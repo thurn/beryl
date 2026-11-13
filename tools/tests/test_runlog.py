@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import checks, oracles, paths, runlog, system, verdicts
+from beryl_tools import checks, oracles, paths, reruns, runlog, system, verdicts
 
 
 def logged() -> list[dict[str, object]]:
@@ -380,3 +380,19 @@ def test_checks_share_a_steps_cpu_time_evenly_when_none_has_wall_time() -> None:
     assert [r["cpu_seconds"] for r in records] == [1.0, 1.0, 0.0]
     with run.step({}) as (_, path):
         assert "cpu_seconds" not in run.records("rust", "fmt", True, 1.0, path)[0]
+
+
+def test_a_pytest_rerun_runs_only_the_tests_that_failed() -> None:
+    output = (
+        "F.\n=== short test summary info ===\n"
+        "FAILED tests/test_warm.py::test_a_clone - assert 1 == 2\n"
+        "ERROR tests/test_bisect.py::test_hangs[slow]\n"
+        "1 failed, 1 error, 1 passed in 2.0s\n"
+    )
+    assert reruns.failed_pytests(output) == [
+        "tests/test_warm.py::test_a_clone",
+        "tests/test_bisect.py::test_hangs[slow]",
+    ]
+    # A module that does not import errors outside any test: the rerun runs them all.
+    collection = "ERROR tests/test_warm.py - ImportError\n" + output
+    assert reruns.failed_pytests(collection) == []

@@ -84,6 +84,7 @@ from .reruns import (
     CANNOT_RUN,
     Failed,
     failed_cards,
+    failed_pytests,
     failed_shots,
     failed_tests,
     failed_titles,
@@ -480,7 +481,9 @@ def python_lane() -> Lane:
     if not system.WINDOWS:
         lane.step("pyre", ["pyre", "--noninteractive", "check"], paths.TOOLS)
     return lane.step(
-        "pytest", [sys.executable, "-m", "beryl_tools.checks", "pytest"], rerun=whole
+        "pytest",
+        [sys.executable, "-m", "beryl_tools.checks", "pytest"],
+        rerun=failed_pytests,
     )
 
 
@@ -508,8 +511,11 @@ def scale_lane() -> Lane:
     not touch tools/, can break them and slow CI would be the first to say so."""
     return Lane("scale").step(
         "pytest",
-        [sys.executable, "-m", "beryl_tools.checks", "pytest", *CARD_READERS],
-        rerun=whole,
+        [
+            *[sys.executable, "-m", "beryl_tools.checks", "pytest"],
+            *["--lane", "scale", *CARD_READERS],
+        ],
+        rerun=failed_pytests,
     )
 
 

@@ -99,3 +99,17 @@ def failed_cards(output: str) -> list[str]:
         if s.get("status") == "fail" or s.get("stale_allowlist")
     ]
     return list(dict.fromkeys(cards))
+
+
+# pytest's summary line for a test that failed or errored: its node id, then ` - ` and why.
+PYTEST_FAILED: re.Pattern[str] = re.compile(
+    r"^(?:FAILED|ERROR) (tests/\S+?\.py::\S+?)(?: - .*)?$", re.MULTILINE
+)
+
+
+def failed_pytests(output: str) -> list[str]:
+    """The node ids of the tests pytest's summary names as failed or errored (python_tests.py
+    takes them); none when one errored outside a test, such as on collection."""
+    if re.search(r"^ERROR (?!tests/\S+?\.py::)", output, re.MULTILINE):
+        return []
+    return list(dict.fromkeys(PYTEST_FAILED.findall(output)))
