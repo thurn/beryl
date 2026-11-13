@@ -137,8 +137,8 @@ means `python3 ~/enact/scripts/enact.py`.
 - No plan, bead or skill includes a step that waits for the user's approval
   (plan K31). Where his judgement might be wanted, go ahead with a sensible
   default and record the choice in the bead you're working on. Never file a bead
-  asking him to look at something. The one exception is the count gate in K1 of
-  `docs/project-50k.md`.
+  asking him to look at something. The exceptions are the count gate in K1 of
+  `docs/project-50k.md` and adding a UI exception (see UI).
 - `/enact <beads|epic|task>` runs work inline in one session, and
   `/enact-plan <bead|plan|task>` runs it unattended across several sessions.
   Most work uses neither.
@@ -240,8 +240,11 @@ pixel for pixel, use the `arena-pixel-match` skill.
   `data/ui-conventions.json` by `just conventions`: edit the JSON, never the
   page.
 - The user's bug report takes priority over Arena and over any earlier report.
-  Build what it asks for, and add, change or remove the matching exception in
-  the same change.
+  Build what it asks for, and change or remove the matching exception in the
+  same change.
+- Explicitly confirm with the user before adding a numbered exception to UI
+  Conventions. Ask in chat, and add it only after a clear yes; never infer one
+  from an old report or a design choice nobody asked for.
 - Anything the recordings don't show is built from animations and prompt types
   Beryl already has, never a new look, and listed in UI Conventions under "Not
   seen in Arena".

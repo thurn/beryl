@@ -48,10 +48,10 @@ export function spanSampler({ stage, clock, origin, layer, faults }) {
         };
     };
     /** Why `point`, an end of a line, is not on the edge of `box`: a life total's is the
-     * oval within its box; a card's is its frame, or for an attacker the tip of the chevron
-     * it wears, a sixth of its width past its frame. With `onto`, why it is not on `box` at
-     * all, as the head of an arrow at a target is: on its target's face, or at its edge
-     * where the arrow meets the strip of a stack item under its own. */
+     * oval within its box; a card's is its frame. With `onto`, why it is not on `box` at
+     * all, as the head of an arrow at a target is (on its target's face, or at its edge
+     * where the arrow meets the strip of a stack item under its own), and both ends of a
+     * line of combat are. */
     const offEdge = (point, box, onto = false) => {
         if (!box) return "ends on nothing";
         if (box.round) {
@@ -118,9 +118,16 @@ export function spanSampler({ stage, clock, origin, layer, faults }) {
             }
             const boxes = [boxOf(from), boxOf(to)];
             if (shape) {
+                // A line of combat runs from the middle of one card to the middle of the
+                // other, over both, as Arena's does: both its ends are on their cards.
+                const combat = arrow === "attack" || arrow === "block";
                 const off =
-                    offEdge(shape.from, boxes[0]) ??
-                    offEdge(shape.to, boxes[1], arrow.endsWith("-target"));
+                    offEdge(shape.from, boxes[0], combat) ??
+                    offEdge(
+                        shape.to,
+                        boxes[1],
+                        combat || arrow.endsWith("-target"),
+                    );
                 if (off) fault(`the line ${key} ${off}`);
             }
             return {

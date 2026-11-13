@@ -215,8 +215,8 @@ fn a_coin_is_announced_and_noncombat_damage_streaks() {
 }
 
 /// `emerge` and `count`, in Arena's order: a loyalty ability is on the stack before its cost
-/// shows on the planeswalker, though the cost is paid first. The attacker it exiles loses
-/// its attack line and the ability's arrow in one beat before it goes. Then the turn passes:
+/// shows on the planeswalker, though the cost is paid first. The attacker it exiles, which
+/// attacks the player and so has no line, loses the ability's arrow in a beat before it goes. Then the turn passes:
 /// `set`, the banner, and the lands untapping together.
 #[test]
 fn a_loyalty_cost_counts_after_its_ability_emerges() {
@@ -232,8 +232,7 @@ fn a_loyalty_cost_counts_after_its_ability_emerges() {
             "& +point source a1 > #1",
             "& +point hostile-target a1 > #257",
             "count #1 (The Wandering Emperor) loyalty 1 <- you",
-            "-point attack #257 > you",
-            "& -point hostile-target a1 > #257",
+            "-point hostile-target a1 > #257",
             "vanish #257 (Snapcaster Mage) battlefield>exile exile <- a1",
             "count you life 22 <- a1",
             "-point source a1 > #1",
@@ -261,8 +260,7 @@ fn a_loyalty_cost_counts_after_its_ability_emerges() {
             "& +point hostile-target a1 > #257",
             "count #1 (The Wandering Emperor) loyalty 1 <- opponent",
             "dwell a1",
-            "-point attack #257 > opponent",
-            "& -point hostile-target a1 > #257",
+            "-point hostile-target a1 > #257",
             "vanish #257 (Snapcaster Mage) battlefield>exile exile <- a1",
             "count opponent life 22 <- a1",
             "-point source a1 > #1",

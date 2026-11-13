@@ -479,11 +479,13 @@ export class Prompts {
       wanted.set(keyOf(aimed), aimed);
     }
     // A declaration's line, from each attacker or blocker to what it is aimed at, where the
-    // session says one is drawn: the script draws the same once it is declared.
+    // session says one is drawn: the script draws the same once it is declared. None goes to
+    // a player: Arena's attacker at the player has only its chevron (`IEXcjBn3BXk 22:16.53`).
     const state = prompt?.state;
     const declared =
       state?.shape === "declare" && state.lined ? state : undefined;
     for (const { from, to } of declared?.pairs ?? []) {
+      if (to.kind === "player") continue;
       const source: Subject = { kind: "object", slot: from };
       const { arrow } = declared!;
       const aimed: SpanAct = {

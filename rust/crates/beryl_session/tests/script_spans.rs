@@ -38,9 +38,10 @@ fn lines(found: &[(usize, &str)]) -> Vec<(usize, String)> {
 
 const TEFERI_FALLS: &str = "combat damage removes Teferi while other attacks remain";
 
-/// `point`, an attack line: with a planeswalker to attack, each attacker's line begins once
-/// what it attacks is chosen, and the one at a planeswalker ends before that planeswalker
-/// leaves. The same from both seats, but for who the player is.
+/// `point`, an attack line: only an attacker at a planeswalker has one (Arena,
+/// `UrGalw_f35w 48:56.6`; one at the player has only its chevron). It begins once what it
+/// attacks is chosen, and ends before that planeswalker leaves. The same from both seats,
+/// but for who the player is.
 #[test]
 fn an_attack_line_begins_with_its_destination_and_ends_before_that_leaves() {
     let [first, second] = script(names::TEFERI_TIME_RAVELER, TEFERI_FALLS, 7);
@@ -55,7 +56,6 @@ fn an_attack_line_begins_with_its_destination_and_ends_before_that_leaves() {
         text(&[
             "tap #0 (Elite Spellbinder)".to_owned(),
             "& tap #2 (Snapcaster Mage)".to_owned(),
-            format!("& +point attack #2 > {defender}"),
             format!("set turn 3 {attacker} declareBlockers"),
             format!("set turn 3 {attacker} combatDamage"),
             "strike #0 > #256 3".to_owned(),
@@ -81,7 +81,6 @@ fn a_combat_line_is_begun_once_and_never_swings() {
         first,
         lines(&[
             (7, "+point attack #0 > #256"),
-            (9, "+point attack #2 > opponent"),
             (9, "-point attack #0 > #256"),
         ])
     );
@@ -89,7 +88,6 @@ fn a_combat_line_is_begun_once_and_never_swings() {
         second,
         lines(&[
             (7, "+point attack #0 > #256"),
-            (9, "+point attack #2 > you"),
             (9, "-point attack #0 > #256"),
         ])
     );
@@ -108,20 +106,8 @@ fn a_combat_line_is_begun_once_and_never_swings() {
     // the token the trigger makes is attacking (by-y3sp).
     let name = "Adeline's Human attacks a planeswalker";
     let [first, second] = steps(names::ADELINE_RESPLENDENT_CATHAR, name, "point attack");
-    assert_eq!(
-        first,
-        lines(&[
-            (4, "+point attack #0 > opponent"),
-            (5, "+point attack #512 > #256"),
-        ])
-    );
-    assert_eq!(
-        second,
-        lines(&[
-            (4, "+point attack #0 > you"),
-            (5, "+point attack #512 > #256"),
-        ])
-    );
+    assert_eq!(first, lines(&[(5, "+point attack #512 > #256")]));
+    assert_eq!(second, lines(&[(5, "+point attack #512 > #256")]));
 }
 
 /// `point`, a block line: it begins as the blocker is declared and ends, once combat damage

@@ -241,30 +241,15 @@ const part = (
   mix(mix(a, c, t), mix(c, b, t), t),
 ];
 
-/** The straight line of combat from `from` to `to`: out of the edge of `from` that faces
- * `to`, or for an `attack` from the tip of its chevron, to the edge of `to` that faces it. */
-function straight(
-  arrow: Arrow,
-  from: Reach,
-  to: Reach,
-): [Point, Point] | undefined {
-  const facing = to.middle.y < from.middle.y ? -1 : 1;
-  const toward = arrow === "attack" && from.toward ? from.toward : facing;
-  const reach = arrow === "attack" && from.toward ? from.ahead : 0;
-  const a = {
-    x: from.middle.x,
-    y: from.middle.y + toward * (from.half.y + reach),
-  };
-  // A creature that has closed on what it strikes leaves nothing between them to draw.
+/** A line of combat's two ends: from the middle of the creature it leaves to the middle of
+ * what it points at, over both, as Arena draws a block line from its blocker to its
+ * attacker (`IEXcjBn3BXk 22:23.0`) and an attack line to the planeswalker attacked
+ * (`UrGalw_f35w 48:56.6`). None where the two lie over each other. */
+function straight(from: Reach, to: Reach): [Point, Point] | undefined {
   const apart = (axis: "x" | "y") =>
-    Math.abs(to.middle[axis] - from.middle[axis]) >=
-    from.half[axis] + to.half[axis];
-  const met = !(apart("x") || apart("y")) || edge(to, a) === undefined;
-  if (met) return undefined;
-  const b = to.round
-    ? edge(to, a)!
-    : { x: to.middle.x, y: to.middle.y - facing * to.half.y };
-  return [a, b];
+    Math.abs(to.middle[axis] - from.middle[axis]) >= from.half[axis] / 2;
+  if (!(apart("x") || apart("y"))) return undefined;
+  return [from.middle, to.middle];
 }
 
 /** The whole way of the line that says `arrow` between `from` and `to` as they lie, as a
@@ -280,7 +265,7 @@ export function wayOf(
   sag?: number,
 ): [Point, Point, Point] | null {
   if (arrow === "attack" || arrow === "block") {
-    const ends = straight(arrow, from, to);
+    const ends = straight(from, to);
     return ends ? [ends[0], mix(ends[0], ends[1], 0.5), ends[1]] : null;
   }
   const over = overlap(from, to);

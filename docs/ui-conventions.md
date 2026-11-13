@@ -42,30 +42,6 @@ removes an entry; nothing else does.
    shows no link on the table.
 7. **Own-target warning.** Confirm before a counter or removal spell targets the
    player's own spell or permanent (by-cp2y, by-jmx9).
-8. **Lines and combat marks of light.** Arrows, lines of combat and the marks of
-   combat are painted as light, in Beryl's colors. An attacker wears a wedge of
-   ember light on its leading edge, which pops as it is declared and turns gold
-   once it is blocked; a blocker has a gold crescent under it and a gold beam to
-   the tip of its attacker's wedge. The lines and marks of combat lie on the
-   table, under the cards and the step's banner ("it looks a bit dumb in places"
-   over them); only an arrow at a target and the line to a source are drawn over
-   what rests. An arrow strikes and drains where Arena's appears and is cut.
-   This replaces the thin flat lines and pale gold marks, which read as a
-   diagram: "crummy and cartoony". The line a declaration pulls toward the
-   pointer follows the pointer itself, with no lag (by-w8gv.21.67). A target
-   arrow is a cyan ribbon of light that appears whole in one frame and is cut as
-   its spell resolves. An attacker's chevron appears in one frame, a little wide
-   and bright, and settles; it is red, and gold once blocked. A blocker's line
-   is a gold beam with a head and a crescent under the blocker, cut as combat
-   damage begins (I3Te0m1bBFw 31:35.05, IEXcjBn3BXk 22:16.53, IEXcjBn3BXk
-   22:22.3, IEXcjBn3BXk 35:26.0).
-9. **Attack lines to the player.** While the defending player controls a
-   planeswalker, each unblocked attacker has a line to what it attacks, the
-   player included, so that which one it attacks can be read. Arena draws a line
-   only to a planeswalker attacked; an attack on the player has only its chevron
-   (by-922, by-m0wf, by-986a). An attacker at a planeswalker has a thin red line
-   to it; an attacker at the player has none, only its chevron (UrGalw_f35w
-   48:56.6, IEXcjBn3BXk 22:16.53).
 
 ## Settled as Arena
 
@@ -584,10 +560,11 @@ stage to; Arena's measured instances are kept beside them as reference in
   cause, in place.
 - **point.** An arrow or line between two things, from the step that begins it
   to the step that ends it: to a target, from an ability to its source, from an
-  attacker to what it attacks, from a blocker to its attacker. Each is drawn as
-  light, a ribbon with a hot core. An arrow at a target is a bowed arc, a thread
-  at its spell that swells to a spear head, which strikes out of its spell or
-  ability once that has landed on the stack, lands with a flash and sparks, and
+  attacker to the planeswalker it attacks, from a blocker to its attacker. An
+  attacker at a player has no line, only its wedge. Each is drawn as light, a
+  ribbon with a hot core. An arrow at a target is a bowed arc, a thread at its
+  spell that swells to a spear head, whole in the frame it begins once its spell
+  or ability has landed on the stack, which lands with a flash and sparks and
   has light run along it toward its target while it stands. It comes onto a card
   from the open table in front of it, never along its row, and its head lies on
   the card's face; at a player it goes over the top onto their life total;
@@ -600,24 +577,21 @@ stage to; Arena's measured instances are kept beside them as reference in
   of its height, where it is widest, and comes up toward the bottom of its
   ability, fading out before it reaches it, from either seat; a phone's arcs
   across between them. A line of combat is a straight beam that narrows to a
-  dart, from the tip of the wedge an attacker wears, or from a blocker's edge to
-  the tip of its attacker's wedge. Each is one line for as long as it lasts,
-  drawn every moment from where its two ends are, and an arrow or a line of
-  combat drains into what it points at over the step that ends it, which waits
-  until it has stood whole for its end's delay, so that one whose spell resolves
-  at once is still read, and which what follows waits for, so that neither end
-  moves under it. An ability and the line to its source stay a moment after what
-  the ability did, and go in one tick. An arrow at a target and the line to a
-  source are over everything at rest and under what flies. A line of combat lies
-  on the table, under the cards and the step's banner, as an attacker's wedge
-  and a blocker's crescent do: it passes behind a creature that stands in its
-  way. A browser with no WebGL draws each as a path instead. A cyan arc runs
-  from a spell or ability to its target until it resolves. A thin line joins an
-  ability to its source from the frame it lifts. A thin gold line runs from a
-  blocker to its attacker until combat damage is done. An attacker has no line
-  to the player, only its chevron (I3Te0m1bBFw 31:35.05, bJQDi6NIrZA 55:08.5,
-  IEXcjBn3BXk 20:39.3, IEXcjBn3BXk 22:21.5, sMpAJ0HKDdg 54:50, IEXcjBn3BXk
-  25:52.5). Beryl: 66 ms, 0 ms after its cause, in place.
+  dart, from the middle of its creature to the middle of what it points at, over
+  both. Each is one line for as long as it lasts, drawn every moment from where
+  its two ends are, and each is cut in a frame by the step that ends it, which
+  waits until it has stood whole for its end's delay, so that one whose spell
+  resolves at once is still read, and which what follows waits for, so that
+  neither end moves under it. An ability and the line to its source stay a
+  moment after what the ability did, and go in one tick. Every arrow and line is
+  over everything at rest and under what flies. A browser with no WebGL draws
+  each as a path instead. A cyan arc runs from a spell or ability to its target
+  until it resolves. A thin line joins an ability to its source from the frame
+  it lifts. A thin gold line runs from a blocker to its attacker until combat
+  damage is done. An attacker has no line to the player, only its chevron
+  (I3Te0m1bBFw 31:35.05, bJQDi6NIrZA 55:08.5, IEXcjBn3BXk 20:39.3, IEXcjBn3BXk
+  22:21.5, sMpAJ0HKDdg 54:50, IEXcjBn3BXk 25:52.5). Beryl: 66 ms, 0 ms after its
+  cause, in place.
 - **mark.** A mark from the list below on a card, an ability or a player, from
   the step that begins it to the step that ends it. The light of what may be
   picked comes up over a moment, on all of it at once. Every other mark is there

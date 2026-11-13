@@ -243,9 +243,9 @@ export function timingOf(
     if (mover !== undefined && turned) return { ...own, after: [mover] };
   }
   // An arrow or a line is no turn of its beat: it goes with the step that calls for it and
-  // holds up none after it. Arena cuts its own (data/arena-motion.json, point: "It is cut,
-  // not faded, when it ends"); Beryl's arrow or line of combat drains into what it pointed at
-  // over its end, which what follows waits for, and the line to a source is cut. An arrow or a
+  // holds up none after it. Each is cut in a frame as it ends, as Arena's is
+  // (data/arena-motion.json, point: "It is cut, not faded, when it ends"), and what follows
+  // waits for that. An arrow or a
   // line of combat is drawn between things at rest: it waits for the spell or ability it
   // leaves to land. The line from an ability to its source does not: it stretches as the
   // ability lifts. The marks of one beat come up together, their delay after its turn comes.

@@ -8,8 +8,8 @@
 // total, which the chrome around the table draws. A mark (spans.ts) is drawn as an effect
 // is, an element inside what it is on with its look in stage.css, for as long as its span is
 // open. An arrow or line is one path in a drawing of the layer's own, from the step that
-// begins it to the step that ends it: over everything at rest and under what flies, or for a
-// line of combat on the table, under the cards. The stage writes its shape in stage pixels
+// begins it to the step that ends it: over everything at rest and under what flies, a line
+// of combat too. The stage writes its shape in stage pixels
 // each tick. Where the browser has WebGL the lines and the marks of combat are painted as
 // light instead (light.ts, glow.ts), on two canvases of the layer's own, at the depths of
 // the two drawings; the paths stay on the page as the record of what is drawn, which the
@@ -38,9 +38,8 @@ const named = (said: string): Name =>
 export class DomSurface implements Surface {
   readonly #layer: HTMLElement;
   readonly #nodes = new Map<Name, HTMLElement>();
-  /** The drawings the lines are paths of, each made with its first: one over everything at
-   * rest, for an arrow at a target and the line to a source, and one under the cards, on
-   * the table, for the lines of combat. */
+  /** The drawings the lines are paths of, each made with its first: every line is in the
+   * one over everything at rest; the one under the cards is left unused by lines. */
   readonly #drawings: { over?: SVGSVGElement; under?: SVGSVGElement } = {};
   readonly #lines = new Map<string, SVGPathElement>();
   /** What paints each layer of light: none yet, or `null` where the browser has none to
@@ -242,7 +241,8 @@ export class DomSurface implements Surface {
     if (!path) {
       const document = this.#layer.ownerDocument;
       const svg = "http://www.w3.org/2000/svg";
-      const where = arrow === "attack" || arrow === "block" ? "under" : "over";
+      // Every line is drawn over the cards, a line of combat too, as Arena's is.
+      const where = "over";
       let drawing = this.#drawings[where];
       if (!drawing?.isConnected) {
         drawing = document.createElementNS(svg, "svg");

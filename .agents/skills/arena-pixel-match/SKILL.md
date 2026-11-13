@@ -22,11 +22,15 @@ In this order:
 1. **The request.** Anything the user said with the request wins over Arena,
    whatever Arena does. Write these down before you look at a frame, and say
    in your report which differences from Arena they caused. A difference the
-   request asks for is a Beryl exception: add it to `data/ui-conventions.json`
-   in the same change (`just conventions` renders the page).
+   request asks for would be a new Beryl exception: ask the user explicitly
+   whether to add it before you do, and add it to `data/ui-conventions.json`
+   (`just conventions` renders the page) only after a clear yes.
 2. **The numbered exceptions** in `docs/ui-conventions.md`. Each was the user's
    word once. Where one stands in the way of a match, keep it, name it in the
    report with what matching would have looked like, and let the user lift it.
+   A difference that no numbered exception lists is not one, even if an old
+   report or design choice led to it: match Arena, or ask the user before
+   listing it.
 3. **Arena, to the pixel.** Everything else.
 
 Arena's own art, card frames, fonts, icons and sounds are never copied into
@@ -231,5 +235,6 @@ The recordings are compressed 1080p video at 30 frames a second (a few at
 - Is each difference left named, with its reason?
 - Would a check fail if the route or the destination went back to how it was?
 
-No step here waits for the user. Where his eye might be wanted, proceed on
-Arena and say so in the report.
+No step here waits for the user, but one: before adding a numbered exception,
+ask him explicitly and wait for a clear yes. Everywhere else his eye might be
+wanted, proceed on Arena and say so in the report.

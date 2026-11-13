@@ -12,8 +12,8 @@ use super::build::Builder;
 use super::table::{Entry, Table};
 use super::{Act, Arrow, Open, Span, Step, Subject};
 use crate::protocol::{
-    CardHandling, CardType, Combat, ObjectView, OutcomeView, PlayerView, Side, StackItem, Status,
-    TargetRef, ZoneName,
+    CardHandling, Combat, ObjectView, OutcomeView, PlayerView, Side, StackItem, Status, TargetRef,
+    ZoneName,
 };
 
 /// The arrows and lines `table` calls for, in the order they begin: each spell's and
@@ -93,34 +93,12 @@ fn aimed(table: &Table) -> Vec<Open> {
     spans
 }
 
-/// Whether `side` controls a planeswalker among the permanents `objects`: an attack on that
-/// side has more than one thing to aim at, so each attacker's line is drawn. The prompt that
-/// declares an attack asks this too ([`crate::prompt`]'s declare shape), so a line it draws is
-/// one the script goes on drawing.
-pub(crate) fn walkers<'a>(objects: impl IntoIterator<Item = &'a ObjectView>, side: Side) -> bool {
-    objects.into_iter().any(|o| {
-        o.zone == ZoneName::Battlefield
-            && o.controller == side
-            && o.types.contains(&CardType::Planeswalker)
-    })
-}
-
 /// The lines of the combat `table` shows: each blocker's to its attacker, and each attacker's
-/// to what it attacks where a planeswalker could be attacked.
+/// to the planeswalker it attacks.
 pub(super) fn combat(table: &Table, aimless: &[u16]) -> Vec<Open> {
     let mut spans = Vec::new();
     let mut want = |arrow, from, to| spans.push(Open::Point { arrow, from, to });
     let permanent = |slot: u16| permanent(table, slot);
-    let defends = |attacker: Side| match attacker {
-        Side::You => Side::Opponent,
-        Side::Opponent => Side::You,
-    };
-    let walkers = |side: Side| {
-        walkers(
-            table.battlefield.iter().filter_map(|&slot| permanent(slot)),
-            side,
-        )
-    };
     for &slot in &table.battlefield {
         let Some(object) = permanent(slot).filter(|_| !aimless.contains(&slot)) else {
             continue;
@@ -136,22 +114,17 @@ pub(super) fn combat(table: &Table, aimless: &[u16]) -> Vec<Open> {
             {
                 want(Arrow::Block, from, Subject::Object { slot: attacker });
             }
-            // An attacker's line only where a planeswalker could be attacked: with one
-            // thing to attack its chevron says it all (Arena, `IEXcjBn3BXk 25:52.5`), and a
-            // blocked attacker's line is its blocker's. One whose planeswalker left never
+            // An attacker's line only to the planeswalker it attacks: Arena draws a thin
+            // red line to an attacked planeswalker (`UrGalw_f35w 48:56.6`) and none to an
+            // attacked player, whose attacker has only its chevron (`IEXcjBn3BXk 22:16.53`).
+            // A blocked attacker's line is its blocker's. One whose planeswalker left never
             // swings to the player (by-2wsl).
             Some(Combat::Attacking {
-                planeswalker,
+                planeswalker: Some(walker),
                 target_departed,
                 blocked: false,
-            }) if target_departed != Some(true) => {
-                let defender = defends(object.controller);
-                let to = match planeswalker {
-                    Some(walker) if permanent(walker).is_some() => Subject::Object { slot: walker },
-                    None if walkers(defender) => Subject::Player { player: defender },
-                    _ => continue,
-                };
-                want(Arrow::Attack, from, to);
+            }) if target_departed != Some(true) && permanent(walker).is_some() => {
+                want(Arrow::Attack, from, Subject::Object { slot: walker });
             }
             _ => {}
         }

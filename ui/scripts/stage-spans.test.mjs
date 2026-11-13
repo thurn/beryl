@@ -33,35 +33,30 @@ const close = (found, wanted, what) =>
     );
 const at = ({ x, y }) => [x, y];
 
-test("a blocker's line runs straight between the edges that face", () => {
-    // The blocker lies under its attacker: out of its top edge, into the attacker's foot.
+test("a blocker's line runs straight from its middle to its attacker's", () => {
+    // Over both cards, as Arena's is (IEXcjBn3BXk 22:23.0): from the blocker below to the
+    // middle of the attacker above.
     const shape = shapeOf("block", card(0, 500), card(0, 0, 1), 1);
     assert.deepEqual(shape, {
-        d: "M50.0 500.0 L50.0 140.0",
-        from: { x: 50, y: 500 },
-        to: { x: 50, y: 140 },
+        d: "M50.0 570.0 L50.0 70.0",
+        from: { x: 50, y: 570 },
+        to: { x: 50, y: 70 },
     });
     // Half drawn, it has come half way from the blocker.
     assert.equal(
         shapeOf("block", card(0, 500), card(0, 0, 1), 0.5).d,
-        "M50.0 500.0 L50.0 320.0",
+        "M50.0 570.0 L50.0 320.0",
     );
     assert.equal(shapeOf("block", card(0, 500), card(0, 0, 1), 0), null);
-    // A blocker that has closed on its attacker, as it strikes, has no line to it.
-    assert.equal(shapeOf("block", card(0, 130), card(0, 0, 1), 1), null);
+    // A blocker that lies right over its attacker has no line to it.
+    assert.equal(shapeOf("block", card(0, 20), card(0, 0, 1), 1), null);
 });
 
-test("an attacker's line leaves the tip of its chevron for what it attacks", () => {
-    // Yours wears its chevron above it, a sixth of its width past its edge (by-986a).
+test("an attacker's line runs from its middle to the planeswalker it attacks", () => {
+    // As Arena's red line to an attacked planeswalker (UrGalw_f35w 48:56.6).
     const walker = shapeOf("attack", card(0, 500), card(400, 0, 1), 1);
-    close(at(walker.from), [50, 500 - 100 / 6], "the chevron's tip");
-    assert.deepEqual(walker.to, { x: 450, y: 140 }, "the planeswalker's foot");
-    // The opponent's wears it below, and its line meets your life total on its rim.
-    const player = shapeOf("attack", card(0, 0, 1), orb(1000, 900), 1);
-    close(at(player.from), [50, 140 + 100 / 6], "the chevron's tip");
-    const rim = Math.hypot(player.to.x - 1000, player.to.y - 900);
-    assert.ok(Math.abs(rim - 80) < 1e-9, "on the rim of the life total");
-    assert.ok(player.to.x < 1000 && player.to.y < 900, "on the side it faces");
+    assert.deepEqual(walker.from, { x: 50, y: 570 }, "the attacker's middle");
+    assert.deepEqual(walker.to, { x: 450, y: 70 }, "the planeswalker's middle");
 });
 
 test("an arrow comes onto its target from the table in front of it, its head on its face", () => {

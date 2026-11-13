@@ -86,7 +86,7 @@ const ATTACK: Scenario = Scenario::new("attack")
     .library(P1, &[ISLAND; 6]);
 
 /// An attack is declared by clicking the creatures: each is aimed at the defending player at
-/// once, there being nothing else to attack, with no line drawn to say so, and taken back by
+/// once, there being nothing else to attack (the stage draws no line to a player), and taken back by
 /// another click. Every creature that can attack is marked, the second of two alike too,
 /// though the engine offers one for both. The buttons declare every attacker, none, or what
 /// is picked.
@@ -98,7 +98,7 @@ fn attackers_are_declared_by_clicks_and_confirmed_by_their_count() {
     let binder = play.named(ELITE_SPELLBINDER, ZoneName::Battlefield, Side::You)[0];
     let open = format!(
         "declare attack: Choose attackers.\n\
-         declare attack, no lines:\n\
+         declare attack:\n\
          eligible {}\n\
          auto[All Attack]* decline[No Attacks]\n",
         cards(&[mages[0], mages[1], binder]),
@@ -112,7 +112,7 @@ fn attackers_are_declared_by_clicks_and_confirmed_by_their_count() {
     // The second Mage attacks the defending player, the one thing it can attack.
     let one = format!(
         "declare attack: Choose attackers.\n\
-         declare attack, no lines: #{}>opponent\n\
+         declare attack: #{}>opponent\n\
          eligible {}\n\
          selected #{}\n\
          confirm[1 Attacker]* decline[Cancel Attacks]\n",
@@ -123,7 +123,7 @@ fn attackers_are_declared_by_clicks_and_confirmed_by_their_count() {
     assert_eq!(play.on(mages[1]).as_deref(), Some(one.as_str()));
     let two = format!(
         "declare attack: Choose attackers.\n\
-         declare attack, no lines: #{}>opponent #{binder}>opponent\n\
+         declare attack: #{}>opponent #{binder}>opponent\n\
          eligible #{}\n\
          selected {}\n\
          confirm[2 Attackers]* decline[Cancel Attacks]\n",
@@ -142,7 +142,7 @@ fn attackers_are_declared_by_clicks_and_confirmed_by_their_count() {
     // Every creature attacks, and one is taken back.
     let all = format!(
         "declare attack: Choose attackers.\n\
-         declare attack, no lines: #{}>opponent #{}>opponent #{binder}>opponent\n\
+         declare attack: #{}>opponent #{}>opponent #{binder}>opponent\n\
          selected {}\n\
          confirm[3 Attackers]* decline[Cancel Attacks]\n",
         mages[0],

@@ -212,9 +212,11 @@ function arrowsOnCardsThatMoved(run, reflows) {
  * begun once, at one thing, and is whole within a tenth of a second of the step that begins
  * it. */
 function combatLinesThatFlickered(runs) {
+    // Only an attacker at a planeswalker has a line (Arena, UrGalw_f35w 48:56.6): one of
+    // `combat`'s three. `piles`' token attacks the player and has none.
     for (const [moment, most] of [
-        ["combat", 3],
-        ["piles", 1],
+        ["combat", 1],
+        ["piles", 0],
     ]) {
         const lines = drawn(runs[moment]).filter(
             ({ act }) => act.arrow === "attack" || act.arrow === "block",

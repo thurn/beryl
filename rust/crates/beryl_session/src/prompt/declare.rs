@@ -22,7 +22,7 @@ use super::ahead;
 use super::held::{Clicked, Run, Step, Table, Want, alike, button, named, options};
 use super::{ButtonId, Click, Marked, Pair, PartName, PromptView, ShapeView};
 use crate::protocol::{Candidate, DecisionView, Side};
-use crate::script::{Arrow, Mark, Subject, walkers};
+use crate::script::{Arrow, Mark, Subject};
 
 /// The state of a declaration.
 #[derive(Clone, Debug)]
@@ -30,10 +30,9 @@ pub(crate) struct Declare {
     purpose: Purpose,
     arrow: Arrow,
     /// Whether a line is drawn from each creature declared to what it is aimed at: a
-    /// blocker's to its attacker, and an attacker's only where a planeswalker could be
-    /// attacked. With one thing to attack its chevron says it all (Arena,
-    /// `IEXcjBn3BXk 25:52.5`), and the script draws none either (`script/spans.rs`), so a
-    /// line drawn here would go as the declaration is confirmed.
+    /// blocker's to its attacker, and an attacker's to a planeswalker. The stage draws no
+    /// line to a player (Arena, `IEXcjBn3BXk 22:16.53`), as the script draws none
+    /// (`script/spans.rs`).
     lined: bool,
     /// The creatures that can be declared, each with what it can be aimed at: those the
     /// decision offers, in its order, then the ones that stand for one of those.
@@ -63,7 +62,7 @@ impl Declare {
         let prompt = &decision.prompt;
         let d = table.d?;
         let (arrow, lined) = match purpose {
-            Purpose::Attack => (Arrow::Attack, walkers(&table.view.objects, Side::Opponent)),
+            Purpose::Attack => (Arrow::Attack, true),
             Purpose::Block => (Arrow::Block, true),
             _ => return None,
         };

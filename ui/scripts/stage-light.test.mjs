@@ -129,8 +129,8 @@ test("the line to a source is a pale swell that grows out of the source", () => 
     assert.equal(at(1), 0, "faded out at the ability");
 });
 
-test("a blocker's beam meets the tip of the wedge its attacker wears", () => {
-    // The blocker is the opponent's, over your attacker, which faces up the stage.
+test("a blocker's beam runs from its middle to its attacker's", () => {
+    // The blocker is the opponent's, over your attacker (Arena, IEXcjBn3BXk 22:23.0).
     const [blocker, attacker] = [card(0, 0, 1), card(0, 500)];
     const [ribbon] = lightOf(
         1000,
@@ -138,8 +138,8 @@ test("a blocker's beam meets the tip of the wedge its attacker wears", () => {
         [],
     ).ribbons;
     assert.deepEqual([ribbon.tone, ribbon.cut], ["gold", "beam"]);
-    assert.deepEqual(ribbon.curve[0], { x: 50, y: 140 });
-    assert.deepEqual(ribbon.curve[2], { x: 50, y: 500 - 100 / 6 });
+    assert.deepEqual(ribbon.curve[0], { x: 50, y: 70 });
+    assert.deepEqual(ribbon.curve[2], { x: 50, y: 570 });
 });
 
 test("an attacker's wedge pops out of its leading edge, and turns gold once blocked", () => {
@@ -190,7 +190,7 @@ test("a blocker has a gold crescent under the edge that faces its attacker", () 
     assert.deepEqual(glint.up, { x: 0, y: 1 });
 });
 
-test("combat is lit under the cards, and an arrow and a source's line over them", () => {
+test("every line is lit over the cards, and the marks of combat under them", () => {
     const [spell, target] = [card(1000, 300), card(0, 0, 1)];
     const [blocker, attacker] = [card(400, 0, 1), card(400, 500)];
     const { under, over } = layered(
@@ -206,19 +206,26 @@ test("combat is lit under the cards, and an arrow and a source's line over them"
             { reach: blocker, fights: "blocks", since: 1000 },
         ],
     );
+    // A line of combat over the cards too, as Arena draws it (22:23.0).
     assert.deepEqual(
-        over.ribbons.map((ribbon) => ribbon.cut),
-        ["arrow", "swell"],
+        over.ribbons.map((ribbon) => [ribbon.cut, ribbon.tone]),
+        [
+            ["arrow", "hostile"],
+            ["swell", "pale"],
+            ["beam", "gold"],
+            ["beam", "ember"],
+        ],
     );
-    assert.deepEqual(
-        under.ribbons.map((ribbon) => ribbon.tone),
-        ["gold", "ember"],
-    );
+    assert.deepEqual(under.ribbons, []);
     assert.deepEqual(
         under.glints.map((glint) => glint.kind).filter((k) => k !== "flash"),
         ["wedge", "crescent"],
     );
-    assert.ok(over.glints.every((glint) => glint.kind === "flash"));
+    assert.ok(
+        over.glints.every(
+            (glint) => glint.kind === "flash" || glint.kind === "burst",
+        ),
+    );
 });
 
 test("the arrow a choice of targets pulls runs to the pointer, thin and pale", () => {

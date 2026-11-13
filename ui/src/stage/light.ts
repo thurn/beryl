@@ -6,10 +6,10 @@
 // reached and a test can step it. Nothing here reads the page or draws: glow.ts paints a
 // scene, and the surface that has no painter draws the lines as paths instead (dom.ts).
 //
-// How each looks is Beryl's own. An arrow strikes from its spell to its target, lands with a
-// flash and sparks, and light runs along it toward the target while it stands; as the step
-// that ends it plays it drains into the target. Arena's appears whole in a frame and is cut
-// (`I3Te0m1bBFw 31:35.05`, `31:36.65`): what Beryl keeps of that is when each begins and ends.
+// Each appears whole in a frame and is cut in a frame, as Arena's is (`I3Te0m1bBFw 31:35.05`,
+// `31:36.65`). An arrow lands with a flash and sparks, and light runs along it toward the
+// target while it stands. A line of combat runs over the cards, from the middle of its
+// creature to the middle of what it points at (`IEXcjBn3BXk 22:23.0`).
 // An attacker's wedge pops out of its leading edge and settles, as Arena's is a frame wide and
 // bright before it settles (`IEXcjBn3BXk 22:16.53`), and turns gold once it is blocked, as
 // Arena's does (`IEXcjBn3BXk 22:22.3`).
@@ -110,8 +110,7 @@ export interface Lit {
 }
 
 /** The layer a line is painted in. */
-export const layerOf = (arrow: Arrow): keyof Lit =>
-  arrow === "attack" || arrow === "block" ? "under" : "over";
+export const layerOf = (_arrow: Arrow): keyof Lit => "over";
 
 /** A line the stage holds, as the light is drawn from it: the whole way it runs (lines.ts
  * `wayOf`), how its ends lie, how far it is drawn in and how far drained, and the stage time
@@ -328,12 +327,7 @@ function lineLight(scene: Scene, line: LitLine, now: number) {
   }
   if (arrow === "attack" || arrow === "block") {
     const tone = arrow === "attack" ? "ember" : "gold";
-    // A blocker's line meets the tip of the wedge its attacker wears, where that faces it.
-    const faces = Math.sign(way[0].y - way[2].y) === to.toward;
-    const tip =
-      arrow === "block" && faces
-        ? { x: way[2].x, y: way[2].y + to.toward * to.ahead }
-        : way[2];
+    const tip = way[2];
     const curve: Curve = [
       way[0],
       { x: (way[0].x + tip.x) / 2, y: (way[0].y + tip.y) / 2 },
