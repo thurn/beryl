@@ -21,8 +21,9 @@ plan its beads are written against.*
 
 ## Where the engine stands
 
-Project 50k ([project-50k.md](project-50k.md)) rebuilt the structure: a kernel
-that owns the state, a card vocabulary of effect data, and three stores for what
+Project 50k rebuilt the structure
+([engine-architecture.md](engine-architecture.md), K1 to K29): a kernel that
+owns the state, a card vocabulary of effect data, and three stores for what
 cards create. It added no rules. What the rules can do is still what the 48
 implemented cards need.
 
@@ -55,9 +56,10 @@ implemented cards need.
 4. **Exact first, restricted second.** The engine always plays the exact rules.
    Search speed comes from restriction profiles that offer fewer choices, never
    from approximating a rule.
-5. **Data for interfaces and for bodies.** Every card is effect data
-   (project-50k.md, K1). A mechanism is a new entry of the vocabulary and its
-   arm in the rules, and the compiler finds every place a new variant matters.
+5. **Data for interfaces and for behavior.** Every card is effect data
+   (engine-architecture.md, K1). A mechanism is a new entry of the vocabulary
+   and its arm in the rules, and the compiler finds every place a new variant
+   matters.
 6. **Each mechanism lands with its numbers.** The absent-cost gate holds with no
    bump, and the mechanism's own corpus holds the present-cost gate (R2, R3).
 7. **One query for each question.** "Does this object have this ability", "what
@@ -74,7 +76,7 @@ toward that design; Beryl cannot afford it.
 | ID  | Decision                                                                                                                                                                                                                                                                                                             | Why                                                                                                                                                                                                                                                                                                                                   |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | R1  | The cards are chosen by what is expensive to retrofit: how card data is written, what the kernel assumes an object is, and what the decision protocol assumes. 24 keystones and about 25 partners. No complete deck.                                                                                                 | Legacy's most-played decks are mostly easy cards, so choosing by popularity delivers the hard cases late. Breadth is cheap to add later; a wrong assumption in the kernel is not.                                                                                                                                                     |
-| R2  | A mechanism that the WU Control mirror does not use costs it nothing. The count gate is never raised for a new mechanism, and a bead that cannot hold it after three attempts stops the run for a human decision.                                                                                                    | This is the one bar an unattended run cannot argue its way past (project-50k.md, K1).                                                                                                                                                                                                                                                 |
+| R2  | A mechanism that the WU Control mirror does not use costs it nothing. The count gate is never raised for a new mechanism, and a bead that cannot hold it after three attempts stops the run for a human decision.                                                                                                    | This is the one bar an unattended run cannot argue its way past (engine-architecture.md, K1).                                                                                                                                                                                                                                         |
 | R3  | Each family of keystones has a counted rollout corpus with the family in play. Every step of those rollouts is also counted on the same state with the family taken out, and the family's steps stay within 1.25 times that. A miss after three attempts is recorded with its value and cause and files a follow-up. | The count gate cannot see what a mechanism costs when present. Two rollouts, one with the family and one without, play different games, so their difference is mostly the game's and not the mechanism's; one step from one state differs only by the mechanism. At 1.25 times, a search over such a board keeps 80% of its rollouts. |
 | R4  | `State<Small>` stays within 20,480 bytes. Each bead that changes its size has an allotment and reports the size. Last-known information moves out of every waiting trigger into a shared table, which frees about 900 bytes for the rest.                                                                            | A state and its scratch copy must fit the 64 KiB first-level cache of a Performance core.                                                                                                                                                                                                                                             |
 | R5  | The layers stay one full recompute from base, applied one layer at a time. A same-layer dependency (CR 613.8) is found by applying one effect to a scratch copy and seeing whether the other changed, never from a table of card pairs.                                                                              | A table of pairs cannot cover 50,000 cards. The trial runs only when two effects share a layer and one writes what the other reads.                                                                                                                                                                                                   |
@@ -515,7 +517,7 @@ A Mason audits the kernel's contract after these three. Then, in parallel:
 `just census` counts, over the pool's cards, which mechanics in Forge's card
 scripts the vocabulary lacks. It reads only kind names (ability APIs, trigger
 modes, static modes, replacement events and keywords) and never keeps a
-parameter or emits a definition (project-50k.md, K16).
+parameter or emits a definition (engine-architecture.md, K16).
 `data/census-coverage.json` lists the kinds `beryl_card` covers, each with its
 entry; a test fails when an entry no longer exists. The report goes to
 `$BERYL_CACHE/census.json`, ordered by the cards that only that kind blocks. On

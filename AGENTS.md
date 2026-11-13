@@ -140,11 +140,11 @@ means `python3 ~/enact/scripts/enact.py`.
   never start a session or subagent on a Fable model, unless the user has
   explicitly asked for it. Design work defaults to `tier:opus` and mechanical
   work to `tier:sonnet` (or `tier:light`).
-- No plan, bead or skill includes a step that waits for the user's approval
-  (plan K31). Where his judgement might be wanted, go ahead with a sensible
-  default and record the choice in the bead you're working on. Never file a bead
-  asking him to look at something. The exceptions are the count gate in K1 of
-  `docs/project-50k.md` and adding a UI exception (see UI).
+- No plan, bead or skill includes a step that waits for the user's approval.
+  Where his judgement might be wanted, go ahead with a sensible default and
+  record the choice in the bead you're working on. Never file a bead asking him
+  to look at something. The exceptions are the count gate (K1 in
+  `docs/engine-architecture.md`) and adding a UI exception (see UI).
 - `/enact <beads|epic|task>` runs work inline in one session, and
   `/enact-plan <bead|plan|task>` runs it unattended across several sessions.
   Most work uses neither.
@@ -173,7 +173,7 @@ means `python3 ~/enact/scripts/enact.py`.
   propagate the `Full` error, which makes the game switch to the slower `Large`
   state representation, which has room to grow.
 - State that a card creates goes in a store, not in a new field on `Player`,
-  `Object` or `State` (plan K4).
+  `Object` or `State` (K4 in `docs/engine-architecture.md`).
 - Helpers used by two or more cards go in the shared library, not in a card
   file.
 - A card definition implements every clause of its Oracle text, including one
@@ -222,7 +222,7 @@ file or test. The fast check runs only the lanes whose files have changed.
   motion) cover it. If the bug is a new kind of problem, extend one of those
   checks. Only write a custom scripted check in `ui/scripts/kept.mjs` when none
   of the generic checks can express the property, and explain why in a comment
-  (`docs/project-50k.md`, K20).
+  (K20 in `docs/engine-architecture.md`).
 - The counts in an allowlist under `data/` may only go down.
 - A check that runs over its time budget is sped up, moved or deleted. Never
   raise a budget to make it pass.
@@ -236,11 +236,11 @@ file or test. The fast check runs only the lanes whose files have changed.
 ## UI
 
 MTG Arena is the reference for Beryl's game flow, the order and timing of
-events, the table layout and the wording (`docs/project-50k.md`, K22). Before
-you design or change a prompt, animation, arrow or label, look up how Arena does
-it with the `arena-video` skill. A screenshot or filmstrip answers questions
-that a description can't. To make something match Arena as closely as possible,
-pixel for pixel, use the `arena-pixel-match` skill.
+events, the table layout and the wording (K22 in `docs/engine-architecture.md`).
+Before you design or change a prompt, animation, arrow or label, look up how
+Arena does it with the `arena-video` skill. A screenshot or filmstrip answers
+questions that a description can't. To make something match Arena as closely as
+possible, pixel for pixel, use the `arena-pixel-match` skill.
 
 - Animations follow Arena in what they show and when: what changed, who did it,
   where it went, in what order, and what stays still. No review is required to

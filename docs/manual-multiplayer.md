@@ -56,9 +56,9 @@ A few parts of Beryl are named throughout, and are defined here once.
   document. Every Cockatrice control that manipulates a game, with the gesture,
   menu row and key that reaches it in Beryl. Read it beside the
   [Interaction](#interaction) section.
-- [Project 50k](project-50k.md): the plan Beryl's engine and interface are being
-  rebuilt to. Its decisions K22 to K26 define the view and script contract
-  between the session and the stage, which the manual table reuses unchanged.
+- [Engine architecture](engine-architecture.md), decisions K22 to K26: the view
+  and script contract between the session and the stage, which the manual table
+  reuses unchanged.
 - [Engine architecture](engine-architecture.md), sections 13 and 19.2: hidden
   information and the session's protocol for engine games.
 - [UI Conventions](ui-conventions.md): Beryl's design language. Beryl's

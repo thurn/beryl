@@ -1,9 +1,10 @@
 # UI Conventions
 
 MTG Arena is the reference for Beryl's flow, the order and timing of events,
-table layout and wording (AGENTS.md, UI; [Project 50k](project-50k.md), K22).
-This page lists only what Arena does not settle: where Beryl differs on purpose,
-what Arena has no equivalent for, and what the recordings do not show.
+table layout and wording (AGENTS.md, UI;
+[Engine architecture](engine-architecture.md), K22). This page lists only what
+Arena does not settle: where Beryl differs on purpose, what Arena has no
+equivalent for, and what the recordings do not show.
 
 The rulings were made on 2026-11-10 from an audit of 180 bug reports against the
 recordings in `~/arena`. Each Arena finding cites the recording moments that

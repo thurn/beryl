@@ -33,7 +33,7 @@ A strong opponent that **does not cheat** and **plays like a plausible human**.
 - **General by data, not by code.** A policy rule reads what a card's definition
   says (its types, keywords, costs, targets) and the game's state. It never
   names a card. Per-card numbers survive only as table entries (`values.rs`),
-  the overlay of plan K9 ([project-50k.md](project-50k.md)).
+  the per-deck overlay ([engine-architecture.md](engine-architecture.md), K9).
 - **The bar.** The WU Control mirror is the only testbed until a human finds a
   new blunder in fewer than one game in five. Then the ladder moves to the next
   deck.

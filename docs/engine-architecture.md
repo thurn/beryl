@@ -14,7 +14,11 @@ deck in `docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt`, a mythic
 drafter's WU Control deck from the cube's Arena run. It built the structures
 described here, but only the mechanics its cards use. More decks come in later
 milestones. The twenty-two decisions it rests on are marked **D1** to **D22**
-where they apply and listed again in the appendix.
+where they apply and listed again in the first appendix. On 2026-11-10 the
+structure was rebuilt so that it would hold every Magic card (Project 50k): a
+kernel crate that owns the state, card behavior as effect data, set crates and a
+card store for the whole pool. The decisions of that rebuild are marked **K1**
+to **K29** and listed in the second appendix, with the measurements behind them.
 
 ## 1. Goals
 
@@ -96,9 +100,10 @@ monarch, votes, phasing, infect, dungeons, wishes, dredge and morph.
 03. **The state is a flat `Copy` value** with fixed capacities and no heap
     (**D3**, **D4**). Everything static lives in shared read-only tables: one
     for the cube, and one built per game from the two decklists (**D20**).
-04. **Code for bodies, data for interfaces** (**D1**). What the engine must
-    inspect about an ability is typed Rust data; what an ability does is a Rust
-    function.
+04. **Data for interfaces and for behavior** (**D1**, **K1**). What the engine
+    must inspect about an ability, and what the ability does, are typed effect
+    data that one interpreter runs. A Rust function is the escape hatch for what
+    the vocabulary cannot say.
 05. **Decisions at the granularity of distinct consequences** (**D6**).
     Candidates that lead to the same game state are one candidate.
 06. **Determinism.** A game is a pure function of the decks, the seed and the
@@ -130,10 +135,10 @@ pub struct Choice(pub u8);
 - `Scratch` is per-thread working memory: candidate buffers, the mana solver's
   arrays, the event buffer the UI reads, and a spare `State` used by
   transactional replay (§7.3). It is never copied with the state.
-- `Answers` is where a card body's mid-resolution choices come from (§7.3).
-  `Replay` answers from the choice record and pauses the body when the record
-  runs out, for tree nodes and the UI; the rollout policy answers inline and
-  never pauses.
+- `Answers` is where the choices asked while something resolves come from
+  (§7.3). `Replay` answers from the choice record and pauses the resolution when
+  the record runs out, for tree nodes and the UI; the rollout policy answers
+  inline and never pauses.
 - A rollout is the loop below. The search crate inlines it, so the "callback"
   shape costs nothing where it is the right shape:
 
@@ -154,15 +159,15 @@ loop {
 structure for a rollout, and the loop above matches it; inside a rollout the
 policy even answers mid-resolution choices inline (§7.3). It fails everywhere
 else. Tree search must be able to hold a position at any node and copy it to
-expand; a position paused inside a Rust function has no copyable representation,
-so no node could sit at a mid-resolution choice. The choices that decide games
-in this cube are exactly those: what to fetch with Demonic Tutor, what to put
-back with Brainstorm, what to keep from a scry, what the opponent puts down with
-Show and Tell. Under callbacks the AI answers them by heuristic because it
-cannot copy the position and simulate forward. DeepScry and Ironsmith both
-started with callbacks and both had to bolt on checkpoint-and-replay to get back
-into a decision. Here the paused position is a value (§7.3), so a tutor choice
-is an ordinary node with forty legal children.
+expand; a position paused inside a running function has no copyable
+representation, so no node could sit at a mid-resolution choice. The choices
+that decide games in this cube are exactly those: what to fetch with Demonic
+Tutor, what to put back with Brainstorm, what to keep from a scry, what the
+opponent puts down with Show and Tell. Under callbacks the AI answers them by
+heuristic because it cannot copy the position and simulate forward. DeepScry and
+Ironsmith both started with callbacks and both had to bolt on
+checkpoint-and-replay to get back into a decision. Here the paused position is a
+value (§7.3), so a tutor choice is an ordinary node with forty legal children.
 
 ## 4. State layout (D3, D4)
 
@@ -263,9 +268,9 @@ object in a slot:
   allocated from a free bitboard and recycled once they cease to exist. The
   incarnation counter makes a stale reference to a recycled slot detectable.
 
-- **Emblems** are a per-player bitmask over the handful of emblem kinds the cube
-  has, not objects. The continuous-effect machinery treats an emblem as a source
-  like any other.
+- **Emblems** are not objects: each player holds up to four, as game-table
+  indices of their definitions. The continuous-effect machinery treats an emblem
+  as a source like any other.
 
 - **Capacities** of `Small`, each a stall when exceeded (§4.1):
 
@@ -310,17 +315,13 @@ object in a slot:
 
 ### 4.4 Players and turn
 
-`Player` holds life, poison, energy, the mana pool, land drops this turn, the
-emblem mask, and the per-turn history counters that rules read: spells cast this
-turn by each player for storm, cards drawn this turn for Narset and Sheoldred,
-life gained and lost, creatures that died, lands that entered. **Every history
-fact a rule reads is a counter maintained at the mutation chokepoint.** None is
-derived from a log, which is the trap DeepScry fell into when its rollouts ran
-with the log off.
-
-The mana pool is six `u8` color counts plus a short list of restricted mana
-entries, each tagged with its restriction: the artifact-only mana of Mishra's
-Workshop and The Mightstone and Weakstone.
+`Player` holds only what the rules give a player: life, the mana pool (six `u8`
+counts), land drops this turn, the mulligan's progress and the emblems. **Every
+history fact a rule reads is a tracker noted at the mutation chokepoint**
+(§4.5), and only in a game with a card that reads it: a loyalty ability
+activated this turn, a permanent that entered this turn. None is derived from a
+log, which is the trap DeepScry fell into when its rollouts ran with the log
+off.
 
 `Turn` holds the turn number, active player, step, the priority holder and pass
 count, the queue of extra turns, and any inserted combat phase.
@@ -335,10 +336,15 @@ count, the queue of extra turns, and any inserted combat phase.
   with their source, event payload and LKI.
 - `delayed`: delayed triggered abilities with their duration and source (Mana
   Drain, Sneak Attack, Memory Jar, Fable's Reflection).
-- `effects`: continuous effects from resolved spells and abilities, with source,
-  timestamp, duration, layer, affected-set filter and modification
-  (until-end-of-turn pumps, Oko's Elk, control changes, protection from Giver of
-  Runes, haste from Sneak Attack).
+- `effects`, `memos` and `trackers`: the three stores of what cards create
+  (**K4**; `beryl_kernel`'s contract, "Stores"). Effects are continuous effects
+  with a source, timestamp and duration, whose affected side is an object, a
+  player, a locked-in set or the game, and whose payload is a layer change, a
+  rule change, a replacement, a cost change or a permission. Memos are what an
+  object remembers about how it was cast or entered, cleared as it changes
+  zones. Trackers are this turn's facts that a card of the game reads. Each
+  store implements duration, expiry, layout conversion, saving and observation
+  once.
 
 ## 5. Identity, zone changes and last-known information
 
@@ -353,25 +359,26 @@ Leaves-the-battlefield abilities look back in time (CR 603.10). The zone-move
 pipeline (§8.2) therefore matches look-back triggers **before** the move, using
 the object's derived characteristics as they were, and copies an 8-byte LKI
 record (power, toughness, counters, controller, types) into the pending trigger
-and later its stack entry. Bodies read LKI from there. Token slots are not
+and later its stack entry. Effects read LKI from there. Token slots are not
 recycled until the state-based pass that removed them has finished enqueuing
 triggers.
 
-## 6. Cards: data for interfaces, code for bodies (D1)
+## 6. Cards: typed data (D1, K1)
 
-### 6.1 The split
+### 6.1 Why data
 
 The transition budget is about 20,000 instructions. Nearly all of it goes to
 machinery that is identical however card text is expressed: legal-move
 generation, payability, zone moves, trigger matching, state-based actions, layer
-recomputation. A body like Lightning Bolt is three primitive calls, and
-dispatching those through a `match` on a typed enum would cost one or two
-percent. So the choice between data and code for effect bodies turns on three
+recomputation. An effect like Lightning Bolt's is three primitive calls, and
+abilities resolve 10 to 20 times a game, so dispatching through a `match` on a
+typed enum costs about 0.02% of a rollout (the count gate held with no bump when
+every card moved to effect data). So the choice between data and code turns on
 other things:
 
 - **Resumability.** Resolution must stop for a player's choice without the
-  engine calling anyone. A suspended Rust function cannot be copied; §7.3 shows
-  how plain Rust bodies pause anyway.
+  engine calling anyone. A suspended function cannot be copied; §7.3 shows how a
+  resolution pauses anyway.
 - **Inspectability.** The engine must look inside abilities: which spells have a
   legal target now, what mana a permanent can make, which events a trigger
   listens to, what layer a static effect sits in, whether an activated ability
@@ -380,39 +387,35 @@ other things:
   a silent rules bug.
 - **Hot predicates.** Target and affected-set filters run per candidate per
   legality check. They must be bitboard operations, never tree walks.
+- **Tools.** The AI's card knowledge (§19.1), the renderer that turns a
+  definition back into rules text to compare with Scryfall's (**K13**), the
+  generated scenarios (**K3**) and the oracle exporters all read the data.
 
-Hence the split: **everything the engine inspects is typed Rust data; what an
-ability does is a Rust function.** No scripting language, no text parsed at
-runtime, no general-purpose VM. Both compile ahead of time into one static
-table.
+Hence: **an ability, interface and behavior, is typed Rust data that one
+interpreter runs.** A Rust function is the escape hatch (§6.3). No scripting
+language, no text parsed at runtime, no general-purpose VM. Everything is built
+with `const fn`, so a definition is a static with no startup cost and no macro.
 
 ### 6.2 The table
 
-```rust
-pub struct CardDef {
-    pub name: &'static str,
-    pub faces: &'static [Face],          // 1, or 2 for DFC, MDFC, split, adventure
-}
-pub struct Face {
-    pub cost: ManaCost, pub types: Types, pub subtypes: Subtypes,
-    pub colors: Colors, pub power: Option<Pt>, pub toughness: Option<Pt>,
-    pub loyalty: Option<u8>, pub keywords: Keywords,
-    pub abilities: &'static [Ability],
-}
-pub struct Ability {
-    pub kind: AbilityKind,               // Spell, Activated, Mana, Triggered, Static, Replacement
-    pub cost: Cost,                      // mana, tap, sacrifice, discard, life, exile, ...
-    pub timing: Timing,                  // sorcery speed, instant speed, "any time you could cast an instant"
-    pub targets: &'static [TargetSpec],  // filter, count, optional
-    pub modes: Modes,                    // choose N of these, each with its own targets
-    pub listens: EventMask,              // triggered and replacement: which event kinds
-    pub matches: Filter,                 // triggered and replacement: which events
-    pub layer: Option<LayerSpec>,        // static: layer, sublayer, affected set, modification
-    pub produces: ManaSet,               // mana abilities: colors, amount, restriction
-    pub body: Behavior,                  // effect data, or a Rust function (§6.3)
-}
-pub type Flow = Result<(), Stop>;    // Err: paused at a question, or out of room
-```
+A `CardDef` is a name and one or two faces (DFC, MDFC, split, adventure). A face
+holds its printed characteristics and its abilities. An `Ability`'s fields are
+private, set by `const fn` builders (`beryl_card`'s `ability.rs`):
+
+- its kind (spell, activated, mana, triggered, static, replacement), cost (mana,
+  tap, sacrifice, discard, life, exile and the rest) and timing;
+- its targets, each a `TargetSpec` of a filter and a count;
+- for a triggered ability, its `Trigger` (the event and the filter of what it
+  matches), and for a static or replacement ability, or an intervening "if", a
+  `Condition`;
+- for a static ability, its `LayerSpec` or `RuleChange`; for a replacement
+  ability, the event it modifies; for a mana ability, what it produces;
+- its body, a `Behavior`: effect data (`Behavior::Data(&Effect)`) or a Rust
+  function (`Behavior::Custom`, §6.3).
+
+What an ability needs to do anything (`Ability::needs`) and whether it may ask a
+question as it resolves (`Ability::asks`) are read from the data, never declared
+beside it.
 
 - `Filter` is a small enum over bitboard-backed predicates: creature, controlled
   by, tapped, mana value at most, has counter, subtype, color, and combinations.
@@ -420,50 +423,50 @@ pub type Flow = Result<(), Stop>;    // Err: paused at a question, or out of roo
 - `fn` pointers are fine in the table because the table is `&'static` data
   shared by all threads; they are banned from `State`, which stores only
   game-table indices and ability indices.
-- A generated `names` module (`names::LIGHTNING_BOLT`) makes a misspelled card a
-  compile error in both card files and scenarios. No list of names is committed:
-  each set crate's build script writes `own_names`, the names of its cards with
-  a file and of its cards complete from the card store, and `names`, those plus
-  the other cards its files name. `beryl_cards::names` re-exports every set
-  crate's `own_names` and adds the decklists' cards (`docs/sample-decks/`) and
-  the basic lands. A card is first printed in one set, so no two set crates
-  share a name. Since the registry's build script only lists the set crates, an
-  edit to a card file reruns no build script but its own crate's.
+- Generated names (`Card::Counterspell` in a card file, `names::COUNTERSPELL`
+  elsewhere) make a misspelled card a compile error in both card files and
+  scenarios. No list of names is committed: each set crate's build script writes
+  `own_names`, the names of its cards with a file and of its cards complete from
+  the card store, and `names`, those plus the other cards its files name.
+  `beryl_cards::names` re-exports every set crate's `own_names` and adds the
+  decklists' cards (`docs/sample-decks/`) and the basic lands. A card is first
+  printed in one set, so no two set crates share a name. Since the registry's
+  build script only lists the set crates, an edit to a card file reruns no build
+  script but its own crate's.
 - One file per card, `rust/cards/<crate>/<set>/<card>.rs`, by the card's first
   printing (`just card path <name>` prints it). `data/set-groups.json` puts each
   first-printing set in the crate of its release year, `cards_2010`; a year of
   more than 1,200 cards, and the current year and later ones, are split into
   halves by release date (`cards_2024_h1`, `cards_2024_h2`), and a half of more
   than 1,200 into quarters (`cards_2026_q1`). The cap keeps the crate that a
-  one-card edit rechecks small. The file holds the `CardDef`, its bodies, and
-  its black-box scenarios (§17). Nothing lists the files by hand: a new card is
-  a new file (`beryl_card_build`).
-- Nobody types a printed characteristic (plan K2). A set crate's build script
-  writes a `printed::<FACE>` constant for each face of its cards, and a
-  `printed::token::<TOKEN>` for each token its files name, from the card store;
-  a face starts from it and adds its abilities, and a file that types a cost,
-  type, subtype, color, power, toughness, loyalty or face name fails the build.
-  Each file opens with a generated header of its card's printed faces, which
+  one-card edit rechecks small. The file holds the `CardDef` and its black-box
+  scenarios (§17). Nothing lists the files by hand: a new card is a new file
+  (`beryl_card_build`).
+- Nobody types a printed characteristic (**K2**). A set crate's build script
+  writes a `Printed::<Face>` constant for each face of its cards, and a
+  `Token::<Token>` for each token its files name, from the card store; a face
+  starts from it and adds its abilities, and a file that types a cost, type,
+  subtype, color, power, toughness, loyalty or face name fails the build. Each
+  file opens with a generated header of its card's printed faces, which
   `just card header` rewrites and the `names` lane holds to the store.
-- A card complete from the store has no file (plan K2: "keyword-only creatures
-  need no authoring"): a single-faced creature with a cost the engine can hold
-  whose Oracle text, less reminder text, is empty or only keywords of
-  `Keywords`, read from `characteristics.rs` so the rule follows that list. Its
-  set crate's build script writes its `CardDef`, its printed face with those
-  keywords, into `STORE_CARDS` (`beryl_card_build`'s `complete`), and a file for
-  it, if one is written, replaces that definition. `CARDS.get` finds these
-  cards, but `CARDS.cards()` and `scenarios()`, which tests and sweeps walk,
-  hold only the cards with files; a store card's spec and generated scenarios
-  are made when someone names it (`/specs/<card>`, `just oracle <card>`). The
-  set crates themselves are written from `data/set-groups.json` by
-  `just card crates`, which the `card-crates` check holds current.
+- A card complete from the store has no file (**K2**): a single-faced creature
+  with a cost the engine can hold whose Oracle text, less reminder text, is
+  empty or only keywords of `Keywords`, read from `characteristics.rs` so the
+  rule follows that list. Its set crate's build script writes its `CardDef`, its
+  printed face with those keywords, into `STORE_CARDS` (`beryl_card_build`'s
+  `complete`), and a file for it, if one is written, replaces that definition.
+  `CARDS.get` finds these cards, but `CARDS.cards()` and `scenarios()`, which
+  tests and sweeps walk, hold only the cards with files; a store card's spec and
+  generated scenarios are made when someone names it (`/specs/<card>`,
+  `just oracle <card>`). The set crates themselves are written from
+  `data/set-groups.json` by `just card crates`, which the `card-crates` check
+  holds current.
 
 ### 6.3 Bodies
 
 What an ability does as it resolves is a `Behavior`: effect data, or a Rust
-function where the vocabulary cannot say it (`docs/project-50k.md`, K1). Every
-card of the pool is effect data, written with `beryl_card`'s `const fn`
-builders:
+function where the vocabulary cannot say it (**K1**). Every card of the pool is
+effect data, written with `beryl_card`'s `const fn` builders:
 
 ```rust
 // "Return target spell to its owner's hand. Draw a card."
@@ -608,46 +611,47 @@ multiplies by factors that cannot change the game.
 ### 7.3 Transactional replay
 
 Casting and combat declaration are engine-generic and hot, so they are explicit
-state machines whose step lives in `pending`. Card bodies are the long tail, and
-they pause differently:
+state machines whose step lives in `pending`. Resolutions are the long tail, and
+they pause differently. A resolution is a `Resolution` (the source, the
+controller, the targets and the record of answers) that the interpreter runs the
+ability's effect against.
 
-1. When a body must run, the engine copies the committed state into the scratch
-   `State` and runs the body there with the choice record so far.
-2. If the body completes, the scratch state becomes the committed state and the
-   record is cleared.
-3. If the body asks a question the record does not answer, the scratch state is
+1. When something must resolve, the engine copies the committed state into the
+   scratch `State` and runs the resolution there with the choice record so far.
+2. If it completes, the scratch state becomes the committed state and the record
+   is cleared.
+3. If it asks a question the record does not answer, the scratch state is
    discarded, and the question is stored in `pending` with the record intact.
    The committed state is still the pre-resolution state.
-4. The next `apply` appends the answer to the record and runs the body again
-   from step 1.
+4. The next `apply` appends the answer to the record and runs the resolution
+   again from step 1.
 
 A paused position is therefore just pre-state plus a short record, and search
-copies it like any other state. Randomness inside a body replays identically
-because the RNG is part of the copied pre-state. A body with k choices costs k
-short re-runs; the record holds 32 answers, which covers Balance and Doomsday,
-and overflowing it is a stall. Events emitted during a run that ends pending are
-discarded with the scratch state. Viewing a paused position (§13) replays the
-body once into scratch and takes the view there, so the viewer sees, for
-example, the three cards Brainstorm just drew.
+copies it like any other state. Randomness inside a resolution replays
+identically because the RNG is part of the copied pre-state. A resolution with k
+choices costs k short re-runs; the record holds 32 answers, which covers Balance
+and Doomsday, and overflowing it is a stall. Events emitted during a run that
+ends pending are discarded with the scratch state. Viewing a paused position
+(§13) replays the resolution once into scratch and takes the view there, so the
+viewer sees, for example, the three cards Brainstorm just drew.
 
 Only an ability that may ask a question runs on the scratch copy, which costs
-about 170 ns. An ability written as effect data says so itself: its effect
-contains an instruction that asks (`Effect::asks`). A Rust body, which nothing
-can read, declares it with `Ability::pauses`, and a debug assertion catches a
-body that asks a question without declaring it. `Ability::asks` answers for
-both. The alternative, a hand-written step enum per multi-step card, was
-rejected (**D1**) as the error-prone half of the work for no measurable speed.
+about 170 ns. `Ability::asks` says which: effect data says so itself, since its
+effect contains an instruction that asks (`Effect::asks`), and a Rust body,
+which nothing can read, says it in `CustomBody::SAYS`. The alternative, a
+hand-written step enum per multi-step card, was rejected (**D1**) as the
+error-prone half of the work for no measurable speed.
 
 **Rollouts never pause.** Their answer source is the rollout policy, called
-inline, so a `may_pause` body runs once on the committed state, with no scratch
-copy and no re-run. This cube is full of such bodies: twelve fetch-style lands,
-tutors, Thoughtseize, Brainstorm, Ponder, Preordain, Stock Up and Dig Through
-Time. At 10 to 20 resolutions a game, replaying them would cost about 2 to 3% of
-rollout time. Both paths must reach the same state for the same answers, so a
-differential test records a rollout's inline answers, replays them through
-`Replay`, and compares state hashes at every decision (§17.4). An undo log that
-rolls back on pause was considered and rejected: exact undo for every primitive
-is the bug class that broke DeepScry's rewind.
+inline, so a resolution that may ask runs once on the committed state, with no
+scratch copy and no re-run. This cube is full of such abilities: twelve
+fetch-style lands, tutors, Thoughtseize, Brainstorm, Ponder, Preordain, Stock Up
+and Dig Through Time. At 10 to 20 resolutions a game, replaying them would cost
+about 2 to 3% of rollout time. Both paths must reach the same state for the same
+answers, so a differential test records a rollout's inline answers, replays them
+through `Replay`, and compares state hashes at every decision (§17.4). An undo
+log that rolls back on pause was considered and rejected: exact undo for every
+primitive is the bug class that broke DeepScry's rewind.
 
 ### 7.4 Casting
 
@@ -703,11 +707,11 @@ declaration (CR 508.1f), the taps and mana of one payment (CR 601.2h), and a
 permanent leaving with what it had exiled until then returning (CR 610.3). Cards
 drawn are not one (CR 121.2). The rules open a group around what they do at
 once, and one opened inside another is part of it. A tag has no group number,
-only `together`: the event is of the group of the event kept before it. A body
-that runs again from its start (§7.3) so keeps the same tags as its run before,
-which the session relies on to tell the repeats, and `Tag::groups` numbers a
-list's groups for a reader. A block declared (CR 509.1) is an event only a
-recording sink keeps, `Block`, one for each blocker, together.
+only `together`: the event is of the group of the event kept before it. A
+resolution that runs again from its start (§7.3) so keeps the same tags as its
+run before, which the session relies on to tell the repeats, and `Tag::groups`
+numbers a list's groups for a reader. A block declared (CR 509.1) is an event
+only a recording sink keeps, `Block`, one for each blocker, together.
 
 ### 8.2 The pipeline
 
@@ -736,15 +740,15 @@ as a mana ability activated to pay a cost an effect asks for sits inside that
 payment, inside the resolution; and with none open the cause is the rules.
 Search pays nothing per event for this and one branch to open or close a scope
 or a group: a sink that is off never builds a cause, and the code that records
-sits out of line. A body run that is discarded (§7.3) drops its tags with its
-events.
+sits out of line. A resolution run that is discarded (§7.3) drops its tags with
+its events.
 
 ### 8.3 Triggers
 
 Pending triggers go on the stack the next time a player would receive priority,
 in APNAP order, each controller ordering their own non-equivalent ones.
 Intervening-if conditions are checked when the ability triggers and again on
-resolution. Reflexive triggers ("when you do") are enqueued by the body that
+resolution. Reflexive triggers ("when you do") are enqueued by the effect that
 created the condition. Delayed triggers carry their duration and fire from
 step-boundary events. State triggers (Dark Depths) are checked with state-based
 actions and enqueued once until they resolve. Triggers from outside the
@@ -1064,7 +1068,7 @@ zone.
 - `State` implements `Hash` over its fields, computed on demand for tests,
   divergence checks and the first transposition tables. The mutation chokepoints
   are placed so an incremental Zobrist hash can be added without touching card
-  bodies if transposition tables earn it.
+  definitions if transposition tables earn it.
 
 ## 15. Restriction profiles
 
@@ -1217,10 +1221,10 @@ or appear on the divergence allowlist, and fuzz play including the card raises
 no invariant. dirac's lockstep bar is the model.
 
 `beryl_engine`'s `coverage` feature, which only tests enable, records each
-ability whose body runs, mana ability that makes mana, static ability whose
-effect applies or rule bites, replacement that modifies an event, and casting
-option a spell is cast with. A `beryl_cards` test fails on any no scenario
-exercises, and `just fuzz` reports those random play never reaches.
+ability that resolves, mana ability that makes mana, static ability whose effect
+applies or rule bites, replacement that modifies an event, and casting option a
+spell is cast with. A `beryl_cards` test fails on any no scenario exercises, and
+`just fuzz` reports those random play never reaches.
 
 ### 17.4 Other checks
 
@@ -1469,27 +1473,114 @@ and an `Undo` entry, so a replay goes back too. The engine is untouched.
 
 ## Appendix: decisions
 
-| ID  | Decision                                                                                                                                                   | Why                                                                                                                                                                                  |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| D1  | Typed Rust data for ability interfaces, Rust functions for bodies; transactional replay for pauses at tree nodes and in the UI, inline answers in rollouts | Dispatch cost is 1 to 2%; the engine must inspect abilities; bodies must pause without callbacks or step enums; rollouts never need to pause, and replaying there would cost 2 to 3% |
-| D2  | One exact engine; speed from representation plus restriction profiles                                                                                      | dirac shows exact and fast coexist; two implementations double the card work; search exploits approximations                                                                         |
-| D3  | Flat `Copy` state, fixed capacities, no heap                                                                                                               | One-`memcpy` copies and zero allocations are the proven pattern; copy-make suits determinized root-parallel search                                                                   |
-| D4  | u8 slots, 256 objects, decks to 60, generous queues, about 17 to 20 KiB; copies 170 ns or less                                                             | Fits L1 on both core types; token and storm decks do not stall; emblems as a bitmask; a 20 KiB copy measured 167 ns and rollouts copy once, so a leaner layout buys little           |
-| D5  | Base plus derived arrays, full recompute when dirty, pairwise 613.8 test                                                                                   | Reads are array loads; the cube has few active effects; incremental schemes are where layer bugs live                                                                                |
-| D6  | Offer only distinct consequences                                                                                                                           | One surface for the UI and search, which search profiles only restrict; branching never multiplies by outcome-neutral factors                                                        |
-| D7  | Mana solver picks taps (keeping the most costs payable, in rollouts too; the human's payments look ahead), offers resource trade-offs, `manual_mana` flag  | Payability needs a solver anyway; sacrifices and life are real decisions; tap choice rarely is; searching tap plans costs about 1 µs a cast                                          |
-| D8  | Sequential combat picks with legality-aware candidates; division by distinct outcomes                                                                      | Whole-declaration decisions are combinatorial; defenders and divisions are real decisions                                                                                            |
-| D9  | Engine-tracked knowledge over public slots; shuffles rebind identities; Observation as a borrowed view                                                     | The chokepoints are in the engine; every engine that tracked knowledge elsewhere leaked; a masked copy per decision would cost over 10% of the budget                                |
-| D10 | Typed `Event` enum for about 30 kinds, per-kind indexes, set-carrying events                                                                               | One replacement and trigger protocol; everything-is-an-event is slow; per-primitive hooks drift                                                                                      |
-| D11 | Distinct `Stalled(reason)` terminal scored as a draw                                                                                                       | Budgets are unavoidable; a stall must be distinguishable from a rules draw in tests and statistics                                                                                   |
-| D12 | Crates: engine, cards, scenario, search, session, cli, bench, app                                                                                          | The engine knows no card; card edits do not rebuild rules tests; the AI cannot reach engine internals                                                                                |
-| D13 | Scenarios as Rust-built serde values, strict runner, exported to XMage and Forge                                                                           | Typo-safe authoring with the compiler's help; one scenario, three engines                                                                                                            |
-| D14 | Rust `GameSession` on its own thread; Observations over IPC; replay files                                                                                  | AI thinking never blocks the window; hidden identities never reach the webview                                                                                                       |
-| D15 | A scripted expert system behind an `Agent` trait over Observations                                                                                         | Plays sanely in Milestone 1 and supplies the benchmark's positions; no API change for MCTS                                                                                           |
-| D16 | Per-core budgets measured on rollouts as MCTS runs them; metrics first-class                                                                               | The per-decision budget drives the layout; random games undercount the decisions search pays for; machine-wide numbers reward degenerate games                                       |
-| D17 | This document at `docs/engine-architecture.md`, engine plus boundaries                                                                                     | Reference material every session reads; the interfaces the UI and AI consume are written down                                                                                        |
-| D18 | Search profiles give priority only at smart stops                                                                                                          | A held fetchland or instant makes most of a turn's 16 to 20 priority passes into decisions; smart stops cut decisions 2.5 to 3 times, which no codegen recovers                      |
-| D19 | Decklists are public; hidden information is where the known cards are                                                                                      | The AI is built for open decklists; determinization deals each list's unknown remainder, so no belief model is needed                                                                |
-| D20 | A dense per-game table over the game's known cards; per-matchup builds only on a measured gain of 10% or more                                              | Decision cost is generic machinery whose work depends on the board; the table gets most of specialization's gain                                                                     |
-| D21 | A table-driven rollout policy with no copies or lookahead, about 300 ns per decision                                                                       | Policy cost multiplies every rollout decision; lookahead costs seven times the engine; weaker rollout players gave better estimates in Cowling et al.                                |
-| D22 | A `search` build with fat LTO, abort and the M4 CPU target, then PGO trained on the rollout benchmark                                                      | An estimated 5 to 20% for a build profile; the app follows only once the gain is measured                                                                                            |
+| ID  | Decision                                                                                                                                                      | Why                                                                                                                                                                                                                    |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Typed Rust data for abilities, interface and behavior alike (**K1**); transactional replay for pauses at tree nodes and in the UI, inline answers in rollouts | Dispatch costs about 0.02% of a rollout; the engine and its tools must inspect abilities; resolutions must pause without callbacks or step enums; rollouts never need to pause, and replaying there would cost 2 to 3% |
+| D2  | One exact engine; speed from representation plus restriction profiles                                                                                         | dirac shows exact and fast coexist; two implementations double the card work; search exploits approximations                                                                                                           |
+| D3  | Flat `Copy` state, fixed capacities, no heap                                                                                                                  | One-`memcpy` copies and zero allocations are the proven pattern; copy-make suits determinized root-parallel search                                                                                                     |
+| D4  | u8 slots, 256 objects, decks to 60, generous queues, about 17 to 20 KiB; copies 170 ns or less                                                                | Fits L1 on both core types; token and storm decks do not stall; emblems as a bitmask; a 20 KiB copy measured 167 ns and rollouts copy once, so a leaner layout buys little                                             |
+| D5  | Base plus derived arrays, full recompute when dirty, pairwise 613.8 test                                                                                      | Reads are array loads; the cube has few active effects; incremental schemes are where layer bugs live                                                                                                                  |
+| D6  | Offer only distinct consequences                                                                                                                              | One surface for the UI and search, which search profiles only restrict; branching never multiplies by outcome-neutral factors                                                                                          |
+| D7  | Mana solver picks taps (keeping the most costs payable, in rollouts too; the human's payments look ahead), offers resource trade-offs, `manual_mana` flag     | Payability needs a solver anyway; sacrifices and life are real decisions; tap choice rarely is; searching tap plans costs about 1 µs a cast                                                                            |
+| D8  | Sequential combat picks with legality-aware candidates; division by distinct outcomes                                                                         | Whole-declaration decisions are combinatorial; defenders and divisions are real decisions                                                                                                                              |
+| D9  | Engine-tracked knowledge over public slots; shuffles rebind identities; Observation as a borrowed view                                                        | The chokepoints are in the engine; every engine that tracked knowledge elsewhere leaked; a masked copy per decision would cost over 10% of the budget                                                                  |
+| D10 | Typed `Event` enum for about 30 kinds, per-kind indexes, set-carrying events                                                                                  | One replacement and trigger protocol; everything-is-an-event is slow; per-primitive hooks drift                                                                                                                        |
+| D11 | Distinct `Stalled(reason)` terminal scored as a draw                                                                                                          | Budgets are unavoidable; a stall must be distinguishable from a rules draw in tests and statistics                                                                                                                     |
+| D12 | Crates: card vocabulary, kernel, rules, set crates and their registry, scenario, search, session, cli, bench, app (§16)                                       | The engine knows no card; card edits do not rebuild rules tests; the AI cannot reach engine internals                                                                                                                  |
+| D13 | Scenarios as Rust-built serde values, strict runner, exported to XMage and Forge                                                                              | Typo-safe authoring with the compiler's help; one scenario, three engines                                                                                                                                              |
+| D14 | Rust `GameSession` on its own thread; Observations over IPC; replay files                                                                                     | AI thinking never blocks the window; hidden identities never reach the webview                                                                                                                                         |
+| D15 | A scripted expert system behind an `Agent` trait over Observations                                                                                            | Plays sanely in Milestone 1 and supplies the benchmark's positions; no API change for MCTS                                                                                                                             |
+| D16 | Per-core budgets measured on rollouts as MCTS runs them; metrics first-class                                                                                  | The per-decision budget drives the layout; random games undercount the decisions search pays for; machine-wide numbers reward degenerate games                                                                         |
+| D17 | This document at `docs/engine-architecture.md`, engine plus boundaries                                                                                        | Reference material every session reads; the interfaces the UI and AI consume are written down                                                                                                                          |
+| D18 | Search profiles give priority only at smart stops                                                                                                             | A held fetchland or instant makes most of a turn's 16 to 20 priority passes into decisions; smart stops cut decisions 2.5 to 3 times, which no codegen recovers                                                        |
+| D19 | Decklists are public; hidden information is where the known cards are                                                                                         | The AI is built for open decklists; determinization deals each list's unknown remainder, so no belief model is needed                                                                                                  |
+| D20 | A dense per-game table over the game's known cards; per-matchup builds only on a measured gain of 10% or more                                                 | Decision cost is generic machinery whose work depends on the board; the table gets most of specialization's gain                                                                                                       |
+| D21 | A table-driven rollout policy with no copies or lookahead, about 300 ns per decision                                                                          | Policy cost multiplies every rollout decision; lookahead costs seven times the engine; weaker rollout players gave better estimates in Cowling et al.                                                                  |
+| D22 | A `search` build with fat LTO, abort and the M4 CPU target, then PGO trained on the rollout benchmark                                                         | An estimated 5 to 20% for a build profile; the app follows only once the gain is measured                                                                                                                              |
+
+## Appendix: structure decisions
+
+The decisions of the rebuild for 50,000 cards (2026-11-10), as shipped. Numbers
+missing from the list were about how the rebuild was run.
+
+| ID  | Decision                                                                                                                                                                                                                                                                                         | Why                                                                                                                                                                                          |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| K1  | A card's behavior is typed effect data run by one interpreter; a `CustomBody` is the escape hatch (§6). The count gate holds with no bump; a change that cannot hold it after three attempts stops for a human decision.                                                                         | Opaque bodies force hand-kept metadata on every card. Abilities resolve 10 to 20 times a game, so dispatch is about 0.02% of a rollout. K3, K9 and K13 all read the data.                    |
+| K2  | Printed characteristics come from Scryfall, for the whole pool, through the card store. A card gets a Rust file, under a generated header, only when it gets written abilities (§6.2).                                                                                                           | Nobody types a cost or a type line, and keyword-only creatures need no authoring. About 30,000 stub files would be rebuilt by every vocabulary edit and rewritten by every Scryfall refresh. |
+| K3  | The bar for a card is tiered: rules-library effects carry hand-written scenarios, and a card built only from them gets generated scenarios (§17).                                                                                                                                                | Hand-written scenarios for every card would be about 5.8 million lines and hours of oracle time.                                                                                             |
+| K4  | Struct fields hold only what the Comprehensive Rules give that thing. What a card creates lives in three stores: Effects, Memos and Trackers (§4.5).                                                                                                                                             | Each one-card flag hand-rolled its own duration, expiry, layout conversion, save description and observation.                                                                                |
+| K5  | The rules library is free functions over `Game` and `Resolution`, in modules named for the Comprehensive Rules (`actions::scry`, `tokens`).                                                                                                                                                      | An agent reading "Scry 2" or a rule number finds the file by name, and each file stays small.                                                                                                |
+| K6  | `beryl_kernel` owns the state. Its fields are private; other crates use typed mutators, queries and order-free sets (its `lib.rs` is the contract).                                                                                                                                              | Ten of the first 17 logged bugs needed a chokepoint nothing enforced. A crate boundary enforces it at compile time.                                                                          |
+| K7  | Card data says what the card says ("each opponent", "defending player"). The kernel's API reaches players through sets and orders, never a two-player shortcut; no multiplayer logic is written.                                                                                                 | Card data cannot be re-audited cheaply.                                                                                                                                                      |
+| K8  | Card files are grouped by first-printing set, in a crate per release year (halves or quarters of a year past 1,200 cards), with every registry generated at build time (§6.2).                                                                                                                   | A set is how work is batched, a one-card edit rebuilds one crate, and parallel agents never edit a shared list. A one-card rebuild depends on the crate's size (measurements below).         |
+| K9  | Generic agents derive card knowledge from definitions (`values.rs`, `estimate.rs`). Hand-tuned numbers survive only as a per-deck overlay (`beryl_search/src/overlay/`).                                                                                                                         | A table keyed by card name cannot cover the pool. The overlay keeps the WU mirror's strength.                                                                                                |
+| K10 | A prompt is one of about ten shapes plus a purpose from a closed list (§7.1).                                                                                                                                                                                                                    | Half the old prompt kinds served one card. A shape is built once, so a new card needs no protocol or UI change.                                                                              |
+| K12 | The kernel, rules and card crates have no runtime dependencies. Tests use `proptest` and `insta`; tools use mature crates freely.                                                                                                                                                                | The hot path needs exact layout control. Fuzz failures need shrinking.                                                                                                                       |
+| K13 | A definition renders back to Oracle-style text (`beryl_card`'s `render/`), compared with Scryfall's.                                                                                                                                                                                             | A cheap model's typical error is a plausible definition that differs from the card, and rendering makes it mechanical to find.                                                               |
+| K16 | Beryl stays Apache-2.0 and takes no card data, vocabulary or design from Forge. Forge is a test oracle and, in `just census`, a count of mechanics. A card brief cites Oracle text, rulings and the MIT-licensed XMage class.                                                                    | A translator from Forge's scripts would be a second vocabulary of about 1,600 hand-mapped script entries for 83% of its cards (measurements below), at the cost of a permanent GPL.          |
+| K17 | No source file over 800 lines (the `file-length` check, with a shrinking allowlist).                                                                                                                                                                                                             | Appending to a big file is an agent's path of least resistance.                                                                                                                              |
+| K18 | Every run of every check is logged, and each failure gets an inferred verdict: flaky, stale test, caught a bug or selection miss (`verdicts.py`). `just ci-report --prune` lists the checks a fixed pruning rule deletes or moves on that record (`prune.py`).                                   | A verdict an agent must write costs tokens and drifts toward "caught a bug"; the fix's diff already says which it was.                                                                       |
+| K19 | The fast check and slow CI run the browser checks a change can affect, chosen by measured coverage ([checks.md](checks.md)).                                                                                                                                                                     | `Board.tsx` changed in a quarter of all commits, so choosing by file would choose everything.                                                                                                |
+| K20 | A UI fix adds the broken state to what the generic audits run over. A scripted check is the exception and says in a comment why no audit can express it.                                                                                                                                         | Audits found most of the real UI bugs, and scripted checks caused nearly all the stale and racy failures. Only audits scale to generated specs for every card.                               |
+| K21 | A failed check reruns once; one that flakes twice in seven days is quarantined. A slow-CI failure is bisected before its Steward bead is filed.                                                                                                                                                  | A racy test should not charge an unrelated change.                                                                                                                                           |
+| K22 | MTG Arena is the reference for flow, motion, timing, table layout and wording; Beryl keeps its own skin. Beryl differs only by a numbered exception in [ui-conventions.md](ui-conventions.md).                                                                                                   | Prose rules were read differently each time; a recording can be measured.                                                                                                                    |
+| K23 | For each update the session builds, per seat, a script of steps of a closed list of motion verbs covering every visible change, arrows, combat lines and marks included (`beryl_session/src/script`). Engine events carry their cause and group (§8.1). The UI plays scripts and infers nothing. | The UI rebuilt a timeline from snapshots and guessed causes the engine knew.                                                                                                                 |
+| K24 | Scripts are held to invariants: replaying a script on the previous view gives the next view, and no arrow points at an object that is moving or gone. Text snapshots exist only where a person wrote the expectation.                                                                            | Invariants scale to the pool; a snapshot per card is a change detector that one verb change rewrites everywhere.                                                                             |
+| K25 | An imperative stage plays scripts over one persistent DOM node per game object, on a clock it owns and a test can step. A step ends when its animation ends.                                                                                                                                     | Fixed waits and several animation systems sharing a screen were the seams that flickered.                                                                                                    |
+| K26 | A prompt's state lives in the session. Each click is a command; the answer is marks from a closed list and the state of each button.                                                                                                                                                             | A prompt interaction becomes a Rust test, and the phone behaves identically.                                                                                                                 |
+| K27 | Each verb's motion values are Beryl's own data; `just motion` holds the stage to them and shows Arena's measured values (`data/arena-motion.json`) beside them. The user's bug reports judge the look.                                                                                           | Asking only whether something moved passed fixes the user reported again.                                                                                                                    |
+| K28 | The design language is data (`data/ui-conventions.json`): each verb, each mark, the numbered exceptions and the cases Arena does not show. `docs/ui-conventions.md` is generated from it.                                                                                                        | Nothing forced the code and the prose to agree.                                                                                                                                              |
+| K29 | What the recordings do not show is composed from existing verbs and shapes and listed. The phone shares the stage and keeps its own layout.                                                                                                                                                      | 50,000 cards cannot each need a decision, and the recordings are desktop only.                                                                                                               |
+
+### Measurements behind the structure
+
+Taken 2026-11-10 to 2026-11-12 on the development machine (M5 Max), under load
+from other sessions.
+
+**Compile scaling** (K1, K8). 10,000 generated cards shaped like Counterspell,
+75 lines each, against the engine before the rebuild:
+
+| Layout                             | `cargo check` | Release build | One-card edit | Peak compiler memory |
+| ---------------------------------- | ------------- | ------------- | ------------- | -------------------- |
+| One crate, Rust bodies             | 30 s          | 89 s          | 13 s          | 4.1 GiB              |
+| 16 crates, Rust bodies             | 6.5 s         | 7 to 12 s     | 0.9 s         | 1.5 GiB              |
+| One crate, no function bodies      | 34 s          | 34 s          | 7.5 s         | 3.5 GiB              |
+| One crate, no bodies, no scenarios | 9 s           | 8 s           | 4.8 s         | 1.4 GiB              |
+
+Scenarios are three quarters of the compile cost, so they build only for tests
+and tools (`scenarios` feature).
+
+**Scale rehearsal.** `just scale --assert --edits 8` clones the implemented card
+files into 50,000 definitions in 66 set crates of 387 to 1,212 cards, sized like
+the real groups, and builds them with the real build scripts. On 2026-11-12, at
+a load of 11 to 15:
+
+| Measure                                 | Result             | Budget |
+| --------------------------------------- | ------------------ | ------ |
+| Cold `cargo check`, with scenarios      | 58.7 s (415 CPU-s) | 60 s   |
+| Release build                           | 31.4 s (161 CPU-s) | 180 s  |
+| Rebuild after one edit, median of eight | 1.4 s              | 2 s    |
+| Largest compiler process                | 1.13 GiB           | 4 GiB  |
+
+- The cold check is close to its budget in every run.
+- A one-card rebuild is the edited crate's recheck plus about 0.45 s before
+  Cargo starts a unit, 0.25 s of its build script and 0.2 s of `beryl_cards`'
+  recheck. The edited crate's recheck grows with its size (1.55 s at about 1,350
+  cards, 0.6 s at about 680), which is why a crate holds at most about 1,200.
+- Set crates' tables are statics and scenarios are gathered at run time; as
+  `const` tables, the registry re-evaluated every card's scenarios (145 s, 5.9
+  GiB). Each set crate writes its own cards' names, so an edit reruns only its
+  own build script.
+- More crates cost more to link: 164, 212 and 220 release CPU-seconds at 37, 74
+  and 111 crates.
+- The card store is 22.5 MiB with 34,195 card keys. App start-up (321 ms) and
+  the built UI (13.7 MB) did not grow with it.
+
+**Forge's vocabulary** (K16). A census, not a design input. Across 34,134
+scripts, ignoring parameters, there are 450 distinct effect types, static modes,
+trigger modes and replacement events, plus 222 keywords. Counted at the level a
+translator would have to map (names, parameter keys, filter properties,
+references and computed variables), there are 6,199 distinct entries, and the
+most common 1,600 fully cover 82.8% of scripts. 36% of scripts compute a value
+through a script variable, 28% chain sub-abilities and 12% keep remembered
+state.
