@@ -627,9 +627,27 @@ this machine's speed factor (0.82), and `--assert` gave a median of 2.2 s at a
 load of 19. What remains is the edited crate's own recheck (about 0.9 s for
 1,350 cards, mostly parsing their files and writing the crate's metadata) and
 about 0.4 s in which Cargo checks the times of the card files before any unit
-starts. Both grow with the crate's size (K8). Edits made just after the release
-build can wait for seconds with the processor idle while macOS scans the build
-scripts' executables, which also inflates the first edit above.
+starts. Both grow with the crate's size (K8).
+
+Smaller set crates were measured against this (by-w8gv.13.15): the same 50,000
+clones in 37, 74 and 111 crates, editing one card in each workspace in turn. The
+machine is always busy, at a load of 11 to 40 on 18 cores during these runs. The
+edited crate's recheck fell from 0.9 s to 0.45 s and 0.35 s, but the whole
+rebuild barely moved: at a load of about 11 it took 1.8 to 2.1 s on the clock at
+37 crates and 1.8 to 1.9 s at 74 and 111; over eight rounds at a load of 13 to
+20 the load-adjusted medians were 3.2, 2.8 and 3.0 s, over the 2 s budget at
+every size. With smaller crates, `beryl_card_names` is the longest path instead:
+its build script watches every card file, so an edit to one card's code reruns
+it (0.3 s) and rechecks its 50,000 constants (0.7 s), though the names change
+only when a card file is added or removed. K8's rule of 500 to 1,500 cards per
+crate stays until the names crate no longer rebuilds on such an edit
+(by-w8gv.13.16). More crates also cost more to link: the release build took 164,
+212 and 220 CPU-seconds at 37, 74 and 111 crates, while the cold check stayed at
+about 490 CPU-seconds.
+
+Edits made just after the release build can wait for seconds with the processor
+idle while macOS scans the build scripts' executables, which also inflates the
+first edit above.
 
 The card store is 22.5 MiB with 34,195 card keys. Neither start-up nor the UI
 grew with it. Start-up to the UI's report (`just smoke`'s debug app, median of
