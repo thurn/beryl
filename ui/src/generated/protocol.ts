@@ -60,6 +60,8 @@ decision: DecisionId, };
 
 export type ConcedeRequest = { session: SessionId, };
 
+export type ShareBugRequest = { id: string, };
+
 export type BugReport = { 
 /**
  * What the player says went wrong.
@@ -859,6 +861,7 @@ export type Commands = {
   capture_window: { args: Record<string, never>; result: number; error: SessionError };
   report_bug: { args: { request: BugReport }; result: BugSaved; error: SessionError };
   export_bugs: { args: Record<string, never>; result: number | null; error: SessionError };
+  share_bug: { args: { request: ShareBugRequest }; result: null; error: SessionError };
   ui_log: { args: { request: UiLogRequest }; result: null; error: never };
   card_records: { args: { request: CardRecordsRequest }; result: CardRecords; error: never };
 };

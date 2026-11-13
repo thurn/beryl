@@ -57,5 +57,9 @@ objc2-web-kit = { version = "0.3", default-features = false, features = ["std", 
 webview2-com = "0.39"
 windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Com_StructuredStorage"] }
 
+[dev-dependencies]
+# Isolated report folders for the share path test.
+tempfile = "3"
+
 [lints]
 workspace = true

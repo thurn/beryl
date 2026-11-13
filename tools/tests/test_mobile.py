@@ -26,3 +26,8 @@ def test_run_records_ignore_an_earlier_run_with_the_same_pid() -> None:
     # A freshly booted emulator hands the app the pid an earlier run had.
     text = journal((7, ["started", mobile.READY]), (8, []), (7, ["started"]))
     assert mobile.READY not in messages(text, 7)
+
+
+def test_run_records_skips_a_torn_android_journal_line() -> None:
+    text = journal((7, ["started"])) + "\n\0\0broken\n" + journal((8, [mobile.READY]))
+    assert messages(text, 8) == ["opened", mobile.READY]

@@ -55,6 +55,8 @@ pub const CAPTURE_WINDOW: &str = "capture_window";
 pub const REPORT_BUG: &str = "report_bug";
 /// Saves the current bug reports as a ZIP. Returns the count, or None if canceled.
 pub const EXPORT_BUGS: &str = "export_bugs";
+/// Shares one saved bug report as a ZIP through the phone OS.
+pub const SHARE_BUG: &str = "share_bug";
 /// Journals the UI's warnings and errors ([`crate::bugs::UiLogRequest`]).
 pub const UI_LOG: &str = "ui_log";
 /// The card store's records for the names asked for ([`crate::card_records`]).
@@ -112,6 +114,13 @@ pub struct PassOnRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ConcedeRequest {
     pub session: SessionId,
+}
+
+/// The [`SHARE_BUG`] command's request.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ShareBugRequest {
+    pub id: String,
 }
 
 /// The operating system hosting the app or live server.
@@ -319,6 +328,12 @@ pub(crate) fn typescript(cfg: &Config) -> String {
             EXPORT_BUGS,
             "Record<string, never>".to_owned(),
             name::<Option<u32>>(cfg),
+            error.clone(),
+        ),
+        (
+            SHARE_BUG,
+            request(name::<ShareBugRequest>(cfg)),
+            name::<()>(cfg),
             error.clone(),
         ),
         (

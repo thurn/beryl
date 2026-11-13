@@ -277,6 +277,7 @@ pub fn run() {
             capture_window = ipc::CAPTURE_WINDOW,
             report_bug = ipc::REPORT_BUG,
             bug_reports::export_bugs = ipc::EXPORT_BUGS,
+            bug_reports::share_bug = ipc::SHARE_BUG,
             ui_log = ipc::UI_LOG,
             card_records = ipc::CARD_RECORDS,
         ])

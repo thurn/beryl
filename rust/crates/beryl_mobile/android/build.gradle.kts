@@ -28,4 +28,6 @@ kotlin {
 
 dependencies {
     implementation(project(":tauri-android"))
+    // FileProvider grants chooser apps read access only to cache/share.
+    implementation("androidx.core:core:1.15.0")
 }

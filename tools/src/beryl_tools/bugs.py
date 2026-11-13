@@ -402,6 +402,22 @@ def stage_bundle(archive: zipfile.ZipFile, staging: Path) -> list[str]:
     return ids
 
 
+def adopt_report(staged: Path, root: Path) -> bool:
+    """Moves a validated staged report into local triage, unless it is already known."""
+    key = staged.name
+    if not REPORT_ID.fullmatch(key):
+        raise ValueError(f"invalid report ID {key!r}")
+    report = load(staged)
+    if report is None or report.fields.get("id") != key:
+        raise ValueError(f"missing or invalid report {key}")
+    root.mkdir(parents=True, exist_ok=True)
+    with system.file_lock(root / ".triage.lock"):
+        if (root / key).exists() or (root / DONE / key).exists():
+            return False
+        staged.rename(root / key)
+    return True
+
+
 def import_cmd(args: argparse.Namespace) -> int:
     root = bugs_dir()
     root.mkdir(parents=True, exist_ok=True)
@@ -410,13 +426,11 @@ def import_cmd(args: argparse.Namespace) -> int:
             staging = Path(temp)
             with zipfile.ZipFile(args.bundle) as archive:
                 keys = stage_bundle(archive, staging)
-            with system.file_lock(root / ".triage.lock"):
-                for key in keys:
-                    if (root / key).exists() or (root / DONE / key).exists():
-                        print(f"already saved {key}")
-                        continue
-                    (staging / key).rename(root / key)
+            for key in keys:
+                if adopt_report(staging / key, root):
                     print(f"imported {key}")
+                else:
+                    print(f"already saved {key}")
     except (OSError, ValueError, RuntimeError, zipfile.BadZipFile) as error:
         print(f"bugs: {error}", file=sys.stderr)
         return 1

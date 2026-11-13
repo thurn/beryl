@@ -432,7 +432,11 @@ def run_records(journal: str, pid: int) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     ours = False
     for line in journal.splitlines():
-        record: dict[str, Any] = json.loads(line)
+        try:
+            record: dict[str, Any] = json.loads(line)
+        except json.JSONDecodeError:
+            # A killed app can leave a torn or NUL-filled journal line behind.
+            continue
         if record.get("source") == "journal" and record.get("message") == "opened":
             ours = (record.get("data") or {}).get("pid") == pid
             if ours:

@@ -3,6 +3,8 @@ package ca.thurn.beryl.mobile
 import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.content.Intent
+import androidx.core.content.FileProvider
 import android.os.Build
 import android.webkit.WebView
 import app.tauri.annotation.Command
@@ -50,6 +52,35 @@ class BerylMobilePlugin(private val activity: Activity) : Plugin(activity) {
                 }
             } catch (error: Exception) {
                 invoke.reject("Could not snapshot the WebView", error)
+            }
+        }
+    }
+
+    @Command
+    fun share(invoke: Invoke) {
+        activity.runOnUiThread {
+            try {
+                val source = File(invoke.getArgs().getString("path"))
+                val folder = File(activity.cacheDir, "share")
+                folder.mkdirs()
+                folder.listFiles()?.filter { it.canonicalPath != source.canonicalPath }
+                    ?.forEach { it.delete() }
+                val shared = File(folder, source.name)
+                if (source.canonicalPath != shared.canonicalPath) {
+                    source.copyTo(shared, overwrite = true)
+                }
+                val uri = FileProvider.getUriForFile(
+                    activity, "${activity.packageName}.fileprovider", shared
+                )
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/zip"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                activity.startActivity(Intent.createChooser(send, null))
+                invoke.resolve()
+            } catch (error: Exception) {
+                invoke.reject("Could not share the report archive", error)
             }
         }
     }

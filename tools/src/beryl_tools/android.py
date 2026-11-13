@@ -136,7 +136,8 @@ def start_emulator(window: bool) -> subprocess.Popen[bytes]:
 
 
 def install() -> None:
-    adb("install", "-r", str(APK), check=True)
+    # The emulator rejects streamed installs of this large APK intermittently.
+    adb("install", "--no-streaming", "-r", str(APK), check=True)
 
 
 def android(args: argparse.Namespace) -> int:

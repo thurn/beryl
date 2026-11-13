@@ -44,6 +44,9 @@ player select the area that shows the bug, and writes a folder under
 `~/Library/Application Support/ca.thurn.beryl/bugs` (`$BERYL_BUGS` overrides it;
 `beryl_session`'s `bugs.rs` writes it):
 
+Phone reports stay on the phone until `just mobile-bugs` pulls them into this folder.
+A shared zip is taken with `just mobile-bugs <zip>`.
+
 - `report.md`: front matter (`kind`: `bug`, or `ai` for a play of the AI's the
   player ticked "AI play" for; `status`: open, filed or done; `bead`;
   the game's `seed`, `turn`, `step`, `decision`; the `commit` the app was built

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri::plugin::mobile::PluginInvokeError;
 use tauri::plugin::{Builder, PluginHandle, TauriPlugin};
 use tauri::{Manager, Runtime};
@@ -20,11 +20,22 @@ struct Snapshot {
     path: PathBuf,
 }
 
+#[derive(Serialize)]
+struct ShareRequest {
+    path: PathBuf,
+}
+
 pub struct Mobile<R: Runtime>(PluginHandle<R>);
 
 impl<R: Runtime> Mobile<R> {
     pub async fn device(&self) -> Result<Device, PluginInvokeError> {
         self.0.run_mobile_plugin_async("device", ()).await
+    }
+
+    pub async fn share(&self, path: PathBuf) -> Result<(), PluginInvokeError> {
+        self.0
+            .run_mobile_plugin_async("share", ShareRequest { path })
+            .await
     }
 
     pub async fn snapshot(&self) -> Result<PathBuf, PluginInvokeError> {

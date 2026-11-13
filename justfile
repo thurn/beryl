@@ -76,6 +76,11 @@ android *args:
 android-smoke *args:
     {{ by }} android-smoke "$@"
 
+# Pull bug reports from a booted simulator and running emulator (--device for paired iPhone; or ZIP path)
+[group('app')]
+mobile-bugs *args:
+    {{ by }} mobile-bugs "$@"
+
 # Screenshot UI states headless into the cache and print the paths (shot names; ui/shots.json)
 [group('app')]
 ui-shots *args:

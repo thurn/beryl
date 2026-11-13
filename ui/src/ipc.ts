@@ -506,6 +506,10 @@ export const canExportBugs = () =>
   isNativeApp() && platform !== undefined && !isMobile(platform);
 export const exportBugs = () => call("export_bugs", {});
 
+export const canShareBugs = () =>
+  isNativeApp() && platform !== undefined && isMobile(platform);
+export const shareBug = (id: string) => call("share_bug", { request: { id } });
+
 async function chooseTransport(): Promise<Transport> {
   const wrapped = instrumented(await rawTransport());
   if (canReportBugs()) {

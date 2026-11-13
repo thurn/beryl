@@ -34,6 +34,34 @@ class BerylMobilePlugin: Plugin {
         }
     }
 
+    private struct ShareArgs: Decodable {
+        let path: String
+    }
+
+    @objc private func share(_ invoke: Invoke) {
+        do {
+            let args = try invoke.parseArgs(ShareArgs.self)
+            DispatchQueue.main.async {
+                guard let controller = self.webview?.window?.rootViewController else {
+                    invoke.reject("The app window is unavailable")
+                    return
+                }
+                let file = URL(fileURLWithPath: args.path)
+                guard FileManager.default.fileExists(atPath: file.path) else {
+                    invoke.reject("The report archive was not found")
+                    return
+                }
+                let sheet = UIActivityViewController(activityItems: [file], applicationActivities: nil)
+                sheet.popoverPresentationController?.sourceView = controller.view
+                controller.present(sheet, animated: true) {
+                    invoke.resolve()
+                }
+            }
+        } catch {
+            invoke.reject(error.localizedDescription)
+        }
+    }
+
     @objc private func device(_ invoke: Invoke) {
         DispatchQueue.main.async {
             #if targetEnvironment(simulator)

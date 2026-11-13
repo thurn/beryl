@@ -8,7 +8,7 @@ use crate::bugs::{BugReport, BugSaved, PageInfo, Region, UiLogEntry, UiLogReques
 use crate::card_records::{CardEntry, CardFace, CardImages, CardRecords, CardRecordsRequest};
 use crate::ipc::{
     AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, Fixture, FixtureMessage, PassOnRequest,
-    Platform, SetStopsRequest, UndoRequest,
+    Platform, SetStopsRequest, ShareBugRequest, UndoRequest,
 };
 use crate::journal::Level;
 use crate::prompt::{
@@ -70,6 +70,7 @@ pub fn typescript() -> String {
         UndoRequest::decl(&cfg),
         PassOnRequest::decl(&cfg),
         ConcedeRequest::decl(&cfg),
+        ShareBugRequest::decl(&cfg),
         BugReport::decl(&cfg),
         Region::decl(&cfg),
         PageInfo::decl(&cfg),
