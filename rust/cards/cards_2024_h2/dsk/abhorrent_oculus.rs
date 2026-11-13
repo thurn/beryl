@@ -11,21 +11,22 @@
 
 use crate::prelude::*;
 
-/// The six cards are an additional cost
-/// ([CR 118.8](https://yawgatog.com/resources/magic-rules/#R1188)): "Some spells and abilities
-/// have additional costs. An additional cost is a cost listed in a spell's rules text, or
-/// applied to a spell or ability from another effect, that its controller must pay at the same
-/// time they pay the spell's mana cost or the ability's activation cost." The trigger is the
-/// opponent's upkeep's alone
-/// ([CR 503.1a](https://yawgatog.com/resources/magic-rules/#R5031a)): "Any abilities that
-/// triggered during the untap step and any abilities that triggered at the beginning of the
-/// upkeep are put onto the stack before the active player gets priority".
+/// The six cards are an additional cost ([CR 118.8]): "Some spells and abilities have additional
+/// costs. An additional cost is a cost listed in a spell's rules text, or applied to a spell or
+/// ability from another effect, that its controller must pay at the same time they pay the spell's
+/// mana cost or the ability's activation cost." The trigger is the opponent's upkeep's alone
+/// ([CR 503.1a]): "Any abilities that triggered during the untap step and any abilities that
+/// triggered at the beginning of the upkeep are put onto the stack before the active player gets
+/// priority".
 ///
-/// Manifest dread ([CR 701.62a](https://yawgatog.com/resources/magic-rules/#R70162a)): "Look
-/// at the top two cards of your library. Manifest one of them, then put the cards you looked
-/// at that were not manifested this way into your graveyard." The ability's controller does,
-/// whether or not Oculus is still there
-/// ([CR 113.7a](https://yawgatog.com/resources/magic-rules/#R1137a)).
+/// Manifest dread ([CR 701.62a]): "Look at the top two cards of your library. Manifest one of them,
+/// then put the cards you looked at that were not manifested this way into your graveyard." The
+/// ability's controller does, whether or not Oculus is still there ([CR 113.7a]).
+///
+/// [CR 118.8]: https://yawgatog.com/resources/magic-rules/#R1188
+/// [CR 503.1a]: https://yawgatog.com/resources/magic-rules/#R5031a
+/// [CR 701.62a]: https://yawgatog.com/resources/magic-rules/#R70162a
+/// [CR 113.7a]: https://yawgatog.com/resources/magic-rules/#R1137a
 pub static CARD: CardDef = Printed::AbhorrentOculus
     .keywords(Keywords::FLYING)
     .abilities(&[

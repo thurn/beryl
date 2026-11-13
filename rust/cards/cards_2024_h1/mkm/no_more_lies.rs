@@ -8,12 +8,13 @@
 
 use crate::prelude::*;
 
-/// "Unless" as [CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a) reads it. The
-/// second sentence modifies the first
-/// ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)): "later text on the card
-/// may modify the meaning of earlier text (for example, ... 'Counter target spell. If that
-/// spell is countered this way, put it on top of its owner's library instead of into its
+/// "Unless" as [CR 118.12a] reads it. The second sentence modifies the first ([CR 608.2c]): "later
+/// text on the card may modify the meaning of earlier text (for example, ... 'Counter target spell.
+/// If that spell is countered this way, put it on top of its owner's library instead of into its
 /// owner's graveyard.')", so the countered spell goes straight to exile.
+///
+/// [CR 118.12a]: https://yawgatog.com/resources/magic-rules/#R11812a
+/// [CR 608.2c]: https://yawgatog.com/resources/magic-rules/#R6082c
 pub static CARD: CardDef = Printed::NoMoreLies
     .abilities(&[Ability::spell()
         .target(&TargetSpec::spell())

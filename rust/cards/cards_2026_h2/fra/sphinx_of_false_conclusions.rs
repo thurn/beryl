@@ -14,7 +14,8 @@ pub static CARD: CardDef = Printed::SphinxOfFalseConclusions
     .keywords(Keywords::FLASH.union(Keywords::FLYING))
     .abilities(&[
         // "Draw a card, then discard a card."
-        Ability::triggered(&Trigger::ATTACKS).effect(&sequence(&[draw(you(), 1), discard(you(), 1)])),
+        Ability::triggered(&Trigger::ATTACKS)
+            .effect(&sequence(&[draw(you(), 1), discard(you(), 1)])),
         // "If it isn't a token", as it last existed on the battlefield
         // ([CR 603.10a](https://yawgatog.com/resources/magic-rules/#R60310a)): "Some
         // zone-change triggers look back in time." The copy's copiable values are its

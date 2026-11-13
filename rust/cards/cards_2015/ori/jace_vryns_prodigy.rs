@@ -16,55 +16,54 @@
 
 use crate::prelude::*;
 
-/// [CR 712.2](https://yawgatog.com/resources/magic-rules/#R7122): a double-faced card "has a
-/// Magic card face on each side rather than a Magic card face on one side and a Magic card
-/// back on the other."
+/// [CR 712.2]: a double-faced card "has a Magic card face on each side rather than a Magic card
+/// face on one side and a Magic card back on the other."
 ///
-/// "{T}: Draw a card, then discard a card. If there are five or more cards in your graveyard,
-/// exile Jace, then return him to the battlefield transformed under his owner's control."
-/// The graveyard is counted after the discard, as the instructions are followed in order
-/// ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)). A Jace that has left
-/// the battlefield is not exiled, and one that was not exiled does not return
-/// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)). "The cards in your
-/// graveyard".
+/// "{T}: Draw a card, then discard a card. If there are five or more cards in your graveyard, exile
+/// Jace, then return him to the battlefield transformed under his owner's control." The graveyard
+/// is counted after the discard, as the instructions are followed in order ([CR 608.2c]). A Jace
+/// that has left the battlefield is not exiled, and one that was not exiled does not return
+/// ([CR 400.7]). "The cards in your graveyard".
 ///
 /// "+1: Up to one target creature gets -2/-0 until your next turn." A layer 7c effect
-/// ([CR 613.4c](https://yawgatog.com/resources/magic-rules/#R6134c)): "Effects and counters
-/// that modify power and/or toughness (but don't set power and/or toughness to a specific
-/// number or value) are applied." It lasts "as long as stated by the spell or ability creating
-/// it" ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a)).
+/// ([CR 613.4c]): "Effects and counters that modify power and/or toughness (but don't set power
+/// and/or toughness to a specific number or value) are applied." It lasts "as long as stated by the
+/// spell or ability creating it" ([CR 611.2a]).
 ///
-/// "−3: You may cast target instant or sorcery card from your graveyard this turn. If that
-/// spell would be put into your graveyard, exile it instead." The permission carries the
-/// replacement to the spell it casts: a new object on the stack
-/// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), which "exile it instead"
-/// follows wherever it would go to the graveyard: resolving, countered or fizzling
-/// ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)).
+/// "−3: You may cast target instant or sorcery card from your graveyard this turn. If that spell
+/// would be put into your graveyard, exile it instead." The permission carries the replacement to
+/// the spell it casts: a new object on the stack ([CR 400.7]), which "exile it instead" follows
+/// wherever it would go to the graveyard: resolving, countered or fizzling ([CR 614.1a]).
 ///
-/// "−9: You get an emblem with 'Whenever you cast a spell, target opponent mills five
-/// cards.'" [CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142): "This means that
-/// [player] puts an emblem with [ability] into the command zone. The emblem is both owned and
-/// controlled by that player."
+/// "−9: You get an emblem with 'Whenever you cast a spell, target opponent mills five cards.'"
+/// [CR 114.2]: "This means that [player] puts an emblem with [ability] into the command zone. The
+/// emblem is both owned and controlled by that player."
+///
+/// [CR 712.2]: https://yawgatog.com/resources/magic-rules/#R7122
+/// [CR 608.2c]: https://yawgatog.com/resources/magic-rules/#R6082c
+/// [CR 400.7]: https://yawgatog.com/resources/magic-rules/#R4007
+/// [CR 613.4c]: https://yawgatog.com/resources/magic-rules/#R6134c
+/// [CR 611.2a]: https://yawgatog.com/resources/magic-rules/#R6112a
+/// [CR 614.1a]: https://yawgatog.com/resources/magic-rules/#R6141a
+/// [CR 114.2]: https://yawgatog.com/resources/magic-rules/#R1142
 pub static CARD: CardDef = card(
     Card::JaceVrynsProdigy,
     &[
-        Printed::JaceVrynsProdigy.abilities(&[Ability::activated(Cost::TAP).effect(
-            &sequence(&[
-                draw(you(), 1),
-                discard(you(), 1),
-                if_then(
-                    Condition::Compare(
-                        Amount::Count(&Objects::All {
-                            zone: Zone::Graveyard,
-                            filter: Filter::Whose(&Players::You),
-                        }),
-                        Comparison::AtLeast,
-                        Amount::Fixed(5),
-                    ),
-                    &sequence(&[exile(this()), return_transformed(those())]),
+        Printed::JaceVrynsProdigy.abilities(&[Ability::activated(Cost::TAP).effect(&sequence(&[
+            draw(you(), 1),
+            discard(you(), 1),
+            if_then(
+                Condition::Compare(
+                    Amount::Count(&Objects::All {
+                        zone: Zone::Graveyard,
+                        filter: Filter::Whose(&Players::You),
+                    }),
+                    Comparison::AtLeast,
+                    Amount::Fixed(5),
                 ),
-            ]),
-        )]),
+                &sequence(&[exile(this()), return_transformed(those())]),
+            ),
+        ]))]),
         Printed::JaceTelepathUnbound.abilities(&[
             Ability::loyalty(1)
                 .target(&TargetSpec::creature().optional())
@@ -90,14 +89,15 @@ pub static CARD: CardDef = card(
 )
 .creating(&[&EMBLEM]);
 
-/// The emblem of the −9 ([CR 114.1](https://yawgatog.com/resources/magic-rules/#R1141)): "An
-/// emblem is a marker used to represent an object that has one or more abilities, but usually
-/// no other characteristics."
+/// The emblem of the −9 ([CR 114.1]): "An emblem is a marker used to represent an object that has
+/// one or more abilities, but usually no other characteristics."
 ///
-/// "Whenever you cast a spell, target opponent mills five cards."
-/// [CR 701.17a](https://yawgatog.com/resources/magic-rules/#R70117a): "For a player to mill a
-/// number of cards, that player puts that many cards from the top of their library into their
-/// graveyard."
+/// "Whenever you cast a spell, target opponent mills five cards." [CR 701.17a]: "For a player to
+/// mill a number of cards, that player puts that many cards from the top of their library into
+/// their graveyard."
+///
+/// [CR 114.1]: https://yawgatog.com/resources/magic-rules/#R1141
+/// [CR 701.17a]: https://yawgatog.com/resources/magic-rules/#R70117a
 pub static EMBLEM: CardDef = card(
     "Jace, Telepath Unbound Emblem",
     &[Face::EMPTY.abilities(&[
@@ -165,7 +165,10 @@ pub mod scenarios {
         Scenario::new("−3 recasts a sorcery from the graveyard, which is then exiled")
             .permanents(
                 P0,
-                &[Permanent::new(JACE).transformed(), Permanent::new(Card::Plains)],
+                &[
+                    Permanent::new(JACE).transformed(),
+                    Permanent::new(Card::Plains),
+                ],
             )
             .graveyard(P0, &[Card::Oust])
             // A land to play keeps the game in this main phase for the assertions.

@@ -9,13 +9,13 @@
 
 use crate::prelude::*;
 
-/// "Its controller" is the permanent's controller as it was destroyed
-/// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "If an effect requires
-/// information from the game ..., the answer is determined only once, when the effect is
-/// applied. If the effect requires information from a specific object, ... the effect uses
-/// the current information of that object if it's in the public zone it was expected to be
-/// in; if it's no longer in that zone, ... the effect uses the object's last known
-/// information."
+/// "Its controller" is the permanent's controller as it was destroyed ([CR 608.2h]): "If an effect
+/// requires information from the game ..., the answer is determined only once, when the effect is
+/// applied. If the effect requires information from a specific object, ... the effect uses the
+/// current information of that object if it's in the public zone it was expected to be in; if it's
+/// no longer in that zone, ... the effect uses the object's last known information."
+///
+/// [CR 608.2h]: https://yawgatog.com/resources/magic-rules/#R6082h
 pub static CARD: CardDef = Printed::GetLost
     .abilities(&[Ability::spell()
         .target(&TargetSpec::permanent(Filter::Types(
@@ -33,11 +33,12 @@ pub static CARD: CardDef = Printed::GetLost
 /// The Map token's name: its subtype plus the word "Token" (CR 111.4).
 pub use crate::tokens::MAP_TOKEN;
 
-/// The predefined Map token
-/// ([CR 111.10s](https://yawgatog.com/resources/magic-rules/#R11110s)): "A Map token is a
-/// colorless Map artifact token with "{1}, {T}, Sacrifice this token: Target creature you
-/// control explores. Activate only as a sorcery.""
-/// Explore is [CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a).
+/// The predefined Map token ([CR 111.10s]): "A Map token is a colorless Map artifact token with
+/// "{1}, {T}, Sacrifice this token: Target creature you control explores. Activate only as a
+/// sorcery."" Explore is [CR 701.44a].
+///
+/// [CR 111.10s]: https://yawgatog.com/resources/magic-rules/#R11110s
+/// [CR 701.44a]: https://yawgatog.com/resources/magic-rules/#R70144a
 pub static MAP: CardDef = Token::MapToken
     .abilities(&[Ability::activated(Cost::of(
         ManaCost::generic(1),

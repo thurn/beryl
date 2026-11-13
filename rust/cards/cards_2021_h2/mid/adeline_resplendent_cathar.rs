@@ -10,9 +10,10 @@
 
 use crate::prelude::*;
 
-/// The Human token ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)): "If the
-/// spell or ability doesn't specify the name of the token, its name is the same as its
-/// subtype(s) plus the word 'Token.'"
+/// The Human token ([CR 111.4]): "If the spell or ability doesn't specify the name of the token,
+/// its name is the same as its subtype(s) plus the word 'Token.'"
+///
+/// [CR 111.4]: https://yawgatog.com/resources/magic-rules/#R1114
 pub use crate::tokens::HUMAN_TOKEN;
 
 /// The Human token.
@@ -32,7 +33,10 @@ pub static CARD: CardDef = Printed::AdelineResplendentCathar
             condition: None,
             modification: Modification::SetPower(&Amount::Count(&Objects::All {
                 zone: Zone::Battlefield,
-                filter: Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),
+                filter: Filter::All(&[
+                    Filter::Types(Types::CREATURE),
+                    Filter::Whose(&Players::You),
+                ]),
             })),
         }),
         // "Whenever you attack"

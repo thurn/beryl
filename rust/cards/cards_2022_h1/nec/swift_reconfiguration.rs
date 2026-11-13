@@ -47,7 +47,13 @@ pub mod scenarios {
         .hand(P0, &[SWIFT, Card::ThievingSkydiver])
         .battlefield(
             P0,
-            &[Card::Plains, Card::Island, Card::Island, Card::Island, Card::Island],
+            &[
+                Card::Plains,
+                Card::Island,
+                Card::Island,
+                Card::Island,
+                Card::Island,
+            ],
         )
         .battlefield(P1, &[Prop::SmallCreature])
         .library(P0, &[Card::Plains])
@@ -75,7 +81,12 @@ pub mod scenarios {
         Scenario::new("crewing the Vehicle makes it a creature until end of turn")
             .battlefield(
                 P0,
-                &[Card::Plains, Prop::SmallCreature, Prop::Creature, Prop::Creature],
+                &[
+                    Card::Plains,
+                    Prop::SmallCreature,
+                    Prop::Creature,
+                    Prop::Creature,
+                ],
             )
             .hand(P0, &[SWIFT])
             .library(P0, &[Card::Plains, Card::Plains])

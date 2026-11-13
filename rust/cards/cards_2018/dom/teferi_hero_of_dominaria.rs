@@ -14,21 +14,23 @@ use crate::prelude::*;
 const UNTAP: u8 = 3;
 
 /// "+1: Draw a card. At the beginning of the next end step, untap up to two lands." The second
-/// sentence creates a delayed triggered ability
-/// ([CR 603.7a](https://yawgatog.com/resources/magic-rules/#R6037a)), whose source is Teferi
-/// ([CR 603.7e](https://yawgatog.com/resources/magic-rules/#R6037e)): "If an activated or
-/// triggered ability creates a delayed triggered ability, the source of that delayed
-/// triggered ability is the same as the source of that other ability." It triggers whether or
-/// not Teferi is still on the battlefield, since it refers to no object.
+/// sentence creates a delayed triggered ability ([CR 603.7a]), whose source is Teferi
+/// ([CR 603.7e]): "If an activated or triggered ability creates a delayed triggered ability, the
+/// source of that delayed triggered ability is the same as the source of that other ability." It
+/// triggers whether or not Teferi is still on the battlefield, since it refers to no object.
 ///
-/// "−3: Put target nonland permanent into its owner's library third from the top." Under two
-/// cards, or on the bottom of a library with fewer
-/// ([CR 401.7](https://yawgatog.com/resources/magic-rules/#R4017)): "If an effect causes a
-/// player to put a card into a library 'Nth from the top,' and that library has fewer than N
-/// cards in it, the player puts that card on the bottom of that library." It goes to its
-/// owner's library ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)).
+/// "−3: Put target nonland permanent into its owner's library third from the top." Under two cards,
+/// or on the bottom of a library with fewer ([CR 401.7]): "If an effect causes a player to put a
+/// card into a library 'Nth from the top,' and that library has fewer than N cards in it, the
+/// player puts that card on the bottom of that library." It goes to its owner's library
+/// ([CR 400.3]).
 ///
 /// "Untap up to two lands": any lands, whoever controls them, chosen as it resolves.
+///
+/// [CR 603.7a]: https://yawgatog.com/resources/magic-rules/#R6037a
+/// [CR 603.7e]: https://yawgatog.com/resources/magic-rules/#R6037e
+/// [CR 401.7]: https://yawgatog.com/resources/magic-rules/#R4017
+/// [CR 400.3]: https://yawgatog.com/resources/magic-rules/#R4003
 pub static CARD: CardDef = Printed::TeferiHeroOfDominaria
     .abilities(&[
         Ability::loyalty(1).effect(&sequence(&[draw(you(), 1), delay(UNTAP)])),
@@ -52,16 +54,17 @@ pub static CARD: CardDef = Printed::TeferiHeroOfDominaria
     .card()
     .creating(&[&EMBLEM]);
 
-/// The emblem of the −8 ([CR 114.1](https://yawgatog.com/resources/magic-rules/#R1141)): "An
-/// emblem is a marker used to represent an object that has one or more abilities, but usually
-/// no other characteristics." Teferi's controller gets it
-/// ([CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142)): "This means that [player]
-/// puts an emblem with [ability] into the command zone. The emblem is both owned and
-/// controlled by that player."
+/// The emblem of the −8 ([CR 114.1]): "An emblem is a marker used to represent an object that has
+/// one or more abilities, but usually no other characteristics." Teferi's controller gets it
+/// ([CR 114.2]): "This means that [player] puts an emblem with [ability] into the command zone. The
+/// emblem is both owned and controlled by that player."
 ///
-/// "Whenever you draw a card, exile target permanent an opponent controls."
-/// [CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a): "To exile an object,
-/// move it to the exile zone from wherever it is."
+/// "Whenever you draw a card, exile target permanent an opponent controls." [CR 701.13a]: "To exile
+/// an object, move it to the exile zone from wherever it is."
+///
+/// [CR 114.1]: https://yawgatog.com/resources/magic-rules/#R1141
+/// [CR 114.2]: https://yawgatog.com/resources/magic-rules/#R1142
+/// [CR 701.13a]: https://yawgatog.com/resources/magic-rules/#R70113a
 pub static EMBLEM: CardDef = card(
     "Teferi, Hero of Dominaria Emblem",
     &[
@@ -154,12 +157,7 @@ pub mod scenarios {
                 ME.activates(TEFERI, 1), // −3
                 ME.targets(Prop::Creature),
                 Resolve,
-                THEM.library_top(&[
-                    Card::Plains,
-                    Card::Plains,
-                    Prop::Creature,
-                    Card::Island,
-                ]),
+                THEM.library_top(&[Card::Plains, Card::Plains, Prop::Creature, Card::Island]),
                 THEM.has(Zone::Battlefield, Prop::Creature, 0),
                 ME.has_loyalty(TEFERI, 1),
             ],
@@ -214,7 +212,10 @@ pub mod scenarios {
                     Permanent::new(Prop::Planeswalker),
                 ],
             )
-            .library(P0, &[Card::Island, Card::Island, Card::Plains, Card::Plains])
+            .library(
+                P0,
+                &[Card::Island, Card::Island, Card::Plains, Card::Plains],
+            )
             .battlefield(
                 P1,
                 &[
@@ -243,10 +244,7 @@ pub mod scenarios {
             ]),
         // UI regressions by-svq/by-2ml: useful colors among three lands, then undo next turn.
         Scenario::new("+1 untaps a dual land with an instant in hand")
-            .battlefield(
-                P0,
-                &[TEFERI, Card::Plains, Card::Island, Card::Tundra],
-            )
+            .battlefield(P0, &[TEFERI, Card::Plains, Card::Island, Card::Tundra])
             .hand(P0, &[Prop::Instant, Prop::Creature])
             .library(P0, &[Card::Plains, Card::Island])
             .library(P1, &[Card::Island, Card::Plains])

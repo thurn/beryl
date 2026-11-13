@@ -11,27 +11,28 @@
 
 use crate::prelude::*;
 
-/// "Creature you don't control". Not "an opponent controls": a teammate's creature is one
-/// you don't control too
-/// ([CR 102.3](https://yawgatog.com/resources/magic-rules/#R1023)): "the player's opponents
-/// are all players not on their team."
+/// "Creature you don't control". Not "an opponent controls": a teammate's creature is one you don't
+/// control too ([CR 102.3]): "the player's opponents are all players not on their team."
+///
+/// [CR 102.3]: https://yawgatog.com/resources/magic-rules/#R1023
 const CREATURES_YOU_DONT_CONTROL: Filter = Filter::All(&[
     Filter::Types(Types::CREATURE),
     Filter::Not(&Filter::Whose(&Players::You)),
 ]);
 
-/// "For each creature exiled this way, its controller searches their library for a basic
-/// land card. Those players put those cards onto the battlefield tapped, then shuffle": each
-/// player whose creatures were exiled searches for that many basic land cards
-/// ([CR 701.23a](https://yawgatog.com/resources/magic-rules/#R70123a)) and puts them onto the
-/// battlefield tapped, then shuffles
-/// ([CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a)), in turn order
-/// ([CR 101.4](https://yawgatog.com/resources/magic-rules/#R1014)). A player may find fewer,
-/// or none from a library without basics
-/// ([CR 701.23b](https://yawgatog.com/resources/magic-rules/#R70123b)): "that player isn't
-/// required to find some or all of those cards". Who searches is each creature's controller
-/// as it last existed on the battlefield: in exile it has none. A creature a replacement
-/// kept from exile was not "exiled this way".
+/// "For each creature exiled this way, its controller searches their library for a basic land card.
+/// Those players put those cards onto the battlefield tapped, then shuffle": each player whose
+/// creatures were exiled searches for that many basic land cards ([CR 701.23a]) and puts them onto
+/// the battlefield tapped, then shuffles ([CR 701.24a]), in turn order ([CR 101.4]). A player may
+/// find fewer, or none from a library without basics ([CR 701.23b]): "that player isn't required to
+/// find some or all of those cards". Who searches is each creature's controller as it last existed
+/// on the battlefield: in exile it has none. A creature a replacement kept from exile was not
+/// "exiled this way".
+///
+/// [CR 701.23a]: https://yawgatog.com/resources/magic-rules/#R70123a
+/// [CR 701.24a]: https://yawgatog.com/resources/magic-rules/#R70124a
+/// [CR 101.4]: https://yawgatog.com/resources/magic-rules/#R1014
+/// [CR 701.23b]: https://yawgatog.com/resources/magic-rules/#R70123b
 const FETCH: Effect = for_each_player(
     each_player(),
     &Effect::Search {
@@ -45,14 +46,15 @@ const FETCH: Effect = for_each_player(
     },
 );
 
-/// "Exile target creature you don't control"
-/// ([CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a)): "To exile an object,
-/// move it to the exile zone from wherever it is."
+/// "Exile target creature you don't control" ([CR 701.13a]): "To exile an object, move it to the
+/// exile zone from wherever it is."
 ///
-/// Overloaded, "Exile each creature you don't control"
-/// ([CR 702.96a](https://yawgatog.com/resources/magic-rules/#R70296a)), with no target
-/// ([CR 702.96b](https://yawgatog.com/resources/magic-rules/#R70296b)). The creatures are
-/// exiled at once.
+/// Overloaded, "Exile each creature you don't control" ([CR 702.96a]), with no target
+/// ([CR 702.96b]). The creatures are exiled at once.
+///
+/// [CR 701.13a]: https://yawgatog.com/resources/magic-rules/#R70113a
+/// [CR 702.96a]: https://yawgatog.com/resources/magic-rules/#R70296a
+/// [CR 702.96b]: https://yawgatog.com/resources/magic-rules/#R70296b
 pub static CARD: CardDef = Printed::WindsOfAbandon
     .abilities(&[
         Ability::spell()

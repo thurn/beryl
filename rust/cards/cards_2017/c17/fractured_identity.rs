@@ -8,19 +8,21 @@
 
 use crate::prelude::*;
 
-/// "Its controller" and "it" are the permanent as it last existed on the battlefield
-/// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "If an effect requires
-/// information from the game (such as the number of creatures on the battlefield), the answer
-/// is determined only once, when the effect is applied. If the effect requires information
-/// from a specific object, including the source of the ability itself, the effect uses the
-/// current information of that object if it's in the public zone it was expected to be in;
-/// if it's no longer in that zone, ... the effect uses the object's last known information."
-/// So an exiled token, which ceases to exist, is copied all the same (CR 111.12). Each copy
-/// has the permanent's copiable values (CR 707.2): not its counters, so a planeswalker's copy
-/// enters with its printed loyalty (CR 306.5b).
+/// "Its controller" and "it" are the permanent as it last existed on the battlefield ([CR 608.2h]):
+/// "If an effect requires information from the game (such as the number of creatures on the
+/// battlefield), the answer is determined only once, when the effect is applied. If the effect
+/// requires information from a specific object, including the source of the ability itself, the
+/// effect uses the current information of that object if it's in the public zone it was expected to
+/// be in; if it's no longer in that zone, ... the effect uses the object's last known information."
+/// So an exiled token, which ceases to exist, is copied all the same (CR 111.12). Each copy has the
+/// permanent's copiable values (CR 707.2): not its counters, so a planeswalker's copy enters with
+/// its printed loyalty (CR 306.5b).
 ///
-/// [CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112): "The player who creates a
-/// token is its owner. The token enters the battlefield under that player's control."
+/// [CR 111.2]: "The player who creates a token is its owner. The token enters the battlefield under
+/// that player's control."
+///
+/// [CR 608.2h]: https://yawgatog.com/resources/magic-rules/#R6082h
+/// [CR 111.2]: https://yawgatog.com/resources/magic-rules/#R1112
 pub static CARD: CardDef = Printed::FracturedIdentity
     .abilities(&[Ability::spell()
         .target(&TargetSpec::permanent(Filter::Not(&Filter::Types(

@@ -8,27 +8,30 @@
 
 use crate::prelude::*;
 
-/// The mana value is the spell's as it was on the stack, X included
-/// ([CR 202.3e](https://yawgatog.com/resources/magic-rules/#R2023e)): "X is treated as the
-/// number chosen for it while the object is on the stack." The second sentence creates a
-/// delayed triggered ability ([CR 603.7a](https://yawgatog.com/resources/magic-rules/#R6037a)):
-/// "Delayed triggered abilities are created during the resolution of spells or abilities".
+/// The mana value is the spell's as it was on the stack, X included ([CR 202.3e]): "X is treated as
+/// the number chosen for it while the object is on the stack." The second sentence creates a
+/// delayed triggered ability ([CR 603.7a]): "Delayed triggered abilities are created during the
+/// resolution of spells or abilities".
 ///
 /// The delayed ability is the face's ability 1.
-pub static CARD: CardDef = Printed::ManaDrain
-    .abilities(&[
-        Ability::spell()
-            .target(&TargetSpec::spell())
-            .effect(&sequence(&[
-                counter(target()),
-                delay_carrying(1, Amount::ManaValue(target())),
-            ])),
-        // CR 106.4: "When an effect instructs a player to add mana, that mana goes into
-        // a player's mana pool."
-        Ability::triggered(&Trigger::main_phase(Players::You).next())
-            .effect(&add_mana_of_kind(you(), ManaColor::Colorless, carried())),
-    ])
-    .card();
+///
+/// [CR 202.3e]: https://yawgatog.com/resources/magic-rules/#R2023e
+/// [CR 603.7a]: https://yawgatog.com/resources/magic-rules/#R6037a
+pub static CARD: CardDef =
+    Printed::ManaDrain
+        .abilities(&[
+            Ability::spell()
+                .target(&TargetSpec::spell())
+                .effect(&sequence(&[
+                    counter(target()),
+                    delay_carrying(1, Amount::ManaValue(target())),
+                ])),
+            // CR 106.4: "When an effect instructs a player to add mana, that mana goes into
+            // a player's mana pool."
+            Ability::triggered(&Trigger::main_phase(Players::You).next())
+                .effect(&add_mana_of_kind(you(), ManaColor::Colorless, carried())),
+        ])
+        .card();
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

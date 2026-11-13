@@ -12,9 +12,10 @@
 
 use crate::prelude::*;
 
-/// The Samurai token's name ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)):
-/// "If the spell or ability doesn't specify the name of the token, its name is the same as
-/// its subtype(s) plus the word 'Token.'"
+/// The Samurai token's name ([CR 111.4]): "If the spell or ability doesn't specify the name of the
+/// token, its name is the same as its subtype(s) plus the word 'Token.'"
+///
+/// [CR 111.4]: https://yawgatog.com/resources/magic-rules/#R1114
 pub use crate::tokens::SAMURAI_TOKEN;
 
 /// "A 2/2 white Samurai creature token with vigilance"
@@ -23,17 +24,19 @@ pub static SAMURAI: CardDef = Token::SamuraiToken.keywords(Keywords::VIGILANCE).
 /// "You may activate her loyalty abilities any time you could cast an instant." Only "as long
 /// as The Wandering Emperor entered this turn".
 ///
-/// "+1: Put a +1/+1 counter on up to one target creature. It gains first strike until end of
-/// turn." [CR 702.7a](https://yawgatog.com/resources/magic-rules/#R7027a): "First strike is
-/// a static ability that modifies the rules for the combat damage step."
+/// "+1: Put a +1/+1 counter on up to one target creature. It gains first strike until end of turn."
+/// [CR 702.7a]: "First strike is a static ability that modifies the rules for the combat damage
+/// step."
 ///
-/// "−1: Create a 2/2 white Samurai creature token with vigilance."
-/// [CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112): "The player who creates a
-/// token is its owner. The token enters the battlefield under that player's control."
+/// "−1: Create a 2/2 white Samurai creature token with vigilance." [CR 111.2]: "The player who
+/// creates a token is its owner. The token enters the battlefield under that player's control."
 ///
-/// "−2: Exile target tapped creature. You gain 2 life."
-/// [CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a): "To exile an object,
-/// move it to the exile zone from wherever it is."
+/// "−2: Exile target tapped creature. You gain 2 life." [CR 701.13a]: "To exile an object, move it
+/// to the exile zone from wherever it is."
+///
+/// [CR 702.7a]: https://yawgatog.com/resources/magic-rules/#R7027a
+/// [CR 111.2]: https://yawgatog.com/resources/magic-rules/#R1112
+/// [CR 701.13a]: https://yawgatog.com/resources/magic-rules/#R70113a
 pub static CARD: CardDef = Printed::TheWanderingEmperor
     .keywords(Keywords::FLASH)
     .abilities(&[

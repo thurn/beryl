@@ -8,12 +8,14 @@
 
 use crate::prelude::*;
 
-/// "Exile target ... until this artifact leaves the battlefield"
-/// ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)): "A second one-shot effect
-/// is created immediately after the specified event. This second one-shot effect returns the
-/// object to its previous zone." A target gone, or no longer matching, by resolution stops
-/// the ability ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)); a Hole
-/// gone first exiles nothing ([CR 610.3b](https://yawgatog.com/resources/magic-rules/#R6103b)).
+/// "Exile target ... until this artifact leaves the battlefield" ([CR 610.3]): "A second one-shot
+/// effect is created immediately after the specified event. This second one-shot effect returns the
+/// object to its previous zone." A target gone, or no longer matching, by resolution stops the
+/// ability ([CR 608.2b]); a Hole gone first exiles nothing ([CR 610.3b]).
+///
+/// [CR 610.3]: https://yawgatog.com/resources/magic-rules/#R6103
+/// [CR 608.2b]: https://yawgatog.com/resources/magic-rules/#R6082b
+/// [CR 610.3b]: https://yawgatog.com/resources/magic-rules/#R6103b
 pub static CARD: CardDef = Printed::PortableHole
     .abilities(&[Ability::triggered(&Trigger::ENTERS)
         .target(&TargetSpec::permanent(Filter::All(&[
@@ -118,10 +120,7 @@ pub mod scenarios {
             .battlefield(P0, &[Card::Plains, Card::Island, Card::Island])
             .hand(P0, &[HOLE, TWO_DROP])
             .library(P0, &[Card::Island])
-            .battlefield(
-                P1,
-                &[TWO_DROP, Card::Island, Card::Island, Card::Island],
-            )
+            .battlefield(P1, &[TWO_DROP, Card::Island, Card::Island, Card::Island])
             .hand(P1, &[Card::SinkIntoStupor])
             .actions(&[
                 ME.casts(HOLE),

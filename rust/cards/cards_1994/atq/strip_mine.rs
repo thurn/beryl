@@ -8,10 +8,11 @@
 
 use crate::prelude::*;
 
-/// The second ability is not a mana ability: it has a target
-/// ([CR 605.1a](https://yawgatog.com/resources/magic-rules/#R6051a)), so it uses the stack.
-/// [CR 701.8a](https://yawgatog.com/resources/magic-rules/#R7018a): "To destroy a permanent,
-/// move it from the battlefield to its owner's graveyard."
+/// The second ability is not a mana ability: it has a target ([CR 605.1a]), so it uses the stack.
+/// [CR 701.8a]: "To destroy a permanent, move it from the battlefield to its owner's graveyard."
+///
+/// [CR 605.1a]: https://yawgatog.com/resources/magic-rules/#R6051a
+/// [CR 701.8a]: https://yawgatog.com/resources/magic-rules/#R7018a
 pub static CARD: CardDef = Printed::StripMine
     .abilities(&[
         Ability::tap_for_mana(ManaSet::one(ManaColor::Colorless)),

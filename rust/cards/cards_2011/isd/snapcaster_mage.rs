@@ -10,17 +10,17 @@
 
 use crate::prelude::*;
 
-/// Flashback for the card's mana cost, an alternative cost
-/// ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a)): "'Flashback [cost]'
+/// Flashback for the card's mana cost, an alternative cost ([CR 702.34a]): "'Flashback [cost]'
 /// means 'You may cast this card from your graveyard if the resulting spell is an instant or
-/// sorcery spell by paying [cost] rather than paying its mana cost' and 'If the flashback
-/// cost was paid, exile this card instead of putting it anywhere else any time it would leave
-/// the stack.'" The card is in its owner's graveyard, and its owner is the trigger's
-/// controller.
+/// sorcery spell by paying [cost] rather than paying its mana cost' and 'If the flashback cost was
+/// paid, exile this card instead of putting it anywhere else any time it would leave the stack.'"
+/// The card is in its owner's graveyard, and its owner is the trigger's controller.
 ///
-/// With no instant or sorcery card in its controller's graveyard the trigger has no target,
-/// and is removed from the stack
-/// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d)).
+/// With no instant or sorcery card in its controller's graveyard the trigger has no target, and is
+/// removed from the stack ([CR 603.3d]).
+///
+/// [CR 702.34a]: https://yawgatog.com/resources/magic-rules/#R70234a
+/// [CR 603.3d]: https://yawgatog.com/resources/magic-rules/#R6033d
 pub static CARD: CardDef = Printed::SnapcasterMage
     .keywords(Keywords::FLASH)
     .abilities(&[Ability::triggered(&Trigger::ENTERS)

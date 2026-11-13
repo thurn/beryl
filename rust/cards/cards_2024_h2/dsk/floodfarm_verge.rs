@@ -8,10 +8,11 @@
 
 use crate::prelude::*;
 
-/// The {U} ability's restriction reads the land's subtypes, so a Tundra, a Plains Island,
-/// counts, as a basic does
-/// ([CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056)): "The basic land types are
-/// Plains, Island, Swamp, Mountain, and Forest."
+/// The {U} ability's restriction reads the land's subtypes, so a Tundra, a Plains Island, counts,
+/// as a basic does ([CR 305.6]): "The basic land types are Plains, Island, Swamp, Mountain, and
+/// Forest."
+///
+/// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056
 pub static CARD: CardDef = Printed::FloodfarmVerge
     .abilities(&[
         Ability::tap_for_mana(ManaSet::one(ManaColor::White)),

@@ -9,10 +9,11 @@
 use crate::prelude::*;
 
 /// "Equipped creature gets +1/+1": a continuous effect on the creature it is attached to
-/// ([CR 301.5a](https://yawgatog.com/resources/magic-rules/#R3015a)): "The creature an
-/// Equipment is attached to is called the 'equipped creature.'"
+/// ([CR 301.5a]): "The creature an Equipment is attached to is called the 'equipped creature.'"
 ///
 /// Implemented so that scenarios have an Equipment to attach: it is in none of the decks.
+///
+/// [CR 301.5a]: https://yawgatog.com/resources/magic-rules/#R3015a
 pub static CARD: CardDef = Printed::LeoninScimitar
     .abilities(&[
         Ability::static_ability(&LayerSpec {
@@ -35,7 +36,10 @@ pub mod scenarios {
         // opponent's creature is not a legal target (CR 702.6a: "target creature you
         // control"), so P0 chooses between its own two. `Prop::Creature` is a 3/1.
         Scenario::new("Leonin Scimitar equips a creature, which gets +1/+1")
-            .battlefield(P0, &[SCIMITAR, Prop::Creature, Prop::SmallCreature, Card::Plains])
+            .battlefield(
+                P0,
+                &[SCIMITAR, Prop::Creature, Prop::SmallCreature, Card::Plains],
+            )
             .battlefield(P1, &[Prop::SmallCreature])
             .library(P0, &[Card::Plains])
             .library(P1, &[Card::Plains])

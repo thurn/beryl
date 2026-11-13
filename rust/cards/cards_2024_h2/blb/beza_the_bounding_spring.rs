@@ -11,16 +11,19 @@
 use crate::prelude::*;
 use crate::tokens::TREASURE;
 
-/// The Fish token's name: its subtype plus the word "Token"
-/// ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)).
+/// The Fish token's name: its subtype plus the word "Token" ([CR 111.4]).
+///
+/// [CR 111.4]: https://yawgatog.com/resources/magic-rules/#R1114
 pub const FISH_TOKEN: &str = "Fish Token";
 
 /// The Fish token: a 1/1 blue Fish creature token.
 pub static FISH: CardDef = Token::FishToken.card();
 
 /// "An opponent has more [of an amount] than you": the most any of them has, against yours
-/// ([CR 102.2](https://yawgatog.com/resources/magic-rules/#R1022): "In a two-player game, a
-/// player's opponent is the other player"). A tie is not "more".
+/// ([CR 102.2]: "In a two-player game, a player's opponent is the other player"). A tie is not
+/// "more".
+///
+/// [CR 102.2]: https://yawgatog.com/resources/magic-rules/#R1022
 const fn an_opponent_has_more(amount: &'static Amount) -> Condition {
     Condition::Compare(
         Amount::Most(each_opponent(), amount),
@@ -29,12 +32,13 @@ const fn an_opponent_has_more(amount: &'static Amount) -> Condition {
     )
 }
 
-/// The four sentences in order, each comparison made as its sentence is applied, on
-/// resolution ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "If an effect
-/// requires information from the game (such as the number of creatures on the battlefield),
-/// the answer is determined only once, when the effect is applied." The "if"s are not right
-/// after the trigger condition, so none is an intervening "if" (CR 603.4): the ability always
-/// triggers.
+/// The four sentences in order, each comparison made as its sentence is applied, on resolution
+/// ([CR 608.2h]): "If an effect requires information from the game (such as the number of creatures
+/// on the battlefield), the answer is determined only once, when the effect is applied." The "if"s
+/// are not right after the trigger condition, so none is an intervening "if" (CR 603.4): the
+/// ability always triggers.
+///
+/// [CR 608.2h]: https://yawgatog.com/resources/magic-rules/#R6082h
 pub static CARD: CardDef = Printed::BezaTheBoundingSpring
     .abilities(&[Ability::triggered(&Trigger::ENTERS).effect(&sequence(&[
         // Lands you control.

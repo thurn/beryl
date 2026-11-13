@@ -12,19 +12,20 @@
 use crate::prelude::*;
 
 /// The counter, the loot, and the offer to cast the discarded card as the ability finishes
-/// resolving ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)). Without its
-/// mana cost it is cast for an alternative cost
-/// ([CR 118.9](https://yawgatog.com/resources/magic-rules/#R1189)), so a land, which can't be
-/// cast, is never offered.
+/// resolving ([CR 608.2g]). Without its mana cost it is cast for an alternative cost ([CR 118.9]),
+/// so a land, which can't be cast, is never offered.
 ///
-/// The count is read from Malcolm on the battlefield. Had he left before the ability
-/// resolved, his last-known chorus count would decide
-/// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)); the engine keeps no
-/// counters in last-known information, so the cast is then not offered.
+/// The count is read from Malcolm on the battlefield. Had he left before the ability resolved, his
+/// last-known chorus count would decide ([CR 608.2h]); the engine keeps no counters in last-known
+/// information, so the cast is then not offered.
+///
+/// [CR 608.2g]: https://yawgatog.com/resources/magic-rules/#R6082g
+/// [CR 118.9]: https://yawgatog.com/resources/magic-rules/#R1189
+/// [CR 608.2h]: https://yawgatog.com/resources/magic-rules/#R6082h
 pub static CARD: CardDef = Printed::MalcolmAlluringScoundrel
     .keywords(Keywords::FLASH.union(Keywords::FLYING))
-    .abilities(&[Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER).effect(
-        &sequence(&[
+    .abilities(&[
+        Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER).effect(&sequence(&[
             add_counters(this(), CounterKind::Chorus, 1),
             draw(you(), 1),
             discard(you(), 1),
@@ -36,8 +37,8 @@ pub static CARD: CardDef = Printed::MalcolmAlluringScoundrel
                 ),
                 &may_cast_free(you(), those()),
             ),
-        ]),
-    )])
+        ])),
+    ])
     .card();
 
 #[cfg(feature = "scenarios")]
@@ -47,7 +48,9 @@ pub mod scenarios {
     const MALCOLM: &str = Card::MalcolmAlluringScoundrel;
 
     /// A creature without flash: cast during the combat damage step, timing is ignored
-    /// ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)).
+    /// ([CR 608.2g]).
+    ///
+    /// [CR 608.2g]: https://yawgatog.com/resources/magic-rules/#R6082g
     const SPELLBINDER: &str = Card::EliteSpellbinder;
 
     /// Malcolm attacks alone in `turn` and his trigger resolves; the discard has one kind of card

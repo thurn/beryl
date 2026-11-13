@@ -9,11 +9,12 @@
 
 use crate::prelude::*;
 
-/// Its three basic land types give it their intrinsic mana abilities
-/// ([CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056)): "An object with the land
-/// card type and a basic land type has the intrinsic ability '{T}: Add [mana symbol],'".
-/// Cycling ([CR 702.29a](https://yawgatog.com/resources/magic-rules/#R70229a)) "functions
-/// only while the card with cycling is in a player's hand."
+/// Its three basic land types give it their intrinsic mana abilities ([CR 305.6]): "An object with
+/// the land card type and a basic land type has the intrinsic ability '{T}: Add [mana symbol],'".
+/// Cycling ([CR 702.29a]) "functions only while the card with cycling is in a player's hand."
+///
+/// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056
+/// [CR 702.29a]: https://yawgatog.com/resources/magic-rules/#R70229a
 pub static CARD: CardDef = Printed::SparasHeadquarters
     .abilities(&[
         Ability::tap_for_mana(ManaSet::one(ManaColor::Green)),

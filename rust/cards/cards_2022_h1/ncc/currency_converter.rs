@@ -11,29 +11,33 @@
 use crate::prelude::*;
 use crate::tokens::TREASURE;
 
-/// The Rogue token's name: its subtype plus the word "Token"
-/// ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)).
+/// The Rogue token's name: its subtype plus the word "Token" ([CR 111.4]).
+///
+/// [CR 111.4]: https://yawgatog.com/resources/magic-rules/#R1114
 pub use crate::tokens::ROGUE_TOKEN;
 
 /// The Rogue token: a 2/2 black Rogue creature token.
 pub static ROGUE: CardDef = Token::RogueToken.card();
 
-/// "That card from your graveyard" is the card as it was put into the graveyard: once it has
-/// left, it is a new object ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007))
-/// and nothing is asked. A discarded card that a replacement effect put somewhere else, as
-/// madness exiles it, was never in the graveyard and is not exiled with this. The exile is linked to the last ability
-/// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second ability
-/// refers only to cards in the exile zone that were put there as a result of an instruction
-/// to exile them in the first ability."
+/// "That card from your graveyard" is the card as it was put into the graveyard: once it has left,
+/// it is a new object ([CR 400.7]) and nothing is asked. A discarded card that a replacement effect
+/// put somewhere else, as madness exiles it, was never in the graveyard and is not exiled with
+/// this. The exile is linked to the last ability ([CR 607.2a]): "The second ability refers only to
+/// cards in the exile zone that were put there as a result of an instruction to exile them in the
+/// first ability."
 ///
-/// Draws, then discards ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)):
-/// "The controller of the spell or ability follows its instructions in the order written."
+/// Draws, then discards ([CR 608.2c]): "The controller of the spell or ability follows its
+/// instructions in the order written."
 ///
 /// One of the cards exiled with this Converter, its controller's choice, goes to its owner's
-/// graveyard (CR 400.3); what it is decides the token. Off the stack and the battlefield a
-/// modal double-faced card has only its front face's characteristics
-/// ([CR 712.6a](https://yawgatog.com/resources/magic-rules/#R7126a)), so Sink into Stupor is
-/// a nonland card. With no card exiled with it there is no "it", and no token.
+/// graveyard (CR 400.3); what it is decides the token. Off the stack and the battlefield a modal
+/// double-faced card has only its front face's characteristics ([CR 712.6a]), so Sink into Stupor
+/// is a nonland card. With no card exiled with it there is no "it", and no token.
+///
+/// [CR 400.7]: https://yawgatog.com/resources/magic-rules/#R4007
+/// [CR 607.2a]: https://yawgatog.com/resources/magic-rules/#R6072a
+/// [CR 608.2c]: https://yawgatog.com/resources/magic-rules/#R6082c
+/// [CR 712.6a]: https://yawgatog.com/resources/magic-rules/#R7126a
 pub static CARD: CardDef = Printed::CurrencyConverter
     .abilities(&[
         Ability::triggered(&Trigger::discards(Players::You))
@@ -41,7 +45,11 @@ pub static CARD: CardDef = Printed::CurrencyConverter
         Ability::activated(Cost::of(ManaCost::generic(2), &[CostPart::TAP]))
             .effect(&sequence(&[draw(you(), 1), discard(you(), 1)])),
         Ability::activated(Cost::TAP).effect(&sequence(&[
-            choose(you(), exiled_with_this(), Prompt::new(Purpose::Choose).most(1)),
+            choose(
+                you(),
+                exiled_with_this(),
+                Prompt::new(Purpose::Choose).most(1),
+            ),
             if_then(
                 if_you_do(),
                 &sequence(&[
@@ -122,7 +130,12 @@ pub mod scenarios {
             .hand(P0, &[Card::ThirstForDiscovery])
             .library(
                 P0,
-                &[Card::Tundra, Prop::Artifact, Card::Counterspell, Card::Island],
+                &[
+                    Card::Tundra,
+                    Prop::Artifact,
+                    Card::Counterspell,
+                    Card::Island,
+                ],
             )
             .actions(&[
                 ME.casts(Card::ThirstForDiscovery),
@@ -146,7 +159,12 @@ pub mod scenarios {
             // The Converter, the {2} for its loot, and Jace, Vryn's Prodigy to loot too.
             .battlefield(
                 P0,
-                &[CONVERTER, Card::Island, Card::Island, Card::JaceVrynsProdigy],
+                &[
+                    CONVERTER,
+                    Card::Island,
+                    Card::Island,
+                    Card::JaceVrynsProdigy,
+                ],
             )
             .hand(P0, &[Card::Island, Card::Oust])
             .library(P0, &[Card::Plains, Card::Plains, Card::Plains])

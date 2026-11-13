@@ -11,21 +11,24 @@
 
 use crate::prelude::*;
 
-/// The Insect token's name ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)):
-/// its subtype plus the word "Token".
+/// The Insect token's name ([CR 111.4]): its subtype plus the word "Token".
+///
+/// [CR 111.4]: https://yawgatog.com/resources/magic-rules/#R1114
 pub use crate::tokens::INSECT_TOKEN;
 
 /// The Insect token: a 2/1 white Insect creature token with flying.
 pub static INSECT: CardDef = Token::InsectToken.keywords(Keywords::FLYING).card();
 
-/// "Create two 2/1 white Insect creature tokens with flying": one event
-/// ([CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111)).
+/// "Create two 2/1 white Insect creature tokens with flying": one event ([CR 111.1]).
+///
+/// [CR 111.1]: https://yawgatog.com/resources/magic-rules/#R1111
 static TWO_INSECTS: Effect = create_tokens(you(), &INSECT, 2);
 
-/// Impending is four abilities
-/// ([CR 702.176a](https://yawgatog.com/resources/magic-rules/#R702176a)): the alternative cost,
-/// the time counters it enters with (both in the casting option), "isn't a creature" while it
-/// has one, and the end-step countdown.
+/// Impending is four abilities ([CR 702.176a]): the alternative cost, the time counters it enters
+/// with (both in the casting option), "isn't a creature" while it has one, and the end-step
+/// countdown.
+///
+/// [CR 702.176a]: https://yawgatog.com/resources/magic-rules/#R702176a
 pub static CARD: CardDef = Printed::OverlordOfTheMistmoors
     .abilities(&[
         Ability::impending(),

@@ -12,27 +12,29 @@
 
 use crate::prelude::*;
 
-/// "+2: Look at the top card of target player's library. You may put that card on the
-/// bottom of that player's library." Looking shows the card to Jace's controller alone, an
-/// exception to [CR 401.2](https://yawgatog.com/resources/magic-rules/#R4012): "Players can't
-/// look at or change the order of cards in a library." Moving it within the library is no
-/// zone change, so it stays the same object.
+/// "+2: Look at the top card of target player's library. You may put that card on the bottom of
+/// that player's library." Looking shows the card to Jace's controller alone, an exception to
+/// [CR 401.2]: "Players can't look at or change the order of cards in a library." Moving it within
+/// the library is no zone change, so it stays the same object.
 ///
-/// "0: Draw three cards, then put two cards from your hand on top of your library in any
-/// order." Each card chosen goes on top of the one before, so the second is the top card.
-/// [CR 121.2](https://yawgatog.com/resources/magic-rules/#R1212): "If a player is instructed to
-/// draw multiple cards, that player performs that many individual card draws."
+/// "0: Draw three cards, then put two cards from your hand on top of your library in any order."
+/// Each card chosen goes on top of the one before, so the second is the top card. [CR 121.2]: "If a
+/// player is instructed to draw multiple cards, that player performs that many individual card
+/// draws."
 ///
-/// "−1: Return target creature to its owner's hand."
-/// [CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003): "If an object would go to
-/// any library, graveyard, or hand other than its owner's, it goes to its owner's
-/// corresponding zone."
+/// "−1: Return target creature to its owner's hand." [CR 400.3]: "If an object would go to any
+/// library, graveyard, or hand other than its owner's, it goes to its owner's corresponding zone."
 ///
-/// "−12: Exile all cards from target player's library, then that player shuffles their hand
-/// into their library." [CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a):
-/// "To exile an object, move it to the exile zone from wherever it is." Then
-/// [CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a): "To shuffle a library
-/// ... randomize the cards within it so that no player knows their order."
+/// "−12: Exile all cards from target player's library, then that player shuffles their hand into
+/// their library." [CR 701.13a]: "To exile an object, move it to the exile zone from wherever it
+/// is." Then [CR 701.24a]: "To shuffle a library ... randomize the cards within it so that no
+/// player knows their order."
+///
+/// [CR 401.2]: https://yawgatog.com/resources/magic-rules/#R4012
+/// [CR 121.2]: https://yawgatog.com/resources/magic-rules/#R1212
+/// [CR 400.3]: https://yawgatog.com/resources/magic-rules/#R4003
+/// [CR 701.13a]: https://yawgatog.com/resources/magic-rules/#R70113a
+/// [CR 701.24a]: https://yawgatog.com/resources/magic-rules/#R70124a
 pub static CARD: CardDef = Printed::JaceTheMindSculptor
     .abilities(&[
         Ability::loyalty(2)
@@ -83,7 +85,10 @@ pub mod scenarios {
         Scenario::new("0 draws three and puts two back in the order chosen")
             .battlefield(P0, &[JACE])
             .hand(P0, &[Prop::Artifact])
-            .library(P0, &[Card::Island, Card::Plains, Prop::Creature, Card::Island])
+            .library(
+                P0,
+                &[Card::Island, Card::Plains, Prop::Creature, Card::Island],
+            )
             .library(P1, &[Card::Plains])
             .actions(&[
                 ME.activates(JACE, 1), // 0
@@ -95,7 +100,10 @@ pub mod scenarios {
                 ME.has_loyalty(JACE, 3),
             ]),
         Scenario::new("−1 returns a creature; −12 exiles a library and shuffles in the hand")
-            .permanents(P0, &[Permanent::new(JACE).counters(CounterKind::Loyalty, 13)])
+            .permanents(
+                P0,
+                &[Permanent::new(JACE).counters(CounterKind::Loyalty, 13)],
+            )
             .battlefield(P1, &[Prop::Creature])
             .hand(P1, &[Card::Plains])
             .library(P0, &[Card::Island, Card::Island])

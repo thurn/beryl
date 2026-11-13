@@ -7,17 +7,17 @@
 
 use crate::prelude::*;
 
-/// "Discard two cards unless you discard a basic land card"
-/// ([CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a)): "This means the same
-/// thing as '[A player may do something else]. If [that player doesn't], [do something].'"
-/// So the player may discard a basic land card; if they don't, they discard two cards, basic
-/// lands among them or not, or as many as they have
-/// ([CR 101.3](https://yawgatog.com/resources/magic-rules/#R1013)): "Any part of an
-/// instruction that's impossible to perform is ignored." With a basic land and nothing else
-/// in hand, both ways discard it, so nothing is asked. A Tundra is not one, its land types
-/// notwithstanding ([CR 205.4c](https://yawgatog.com/resources/magic-rules/#R2054c)): "Any
-/// land that doesn't have this supertype is a nonbasic land, even if it has a basic land
-/// type."
+/// "Discard two cards unless you discard a basic land card" ([CR 118.12a]): "This means the same
+/// thing as '[A player may do something else]. If [that player doesn't], [do something].'" So the
+/// player may discard a basic land card; if they don't, they discard two cards, basic lands among
+/// them or not, or as many as they have ([CR 101.3]): "Any part of an instruction that's impossible
+/// to perform is ignored." With a basic land and nothing else in hand, both ways discard it, so
+/// nothing is asked. A Tundra is not one, its land types notwithstanding ([CR 205.4c]): "Any land
+/// that doesn't have this supertype is a nonbasic land, even if it has a basic land type."
+///
+/// [CR 118.12a]: https://yawgatog.com/resources/magic-rules/#R11812a
+/// [CR 101.3]: https://yawgatog.com/resources/magic-rules/#R1013
+/// [CR 205.4c]: https://yawgatog.com/resources/magic-rules/#R2054c
 pub static CARD: CardDef = Printed::ThirstForDiscovery
     .abilities(&[Ability::spell().effect(&sequence(&[
         draw(you(), 3),

@@ -8,17 +8,20 @@
 
 use crate::prelude::*;
 
-/// The instructions in order ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)):
-/// "The controller of the spell or ability follows its instructions in the order written."
-/// Exiled first, Time Spiral is not shuffled away, and it is not put into a graveyard as the
-/// final part of its resolution (CR 608.2n): it is no longer on the stack.
+/// The instructions in order ([CR 608.2c]): "The controller of the spell or ability follows its
+/// instructions in the order written." Exiled first, Time Spiral is not shuffled away, and it is
+/// not put into a graveyard as the final part of its resolution (CR 608.2n): it is no longer on the
+/// stack.
 ///
-/// The hands and graveyards go to their libraries together, each card to its owner's
-/// ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)), each library is shuffled
-/// ([CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a)), and each player
-/// draws seven in turn order ([CR 101.4](https://yawgatog.com/resources/magic-rules/#R1014)).
+/// The hands and graveyards go to their libraries together, each card to its owner's ([CR 400.3]),
+/// each library is shuffled ([CR 701.24a]), and each player draws seven in turn order ([CR 101.4]).
 ///
 /// "Up to six lands" are any lands, whoever controls them.
+///
+/// [CR 608.2c]: https://yawgatog.com/resources/magic-rules/#R6082c
+/// [CR 400.3]: https://yawgatog.com/resources/magic-rules/#R4003
+/// [CR 701.24a]: https://yawgatog.com/resources/magic-rules/#R70124a
+/// [CR 101.4]: https://yawgatog.com/resources/magic-rules/#R1014
 pub static CARD: CardDef = Printed::TimeSpiral
     .abilities(&[Ability::spell().effect(&sequence(&[
         exile(this()),

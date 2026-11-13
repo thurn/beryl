@@ -85,10 +85,7 @@ pub mod scenarios {
                 THEM.has_loyalty(Prop::Planeswalker, 3),
             ]),
         Scenario::new("waterbend taps a creature and an artifact; scry reorders the top")
-            .battlefield(
-                P0,
-                &[ICEBERG, Card::Plains, Prop::Creature, Prop::Artifact],
-            )
+            .battlefield(P0, &[ICEBERG, Card::Plains, Prop::Creature, Prop::Artifact])
             .library(P0, &[Card::Island, Card::Plains])
             .library(P1, &[Card::Plains])
             .actions(&[
@@ -106,7 +103,11 @@ pub mod scenarios {
                 ME.library_top(&[Card::Plains, Card::Island]),
             ]),
         Scenario::new("waterbend uses mana sources without sacrificing them")
-            .interaction(&[Card::ManaCrypt, Card::JaceVrynsProdigy, Card::CurrencyConverter])
+            .interaction(&[
+                Card::ManaCrypt,
+                Card::JaceVrynsProdigy,
+                Card::CurrencyConverter,
+            ])
             .battlefield(
                 P0,
                 &[

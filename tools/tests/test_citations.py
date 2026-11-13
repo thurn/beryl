@@ -263,7 +263,7 @@ def test_the_step_skips_and_passes_with_no_text_to_hold_the_tree_to(
     assert not citations.cached_text(citations.pinned(paths.REPO)).exists()
 
 
-def test_shortening_moves_each_doc_comments_links_to_its_end() -> None:
+def test_shortening_moves_each_doc_comments_links_to_its_end_and_rewraps() -> None:
     link = "https://yawgatog.com/resources/magic-rules/#"
     text = (
         f'/// One ([CR 712.6]({link}R7126)): "a", and [CR 712.6]({link}R7126) again,\n'
@@ -272,8 +272,7 @@ def test_shortening_moves_each_doc_comments_links_to_its_end() -> None:
         f"    // A plain comment keeps [CR 712.6]({link}R7126).\n"
     )
     assert citation_shorten.shorten(text) == (
-        '/// One ([CR 712.6]): "a", and [CR 712.6] again,\n'
-        "/// and [CR 104.3a].\n"
+        '/// One ([CR 712.6]): "a", and [CR 712.6] again, and [CR 104.3a].\n'
         "///\n"
         f"/// [CR 712.6]: {link}R7126\n"
         f"/// [CR 104.3a]: {link}R1043a\n"

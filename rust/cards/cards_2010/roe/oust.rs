@@ -7,12 +7,13 @@
 
 use crate::prelude::*;
 
-/// "Second from the top" is under one card, or the top of an empty library. "Its controller"
-/// is the creature's as it was on the battlefield: in a library it has no controller
-/// ([CR 108.4a](https://yawgatog.com/resources/magic-rules/#R1084a)): "If anything asks for
-/// the controller of a card that doesn't have one (because it's not a permanent or spell),
-/// use its owner instead." Owner and controller differ only for a stolen creature, which
+/// "Second from the top" is under one card, or the top of an empty library. "Its controller" is the
+/// creature's as it was on the battlefield: in a library it has no controller ([CR 108.4a]): "If
+/// anything asks for the controller of a card that doesn't have one (because it's not a permanent
+/// or spell), use its owner instead." Owner and controller differ only for a stolen creature, which
 /// goes to its owner's library while its controller gains the life.
+///
+/// [CR 108.4a]: https://yawgatog.com/resources/magic-rules/#R1084a
 pub static CARD: CardDef = Printed::Oust
     .abilities(&[Ability::spell()
         .target(&TargetSpec::creature())

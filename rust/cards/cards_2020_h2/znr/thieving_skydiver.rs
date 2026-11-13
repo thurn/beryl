@@ -11,11 +11,13 @@
 use crate::prelude::*;
 
 /// Gains control of the artifact for as long as the effect lasts, which it doesn't say, so
-/// indefinitely ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a)). An
-/// Equipment then moves onto the Skydiver, unless it can't equip it
-/// ([CR 701.3b](https://yawgatog.com/resources/magic-rules/#R7013b)): "If an effect tries to
-/// attach an Aura, Equipment, or Fortification to an object or player it can't be attached
-/// to, the Aura, Equipment, or Fortification doesn't move." It still changes control.
+/// indefinitely ([CR 611.2a]). An Equipment then moves onto the Skydiver, unless it can't equip it
+/// ([CR 701.3b]): "If an effect tries to attach an Aura, Equipment, or Fortification to an object
+/// or player it can't be attached to, the Aura, Equipment, or Fortification doesn't move." It still
+/// changes control.
+///
+/// [CR 611.2a]: https://yawgatog.com/resources/magic-rules/#R6112a
+/// [CR 701.3b]: https://yawgatog.com/resources/magic-rules/#R7013b
 pub static CARD: CardDef = Printed::ThievingSkydiver
     .keywords(Keywords::FLYING)
     .abilities(&[

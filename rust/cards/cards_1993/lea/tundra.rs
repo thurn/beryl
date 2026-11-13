@@ -8,13 +8,14 @@
 use crate::prelude::*;
 
 /// Not basic, but it has both basic land types, and with them both intrinsic mana abilities
-/// ([CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056)): "An object with the land
-/// card type and a basic land type has the intrinsic ability '{T}: Add [mana symbol],' even if
-/// the text box doesn't actually contain that text". They are mana abilities
-/// ([CR 605.1a](https://yawgatog.com/resources/magic-rules/#R6051a)): an activated ability
-/// that "doesn't require a target ..., it could add mana to a player's mana pool when it
-/// resolves, it's not a loyalty ability ..., and its cost and effect don't move any card to or
-/// from a library."
+/// ([CR 305.6]): "An object with the land card type and a basic land type has the intrinsic ability
+/// '{T}: Add [mana symbol],' even if the text box doesn't actually contain that text". They are
+/// mana abilities ([CR 605.1a]): an activated ability that "doesn't require a target ..., it could
+/// add mana to a player's mana pool when it resolves, it's not a loyalty ability ..., and its cost
+/// and effect don't move any card to or from a library."
+///
+/// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056
+/// [CR 605.1a]: https://yawgatog.com/resources/magic-rules/#R6051a
 pub static CARD: CardDef = Printed::Tundra
     .abilities(&[
         Ability::tap_for_mana(ManaSet::one(ManaColor::White)),

@@ -22,19 +22,20 @@ const LIBRARY_IS_EMPTY: Condition = Condition::Compare(
 /// "You win the game".
 static YOU_WIN: Effect = win_game(you());
 
-/// "+1: Target player mills two cards. Draw a card." In order
-/// ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)), so milling himself
-/// empty, Jace draws from an empty library and his controller wins instead.
-/// [CR 701.17b](https://yawgatog.com/resources/magic-rules/#R70117b): "A player can't mill a
-/// number of cards greater than the number of cards in their library."
+/// "+1: Target player mills two cards. Draw a card." In order ([CR 608.2c]), so milling himself
+/// empty, Jace draws from an empty library and his controller wins instead. [CR 701.17b]: "A player
+/// can't mill a number of cards greater than the number of cards in their library."
 ///
-/// "−8: Draw seven cards. Then if your library has no cards in it, you win the game." Jace
-/// with exactly eight loyalty is gone by then (CR 704.5i), and his controller draws what is
-/// left and wins on the second sentence; the attempt to draw from the empty library loses
-/// only when state-based actions are next checked
-/// ([CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b)), by when the game is
-/// over ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b)): "An effect may
-/// state that a player wins the game."
+/// "−8: Draw seven cards. Then if your library has no cards in it, you win the game." Jace with
+/// exactly eight loyalty is gone by then (CR 704.5i), and his controller draws what is left and
+/// wins on the second sentence; the attempt to draw from the empty library loses only when
+/// state-based actions are next checked ([CR 704.5b]), by when the game is over ([CR 104.2b]): "An
+/// effect may state that a player wins the game."
+///
+/// [CR 608.2c]: https://yawgatog.com/resources/magic-rules/#R6082c
+/// [CR 701.17b]: https://yawgatog.com/resources/magic-rules/#R70117b
+/// [CR 704.5b]: https://yawgatog.com/resources/magic-rules/#R7045b
+/// [CR 104.2b]: https://yawgatog.com/resources/magic-rules/#R1042b
 pub static CARD: CardDef = Printed::JaceWielderOfMysteries
     .abilities(&[
         // A replacement effect ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)):

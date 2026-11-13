@@ -13,14 +13,16 @@
 
 use crate::prelude::*;
 
-/// [CR 712.8b](https://yawgatog.com/resources/magic-rules/#R7128b): "A player casting a modal
-/// double-faced card ... chooses which face they are casting"; only the instant can be, and
-/// [CR 712.9](https://yawgatog.com/resources/magic-rules/#R7129): "A player playing a modal
-/// double-faced card ... as a land chooses one of its faces that's a land ... It enters the
-/// battlefield with that face up."
+/// [CR 712.8b]: "A player casting a modal double-faced card ... chooses which face they are
+/// casting"; only the instant can be, and [CR 712.9]: "A player playing a modal double-faced card
+/// ... as a land chooses one of its faces that's a land ... It enters the battlefield with that
+/// face up."
 ///
 /// A spell returned to its owner's hand leaves the stack without resolving; a permanent
 /// leaves the battlefield.
+///
+/// [CR 712.8b]: https://yawgatog.com/resources/magic-rules/#R7128b
+/// [CR 712.9]: https://yawgatog.com/resources/magic-rules/#R7129
 pub static CARD: CardDef = card(
     Card::SinkIntoStupor,
     &[

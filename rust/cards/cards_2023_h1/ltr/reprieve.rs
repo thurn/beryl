@@ -8,17 +8,18 @@
 
 use crate::prelude::*;
 
-/// The spell leaves the stack without resolving, to its owner's hand
-/// ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)): "If an object would go to
-/// any library, graveyard, or hand other than its owner's, it goes to its owner's
+/// The spell leaves the stack without resolving, to its owner's hand ([CR 400.3]): "If an object
+/// would go to any library, graveyard, or hand other than its owner's, it goes to its owner's
 /// corresponding zone." The costs paid for it, X and kicker included, are not refunded. Then
-/// Reprieve's controller draws: an illegal target would have stopped the whole spell
-/// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)), "If all its targets
-/// ... are now illegal, the spell or ability doesn't resolve."
+/// Reprieve's controller draws: an illegal target would have stopped the whole spell ([CR 608.2b]),
+/// "If all its targets ... are now illegal, the spell or ability doesn't resolve."
 ///
-/// A copy of a spell returned this way would cease to exist
-/// ([CR 704.5e](https://yawgatog.com/resources/magic-rules/#R7045e)): "If a copy of a spell
-/// is in a zone other than the stack, it ceases to exist." No card here copies a spell yet.
+/// A copy of a spell returned this way would cease to exist ([CR 704.5e]): "If a copy of a spell is
+/// in a zone other than the stack, it ceases to exist." No card here copies a spell yet.
+///
+/// [CR 400.3]: https://yawgatog.com/resources/magic-rules/#R4003
+/// [CR 608.2b]: https://yawgatog.com/resources/magic-rules/#R6082b
+/// [CR 704.5e]: https://yawgatog.com/resources/magic-rules/#R7045e
 pub static CARD: CardDef = Printed::Reprieve
     .abilities(&[Ability::spell()
         .target(&TargetSpec::spell())

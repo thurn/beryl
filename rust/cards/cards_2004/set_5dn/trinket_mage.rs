@@ -10,13 +10,15 @@ use crate::prelude::*;
 
 /// "An artifact card with mana value 1 or less".
 ///
-/// "You may" covers the whole instruction, the shuffle with it: declining searches nothing
-/// and shuffles nothing. Searching, the player may find nothing
-/// ([CR 701.23b](https://yawgatog.com/resources/magic-rules/#R70123b)) and shuffles all the
-/// same ([CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a)): "To shuffle a
-/// library ..., randomize the cards within it so that no player knows their order." The card
-/// found is revealed ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a)):
-/// "To reveal a card, show that card to all players for a brief time."
+/// "You may" covers the whole instruction, the shuffle with it: declining searches nothing and
+/// shuffles nothing. Searching, the player may find nothing ([CR 701.23b]) and shuffles all the
+/// same ([CR 701.24a]): "To shuffle a library ..., randomize the cards within it so that no player
+/// knows their order." The card found is revealed ([CR 701.20a]): "To reveal a card, show that card
+/// to all players for a brief time."
+///
+/// [CR 701.23b]: https://yawgatog.com/resources/magic-rules/#R70123b
+/// [CR 701.24a]: https://yawgatog.com/resources/magic-rules/#R70124a
+/// [CR 701.20a]: https://yawgatog.com/resources/magic-rules/#R70120a
 pub static CARD: CardDef = Printed::TrinketMage
     .abilities(&[Ability::triggered(&Trigger::ENTERS).effect(&may(
         you(),

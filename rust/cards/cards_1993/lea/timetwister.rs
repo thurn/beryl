@@ -8,16 +8,18 @@
 
 use crate::prelude::*;
 
-/// "Each player shuffles their hand and graveyard into their library, then draws seven
-/// cards." The cards go to their libraries together, each to its owner's
-/// ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)), and each library is
-/// shuffled ([CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a)). Then each
-/// player draws seven, one card at a time
-/// ([CR 121.2](https://yawgatog.com/resources/magic-rules/#R1212)), in APNAP order
-/// ([CR 101.4](https://yawgatog.com/resources/magic-rules/#R1014)): "the active player ...
-/// makes any choices required, then the next player in turn order ... Then the actions happen
-/// simultaneously." No draw involves a choice, so the order changes nothing: a player who draws
-/// from an empty library loses as state-based actions are next checked either way (CR 704.5b).
+/// "Each player shuffles their hand and graveyard into their library, then draws seven cards." The
+/// cards go to their libraries together, each to its owner's ([CR 400.3]), and each library is
+/// shuffled ([CR 701.24a]). Then each player draws seven, one card at a time ([CR 121.2]), in APNAP
+/// order ([CR 101.4]): "the active player ... makes any choices required, then the next player in
+/// turn order ... Then the actions happen simultaneously." No draw involves a choice, so the order
+/// changes nothing: a player who draws from an empty library loses as state-based actions are next
+/// checked either way (CR 704.5b).
+///
+/// [CR 400.3]: https://yawgatog.com/resources/magic-rules/#R4003
+/// [CR 701.24a]: https://yawgatog.com/resources/magic-rules/#R70124a
+/// [CR 121.2]: https://yawgatog.com/resources/magic-rules/#R1212
+/// [CR 101.4]: https://yawgatog.com/resources/magic-rules/#R1014
 pub static CARD: CardDef = Printed::Timetwister
     .abilities(&[Ability::spell().effect(&sequence(&[
         shuffle_into(

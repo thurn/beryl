@@ -9,14 +9,15 @@
 
 use crate::prelude::*;
 
-/// Its color is its mana cost's, black: the overload cost doesn't change it
-/// ([CR 202.2](https://yawgatog.com/resources/magic-rules/#R2022)): "An object is the color or
-/// colors of the mana symbols in its mana cost". The cube lists it with white for its
-/// overload.
+/// Its color is its mana cost's, black: the overload cost doesn't change it ([CR 202.2]): "An
+/// object is the color or colors of the mana symbols in its mana cost". The cube lists it with
+/// white for its overload.
 ///
-/// Neither spell lets the creatures it destroys regenerate
-/// ([CR 701.19c](https://yawgatog.com/resources/magic-rules/#R70119c)): "they cause
-/// regeneration shields to not be applied."
+/// Neither spell lets the creatures it destroys regenerate ([CR 701.19c]): "they cause regeneration
+/// shields to not be applied."
+///
+/// [CR 202.2]: https://yawgatog.com/resources/magic-rules/#R2022
+/// [CR 701.19c]: https://yawgatog.com/resources/magic-rules/#R70119c
 pub static CARD: CardDef = Printed::Damn
     .abilities(&[
         Ability::spell()

@@ -8,10 +8,11 @@
 
 use crate::prelude::*;
 
-/// The entering replacement ([CR 614.1d](https://yawgatog.com/resources/magic-rules/#R6141d)):
-/// "Continuous effects that read "[This permanent] enters . . ." ... are replacement
-/// effects." It counts the lands its controller controls as it would enter, which are all
-/// other lands.
+/// The entering replacement ([CR 614.1d]): "Continuous effects that read "[This permanent] enters .
+/// . ." ... are replacement effects." It counts the lands its controller controls as it would
+/// enter, which are all other lands.
+///
+/// [CR 614.1d]: https://yawgatog.com/resources/magic-rules/#R6141d
 pub static CARD: CardDef = Printed::SeachromeCoast
     .abilities(&[
         Ability::replacing(Replacement::EntersTappedUnlessFewLands(2)),

@@ -11,17 +11,20 @@
 
 use crate::prelude::*;
 
-/// The spell leaves the stack without resolving, to the library of its owner, who chooses
-/// the end ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)): "If an object
-/// would go to any library, graveyard, or hand other than its owner's, it goes to its owner's
-/// corresponding zone." The trigger resolves whether or not Subtlety is still there, as after
-/// evoke's sacrifice ([CR 113.7a](https://yawgatog.com/resources/magic-rules/#R1137a)): "Once
-/// activated or triggered, an ability exists on the stack independently of its source."
+/// The spell leaves the stack without resolving, to the library of its owner, who chooses the end
+/// ([CR 400.3]): "If an object would go to any library, graveyard, or hand other than its owner's,
+/// it goes to its owner's corresponding zone." The trigger resolves whether or not Subtlety is
+/// still there, as after evoke's sacrifice ([CR 113.7a]): "Once activated or triggered, an ability
+/// exists on the stack independently of its source."
 ///
-/// Evoke's cost exiles a blue card from the hand rather than paying {2}{U}{U}
-/// ([CR 702.74a](https://yawgatog.com/resources/magic-rules/#R70274a)), and its sacrifice
-/// trigger enters alongside the tuck, both Subtlety's controller's to order
-/// ([CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b)).
+/// Evoke's cost exiles a blue card from the hand rather than paying {2}{U}{U} ([CR 702.74a]), and
+/// its sacrifice trigger enters alongside the tuck, both Subtlety's controller's to order
+/// ([CR 603.3b]).
+///
+/// [CR 400.3]: https://yawgatog.com/resources/magic-rules/#R4003
+/// [CR 113.7a]: https://yawgatog.com/resources/magic-rules/#R1137a
+/// [CR 702.74a]: https://yawgatog.com/resources/magic-rules/#R70274a
+/// [CR 603.3b]: https://yawgatog.com/resources/magic-rules/#R6033b
 pub static CARD: CardDef = Printed::Subtlety
     .keywords(Keywords::FLASH.union(Keywords::FLYING))
     .abilities(&[
