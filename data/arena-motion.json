@@ -103,48 +103,38 @@
         {
           "case": "permanent resolves",
           "recording": "UrGalw_f35w",
-          "time": "17:00.95",
-          "span": 1.0,
-          "crop": [
-            700,
-            50,
-            1220,
-            700
-          ],
+          "time": "17:01.03",
+          "span": 0.8,
+          "crop": null,
           "method": "filmstrip",
           "why": "just video measure refused: 'cannot measure: 3 things moved where 1 card was asked for: crop closer, shorten the span, or pass --cards' (trail, smoke and flash move too).",
-          "command": "just video film UrGalw_f35w 17:01.1 --span 0.8 --fps 20 --cols 4 --width 480 --crop 700,50,1220,700",
+          "command": "just video film UrGalw_f35w 17:01.03 --span 0.8 --fps 30 --cols 6 --width 640",
           "since": "",
-          "duration_ms": 600,
+          "duration_ms": 530,
           "delay_ms": null,
           "stagger_ms": null,
           "peak": 2.37,
-          "path": "Monastery Mentor (own spell) sits large at the stack position top right, leaves at 17:01.10, shrinks and flies left and down to its slot, at rest 17:01.70. Crop x centres 405,341,287,243,218,196,177,158,140,126,107,103,100 at 20 fps: fast start, slow arrival.",
+          "path": "Monastery Mentor (own spell) lies on the stack at the right, its middle 0.89 of the table's width across and 0.45 of its height down, until 17:01.13. One frame later it is the smaller battlefield card, 0.8 of the spell's width, and has jumped up and left. It keeps rising for 100 ms, to 0.29 of the table's height, crosses the table at that height until 17:01.43, and then drops onto its slot at 0.495 across and 0.55 down, at rest 17:01.66, shrinking to 0.53 of the spell's width as it comes down. Its shadow leaves it at once and is under the slot within about 130 ms. Middle at each 30 fps frame from 17:01.16, as shares of the table's width and height: (.83,.37) (.74,.33) (.72,.29) (.69,.29) (.65,.29) (.63,.29) (.62,.29) (.59,.30) (.58,.31) (.56,.36) (.55,.40) (.535,.42) (.52,.45) (.51,.49) (.50,.545) (.495,.55).",
           "curve": "ease-out",
-          "note": "Slot flash starts 17:01.75 and fades out by about 17:02.15, so the flash lasts about 400 ms and begins as the card stops. The stack card had been at rest from 17:00.95. Delay left null: nothing visible precedes it. Peak retaken as the tracker takes size (the side of a square of the box's area, so a card's size whichever way it turns: by-w8gv.21.37) from full-frame stills (`just video film UrGalw_f35w 17:01.0 --span 0.1 --fps 10 --cols 1 --width 1920`): 335x468 on the stack, 182x153 (17:01.9) at rest. The earlier figure, 2.0, was the widths' ratio by eye, a portrait card over a landscape art crop."
+          "note": "Retaken on the whole table at 30 fps: the first take, a 20 fps crop, read 600 ms and a path 'left and down'. It is half way across after a quarter of its time (51% at 133 ms, 76% at 267 ms, 90% at 400 ms), and up to 0.22 of the table's height above the straight line between its ends, from 100 ms to 300 ms. Dark smoke stays where it left the stack. The slot whitens from 17:01.73 and bursts until about 17:02.07. Peak is the stack card's width over the resting card's, as the tracker takes size."
         },
         {
           "case": "permanent resolves",
           "recording": "pE4XSNi-nZc",
-          "time": "23:02.4",
+          "time": "23:02.47",
           "span": 0.8,
-          "crop": [
-            800,
-            100,
-            1100,
-            600
-          ],
+          "crop": null,
           "method": "filmstrip",
           "why": "just video measure was not run on this clip after refusing with '2 things moved where 1 card was asked for' / '3 things moved' on the other resolves (glow, trails and a shadow move with the card).",
-          "command": "just video film pE4XSNi-nZc 23:02.4 --span 0.8 --fps 20 --cols 4 --width 480 --crop 800,100,1100,600",
+          "command": "just video film pE4XSNi-nZc 23:02.47 --span 0.8 --fps 30 --cols 6 --width 640",
           "since": "",
-          "duration_ms": 550,
+          "duration_ms": 500,
           "delay_ms": null,
           "stagger_ms": null,
           "peak": 2.29,
-          "path": "Emeritus of Ideation (own creature) at rest on the stack at right at 23:02.50, leaves at 23:02.55, shrinks and sweeps left and down in an arc to its slot, at rest about 23:03.10, flash from 23:03.15.",
+          "path": "Emeritus of Ideation (own creature) lies on the stack at the right until 23:02.54, is the smaller battlefield card one frame later, higher up the screen and tilted about 8 degrees, crosses the table to the left at that height with its shadow apart from it below, and drops onto its slot from about 23:02.84, at rest 23:03.04.",
           "curve": "ease-out",
-          "note": "Peak is approximate (card width about 140 px at the stack vs about 95 px at rest in the crop). Flash begins 23:03.15 and was still bright at the end of the 5 fps sheet around 23:03.4, so about 300 to 400 ms; not timed closely. Peak retaken as the tracker takes size (the side of a square of the box's area, so a card's size whichever way it turns: by-w8gv.21.37) from full-frame stills (`just video film pE4XSNi-nZc 23:02.5 --span 0.1 --fps 10 --cols 1 --width 1920`): 330x470 on the stack, 188x158 (23:04.0) at rest. The earlier figure, 1.5, was the widths' ratio by eye, a portrait card over a landscape art crop."
+          "note": "Retaken on the whole table at 30 fps (the first take, a 20 fps crop, read 550 ms). The same route as UrGalw_f35w 17:01.03: up at once, across high, then down. The slot bursts in blue-white light from 23:03.07 for more than 170 ms. Peak is approximate (card width about 140 px at the stack vs about 95 px at rest in the first take's crop)."
         },
         {
           "case": "permanent resolves",
@@ -172,25 +162,20 @@
         {
           "case": "permanent resolves",
           "recording": "pE4XSNi-nZc",
-          "time": "21:19.7",
-          "span": 1.6,
-          "crop": [
-            700,
-            150,
-            1220,
-            650
-          ],
+          "time": "21:19.93",
+          "span": 0.8,
+          "crop": null,
           "method": "filmstrip",
           "why": "the tracker refuses these clips (more than one mover), see the other resolves.",
-          "command": "just video film pE4XSNi-nZc 21:19.7 --span 0.8 --fps 20 --cols 4 --width 480 --crop 700,150,1220,650",
+          "command": "just video film pE4XSNi-nZc 21:19.93 --span 0.8 --fps 30 --cols 6 --width 640",
           "since": "",
-          "duration_ms": 600,
+          "duration_ms": 500,
           "delay_ms": null,
           "stagger_ms": null,
           "peak": 2.32,
-          "path": "Opponent's Mole Man, Moloid Master rests large at the stack position at right until 21:20.00, shrinks and flies left to its slot beside the other creature, at rest about 21:20.60.",
+          "path": "Opponent's Mole Man, Moloid Master lies on the stack at the right until 21:20.03, is the smaller battlefield card one frame later, rises about 0.13 of the table's height in its first 130 ms, crosses the table to the left at that height until about 21:20.40 and drops onto its slot beside the other creature, at rest 21:20.53.",
           "curve": "ease-out",
-          "note": "No flash was visible at the slot in the 20 fps frames to 21:21.15, so the slot flash is absent here or too faint to see. Started a second film at 21:20.4 to catch the arrival. Peak retaken as the tracker takes size (the side of a square of the box's area, so a card's size whichever way it turns: by-w8gv.21.37) from full-frame stills (`just video film pE4XSNi-nZc 21:19.8 --span 0.1 --fps 10 --cols 1 --width 1920`): 330x467 on the stack, 184x155 (21:20.8) at rest. The earlier figure, 1.9, was the widths' ratio by eye, a portrait card over a landscape art crop."
+          "note": "Retaken on the whole table at 30 fps (the first take, a 20 fps crop, read 600 ms). The opponent's permanent is thrown up the screen and drops as the player's own is: the camera looks down on both from the same side. No flash was visible at the slot to 21:20.70. Peak retaken as the tracker takes size."
         },
         {
           "case": "permanent resolves",
@@ -471,7 +456,7 @@
       ],
       "summary": {
         "duration_ms": {
-          "median": 525,
+          "median": 500,
           "min": 130,
           "max": 1117
         },
@@ -519,7 +504,7 @@
           },
           "permanent resolves": {
             "duration_ms": {
-              "median": 600,
+              "median": 500,
               "min": 500,
               "max": 650
             },

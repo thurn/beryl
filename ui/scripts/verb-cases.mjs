@@ -8,6 +8,7 @@ import {
     before,
     beside,
     bows,
+    rises,
     effectsOn,
     leavesFrom,
     middleOf,
@@ -69,9 +70,14 @@ export const CASES = {
                 "it leaves from where it lay",
             );
             assert.equal(flight.at.to.zones[card], flight.act.object.zone);
-            // A spell thrown onto the stack and a permanent set down from it leave the
-            // straight line, toward their controller's edge of the table.
-            bows(start, half, end, seat, `${flight.act.from} flight`);
+            // A spell thrown onto the stack leaves the straight line, toward its
+            // controller's edge of the table. A permanent leaving the stack is thrown up
+            // the screen and drops onto its place.
+            if (flight === cast) {
+                bows(start, half, end, seat, `${flight.act.from} flight`);
+            } else {
+                rises(start, half, end, `${flight.act.from} flight`);
+            }
             assert.ok(half.depth >= ALOFT, "it flies over what rests");
             assert.ok(end.depth < ALOFT, "it lands among what rests");
             assert.equal(end.opacity, 1);

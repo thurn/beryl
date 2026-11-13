@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { caseOf, effectsOf, timingOf } from "../src/stage/timing.ts";
-import { bowed, bowOf } from "../src/stage/tracks.ts";
+import { bowed, bowOf, glide, LIFT, lifts } from "../src/stage/tracks.ts";
 import { move, object, reach, stage, view } from "./stage-table.mjs";
 
 const card = (slot) => ({ kind: "object", slot });
@@ -472,4 +472,54 @@ test("a land played is quicker than a spell, lands with no flash, and the oppone
         ],
         "and leaves and lands on the line, upright",
     );
+});
+
+test("a permanent leaving the stack is thrown up, crosses high, and drops onto its place", () => {
+    const resolved = {
+        verb: "fly",
+        from: "stack",
+        object: { ...object(1), zone: "battlefield", controller: "you" },
+    };
+    const cast = { ...resolved, from: "hand" };
+    assert.deepEqual([lifts(resolved), lifts(cast)], [true, false]);
+    assert.equal(bowOf(resolved, 1), undefined, "it bows no other way");
+    // From the stack at the right, 200 wide, to a place 400 to its left and 100 below it,
+    // where it rests 100 wide: the same for either player, whose table the camera looks
+    // down on from the same side.
+    const flat = { rotation: 0, skew: 0, turn: 0, opacity: 1, depth: 0 };
+    const [start, rest] = [
+        { ...flat, x: 1000, y: 300, width: 200, face: "front" },
+        { ...flat, x: 600, y: 400, width: 100, face: "front" },
+    ];
+    const even = (progress) => progress;
+    const path = glide(start, even, true, { lift: true });
+    const middle = (progress) => {
+        const pose = path(progress, rest);
+        return { x: pose.x + pose.width / 2, y: pose.y, width: pose.width };
+    };
+    // It leaves from where it lay, and two frames of sixty later it is already smaller.
+    assert.deepEqual(middle(0), { x: 1100, y: 300, width: 200 });
+    const small = middle(LIFT.shrunk).width;
+    assert.ok(
+        small < LIFT.width * 200 && small > 150,
+        `it is smaller: ${small}`,
+    );
+    // A quarter of its time through it is as high as it goes, well above where it left
+    // though its place is below that, and nearly half way across (Arena's is half way
+    // across and 0.2 of the table's height above its line, `UrGalw_f35w 17:01.26`).
+    const quarter = middle(0.25);
+    assert.ok(quarter.y < start.y - 100, `it has risen: ${quarter.y}`);
+    assert.ok(
+        quarter.x < 1100 - 0.3 * 450 && quarter.x > 1100 - 0.6 * 450,
+        `it is nearly half way across: ${quarter.x}`,
+    );
+    // It is still that high past half its time, then comes down evenly, narrowing.
+    const [half, late] = [middle(0.55), middle(0.8)];
+    assert.ok(half.y < start.y - 80, `it crosses high: ${half.y}`);
+    assert.ok(late.y > half.y + 60 && late.y < rest.y, `it drops: ${late.y}`);
+    assert.ok(late.width < half.width && late.width > rest.width);
+    assert.deepEqual(middle(1), { x: 650, y: 400, width: 100 });
+    // One with no lift keeps to its line.
+    const straight = glide(start, even, true)(0.25, rest);
+    assert.deepEqual([straight.x, straight.y, straight.width], [900, 325, 175]);
 });

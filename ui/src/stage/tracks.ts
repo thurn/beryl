@@ -148,7 +148,6 @@ export const BOWS = {
   cast: { share: 0.15 },
   theirs: { share: 0.08, peak: 0.6 },
   played: { share: 0.3, back: 1, peak: 0.6, lean: 20 },
-  lands: { share: 0.1, lean: 2 },
   lifts: { share: 0.12, peak: 0.6 },
   drawn: { share: 0.2, peak: 0.42 },
 };
@@ -168,7 +167,72 @@ export function bowOf(act: Act, toward: number): Bow | undefined {
   if (act.from === "hand") {
     return toward < 0 ? { ...BOWS.played, toward: -toward } : undefined;
   }
-  return act.from === "stack" ? { ...BOWS.lands, toward } : undefined;
+  return undefined;
+}
+
+/** How a permanent that resolves leaves the stack for its place, as Arena's does for either
+ * player (`UrGalw_f35w 17:01.13`, `pE4XSNi-nZc 23:02.54` and `21:20.03`, filmed whole at 30
+ * frames a second). It does not slide along a line. In its first frame off the stack it is
+ * already smaller, `width` of the spell's width, and it is thrown up the screen: within
+ * `risen` of its time it is `height` of the spell's width above the straight line, it stays
+ * that high until `held` of its time while it crosses most of the way, and then it drops
+ * onto its place, shrinking to its size there as it comes down. It also leaves faster than
+ * the verb's curve alone: `launch` sharpens the curve, so that it is half way across after
+ * a quarter of its time. */
+export const LIFT = {
+  height: 0.95,
+  risen: 0.2,
+  held: 0.57,
+  width: 0.8,
+  shrunk: 0.06,
+  launch: 1.4,
+};
+
+/** Whether the flight of the step `act` is a permanent's from the stack to the battlefield,
+ * which is thrown up and drops onto its place (`LIFT`). */
+export const lifts = (act: Act) =>
+  act.verb === "fly" &&
+  act.from === "stack" &&
+  act.object.zone === "battlefield";
+
+/** How high above its straight line a permanent leaving the stack is, `progress` of its time
+ * through, as a share of its greatest height: up quickly, level, then down evenly. */
+export function liftAt(progress: number): number {
+  const at = Math.min(1, Math.max(0, progress));
+  if (at < LIFT.risen) return 1 - (1 - at / LIFT.risen) ** 2;
+  return at <= LIFT.held ? 1 : 1 - (at - LIFT.held) / (1 - LIFT.held);
+}
+
+/** `pose`, which is on the straight way from `start` to `rest`, as a permanent leaving the
+ * stack has it `progress` of its time through: lifted up the screen, and as wide as its
+ * height above the table makes it. */
+export function lifted(
+  pose: Pose,
+  start: Pose,
+  rest: Pose,
+  progress: number,
+): Pose {
+  const high = liftAt(progress);
+  // It never rises past the table's far edge, which is the top of the stage: a place in the
+  // opponent's rows has less room over it than Arena's camera leaves.
+  const room = Math.max(0, Math.min(start.y, rest.y));
+  // It is the spell's own width as it leaves, smaller within two frames, and from there
+  // comes down to its width at rest as it descends.
+  const aloft = LIFT.width * start.width;
+  const down = (at: number) =>
+    rest.width + (aloft - rest.width) * (1 - at ** 1.5);
+  const wide =
+    progress < LIFT.shrunk
+      ? start.width +
+        (down(LIFT.shrunk) - start.width) * (progress / LIFT.shrunk)
+      : down(progress);
+  return {
+    ...pose,
+    // A pose is placed by its top-left corner: it stays about its middle as it narrows.
+    x: pose.x + (pose.width - wide) / 2,
+    y: pose.y - Math.min(LIFT.height * start.width, room) * high,
+    width: wide,
+  };
 }
 
 /** `pose`, which is `through` of the straight way from `from` to `to`, as far off that way
@@ -222,6 +286,8 @@ export interface Flown {
   turning?: Turning;
   bow?: Bow;
   round?: (pose: Pose, near: number) => Pose;
+  /** It is thrown up off the stack and drops onto its place (`lifted`). */
+  lift?: boolean;
 }
 
 /** The glide to its resting place of an entry that was at `start`: `aloft` for what a step
@@ -240,10 +306,11 @@ export const glide =
     start: Pose,
     ease: Timing["ease"],
     aloft: boolean,
-    { over, turning = CAST, bow, round }: Flown = {},
+    { over, turning = CAST, bow, round, lift }: Flown = {},
   ): Path =>
   (progress, rest) => {
-    const through = ease(progress);
+    const eased = ease(progress);
+    const through = lift ? 1 - (1 - eased) ** LIFT.launch : eased;
     const back = over !== undefined && progress < turning.at;
     const turned = over !== undefined && opposed(start, rest);
     const hidden = over === undefined && round !== undefined;
@@ -255,7 +322,8 @@ export const glide =
           : start;
     const to = turned && back ? over(rest, start.rotation) : rest;
     const straight = between(from, to, through, aloft);
-    const pose = bow ? bowed(straight, from, to, through, bow) : straight;
+    const curved = bow ? bowed(straight, from, to, through, bow) : straight;
+    const pose = lift ? lifted(curved, from, to, progress) : curved;
     if (!over) return pose;
     return {
       ...pose,
@@ -643,6 +711,7 @@ export function carried(
         over: turns ? halfTurn : undefined,
         turning: turningOf(run.step.act),
         bow: flies ? bowOf(run.step.act, toward) : undefined,
+        lift: flies && lifts(run.step.act),
         round:
           flies && (faceUp || resting.pose.face === "back")
             ? halfTurn

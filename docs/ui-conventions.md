@@ -413,30 +413,36 @@ stage to; Arena's measured instances are kept beside them as reference in
   room for them all as the first left. A card that comes to a hand joins its
   right end, and keeps its place there. A card that lands face down the other
   way up the table, as the opponent's draw does, leaves the way up it will lie.
-  A spell cast and a permanent resolving leave the straight line in a shallow
-  arc that bows toward their controller's edge of the table, the permanent
-  leaning a little into it. The player's own land glides straight to its place.
-  The opponent's land drops out of their hand into the open table on the side
-  away from where it is going, tilted, and swings back along the table to its
-  place. A played land glides from where it is released to its slot in about 0.3
-  s, gathering speed, and lands with no flash. The opponent's land leaves their
-  hand face up, drops down into the table on the side away from their lands,
-  tilted, and swings back to its slot, about 0.6 s in all, with no flash. The
-  opponent's spell leaves their hand as a card back and is face up when it
-  reaches the stack, about 0.4 s; the player's own flies from where it is
-  released in about 0.35 s. A resolving permanent flies to its slot in about 0.6
-  s and the slot flashes. A drawn card leaves the library at the lower left
-  turning face up within about 0.2 s, flies right across the table to a place
-  beside the stack growing as it comes, holds there about 0.2 s and drops into
-  the right end of the hand, about 1.1 s in all; three drawn by one spell leave
-  a quarter second apart and fly the same way with no hold, about 0.7 s each. A
-  discard drops to the graveyard at hand size in about 0.2 s (UrGalw_f35w
-  16:14.8, UrGalw_f35w 16:35.37, UrGalw_f35w 16:46.1, pE4XSNi-nZc 20:13.2,
-  UrGalw_f35w 16:46.3, UrGalw_f35w 16:47.15, pE4XSNi-nZc 22:00.0, pE4XSNi-nZc
-  23:23.5, UrGalw_f35w 17:01.3, UrGalw_f35w 16:15.8, WQiYBv23buw 29:14.3,
-  vPdoSA5H5xU 17:46.2, 3sEoP_s4DQE 39:04.3, 5UHzpVvUkfI 1:01:50.3). Beryl: 475
-  ms, 326 ms apart, ease-out. Effects: settle as it ends (into the battlefield)
-  (but not land played, opponent land played).
+  A spell cast leaves the straight line in a shallow arc that bows toward its
+  controller's edge of the table. A permanent resolving, either player's, is
+  thrown up off the stack: it is smaller in its first frame, rises up the screen
+  at once, crosses most of the way to its place at that height, half way across
+  after a quarter of its time, and then drops onto its place, shrinking as it
+  comes down. The player's own land glides straight to its place. The opponent's
+  land drops out of their hand into the open table on the side away from where
+  it is going, tilted, and swings back along the table to its place. A played
+  land glides from where it is released to its slot in about 0.3 s, gathering
+  speed, and lands with no flash. The opponent's land leaves their hand face up,
+  drops down into the table on the side away from their lands, tilted, and
+  swings back to its slot, about 0.6 s in all, with no flash. The opponent's
+  spell leaves their hand as a card back and is face up when it reaches the
+  stack, about 0.4 s; the player's own flies from where it is released in about
+  0.35 s. A resolving permanent, either player's, is the smaller battlefield
+  card one frame after it leaves the stack, rises up the screen by about a fifth
+  of the table's height within 0.1 s, crosses to above its slot at that height
+  and drops onto it, about 0.5 s in all, and the slot flashes. A drawn card
+  leaves the library at the lower left turning face up within about 0.2 s, flies
+  right across the table to a place beside the stack growing as it comes, holds
+  there about 0.2 s and drops into the right end of the hand, about 1.1 s in
+  all; three drawn by one spell leave a quarter second apart and fly the same
+  way with no hold, about 0.7 s each. A discard drops to the graveyard at hand
+  size in about 0.2 s (UrGalw_f35w 16:14.8, UrGalw_f35w 16:35.37, UrGalw_f35w
+  16:46.1, pE4XSNi-nZc 20:13.2, UrGalw_f35w 16:46.3, UrGalw_f35w 16:47.15,
+  pE4XSNi-nZc 22:00.0, pE4XSNi-nZc 23:23.5, UrGalw_f35w 17:01.3, UrGalw_f35w
+  16:15.8, WQiYBv23buw 29:14.3, vPdoSA5H5xU 17:46.2, 3sEoP_s4DQE 39:04.3,
+  5UHzpVvUkfI 1:01:50.3, UrGalw_f35w 17:01.03). Beryl: 475 ms, 326 ms apart,
+  ease-out. Effects: settle as it ends (into the battlefield) (but not land
+  played, opponent land played).
 - **appear.** A card comes to be at its place with no flight: a token, the
   opening hand, a card a look put in the graveyard. Its row makes room in its
   delay, so it shows at a place already open. A token appears whole with a short

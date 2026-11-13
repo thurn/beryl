@@ -593,8 +593,8 @@ export const CASES = {
         assert.ok(land, "a land is played");
         assert.deepEqual(
             effectsOn(land.at.to, land.act.object.slot),
-            ["settle over"],
-            "it settles as it lands",
+            [],
+            "it lands with no flash, as Arena's land does",
         );
         const was = before(place, land);
         const { middle, to } = land.at;

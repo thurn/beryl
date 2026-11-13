@@ -86,6 +86,29 @@ export function bows(start, half, end, seat, what) {
     }
 }
 
+/** A permanent's flight from the stack half way: on its way, and thrown up the screen, well
+ * above the straight line from where it is at `start` to where it is at `end`, by their
+ * middles, whichever player's it is (src/stage/tracks.ts LIFT). Where that line runs up or
+ * down the table, as the phone's does, being thrown up it only holds the card back along
+ * the line or carries it past its place before it drops, so there it is only held to be
+ * under way. */
+export function rises(start, half, end, what) {
+    const [a, p, b] = [start, half, end].map(turnedMiddle);
+    const { level } = against(start, half, end);
+    assert.notDeepEqual(where(half), where(start), `${what}: it has not left`);
+    assert.notDeepEqual(
+        where(half),
+        where(end),
+        `${what}: it is there at once`,
+    );
+    if (!level) return;
+    const line = a.y + ((b.y - a.y) * (p.x - a.x)) / (b.x - a.x);
+    assert.ok(
+        p.y < line - 0.3 * start.width,
+        `${what}: half way it is high above its line (${p.y} against ${line})`,
+    );
+}
+
 export const placeOf = ({ x, y, width }) => ({ x, y, width });
 /** Whether two poses lie within a card's width of one another. */
 export const beside = (a, b) =>
