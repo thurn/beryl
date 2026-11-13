@@ -9,6 +9,11 @@ slow = "uv run --quiet --project tools by ci"
 # A backstop behind `by ci`'s own deadline (twice its budget, at least 600 s), which names
 # the step.
 slow_timeout = 1000
+# Least seconds between one slow-CI run ending and the next starting, so a higher commit rate
+# makes larger batches, not more runs. `by ci` already draws its CPU from the `ci` token class
+# (tools/src/beryl_tools/tokens.py), capped at half the cores. Runs take about 330 s, so this
+# keeps the runner idle for about half of the time and `master` still advances within minutes.
+slow_min_gap = 300
 
 [worktree]
 root = ".worktrees"   # inside the checkout; gitignored
