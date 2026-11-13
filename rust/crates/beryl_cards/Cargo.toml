@@ -65,7 +65,8 @@ cards_2025_h1 = { path = "../../cards/cards_2025_h1" }
 cards_2025_h2 = { path = "../../cards/cards_2025_h2" }
 cards_2026_q1 = { path = "../../cards/cards_2026_q1" }
 cards_2026_q2 = { path = "../../cards/cards_2026_q2" }
-cards_2026_h2 = { path = "../../cards/cards_2026_h2" }
+cards_2026_q3 = { path = "../../cards/cards_2026_q3" }
+cards_2026_q4 = { path = "../../cards/cards_2026_q4" }
 
 [build-dependencies]
 # Lists the set crates and writes the tables over them.
@@ -126,7 +127,8 @@ scenarios = [
     "cards_2025_h2/scenarios",
     "cards_2026_q1/scenarios",
     "cards_2026_q2/scenarios",
-    "cards_2026_h2/scenarios",
+    "cards_2026_q3/scenarios",
+    "cards_2026_q4/scenarios",
 ]
 
 [[bin]]

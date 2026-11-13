@@ -1,5 +1,5 @@
 {
-  "rule": "Crates of card files (`by cards`, `card crates`; tools/src/beryl_tools/set_groups.py specifies them): each first-printing set in the crate of its first release's year, cards_<year>. A year of more than 1,200 cards, and the current year and later ones, are split into halves by release date (cards_<year>_h1, _h2), and a half of more than 1,200 into quarters (_q1 to _q4). A split, once made, is kept.",
+  "rule": "Crates of card files (`by cards`, `card crates`; tools/src/beryl_tools/set_groups.py specifies them): each first-printing set in the crate of its first release's year, cards_<year>. A year of more than 1,200 cards is split into halves by release date (cards_<year>_h1, _h2), and a half of more than 1,200 into quarters (_q1 to _q4). The current year and later ones are split straight into quarters. A split, once made, is kept.",
   "groups": [
     {
       "crate": "cards_1993",
@@ -433,11 +433,16 @@
       ]
     },
     {
-      "crate": "cards_2026_h2",
+      "crate": "cards_2026_q3",
       "sets": [
         "hob",
         "hoc",
-        "slz",
+        "slz"
+      ]
+    },
+    {
+      "crate": "cards_2026_q4",
+      "sets": [
         "fra",
         "frc",
         "trc",

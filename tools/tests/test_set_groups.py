@@ -31,7 +31,7 @@ def test_sets_are_grouped_by_year_and_large_years_split() -> None:
         "jan": SetInfo("2010-01-01", 700),
         "may": SetInfo("2010-05-01", 550),
         "aug": SetInfo("2010-08-01", 50),
-        # The current year and later ones are split into halves however small.
+        # The current year and later ones are split into quarters however small.
         "now": SetInfo("2026-09-01", 10),
         "next": SetInfo("2027-02-01", 10),
     }
@@ -42,8 +42,8 @@ def test_sets_are_grouped_by_year_and_large_years_split() -> None:
         ("cards_2010_q1", ["jan"]),
         ("cards_2010_q2", ["may"]),
         ("cards_2010_h2", ["aug"]),
-        ("cards_2026_h2", ["now"]),
-        ("cards_2027_h1", ["next"]),
+        ("cards_2026_q3", ["now"]),
+        ("cards_2027_q1", ["next"]),
     ]
 
 
@@ -64,7 +64,7 @@ def test_a_split_is_kept_and_a_set_moves_only_when_its_year_overflows() -> None:
     smaller = {"b": sets["b"], "now": SetInfo("2026-01-01", 10)}
     split = set_groups.extend(set_groups.extend([], smaller, TODAY), smaller, TODAY)
     later = set_groups.extend([*again, *split], smaller, date(2030, 1, 1))
-    assert [g.crate for g in later] == ["cards_2021_h2", "cards_2026_h1"]
+    assert [g.crate for g in later] == ["cards_2021_h2", "cards_2026_q1"]
 
 
 def test_the_committed_groups_follow_the_rule_and_cover_every_set() -> None:

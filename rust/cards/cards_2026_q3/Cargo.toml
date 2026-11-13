@@ -1,7 +1,7 @@
 [package]
-name = "cards_2026_h2"
+name = "cards_2026_q3"
 version = "0.1.0"
-description = "The cards first printed in the sets of the group cards_2026_h2"
+description = "The cards first printed in the sets of the group cards_2026_q3"
 edition.workspace = true
 license.workspace = true
 publish = false

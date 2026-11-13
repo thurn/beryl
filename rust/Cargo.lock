@@ -235,9 +235,10 @@ dependencies = [
  "cards_2024_h2",
  "cards_2025_h1",
  "cards_2025_h2",
- "cards_2026_h2",
  "cards_2026_q1",
  "cards_2026_q2",
+ "cards_2026_q3",
+ "cards_2026_q4",
  "serde_json",
 ]
 
@@ -880,16 +881,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cards_2026_h2"
-version = "0.1.0"
-dependencies = [
- "beryl_card",
- "beryl_card_build",
- "beryl_card_shared",
- "beryl_scenario_types",
-]
-
-[[package]]
 name = "cards_2026_q1"
 version = "0.1.0"
 dependencies = [
@@ -901,6 +892,26 @@ dependencies = [
 
 [[package]]
 name = "cards_2026_q2"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2026_q3"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2026_q4"
 version = "0.1.0"
 dependencies = [
  "beryl_card",

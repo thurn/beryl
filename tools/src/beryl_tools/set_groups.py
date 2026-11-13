@@ -7,9 +7,10 @@ year of its earliest first printing's release date, `cards_2010`. A year whose s
 than `CAP` cards is split by release date into halves, `cards_2024_h1` (January to June) and
 `cards_2024_h2` (July to December), and a half over `CAP` into quarters, `cards_2026_q1` to
 `cards_2026_q4`; quarters are not split further. The current year and later ones are split into
-halves from the start, since recent years always grow past `CAP`, so a set does not move when
-its year fills. A split is kept once made: a crate named in the file keeps its year or half
-split even when its sets shrink or the year is past. The rest is a function of the store's
+quarters from the start, since recent years always grow past `CAP`, so a set does not move when
+its year fills and a year's crates do not change shape while it is not over. A split is kept
+once made: a crate named in the file keeps its year or half split even when its sets shrink or
+the year is past. The rest is a function of the store's
 sets alone, so a set moves only when its year or half first grows past `CAP`, and `card crates`
 then moves its card files. The cap keeps the one-edit rebuild in budget: it is mostly the
 recheck of the edited crate, which grows with the crate's cards (K8, Measurements).
@@ -44,9 +45,10 @@ CAP = 1200
 RULE = (
     "Crates of card files (`by cards`, `card crates`; tools/src/beryl_tools/set_groups.py "
     "specifies them): each first-printing set in the crate of its first release's year, "
-    "cards_<year>. A year of more than 1,200 cards, and the current year and later ones, are "
-    "split into halves by release date (cards_<year>_h1, _h2), and a half of more than 1,200 "
-    "into quarters (_q1 to _q4). A split, once made, is kept."
+    "cards_<year>. A year of more than 1,200 cards is split into halves by release date "
+    "(cards_<year>_h1, _h2), and a half of more than 1,200 into quarters (_q1 to _q4). The "
+    "current year and later ones are split straight into quarters. A split, once made, is "
+    "kept."
 )
 # A crate name the rule makes: a year, then a half or quarter of it.
 CRATE: re.Pattern[str] = re.compile(r"^cards_(\d{4})(?:_([hq])([1-4]))?$")
@@ -165,11 +167,8 @@ def extend(
     def place(crate: str, codes: list[str], depth: int) -> None:
         # `crate` is a year at depth 0, a half at 1 and a quarter at 2.
         total = sum(sets[c].cards for c in codes)
-        must = (
-            crate in split
-            or total > CAP
-            or (depth == 0 and int(crate.removeprefix("cards_")) >= current)
-        )
+        recent = int(crate.removeprefix("cards_")[:4]) >= current
+        must = crate in split or total > CAP or recent
         if depth == 2 or not must:
             groups.append(Group(crate, codes))
             return
