@@ -267,6 +267,20 @@ def test_rust_test_items_and_scenarios_are_the_checks_side(repo: Path) -> None:
     assert verdicts.classify("rust", in_product, tree(repo)) == "stale"
 
 
+def test_every_file_is_the_product_of_a_repo_check(repo: Path) -> None:
+    before = tree(repo)
+    write(repo, "ui/scripts/kept-table.mjs", "shorter checks\n")
+    # A browser script is a browser lane's check, but repo:file-length lints its length.
+    shortened = tree(repo)
+    assert verdicts.classify("repo", before, shortened) == "catch"
+    assert verdicts.classify("rust", before, shortened) == "flaky"
+    write(repo, "docs/guide.md", "reflowed\n")
+    assert verdicts.classify("repo", shortened, tree(repo)) == "catch"
+    write(repo, ".beads/issues.jsonl", "{}\n")
+    write(repo, "data/file-length-allowlist.json", "{}\n")
+    assert verdicts.classify("repo", shortened, tree(repo)) == "mixed"
+
+
 def test_the_items_of_a_rust_file_end_where_their_brackets_close() -> None:
     assert verdicts.regions(RUST, "scenarios") == [(5, 8)]
     assert verdicts.regions(RUST, "tests") == [(5, 8), (10, 16)]

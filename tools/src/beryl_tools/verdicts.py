@@ -78,9 +78,14 @@ CHECK_SIDE: dict[str, Side] = {
     "oracle": Side(("data/oracle-divergences.json",), rust="scenarios"),
     "python": Side(("tools/tests/*",)),
     "names": Side(("data/card-names-allowlist.json",)),
+    "repo": Side(("data/file-length-allowlist.json",)),
 }
 # Neither side of any check: prose and the beads.
 NEUTRAL = ("docs/*", ".beads/*", "*.md")
+# Lanes whose checks lint files of every kind (file length, Markdown and justfile format), so
+# prose, other lanes' checks and test code are all their product. Only the beads are neutral:
+# a fix that shortened an over-long `ui/scripts` file once read as a flake of `repo:file-length`.
+WHOLE_TREE: frozenset[str] = frozenset({"repo"})
 
 
 @dataclass(frozen=True)
@@ -215,16 +220,21 @@ def sides(lane: str, old: str, new: str) -> set[str] | None:
     if diff.returncode:
         return None
     own = CHECK_SIDE.get(lane, Side(()))
-    others = [g for name, s in CHECK_SIDE.items() if name != lane for g in s.globs]
+    whole = lane in WHOLE_TREE
+    others = (
+        []
+        if whole
+        else [g for n, s in CHECK_SIDE.items() if n != lane for g in s.globs]
+    )
     touched: set[str] = set()
     for path in diff.stdout.splitlines():
-        if matches(path, NEUTRAL):
+        if matches(path, (".beads/*",) if whole else NEUTRAL):
             continue
         if matches(path, own.globs):
             touched.add("check")
         elif matches(path, others):
             continue
-        elif path.endswith(".rs"):
+        elif path.endswith(".rs") and not whole:
             touched |= rust_sides(old, new, path, lane)
         else:
             touched.add("product")
