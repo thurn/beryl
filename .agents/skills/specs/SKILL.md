@@ -212,7 +212,7 @@ sources, with short general labels:
   (`Stops: card exiled`, through `Permanent::exiled_with`), each ability
   activated (labelled by its cost: `{2}{T}`, `+2`, `−1`), and one bounced in
   response (`{2}{T}, bounced`).
-- **The card's scenarios** (`beryl_cards::SCENARIOS`), each under its own name
+- **The card's scenarios** (`beryl_cards::scenarios()`), each under its own name
   as a heading (less the card's name). `Start` opens on its first board, and
   play runs the whole scenario (held to the turn a trailing `AdvanceTo` names).
   It is cut at each cast or activation of the card (`{T}`, played out once
