@@ -1,10 +1,16 @@
 /* The opponent acting (Player.tsx' Thinking): an arc faint at its tail and bright at
-   its head, turning round a faint ring. */
+   its head, turning round a faint ring. The whole drawing turns, not the arc inside it: the
+   ring and the glow are round, so it looks the same, and a turning element with a layer of its
+   own is moved by the compositor. Turning a shape inside the drawing made WebKit repaint and
+   re-filter the drawing every frame for as long as the opponent thought, which by itself cost
+   about a third of the frames dropped in a combat. */
 .thinking {
   width: 40px;
   height: 40px;
   overflow: visible;
   filter: drop-shadow(0 0 3px rgb(255 150 40 / 70%));
+  will-change: transform;
+  animation: thinking-turn 0.8s linear infinite;
 }
 .thinking-track {
   fill: none;
@@ -15,7 +21,6 @@
   fill: none;
   stroke-width: 3.4;
   stroke-linecap: round;
-  animation: thinking-turn 0.8s linear infinite;
 }
 .thinking-head {
   fill: #fff3c0;
@@ -23,11 +28,11 @@
 }
 @keyframes thinking-turn {
   to {
-    rotate: 360deg;
+    transform: rotate(360deg);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .thinking-arc {
+  .thinking {
     animation-duration: 2s;
   }
 }

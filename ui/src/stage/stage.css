@@ -201,8 +201,22 @@
    a little up and down, each smaller than the last, from the stage's `--shake` alone. Only
    while it shakes does the table carry a `translate`, which would make it the containing
    block of everything in it. */
+/* The two numbers are not inherited: everything on the table would otherwise be restyled
+   every frame of a shake for a number only the table reads. And the table has a layer of its
+   own while it shakes, so the compositor moves it instead of repainting all of it each frame. */
+@property --shake {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+@property --shaken {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
 :is(.table, .phone-board)[data-shaking] {
   --shaken: calc(1 - var(--shake));
+  will-change: transform;
   translate: calc(
       sin(var(--shake) * 720deg) * var(--shaken) * var(--shaken) * 0.7%
     )
@@ -428,6 +442,10 @@
 .turn-banner.stage-notice {
   --through: var(--notice-turn, 0);
   --toward: 1;
+  /* Its own layer, so that fading, growing and sinking it moves that layer and does not
+     repaint the band, the title and the rosettes' glow every frame: without it WebKit drops
+     most of the banner's frames, and those of the cards flying under it. */
+  will-change: transform, opacity;
   /* Over everything on the table, the cards in flight too (stage/pose.ts ALOFT; a strike is
      the highest, under twice that): play goes on under it. */
   z-index: 2600;

@@ -60,10 +60,12 @@
   stroke: var(--turn);
   filter: drop-shadow(0 0 4px var(--turn-glow));
 }
+/* Each rosette is a drawing of its own (TurnBanner.tsx), turned whole about its middle with
+   a layer of its own: the compositor turns it, and its glow is drawn once. Turning a group
+   inside one drawing made WebKit repaint and re-filter the drawing every frame of the banner. */
 .turn-banner-ring-outer,
 .turn-banner-ring-inner {
-  transform-box: view-box;
-  transform-origin: center;
+  will-change: transform;
   animation: turn-banner-spin calc(var(--turn-ms) + 600ms) linear both;
 }
 .turn-banner-ring-outer {

@@ -31,13 +31,27 @@ export function TurnAnnouncement({ side }: { side: Side }) {
       data-turn={side}
     >
       <div className="turn-banner-band" />
+      {/* Each rosette is a drawing of its own, turned whole, so the compositor turns it
+          and its glow is drawn once (screens/styles/turn-banner.css). */}
+      <svg
+        className="turn-banner-rings turn-banner-ring-outer"
+        viewBox="-110 -110 220 220"
+        aria-hidden
+      >
+        {rosette(12, 50)}
+      </svg>
+      <svg
+        className="turn-banner-rings turn-banner-ring-inner"
+        viewBox="-110 -110 220 220"
+        aria-hidden
+      >
+        {rosette(8, 32, 0.5)}
+      </svg>
       <svg
         className="turn-banner-rings"
         viewBox="-110 -110 220 220"
         aria-hidden
       >
-        <g className="turn-banner-ring-outer">{rosette(12, 50)}</g>
-        <g className="turn-banner-ring-inner">{rosette(8, 32, 0.5)}</g>
         <circle className="turn-banner-rim" r={101} />
         <circle className="turn-banner-rim" r={104} />
       </svg>
