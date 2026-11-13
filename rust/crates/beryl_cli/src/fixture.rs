@@ -549,25 +549,6 @@ mod tests {
         assert!(Condition::parse("raining").is_err());
     }
 
-    /// Every board fixture the UI records still plays out to its stop, in a fraction of a
-    /// second, so a change that breaks one fails here rather than in the UI's checks.
-    #[test]
-    fn every_board_fixture_records() {
-        // Read at run time: a test binary from the shared target directory may have been
-        // built in a worktree that no longer exists.
-        let path = Path::new(
-            &std::env::var_os("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"),
-        )
-        .join("../../../ui/fixtures.json");
-        let text = std::fs::read_to_string(&path).unwrap();
-        let defs: Definitions = serde_json::from_str(&text).unwrap();
-        let boards: Vec<&Definition> = defs.fixtures.iter().filter(|d| d.board.is_some()).collect();
-        assert!(!boards.is_empty());
-        for def in boards {
-            record(def).unwrap_or_else(|e| panic!("fixture {}: {e}", def.name));
-        }
-    }
-
     #[test]
     fn a_recording_stops_at_its_condition() {
         let def = Definition {
