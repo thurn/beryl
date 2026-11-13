@@ -113,6 +113,12 @@ pub struct CandidateView {
     /// (activated, mana abilities among them, or triggered) before the one that says it, as
     /// [`StackItem::Ability`]'s `nth` counts them, so the UI finds the ability's paragraph.
     pub nth: Option<u8>,
+    /// For a candidate that activates an ability or puts a waiting trigger on the stack: the
+    /// ability's rules text, when the printed text of its face has no paragraph for it, as
+    /// [`StackItem::Ability`]'s `text` says. None otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub text: Option<String>,
     /// For a candidate that announces one or more targets: what the first of them may be, one
     /// of each set of interchangeable objects (§7.2), so the UI can take the count and the
     /// target as one pick. None otherwise.

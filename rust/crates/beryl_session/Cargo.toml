@@ -10,6 +10,8 @@ publish = false
 workspace = true
 
 [dependencies]
+# The renderer (`beryl_card::render`) writes an ability's rules text where its card prints none.
+beryl_card = { path = "../beryl_card" }
 beryl_card_store = { path = "../beryl_card_store" }
 beryl_cards = { path = "../beryl_cards" }
 beryl_engine = { path = "../beryl_engine" }
@@ -24,8 +26,6 @@ uuid = { version = "1", features = ["v4"] }
 zip = { version = "8.6", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [dev-dependencies]
-# The promotion tests write test cards as effect data.
-beryl_card = { path = "../beryl_card" }
 # The tests play cards' scenarios.
 beryl_cards = { path = "../beryl_cards", features = ["scenarios"] }
 beryl_scenario = { path = "../beryl_scenario" }

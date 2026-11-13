@@ -33,15 +33,18 @@ import "./choose.css";
 type Candidate = DecisionView["candidates"][number];
 
 /** The `nth` activated ability of `object`, called `label`, as the stack will show it: its
- * source's frame, wearing the words of the ability. */
+ * source's frame, wearing the words of the ability, or `text` where the session sends them
+ * because the printed text has no paragraph for the ability (one granted to `object`). */
 function Ability({
   object,
   nth,
+  text,
   label,
   width,
 }: {
   object: ObjectView;
   nth: number;
+  text?: string | undefined;
   label: string;
   width: number;
 }) {
@@ -50,7 +53,7 @@ function Ability({
     <StackItem
       source={face}
       label="Activated Ability"
-      text={abilityText(face.text ?? "", false, nth)}
+      text={text ?? abilityText(face.text ?? "", false, nth)}
       width={width}
       showArt
     />
@@ -85,6 +88,7 @@ function Way({
       <Ability
         object={object}
         nth={candidate.nth ?? 0}
+        text={candidate.text}
         label={candidate.label}
         width={width}
       />

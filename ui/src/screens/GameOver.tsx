@@ -2,6 +2,7 @@
 import { BLANK, paragraphOf, useAbilityFace } from "../game/faces";
 import { Button, Dock, DockButtons } from "../components/Controls";
 import { Card } from "../components/Card";
+import { StackItem } from "../components/Stack";
 import {
   type Culprit,
   type LossReason,
@@ -93,9 +94,27 @@ export function GameOver({
 }
 
 /** The card that ended the game, under the reason: with the ability that did it lit, as a
- * plate over its scan, or whole for a spell or a source of damage. */
+ * plate over its scan, or whole for a spell or a source of damage. A triggered or activated
+ * ability its printed text has no paragraph for wears the words the session sends, as the
+ * stack shows it. */
 function CulpritCard({ culprit }: { culprit: Culprit }) {
   const face = useAbilityFace(culprit.name, undefined, BLANK);
+  const kind = culprit.ability?.kind;
+  if (culprit.text !== undefined && kind && kind !== "static") {
+    return (
+      <div className="game-over-card" data-card={culprit.name}>
+        <StackItem
+          source={face}
+          label={
+            kind === "triggered" ? "Triggered Ability" : "Activated Ability"
+          }
+          text={culprit.text}
+          width={230}
+          showArt
+        />
+      </div>
+    );
+  }
   const lit =
     culprit.ability && face.text
       ? paragraphOf(face.text, culprit.ability)

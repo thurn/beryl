@@ -89,6 +89,7 @@ fn trigger(source: Option<u16>, name: &str, targets: Vec<TargetRef>) -> StackIte
         triggered: true,
         taps_to_pay: None,
         nth: 0,
+        text: None,
         controller: Side::Opponent,
         targets,
         x: 0,

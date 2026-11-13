@@ -285,6 +285,13 @@ pub enum StackItem {
         /// How many paragraphs of its face's text say abilities of its kind (triggered, or
         /// activated) before the one that says it, so the UI finds its paragraph.
         nth: u8,
+        /// Its rules text as its definition says it, when the printed text of its face has no
+        /// paragraph that says it: an ability another object grants, or one past the printed
+        /// paragraphs of its kind, as a token's or an emblem's with no text in the card store
+        /// is. None where the UI finds the `nth` paragraph.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        text: Option<String>,
         controller: Side,
         targets: Vec<TargetRef>,
         /// The announced value of X.

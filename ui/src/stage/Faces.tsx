@@ -69,7 +69,10 @@ const AbilityFace = memo(function AbilityFace({
       <StackItem
         source={face}
         label={ability.triggered ? "Triggered Ability" : "Activated Ability"}
-        text={abilityText(face.text ?? "", ability.triggered, ability.nth)}
+        text={
+          ability.text ??
+          abilityText(face.text ?? "", ability.triggered, ability.nth)
+        }
         width={dress.frame}
         showArt
       />

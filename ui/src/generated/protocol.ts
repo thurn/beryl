@@ -325,7 +325,14 @@ tapsToPay?: boolean,
  * How many paragraphs of its face's text say abilities of its kind (triggered, or
  * activated) before the one that says it, so the UI finds its paragraph.
  */
-nth: number, controller: Side, targets: Array<TargetRef>, 
+nth: number, 
+/**
+ * Its rules text as its definition says it, when the printed text of its face has no
+ * paragraph that says it: an ability another object grants, or one past the printed
+ * paragraphs of its kind, as a token's or an emblem's with no text in the card store
+ * is. None where the UI finds the `nth` paragraph.
+ */
+text?: string, controller: Side, targets: Array<TargetRef>, 
 /**
  * The announced value of X.
  */
@@ -429,6 +436,12 @@ blocks: Array<number>,
  */
 nth: number | null, 
 /**
+ * For a candidate that activates an ability or puts a waiting trigger on the stack: the
+ * ability's rules text, when the printed text of its face has no paragraph for it, as
+ * [`StackItem::Ability`]'s `text` says. None otherwise.
+ */
+text?: string, 
+/**
  * For a candidate that announces one or more targets: what the first of them may be, one
  * of each set of interchangeable objects (§7.2), so the UI can take the count and the
  * target as one pick. None otherwise.
@@ -476,7 +489,12 @@ name: string,
  * Which of its abilities did it, as its card's text orders them; none for a spell, or
  * for damage.
  */
-ability: AbilityRef | null, };
+ability: AbilityRef | null, 
+/**
+ * The ability's rules text, when the printed text of its face has no paragraph that
+ * says it ([`StackItem::Ability`](super::StackItem::Ability)'s `text`).
+ */
+text?: string, };
 
 export type AbilityRef = { kind: AbilityClass, nth: number, };
 

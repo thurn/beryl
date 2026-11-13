@@ -30,6 +30,7 @@ pub(super) fn decision_view<L: Layout>(
                 payments: Vec::new(),
                 blocks: Vec::new(),
                 nth: None,
+                text: None,
                 targets: Vec::new(),
             })
             .collect(),
@@ -105,6 +106,7 @@ pub(super) fn halt_view<L: Layout>(
             payments: Vec::new(),
             blocks: Vec::new(),
             nth: None,
+            text: None,
             targets: Vec::new(),
         }],
         resolving: None,

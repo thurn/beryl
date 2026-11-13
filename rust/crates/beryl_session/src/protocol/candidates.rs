@@ -132,6 +132,7 @@ pub(super) fn candidate<L: Layout>(
         payments: Vec::new(),
         blocks: Vec::new(),
         nth: ability_nth(t, obs, o),
+        text: ability_text(t, obs, o),
         targets: Vec::new(),
     }
 }
@@ -181,6 +182,44 @@ fn ability_nth<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) -> 
         _ => return None,
     };
     Some(ability_order(face.abilities, i.get()).1)
+}
+
+/// [`CandidateView::text`].
+fn ability_text<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) -> Option<String> {
+    let (card, face, ability) = match o {
+        Opt::Activate { slot, ability } => face_ability(obs, slot, ability)?,
+        Opt::Trigger(index) => {
+            let trigger = obs.triggers()[Into::<usize>::into(index)];
+            (
+                trigger.card,
+                trigger.face,
+                FaceAbility::Own(trigger.ability),
+            )
+        }
+        _ => return None,
+    };
+    super::rules_text::unprinted(t, card, face, ability)
+}
+
+/// The card, face and ability of that face that ability `ability` of the object in `slot`
+/// is, if the viewer knows the card: its own face's, or the granting card's front face's
+/// ([`ObjectAbility::Granted`]).
+fn face_ability<L: Layout>(
+    obs: Observation<'_, L>,
+    slot: L::Slot,
+    ability: ObjectAbility,
+) -> Option<(L::Card, FaceIx, FaceAbility)> {
+    Some(match ability {
+        ObjectAbility::Own(i) => (
+            obs.card(slot)?,
+            obs.object(slot).face(),
+            FaceAbility::Own(i),
+        ),
+        ObjectAbility::Granted(k) => {
+            let grant = obs.derived(slot).granted[usize::from(k)]?;
+            (grant.card, FaceIx::FRONT, FaceAbility::Grant(grant.grant))
+        }
+    })
 }
 
 /// An activated ability of an object's own face that is not a mana ability, as an activation
@@ -343,17 +382,7 @@ fn activated_cost<L: Layout>(
     slot: L::Slot,
     ability: ObjectAbility,
 ) -> Option<String> {
-    let (card, face, ability) = match ability {
-        ObjectAbility::Own(i) => (
-            obs.card(slot)?,
-            obs.object(slot).face(),
-            FaceAbility::Own(i),
-        ),
-        ObjectAbility::Granted(k) => {
-            let grant = obs.derived(slot).granted[usize::from(k)]?;
-            (grant.card, FaceIx::FRONT, FaceAbility::Grant(grant.grant))
-        }
-    };
+    let (card, face, ability) = face_ability(obs, slot, ability)?;
     Some(cost_text(t.def(card).face(face).ability(ability).cost()))
 }
 

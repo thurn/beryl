@@ -10,6 +10,7 @@ mod decision;
 mod event;
 mod names;
 mod outcome;
+mod rules_text;
 mod shown;
 mod stops;
 mod view;

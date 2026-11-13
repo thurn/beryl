@@ -56,6 +56,11 @@ pub struct Culprit {
     /// Which of its abilities did it, as its card's text orders them; none for a spell, or
     /// for damage.
     pub ability: Option<AbilityRef>,
+    /// The ability's rules text, when the printed text of its face has no paragraph that
+    /// says it ([`StackItem::Ability`](super::StackItem::Ability)'s `text`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub text: Option<String>,
 }
 
 /// One of a face's abilities, as its rules text finds it: the `nth` of its `kind`.
@@ -103,6 +108,7 @@ pub(super) fn outcome_view<L: Layout>(
                         .map(|name| Culprit {
                             name: name.to_owned(),
                             ability: None,
+                            text: None,
                         }),
                 ),
                 Some(LossCause::Library) => (LossReason::Library, None),
@@ -116,6 +122,7 @@ pub(super) fn outcome_view<L: Layout>(
                     Some(Culprit {
                         name: t.def(card).face_name(face).to_owned(),
                         ability: ability.map(|a| ability_ref(t.def(card).face(face), a)),
+                        text: ability.and_then(|a| super::rules_text::unprinted(t, card, face, a)),
                     }),
                 ),
                 Some(LossCause::Concede) => (LossReason::Concede, None),
@@ -139,7 +146,7 @@ pub(super) fn outcome_view<L: Layout>(
 }
 
 /// Where the rules text of `face` says ability `a`: the how-manyth of its kind.
-fn ability_ref(face: &Face, a: FaceAbility) -> AbilityRef {
+pub(super) fn ability_ref(face: &Face, a: FaceAbility) -> AbilityRef {
     let (list, index) = match a {
         FaceAbility::Own(i) => (face.abilities, i.index()),
         FaceAbility::Grant(i) => (face.grants, i.index()),

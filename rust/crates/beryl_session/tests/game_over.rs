@@ -103,6 +103,7 @@ fn by_jace(kind: AbilityClass, nth: u8) -> Culprit {
     Culprit {
         name: names::JACE_WIELDER_OF_MYSTERIES.to_owned(),
         ability: Some(AbilityRef { kind, nth }),
+        text: None,
     }
 }
 
@@ -164,6 +165,7 @@ fn zero_life_names_the_damage_source() {
             by: Some(Culprit {
                 name: names::MANA_CRYPT.to_owned(),
                 ability: None,
+                text: None,
             }),
         }
     );

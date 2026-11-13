@@ -489,6 +489,7 @@ pub(super) fn stack_item_cast<L: Layout>(
                 )
                 .then_some(true),
                 nth,
+                text: super::rules_text::unprinted(t, e.card, e.face, ability),
                 controller: side(obs, e.controller),
                 targets,
                 x: e.x,

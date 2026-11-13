@@ -36,9 +36,15 @@ fn events(
         Step::Over(o) => panic!("the game ended: {o:?}"),
     };
     for action in &scenario.actions[..actions] {
+        if matches!(action, Action::Assert { .. }) {
+            continue;
+        }
         if matches!(action, Action::Resolve) {
             let mut d = decide(&mut s, &mut x);
-            let top = *s.stack().last().expect("something to resolve");
+            // The spell may have resolved already, where no one had anything but a pass.
+            let Some(&top) = s.stack().last() else {
+                continue;
+            };
             while s.stack().last() == Some(&top) {
                 assert_eq!(d.candidates.option(Choice(0)), Some(Opt::Pass));
                 apply(&mut s, &t, &mut x, &mut Replay, Choice(0));
@@ -118,6 +124,7 @@ fn a_loyalty_activation_names_its_source_cost_and_target_player() {
         source,
         name,
         triggered,
+        text,
         controller,
         targets,
         ..
@@ -128,6 +135,8 @@ fn a_loyalty_activation_names_its_source_cost_and_target_player() {
     assert_eq!(*source, Some(jace));
     assert_eq!(name, names::JACE_WIELDER_OF_MYSTERIES);
     assert!(!triggered);
+    // Jace prints the ability, so the UI lights its paragraph and needs no text.
+    assert_eq!(text, &None);
     assert_eq!(*controller, Side::Opponent);
     assert_eq!(targets, &[TargetRef::Player { player: Side::You }]);
     // The loyalty counter paid comes before it, for the log to fold into its line.
@@ -237,4 +246,32 @@ fn an_unanswered_nontargeted_trigger_is_announced() {
         1,
         "{events:?}"
     );
+}
+
+#[test]
+fn a_granted_ability_carries_its_rules_text() {
+    // Swift Reconfiguration grants crew 5 to the permanent it enchants, whose printed text
+    // has no paragraph for it, so the stack item says the ability in words.
+    let (events, slot) = events(
+        names::SWIFT_RECONFIGURATION,
+        "crewing the Vehicle makes it a creature until end of turn",
+        5,
+        Seat::new(0),
+    );
+    let seen = abilities(&events);
+    let [(item, _)] = seen.as_slice() else {
+        panic!("one ability: {events:?}");
+    };
+    let StackItem::Ability {
+        source,
+        granted,
+        text,
+        ..
+    } = item
+    else {
+        panic!("an ability: {item:?}");
+    };
+    assert_eq!(*source, Some(slot(names::SNAPCASTER_MAGE)));
+    assert!(granted);
+    assert_eq!(text.as_deref(), Some("Crew 5"));
 }

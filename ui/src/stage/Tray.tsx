@@ -86,7 +86,9 @@ function Waiting({
     <StackItem
       source={face}
       label="Triggered Ability"
-      text={abilityText(face.text ?? "", true, candidate.nth ?? 0)}
+      text={
+        candidate.text ?? abilityText(face.text ?? "", true, candidate.nth ?? 0)
+      }
       width={width}
       showArt
     />
