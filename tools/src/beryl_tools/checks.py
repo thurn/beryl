@@ -69,7 +69,7 @@ from . import (
 )
 from . import budget as budget_beads
 from .changes import branch_base, changed_paths, git, markdown_files, narrow
-from .clock import MAX_STRETCH, Clock, WallClock, stretch, took
+from .clock import MAX_STRETCH, Clock, WallClock, load_note, stretch, took
 from .reruns import (
     CANNOT_RUN,
     Failed,
@@ -439,16 +439,6 @@ def play(
         except BaseException:
             steps.stop()
             raise
-
-
-def load_note() -> str:
-    one, five, fifteen = system.loadavg()
-    return (
-        f"load average {one:.0f} {five:.0f} {fifteen:.0f} on {os.cpu_count()} cores;"
-        f" the times above are adjusted for load beyond the cores, up to {MAX_STRETCH:.0f}x,"
-        f" and for this machine's speed, {speed.factor():.2f}x the reference's time"
-        " (`just speed`)"
-    )
 
 
 # Lanes.
