@@ -78,6 +78,12 @@ struct Ctx {
     /// Whether the object is "it" in the text being written: in the condition of its own
     /// trigger, "when this creature dies, if it isn't a token".
     this_is_it: bool,
+    /// Whether the instruction that set "those" discarded them, and whether that was several
+    /// cards.
+    discarded: Option<bool>,
+    /// Set from `discarded` once the text names this object after the discard, so "it" would
+    /// mean this object: "those" is then "the discarded card".
+    those_named: Option<bool>,
 }
 
 /// What "enchanted" or "equipped" names.
@@ -136,6 +142,8 @@ impl Ctx {
             group: None,
             plural: false,
             this_is_it: false,
+            discarded: None,
+            those_named: None,
         }
     }
 
@@ -150,6 +158,8 @@ impl Ctx {
         self.group = None;
         self.plural = false;
         self.this_is_it = false;
+        self.discarded = None;
+        self.those_named = None;
     }
 }
 

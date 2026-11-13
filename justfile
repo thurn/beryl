@@ -148,8 +148,9 @@ count-gate:
     {{ by }} count-gate
 
 # The tools a card is written with: brief <name> prints the packet it is written from, new <name> starts its
-# file, check <name> [--no-oracles] builds it and plays its scenarios in Beryl, XMage and Forge, path <name>
-# its file, header <name>|--all rewrites its file's generated header from the card store
+# file, check <name> [--no-oracles] builds it, plays its scenarios in Beryl, XMage and Forge and diffs its
+# rendered text, render <name>...|--all diffs rendered text against Oracle text, path <name> its file,
+# header <name>|--all rewrites its file's generated header from the card store
 [group('data')]
 card command *args:
     {{ by }} card "$@"

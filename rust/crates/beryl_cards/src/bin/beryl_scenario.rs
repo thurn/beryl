@@ -1,6 +1,8 @@
-//! `beryl_scenario render [NAME]...`: prints the rules text each named card's definition renders
-//! to ([`beryl_card::render`]), each face under its name, or every card written in a file when
-//! none is named, for comparing a definition with the card's Oracle text (plan K13).
+//! `beryl_scenario render [--json] [NAME]...`: prints the rules text each named card's definition
+//! renders to ([`beryl_card::render`]), each face under its name, or every card written in a file
+//! when none is named, for comparing a definition with the card's Oracle text (plan K13). With
+//! `--json` it prints one JSON object per card and line, `{"name": .., "faces": [{"name": ..,
+//! "text": ..}]}`, which `just card render` reads.
 //!
 //! `beryl_scenario dump [PATH] [--generated N] [--card NAME]...`: writes every card's scenarios
 //! as JSON, to PATH or to standard output, for the oracle exporters (architecture §17.2), with
@@ -16,6 +18,7 @@
 //! prints a line per scenario and a count of each kind, and exits 1 when any fails or a
 //! generated run could not be played, and 2 when no card has that name.
 
+use std::fmt::Write as _;
 use std::process::ExitCode;
 
 use beryl_cards::{derive, generate};
@@ -25,7 +28,7 @@ use beryl_scenario::Scenario;
 const SEED: u64 = 1;
 
 const USAGE: &str = "usage: beryl_scenario dump [PATH] [--generated N] [--card NAME]... | run \
-                     --card NAME | render [NAME]...";
+                     --card NAME | render [--json] [NAME]...";
 
 fn usage() -> ExitCode {
     eprintln!("{USAGE}");
@@ -94,9 +97,18 @@ fn dump_json(generated: usize, named: &[String]) -> String {
     beryl_scenario::to_json(&beryl_cards::CARDS, &cards)
 }
 
+/// The card called `name`: by Beryl's name, or by the card store's, which names a double-faced
+/// card "Front // Back" where Beryl names it by its front face (CR 712.6a).
+fn find(name: &str) -> Option<&'static beryl_card::CardDef> {
+    let front = name.split(" // ").next().unwrap_or(name);
+    beryl_cards::CARDS
+        .get(name)
+        .or_else(|| beryl_cards::CARDS.get(front))
+}
+
 /// Plays the scenarios of the card called `name` in the strict runner.
 fn run_card(name: &str) -> ExitCode {
-    let Some(def) = beryl_cards::CARDS.get(name) else {
+    let Some(def) = find(name) else {
         eprintln!("beryl_scenario: no card named {name} is built");
         return ExitCode::from(2);
     };
@@ -151,13 +163,15 @@ fn run_card(name: &str) -> ExitCode {
 }
 
 /// Prints the rendered rules text of the cards named, or of every card written in a file.
-fn render(names: &[String]) -> ExitCode {
+fn render(args: &[String]) -> ExitCode {
+    let json = args.first().is_some_and(|a| a == "--json");
+    let names = if json { &args[1..] } else { args };
     let defs: Vec<&'static beryl_card::CardDef> = if names.is_empty() {
         beryl_cards::CARDS.cards().to_vec()
     } else {
         let mut defs = Vec::new();
         for name in names {
-            let Some(def) = beryl_cards::CARDS.get(name) else {
+            let Some(def) = find(name) else {
                 eprintln!("beryl_scenario: no card named {name:?}");
                 return ExitCode::FAILURE;
             };
@@ -165,6 +179,27 @@ fn render(names: &[String]) -> ExitCode {
         }
         defs
     };
+    if json {
+        for def in defs {
+            let faces: Vec<String> = def
+                .face_ixs()
+                .map(|face| {
+                    let text = beryl_card::render::render_face(def, face);
+                    format!(
+                        "{{\"name\": {}, \"text\": {}}}",
+                        json_string(def.face_name(face)),
+                        json_string(&text)
+                    )
+                })
+                .collect();
+            println!(
+                "{{\"name\": {}, \"faces\": [{}]}}",
+                json_string(def.name),
+                faces.join(", ")
+            );
+        }
+        return ExitCode::SUCCESS;
+    }
     let texts: Vec<String> = defs
         .iter()
         .map(|def| {
@@ -179,4 +214,25 @@ fn render(names: &[String]) -> ExitCode {
         .collect();
     println!("{}", texts.join("\n\n"));
     ExitCode::SUCCESS
+}
+
+/// `text` as a JSON string literal (RFC 8259 §7): quotes, backslashes and control characters
+/// escaped, everything else as it is.
+fn json_string(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            c if u32::from(c) < 0x20 => {
+                // Writing to a String cannot fail.
+                let _ = write!(out, "\\u{:04x}", u32::from(c));
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }

@@ -88,6 +88,9 @@ impl Ctx {
     /// "Destroy target creature", an instruction you carry out on objects, with `rest` after
     /// them. What it acted on is what "it" or "them" means next.
     pub(super) fn acts(&mut self, verb: (&str, &str), objects: Objects, rest: &str) -> String {
+        // What this instruction acts on is what "those" means next, not a discarded card.
+        self.discarded = None;
+        self.those_named = None;
         let plural = self.is_plural(objects);
         let clause = self.clause(Players::You, verb, |c| {
             format!("{}{rest}", c.moved(objects))
@@ -115,6 +118,8 @@ impl Ctx {
 
     /// "Draw two cards", "target player mills two cards".
     pub(super) fn cards(&mut self, player: Players, verb: (&str, &str), count: Amount) -> String {
+        self.discarded = None;
+        self.those_named = None;
         let clause = self.clause(player, verb, |c| c.count_of(count, "card", "cards"));
         self.plural = !matches!(count, Amount::Fixed(1));
         clause

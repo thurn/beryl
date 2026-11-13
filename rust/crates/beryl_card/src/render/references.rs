@@ -75,10 +75,20 @@ impl Ctx {
     /// "this creature", "all creatures", "the cards exiled with this artifact".
     pub(super) fn objects(&mut self, objects: Objects) -> String {
         match objects {
-            Objects::This => self.this_word(),
+            Objects::This => {
+                // "It" no longer means the discarded card once this object is named.
+                self.those_named = self.those_named.or(self.discarded);
+                self.this_word()
+            }
             Objects::Target(n) => self.target(n).unwrap_or_else(|| self.pronoun(n)),
             Objects::AttachedTo => self.attached_to(),
-            Objects::Those => if self.plural { "them" } else { "it" }.to_owned(),
+            Objects::Those => match (self.those_named, self.plural) {
+                (Some(true), _) => "the discarded cards",
+                (Some(false), _) => "the discarded card",
+                (None, true) => "them",
+                (None, false) => "it",
+            }
+            .to_owned(),
             Objects::TriggeredOn => self.triggered_on(),
             Objects::ExiledWithThis => format!("the cards exiled with {}", self.this),
             Objects::All { zone, filter } => {
@@ -488,7 +498,12 @@ impl Ctx {
                         } else {
                             format!("{many} {} counters", kind.name())
                         };
-                        format!("{on} has {counters} on it")
+                        let be = if n == 1 && comparison == Comparison::AtLeast {
+                            "is"
+                        } else {
+                            "are"
+                        };
+                        format!("there {be} {counters} on {on}")
                     };
                 }
                 Amount::Count(objects) => {

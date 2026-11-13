@@ -181,7 +181,10 @@ impl Ctx {
             }
             Effect::Draw { player, count } => vec![self.cards(player, ("draw", "draws"), count)],
             Effect::Discard { player, count } => {
-                vec![self.cards(player, ("discard", "discards"), count)]
+                let clause = self.cards(player, ("discard", "discards"), count);
+                self.discarded = Some(self.plural);
+                self.those_named = None;
+                vec![clause]
             }
             Effect::Mill { player, count } => vec![self.cards(player, ("mill", "mills"), count)],
             Effect::Scry { player, count } => {
@@ -484,10 +487,24 @@ impl Ctx {
         let looks = self.clause(player, ("look", "looks"), |c| {
             format!("at {}", c.top_cards(player, look))
         });
+        let order = match rest {
+            LibraryOrder::Any => "any order",
+            LibraryOrder::Random => "a random order",
+        };
         let takes = match take {
-            Taken::Put(n) => self.clause(player, ("put", "puts"), |c| {
-                format!("{} of them into {} hand", number(n), c.possessive(player))
-            }),
+            // One sentence puts both piles: "Put two of them into your hand and the rest on
+            // the bottom of your library in any order."
+            Taken::Put(n) => {
+                let both = self.clause(player, ("put", "puts"), |c| {
+                    let library = c.possessive(player);
+                    format!(
+                        "{} of them into {library} hand and the rest on the bottom of \
+                         {library} library in {order}",
+                        number(n)
+                    )
+                });
+                return vec![looks, both];
+            }
             Taken::MayReveal(filter) => {
                 self.may = true;
                 self.clause(player, ("reveal", "reveals"), |c| {
@@ -501,10 +518,6 @@ impl Ctx {
                     )
                 })
             }
-        };
-        let order = match rest {
-            LibraryOrder::Any => "any order",
-            LibraryOrder::Random => "a random order",
         };
         let rest = self.clause(player, ("put", "puts"), |c| {
             format!(

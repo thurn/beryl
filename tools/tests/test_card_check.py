@@ -162,18 +162,27 @@ ORACLE_SUMMARY: dict[str, object] = {
 
 class Commands:
     """Stands in for `card_check.command`: records each command and answers it, failing the
-    one whose words include `fail_on`."""
+    one whose words include `fail_on`. It renders each card as `rendered` says, else as its
+    Oracle text in the fake store."""
 
-    def __init__(self, fail_on: str | None = None) -> None:
+    def __init__(
+        self, fail_on: str | None = None, rendered: dict[str, str] | None = None
+    ) -> None:
         self.ran: list[list[str]] = []
         self.fail_on = fail_on
+        self.rendered = {"Counterspell": "Counter target spell.", "Grizzly Bears": ""}
+        self.rendered.update(rendered or {})
 
     def __call__(
         self, args: list[str], cwd: Path = Path(".")
     ) -> subprocess.CompletedProcess[str]:
         self.ran.append(args)
         failing = self.fail_on is not None and self.fail_on in args
-        if "beryl_scenario" in args:
+        if "render" in args:
+            name = args[-1]
+            face = {"name": name, "text": self.rendered[name]}
+            out = json.dumps({"name": name, "faces": [face]}) + "\n"
+        elif "beryl_scenario" in args:
             out = "pass hand-written: one\n1 hand-written, 2 generated, 0 failed\n"
             if failing:
                 out = "fail hand-written: one: action 2: wrong\n1 hand-written, 0 failed\n"
@@ -187,8 +196,10 @@ class Commands:
         return subprocess.CompletedProcess(args, 1 if failing else 0, out, err)
 
     def steps(self) -> list[str]:
-        """Which step each command was: its cargo subcommand, or `oracle`."""
-        return ["oracle" if "oracle" in a else a[1] for a in self.ran]
+        """Which step each command was: its cargo subcommand, `oracle` or `render`."""
+        return [
+            next((w for w in ("oracle", "render") if w in a), a[1]) for a in self.ran
+        ]
 
 
 def check(
@@ -209,18 +220,19 @@ def test_check_runs_each_step_in_order_on_the_cards_crate(
 ) -> None:
     commands = Commands()
     assert check("Counterspell", sources, monkeypatch, commands) == 0
-    assert commands.steps() == ["check", "test", "run", "oracle"]
-    build, tests, beryl, oracle = commands.ran
+    assert commands.steps() == ["check", "test", "run", "oracle", "render"]
+    build, tests, beryl, oracle, render = commands.ran
     assert build[build.index("-p") + 1] == "cards_1993"
     assert tests[-2:] == ["--", "lea::counterspell::"]
     assert beryl[-3:] == ["run", "--card", "Counterspell"]
     assert oracle[-3:] == ["oracle", "Counterspell", "--no-sim"]
+    assert render[-3:] == ["render", "--json", "Counterspell"]
     assert capsys.readouterr().out.splitlines() == [
         "build: pass: cargo check -p cards_1993",
         "tests: pass: 2 passed",
         "beryl: pass: 1 hand-written, 2 generated, 0 failed",
         "oracles: pass: xmage: 2 pass, 1 unsupported (no exporter for X); forge: 3 pass",
-        "render: skip: the render diff is not built yet",
+        "render: pass: matches its Oracle text",
         "card check: Counterspell passed",
     ]
 
@@ -261,7 +273,7 @@ def test_no_oracles_skips_xmage_and_forge(
 ) -> None:
     commands = Commands()
     assert check("Counterspell", sources, monkeypatch, commands, no_oracles=True) == 0
-    assert commands.steps() == ["check", "test", "run"]
+    assert commands.steps() == ["check", "test", "run", "render"]
     assert "oracles: skip: --no-oracles" in capsys.readouterr().out
 
 
@@ -272,7 +284,7 @@ def test_a_card_complete_from_the_store_has_no_tests_of_its_own(
 ) -> None:
     commands = Commands()
     assert check("Grizzly Bears", sources, monkeypatch, commands, no_oracles=True) == 0
-    assert commands.steps() == ["check", "run"]
+    assert commands.steps() == ["check", "run", "render"]
     assert "tests: skip: no file" in capsys.readouterr().out
 
 
@@ -293,6 +305,21 @@ def test_a_card_file_with_no_scenario_of_its_own_fails(
 
     assert check("Counterspell", sources, monkeypatch, Generated(), True) == 1
     assert "beryl: fail: its file has no scenario" in capsys.readouterr().out
+
+
+def test_a_rendering_that_differs_from_the_oracle_text_fails_with_the_diff(
+    sources: card.Sources,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    commands = Commands(rendered={"Counterspell": "Counter target creature spell."})
+    assert check("Counterspell", sources, monkeypatch, commands, no_oracles=True) == 1
+    out = capsys.readouterr().out.splitlines()
+    assert out[-3:] == [
+        "render: fail: 1 paragraph differs from its Oracle text",
+        "Counterspell: counter target {+creature+} spell .",
+        "card check: Counterspell failed at render",
+    ]
 
 
 def test_check_refuses_a_card_with_no_file_and_a_stranger(

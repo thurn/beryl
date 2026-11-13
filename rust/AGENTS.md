@@ -44,8 +44,10 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   text, rulings, matching vocabulary entries, the most similar cards already
   implemented and the XMage class. `just card new <name>` writes the card's file
   with its header and an empty definition, and `just card check <name>` builds
-  its set crate and plays its scenarios in Beryl, XMage and Forge
-  (`--no-oracles` for a fast loop).
+  its set crate, plays its scenarios in Beryl, XMage and Forge (`--no-oracles`
+  for a fast loop), and compares the rules text its definition renders to with
+  its Oracle text. `just card render <name>` prints that comparison, and
+  `just card render --all` the match rate over every card file.
 - `beryl_cli script-check` runs every card's spec moments from both seats and
   every UI fixture's recording, checking each animation script against its
   assertions (the `script` lane in `docs/checks.md`).

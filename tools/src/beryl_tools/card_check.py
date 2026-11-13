@@ -11,8 +11,10 @@ stops the rest:
 4. `oracles`: the same scenarios in XMage and Forge, `by oracle <name> --no-sim`, which holds
    the oracle lock and applies data/oracle-divergences.json and data/oracle-exporter-gaps.json.
    `--no-oracles` skips it, for a fast loop.
-5. `render`: the card's rendered frame against Scryfall's image. Not built yet: the step says
-   so and is skipped. The render diff fills in `render`.
+5. `render`: the rules text the card's definition renders to against its Oracle text in the
+   card store, normalized (render_diff.py). A difference fails the step and prints the
+   paragraphs that differ, since a definition that reads differently from the card most often
+   does something different (plan K13).
 
 Each step prints one line, its name, `pass`, `fail` or `skip`, and what it found; a failure
 then prints the command's output. The command exits 1 when a step fails.
@@ -29,7 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from . import card, card_store, paths, set_groups, store_cards
+from . import card, card_store, paths, render_diff, set_groups, store_cards
 
 Json = card_store.Json
 
@@ -44,6 +46,8 @@ class Card:
     # The path of its module in that crate, e.g. `lea::counterspell`; None for a card complete
     # from the store, which has no file.
     module: str | None
+    # Its faces' Oracle text, from the card store.
+    oracle: tuple[render_diff.Face, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -194,8 +198,20 @@ def oracles(target: Card) -> Outcome:
 
 
 def render(target: Card) -> Outcome:
-    """The render diff's step: not built yet."""
-    return Outcome("skip", "the render diff is not built yet")
+    found = render_diff.parse(command(render_diff.render_command([target.name])))
+    if isinstance(found, str):
+        return Outcome("fail", first_error(found), found)
+    if len(found) != 1:
+        return Outcome("fail", f"rendered {len(found)} cards, not one")
+    diff = render_diff.compare(target.name, list(target.oracle), found[0][1])
+    if diff.matches:
+        return Outcome("pass", "matches its Oracle text")
+    return Outcome(
+        "fail",
+        f"{len(diff.lines)} {'paragraph differs' if len(diff.lines) == 1 else 'paragraphs differ'}"
+        " from its Oracle text",
+        "\n".join(diff.lines),
+    )
 
 
 def no_oracles_given(target: Card) -> Outcome:
@@ -246,7 +262,8 @@ def run(args: argparse.Namespace, sources: card.Sources = card.Sources()) -> int
             file=sys.stderr,
         )
         return 1
-    return check(Card(name, groups.group_of(found), module), args.no_oracles)
+    oracle = tuple(render_diff.oracle_faces(found))
+    return check(Card(name, groups.group_of(found), module, oracle), args.no_oracles)
 
 
 def register(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:

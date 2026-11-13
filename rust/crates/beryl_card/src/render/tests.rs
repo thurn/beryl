@@ -3,16 +3,17 @@
 //! way that card's file writes it; the expected text is the card's Oracle text.
 
 use super::{render, render_ability};
+use crate::CounterKind;
 use crate::ability::{Ability, Behavior, Custom, Says};
 use crate::characteristics::{Supertypes, Types};
 use crate::continuous::{Governed, RuleChange, When};
 use crate::cost::{Cost, CostPart};
 use crate::definition::{CardDef, Face, card};
 use crate::effect::build::{
-    IF_YOU_LOSE_THE_FLIP, TARGET, YOU, counter, deal_damage_to, destroy, draw,
-    exile_until_this_leaves, flip_coin, if_then, put_back, sequence,
+    IF_YOU_LOSE_THE_FLIP, TARGET, THIS, THOSE, YOU, counter, deal_damage_to, destroy, dig, discard,
+    draw, exile_until_this_leaves, flip_coin, if_then, may_cast_free, put_back, sequence,
 };
-use crate::effect::{Effect, Players};
+use crate::effect::{Amount, Comparison, Condition, Effect, LibraryOrder, Players, Taken};
 use crate::filter::Filter;
 use crate::ids::TurnStep;
 use crate::mana::{ManaSet, mana};
@@ -142,4 +143,50 @@ fn a_bare_ability_and_a_rust_body() {
     let custom = Ability::activated(Cost::mana(mana("{1}")))
         .custom(Behavior::Custom(Custom::new(&BODY, &Says::NOTHING)));
     assert_eq!(render_ability(&custom), "{1}: [custom ability].");
+}
+
+/// Two piles in one sentence: Stock Up's "Look at the top five cards of your library. Put two
+/// of them into your hand and the rest on the bottom of your library in any order."
+#[test]
+fn a_dig_puts_both_piles_in_one_sentence() {
+    static STOCK_UP: Effect = dig(YOU, 5, Taken::Put(2), LibraryOrder::Any);
+    assert_eq!(
+        render_ability(&Ability::spell().effect(&STOCK_UP)),
+        "Look at the top five cards of your library. Put two of them into your hand and the \
+         rest on the bottom of your library in any order."
+    );
+}
+
+/// A discarded card named after the object itself: Malcolm, Alluring Scoundrel's "Draw a
+/// card, then discard a card. If there are four or more chorus counters on Malcolm, you may
+/// cast the discarded card without paying its mana cost." Its "it" would mean Malcolm.
+#[test]
+fn a_discarded_card_is_named_once_it_would_be_ambiguous() {
+    static LOOT: Effect = sequence(&[
+        draw(YOU, 1),
+        discard(YOU, 1),
+        if_then(
+            Condition::Compare(
+                Amount::Counters(THIS, CounterKind::Chorus),
+                Comparison::AtLeast,
+                Amount::Fixed(4),
+            ),
+            &may_cast_free(YOU, THOSE),
+        ),
+    ]);
+    static MALCOLM: CardDef = one_face(
+        "Malcolm, Alluring Scoundrel",
+        &[Face::EMPTY
+            .types(Types::CREATURE)
+            .supertypes(Supertypes::LEGENDARY)
+            .abilities(&[
+                Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER).effect(&LOOT),
+            ])],
+    );
+    assert_eq!(
+        render(&MALCOLM),
+        "Whenever Malcolm deals combat damage to a player, draw a card, then discard a card. If \
+         there are four or more chorus counters on Malcolm, you may cast the discarded card \
+         without paying its mana cost."
+    );
 }
