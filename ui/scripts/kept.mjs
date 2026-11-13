@@ -9,6 +9,7 @@
 import { finish } from "./kept-harness.mjs";
 
 await import("./kept-screens.mjs");
+await import("./kept-bug-reports.mjs");
 await import("./kept-table.mjs");
 await import("./kept-crowded.mjs");
 await import("./kept-piles.mjs");

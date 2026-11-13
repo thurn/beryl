@@ -17,7 +17,7 @@ import {
   reportBug,
   snapshotUrl,
 } from "../ipc";
-import type { Region } from "../ipc";
+import type { PageInfo, Region } from "../ipc";
 import { diagnostics, note } from "../diagnostics";
 import { freeze, thaw } from "../freeze";
 import { Button } from "./Controls";
@@ -31,6 +31,7 @@ type Stage =
       kind: "describe";
       frame?: Shot;
       region: Region;
+      page: PageInfo;
       saving: boolean;
       error?: string;
     }
@@ -40,6 +41,7 @@ type Stage =
 interface Shot {
   id: number;
   url: string;
+  pageWidth: number;
 }
 
 /** A drag shorter than this, in CSS pixels, is a click: the whole window. */
@@ -88,16 +90,27 @@ export function BugReporter({ route }: { route: string }) {
   const wantWhole = useRef(false);
   /** Counts openings, so a snapshot that lands after its report was closed is dropped. */
   const opening = useRef(0);
+  // The keyboard can resize or zoom the WebView after the player selects a region.
+  const frozenPage = useRef<PageInfo>(null);
 
   /** Goes on to describe `region` of `frame`. */
   const choose = useCallback((frame: Shot | undefined, region: Region) => {
-    setStage({ kind: "describe", frame, region, saving: false });
+    const page = frozenPage.current;
+    if (page)
+      setStage({ kind: "describe", frame, region, page, saving: false });
   }, []);
 
   const start = useCallback(async () => {
     // Stop the motion first: the frame is the instant the player asked.
     freeze();
     const mine = ++opening.current;
+    const page = {
+      url: window.location.href,
+      width: window.innerWidth,
+      height: window.innerHeight,
+      scale: window.devicePixelRatio,
+    };
+    frozenPage.current = page;
     wantWhole.current = false;
     setStage({ kind: "capturing" });
     let frame: Shot | undefined;
@@ -105,7 +118,7 @@ export function BugReporter({ route }: { route: string }) {
       try {
         // The pixels stay in the app, which serves them: nothing large crosses IPC.
         const id = await captureWindow();
-        frame = { id, url: snapshotUrl(id) };
+        frame = { id, url: snapshotUrl(id), pageWidth: page.width };
         // Decoded before it shows, so the overlay never flashes empty.
         const image = new Image();
         image.src = frame.url;
@@ -189,12 +202,7 @@ export function BugReporter({ route }: { route: string }) {
         ai,
         snapshot: stage.frame?.id ?? null,
         region: stage.region,
-        page: {
-          url: window.location.href,
-          width: window.innerWidth,
-          height: window.innerHeight,
-          scale: window.devicePixelRatio,
-        },
+        page: stage.page,
         uiLog: log,
         updates,
       });
@@ -391,7 +399,7 @@ function Thumb({ frame, region }: { frame: Shot; region: Region }) {
         width: region.width * k,
         height: region.height * k,
         backgroundImage: `url("${frame.url}")`,
-        backgroundSize: `${window.innerWidth * k}px auto`,
+        backgroundSize: `${frame.pageWidth * k}px auto`,
         backgroundPosition: `${-region.x * k}px ${-region.y * k}px`,
       }}
     />
