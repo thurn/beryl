@@ -147,8 +147,9 @@ bench-count *args:
 count-gate:
     {{ by }} count-gate
 
-# The tools a card is written with: brief <name> prints the packet it is written from, path <name> its file,
-# header <name>|--all rewrites its file's generated header from the card store
+# The tools a card is written with: brief <name> prints the packet it is written from, new <name> starts its
+# file, check <name> [--no-oracles] builds it and plays its scenarios in Beryl, XMage and Forge, path <name>
+# its file, header <name>|--all rewrites its file's generated header from the card store
 [group('data')]
 card command *args:
     {{ by }} card "$@"
