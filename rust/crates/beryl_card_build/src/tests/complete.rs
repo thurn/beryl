@@ -170,10 +170,12 @@ fn a_set_crate_defines_its_complete_cards_without_files() {
     assert!(!source.contains("OTHER"), "Other is of another group");
 }
 
-/// How many cards of the real store are complete from it, which the bead and the plan
-/// report: every group's, with and without files.
+/// Every group with a card complete from the real store has a set crate, whose build defines
+/// it. `just card crates` writes the crates by Python's copy of the rule (`store_cards.py`), so
+/// were the two rules to drift, a card this rule completes could have no crate and be no card
+/// at all. Also prints how many cards are complete, which the plan reports.
 #[test]
-fn count_the_cards_complete_from_the_store() {
+fn every_card_complete_from_the_store_has_a_crate() {
     let crate_dir = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let root = crate_dir.join("../../..");
     let store = Store::read(&root.join("data/card-store.tsv")).unwrap();
@@ -199,6 +201,15 @@ fn count_the_cards_complete_from_the_store() {
             {
                 complete += 1;
                 with_files += usize::from(files.iter().any(|f| f == card));
+                assert!(
+                    root.join("rust/cards")
+                        .join(name)
+                        .join("Cargo.toml")
+                        .is_file(),
+                    "{card} is complete from the store, but its group {name} has no set crate: \
+                     run `just card crates`, and if that writes none, make store_cards.py's rule \
+                     agree with beryl_card_build's complete.rs"
+                );
             }
         }
         assert!(sets.iter().all(|s| !set_module(s).is_empty()));
