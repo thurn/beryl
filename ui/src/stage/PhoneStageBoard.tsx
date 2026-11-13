@@ -25,6 +25,7 @@ import { incoming } from "../game/combat";
 import { blockedBy } from "./Chrome.tsx";
 import type { LogEntry } from "../game/log";
 import { opponentActing } from "../game/Narration";
+import { emblemObjects } from "../game/zoneViews";
 import { MenuButton, Middle, Orb, Piles, useViewport } from "../mobile/chrome";
 import { PHONE } from "../mobile/faces";
 import { phoneLayout } from "../mobile/layout";
@@ -129,7 +130,9 @@ export function PhoneStageBoard({
   // read.
   useEffect(() => {
     prompts.clicks = (name) =>
-      stage.shown.resting.get(name)?.dress.zone !== "hand";
+      typeof name === "number" && name < 0
+        ? false
+        : stage.shown.resting.get(name)?.dress.zone !== "hand";
     return () => {
       prompts.clicks = () => true;
     };
@@ -165,7 +168,10 @@ export function PhoneStageBoard({
   );
   const inspected =
     typeof inspecting === "number"
-      ? table?.objects.find((o) => o.slot === inspecting)
+      ? table &&
+        [...table.objects, ...emblemObjects(table)].find(
+          (o) => o.slot === inspecting,
+        )
       : inspecting;
   const pile =
     typeof sheet === "object"

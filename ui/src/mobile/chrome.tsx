@@ -8,6 +8,7 @@ import { CardBack } from "../components/Card";
 import { PhaseIcon } from "../components/Controls";
 import { LifeOrb } from "../components/Player";
 import { Incoming, LifeChange } from "../game/Life";
+import { zonePiles } from "../game/zoneViews";
 import { PileTop } from "./faces";
 import { phaseOf, PILE, type Band, type Viewport } from "./layout";
 
@@ -25,6 +26,9 @@ export function Piles({
 }) {
   const player = view.players[side];
   const graveTop = view.objects.find((o) => o.slot === player.graveyard.at(-1));
+  const exile = zonePiles(view).find(
+    (pile) => pile.side === side && pile.zone === "exile",
+  );
   return (
     <div className="phone-piles">
       <div className="phone-pile">
@@ -34,10 +38,12 @@ export function Piles({
         {tops && <CardBack width={PILE.width} />}
       </div>
       <div className="phone-pile">
-        {graveTop && (
+        {(graveTop || exile?.cards.length) && (
           <>
             <i className="phone-pile-edge" />
-            {tops && <PileTop object={graveTop} width={PILE.width} />}
+            {tops && graveTop && (
+              <PileTop object={graveTop} width={PILE.width} />
+            )}
           </>
         )}
       </div>

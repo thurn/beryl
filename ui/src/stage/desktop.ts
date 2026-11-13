@@ -168,7 +168,10 @@ const ability = (
  * which the view gives no source ([CR 114.4](https://yawgatog.com/resources/magic-rules/#R1144):
  * "Abilities of emblems function in the command zone"), the card the table draws for the
  * emblem of that name its controller has. */
-function origin(view: PlayerView, item: StackAbility): number | undefined {
+export function origin(
+  view: PlayerView,
+  item: StackAbility,
+): number | undefined {
   if (item.source !== null) return item.source;
   const index = view.players[item.controller].emblems.indexOf(item.name);
   return index < 0 ? undefined : emblemSlot(item.controller, index);

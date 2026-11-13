@@ -358,10 +358,10 @@ function judgeStep(act, start, end, frames, taken) {
     ) {
         return played;
     }
-    // The phone draws no exile pile yet: an exiled card rests unseen under its owner's
-    // graveyard (UI Conventions, "The phone"), so a card's way into or out of exile there has
-    // no place of its own to be seen at. One a permanent holds is tucked under it, as on the
-    // desktop, and is judged as any.
+    // The phone has no separate exile pile: an exiled card rests unseen under its owner's
+    // graveyard and appears only when that pile's sheet opens (UI Conventions, "The phone").
+    // The audit reads the closed sheet, so a card's way into or out of that exile pile has no
+    // visible place of its own. One a permanent holds is tucked under it and is judged as any.
     const exiled = (object) =>
         object?.zone === "exile" &&
         object.exiledBy == null &&

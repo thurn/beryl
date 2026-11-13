@@ -298,6 +298,13 @@ body.phone {
   font: 700 18px/1.2 var(--font-display);
   color: var(--gold);
 }
+.phone-sheet-pile-list {
+  min-height: 0;
+  overflow-y: auto;
+}
+.phone-sheet-pile-list .phone-sheet-title:not(:first-child) {
+  margin-top: 16px;
+}
 .phone-sheet-cards {
   display: flex;
   flex-wrap: wrap;

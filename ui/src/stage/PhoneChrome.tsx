@@ -41,15 +41,31 @@ const INSPECT = { width: 330, margin: 16, top: 56 };
 
 type Bands = Record<BandName, Band>;
 
-/** A pile the phone lists: a strip has a library and a graveyard. */
-export type PhonePile = ZonePile & { zone: "library" | "graveyard" };
+/** A pile the phone opens from a strip. Exile shares its owner's graveyard sheet. */
+export type PhonePile = ZonePile & {
+  zone: "library" | "graveyard";
+  exile?: ZonePile;
+};
 
 /** The piles a touch opens: a graveyard that holds anything, and a library of which a card is
  * known. */
 export function phonePiles(table: PlayerView): PhonePile[] {
-  return [...zonePiles(table), ...knownLibraries(table)].filter(
-    (pile): pile is PhonePile => pile.zone !== "exile" && pile.cards.length > 0,
+  const zones = zonePiles(table);
+  const stripPiles = [...zones, ...knownLibraries(table)].filter(
+    (pile): pile is ZonePile & { zone: "library" | "graveyard" } =>
+      pile.zone !== "exile",
   );
+  return stripPiles.flatMap((pile) => {
+    const exile = zones.find(
+      (other) => other.side === pile.side && other.zone === "exile",
+    );
+    if (
+      pile.cards.length === 0 &&
+      !(pile.zone === "graveyard" && exile?.cards.length)
+    )
+      return [];
+    return [{ ...pile, exile: pile.zone === "graveyard" ? exile : undefined }];
+  });
 }
 
 /** `table` with only the cards that have landed in each library and graveyard, for the strips'
@@ -201,7 +217,8 @@ export function LogSheet({
   );
 }
 
-/** A pile's cards, the top one first; a touch on one inspects it. */
+/** A pile's cards, the top one first; a touch on one inspects it. The graveyard sheet also
+ * lists its owner's exile, apart from cards tucked under permanents. */
 export function PileSheet({
   pile,
   title,
@@ -215,26 +232,50 @@ export function PileSheet({
   onClose(): void;
 }) {
   const name = title ?? ("zone" in pile ? pileName(pile) : "");
+  const section = (cards: readonly ObjectView[]) => (
+    <div className="phone-sheet-cards" onClick={() => onInspect(undefined)}>
+      {[...cards].reverse().map((object) => (
+        <button
+          key={object.slot}
+          type="button"
+          className="phone-sheet-card"
+          aria-label={object.name ?? "A card"}
+          onClick={(e) => {
+            e.stopPropagation();
+            onInspect(object.slot);
+          }}
+        >
+          <CardScan object={object} width={LISTED} field={false} />
+        </button>
+      ))}
+    </div>
+  );
+  const exile = "zone" in pile ? pile.exile : undefined;
   return (
     <Sheet label={name} className="phone-sheet" onClose={onClose}>
-      <h2 className="phone-sheet-title" onClick={() => onInspect(undefined)}>
-        {name}
-      </h2>
-      <div className="phone-sheet-cards" onClick={() => onInspect(undefined)}>
-        {[...pile.cards].reverse().map((object) => (
-          <button
-            key={object.slot}
-            type="button"
-            className="phone-sheet-card"
-            aria-label={object.name ?? "A card"}
-            onClick={(e) => {
-              e.stopPropagation();
-              onInspect(object.slot);
-            }}
-          >
-            <CardScan object={object} width={LISTED} field={false} />
-          </button>
-        ))}
+      <div className="phone-sheet-pile-list">
+        {pile.cards.length > 0 && (
+          <>
+            <h2
+              className="phone-sheet-title"
+              onClick={() => onInspect(undefined)}
+            >
+              {name}
+            </h2>
+            {section(pile.cards)}
+          </>
+        )}
+        {exile && exile.cards.length > 0 && (
+          <>
+            <h2
+              className="phone-sheet-title"
+              onClick={() => onInspect(undefined)}
+            >
+              {pileName(exile)}
+            </h2>
+            {section(exile.cards)}
+          </>
+        )}
       </div>
     </Sheet>
   );

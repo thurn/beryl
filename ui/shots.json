@@ -1120,6 +1120,100 @@
       "route": "/?phone&fixture=shape-divide&at=1#/game",
       "width": 393,
       "height": 759
+    },
+    {
+      "name": "phone-emblems",
+      "route": "/?phone&fixture=emblems#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "phone-emblems-se",
+      "route": "/?phone&fixture=emblems#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-emblems-inspect",
+      "route": "/?phone&fixture=emblems#/game",
+      "width": 393,
+      "height": 759,
+      "click": "[data-card='Teferi, Hero of Dominaria Emblem']",
+      "expect": ".inspect"
+    },
+    {
+      "name": "phone-emblems-inspect-se",
+      "route": "/?phone&fixture=emblems#/game",
+      "width": 375,
+      "height": 647,
+      "click": "[data-card='Teferi, Hero of Dominaria Emblem']",
+      "expect": ".inspect"
+    },
+    {
+      "name": "phone-exile-sheet",
+      "route": "/?phone&fixture=choice-scry&at=1#/game",
+      "width": 393,
+      "height": 759,
+      "click": "[data-pile=graveyard][data-side=opponent]",
+      "expect": ".phone-sheet-title:has-text(\"Opponent's exile\")"
+    },
+    {
+      "name": "phone-exile-sheet-se",
+      "route": "/?phone&fixture=choice-scry&at=1#/game",
+      "width": 375,
+      "height": 647,
+      "click": "[data-pile=graveyard][data-side=opponent]",
+      "expect": ".phone-sheet-title:has-text(\"Opponent's exile\")"
+    },
+    {
+      "name": "phone-exile-beneath",
+      "route": "/?phone&fixture=exiled-beneath#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "phone-exile-beneath-se",
+      "route": "/?phone&fixture=exiled-beneath#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-exile-only",
+      "route": "/?phone&fixture=choice-untap&at=2#/game",
+      "width": 393,
+      "height": 759,
+      "click": "[data-pile=graveyard][data-side=you]",
+      "expect": ".phone-sheet-title:has-text(\"Your exile\")"
+    },
+    {
+      "name": "phone-exile-only-se",
+      "route": "/?phone&fixture=choice-untap&at=2#/game",
+      "width": 375,
+      "height": 647,
+      "click": "[data-pile=graveyard][data-side=you]",
+      "expect": ".phone-sheet-title:has-text(\"Your exile\")"
+    },
+    {
+      "name": "phone-exile-inspect",
+      "route": "/?phone&fixture=choice-scry&at=1#/game",
+      "width": 393,
+      "height": 759,
+      "click": [
+        "[data-pile=graveyard][data-side=opponent]",
+        ".phone-sheet-card[aria-label=\"Malcolm, Alluring Scoundrel\"]"
+      ],
+      "expect": ".inspect"
+    },
+    {
+      "name": "phone-exile-inspect-se",
+      "route": "/?phone&fixture=choice-scry&at=1#/game",
+      "width": 375,
+      "height": 647,
+      "click": [
+        "[data-pile=graveyard][data-side=opponent]",
+        ".phone-sheet-card[aria-label=\"Malcolm, Alluring Scoundrel\"]"
+      ],
+      "expect": ".inspect"
     }
   ]
 }

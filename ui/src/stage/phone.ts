@@ -4,14 +4,15 @@
 // phone"). Besides the cards mobile/layout.ts places (the battlefield, your hand, the stack),
 // everything a step can move rests somewhere: the opponent's hand as backs at the top edge,
 // and the top card of each library and graveyard on its pile in its player's strip, the rest
-// of a pile unseen beneath it. The phone draws no exile pile and no emblem yet: an exiled card
-// rests unseen under its owner's graveyard, unless a permanent holds it, and an emblem's
-// ability has no source to lift out of. A card exiled until a permanent leaves, or with its
-// ability, is tucked under that permanent as the desktop's is (UI Conventions, exception 6).
+// of a pile unseen beneath it. The phone lists exile in the graveyard's sheet, though its
+// cards still rest unseen under that pile. Emblems stand after their controller's other
+// permanents, and their abilities lift from them. A card exiled until a permanent leaves, or
+// with its ability, is tucked under that permanent as the desktop's is (UI Conventions,
+// exception 6).
 import type { ObjectView, PlayerView, Side } from "../generated/protocol";
 import { CARD_ASPECT } from "../components/Card";
 import { BENEATH_STEP } from "../game/placement";
-import { held as holder } from "../game/zoneViews";
+import { emblemObjects, held as holder } from "../game/zoneViews";
 import {
   BACKS,
   backSpot,
@@ -24,7 +25,7 @@ import {
   type Spot,
   type Viewport,
 } from "../mobile/layout";
-import { drawn, emerging, half, middle } from "./desktop.ts";
+import { drawn, emerging, half, middle, origin } from "./desktop.ts";
 import {
   abilityName,
   type Anchors,
@@ -139,7 +140,9 @@ function rest(table: Table, viewport: Viewport, left?: ReadonlySet<Name>) {
     ? new Set([...(left ?? []), ...tray.piles.flatMap((pile) => pile.cards)])
     : left;
   const { bands, cards, stack } = phoneLayout(view, viewport);
-  const objects = new Map(view.objects.map((o) => [o.slot, o]));
+  const objects = new Map(
+    [...view.objects, ...emblemObjects(view)].map((o) => [o.slot, o]),
+  );
   const out = new Map<Name, Resting>();
   // Permanents lie over one another in the order of their rows; nothing else overlaps them.
   const rows = cards
@@ -259,8 +262,8 @@ function rest(table: Table, viewport: Viewport, left?: ReadonlySet<Name>) {
     }
     const id = abilities[numbered++];
     if (id === undefined) continue;
-    const source =
-      spot.item.source === null ? undefined : out.get(spot.item.source)?.object;
+    const from = origin(view, spot.item);
+    const source = from === undefined ? undefined : out.get(from)?.object;
     out.set(abilityName(id), { ability: spot.item, source, pose, dress });
   }
   fan(out, revealed, phoneRevealed(view, viewport));

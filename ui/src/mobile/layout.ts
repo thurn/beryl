@@ -13,6 +13,7 @@ import type {
 } from "../generated/protocol";
 import type { Phase } from "../components/Controls";
 import { referenced, twins } from "../game/decisions";
+import { emblemObjects } from "../game/zoneViews";
 
 /** A card scan's width over its height. */
 export const RATIO = 0.716;
@@ -161,7 +162,7 @@ interface Rows {
 
 /** Each permanent `side` controls in its row, identical ones stacked as one group (one card,
  * the rest peeking from under it): interchangeable as the engine offers them (`twins`), and
- * neither named on the stack, whose glow must show apart. */
+ * neither named on the stack, whose glow must show apart. Emblems follow the other permanents. */
 function sideRows(view: PlayerView, side: Side, named: Set<number>): Rows {
   const bySlot = new Map(view.objects.map((o) => [o.slot, o]));
   const rows: Rows = { lands: [], other: [], creatures: [] };
@@ -178,6 +179,9 @@ function sideRows(view: PlayerView, side: Side, named: Set<number>): Rows {
       : row.find((g) => !named.has(g[0]!.slot) && twins(g[0]!, o));
     if (group) group.push(o);
     else row.push([o]);
+  }
+  for (const emblem of emblemObjects(view)) {
+    if (emblem.controller === side) rows.other.push([emblem]);
   }
   return rows;
 }
