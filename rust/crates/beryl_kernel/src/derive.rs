@@ -11,6 +11,7 @@ use std::ops::Deref;
 
 use beryl_card::FaceIx;
 
+use crate::event::Listens;
 use crate::layout::{Layout, PerSeat, Queue, Table};
 use crate::object::Derived;
 use crate::rule_changes::Rules;
@@ -58,14 +59,15 @@ impl<L: Layout> Rederive<'_, L> {
         &mut self.0.derived.as_mut_slice()[..len]
     }
 
-    /// Stores the results as current, with `listening`, the kinds of event the permanents
-    /// have triggered abilities for, and `rules`, the rules their static abilities change
-    /// for each player, by seat ([`State::rule_applies`]). Control is settled now, so each
-    /// face-down permanent's controller sees it from here on
-    /// ([CR 708.5](https://yawgatog.com/resources/magic-rules/#R7085)): "At any time, you may
-    /// look at ... a face-down permanent you control".
+    /// Stores the results as current, with `listening`, the kinds of event the permanents have
+    /// triggered abilities for, and `rules`, the rules their static abilities change for each
+    /// player, by seat ([`State::rule_applies`]). Control is settled now, so each face-down
+    /// permanent's controller sees it from here on ([CR 708.5]): "At any time, you may look at ...
+    /// a face-down permanent you control".
+    ///
+    /// [CR 708.5]: https://yawgatog.com/resources/magic-rules/#R7085
     #[inline]
-    pub fn finish(self, listening: u16, rules: PerSeat<Rules>) {
+    pub fn finish(self, listening: Listens, rules: PerSeat<Rules>) {
         let s = self.0;
         s.listening = listening;
         s.static_rules = Table::from_fn(|player| rules[player]);

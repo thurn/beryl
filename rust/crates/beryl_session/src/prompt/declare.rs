@@ -348,8 +348,7 @@ impl Aims {
                 if let Some(pair) = self.aiming.take()
                     && let Subject::Object { slot: aimed } = pair.to
                     && let Some(blocker) = L::Slot::from_num(pair.from.0)
-                    && s.object(blocker).is_blocking()
-                    && let Some(took) = s.object(blocker).combat()
+                    && let Some(took) = s.object(blocker).blocked_attackers().first()
                 {
                     self.take(aimed, took.num());
                 }

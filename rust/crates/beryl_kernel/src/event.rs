@@ -1,7 +1,8 @@
-//! Events: what a game action did, as the rules match triggers against it and as the UI or a
-//! replay reads it (architecture §8.1, §8.2, decision D10), and the [`Sink`] executed events
-//! go to, which keeps beside each what it came from ([`crate::cause`]). The pipeline that executes an event (replacements, the layer refresh, trigger
-//! matching) is the rules', in `beryl_engine`'s `event` module.
+//! Events: what a game action did, as the rules match triggers against it and as the UI or a replay
+//! reads it (architecture §8.1, §8.2, decision D10), and the [`Sink`] executed events go to, which
+//! keeps beside each what it came from ([`crate::cause`]). The pipeline that executes an event
+//! (replacements, the layer refresh, trigger matching) is the rules', in `beryl_engine`'s `event`
+//! module.
 
 use beryl_card::{Castings, CounterKind, FaceAbility, FaceIx, ManaColor, TurnStep, Zone};
 
@@ -40,7 +41,9 @@ pub enum Reason {
     Effect,
     /// Put on the stack as it is cast (CR 601.2a).
     Cast,
-    /// Countered ([CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a)).
+    /// Countered ([CR 701.6a]).
+    ///
+    /// [CR 701.6a]: https://yawgatog.com/resources/magic-rules/#R7016a
     Counter,
     /// A spell resolving or failing to: a permanent spell entering the battlefield, an
     /// instant or sorcery put into its owner's graveyard (CR 608.2n, 608.3).
@@ -54,33 +57,34 @@ pub enum Recipient<L: Layout = Small> {
     Permanent(ObjectRef<L>),
 }
 
-/// Why a player lost the game
-/// ([CR 104.3](https://yawgatog.com/resources/magic-rules/#R1043)): "There are several ways
-/// to lose the game."
+/// Why a player lost the game ([CR 104.3]): "There are several ways to lose the game."
+///
+/// [CR 104.3]: https://yawgatog.com/resources/magic-rules/#R1043
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum LossCause<L: Layout = Small> {
-    /// [CR 704.5a](https://yawgatog.com/resources/magic-rules/#R7045a): "If a player has 0 or
-    /// less life, that player loses the game." What lowered it is in the events before.
+    /// [CR 704.5a](https://yawgatog.com/resources/magic-rules/#R7045a): "If a player has 0 or less
+    /// life, that player loses the game." What lowered it is in the events before.
     Life,
-    /// [CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b): "If a player attempted
-    /// to draw a card from a library with no cards in it since the last time state-based
-    /// actions were checked, that player loses the game."
+    /// [CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b): "If a player attempted to
+    /// draw a card from a library with no cards in it since the last time state-based actions were
+    /// checked, that player loses the game."
     Library,
-    /// An effect had their opponent win
-    /// ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b): "An effect may state
-    /// that a player wins the game") or had them lose
-    /// ([CR 104.3e](https://yawgatog.com/resources/magic-rules/#R1043e): "An effect may state
-    /// that a player loses the game"): the ability of `face` of `card` that did, or its spell
-    /// when `ability` is none, and the object that had it, if any.
+    /// An effect had their opponent win ([CR 104.2b]: "An effect may state that a player wins the
+    /// game") or had them lose ([CR 104.3e]: "An effect may state that a player loses the game"):
+    /// the ability of `face` of `card` that did, or its spell when `ability` is none, and the
+    /// object that had it, if any.
+    ///
+    /// [CR 104.2b]: https://yawgatog.com/resources/magic-rules/#R1042b
+    /// [CR 104.3e]: https://yawgatog.com/resources/magic-rules/#R1043e
     Effect {
         source: Option<ObjectRef<L>>,
         card: L::Card,
         face: FaceIx,
         ability: Option<FaceAbility>,
     },
-    /// [CR 104.3a](https://yawgatog.com/resources/magic-rules/#R1043a): "A player can concede
-    /// the game at any time. A player who concedes leaves the game immediately. That player
-    /// loses the game."
+    /// [CR 104.3a](https://yawgatog.com/resources/magic-rules/#R1043a): "A player can concede the
+    /// game at any time. A player who concedes leaves the game immediately. That player loses the
+    /// game."
     Concede,
 }
 
@@ -89,8 +93,9 @@ pub enum LossCause<L: Layout = Small> {
 /// every attacker declared. Flag writes and cache updates never go through events.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Event<L: Layout = Small> {
-    /// An object changed zones; `object` is the new object
-    /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
+    /// An object changed zones; `object` is the new object ([CR 400.7]).
+    ///
+    /// [CR 400.7]: https://yawgatog.com/resources/magic-rules/#R4007
     ZoneChange {
         object: ObjectRef<L>,
         from: Zone,
@@ -122,10 +127,10 @@ pub enum Event<L: Layout = Small> {
     LibraryShuffled {
         player: Seat,
     },
-    /// A card was revealed
-    /// ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a)): "To reveal a card,
-    /// show that card to all players for a brief time." For the UI, which holds it up to be
-    /// read; no rule acts on it.
+    /// A card was revealed ([CR 701.20a]): "To reveal a card, show that card to all players for a
+    /// brief time." For the UI, which holds it up to be read; no rule acts on it.
+    ///
+    /// [CR 701.20a]: https://yawgatog.com/resources/magic-rules/#R70120a
     Reveal {
         slot: L::Slot,
     },
@@ -153,51 +158,56 @@ pub enum Event<L: Layout = Small> {
     Untap {
         object: ObjectRef<L>,
     },
-    /// Mana was added to a player's mana pool
-    /// ([CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064)): "When an effect
-    /// instructs a player to add mana, that mana goes into a player's mana pool." For the UI,
-    /// which shows it flow from `source` (the mana ability's permanent, or the spell or
-    /// ability that added it) to what it pays for.
+    /// Mana was added to a player's mana pool ([CR 106.4]): "When an effect instructs a player to
+    /// add mana, that mana goes into a player's mana pool." For the UI, which shows it flow from
+    /// `source` (the mana ability's permanent, or the spell or ability that added it) to what it
+    /// pays for.
+    ///
+    /// [CR 106.4]: https://yawgatog.com/resources/magic-rules/#R1064
     Mana {
         player: Seat,
         source: Option<ObjectRef<L>>,
         color: ManaColor,
         amount: u8,
     },
-    /// Mana paid during resolution ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)):
-    /// "If an effect gives a player the option to pay mana, they may activate mana abilities".
-    /// Names the resolving item so its payment can be shown before it leaves the stack.
+    /// Mana paid during resolution ([CR 608.2g]): "If an effect gives a player the option to pay
+    /// mana, they may activate mana abilities". Names the resolving item so its payment can be
+    /// shown before it leaves the stack.
+    ///
+    /// [CR 608.2g]: https://yawgatog.com/resources/magic-rules/#R6082g
     ResolutionPayment {
         player: Seat,
         item: StackEntry<L>,
     },
-    /// An ability left the stack at the end of resolution
-    /// ([CR 608.2n](https://yawgatog.com/resources/magic-rules/#R6082n)): "the
-    /// ability is removed from the stack and ceases to exist." Playback needs
-    /// this boundary even when the next trigger arrives in the same view.
+    /// An ability left the stack at the end of resolution ([CR 608.2n]): "the ability is removed
+    /// from the stack and ceases to exist." Playback needs this boundary even when the next trigger
+    /// arrives in the same view.
+    ///
+    /// [CR 608.2n]: https://yawgatog.com/resources/magic-rules/#R6082n
     AbilityFinished,
-    /// A spell or ability arrived on the stack, on top
-    /// ([CR 405.2](https://yawgatog.com/resources/magic-rules/#R4052): "Each time an object
-    /// is put on the stack, it's put on top of all objects already there."), as it stood
-    /// then: a spell or an activated ability before anything is announced for it (CR 601.2a,
-    /// 602.2a), a triggered ability before its targets are chosen (CR 603.3d). For whoever
-    /// follows the stack through the events ([`StackIx`]); no rule acts on it.
+    /// A spell or ability arrived on the stack, on top ([CR 405.2]: "Each time an object is put on
+    /// the stack, it's put on top of all objects already there."), as it stood then: a spell or an
+    /// activated ability before anything is announced for it (CR 601.2a, 602.2a), a triggered
+    /// ability before its targets are chosen (CR 603.3d). For whoever follows the stack through the
+    /// events ([`StackIx`]); no rule acts on it.
+    ///
+    /// [CR 405.2]: https://yawgatog.com/resources/magic-rules/#R4052
     StackArrival {
         entry: StackEntry<L>,
     },
-    /// The spell or ability at `entry` left the stack: resolved or failed to (CR 608.2n,
-    /// 608.3), countered
-    /// ([CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a): "To counter a spell
-    /// or ability means to cancel it, removing it from the stack."), removed as a triggered
-    /// ability with nothing legal to choose
-    /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d): "the ability is
-    /// simply removed from the stack"), or its card moved elsewhere by an effect. A spell's
-    /// card moves in an event of its own, before this one; a resolving spell whose own effect
-    /// moved its card leaves only as its resolution ends
-    /// ([CR 608.2m](https://yawgatog.com/resources/magic-rules/#R6082m): "If an instant
-    /// spell, sorcery spell, or ability that can legally resolve leaves the stack once it
-    /// starts to resolve, it will continue to resolve fully."). The entries above it fall by
-    /// one place. For whoever follows the stack; no rule acts on it.
+    /// The spell or ability at `entry` left the stack: resolved or failed to (CR 608.2n, 608.3),
+    /// countered ([CR 701.6a]: "To counter a spell or ability means to cancel it, removing it from
+    /// the stack."), removed as a triggered ability with nothing legal to choose ([CR 603.3d]: "the
+    /// ability is simply removed from the stack"), or its card moved elsewhere by an effect. A
+    /// spell's card moves in an event of its own, before this one; a resolving spell whose own
+    /// effect moved its card leaves only as its resolution ends ([CR 608.2m]: "If an instant spell,
+    /// sorcery spell, or ability that can legally resolve leaves the stack once it starts to
+    /// resolve, it will continue to resolve fully."). The entries above it fall by one place. For
+    /// whoever follows the stack; no rule acts on it.
+    ///
+    /// [CR 701.6a]: https://yawgatog.com/resources/magic-rules/#R7016a
+    /// [CR 603.3d]: https://yawgatog.com/resources/magic-rules/#R6033d
+    /// [CR 608.2m]: https://yawgatog.com/resources/magic-rules/#R6082m
     StackDeparture {
         entry: StackIx,
     },
@@ -206,9 +216,10 @@ pub enum Event<L: Layout = Small> {
         controller: Seat,
         tokens: Bitboard<L::Slot>,
     },
-    /// A spell was cast ([CR 601.2i](https://yawgatog.com/resources/magic-rules/#R6012i)), as
-    /// the stack then showed it, for the UI: an opponent's spell that resolves unanswered has
-    /// left the stack by the time anyone looks.
+    /// A spell was cast ([CR 601.2i]), as the stack then showed it, for the UI: an opponent's spell
+    /// that resolves unanswered has left the stack by the time anyone looks.
+    ///
+    /// [CR 601.2i]: https://yawgatog.com/resources/magic-rules/#R6012i
     Cast {
         spell: ObjectRef<L>,
         controller: Seat,
@@ -217,14 +228,14 @@ pub enum Event<L: Layout = Small> {
         costs: Castings,
         flashback: bool,
     },
-    /// An ability was put on the stack, for the UI's log: an activated one as it becomes
-    /// activated, its costs paid
-    /// ([CR 602.2b](https://yawgatog.com/resources/magic-rules/#R6022b): "The remainder of the
-    /// process for activating an ability is identical to the process for casting a spell
-    /// listed in rules 601.2b-i"), or a triggered one once its targets are chosen
-    /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d)), or at once if it
-    /// has none. The ability as it stood on the stack then, which it may have left by the
-    /// time anyone looks.
+    /// An ability was put on the stack, for the UI's log: an activated one as it becomes activated,
+    /// its costs paid ([CR 602.2b]: "The remainder of the process for activating an ability is
+    /// identical to the process for casting a spell listed in rules 601.2b-i"), or a triggered one
+    /// once its targets are chosen ([CR 603.3d]), or at once if it has none. The ability as it
+    /// stood on the stack then, which it may have left by the time anyone looks.
+    ///
+    /// [CR 602.2b]: https://yawgatog.com/resources/magic-rules/#R6022b
+    /// [CR 603.3d]: https://yawgatog.com/resources/magic-rules/#R6033d
     Ability {
         source: Option<ObjectRef<L>>,
         controller: Seat,
@@ -234,23 +245,28 @@ pub enum Event<L: Layout = Small> {
         targets: L::Queue<Target<L>, TARGETS>,
         x: u8,
     },
-    /// A player declared attackers ([CR 508.1](https://yawgatog.com/resources/magic-rules/#R5081)).
+    /// A player declared attackers ([CR 508.1]).
+    ///
+    /// [CR 508.1]: https://yawgatog.com/resources/magic-rules/#R5081
     Attack {
         player: Seat,
         attackers: Bitboard<L::Slot>,
     },
-    /// A creature was declared as a blocker for `attacker`
-    /// ([CR 509.1a](https://yawgatog.com/resources/magic-rules/#R5091a): "The defending
-    /// player chooses which creatures they control, if any, will block. ... For each of
-    /// the chosen creatures, the defending player chooses one creature for it to block"),
-    /// one event for each blocker of a declaration, together. For the UI, which
-    /// draws the block; no rule acts on it yet, so it is only noted.
+    /// A creature was declared as a blocker for `attacker` ([CR 509.1a]: "The defending player
+    /// chooses which creatures they control, if any, will block. ... For each of the chosen
+    /// creatures, the defending player chooses one creature for it to block"), one event for each
+    /// blocker of a declaration, together. For the UI, which draws the block; no rule acts on it
+    /// yet, so it is only noted.
+    ///
+    /// [CR 509.1a]: https://yawgatog.com/resources/magic-rules/#R5091a
     Block {
         player: Seat,
         blocker: ObjectRef<L>,
         attacker: ObjectRef<L>,
     },
-    /// A step or phase began ([CR 500.6](https://yawgatog.com/resources/magic-rules/#R5006)).
+    /// A step or phase began ([CR 500.6]).
+    ///
+    /// [CR 500.6]: https://yawgatog.com/resources/magic-rules/#R5006
     StepBegins {
         step: TurnStep,
         active: Seat,
@@ -259,8 +275,9 @@ pub enum Event<L: Layout = Small> {
         object: ObjectRef<L>,
         player: Seat,
     },
-    /// A coin flip ([CR 705.2](https://yawgatog.com/resources/magic-rules/#R7052)): "If the
-    /// call matches the result, the player wins the flip."
+    /// A coin flip ([CR 705.2]): "If the call matches the result, the player wins the flip."
+    ///
+    /// [CR 705.2]: https://yawgatog.com/resources/magic-rules/#R7052
     CoinFlip {
         player: Seat,
         won: bool,
@@ -276,53 +293,119 @@ pub enum Event<L: Layout = Small> {
     },
 }
 
-/// One bit per kind of event a triggered ability can listen to, for the per-card masks of
-/// the game table (§6.4): a kind no card listens to costs one AND.
-pub mod kind {
-    pub const ENTERS: u16 = 1 << 0;
-    pub const ATTACK: u16 = 1 << 1;
-    pub const DAMAGE: u16 = 1 << 2;
-    pub const STEP: u16 = 1 << 3;
-    pub const TOKENS: u16 = 1 << 4;
-    pub const CAST: u16 = 1 << 5;
-    pub const DIES: u16 = 1 << 6;
-    pub const DISCARD: u16 = 1 << 7;
-    pub const DRAW: u16 = 1 << 8;
-    /// No kind of event, and no [`super::Event`] has it: the bit of a card's mask
-    /// ([`crate::GameTable`]) that says a static ability of it changes a rule for players
-    /// ([`crate::rule_changes::RuleKind::of_players`]). The layers read each permanent's mask once, for what
-    /// listens, and so learn in the same read whether any permanent changes a rule
-    /// ([`crate::derive::Rederive::finish`]).
-    pub const RULE_CHANGE: u16 = 1 << 15;
-    /// No kind of event either: the bit of a card's mask that says a static ability of it
-    /// replaces its controller's draws (`beryl_card`'s `Replacement::WouldDraw`). With no
-    /// such permanent on the battlefield a draw reads no ability
-    /// ([`crate::State::listening`]).
-    pub const DRAW_REPLACEMENT: u16 = 1 << 14;
+/// A kind of event a triggered ability can listen to (§6.4). A card's [`Listens`] has one
+/// bit for each.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum EventKind {
+    Enters,
+    Attack,
+    Damage,
+    Step,
+    Tokens,
+    Cast,
+    Dies,
+    Discard,
+    Draw,
+}
+
+/// What a card's abilities may react to, as one mask for the game table (§6.4): the
+/// [`EventKind`]s its triggered abilities listen to, and two marks that are no event: a
+/// static ability that changes a rule for players, and one that replaces its controller's
+/// draws. A kind no card listens to costs one AND, and the layers learn in the same read of
+/// each permanent's mask whether any permanent changes a rule
+/// ([`crate::derive::Rederive::finish`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Listens(u16);
+
+impl Listens {
+    pub const NONE: Listens = Listens(0);
+    /// A static ability of it changes a rule for players
+    /// ([`crate::rule_changes::RuleKind::of_players`]).
+    pub const RULE_CHANGE: Listens = Listens(1 << 15);
+    /// A static ability of it replaces its controller's draws (`beryl_card`'s
+    /// `Replacement::WouldDraw`). With no such permanent on the battlefield a draw reads no
+    /// ability ([`crate::State::listening`]).
+    pub const DRAW_REPLACEMENT: Listens = Listens(1 << 14);
+
+    /// The mask of one kind of event.
+    #[inline]
+    pub const fn event(kind: EventKind) -> Listens {
+        Listens(1 << kind as u8)
+    }
+
+    /// Whether it listens to events of `kind`.
+    #[inline]
+    pub const fn hears(self, kind: EventKind) -> bool {
+        self.0 & Listens::event(kind).0 != 0
+    }
+
+    /// Whether it has every bit of `other`: an event kind or a mark.
+    #[inline]
+    pub const fn contains(self, other: Listens) -> bool {
+        self.0 & other.0 == other.0
+    }
+
+    /// Whether it has any bit of `other`.
+    #[inline]
+    pub const fn intersects(self, other: Listens) -> bool {
+        self.0 & other.0 != 0
+    }
+
+    #[inline]
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+}
+
+impl std::ops::BitOr for Listens {
+    type Output = Listens;
+
+    #[inline]
+    fn bitor(self, other: Listens) -> Listens {
+        Listens(self.0 | other.0)
+    }
+}
+
+impl std::ops::BitOr<EventKind> for Listens {
+    type Output = Listens;
+
+    #[inline]
+    fn bitor(self, kind: EventKind) -> Listens {
+        self | Listens::event(kind)
+    }
+}
+
+impl std::ops::BitOrAssign for Listens {
+    #[inline]
+    fn bitor_assign(&mut self, other: Listens) {
+        self.0 |= other.0;
+    }
 }
 
 impl Copy for Event<Small> {}
 
 impl<L: Layout> Event<L> {
-    /// The listener kind of this event, or 0 if no trigger listens to it.
-    pub fn kind(&self) -> u16 {
-        match self {
+    /// The kind of event a trigger may listen to this as, or `None` if no trigger listens to
+    /// it.
+    pub fn kind(&self) -> Option<EventKind> {
+        Some(match self {
             Event::ZoneChange {
                 to: Zone::Battlefield,
                 ..
-            } => kind::ENTERS,
+            } => EventKind::Enters,
             Event::ZoneChange {
                 reason: Reason::Discard,
                 ..
-            } => kind::DISCARD,
-            Event::Attack { .. } => kind::ATTACK,
-            Event::Damage { .. } => kind::DAMAGE,
-            Event::StepBegins { .. } => kind::STEP,
-            Event::TokensCreated { .. } => kind::TOKENS,
-            Event::Cast { .. } => kind::CAST,
-            Event::Draw { .. } => kind::DRAW,
-            _ => 0,
-        }
+            } => EventKind::Discard,
+            Event::Attack { .. } => EventKind::Attack,
+            Event::Damage { .. } => EventKind::Damage,
+            Event::StepBegins { .. } => EventKind::Step,
+            Event::TokensCreated { .. } => EventKind::Tokens,
+            Event::Cast { .. } => EventKind::Cast,
+            Event::Draw { .. } => EventKind::Draw,
+            _ => return None,
+        })
     }
 }
 
@@ -486,10 +569,11 @@ impl<L: Layout> Sink<L> {
         });
     }
 
-    /// Opens the scope of the resolution of the spell or ability the state has just taken
-    /// off the top of its stack, which then holds `below` entries
-    /// ([CR 608.1](https://yawgatog.com/resources/magic-rules/#R6081)). The entry keeps its
-    /// place until [`Sink::resolved`] says it left.
+    /// Opens the scope of the resolution of the spell or ability the state has just taken off the
+    /// top of its stack, which then holds `below` entries ([CR 608.1]). The entry keeps its place
+    /// until [`Sink::resolved`] says it left.
+    ///
+    /// [CR 608.1]: https://yawgatog.com/resources/magic-rules/#R6081
     #[inline]
     pub fn enter_resolution(&mut self, below: impl FnOnce() -> usize) {
         if self.on {
@@ -540,9 +624,10 @@ impl<L: Layout> Sink<L> {
         }
     }
 
-    /// Opens a group as [`Sink::together`] does, of which the event kept last is part: what
-    /// the rules do "immediately after" an event, with nothing between
-    /// ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)).
+    /// Opens a group as [`Sink::together`] does, of which the event kept last is part: what the
+    /// rules do "immediately after" an event, with nothing between ([CR 610.3]).
+    ///
+    /// [CR 610.3]: https://yawgatog.com/resources/magic-rules/#R6103
     #[inline]
     pub fn together_with_last(&mut self) {
         if self.on {
@@ -597,11 +682,11 @@ impl<L: Layout> Sink<L> {
         }
     }
 
-    /// Notes that the spell or ability that is resolving left the stack, as the last part
-    /// of its resolution
-    /// ([CR 608.2n](https://yawgatog.com/resources/magic-rules/#R6082n): "As the final part
-    /// of an ability's resolution, the ability is removed from the stack and ceases to
-    /// exist.").
+    /// Notes that the spell or ability that is resolving left the stack, as the last part of its
+    /// resolution ([CR 608.2n]: "As the final part of an ability's resolution, the ability is
+    /// removed from the stack and ceases to exist.").
+    ///
+    /// [CR 608.2n]: https://yawgatog.com/resources/magic-rules/#R6082n
     #[inline]
     pub fn resolved(&mut self) {
         if self.on

@@ -17,8 +17,8 @@ use crate::ids::Seat;
 use crate::layout::{Layout, PerPlayer, Table};
 use crate::query::Copiable;
 use crate::state::{
-    CountersHeld, ObjectFlags, PendingTrigger, State, TARGETS, Target, TargetPlace, TargetPlaces,
-    Tracker, Zone, ZoneKey, placed,
+    CountersHeld, PendingTrigger, State, TARGETS, Target, TargetPlace, TargetPlaces, Tracker, Zone,
+    ZoneKey, placed,
 };
 use crate::table::GameTable;
 use crate::trigger::entered_with;
@@ -500,8 +500,7 @@ impl<L: Layout> Scene<'_, L> {
         if objects.is_empty() && names == Objects::This {
             return self.subject.info.lki.token;
         }
-        !objects.is_empty()
-            && objects.all(|slot| self.s.object(slot).flags().has(ObjectFlags::TOKEN))
+        !objects.is_empty() && objects.all(|slot| self.s.object(slot).is_token())
     }
 
     fn passing(&self, objects: Bitboard<L::Slot>, filter: Filter) -> Bitboard<L::Slot> {

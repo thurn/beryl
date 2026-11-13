@@ -15,7 +15,7 @@ use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::mana::Funds;
 use crate::rule_change;
-use crate::state::{ObjectFlags, RuleKind, State, Tracker, Zone, ZoneKey};
+use crate::state::{RuleKind, State, Tracker, Zone, ZoneKey};
 use crate::table::GameTable;
 
 use super::costs::{From, option_sets, spell_cost, x_range_start};
@@ -311,9 +311,8 @@ fn activatable<L: Layout>(
         // 602.5a: "A creature's activated ability with the tap symbol ... in its activation
         // cost can't be activated unless the creature has been under its controller's control
         // since the start of their most recent turn."
-        if o.flags().has(ObjectFlags::TAPPED)
-            || (s.derived(slot).types.intersects(Types::CREATURE)
-                && o.flags().has(ObjectFlags::SUMMONING_SICK))
+        if o.is_tapped()
+            || (s.derived(slot).types.intersects(Types::CREATURE) && o.is_summoning_sick())
         {
             return false;
         }

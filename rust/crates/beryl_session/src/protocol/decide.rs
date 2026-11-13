@@ -199,7 +199,7 @@ fn decision_source<L: Layout>(
                 return None;
             };
             opts.iter().find_map(|&o| match o {
-                Opt::Lethal(blocker) => obs.object(blocker).combat(),
+                Opt::Lethal(blocker) => obs.object(blocker).blocked_attackers().first(),
                 _ => None,
             })
         }

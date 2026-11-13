@@ -6,8 +6,7 @@ use beryl_card::{
     FACE_DOWN, FACE_DOWN_COPY, Face, FaceIx, RuleChange,
 };
 
-#[cfg(doc)]
-use crate::event::kind;
+use crate::event::{EventKind, Listens};
 use crate::ids::{CardId, CardIx, LargeCardIx, Seat};
 use crate::layout::{Layout, PerLayout, PerSeat};
 use crate::listener::{self, Listener, Unmatched};
@@ -203,12 +202,12 @@ pub struct GameTable {
     defs: Vec<&'static CardDef>,
     /// Each deck as game indices, in decklist order.
     decks: PerSeat<Vec<usize>>,
-    /// Per game index, the event kinds its triggered abilities listen to, and the bits no
-    /// event has: [`kind::RULE_CHANGE`] if a static ability of it changes a rule for
-    /// players, [`kind::DRAW_REPLACEMENT`] if one replaces its controller's draws.
-    listens: Vec<u16>,
+    /// Per game index, the event kinds its triggered abilities listen to, and the marks no
+    /// event has: [`Listens::RULE_CHANGE`] if a static ability of it changes a rule for
+    /// players, [`Listens::DRAW_REPLACEMENT`] if one replaces its controller's draws.
+    listens: Vec<Listens>,
     /// Every kind any card of the game listens to.
-    listens_any: u16,
+    listens_any: Listens,
     /// Every triggered ability of the game's cards under the kind of event it listens to:
     /// each card's in turn, in the order its faces list them.
     listeners: Vec<Listener>,
@@ -248,19 +247,20 @@ pub struct GameTable {
 /// are live ([`crate::effects`]), which a table could only bound, since a Rust body is
 /// opaque to it. These are what no live entry can say: whether to keep a count nothing has
 /// yet read. Whether a static ability changes a rule for players is no capability of the
-/// game either: it is a bit of each card's listener mask ([`kind::RULE_CHANGE`]), which says
+/// game either: it is a bit of each card's listener mask ([`Listens::RULE_CHANGE`]), which says
 /// it of the permanents on the battlefield now.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Capability {
     /// A card reads whether a permanent entered the battlefield this turn, so that is
     /// tracked (by-w8gv.7.8).
     EnteredThisTurn,
-    /// A card has a loyalty ability, so whether one of a permanent's was activated this
-    /// turn is tracked (by-w8gv.7.8)
-    /// ([CR 606.3](https://yawgatog.com/resources/magic-rules/#R6063)): "A player may
-    /// activate a loyalty ability of a permanent they control any time they have priority
-    /// and the stack is empty during a main phase of their turn, but only if no player has
-    /// previously activated a loyalty ability of that permanent that turn."
+    /// A card has a loyalty ability, so whether one of a permanent's was activated this turn is
+    /// tracked (by-w8gv.7.8) ([CR 606.3]): "A player may activate a loyalty ability of a permanent
+    /// they control any time they have priority and the stack is empty during a main phase of their
+    /// turn, but only if no player has previously activated a loyalty ability of that permanent
+    /// that turn."
+    ///
+    /// [CR 606.3]: https://yawgatog.com/resources/magic-rules/#R6063
     LoyaltyActivated,
 }
 
@@ -286,10 +286,10 @@ impl Capability {
     }
 }
 
-/// The bits of a card's listener mask that no event has ([`kind::DRAW_REPLACEMENT`],
-/// [`kind::RULE_CHANGE`]), with the rule changes its abilities name numbered in
+/// The marks of a card's listener mask that are no event ([`Listens::DRAW_REPLACEMENT`],
+/// [`Listens::RULE_CHANGE`]), with the rule changes its abilities name numbered in
 /// `rule_changes`; or the first of its abilities the engine has no code for.
-fn unlistened(def: &CardDef, rule_changes: &mut RuleChanges) -> Result<u16, TableError> {
+fn unlistened(def: &CardDef, rule_changes: &mut RuleChanges) -> Result<Listens, TableError> {
     let replaces = replacement::check(def).map_err(|unreplaced| TableError::Replacement {
         card: def.name,
         unreplaced,
@@ -400,7 +400,7 @@ impl GameTable {
             listeners.extend(of);
         }
         listeners_from.push(u32::try_from(listeners.len()).expect("fewer listeners"));
-        let listens_any = listens.iter().fold(0, |a, &b| a | b);
+        let listens_any = listens.iter().fold(Listens::NONE, |a, &b| a | b);
         let needy = defs.iter().any(|d| {
             d.faces
                 .iter()
@@ -449,11 +449,12 @@ impl GameTable {
         &self.subtypes
     }
 
-    /// The printed subtypes of the face `face` of the card at `card` by the game's numbers:
-    /// found once per game for its first two faces, and from the face itself for any other.
-    /// A face-down permanent has none
-    /// ([CR 708.2a](https://yawgatog.com/resources/magic-rules/#R7082a)): it "becomes a 2/2
-    /// face-down creature with no text, no name, no subtypes, and no mana cost."
+    /// The printed subtypes of the face `face` of the card at `card` by the game's numbers: found
+    /// once per game for its first two faces, and from the face itself for any other. A face-down
+    /// permanent has none ([CR 708.2a]): it "becomes a 2/2 face-down creature with no text, no
+    /// name, no subtypes, and no mana cost."
+    ///
+    /// [CR 708.2a]: https://yawgatog.com/resources/magic-rules/#R7082a
     #[inline]
     pub fn face_subtypes(&self, card: impl CardId, face: FaceIx) -> GameSubtypes {
         match self.face_subtypes[card.index()].get(usize::from(face.get())) {
@@ -495,26 +496,27 @@ impl GameTable {
     /// own: others ask [`crate::Copiable::may_listen`], which is nothing for a face-down
     /// permanent whatever its hidden card listens to.
     #[inline]
-    pub(crate) fn listens(&self, card: impl CardId) -> u16 {
+    pub(crate) fn listens(&self, card: impl CardId) -> Listens {
         self.listens[card.index()]
     }
 
-    /// The triggered abilities of the face `face` of the card at `card` that listen to events
-    /// of `kind`, in the order the face lists them: what an event of that kind is matched
-    /// against, and nothing else of the face is read. A face-down permanent's face has none
-    /// ([CR 708.2a](https://yawgatog.com/resources/magic-rules/#R7082a)).
+    /// The triggered abilities of the face `face` of the card at `card` that listen to events of
+    /// `kind`, in the order the face lists them: what an event of that kind is matched against, and
+    /// nothing else of the face is read. A face-down permanent's face has none ([CR 708.2a]).
+    ///
+    /// [CR 708.2a]: https://yawgatog.com/resources/magic-rules/#R7082a
     #[inline]
     pub fn listeners(
         &self,
         card: impl CardId,
         face: FaceIx,
-        kind: u16,
+        kind: EventKind,
     ) -> impl Iterator<Item = &Listener> {
         let from = self.listeners_from[card.index()] as usize;
         let to = self.listeners_from[card.index() + 1] as usize;
         self.listeners[from..to]
             .iter()
-            .filter(move |l| l.kind & kind != 0 && l.face == face)
+            .filter(move |l| l.kind == kind && l.face == face)
     }
 
     /// The facts of the face `face` of the card at `card`: found once per game for its first
@@ -590,7 +592,7 @@ impl GameTable {
 
     /// The event kinds any card of this game listens to.
     #[inline]
-    pub fn listens_any(&self) -> u16 {
+    pub fn listens_any(&self) -> Listens {
         self.listens_any
     }
 
@@ -671,9 +673,10 @@ impl FaceFacts {
         activated: 0,
     };
 
-    /// Whether it has an activated ability
-    /// ([CR 602.1](https://yawgatog.com/resources/magic-rules/#R6021)): "Activated abilities
-    /// have a cost and an effect."
+    /// Whether it has an activated ability ([CR 602.1]): "Activated abilities have a cost and an
+    /// effect."
+    ///
+    /// [CR 602.1]: https://yawgatog.com/resources/magic-rules/#R6021
     #[inline]
     pub fn activates(self) -> bool {
         self.activated != 0
@@ -769,11 +772,12 @@ pub fn is_simple(a: &Ability) -> bool {
         && matches!(a.cost().parts(), [CostPart::This(CostAction::Tap)])
 }
 
-/// Whether an ability is a mana ability whose whole cost is {T} and sacrificing its source,
-/// as a Treasure's ([CR 111.10a](https://yawgatog.com/resources/magic-rules/#R11110a)):
-/// "{T}, Sacrifice this token: Add one mana of any color." Spending the permanent is a
-/// resource a plan consumes (§10): the solver taps such a source only when the cost needs it,
-/// or when sacrificing it keeps more later costs payable.
+/// Whether an ability is a mana ability whose whole cost is {T} and sacrificing its source, as a
+/// Treasure's ([CR 111.10a]): "{T}, Sacrifice this token: Add one mana of any color." Spending the
+/// permanent is a resource a plan consumes (§10): the solver taps such a source only when the cost
+/// needs it, or when sacrificing it keeps more later costs payable.
+///
+/// [CR 111.10a]: https://yawgatog.com/resources/magic-rules/#R11110a
 #[inline]
 pub fn is_sacrificed(a: &Ability) -> bool {
     a.kind() == AbilityKind::Mana

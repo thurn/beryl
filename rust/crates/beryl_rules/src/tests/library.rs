@@ -10,7 +10,7 @@ use crate::event::{self, Event, Reason};
 use crate::game::Game;
 use crate::ids::{Seat, Slot};
 use crate::resolution::Resolution;
-use crate::state::{ObjectFlags, ObjectRef, StackEntry, TargetPlaces, TurnStep, Zone, ZoneKey};
+use crate::state::{ObjectRef, StackEntry, TargetPlaces, TurnStep, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{
     Choice, Decision, DecisionKind, GameTable, Opt, PlayerSet, Profile, Scratch, State, choices,
@@ -56,7 +56,7 @@ fn pick(d: &Decision, option: Opt) -> u8 {
 }
 
 fn tapped(s: &State, slot: Slot) -> bool {
-    s.object(slot).flags().has(ObjectFlags::TAPPED)
+    s.object(slot).is_tapped()
 }
 
 /// [CR 701.26b](https://yawgatog.com/resources/magic-rules/#R70126b): "Only tapped permanents
@@ -228,11 +228,8 @@ fn any_tokens_enter_attacking_one_of_the_defending_players_given() {
         }
     };
     let flags = |s: &State, slot: Slot| {
-        let flags = s.object(slot).flags();
-        (
-            flags.has(ObjectFlags::TAPPED),
-            flags.has(ObjectFlags::ATTACKING),
-        )
+        let o = s.object(slot);
+        (o.is_tapped(), o.is_attacking())
     };
 
     // The attacking player's, against the defending player: they choose what the two attack.
@@ -263,7 +260,7 @@ fn any_tokens_enter_attacking_one_of_the_defending_players_given() {
     assert_eq!(created.count(), 2);
     for token in s.in_candidate_order(created) {
         assert_eq!(flags(&s, token), (true, true));
-        assert_eq!(s.object(token).combat(), Some(walker));
+        assert_eq!(s.object(token).attacked_planeswalker(), Some(walker));
         assert_eq!(s.controller(token), Seat::P0);
     }
 

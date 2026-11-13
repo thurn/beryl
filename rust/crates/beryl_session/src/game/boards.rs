@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use beryl_engine::chance::Chance;
 use beryl_engine::event::Tagged;
-use beryl_engine::state::{ObjectFlags, Pending, StackEntry, Turn};
+use beryl_engine::state::{Pending, StackEntry, Turn};
 use beryl_engine::{
     Choice, GameTable, Large, Layout, Outcome, Profile, Relayout, Replay, Scratch, Small,
     StallReason, State, Step, TurnStep, apply, next_in_step,
@@ -225,7 +225,7 @@ impl Boards {
             .state
             .battlefield()
             .iter()
-            .any(|&slot| b.state.object(slot).flags().has(ObjectFlags::BLOCKING)))
+            .any(|&slot| b.state.object(slot).is_blocking()))
     }
 
     pub(super) fn outcome(&self) -> Option<Outcome> {

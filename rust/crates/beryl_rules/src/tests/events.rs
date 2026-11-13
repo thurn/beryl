@@ -26,7 +26,7 @@ use crate::ids::{Seat, Slot};
 use crate::profile::Breakpoint;
 use crate::resolution::Resolution;
 use crate::state::{
-    Continuous, CounterKind, Duration, LayerChange, ManaPool, MoveReplacement, ObjectFlags,
+    AttackTarget, Continuous, CounterKind, Duration, LayerChange, ManaPool, MoveReplacement,
     PendingTrigger, StackEntry, TriggerInfo, TurnStep, Zone, ZoneKey,
 };
 use crate::zone::Place;
@@ -248,9 +248,12 @@ impl CustomBody for HumanAttacking {
             tokens::predefined(game.table(), &HUMAN),
             resolution.controller(),
         );
+        let state = game.state();
         let how = TokenEntry {
             tapped: true,
-            attacking: true,
+            attacking: state
+                .players_in_turn_order(state.defending_players())
+                .next(),
         };
         tokens::create(game, you, what, 1, how)?;
         Ok(())
@@ -691,7 +694,7 @@ fn a_dies_trigger_looks_back_and_its_intervening_if_skips_tokens() {
     let token = *s
         .battlefield()
         .iter()
-        .find(|&&slot| s.object(slot).flags().has(ObjectFlags::TOKEN))
+        .find(|&&slot| s.object(slot).is_token())
         .expect("a token copy");
     assert_eq!(s.definition_name(&t, token), "Test Sphinx");
     assert_eq!((s.derived(token).power, s.derived(token).toughness), (3, 3));
@@ -856,7 +859,7 @@ fn attack_triggers_fire_per_attacker_and_whenever_you_attack_once() {
     let attackers: Bitboard = [a, b, adeline].into_iter().collect();
     // Each pick of the declaration is marked on its own, with no event.
     for slot in s.in_candidate_order(attackers) {
-        s.declare_attacker(slot);
+        s.declare_attacker(slot, p.opponent());
     }
     event::settle(
         &mut s,
@@ -878,7 +881,7 @@ fn attack_triggers_fire_per_attacker_and_whenever_you_attack_once() {
         .find(|&&slot| s.definition_name(&t, slot) == "Test Human")
         .unwrap();
     let o = s.object(human);
-    assert!(o.flags().has(ObjectFlags::TAPPED) && o.flags().has(ObjectFlags::ATTACKING));
+    assert!(o.is_tapped() && o.is_attacking());
     // A creature put onto the battlefield attacking was never declared: no new triggers.
     assert!(s.triggers().is_empty());
     // Adeline counts the creatures her controller controls, the Human included.
@@ -1198,7 +1201,7 @@ fn whenever_you_create_creature_tokens_triggers_once_per_event() {
 fn lands_enter_tapped_conditionally_or_unless_life_is_paid() {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
-    let tapped = |s: &State, slot: Slot| s.object(slot).flags().has(ObjectFlags::TAPPED);
+    let tapped = |s: &State, slot: Slot| s.object(slot).is_tapped();
     let tapland = put(&t, &mut s, &mut x, p, "Test Tapland");
     assert!(tapped(&s, tapland));
     // Seachrome Coast: untapped with two or fewer other lands, tapped with three.
@@ -1412,7 +1415,7 @@ fn a_stolen_creatures_dies_trigger_belongs_to_its_last_controller() {
     let copy = *s
         .battlefield()
         .iter()
-        .find(|&&slot| s.object(slot).flags().has(ObjectFlags::TOKEN))
+        .find(|&&slot| s.object(slot).is_token())
         .expect("a token copy");
     assert_eq!((s.object(copy).owner(), s.controller(copy)), (p, p));
 }
@@ -1645,17 +1648,14 @@ fn gaining_control_changes_the_controller_until_the_effect_ends() {
     });
     assert_eq!(s.controller(theirs), p);
     assert_eq!(s.object(theirs).owner(), q);
-    assert!(s.object(theirs).flags().has(ObjectFlags::SUMMONING_SICK));
+    assert!(s.object(theirs).is_summoning_sick());
     assert_eq!(s.derived(mine).power, 2, "Adeline counts it");
     // It untaps in its new controller's untap step and goes to its owner's graveyard.
     s.board().set_tapped(theirs, true);
     advance_to(&t, &mut s, &mut x, q, TurnStep::PrecombatMain);
-    assert!(
-        s.object(theirs).flags().has(ObjectFlags::TAPPED),
-        "not in its owner's"
-    );
+    assert!(s.object(theirs).is_tapped(), "not in its owner's");
     advance_to(&t, &mut s, &mut x, p, TurnStep::PrecombatMain);
-    assert!(!s.object(theirs).flags().has(ObjectFlags::TAPPED));
+    assert!(!s.object(theirs).is_tapped());
     assert_eq!(s.controller(theirs), p, "an indefinite effect lasts");
     with_game(&t, &mut s, &mut x, mine, |game, _| {
         destroy(game, r).unwrap();
@@ -1929,10 +1929,8 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
                     )
                 );
                 let o = paused.object(shown);
-                assert!(
-                    o.flags().has(ObjectFlags::ATTACKING) && o.flags().has(ObjectFlags::TAPPED)
-                );
-                assert_eq!(o.combat(), None);
+                assert!(o.is_attacking() && o.is_tapped());
+                assert_eq!(o.attack_target(), Some(AttackTarget::Player(Seat::P1)));
                 pick(Opt::Defender(Some(walker)))
             }
             _ => Choice(0),
@@ -1940,10 +1938,12 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
         apply(&mut s, &t, &mut x, &mut Replay, choice);
     };
     let o = s.object(human);
-    assert!(o.flags().has(ObjectFlags::ATTACKING) && o.flags().has(ObjectFlags::TAPPED));
-    assert!(o.flags().has(ObjectFlags::ATTACKS_PLANESWALKER));
-    assert_eq!(o.combat(), Some(walker));
-    assert_eq!(s.object(cathar).combat(), None);
+    assert!(o.is_attacking() && o.is_tapped());
+    assert_eq!(o.attack_target(), Some(AttackTarget::Planeswalker(walker)));
+    assert_eq!(
+        s.object(cathar).attack_target(),
+        Some(AttackTarget::Player(Seat::P1))
+    );
 }
 
 /// Thieving Skydiver: kicker {X}, X can't be 0; "When this creature enters, if it was

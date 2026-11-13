@@ -10,7 +10,7 @@ use std::fmt::Write;
 
 use beryl_engine::card::{CastingOption, FaceIx, ObjectAbility, Types};
 use beryl_engine::event::{Event, Reason, Recipient};
-use beryl_engine::state::{ObjectFlags, ObjectRef};
+use beryl_engine::state::ObjectRef;
 use beryl_engine::{
     Candidates, Choice, Decision, GameTable, Opt, Outcome, Seat, Slot, State, TurnStep, Zone,
     ZoneKey,
@@ -342,7 +342,7 @@ fn permanent(t: &GameTable, s: &State, slot: Slot) -> String {
     if o.damage() > 0 {
         let _ = write!(text, " ({} damage)", o.damage());
     }
-    if o.flags().has(ObjectFlags::TAPPED) {
+    if o.is_tapped() {
         text.push_str(" (tapped)");
     }
     if let Some(host) = o.attached_to() {

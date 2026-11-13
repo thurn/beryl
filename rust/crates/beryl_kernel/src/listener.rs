@@ -10,14 +10,14 @@
 
 use beryl_card::{AbilityIx, CardDef, FaceIx, Filter, Players, Subject, Trigger, TriggerEvent};
 
-use crate::event::kind;
+use crate::event::EventKind;
 use crate::filter::reads;
 
 /// One triggered ability of a card of the game, under the kind of event it listens to.
 #[derive(Clone, Copy, Debug)]
 pub struct Listener {
-    /// The one bit of [`kind`] its event has.
-    pub kind: u16,
+    /// The kind of event it listens to.
+    pub kind: EventKind,
     pub face: FaceIx,
     pub ability: AbilityIx,
     pub trigger: &'static Trigger,
@@ -47,23 +47,24 @@ enum About {
     Nothing,
 }
 
-/// The kind of event a trigger listens to, one bit of [`kind`], or why the engine cannot
-/// match it. A delayed trigger listens to none: it waits in the state, not in the table,
-/// for the beginning of a step
-/// ([CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)): "An effect may create a
-/// delayed triggered ability that can do something at a later time."
-pub fn listens_to(trigger: &Trigger) -> Result<u16, Unmatched> {
+/// The kind of event a trigger listens to, or why the engine cannot match it. A delayed trigger
+/// listens to none (`None`): it waits in the state, not in the table, for the beginning of a step
+/// ([CR 603.7]): "An effect may create a delayed triggered ability that can do something at a later
+/// time."
+///
+/// [CR 603.7]: https://yawgatog.com/resources/magic-rules/#R6037
+pub fn listens_to(trigger: &Trigger) -> Result<Option<EventKind>, Unmatched> {
     let (kind, about, has_player) = match trigger.event {
-        TriggerEvent::Enters => (kind::ENTERS, About::This, false),
-        TriggerEvent::Dies => (kind::DIES, About::This, false),
-        TriggerEvent::Attacks => (kind::ATTACK, About::This, false),
-        TriggerEvent::PlayerAttacks => (kind::ATTACK, About::Filtered, true),
-        TriggerEvent::DealsCombatDamageToPlayer => (kind::DAMAGE, About::This, true),
-        TriggerEvent::Step(_) | TriggerEvent::MainPhase => (kind::STEP, About::Nothing, true),
-        TriggerEvent::CreatesTokens => (kind::TOKENS, About::Filtered, true),
-        TriggerEvent::Casts => (kind::CAST, About::Filtered, true),
-        TriggerEvent::Discards => (kind::DISCARD, About::Filtered, true),
-        TriggerEvent::Draws => (kind::DRAW, About::Nothing, true),
+        TriggerEvent::Enters => (EventKind::Enters, About::This, false),
+        TriggerEvent::Dies => (EventKind::Dies, About::This, false),
+        TriggerEvent::Attacks => (EventKind::Attack, About::This, false),
+        TriggerEvent::PlayerAttacks => (EventKind::Attack, About::Filtered, true),
+        TriggerEvent::DealsCombatDamageToPlayer => (EventKind::Damage, About::This, true),
+        TriggerEvent::Step(_) | TriggerEvent::MainPhase => (EventKind::Step, About::Nothing, true),
+        TriggerEvent::CreatesTokens => (EventKind::Tokens, About::Filtered, true),
+        TriggerEvent::Casts => (EventKind::Cast, About::Filtered, true),
+        TriggerEvent::Discards => (EventKind::Discard, About::Filtered, true),
+        TriggerEvent::Draws => (EventKind::Draw, About::Nothing, true),
     };
     let subject = match (about, trigger.subject) {
         (About::This, Subject::This)
@@ -78,8 +79,8 @@ pub fn listens_to(trigger: &Trigger) -> Result<u16, Unmatched> {
     };
     subject.and(whose)?;
     match (trigger.delayed, kind) {
-        (false, kind) => Ok(kind),
-        (true, kind::STEP) => Ok(0),
+        (false, kind) => Ok(Some(kind)),
+        (true, EventKind::Step) => Ok(None),
         (true, _) => Err(Unmatched::Delayed),
     }
 }
@@ -93,8 +94,7 @@ pub(crate) fn of(def: &CardDef) -> Result<Vec<Listener>, Unmatched> {
             let Some(trigger) = ability.trigger() else {
                 continue;
             };
-            let kind = listens_to(trigger)?;
-            if kind != 0 {
+            if let Some(kind) = listens_to(trigger)? {
                 let index = u8::try_from(index).expect("a face of at most 64 abilities");
                 listeners.push(Listener {
                     kind,
@@ -118,29 +118,32 @@ mod tests {
     fn a_trigger_listens_to_the_kind_of_its_event() {
         let creature = Filter::Types(Types::CREATURE);
         for (trigger, kind) in [
-            (Trigger::ENTERS, kind::ENTERS),
-            (Trigger::DIES, kind::DIES),
-            (Trigger::ATTACKS, kind::ATTACK),
-            (Trigger::attack(Players::EachOpponent), kind::ATTACK),
-            (Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER, kind::DAMAGE),
+            (Trigger::ENTERS, EventKind::Enters),
+            (Trigger::DIES, EventKind::Dies),
+            (Trigger::ATTACKS, EventKind::Attack),
+            (Trigger::attack(Players::EachOpponent), EventKind::Attack),
+            (Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER, EventKind::Damage),
             (
                 Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER.whose(Players::EachOpponent),
-                kind::DAMAGE,
+                EventKind::Damage,
             ),
             (
                 Trigger::step(TurnStep::Upkeep, Players::EachPlayer),
-                kind::STEP,
+                EventKind::Step,
             ),
-            (Trigger::main_phase(Players::You), kind::STEP),
+            (Trigger::main_phase(Players::You), EventKind::Step),
             (
                 Trigger::creates_tokens(Players::You, creature),
-                kind::TOKENS,
+                EventKind::Tokens,
             ),
-            (Trigger::casts(Players::EachOpponent, creature), kind::CAST),
-            (Trigger::discards(Players::You), kind::DISCARD),
-            (Trigger::draws(Players::EachPlayer), kind::DRAW),
+            (
+                Trigger::casts(Players::EachOpponent, creature),
+                EventKind::Cast,
+            ),
+            (Trigger::discards(Players::You), EventKind::Discard),
+            (Trigger::draws(Players::EachPlayer), EventKind::Draw),
         ] {
-            assert_eq!(listens_to(&trigger), Ok(kind), "{trigger:?}");
+            assert_eq!(listens_to(&trigger), Ok(Some(kind)), "{trigger:?}");
         }
     }
 
@@ -148,8 +151,11 @@ mod tests {
     #[test]
     fn a_delayed_trigger_waits_for_a_step_and_listens_to_nothing() {
         let end = Trigger::step(TurnStep::End, Players::EachPlayer).next();
-        assert_eq!(listens_to(&end), Ok(0));
-        assert_eq!(listens_to(&Trigger::main_phase(Players::You).next()), Ok(0));
+        assert_eq!(listens_to(&end), Ok(None));
+        assert_eq!(
+            listens_to(&Trigger::main_phase(Players::You).next()),
+            Ok(None)
+        );
         assert_eq!(
             listens_to(&Trigger::draws(Players::You).next()),
             Err(Unmatched::Delayed)

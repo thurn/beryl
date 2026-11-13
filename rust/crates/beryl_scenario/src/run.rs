@@ -2,7 +2,7 @@
 
 use beryl_engine::card::{FaceIx, Types};
 use beryl_engine::event::{Event, Tag};
-use beryl_engine::state::{ObjectFlags, ObjectRef};
+use beryl_engine::state::ObjectRef;
 use beryl_engine::{
     Breakpoint, CardTable, Choice, Decision, DecisionKind, GameTable, Opt, Outcome, Profile,
     Replay, Scratch, Seat, Slot, State, Step, Stops, Zone, ZoneKey, apply, next,
@@ -482,7 +482,7 @@ impl Runner {
                 count,
             } => tally(
                 self.permanents(player, card)
-                    .filter(|&slot| s.object(slot).flags().has(ObjectFlags::TAPPED))
+                    .filter(|&slot| s.object(slot).is_tapped())
                     .count(),
                 count,
             ),
@@ -507,7 +507,7 @@ impl Runner {
                 count,
             } => tally(
                 self.permanents(player, card)
-                    .filter(|&slot| s.object(slot).flags().has(ObjectFlags::ATTACKING))
+                    .filter(|&slot| s.object(slot).is_attacking())
                     .count(),
                 count,
             ),
@@ -520,7 +520,7 @@ impl Runner {
             } => {
                 let slot = self
                     .permanents(player, card)
-                    .find(|&slot| s.object(slot).flags().has(ObjectFlags::TOKEN) == token)
+                    .find(|&slot| s.object(slot).is_token() == token)
                     .ok_or_else(|| {
                         let what = if token { "token" } else { "card" };
                         format!("player {player} controls no {card} {what}")

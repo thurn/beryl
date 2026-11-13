@@ -13,7 +13,7 @@ use crate::card::{
 use crate::event::Event;
 use crate::ids::{Seat, Slot};
 use crate::profile::{Breakpoint, stops_for};
-use crate::state::{CounterKind, ObjectFlags, Zone, ZoneKey};
+use crate::state::{AttackTarget, CounterKind, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{
     Candidates, CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile,
@@ -321,13 +321,13 @@ fn unblocked_attackers_tap_and_deal_damage_to_the_defending_player() {
     g.pick(DecisionKind::Attacker, Opt::Attack(bear.max(other)));
     // Once only "done" is left, it is applied silently (§7.2).
     g.pick(DecisionKind::Attacker, Opt::Done);
-    assert!(g.s.object(bear).flags().has(ObjectFlags::TAPPED));
-    assert!(!g.s.object(ogre).flags().has(ObjectFlags::TAPPED));
+    assert!(g.s.object(bear).is_tapped());
+    assert!(!g.s.object(ogre).is_tapped());
     g.finish_combat();
     assert_eq!(g.life(d), 16);
     assert_eq!(g.life(a), 20);
     // Combat is over: nothing is attacking any more.
-    assert!(!g.s.object(bear).flags().has(ObjectFlags::ATTACKING));
+    assert!(!g.s.object(bear).is_attacking());
     let damage = g.x.events.events().iter().filter(|e| {
         matches!(
             e,
@@ -366,8 +366,8 @@ fn vigilance_attacks_without_tapping() {
     let sentry = g.put(g.attacker, "Sentry");
     g.pass_to_combat();
     g.pick(DecisionKind::Attacker, Opt::Attack(sentry));
-    assert!(g.s.object(sentry).flags().has(ObjectFlags::ATTACKING));
-    assert!(!g.s.object(sentry).flags().has(ObjectFlags::TAPPED));
+    assert!(g.s.object(sentry).is_attacking());
+    assert!(!g.s.object(sentry).is_tapped());
     g.finish_combat();
     assert_eq!(g.life(g.defender()), 19);
 }
@@ -660,6 +660,8 @@ fn an_attacker_whose_planeswalker_left_deals_no_damage() {
     g.pick(DecisionKind::Attacker, Opt::Attack(ogre));
     g.pick(DecisionKind::AttackTarget, Opt::Defender(Some(walker)));
     stop_at(&mut g, TurnStep::DeclareAttackers);
+    let target = |g: &Game| g.s.object(ogre).attack_target();
+    assert_eq!(target(&g), Some(AttackTarget::Planeswalker(walker)));
     g.s.move_object(
         &mut crate::event::Sink::off(),
         walker,
@@ -667,8 +669,13 @@ fn an_attacker_whose_planeswalker_left_deals_no_damage() {
         Place::Top,
     )
     .unwrap();
+    // CR 506.4c: it is still an attacking creature, attacking nothing, and no player
+    // becomes its defending player.
+    assert_eq!(target(&g), Some(AttackTarget::Removed));
+    assert_eq!(g.s.defending_player(ogre), None);
     g.finish_combat();
     assert_eq!(g.life(d), 20);
+    assert_eq!(g.life(a), 20);
 }
 
 #[test]
@@ -768,8 +775,8 @@ fn a_creature_put_onto_the_battlefield_attacking_was_never_declared() {
             .copied()
             .find(|&slot| g.s.definition_name(&g.t, slot) == "Recruit")
             .unwrap();
-    let flags = g.s.object(recruit).flags();
-    assert!(flags.has(ObjectFlags::ATTACKING) && flags.has(ObjectFlags::TAPPED));
+    let o = g.s.object(recruit);
+    assert!(o.is_attacking() && o.is_tapped());
     g.finish_combat();
     assert_eq!(g.life(a), 20);
     assert_eq!(g.life(d), 18);
@@ -825,7 +832,7 @@ fn crew_taps_creatures_one_at_a_time_and_makes_an_artifact_creature_until_end_of
     g.pick_object(DecisionKind::ChooseObject, bear);
     // One creature is left, so the second pick is applied silently. Crew uses the stack.
     g.expect(DecisionKind::Priority);
-    assert!(g.s.object(sentry).flags().has(ObjectFlags::TAPPED));
+    assert!(g.s.object(sentry).is_tapped());
     assert_eq!(g.s.stack().len(), 1);
     assert!(!is_creature(&g, wagon));
     g.pick(DecisionKind::Priority, Opt::Pass);

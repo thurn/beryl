@@ -8,11 +8,11 @@ use crate::event::Sink;
 use crate::ids::Slot;
 use crate::mana::{self, Units};
 use crate::rng::SplitMix64;
-use crate::state::{ManaPool, ObjectFlags, TurnStep, Zone};
+use crate::state::{ManaPool, TurnStep, Zone};
 use crate::{DecisionKind, Opt, Payment, Profile};
 
 fn tapped(g: &Game, slot: Slot) -> bool {
-    g.s.object(slot).flags().has(ObjectFlags::TAPPED)
+    g.s.object(slot).is_tapped()
 }
 
 #[test]
@@ -329,7 +329,7 @@ fn pay_and_check(
     // CR 601.2h: the cost is paid in full, and only from the mana the tapped and sacrificed
     // sources made and the pool held.
     let sacrificed = |slot: Slot| paid.object(slot).zone() == Zone::Graveyard;
-    let used = |slot: Slot| paid.object(slot).flags().has(ObjectFlags::TAPPED) || sacrificed(slot);
+    let used = |slot: Slot| paid.object(slot).is_tapped() || sacrificed(slot);
     let made: u32 = slots
         .iter()
         .zip(names)

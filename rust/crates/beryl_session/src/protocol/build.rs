@@ -5,7 +5,7 @@ use beryl_engine::card::{
 };
 use beryl_engine::event::{Event, LossCause};
 use beryl_engine::layout::Queue;
-use beryl_engine::state::{ObjectFlags, ObjectRef, Pending, StackEntry};
+use beryl_engine::state::{AttackTarget, CombatRole, ObjectRef, Pending, StackEntry};
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
     Candidates, Decision, GameTable, Layout, Observation, Opt, Outcome, Seat, SlotId, Small, State,
@@ -306,7 +306,6 @@ pub(super) fn face_name<L: Layout>(
 
 fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot) -> ObjectView {
     let o = obs.object(slot);
-    let flags = o.flags();
     let on_battlefield = o.zone() == Zone::Battlefield;
     let derived = on_battlefield.then(|| obs.derived(slot));
     let types = derived.map_or(Types::NONE, |d| d.types);
@@ -331,9 +330,9 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         } else {
             Facing::Up
         },
-        token: flags.has(ObjectFlags::TOKEN),
-        tapped: flags.has(ObjectFlags::TAPPED),
-        summoning_sick: creature && flags.has(ObjectFlags::SUMMONING_SICK),
+        token: o.is_token(),
+        tapped: o.is_tapped(),
+        summoning_sick: creature && o.is_summoning_sick(),
         damage: o.damage(),
         counters,
         types: CardType::ALL
@@ -355,24 +354,21 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         attached_to: some(o.attached_to()),
         exiled_by: some(obs.memos(slot).exiled_until()),
         exiled_with: some(obs.memos(slot).exiled_with()),
-        combat: if flags.has(ObjectFlags::ATTACKING) {
-            let attacks_walker = flags.has(ObjectFlags::ATTACKS_PLANESWALKER);
-            let planeswalker = if attacks_walker {
-                some(o.combat())
-            } else {
-                None
-            };
-            Some(Combat::Attacking {
-                planeswalker,
-                target_departed: (attacks_walker && planeswalker.is_none()).then_some(true),
-                blocked: flags.has(ObjectFlags::BLOCKED),
-            })
-        } else if flags.has(ObjectFlags::BLOCKING) {
-            Some(Combat::Blocking {
-                attacker: some(o.combat()),
-            })
-        } else {
-            None
+        combat: match *o.combat() {
+            CombatRole::Attacking {
+                target, blocked, ..
+            } => Some(Combat::Attacking {
+                planeswalker: match target {
+                    AttackTarget::Planeswalker(walker) => Some(walker.num()),
+                    AttackTarget::Player(_) | AttackTarget::Removed => None,
+                },
+                target_departed: (target == AttackTarget::Removed).then_some(true),
+                blocked,
+            }),
+            CombatRole::Blocking { attackers, .. } => Some(Combat::Blocking {
+                attacker: some(attackers.first()),
+            }),
+            CombatRole::None => None,
         },
     }
 }

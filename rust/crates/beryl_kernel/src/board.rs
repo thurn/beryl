@@ -14,8 +14,7 @@ use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::state::{
-    CounterKind, ManaPool, Memo, MulliganStatus, ObjectFlags, Pending, State, Tracker, TurnStep,
-    Zone,
+    CounterKind, Flag, ManaPool, Memo, MulliganStatus, Pending, State, Tracker, TurnStep, Zone,
 };
 use crate::table::GameTable;
 use crate::two_player::TwoPlayerSeat as _;
@@ -80,15 +79,16 @@ impl<L: Layout> Board<'_, L> {
     /// actions are not performed: the game is already in it. Call it on a new state, before
     /// any decision is answered.
     ///
-    /// Turns alternate from the starting player
-    /// ([CR 103.8](https://yawgatog.com/resources/magic-rules/#R1038)), so `active` takes the
-    /// odd-numbered turns.
+    /// Turns alternate from the starting player ([CR 103.8]), so `active` takes the odd-numbered
+    /// turns.
     ///
-    /// The step must be one where players get priority:
-    /// [CR 502.4](https://yawgatog.com/resources/magic-rules/#R5024): "No player receives
-    /// priority during the untap step", and
-    /// [CR 514.3](https://yawgatog.com/resources/magic-rules/#R5143): "Normally, no player
-    /// receives priority during the cleanup step".
+    /// The step must be one where players get priority: [CR 502.4]: "No player receives priority
+    /// during the untap step", and [CR 514.3]: "Normally, no player receives priority during the
+    /// cleanup step".
+    ///
+    /// [CR 103.8]: https://yawgatog.com/resources/magic-rules/#R1038
+    /// [CR 502.4]: https://yawgatog.com/resources/magic-rules/#R5024
+    /// [CR 514.3]: https://yawgatog.com/resources/magic-rules/#R5143
     pub fn begin_at(&mut self, turn: u16, active: Seat, step: TurnStep) {
         assert!(turn >= 1, "turns are numbered from 1");
         assert!(
@@ -115,14 +115,15 @@ impl<L: Layout> Board<'_, L> {
         }
     }
 
-    /// Skips the start of the game and puts it just before turn `turn` begins, with `active`
-    /// its active player and both opening hands kept: the previous turn's cleanup step is
-    /// over, so the engine's next call begins the turn, untapping, emptying what lasted
-    /// "until your next turn" and triggering what the turn's beginning triggers, as play would
-    /// ([CR 514.3](https://yawgatog.com/resources/magic-rules/#R5143)): "Normally, no player
-    /// receives priority during the cleanup step". Call it on a new state, before any
-    /// decision is answered. Turns alternate from the starting player
-    /// ([CR 103.8](https://yawgatog.com/resources/magic-rules/#R1038)).
+    /// Skips the start of the game and puts it just before turn `turn` begins, with `active` its
+    /// active player and both opening hands kept: the previous turn's cleanup step is over, so the
+    /// engine's next call begins the turn, untapping, emptying what lasted "until your next turn"
+    /// and triggering what the turn's beginning triggers, as play would ([CR 514.3]): "Normally, no
+    /// player receives priority during the cleanup step". Call it on a new state, before any
+    /// decision is answered. Turns alternate from the starting player ([CR 103.8]).
+    ///
+    /// [CR 514.3]: https://yawgatog.com/resources/magic-rules/#R5143
+    /// [CR 103.8]: https://yawgatog.com/resources/magic-rules/#R1038
     pub fn begin_before_turn(&mut self, turn: u16, active: Seat) {
         assert!(turn >= 1, "turns are numbered from 1");
         assert!(
@@ -148,9 +149,11 @@ impl<L: Layout> Board<'_, L> {
         }
     }
 
-    /// Moves the object in `slot` to the top of `zone`. A permanent put onto the battlefield
-    /// this way has been there since its controller's turn began, so it is not summoning sick
-    /// ([CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026)).
+    /// Moves the object in `slot` to the top of `zone`. A permanent put onto the battlefield this
+    /// way has been there since its controller's turn began, so it is not summoning sick
+    /// ([CR 302.6]).
+    ///
+    /// [CR 302.6]: https://yawgatog.com/resources/magic-rules/#R3026
     pub fn place(&mut self, slot: L::Slot, zone: Zone) -> Result<(), Full> {
         self.0
             .move_object(&mut Sink::off(), slot, zone, Place::Top)?;
@@ -158,17 +161,19 @@ impl<L: Layout> Board<'_, L> {
             self.0
                 .object_mut(slot)
                 .flags
-                .set(ObjectFlags::SUMMONING_SICK, false);
+                .set(Flag::SummoningSick, false);
         }
         Ok(())
     }
 
-    /// Creates a token of the game-table card `card` on the battlefield, owned and controlled
-    /// by `owner` ([CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112): "The player
-    /// who creates a token is its owner"), with face `face` up and, for a copy that is 1/1 by
-    /// exception, `one_one` ([CR 707.9b](https://yawgatog.com/resources/magic-rules/#R7079b)).
-    /// No ability triggers: it is already there. Like [`Board::place`], it has been there since
-    /// its controller's turn began.
+    /// Creates a token of the game-table card `card` on the battlefield, owned and controlled by
+    /// `owner` ([CR 111.2]: "The player who creates a token is its owner"), with face `face` up
+    /// and, for a copy that is 1/1 by exception, `one_one` ([CR 707.9b]). No ability triggers: it
+    /// is already there. Like [`Board::place`], it has been there since its controller's turn
+    /// began.
+    ///
+    /// [CR 111.2]: https://yawgatog.com/resources/magic-rules/#R1112
+    /// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
     pub fn place_token(
         &mut self,
         owner: Seat,
@@ -187,29 +192,29 @@ impl<L: Layout> Board<'_, L> {
         Ok(slot)
     }
 
-    /// Makes `player` the controller of the permanent in `slot` before continuous effects, as
-    /// if it had entered the battlefield under their control
-    /// ([CR 110.2](https://yawgatog.com/resources/magic-rules/#R1102)): "A permanent's
-    /// controller is, by default, the player under whose control it entered the battlefield."
+    /// Makes `player` the controller of the permanent in `slot` before continuous effects, as if it
+    /// had entered the battlefield under their control ([CR 110.2]): "A permanent's controller is,
+    /// by default, the player under whose control it entered the battlefield."
+    ///
+    /// [CR 110.2]: https://yawgatog.com/resources/magic-rules/#R1102
     pub fn set_controller(&mut self, slot: L::Slot, player: Seat) {
         debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
         self.0.object_mut(slot).base_controller = player;
         self.0.flags.derived_dirty = true;
     }
 
-    /// Whether the permanent in `slot` has been under its controller's control continuously
-    /// since their most recent turn began
-    /// ([CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026)).
+    /// Whether the permanent in `slot` has been under its controller's control continuously since
+    /// their most recent turn began ([CR 302.6]).
+    ///
+    /// [CR 302.6]: https://yawgatog.com/resources/magic-rules/#R3026
     pub fn set_sick(&mut self, slot: L::Slot, sick: bool) {
         debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
-        self.0
-            .object_mut(slot)
-            .flags
-            .set(ObjectFlags::SUMMONING_SICK, sick);
+        self.0.object_mut(slot).flags.set(Flag::SummoningSick, sick);
     }
 
-    /// Attaches the Aura or Equipment in `slot` to the permanent in `to`
-    /// ([CR 701.3a](https://yawgatog.com/resources/magic-rules/#R7013a)).
+    /// Attaches the Aura or Equipment in `slot` to the permanent in `to` ([CR 701.3a]).
+    ///
+    /// [CR 701.3a]: https://yawgatog.com/resources/magic-rules/#R7013a
     pub fn attach(&mut self, slot: L::Slot, to: L::Slot) {
         debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
         debug_assert_eq!(self.0.object(to).zone, Zone::Battlefield);
@@ -217,24 +222,27 @@ impl<L: Layout> Board<'_, L> {
         self.0.flags.derived_dirty = true;
     }
 
-    /// Marks `damage` on the permanent in `slot`
-    /// ([CR 120.3e](https://yawgatog.com/resources/magic-rules/#R1203e)).
+    /// Marks `damage` on the permanent in `slot` ([CR 120.3e]).
+    ///
+    /// [CR 120.3e]: https://yawgatog.com/resources/magic-rules/#R1203e
     pub fn set_damage(&mut self, slot: L::Slot, damage: u8) {
         debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
         self.0.object_mut(slot).damage = damage;
     }
 
-    /// Has the object in `slot` remember `memo` ([`State::remember`]): a permanent, of the
-    /// spell it was, as one cast that way would, that its impending cost was paid
-    /// ([CR 702.176a](https://yawgatog.com/resources/magic-rules/#R702176a)), say; a card
-    /// in exile, the permanent that exiled it, as an ability of that permanent exiling it
+    /// Has the object in `slot` remember `memo` ([`State::remember`]): a permanent, of the spell it
+    /// was, as one cast that way would, that its impending cost was paid ([CR 702.176a]), say; a
+    /// card in exile, the permanent that exiled it, as an ability of that permanent exiling it
     /// would have.
+    ///
+    /// [CR 702.176a]: https://yawgatog.com/resources/magic-rules/#R702176a
     pub fn remember(&mut self, slot: L::Slot, memo: Memo<L>) -> Result<(), Full> {
         self.0.remember(slot, memo)
     }
 
-    /// Gives `player` the emblem of the game-table card `card`
-    /// ([CR 114.1](https://yawgatog.com/resources/magic-rules/#R1141)).
+    /// Gives `player` the emblem of the game-table card `card` ([CR 114.1]).
+    ///
+    /// [CR 114.1]: https://yawgatog.com/resources/magic-rules/#R1141
     pub fn add_emblem(&mut self, player: Seat, card: L::Card) -> Result<(), Full> {
         self.0.add_emblem(player, card)
     }
@@ -259,10 +267,10 @@ impl<L: Layout> Board<'_, L> {
     }
 
     /// Turns a double-faced permanent so that the face at `face` is up, as one that entered
-    /// transformed has its back face up
-    /// ([CR 712.11a](https://yawgatog.com/resources/magic-rules/#R71211a)), or turns a
-    /// permanent face down ([`FaceIx::DOWN`]), as a manifested one is. Then only its
-    /// controller knows it (CR 708.5).
+    /// transformed has its back face up ([CR 712.11a]), or turns a permanent face down
+    /// ([`FaceIx::DOWN`]), as a manifested one is. Then only its controller knows it (CR 708.5).
+    ///
+    /// [CR 712.11a]: https://yawgatog.com/resources/magic-rules/#R71211a
     pub fn set_face(&mut self, slot: L::Slot, face: FaceIx) {
         debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
         self.0.object_mut(slot).face = face;
@@ -278,16 +286,14 @@ impl<L: Layout> Board<'_, L> {
     /// Taps or untaps a permanent.
     pub fn set_tapped(&mut self, slot: L::Slot, tapped: bool) {
         debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
-        self.0
-            .object_mut(slot)
-            .flags
-            .set(ObjectFlags::TAPPED, tapped);
+        self.0.object_mut(slot).flags.set(Flag::Tapped, tapped);
     }
 
-    /// Whether `tracker` is noted of the permanent in `slot` this turn
-    /// ([`crate::trackers`]): that it entered the battlefield, or that a loyalty ability of
-    /// it was activated ([CR 606.3](https://yawgatog.com/resources/magic-rules/#R6063)).
+    /// Whether `tracker` is noted of the permanent in `slot` this turn ([`crate::trackers`]): that
+    /// it entered the battlefield, or that a loyalty ability of it was activated ([CR 606.3]).
     /// Arrange it only in a game with a card that reads the tracker: no other keeps it.
+    ///
+    /// [CR 606.3]: https://yawgatog.com/resources/magic-rules/#R6063
     pub fn set_tracked(&mut self, slot: L::Slot, tracker: Tracker, on: bool) {
         debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
         self.0.trackers.set(tracker, slot, on);
@@ -309,7 +315,7 @@ impl<L: Layout> Board<'_, L> {
         match how {
             Corruption::Zone(zone) => self.0.object_mut(slot).zone = zone,
             Corruption::Tapped => {
-                self.0.object_mut(slot).flags.set(ObjectFlags::TAPPED, true);
+                self.0.object_mut(slot).flags.set(Flag::Tapped, true);
             }
             Corruption::Unlisted => {
                 self.0.zones.library[owner].pop();
@@ -365,14 +371,15 @@ impl<L: Layout> Board<'_, L> {
         }
     }
 
-    /// Settles who won the coin flip of [CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)
-    /// as a record says, rather than as the game's randomness drew it: "the players determine
-    /// which one of them will choose who takes the first turn". Only while the winner's choice
-    /// to play or draw is open.
+    /// Settles who won the coin flip of [CR 103.1] as a record says, rather than as the game's
+    /// randomness drew it: "the players determine which one of them will choose who takes the first
+    /// turn". Only while the winner's choice to play or draw is open.
     ///
     /// # Panics
     ///
     /// If the choice to play or draw is not open.
+    ///
+    /// [CR 103.1]: https://yawgatog.com/resources/magic-rules/#R1031
     pub fn set_flip_winner(&mut self, chooser: Seat) {
         assert!(
             matches!(self.0.pending, Pending::PlayOrDraw { .. }),

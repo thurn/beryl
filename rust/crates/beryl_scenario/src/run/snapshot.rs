@@ -1,7 +1,7 @@
 //! The facts about a position that a scenario's own assertions may leave out.
 
 use beryl_engine::card::{AbilityKind, FaceIx, Types};
-use beryl_engine::state::ObjectFlags;
+use beryl_engine::state::Flag;
 use beryl_engine::{Choice, Decision, DecisionKind, Seat, Slot, Step, Zone, ZoneKey};
 
 use super::{Runner, answer};
@@ -101,7 +101,7 @@ impl Runner {
                 .copied()
                 .filter(|&slot| self.name(slot) == card)
                 .collect();
-            let flag = |slot: Slot, f: u32| s.object(slot).flags().has(f);
+            let flag = |slot: Slot, f: Flag| s.object(slot).flags().has(f);
             out.push(Assertion::Controls {
                 player,
                 card,
@@ -118,7 +118,7 @@ impl Runner {
                     count: count(
                         named
                             .iter()
-                            .filter(|&&slot| flag(slot, ObjectFlags::TAPPED))
+                            .filter(|&&slot| flag(slot, Flag::Tapped))
                             .count(),
                     ),
                 });
@@ -127,7 +127,7 @@ impl Runner {
                 let kind: Vec<Slot> = named
                     .iter()
                     .copied()
-                    .filter(|&slot| flag(slot, ObjectFlags::TOKEN) == token)
+                    .filter(|&slot| flag(slot, Flag::Token) == token)
                     .collect();
                 if let [slot] = kind[..] {
                     let d = s.derived(slot);

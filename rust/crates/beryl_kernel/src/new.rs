@@ -3,6 +3,7 @@
 use beryl_card::{TurnStep, Zone};
 
 use crate::bitboard::Bitboard;
+use crate::event::Listens;
 use crate::fit::Misfit;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
@@ -17,8 +18,10 @@ use crate::store::Store;
 use crate::table::GameTable;
 use crate::turn::Turn;
 
-/// A player before the game begins ([CR 103.4](https://yawgatog.com/resources/magic-rules/#R1034)):
-/// "Each player begins the game with a starting life total of 20."
+/// A player before the game begins ([CR 103.4]): "Each player begins the game with a starting life
+/// total of 20."
+///
+/// [CR 103.4]: https://yawgatog.com/resources/magic-rules/#R1034
 fn new_player<L: Layout>() -> Player<L> {
     Player {
         life: 20,
@@ -48,12 +51,13 @@ impl<L: Layout> State<L> {
     /// game index numbers ([`Misfit::TooManyCards`]): the game is dealt in a layout that has
     /// them.
     ///
-    /// Each deck's cards are dealt into its slots by a permutation drawn from the hidden
-    /// shuffle stream (architecture §4.2), so a slot number says nothing about the card in
-    /// it. That permutation is also the shuffle of
-    /// [CR 103.3](https://yawgatog.com/resources/magic-rules/#R1033): "each player shuffles
-    /// their deck so that the cards are in a random order." A card's place does not depend
-    /// on the layout, so the same seed deals the same game in each.
+    /// Each deck's cards are dealt into its slots by a permutation drawn from the hidden shuffle
+    /// stream (architecture §4.2), so a slot number says nothing about the card in it. That
+    /// permutation is also the shuffle of [CR 103.3]: "each player shuffles their deck so that the
+    /// cards are in a random order." A card's place does not depend on the layout, so the same seed
+    /// deals the same game in each.
+    ///
+    /// [CR 103.3]: https://yawgatog.com/resources/magic-rules/#R1033
     pub fn deal(t: &GameTable, seed: u64, profile: Profile) -> Result<State<L>, Misfit> {
         t.fits::<L>()?;
         for player in Seat::BOTH {
@@ -102,7 +106,7 @@ impl<L: Layout> State<L> {
             objects: Table::filled(Object::EMPTY),
             battlefield: Default::default(),
             derived: Table::filled(Derived::default()),
-            listening: 0,
+            listening: Listens::NONE,
             static_rules: Table::filled(Rules::NONE),
             zones: Zones {
                 members: Table::filled([Bitboard::EMPTY; Zone::OWNED]),

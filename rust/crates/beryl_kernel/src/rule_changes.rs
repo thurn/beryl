@@ -1,20 +1,20 @@
 //! The rule changes a game's cards can make, numbered (the crate's contract, "Static rule
 //! changes").
 //!
-//! [CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311): "Some continuous effects
-//! affect game rules rather than objects." A card says one as data (`beryl_card`'s
-//! [`RuleChange`]), and any number of cards may say any number of them, so a game numbers
-//! those its own cards name ([`RuleId`]) as its table is built. A set of them is then one
-//! word ([`Rules`]), an entry of the Effects store holds one in a byte, and the table keeps
-//! the set of each kind the rules check ([`RuleKind`]): whether a change of a kind is in
-//! force for a player is one AND, and only when one is does a check read what it says.
+//! [CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311): "Some continuous effects affect
+//! game rules rather than objects." A card says one as data (`beryl_card`'s [`RuleChange`]), and
+//! any number of cards may say any number of them, so a game numbers those its own cards name
+//! ([`RuleId`]) as its table is built. A set of them is then one word ([`Rules`]), an entry of the
+//! Effects store holds one in a byte, and the table keeps the set of each kind the rules check
+//! ([`RuleKind`]): whether a change of a kind is in force for a player is one AND, and only when
+//! one is does a check read what it says.
 
 use beryl_card::{
     Ability, AbilityKind, CardDef, Condition, Face, Filter, Governed, Objects, Players, RuleChange,
     When,
 };
 
-use crate::event::kind;
+use crate::event::Listens;
 
 /// Why the rules cannot check a rule change: the part of it no code reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -116,16 +116,19 @@ impl Rules {
 /// each read where the rule it changes is applied.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RuleKind {
-    /// Some players may cast some spells only when they could cast a sorcery
-    /// ([CR 307.1](https://yawgatog.com/resources/magic-rules/#R3071)).
+    /// Some players may cast some spells only when they could cast a sorcery ([CR 307.1]).
+    ///
+    /// [CR 307.1]: https://yawgatog.com/resources/magic-rules/#R3071
     CastOnlyAsSorcery,
-    /// Some players may cast some spells any time they could cast an instant, as though
-    /// the spells had flash ([CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a)).
+    /// Some players may cast some spells any time they could cast an instant, as though the spells
+    /// had flash ([CR 702.8a]).
+    ///
+    /// [CR 702.8a]: https://yawgatog.com/resources/magic-rules/#R7028a
     CastAsInstant,
-    /// The loyalty abilities of the permanent with the ability may be activated any time
-    /// its controller could cast an instant, where
-    /// [CR 606.3](https://yawgatog.com/resources/magic-rules/#R6063) has "during a main
-    /// phase of their turn".
+    /// The loyalty abilities of the permanent with the ability may be activated any time its
+    /// controller could cast an instant, where [CR 606.3] has "during a main phase of their turn".
+    ///
+    /// [CR 606.3]: https://yawgatog.com/resources/magic-rules/#R6063
     LoyaltyAsInstant,
 }
 
@@ -312,10 +315,10 @@ impl RuleChanges {
 }
 
 /// Numbers the rule changes the abilities of a card's faces name, or of the abilities they
-/// grant, and gives [`kind::RULE_CHANGE`] if a static ability of it makes one for players:
+/// grant, and gives [`Listens::RULE_CHANGE`] if a static ability of it makes one for players:
 /// the bit of its listener mask no event has. Or the first of them the rules cannot check.
-pub(crate) fn number(def: &CardDef, rules: &mut RuleChanges) -> Result<u16, Unchecked> {
-    let mut mask = 0;
+pub(crate) fn number(def: &CardDef, rules: &mut RuleChanges) -> Result<Listens, Unchecked> {
+    let mut mask = Listens::NONE;
     for face in def.faces {
         for ability in face.abilities.iter().chain(face.grants) {
             mask |= named_by(ability, rules)?;
@@ -325,24 +328,24 @@ pub(crate) fn number(def: &CardDef, rules: &mut RuleChanges) -> Result<u16, Unch
 }
 
 /// Numbers the rule change `ability` names, if it names one, and gives
-/// [`kind::RULE_CHANGE`] if it is a static ability's for players.
-fn named_by(ability: &Ability, rules: &mut RuleChanges) -> Result<u16, Unchecked> {
+/// [`Listens::RULE_CHANGE`] if it is a static ability's for players.
+fn named_by(ability: &Ability, rules: &mut RuleChanges) -> Result<Listens, Unchecked> {
     let Some(rule) = ability.rule() else {
-        return Ok(0);
+        return Ok(Listens::NONE);
     };
     let first = rules.id(rule).is_none();
     let id = rules.number(rule)?;
     let of_players = RuleKind::of(rule)?.of_players();
     match (ability.kind() == AbilityKind::Static, of_players) {
         (true, true) if ability.condition().is_some() => Err(Unchecked::Condition),
-        (true, true) => Ok(kind::RULE_CHANGE),
+        (true, true) => Ok(Listens::RULE_CHANGE),
         // Asked of the permanent, with its condition, as the rule is applied.
         (true, false) => {
             rules.keep_condition(id, ability.condition(), first)?;
-            Ok(0)
+            Ok(Listens::NONE)
         }
         // Started by the ability's effect, on the players it names as it resolves.
-        (false, true) => Ok(0),
+        (false, true) => Ok(Listens::NONE),
         (false, false) => Err(Unchecked::Rule),
     }
 }

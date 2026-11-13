@@ -6,7 +6,7 @@ use beryl_card::{
 };
 
 use super::*;
-use crate::event::kind;
+use crate::event::{EventKind, Listens};
 use crate::rule_changes::fixtures::{LIMIT, WALKER};
 
 static ALPHA: CardDef = CardDef {
@@ -43,9 +43,9 @@ fn a_game_has_the_capabilities_of_its_cards_and_no_others() {
 fn a_card_that_changes_a_rule_for_players_says_so_in_its_mask() {
     let t = GameTable::new(&WALKERS, [&[(4, "Alpha")], &[(1, "Walker")]]).unwrap();
     let (alpha, walker) = (CardIx::from_index(0), CardIx::from_index(1));
-    assert_eq!(t.listens(alpha) & kind::RULE_CHANGE, 0);
-    assert_eq!(t.listens(walker), kind::RULE_CHANGE);
-    assert_eq!(t.listens_any(), kind::RULE_CHANGE);
+    assert!(!t.listens(alpha).contains(Listens::RULE_CHANGE));
+    assert_eq!(t.listens(walker), Listens::RULE_CHANGE);
+    assert_eq!(t.listens_any(), Listens::RULE_CHANGE);
     // Its rule about itself is none of the players' rules.
     let limit = t.rule_id(&LIMIT).unwrap();
     assert_eq!(
@@ -106,14 +106,19 @@ fn an_event_reads_only_the_listeners_of_its_kind_on_the_face_that_is_up() {
             .map(|l| l.ability.get())
             .collect()
     };
-    assert_eq!(t.listens(herald), kind::ENTERS | kind::STEP | kind::DRAW);
+    assert_eq!(
+        t.listens(herald),
+        Listens::event(EventKind::Enters)
+            | Listens::event(EventKind::Step)
+            | Listens::event(EventKind::Draw)
+    );
     assert_eq!(t.listens_any(), t.listens(herald));
-    assert_eq!(listening(herald, FaceIx::FRONT, kind::ENTERS), [0, 3]);
-    assert_eq!(listening(herald, FaceIx::FRONT, kind::STEP), [2]);
-    assert_eq!(listening(herald, FaceIx::FRONT, kind::DRAW), [0u8; 0]);
-    assert_eq!(listening(herald, FaceIx::BACK, kind::DRAW), [0]);
-    assert_eq!(listening(herald, FaceIx::DOWN, kind::ENTERS), [0u8; 0]);
-    assert_eq!(listening(alpha, FaceIx::FRONT, kind::ENTERS), [0u8; 0]);
+    assert_eq!(listening(herald, FaceIx::FRONT, EventKind::Enters), [0, 3]);
+    assert_eq!(listening(herald, FaceIx::FRONT, EventKind::Step), [2]);
+    assert_eq!(listening(herald, FaceIx::FRONT, EventKind::Draw), [0u8; 0]);
+    assert_eq!(listening(herald, FaceIx::BACK, EventKind::Draw), [0]);
+    assert_eq!(listening(herald, FaceIx::DOWN, EventKind::Enters), [0u8; 0]);
+    assert_eq!(listening(alpha, FaceIx::FRONT, EventKind::Enters), [0u8; 0]);
 }
 
 /// A trigger no code matches would never trigger: the table is not built, whether the

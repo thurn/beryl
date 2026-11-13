@@ -1,4 +1,6 @@
-//! Drawing a card ([CR 121](https://yawgatog.com/resources/magic-rules/#R121)).
+//! Drawing a card ([CR 121]).
+//!
+//! [CR 121]: https://yawgatog.com/resources/magic-rules/#R121
 
 use beryl_card::{Amount, Players};
 
@@ -6,7 +8,7 @@ use crate::bitboard::Bitboard;
 #[cfg(doc)]
 use crate::card::Replacement;
 use crate::card::{Ability, AbilityIx, FaceAbility};
-use crate::event::{Event, LossCause, kind};
+use crate::event::{Event, Listens, LossCause};
 use crate::filter;
 use crate::fixed::Full;
 use crate::game::Game;
@@ -18,21 +20,24 @@ use crate::state::{State, Zone, ZoneKey};
 use crate::table::GameTable;
 use crate::{ending, trigger};
 
-/// A player draws cards, one at a time
-/// ([CR 121.2](https://yawgatog.com/resources/magic-rules/#R1212)): "If a player is instructed
-/// to draw multiple cards, that player performs that many individual card draws." The event
-/// counts the cards actually drawn, if any.
+/// A player draws cards, one at a time ([CR 121.2]): "If a player is instructed to draw multiple
+/// cards, that player performs that many individual card draws." The event counts the cards
+/// actually drawn, if any.
 ///
 /// Each draw is offered first to a replacement effect of the player's permanents
-/// ([`Replacement::WouldDraw`]), an empty library or not
-/// ([CR 614.11](https://yawgatog.com/resources/magic-rules/#R61411)): "Some effects replace
-/// card draws. These effects are applied even if no cards could be drawn because there are no
-/// cards in the affected player's library." What happens instead follows the cards drawn
-/// before it. Where it ends the game, the draws left are never made. With no such permanent
-/// on the battlefield a draw reads no ability.
+/// ([`Replacement::WouldDraw`]), an empty library or not ([CR 614.11]): "Some effects replace card
+/// draws. These effects are applied even if no cards could be drawn because there are no cards in
+/// the affected player's library." What happens instead follows the cards drawn before it. Where it
+/// ends the game, the draws left are never made. With no such permanent on the battlefield a draw
+/// reads no ability.
+///
+/// [CR 121.2]: https://yawgatog.com/resources/magic-rules/#R1212
+/// [CR 614.11]: https://yawgatog.com/resources/magic-rules/#R61411
 pub fn draw<L: Layout>(game: &mut Game<'_, L>, player: Seat, cards: u8) -> Result<(), Full> {
     let listening = game.state.listening();
-    let replaceable = listening.unwrap_or(game.table.listens_any()) & kind::DRAW_REPLACEMENT != 0;
+    let replaceable = listening
+        .unwrap_or(game.table.listens_any())
+        .contains(Listens::DRAW_REPLACEMENT);
     let mut left = cards;
     loop {
         let s = &mut *game.state;
@@ -84,7 +89,9 @@ fn replacement<L: Layout>(
     s.battlefield()
         .iter()
         .filter(|&&slot| {
-            s.copiable(slot).may_listen(t) & kind::DRAW_REPLACEMENT != 0
+            s.copiable(slot)
+                .may_listen(t)
+                .contains(Listens::DRAW_REPLACEMENT)
                 && s.controller(slot) == player
         })
         .find_map(|&slot| {
@@ -125,9 +132,11 @@ pub fn wins_instead_of_drawing(ability: &Ability) -> bool {
         )
 }
 
-/// [`Effect::Draw`](beryl_card::Effect::Draw): "[Player] draws [count] cards"
-/// ([CR 121.1](https://yawgatog.com/resources/magic-rules/#R1211)): "A player draws a card by
-/// putting the top card of their library into their hand." The outcome is the cards drawn.
+/// [`Effect::Draw`](beryl_card::Effect::Draw): "[Player] draws [count] cards" ([CR 121.1]): "A
+/// player draws a card by putting the top card of their library into their hand." The outcome is
+/// the cards drawn.
+///
+/// [CR 121.1]: https://yawgatog.com/resources/magic-rules/#R1211
 pub(crate) fn instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     players: Players,

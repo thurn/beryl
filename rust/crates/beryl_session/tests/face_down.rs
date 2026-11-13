@@ -86,11 +86,7 @@ fn a_copy_of_a_face_down_permanent_is_a_face_up_nameless_two_two() {
         .battlefield()
         .iter()
         .copied()
-        .find(|&slot| {
-            s.object(slot)
-                .flags()
-                .has(beryl_engine::state::ObjectFlags::TOKEN)
-        })
+        .find(|&slot| s.object(slot).is_token())
         .expect("the copy");
     let snapcaster = t
         .index_of(CARDS.get(names::SNAPCASTER_MAGE).unwrap())

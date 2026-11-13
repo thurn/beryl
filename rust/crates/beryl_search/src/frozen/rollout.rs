@@ -30,7 +30,7 @@ use beryl_engine::card::{
     ObjectAbility, Players, Purpose, TargetKind, TargetSpec, Types,
 };
 use beryl_engine::filter::Filter;
-use beryl_engine::state::{ObjectFlags, StackEntry};
+use beryl_engine::state::{AttackTarget, StackEntry};
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
     Answers, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Seat, Slot,
@@ -600,8 +600,12 @@ impl Policy<'_> {
         self.obs.derived(slot).types.intersects(Types::CREATURE)
     }
 
-    pub(crate) fn flags(&self, slot: Slot) -> ObjectFlags {
-        self.obs.object(slot).flags()
+    /// Whether an attacking creature attacks a player, rather than a planeswalker or nothing.
+    pub(crate) fn attacks_player(&self, attacker: Slot) -> bool {
+        matches!(
+            self.obs.object(attacker).attack_target(),
+            Some(AttackTarget::Player(_))
+        )
     }
 
     /// Whether `blocker` could block `attacker`, by evasion
@@ -626,7 +630,7 @@ impl Policy<'_> {
             && !self.obs.battlefield().iter().any(|&b| {
                 self.obs.controller(b) != self.me
                     && self.creature(b)
-                    && !self.flags(b).has(ObjectFlags::TAPPED)
+                    && !self.obs.object(b).is_tapped()
                     && !self.evades(attacker, b)
                     && self.kills(b, attacker)
             })
@@ -645,9 +649,7 @@ impl Policy<'_> {
             .iter()
             .filter(|&&a| {
                 let o = self.obs.object(a);
-                self.obs.controller(a) == self.me
-                    && o.flags().has(ObjectFlags::ATTACKING)
-                    && o.combat() == Some(walker)
+                self.obs.controller(a) == self.me && o.attacked_planeswalker() == Some(walker)
             })
             .map(|&a| i32::from(self.obs.derived(a).power.max(0)))
             .sum();
@@ -659,13 +661,13 @@ impl Policy<'_> {
     }
 
     pub(crate) fn attacking(&self, slot: Slot) -> bool {
-        self.obs.controller(slot) != self.me && self.flags(slot).has(ObjectFlags::ATTACKING)
+        self.obs.controller(slot) != self.me && self.obs.object(slot).is_attacking()
     }
 
     pub(crate) fn blocked(&self, attacker: Slot) -> bool {
         self.obs.battlefield().iter().any(|&b| {
             let o = self.obs.object(b);
-            o.flags().has(ObjectFlags::BLOCKING) && o.combat() == Some(attacker)
+            o.blocks(attacker)
         })
     }
 
@@ -674,11 +676,7 @@ impl Policy<'_> {
         self.obs
             .battlefield()
             .iter()
-            .filter(|&&a| {
-                self.attacking(a)
-                    && !self.flags(a).has(ObjectFlags::ATTACKS_PLANESWALKER)
-                    && !self.blocked(a)
-            })
+            .filter(|&&a| self.attacking(a) && self.attacks_player(a) && !self.blocked(a))
             .map(|&a| i32::from(self.obs.derived(a).power.max(0)))
             .sum()
     }
@@ -697,7 +695,7 @@ impl Policy<'_> {
             (true, true) if va >= vb => Some(200 + va - vb),
             (false, false) => Some(100 + power),
             _ if self.unblocked_damage() >= i32::from(self.obs.player(self.me).life())
-                && !self.flags(attacker).has(ObjectFlags::ATTACKS_PLANESWALKER) =>
+                && self.attacks_player(attacker) =>
             {
                 // Above declining (0) at any blocker value, the cheapest blocker first.
                 Some(20 + power - vb / 10)
@@ -719,9 +717,7 @@ impl Policy<'_> {
     pub(crate) fn declaring_blocker(&self) -> Option<Slot> {
         self.obs.battlefield().iter().copied().find(|&b| {
             let o = self.obs.object(b);
-            self.obs.controller(b) == self.me
-                && o.flags().has(ObjectFlags::BLOCKING)
-                && o.combat().is_none()
+            self.obs.controller(b) == self.me && o.is_blocking() && o.blocked_attackers().is_empty()
         })
     }
 }

@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use beryl_engine::card::{
     Ability, CardDef, FaceIx, ObjectAbility, TargetKind, TriggerEvent, Types,
 };
-use beryl_engine::state::ObjectFlags;
+
 use beryl_engine::{DecisionKind, Outcome, Step, TurnStep};
 use beryl_scenario::{Action, Assertion, Ending, Live, P0, Scenario};
 
@@ -236,9 +236,10 @@ impl Walk {
         let outcome = ending.map(|outcome| Action::assert(Assertion::Outcome { outcome }));
         run.actions.extend(outcome);
         if let Place::Mana(..) = place {
-            run.touched = s.battlefield().iter().any(|&slot| {
-                is(def, live.name(slot)) && s.object(slot).flags().has(ObjectFlags::TAPPED)
-            });
+            run.touched = s
+                .battlefield()
+                .iter()
+                .any(|&slot| is(def, live.name(slot)) && s.object(slot).is_tapped());
         }
         run
     }

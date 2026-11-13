@@ -6,7 +6,6 @@
 //! only breaks ties between candidates that do the same and shows drift.
 
 use beryl_engine::card::{AbilityKind, CastingOption, ManaColor, ObjectAbility, Types};
-use beryl_engine::state::ObjectFlags;
 use beryl_engine::{Choice, Decision, GameTable, Layout, Opt, State, TurnStep, Zone};
 use serde::{Deserialize, Serialize};
 
@@ -610,13 +609,13 @@ impl Obj {
             zone: o.zone().into(),
             controller: controller.get(),
             owner: (o.owner() != controller).then_some(o.owner().get()),
-            tapped: o.flags().has(ObjectFlags::TAPPED),
+            tapped: o.is_tapped(),
             shown: matches!(o.zone(), Zone::Hand | Zone::Library)
                 && s.opponents_of(o.owner()).any(|p| s.knows(p, slot)),
             before_v5: false,
-            token: permanent && o.flags().has(ObjectFlags::TOKEN),
+            token: permanent && o.is_token(),
             sick: permanent
-                && o.flags().has(ObjectFlags::SUMMONING_SICK)
+                && o.is_summoning_sick()
                 && s.derived(slot).types.contains(Types::CREATURE),
             counters: if permanent {
                 Counter::on(s, slot)
@@ -624,16 +623,13 @@ impl Obj {
                 Vec::new()
             },
             damage: if permanent { o.damage() } else { 0 },
-            attacking: permanent && o.flags().has(ObjectFlags::ATTACKING),
-            blocking: permanent && o.flags().has(ObjectFlags::BLOCKING),
-            blocked: permanent && o.flags().has(ObjectFlags::BLOCKED),
+            attacking: permanent && o.is_attacking(),
+            blocking: permanent && o.is_blocking(),
+            blocked: permanent && o.is_blocked(),
             against: o
-                .combat()
-                .filter(|&other| {
-                    permanent
-                        && o.flags().0 & (ObjectFlags::ATTACKING | ObjectFlags::BLOCKING) != 0
-                        && s.object(other).zone() == Zone::Battlefield
-                })
+                .attacked_planeswalker()
+                .or(o.blocked_attackers().first())
+                .filter(|&other| permanent && s.object(other).zone() == Zone::Battlefield)
                 .map(|other| s.name(t, other).to_owned()),
             before_v6: false,
         }

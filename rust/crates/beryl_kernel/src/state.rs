@@ -11,7 +11,9 @@ pub use crate::effects::{
     LockedIn, MoveReplacement, Payload, Permanents, Permission, Permitted, SETS, Subject,
 };
 pub use crate::memos::{MEMOS, Memo, Memos, MemosOf};
-pub use crate::object::{Derived, GrantRef, Object, ObjectFlags, ObjectRef};
+pub use crate::object::{
+    AttackTarget, CombatRole, Derived, Flag, GrantRef, Object, ObjectFlags, ObjectRef, SlotSet,
+};
 pub use crate::pending::{CastStep, Casting, Pending, Resolving};
 pub use crate::player::{ManaPool, MulliganStatus, Player};
 pub use crate::stack::{
@@ -26,6 +28,7 @@ use beryl_card::FaceIx;
 
 use crate::bitboard::Bitboard;
 use crate::decision::Outcome;
+use crate::event::Listens;
 use crate::fixed::Full;
 use crate::ids::{Seat, Slot, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
@@ -39,9 +42,8 @@ pub const SLOTS: usize = Slot::COUNT;
 /// Permanents on the battlefield at once.
 pub const BATTLEFIELD: usize = 128;
 
-/// Names a zone, or a player's part of one, for [`State::zone`]
-/// ([CR 400.1](https://yawgatog.com/resources/magic-rules/#R4001)): "Each player has their
-/// own library, hand, and graveyard. The other zones are shared by all players."
+/// Names a zone, or a player's part of one, for [`State::zone`] ([CR 400.1]): "Each player has
+/// their own library, hand, and graveyard. The other zones are shared by all players."
 ///
 /// Today the kernel keeps every zone but the stack by owner, so the battlefield and exile
 /// are named a player's part at a time. Two zones the key can name and the kernel does not
@@ -50,19 +52,24 @@ pub const BATTLEFIELD: usize = 128;
 /// - A zone shared by all players, as the rules see the battlefield and exile, is a variant
 ///   with no player, as [`ZoneKey::Stack`] is: add the variant, keep its membership once in
 ///   [`Zones`] and answer it in [`State::zone`].
-/// - A command zone ([CR 408.1](https://yawgatog.com/resources/magic-rules/#R4081): "The
+/// - A command zone ([CR 408.1]: "The
 ///   command zone is a game area reserved for certain specialized objects") is
 ///   `Of(player, Zone::Command)` for the objects a player owns there, once `beryl_card`'s
 ///   `Zone` has the variant and `Zone::OWNED` covers it, or a variant with no player if it
 ///   is kept shared.
 ///
 /// Either way no caller's signature changes.
+///
+/// [CR 400.1]: https://yawgatog.com/resources/magic-rules/#R4001
+/// [CR 408.1]: https://yawgatog.com/resources/magic-rules/#R4081
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ZoneKey {
     /// The objects `Seat` owns in a zone other than the stack: their library, hand or
     /// graveyard, or their cards on the battlefield or in exile.
     Of(Seat, Zone),
-    /// The stack ([CR 405.1](https://yawgatog.com/resources/magic-rules/#R4051)).
+    /// The stack ([CR 405.1]).
+    ///
+    /// [CR 405.1]: https://yawgatog.com/resources/magic-rules/#R4051
     Stack,
 }
 
@@ -125,7 +132,7 @@ pub struct State<L: Layout = Small> {
     /// The kinds of event the permanents on the battlefield have triggered abilities for
     /// ([`crate::table::GameTable::listens`] of each), found with the layer results and
     /// current while they are.
-    pub(crate) listening: u16,
+    pub(crate) listening: Listens,
     pub(crate) outcome: Option<Outcome>,
     pub(crate) profile: Profile,
     pub(crate) flags: Flags,
@@ -376,7 +383,7 @@ impl<L: Layout> State<L> {
     /// The kinds of event the permanents on the battlefield have triggered abilities for, as
     /// the layers last stored them, or nothing while the layer results are stale.
     #[inline]
-    pub fn listening(&self) -> Option<u16> {
+    pub fn listening(&self) -> Option<Listens> {
         (!self.flags.derived_dirty).then_some(self.listening)
     }
 
@@ -422,24 +429,25 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// Who controls an object before continuous effects, which is what the layers start
-    /// from and a saved position keeps: for a permanent, the player who put it onto the
-    /// battlefield, usually its owner
-    /// ([CR 110.2](https://yawgatog.com/resources/magic-rules/#R1102)): "A permanent's owner
-    /// is the same as the owner of the card that represents it ... A permanent's controller
-    /// is, by default, the player under whose control it entered the battlefield." Who
-    /// controls it now is [`State::controller`].
+    /// Who controls an object before continuous effects, which is what the layers start from and a
+    /// saved position keeps: for a permanent, the player who put it onto the battlefield, usually
+    /// its owner ([CR 110.2]): "A permanent's owner is the same as the owner of the card that
+    /// represents it ... A permanent's controller is, by default, the player under whose control it
+    /// entered the battlefield." Who controls it now is [`State::controller`].
+    ///
+    /// [CR 110.2]: https://yawgatog.com/resources/magic-rules/#R1102
     pub fn base_controller(&self, slot: L::Slot) -> Seat {
         self.object(slot).base_controller
     }
 
-    /// The name of the object in `slot`: its face up's, which is the card's own name
-    /// everywhere but on the stack and the battlefield
-    /// ([CR 712.6a](https://yawgatog.com/resources/magic-rules/#R7126a)): "While a
-    /// double-faced card is outside the game or in a zone other than the battlefield or
-    /// stack, it has only the characteristics of its front face." A face-down permanent,
-    /// which has no name ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)),
-    /// goes by its card's: what scenarios and saves call it.
+    /// The name of the object in `slot`: its face up's, which is the card's own name everywhere but
+    /// on the stack and the battlefield ([CR 712.6a]): "While a double-faced card is outside the
+    /// game or in a zone other than the battlefield or stack, it has only the characteristics of
+    /// its front face." A face-down permanent, which has no name ([CR 708.2]), goes by its card's:
+    /// what scenarios and saves call it.
+    ///
+    /// [CR 712.6a]: https://yawgatog.com/resources/magic-rules/#R7126a
+    /// [CR 708.2]: https://yawgatog.com/resources/magic-rules/#R7082
     pub fn name(&self, t: &crate::table::GameTable, slot: L::Slot) -> &'static str {
         let def = t.def(self.card(slot));
         match self.object(slot).face {

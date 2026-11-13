@@ -8,7 +8,7 @@ use crate::card::{
     Ability, AbilityIx, CastingKind, Face, FaceAbility, FaceIx, Subject, Trigger, TriggerEvent,
     Types,
 };
-use crate::event::{Event, Recipient, Sink, kind};
+use crate::event::{Event, EventKind, Listens, Recipient, Sink};
 use crate::filter::{Evaluate, Filter, is_for};
 use crate::fixed::Full;
 use crate::ids::{CardId, Seat};
@@ -16,8 +16,7 @@ use crate::layers;
 use crate::layout::{Layout, Queue, index};
 use crate::query::Copiable;
 use crate::state::{
-    Lki, ObjectFlags, ObjectRef, PendingTrigger, PermanentTypes, StackEntry, State, TriggerInfo,
-    TurnStep, Zone,
+    Lki, ObjectRef, PendingTrigger, PermanentTypes, StackEntry, State, TriggerInfo, TurnStep, Zone,
 };
 use crate::table::GameTable;
 
@@ -37,9 +36,8 @@ pub(crate) fn ability(
     &t.def(card).face(face).abilities[ability.index()]
 }
 
-/// Matches an executed event against every triggered ability that listens to its kind: those
-/// of the permanents on the battlefield and of the players' emblems
-/// ([CR 114.4](https://yawgatog.com/resources/magic-rules/#R1144): "Abilities of emblems
+/// Matches an executed event against every triggered ability that listens to its kind: those of the
+/// permanents on the battlefield and of the players' emblems ([CR 114.4]: "Abilities of emblems
 /// function in the command zone"), then the delayed triggers waiting for a step.
 ///
 /// The game's table has each card's triggered abilities under the kind of event they listen
@@ -47,19 +45,20 @@ pub(crate) fn ability(
 /// card of the game has one the whole check is an AND
 /// ([`GameTable::listens_any`]).
 ///
-/// [CR 603.2](https://yawgatog.com/resources/magic-rules/#R6032): "Whenever a game event or
-/// game state matches a triggered ability's trigger event, that ability automatically
-/// triggers."
+/// [CR 603.2](https://yawgatog.com/resources/magic-rules/#R6032): "Whenever a game event or game
+/// state matches a triggered ability's trigger event, that ability automatically triggers."
+///
+/// [CR 114.4]: https://yawgatog.com/resources/magic-rules/#R1144
 pub(crate) fn match_event<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     e: &Event<L>,
 ) -> Result<(), Full> {
-    let k = e.kind();
-    if k == 0 {
+    let Some(k) = e.kind() else {
         return Ok(());
-    }
-    if t.listens_any() & k != 0 {
+    };
+    let mask = Listens::event(k);
+    if t.listens_any().intersects(mask) {
         // Only permanents can have changed what listens while the layer results are stale.
         let listening = s.listening().map_or(t.listens_any(), |listening| {
             debug_assert_eq!(
@@ -69,11 +68,11 @@ pub(crate) fn match_event<L: Layout>(
             );
             listening
         });
-        if listening & k != 0 {
+        if listening.intersects(mask) {
             for i in 0..s.battlefield().len() {
                 let slot = s.battlefield()[i];
                 let what = s.copiable(slot);
-                if what.may_listen(t) & k == 0 {
+                if !what.may_listen(t).intersects(mask) {
                     continue;
                 }
                 let source = s.object_ref(slot);
@@ -92,7 +91,7 @@ pub(crate) fn match_event<L: Layout>(
         for player in s.players_in_seat_order(s.players()) {
             for index in 0..s.player(player).emblems().len() {
                 let card = s.player(player).emblems()[index];
-                if Copiable::<L>::of_card(card).may_listen(t) & k == 0 {
+                if !Copiable::<L>::of_card(card).may_listen(t).intersects(mask) {
                     continue;
                 }
                 for l in t.listeners(card, FaceIx::FRONT, k) {
@@ -111,11 +110,11 @@ pub(crate) fn match_event<L: Layout>(
     Ok(())
 }
 
-/// How many times a trigger that fires on `e` triggers: once for each card of a draw event,
-/// whose cards are individual draws
-/// ([CR 603.2c](https://yawgatog.com/resources/magic-rules/#R6032c)): "An ability triggers
-/// only once each time its trigger event occurs. However, it can trigger repeatedly if one
-/// event contains multiple occurrences."
+/// How many times a trigger that fires on `e` triggers: once for each card of a draw event, whose
+/// cards are individual draws ([CR 603.2c]): "An ability triggers only once each time its trigger
+/// event occurs. However, it can trigger repeatedly if one event contains multiple occurrences."
+///
+/// [CR 603.2c]: https://yawgatog.com/resources/magic-rules/#R6032c
 fn times<L: Layout>(e: &Event<L>) -> u8 {
     match *e {
         Event::Draw { cards, .. } => cards,
@@ -130,9 +129,11 @@ fn counted(count: u32) -> u8 {
     u8::try_from(count).unwrap_or(u8::MAX)
 }
 
-/// Whether a trigger waiting for the beginning of a step or phase waits for `step`
-/// ([CR 500.6](https://yawgatog.com/resources/magic-rules/#R5006)): "When a phase or step
-/// begins, any abilities that trigger 'at the beginning of' that phase or step trigger."
+/// Whether a trigger waiting for the beginning of a step or phase waits for `step` ([CR 500.6]):
+/// "When a phase or step begins, any abilities that trigger 'at the beginning of' that phase or
+/// step trigger."
+///
+/// [CR 500.6]: https://yawgatog.com/resources/magic-rules/#R5006
 fn begins(event: TriggerEvent, step: TurnStep) -> bool {
     match event {
         TriggerEvent::Step(at) => at == step,
@@ -257,13 +258,14 @@ fn how_many<L: Layout>(
         .count()
 }
 
-/// Matches the leaves-the-battlefield abilities of a permanent about to move, which look
-/// back in time ([CR 603.10a](https://yawgatog.com/resources/magic-rules/#R60310a)), and
-/// captures its last-known information for their bodies (architecture §5). The permanent
-/// is still on the battlefield, with every other permanent of the same event.
+/// Matches the leaves-the-battlefield abilities of a permanent about to move, which look back in
+/// time ([CR 603.10a]), and captures its last-known information for their bodies (architecture §5).
+/// The permanent is still on the battlefield, with every other permanent of the same event.
 ///
-/// [CR 700.4](https://yawgatog.com/resources/magic-rules/#R7004): "The term dies means 'is
-/// put into a graveyard from the battlefield.'"
+/// [CR 700.4](https://yawgatog.com/resources/magic-rules/#R7004): "The term dies means 'is put into
+/// a graveyard from the battlefield.'"
+///
+/// [CR 603.10a]: https://yawgatog.com/resources/magic-rules/#R60310a
 pub(crate) fn match_leaving<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -271,7 +273,7 @@ pub(crate) fn match_leaving<L: Layout>(
     to: Zone,
 ) -> Result<(), Full> {
     let what = s.copiable(slot);
-    if what.may_listen(t) & kind::DIES == 0 || to != Zone::Graveyard {
+    if !what.may_listen(t).hears(EventKind::Dies) || to != Zone::Graveyard {
         return Ok(());
     }
     let lki = lki(s, t, slot);
@@ -281,7 +283,7 @@ pub(crate) fn match_leaving<L: Layout>(
     let source = s.object_ref(slot);
     let (card, face) = what.record(t);
     // Each is "when this dies": the table has no other under the kind.
-    for l in t.listeners(card, face, kind::DIES) {
+    for l in t.listeners(card, face, EventKind::Dies) {
         let info = TriggerInfo {
             object: Some(source),
             player: lki.controller,
@@ -312,14 +314,15 @@ pub(crate) fn lki<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Lki<
         toughness: d.toughness,
         types: PermanentTypes::of(d.types),
         controller: d.controller,
-        token: o.flags().has(ObjectFlags::TOKEN),
+        token: o.is_token(),
     }
 }
 
-/// Records a triggered ability, if its intervening "if" holds now
-/// ([CR 603.4](https://yawgatog.com/resources/magic-rules/#R6034)): "When the trigger event
-/// occurs, the ability checks whether the stated condition is true. The ability triggers
-/// only if it is; otherwise it does nothing."
+/// Records a triggered ability, if its intervening "if" holds now ([CR 603.4]): "When the trigger
+/// event occurs, the ability checks whether the stated condition is true. The ability triggers only
+/// if it is; otherwise it does nothing."
+///
+/// [CR 603.4]: https://yawgatog.com/resources/magic-rules/#R6034
 #[allow(clippy::too_many_arguments)]
 fn enqueue<L: Layout>(
     s: &mut State<L>,
@@ -345,8 +348,9 @@ fn enqueue<L: Layout>(
     s.queue_trigger(pending)
 }
 
-/// Fires the delayed triggers waiting for this step, each once
-/// ([CR 603.7b](https://yawgatog.com/resources/magic-rules/#R6037b)).
+/// Fires the delayed triggers waiting for this step, each once ([CR 603.7b]).
+///
+/// [CR 603.7b]: https://yawgatog.com/resources/magic-rules/#R6037b
 fn fire_delayed<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -364,9 +368,8 @@ fn fire_delayed<L: Layout>(
 /// The player who puts the next waiting trigger on the stack, and the triggers they choose
 /// from: one of each set of equivalent ones (§7.2), as indices into the waiting triggers.
 ///
-/// [CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b): "each player, in APNAP
-/// order, puts each triggered ability they control ... on the stack in any order they
-/// choose."
+/// [CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b): "each player, in APNAP order,
+/// puts each triggered ability they control ... on the stack in any order they choose."
 pub(crate) fn next_to_stack<L: Layout>(s: &State<L>) -> Option<(Seat, L::Queue<L::Index, 64>)> {
     let player = s
         .players_in_turn_order(s.players())
@@ -454,10 +457,10 @@ fn equivalent<L: Layout>(
     })
 }
 
-/// Puts the waiting trigger at `index` on the stack
-/// ([CR 603.3](https://yawgatog.com/resources/magic-rules/#R6033)): "The ability becomes the
-/// topmost object on the stack."
-/// Then its targets are chosen, through the casting machine (CR 603.3d).
+/// Puts the waiting trigger at `index` on the stack ([CR 603.3]): "The ability becomes the topmost
+/// object on the stack." Then its targets are chosen, through the casting machine (CR 603.3d).
+///
+/// [CR 603.3]: https://yawgatog.com/resources/magic-rules/#R6033
 pub(crate) fn put_on_stack<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -485,7 +488,9 @@ pub(crate) fn put_on_stack<L: Layout>(
     crate::cast::target_trigger(s, t, sink)
 }
 
-/// Creates a delayed triggered ability ([CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)).
+/// Creates a delayed triggered ability ([CR 603.7]).
+///
+/// [CR 603.7]: https://yawgatog.com/resources/magic-rules/#R6037
 pub(crate) fn delay<L: Layout>(s: &mut State<L>, trigger: PendingTrigger<L>) -> Result<(), Full> {
     s.delay_trigger(trigger)
 }

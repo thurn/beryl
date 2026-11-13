@@ -7,7 +7,7 @@
 
 use beryl_engine::card::{AbilityKind, CostAction, Purpose};
 use beryl_engine::layout::Queue;
-use beryl_engine::state::{ObjectFlags, Pending};
+use beryl_engine::state::Pending;
 use beryl_engine::{
     Candidates, Choice, Decision, DecisionKind, GameTable, Layout, Opt, Replay, Scratch, Seat,
     SlotId, State, Step, Zone, apply, cost_being_cast, next,
@@ -273,7 +273,7 @@ fn priced<L: Layout>(at: Payment, s: &State<L>, t: &GameTable) -> Payment {
 pub(crate) fn tapped<L: Layout>(before: &State<L>, after: &State<L>, t: &GameTable) -> Vec<u16> {
     let untapped = |s: &State<L>, slot| {
         let o = s.object(slot);
-        o.zone() == Zone::Battlefield && !o.flags().has(ObjectFlags::TAPPED)
+        o.zone() == Zone::Battlefield && !o.is_tapped()
     };
     let sacrifices_for_mana = |slot: L::Slot| {
         let face = before.copiable(slot).face(t);
@@ -443,11 +443,7 @@ mod tests {
         let mut seen = None;
         beryl_scenario::visit(&CARDS, &SCENARIO, |t, s, d| {
             if d.prompt.purpose == Purpose::UnlessPays {
-                let untapped = |slot: u16| {
-                    !s.object(Slot::from_num(slot).unwrap())
-                        .flags()
-                        .has(ObjectFlags::TAPPED)
-                };
+                let untapped = |slot: u16| !s.object(Slot::from_num(slot).unwrap()).is_tapped();
                 let paid = payments(s, t, d);
                 let yes = (0..d.len())
                     .position(|i| d.candidates.option(choice(i)) == Some(Opt::Yes))

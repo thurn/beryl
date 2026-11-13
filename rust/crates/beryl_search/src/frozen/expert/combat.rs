@@ -14,7 +14,7 @@
 
 use beryl_cards::names;
 use beryl_engine::card::{Keywords, Types};
-use beryl_engine::state::ObjectFlags;
+use beryl_engine::state::CombatRole;
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
     Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome, Scratch,
@@ -206,7 +206,7 @@ impl Sim<'_> {
         s.battlefield().iter().any(|&b| {
             s.controller(b) != self.me
                 && s.derived(b).types.intersects(Types::CREATURE)
-                && !s.object(b).flags().has(ObjectFlags::TAPPED)
+                && !s.object(b).is_tapped()
                 && can_block(s, b, attacker)
                 && i16::from(s.derived(b).power) >= left(attacker)
                 && i16::from(s.derived(attacker).power) < left(b)
@@ -524,7 +524,7 @@ impl Sim<'_> {
             .filter(|&&c| {
                 s.controller(c) == self.me
                     && s.derived(c).types.intersects(Types::CREATURE)
-                    && s.object(c).flags().has(ObjectFlags::TAPPED)
+                    && s.object(c).is_tapped()
             })
             .map(|&c| p.value(c))
             .max()
@@ -558,11 +558,7 @@ fn swing_back(s: &State, me: Seat, untap: bool, fragile: bool) -> i32 {
         .battlefield()
         .iter()
         .copied()
-        .filter(|&b| {
-            s.controller(b) == me
-                && creature(b)
-                && (untap || !s.object(b).flags().has(ObjectFlags::TAPPED))
-        })
+        .filter(|&b| s.controller(b) == me && creature(b) && (untap || !s.object(b).is_tapped()))
         .map(|b| flies(b, Keywords::FLYING.union(Keywords::REACH)))
         .collect();
     if fragile && !blockers.is_empty() {
@@ -620,10 +616,7 @@ fn offered(s: &State, d: &Decision, pick: impl Fn(Opt) -> Option<Slot>) -> Vec<S
         .iter()
         .copied()
         .filter(|&c| named.iter().any(|&n| like(s, n, c)))
-        .filter(|&c| {
-            let f = s.object(c).flags();
-            !f.has(ObjectFlags::ATTACKING) && !f.has(ObjectFlags::BLOCKING)
-        })
+        .filter(|&c| matches!(s.object(c).combat(), CombatRole::None))
         .collect()
 }
 
@@ -634,8 +627,7 @@ fn like(s: &State, a: Slot, b: Slot) -> bool {
             && s.copiable(a).key() == s.copiable(b).key()
             && s.derived(a).power == s.derived(b).power
             && s.derived(a).toughness == s.derived(b).toughness
-            && s.object(a).flags().has(ObjectFlags::TAPPED)
-                == s.object(b).flags().has(ObjectFlags::TAPPED))
+            && s.object(a).is_tapped() == s.object(b).is_tapped())
 }
 
 /// Whether `blocker` could block `attacker`, by evasion
@@ -651,7 +643,7 @@ fn attacking(s: &State, me: Seat) -> Vec<Slot> {
     s.battlefield()
         .iter()
         .copied()
-        .filter(|&a| s.controller(a) != me && s.object(a).flags().has(ObjectFlags::ATTACKING))
+        .filter(|&a| s.controller(a) != me && s.object(a).is_attacking())
         .collect()
 }
 

@@ -16,7 +16,7 @@
 use beryl_engine::card::{CastingKind, CastingKinds, FaceIx, Types};
 use beryl_engine::layout::Queue;
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::state::{CounterKind, Memo, ObjectFlags};
+use beryl_engine::state::{CounterKind, Memo};
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{CardIx, GameTable, Layout, Seat, Small, State, Zone, ZoneKey};
 use serde::de::Error as _;
@@ -521,10 +521,10 @@ fn permanent<L: Layout>(
         owner: o.owner().get(),
         controller: s.base_controller(slot).get(),
         face,
-        token: o.flags().has(ObjectFlags::TOKEN),
-        one_one: o.flags().has(ObjectFlags::ONE_ONE),
-        tapped: o.flags().has(ObjectFlags::TAPPED),
-        sick: o.flags().has(ObjectFlags::SUMMONING_SICK),
+        token: o.is_token(),
+        one_one: o.is_one_one(),
+        tapped: o.is_tapped(),
+        sick: o.is_summoning_sick(),
         counters: Counter::on(s, slot),
         damage: o.damage(),
         attached_to: o.attached_to().and_then(place),

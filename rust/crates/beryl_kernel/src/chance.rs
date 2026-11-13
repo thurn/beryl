@@ -7,17 +7,18 @@
 //! game on ([`crate::event::Sink::set_chance`]). Search never does, so its copies of the state
 //! pay one branch at each chokepoint and record nothing.
 //!
-//! A card's identity matters from the moment someone learns it: until then, which card sits
-//! in a slot no player knows could be any card of the rest of its owner's decklist, as a
-//! determinization deals it ([`crate::Observation::determinize`]). No one may look at a
-//! library ([CR 401.2](https://yawgatog.com/resources/magic-rules/#R4012): "Players can't
-//! look at or change the order of cards in a library"), and a shuffle leaves its cards in an
-//! order no player knows
-//! ([CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a): "randomize the cards
-//! within it so that no player knows their order"). So replay binds a recorded
-//! card to the slot being revealed by swapping identities with another slot of the same owner
-//! and zone that no player knows, the move a shuffle's rebinding makes ([`crate::zone`]). A
-//! shuffled library's order never matters until one of its cards is revealed.
+//! A card's identity matters from the moment someone learns it: until then, which card sits in a
+//! slot no player knows could be any card of the rest of its owner's decklist, as a determinization
+//! deals it ([`crate::Observation::determinize`]). No one may look at a library ([CR 401.2]:
+//! "Players can't look at or change the order of cards in a library"), and a shuffle leaves its
+//! cards in an order no player knows ([CR 701.24a]: "randomize the cards within it so that no
+//! player knows their order"). So replay binds a recorded card to the slot being revealed by
+//! swapping identities with another slot of the same owner and zone that no player knows, the move
+//! a shuffle's rebinding makes ([`crate::zone`]). A shuffled library's order never matters until
+//! one of its cards is revealed.
+//!
+//! [CR 401.2]: https://yawgatog.com/resources/magic-rules/#R4012
+//! [CR 701.24a]: https://yawgatog.com/resources/magic-rules/#R70124a
 
 use std::collections::VecDeque;
 
@@ -25,7 +26,7 @@ use crate::bitboard::Bitboard;
 use crate::event::Sink;
 use crate::ids::{CardId, LargeCardIx, Seat};
 use crate::layout::Layout;
-use crate::state::{ObjectFlags, State, TurnStep, Zone, ZoneKey};
+use crate::state::{Flag, State, TurnStep, Zone, ZoneKey};
 
 /// The outcome of one random event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -151,7 +152,7 @@ fn settle_but<L: Layout>(
         return;
     };
     let o = *s.object(slot);
-    if !unknown(s, slot) || o.flags.has(ObjectFlags::TOKEN) {
+    if !unknown(s, slot) || o.flags.has(Flag::Token) {
         return;
     }
     // A paused body run again reveals what its earlier runs revealed: chance took its course

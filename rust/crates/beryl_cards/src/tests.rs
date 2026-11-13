@@ -6,7 +6,7 @@ use beryl_engine::card::{
     AbilityKind, CostAction, FaceIx, ManaColor, Purpose, Subtype, Supertypes, Types,
 };
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::state::ObjectFlags;
+
 use beryl_engine::{
     Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome, Profile, Replay, Scratch,
     Seat, State, Step, TurnStep, Zone, ZoneKey, apply, next,
@@ -551,7 +551,7 @@ fn a_copy_of_a_face_down_permanent_hides_its_card() {
         .battlefield()
         .iter()
         .copied()
-        .find(|&slot| s.object(slot).flags().has(ObjectFlags::TOKEN))
+        .find(|&slot| s.object(slot).is_token())
         .expect("the copy");
     assert_eq!(s.controller(copy), Seat::P1);
     assert_eq!(s.object(copy).face(), FaceIx::FRONT);
@@ -859,7 +859,7 @@ fn each_payment_mode_finishes_mana_before_exile_choices() {
         assert_eq!(
             s.battlefield()
                 .iter()
-                .filter(|&&slot| s.object(slot).flags().has(ObjectFlags::TAPPED))
+                .filter(|&&slot| s.object(slot).is_tapped())
                 .count(),
             3
         );

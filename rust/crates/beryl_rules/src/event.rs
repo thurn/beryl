@@ -8,7 +8,9 @@
 //! most draws) arrive with the cards that create them.
 
 pub use beryl_kernel::cause::{Cause, StackIx, Tag};
-pub use beryl_kernel::event::{Event, LossCause, Reason, Recipient, Sink, Tagged, Work, kind};
+pub use beryl_kernel::event::{
+    Event, EventKind, Listens, LossCause, Reason, Recipient, Sink, Tagged, Work,
+};
 
 pub use crate::tokens::TokenEntry;
 use beryl_kernel::mutate::Arrival;
@@ -22,9 +24,7 @@ use crate::layers;
 use crate::layout::{Layout, Queue, Small};
 use crate::life;
 use crate::query::Copiable;
-use crate::state::{
-    CounterKind, Memo, MoveReplacement, ObjectFlags, ObjectRef, State, Tracker, Zone,
-};
+use crate::state::{CounterKind, Memo, MoveReplacement, ObjectRef, State, Tracker, Zone};
 use crate::table::GameTable;
 use crate::trigger;
 use crate::zone::Place;
@@ -34,9 +34,9 @@ use crate::zone::Place;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub(crate) struct Entry<L: Layout = Small> {
     pub tapped: bool,
-    /// Put onto the battlefield attacking
+    /// Put onto the battlefield attacking this player
     /// ([CR 508.4](https://yawgatog.com/resources/magic-rules/#R5084)).
-    pub attacking: bool,
+    pub attacking: Option<Seat>,
     /// Under this player's control rather than its owner's.
     pub controller: Option<Seat>,
     /// The face up.
@@ -174,9 +174,7 @@ pub(crate) fn move_batch_to<L: Layout>(
         // CR 111.8: "A token that has left the battlefield can't move to another zone or
         // come back onto the battlefield. If such a token would change zones, it remains in
         // its current zone instead."
-        if o.flags().has(ObjectFlags::TOKEN)
-            && !matches!(o.zone(), Zone::Battlefield | Zone::Nowhere)
-        {
+        if o.is_token() && !matches!(o.zone(), Zone::Battlefield | Zone::Nowhere) {
             continue;
         }
         let dest = destination(s, slot, to);

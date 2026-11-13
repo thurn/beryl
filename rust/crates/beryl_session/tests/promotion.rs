@@ -17,7 +17,7 @@ use beryl_engine::card::{
     Ability, CardDef, Castings, Colors, Face, FaceIx, ManaCost, Objects, Players, Trigger, Types,
 };
 use beryl_engine::filter::Filter;
-use beryl_engine::state::{EFFECTS, ObjectFlags, Pending};
+use beryl_engine::state::{EFFECTS, Pending};
 use beryl_engine::{
     CardTable, Choice, Decision, DecisionKind, GameTable, Large, Layout, Observation, Opt, State,
     TurnStep, Zone,
@@ -208,7 +208,7 @@ fn tokens_past_the_small_slots_play_on_in_large() {
             let tokens = s
                 .battlefield()
                 .iter()
-                .filter(|&&slot| s.object(slot).flags().has(ObjectFlags::TOKEN))
+                .filter(|&&slot| s.object(slot).is_token())
                 .count();
             most_tokens = most_tokens.max(tokens);
         }

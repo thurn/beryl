@@ -15,25 +15,22 @@ use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
-use crate::state::{BATTLEFIELD, ObjectFlags, ObjectRef, Pending, State, TurnStep};
+use crate::state::{AttackTarget, BATTLEFIELD, CombatRole, ObjectRef, Pending, State, TurnStep};
 use crate::table::GameTable;
 
-/// The defending player ([CR 506.2](https://yawgatog.com/resources/magic-rules/#R5062)):
-/// "During the combat phase of a two-player game, the nonactive player is the defending
-/// player".
+/// The defending player ([CR 506.2]): "During the combat phase of a two-player game, the nonactive
+/// player is the defending player".
 ///
 /// The declarations here are the two-player game's: [`Opt::Defender`] names a planeswalker or
 /// "the" defending player, and one player declares every block. With more players each of the
 /// attacking player's opponents is a defending player (CR 802.2), an attacker is declared
 /// against one of them and each declares their own blocks.
+///
+/// [CR 506.2]: https://yawgatog.com/resources/magic-rules/#R5062
 fn defender<L: Layout>(s: &State<L>) -> Seat {
     s.defending_players()
         .sole()
         .expect("one defending player in a two-player game")
-}
-
-fn flags<L: Layout>(s: &State<L>, slot: L::Slot) -> ObjectFlags {
-    s.object(slot).flags()
 }
 
 fn is_creature<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
@@ -44,13 +41,9 @@ fn has<L: Layout>(s: &State<L>, slot: L::Slot, keyword: Keywords) -> bool {
     s.derived(slot).keywords.contains(keyword)
 }
 
-/// The battlefield objects with a flag.
-fn with_flag<L: Layout>(s: &State<L>, flag: u32) -> Bitboard<L::Slot> {
-    s.battlefield()
-        .iter()
-        .copied()
-        .filter(|&slot| flags(s, slot).has(flag))
-        .collect()
+/// Whether the object in `slot` is attacking or blocking.
+fn in_combat_now<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
+    !matches!(s.object(slot).combat(), CombatRole::None)
 }
 
 /// The creatures blocking an attacker.
@@ -58,27 +51,23 @@ fn blockers_of<L: Layout>(s: &State<L>, attacker: L::Slot) -> Bitboard<L::Slot> 
     s.battlefield()
         .iter()
         .copied()
-        .filter(|&slot| {
-            let o = s.object(slot);
-            o.flags().has(ObjectFlags::BLOCKING) && o.combat() == Some(attacker)
-        })
+        .filter(|&slot| s.object(slot).blocks(attacker))
         .collect()
 }
 
 /// Whether any creature can attack now, so that the declaration is worth starting.
 ///
-/// [CR 508.1a](https://yawgatog.com/resources/magic-rules/#R5081a): "The active player
-/// chooses which creatures that they control, if any, will attack. The chosen creatures must
-/// be untapped, they can't also be battles, and each one must either have haste or have been
-/// controlled by the active player continuously since the turn began." None of the cards has
-/// haste.
+/// [CR 508.1a](https://yawgatog.com/resources/magic-rules/#R5081a): "The active player chooses
+/// which creatures that they control, if any, will attack. The chosen creatures must be untapped,
+/// they can't also be battles, and each one must either have haste or have been controlled by the
+/// active player continuously since the turn began." None of the cards has haste.
 fn may_attack<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
     let o = s.object(slot);
     s.controller(slot) == s.turn().active()
         && is_creature(s, slot)
-        && !o.flags().has(ObjectFlags::TAPPED)
-        && !o.flags().has(ObjectFlags::SUMMONING_SICK)
-        && !o.flags().has(ObjectFlags::ATTACKING)
+        && !o.is_tapped()
+        && !o.is_summoning_sick()
+        && !o.is_attacking()
 }
 
 /// Whether the active player has a creature that can attack now, so that declaring attackers
@@ -87,9 +76,10 @@ pub(crate) fn can_declare_attackers<L: Layout>(s: &State<L>) -> bool {
     s.battlefield().iter().any(|&slot| may_attack(s, slot))
 }
 
-/// The declare attackers step's turn-based action begins
-/// ([CR 508.1](https://yawgatog.com/resources/magic-rules/#R5081)): "First, the active player
+/// The declare attackers step's turn-based action begins ([CR 508.1]): "First, the active player
 /// declares attackers. This turn-based action doesn't use the stack."
+///
+/// [CR 508.1]: https://yawgatog.com/resources/magic-rules/#R5081
 pub(crate) fn begin_attackers<L: Layout>(s: &mut State<L>) {
     if can_declare_attackers(s) {
         s.ask(Pending::DeclareAttackers { attacker: None });
@@ -99,10 +89,10 @@ pub(crate) fn begin_attackers<L: Layout>(s: &mut State<L>) {
 /// The next pick of the attack declaration: a creature or done, or, for the creature just
 /// chosen, what it attacks.
 ///
-/// [CR 508.1b](https://yawgatog.com/resources/magic-rules/#R5081b): the active player
-/// "announces which player, planeswalker, or battle each of the chosen creatures is
-/// attacking." Offered only when the defending player controls a planeswalker; otherwise the
-/// one candidate is applied silently (§7.2).
+/// [CR 508.1b](https://yawgatog.com/resources/magic-rules/#R5081b): the active player "announces
+/// which player, planeswalker, or battle each of the chosen creatures is attacking." Offered only
+/// when the defending player controls a planeswalker; otherwise the one candidate is applied
+/// silently (§7.2).
 pub(crate) fn attack_decision<L: Layout>(
     s: &State<L>,
     attacker: Option<L::Slot>,
@@ -160,7 +150,7 @@ pub(crate) fn attack<L: Layout>(
         Opt::Attack(slot) => {
             // CR 508.1k: "Each chosen creature still controlled by the active player becomes
             // an attacking creature."
-            s.declare_attacker(slot);
+            s.declare_attacker(slot, defender(s));
             s.ask(Pending::DeclareAttackers {
                 attacker: Some(slot),
             });
@@ -173,6 +163,10 @@ pub(crate) fn attack<L: Layout>(
             else {
                 unreachable!("an attack target without an attacker");
             };
+            let target = target.map_or(
+                AttackTarget::Player(defender(s)),
+                AttackTarget::Planeswalker,
+            );
             s.choose_attacked(attacker, target);
             s.ask(Pending::DeclareAttackers { attacker: None });
             Ok(())
@@ -183,21 +177,20 @@ pub(crate) fn attack<L: Layout>(
 
 /// Finishes the attack declaration: the attackers tap, then attack triggers trigger.
 ///
-/// [CR 508.1f](https://yawgatog.com/resources/magic-rules/#R5081f): "The active player taps
-/// the chosen creatures. Tapping a creature when it's declared as an attacker isn't a cost;
-/// attacking simply causes creatures to become tapped."
+/// [CR 508.1f](https://yawgatog.com/resources/magic-rules/#R5081f): "The active player taps the
+/// chosen creatures. Tapping a creature when it's declared as an attacker isn't a cost; attacking
+/// simply causes creatures to become tapped."
 ///
 /// [CR 508.3a](https://yawgatog.com/resources/magic-rules/#R5083a): "An ability that reads
-/// "Whenever [a creature] attacks, . . ." triggers if that creature is declared as an
-/// attacker. ... Such abilities won't trigger if a creature is put onto the battlefield
-/// attacking." The event names only the declared attackers
-/// ([CR 508.4](https://yawgatog.com/resources/magic-rules/#R5084)): creatures put onto the
-/// battlefield attacking, "for the purposes of trigger events and effects, ... never
-/// 'attacked.'"
+/// "Whenever [a creature] attacks, . . ." triggers if that creature is declared as an attacker. ...
+/// Such abilities won't trigger if a creature is put onto the battlefield attacking." The event
+/// names only the declared attackers ([CR 508.4]): creatures put onto the battlefield attacking,
+/// "for the purposes of trigger events and effects, ... never 'attacked.'"
 ///
-/// The taps and the attack are kept as one group: the one declaration
-/// ([CR 508.1](https://yawgatog.com/resources/magic-rules/#R5081): "First, the active player
-/// declares attackers. This turn-based action doesn't use the stack.").
+/// The taps and the attack are kept as one group: the one declaration ([CR 508.1]: "First, the
+/// active player declares attackers. This turn-based action doesn't use the stack.").
+///
+/// [CR 508.4]: https://yawgatog.com/resources/magic-rules/#R5084
 fn finish_attack<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -216,7 +209,12 @@ fn declare_attack<L: Layout>(
     t: &GameTable,
     sink: &mut Sink<L>,
 ) -> Result<(), Full> {
-    let attackers = with_flag(s, ObjectFlags::ATTACKING);
+    let attackers: Bitboard<L::Slot> = s
+        .battlefield()
+        .iter()
+        .copied()
+        .filter(|&slot| s.object(slot).is_attacking())
+        .collect();
     // In battlefield order, never slot order: the taps' events are seen in this order, and a
     // slot number says nothing about a card (architecture §13). Tapping moves nothing. A
     // sole attacker has no order, and needs no walk of the battlefield.
@@ -256,29 +254,29 @@ fn declare_attack<L: Layout>(
 /// creatures, the defending player chooses one creature for it to block that's attacking that
 /// player, a planeswalker they control, or a battle they protect."
 ///
-/// [CR 702.9b](https://yawgatog.com/resources/magic-rules/#R7029b): "A creature with flying
-/// can't be blocked except by creatures with flying and/or reach."
+/// [CR 702.9b](https://yawgatog.com/resources/magic-rules/#R7029b): "A creature with flying can't
+/// be blocked except by creatures with flying and/or reach."
 fn can_block<L: Layout>(s: &State<L>, blocker: L::Slot, attacker: L::Slot) -> bool {
-    let a = s.object(attacker);
-    a.flags().has(ObjectFlags::ATTACKING)
-        && !(a.flags().has(ObjectFlags::ATTACKS_PLANESWALKER) && a.combat().is_none())
-        && (!has(s, attacker, Keywords::FLYING)
-            || has(s, blocker, Keywords::FLYING)
-            || has(s, blocker, Keywords::REACH))
+    matches!(
+        s.object(attacker).attack_target(),
+        Some(AttackTarget::Player(_) | AttackTarget::Planeswalker(_))
+    ) && (!has(s, attacker, Keywords::FLYING)
+        || has(s, blocker, Keywords::FLYING)
+        || has(s, blocker, Keywords::REACH))
 }
 
 /// Whether a creature may still be declared as a blocker: an untapped creature of the
 /// defending player that blocks nothing yet and can block some attacker.
 ///
-/// [CR 509.1a](https://yawgatog.com/resources/magic-rules/#R5091a): "The defending player
-/// chooses which creatures they control, if any, will block. The chosen creatures must be
-/// untapped and they can't also be battles."
+/// [CR 509.1a](https://yawgatog.com/resources/magic-rules/#R5091a): "The defending player chooses
+/// which creatures they control, if any, will block. The chosen creatures must be untapped and they
+/// can't also be battles."
 fn may_block<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
     let o = s.object(slot);
     s.defending_players().contains(s.controller(slot))
         && is_creature(s, slot)
-        && !o.flags().has(ObjectFlags::TAPPED)
-        && !o.flags().has(ObjectFlags::BLOCKING)
+        && !o.is_tapped()
+        && !o.is_blocking()
         && s.battlefield().iter().any(|&a| can_block(s, slot, a))
 }
 
@@ -288,9 +286,10 @@ pub(crate) fn can_declare_blockers<L: Layout>(s: &State<L>) -> bool {
     s.battlefield().iter().any(|&slot| may_block(s, slot))
 }
 
-/// The declare blockers step's turn-based action begins
-/// ([CR 509.1](https://yawgatog.com/resources/magic-rules/#R5091)): "First, the defending
-/// player declares blockers. This turn-based action doesn't use the stack."
+/// The declare blockers step's turn-based action begins ([CR 509.1]): "First, the defending player
+/// declares blockers. This turn-based action doesn't use the stack."
+///
+/// [CR 509.1]: https://yawgatog.com/resources/magic-rules/#R5091
 pub(crate) fn begin_blockers<L: Layout>(s: &mut State<L>) {
     if can_declare_blockers(s) {
         s.ask(Pending::DeclareBlockers { blocker: None });
@@ -343,8 +342,8 @@ pub(crate) fn block_decision<L: Layout>(
 
 /// Declares a blocker, whose attacker is the next pick.
 ///
-/// [CR 509.1g](https://yawgatog.com/resources/magic-rules/#R5091g): "Each chosen creature
-/// still controlled by the defending player becomes a blocking creature."
+/// [CR 509.1g](https://yawgatog.com/resources/magic-rules/#R5091g): "Each chosen creature still
+/// controlled by the defending player becomes a blocking creature."
 pub(crate) fn block_with<L: Layout>(s: &mut State<L>, blocker: L::Slot) {
     s.declare_blocker(blocker);
     s.ask(Pending::DeclareBlockers {
@@ -354,27 +353,29 @@ pub(crate) fn block_with<L: Layout>(s: &mut State<L>, blocker: L::Slot) {
 
 /// Has the blocker just declared block `attacker`.
 ///
-/// [CR 509.1h](https://yawgatog.com/resources/magic-rules/#R5091h): "An attacking creature
-/// with one or more creatures declared as blockers for it becomes a blocked creature". It
-/// becomes blocked as soon as its first blocker is chosen, so a blocked and an unblocked
-/// attacker are never offered as interchangeable to the next blocker.
-pub(crate) fn block_attacker<L: Layout>(s: &mut State<L>, attacker: L::Slot) {
+/// [CR 509.1h](https://yawgatog.com/resources/magic-rules/#R5091h): "An attacking creature with one
+/// or more creatures declared as blockers for it becomes a blocked creature". It becomes blocked as
+/// soon as its first blocker is chosen, so a blocked and an unblocked attacker are never offered as
+/// interchangeable to the next blocker.
+pub(crate) fn block_attacker<L: Layout>(s: &mut State<L>, attacker: L::Slot) -> Result<(), Full> {
     let Pending::DeclareBlockers {
         blocker: Some(blocker),
     } = *s.pending()
     else {
         unreachable!("a block target without a blocker");
     };
-    s.block(blocker, attacker);
+    s.block(blocker, attacker)?;
     s.ask(Pending::DeclareBlockers { blocker: None });
+    Ok(())
 }
 
-/// Finishes the block declaration, and says what was declared: each blocker and the
-/// creature it blocks, in the order the blockers entered the battlefield, as one group
-/// ([CR 509.1](https://yawgatog.com/resources/magic-rules/#R5091): "First, the defending
-/// player declares blockers. This turn-based action doesn't use the stack."). Only a
-/// recording sink is told: no card yet reads a block, so the declaration goes through no
-/// trigger matching, and a search pays one branch for it.
+/// Finishes the block declaration, and says what was declared: each blocker and the creature it
+/// blocks, in the order the blockers entered the battlefield, as one group ([CR 509.1]: "First, the
+/// defending player declares blockers. This turn-based action doesn't use the stack."). Only a
+/// recording sink is told: no card yet reads a block, so the declaration goes through no trigger
+/// matching, and a search pays one branch for it.
+///
+/// [CR 509.1]: https://yawgatog.com/resources/magic-rules/#R5091
 pub(crate) fn finish_blocks<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>) {
     s.settle_question();
     if sink.records() {
@@ -386,8 +387,7 @@ pub(crate) fn finish_blocks<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>) {
 fn note_blocks<L: Layout>(s: &State<L>, sink: &mut Sink<L>) {
     sink.together();
     for &slot in s.battlefield() {
-        let o = s.object(slot);
-        if let (true, Some(attacker)) = (o.flags().has(ObjectFlags::BLOCKING), o.combat()) {
+        for attacker in s.object(slot).blocked_attackers().iter() {
             sink.note(Event::Block {
                 player: s.controller(slot),
                 blocker: s.object_ref(slot),
@@ -398,45 +398,47 @@ fn note_blocks<L: Layout>(s: &State<L>, sink: &mut Sink<L>) {
     sink.apart();
 }
 
-/// Whether the combat damage step gets a first-strike step before it
-/// ([CR 510.4](https://yawgatog.com/resources/magic-rules/#R5104)): "If at least one
-/// attacking or blocking creature has first strike ... as the combat damage step begins, the
-/// only creatures that assign combat damage in that step are those with first strike ...
-/// After that step, instead of proceeding to the end of combat step, the phase gets a second
-/// combat damage step." None of the cards has double strike.
+/// Whether the combat damage step gets a first-strike step before it ([CR 510.4]): "If at least one
+/// attacking or blocking creature has first strike ... as the combat damage step begins, the only
+/// creatures that assign combat damage in that step are those with first strike ... After that
+/// step, instead of proceeding to the end of combat step, the phase gets a second combat damage
+/// step." None of the cards has double strike.
+///
+/// [CR 510.4]: https://yawgatog.com/resources/magic-rules/#R5104
 pub(crate) fn first_strike_step<L: Layout>(s: &State<L>) -> bool {
-    s.battlefield().iter().any(|&slot| {
-        flags(s, slot).has(ObjectFlags::ATTACKING | ObjectFlags::BLOCKING)
-            && has(s, slot, Keywords::FIRST_STRIKE)
-    })
+    s.battlefield()
+        .iter()
+        .any(|&slot| in_combat_now(s, slot) && has(s, slot, Keywords::FIRST_STRIKE))
 }
 
 /// Whether a creature in combat assigns combat damage in this step: in a first-strike step
 /// those with first strike; in the other, "the remaining attackers and blockers that had
 /// neither first strike nor double strike as the first combat damage step began" (CR 510.4).
 fn assigns_now<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
-    if !flags(s, slot).has(ObjectFlags::ATTACKING | ObjectFlags::BLOCKING) {
+    if !in_combat_now(s, slot) {
         return false;
     }
     if s.turn().step() == TurnStep::FirstStrikeDamage {
         has(s, slot, Keywords::FIRST_STRIKE)
     } else {
-        !flags(s, slot).has(ObjectFlags::STRUCK_FIRST)
+        !s.object(slot).struck_first()
     }
 }
 
-/// The combat damage a creature assigns
-/// ([CR 510.1a](https://yawgatog.com/resources/magic-rules/#R5101a)): "Each attacking creature
-/// and each blocking creature assigns combat damage equal to its power. Creatures that would
-/// assign 0 or less damage this way don't assign combat damage at all."
+/// The combat damage a creature assigns ([CR 510.1a]): "Each attacking creature and each blocking
+/// creature assigns combat damage equal to its power. Creatures that would assign 0 or less damage
+/// this way don't assign combat damage at all."
+///
+/// [CR 510.1a]: https://yawgatog.com/resources/magic-rules/#R5101a
 fn power<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
     u8::try_from(s.derived(slot).power.max(0)).unwrap_or(0)
 }
 
-/// The damage that would be lethal to a creature: its toughness less the damage already
-/// marked on it ([CR 120.6](https://yawgatog.com/resources/magic-rules/#R1206)): "If the total
-/// damage marked on a creature is greater than or equal to its toughness, that creature has
-/// been dealt lethal damage". At least 1.
+/// The damage that would be lethal to a creature: its toughness less the damage already marked on
+/// it ([CR 120.6]): "If the total damage marked on a creature is greater than or equal to its
+/// toughness, that creature has been dealt lethal damage". At least 1.
+///
+/// [CR 120.6]: https://yawgatog.com/resources/magic-rules/#R1206
 fn lethal<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
     let left = i16::from(s.derived(slot).toughness) - i16::from(s.object(slot).damage());
     u8::try_from(left.clamp(1, 255)).unwrap_or(1)
@@ -446,8 +448,7 @@ fn lethal<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
 /// and assigning damage now, and not yet divided.
 fn next_division<L: Layout>(s: &State<L>, done: Bitboard<L::Slot>) -> Option<L::Slot> {
     s.battlefield().iter().copied().find(|&slot| {
-        flags(s, slot).has(ObjectFlags::ATTACKING)
-            && flags(s, slot).has(ObjectFlags::BLOCKED)
+        s.object(slot).is_blocked()
             && !done.contains(slot)
             && assigns_now(s, slot)
             && power(s, slot) > 0
@@ -455,12 +456,13 @@ fn next_division<L: Layout>(s: &State<L>, done: Bitboard<L::Slot>) -> Option<L::
     })
 }
 
-/// The combat damage step's turn-based actions begin
-/// ([CR 510.1](https://yawgatog.com/resources/magic-rules/#R5101)): "First, the active player
+/// The combat damage step's turn-based actions begin ([CR 510.1]): "First, the active player
 /// announces how each attacking creature assigns its combat damage, then the defending player
-/// announces how each blocking creature assigns its combat damage." A blocking creature
-/// blocks one attacker, so only the attackers' divisions are choices; when none is, the
-/// damage is dealt at once.
+/// announces how each blocking creature assigns its combat damage." A blocking creature blocks one
+/// attacker, so only the attackers' divisions are choices; when none is, the damage is dealt at
+/// once.
+///
+/// [CR 510.1]: https://yawgatog.com/resources/magic-rules/#R5101
 pub(crate) fn begin_damage<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -487,13 +489,13 @@ pub(crate) fn begin_damage<L: Layout>(
 
 /// The next pick of a damage division: a blocker to deal lethal damage to, or done.
 ///
-/// [CR 510.1c](https://yawgatog.com/resources/magic-rules/#R5101c): "If two or more creatures
-/// are blocking it, it assigns its combat damage to those creatures divided as its controller
-/// chooses among them." Divisions are offered by their distinct outcomes (§11): which
-/// blockers are dealt lethal damage, picked one at a time while the damage left covers
-/// another. "Done" is offered once the damage left can go somewhere without killing another
-/// blocker: onto a blocker already dealt lethal damage, or below lethal on the others. None
-/// of the cards deals noncombat damage to creatures, so damage on a survivor never matters.
+/// [CR 510.1c](https://yawgatog.com/resources/magic-rules/#R5101c): "If two or more creatures are
+/// blocking it, it assigns its combat damage to those creatures divided as its controller chooses
+/// among them." Divisions are offered by their distinct outcomes (§11): which blockers are dealt
+/// lethal damage, picked one at a time while the damage left covers another. "Done" is offered once
+/// the damage left can go somewhere without killing another blocker: onto a blocker already dealt
+/// lethal damage, or below lethal on the others. None of the cards deals noncombat damage to
+/// creatures, so damage on a survivor never matters.
 pub(crate) fn division_decision<L: Layout>(
     s: &State<L>,
     done: Bitboard<L::Slot>,
@@ -523,10 +525,12 @@ pub(crate) fn division_decision<L: Layout>(
     })
 }
 
-/// The smart-stop recommendation for the next pick under [CR 510.1c](https://yawgatog.com/resources/magic-rules/#R5101c)
-/// ("divided as its controller chooses among them"). Prefer killing more blockers by
-/// taking the cheapest lethal assignment first, breaking ties by power. The pick
-/// can be silent if it is the only distinct lethal pick or all killable blockers fit.
+/// The smart-stop recommendation for the next pick under [CR 510.1c] ("divided as its controller
+/// chooses among them"). Prefer killing more blockers by taking the cheapest lethal assignment
+/// first, breaking ties by power. The pick can be silent if it is the only distinct lethal pick or
+/// all killable blockers fit.
+///
+/// [CR 510.1c]: https://yawgatog.com/resources/magic-rules/#R5101c
 pub fn preferred_damage<L: Layout>(s: &State<L>, d: &Decision<L>) -> Option<(Choice, bool)> {
     let Pending::CombatDamage {
         done,
@@ -596,10 +600,10 @@ struct Assignment<L: Layout = Small> {
 /// Deals the combat damage of this step, `lethal` holding the blockers the divisions chose
 /// to destroy.
 ///
-/// [CR 510.2](https://yawgatog.com/resources/magic-rules/#R5102): "Second, all combat damage
-/// that's been assigned is dealt simultaneously." Every assignment is made from the creatures
-/// as they are before any damage is dealt, and the events of the damage are kept as one
-/// group. Damage to a player is the life they lose (CR 120.3a), in the one event.
+/// [CR 510.2](https://yawgatog.com/resources/magic-rules/#R5102): "Second, all combat damage that's
+/// been assigned is dealt simultaneously." Every assignment is made from the creatures as they are
+/// before any damage is dealt, and the events of the damage are kept as one group. Damage to a
+/// player is the life they lose (CR 120.3a), in the one event.
 fn deal<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -635,27 +639,34 @@ fn deal_assigned<L: Layout>(
                 amount,
             })
         };
-        if o.flags().has(ObjectFlags::BLOCKING) {
+        match *o.combat() {
             // CR 510.1d: "A blocking creature assigns combat damage to the creatures it's
             // blocking. If it isn't currently blocking any creatures ..., it assigns no
-            // combat damage."
-            if let Some(other) = o.combat() {
-                push(Recipient::Permanent(s.object_ref(other)), amount)?;
+            // combat damage." A creature that blocks more than one attacker divides its
+            // damage as an attacker does (CR 510.1d), which no card makes happen yet: it
+            // assigns all of it to the first.
+            CombatRole::Blocking { attackers, .. } => {
+                if let Some(other) = attackers.first() {
+                    push(Recipient::Permanent(s.object_ref(other)), amount)?;
+                }
             }
-        } else if o.flags().has(ObjectFlags::BLOCKED) {
-            for (b, n) in division(s, slot, lethal).iter() {
-                push(Recipient::Permanent(s.object_ref(*b)), *n)?;
+            CombatRole::Attacking { blocked: true, .. } => {
+                for (b, n) in division(s, slot, lethal).iter() {
+                    push(Recipient::Permanent(s.object_ref(*b)), *n)?;
+                }
             }
-        } else if o.flags().has(ObjectFlags::ATTACKS_PLANESWALKER) {
             // CR 510.1b: "An unblocked creature assigns its combat damage to the player,
             // planeswalker, or battle it's attacking. If it isn't currently attacking anything
             // (if, for example, it was attacking a planeswalker that has left the
             // battlefield), it assigns no combat damage."
-            if let Some(other) = o.combat() {
-                push(Recipient::Permanent(s.object_ref(other)), amount)?;
-            }
-        } else if let Some(player) = s.defending_player(slot) {
-            push(Recipient::Player(player), amount)?;
+            CombatRole::Attacking { target, .. } => match target {
+                AttackTarget::Player(player) => push(Recipient::Player(player), amount)?,
+                AttackTarget::Planeswalker(walker) => {
+                    push(Recipient::Permanent(s.object_ref(walker)), amount)?;
+                }
+                AttackTarget::Removed => {}
+            },
+            CombatRole::None => {}
         }
     }
     for a in assigned.iter() {
@@ -719,9 +730,9 @@ fn division<L: Layout>(
 /// attacking or blocking creature that ... stops being a creature". Leaving the battlefield
 /// is handled as objects change zones; this handles the rest, after the layers settle.
 ///
-/// [CR 506.4](https://yawgatog.com/resources/magic-rules/#R5064): "A creature that's removed
-/// from combat stops being an attacking, blocking, blocked, and/or unblocked creature. A
-/// planeswalker or battle that's removed from combat stops being attacked."
+/// [CR 506.4](https://yawgatog.com/resources/magic-rules/#R5064): "A creature that's removed from
+/// combat stops being an attacking, blocking, blocked, and/or unblocked creature. A planeswalker or
+/// battle that's removed from combat stops being attacked."
 pub(crate) fn prune<L: Layout>(s: &mut State<L>) {
     // A permanent keeps no record of who controlled it as it was declared. An attacker's
     // controller was the attacking player. A blocker's, and an attacked planeswalker's, was a
@@ -731,11 +742,15 @@ pub(crate) fn prune<L: Layout>(s: &mut State<L>) {
     let defending = s.defending_players();
     for i in 0..s.battlefield().len() {
         let slot = s.battlefield()[i];
-        let o = *s.object(slot);
-        let attacker = o.flags().has(ObjectFlags::ATTACKING);
-        if !attacker && !o.flags().has(ObjectFlags::BLOCKING) {
-            continue;
-        }
+        let (attacker, walker) = match *s.object(slot).combat() {
+            CombatRole::None => continue,
+            CombatRole::Attacking {
+                target: AttackTarget::Planeswalker(walker),
+                ..
+            } => (true, Some(walker)),
+            CombatRole::Attacking { .. } => (true, None),
+            CombatRole::Blocking { .. } => (false, None),
+        };
         let changed = |controller: Seat| {
             if attacker {
                 controller != attacking
@@ -745,8 +760,7 @@ pub(crate) fn prune<L: Layout>(s: &mut State<L>) {
         };
         if !is_creature(s, slot) || changed(s.controller(slot)) {
             s.remove_from_combat(slot);
-        } else if o.flags().has(ObjectFlags::ATTACKS_PLANESWALKER)
-            && let Some(walker) = o.combat()
+        } else if let Some(walker) = walker
             && (!defending.contains(s.controller(walker))
                 || !s.derived(walker).types.contains(Types::PLANESWALKER))
         {
@@ -767,9 +781,10 @@ pub(crate) fn in_combat(step: TurnStep) -> bool {
     )
 }
 
-/// Ends combat ([CR 511.3](https://yawgatog.com/resources/magic-rules/#R5113)): "As soon as
-/// the end of combat step ends, all creatures, battles, and planeswalkers are removed from
-/// combat."
+/// Ends combat ([CR 511.3]): "As soon as the end of combat step ends, all creatures, battles, and
+/// planeswalkers are removed from combat."
+///
+/// [CR 511.3]: https://yawgatog.com/resources/magic-rules/#R5113
 pub(crate) fn end_combat<L: Layout>(s: &mut State<L>) {
     s.end_combat();
 }

@@ -5,7 +5,7 @@ use crate::bitboard::Bitboard;
 use crate::card::{Ability, Face, Types};
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
-use crate::state::{Derived, ObjectFlags, State};
+use crate::state::{Derived, State};
 use crate::table::{GameTable, ManaFace, has_other_ability, is_sacrificed, is_simple};
 use crate::{filter::Evaluate, fixed::Full};
 
@@ -93,12 +93,12 @@ pub(super) fn source<L: Layout>(
         mana != ManaFace::Not || read_source(s, t, player, face()).is_none(),
         "a face the table calls no source makes mana"
     );
-    if mana == ManaFace::Not || d.controller != player || o.flags().has(ObjectFlags::TAPPED) {
+    if mana == ManaFace::Not || d.controller != player || o.is_tapped() {
         return None;
     }
     // CR 302.6: a creature's {T} abilities need it under its controller's control since their
     // most recent turn began.
-    if d.types.intersects(Types::CREATURE) && o.flags().has(ObjectFlags::SUMMONING_SICK) {
+    if d.types.intersects(Types::CREATURE) && o.is_summoning_sick() {
         return None;
     }
     if let ManaFace::Plain {

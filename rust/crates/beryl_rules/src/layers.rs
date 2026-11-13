@@ -7,7 +7,7 @@ use beryl_card::Amount;
 
 use crate::card::{AbilityIx, AbilityKind, Colors, Modification, Objects};
 use crate::decision::{Outcome, StallReason};
-use crate::event::{Sink, kind};
+use crate::event::{Listens, Sink};
 use crate::filter::{self, Filter};
 use crate::fixed::Full;
 use crate::ids::{CardId, Seat};
@@ -26,9 +26,10 @@ enum Target<L: Layout> {
     /// of its battlefield, however many permanents that holds.
     Position(L::Index),
     /// Each permanent the effect locked in as it began that is still the object it was
-    /// ([CR 611.2c](https://yawgatog.com/resources/magic-rules/#R6112c)): "the set of objects
-    /// it affects is determined when that continuous effect begins. After that point, the
-    /// set won't change."
+    /// ([CR 611.2c]): "the set of objects it affects is determined when that continuous effect
+    /// begins. After that point, the set won't change."
+    ///
+    /// [CR 611.2c]: https://yawgatog.com/resources/magic-rules/#R6112c
     Set(LockedIn<L>),
 }
 
@@ -48,12 +49,13 @@ struct Apply<L: Layout> {
 }
 
 impl<L: Layout> Apply<L> {
-    /// Where it comes among the effects
-    /// ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137)): "Within a layer or
-    /// sublayer, determining which order effects are applied in is usually done using a
-    /// timestamp system." Static abilities of permanents that share a timestamp apply in
-    /// the order of the permanents they change. An effect on a set needs no such order: it
-    /// has a timestamp of its own, and one change to each member commutes.
+    /// Where it comes among the effects ([CR 613.7]): "Within a layer or sublayer, determining
+    /// which order effects are applied in is usually done using a timestamp system." Static
+    /// abilities of permanents that share a timestamp apply in the order of the permanents they
+    /// change. An effect on a set needs no such order: it has a timestamp of its own, and one
+    /// change to each member commutes.
+    ///
+    /// [CR 613.7]: https://yawgatog.com/resources/magic-rules/#R6137
     fn key(&self) -> (u8, u16, u8, u16) {
         let position: u16 = match self.target {
             Target::Position(i) => i.into(),
@@ -117,25 +119,25 @@ pub(crate) fn over_or_refreshed<L: Layout>(
     s.outcome()
 }
 
-/// The kinds of event the permanents on the battlefield have triggered abilities for. A
-/// face-down permanent has none, whichever card it is
-/// ([CR 708.2a](https://yawgatog.com/resources/magic-rules/#R7082a)): it has "no text, no
-/// name, no subtypes, and no mana cost". So it counts for nothing
-/// ([`crate::query::Copiable::may_listen`]), and masking or determinizing its hidden
-/// identity leaves this unchanged.
-pub(crate) fn listening<L: Layout>(s: &State<L>, t: &GameTable) -> u16 {
+/// The kinds of event the permanents on the battlefield have triggered abilities for. A face-down
+/// permanent has none, whichever card it is ([CR 708.2a]): it has "no text, no name, no subtypes,
+/// and no mana cost". So it counts for nothing ([`crate::query::Copiable::may_listen`]), and
+/// masking or determinizing its hidden identity leaves this unchanged.
+///
+/// [CR 708.2a]: https://yawgatog.com/resources/magic-rules/#R7082a
+pub(crate) fn listening<L: Layout>(s: &State<L>, t: &GameTable) -> Listens {
     s.battlefield()
         .iter()
-        .fold(0, |k, &slot| k | s.copiable(slot).may_listen(t))
+        .fold(Listens::NONE, |k, &slot| k | s.copiable(slot).may_listen(t))
 }
 
-/// Whether a change in the number of `kind` counters on the object in `slot` can change its
-/// derived characteristics, so that the layers must run again. Only +1/+1 and -1/-1 counters
-/// modify power and toughness
-/// ([CR 613.4c](https://yawgatog.com/resources/magic-rules/#R6134c)): "Effects and counters
-/// that modify power and/or toughness ... are applied". Any other kind matters only to a
-/// static ability of its own that applies while it has some: loyalty, which planeswalkers
-/// gain and lose every turn, never does.
+/// Whether a change in the number of `kind` counters on the object in `slot` can change its derived
+/// characteristics, so that the layers must run again. Only +1/+1 and -1/-1 counters modify power
+/// and toughness ([CR 613.4c]): "Effects and counters that modify power and/or toughness ... are
+/// applied". Any other kind matters only to a static ability of its own that applies while it has
+/// some: loyalty, which planeswalkers gain and lose every turn, never does.
+///
+/// [CR 613.4c]: https://yawgatog.com/resources/magic-rules/#R6134c
 pub(crate) fn counters_matter<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -151,21 +153,17 @@ pub(crate) fn counters_matter<L: Layout>(
         })
 }
 
-/// Recomputes every permanent's characteristics from base
-/// ([CR 613.1](https://yawgatog.com/resources/magic-rules/#R6131)): "The values of an
-/// object's characteristics are determined by starting with the actual object. For a card,
-/// that means the values of the characteristics printed on that card. For a token or a copy
-/// of a spell or card, that means the values of the characteristics defined by the effect
-/// that created it. Then all applicable continuous effects are applied in a series of layers
-/// in the following order".
+/// Recomputes every permanent's characteristics from base ([CR 613.1]): "The values of an object's
+/// characteristics are determined by starting with the actual object. For a card, that means the
+/// values of the characteristics printed on that card. For a token or a copy of a spell or card,
+/// that means the values of the characteristics defined by the effect that created it. Then all
+/// applicable continuous effects are applied in a series of layers in the following order".
 ///
-/// Within a layer, effects apply in timestamp order
-/// ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137)): "An effect with an earlier
-/// timestamp is applied before an effect with a later timestamp." A characteristic-defining
-/// ability defines power alone and sits in layer 7a with no other effect, so "apply effects
-/// from characteristic-defining abilities first" (CR 613.3) holds by the layer order. No two of the
-/// cards' effects in one layer depend on each other
-/// ([CR 613.8](https://yawgatog.com/resources/magic-rules/#R6138)), so timestamps decide.
+/// Within a layer, effects apply in timestamp order ([CR 613.7]): "An effect with an earlier
+/// timestamp is applied before an effect with a later timestamp." A characteristic-defining ability
+/// defines power alone and sits in layer 7a with no other effect, so "apply effects from
+/// characteristic-defining abilities first" (CR 613.3) holds by the layer order. No two of the
+/// cards' effects in one layer depend on each other ([CR 613.8]), so timestamps decide.
 ///
 /// The kernel has ended the effects on objects that left their zone as they left, and stores
 /// the results, with what each face-down permanent's controller now sees, as the
@@ -174,6 +172,10 @@ pub(crate) fn counters_matter<L: Layout>(
 ///
 /// [`Full`] if the list of effects had no place for one: the results are stored all the
 /// same, lacking that effect, for a caller that ends the game.
+///
+/// [CR 613.1]: https://yawgatog.com/resources/magic-rules/#R6131
+/// [CR 613.7]: https://yawgatog.com/resources/magic-rules/#R6137
+/// [CR 613.8]: https://yawgatog.com/resources/magic-rules/#R6138
 fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
     let Some(mut s) = s.rederive() else {
         return Ok(());
@@ -283,7 +285,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
     }
     // A permanent that may change a rule for players said so in the mask just read for
     // the listeners: with none on the battlefield, one AND.
-    let rules = if listening & kind::RULE_CHANGE != 0 {
+    let rules = if listening.contains(Listens::RULE_CHANGE) {
         player_rules(&mut s, t)
     } else {
         [Rules::NONE; _]
@@ -335,17 +337,18 @@ fn resolved_effects<L: Layout>(
     listed
 }
 
-/// The rules the permanents' static abilities change for each player, by seat
-/// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311)): "Some continuous
-/// effects affect game rules rather than objects. ... These effects are applied after all
-/// other continuous effects have been applied." So control is settled: "each opponent" and
-/// "you" in such an ability are read for the permanent's controller as layer 2 left it
-/// ([CR 109.5](https://yawgatog.com/resources/magic-rules/#R1095): "For a static ability,
-/// this is the current controller of the object it's on."). A face-down permanent has no
-/// abilities ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)), which its
-/// copiable values answer for.
+/// The rules the permanents' static abilities change for each player, by seat ([CR 613.11]): "Some
+/// continuous effects affect game rules rather than objects. ... These effects are applied after
+/// all other continuous effects have been applied." So control is settled: "each opponent" and
+/// "you" in such an ability are read for the permanent's controller as layer 2 left it ([CR 109.5]:
+/// "For a static ability, this is the current controller of the object it's on."). A face-down
+/// permanent has no abilities ([CR 708.2]), which its copiable values answer for.
 ///
 /// Out of line: only a recompute with such a permanent on the battlefield comes here.
+///
+/// [CR 613.11]: https://yawgatog.com/resources/magic-rules/#R61311
+/// [CR 109.5]: https://yawgatog.com/resources/magic-rules/#R1095
+/// [CR 708.2]: https://yawgatog.com/resources/magic-rules/#R7082
 #[inline(never)]
 fn player_rules<L: Layout>(s: &mut Rederive<'_, L>, t: &GameTable) -> PerSeat<Rules> {
     let mut rules = [Rules::NONE; _];

@@ -12,32 +12,35 @@
 use beryl_card::{CardDef, Face, FaceIx, Zone};
 
 use crate::bitboard::Bitboard;
+use crate::event::Listens;
 use crate::ids::{CardId, CardIx, Seat};
 use crate::layout::{Layout, Small};
+use crate::object::CombatRole;
 use crate::object::Object;
 use crate::rule_changes::Rules;
 use crate::state::State;
 use crate::subtypes::GameSubtypes;
 use crate::table::{FaceFacts, GameTable};
 
-/// An object's copiable values: what a copy of it would have, and what it has itself before
-/// any other effect applies
-/// ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)): "The copiable values are
-/// the values derived from the text printed on the object (that text being name, mana cost,
-/// color indicator, card type, subtype, supertype, rules text, power, toughness, loyalty,
-/// and/or defense), as modified by other copy effects, by its face-down status, and by 'as . . .
-/// enters' and 'as . . . is turned face up' abilities that set power and toughness (and may
-/// also set additional characteristics). Other effects (including type-changing and
-/// text-changing effects), status, counters, and stickers are not copied."
+/// An object's copiable values: what a copy of it would have, and what it has itself before any
+/// other effect applies ([CR 707.2]): "The copiable values are the values derived from the text
+/// printed on the object (that text being name, mana cost, color indicator, card type, subtype,
+/// supertype, rules text, power, toughness, loyalty, and/or defense), as modified by other copy
+/// effects, by its face-down status, and by 'as . . . enters' and 'as . . . is turned face up'
+/// abilities that set power and toughness (and may also set additional characteristics). Other
+/// effects (including type-changing and text-changing effects), status, counters, and stickers are
+/// not copied."
 ///
-/// It is a definition, the face of it that is up, and a copy effect's exception. A token's
-/// are those its creation defined
-/// ([CR 111.3](https://yawgatog.com/resources/magic-rules/#R1113)), a token copy's those of
-/// what it copied. A face-down permanent's are the blank ones, whichever card it is
-/// ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)): "Any listed
-/// characteristics are the copiable values of that object's characteristics." Nothing here
-/// gives its hidden card away: [`Copiable::face`] reads [`beryl_card::FACE_DOWN`], and
-/// [`Copiable::record`] names [`beryl_card::FACE_DOWN_COPY`].
+/// It is a definition, the face of it that is up, and a copy effect's exception. A token's are
+/// those its creation defined ([CR 111.3]), a token copy's those of what it copied. A face-down
+/// permanent's are the blank ones, whichever card it is ([CR 708.2]): "Any listed characteristics
+/// are the copiable values of that object's characteristics." Nothing here gives its hidden card
+/// away: [`Copiable::face`] reads [`beryl_card::FACE_DOWN`], and [`Copiable::record`] names
+/// [`beryl_card::FACE_DOWN_COPY`].
+///
+/// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
+/// [CR 111.3]: https://yawgatog.com/resources/magic-rules/#R1113
+/// [CR 708.2]: https://yawgatog.com/resources/magic-rules/#R7082
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Copiable<L: Layout = Small> {
     card: L::Card,
@@ -62,10 +65,11 @@ impl<C: CardId> DefinitionKey<C> {
 }
 
 impl<L: Layout> Copiable<L> {
-    /// The copiable values of the card or token at a game index, its front face up: what a
-    /// card has wherever it is not a permanent or a spell with another face up
-    /// ([CR 712.6a](https://yawgatog.com/resources/magic-rules/#R7126a)), and what a record
-    /// names that kept only the index, such as last-known information.
+    /// The copiable values of the card or token at a game index, its front face up: what a card has
+    /// wherever it is not a permanent or a spell with another face up ([CR 712.6a]), and what a
+    /// record names that kept only the index, such as last-known information.
+    ///
+    /// [CR 712.6a]: https://yawgatog.com/resources/magic-rules/#R7126a
     #[inline]
     pub const fn of_card(card: L::Card) -> Copiable<L> {
         Copiable {
@@ -85,9 +89,11 @@ impl<L: Layout> Copiable<L> {
     }
 
     /// These values with power and toughness 1/1, as a copy effect's exception sets them
-    /// ([CR 707.9b](https://yawgatog.com/resources/magic-rules/#R7079b)): "Some copy effects
-    /// modify a characteristic as part of the copying process. The final set of values for
-    /// that characteristic becomes part of the copiable values of the copy."
+    /// ([CR 707.9b]): "Some copy effects modify a characteristic as part of the copying process.
+    /// The final set of values for that characteristic becomes part of the copiable values of the
+    /// copy."
+    ///
+    /// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
     #[inline]
     #[must_use]
     pub const fn except_one_one(self) -> Copiable<L> {
@@ -97,10 +103,12 @@ impl<L: Layout> Copiable<L> {
         }
     }
 
-    /// These values with the face at `face` up instead: the spell a card becomes cast with
-    /// that face ([CR 712.8b](https://yawgatog.com/resources/magic-rules/#R7128b)), or the
-    /// permanent it becomes entering with it up or down
-    /// ([CR 712.11a](https://yawgatog.com/resources/magic-rules/#R71211a), CR 708.2).
+    /// These values with the face at `face` up instead: the spell a card becomes cast with that
+    /// face ([CR 712.8b]), or the permanent it becomes entering with it up or down ([CR 712.11a],
+    /// CR 708.2).
+    ///
+    /// [CR 712.8b]: https://yawgatog.com/resources/magic-rules/#R7128b
+    /// [CR 712.11a]: https://yawgatog.com/resources/magic-rules/#R71211a
     #[inline]
     #[must_use]
     pub const fn turned(self, face: FaceIx) -> Copiable<L> {
@@ -146,7 +154,7 @@ impl<L: Layout> Copiable<L> {
     /// The rule changes the static abilities of the face that is up make for players
     /// ([`GameTable::player_rules`]). For a card no face of which makes one, a load and an
     /// AND. The layers ask it only of a battlefield with such a card on it
-    /// ([`crate::event::kind::RULE_CHANGE`]).
+    /// ([`crate::event::Listens::RULE_CHANGE`]).
     #[inline]
     pub fn player_rules(self, t: &GameTable) -> Rules {
         let of_players = t.player_rules();
@@ -156,32 +164,34 @@ impl<L: Layout> Copiable<L> {
         t.face_rules(self.card, self.face).common(of_players)
     }
 
-    /// The event kinds the triggered abilities of any face of the definition listen to: more
-    /// than the face that is up may have, so a mask to skip an object by and nothing else. A
-    /// face-down permanent has no abilities
-    /// ([CR 708.2a](https://yawgatog.com/resources/magic-rules/#R7082a)), so none.
+    /// The event kinds the triggered abilities of any face of the definition listen to: more than
+    /// the face that is up may have, so a mask to skip an object by and nothing else. A face-down
+    /// permanent has no abilities ([CR 708.2a]), so none.
+    ///
+    /// [CR 708.2a]: https://yawgatog.com/resources/magic-rules/#R7082a
     #[inline]
-    pub fn may_listen(self, t: &GameTable) -> u16 {
+    pub fn may_listen(self, t: &GameTable) -> Listens {
         if self.face == FaceIx::DOWN {
-            0
+            Listens::NONE
         } else {
             t.listens(self.card)
         }
     }
 
-    /// The name of the face that is up
-    /// ([CR 712.6a](https://yawgatog.com/resources/magic-rules/#R7126a),
-    /// [CR 712.6d](https://yawgatog.com/resources/magic-rules/#R7126d)); none, the empty
-    /// string, for a face-down permanent (CR 708.2a).
+    /// The name of the face that is up ([CR 712.6a], [CR 712.6d]); none, the empty string, for a
+    /// face-down permanent (CR 708.2a).
+    ///
+    /// [CR 712.6a]: https://yawgatog.com/resources/magic-rules/#R7126a
+    /// [CR 712.6d]: https://yawgatog.com/resources/magic-rules/#R7126d
     #[inline]
     pub fn name(self, t: &GameTable) -> &'static str {
         t.def(self.card).face_name(self.face)
     }
 
-    /// Power, 0 where the face has none
-    /// ([CR 208.1](https://yawgatog.com/resources/magic-rules/#R2081)): "A creature card has
-    /// two numbers separated by a slash printed in its lower right corner. The first number
-    /// is its power".
+    /// Power, 0 where the face has none ([CR 208.1]): "A creature card has two numbers separated by
+    /// a slash printed in its lower right corner. The first number is its power".
+    ///
+    /// [CR 208.1]: https://yawgatog.com/resources/magic-rules/#R2081
     #[inline]
     pub fn power(self, t: &GameTable) -> i8 {
         if self.one_one {
@@ -203,10 +213,11 @@ impl<L: Layout> Copiable<L> {
 
     /// The game index and face a record keeps for these values: a stack entry's, a pending
     /// trigger's, last-known information's, and what a token copy is made of. A face-down
-    /// permanent's are the one face of [`beryl_card::FACE_DOWN_COPY`], never its hidden card:
-    /// being face down is a status, which a copy does not have
-    /// ([CR 110.5](https://yawgatog.com/resources/magic-rules/#R1105), CR 707.2), and the
-    /// blank values are what it copies (CR 708.2).
+    /// permanent's are the one face of [`beryl_card::FACE_DOWN_COPY`], never its hidden card: being
+    /// face down is a status, which a copy does not have ([CR 110.5], CR 707.2), and the blank
+    /// values are what it copies (CR 708.2).
+    ///
+    /// [CR 110.5]: https://yawgatog.com/resources/magic-rules/#R1105
     #[inline]
     pub fn record(self, t: &GameTable) -> (L::Card, FaceIx) {
         if self.face == FaceIx::DOWN {
@@ -224,26 +235,28 @@ impl<L: Layout> Copiable<L> {
 }
 
 impl<L: Layout> State<L> {
-    /// The card that represents the object in `slot`: nothing for a token
-    /// ([CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111)): "a marker used to
-    /// represent any permanent that isn't represented by a card", which stays one wherever
-    /// it goes ([CR 111.7](https://yawgatog.com/resources/magic-rules/#R1117)) and is never a
-    /// card ([CR 111.6](https://yawgatog.com/resources/magic-rules/#R1116)), whatever it
-    /// copies. Ask this for what only a card has: the other faces it could be cast or played
-    /// with, what turning a face-down permanent face up shows, a place in a decklist.
+    /// The card that represents the object in `slot`: nothing for a token ([CR 111.1]): "a marker
+    /// used to represent any permanent that isn't represented by a card", which stays one wherever
+    /// it goes ([CR 111.7]) and is never a card ([CR 111.6]), whatever it copies. Ask this for what
+    /// only a card has: the other faces it could be cast or played with, what turning a face-down
+    /// permanent face up shows, a place in a decklist.
     ///
     /// It is the rules' answer, with nothing masked: a face-down permanent's is its hidden
     /// card. A player's view asks [`crate::Observation::card`].
+    ///
+    /// [CR 111.1]: https://yawgatog.com/resources/magic-rules/#R1111
+    /// [CR 111.7]: https://yawgatog.com/resources/magic-rules/#R1117
+    /// [CR 111.6]: https://yawgatog.com/resources/magic-rules/#R1116
     #[inline]
     pub fn card_behind(&self, slot: L::Slot) -> Option<L::Card> {
         let o = self.object(slot);
         (!o.is_token()).then_some(o.card)
     }
 
-    /// The definition of the card that represents the object in `slot`, with every face it
-    /// may be cast or played with
-    /// ([CR 712.6a](https://yawgatog.com/resources/magic-rules/#R7126a)); nothing for a
-    /// token ([`State::card_behind`]).
+    /// The definition of the card that represents the object in `slot`, with every face it may be
+    /// cast or played with ([CR 712.6a]); nothing for a token ([`State::card_behind`]).
+    ///
+    /// [CR 712.6a]: https://yawgatog.com/resources/magic-rules/#R7126a
     #[inline]
     pub fn card_def(&self, t: &GameTable, slot: L::Slot) -> Option<&'static CardDef> {
         self.card_behind(slot).map(|card| t.def(card))
@@ -266,21 +279,22 @@ impl<L: Layout> State<L> {
         Copiable::of_object(self.object(slot))
     }
 
-    /// The mana value of the object in `slot`
-    /// ([CR 202.3](https://yawgatog.com/resources/magic-rules/#R2023)): "The mana value of an
-    /// object is a number equal to the total amount of mana in its mana cost, regardless of
-    /// color." A spell's counts its X
-    /// ([CR 202.3e](https://yawgatog.com/resources/magic-rules/#R2023e)): "X is treated as
-    /// the number chosen for it while the object is on the stack."
+    /// The mana value of the object in `slot` ([CR 202.3]): "The mana value of an object is a
+    /// number equal to the total amount of mana in its mana cost, regardless of color." A spell's
+    /// counts its X ([CR 202.3e]): "X is treated as the number chosen for it while the object is on
+    /// the stack."
     ///
-    /// [CR 712.6d](https://yawgatog.com/resources/magic-rules/#R7126d): a transforming
-    /// double-faced permanent with its back face up "has only the characteristics of its back
-    /// face. However, its mana value is calculated using the mana cost of its front face. If a
-    /// permanent is copying the back face of a nonmodal double-faced permanent (even if the
-    /// object representing that copy is itself a double-faced permanent), the mana value of
-    /// that permanent is 0." A token with a double-faced card's faces is always such a copy
-    /// ([CR 707.8a](https://yawgatog.com/resources/magic-rules/#R7078a)). A face-down
-    /// permanent has no mana cost (CR 708.2a), so 0.
+    /// [CR 712.6d](https://yawgatog.com/resources/magic-rules/#R7126d): a transforming double-faced
+    /// permanent with its back face up "has only the characteristics of its back face. However, its
+    /// mana value is calculated using the mana cost of its front face. If a permanent is copying
+    /// the back face of a nonmodal double-faced permanent (even if the object representing that
+    /// copy is itself a double-faced permanent), the mana value of that permanent is 0." A token
+    /// with a double-faced card's faces is always such a copy ([CR 707.8a]). A face-down permanent
+    /// has no mana cost (CR 708.2a), so 0.
+    ///
+    /// [CR 202.3]: https://yawgatog.com/resources/magic-rules/#R2023
+    /// [CR 202.3e]: https://yawgatog.com/resources/magic-rules/#R2023e
+    /// [CR 707.8a]: https://yawgatog.com/resources/magic-rules/#R7078a
     #[inline]
     pub fn mana_value(&self, t: &GameTable, slot: L::Slot) -> u8 {
         let o = self.object(slot);
@@ -306,13 +320,10 @@ impl<L: Layout> State<L> {
     }
 
     /// Who controls the object in `slot`: a permanent's controller after continuous effects
-    /// ([CR 110.2](https://yawgatog.com/resources/magic-rules/#R1102)), a spell's, who is the
-    /// player who cast it
-    /// ([CR 601.2a](https://yawgatog.com/resources/magic-rules/#R6012a): "that player
-    /// becomes its controller"), and anywhere else its owner
-    /// ([CR 108.4a](https://yawgatog.com/resources/magic-rules/#R1084a)): "If anything asks
-    /// for the controller of a card that doesn't have one (because it's not a permanent or
-    /// spell), use its owner instead."
+    /// ([CR 110.2]), a spell's, who is the player who cast it ([CR 601.2a]: "that player becomes
+    /// its controller"), and anywhere else its owner ([CR 108.4a]): "If anything asks for the
+    /// controller of a card that doesn't have one (because it's not a permanent or spell), use its
+    /// owner instead."
     ///
     /// One read off the battlefield: the zone move gives an object back to its owner, and
     /// only becoming a spell or entering the battlefield names another controller
@@ -321,6 +332,10 @@ impl<L: Layout> State<L> {
     /// # Panics
     ///
     /// In debug builds, for a permanent while the layer results are stale.
+    ///
+    /// [CR 110.2]: https://yawgatog.com/resources/magic-rules/#R1102
+    /// [CR 601.2a]: https://yawgatog.com/resources/magic-rules/#R6012a
+    /// [CR 108.4a]: https://yawgatog.com/resources/magic-rules/#R1084a
     #[inline]
     pub fn controller(&self, slot: L::Slot) -> Seat {
         let o = self.object(slot);
@@ -331,9 +346,10 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// The power of the object in `slot`: a permanent's after continuous effects
-    /// ([CR 613.4](https://yawgatog.com/resources/magic-rules/#R6134)), and elsewhere its
-    /// copiable value ([`Copiable::power`]).
+    /// The power of the object in `slot`: a permanent's after continuous effects ([CR 613.4]), and
+    /// elsewhere its copiable value ([`Copiable::power`]).
+    ///
+    /// [CR 613.4]: https://yawgatog.com/resources/magic-rules/#R6134
     #[inline]
     pub fn power(&self, t: &GameTable, slot: L::Slot) -> i8 {
         let o = self.object(slot);
@@ -361,27 +377,27 @@ impl<L: Layout> State<L> {
     /// the object, so that two objects alike in themselves lead to different games:
     ///
     /// - a stack entry names its spell's card or its ability's source, its targets
-    ///   ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c): "The player
+    ///   ([CR 601.2c]: "The player
     ///   announces their choice of an appropriate object or player for each target the
     ///   spell requires."), and the object a triggered ability triggered on. An
     ///   ability's source is named though the ability exists apart from it: it can be its
     ///   own target, chosen before its costs are paid
-    ///   ([CR 602.2b](https://yawgatog.com/resources/magic-rules/#R6022b): "The remainder
+    ///   ([CR 602.2b]: "The remainder
     ///   of the process for activating an ability is identical to the process for casting
     ///   a spell listed in rules 601.2b-i"), so a land sacrificed to destroy target land
     ///   does nothing aimed at itself and destroys its twin aimed at that;
     /// - an ability that has triggered and waits to be put on the stack, or a delayed one,
     ///   names its source and that object
-    ///   ([CR 603.7c](https://yawgatog.com/resources/magic-rules/#R6037c): "A delayed
+    ///   ([CR 603.7c]: "A delayed
     ///   triggered ability that refers to a particular object still affects it even if the
     ///   object changes characteristics.");
     /// - a permanent names what it is attached to
-    ///   ([CR 701.3](https://yawgatog.com/resources/magic-rules/#R7013)), the planeswalker
+    ///   ([CR 701.3]), the planeswalker
     ///   it attacks and the attacker it blocks
-    ///   ([CR 509.1g](https://yawgatog.com/resources/magic-rules/#R5091g));
+    ///   ([CR 509.1g]);
     /// - an entry of a store about one object names another, as a card in exile remembers
-    ///   what exiled it ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103),
-    ///   [CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): the store says
+    ///   what exiled it ([CR 610.3],
+    ///   [CR 607.2a]): the store says
     ///   which itself (`Store::names`).
     ///
     /// Every field and store that holds a slot is either about that slot's object, and
@@ -394,6 +410,14 @@ impl<L: Layout> State<L> {
     /// By slot, whichever object the record meant: one that outlived its object keeps
     /// apart two objects that might have been one candidate, and merges none that are not
     /// alike.
+    ///
+    /// [CR 601.2c]: https://yawgatog.com/resources/magic-rules/#R6012c
+    /// [CR 602.2b]: https://yawgatog.com/resources/magic-rules/#R6022b
+    /// [CR 603.7c]: https://yawgatog.com/resources/magic-rules/#R6037c
+    /// [CR 701.3]: https://yawgatog.com/resources/magic-rules/#R7013
+    /// [CR 509.1g]: https://yawgatog.com/resources/magic-rules/#R5091g
+    /// [CR 610.3]: https://yawgatog.com/resources/magic-rules/#R6103
+    /// [CR 607.2a]: https://yawgatog.com/resources/magic-rules/#R6072a
     pub fn named(&self) -> Bitboard<L::Slot> {
         self.named_apart_from_waiting_triggers() | self.named_by_waiting_triggers()
     }
@@ -406,8 +430,14 @@ impl<L: Layout> State<L> {
         // A set, built the same in any order. Only a permanent is attached or in combat
         // (the invariants hold an object off the battlefield to neither).
         for &slot in self.battlefield() {
-            for other in self.object(slot).names() {
-                named.insert(other);
+            let o = self.object(slot);
+            if let Some(host) = o.attached_to {
+                named.insert(host);
+            }
+            if !matches!(o.combat, CombatRole::None) {
+                for other in o.combat.names() {
+                    named.insert(other);
+                }
             }
         }
         named

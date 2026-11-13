@@ -4,7 +4,7 @@
 use crate::bitboard::Bitboard;
 use crate::ids::{CardId, Place, Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
-use crate::state::{Object, ObjectFlags, Pending, State, Zone};
+use crate::state::{Flag, Object, Pending, State, Zone};
 use crate::table::GameTable;
 use beryl_card::FaceIx;
 
@@ -62,7 +62,7 @@ impl<L: Layout> State<L> {
                 check(!in_deck, "a deck card is nowhere", at)?;
                 continue;
             }
-            let token = o.flags.has(ObjectFlags::TOKEN);
+            let token = o.flags.has(Flag::Token);
             if deck_owner.is_none() {
                 // The shared pool holds tokens.
                 check(token, "a non-token in the token pool", at)?;
@@ -75,9 +75,9 @@ impl<L: Layout> State<L> {
                 )?;
             }
             check(o.card.index() < t.len(), "no such card", at)?;
-            for link in [o.attached_to, o.combat] {
+            for link in o.names() {
                 check(
-                    link.is_none_or(|l| self.object(l).zone != Zone::Nowhere),
+                    self.object(link).zone != Zone::Nowhere,
                     "a link to an empty slot",
                     at,
                 )?;
@@ -93,7 +93,6 @@ impl<L: Layout> State<L> {
             if !matches!(o.zone, Zone::Battlefield | Zone::Stack) {
                 // What may stay off the battlefield: being a token. What exiled a card is
                 // a memo of it, held to the exile zone by the Memos store's own check.
-                let kept = ObjectFlags::TOKEN | ObjectFlags::ONE_ONE;
                 check(
                     *o == Object {
                         card: o.card,
@@ -102,19 +101,18 @@ impl<L: Layout> State<L> {
                         owner: o.owner,
                         base_controller: o.owner,
                         timestamp: o.timestamp,
-                        flags: ObjectFlags(o.flags.0 & kept),
+                        flags: o.flags.kept_across_zones(),
                         ..Object::EMPTY
                     },
                     "permanent status off the battlefield",
                     at,
                 )?;
             }
-            // A blocker blocks an attacker, or nothing once that attacker left combat
-            // (CR 506.4).
+            // A blocker blocks attackers, or nothing once they left combat (CR 506.4).
             check(
-                !o.flags.has(ObjectFlags::BLOCKING)
-                    || o.combat
-                        .is_none_or(|a| self.object(a).flags.has(ObjectFlags::ATTACKING)),
+                o.blocked_attackers()
+                    .iter()
+                    .all(|a| self.object(a).is_attacking()),
                 "a blocker blocking a nonattacker",
                 at,
             )?;

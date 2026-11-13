@@ -8,7 +8,7 @@ use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::rule_change;
-use crate::state::{ObjectFlags, State, TurnStep, Zone, ZoneKey};
+use crate::state::{State, TurnStep, Zone, ZoneKey};
 use crate::table::{GameTable, ManaFace};
 
 use super::solver::{Plan, each_plan};
@@ -59,7 +59,7 @@ pub(super) fn later_costs<L: Layout>(
     }
     for &slot in s.battlefield() {
         let o = s.object(slot);
-        if s.controller(slot) != player || o.flags().has(ObjectFlags::TAPPED) {
+        if s.controller(slot) != player || o.is_tapped() {
             continue;
         }
         for a in s.copiable(slot).face(t).abilities {
@@ -258,7 +258,7 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
     }
     for &slot in s.battlefield() {
         let o = s.object(slot);
-        if s.controller(slot) != player || o.flags().has(ObjectFlags::TAPPED) {
+        if s.controller(slot) != player || o.is_tapped() {
             continue;
         }
         for a in s.copiable(slot).face(t).abilities {

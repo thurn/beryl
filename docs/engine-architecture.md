@@ -238,20 +238,20 @@ Every card, token and spell copy occupies one of 255 slots, addressed by a
 `CardIx` (stored plus one the same way), so one cannot pass for another. The
 object in a slot:
 
-| Field                         | Size | Notes                                                                                       |
-| ----------------------------- | ---- | ------------------------------------------------------------------------------------------- |
-| `card: CardIx`                | 1    | Index into the game's table (§6.4). Tokens and copies point at their definition too         |
-| `incarnation: u16`            | 2    | Bumped on every zone change (§5)                                                            |
-| `zone`, `owner`, `controller` | 3    | Small enums; `controller` is the base one, the layer-2 result is in `Derived`               |
-| `flags`                       | 4    | tapped, summoning sick, attacking, blocking, face down, transformed, phased out, token, ... |
-| `damage: u8`                  | 1    | Marked damage this turn                                                                     |
-| `counters`                    | 3    | +1/+1, -1/-1 and loyalty; any other kind is a row of a table keyed by object and kind       |
-| `attached_to`                 | 1    | `Option<Slot>`: equipment and auras. What exiled a card is a memo of the card               |
-| `timestamp: u16`              | 2    | Battlefield entry order, for layers                                                         |
-| `face`                        | 1    | Which face is up; a chosen color or type joins it with the first card that names one        |
-| `combat: Option<Slot>`        | 1    | The planeswalker an attacker attacks, or the attacker a blocker blocks                      |
+| Field                         | Size | Notes                                                                                                          |
+| ----------------------------- | ---- | -------------------------------------------------------------------------------------------------------------- |
+| `card: CardIx`                | 1    | Index into the game's table (§6.4). Tokens and copies point at their definition too                            |
+| `incarnation: u16`            | 2    | Bumped on every zone change (§5)                                                                               |
+| `zone`, `owner`, `controller` | 3    | Small enums; `controller` is the base one, the layer-2 result is in `Derived`                                  |
+| `flags`                       | 1    | `ObjectFlags`, one bit per `Flag`: tapped, summoning sick, token, a copy's 1/1 exception                       |
+| `damage: u8`                  | 1    | Marked damage this turn                                                                                        |
+| `counters`                    | 3    | +1/+1, -1/-1 and loyalty; any other kind is a row of a table keyed by object and kind                          |
+| `attached_to`                 | 1    | `Option<Slot>`: equipment and auras. What exiled a card is a memo of the card                                  |
+| `timestamp: u16`              | 2    | Battlefield entry order, for layers                                                                            |
+| `face`                        | 1    | Which face is up; a chosen color or type joins it with the first card that names one                           |
+| `combat: CombatRole`          | 5    | None; attacking a player, a planeswalker or nothing (blocked, struck first); or blocking up to three attackers |
 
-About 20 bytes, 24 as laid out, so the table is about 6 KiB.
+22 bytes, 24 as laid out (aligned to 4 bytes), so the table is about 6 KiB.
 
 - **Deck cards get fixed slots.** Each player's deck, up to 60 cards, is
   assigned slots by a random permutation drawn from the hidden RNG at game

@@ -52,7 +52,7 @@ use beryl_engine::card::{
     Ability, CastingKind, CastingOption, Castings, Face, FaceIx, Keywords, ManaColor,
     ObjectAbility, Purpose, Types,
 };
-use beryl_engine::state::{ObjectFlags, StackEntry, Tracker};
+use beryl_engine::state::{StackEntry, Tracker};
 use beryl_engine::{
     Bitboard, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Scratch, Seat, Step,
     TurnStep, Zone, apply, next,
@@ -211,7 +211,7 @@ impl<L: Layout> Agent<L> for ExpertAgent<L> {
             // Crew with the creatures that could not attack anyway, then the least valuable.
             DecisionKind::ChooseObject if d.prompt.purpose == Purpose::Crew => best(d, |c| {
                 let slot = c.object()?;
-                let sick = obs.object(slot).flags().has(ObjectFlags::SUMMONING_SICK);
+                let sick = obs.object(slot).is_summoning_sick();
                 Some(i32::from(sick) * 1000 - e.value(slot))
             }),
             DecisionKind::ChooseObject => e
@@ -313,7 +313,7 @@ fn returns_as_token<L: Layout>(p: &Policy<'_, L>, slot: L::Slot) -> bool {
     p.obs
         .card(slot)
         .is_some_and(|c| p.t.def(c).name == names::SPHINX_OF_FALSE_CONCLUSIONS)
-        && !p.obs.object(slot).flags().has(ObjectFlags::TOKEN)
+        && !p.obs.object(slot).is_token()
 }
 
 /// When a priority decision comes: what the expert may do then.
@@ -409,7 +409,7 @@ impl<L: Layout> Expert<'_, L> {
     }
 
     fn tapped(&self, slot: L::Slot) -> bool {
-        self.obs().object(slot).flags().has(ObjectFlags::TAPPED)
+        self.obs().object(slot).is_tapped()
     }
 
     fn lands(&self, controller: Seat) -> usize {
@@ -972,12 +972,7 @@ impl<L: Layout> Expert<'_, L> {
         }
         let power = |s: L::Slot| i32::from(self.obs().derived(s).power.max(0));
         let flies = |s: L::Slot| self.obs().derived(s).keywords.intersects(Keywords::FLYING);
-        let sick = |s: L::Slot| {
-            self.obs()
-                .object(s)
-                .flags()
-                .has(ObjectFlags::SUMMONING_SICK)
-        };
+        let sick = |s: L::Slot| self.obs().object(s).is_summoning_sick();
         let mut crew: Vec<L::Slot> = self
             .creatures(self.me())
             .filter(|&s| !self.tapped(s))
@@ -1521,8 +1516,8 @@ impl<L: Layout> Expert<'_, L> {
                 let o = self.obs().object(s);
                 self.is(s, names::JACE_VRYNS_PRODIGY)
                     && o.face() == FaceIx::FRONT
-                    && !o.flags().has(ObjectFlags::TAPPED)
-                    && !o.flags().has(ObjectFlags::SUMMONING_SICK)
+                    && !o.is_tapped()
+                    && !o.is_summoning_sick()
             })
     }
 
@@ -1530,9 +1525,7 @@ impl<L: Layout> Expert<'_, L> {
     fn can_attack(&self) -> bool {
         self.creatures(self.me()).any(|s| {
             let o = self.obs().object(s);
-            !o.flags().has(ObjectFlags::TAPPED)
-                && !o.flags().has(ObjectFlags::SUMMONING_SICK)
-                && self.obs().derived(s).power > 0
+            !o.is_tapped() && !o.is_summoning_sick() && self.obs().derived(s).power > 0
         })
     }
 
@@ -1853,7 +1846,7 @@ impl<L: Layout> Expert<'_, L> {
             .creatures(self.me())
             .filter(|&s| {
                 let o = self.obs().object(s);
-                !o.flags().has(ObjectFlags::TAPPED) && !o.flags().has(ObjectFlags::SUMMONING_SICK)
+                !o.is_tapped() && !o.is_summoning_sick()
             })
             .map(|s| {
                 let power =
@@ -2089,9 +2082,9 @@ impl<L: Layout> Expert<'_, L> {
             return -1;
         }
         // A token worth returning is gone for good.
-        let token = self.creatures(self.opp()).any(|s| {
-            self.obs().object(s).flags().has(ObjectFlags::TOKEN) && self.bounce_value(s) >= 40
-        });
+        let token = self
+            .creatures(self.opp())
+            .any(|s| self.obs().object(s).is_token() && self.bounce_value(s) >= 40);
         // +2 leaves him at loyalty + 2; the opponent's swing back decides the rest.
         if threatened >= loyalty + 2 {
             // −1 returns the creature best returned: worth it if that saves him, or on a token
@@ -2185,7 +2178,7 @@ impl<L: Layout> Expert<'_, L> {
     fn their_attack(&self, o: Opt<L>) -> i32 {
         let attackers: Vec<L::Slot> = self
             .creatures(self.opp())
-            .filter(|&s| self.obs().object(s).flags().has(ObjectFlags::ATTACKING))
+            .filter(|&s| self.obs().object(s).is_attacking())
             .collect();
         if attackers.is_empty() {
             return 0;
@@ -2202,7 +2195,7 @@ impl<L: Layout> Expert<'_, L> {
             self.has_type(w, Types::PLANESWALKER) && {
                 let at: i32 = attackers
                     .iter()
-                    .filter(|&&a| self.obs().object(a).combat() == Some(w))
+                    .filter(|&&a| self.obs().object(a).attacked_planeswalker() == Some(w))
                     .map(|&a| i32::from(self.obs().derived(a).power.max(0)))
                     .sum();
                 at > 0 && at >= i32::from(self.obs().object(w).counters().loyalty)
@@ -2373,7 +2366,7 @@ impl<L: Layout> Expert<'_, L> {
     /// enters-the-battlefield ability comes back with it again.
     fn returned(&self, slot: L::Slot) -> i32 {
         let v = self.value(slot);
-        if self.obs().object(slot).flags().has(ObjectFlags::TOKEN) {
+        if self.obs().object(slot).is_token() {
             return v + 15;
         }
         // A planeswalker comes back with its printed loyalty: returning it takes the loyalty
@@ -2621,7 +2614,7 @@ impl<L: Layout> Expert<'_, L> {
         let o = self.obs().object(slot);
         o.zone() == Zone::Battlefield
             && self.obs().controller(slot) == self.opp()
-            && o.flags().has(ObjectFlags::ATTACKING)
+            && o.is_attacking()
     }
 
     /// In their combat, what removing their permanent in `slot` is worth: a lethal attack's
@@ -2636,19 +2629,25 @@ impl<L: Layout> Expert<'_, L> {
         let power = |s: L::Slot| i32::from(self.obs().derived(s).power.max(0));
         let damage: i32 = self
             .creatures(self.opp())
-            .filter(|&s| self.attacking(s) && self.obs().object(s).combat().is_none())
+            .filter(|&s| {
+                self.attacking(s) && self.obs().object(s).attacked_planeswalker().is_none()
+            })
             .map(power)
             .sum();
         if damage >= self.life() {
             return 100_000 + 1000 * power(slot) + v;
         }
-        if 2 * damage >= self.life() && self.obs().object(slot).combat().is_none() {
+        if 2 * damage >= self.life() && self.obs().object(slot).attacked_planeswalker().is_none() {
             return 100_000 + v;
         }
-        let walker = self.obs().object(slot).combat().filter(|&w| {
-            self.has_type(w, Types::PLANESWALKER)
-                && power(slot) >= i32::from(self.obs().object(w).counters().loyalty)
-        });
+        let walker = self
+            .obs()
+            .object(slot)
+            .attacked_planeswalker()
+            .filter(|&w| {
+                self.has_type(w, Types::PLANESWALKER)
+                    && power(slot) >= i32::from(self.obs().object(w).counters().loyalty)
+            });
         v + walker.map_or(0, |w| self.value(w))
     }
 

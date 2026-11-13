@@ -232,7 +232,7 @@ impl<L: Layout> Relayout for Object<L> {
             attached_to: self.attached_to.map(slot),
             timestamp: self.timestamp,
             face: self.face,
-            combat: self.combat.map(slot),
+            combat: self.combat.map::<M>(slot),
             battlefield_index: self.battlefield_index,
         }
     }

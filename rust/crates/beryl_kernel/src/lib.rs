@@ -160,7 +160,7 @@
 //! | `EXILED_UNTIL`, `EXILED_WITH`, `Object::linked`, `State::link`, `zone::forget_exiled_with` | Memos: a memo of the exiled card naming the slot of what exiled it ([`memos::Memo::ExiledWith`], [`memos::Memo::ExiledUntil`]; "Duration and expiry" says how the first outlives that object), read by [`State::exiled_with`] and [`State::exiled_until`] | by-w8gv.7.7, built |
 //! | `LOYALTY_ACTIVATED`, `ENTERED_THIS_TURN` | Trackers, keyed by permanent: a kind of [`trackers::Tracker`] each, noted with [`State::track`] and read with [`State::tracked`] | by-w8gv.7.8, built |
 //! | [`state::Counters`]' long-tail pair (`other_kind`, `other`) | the counters table ([`counters::CounterTable`]), a row for each kind on each object, beside the three kinds the rules themselves read, which stay fields of the object. The kinds are the vocabulary's list (`beryl_card::counter_kinds`), and [`State::add_counters`], [`State::remove_counters`] and [`State::counters_of`] take any of them | by-w8gv.7.9, built |
-//! | `ObjectFlags::ONE_ONE` | stays a field. It is a copy's exception (CR 707.9b), part of the copiable values the rules give a token, and survives its zone changes as `TOKEN` does. That a flag holds exactly one exception is the copy effects' to widen (`docs/rules-coverage.md` §4), not a store's | none |
+//! | `Flag::OneOne` | stays a field. It is a copy's exception (CR 707.9b), part of the copiable values the rules give a token, and survives its zone changes as `TOKEN` does. That a flag holds exactly one exception is the copy effects' to widen (`docs/rules-coverage.md` §4), not a store's | none |
 //!
 //! A fact about a permanent that ends with the turn (a loyalty ability was activated, it
 //! entered this turn) is a tracker keyed by object, not a memo with an expiry. A memo is
@@ -251,22 +251,20 @@
 //! the game, which joins with its first user, since no card yet changes a rule for
 //! everyone. The fields are the variant's own, so every side fits four bytes.
 //!
-//! A locked-in set is the objects one effect affects when it affects several
-//! ([CR 611.2c](https://yawgatog.com/resources/magic-rules/#R6112c), "the set of objects it
-//! affects is determined when that continuous effect begins. After that point, the set
-//! won't change."): [`State::start_effect_on_set`] starts one entry with one timestamp
-//! (CR 613.7) for the permanents it is given, and the layers apply it to each member
-//! ([`State::locked_in`]). A set holds slots, not incarnations: a member that ends leaves
-//! its set where every stored thing about it ends ("Duration and expiry"), so whatever a
-//! set holds is still the object it was, and a card that comes back is no member. The
-//! effect ends with its duration or with its last member, and its place in the table is
-//! free again. Only an effect on two objects or more takes a place: on one it is an entry
-//! on that object, the same effect, and on none it never begins. A set is affected by a
-//! layer change alone, as a player is by a rule change alone (the store's invariants,
-//! which the mutators' arguments keep): nothing else the cards do is one effect on several
-//! objects, and each query by kind would otherwise search the sets. An effect cannot be
-//! started on another's set: only [`State::start_effect_on_set`] names one, and it makes
-//! the set it names.
+//! A locked-in set is the objects one effect affects when it affects several ([CR 611.2c], "the set
+//! of objects it affects is determined when that continuous effect begins. After that point, the
+//! set won't change."): [`State::start_effect_on_set`] starts one entry with one timestamp (CR
+//! 613.7) for the permanents it is given, and the layers apply it to each member
+//! ([`State::locked_in`]). A set holds slots, not incarnations: a member that ends leaves its set
+//! where every stored thing about it ends ("Duration and expiry"), so whatever a set holds is still
+//! the object it was, and a card that comes back is no member. The effect ends with its duration or
+//! with its last member, and its place in the table is free again. Only an effect on two objects or
+//! more takes a place: on one it is an entry on that object, the same effect, and on none it never
+//! begins. A set is affected by a layer change alone, as a player is by a rule change alone (the
+//! store's invariants, which the mutators' arguments keep): nothing else the cards do is one effect
+//! on several objects, and each query by kind would otherwise search the sets. An effect cannot be
+//! started on another's set: only [`State::start_effect_on_set`] names one, and it makes the set it
+//! names.
 //!
 //! Its payload ([`effects::Payload`]) is a layer change, a zone-change replacement or a
 //! rule change, a permission to cast or a cost change (built). A payload is a
@@ -289,7 +287,7 @@
 //!   active player as a turn begins and `EndOfTurn` in the cleanup step.
 //! - **An object ends.** "While the card stays in its zone" is no duration: whatever is
 //!   stored about an object ends with it
-//!   ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), inside the three
+//!   ([CR 400.7]), inside the three
 //!   chokepoints that bump an incarnation ([`State::move_object`],
 //!   [`State::cease_to_exist`], a shuffle's rebind). `State` keeps the set of slots any
 //!   store has an entry about, the members of the locked-in sets among them, so the move
@@ -308,11 +306,10 @@
 //! "until" a permanent leaves needs no such end: the rules return it as the permanent
 //! leaves (CR 610.3), and the store's invariant holds that permanent to the battlefield.
 //!
-//! Counters end the same way
-//! ([CR 122.2](https://yawgatog.com/resources/magic-rules/#R1222): "Counters on an object
-//! are not retained if that object moves from one zone to another."): the move resets the
-//! object's fields and ends its rows of the table with everything else stored about it. A
-//! row also ends with its last counter, so the table holds no row of none.
+//! Counters end the same way ([CR 122.2]: "Counters on an object are not retained if that object
+//! moves from one zone to another."): the move resets the object's fields and ends its rows of the
+//! table with everything else stored about it. A row also ends with its last counter, so the table
+//! holds no row of none.
 //!
 //! Trackers of this turn are cleared whole as the turn begins, inside
 //! [`State::begin_turn`] with the lands played, and a permanent's bits as it leaves the
@@ -343,7 +340,7 @@
 //! | [`State::signature`] | one bit test of the keyed slots, and one of the two bits as two objects are compared (`store::Stored`) | out of line, the two objects' memos, their rows of counters and the effects on them compared: a permanent's layer results show what its effects make of it now, not for how long |
 //! | "is a rule change of this kind in force" ([`State::rules_for`], [`GameTable::rules_of`]) | for a player, their two sets of rules joined and one AND with the table's set of the kind, which is the whole answer; for a permanent, one AND of the table's rules of its card and one of the store's kinds | for a permanent, a second AND of the rules of the face that is up, or one pass over the store's entries |
 //! | an event's match against triggered abilities (the rules' `trigger::match_event`) | one AND of the kinds any card of the game listens to ([`GameTable::listens_any`]) | one AND of the battlefield's listener mask; then, for each permanent whose card listens to the kind, the listeners of that kind on the face that is up ([`GameTable::listeners`]), and no other ability of it |
-//! | the layers' search for the rules static abilities change for players | one AND of the listener mask the pass has just folded from the permanents ([`event::kind::RULE_CHANGE`]): no read of its own | a second pass over the permanents, out of line, in a recompute with such a permanent on the battlefield |
+//! | the layers' search for the rules static abilities change for players | one AND of the listener mask the pass has just folded from the permanents ([`event::Listens::RULE_CHANGE`]): no read of its own | a second pass over the permanents, out of line, in a recompute with such a permanent on the battlefield |
 //! | a tracker ([`State::track`], [`State::tracked`]) | one AND of the table's capabilities where the rules would write it; a read finds an empty set | a bit set or tested |
 //! | a count of counters ([`State::counters_of`]) | of a kind the object keeps in a field, one read; of any other, one bit test of the keyed slots | one pass over the table's rows, at most 32 of 3 bytes |
 //!
@@ -398,10 +395,9 @@
 //!
 //! ### Static rule changes
 //!
-//! Whether a rule change applies to a player or a permanent now is asked the same way
-//! whether a static ability or a resolved effect makes it
-//! ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311): "Some continuous
-//! effects affect game rules rather than objects."):
+//! Whether a rule change applies to a player or a permanent now is asked the same way whether a
+//! static ability or a resolved effect makes it ([CR 613.11]: "Some continuous effects affect game
+//! rules rather than objects."):
 //!
 //! - A rule change is the vocabulary's data (`beryl_card`'s `RuleChange`: who may or may
 //!   not do what, and when), and any number of cards may say any number of them. A game
@@ -421,7 +417,7 @@
 //!   [`State::rule_applies`] answers for one numbered rule change, for tools and tests.
 //! - A static ability's change for players is kept current with the layers, never found
 //!   by walking the battlefield as the rules ask. A card with such an ability has
-//!   [`event::kind::RULE_CHANGE`] in its listener mask, which the layers' pass already
+//!   [`event::Listens::RULE_CHANGE`] in its listener mask, which the layers' pass already
 //!   reads of every permanent for what listens. With the bit in what it folded, the pass
 //!   adds each such permanent's rules to the set of each player they apply to, control
 //!   being settled, and stores the sets as it finishes ([`derive::Rederive::finish`], with
@@ -441,7 +437,7 @@
 //!   a face-down permanent has none of. The Effects store keeps entries on an object too
 //!   ([`State::effect_rules_on`]), which no card starts: the table refuses an ability
 //!   whose effect would.
-//! - "Can't" beats "can" ([CR 101.2](https://yawgatog.com/resources/magic-rules/#R1012))
+//! - "Can't" beats "can" ([CR 101.2])
 //!   in the rules that read two changes together, not here: each rule is its own bit.
 //! - Which permanent makes a change, to tell a player why, is asked only once it is known
 //!   to apply (`beryl_engine`'s `rule_change::maker`).
@@ -635,6 +631,12 @@
 //! [`State::try_relayout`] a game with a deck, a token, a list or a table past what the
 //! target holds. [`GameTable`] refuses no deck for its size and no decks for how many
 //! distinct cards they name.
+//!
+//! [CR 611.2c]: https://yawgatog.com/resources/magic-rules/#R6112c
+//! [CR 400.7]: https://yawgatog.com/resources/magic-rules/#R4007
+//! [CR 122.2]: https://yawgatog.com/resources/magic-rules/#R1222
+//! [CR 613.11]: https://yawgatog.com/resources/magic-rules/#R61311
+//! [CR 101.2]: https://yawgatog.com/resources/magic-rules/#R1012
 
 pub mod bitboard;
 pub mod board;

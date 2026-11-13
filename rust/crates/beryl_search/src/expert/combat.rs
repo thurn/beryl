@@ -2,7 +2,7 @@
 
 use beryl_cards::names;
 use beryl_engine::card::Types;
-use beryl_engine::state::ObjectFlags;
+
 use beryl_engine::{GameTable, Layout, Seat, State};
 
 use crate::combat::Judgments;
@@ -43,7 +43,7 @@ impl<L: Layout> Judgments<L> for ExpertCombat {
             .filter(|&&c| {
                 s.controller(c) == me
                     && s.derived(c).types.intersects(Types::CREATURE)
-                    && s.object(c).flags().has(ObjectFlags::TAPPED)
+                    && s.object(c).is_tapped()
             })
             .map(|&c| p.value(c))
             .max()

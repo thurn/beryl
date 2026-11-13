@@ -7,9 +7,7 @@ use crate::card::{CastingKind, Castings, FaceIx, ManaColor, ObjectAbility, SpecI
 use crate::continuous;
 use crate::event::{self, Reason};
 use crate::ids::Slot;
-use crate::state::{
-    CounterKind, Duration, ManaPool, ObjectFlags, Pending, Tracker, TurnStep, Zone, ZoneKey,
-};
+use crate::state::{CounterKind, Duration, ManaPool, Pending, Tracker, TurnStep, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{Candidates, Choice, DecisionKind, Opt, Profile};
 
@@ -59,7 +57,7 @@ fn a_creature_spell_goes_on_the_stack_then_resolves_onto_the_battlefield() {
     assert_eq!(g.s.object(bear).zone(), Zone::Stack);
     assert_eq!(g.s.stack().len(), 1);
     for land in lands {
-        assert!(g.s.object(land).flags().has(ObjectFlags::TAPPED));
+        assert!(g.s.object(land).is_tapped());
     }
     assert_eq!(g.s.player(g.me).mana(), ManaPool::default());
     assert_eq!(g.s.turn().priority(), g.me);
@@ -764,7 +762,7 @@ fn a_mana_ability_taps_for_the_color_chosen() {
         color: ManaColor::Blue,
     });
     assert_eq!(g.s.player(g.me).mana().amounts(), [0, 1, 0, 0, 0, 0]);
-    assert!(g.s.object(island).flags().has(ObjectFlags::TAPPED));
+    assert!(g.s.object(island).is_tapped());
 }
 
 #[test]

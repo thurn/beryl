@@ -22,9 +22,7 @@ use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::{Seat, Slot};
 use crate::resolution::Resolution;
-use crate::state::{
-    CounterKind, ObjectFlags, ObjectRef, StackEntry, Target, TurnStep, Zone, ZoneKey,
-};
+use crate::state::{CounterKind, ObjectRef, StackEntry, Target, TurnStep, Zone, ZoneKey};
 use crate::{Decision, DecisionKind, GameTable, Scratch, State};
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
@@ -557,7 +555,7 @@ fn gaining_control_as_data_changes_the_controller_and_says_so() {
     let targets = [Target::object(SpecIx::new(0), s.object_ref(bear))];
     assert!(resolve(&t, &mut s, &mut x, source, &STEAL, &targets, &[]).is_none());
     assert_eq!(s.controller(bear), p);
-    assert!(s.object(bear).flags().has(ObjectFlags::SUMMONING_SICK));
+    assert!(s.object(bear).is_summoning_sick());
     let said = x.events.drain().into_iter().any(|event| {
         matches!(event, Event::GainControl { object, player } if object.slot == bear && player == p)
     });
@@ -590,7 +588,7 @@ fn a_copy_of_a_target_is_a_token_with_its_copiable_values() {
     let targets = [Target::object(SpecIx::new(0), s.object_ref(bear))];
     assert!(resolve(&t, &mut s, &mut x, source, &COPY, &targets, &[]).is_none());
     let copies: Vec<Slot> = (s.battlefield().iter().copied())
-        .filter(|&slot| s.object(slot).flags().has(ObjectFlags::TOKEN))
+        .filter(|&slot| s.object(slot).is_token())
         .collect();
     assert_eq!(copies.len(), 1);
     assert_eq!(s.copiable(copies[0]), s.copiable(bear));

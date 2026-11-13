@@ -109,7 +109,7 @@ fn token(t: &GameTable, s: &mut State, owner: Seat, what: Copiable) -> Slot {
         slot,
         Arrival {
             tapped: false,
-            attacking: false,
+            attacking: None,
             controller: None,
             face,
             counters: None,
@@ -144,7 +144,7 @@ fn derive(t: &GameTable, s: &mut State, boost: i8) {
             ..Derived::default()
         };
     }
-    cache.finish(0, Default::default());
+    cache.finish(beryl_kernel::event::Listens::NONE, Default::default());
 }
 
 #[test]
@@ -205,7 +205,7 @@ fn copiable_values_are_the_face_up_or_the_blank_face_down_ones() {
     assert!(std::ptr::eq(down.face(&t), &raw const FACE_DOWN));
     assert_eq!(down.name(&t), "");
     assert_eq!((down.power(&t), down.toughness(&t)), (2, 2));
-    assert_eq!(down.may_listen(&t), 0);
+    assert!(down.may_listen(&t).is_empty());
     assert_eq!(
         down.record(&t),
         (t.face_down_copy::<beryl_kernel::Small>(), FaceIx::FRONT)

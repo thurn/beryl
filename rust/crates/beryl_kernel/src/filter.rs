@@ -7,7 +7,7 @@ use beryl_card::{CardDef, Players};
 use crate::bitboard::Bitboard;
 use crate::ids::Seat;
 use crate::layout::Layout;
-use crate::state::{ObjectFlags, State, Zone};
+use crate::state::{Flag, State, Zone};
 use crate::table::GameTable;
 
 /// What a [`Filter`] accepts in a game. Evaluating one is a pass over a candidate set; the
@@ -91,7 +91,7 @@ impl Evaluate for Filter {
             // CR 108.4a: a card that is no permanent or spell has no controller, and "its
             // owner" is used instead, which is what the query answers.
             Filter::Whose(players) => is_for(players, s.controller(slot), you),
-            Filter::Tapped => o.flags.has(ObjectFlags::TAPPED),
+            Filter::Tapped => o.flags.has(Flag::Tapped),
             Filter::ManaValueAtMost(n) => s.mana_value(t, slot) <= n,
             Filter::ManaValueAtMostX => s.mana_value(t, slot) <= x,
             Filter::Not(f) => !f.matches_x(s, t, slot, you, x),
@@ -148,15 +148,16 @@ pub(crate) fn reads_players_of(def: &CardDef) -> bool {
     read
 }
 
-/// [`Players::EachOpponent`]: whether `player` is one of `you`'s opponents
-/// ([CR 102.2](https://yawgatog.com/resources/magic-rules/#R1022)): "In a two-player game, a
-/// player's opponent is the other player."
+/// [`Players::EachOpponent`]: whether `player` is one of `you`'s opponents ([CR 102.2]): "In a
+/// two-player game, a player's opponent is the other player."
 ///
-/// The one place that entry is read, and [`crate::State::opponents_of`] is the set it tests.
-/// With more players and no teams every other player is an opponent, as written here.
-/// Between teams, "the player's opponents are all players not on their team"
-/// ([CR 102.3](https://yawgatog.com/resources/magic-rules/#R1023)): this function changes
+/// The one place that entry is read, and [`crate::State::opponents_of`] is the set it tests. With
+/// more players and no teams every other player is an opponent, as written here. Between teams,
+/// "the player's opponents are all players not on their team" ([CR 102.3]): this function changes
 /// then, and no card does.
+///
+/// [CR 102.2]: https://yawgatog.com/resources/magic-rules/#R1022
+/// [CR 102.3]: https://yawgatog.com/resources/magic-rules/#R1023
 #[inline]
 pub fn is_an_opponent(player: Seat, you: Seat) -> bool {
     player != you

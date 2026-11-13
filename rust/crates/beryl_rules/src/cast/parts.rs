@@ -20,9 +20,7 @@ use crate::game::Game;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
 use crate::mana::{self, Funds};
-use crate::state::{
-    CastStep, Casting, CounterKind, ObjectFlags, Pending, StackEntry, State, Zone, ZoneKey,
-};
+use crate::state::{CastStep, Casting, CounterKind, Pending, StackEntry, State, Zone, ZoneKey};
 use crate::table::GameTable;
 
 use super::costs::total_cost;
@@ -112,8 +110,7 @@ pub(super) fn candidates<L: Layout>(
                 !(chosen.other && slot == itself)
                     && s.controller(slot) == player
                     && chosen.filter.matches(s, t, slot, player)
-                    && !(action == CostAction::Tap
-                        && s.object(slot).flags().has(ObjectFlags::TAPPED))
+                    && !(action == CostAction::Tap && s.object(slot).is_tapped())
             })
             .collect(),
         zone => {

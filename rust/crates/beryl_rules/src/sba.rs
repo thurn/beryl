@@ -9,7 +9,7 @@ use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layers;
 use crate::layout::{Layout, PerPlayer, Table};
-use crate::state::{ObjectFlags, Pending, State, Zone};
+use crate::state::{Pending, State, Zone};
 use crate::table::GameTable;
 
 /// Checks state-based actions and performs them, returning whether any were performed. A
@@ -145,8 +145,7 @@ fn doomed<L: Layout>(s: &State<L>, t: &GameTable) -> Doomed<L> {
     ]
     .into_iter()
     .fold(Bitboard::EMPTY, |away, zone| away | s.in_zone(zone));
-    let tokens =
-        (away & L::TOKEN_POOL).filter(|slot| s.object(slot).flags().has(ObjectFlags::TOKEN));
+    let tokens = (away & L::TOKEN_POOL).filter(|slot| s.object(slot).is_token());
     (graveyard, tokens, legendary)
 }
 

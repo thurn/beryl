@@ -509,10 +509,7 @@ fn perform<L: Layout>(
             }
             Ok(())
         }
-        DecisionKind::BlockTarget => {
-            combat::block_attacker(s, object());
-            Ok(())
-        }
+        DecisionKind::BlockTarget => combat::block_attacker(s, object()),
         DecisionKind::DamageDivision => {
             let Pending::CombatDamage { done, lethal } = *s.pending() else {
                 unreachable!("a damage division without its pending state");

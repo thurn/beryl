@@ -479,7 +479,7 @@ fn derive_alike(s: &mut State) {
     for i in 0..cache.battlefield().len() {
         cache.results()[i] = crate::state::Derived::default();
     }
-    cache.finish(0, Default::default());
+    cache.finish(crate::event::Listens::NONE, Default::default());
 }
 
 /// Two objects are interchangeable only if the same effects are on them (§7.2): their

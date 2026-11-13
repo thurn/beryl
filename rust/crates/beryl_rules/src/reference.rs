@@ -17,7 +17,7 @@ use crate::invariants::{At, Violation};
 use crate::layers;
 use crate::layout::{Layout, Queue, Table};
 use crate::mana::{self, Funds};
-use crate::state::{ObjectFlags, State, Zone, ZoneKey};
+use crate::state::{State, Zone, ZoneKey};
 use crate::table::GameTable;
 use crate::trigger::face;
 
@@ -193,10 +193,10 @@ fn reference_units<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Opti
     for &slot in s.battlefield() {
         let d = s.derived(slot);
         let o = s.object(slot);
-        if d.controller != player || o.flags().has(ObjectFlags::TAPPED) {
+        if d.controller != player || o.is_tapped() {
             continue;
         }
-        if d.types.intersects(Types::CREATURE) && o.flags().has(ObjectFlags::SUMMONING_SICK) {
+        if d.types.intersects(Types::CREATURE) && o.is_summoning_sick() {
             continue;
         }
         let mut kinds = 0u8;
