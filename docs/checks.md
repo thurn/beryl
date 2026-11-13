@@ -50,10 +50,10 @@ branch left `origin/staging`:
 
 For a change to `ui/` or `rust/`, it also runs as many of the `ui-test` and
 `shots` browser checks as fit in the budget, choosing those the change could
-break according to the nightly coverage data (`just coverage`), worst failure
-history first. The run log's `chosen` field says why each one ran, and `cut`
-marks the ones left to slow CI. The fast check also rejects conflict markers and
-badly formatted commit subjects.
+break according to the coverage data (`just coverage`), worst failure history
+first. The run log's `chosen` field says why each one ran, and `cut` marks the
+ones left to slow CI. The fast check also rejects conflict markers and badly
+formatted commit subjects.
 
 ## Slow CI
 
@@ -76,6 +76,10 @@ affect (`slow_ci.py`):
   rule places.
 - Every lane runs in full once an hour (`FULL_EVERY`), or when `$BERYL_CI_FULL`
   is set, so a wrong selection is caught within the hour.
+- The coverage data is measured nightly, and again in the background after each
+  full sweep in which `shots` and `ui-test` pass, so it stays about an hour
+  behind staging. A ui/src line changed since the coverage's commit is one the
+  data cannot place.
 - A lane left out gets a `skip` record in the run log saying why, and
   `just ci <lanes>` runs the named lanes in full.
 
