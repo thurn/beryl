@@ -14,7 +14,9 @@ from pathlib import Path
 from . import paths
 
 SCANNED = ("rust", "ui/src", "ui/scripts", "tools/src")
-SUFFIXES = frozenset({".rs", ".toml", ".ts", ".tsx", ".mjs", ".js", ".py"})
+SUFFIXES: frozenset[str] = frozenset(
+    {".rs", ".toml", ".ts", ".tsx", ".mjs", ".js", ".py"}
+)
 REFERENCE: re.Pattern[str] = re.compile(r"plan K[0-9]|[(]plan,|project-50[k]")
 ADVICE = "do not cite a planning document; say what the code does, or cite docs/engine-architecture.md"
 
