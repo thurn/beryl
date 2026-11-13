@@ -25,7 +25,9 @@ cannot diff against, and one a changed path reaches that no rule here places
 
 Every lane runs in full when the last full sweep on this machine began over [`FULL_EVERY`] ago,
 or `$BERYL_CI_FULL` is set. Slow CI runs only while staging moves, so a check that the selection
-wrongly left out fails within the hour, and bisect.py finds the commit that broke it.
+wrongly left out fails within the hour, and bisect.py finds the commit that broke it. A full
+sweep in which the browser lanes pass starts a coverage run of its commit in the background
+(`coverage.refresh`), so the browser lanes' choice has coverage at most about an hour old.
 
 `by ci <lanes>` runs the lanes named, in full.
 """
@@ -49,6 +51,7 @@ from pathlib import Path
 from . import (
     bench,
     checks,
+    coverage,
     mobile,
     oracle_selection,
     paths,
@@ -114,6 +117,9 @@ LANES: tuple[str, ...] = (
     "mobile",
 )
 ALWAYS = "always: needs no build"
+# The lanes coverage.py measures. A full sweep in which both pass refreshes the coverage that
+# chooses their checks, so that it is at most about an hour behind staging.
+BROWSER: frozenset[str] = frozenset({"ui-test", "shots"})
 
 
 # What each lane runs of the tools.
@@ -536,7 +542,7 @@ def slow(args: argparse.Namespace) -> int:
     passes: Passes = Passes.load(passes_path())
     commit: str = recordable()
     if args.lanes:
-        chosen = Plan({n: "named" for n in names}, {}, set(names), "named")
+        chosen: Plan = Plan({n: "named" for n in names}, {}, set(names), "named")
     else:
         chosen = plan(passes, now, names, prints)
         report(chosen, passes, now, commit)
@@ -546,6 +552,8 @@ def slow(args: argparse.Namespace) -> int:
     def passed(lanes: list[str]) -> None:
         if commit:
             passes.record(lanes, commit, prints)
+        if commit and chosen.full and not args.lanes and BROWSER <= set(lanes):
+            print(f"ci: {coverage.refresh(commit)}")
 
     budget = int(os.environ.get("CI_BUDGET_S", checks.SLOW_BUDGET))
     every = len(chosen.whole) == len(chosen.why)

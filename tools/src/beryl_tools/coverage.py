@@ -387,6 +387,51 @@ def in_tree(
             remove_tree(tree)
 
 
+def refresh(commit: str) -> str:
+    """Starts measuring `commit` in the background at low priority, unless it is the newest
+    coverage already or another coverage run holds the lock, and returns a line saying which.
+
+    Slow CI calls this after an hourly full sweep whose browser lanes passed. Without it,
+    coverage is measured only nightly, and a line of ui/src changed since then is one coverage
+    cannot place, so slow CI runs every browser check (selection.py's `Chooser.unboxed`). The
+    run starts from the main checkout's tools, as the nightly agent's does, in a session of its
+    own: slow CI runs in a worktree that Enact deletes when it ends, ending every process left
+    inside it."""
+    if system.WINDOWS:
+        return "coverage: not refreshed: this host records no coverage"
+    try:
+        newest = json.loads((folder() / "latest.json").read_text()).get("commit")
+    except (OSError, ValueError):
+        newest = None
+    if newest == commit:
+        return f"coverage: {commit[:10]} is measured already"
+    try:
+        with system.file_lock(folder() / ".lock", timeout=0):
+            pass
+    except system.LockHeld:
+        return "coverage: not refreshed: another coverage run is in progress"
+    main = paths.main_checkout()
+    uv = shutil.which("uv")
+    if main is None or uv is None:
+        return "coverage: not refreshed: needs the main checkout and uv"
+    command = [uv, "run", "--quiet", "--project", str(main / "tools")]
+    command += ["by", "coverage", "--commit", commit]
+    # Not slow CI's: its worktree's environment, or its run log's results file.
+    leave = {"VIRTUAL_ENV", "PYTHONPATH", runlog.RESULTS_ENV}
+    env = {k: v for k, v in os.environ.items() if k not in leave}
+    with open(folder() / "refresh.log", "w") as log:
+        subprocess.Popen(
+            system.utility(command),
+            cwd=main,
+            env=env,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    return f"coverage: measuring {commit[:10]} in the background ({log.name})"
+
+
 def remove_tree(tree: Path) -> None:
     subprocess.run(
         ["git", "worktree", "remove", "--force", str(tree)],

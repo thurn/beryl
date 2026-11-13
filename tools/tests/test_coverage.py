@@ -1,8 +1,11 @@
 import base64
 import json
+import subprocess
 from pathlib import Path
 
-from beryl_tools import coverage
+import pytest
+
+from beryl_tools import coverage, paths, system
 
 
 def inline(text: str, sources: list[str], mappings: str, comment: str = "//") -> str:
@@ -145,6 +148,48 @@ def test_a_dirty_tree_leaves_latest_alone(tmp_path: Path) -> None:
     assert path.name == "def456-dirty.json"
     latest = json.loads((coverage.folder() / "latest.json").read_text())
     assert latest["commit"] == "abc123"
+
+
+def started(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
+    """The commands `coverage.refresh` starts, recorded instead of run, from a main checkout
+    at /main."""
+    commands: list[list[str]] = []
+    monkeypatch.setattr(paths, "main_checkout", lambda: Path("/main"))
+
+    def popen(command: list[str], **_: object) -> None:
+        commands.append(command)
+
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    return commands
+
+
+def test_a_refresh_measures_a_commit_newer_than_the_coverage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands = started(monkeypatch)
+    coverage.write({}, "abc123", False, {}, 1.0)
+    line = coverage.refresh("def456")
+    assert "measuring def456" in line
+    [command] = commands
+    assert command[-4:] == ["by", "coverage", "--commit", "def456"]
+
+
+def test_a_refresh_skips_the_commit_coverage_has(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands = started(monkeypatch)
+    coverage.write({}, "abc123", False, {}, 1.0)
+    assert "measured already" in coverage.refresh("abc123")
+    assert commands == []
+
+
+def test_a_refresh_waits_for_no_coverage_run_in_progress(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands = started(monkeypatch)
+    with system.file_lock(coverage.folder() / ".lock"):
+        assert "in progress" in coverage.refresh("def456")
+    assert commands == []
 
 
 def test_spans_join_consecutive_lines() -> None:
