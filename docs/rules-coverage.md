@@ -286,7 +286,9 @@ proposal, a filter over it, a class from CR 616.1 and a rewrite.
   A shield is an Effects entry with what is left of it and the source it was
   chosen for. A proposal carries "can't be prevented". Doubling and prevention
   on one event are ordered by the loop above.
-- **Regeneration** is a shield that rewrites a destruction, and lands here.
+- **Regeneration** is a shield that rewrites a destruction. by-ilmp (epic
+  by-sxgz) builds it first as an Effects entry; this group folds that shield
+  into the pipeline as a destruction proposal.
 
 Counters and tokens are proposals of the same form with no keystone here. They
 are built with their first card.
