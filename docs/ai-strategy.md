@@ -35,8 +35,8 @@ A strong opponent that **does not cheat** and **plays like a plausible human**.
   names a card. Per-card numbers survive only as table entries (`values.rs`),
   the overlay of plan K9 ([project-50k.md](project-50k.md)).
 - **The bar.** The WU Control mirror is the only testbed until a human finds a
-  new blunder in fewer than one game in five. Then the ladder moves to the first
-  Legacy deck.
+  new blunder in fewer than one game in five. Then the ladder moves to the next
+  deck.
 
 ## 2. What we learned
 
@@ -548,7 +548,7 @@ The expert gets 18 of the 20 suite positions right and the champion 2 (§2.2).
 One measurement says how much of that gap the root alone can close, and at what
 price in strength. It is a yardstick, measured once after the `guard` rung, and
 never promoted: the expert is 3,200 lines for 29 cards, so a champion that
-leaned on it would tell us nothing about a Legacy deck, and would not count
+leaned on it would tell us nothing about another deck, and would not count
 toward §1's bar.
 
 - **The option `expert`.** With `anchor` and `expert` set, the root's default at
@@ -570,7 +570,7 @@ toward §1's bar.
 
 Engine speed is a multiplier on every rung.
 
-- The cube rollout benchmark and `count-gate.toml` stay the measure
+- The rollout benchmark and `count-gate.toml` stay the measure
   ([benchmarking.md](benchmarking.md)).
 - A speed-up that keeps every answer (`rollouts_never_change` pinned) changes no
   move, so it needs no match.
@@ -588,7 +588,7 @@ Engine speed is a multiplier on every rung.
 - **A second deck.** The mirror is the only testbed until §1's bar is met. The
   timing rule rests on dominance (the same play is available later at no loss),
   which does not depend on the deck; greedy's card values and combat rules do,
-  and will need the first Legacy deck to test them.
+  and will need another deck to test them.
 - **Combo decks.** A combo turn is 10 to 20 linked decisions, which needs the
   tree of turns (§9).
 - **A solver that weighs every attack and every block.** The planner weighs a

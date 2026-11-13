@@ -712,7 +712,7 @@ impl FaceFacts {
 }
 
 /// What a face makes as a source, found once per game ([`GameTable::facts`]) for the
-/// many faces the mana solver reads: the cube's permanents are mostly not sources, or sources whose
+/// many faces the mana solver reads: most implemented permanents are not sources, or sources whose
 /// mana depends on nothing else.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ManaFace {

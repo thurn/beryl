@@ -190,7 +190,7 @@ fn complete<L: Layout>(
 /// Whether a paying plan taps a source it could leave untapped, spending the same floating
 /// mana: three Plains and a Mana Crypt for {3}{W}, when the Crypt and two Plains pay it. The
 /// extra source only turns into floating mana, which tapping it later would make as well, so
-/// the plan is dominated (§10) and never offered or taken. The cube has no {C} symbol in a
+/// the plan is dominated (§10) and never offered or taken. No implemented card has a {C} symbol in a
 /// cost, so colorless mana left floating is never worth more than the source's own mana.
 fn wasteful<L: Layout>(
     cost: ManaCost,

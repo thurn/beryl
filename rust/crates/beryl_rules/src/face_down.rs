@@ -28,7 +28,7 @@ use crate::table::GameTable;
 /// face up this way.)" The card's characteristics are its front face's
 /// ([CR 712.6a](https://yawgatog.com/resources/magic-rules/#R7126a)), which is the face it
 /// turns up ([CR 712.12a](https://yawgatog.com/resources/magic-rules/#R71212a)): "If it's
-/// turned face up, it will have its front face up." No creature card in the cube costs {0},
+/// turned face up, it will have its front face up." No implemented creature card costs {0},
 /// so a cost of nothing is no mana cost.
 fn face_up_cost<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Option<ManaCost> {
     // Only a card is turned face up: a token copy of a face-down permanent has no card

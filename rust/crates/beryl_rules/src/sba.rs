@@ -107,7 +107,7 @@ type Legendary<L> = PerPlayer<L, Bitboard<<L as Layout>::Slot>>;
 ///
 /// [CR 704.5m](https://yawgatog.com/resources/magic-rules/#R7045m): "If an Aura is attached to
 /// an illegal object or player, or is not attached to an object or player, that Aura is put
-/// into its owner's graveyard." The cube's one Aura, Swift Reconfiguration, makes what it
+/// into its owner's graveyard." The one implemented Aura, Swift Reconfiguration, makes what it
 /// enchants a Vehicle, which its "enchant creature or Vehicle" allows, so only the second
 /// case arises: what it enchanted left the battlefield (`zone::leave` detaches it).
 ///

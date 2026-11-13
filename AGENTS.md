@@ -1,21 +1,19 @@
 # Working on Project Beryl
 
-Project Beryl is a research project to build a Magic: The Gathering AI for the
-Legacy constructed format that plays the format's top decks as well as a strong
-human player. It is a Tauri 2 desktop app for Apple silicon Macs, with a Rust
-workspace behind a React and TypeScript UI. The repository is public.
+Project Beryl is a research project to build a Magic: The Gathering AI that
+plays as well as a strong human player. It is a Tauri 2 desktop app for Apple
+silicon Macs, with a Rust workspace behind a React and TypeScript UI. The
+repository is public.
 
-Games are two-player, best of three with sideboards, between fixed tournament
-decklists. There is no drafting. The V1 card pool is the main decks and
-sideboards of the Legacy decks we choose to support, kept as decklists in
-`docs/sample-decks/`. The rules engine and AI only need to handle those cards.
-Until those decks are implemented, we test with the WU Control mirror left over
-from the project's earlier cube-draft target:
+The goal is to support 50,000+ different card definitions, so write modular code
+that scales to that size.
+
+Games are two-player, best of three with sideboards, between fixed decklists.
+There is no drafting. The card pool is the cards in the decklists kept in
+`docs/sample-decks/`, and the rules engine and AI only need to handle those
+cards. Until more decks are implemented, we test with the WU Control mirror in
 `docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt`
 (`decks::WU_CONTROL`). Never delete a card implementation.
-
-The long-term goal is to support 50,000+ different cards, so write modular code
-that scales to that size.
 
 All rules engine code must have comments that point to the part of the
 Comprehensive Rules it implements. Link to

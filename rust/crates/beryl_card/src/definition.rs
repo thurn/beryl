@@ -167,7 +167,7 @@ impl Face {
 /// effect that put it onto the battlefield face down": "a 2/2 face-down creature with no text,
 /// no name, no subtypes, and no mana cost." These are its copiable values, applied in layer 1b
 /// ([CR 613.2b](https://yawgatog.com/resources/magic-rules/#R6132b)): "Face-down spells and
-/// permanents have their characteristics modified as defined in rule 708.2." The cube's only
+/// permanents have their characteristics modified as defined in rule 708.2." The only
 /// face-down permanents are manifested ones (CR 701.40a), which list the same values.
 pub static FACE_DOWN: Face = Face {
     types: Types::CREATURE,

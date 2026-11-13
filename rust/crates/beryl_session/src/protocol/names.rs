@@ -93,7 +93,7 @@ mirror! {
     Mana from ManaColor { White, Blue, Black, Red, Green, Colorless }
 }
 
-/// A card type (CR 300.1), those the cube's cards use.
+/// A card type (CR 300.1), those the implemented cards use.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum CardType {
@@ -106,7 +106,7 @@ pub enum CardType {
     Sorcery,
 }
 
-/// A keyword ability a permanent can show (CR 702), those the cube's permanents use in combat.
+/// A keyword ability a permanent can show (CR 702), those implemented permanents use in combat.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum Keyword {

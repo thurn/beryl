@@ -17,7 +17,7 @@ pub fn default_deck() -> Vec<(u8, String)> {
 }
 
 /// The 40-card main deck of `docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt`, the
-/// Milestone 1 mirror: a mythic drafter's deck from the Arena Powered Cube run of 2025-10-30.
+/// Milestone 1 mirror: a mythic drafter's deck from an Arena run of 2025-10-30.
 pub const WU_CONTROL: &Decklist = &[
     (1, names::JACE_VRYNS_PRODIGY),
     (1, names::SNAPCASTER_MAGE),
@@ -52,7 +52,7 @@ pub const WU_CONTROL: &Decklist = &[
 ];
 
 /// The 40-card main deck of `docs/sample-decks/2026-10-17-PrinceJools-wu-control.txt`, the
-/// MTGO Vintage Cube deck that was the mirror before. It plays implemented cards the mirror
+/// MTGO deck that was the mirror before. It plays implemented cards the mirror
 /// lacks, which UI fixtures reach in play.
 pub const VINTAGE_WU_CONTROL: &Decklist = &[
     (1, names::MANA_TITHE),
@@ -91,13 +91,13 @@ pub const VINTAGE_WU_CONTROL: &Decklist = &[
 /// minimum deck size of 40 cards."
 const FUZZ_DECK: usize = 40;
 
-/// Nonbasic cards in a fuzz deck at most, about a cube deck's spells and nonbasic lands.
+/// Nonbasic cards in a fuzz deck at most, about a deck's spells and nonbasic lands.
 const FUZZ_NONBASICS: usize = 23;
 
 /// A legal 40-card deck of the cards implemented so far, for random play: up to 23 nonbasic
-/// cards chosen by `seed`, each at most once as in a cube draft, and basic lands in turn for
+/// cards chosen by `seed`, each at most once as in a draft, and basic lands in turn for
 /// the rest. A limited deck holds "as many duplicates of a card as are included with the
-/// product" (CR 100.2b), and the cube holds one of each.
+/// product" (CR 100.2b), and the card pool holds one of each.
 pub fn fuzz_deck(seed: u64) -> Vec<(u8, &'static str)> {
     let (mut basics, mut nonbasics): (Vec<&CardDef>, Vec<&CardDef>) = CARDS
         .cards()

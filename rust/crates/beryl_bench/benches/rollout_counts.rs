@@ -1,4 +1,4 @@
-//! Instruction counts of the cube rollout benchmark (`beryl_bench::rollout`) with Gungraun:
+//! Instruction counts of the rollout benchmark (`beryl_bench::rollout`) with Gungraun:
 //! `just bench-count`. Each benchmark runs its subject over the whole corpus; divide by the
 //! summary `rollout_timing` prints (copies are one per start, samples are the policy's) for
 //! the count per copy, decision or rollout. Valgrind needs Linux; elsewhere this is a stub.

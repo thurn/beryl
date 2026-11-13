@@ -21,7 +21,7 @@ use crate::{CARDS, names};
 /// The card the dump files generated scenarios under.
 pub const CARD: &str = "Generated";
 
-/// The implemented cards outside the cube (AGENTS.md), which V1 never plays against a drafted
+/// The implemented cards outside the decks (AGENTS.md), which V1 never plays against a drafted
 /// deck: the generator leaves them out.
 const OUTSIDE_CUBE: [&str; 3] = [
     names::AANGS_ICEBERG,

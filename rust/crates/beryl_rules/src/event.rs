@@ -4,7 +4,7 @@
 //! A primitive performs its mutation through here: zone changes get replacement effects,
 //! look-back trigger matching with last-known information, execution, a layer refresh, then
 //! trigger matching and the sink; every other event is executed by its primitive and then
-//! [`settle`]d the same way. The cube's other replacement and prevention effects (damage,
+//! [`settle`]d the same way. The other implemented replacement and prevention effects (damage,
 //! most draws) arrive with the cards that create them.
 
 pub use beryl_kernel::cause::{Cause, StackIx, Tag};

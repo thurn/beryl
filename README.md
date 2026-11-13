@@ -1,9 +1,9 @@
 # Project Beryl
 
-A research project to build a Magic: The Gathering AI that plays Legacy
-constructed at the level of a strong human player. It is a Tauri 2 desktop app
-for Apple silicon Macs: a Rust workspace behind a React and TypeScript UI. Free
-and open source, under the Apache License 2.0.
+A research project to build a Magic: The Gathering AI that plays at the level of
+a strong human player. It is a Tauri 2 desktop app for Apple silicon Macs: a
+Rust workspace behind a React and TypeScript UI. Free and open source, under the
+Apache License 2.0.
 
 - [AGENTS.md](AGENTS.md): how every change is made, tested and delivered.
 - [docs/engine-architecture.md](docs/engine-architecture.md): the rules engine's

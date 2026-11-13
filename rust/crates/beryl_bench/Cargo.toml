@@ -1,7 +1,7 @@
 [package]
 name = "beryl_bench"
 version = "0.1.0"
-description = "Benchmark support (deterministic inputs, core placement, ABBA timing) and the cube rollout benchmark"
+description = "Benchmark support (deterministic inputs, core placement, ABBA timing) and the rollout benchmark"
 edition.workspace = true
 license.workspace = true
 publish = false

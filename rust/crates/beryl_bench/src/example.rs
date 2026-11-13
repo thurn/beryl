@@ -9,7 +9,7 @@ use crate::rng::SplitMix64;
 
 /// Benchmarks seed their inputs with this, so every run measures the same pools.
 pub const SEED: u64 = 0xBE41_2026;
-/// Cards in a cube draft pool: 3 packs of 15.
+/// Cards in a draft pool: 3 packs of 15.
 pub const POOL_CARDS: usize = 45;
 /// Pools per measured call, so one call covers varied inputs.
 pub const POOLS: usize = 64;
@@ -48,7 +48,7 @@ pub fn over_pools(pools: &[Vec<u8>], curve: impl Fn(&[u8]) -> Curve) -> u32 {
         .fold(0, u32::wrapping_add)
 }
 
-/// `count` pools of mana values, shaped roughly like a cube's curve.
+/// `count` pools of mana values, shaped roughly like a deck's curve.
 pub fn sample_pools(seed: u64, count: usize) -> Vec<Vec<u8>> {
     // Relative frequency of mana values 0..=8.
     const WEIGHTS: [u64; 9] = [4, 16, 24, 22, 15, 9, 5, 3, 2];

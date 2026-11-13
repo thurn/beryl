@@ -4,7 +4,7 @@
 //! It plays `N` seeded games (200 by default) with the cheap agents in both seats, the human's
 //! answered by a stand-in, between fuzz decks and, every eighth game, the vintage WU Control
 //! deck against one. It keeps a small set of them that between them play or cast every card of
-//! the cube and of that deck, or activate an ability of it, and make every kind of decision,
+//! the implemented cards and of that deck, or activate an ability of it, and make every kind of decision,
 //! as far as the games reached; prints the coverage it reached; checks that each kept game
 //! replays exactly; and freezes each as `<date>-<seed>.json.gz`. The seeds begin from today's
 //! date unless `--seed` says, so each day's run adds new games. Run it every week or so, so

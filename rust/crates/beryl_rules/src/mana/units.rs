@@ -70,7 +70,7 @@ impl Units {
     /// any. That is a bipartite matching, and by Hall's theorem it exists exactly when every
     /// set of symbol kinds has at least as many units able to pay one of them as it has
     /// symbols, and the units cover the total. A source that makes several mana of one kind
-    /// it chooses counts as several independent units, which the cube's colorless rocks are.
+    /// it chooses counts as several independent units, which colorless rocks are.
     pub(crate) fn pays(&self, cost: ManaCost) -> bool {
         debug_assert_eq!(cost.x, 0, "X is announced before payment");
         if self.total() < cost.total(0) {

@@ -62,7 +62,7 @@ just bench -p beryl_bench --bench example_timing
 Name benchmark targets by kind: `<subject>_counts`, `<subject>_abba`,
 `<subject>_timing`.
 
-## The cube rollout benchmark
+## The rollout benchmark
 
 `rollout_*` measure what search spends its time on (architecture §18), over a
 corpus of mid-game WU Control mirror positions cut from seeded `expert` and

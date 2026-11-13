@@ -36,7 +36,7 @@
 //!   file and writes its transcript; `--agent recorded` or another agent adds its search at
 //!   each of the opponent's decisions ([`review`]).
 //! - `beryl_cli freeze-saves <dir> [--games N] [--seed N] [--replay FILE]` adds saves to the
-//!   frozen corpus at `<dir>`: a small set of seeded games between them covering the cube's
+//!   frozen corpus at `<dir>`: a small set of seeded games between them covering the implemented cards'
 //!   cards and every kind of decision, or the given replay file ([`freeze`]).
 //! - `beryl_cli serve [--port N]` serves the app's game commands over HTTP for a UI in a plain
 //!   browser to play live games through (`just ui-live`, [`serve`]).

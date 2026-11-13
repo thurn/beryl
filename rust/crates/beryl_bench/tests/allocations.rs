@@ -1,5 +1,5 @@
 //! No heap allocation in the rollout loop (architecture §17.4, §18): a counting allocator
-//! around rollouts from every position of the cube rollout benchmark's corpus, each played to
+//! around rollouts from every position of the rollout benchmark's corpus, each played to
 //! the end under the rollout policy, mid-game positions with their stacks, payments and
 //! resolutions. One rollout per position, not the benchmark's four: in a debug build all of
 //! them, and the recording the benchmarks need, took over 20 s of the fast check.
@@ -62,7 +62,7 @@ fn main() {
     );
     assert!(starts.len() == c.positions.len() && x.counts.decisions > 1000);
     println!(
-        "allocations: no heap allocation in {} rollouts, {} decisions, from the cube rollout \
+        "allocations: no heap allocation in {} rollouts, {} decisions, from the rollout \
          benchmark's positions",
         starts.len(),
         x.counts.decisions

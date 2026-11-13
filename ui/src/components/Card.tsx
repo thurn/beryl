@@ -193,8 +193,8 @@ function LitRules({ text, lit }: { text: string; lit: number }) {
   ));
 }
 
-/** Shrinks long rules text to fit its box rather than cutting it off mid-line, as the cube's
- * longer cards (planeswalkers, Aang's Iceberg) would be: `--fit` scales the text's size
+/** Shrinks long rules text to fit its box rather than cutting it off mid-line, which
+ * longer cards (planeswalkers, Aang's Iceberg) need: `--fit` scales the text's size
  * (components.css), stepped down until the text fits, measured again whenever the box resizes.
  * Text rewraps as it shrinks, so its height falls faster than its size: each step shrinks by
  * the square root of the overflow. */

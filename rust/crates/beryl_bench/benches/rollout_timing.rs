@@ -1,4 +1,4 @@
-//! Wall-clock timing of the cube rollout benchmark (`beryl_bench::rollout`) with Criterion:
+//! Wall-clock timing of the rollout benchmark (`beryl_bench::rollout`) with Criterion:
 //! `just bench -p beryl_bench --bench rollout_timing`, which builds the `search` profile.
 //! Throughputs are per copy, per decision, per sampled decision and per rollout, so
 //! `rollouts` reads as rollouts per core-second.
@@ -14,7 +14,7 @@ fn cube_rollout(c: &mut Criterion) {
     let w = Workload::new();
     let summary = w.summary;
     println!(
-        "cube rollout: {} positions, {} rollouts, {} decisions ({} sampled for the policy); \
+        "rollout: {} positions, {} rollouts, {} decisions ({} sampled for the policy); \
          {:.1} decisions per rollout, {:.2} per turn, {:.2} inline questions per decision",
         w.starts.len() as u64 / rollout::ROLLOUTS,
         summary.rollouts,

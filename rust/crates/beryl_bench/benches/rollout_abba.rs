@@ -1,4 +1,4 @@
-//! The cube rollout benchmark's subjects old against new, interleaved A B B A
+//! The rollout benchmark's subjects old against new, interleaved A B B A
 //! (`beryl_bench::abba`): `just bench -p beryl_bench --bench rollout_abba` (`-- --quick` for
 //! a fast look). Until an optimization puts its old version in A, both sides run the
 //! current code: a null comparison whose interval shows the noise floor on this machine.

@@ -277,7 +277,7 @@ const VOICES: usize = 33;
 
 /// A test card with [`VOICES`] distinct cast abilities, each doing nothing; [`ECHOES`] is
 /// another. Their triggers are not interchangeable, so ordering them offers each one. No
-/// cards of the cube trigger that often at once; a larger card pool may.
+/// implemented cards trigger that often at once; a larger card pool may.
 static VOICES_CARD: CardDef = chorus("Chorus of Voices");
 
 static ECHOES: CardDef = chorus("Chorus of Echoes");
@@ -420,7 +420,7 @@ fn source_classes_past_small_play_on_in_large() {
 /// any `Small` battlefield holds (128 permanents).
 const TREASURES: u8 = 90;
 
-/// A test card: "When this enters, create [`TREASURES`] Treasure tokens." No card of the cube
+/// A test card: "When this enters, create [`TREASURES`] Treasure tokens." No implemented card
 /// makes so many at once; a larger card pool may.
 static HOARD: CardDef = CardDef {
     name: "Hoard",

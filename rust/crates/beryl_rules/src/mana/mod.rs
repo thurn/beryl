@@ -6,7 +6,7 @@
 //! pay costs immediately, or it can stay in the player's mana pool as unspent mana."
 //!
 //! The solver works over **sources**: permanents whose mana abilities cost only {T} and do
-//! nothing but add mana, the lands and rocks of the cube, and those whose mana ability costs
+//! nothing but add mana, the lands and rocks implemented, and those whose mana ability costs
 //! {T} and sacrificing them, the Treasures. Sources that make the same mana and have no other
 //! ability are interchangeable, so they form a **class**, and a plan says how many of each
 //! class it taps and how much floating mana of each kind it spends. Plans that leave the same

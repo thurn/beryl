@@ -1,4 +1,4 @@
-//! The cube rollout benchmark (architecture §18): the workload search runs, measured in its
+//! The rollout benchmark (architecture §18): the workload search runs, measured in its
 //! parts. A pinned corpus of mid-game WU Control mirror positions, cut from seeded games
 //! between `expert-frozen` agents, which tuning the live expert never moves, and between
 //! `greedy` agents, is rolled out to the end of the game

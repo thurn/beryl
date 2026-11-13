@@ -5,7 +5,7 @@
 //! - [`cores`]: asks macOS to run the benchmark thread on the fastest cores.
 //! - [`abba`]: old-versus-new timing interleaved in one executable.
 //! - [`example`]: the sample subject the `example_*` benchmarks measure.
-//! - [`rollout`]: the cube rollout benchmark, the `rollout_*` benchmarks' corpus and
+//! - [`rollout`]: the rollout benchmark, the `rollout_*` benchmarks' corpus and
 //!   subjects.
 
 pub mod abba;
