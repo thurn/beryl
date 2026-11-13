@@ -355,23 +355,27 @@ recordings do not show them.
   card rests unseen under its owner's graveyard, and an emblem's ability appears
   on the stack with no lift: the phone draws no exile pile and no emblem yet.
   Sounds follow the same steps. What the desktop shows around its table is
-  composed for the phone from the same pieces. The menu button opens the
-  settings with the log and the bug report in them. Undo and full control's mark
-  stand at the end of the middle band, across from the phase. Unspent mana lies
-  beside its player's life total, and the combat damage on its way on the
-  total's rim. A touch on a graveyard, or on a library with a known card, lists
-  its cards; a touch on a card shows it whole, and a touch beside it puts it
-  away. The turn's banner crosses the middle band, a combat step's lies under
-  the opponent's strip, and a scry's pill beside its player's lands, past the
-  end of their row; a coin is tossed just above the middle band. A prompt picked
-  on the table is the desktop's: the button it puts forward stands in the
-  player's strip where the turn button is, with the one that passes on beside
-  it; what it asks is a pill over that strip, and its other buttons are stacked
-  over the turn button. A touch on a card the prompt can use uses it, and one it
-  has no use for shows the card whole; a card in your hand is read by a touch
-  and played by carrying it out of the hand. The Revealed Cards lie in the
-  opponent's strip beside their graveyard, at a pile's size with no pill, and a
-  touch opens them as it opens a pile.
+  composed for the phone from the same pieces. On the phone's start screen, the
+  opponent list scrolls between the sound and credits controls at the top and
+  the seed and game buttons at the bottom. The game result shows over the board
+  with its reason and any culprit card centered, and the full-width result
+  buttons stay above the bottom safe area when the result is shown or put aside.
+  The menu button opens the settings with the log and the bug report in them.
+  Undo and full control's mark stand at the end of the middle band, across from
+  the phase. Unspent mana lies beside its player's life total, and the combat
+  damage on its way on the total's rim. A touch on a graveyard, or on a library
+  with a known card, lists its cards; a touch on a card shows it whole, and a
+  touch beside it puts it away. The turn's banner crosses the middle band, a
+  combat step's lies under the opponent's strip, and a scry's pill beside its
+  player's lands, past the end of their row; a coin is tossed just above the
+  middle band. A prompt picked on the table is the desktop's: the button it puts
+  forward stands in the player's strip where the turn button is, with the one
+  that passes on beside it; what it asks is a pill over that strip, and its
+  other buttons are stacked over the turn button. A touch on a card the prompt
+  can use uses it, and one it has no use for shows the card whole; a card in
+  your hand is read by a touch and played by carrying it out of the hand. The
+  Revealed Cards lie in the opponent's strip beside their graveyard, at a pile's
+  size with no pill, and a touch opens them as it opens a pile.
 
 ## Verbs
 

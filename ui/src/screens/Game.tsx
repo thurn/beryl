@@ -56,17 +56,15 @@ export function GameScreen({
   /** The game in progress is still being asked for. */
   resuming: boolean;
 }) {
-  if (resuming && !playback) {
-    return (
-      <Stage>
-        <div className="table start-screen"></div>
-      </Stage>
-    );
-  }
+  const phone = usePhone();
   if (starting || !playback) {
-    return (
-      <Stage>
-        <div className="table start-screen">
+    const screen = (
+      <div
+        className={
+          phone ? "table start-screen phone-start-status" : "table start-screen"
+        }
+      >
+        {(!resuming || playback) && (
           <section className="start-panel" role="status">
             {starting ? (
               <>
@@ -89,9 +87,10 @@ export function GameScreen({
               </>
             )}
           </section>
-        </div>
-      </Stage>
+        )}
+      </div>
     );
+    return phone ? screen : <Stage>{screen}</Stage>;
   }
   // Each game starts with a clean screen.
   const params = new URLSearchParams(window.location.search);
@@ -237,16 +236,16 @@ function Playing({ playback }: { playback: Playback }) {
             fail(e);
           }
         });
+  const openingScreen = opening && (
+    <Opening
+      view={view}
+      decision={openDecision}
+      onPick={answer}
+      onPlan={planOpening}
+    />
+  );
   const overlays = (
     <>
-      {opening && (
-        <Opening
-          view={view}
-          decision={openDecision}
-          onPick={answer}
-          onPlan={planOpening}
-        />
-      )}
       {over && (
         <GameOver
           outcome={status.kind === "over" ? status.outcome : undefined}
@@ -254,7 +253,7 @@ function Playing({ playback }: { playback: Playback }) {
         />
       )}
       {result.state === "aside" && (
-        <Dock>
+        <Dock className={phone ? "phone-result-return" : undefined}>
           <Button
             variant="secondary"
             className="overlay-return"
@@ -288,14 +287,11 @@ function Playing({ playback }: { playback: Playback }) {
           onConcede={onConcede}
           dimmed={opening || over}
         />
+        {openingScreen}
         {overlays}
       </Stage>
     );
   }
-  // On a phone the board is drawn for the phone; what shows over it is still the desktop's,
-  // on its stage over the board, until the phone has its own (by-7pm's designs).
-  const overlaid =
-    opening || over || result.state === "aside" || error !== undefined;
   return (
     <>
       <PhoneStageBoard
@@ -309,7 +305,9 @@ function Playing({ playback }: { playback: Playback }) {
         setStops={chooseStops}
         onConcede={onConcede}
       />
-      {overlaid && <Stage>{overlays}</Stage>}
+      {/* The opening still uses the desktop layout. */}
+      {openingScreen && <Stage>{openingScreen}</Stage>}
+      {overlays}
     </>
   );
 }

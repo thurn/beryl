@@ -122,6 +122,94 @@
       "click": ".game-over .button-secondary"
     },
     {
+      "name": "phone-start",
+      "route": "/?phone&fixture=greedy-turn-9&at=0#/",
+      "width": 393,
+      "height": 759,
+      "expect": ".phone-start-screen .start-buttons .button-primary"
+    },
+    {
+      "name": "phone-start-se",
+      "route": "/?phone&fixture=greedy-turn-9&at=0#/",
+      "width": 375,
+      "height": 647,
+      "expect": ".phone-start-screen .start-buttons .button-primary"
+    },
+    {
+      "name": "phone-start-resume",
+      "route": "/?phone&fixture=greedy-turn-9&at=49#/",
+      "width": 393,
+      "height": 759,
+      "expect": ".phone-start-screen .start-buttons .button-secondary"
+    },
+    {
+      "name": "phone-start-resume-se",
+      "route": "/?phone&fixture=greedy-turn-9&at=49#/",
+      "width": 375,
+      "height": 647,
+      "expect": ".phone-start-screen .start-buttons .button-secondary"
+    },
+    {
+      "name": "phone-starting",
+      "route": "/?phone&fixture=greedy-turn-9&at=0#/",
+      "width": 393,
+      "height": 759,
+      "click": ".start-buttons button",
+      "expect": ".phone-start-status .start-working"
+    },
+    {
+      "name": "phone-starting-se",
+      "route": "/?phone&fixture=greedy-turn-9&at=0#/",
+      "width": 375,
+      "height": 647,
+      "click": ".start-buttons button",
+      "expect": ".phone-start-status .start-working"
+    },
+    {
+      "name": "phone-game-over",
+      "route": "/?phone&fixture=game-over#/game",
+      "width": 393,
+      "height": 759,
+      "expect": ".phone-game-over .game-over-title"
+    },
+    {
+      "name": "phone-game-over-se",
+      "route": "/?phone&fixture=game-over#/game",
+      "width": 375,
+      "height": 647,
+      "expect": ".phone-game-over .game-over-title"
+    },
+    {
+      "name": "phone-game-over-culprit",
+      "route": "/?phone&fixture=game-over-jace#/game",
+      "width": 393,
+      "height": 759,
+      "expect": ".phone-game-over .game-over-card"
+    },
+    {
+      "name": "phone-game-over-culprit-se",
+      "route": "/?phone&fixture=game-over-jace#/game",
+      "width": 375,
+      "height": 647,
+      "expect": ".phone-game-over .game-over-card"
+    },
+    {
+      "name": "phone-game-over-board",
+      "route": "/?phone&fixture=game-over#/game",
+      "width": 393,
+      "height": 759,
+      "click": ".game-over .button-secondary",
+      "expect": ".phone-result-return .overlay-return"
+    },
+    {
+      "name": "phone-game-over-board-se",
+      "route": "/?phone&fixture=game-over#/game",
+      "width": 375,
+      "height": 647,
+      "click": ".game-over .button-secondary",
+      "expect": ".phone-result-return .overlay-return"
+    },
+    {
       "name": "game-opponent-thinking",
       "route": "/?fixture=opponent-turn&at=12#/game",
       "width": 1600,

@@ -10,6 +10,7 @@ import {
 import { Button } from "../components/Controls";
 import { SoundCorner } from "../audio/SoundControls";
 import { Stage } from "../game/Stage";
+import { usePhone } from "../mobile/phone";
 import { play } from "../audio/sound";
 import { useEffect, useRef, useState } from "react";
 
@@ -59,6 +60,7 @@ export function StartScreen({
   onStart(agent: string, seed?: number): Promise<void>;
   exportReports: boolean;
 }) {
+  const phone = usePhone();
   const [agents, setAgents] = useState<AgentView[]>([]);
   const [agent, setAgent] = useState<string>();
   const [seed, setSeed] = useState(() => lastGame().seed ?? "");
@@ -128,71 +130,83 @@ export function StartScreen({
     window.addEventListener("keydown", listener);
     return () => window.removeEventListener("keydown", listener);
   }, []);
-  return (
-    <Stage>
-      <div className="table start-screen">
-        <SoundCorner />
-        <section className="start-panel">
-          <h1 className="start-title">New Game</h1>
-          <p className="start-subtitle">WU Control mirror</p>
-          <fieldset className="start-agents">
-            <legend>Opponent</legend>
-            {agents.map((a) => (
-              <label key={a.name} className="start-agent">
-                <input
-                  type="radio"
-                  name="agent"
-                  value={a.name}
-                  checked={agent === a.name}
-                  onChange={() => setAgent(a.name)}
-                />
-                <span className="start-agent-name">
-                  {a.title}
-                  {a.name === CHEATING && (
-                    <em className="start-cheating">cheating: sees your hand</em>
-                  )}
-                </span>
-                <span className="start-agent-about">{a.description}</span>
-              </label>
-            ))}
-          </fieldset>
-          <label className="start-seed">
-            <span>Seed</span>
-            <input
-              inputMode="numeric"
-              placeholder="random"
-              value={seed}
-              onChange={(e) => setSeed(e.target.value)}
-              aria-invalid={!seedOk}
-            />
-          </label>
-          {/* With a game in progress, going back to it comes first. */}
-          <div className="start-buttons">
-            {inProgress !== undefined && (
-              <Button onClick={() => (window.location.hash = "#/game")}>
-                Return to Game
-              </Button>
-            )}
-            <Button
-              variant={inProgress !== undefined ? "secondary" : "primary"}
-              disabled={!startable}
-              onClick={start}
-            >
-              {pending
-                ? "Starting…"
-                : inProgress === undefined
-                  ? "Start"
-                  : confirming
-                    ? "Concede & Start"
-                    : "New Game"}
+  const agentRows = agents.map((a) => (
+    <label key={a.name} className="start-agent">
+      <input
+        type="radio"
+        name="agent"
+        value={a.name}
+        checked={agent === a.name}
+        onChange={() => setAgent(a.name)}
+      />
+      <span className="start-agent-name">
+        {a.title}
+        {a.name === CHEATING && (
+          <em className="start-cheating">cheating: sees your hand</em>
+        )}
+      </span>
+      <span className="start-agent-about">{a.description}</span>
+    </label>
+  ));
+  const screen = (
+    <div
+      className={
+        phone ? "table start-screen phone-start-screen" : "table start-screen"
+      }
+    >
+      <SoundCorner />
+      <section className="start-panel">
+        {!phone && (
+          <>
+            <h1 className="start-title">New Game</h1>
+            <p className="start-subtitle">WU Control mirror</p>
+          </>
+        )}
+        <fieldset className="start-agents">
+          <legend>Opponent</legend>
+          {phone ? (
+            <div className="phone-start-agent-list">{agentRows}</div>
+          ) : (
+            agentRows
+          )}
+        </fieldset>
+        <label className="start-seed">
+          <span>Seed</span>
+          <input
+            inputMode="numeric"
+            placeholder="random"
+            value={seed}
+            onChange={(e) => setSeed(e.target.value)}
+            aria-invalid={!seedOk}
+          />
+        </label>
+        {/* With a game in progress, going back to it comes first. */}
+        <div className="start-buttons">
+          {inProgress !== undefined && (
+            <Button onClick={() => (window.location.hash = "#/game")}>
+              Return to Game
             </Button>
-          </div>
-          {error && <p className="game-error">{error}</p>}
-          {exportReports && <ExportReports />}
-        </section>
-      </div>
-    </Stage>
+          )}
+          <Button
+            variant={inProgress !== undefined ? "secondary" : "primary"}
+            disabled={!startable}
+            onClick={start}
+          >
+            {pending
+              ? "Starting…"
+              : inProgress === undefined
+                ? "Start"
+                : confirming
+                  ? "Concede & Start"
+                  : "New Game"}
+          </Button>
+        </div>
+        {error && <p className="game-error">{error}</p>}
+        {exportReports && <ExportReports />}
+      </section>
+    </div>
   );
+  return phone ? screen : <Stage>{screen}</Stage>;
 }
 
 function ExportReports() {

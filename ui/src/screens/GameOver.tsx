@@ -9,7 +9,8 @@ import {
   type OutcomeView,
   type Stall,
 } from "../ipc";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
+import { usePhone } from "../mobile/phone";
 
 const STALLS: Record<Stall, string> = {
   decisionsPerTurn: "too many decisions in one turn",
@@ -60,6 +61,7 @@ export function GameOver({
   outcome?: OutcomeView;
   onClose(): void;
 }) {
+  const phone = usePhone();
   const title = resultTitle(outcome);
   const win = outcome?.kind === "win" ? outcome : undefined;
   const reason =
@@ -69,7 +71,11 @@ export function GameOver({
         ? { icon: "stall" as const, text: STALLS[outcome.reason] }
         : undefined;
   return (
-    <div className="game-over" role="dialog" aria-label={title}>
+    <div
+      className={phone ? "game-over phone-game-over" : "game-over"}
+      role="dialog"
+      aria-label={title}
+    >
       <div className="overlay-backdrop" />
       <h2 className="game-over-title">{title}</h2>
       {reason && (
@@ -93,11 +99,21 @@ export function GameOver({
   );
 }
 
+const narrowCulprit = window.matchMedia("(width < 393px)");
+const isNarrowCulprit = () => narrowCulprit.matches;
+const subscribeCulpritWidth = (change: () => void) => {
+  narrowCulprit.addEventListener("change", change);
+  return () => narrowCulprit.removeEventListener("change", change);
+};
+
 /** The card that ended the game, under the reason: with the ability that did it lit, as a
  * plate over its scan, or whole for a spell or a source of damage. A triggered or activated
  * ability its printed text has no paragraph for wears the words the session sends, as the
  * stack shows it. */
 function CulpritCard({ culprit }: { culprit: Culprit }) {
+  const phone = usePhone();
+  const narrow = useSyncExternalStore(subscribeCulpritWidth, isNarrowCulprit);
+  const width = phone ? (narrow ? 140 : 160) : 230;
   const face = useAbilityFace(culprit.name, undefined, BLANK);
   const kind = culprit.ability?.kind;
   if (culprit.text !== undefined && kind && kind !== "static") {
@@ -109,7 +125,7 @@ function CulpritCard({ culprit }: { culprit: Culprit }) {
             kind === "triggered" ? "Triggered Ability" : "Activated Ability"
           }
           text={culprit.text}
-          width={230}
+          width={width}
           showArt
         />
       </div>
@@ -121,7 +137,7 @@ function CulpritCard({ culprit }: { culprit: Culprit }) {
       : undefined;
   return (
     <div className="game-over-card" data-card={culprit.name}>
-      <Card card={{ ...face, lit }} width={230} />
+      <Card card={{ ...face, lit }} width={width} />
     </div>
   );
 }

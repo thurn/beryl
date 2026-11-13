@@ -429,3 +429,210 @@ body.phone {
   height: 100%;
   translate: none;
 }
+
+/* The start screen leaves its footer in reach while the opponent list scrolls. */
+body.phone .phone-start-screen {
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top, 0px) 16px
+    calc(16px + env(safe-area-inset-bottom, 0px));
+}
+.phone-start-screen .sound-corner {
+  position: relative;
+  inset: auto;
+  z-index: 1;
+  justify-content: space-between;
+  flex: 0 0 56px;
+}
+.phone-start-screen .sound-corner > button {
+  min-width: 40px;
+  min-height: 40px;
+}
+.phone-start-screen .corner-panel {
+  inset: 100% 0 auto;
+  max-height: calc(
+    100dvh - 80px - env(safe-area-inset-top, 0px) -
+      env(safe-area-inset-bottom, 0px)
+  );
+  overflow-y: auto;
+  touch-action: pan-y;
+}
+.phone-start-screen .credits {
+  white-space: normal;
+}
+.phone-start-screen .credit-author small {
+  font-size: 13px;
+}
+.phone-start-screen .credit a {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+}
+.phone-start-screen .corner-panel .icon-button,
+.phone-start-screen .sound-level input {
+  min-height: 40px;
+  touch-action: pan-x;
+}
+.phone-start-screen .corner-panel .icon-button {
+  min-width: 40px;
+}
+
+.phone-start-screen .start-panel {
+  position: static;
+  translate: none;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  align-items: stretch;
+}
+.phone-start-screen .start-agents {
+  flex: 0 1 auto;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+.phone-start-screen .start-agents legend {
+  font-size: 13px;
+}
+.phone-start-agent-list {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 4px;
+  overflow-y: auto;
+  touch-action: pan-y;
+}
+.phone-start-screen .start-agent {
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-content: center;
+  min-height: 56px;
+  padding: 8px 4px;
+}
+.phone-start-screen .start-agent input {
+  grid-row: span 2;
+  place-self: center;
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+}
+.phone-start-screen .start-agent input::before {
+  content: "";
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--metal);
+  border-radius: 50%;
+  background-color: var(--surface-sunk);
+}
+.phone-start-screen .start-agent input:checked::before {
+  border-color: var(--gold);
+  background-image: radial-gradient(circle, var(--gold) 6px, transparent 7px);
+}
+.phone-start-screen .start-agent input:focus-visible {
+  outline: 2px solid var(--metal-bright);
+  outline-offset: -3px;
+  border-radius: 50%;
+}
+.phone-start-screen .start-agent-name {
+  font-size: 16px;
+}
+.phone-start-screen :is(.start-agent-about, .start-cheating) {
+  font-size: 13px;
+}
+.phone-start-screen .start-cheating {
+  display: inline-block;
+  margin-left: 6px;
+}
+.phone-start-screen .start-seed {
+  flex: 0 0 44px;
+  margin-top: auto;
+}
+.phone-start-screen .start-seed input {
+  flex: 1;
+  height: 100%;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.phone-start-screen .start-buttons {
+  flex-direction: column-reverse;
+  flex-shrink: 0;
+  gap: 8px;
+}
+.phone-start-screen .game-error {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.phone-start-status .start-panel {
+  width: calc(100% - 32px);
+  gap: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.phone-start-status .start-title {
+  font-size: 26px;
+}
+.phone-start-status .start-subtitle {
+  margin: 0;
+  font-size: 16px;
+}
+body.phone
+  :is(
+    .phone-start-screen,
+    .phone-start-status,
+    .phone-game-over,
+    .phone-result-return
+  )
+  .button {
+  height: 48px;
+  font-size: 18px;
+}
+
+/* The game's result and the way back to it share the same bottom gutter. */
+body.phone .phone-game-over {
+  position: fixed;
+  padding: max(30dvh, env(safe-area-inset-top, 0px)) 16px 0;
+  text-align: center;
+}
+.phone-game-over > .overlay-backdrop {
+  background: rgb(0 0 0 / 60%);
+}
+.phone-game-over .game-over-title {
+  font-size: 36px;
+}
+.phone-game-over .game-over-reason {
+  margin-top: 8px;
+  font-size: 16px;
+}
+.phone-game-over .game-over-icon {
+  width: 24px;
+  height: 24px;
+  flex: none;
+}
+.phone-game-over .game-over-card {
+  margin-top: 12px;
+}
+body.phone :is(.phone-game-over > .dock, .phone-result-return) {
+  position: fixed;
+  inset: auto 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  width: auto;
+  min-width: 0;
+  max-width: none;
+}
+.phone-game-over .dock-buttons {
+  gap: 8px;
+}
+body.phone .game-toast {
+  position: fixed;
+  inset: calc(8px + env(safe-area-inset-top, 0px)) 16px auto;
+  margin: 0;
+  translate: none;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
