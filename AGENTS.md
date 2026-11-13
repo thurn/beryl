@@ -311,3 +311,6 @@ possible, pixel for pixel, use the `arena-pixel-match` skill.
 - Timeouts only catch hangs: a slow test or run files a bead, never fails CI.
   Tests fail deterministically; delete flaky ones. Avoid slow integration tests:
   prefer a fast test that keeps most of their value.
+- Never use "no card with this behavior is implemented yet, so I can't write a
+  test" as an excuse. Implement additional cards or file a bead under your
+  current epic for really major items.
