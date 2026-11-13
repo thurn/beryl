@@ -8,7 +8,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{TARGET, YOU, change_rule, draw, return_to_hand, sequence};
+use beryl_card::effect::build::{target, you, change_rule, draw, return_to_hand, sequence};
 use beryl_card::{
     Ability, CardDef, Duration, Filter, Governed, Players, RuleChange, TargetKind, TargetSpec,
     Types, When, card,
@@ -62,7 +62,7 @@ pub static CARD: CardDef = card(
                         .union(Types::ENCHANTMENT),
                 ),
             )])
-            .effect(&sequence(&[return_to_hand(TARGET), draw(YOU, 1)])),
+            .effect(&sequence(&[return_to_hand(target()), draw(you(), 1)])),
     ])],
 );
 

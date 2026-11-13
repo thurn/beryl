@@ -2,7 +2,7 @@
 //! through the path the cards' own instances take, and what the engine has no path for is
 //! refused as the card table is built.
 
-use beryl_card::effect::build::{TARGET, YOU, draw, lose_game, modify, sequence, win_game};
+use beryl_card::effect::build::{draw, lose_game, modify, sequence, target, win_game, you};
 use beryl_card::{
     Amount, Comparison, Condition, Duration, Effect, Governed, Objects, Players, RuleChange,
     SpecIx, When,
@@ -95,9 +95,9 @@ static REFORGE: CardDef = CardDef {
     faces: &[Face {
         types: Types::INSTANT,
         abilities: &[Ability::spell().effect(&sequence(&[
-            draw(YOU, 1),
+            draw(you(), 1),
             modify(
-                TARGET,
+                target(),
                 Modification::SetPower(&ARTIFACTS),
                 Duration::EndOfTurn,
             ),
@@ -165,7 +165,7 @@ const fn face(abilities: &'static [Ability]) -> Face {
 static DOOM: CardDef = CardDef {
     name: "Test Doom",
     faces: &[face(&[
-        Ability::replacing(Replacement::WouldDraw).effect(&lose_game(YOU))
+        Ability::replacing(Replacement::WouldDraw).effect(&lose_game(you()))
     ])],
     tokens: &[],
 };
@@ -184,7 +184,7 @@ static GIFT: CardDef = CardDef {
 static WINDFALL: CardDef = CardDef {
     name: "Test Windfall",
     faces: &[face(&[
-        Ability::replacing(Replacement::WouldDraw).effect(&draw(YOU, 2))
+        Ability::replacing(Replacement::WouldDraw).effect(&draw(you(), 2))
     ])],
     tokens: &[],
 };

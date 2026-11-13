@@ -7,7 +7,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{TARGET, exile_until_this_leaves};
+use beryl_card::effect::build::{target, exile_until_this_leaves};
 use beryl_card::{Ability, CardDef, Filter, Players, TargetKind, TargetSpec, Trigger, Types, card};
 
 /// "Exile target ... until this artifact leaves the battlefield"
@@ -28,7 +28,7 @@ pub static CARD: CardDef = card(
                     Filter::ManaValueAtMost(2),
                 ]),
             )])
-            .effect(&exile_until_this_leaves(TARGET))]),
+            .effect(&exile_until_this_leaves(target()))]),
     ],
 );
 

@@ -29,7 +29,7 @@ and builders a card definition is made of.
 - **No new vocabulary.** Use only entries that exist. If the card needs one that
   doesn't, escalate (below).
 - **No Rust body.** A definition is `static` and `const` data built from
-  vocabulary constructors (`draw(YOU, 1)`, `Ability::triggered(...)`). Write no
+  vocabulary constructors (`draw(you(), 1)`, `Ability::triggered(...)`). Write no
   `fn` in the definition and no `impl`. Small `const fn` helpers inside the
   `scenarios` module are fine.
 - **Never from Forge.** Don't read Forge's card scripts or code. The

@@ -188,13 +188,12 @@ const fn add_mana(mana: ManaSet) -> &'static Effect {
 /// produces is what its effect adds.
 ///
 /// ```
-/// use beryl_card::effect::build::{TARGET, YOU, draw, return_to_hand, sequence};
-/// use beryl_card::{Ability, Filter, TargetKind, TargetSpec};
+/// use beryl_card::prelude::*;
 ///
 /// // "Return target spell to its owner's hand. Draw a card."
 /// const REPRIEVE: Ability = Ability::spell()
-///     .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
-///     .effect(&sequence(&[return_to_hand(TARGET), draw(YOU, 1)]));
+///     .target(&TargetSpec::spell())
+///     .effect(&sequence(&[return_to_hand(target()), draw(you(), 1)]));
 /// ```
 ///
 /// The engine scans a face's abilities for every decision it builds, so the size is kept a
@@ -469,6 +468,13 @@ impl Ability {
             "only a spell, activated or triggered ability has targets"
         );
         Ability { targets, ..self }
+    }
+
+    /// Its one target: [`Ability::targeting`] with one spec, as
+    /// `.target(&TargetSpec::creature())`.
+    #[must_use]
+    pub const fn target(self, target: &'static TargetSpec) -> Ability {
+        self.targeting(std::slice::from_ref(target))
     }
 
     /// What it does as it resolves, as effect data. Of a replacement ability, what happens

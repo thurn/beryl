@@ -10,7 +10,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{YOU, dig};
+use beryl_card::effect::build::{you, dig};
 use beryl_card::{
     Ability, CardDef, CastingOption, Effect, Filter, LibraryOrder, ManaCost, Taken, Trigger, Types,
     card,
@@ -24,7 +24,7 @@ const NONCREATURE_NONLAND: Filter = Filter::Not(&Filter::Types(Types::CREATURE.u
 /// order ([CR 401.4](https://yawgatog.com/resources/magic-rules/#R4014)): "That library's
 /// owner doesn't reveal the order in which the cards go into the library."
 static DIG: Effect = dig(
-    YOU,
+    you(),
     4,
     Taken::MayReveal(NONCREATURE_NONLAND),
     LibraryOrder::Random,

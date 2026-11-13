@@ -7,7 +7,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{TARGET, destroy};
+use beryl_card::effect::build::{target, destroy};
 use beryl_card::{
     Ability, CardDef, Cost, CostPart, Filter, ManaColor, ManaSet, TargetKind, TargetSpec, Types,
     card,
@@ -26,7 +26,7 @@ pub static CARD: CardDef = card(
                 TargetKind::Permanent,
                 Filter::Types(Types::LAND),
             )])
-            .effect(&destroy(TARGET)),
+            .effect(&destroy(target())),
     ])],
 );
 

@@ -16,13 +16,13 @@ use crate::{
     Choice, Decision, DecisionKind, GameTable, Opt, PlayerSet, Profile, Scratch, State, choices,
     coins, costs, library, tokens,
 };
-use beryl_card::effect::build::{YOU, scry};
+use beryl_card::effect::build::{scry, you};
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 use super::events::{CARDS, DECK, INSECT, PRODIGY_CARDS, find, game, put};
 
 /// An ability that may ask, as data that asks says of itself.
-static ASKS: Ability = Ability::spell().effect(&scry(YOU, 1));
+static ASKS: Ability = Ability::spell().effect(&scry(you(), 1));
 
 /// Does `act` as a step of an ability of `source` resolving, its questions answered from
 /// `answers` in turn. Returns what it came to, and the question it stopped at if it did.

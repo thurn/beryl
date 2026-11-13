@@ -6,7 +6,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{YOU, discard, draw, sequence, unless};
+use beryl_card::effect::build::{you, discard, draw, sequence, unless};
 use beryl_card::{Ability, CardDef, Cost, CostPart, Effect, Filter, Supertypes, Types, card};
 
 const BASIC_LAND: Filter = Filter::All(&[
@@ -26,10 +26,10 @@ const BASIC_LAND: Filter = Filter::All(&[
 /// land that doesn't have this supertype is a nonbasic land, even if it has a basic land
 /// type."
 static DRAW_THREE_DISCARD: Effect = sequence(&[
-    draw(YOU, 3),
+    draw(you(), 3),
     unless(
-        &discard(YOU, 2),
-        YOU,
+        &discard(you(), 2),
+        you(),
         Cost::of_parts(&[CostPart::discard(BASIC_LAND)]),
     ),
 ]);

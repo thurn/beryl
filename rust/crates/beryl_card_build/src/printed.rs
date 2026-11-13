@@ -261,7 +261,15 @@ pub fn faces(record: &Record, subtypes: &Subtypes) -> Result<Vec<(String, String
         .iter()
         .enumerate()
         .map(|(i, face)| {
-            let source = face_source(face, i, &record.layout, subtypes)?;
+            let mut source = face_source(face, i, &record.layout, subtypes)?;
+            // A card of one face carries its name, which `Face::card` builds the card under.
+            if record.faces.len() == 1 {
+                source = source.replacen(
+                    "beryl_card::Face::EMPTY",
+                    &format!("beryl_card::Face::EMPTY\n    .named({:?})", face.name),
+                    1,
+                );
+            }
             Ok((face.name.clone(), source))
         })
         .collect()

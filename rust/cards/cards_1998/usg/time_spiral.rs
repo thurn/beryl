@@ -8,7 +8,7 @@
 
 use crate::{names, printed};
 use beryl_card::effect::build::{
-    EACH_PLAYER, THIS, YOU, draw, exile, sequence, shuffle_into, untap_up_to,
+    each_player, this, you, draw, exile, sequence, shuffle_into, untap_up_to,
 };
 use beryl_card::{Ability, CardDef, Effect, Filter, Objects, Types, Zone, card};
 
@@ -24,17 +24,17 @@ use beryl_card::{Ability, CardDef, Effect, Filter, Objects, Types, Zone, card};
 ///
 /// "Up to six lands" are any lands, whoever controls them.
 static SPIRAL: Effect = sequence(&[
-    exile(THIS),
+    exile(this()),
     shuffle_into(
-        EACH_PLAYER,
+        each_player(),
         Objects::CardsIn {
-            players: &EACH_PLAYER,
+            players: &each_player(),
             zones: &[Zone::Hand, Zone::Graveyard],
         },
     ),
-    draw(EACH_PLAYER, 7),
+    draw(each_player(), 7),
     untap_up_to(
-        YOU,
+        you(),
         6,
         Objects::All {
             zone: Zone::Battlefield,

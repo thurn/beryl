@@ -8,7 +8,7 @@
 
 use crate::{names, printed};
 use beryl_card::effect::build::{
-    CARRIED, TARGET, YOU, add_mana_of_kind, counter, delay_carrying, sequence,
+    carried, target, you, add_mana_of_kind, counter, delay_carrying, sequence,
 };
 use beryl_card::{
     Ability, Amount, CardDef, Effect, Filter, ManaColor, Players, TargetKind, TargetSpec, Trigger,
@@ -28,7 +28,7 @@ pub static CARD: CardDef =
             // CR 106.4: "When an effect instructs a player to add mana, that mana goes into
             // a player's mana pool."
             Ability::triggered(&Trigger::main_phase(Players::You).next())
-                .effect(&add_mana_of_kind(YOU, ManaColor::Colorless, CARRIED)),
+                .effect(&add_mana_of_kind(you(), ManaColor::Colorless, carried())),
         ])],
     );
 
@@ -38,8 +38,8 @@ pub static CARD: CardDef =
 /// delayed triggered ability ([CR 603.7a](https://yawgatog.com/resources/magic-rules/#R6037a)):
 /// "Delayed triggered abilities are created during the resolution of spells or abilities".
 static COUNTER_AND_DELAY: Effect = sequence(&[
-    counter(TARGET),
-    delay_carrying(ADD_COLORLESS, Amount::ManaValue(TARGET)),
+    counter(target()),
+    delay_carrying(ADD_COLORLESS, Amount::ManaValue(target())),
 ]);
 
 #[cfg(feature = "scenarios")]

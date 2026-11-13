@@ -7,7 +7,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{ITS_CONTROLLER, TARGET, counter_and_exile, unless_pays};
+use beryl_card::effect::build::{its_controller, target, counter_and_exile, unless_pays};
 use beryl_card::{Ability, CardDef, Filter, ManaCost, TargetKind, TargetSpec, card};
 
 /// "Unless" as [CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a) reads it. The
@@ -21,8 +21,8 @@ pub static CARD: CardDef = card(
     &[printed::NO_MORE_LIES.abilities(&[Ability::spell()
         .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
         .effect(&unless_pays(
-            &counter_and_exile(TARGET),
-            ITS_CONTROLLER,
+            &counter_and_exile(target()),
+            its_controller(),
             ManaCost::generic(3),
         ))])],
 );

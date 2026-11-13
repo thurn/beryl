@@ -3,8 +3,8 @@
 //! through the events alone reads them.
 
 use beryl_card::effect::build::{
-    ITS_CONTROLLER, TARGET, YOU, counter, create_tokens, destroy, discard, draw, sequence,
-    unless_pays,
+    counter, create_tokens, destroy, discard, draw, its_controller, sequence, target, unless_pays,
+    you,
 };
 use beryl_card::{Amount, Effect, Recipients};
 
@@ -40,7 +40,7 @@ static SAGE: CardDef = CardDef {
     faces: &[Face {
         cost: W,
         types: Types::SORCERY,
-        abilities: &[Ability::spell().effect(&draw(YOU, 1))],
+        abilities: &[Ability::spell().effect(&draw(you(), 1))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -52,7 +52,7 @@ static LOOT: CardDef = CardDef {
     faces: &[Face {
         cost: W,
         types: Types::SORCERY,
-        abilities: &[Ability::spell().effect(&sequence(&[draw(YOU, 1), discard(YOU, 1)]))],
+        abilities: &[Ability::spell().effect(&sequence(&[draw(you(), 1), discard(you(), 1)]))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -67,7 +67,7 @@ static SHOCK: CardDef = CardDef {
         abilities: &[Ability::spell()
             .targeting(&[TargetSpec::one(TargetKind::Permanent, CREATURE)])
             .effect(&Effect::DealDamage {
-                to: Recipients::Permanents(TARGET),
+                to: Recipients::Permanents(target()),
                 amount: Amount::Fixed(2),
             })],
         ..Face::EMPTY
@@ -83,7 +83,7 @@ static DENY: CardDef = CardDef {
         types: Types::INSTANT,
         abilities: &[Ability::spell()
             .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
-            .effect(&counter(TARGET))],
+            .effect(&counter(target()))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -98,8 +98,8 @@ static TITHE: CardDef = CardDef {
         abilities: &[Ability::spell()
             .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
             .effect(&unless_pays(
-                &counter(TARGET),
-                ITS_CONTROLLER,
+                &counter(target()),
+                its_controller(),
                 ManaCost::generic(1),
             ))],
         ..Face::EMPTY
@@ -127,7 +127,11 @@ static HATCHER: CardDef = CardDef {
         types: Types::CREATURE,
         power: Some(1),
         toughness: Some(1),
-        abilities: &[Ability::triggered(&Trigger::ENTERS).effect(&create_tokens(YOU, &INSECT, 1))],
+        abilities: &[Ability::triggered(&Trigger::ENTERS).effect(&create_tokens(
+            you(),
+            &INSECT,
+            1,
+        ))],
         ..Face::EMPTY
     }],
     tokens: &[&INSECT],
@@ -146,7 +150,7 @@ static STINGER: CardDef = CardDef {
                 TargetKind::Permanent,
                 Filter::All(&[CREATURE, Filter::Whose(&Players::EachOpponent)]),
             )])
-            .effect(&destroy(TARGET))],
+            .effect(&destroy(target()))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -163,7 +167,7 @@ static STRIP: CardDef = CardDef {
                     TargetKind::Permanent,
                     Filter::Types(Types::LAND),
                 )])
-                .effect(&destroy(TARGET)),
+                .effect(&destroy(target())),
         ],
         ..Face::EMPTY
     }],
@@ -178,7 +182,7 @@ static MOURNER: CardDef = CardDef {
         types: Types::CREATURE,
         power: Some(1),
         toughness: Some(1),
-        abilities: &[Ability::triggered(&Trigger::DIES).effect(&draw(YOU, 1))],
+        abilities: &[Ability::triggered(&Trigger::DIES).effect(&draw(you(), 1))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -192,7 +196,7 @@ static DOOM: CardDef = CardDef {
         types: Types::INSTANT,
         abilities: &[Ability::spell()
             .targeting(&[TargetSpec::one(TargetKind::Permanent, CREATURE)])
-            .effect(&destroy(TARGET))],
+            .effect(&destroy(target()))],
         ..Face::EMPTY
     }],
     tokens: &[],

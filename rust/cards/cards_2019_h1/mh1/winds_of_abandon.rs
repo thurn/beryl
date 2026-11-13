@@ -11,7 +11,7 @@
 
 use crate::{names, printed};
 use beryl_card::effect::build::{
-    EACH_PLAYER, TARGET, THAT_PLAYER, exile, for_each_player, sequence,
+    each_player, target, that_player, exile, for_each_player, sequence,
 };
 use beryl_card::{
     Ability, Amount, CardDef, CastingOption, Effect, Filter, Found, ManaCost, Objects, Players,
@@ -45,11 +45,11 @@ const BASIC_LANDS: Filter = Filter::All(&[
 /// as it last existed on the battlefield: in exile it has none. A creature a replacement
 /// kept from exile was not "exiled this way".
 const FETCH: Effect = for_each_player(
-    EACH_PLAYER,
+    each_player(),
     &Effect::Search {
-        player: THAT_PLAYER,
+        player: that_player(),
         filter: BASIC_LANDS,
-        count: Amount::ThoseOf(THAT_PLAYER),
+        count: Amount::ThoseOf(that_player()),
         found: Found::OntoBattlefieldTapped,
     },
 );
@@ -57,7 +57,7 @@ const FETCH: Effect = for_each_player(
 /// "Exile target creature you don't control"
 /// ([CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a)): "To exile an object,
 /// move it to the exile zone from wherever it is."
-static EXILE_TARGET: Effect = sequence(&[exile(TARGET), FETCH]);
+static EXILE_TARGET: Effect = sequence(&[exile(target()), FETCH]);
 
 /// Overloaded, "Exile each creature you don't control"
 /// ([CR 702.96a](https://yawgatog.com/resources/magic-rules/#R70296a)), with no target

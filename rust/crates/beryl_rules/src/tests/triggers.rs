@@ -1,7 +1,7 @@
 //! A trigger is an event, a subject and players (`beryl_card::Trigger`): the products no
 //! printed card of the pool says, each matched by the code that matches the pool's.
 
-use beryl_card::effect::build::{YOU, gain_life};
+use beryl_card::effect::build::{gain_life, you};
 
 use super::begin;
 use super::events::{advance_to, put, resolve_all};
@@ -26,7 +26,7 @@ macro_rules! listener {
             name: $text,
             faces: &[Face {
                 types: Types::ARTIFACT,
-                abilities: &[Ability::triggered(&$trigger).effect(&gain_life(YOU, 1))],
+                abilities: &[Ability::triggered(&$trigger).effect(&gain_life(you(), 1))],
                 ..Face::EMPTY
             }],
             tokens: &[],

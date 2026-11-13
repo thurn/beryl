@@ -2,8 +2,8 @@
 //! positions with them.
 
 use beryl_card::effect::build::{
-    ITS_CONTROLLER, TARGET, YOU, change_rule, counter, counter_and_exile, destroy as destroy_it,
-    discard, draw, gain_flashback, permit_cast, return_to_hand, sequence, unless_pays,
+    change_rule, counter, counter_and_exile, destroy as destroy_it, discard, draw, gain_flashback,
+    its_controller, permit_cast, return_to_hand, sequence, target, unless_pays, you,
 };
 use beryl_card::{CastTerms, Condition, Effect, Governed, Objects, RuleChange, Says, Takes, When};
 
@@ -61,7 +61,7 @@ impl CustomBody for DestroyTarget {
 
 /// "Counter target spell unless its controller pays {1}."
 const COUNTER_UNLESS_PAID: Effect =
-    unless_pays(&counter(TARGET), ITS_CONTROLLER, ManaCost::generic(1));
+    unless_pays(&counter(target()), its_controller(), ManaCost::generic(1));
 
 /// A choice of one object, for nothing a purpose names.
 const CHOOSE: Prompt = Prompt::new(Purpose::Choose).most(1);
@@ -97,8 +97,8 @@ const ASKS: Says = Says {
 /// "You may cast target instant or sorcery card from your graveyard this turn. If that spell
 /// would be put into your graveyard, exile it instead."
 const CAST_THIS_TURN: Effect = permit_cast(
-    YOU,
-    TARGET,
+    you(),
+    target(),
     beryl_card::Duration::EndOfTurn,
     CastTerms::PLAIN.exiled_instead(),
 );
@@ -159,7 +159,7 @@ impl CustomBody for LootAndCast {
 }
 
 /// "Draw a card, then discard two cards."
-const DRAW_THEN_DISCARD_TWO: Effect = sequence(&[draw(YOU, 1), discard(YOU, 2)]);
+const DRAW_THEN_DISCARD_TWO: Effect = sequence(&[draw(you(), 1), discard(you(), 2)]);
 
 pub(crate) static ISLAND: CardDef = CardDef {
     name: "Test Island",
@@ -194,7 +194,7 @@ pub(crate) static SAGE: CardDef = CardDef {
     faces: &[Face {
         cost: mana(0, 0, 2),
         types: Types::SORCERY,
-        abilities: &[Ability::spell().effect(&draw(YOU, 1))],
+        abilities: &[Ability::spell().effect(&draw(you(), 1))],
         ..Face::EMPTY
     }],
 };
@@ -239,7 +239,7 @@ pub(crate) static STRIP: CardDef = CardDef {
             Ability::tap_for_mana(ManaSet::one(ManaColor::Colorless)),
             Ability::activated(Cost::of_parts(&[CostPart::TAP, CostPart::SACRIFICE]))
                 .targeting(&[TargetSpec::one(TargetKind::Permanent, LANDS)])
-                .effect(&destroy_it(TARGET)),
+                .effect(&destroy_it(target())),
         ],
         ..Face::EMPTY
     }],
@@ -304,7 +304,7 @@ pub(crate) static LIES: CardDef = CardDef {
         types: Types::INSTANT,
         abilities: &[Ability::spell()
             .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
-            .effect(&counter_and_exile(TARGET))],
+            .effect(&counter_and_exile(target()))],
         ..Face::EMPTY
     }],
 };
@@ -401,7 +401,7 @@ pub(crate) static STUPOR: CardDef = CardDef {
                     TargetKind::Permanent,
                     Filter::All(&[Filter::Not(&LANDS), Filter::Whose(&Players::EachOpponent)]),
                 )])
-                .effect(&return_to_hand(TARGET))],
+                .effect(&return_to_hand(target()))],
             ..Face::EMPTY
         },
         Face {
@@ -450,7 +450,7 @@ pub(crate) static RAVELER: CardDef = CardDef {
                 )),
             Ability::loyalty(-3)
                 .targeting(&[TargetSpec::up_to_one(TargetKind::Permanent, CREATURE)])
-                .effect(&return_to_hand(TARGET)),
+                .effect(&return_to_hand(target())),
         ],
         ..Face::EMPTY
     }],
@@ -467,13 +467,13 @@ pub(crate) static EMPEROR: CardDef = CardDef {
         abilities: &[
             Ability::rule_change(&LOYALTY_AS_INSTANT)
                 .only_if(&Condition::EnteredThisTurn(Objects::This)),
-            Ability::loyalty(1).effect(&draw(YOU, 1)),
+            Ability::loyalty(1).effect(&draw(you(), 1)),
             Ability::loyalty(-2)
                 .targeting(&[TargetSpec::one(
                     TargetKind::Permanent,
                     Filter::All(&[CREATURE, Filter::Tapped]),
                 )])
-                .effect(&destroy_it(TARGET)),
+                .effect(&destroy_it(target())),
         ],
         ..Face::EMPTY
     }],
@@ -512,7 +512,7 @@ pub(crate) static SNAPBACK: CardDef = CardDef {
                     Filter::Whose(&Players::You),
                 ]),
             )])
-            .effect(&gain_flashback(TARGET))],
+            .effect(&gain_flashback(target()))],
         ..Face::EMPTY
     }],
 };
@@ -525,7 +525,7 @@ pub(crate) static BOUNCE: CardDef = CardDef {
         types: Types::INSTANT,
         abilities: &[Ability::spell()
             .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
-            .effect(&return_to_hand(TARGET))],
+            .effect(&return_to_hand(target()))],
         ..Face::EMPTY
     }],
 };
@@ -566,7 +566,7 @@ pub(crate) static STINGER: CardDef = CardDef {
         power: Some(1),
         toughness: Some(1),
         abilities: &[Ability::triggered(&Trigger::ENTERS)
-            .effect(&destroy_it(TARGET))
+            .effect(&destroy_it(target()))
             .targeting(&[TargetSpec::one(
                 TargetKind::Permanent,
                 Filter::All(&[CREATURE, Filter::Whose(&Players::EachOpponent)]),

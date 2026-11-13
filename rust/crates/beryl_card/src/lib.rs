@@ -63,3 +63,17 @@ pub use mana::{ManaColor, ManaCost, ManaSet, mana};
 pub use prompt::{Part, Place, Prompt, Purpose, Shape};
 pub use target::{Takes, TargetKind, TargetSpec};
 pub use trigger::{Subject, Trigger, TriggerEvent};
+
+/// Everything a card file uses: the vocabulary's types and its builders,
+/// `use beryl_card::prelude::*;`.
+pub mod prelude {
+    pub use crate::effect::build::*;
+    pub use crate::{
+        Ability, Amount, CardDef, CastTerms, CastingKind, CastingOption, Castings, Colors,
+        Comparison, Condition, Cost, CostAction, CostPart, CounterKind, Duration, Effect, Face,
+        Filter, Keywords, LibraryOrder, LibraryPosition, ManaColor, ManaCost, ManaSet,
+        Modification, Objects, Players, Recipients, Replacement, RuleChange, Subtype, Subtypes,
+        Supertypes, TargetKind, TargetSpec, Trigger, TriggerEvent, TurnStep, Types, Zone, card,
+        mana,
+    };
+}

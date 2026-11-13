@@ -9,7 +9,7 @@
 
 use crate::{names, printed};
 use beryl_card::effect::build::{
-    IF_YOU_LOSE_THE_FLIP, YOU, deal_damage_to, flip_coin, if_then, sequence,
+    if_you_lose_the_flip, you, deal_damage_to, flip_coin, if_then, sequence,
 };
 use beryl_card::{Ability, CardDef, ManaColor, ManaSet, Players, Trigger, TurnStep, card};
 
@@ -22,8 +22,8 @@ pub static CARD: CardDef = card(
     names::MANA_CRYPT,
     &[printed::MANA_CRYPT.abilities(&[
         Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::You)).effect(&sequence(&[
-            flip_coin(YOU),
-            if_then(IF_YOU_LOSE_THE_FLIP, &deal_damage_to(YOU, 3)),
+            flip_coin(you()),
+            if_then(if_you_lose_the_flip(), &deal_damage_to(you(), 3)),
         ])),
         Ability::tap_for_mana(ManaSet {
             colors: 1 << ManaColor::Colorless as u8,

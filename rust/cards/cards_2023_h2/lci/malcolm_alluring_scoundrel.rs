@@ -11,7 +11,7 @@
 
 use crate::{names, printed};
 use beryl_card::effect::build::{
-    THIS, THOSE, YOU, add_counters, discard, draw, if_then, may_cast_free, sequence,
+    this, those, you, add_counters, discard, draw, if_then, may_cast_free, sequence,
 };
 use beryl_card::{
     Ability, Amount, CardDef, Comparison, Condition, CounterKind, Effect, Keywords, Trigger, card,
@@ -28,16 +28,16 @@ use beryl_card::{
 /// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)); the engine keeps no
 /// counters in last-known information, so the cast is then not offered.
 static CHORUS: Effect = sequence(&[
-    add_counters(THIS, CounterKind::Chorus, 1),
-    draw(YOU, 1),
-    discard(YOU, 1),
+    add_counters(this(), CounterKind::Chorus, 1),
+    draw(you(), 1),
+    discard(you(), 1),
     if_then(
         Condition::Compare(
-            Amount::Counters(THIS, CounterKind::Chorus),
+            Amount::Counters(this(), CounterKind::Chorus),
             Comparison::AtLeast,
             Amount::Fixed(4),
         ),
-        &may_cast_free(YOU, THOSE),
+        &may_cast_free(you(), those()),
     ),
 ]);
 

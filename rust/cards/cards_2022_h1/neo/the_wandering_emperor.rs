@@ -12,7 +12,7 @@
 
 use crate::{names, printed};
 use beryl_card::effect::build::{
-    TARGET, YOU, add_counters, create_tokens, exile, gain_life, modify, sequence,
+    target, you, add_counters, create_tokens, exile, gain_life, modify, sequence,
 };
 use beryl_card::{
     Ability, CardDef, Condition, CounterKind, Duration, Effect, Filter, Governed, Keywords,
@@ -67,9 +67,9 @@ pub static SAMURAI: CardDef = card(
 /// turn." [CR 702.7a](https://yawgatog.com/resources/magic-rules/#R7027a): "First strike is
 /// a static ability that modifies the rules for the combat damage step."
 static COUNTER_AND_FIRST_STRIKE: Effect = sequence(&[
-    add_counters(TARGET, CounterKind::PlusOne, 1),
+    add_counters(target(), CounterKind::PlusOne, 1),
     modify(
-        TARGET,
+        target(),
         Modification::AddKeywords(Keywords::FIRST_STRIKE),
         Duration::EndOfTurn,
     ),
@@ -78,12 +78,12 @@ static COUNTER_AND_FIRST_STRIKE: Effect = sequence(&[
 /// "−1: Create a 2/2 white Samurai creature token with vigilance."
 /// [CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112): "The player who creates a
 /// token is its owner. The token enters the battlefield under that player's control."
-static CREATE_SAMURAI: Effect = create_tokens(YOU, &SAMURAI, 1);
+static CREATE_SAMURAI: Effect = create_tokens(you(), &SAMURAI, 1);
 
 /// "−2: Exile target tapped creature. You gain 2 life."
 /// [CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a): "To exile an object,
 /// move it to the exile zone from wherever it is."
-static EXILE_AND_GAIN: Effect = sequence(&[exile(TARGET), gain_life(YOU, 2)]);
+static EXILE_AND_GAIN: Effect = sequence(&[exile(target()), gain_life(you(), 2)]);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

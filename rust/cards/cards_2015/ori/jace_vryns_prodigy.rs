@@ -15,7 +15,7 @@
 // End of the generated card header.
 
 use beryl_card::effect::build::{
-    TARGET, TARGET_PLAYER, THIS, THOSE, YOU, discard, draw, exile, get_emblem, if_then, mill,
+    target, target_player, this, those, you, discard, draw, exile, get_emblem, if_then, mill,
     modify, permit_cast, return_transformed, sequence,
 };
 use beryl_card::{
@@ -83,15 +83,15 @@ static YOUR_GRAVEYARD: Objects = Objects::All {
 /// the battlefield is not exiled, and one that was not exiled does not return
 /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
 static LOOT_AND_TRANSFORM: Effect = sequence(&[
-    draw(YOU, 1),
-    discard(YOU, 1),
+    draw(you(), 1),
+    discard(you(), 1),
     if_then(
         Condition::Compare(
             Amount::Count(&YOUR_GRAVEYARD),
             Comparison::AtLeast,
             Amount::Fixed(5),
         ),
-        &sequence(&[exile(THIS), return_transformed(THOSE)]),
+        &sequence(&[exile(this()), return_transformed(those())]),
     ),
 ]);
 
@@ -101,7 +101,7 @@ static LOOT_AND_TRANSFORM: Effect = sequence(&[
 /// number or value) are applied." It lasts "as long as stated by the spell or ability creating
 /// it" ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a)).
 static WEAKEN: Effect = modify(
-    TARGET,
+    target(),
     Modification::ModifyPt(-2, 0),
     Duration::UntilYourNextTurn,
 );
@@ -113,8 +113,8 @@ static WEAKEN: Effect = modify(
 /// follows wherever it would go to the graveyard: resolving, countered or fizzling
 /// ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)).
 static RECAST: Effect = permit_cast(
-    YOU,
-    TARGET,
+    you(),
+    target(),
     Duration::EndOfTurn,
     CastTerms::PLAIN.exiled_instead(),
 );
@@ -123,13 +123,13 @@ static RECAST: Effect = permit_cast(
 /// cards.'" [CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142): "This means that
 /// [player] puts an emblem with [ability] into the command zone. The emblem is both owned and
 /// controlled by that player."
-static GET_EMBLEM: Effect = get_emblem(YOU, &EMBLEM);
+static GET_EMBLEM: Effect = get_emblem(you(), &EMBLEM);
 
 /// "Whenever you cast a spell, target opponent mills five cards."
 /// [CR 701.17a](https://yawgatog.com/resources/magic-rules/#R70117a): "For a player to mill a
 /// number of cards, that player puts that many cards from the top of their library into their
 /// graveyard."
-static MILL_FIVE: Effect = mill(TARGET_PLAYER, 5);
+static MILL_FIVE: Effect = mill(target_player(), 5);
 
 /// The back face's name, which the transformed permanent has (CR 712.6d).
 const TELEPATH: &str = "Jace, Telepath Unbound";

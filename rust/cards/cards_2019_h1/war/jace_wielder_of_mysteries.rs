@@ -8,7 +8,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{TARGET_PLAYER, YOU, draw, if_then, mill, sequence, win_game};
+use beryl_card::effect::build::{target_player, you, draw, if_then, mill, sequence, win_game};
 use beryl_card::{
     Ability, Amount, CardDef, Comparison, Condition, Effect, Filter, Objects, Players, Replacement,
     TargetKind, TargetSpec, Zone, card,
@@ -25,7 +25,7 @@ const LIBRARY_IS_EMPTY: Condition = Condition::Compare(
 );
 
 /// "You win the game".
-static YOU_WIN: Effect = win_game(YOU);
+static YOU_WIN: Effect = win_game(you());
 
 pub static CARD: CardDef = card(
     names::JACE_WIELDER_OF_MYSTERIES,
@@ -48,7 +48,7 @@ pub static CARD: CardDef = card(
 /// empty, Jace draws from an empty library and his controller wins instead.
 /// [CR 701.17b](https://yawgatog.com/resources/magic-rules/#R70117b): "A player can't mill a
 /// number of cards greater than the number of cards in their library."
-static MILL_TWO_AND_DRAW: Effect = sequence(&[mill(TARGET_PLAYER, 2), draw(YOU, 1)]);
+static MILL_TWO_AND_DRAW: Effect = sequence(&[mill(target_player(), 2), draw(you(), 1)]);
 
 /// "−8: Draw seven cards. Then if your library has no cards in it, you win the game." Jace
 /// with exactly eight loyalty is gone by then (CR 704.5i), and his controller draws what is
@@ -57,7 +57,7 @@ static MILL_TWO_AND_DRAW: Effect = sequence(&[mill(TARGET_PLAYER, 2), draw(YOU, 
 /// ([CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b)), by when the game is
 /// over ([CR 104.2b](https://yawgatog.com/resources/magic-rules/#R1042b)): "An effect may
 /// state that a player wins the game."
-static DRAW_SEVEN: Effect = sequence(&[draw(YOU, 7), if_then(LIBRARY_IS_EMPTY, &YOU_WIN)]);
+static DRAW_SEVEN: Effect = sequence(&[draw(you(), 7), if_then(LIBRARY_IS_EMPTY, &YOU_WIN)]);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

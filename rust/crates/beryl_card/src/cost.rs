@@ -271,6 +271,11 @@ impl Cost {
         Cost::of(mana, &[])
     }
 
+    /// A cost of no mana and one part.
+    pub const fn part(part: &'static CostPart) -> Cost {
+        Cost::of_parts(std::slice::from_ref(part))
+    }
+
     /// A cost of no mana: these parts, in the order printed.
     pub const fn of_parts(parts: &'static [CostPart]) -> Cost {
         Cost::of(ManaCost::NONE, parts)

@@ -7,8 +7,8 @@
 //! `Subtype` lacks is left out; what is under test is the abilities.
 
 use beryl_card::effect::build::{
-    EACH_OPPONENT, EACH_PLAYER, TARGET, THAT_PLAYER, THIS, YOU, counter, create_tokens, destroy,
-    draw, sequence,
+    counter, create_tokens, destroy, draw, each_opponent, each_player, sequence, target,
+    that_player, this, you,
 };
 use beryl_card::{
     Ability, Amount, Behavior, CardDef, Colors, Comparison, Condition, Cost, CostAction, CostPart,
@@ -29,7 +29,7 @@ static FIRE_NATION_WARSHIP: CardDef = CardDef {
         toughness: Some(4),
         keywords: Keywords::REACH,
         abilities: &[
-            Ability::triggered(&Trigger::DIES).effect(&create_tokens(YOU, &CLUE, 1)),
+            Ability::triggered(&Trigger::DIES).effect(&create_tokens(you(), &CLUE, 1)),
             Ability::crew(2),
         ],
         ..Face::EMPTY
@@ -42,7 +42,8 @@ static CLUE: CardDef = CardDef {
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[
-            Ability::activated(Cost::of(mana("{2}"), &[CostPart::SACRIFICE])).effect(&draw(YOU, 1)),
+            Ability::activated(Cost::of(mana("{2}"), &[CostPart::SACRIFICE]))
+                .effect(&draw(you(), 1)),
         ],
         ..Face::EMPTY
     }],
@@ -63,10 +64,10 @@ static SERENE_OFFERING: CardDef = CardDef {
                 Filter::Types(Types::ENCHANTMENT),
             )])
             .effect(&sequence(&[
-                destroy(TARGET),
+                destroy(target()),
                 Effect::GainLife {
-                    player: YOU,
-                    amount: Amount::ManaValue(TARGET),
+                    player: you(),
+                    amount: Amount::ManaValue(target()),
                 },
             ]))],
         ..Face::EMPTY
@@ -83,9 +84,9 @@ static DEMONIC_LORE: CardDef = CardDef {
         types: Types::ENCHANTMENT,
         colors: Colors::BLACK,
         abilities: &[
-            Ability::triggered(&Trigger::ENTERS).effect(&draw(YOU, 3)),
-            Ability::triggered(&Trigger::step(TurnStep::End, YOU)).effect(&Effect::LoseLife {
-                player: YOU,
+            Ability::triggered(&Trigger::ENTERS).effect(&draw(you(), 3)),
+            Ability::triggered(&Trigger::step(TurnStep::End, you())).effect(&Effect::LoseLife {
+                player: you(),
                 amount: Amount::Times(2, &Amount::Count(&CARDS_IN_YOUR_HAND)),
             }),
         ],
@@ -96,7 +97,7 @@ static DEMONIC_LORE: CardDef = CardDef {
 
 const CARDS_IN_YOUR_HAND: Objects = Objects::All {
     zone: Zone::Hand,
-    filter: Filter::Whose(&YOU),
+    filter: Filter::Whose(&you()),
 };
 
 /// Azure Drake {3}{U}, Creature — Drake 2/4. "Flying"
@@ -150,7 +151,7 @@ static SLAGDRILL_SCRAPPER: CardDef = CardDef {
                 CostPart::sacrifice_another(Filter::Types(Types::ARTIFACT.union(Types::LAND))),
             ],
         ))
-        .effect(&draw(YOU, 1))],
+        .effect(&draw(you(), 1))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -171,15 +172,15 @@ static SEVERED_STRANDS: CardDef = CardDef {
                 TargetKind::Permanent,
                 Filter::All(&[
                     Filter::Types(Types::CREATURE),
-                    Filter::Whose(&EACH_OPPONENT),
+                    Filter::Whose(&each_opponent()),
                 ]),
             )])
             .effect(&sequence(&[
                 Effect::GainLife {
-                    player: YOU,
+                    player: you(),
                     amount: Amount::Toughness(SACRIFICED),
                 },
-                destroy(TARGET),
+                destroy(target()),
             ]))],
         ..Face::EMPTY
     }],
@@ -203,13 +204,13 @@ static TEFERIS_CARE: CardDef = CardDef {
                 TargetKind::Permanent,
                 Filter::Types(Types::ENCHANTMENT),
             )])
-            .effect(&destroy(TARGET)),
+            .effect(&destroy(target())),
             Ability::activated(Cost::mana(mana("{3}{U}{U}")))
                 .targeting(&[TargetSpec::one(
                     TargetKind::Spell,
                     Filter::Types(Types::ENCHANTMENT),
                 )])
-                .effect(&counter(TARGET)),
+                .effect(&counter(target())),
         ],
         ..Face::EMPTY
     }],
@@ -323,7 +324,7 @@ const TRIGGERS: [(&str, &str, Trigger); 8] = [
     (
         "Speed, Young Avenger",
         "Whenever you cast a noncreature spell",
-        Trigger::casts(YOU, Filter::Not(&Filter::Types(Types::CREATURE))),
+        Trigger::casts(you(), Filter::Not(&Filter::Types(Types::CREATURE))),
     ),
     ("Arcbound Tracker", "When it dies", Trigger::DIES),
     (
@@ -334,7 +335,7 @@ const TRIGGERS: [(&str, &str, Trigger); 8] = [
     (
         "Spiritual Sanctuary",
         "At the beginning of each player's upkeep",
-        Trigger::step(TurnStep::Upkeep, EACH_PLAYER),
+        Trigger::step(TurnStep::Upkeep, each_player()),
     ),
     // Frog is a subtype `Subtype` lacks, left out as the printed ones are.
     (
@@ -344,7 +345,7 @@ const TRIGGERS: [(&str, &str, Trigger); 8] = [
             TriggerEvent::Attacks,
             Subject::A(Filter::All(&[
                 Filter::Types(Types::CREATURE),
-                Filter::Whose(&YOU),
+                Filter::Whose(&you()),
             ])),
         ),
     ),
@@ -356,12 +357,12 @@ const TRIGGERS: [(&str, &str, Trigger); 8] = [
     (
         "Thousand Moons Smithy",
         "At the beginning of your first main phase",
-        Trigger::step(TurnStep::PrecombatMain, YOU),
+        Trigger::step(TurnStep::PrecombatMain, you()),
     ),
     (
         "Taurean Mauler",
         "Whenever an opponent casts a spell",
-        Trigger::casts(EACH_OPPONENT, Filter::Any),
+        Trigger::casts(each_opponent(), Filter::Any),
     ),
 ];
 
@@ -413,7 +414,7 @@ const AFFECTED: [(&str, &str, Objects); 2] = [
             filter: Filter::All(&[
                 Filter::Supertypes(Supertypes::LEGENDARY),
                 CREATURES,
-                Filter::Whose(&YOU),
+                Filter::Whose(&you()),
             ]),
         },
     ),
@@ -433,7 +434,7 @@ const AS_LONG_AS: [(&str, &str, Condition); 1] = [(
     "Vadmir, New Blood",
     "As long as Vadmir has four or more +1/+1 counters on it",
     Condition::Compare(
-        Amount::Counters(THIS, CounterKind::PlusOne),
+        Amount::Counters(this(), CounterKind::PlusOne),
         Comparison::AtLeast,
         Amount::Fixed(4),
     ),
@@ -449,7 +450,7 @@ const AS_LONG_AS: [(&str, &str, Condition); 1] = [(
 const CONTROLS: [(&str, &str, Filter); 1] = [(
     "Hurloon Shaman",
     "Each player sacrifices a land of their choice",
-    Filter::All(&[Filter::Types(Types::LAND), Filter::Whose(&THAT_PLAYER)]),
+    Filter::All(&[Filter::Types(Types::LAND), Filter::Whose(&that_player())]),
 )];
 
 /// A static ability is read with no spell or ability resolving (CR 604.1), so its text

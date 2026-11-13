@@ -2,11 +2,11 @@
 //! resolved as abilities of test permanents.
 
 use beryl_card::effect::build::{
-    EACH_OPPONENT, EACH_PLAYER, IF_YOU_DO, ITS_CONTROLLER, TARGET, THAT_MANY, THAT_PLAYER, THIS,
-    THOSE, YOU, add_counters, controller_of, create_copy, deal_damage_to, destroy, discard, draw,
-    exile, exile_until_this_leaves, for_each_player, gain_life, if_else, if_then, lose_life, may,
-    mill, modify, put_into_library, remove_counters, return_to_hand, sacrifice, scry, sequence,
-    target, target_player,
+    add_counters, controller_of, create_copy, deal_damage_to, destroy, discard, draw,
+    each_opponent, each_player, exile, exile_until_this_leaves, for_each_player, gain_life,
+    if_else, if_then, if_you_do, its_controller, lose_life, may, mill, modify, nth_target,
+    nth_target_player, put_into_library, remove_counters, return_to_hand, sacrifice, scry,
+    sequence, target, that_many, that_player, this, those, you,
 };
 use beryl_card::{
     Amount, Comparison, Condition, Duration, Effect, LibraryPosition, Objects, Recipients,
@@ -119,8 +119,8 @@ fn that_many_is_what_the_instruction_before_did_to_every_object_at_once() {
             filter: CREATURES,
         }),
         Effect::GainLife {
-            player: YOU,
-            amount: THAT_MANY,
+            player: you(),
+            amount: that_many(),
         },
     ]));
     let (t, mut s, mut x, p, source) = game_with_source();
@@ -154,9 +154,9 @@ fn that_many_is_what_the_instruction_before_did_to_every_object_at_once() {
 
 #[test]
 fn those_are_the_objects_the_instruction_before_moved_as_they_are_now() {
-    static MILL_BACK: Ability = does(&sequence(&[mill(YOU, 2), return_to_hand(THOSE)]));
+    static MILL_BACK: Ability = does(&sequence(&[mill(you(), 2), return_to_hand(those())]));
     static MILL_UNDER: Ability = does(&sequence(&[
-        mill(YOU, 2),
+        mill(you(), 2),
         put_into_library(
             Objects::All {
                 zone: Zone::Graveyard,
@@ -197,8 +197,8 @@ fn attached_to_is_the_permanent_the_source_is_attached_to() {
 #[test]
 fn if_you_do_asks_whether_the_instruction_before_did_anything() {
     static PAY_OFF: Ability = does(&sequence(&[
-        sacrifice(THIS),
-        if_else(IF_YOU_DO, &draw(YOU, 1), &lose_life(YOU, 1)),
+        sacrifice(this()),
+        if_else(if_you_do(), &draw(you(), 1), &lose_life(you(), 1)),
     ]));
     let (t, s, mut x, p, source) = game_with_source();
 
@@ -220,19 +220,19 @@ fn if_you_do_asks_whether_the_instruction_before_did_anything() {
 fn each_player_takes_their_turn_at_an_effect_from_the_active_player() {
     static EACH: Ability = does(&sequence(&[
         for_each_player(
-            EACH_PLAYER,
+            each_player(),
             &sequence(&[
-                draw(THAT_PLAYER, 1),
+                draw(that_player(), 1),
                 Effect::LoseLife {
-                    player: THAT_PLAYER,
-                    amount: THAT_MANY,
+                    player: that_player(),
+                    amount: that_many(),
                 },
             ]),
         ),
         // Every player's together: the life both lost.
         Effect::GainLife {
-            player: YOU,
-            amount: THAT_MANY,
+            player: you(),
+            amount: that_many(),
         },
     ]));
     let (t, mut s, mut x, p, source) = game_with_source();
@@ -255,11 +255,11 @@ fn each_player_takes_their_turn_at_an_effect_from_the_active_player() {
 #[test]
 fn a_choice_in_the_data_pauses_until_it_is_answered() {
     static MAY: Ability = does(&sequence(&[
-        may(YOU, &draw(YOU, 1)),
-        if_then(Condition::Not(&IF_YOU_DO), &lose_life(YOU, 2)),
+        may(you(), &draw(you(), 1)),
+        if_then(Condition::Not(&if_you_do()), &lose_life(you(), 2)),
     ]));
-    static DISCARD: Ability = does(&discard(EACH_OPPONENT, 1));
-    static SCRY: Ability = does(&scry(YOU, 2));
+    static DISCARD: Ability = does(&discard(each_opponent(), 1));
+    static SCRY: Ability = does(&scry(you(), 2));
     let (t, s, mut x, p, source) = game_with_source();
 
     let question = resolve(&t, &mut { s }, &mut x, source, &MAY, &[], &[]).unwrap();
@@ -306,11 +306,11 @@ fn a_target_the_effect_moved_is_known_as_it_last_was() {
     static SWORDS: Ability = does_to(
         &[A_CREATURE],
         &sequence(&[
-            modify(TARGET, Modification::ModifyPt(1, 1), Duration::EndOfTurn),
-            exile(TARGET),
+            modify(target(), Modification::ModifyPt(1, 1), Duration::EndOfTurn),
+            exile(target()),
             Effect::LoseLife {
-                player: ITS_CONTROLLER,
-                amount: Amount::Power(TARGET),
+                player: its_controller(),
+                amount: Amount::Power(target()),
             },
         ]),
     );
@@ -338,7 +338,7 @@ fn the_controllers_of_what_an_instruction_moved_are_who_controlled_each() {
     };
     static WRATH: Ability = does(&sequence(&[
         destroy(ALL_CREATURES),
-        lose_life(controller_of(THOSE), 1),
+        lose_life(controller_of(those()), 1),
     ]));
     let (t, mut s, mut x, p, source) = game_with_source();
     let bear = put(&t, &mut s, &mut x, p.opponent(), "Test Bear");
@@ -361,10 +361,10 @@ fn a_target_an_instruction_could_not_move_is_read_where_it_is() {
     static HOLE: Ability = does_to(
         &[A_CREATURE],
         &sequence(&[
-            exile_until_this_leaves(TARGET),
+            exile_until_this_leaves(target()),
             Effect::GainLife {
-                player: YOU,
-                amount: Amount::Power(TARGET),
+                player: you(),
+                amount: Amount::Power(target()),
             },
         ]),
     );
@@ -383,10 +383,10 @@ fn an_illegal_target_is_not_acted_on_and_names_nobody() {
     static BOTH: Ability = does_to(
         &[A_CREATURE, A_CREATURE, A_PLAYER],
         &sequence(&[
-            destroy(target(0)),
-            destroy(target(1)),
-            gain_life(controller_of(target(0)), 5),
-            gain_life(target_player(2), 3),
+            destroy(nth_target(0)),
+            destroy(nth_target(1)),
+            gain_life(controller_of(nth_target(0)), 5),
+            gain_life(nth_target_player(2), 3),
         ]),
     );
     let (t, mut s, mut x, p, source) = game_with_source();
@@ -414,25 +414,25 @@ fn an_illegal_target_is_not_acted_on_and_names_nobody() {
 
 #[test]
 fn counters_amounts_and_conditions_are_read_as_each_instruction_is_reached() {
-    const STORY: Amount = Amount::Counters(THIS, CounterKind::Story);
+    const STORY: Amount = Amount::Counters(this(), CounterKind::Story);
     static COUNT_UP: Ability = does(&sequence(&[
-        add_counters(THIS, CounterKind::Story, 2),
+        add_counters(this(), CounterKind::Story, 2),
         if_then(
             Condition::Compare(STORY, Comparison::AtLeast, Amount::Fixed(2)),
             &Effect::CreateTokens {
-                player: YOU,
+                player: you(),
                 token: &INSECT,
                 count: STORY,
             },
         ),
         // The tokens just created are creatures.
-        if_then(Condition::Is(THOSE, CREATURES), &gain_life(YOU, 1)),
+        if_then(Condition::Is(those(), CREATURES), &gain_life(you(), 1)),
         // As many as it has: two, not five (CR 609.3).
-        remove_counters(THIS, CounterKind::Story, 5),
+        remove_counters(this(), CounterKind::Story, 5),
         if_then(
-            Condition::Compare(THAT_MANY, Comparison::Equal, Amount::Fixed(2)),
+            Condition::Compare(that_many(), Comparison::Equal, Amount::Fixed(2)),
             &Effect::LoseLife {
-                player: EACH_OPPONENT,
+                player: each_opponent(),
                 amount: Amount::Times(
                     2,
                     &Amount::Count(&Objects::All {
@@ -460,35 +460,35 @@ fn counters_amounts_and_conditions_are_read_as_each_instruction_is_reached() {
 /// ([CR 119.1](https://yawgatog.com/resources/magic-rules/#R1191)), and a tie is not more.
 #[test]
 fn the_most_any_player_has_is_read_with_each_in_your_place() {
-    const LIFE: Amount = Amount::Life(YOU);
+    const LIFE: Amount = Amount::Life(you());
     const YOUR_CREATURES: Amount = Amount::Count(&Objects::All {
         zone: Zone::Battlefield,
         filter: Filter::All(&[CREATURES, Filter::Whose(&Players::You)]),
     });
     const fn an_opponent_has_more(amount: &'static Amount) -> Condition {
         Condition::Compare(
-            Amount::Most(EACH_OPPONENT, amount),
+            Amount::Most(each_opponent(), amount),
             Comparison::MoreThan,
             *amount,
         )
     }
     static CATCH_UP: Ability = does(&sequence(&[
         // Life 20 each: no opponent has more.
-        if_then(an_opponent_has_more(&LIFE), &draw(YOU, 1)),
-        deal_damage_to(YOU, 3),
+        if_then(an_opponent_has_more(&LIFE), &draw(you(), 1)),
+        deal_damage_to(you(), 3),
         // 20 against 17.
-        if_then(an_opponent_has_more(&LIFE), &gain_life(YOU, 1)),
+        if_then(an_opponent_has_more(&LIFE), &gain_life(you(), 1)),
         // Their one creature against none.
         if_then(
             an_opponent_has_more(&YOUR_CREATURES),
             &Effect::CreateTokens {
-                player: YOU,
+                player: you(),
                 token: &INSECT,
                 count: Amount::Fixed(1),
             },
         ),
         // One each now.
-        if_then(an_opponent_has_more(&YOUR_CREATURES), &draw(YOU, 1)),
+        if_then(an_opponent_has_more(&YOUR_CREATURES), &draw(you(), 1)),
     ]));
     let (t, mut s, mut x, p, source) = game_with_source();
     put(&t, &mut s, &mut x, p.opponent(), "Test Bear");
@@ -509,7 +509,7 @@ fn the_most_any_player_has_is_read_with_each_in_your_place() {
 /// is no token ([CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111)).
 #[test]
 fn damage_to_permanents_is_marked_on_each_and_a_token_is_told_from_a_card() {
-    static COPY: Ability = does_to(&[A_CREATURE], &create_copy(YOU, TARGET));
+    static COPY: Ability = does_to(&[A_CREATURE], &create_copy(you(), target()));
     static SINGE: Ability = does(&sequence(&[
         Effect::DealDamage {
             to: Recipients::Permanents(Objects::All {
@@ -520,12 +520,12 @@ fn damage_to_permanents_is_marked_on_each_and_a_token_is_told_from_a_card() {
         },
         // One of the two dealt damage is a card, so they are not all tokens: each is copied.
         if_else(
-            Condition::Token(THOSE),
-            &lose_life(YOU, 5),
-            &create_copy(YOU, THOSE),
+            Condition::Token(those()),
+            &lose_life(you(), 5),
+            &create_copy(you(), those()),
         ),
         // The copies are.
-        if_then(Condition::Token(THOSE), &gain_life(YOU, 1)),
+        if_then(Condition::Token(those()), &gain_life(you(), 1)),
     ]));
     let (t, mut s, mut x, p, source) = game_with_source();
     let bear = put(&t, &mut s, &mut x, p.opponent(), "Test Bear");
@@ -549,7 +549,7 @@ fn damage_to_permanents_is_marked_on_each_and_a_token_is_told_from_a_card() {
 fn gaining_control_as_data_changes_the_controller_and_says_so() {
     static STEAL: Ability = does_to(
         &[A_CREATURE],
-        &modify(TARGET, Modification::Control, Duration::Indefinite),
+        &modify(target(), Modification::Control, Duration::Indefinite),
     );
     let (t, mut s, mut x, p, source) = game_with_source();
     let bear = put(&t, &mut s, &mut x, p.opponent(), "Test Bear");
@@ -570,11 +570,11 @@ fn an_instruction_out_of_room_stops_the_resolution_at_once() {
     // the instruction passes it on, and nothing after it is done: the game stalls.
     static SWARM: Ability = does(&sequence(&[
         Effect::CreateTokens {
-            player: YOU,
+            player: you(),
             token: &INSECT,
             count: Amount::Fixed(200),
         },
-        gain_life(YOU, 1),
+        gain_life(you(), 1),
     ]));
     let (t, mut s, mut x, p, source) = game_with_source();
     let (question, ended) = run(&t, &mut s, &mut x, source, &SWARM, &[], &[]);
@@ -584,7 +584,7 @@ fn an_instruction_out_of_room_stops_the_resolution_at_once() {
 
 #[test]
 fn a_copy_of_a_target_is_a_token_with_its_copiable_values() {
-    static COPY: Ability = does_to(&[A_CREATURE], &create_copy(YOU, TARGET));
+    static COPY: Ability = does_to(&[A_CREATURE], &create_copy(you(), target()));
     let (t, mut s, mut x, p, source) = game_with_source();
     let bear = put(&t, &mut s, &mut x, p.opponent(), "Test Bear");
     let targets = [Target::object(SpecIx::new(0), s.object_ref(bear))];

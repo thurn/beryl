@@ -301,8 +301,9 @@ fn every_card_in_the_store_has_a_module() {
     Store::read(&crate_dir.join("../../../data/card-store.tsv")).unwrap();
 }
 
-/// Each face's printed characteristics come from its record: a later face names itself, `*`
-/// is 0, and a token is the printing its card links.
+/// Each face's printed characteristics come from its record: a later face names itself, as
+/// does the face of a card or token of one face, `*` is 0, and a token is the printing its card
+/// links.
 #[test]
 fn faces_and_tokens_start_from_their_records() {
     let scratch = Scratch::new("printed");
@@ -315,6 +316,7 @@ fn faces_and_tokens_start_from_their_records() {
     let source = crate_source(&scratch.0, &store).unwrap();
     for line in [
         "pub const ADELINE: beryl_card::Face = beryl_card::Face::EMPTY\n    \
+         .named(\"Adeline\")\n    \
          .cost(beryl_card::mana(\"{1}{W}{W}\"))\n    \
          .supertypes(beryl_card::Supertypes::LEGENDARY)\n    \
          .types(beryl_card::Types::CREATURE)\n    \
@@ -325,6 +327,7 @@ fn faces_and_tokens_start_from_their_records() {
         "pub const FIRE: beryl_card::Face = beryl_card::Face::EMPTY\n    .cost(",
         "pub const ICE: beryl_card::Face = beryl_card::Face::EMPTY\n    .named(\"Ice\")\n",
         "pub const HUMAN_TOKEN: beryl_card::Face = beryl_card::Face::EMPTY\n    \
+         .named(\"Human Token\")\n    \
          .types(beryl_card::Types::CREATURE)\n    \
          .subtypes(beryl_card::Subtypes::of(&[beryl_card::Subtype::Human]))\n    \
          .colors(beryl_card::Colors::RED)",

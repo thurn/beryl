@@ -9,7 +9,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{TARGET, gain_flashback};
+use beryl_card::effect::build::{target, gain_flashback};
 use beryl_card::{
     Ability, CardDef, Filter, Keywords, Players, TargetKind, TargetSpec, Trigger, Types, card,
 };
@@ -37,7 +37,7 @@ pub static CARD: CardDef = card(
                     Filter::Whose(&Players::You),
                 ]),
             )])
-            .effect(&gain_flashback(TARGET))])],
+            .effect(&gain_flashback(target()))])],
 );
 
 #[cfg(feature = "scenarios")]

@@ -1,5 +1,7 @@
 //! Targets: what one instance of the word "target" may choose.
 
+use crate::characteristics::Types;
+use crate::effect::Players;
 use crate::filter::Filter;
 
 /// What kind of thing a target is.
@@ -64,6 +66,45 @@ impl TargetSpec {
         TargetSpec {
             optional: true,
             ..TargetSpec::one(kind, filter)
+        }
+    }
+
+    /// "Target spell".
+    pub const fn spell() -> TargetSpec {
+        TargetSpec::one(TargetKind::Spell, Filter::Any)
+    }
+
+    /// "Target player".
+    pub const fn player() -> TargetSpec {
+        TargetSpec::one(TargetKind::Player, Filter::Any)
+    }
+
+    /// "Target opponent".
+    pub const fn opponent() -> TargetSpec {
+        TargetSpec::one(TargetKind::Player, Filter::Whose(&Players::EachOpponent))
+    }
+
+    /// "Target creature".
+    pub const fn creature() -> TargetSpec {
+        TargetSpec::permanent(Filter::Types(Types::CREATURE))
+    }
+
+    /// "Target [permanent that passes `filter`]".
+    pub const fn permanent(filter: Filter) -> TargetSpec {
+        TargetSpec::one(TargetKind::Permanent, filter)
+    }
+
+    /// "Target [card that passes `filter`] from a graveyard".
+    pub const fn graveyard_card(filter: Filter) -> TargetSpec {
+        TargetSpec::one(TargetKind::GraveyardCard, filter)
+    }
+
+    /// The same spec for "up to one target": zero targets may be chosen.
+    #[must_use]
+    pub const fn optional(self) -> TargetSpec {
+        TargetSpec {
+            optional: true,
+            ..self
         }
     }
 

@@ -10,7 +10,7 @@
 
 use crate::{names, printed};
 use beryl_card::effect::build::{
-    EACH_OPPONENT, THAT_PLAYER, YOU, create_attacking_tokens, for_each_player,
+    each_opponent, that_player, you, create_attacking_tokens, for_each_player,
 };
 use beryl_card::{
     Ability, Amount, CardDef, Filter, Keywords, LayerSpec, Modification, Objects, Players, Trigger,
@@ -52,8 +52,8 @@ pub static CARD: CardDef = card(
             // attackers." A Human for each opponent, attacking that player or, as its
             // controller chooses, a planeswalker they control (CR 508.4).
             Ability::triggered(&Trigger::attack(Players::You)).effect(&for_each_player(
-                EACH_OPPONENT,
-                &create_attacking_tokens(YOU, &HUMAN, 1, THAT_PLAYER),
+                each_opponent(),
+                &create_attacking_tokens(you(), &HUMAN, 1, that_player()),
             )),
         ])],
 )

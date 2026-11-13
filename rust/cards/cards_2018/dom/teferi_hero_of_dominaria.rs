@@ -10,7 +10,7 @@
 
 use crate::{names, printed};
 use beryl_card::effect::build::{
-    TARGET, YOU, delay, draw, exile, get_emblem, put_into_library, sequence, untap_up_to,
+    target, you, delay, draw, exile, get_emblem, put_into_library, sequence, untap_up_to,
 };
 use beryl_card::{
     Ability, CardDef, Effect, Face, Filter, LibraryPosition, Objects, Players, TargetKind,
@@ -30,7 +30,7 @@ pub static CARD: CardDef = card(
                 Filter::Not(&Filter::Types(Types::LAND)),
             )])
             .effect(&THIRD_FROM_THE_TOP),
-        Ability::loyalty(-8).effect(&get_emblem(YOU, &EMBLEM)),
+        Ability::loyalty(-8).effect(&get_emblem(you(), &EMBLEM)),
         Ability::triggered(&Trigger::step(TurnStep::End, Players::EachPlayer).next())
             .effect(&UNTAP_TWO_LANDS),
     ])],
@@ -62,11 +62,11 @@ pub static EMBLEM: CardDef = card(
 /// triggered ability creates a delayed triggered ability, the source of that delayed
 /// triggered ability is the same as the source of that other ability." It triggers whether or
 /// not Teferi is still on the battlefield, since it refers to no object.
-static DRAW_AND_DELAY: Effect = sequence(&[draw(YOU, 1), delay(UNTAP)]);
+static DRAW_AND_DELAY: Effect = sequence(&[draw(you(), 1), delay(UNTAP)]);
 
 /// "Untap up to two lands": any lands, whoever controls them, chosen as it resolves.
 static UNTAP_TWO_LANDS: Effect = untap_up_to(
-    YOU,
+    you(),
     2,
     Objects::All {
         zone: Zone::Battlefield,
@@ -80,12 +80,12 @@ static UNTAP_TWO_LANDS: Effect = untap_up_to(
 /// player to put a card into a library 'Nth from the top,' and that library has fewer than N
 /// cards in it, the player puts that card on the bottom of that library." It goes to its
 /// owner's library ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)).
-static THIRD_FROM_THE_TOP: Effect = put_into_library(TARGET, LibraryPosition::FromTop(3));
+static THIRD_FROM_THE_TOP: Effect = put_into_library(target(), LibraryPosition::FromTop(3));
 
 /// "Whenever you draw a card, exile target permanent an opponent controls."
 /// [CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a): "To exile an object,
 /// move it to the exile zone from wherever it is."
-static EXILE_TARGET: Effect = exile(TARGET);
+static EXILE_TARGET: Effect = exile(target());
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

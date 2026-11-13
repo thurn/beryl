@@ -2,7 +2,7 @@
 //! evasion, damage and its division, first strike, planeswalkers and combat triggers.
 
 use beryl_card::effect::build::{
-    EACH_OPPONENT, THAT_PLAYER, YOU, create_attacking_tokens, for_each_player, gain_life,
+    create_attacking_tokens, each_opponent, for_each_player, gain_life, that_player, you,
 };
 
 use super::begin;
@@ -65,9 +65,9 @@ static RAIDER: CardDef = CardDef {
         power: Some(2),
         toughness: Some(2),
         abilities: &[
-            Ability::triggered(&Trigger::ATTACKS).effect(&gain_life(YOU, 1)),
+            Ability::triggered(&Trigger::ATTACKS).effect(&gain_life(you(), 1)),
             Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER)
-                .effect(&gain_life(YOU, 10)),
+                .effect(&gain_life(you(), 10)),
         ],
         ..Face::EMPTY
     }],
@@ -81,7 +81,7 @@ static RECRUIT: CardDef = CardDef {
         types: Types::CREATURE,
         power: Some(1),
         toughness: Some(1),
-        abilities: &[Ability::triggered(&Trigger::ATTACKS).effect(&gain_life(YOU, 1))],
+        abilities: &[Ability::triggered(&Trigger::ATTACKS).effect(&gain_life(you(), 1))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -96,8 +96,8 @@ static CAPTAIN: CardDef = CardDef {
         toughness: Some(1),
         abilities: &[
             Ability::triggered(&Trigger::attack(Players::You)).effect(&for_each_player(
-                EACH_OPPONENT,
-                &create_attacking_tokens(YOU, &RECRUIT, 1, THAT_PLAYER),
+                each_opponent(),
+                &create_attacking_tokens(you(), &RECRUIT, 1, that_player()),
             )),
         ],
         ..Face::EMPTY

@@ -470,8 +470,8 @@ builders:
 ```rust
 // "Return target spell to its owner's hand. Draw a card."
 Ability::spell()
-    .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
-    .effect(&sequence(&[return_to_hand(TARGET), draw(YOU, 1)]))
+    .target(&TargetSpec::spell())
+    .effect(&sequence(&[return_to_hand(target()), draw(you(), 1)]))
 ```
 
 The interpreter (`beryl_rules`' `interpret`) carries the instructions out in

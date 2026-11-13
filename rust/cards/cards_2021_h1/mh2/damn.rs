@@ -8,7 +8,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{TARGET, destroy_without_regeneration};
+use beryl_card::effect::build::{target, destroy_without_regeneration};
 use beryl_card::{
     Ability, CardDef, CastingOption, Filter, Objects, TargetKind, TargetSpec, Types, Zone, card,
     mana,
@@ -30,7 +30,7 @@ pub static CARD: CardDef = card(
         .abilities(&[
             Ability::spell()
                 .targeting(&[TargetSpec::one(TargetKind::Permanent, CREATURES)])
-                .effect(&destroy_without_regeneration(TARGET)),
+                .effect(&destroy_without_regeneration(target())),
             Ability::spell().effect(&destroy_without_regeneration(Objects::All {
                 zone: Zone::Battlefield,
                 filter: CREATURES,

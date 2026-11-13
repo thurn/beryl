@@ -9,7 +9,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{THIS, YOU, create_copy, discard, draw, sequence};
+use beryl_card::effect::build::{this, you, create_copy, discard, draw, sequence};
 use beryl_card::{Ability, CardDef, Condition, Keywords, Trigger, card};
 
 pub static CARD: CardDef = card(
@@ -19,14 +19,14 @@ pub static CARD: CardDef = card(
         .abilities(&[
             // "Draw a card, then discard a card."
             Ability::triggered(&Trigger::ATTACKS)
-                .effect(&sequence(&[draw(YOU, 1), discard(YOU, 1)])),
+                .effect(&sequence(&[draw(you(), 1), discard(you(), 1)])),
             // "If it isn't a token", as it last existed on the battlefield
             // ([CR 603.10a](https://yawgatog.com/resources/magic-rules/#R60310a)): "Some
             // zone-change triggers look back in time." The copy's copiable values are its
             // card's ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)).
             Ability::triggered(&Trigger::DIES)
-                .only_if(&Condition::Not(&Condition::Token(THIS)))
-                .effect(&create_copy(YOU, THIS)),
+                .only_if(&Condition::Not(&Condition::Token(this())))
+                .effect(&create_copy(you(), this())),
         ])],
 );
 

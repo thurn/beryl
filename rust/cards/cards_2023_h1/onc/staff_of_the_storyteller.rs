@@ -8,7 +8,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{THIS, YOU, add_counters, create_tokens, draw};
+use beryl_card::effect::build::{this, you, add_counters, create_tokens, draw};
 use beryl_card::{
     Ability, CardDef, Cost, CostPart, CounterKind, Effect, Filter, Keywords, Players, Trigger,
     Types, card, mana,
@@ -22,12 +22,12 @@ pub static CARD: CardDef = card(
             Players::You,
             Filter::Types(Types::CREATURE),
         ))
-        .effect(&add_counters(THIS, CounterKind::Story, 1)),
+        .effect(&add_counters(this(), CounterKind::Story, 1)),
         Ability::activated(Cost::of(
             mana("{W}"),
             &[CostPart::TAP, CostPart::remove(CounterKind::Story)],
         ))
-        .effect(&draw(YOU, 1)),
+        .effect(&draw(you(), 1)),
     ])],
 )
 .creating(&[&SPIRIT]);
@@ -45,7 +45,7 @@ pub static SPIRIT: CardDef = card(
 /// "When this artifact enters, create a 1/1 white Spirit creature token with flying."
 /// [CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112): "The player who creates a
 /// token is its owner. The token enters the battlefield under that player's control."
-static CREATE_SPIRIT: Effect = create_tokens(YOU, &SPIRIT, 1);
+static CREATE_SPIRIT: Effect = create_tokens(you(), &SPIRIT, 1);
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {

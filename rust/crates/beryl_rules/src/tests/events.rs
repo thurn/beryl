@@ -2,10 +2,10 @@
 //! through the event pipeline with test-only cards.
 
 use beryl_card::effect::build::{
-    CARRIED, EACH_OPPONENT, IF_YOU_LOSE_THE_FLIP, TARGET, THAT_PLAYER, THIS, YOU, add_counters,
-    add_mana_of_kind, create_attacking_tokens, create_copy, create_tokens as create_tokens_of_kind,
-    deal_damage_to, delay_carrying, draw, flip_coin, for_each_player, gain_life, get_emblem,
-    if_then, lose_life, modify, sequence,
+    add_counters, add_mana_of_kind, carried, create_attacking_tokens, create_copy,
+    create_tokens as create_tokens_of_kind, deal_damage_to, delay_carrying, draw, each_opponent,
+    flip_coin, for_each_player, gain_life, get_emblem, if_then, if_you_lose_the_flip, lose_life,
+    modify, sequence, target, that_player, this, you,
 };
 use beryl_card::{Amount, Comparison, Effect};
 
@@ -51,7 +51,7 @@ static GAIN_LAND: CardDef = CardDef {
     name: "Test Gain Land",
     faces: &[Face {
         types: Types::LAND,
-        abilities: &[Ability::triggered(&Trigger::ENTERS).effect(&gain_life(YOU, 1))],
+        abilities: &[Ability::triggered(&Trigger::ENTERS).effect(&gain_life(you(), 1))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -93,8 +93,8 @@ static SPRINGS: CardDef = CardDef {
 
 /// "Flip a coin. If you lose the flip, this deals 3 damage to you."
 const CRYPT_FLIP: Effect = sequence(&[
-    flip_coin(YOU),
-    if_then(IF_YOU_LOSE_THE_FLIP, &deal_damage_to(YOU, 3)),
+    flip_coin(you()),
+    if_then(if_you_lose_the_flip(), &deal_damage_to(you(), 3)),
 ]);
 
 /// Mana Crypt's upkeep trigger, on a land so random games can play it.
@@ -116,7 +116,7 @@ static WATCHER: CardDef = CardDef {
         types: Types::LAND,
         abilities: &[
             Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::EachOpponent))
-                .effect(&gain_life(YOU, 1)),
+                .effect(&gain_life(you(), 1)),
         ],
         ..Face::EMPTY
     }],
@@ -128,7 +128,7 @@ static ENDER: CardDef = CardDef {
     faces: &[Face {
         types: Types::LAND,
         abilities: &[
-            Ability::triggered(&Trigger::step(TurnStep::End, Players::You)).effect(&draw(YOU, 1)),
+            Ability::triggered(&Trigger::step(TurnStep::End, Players::You)).effect(&draw(you(), 1)),
         ],
         ..Face::EMPTY
     }],
@@ -143,7 +143,7 @@ static DRAIN_LAND: CardDef = CardDef {
         abilities: &[
             Ability::triggered(&Trigger::ENTERS).effect(&delay_carrying(1, Amount::Fixed(2))),
             Ability::triggered(&Trigger::main_phase(Players::You).next())
-                .effect(&add_mana_of_kind(YOU, ManaColor::Colorless, CARRIED)),
+                .effect(&add_mana_of_kind(you(), ManaColor::Colorless, carried())),
         ],
         ..Face::EMPTY
     }],
@@ -155,7 +155,7 @@ static EMBLEM: CardDef = CardDef {
     faces: &[Face {
         abilities: &[
             Ability::triggered(&Trigger::casts(Players::You, Filter::Any))
-                .effect(&lose_life(EACH_OPPONENT, 1)),
+                .effect(&lose_life(each_opponent(), 1)),
         ],
         ..Face::EMPTY
     }],
@@ -166,7 +166,7 @@ static EMBLEM_LAND: CardDef = CardDef {
     name: "Test Emblem Land",
     faces: &[Face {
         types: Types::LAND,
-        abilities: &[Ability::triggered(&Trigger::ENTERS).effect(&get_emblem(YOU, &EMBLEM))],
+        abilities: &[Ability::triggered(&Trigger::ENTERS).effect(&get_emblem(you(), &EMBLEM))],
         ..Face::EMPTY
     }],
     tokens: &[&EMBLEM],
@@ -192,8 +192,8 @@ static SPHINX: CardDef = CardDef {
         power: Some(3),
         toughness: Some(3),
         abilities: &[Ability::triggered(&Trigger::DIES)
-            .only_if(&Condition::Not(&Condition::Token(THIS)))
-            .effect(&create_copy(YOU, THIS))],
+            .only_if(&Condition::Not(&Condition::Token(this())))
+            .effect(&create_copy(you(), this()))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -206,7 +206,7 @@ static TRAINER: CardDef = CardDef {
         types: Types::CREATURE,
         power: Some(3),
         toughness: Some(3),
-        abilities: &[Ability::triggered(&Trigger::ENTERS).effect(&gain_life(YOU, 1))],
+        abilities: &[Ability::triggered(&Trigger::ENTERS).effect(&gain_life(you(), 1))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -219,8 +219,8 @@ static RAIDER: CardDef = CardDef {
         power: Some(2),
         toughness: Some(2),
         abilities: &[
-            Ability::triggered(&Trigger::ATTACKS).effect(&gain_life(YOU, 1)),
-            Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER).effect(&draw(YOU, 1)),
+            Ability::triggered(&Trigger::ATTACKS).effect(&gain_life(you(), 1)),
+            Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER).effect(&draw(you(), 1)),
         ],
         ..Face::EMPTY
     }],
@@ -259,8 +259,8 @@ impl CustomBody for HumanAttacking {
 
 /// Adeline's trigger as the card has it: a Human for each opponent, attacking that player
 /// or a planeswalker of theirs.
-const A_HUMAN_ATTACKING: Effect = for_each_player(EACH_OPPONENT, &A_HUMAN_ATTACKING_THEM);
-const A_HUMAN_ATTACKING_THEM: Effect = create_attacking_tokens(YOU, &HUMAN, 1, THAT_PLAYER);
+const A_HUMAN_ATTACKING: Effect = for_each_player(each_opponent(), &A_HUMAN_ATTACKING_THEM);
+const A_HUMAN_ATTACKING_THEM: Effect = create_attacking_tokens(you(), &HUMAN, 1, that_player());
 
 /// Adeline, Resplendent Cathar: power equal to the creatures you control; whenever you
 /// attack, a 1/1 Human tapped and attacking.
@@ -322,7 +322,7 @@ static OVERLORD: CardDef = CardDef {
                 )),
                 modification: Modification::RemoveTypes(Types::CREATURE),
             }),
-            Ability::triggered(&Trigger::ENTERS).effect(&create_tokens_of_kind(YOU, &INSECT, 2)),
+            Ability::triggered(&Trigger::ENTERS).effect(&create_tokens_of_kind(you(), &INSECT, 2)),
         ],
         ..Face::EMPTY
     }],
@@ -340,9 +340,9 @@ static STAFF: CardDef = CardDef {
                 Players::You,
                 Filter::Types(Types::CREATURE),
             ))
-            .effect(&add_counters(THIS, CounterKind::Story, 1)),
+            .effect(&add_counters(this(), CounterKind::Story, 1)),
             Ability::triggered(&Trigger::main_phase(Players::You).next())
-                .effect(&create_tokens_of_kind(YOU, &MAP, 2)),
+                .effect(&create_tokens_of_kind(you(), &MAP, 2)),
         ],
         ..Face::EMPTY
     }],
@@ -1962,7 +1962,7 @@ static THIEF: CardDef = CardDef {
             )])
             .only_if(&Condition::Paid(CastingKind::Kicker))
             .effect(&modify(
-                TARGET,
+                target(),
                 Modification::Control,
                 beryl_card::Duration::Indefinite,
             ))],

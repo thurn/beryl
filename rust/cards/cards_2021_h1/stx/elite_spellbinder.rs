@@ -10,7 +10,7 @@
 
 use crate::{names, printed};
 use beryl_card::effect::build::{
-    TARGET_PLAYER, THOSE, YOU, exile, look_at, may_choose, owner_of, permit_cast, sequence,
+    target_player, those, you, exile, look_at, may_choose, owner_of, permit_cast, sequence,
 };
 use beryl_card::{
     Ability, CardDef, CastTerms, Duration, Effect, Filter, Keywords, Objects, Place, Players,
@@ -20,14 +20,14 @@ use beryl_card::{
 /// "Target opponent's hand".
 const THEIR_HAND: Objects = Objects::InZoneOf {
     zone: Zone::Hand,
-    players: &TARGET_PLAYER,
+    players: &target_player(),
     filter: Filter::Any,
 };
 
 /// "A nonland card from it".
 const A_NONLAND_CARD_FROM_IT: Objects = Objects::InZoneOf {
     zone: Zone::Hand,
-    players: &TARGET_PLAYER,
+    players: &target_player(),
     filter: Filter::Not(&Filter::Types(Types::LAND)),
 };
 
@@ -40,18 +40,18 @@ const A_NONLAND_CARD_FROM_IT: Objects = Objects::InZoneOf {
 /// "To play a card means to play that card as a land or to cast that card as a spell,
 /// whichever is appropriate." The whole hand is looked at, for one card to exile.
 static SPELLBIND: Effect = sequence(&[
-    look_at(YOU, THEIR_HAND),
+    look_at(you(), THEIR_HAND),
     may_choose(
-        YOU,
+        you(),
         A_NONLAND_CARD_FROM_IT,
         Prompt::new(Purpose::Look)
             .most(1)
             .places(Place::Exile, Place::None),
     ),
-    exile(THOSE),
+    exile(those()),
     permit_cast(
-        owner_of(THOSE),
-        THOSE,
+        owner_of(those()),
+        those(),
         Duration::Indefinite,
         CastTerms::PLAIN.costing_more(2).played(),
     ),

@@ -8,7 +8,7 @@
 
 use crate::{names, printed};
 use beryl_card::effect::build::{
-    ITS_CONTROLLER, TARGET, create_copy, each_player_other_than, exile, sequence,
+    its_controller, target, create_copy, each_player_other_than, exile, sequence,
 };
 use beryl_card::{Ability, CardDef, Filter, TargetKind, TargetSpec, Types, card};
 
@@ -33,8 +33,8 @@ pub static CARD: CardDef = card(
             Filter::Not(&Filter::Types(Types::LAND)),
         )])
         .effect(&sequence(&[
-            exile(TARGET),
-            create_copy(each_player_other_than(&ITS_CONTROLLER), TARGET),
+            exile(target()),
+            create_copy(each_player_other_than(&its_controller()), target()),
         ]))])],
 );
 

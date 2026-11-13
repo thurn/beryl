@@ -1,19 +1,19 @@
 //! Builders: the words a card file writes an [`Effect`] in.
 //!
-//! Each is a `const fn` or a constant, so a definition stays a `static`. A builder takes a
+//! Each is a `const fn`, so a definition stays a `static`. A builder takes a
 //! printed number; an instruction whose amount is worked out is written as its [`Effect`]
 //! variant, with the [`Amount`] it reads:
 //!
 //! ```
-//! use beryl_card::effect::build::{TARGET, YOU, destroy, sequence};
+//! use beryl_card::effect::build::{destroy, sequence, target, you};
 //! use beryl_card::{Amount, Effect};
 //!
 //! // "Destroy target enchantment. You gain life equal to its mana value."
 //! const EFFECT: Effect = sequence(&[
-//!     destroy(TARGET),
+//!     destroy(target()),
 //!     Effect::GainLife {
-//!         player: YOU,
-//!         amount: Amount::ManaValue(TARGET),
+//!         player: you(),
+//!         amount: Amount::ManaValue(target()),
 //!     },
 //! ]);
 //! ```
@@ -33,42 +33,101 @@ use crate::mana::{ManaColor, ManaCost, ManaSet};
 use crate::prompt::Prompt;
 
 /// "This creature", "this spell": [`Objects::This`].
-pub const THIS: Objects = Objects::This;
+pub const fn this() -> Objects {
+    Objects::This
+}
+
 /// The first target: [`Objects::Target`].
-pub const TARGET: Objects = target(0);
+pub const fn target() -> Objects {
+    nth_target(0)
+}
+
 /// "It", "them", "that card": [`Objects::Those`].
-pub const THOSE: Objects = Objects::Those;
+pub const fn those() -> Objects {
+    Objects::Those
+}
 
 /// "That card", "that spell", of a triggered ability's event: [`Objects::TriggeredOn`].
-pub const THAT_CARD: Objects = Objects::TriggeredOn;
+pub const fn that_card() -> Objects {
+    Objects::TriggeredOn
+}
 
 /// "That card from your graveyard": [`Objects::TriggeredOnIn`].
-pub const THAT_CARD_FROM_YOUR_GRAVEYARD: Objects = Objects::TriggeredOnIn(Zone::Graveyard);
+pub const fn that_card_from_your_graveyard() -> Objects {
+    Objects::TriggeredOnIn(Zone::Graveyard)
+}
+
 /// "The cards exiled with this": [`Objects::ExiledWithThis`].
-pub const EXILED_WITH_THIS: Objects = Objects::ExiledWithThis;
+pub const fn exiled_with_this() -> Objects {
+    Objects::ExiledWithThis
+}
 
 /// The `n`th target, counting from 0.
-pub const fn target(n: u8) -> Objects {
+pub const fn nth_target(n: u8) -> Objects {
     Objects::Target(SpecIx::new(n))
 }
 
+/// The cards in `zone` that `players` own and that pass `filter`: [`Objects::InZoneOf`].
+pub const fn cards_in(zone: Zone, players: &'static Players, filter: Filter) -> Objects {
+    Objects::InZoneOf {
+        zone,
+        players,
+        filter,
+    }
+}
+
+/// "[Players]'s hand": every card in it.
+pub const fn hand_of(players: &'static Players) -> Objects {
+    cards_in(Zone::Hand, players, Filter::Any)
+}
+
+/// "[Players]'s library": every card in it.
+pub const fn library_of(players: &'static Players) -> Objects {
+    cards_in(Zone::Library, players, Filter::Any)
+}
+
+/// "[Players]'s graveyard": every card in it.
+pub const fn graveyard_of(players: &'static Players) -> Objects {
+    cards_in(Zone::Graveyard, players, Filter::Any)
+}
+
 /// "You": [`Players::You`].
-pub const YOU: Players = Players::You;
+pub const fn you() -> Players {
+    Players::You
+}
+
 /// "Each opponent": [`Players::EachOpponent`].
-pub const EACH_OPPONENT: Players = Players::EachOpponent;
+pub const fn each_opponent() -> Players {
+    Players::EachOpponent
+}
+
 /// "Each player": [`Players::EachPlayer`].
-pub const EACH_PLAYER: Players = Players::EachPlayer;
+pub const fn each_player() -> Players {
+    Players::EachPlayer
+}
+
 /// "Target player" or "target opponent", where it is the first target: [`Players::Target`].
-pub const TARGET_PLAYER: Players = target_player(0);
+pub const fn target_player() -> Players {
+    nth_target_player(0)
+}
+
 /// The first target's controller, "its controller": [`Players::ControllerOf`].
-pub const ITS_CONTROLLER: Players = Players::ControllerOf(TARGET);
+pub const fn its_controller() -> Players {
+    Players::ControllerOf(target())
+}
+
 /// The first target's owner, "its owner": [`Players::OwnerOf`].
-pub const ITS_OWNER: Players = Players::OwnerOf(TARGET);
+pub const fn its_owner() -> Players {
+    Players::OwnerOf(target())
+}
+
 /// "That player", within [`for_each_player`]: [`Players::ThatPlayer`].
-pub const THAT_PLAYER: Players = Players::ThatPlayer;
+pub const fn that_player() -> Players {
+    Players::ThatPlayer
+}
 
 /// The player chosen for the `n`th target, counting from 0.
-pub const fn target_player(n: u8) -> Players {
+pub const fn nth_target_player(n: u8) -> Players {
     Players::Target(SpecIx::new(n))
 }
 
@@ -88,20 +147,34 @@ pub const fn each_player_other_than(players: &'static Players) -> Players {
 }
 
 /// X: [`Amount::X`].
-pub const X: Amount = Amount::X;
+pub const fn x() -> Amount {
+    Amount::X
+}
+
 /// "That many": [`Amount::ThatMany`].
-pub const THAT_MANY: Amount = Amount::ThatMany;
+pub const fn that_many() -> Amount {
+    Amount::ThatMany
+}
 
 /// The number a delayed triggered ability carries: [`Amount::Carried`].
-pub const CARRIED: Amount = Amount::Carried;
+pub const fn carried() -> Amount {
+    Amount::Carried
+}
 
 /// "If you do": [`Condition::Did`].
-pub const IF_YOU_DO: Condition = Condition::Did;
+pub const fn if_you_do() -> Condition {
+    Condition::Did
+}
 
 /// "If you win the flip": [`Condition::WonFlip`].
-pub const IF_YOU_WIN_THE_FLIP: Condition = Condition::WonFlip;
+pub const fn if_you_win_the_flip() -> Condition {
+    Condition::WonFlip
+}
+
 /// "If you lose the flip": not [`Condition::WonFlip`].
-pub const IF_YOU_LOSE_THE_FLIP: Condition = Condition::Not(&Condition::WonFlip);
+pub const fn if_you_lose_the_flip() -> Condition {
+    Condition::Not(&Condition::WonFlip)
+}
 
 /// "If there is a [object]", as "if you control an artifact": at least one of `objects`.
 pub const fn exists(objects: &'static Objects) -> Condition {
@@ -158,7 +231,7 @@ pub const fn unless(effect: &'static Effect, player: Players, cost: Cost) -> Eff
     }
 }
 
-/// [`Effect::ForEachPlayer`]: `effect` for each of `players`, who is [`THAT_PLAYER`] in it.
+/// [`Effect::ForEachPlayer`]: `effect` for each of `players`, who is [`that_player`] in it.
 pub const fn for_each_player(players: Players, effect: &'static Effect) -> Effect {
     Effect::ForEachPlayer { players, effect }
 }
@@ -453,7 +526,7 @@ pub const fn add_mana_of_kind(player: Players, kind: ManaColor, amount: Amount) 
 
 /// [`Effect::Delay`] carrying a number: "[when], [effect]", the delayed triggered ability
 /// that is the `ability`th of its face, counting from 0, which reads `carrying` as
-/// [`CARRIED`].
+/// [`carried`].
 pub const fn delay_carrying(ability: u8, carrying: Amount) -> Effect {
     Effect::Delay {
         ability: AbilityIx::new(ability),

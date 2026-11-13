@@ -6,14 +6,14 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{TARGET, counter};
+use beryl_card::effect::build::{target, counter};
 use beryl_card::{Ability, CardDef, Filter, TargetKind, TargetSpec, card};
 
 pub static CARD: CardDef = card(
     names::COUNTERSPELL,
     &[printed::COUNTERSPELL.abilities(&[Ability::spell()
         .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
-        .effect(&counter(TARGET))])],
+        .effect(&counter(target()))])],
 );
 
 #[cfg(feature = "scenarios")]

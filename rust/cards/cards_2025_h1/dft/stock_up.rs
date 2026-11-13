@@ -7,7 +7,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{YOU, dig};
+use beryl_card::effect::build::{you, dig};
 use beryl_card::{Ability, CardDef, Effect, LibraryOrder, Taken, card};
 
 /// The two for the hand are chosen one at a time and go there together; with two or fewer
@@ -17,7 +17,7 @@ use beryl_card::{Ability, CardDef, Effect, LibraryOrder, Taken, card};
 /// more cards in a specific position in a library at the same time, the owner of those cards
 /// may arrange them in any order." With fewer than five cards in the library, the player
 /// looks at them all.
-static STOCK_UP: Effect = dig(YOU, 5, Taken::Put(2), LibraryOrder::Any);
+static STOCK_UP: Effect = dig(you(), 5, Taken::Put(2), LibraryOrder::Any);
 
 pub static CARD: CardDef = card(
     names::STOCK_UP,

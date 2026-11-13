@@ -12,7 +12,7 @@
 
 use crate::{names, printed};
 use beryl_card::effect::build::{
-    TARGET, TARGET_PLAYER, YOU, draw, exile, fateseal, put_back, return_to_hand, sequence,
+    target, target_player, you, draw, exile, fateseal, put_back, return_to_hand, sequence,
     shuffle_into,
 };
 use beryl_card::{
@@ -43,19 +43,19 @@ pub static CARD: CardDef = card(
 /// exception to [CR 401.2](https://yawgatog.com/resources/magic-rules/#R4012): "Players can't
 /// look at or change the order of cards in a library." Moving it within the library is no
 /// zone change, so it stays the same object.
-static FATESEAL: Effect = fateseal(YOU, TARGET_PLAYER);
+static FATESEAL: Effect = fateseal(you(), target_player());
 
 /// "0: Draw three cards, then put two cards from your hand on top of your library in any
 /// order." Each card chosen goes on top of the one before, so the second is the top card.
 /// [CR 121.2](https://yawgatog.com/resources/magic-rules/#R1212): "If a player is instructed to
 /// draw multiple cards, that player performs that many individual card draws."
-static BRAINSTORM: Effect = sequence(&[draw(YOU, 3), put_back(YOU, 2)]);
+static BRAINSTORM: Effect = sequence(&[draw(you(), 3), put_back(you(), 2)]);
 
 /// "−1: Return target creature to its owner's hand."
 /// [CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003): "If an object would go to
 /// any library, graveyard, or hand other than its owner's, it goes to its owner's
 /// corresponding zone."
-static BOUNCE: Effect = return_to_hand(TARGET);
+static BOUNCE: Effect = return_to_hand(target());
 
 /// "−12: Exile all cards from target player's library, then that player shuffles their hand
 /// into their library." [CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a):
@@ -65,14 +65,14 @@ static BOUNCE: Effect = return_to_hand(TARGET);
 static EXILE_LIBRARY: Effect = sequence(&[
     exile(Objects::InZoneOf {
         zone: Zone::Library,
-        players: &TARGET_PLAYER,
+        players: &target_player(),
         filter: Filter::Any,
     }),
     shuffle_into(
-        TARGET_PLAYER,
+        target_player(),
         Objects::InZoneOf {
             zone: Zone::Hand,
-            players: &TARGET_PLAYER,
+            players: &target_player(),
             filter: Filter::Any,
         },
     ),

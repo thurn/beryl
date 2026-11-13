@@ -1,9 +1,9 @@
 use super::*;
 use crate::cost::CastingKind;
 use crate::effect::build::{
-    TARGET, TARGET_PLAYER, THAT_PLAYER, YOU, add_mana, counter_and_exile, deal_damage_to, delay,
-    destroy, discard, draw, explore, fateseal, for_each_player, get_emblem, if_then, may_cast_free,
-    put_back, search, shuffle_into, unless, unless_pays, untap_up_to,
+    add_mana, counter_and_exile, deal_damage_to, delay, destroy, discard, draw, explore, fateseal,
+    for_each_player, get_emblem, if_then, may_cast_free, put_back, search, shuffle_into, target,
+    target_player, that_player, unless, unless_pays, untap_up_to, you,
 };
 use crate::effect::{Found, LibraryOrder, Taken};
 use crate::ids::TurnStep;
@@ -28,18 +28,18 @@ fn checked(abilities: &'static [Ability]) -> Checked {
 
 #[test]
 fn a_target_the_ability_does_not_have_is_refused() {
-    const NO_TARGET: &[Ability] = &[Ability::spell().effect(&destroy(TARGET))];
+    const NO_TARGET: &[Ability] = &[Ability::spell().effect(&destroy(target()))];
     const A_PLAYER_DESTROYED: &[Ability] = &[Ability::spell()
         .targeting(&[A_PLAYER])
-        .effect(&destroy(TARGET))];
+        .effect(&destroy(target()))];
     const A_CREATURE_DRAWS: &[Ability] = &[Ability::spell()
         .targeting(&[A_CREATURE])
-        .effect(&draw(TARGET_PLAYER, 1))];
+        .effect(&draw(target_player(), 1))];
     const WELL_FORMED: &[Ability] =
         &[Ability::spell()
             .targeting(&[A_CREATURE, A_PLAYER])
             .effect(&Effect::Sequence(&[
-                destroy(TARGET),
+                destroy(target()),
                 draw(Players::Target(SpecIx::new(1)), 1),
             ]))];
     assert_eq!(checked(NO_TARGET), Err(Malformed::Target));
@@ -50,9 +50,11 @@ fn a_target_the_ability_does_not_have_is_refused() {
 
 #[test]
 fn that_player_outside_a_for_each_player_is_refused() {
-    const OUTSIDE: &[Ability] = &[Ability::spell().effect(&draw(THAT_PLAYER, 1))];
-    const INSIDE: &[Ability] =
-        &[Ability::spell().effect(&for_each_player(Players::EachPlayer, &draw(THAT_PLAYER, 1)))];
+    const OUTSIDE: &[Ability] = &[Ability::spell().effect(&draw(that_player(), 1))];
+    const INSIDE: &[Ability] = &[Ability::spell().effect(&for_each_player(
+        Players::EachPlayer,
+        &draw(that_player(), 1),
+    ))];
     assert_eq!(checked(OUTSIDE), Err(Malformed::ThatPlayer));
     assert_eq!(checked(INSIDE), Ok(()));
 }
@@ -61,7 +63,7 @@ fn that_player_outside_a_for_each_player_is_refused() {
 fn a_cost_the_face_cannot_be_cast_with_is_refused() {
     const KICKED: &[Ability] = &[Ability::spell().effect(&if_then(
         Condition::Paid(CastingKind::Kicker),
-        &draw(YOU, 1),
+        &draw(you(), 1),
     ))];
     // Offspring's own ability, on a face that does not list its cost.
     const OFFSPRING: &[Ability] = &[Ability::offspring()];
@@ -82,7 +84,7 @@ fn a_grant_the_face_does_not_list_is_refused() {
 #[test]
 fn a_copy_that_is_not_one_one_is_refused() {
     const COPY: &[Ability] = &[Ability::spell().effect(&Effect::CreateCopies {
-        player: YOU,
+        player: you(),
         of: Objects::This,
         count: Amount::Fixed(1),
         except: CopyException::PowerToughness(2, 2),
@@ -93,7 +95,7 @@ fn a_copy_that_is_not_one_one_is_refused() {
 #[test]
 fn mana_added_outside_a_mana_ability_is_refused() {
     const RITUAL: &[Ability] =
-        &[Ability::spell().effect(&add_mana(YOU, ManaSet::one(ManaColor::Black)))];
+        &[Ability::spell().effect(&add_mana(you(), ManaSet::one(ManaColor::Black)))];
     const LAND: &[Ability] = &[Ability::tap_for_mana(ManaSet::one(ManaColor::Black))];
     assert_eq!(checked(RITUAL), Err(Malformed::AddMana));
     assert_eq!(checked(LAND), Ok(()));
@@ -106,12 +108,12 @@ fn a_countered_spell_put_anywhere_but_exile_is_refused() {
         &[Ability::spell()
             .targeting(&[A_SPELL])
             .effect(&Effect::CounterInto {
-                spells: TARGET,
+                spells: target(),
                 zone: Zone::Hand,
             })];
     const DISSIPATE: &[Ability] = &[Ability::spell()
         .targeting(&[A_SPELL])
-        .effect(&counter_and_exile(TARGET))];
+        .effect(&counter_and_exile(target()))];
     assert_eq!(checked(REMAND), Err(Malformed::Countered));
     assert_eq!(checked(DISSIPATE), Ok(()));
 }
@@ -120,12 +122,12 @@ fn a_countered_spell_put_anywhere_but_exile_is_refused() {
 fn a_delay_of_no_delayed_trigger_of_the_face_is_refused() {
     const AT_THE_NEXT_END_STEP: Ability =
         Ability::triggered(&Trigger::step(TurnStep::End, Players::EachPlayer).next())
-            .effect(&draw(YOU, 1));
+            .effect(&draw(you(), 1));
     const PAST_THE_END: &[Ability] = &[Ability::spell().effect(&delay(1))];
     const ITSELF: &[Ability] = &[Ability::spell().effect(&delay(0)), AT_THE_NEXT_END_STEP];
     const PRINTED: &[Ability] = &[
         Ability::spell().effect(&delay(1)),
-        Ability::triggered(&Trigger::ENTERS).effect(&draw(YOU, 1)),
+        Ability::triggered(&Trigger::ENTERS).effect(&draw(you(), 1)),
     ];
     const WELL_FORMED: &[Ability] = &[Ability::spell().effect(&delay(1)), AT_THE_NEXT_END_STEP];
     for abilities in [PAST_THE_END, ITSELF, PRINTED] {
@@ -137,20 +139,20 @@ fn a_delay_of_no_delayed_trigger_of_the_face_is_refused() {
 #[test]
 fn a_cost_the_engine_cannot_take_as_an_effect_resolves_is_refused() {
     const SACRIFICE: &[Ability] = &[Ability::spell().effect(&unless(
-        &draw(YOU, 1),
-        YOU,
+        &draw(you(), 1),
+        you(),
         Cost::of_parts(&[CostPart::sacrifice(Filter::Any)]),
     ))];
     const MANA_AND_A_CARD: &[Ability] = &[Ability::spell().effect(&unless(
-        &draw(YOU, 1),
-        YOU,
+        &draw(you(), 1),
+        you(),
         Cost::of(mana("{1}"), &[CostPart::discard(Filter::Any)]),
     ))];
     const MANA: &[Ability] =
-        &[Ability::spell().effect(&unless_pays(&draw(YOU, 1), YOU, mana("{1}")))];
+        &[Ability::spell().effect(&unless_pays(&draw(you(), 1), you(), mana("{1}")))];
     const A_CARD: &[Ability] = &[Ability::spell().effect(&unless(
-        &discard(YOU, 2),
-        YOU,
+        &discard(you(), 2),
+        you(),
         Cost::of_parts(&[CostPart::discard(Filter::Any)]),
     ))];
     assert_eq!(checked(SACRIFICE), Err(Malformed::Cost));
@@ -162,11 +164,11 @@ fn a_cost_the_engine_cannot_take_as_an_effect_resolves_is_refused() {
 #[test]
 fn a_fateseal_of_more_than_one_card_is_refused() {
     const TWO: &[Ability] = &[Ability::spell().effect(&Effect::Fateseal {
-        player: YOU,
+        player: you(),
         library: Players::EachOpponent,
         count: Amount::Fixed(2),
     })];
-    const ONE: &[Ability] = &[Ability::spell().effect(&fateseal(YOU, Players::EachOpponent))];
+    const ONE: &[Ability] = &[Ability::spell().effect(&fateseal(you(), Players::EachOpponent))];
     assert_eq!(checked(TWO), Err(Malformed::Fateseal));
     assert_eq!(checked(ONE), Ok(()));
 }
@@ -174,45 +176,46 @@ fn a_fateseal_of_more_than_one_card_is_refused() {
 /// The operands of the entries a card port added are walked as any other's.
 #[test]
 fn the_operands_of_every_entry_are_checked() {
-    const DAMAGE: &[Ability] = &[Ability::spell().effect(&deal_damage_to(TARGET_PLAYER, 3))];
-    const EXPLORE: &[Ability] = &[Ability::spell().effect(&explore(TARGET))];
-    const CAST: &[Ability] = &[Ability::spell().effect(&may_cast_free(YOU, TARGET))];
+    const DAMAGE: &[Ability] = &[Ability::spell().effect(&deal_damage_to(target_player(), 3))];
+    const EXPLORE: &[Ability] = &[Ability::spell().effect(&explore(target()))];
+    const CAST: &[Ability] = &[Ability::spell().effect(&may_cast_free(you(), target()))];
     const MOST: &[Ability] = &[Ability::spell().effect(&Effect::Draw {
-        player: YOU,
-        count: Amount::Most(TARGET_PLAYER, &Amount::Life(YOU)),
+        player: you(),
+        count: Amount::Most(target_player(), &Amount::Life(you())),
     })];
     const A_TOKEN: &[Ability] = &[Ability::spell().effect(&if_then(
-        Condition::Not(&Condition::Token(TARGET)),
-        &draw(YOU, 1),
+        Condition::Not(&Condition::Token(target())),
+        &draw(you(), 1),
     ))];
-    const UNTAP: &[Ability] = &[Ability::spell().effect(&untap_up_to(YOU, 2, TARGET))];
+    const UNTAP: &[Ability] = &[Ability::spell().effect(&untap_up_to(you(), 2, target()))];
     const CARRYING: &[Ability] = &[
         Ability::spell().effect(&Effect::Delay {
             ability: crate::index::AbilityIx::new(1),
-            carrying: Amount::ManaValue(TARGET),
+            carrying: Amount::ManaValue(target()),
         }),
-        Ability::triggered(&Trigger::main_phase(YOU).next()).effect(&draw(YOU, 1)),
+        Ability::triggered(&Trigger::main_phase(you()).next()).effect(&draw(you(), 1)),
     ];
     const EMBLEM: CardDef = crate::definition::card("Test Emblem", &[Face::EMPTY]);
-    const EMBLEM_FOR: &[Ability] = &[Ability::spell().effect(&get_emblem(TARGET_PLAYER, &EMBLEM))];
-    const PUT_BACK: &[Ability] = &[Ability::spell().effect(&put_back(TARGET_PLAYER, 2))];
-    const SHUFFLE: &[Ability] = &[Ability::spell().effect(&shuffle_into(YOU, TARGET))];
+    const EMBLEM_FOR: &[Ability] =
+        &[Ability::spell().effect(&get_emblem(target_player(), &EMBLEM))];
+    const PUT_BACK: &[Ability] = &[Ability::spell().effect(&put_back(target_player(), 2))];
+    const SHUFFLE: &[Ability] = &[Ability::spell().effect(&shuffle_into(you(), target()))];
     const CARDS_IN: &[Ability] = &[Ability::spell().effect(&destroy(Objects::CardsIn {
-        players: &TARGET_PLAYER,
+        players: &target_player(),
         zones: &[Zone::Hand],
     }))];
     const DIG: &[Ability] = &[Ability::spell().effect(&Effect::Dig {
-        player: YOU,
-        look: Amount::ManaValue(TARGET),
+        player: you(),
+        look: Amount::ManaValue(target()),
         take: Taken::Put(1),
         rest: LibraryOrder::Random,
     })];
-    const FATESEAL: &[Ability] = &[Ability::spell().effect(&fateseal(YOU, TARGET_PLAYER))];
+    const FATESEAL: &[Ability] = &[Ability::spell().effect(&fateseal(you(), target_player()))];
     const SEARCH: &[Ability] =
-        &[Ability::spell().effect(&search(TARGET_PLAYER, Filter::Any, Found::RevealToHand))];
+        &[Ability::spell().effect(&search(target_player(), Filter::Any, Found::RevealToHand))];
     const THOSE_OF: &[Ability] = &[Ability::spell().effect(&Effect::Draw {
-        player: YOU,
-        count: Amount::ThoseOf(TARGET_PLAYER),
+        player: you(),
+        count: Amount::ThoseOf(target_player()),
     })];
     for abilities in [
         DAMAGE, EXPLORE, CAST, MOST, A_TOKEN, UNTAP, CARRYING, EMBLEM_FOR, PUT_BACK, SHUFFLE,
@@ -227,33 +230,33 @@ fn the_operands_of_every_entry_are_checked() {
 fn what_the_port_entries_cannot_mean_is_refused() {
     use crate::effect::CastTerms;
     use crate::effect::build::{
-        CARRIED, THAT_CARD, add_mana_of_kind, choose, exile, look_at, permit_cast,
+        add_mana_of_kind, carried, choose, exile, look_at, permit_cast, that_card,
     };
     use crate::prompt::{Prompt, Purpose};
     // "That card", of an ability nothing triggered, and of one something did.
-    const THAT: &[Ability] = &[Ability::spell().effect(&exile(THAT_CARD))];
+    const THAT: &[Ability] = &[Ability::spell().effect(&exile(that_card()))];
     const DISCARDED: &[Ability] =
-        &[Ability::triggered(&Trigger::discards(YOU)).effect(&exile(THAT_CARD))];
+        &[Ability::triggered(&Trigger::discards(you())).effect(&exile(that_card()))];
     // A number no effect settled for it.
-    const UNCARRIED: &[Ability] = &[Ability::triggered(&Trigger::main_phase(YOU))
-        .effect(&add_mana_of_kind(YOU, ManaColor::Colorless, CARRIED))];
+    const UNCARRIED: &[Ability] = &[Ability::triggered(&Trigger::main_phase(you()))
+        .effect(&add_mana_of_kind(you(), ManaColor::Colorless, carried()))];
     // A choice the interpreter cannot ask: two objects, or no object at all.
     const TWO: &[Ability] = &[Ability::spell().effect(&choose(
-        YOU,
+        you(),
         Objects::ExiledWithThis,
         Prompt::new(Purpose::Choose).most(2),
     ))];
     const YES_OR_NO: &[Ability] = &[Ability::spell().effect(&choose(
-        YOU,
+        you(),
         Objects::ExiledWithThis,
         Prompt::new(Purpose::May).most(1),
     ))];
     // The battlefield is no player's own.
     const SHARED: &[Ability] = &[Ability::spell().effect(&look_at(
-        YOU,
+        you(),
         Objects::InZoneOf {
             zone: Zone::Battlefield,
-            players: &YOU,
+            players: &you(),
             filter: Filter::Any,
         },
     ))];
@@ -261,8 +264,8 @@ fn what_the_port_entries_cannot_mean_is_refused() {
     const A_ROUND: &[Ability] = &[Ability::spell()
         .targeting(&[TargetSpec::one(TargetKind::GraveyardCard, Filter::Any)])
         .effect(&permit_cast(
-            YOU,
-            TARGET,
+            you(),
+            target(),
             Duration::UntilYourNextTurn,
             CastTerms::PLAIN,
         ))];
@@ -280,20 +283,21 @@ fn what_the_port_entries_cannot_mean_is_refused() {
 #[test]
 fn what_an_effect_as_a_whole_cannot_mean_is_refused() {
     use crate::continuous::{Governed, RuleChange, When};
-    use crate::effect::build::{THOSE, change_rule, sequence};
+    use crate::effect::build::{change_rule, sequence, those};
     static AS_INSTANT: RuleChange = RuleChange {
         players: Players::You,
         what: Governed::ActivateLoyaltyAbilities(Objects::This),
         when: When::AsInstant,
     };
-    const CAST: Effect = may_cast_free(YOU, THOSE);
-    const CAST_THEN_DRAW: &[Ability] = &[Ability::spell().effect(&sequence(&[CAST, draw(YOU, 1)]))];
+    const CAST: Effect = may_cast_free(you(), those());
+    const CAST_THEN_DRAW: &[Ability] =
+        &[Ability::spell().effect(&sequence(&[CAST, draw(you(), 1)]))];
     const DRAW_THEN_CAST: &[Ability] =
-        &[Ability::spell().effect(&sequence(&[draw(YOU, 1), if_then(Condition::Did, &CAST)]))];
+        &[Ability::spell().effect(&sequence(&[draw(you(), 1), if_then(Condition::Did, &CAST)]))];
     const EACH_CASTS: &[Ability] =
         &[Ability::spell().effect(&for_each_player(Players::EachPlayer, &CAST))];
     const RULE: Effect = change_rule(&AS_INSTANT, Duration::EndOfTurn);
-    const ONE_RULE: &[Ability] = &[Ability::spell().effect(&sequence(&[draw(YOU, 1), RULE]))];
+    const ONE_RULE: &[Ability] = &[Ability::spell().effect(&sequence(&[draw(you(), 1), RULE]))];
     const TWO_RULES: &[Ability] = &[Ability::spell().effect(&sequence(&[RULE, RULE]))];
     assert_eq!(checked(CAST_THEN_DRAW), Err(Malformed::Cast));
     assert_eq!(checked(DRAW_THEN_CAST), Ok(()));
@@ -307,58 +311,58 @@ fn what_an_effect_as_a_whole_cannot_mean_is_refused() {
 #[test]
 fn what_a_moved_object_was_is_refused_where_it_is_not_kept() {
     use crate::effect::build::{
-        ITS_CONTROLLER, THIS, THOSE, controller_of, exile, gain_life, lose_life, sacrifice,
-        sequence,
+        controller_of, exile, gain_life, its_controller, lose_life, sacrifice, sequence, this,
+        those,
     };
     const fn spell(effect: &'static Effect) -> [Ability; 1] {
         [Ability::spell().targeting(&[A_CREATURE]).effect(effect)]
     }
-    const IS_A_CREATURE: Condition = Condition::Is(TARGET, Filter::Any);
-    const DRAW_IF_IT_IS: Effect = if_then(IS_A_CREATURE, &draw(YOU, 1));
-    const ASKED_BEFORE: &[Ability] = &spell(&sequence(&[DRAW_IF_IT_IS, destroy(TARGET)]));
-    const ASKED_AFTER: &[Ability] = &spell(&sequence(&[destroy(TARGET), DRAW_IF_IT_IS]));
+    const IS_A_CREATURE: Condition = Condition::Is(target(), Filter::Any);
+    const DRAW_IF_IT_IS: Effect = if_then(IS_A_CREATURE, &draw(you(), 1));
+    const ASKED_BEFORE: &[Ability] = &spell(&sequence(&[DRAW_IF_IT_IS, destroy(target())]));
+    const ASKED_AFTER: &[Ability] = &spell(&sequence(&[destroy(target()), DRAW_IF_IT_IS]));
     // One way through the effect moved it.
     const ASKED_AFTER_A_BRANCH: &[Ability] = &spell(&sequence(&[
-        if_then(Condition::Did, &exile(TARGET)),
+        if_then(Condition::Did, &exile(target())),
         DRAW_IF_IT_IS,
     ]));
     // The second player's turn at it comes after the first's moved it.
     const ASKED_BY_EACH: &[Ability] = &spell(&for_each_player(
         Players::EachPlayer,
-        &sequence(&[DRAW_IF_IT_IS, destroy(TARGET)]),
+        &sequence(&[DRAW_IF_IT_IS, destroy(target())]),
     ));
     const TOKEN_AFTER: &[Ability] = &spell(&sequence(&[
-        destroy(TARGET),
-        if_then(Condition::Token(TARGET), &draw(YOU, 1)),
+        destroy(target()),
+        if_then(Condition::Token(target()), &draw(you(), 1)),
     ]));
     // The new object the move made is asked where it is (CR 400.7j).
     const THOSE_ASKED_AFTER: &[Ability] = &spell(&sequence(&[
-        destroy(TARGET),
-        if_then(Condition::Is(THOSE, Filter::Any), &draw(YOU, 1)),
+        destroy(target()),
+        if_then(Condition::Is(those(), Filter::Any), &draw(you(), 1)),
     ]));
     const KEPT_OF_A_TARGET: &[Ability] = &spell(&sequence(&[
-        destroy(TARGET),
-        lose_life(ITS_CONTROLLER, 1),
-        lose_life(controller_of(THOSE), 1),
+        destroy(target()),
+        lose_life(its_controller(), 1),
+        lose_life(controller_of(those()), 1),
         Effect::GainLife {
-            player: YOU,
-            amount: Amount::Power(TARGET),
+            player: you(),
+            amount: Amount::Power(target()),
         },
     ]));
     const SOURCE_CONTROLLER_AFTER: &[Ability] = &spell(&sequence(&[
-        sacrifice(THIS),
-        gain_life(controller_of(THIS), 1),
+        sacrifice(this()),
+        gain_life(controller_of(this()), 1),
     ]));
     const SOURCE_POWER_AFTER: &[Ability] = &spell(&sequence(&[
-        exile(THIS),
+        exile(this()),
         Effect::GainLife {
-            player: YOU,
-            amount: Amount::Power(THIS),
+            player: you(),
+            amount: Amount::Power(this()),
         },
     ]));
     // An Aura that has left enchants nothing.
     const ENCHANTED_AFTER: &[Ability] = &spell(&sequence(&[
-        sacrifice(THIS),
+        sacrifice(this()),
         gain_life(controller_of(Objects::AttachedTo), 1),
     ]));
     assert_eq!(checked(ASKED_BEFORE), Ok(()));
@@ -382,7 +386,7 @@ fn what_a_moved_object_was_is_refused_where_it_is_not_kept() {
 #[should_panic(expected = "an effect adds mana outside a mana ability")]
 fn a_card_is_checked_as_it_is_built() {
     const RITUAL: &[Ability] =
-        &[Ability::spell().effect(&add_mana(YOU, ManaSet::one(ManaColor::Black)))];
+        &[Ability::spell().effect(&add_mana(you(), ManaSet::one(ManaColor::Black)))];
     let face: &'static Face = Box::leak(Box::new(Face::EMPTY.abilities(RITUAL)));
     let _ = crate::card("Test Ritual", std::slice::from_ref(face));
 }

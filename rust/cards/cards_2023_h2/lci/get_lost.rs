@@ -9,7 +9,7 @@
 
 use crate::{names, printed};
 use beryl_card::effect::build::{
-    ITS_CONTROLLER, TARGET, create_tokens, destroy, explore, sequence,
+    its_controller, target, create_tokens, destroy, explore, sequence,
 };
 use beryl_card::{
     Ability, CardDef, Cost, CostPart, Filter, ManaCost, Players, TargetKind, TargetSpec, Types,
@@ -35,8 +35,8 @@ pub static CARD: CardDef = card(
             ),
         )])
         .effect(&sequence(&[
-            destroy(TARGET),
-            create_tokens(ITS_CONTROLLER, &MAP, 2),
+            destroy(target()),
+            create_tokens(its_controller(), &MAP, 2),
         ]))])],
 )
 .creating(&[&MAP]);
@@ -61,7 +61,7 @@ pub static MAP: CardDef = card(
             Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),
         )])
         .as_a_sorcery()
-        .effect(&explore(TARGET))]),
+        .effect(&explore(target()))]),
     ],
 );
 

@@ -10,7 +10,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{YOU, manifest_dread};
+use beryl_card::effect::build::{you, manifest_dread};
 use beryl_card::{
     Ability, CardDef, CostPart, Filter, Keywords, Players, Trigger, TurnStep, Zone, card,
 };
@@ -36,7 +36,7 @@ pub static CARD: CardDef = card(
         .keywords(Keywords::FLYING)
         .abilities(&[
             Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::EachOpponent))
-                .effect(&manifest_dread(YOU)),
+                .effect(&manifest_dread(you())),
         ])
         .additional_cost(&[CostPart::exile(6, Zone::Graveyard, Filter::Any)])],
 );

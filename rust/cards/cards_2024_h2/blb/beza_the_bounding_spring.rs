@@ -11,7 +11,7 @@
 use crate::tokens::TREASURE;
 use crate::{names, printed};
 use beryl_card::effect::build::{
-    EACH_OPPONENT, YOU, create_tokens, draw, gain_life, if_then, sequence,
+    each_opponent, you, create_tokens, draw, gain_life, if_then, sequence,
 };
 use beryl_card::{
     Ability, Amount, CardDef, Comparison, Condition, Effect, Filter, Objects, Players, Trigger,
@@ -30,7 +30,7 @@ pub static FISH: CardDef = card(FISH_TOKEN, &[printed::token::FISH_TOKEN]);
 /// player's opponent is the other player"). A tie is not "more".
 const fn an_opponent_has_more(amount: &'static Amount) -> Condition {
     Condition::Compare(
-        Amount::Most(EACH_OPPONENT, amount),
+        Amount::Most(each_opponent(), amount),
         Comparison::MoreThan,
         *amount,
     )
@@ -41,7 +41,7 @@ const LANDS: Amount = Amount::Count(&Objects::All {
     zone: Zone::Battlefield,
     filter: Filter::All(&[Filter::Types(Types::LAND), Filter::Whose(&Players::You)]),
 });
-const LIFE: Amount = Amount::Life(YOU);
+const LIFE: Amount = Amount::Life(you());
 /// "Creatures you control".
 const CREATURES: Amount = Amount::Count(&Objects::All {
     zone: Zone::Battlefield,
@@ -61,14 +61,14 @@ const CARDS_IN_HAND: Amount = Amount::Count(&Objects::All {
 static COMPARE: Effect = sequence(&[
     if_then(
         an_opponent_has_more(&LANDS),
-        &create_tokens(YOU, &TREASURE, 1),
+        &create_tokens(you(), &TREASURE, 1),
     ),
-    if_then(an_opponent_has_more(&LIFE), &gain_life(YOU, 4)),
+    if_then(an_opponent_has_more(&LIFE), &gain_life(you(), 4)),
     if_then(
         an_opponent_has_more(&CREATURES),
-        &create_tokens(YOU, &FISH, 2),
+        &create_tokens(you(), &FISH, 2),
     ),
-    if_then(an_opponent_has_more(&CARDS_IN_HAND), &draw(YOU, 1)),
+    if_then(an_opponent_has_more(&CARDS_IN_HAND), &draw(you(), 1)),
 ]);
 
 pub static CARD: CardDef = card(

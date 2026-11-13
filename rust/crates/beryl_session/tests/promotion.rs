@@ -5,7 +5,7 @@
 
 use std::collections::VecDeque;
 
-use beryl_card::effect::build::{YOU, create_tokens, permit_cast, sequence};
+use beryl_card::effect::build::{create_tokens, permit_cast, sequence, you};
 use beryl_card::{CastTerms, Duration, Effect};
 use beryl_cards::CARDS;
 use beryl_cards::names::{
@@ -133,10 +133,10 @@ static OPEN_VAULT: CardDef = CardDef {
 
 /// "You may cast each card in your graveyard this turn", once.
 const PERMIT: Effect = permit_cast(
-    YOU,
+    you(),
     Objects::All {
         zone: Zone::Graveyard,
-        filter: Filter::Whose(&YOU),
+        filter: Filter::Whose(&you()),
     },
     Duration::EndOfTurn,
     CastTerms::PLAIN,
@@ -428,9 +428,11 @@ static HOARD: CardDef = CardDef {
         cost: ManaCost::NONE,
         types: Types::ARTIFACT,
         colors: Colors::NONE,
-        abilities: &[
-            Ability::triggered(&Trigger::ENTERS).effect(&create_tokens(YOU, &TREASURE, TREASURES))
-        ],
+        abilities: &[Ability::triggered(&Trigger::ENTERS).effect(&create_tokens(
+            you(),
+            &TREASURE,
+            TREASURES,
+        ))],
         ..Face::EMPTY
     }],
     tokens: &[&TREASURE],

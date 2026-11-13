@@ -10,8 +10,8 @@ use crate::continuous::{Governed, RuleChange, When};
 use crate::cost::{Cost, CostPart};
 use crate::definition::{CardDef, Face, card};
 use crate::effect::build::{
-    IF_YOU_LOSE_THE_FLIP, TARGET, THIS, THOSE, YOU, counter, deal_damage_to, destroy, dig, discard,
-    draw, exile_until_this_leaves, flip_coin, if_then, may_cast_free, put_back, sequence,
+    counter, deal_damage_to, destroy, dig, discard, draw, exile_until_this_leaves, flip_coin,
+    if_then, if_you_lose_the_flip, may_cast_free, put_back, sequence, target, this, those, you,
 };
 use crate::effect::{Amount, Comparison, Condition, Effect, LibraryOrder, Players, Taken};
 use crate::filter::Filter;
@@ -29,7 +29,7 @@ const fn one_face(name: &'static str, face: &'static [Face]) -> CardDef {
 /// hand on top of your library in any order."
 #[test]
 fn an_effect_renders_as_its_oracle_sentence() {
-    static BRAINSTORM: Effect = sequence(&[draw(YOU, 3), put_back(YOU, 2)]);
+    static BRAINSTORM: Effect = sequence(&[draw(you(), 3), put_back(you(), 2)]);
     static JACE: CardDef = one_face(
         "Jace, the Mind Sculptor",
         &[Face::EMPTY
@@ -57,7 +57,7 @@ fn a_cost_renders_before_its_colon() {
                     TargetKind::Permanent,
                     Filter::Types(Types::LAND),
                 )])
-                .effect(&destroy(TARGET)),
+                .effect(&destroy(target())),
         ])],
     );
     assert_eq!(
@@ -72,8 +72,8 @@ fn a_cost_renders_before_its_colon() {
 fn a_trigger_leads_its_effect() {
     static UPKEEP: Trigger = Trigger::step(TurnStep::Upkeep, Players::You);
     static FLIP: Effect = sequence(&[
-        flip_coin(YOU),
-        if_then(IF_YOU_LOSE_THE_FLIP, &deal_damage_to(YOU, 3)),
+        flip_coin(you()),
+        if_then(if_you_lose_the_flip(), &deal_damage_to(you(), 3)),
     ]);
     static MANA_CRYPT: CardDef = one_face(
         "Mana Crypt",
@@ -108,7 +108,7 @@ fn a_static_ability_says_what_it_changes() {
 /// battlefield."
 #[test]
 fn a_filter_renders_as_a_noun_phrase() {
-    static HOLE: Effect = exile_until_this_leaves(TARGET);
+    static HOLE: Effect = exile_until_this_leaves(target());
     static PORTABLE_HOLE: CardDef = one_face(
         "Portable Hole",
         &[Face::EMPTY
@@ -135,7 +135,7 @@ fn a_filter_renders_as_a_noun_phrase() {
 /// has no text, renders as a marked placeholder.
 #[test]
 fn a_bare_ability_and_a_rust_body() {
-    static COUNTER: Effect = counter(TARGET);
+    static COUNTER: Effect = counter(target());
     static BODY: fn() = || {};
     static A_SPELL: [TargetSpec; 1] = [TargetSpec::one(TargetKind::Spell, Filter::Any)];
     let counterspell = Ability::spell().targeting(&A_SPELL).effect(&COUNTER);
@@ -149,7 +149,7 @@ fn a_bare_ability_and_a_rust_body() {
 /// of them into your hand and the rest on the bottom of your library in any order."
 #[test]
 fn a_dig_puts_both_piles_in_one_sentence() {
-    static STOCK_UP: Effect = dig(YOU, 5, Taken::Put(2), LibraryOrder::Any);
+    static STOCK_UP: Effect = dig(you(), 5, Taken::Put(2), LibraryOrder::Any);
     assert_eq!(
         render_ability(&Ability::spell().effect(&STOCK_UP)),
         "Look at the top five cards of your library. Put two of them into your hand and the \
@@ -163,15 +163,15 @@ fn a_dig_puts_both_piles_in_one_sentence() {
 #[test]
 fn a_discarded_card_is_named_once_it_would_be_ambiguous() {
     static LOOT: Effect = sequence(&[
-        draw(YOU, 1),
-        discard(YOU, 1),
+        draw(you(), 1),
+        discard(you(), 1),
         if_then(
             Condition::Compare(
-                Amount::Counters(THIS, CounterKind::Chorus),
+                Amount::Counters(this(), CounterKind::Chorus),
                 Comparison::AtLeast,
                 Amount::Fixed(4),
             ),
-            &may_cast_free(YOU, THOSE),
+            &may_cast_free(you(), those()),
         ),
     ]);
     static MALCOLM: CardDef = one_face(

@@ -10,7 +10,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{TARGET, put_into_library};
+use beryl_card::effect::build::{target, put_into_library};
 use beryl_card::{
     Ability, CardDef, CastingOption, Colors, CostPart, Effect, Filter, Keywords, LibraryPosition,
     ManaCost, TargetKind, TargetSpec, Trigger, Types, Zone, card,
@@ -22,7 +22,7 @@ use beryl_card::{
 /// corresponding zone." The trigger resolves whether or not Subtlety is still there, as after
 /// evoke's sacrifice ([CR 113.7a](https://yawgatog.com/resources/magic-rules/#R1137a)): "Once
 /// activated or triggered, an ability exists on the stack independently of its source."
-static TUCK: Effect = put_into_library(TARGET, LibraryPosition::TopOrBottom);
+static TUCK: Effect = put_into_library(target(), LibraryPosition::TopOrBottom);
 
 /// Evoke's cost exiles a blue card from the hand rather than paying {2}{U}{U}
 /// ([CR 702.74a](https://yawgatog.com/resources/magic-rules/#R70274a)), and its sacrifice

@@ -10,7 +10,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{YOU, create_tokens};
+use beryl_card::effect::build::{you, create_tokens};
 use beryl_card::{Ability, CardDef, CastingOption, Effect, Keywords, Trigger, card, mana};
 
 /// The Insect token's name ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)):
@@ -25,7 +25,7 @@ pub static INSECT: CardDef = card(
 
 /// "Create two 2/1 white Insect creature tokens with flying": one event
 /// ([CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111)).
-static TWO_INSECTS: Effect = create_tokens(YOU, &INSECT, 2);
+static TWO_INSECTS: Effect = create_tokens(you(), &INSECT, 2);
 
 /// Impending is four abilities
 /// ([CR 702.176a](https://yawgatog.com/resources/magic-rules/#R702176a)): the alternative cost,

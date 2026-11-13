@@ -11,7 +11,7 @@
 use crate::tokens::TREASURE;
 use crate::{names, printed};
 use beryl_card::effect::build::{
-    EXILED_WITH_THIS, IF_YOU_DO, THAT_CARD_FROM_YOUR_GRAVEYARD, THOSE, YOU, choose, create_tokens,
+    exiled_with_this, if_you_do, that_card_from_your_graveyard, those, you, choose, create_tokens,
     discard, draw, exile_linked, if_else, if_then, may, put_into_graveyard, sequence,
 };
 use beryl_card::{
@@ -33,11 +33,11 @@ pub static ROGUE: CardDef = card(ROGUE_TOKEN, &[printed::token::ROGUE_TOKEN]);
 /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second ability
 /// refers only to cards in the exile zone that were put there as a result of an instruction
 /// to exile them in the first ability."
-static EXILE_DISCARDED: Effect = may(YOU, &exile_linked(THAT_CARD_FROM_YOUR_GRAVEYARD));
+static EXILE_DISCARDED: Effect = may(you(), &exile_linked(that_card_from_your_graveyard()));
 
 /// Draws, then discards ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)):
 /// "The controller of the spell or ability follows its instructions in the order written."
-static LOOT: Effect = sequence(&[draw(YOU, 1), discard(YOU, 1)]);
+static LOOT: Effect = sequence(&[draw(you(), 1), discard(you(), 1)]);
 
 /// One of the cards exiled with this Converter, its controller's choice, goes to its owner's
 /// graveyard (CR 400.3); what it is decides the token. Off the stack and the battlefield a
@@ -45,15 +45,15 @@ static LOOT: Effect = sequence(&[draw(YOU, 1), discard(YOU, 1)]);
 /// ([CR 712.6a](https://yawgatog.com/resources/magic-rules/#R7126a)), so Sink into Stupor is
 /// a nonland card. With no card exiled with it there is no "it", and no token.
 static CONVERT: Effect = sequence(&[
-    choose(YOU, EXILED_WITH_THIS, Prompt::new(Purpose::Choose).most(1)),
+    choose(you(), exiled_with_this(), Prompt::new(Purpose::Choose).most(1)),
     if_then(
-        IF_YOU_DO,
+        if_you_do(),
         &sequence(&[
-            put_into_graveyard(THOSE),
+            put_into_graveyard(those()),
             if_else(
-                Condition::Is(THOSE, Filter::Types(Types::LAND)),
-                &create_tokens(YOU, &TREASURE, 1),
-                &create_tokens(YOU, &ROGUE, 1),
+                Condition::Is(those(), Filter::Types(Types::LAND)),
+                &create_tokens(you(), &TREASURE, 1),
+                &create_tokens(you(), &ROGUE, 1),
             ),
         ]),
     ),

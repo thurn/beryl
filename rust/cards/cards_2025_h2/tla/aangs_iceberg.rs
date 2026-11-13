@@ -11,7 +11,7 @@
 
 use crate::{names, printed};
 use beryl_card::effect::build::{
-    IF_YOU_DO, TARGET, THIS, YOU, exile_until_this_leaves, if_then, sacrifice, scry, sequence,
+    if_you_do, target, this, you, exile_until_this_leaves, if_then, sacrifice, scry, sequence,
 };
 use beryl_card::{
     Ability, CardDef, Cost, CostPart, Filter, Keywords, ManaCost, TargetKind, TargetSpec, Trigger,
@@ -33,12 +33,12 @@ pub static CARD: CardDef = card(
                     Filter::Not(&Filter::Types(Types::LAND)),
                 )
                 .other()])
-                .effect(&exile_until_this_leaves(TARGET)),
+                .effect(&exile_until_this_leaves(target())),
             // "Sacrifice this enchantment. If you do, scry 2." Its controller can sacrifice
             // it only if it is still on the battlefield
             // ([CR 701.21a](https://yawgatog.com/resources/magic-rules/#R70121a)).
             Ability::activated(Cost::of(ManaCost::generic(3), &[CostPart::waterbend(3)])).effect(
-                &sequence(&[sacrifice(THIS), if_then(IF_YOU_DO, &scry(YOU, 2))]),
+                &sequence(&[sacrifice(this()), if_then(if_you_do(), &scry(you(), 2))]),
             ),
         ])],
 );

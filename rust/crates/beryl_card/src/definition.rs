@@ -195,9 +195,7 @@ pub static FACE_DOWN_COPY: CardDef = CardDef {
 /// adventure card. Each face starts from [`Face::EMPTY`]:
 ///
 /// ```
-/// use beryl_card::effect::build::{TARGET, counter};
-/// use beryl_card::{Ability, CardDef, Colors, Face, Filter, TargetKind, TargetSpec, Types};
-/// use beryl_card::{card, mana};
+/// use beryl_card::prelude::*;
 ///
 /// // "Counter target spell."
 /// pub static CARD: CardDef = card(
@@ -207,8 +205,8 @@ pub static FACE_DOWN_COPY: CardDef = CardDef {
 ///         .types(Types::INSTANT)
 ///         .colors(Colors::BLUE)
 ///         .abilities(&[Ability::spell()
-///             .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
-///             .effect(&counter(TARGET))])],
+///             .target(&TargetSpec::spell())
+///             .effect(&counter(target()))])],
 /// );
 /// ```
 ///
@@ -219,14 +217,13 @@ pub static FACE_DOWN_COPY: CardDef = CardDef {
 /// spell resolves, which only a mana ability does:
 ///
 /// ```compile_fail
-/// use beryl_card::effect::build::{YOU, add_mana};
-/// use beryl_card::{Ability, CardDef, Face, ManaColor, ManaSet, Types, card};
+/// use beryl_card::prelude::*;
 ///
 /// pub static CARD: CardDef = card(
 ///     "Dark Ritual",
 ///     &[Face::EMPTY
 ///         .types(Types::INSTANT)
-///         .abilities(&[Ability::spell().effect(&add_mana(YOU, ManaSet::one(ManaColor::Black)))])],
+///         .abilities(&[Ability::spell().effect(&add_mana(you(), ManaSet::one(ManaColor::Black)))])],
 /// );
 /// ```
 pub const fn card(name: &'static str, faces: &'static [Face]) -> CardDef {
@@ -307,6 +304,21 @@ impl Face {
     #[must_use]
     pub const fn keywords(self, keywords: Keywords) -> Face {
         Face { keywords, ..self }
+    }
+
+    /// The card of this one face, named as the face is: `Printed::CardName.abilities(..)
+    /// .card()`, where the face starts from a card of one face, which its generated
+    /// characteristics name. A card of two faces is built with [`card`].
+    ///
+    /// # Panics
+    ///
+    /// As the definition compiles, when the face has no name, or [`card`] refuses it.
+    pub const fn card(&'static self) -> CardDef {
+        assert!(
+            !self.name.is_empty(),
+            "a face with no name makes no card: build a card of two faces with `card(..)`"
+        );
+        card(self.name, std::slice::from_ref(self))
     }
 
     #[must_use]

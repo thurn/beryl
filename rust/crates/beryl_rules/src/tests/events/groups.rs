@@ -1,7 +1,7 @@
 //! Which recorded events happened as one event of the rules: the groups a recording sink's
 //! tags tell, and the blocks a declaration says.
 
-use beryl_card::effect::build::{TARGET, YOU, destroy, draw, exile_until_this_leaves, put_back};
+use beryl_card::effect::build::{destroy, draw, exile_until_this_leaves, put_back, target, you};
 use beryl_card::{Amount, Effect, Objects, Recipients};
 
 use crate::card::{
@@ -88,7 +88,7 @@ static INSIGHT: CardDef = CardDef {
     faces: &[Face {
         cost: W,
         types: Types::SORCERY,
-        abilities: &[Ability::spell().effect(&draw(YOU, 2))],
+        abilities: &[Ability::spell().effect(&draw(you(), 2))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -108,7 +108,7 @@ static JAILER: CardDef = CardDef {
                 TargetKind::Permanent,
                 Filter::All(&[CREATURE, Filter::Whose(&Players::EachOpponent)]),
             )])
-            .effect(&exile_until_this_leaves(TARGET))],
+            .effect(&exile_until_this_leaves(target()))],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -121,7 +121,7 @@ static DELVER: CardDef = CardDef {
     faces: &[Face {
         cost: W,
         types: Types::SORCERY,
-        abilities: &[Ability::spell().effect(&draw(YOU, 1))],
+        abilities: &[Ability::spell().effect(&draw(you(), 1))],
         ..Face::EMPTY
     }
     .additional_cost(&[CostPart::exile(2, Zone::Graveyard, Filter::Any)])],
@@ -134,7 +134,7 @@ static STORM: CardDef = CardDef {
     faces: &[Face {
         cost: W,
         types: Types::SORCERY,
-        abilities: &[Ability::spell().effect(&put_back(YOU, 2))],
+        abilities: &[Ability::spell().effect(&put_back(you(), 2))],
         ..Face::EMPTY
     }],
     tokens: &[],

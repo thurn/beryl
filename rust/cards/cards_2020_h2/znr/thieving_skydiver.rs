@@ -9,7 +9,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{TARGET, THIS, attach, if_then, modify, sequence};
+use beryl_card::effect::build::{target, this, attach, if_then, modify, sequence};
 use beryl_card::{
     Ability, CardDef, CastingKind, CastingOption, Condition, Duration, Effect, Filter, Keywords,
     ManaCost, Modification, Subtype, TargetKind, TargetSpec, Trigger, Types, card,
@@ -22,10 +22,10 @@ use beryl_card::{
 /// attach an Aura, Equipment, or Fortification to an object or player it can't be attached
 /// to, the Aura, Equipment, or Fortification doesn't move." It still changes control.
 static STEAL: Effect = sequence(&[
-    modify(TARGET, Modification::Control, Duration::Indefinite),
+    modify(target(), Modification::Control, Duration::Indefinite),
     if_then(
-        Condition::Is(TARGET, Filter::Subtype(Subtype::Equipment)),
-        &attach(TARGET, THIS),
+        Condition::Is(target(), Filter::Subtype(Subtype::Equipment)),
+        &attach(target(), this()),
     ),
 ]);
 

@@ -7,7 +7,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{YOU, may, search};
+use beryl_card::effect::build::{you, may, search};
 use beryl_card::{Ability, CardDef, Effect, Filter, Found, Trigger, Types, card};
 
 /// "An artifact card with mana value 1 or less".
@@ -20,7 +20,7 @@ const TRINKET: Filter = Filter::All(&[Filter::Types(Types::ARTIFACT), Filter::Ma
 /// library ..., randomize the cards within it so that no player knows their order." The card
 /// found is revealed ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a)):
 /// "To reveal a card, show that card to all players for a brief time."
-static TUTOR: Effect = may(YOU, &search(YOU, TRINKET, Found::RevealToHand));
+static TUTOR: Effect = may(you(), &search(you(), TRINKET, Found::RevealToHand));
 
 pub static CARD: CardDef = card(
     names::TRINKET_MAGE,

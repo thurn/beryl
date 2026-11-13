@@ -6,7 +6,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{ITS_CONTROLLER, TARGET, gain_life, put_into_library, sequence};
+use beryl_card::effect::build::{its_controller, target, gain_life, put_into_library, sequence};
 use beryl_card::{Ability, CardDef, Filter, LibraryPosition, TargetKind, TargetSpec, Types, card};
 
 /// "Second from the top" is under one card, or the top of an empty library. "Its controller"
@@ -23,8 +23,8 @@ pub static CARD: CardDef = card(
             Filter::Types(Types::CREATURE),
         )])
         .effect(&sequence(&[
-            put_into_library(TARGET, LibraryPosition::FromTop(2)),
-            gain_life(ITS_CONTROLLER, 3),
+            put_into_library(target(), LibraryPosition::FromTop(2)),
+            gain_life(its_controller(), 3),
         ]))])],
 );
 

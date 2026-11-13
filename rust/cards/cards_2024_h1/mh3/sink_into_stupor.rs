@@ -12,7 +12,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{TARGET, return_to_hand};
+use beryl_card::effect::build::{target, return_to_hand};
 use beryl_card::{
     Ability, CardDef, Filter, ManaColor, ManaSet, Players, Replacement, TargetKind, TargetSpec,
     Types, card,
@@ -37,7 +37,7 @@ pub static CARD: CardDef = card(
                     Filter::Not(&Filter::Types(Types::LAND)),
                 ]),
             )])
-            .effect(&return_to_hand(TARGET))]),
+            .effect(&return_to_hand(target()))]),
         printed::SOPORIFIC_SPRINGS.abilities(&[
             Ability::replacing(Replacement::EntersTappedUnlessPayLife(3)),
             Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),

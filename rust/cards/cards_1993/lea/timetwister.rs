@@ -7,7 +7,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{EACH_PLAYER, draw, sequence, shuffle_into};
+use beryl_card::effect::build::{each_player, draw, sequence, shuffle_into};
 use beryl_card::{Ability, CardDef, Effect, Objects, Zone, card};
 
 /// "Each player shuffles their hand and graveyard into their library, then draws seven
@@ -22,13 +22,13 @@ use beryl_card::{Ability, CardDef, Effect, Objects, Zone, card};
 /// from an empty library loses as state-based actions are next checked either way (CR 704.5b).
 static TWIST: Effect = sequence(&[
     shuffle_into(
-        EACH_PLAYER,
+        each_player(),
         Objects::CardsIn {
-            players: &EACH_PLAYER,
+            players: &each_player(),
             zones: &[Zone::Hand, Zone::Graveyard],
         },
     ),
-    draw(EACH_PLAYER, 7),
+    draw(each_player(), 7),
 ]);
 
 pub static CARD: CardDef = card(

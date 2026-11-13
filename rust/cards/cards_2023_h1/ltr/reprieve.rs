@@ -7,7 +7,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{TARGET, YOU, draw, return_to_hand, sequence};
+use beryl_card::effect::build::{target, you, draw, return_to_hand, sequence};
 use beryl_card::{Ability, CardDef, Filter, TargetKind, TargetSpec, card};
 
 /// The spell leaves the stack without resolving, to its owner's hand
@@ -25,7 +25,7 @@ pub static CARD: CardDef = card(
     names::REPRIEVE,
     &[printed::REPRIEVE.abilities(&[Ability::spell()
         .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
-        .effect(&sequence(&[return_to_hand(TARGET), draw(YOU, 1)]))])],
+        .effect(&sequence(&[return_to_hand(target()), draw(you(), 1)]))])],
 );
 
 #[cfg(feature = "scenarios")]
