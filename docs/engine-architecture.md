@@ -753,7 +753,7 @@ pub struct Derived {
     pub controller: Seat,                // the layer-2 controller, which State::controller reads
     pub protection: Colors,
     pub keywords: Keywords,              // flying, first strike, deathtouch, ...
-    pub subtypes: Subtypes,              // the cube's creature, land, artifact and enchantment types
+    pub subtypes: GameSubtypes,          // 128 bits by the GameTable's numbers of the subtypes its cards name
     pub granted: [Option<GrantRef>; 4],  // abilities granted by other objects
 }
 ```
