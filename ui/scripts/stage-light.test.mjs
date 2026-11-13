@@ -107,7 +107,7 @@ test("an arrow that drains is drawn from where it has drained to", () => {
     assert.deepEqual(lightOf(5000, [gone], []).dots, []);
 });
 
-test("the line to a source is a pale thread that grows out of the source", () => {
+test("the line to a source is a pale swell that grows out of the source", () => {
     const [ability, source] = [card(1000, 300), card(0, 500)];
     const way = wayOf("source", ability, source);
     const [ribbon] = lightOf(
@@ -115,9 +115,18 @@ test("the line to a source is a pale thread that grows out of the source", () =>
         [line("source", ability, source, { shown: 0.4 })],
         [],
     ).ribbons;
-    assert.deepEqual([ribbon.tone, ribbon.cut], ["pale", "thread"]);
+    assert.deepEqual([ribbon.tone, ribbon.cut], ["pale", "swell"]);
     assert.deepEqual(ribbon.curve[0], way[2], "from the source's end");
     assert.deepEqual([ribbon.from, ribbon.to], [0, 0.4]);
+    // As Arena's: a hairline at the source, widest a little past half way, gone before the
+    // stack card.
+    const at = (share) => widthOf("swell", 3, share * 1000, 1000);
+    assert.ok(
+        at(0.03) < 0.5 * at(0.6),
+        "a hairline where it leaves the source",
+    );
+    assert.ok(at(0.6) >= at(0.4) && at(0.6) >= at(0.8), "widest past half way");
+    assert.equal(at(1), 0, "faded out at the ability");
 });
 
 test("a blocker's beam meets the tip of the wedge its attacker wears", () => {
@@ -190,7 +199,7 @@ test("combat is lit under the cards, and an arrow and a source's line over them"
     );
     assert.deepEqual(
         over.ribbons.map((ribbon) => ribbon.cut),
-        ["arrow", "thread"],
+        ["arrow", "swell"],
     );
     assert.deepEqual(
         under.ribbons.map((ribbon) => ribbon.tone),
@@ -398,4 +407,16 @@ test("mana in flight is a ribbon of its color, and what lands bursts and is gone
     const flare = (age) => landed("flash", age, 330).glints[0];
     assert.ok(flare(0).gain > flare(150).gain && flare(150).gain > 0);
     assert.ok(flare(150).size.x > flare(0).size.x, "it spreads");
+    // A triggered ability come to rest shoots a beam toward the middle of the table, out of
+    // its left side a little above its middle, as Arena's does (`2VW6ZzmS8U4 32:15.43`): long
+    // after a quarter of its time, then a thin streak, then gone.
+    const beam = (age) =>
+        landed("beam", age, 300).glints.find((g) => g.kind === "beam");
+    assert.deepEqual(beam(30).up, { x: -1, y: 0 }, "toward the middle");
+    assert.equal(beam(30).at.x, reach.middle.x - reach.half.x, "from its side");
+    assert.ok(beam(30).at.y < reach.middle.y, "above its middle");
+    assert.ok(beam(90).size.y >= 3 * reach.half.x, "nearly two cards long");
+    assert.ok(beam(240).size.x < beam(60).size.x / 2, "it thins to a streak");
+    assert.ok(beam(60).gain > beam(240).gain && beam(299).gain < 0.01);
+    assert.ok(landed("beam", 60, 300).dots.length > 0, "with sparks behind it");
 });

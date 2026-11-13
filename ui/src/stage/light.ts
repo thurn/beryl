@@ -53,8 +53,9 @@ export const TONES: Record<Tone, { glow: Rgb; core: Rgb }> = {
 };
 
 /** How a ribbon is cut along its length: an arrow is a thread at its tail that swells to a
- * spear head; a beam narrows to a dart; a thread is one width with soft ends. */
-export type Cut = "arrow" | "beam" | "thread";
+ * spear head; a beam narrows to a dart; a thread is one width with soft ends; a swell is a
+ * hairline at its start that is widest a little past half way and fades out before its end. */
+export type Cut = "arrow" | "beam" | "thread" | "swell";
 
 /** A ribbon of light along `curve`, from `from` to `to` of the way along it. */
 export interface Ribbon {
@@ -73,9 +74,11 @@ export interface Ribbon {
 /** A shape of light at `at`, its own upward way `up` on the stage: a wedge with its base at
  * `at`, `size.x` to each side and `size.y` tall; a crescent of that half-size about `at`,
  * open toward `up`; a flash `size.x` across with a ring `ring` of the way out; a burst, a
- * bloom with thin rays out to `size.x` and such a ring, its rays set by `seed`. */
+ * bloom with thin rays out to `size.x` and such a ring, its rays set by `seed`; a beam, a
+ * cone of light shot from `at` toward `up`, `size.x` to each side at its base and `size.y`
+ * long, brightest at its base and along its middle. */
 export interface Glint {
-  kind: "wedge" | "crescent" | "flash" | "burst";
+  kind: "wedge" | "crescent" | "flash" | "burst" | "beam";
   at: Point;
   up: Point;
   size: Point;
@@ -174,6 +177,12 @@ export function widthOf(cut: Cut, wide: number, arc: number, whole: number) {
   if (cut === "thread") {
     return wide * Math.sqrt(clamp(Math.min(arc, left) / 18));
   }
+  if (cut === "swell") {
+    const { peak, least, start, end } = SWELL;
+    const bulge = Math.sin(Math.PI * s ** (Math.log(0.5) / Math.log(peak)));
+    const ends = clamp(s / start) * clamp((1 - s) / end) ** 1.5;
+    return wide * (least + (1 - least) * bulge) * ends;
+  }
   if (cut === "beam") {
     // A dart 17 pixels long at a card's own size, wider than the beam it ends.
     const [head, neck] = [17 * wide, 19 * wide];
@@ -187,6 +196,13 @@ export function widthOf(cut: Cut, wide: number, arc: number, whole: number) {
   const flare = 1 + 0.5 * Math.exp(-(((left - 38) / 15) ** 2));
   return wide * tail * flare * clamp(left / 36) ** 0.72;
 }
+
+/** The width of a swell along its length: widest `peak` of the way along, `least` of that
+ * at its ends' full width, coming in over the first `start` of the way and fading out over
+ * the last `end` of it. Arena's line from an ability to its source is a hairline where it
+ * leaves the source, widest where it hangs lowest and gone before it reaches the stack card
+ * (`2VW6ZzmS8U4 32:16.6`, `0VsYGs88NXA 19:39.85`). */
+export const SWELL = { peak: 0.6, least: 0.25, start: 0.06, end: 0.2 };
 
 /** How large the light on something is: 1 on a card as wide as the design's (110 stage
  * pixels), by the shorter side of what lies there, turned or not. */
@@ -301,14 +317,16 @@ function lineLight(scene: Scene, line: LitLine, now: number) {
   if (arrow === "source") {
     // It grows out of the source, which is where it ends.
     const back: Curve = [way[2], way[1], way[0]];
+    // Arena's is a hairline at the source, about 8 pixels across a 1080 table where it
+    // hangs lowest, with a white core, and fades out short of the stack card.
     scene.ribbons.push({
       curve: back,
       from: left,
       to: shown,
-      cut: "thread",
-      wide: 1.3 * k,
+      cut: "swell",
+      wide: 2.8 * k,
       tone: "pale",
-      gain: 0.55,
+      gain: 1.15,
       seed,
     });
     return;

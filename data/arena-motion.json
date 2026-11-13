@@ -3051,6 +3051,24 @@
           "note": "First frame 23:12.67, full length about 23:12.80. Remains while the target arrow draws (23:13.15) and through at least 23:13.7 (8 fps strip). End not filmed."
         },
         {
+          "case": "source line",
+          "recording": "2VW6ZzmS8U4",
+          "time": "32:15.74",
+          "span": 0.4,
+          "crop": null,
+          "method": "filmstrip",
+          "why": "the tracker cannot apply: the line is a thin glow, not a card; read from full-resolution whole-table frames at 30 fps",
+          "command": "just video film 2VW6ZzmS8U4 32:15.74 --span 0.4 --fps 30 --cols 4 --width 720",
+          "since": "the copy leaves its source (first visible 32:15.13)",
+          "duration_ms": 33,
+          "delay_ms": 810,
+          "stagger_ms": null,
+          "peak": null,
+          "path": "a pale teal line out of the bottom of the opponent's Stoneforge Mystic, down past the bottom player's avatar to about 0.91 of the table's height and up toward the bottom of the stack card, fading out short of it; a hairline at the source, about 8 pixels across with a white core where it hangs lowest",
+          "curve": "none",
+          "note": "Absent at 32:15.907, whole at 32:15.94: it appears in one frame, after the beam of light the ability lands with has gone (32:15.43 to 32:15.73). 0VsYGs88NXA 19:39.67 also appears whole in a frame, 450 ms after its copy left. Still there at 32:16.6."
+        },
+        {
           "case": "target arrow",
           "recording": "IEXcjBn3BXk",
           "time": "23:13.05",
@@ -3198,7 +3216,7 @@
         "delay_ms": {
           "median": 170,
           "min": 70,
-          "max": 320
+          "max": 810
         },
         "stagger_ms": null,
         "peak": null,
@@ -3208,13 +3226,13 @@
           "source line": {
             "duration_ms": {
               "median": 130,
-              "min": 130,
+              "min": 33,
               "max": 130
             },
             "delay_ms": {
               "median": 170,
               "min": 170,
-              "max": 170
+              "max": 810
             },
             "stagger_ms": null,
             "peak": null,

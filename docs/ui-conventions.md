@@ -469,20 +469,21 @@ stage to; Arena's measured instances are kept beside them as reference in
 - **emerge.** An ability lifts out of its source and goes on the stack: a small
   copy appears in the middle of its source and travels all but straight to the
   stack, sagging a little toward the middle of the table, and grows as it goes.
-  The source stays as it is. A triggered ability flashes about 0.1 s after it
-  comes to rest, and the line to its source comes in under it as it lands. A
-  small copy of the card appears in the middle of the source, about a quarter of
-  its size on the stack, and travels to the stack, growing evenly with the way
-  it has come, in 0.25 to 0.35 s; an activated ability does the same. Filmed
-  whole, the way is all but straight: it sags at most 0.025 of its length,
-  toward the middle of the table, from either seat. A triggered ability flares
-  white at the stack about 0.1 s after it comes to rest, for about 0.27 s, while
-  gold sparks hang along the way it came. Two triggers of one event leave 0.3 s
-  apart. A dies trigger leaves before its source breaks up (IEXcjBn3BXk 20:39.3,
-  5UHzpVvUkfI 19:48.5, 5UHzpVvUkfI 19:58.25, krskVfn2v5Q 46:07.2, WQiYBv23buw
-  49:08.0, I3Te0m1bBFw 26:56.75, 0VsYGs88NXA 19:39.5, 2VW6ZzmS8U4 32:15.3).
-  Beryl: 300 ms, 190 ms after its cause, 300 ms apart, ease-in. Effects: flash
-  as it ends (triggered ability) 100 ms later.
+  The source stays as it is. A triggered ability shoots a beam of light toward
+  the middle of the table about 0.1 s after it comes to rest, and the line to
+  its source appears whole once the beam has gone. A small copy of the card
+  appears in the middle of the source, about a quarter of its size on the stack,
+  and travels to the stack, growing evenly with the way it has come, in 0.25 to
+  0.35 s; an activated ability does the same. Filmed whole, the way is all but
+  straight: it sags at most 0.025 of its length, toward the middle of the table,
+  from either seat. A triggered ability flares white at the stack about 0.1 s
+  after it comes to rest, for about 0.27 s, while gold sparks hang along the way
+  it came. Two triggers of one event leave 0.3 s apart. A dies trigger leaves
+  before its source breaks up (IEXcjBn3BXk 20:39.3, 5UHzpVvUkfI 19:48.5,
+  5UHzpVvUkfI 19:58.25, krskVfn2v5Q 46:07.2, WQiYBv23buw 49:08.0, I3Te0m1bBFw
+  26:56.75, 0VsYGs88NXA 19:39.5, 2VW6ZzmS8U4 32:15.3). Beryl: 300 ms, 190 ms
+  after its cause, 300 ms apart, ease-in. Effects: beam as it ends (triggered
+  ability) 100 ms later.
 - **flip.** A card turns over where it lies: a double-faced card transforms, a
   face-down permanent turns face up (not seen: built as "A card turning face up"
   says). A transforming card is covered by an effect (a lava slab, a cocoon) for
@@ -580,29 +581,30 @@ stage to; Arena's measured instances are kept beside them as reference in
   between two things that all but touch it goes round their side. One at the
   stack item its own lies over leaves the side of its own item and comes round
   into the end of the other's strip, its head on the table beside the stack,
-  pointing at that item's name. The line to a source is thin and faint with no
-  head, and comes in as the ability lands: it leaves the bottom of the source,
-  hangs low over the table, to about 0.9 of its height, and comes up into the
-  bottom of its ability, from either seat; a phone's arcs across between them. A
-  line of combat is a straight beam that narrows to a dart, from the tip of the
-  wedge an attacker wears, or from a blocker's edge to the tip of its attacker's
-  wedge. Each is one line for as long as it lasts, drawn every moment from where
-  its two ends are, and an arrow or a line of combat drains into what it points
-  at over the step that ends it, which waits until it has stood whole for its
-  end's delay, so that one whose spell resolves at once is still read, and which
-  what follows waits for, so that neither end moves under it. An ability and the
-  line to its source stay a moment after what the ability did, and go in one
-  tick. An arrow at a target and the line to a source are over everything at
-  rest and under what flies. A line of combat lies on the table, under the cards
-  and the step's banner, as an attacker's wedge and a blocker's crescent do: it
-  passes behind a creature that stands in its way. A browser with no WebGL draws
-  each as a path instead. A cyan arc runs from a spell or ability to its target
-  until it resolves. A thin line joins an ability to its source from the frame
-  it lifts. A thin gold line runs from a blocker to its attacker until combat
-  damage is done. An attacker has no line to the player, only its chevron
-  (I3Te0m1bBFw 31:35.05, bJQDi6NIrZA 55:08.5, IEXcjBn3BXk 20:39.3, IEXcjBn3BXk
-  22:21.5, sMpAJ0HKDdg 54:50, IEXcjBn3BXk 25:52.5). Beryl: 66 ms, 0 ms after its
-  cause, in place.
+  pointing at that item's name. The line to a source has no head and appears
+  whole in a frame, about 0.45 s after its ability leaves its source: it leaves
+  the bottom of the source as a hairline, hangs low over the table, to about 0.9
+  of its height, where it is widest, and comes up toward the bottom of its
+  ability, fading out before it reaches it, from either seat; a phone's arcs
+  across between them. A line of combat is a straight beam that narrows to a
+  dart, from the tip of the wedge an attacker wears, or from a blocker's edge to
+  the tip of its attacker's wedge. Each is one line for as long as it lasts,
+  drawn every moment from where its two ends are, and an arrow or a line of
+  combat drains into what it points at over the step that ends it, which waits
+  until it has stood whole for its end's delay, so that one whose spell resolves
+  at once is still read, and which what follows waits for, so that neither end
+  moves under it. An ability and the line to its source stay a moment after what
+  the ability did, and go in one tick. An arrow at a target and the line to a
+  source are over everything at rest and under what flies. A line of combat lies
+  on the table, under the cards and the step's banner, as an attacker's wedge
+  and a blocker's crescent do: it passes behind a creature that stands in its
+  way. A browser with no WebGL draws each as a path instead. A cyan arc runs
+  from a spell or ability to its target until it resolves. A thin line joins an
+  ability to its source from the frame it lifts. A thin gold line runs from a
+  blocker to its attacker until combat damage is done. An attacker has no line
+  to the player, only its chevron (I3Te0m1bBFw 31:35.05, bJQDi6NIrZA 55:08.5,
+  IEXcjBn3BXk 20:39.3, IEXcjBn3BXk 22:21.5, sMpAJ0HKDdg 54:50, IEXcjBn3BXk
+  25:52.5). Beryl: 66 ms, 0 ms after its cause, in place.
 - **mark.** A mark from the list below on a card, an ability or a player, from
   the step that begins it to the step that ends it. The light of what may be
   picked comes up over a moment, on all of it at once. Every other mark is there
@@ -651,9 +653,14 @@ happened, and is gone.
   damage hits, a card or a player's life total, whole as the blow lands and
   spreading as it fades. Drawn over its card. Beryl: 300 ms, ease-out.
 - **flash.** A flare of white light with rays over a spell or ability as the
-  mana that pays for it lands, or as a triggered ability comes to rest on the
-  stack, brightest at once, that spreads to about twice the card's width and is
-  gone. Drawn over its card. Beryl: 330 ms, linear.
+  mana that pays for it lands, brightest at once, that spreads to about twice
+  the card's width and is gone. Drawn over its card. Beryl: 330 ms, linear.
+- **beam.** A cone of white and yellow light shoots from the side of a triggered
+  ability that has come to rest on the stack, toward the middle of the table,
+  from a little above its middle: it reaches nearly two cards' widths in a
+  quarter of its time, narrows to a streak and fades, with a bloom on the card's
+  edge where it leaves and gold sparks hanging along the way behind it. Drawn
+  over its card. Beryl: 300 ms, linear.
 - **pulse.** A ring of light round a card's frame while its numbers swell and
   settle: a counter put on it or taken off, its loyalty, its power and
   toughness. Drawn over its card. Beryl: 320 ms, ease-out.

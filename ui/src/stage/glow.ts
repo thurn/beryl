@@ -65,7 +65,9 @@ varying vec2 v_p;${PLACED}
 void main(){ v_p = a_c*u_half; gl_Position = placed(u_at + u_ax*v_p.x + u_ay*v_p.y); }`;
 
 /** Each shape is drawn about its own middle, `+y` its upward way: 1 a wedge, its base at
- * the foot of its box; 2 a crescent, open toward `+y`; 3 a flash, with a ring that spreads. */
+ * the foot of its box; 2 a crescent, open toward `+y`; 3 a flash, with a ring that spreads;
+ * 4 a burst; 5 a beam, a cone of light from the foot of its box, hot along its middle and at
+ * its base, its edges fringed a little warmer (the bloom where it leaves is a flash). */
 const GLINT_FRAGMENT = `precision highp float; varying vec2 v_p; uniform int u_kind;
 uniform vec3 u_col, u_hot; uniform vec2 u_size; uniform float u_gain, u_px, u_ring, u_seed;${NOISE}${LIT}
 float seg(vec2 p, vec2 a, vec2 b){ vec2 pa = p-a, ba = b-a;
@@ -88,6 +90,16 @@ void main(){
     float m = smoothstep(-0.15, 0.95, q.y/r), w = max(0.6 + 2.3*m, 0.7*u_px);
     float line = exp(-d*d/(2.*w*w)), glow = exp(-abs(d)/5.5)*0.35;
     rgb = u_col*(glow + line*0.85)*m + u_hot*line*m*m*0.75; shade = glow*m*0.25;
+  } else if (u_kind == 5) {
+    vec2 p = v_p + vec2(0., u_size.y*0.5); float t = clamp(p.y/u_size.y, 0., 1.);
+    float spread = u_size.x*(1. - 0.85*t) + 1.;
+    float x = p.x/spread, along = step(0., p.y)*smoothstep(1., 0.7, t);
+    float n = noise(vec2(p.y/40. + u_seed*7., x*2.));
+    float cone = exp(-x*x*2.2)*along*pow(1. - t, 1.4)*(0.8 + 0.4*n);
+    float core = exp(-x*x*16.)*along*pow(1. - t, 0.8);
+    rgb = u_col*cone*0.9 + u_hot*core*1.3
+      + vec3(0.25, -0.05, 0.15)*cone*smoothstep(0.3, 1., abs(x));
+    shade = 0.;
   } else if (u_kind == 4) {
     float r = length(v_p)/u_size.x; vec2 way = v_p/max(length(v_p), 1e-3);
     float fine = noise(way*14. + u_seed*31.), broad = noise(way*4. + u_seed*17. + 5.);
@@ -358,9 +370,10 @@ export class Glow {
     this.#toned(program, tone, warm, gain);
     // A wedge's box stands on its base; the others lie about their middle. Each has room
     // round it for its halo.
-    const lift = kind === "wedge" ? size.y / 2 : 0;
+    const foot = kind === "wedge" || kind === "beam";
+    const lift = foot ? size.y / 2 : 0;
     const room = kind === "flash" || kind === "burst" ? 0 : 26;
-    const high = kind === "wedge" ? size.y / 2 : size.y;
+    const high = foot ? size.y / 2 : size.y;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.#corners);
     this.#pointed(program, "a_c", 2, 0, 0);
     gl.uniform2f(
@@ -374,7 +387,7 @@ export class Glow {
     gl.uniform2f(program.uniform("u_size"), size.x, size.y);
     gl.uniform1i(
       program.uniform("u_kind"),
-      kind === "wedge" ? 1 : kind === "crescent" ? 2 : kind === "burst" ? 4 : 3,
+      ({ wedge: 1, crescent: 2, flash: 3, burst: 4, beam: 5 } as const)[kind],
     );
     gl.uniform1f(program.uniform("u_seed"), seed);
     gl.uniform1f(program.uniform("u_ring"), Math.min(Math.max(ring, 0), 1));

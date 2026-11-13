@@ -35,8 +35,9 @@ export interface LitFlare {
   span: number;
 }
 
-/** The effects that are light: a permanent landing, and mana landing on what it pays for. */
-export const FLARES: ReadonlySet<string> = new Set(["settle", "flash"]);
+/** The effects that are light: a permanent landing, mana landing on what it pays for, and a
+ * triggered ability coming to rest on the stack. */
+export const FLARES: ReadonlySet<string> = new Set(["settle", "flash", "beam"]);
 
 const TONE: Record<string, Tone> = {
   white: "white",
@@ -147,6 +148,63 @@ export const SETTLE = {
   flecks: 12,
 };
 
+/** How the beam of a triggered ability coming to rest plays (Arena's, filmed whole at 30 fps:
+ * `2VW6ZzmS8U4 32:15.43`, `5UHzpVvUkfI 19:48.97`, `IEXcjBn3BXk 20:39.83`). A cone of white
+ * and yellow light shoots from the card's side toward the middle of the table, out of a point
+ * `high` of its half-height above its middle. It is `long` of the card's half-width at its
+ * longest, which it reaches by `grown` of its time, and `wide` of its half-height to each side
+ * at its base until `thick`; by `thin` it has narrowed to `streak` of that, a horizontal
+ * streak that fades out. A bloom lies where it leaves, brightest at once, and `sparks` gold
+ * sparks hang along the way behind it, drifting, and fade with it. */
+export const BEAM = {
+  high: 0.3,
+  long: 3.6,
+  grown: 0.25,
+  wide: 0.55,
+  thick: 0.3,
+  thin: 0.6,
+  streak: 0.2,
+  sparks: 16,
+};
+
+/** The light of a triggered ability's beam, `share` of the way through its time, `age` ms
+ * since it began. */
+function beamLight(scene: Scene, reach: Reach, share: number, age: number) {
+  const { high, long, grown, wide, thick, thin, streak, sparks } = BEAM;
+  const { middle, half } = reach;
+  // Toward the middle of the table: from the stack at its right edge, to the left.
+  const at = { x: middle.x - half.x, y: middle.y - high * half.y };
+  const grow = 1 - (1 - clamp(share / grown)) ** 3;
+  const length = half.x * long * (0.25 + 0.75 * grow + 0.15 * share);
+  const narrow = clamp((share - thick) / (thin - thick));
+  const across = half.y * wide * (1 - (1 - streak) * narrow);
+  const gain =
+    1.8 * clamp(share / 0.1) * (1 - clamp((share - 0.3) / 0.7)) ** 1.5;
+  scene.glints.push({
+    kind: "beam",
+    at,
+    up: { x: -1, y: 0 },
+    size: { x: across, y: length },
+    tone: "white",
+    warm: 0.35,
+    gain,
+    ring: 0,
+    seed: hash(Math.round(at.x), Math.round(at.y)),
+  });
+  scene.glints.push(
+    glint("flash", at, half.y * 1.1, "white", 1.6 * Math.exp(-age / 90), 0, 0),
+  );
+  const seed = seedOf(`${Math.round(middle.x)}:${Math.round(middle.y)}`);
+  const [r, g, b] = [1.15, 0.78, 0.32];
+  for (let i = 0; i < sparks; i++) {
+    const fade = (1 - share) ** 1.2 * (0.5 + 0.5 * hash(i, seed * 7 + 1));
+    const x = at.x - length * 1.3 * hash(i, seed * 7 + 2) - age * 0.02;
+    const y = at.y + (hash(i, seed * 7 + 3) - 0.5) * half.y * 1.2 - age * 0.03;
+    const size = half.x * (0.05 + 0.05 * hash(i, seed * 7 + 4));
+    scene.dots.push(x, y, size, r * fade, g * fade, b * fade);
+  }
+}
+
 /** Flecks thrown from `middle` `age` ms ago, to `far` stage pixels: each is where it is by
  * its age alone, and drifts up the stage as it fades. */
 function flecks(
@@ -183,6 +241,10 @@ function flareLight(scene: Scene, { name, reach, age, span }: LitFlare) {
   const share = clamp(age / (span || 1));
   const half = Math.max(reach.half.x, reach.half.y);
   const seed = hash(Math.round(reach.middle.x), Math.round(reach.middle.y));
+  if (name === "beam") {
+    beamLight(scene, reach, share, age);
+    return;
+  }
   if (name === "settle") {
     const { from, peak, bloomed, ringFrom, ringTo, wide } = SETTLE;
     const risen = clamp((share - from) / (peak - from));
