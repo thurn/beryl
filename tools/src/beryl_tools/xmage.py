@@ -258,6 +258,10 @@ class Exporter:
         self.emit("removeAllCardsFromLibrary(playerA);")
         self.emit("removeAllCardsFromLibrary(playerB);")
         self.emit("skipInitShuffling();")
+        # XMage's shared random source starts unseeded, so a shuffle during the scenario (such
+        # as Timetwister's) drew different cards on each run. Seeding it with the scenario's seed
+        # makes every run play the same game, as Forge's harness already does.
+        self.emit(f"mage.util.RandomUtil.setSeed({cast(int, self.setup['seed'])}L);")
         start = cast(str, self.setup["step"])
         for seat, setup in enumerate(cast(list[Json], self.setup["players"])):
             who = self.player(seat)

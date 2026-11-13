@@ -21,12 +21,16 @@ use crate::{CARDS, names};
 /// The card the dump files generated scenarios under.
 pub const CARD: &str = "Generated";
 
-/// The implemented cards outside the decks (AGENTS.md), which V1 never plays against a drafted
-/// deck: the generator leaves them out.
-const OUTSIDE_CUBE: [&str; 3] = [
+/// Implemented cards the generator leaves out. The first three are outside the WU Control
+/// deck that V1 plays. Drudge Skeletons is in no deck: it exists only for scenarios. Adding a
+/// card to the pool renumbers every generated scenario, so the oracle exporter gaps listed by
+/// scenario name stop matching, and positions with the new card exposed payments that the
+/// oracles' own AIs make differently from Beryl.
+const OUTSIDE_CUBE: [&str; 4] = [
     names::AANGS_ICEBERG,
     names::SWIFT_RECONFIGURATION,
     names::SPHINX_OF_FALSE_CONCLUSIONS,
+    names::DRUDGE_SKELETONS,
 ];
 
 /// The turn every generated scenario is played in.
