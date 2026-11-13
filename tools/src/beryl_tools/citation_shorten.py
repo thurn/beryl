@@ -32,8 +32,13 @@ WIDTH = 100
 NOT_PROSE: re.Pattern[str] = re.compile(
     r"^\s*([-*+] |\d+\. |#|```|\[[^\]]+\]: https?://)"
 )
+# A reference at the start of a doc line, which Markdown would read as a link definition.
+LINE_START_REFERENCE: re.Pattern[str] = re.compile(
+    r"^(\s*(?:///|//!) ?)\[CR ([\d.a-z]+)\](?!\(|: ?https?://)"
+)
 # The space in a reference, which a line never breaks at.
-REFERENCE_SPACE: re.Pattern[str] = re.compile(r"\[CR (?=[\d.a-z]+\])")
+# The space before a reference is kept too, so that wrapping never starts a line with one.
+REFERENCE_SPACE: re.Pattern[str] = re.compile(r"(?: )?\[CR (?=[\d.a-z]+\])")
 UNBROKEN = "\x00"
 
 
@@ -52,7 +57,10 @@ def rewrap(block: list[str], prefix: str, changed: set[int]) -> list[str]:
             out.extend(
                 f"{prefix} {line.replace(UNBROKEN, ' ')}"
                 for line in textwrap.wrap(
-                    REFERENCE_SPACE.sub(f"[CR{UNBROKEN}", " ".join(texts)),
+                    REFERENCE_SPACE.sub(
+                        lambda m: m.group(0).replace(" ", UNBROKEN),
+                        " ".join(texts),
+                    ),
                     width=WIDTH - len(prefix) - 1,
                     break_long_words=False,
                     break_on_hyphens=False,
@@ -100,12 +108,29 @@ def shorten(text: str) -> str:
         shortened = [LINKED.sub(reference, line) for line in block]
         changed = {i for i, line in enumerate(block) if shortened[i] != line}
         block = rewrap(shortened, f"{indent}{marker}", changed)
+        # A reference that still starts a line stays an inline link.
+        block = [
+            LINE_START_REFERENCE.sub(
+                lambda m: (
+                    f"{m.group(1)}[CR {m.group(2)}]({links[m.group(2)]})"
+                    if m.group(2) in links
+                    else m.group(0)
+                ),
+                line,
+            )
+            for line in block
+        ]
         defined = {
             m.group(1)
             for line in block
             for m in re.finditer(r"\[CR ([\d.a-z]+)\]: https://", line)
         }
-        new = [(n, url) for n, url in links.items() if n not in defined]
+        used = {
+            m.group(1)
+            for line in block
+            for m in re.finditer(r"\[CR ([\d.a-z]+)\](?!\(|: ?https?://)", line)
+        }
+        new = [(n, url) for n, url in links.items() if n not in defined and n in used]
         if new:
             prefix = f"{indent}{marker}"
             if block[-1].strip() != marker and not re.search(

@@ -131,7 +131,7 @@ def test_text_outside_the_roots_and_a_quotation_not_after_the_link_are_ignored(
 def test_a_reference_is_held_to_its_rule_and_needs_a_definition(tmp_path: Path) -> None:
     link = "https://yawgatog.com/resources/magic-rules/#"
     text = (
-        '/// [CR 712.6]: "Each face of a double-faced card has its own set of\n'
+        '/// Per [CR 712.6]: "Each face of a double-faced card has its own set of\n'
         '/// characteristics." Then [CR 712.6d] and [CR 712.6a]: "a set it lacks".\n'
         "///\n"
         f"/// [CR 712.6]: {link}R7126\n"
@@ -279,3 +279,35 @@ def test_shortening_moves_each_doc_comments_links_to_its_end_and_rewraps() -> No
         "static A: u8 = 0;\n"
         f"    // A plain comment keeps [CR 712.6]({link}R7126).\n"
     )
+
+
+def test_shortening_keeps_a_citation_that_starts_a_doc_line_inline() -> None:
+    link = "https://yawgatog.com/resources/magic-rules/#"
+    text = (
+        f'/// [CR 506.4]({link}R5064): "A creature that has left combat."\n'
+        f"/// Then [CR 104.3a]({link}R1043a).\n"
+        "static A: u8 = 0;\n"
+    )
+    assert citation_shorten.shorten(text) == (
+        f'/// [CR 506.4]({link}R5064): "A creature that has left combat." Then [CR 104.3a].\n'
+        "///\n"
+        f"/// [CR 104.3a]: {link}R1043a\n"
+        "static A: u8 = 0;\n"
+    )
+
+
+def test_a_doc_line_starting_with_a_non_link_definition_is_reported(
+    tmp_path: Path,
+) -> None:
+    link = "https://yawgatog.com/resources/magic-rules/#"
+    text = (
+        '/// [CR 712.6]: "Each face of a double-faced card has its own set of\n'
+        '/// characteristics."\n'
+        "///\n"
+        f"/// [CR 712.6]: {link}R7126\n"
+    )
+    assert problems(tmp_path, "rust/crates/a/src/lib.rs", text) == [
+        "rust/crates/a/src/lib.rs:1: CR 712.6: a doc line that starts with "
+        "`[CR 712.6]:` is read as a link definition, so rustdoc drops the rest of "
+        "the line; write the citation as an inline link there"
+    ]

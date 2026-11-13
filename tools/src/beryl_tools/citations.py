@@ -66,6 +66,11 @@ CITATION: re.Pattern[str] = re.compile(
     rf"|\[CR ({NUMBER})\](?!\(|: https://)"
     r"|(?<!\[)\bCR (\d{3}(?:\.\d+[a-z]*)?)\b"
 )
+# A Rust doc line that starts with `[CR x]:` but does not define a link. Markdown reads the line
+# as a link reference definition, so rustdoc drops the rest of the line from the rendered docs.
+DOC_LINE_DEFINITION: re.Pattern[str] = re.compile(
+    rf"^\s*(?:///|//!) ?\[CR ({NUMBER})\]:(?!\s*https?://)"
+)
 COMMENT_PREFIX: re.Pattern[str] = re.compile(r"^\s*(?:///|//!|//|#|/\*\*?|\*(?!\w))\s?")
 QUOTATION_START: re.Pattern[str] = re.compile(r'^\)?:?\s*"')
 # A bare number is often itself in quotes (a test's message that is only the citation), so its quotation
@@ -283,6 +288,14 @@ def citations_in(lines: list[str]) -> list[Citation]:
 def problems_in(rel: str, lines: list[str], rules: dict[str, str]) -> list[str]:
     """Each `file:line: CR n: problem` for the citations in one file's `lines`."""
     found = []
+    for index, line in enumerate(lines):
+        match = DOC_LINE_DEFINITION.match(line)
+        if match:
+            found.append(
+                f"{rel}:{index + 1}: CR {match.group(1)}: a doc line that starts with "
+                f"`[CR {match.group(1)}]:` is read as a link definition, so rustdoc drops "
+                "the rest of the line; write the citation as an inline link there"
+            )
     cited = citations_in(lines)
     defined = {c.number for c in cited if c.kind == "definition"}
     for citation in cited:
