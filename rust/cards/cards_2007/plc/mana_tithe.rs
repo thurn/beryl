@@ -46,12 +46,12 @@ pub mod scenarios {
     /// stays free to pay the tithe.
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("Mana Tithe: the controller pays {1}")
-            .battlefield(
+            .permanents(
                 P0,
                 &[Permanent::new(names::PLAINS), Permanent::new(names::PLAINS)],
             )
             .hand(P0, &[props::ARTIFACT])
-            .battlefield(P1, &[Permanent::new(names::PLAINS)])
+            .permanents(P1, &[Permanent::new(names::PLAINS)])
             .hand(P1, &[names::MANA_TITHE])
             .library(P1, &[names::ISLAND])
             .actions(&[
@@ -80,9 +80,9 @@ pub mod scenarios {
         // tithe. (A game once showed it countered unasked from six lands: Elite Spellbinder's
         // {2} tax had tapped them all.)
         Scenario::new("Mana Tithe: lands left after paying for the spell pay {1}")
-            .battlefield(P0, SIX_LANDS)
+            .permanents(P0, SIX_LANDS)
             .hand(P0, &[props::PLANESWALKER])
-            .battlefield(P1, &[Permanent::new(names::PLAINS)])
+            .permanents(P1, &[Permanent::new(names::PLAINS)])
             .hand(P1, &[names::MANA_TITHE])
             .library(P1, &[names::ISLAND])
             .actions(&[
@@ -106,9 +106,9 @@ pub mod scenarios {
                 }),
             ]),
         Scenario::new("Mana Tithe: a controller who can't pay isn't asked")
-            .battlefield(P0, &[Permanent::new(names::PLAINS)])
+            .permanents(P0, &[Permanent::new(names::PLAINS)])
             .hand(P0, &[props::ARTIFACT])
-            .battlefield(P1, &[Permanent::new(names::PLAINS)])
+            .permanents(P1, &[Permanent::new(names::PLAINS)])
             .hand(P1, &[names::MANA_TITHE])
             .library(P1, &[names::ISLAND])
             .actions(&[

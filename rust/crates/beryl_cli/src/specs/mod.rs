@@ -302,6 +302,7 @@ impl View {
 }
 
 impl Moment {
+    #[allow(clippy::large_types_passed_by_value)] // a `Scenario` is a `Copy` value, built by value
     pub const fn new(name: &'static str, title: &'static str, board: Scenario) -> Moment {
         Moment {
             name,
@@ -542,7 +543,7 @@ mod tests {
             "stalled",
             "Stalled",
             Scenario::new("Counterspell with nothing to counter")
-                .battlefield(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
+                .permanents(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
                 .hand(P0, &[COUNTERSPELL])
                 .library(P0, &[ISLAND])
                 .library(beryl_scenario::P1, &[ISLAND])

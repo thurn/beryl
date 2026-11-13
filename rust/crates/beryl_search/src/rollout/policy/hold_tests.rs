@@ -51,7 +51,7 @@ fn check_choice(scenario: &Scenario, setup: &[Action], card: &str, play: bool) {
 fn hold_waits_to_cast_flash_on_the_opponents_end_step() {
     const FLASH: Scenario = Scenario::new("flash")
         .hand(P0, &[names::SNAPCASTER_MAGE])
-        .battlefield(P0, &[ISLAND; 2]);
+        .permanents(P0, &[ISLAND; 2]);
     check_choice(
         &FLASH.at(4, P0, TurnStep::PrecombatMain),
         &[],
@@ -71,8 +71,8 @@ fn hold_still_answers_an_opponents_spell() {
     const COUNTER: Scenario = Scenario::new("answer Jace")
         .at(4, P1, TurnStep::PrecombatMain)
         .hand(P1, &[names::JACE_THE_MIND_SCULPTOR])
-        .battlefield(P1, &[ISLAND; 4])
-        .battlefield(P0, &[ISLAND; 4]);
+        .permanents(P1, &[ISLAND; 4])
+        .permanents(P0, &[ISLAND; 4]);
     for hand in [&[names::MANA_DRAIN], &[names::SUBTLETY]] {
         check_choice(
             &COUNTER.hand(P0, hand),
@@ -86,7 +86,7 @@ fn hold_still_answers_an_opponents_spell() {
 #[test]
 fn hold_uses_an_untargeted_draw_activation_in_main() {
     const DRAW: Scenario = Scenario::new("draw with Staff")
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(names::PLAINS),

@@ -53,8 +53,8 @@ pub mod scenarios {
     /// its twin lead to different games.
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("Strip Mine destroys a basic land")
-            .battlefield(P0, &[Permanent::new(names::STRIP_MINE)])
-            .battlefield(P1, &[Permanent::new(names::PLAINS)])
+            .permanents(P0, &[Permanent::new(names::STRIP_MINE)])
+            .permanents(P1, &[Permanent::new(names::PLAINS)])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::activate(P0, names::STRIP_MINE, 1),
@@ -71,14 +71,14 @@ pub mod scenarios {
                 count(P1, Zone::Battlefield, None, 0),
             ]),
         Scenario::new("Strip Mine tells itself from its twin")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::STRIP_MINE),
                     Permanent::new(names::STRIP_MINE),
                 ],
             )
-            .battlefield(P1, &[Permanent::new(names::PLAINS)])
+            .permanents(P1, &[Permanent::new(names::PLAINS)])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::activate(P0, names::STRIP_MINE, 1),
@@ -102,7 +102,7 @@ pub mod scenarios {
         // The Island pays the {U}, Strip Mine the {1}. The land still to play keeps the game in
         // P0's main phase.
         Scenario::new("Strip Mine's colorless mana")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::STRIP_MINE),

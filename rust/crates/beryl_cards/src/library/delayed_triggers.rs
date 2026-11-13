@@ -17,7 +17,7 @@ const TEFERI: &str = names::TEFERI_HERO_OF_DOMINARIA;
 pub const SCENARIOS: &[Scenario] =
     &[
         Scenario::new("A delayed ability triggers at the next end step and at no later one")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(TEFERI),
@@ -27,7 +27,7 @@ pub const SCENARIOS: &[Scenario] =
             )
             .hand(P0, &[props::ARTIFACT, props::ARTIFACT])
             .library(P0, &[names::ISLAND, names::ISLAND, names::ISLAND])
-            .battlefield(P1, &[Permanent::new(names::ISLAND)])
+            .permanents(P1, &[Permanent::new(names::ISLAND)])
             .library(P1, &[names::ISLAND, names::ISLAND])
             .actions(&[
                 Action::cast(P0, props::ARTIFACT),

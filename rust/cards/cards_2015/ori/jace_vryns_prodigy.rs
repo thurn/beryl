@@ -163,7 +163,7 @@ pub mod scenarios {
 
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("looting to five cards in the graveyard transforms him")
-            .battlefield(P0, &[Permanent::new(JACE)])
+            .permanents(P0, &[Permanent::new(JACE)])
             .hand(P0, &[PLAINS])
             .graveyard(P0, &[ISLAND, ISLAND, ISLAND])
             .library(P0, &[ISLAND, ISLAND, ISLAND])
@@ -204,8 +204,8 @@ pub mod scenarios {
                 loyalty(6),
             ]),
         Scenario::new("+1 shrinks a creature until his controller's next turn")
-            .battlefield(P0, &[Permanent::new(JACE).transformed()])
-            .battlefield(P1, &[Permanent::new(JACE)])
+            .permanents(P0, &[Permanent::new(JACE).transformed()])
+            .permanents(P1, &[Permanent::new(JACE)])
             .library(P0, &[ISLAND, ISLAND])
             .library(P1, &[PLAINS, PLAINS])
             .actions(&[
@@ -250,14 +250,14 @@ pub mod scenarios {
                 }),
             ]),
         Scenario::new("−3 recasts a sorcery from the graveyard, which is then exiled")
-            .battlefield(
+            .permanents(
                 P0,
                 &[Permanent::new(JACE).transformed(), Permanent::new(PLAINS)],
             )
             .graveyard(P0, &[names::OUST])
             // A land to play keeps the game in this main phase for the assertions.
             .hand(P0, &[ISLAND])
-            .battlefield(P1, &[Permanent::new(JACE)])
+            .permanents(P1, &[Permanent::new(JACE)])
             .library(P0, &[ISLAND])
             .library(P1, &[PLAINS, ISLAND])
             .actions(&[
@@ -284,7 +284,7 @@ pub mod scenarios {
                 }),
             ]),
         Scenario::new("−9's emblem mills an opponent five whenever its owner casts a spell")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(JACE)

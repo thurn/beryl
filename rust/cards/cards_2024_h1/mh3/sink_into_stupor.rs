@@ -87,9 +87,9 @@ pub mod scenarios {
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("Sink into Stupor returns a spell to its owner's hand")
             .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(P0, THREE_ISLANDS)
+            .permanents(P0, THREE_ISLANDS)
             .hand(P0, &[names::SINK_INTO_STUPOR])
-            .battlefield(P1, THREE_ISLANDS)
+            .permanents(P1, THREE_ISLANDS)
             .hand(P1, &[names::TIMETWISTER])
             .library(P0, &[names::PLAINS])
             .actions(&[
@@ -100,9 +100,9 @@ pub mod scenarios {
                 count(P0, Zone::Graveyard, names::SINK_INTO_STUPOR, 1),
             ]),
         Scenario::new("Sink into Stupor returns a nonland permanent, never a land")
-            .battlefield(P0, THREE_ISLANDS)
+            .permanents(P0, THREE_ISLANDS)
             .hand(P0, &[names::SINK_INTO_STUPOR])
-            .battlefield(
+            .permanents(
                 P1,
                 &[
                     Permanent::new(props::ARTIFACT),
@@ -118,12 +118,12 @@ pub mod scenarios {
         // Played as Soporific Springs paying 3 life, it taps for the {U} of the other copy cast
         // as Sink into Stupor.
         Scenario::new("Soporific Springs: 3 life paid, it enters untapped")
-            .battlefield(
+            .permanents(
                 P0,
                 &[Permanent::new(names::ISLAND), Permanent::new(names::ISLAND)],
             )
             .hand(P0, &[names::SINK_INTO_STUPOR, names::SINK_INTO_STUPOR])
-            .battlefield(P1, &[Permanent::new(props::ARTIFACT)])
+            .permanents(P1, &[Permanent::new(props::ARTIFACT)])
             .library(P1, &[names::PLAINS])
             .actions(&[
                 Action::PlayLand {

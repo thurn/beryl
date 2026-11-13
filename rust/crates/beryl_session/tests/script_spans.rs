@@ -354,8 +354,8 @@ fn mana_counts_in_a_pool_and_streaks_out_of_it() {
     let [first, second] = views(names::COUNTERSPELL, name, floating).swap_remove(2);
     let paid = |who: &str, dwell: bool| {
         let mut lines = vec![
-            format!("fly #1 (Counterspell) hand>stack cast at #256 <- {who}"),
-            "& +point hostile-target #1 > #256".to_owned(),
+            format!("fly #1 (Counterspell) hand>stack cast at #257 <- {who}"),
+            "& +point hostile-target #1 > #257".to_owned(),
             format!("tap #0 (Island) <- {who}"),
             format!("& tap #2 (Island) <- {who}"),
             "& streak #0 > #1 blue 1 <- #0".to_owned(),
@@ -369,8 +369,8 @@ fn mana_counts_in_a_pool_and_streaks_out_of_it() {
         }
         lines.extend(
             [
-                "-point hostile-target #1 > #256",
-                "vanish #256 (Portable Hole) stack>graveyard counter <- #1",
+                "-point hostile-target #1 > #257",
+                "vanish #257 (Portable Hole) stack>graveyard counter <- #1",
                 "& vanish #1 (Counterspell) stack>graveyard resolve <- #1",
             ]
             .map(str::to_owned),
@@ -450,7 +450,7 @@ fn counterspell() -> (Table, Script) {
 const ARROW: Open = Open::Point {
     arrow: Arrow::HostileTarget,
     from: Subject::Object { slot: 1 },
-    to: Subject::Object { slot: 256 },
+    to: Subject::Object { slot: 257 },
 };
 
 fn step(act: Act) -> Step {
@@ -472,13 +472,13 @@ fn an_arrow_at_a_thing_that_is_moving_or_gone_breaks_a_rule() {
     late.beats[2].insert(1, step(ARROW.act(Span::Begin)));
     assert_eq!(
         broken(&table, &[], &late),
-        "`+point hostile-target #1 > #256`: #256 is moving"
+        "`+point hostile-target #1 > #257`: #257 is moving"
     );
     // A line from an ability that is not on the stack.
     let source = Open::Point {
         arrow: Arrow::Source,
         from: Subject::Ability { id: 9 },
-        to: Subject::Object { slot: 256 },
+        to: Subject::Object { slot: 257 },
     };
     let gone = Script {
         reset: None,
@@ -486,7 +486,7 @@ fn an_arrow_at_a_thing_that_is_moving_or_gone_breaks_a_rule() {
     };
     assert_eq!(
         broken(&table, &[], &gone),
-        "`+point source a9 > #256`: a9 has left the table"
+        "`+point source a9 > #257`: a9 has left the table"
     );
 }
 
@@ -499,8 +499,8 @@ fn an_arrow_not_ended_before_its_target_moves_breaks_a_rule() {
     kept.beats.remove(2);
     assert_eq!(
         broken(&table, &[], &kept),
-        "`vanish #256 (Portable Hole) stack>graveyard counter <- #1`: \
-         `+point hostile-target #1 > #256` is not ended before #256 moves"
+        "`vanish #257 (Portable Hole) stack>graveyard counter <- #1`: \
+         `+point hostile-target #1 > #257` is not ended before #257 moves"
     );
     // Ended in the beat that moves its target is not before.
     let mut together = whole.clone();
@@ -508,8 +508,8 @@ fn an_arrow_not_ended_before_its_target_moves_breaks_a_rule() {
     together.beats[2].splice(0..0, end);
     assert_eq!(
         broken(&table, &[], &together),
-        "`vanish #256 (Portable Hole) stack>graveyard counter <- #1`: \
-         `+point hostile-target #1 > #256` ends in the beat that moves #256, not before it"
+        "`vanish #257 (Portable Hole) stack>graveyard counter <- #1`: \
+         `+point hostile-target #1 > #257` ends in the beat that moves #257, not before it"
     );
 }
 
@@ -522,7 +522,7 @@ fn two_visuals_of_one_thing_break_a_rule() {
     doubled.beats[0].push(step(ARROW.act(Span::Begin)));
     assert_eq!(
         broken(&table, &[], &doubled),
-        "`+point hostile-target #1 > #256`: it is begun already: one visual per thing"
+        "`+point hostile-target #1 > #257`: it is begun already: one visual per thing"
     );
     // A card flying to two places in one beat.
     let mut twice = whole.clone();
@@ -530,11 +530,11 @@ fn two_visuals_of_one_thing_break_a_rule() {
     twice.beats[0].push(fly);
     assert_eq!(
         broken(&table, &[], &twice),
-        "`fly #1 (Counterspell) hand>stack cast at #256 <- you`: \
+        "`fly #1 (Counterspell) hand>stack cast at #257 <- you`: \
          #1 moves twice in one beat: one visual per thing"
     );
     // A card on the table coming to be again.
-    let crypt: ObjectView = table.objects[&256].clone();
+    let crypt: ObjectView = table.objects[&257].clone();
     let again = Script {
         reset: None,
         beats: vec![vec![step(Act::Appear {
@@ -547,8 +547,8 @@ fn two_visuals_of_one_thing_break_a_rule() {
     };
     assert_eq!(
         broken(&table, &[], &again),
-        "`appear #256 (Portable Hole) nowhere>stack created`: \
-         #256 is on the table already: one visual per thing"
+        "`appear #257 (Portable Hole) nowhere>stack created`: \
+         #257 is on the table already: one visual per thing"
     );
 }
 
@@ -560,11 +560,11 @@ fn taking_off_the_stack_what_it_does_not_hold_breaks_a_rule() {
     // The spell countered, its card on the stack, but no entry for it on the table's stack.
     table
         .stack
-        .retain(|e| !matches!(e.item, StackItem::Spell { slot: 256, .. }));
+        .retain(|e| !matches!(e.item, StackItem::Spell { slot: 257, .. }));
     assert_eq!(
         broken(&table, &[], &whole),
-        "`vanish #256 (Portable Hole) stack>graveyard counter <- #1`: \
-         #256 leaves the stack, which does not hold it"
+        "`vanish #257 (Portable Hole) stack>graveyard counter <- #1`: \
+         #257 leaves the stack, which does not hold it"
     );
     // An ability that was never on the stack, finishing.
     let finish = Script {
@@ -712,7 +712,7 @@ fn a_span_is_ended_by_its_script_or_carried_to_the_next() {
     // An end with no beginning: the screen was not carrying the arrow.
     assert_eq!(
         broken(&shown, &[], &rest),
-        "`-point hostile-target #1 > #256`: it ends what was never begun"
+        "`-point hostile-target #1 > #257`: it ends what was never begun"
     );
     // A reset drops what was carried: the stage starts over with the spans it begins.
     let over = Script {

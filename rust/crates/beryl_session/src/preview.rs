@@ -310,7 +310,7 @@ mod tests {
     fn priority(hand: &'static [&'static str], battlefield: &'static [Permanent]) -> Paid {
         let scenario = Scenario::new("payments")
             .hand(P0, hand)
-            .battlefield(P0, battlefield);
+            .permanents(P0, battlefield);
         let (t, mut s) = beryl_scenario::position(&CARDS, &scenario).unwrap();
         let Step::Decide(d) = next(&mut s, &t, &mut Scratch::new(), &mut Replay) else {
             panic!("a decision");
@@ -402,7 +402,7 @@ mod tests {
     fn each_value_of_x_says_the_total_cost_it_makes() {
         let scenario = Scenario::new("payments")
             .hand(P0, &[names::THIEVING_SKYDIVER])
-            .battlefield(P0, ISLANDS);
+            .permanents(P0, ISLANDS);
         let (t, mut s) = beryl_scenario::position(&CARDS, &scenario).unwrap();
         let Step::Decide(d) = next(&mut s, &t, &mut Scratch::new(), &mut Replay) else {
             panic!("a decision");
@@ -429,10 +429,10 @@ mod tests {
         // Thundertrap Trainer taps two of four lands; Mana Tithe asks {1} of the rest.
         const SCENARIO: Scenario = Scenario::new("payments")
             .at(3, P0, TurnStep::PrecombatMain)
-            .battlefield(P0, &[Permanent::new(names::ISLAND); 4])
+            .permanents(P0, &[Permanent::new(names::ISLAND); 4])
             .hand(P0, &[names::THUNDERTRAP_TRAINER])
             .library(P0, &[names::ISLAND; 4])
-            .battlefield(P1, &[Permanent::new(names::PLAINS)])
+            .permanents(P1, &[Permanent::new(names::PLAINS)])
             .hand(P1, &[names::MANA_TITHE])
             .library(P1, &[names::ISLAND; 4])
             .actions(&[
@@ -482,9 +482,9 @@ mod tests {
                 P0,
                 &[names::BEZA_THE_BOUNDING_SPRING, names::THIEVING_SKYDIVER],
             )
-            .battlefield(P0, &[Permanent::new(names::PLAINS); 5])
+            .permanents(P0, &[Permanent::new(names::PLAINS); 5])
             .library(P0, &[names::ISLAND])
-            .battlefield(P1, SIX_PLAINS)
+            .permanents(P1, SIX_PLAINS)
             .actions(&[
                 Action::cast(P0, names::BEZA_THE_BOUNDING_SPRING),
                 Action::Resolve,
@@ -571,8 +571,8 @@ mod tests {
         ];
         let scenario = Scenario::new("blocks")
             .at(2, P0, TurnStep::BeginningOfCombat)
-            .battlefield(P0, ATTACKERS)
-            .battlefield(P1, BLOCKERS);
+            .permanents(P0, ATTACKERS)
+            .permanents(P1, BLOCKERS);
         let (t, mut s) = beryl_scenario::position(&CARDS, &scenario).unwrap();
         let named = |s: &State, slot: Slot| s.definition_name(&t, slot);
         let mut scratch = Scratch::new();
@@ -631,8 +631,8 @@ mod tests {
         const TEFERI: &[Permanent] = &[Permanent::new(names::TEFERI_TIME_RAVELER)];
         const STAFF: &[Permanent] = &[Permanent::new(names::STAFF_OF_THE_STORYTELLER)];
         let scenario = Scenario::new("targets")
-            .battlefield(P0, TEFERI)
-            .battlefield(P1, STAFF);
+            .permanents(P0, TEFERI)
+            .permanents(P1, STAFF);
         let (t, mut s) = beryl_scenario::position(&CARDS, &scenario).unwrap();
         let named = |s: &State, slot: u16| s.definition_name(&t, Slot::from_num(slot).unwrap());
         let mut scratch = Scratch::new();

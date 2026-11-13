@@ -74,7 +74,7 @@ fn pass_to(play: &mut Play, kind: Kind) {
 /// nothing in their way.
 const ATTACK: Scenario = Scenario::new("attack")
     .at(3, P0, TurnStep::PrecombatMain)
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(SNAPCASTER_MAGE),
@@ -193,14 +193,14 @@ fn no_attack_is_declared_by_its_button() {
 /// Raveler across the table to attack.
 const WALKER: Scenario = Scenario::new("attack a planeswalker")
     .at(3, P0, TurnStep::PrecombatMain)
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(SNAPCASTER_MAGE),
             Permanent::new(ELITE_SPELLBINDER),
         ],
     )
-    .battlefield(P1, &[Permanent::new(TEFERI_TIME_RAVELER)])
+    .permanents(P1, &[Permanent::new(TEFERI_TIME_RAVELER)])
     .library(P0, &[ISLAND; 6])
     .library(P1, &[ISLAND; 6]);
 
@@ -287,14 +287,14 @@ fn an_attacker_is_aimed_at_a_planeswalker_or_its_controller() {
 /// into an Elite Spellbinder, which flies, and an Overlord of the Mistmoors, which does not.
 const BLOCK: Scenario = Scenario::new("block")
     .at(2, P1, TurnStep::PrecombatMain)
-    .battlefield(
+    .permanents(
         P1,
         &[
             Permanent::new(THUNDERTRAP_TRAINER),
             Permanent::new(THIEVING_SKYDIVER),
         ],
     )
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(ELITE_SPELLBINDER),
@@ -414,14 +414,14 @@ fn no_block_is_declared_by_its_button() {
 /// Spellbinder.
 const TWINS: Scenario = Scenario::new("block one of two alike")
     .at(2, P1, TurnStep::PrecombatMain)
-    .battlefield(
+    .permanents(
         P1,
         &[
             Permanent::new(SNAPCASTER_MAGE),
             Permanent::new(SNAPCASTER_MAGE),
         ],
     )
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(TRINKET_MAGE),
@@ -492,8 +492,8 @@ fn two_blockers_aimed_at_one_of_two_attackers_alike_block_the_same_one() {
 /// attacking, and The Wandering Emperor across the table for it to attack.
 const TOKEN: Scenario = Scenario::new("a token made attacking")
     .at(3, P0, TurnStep::PrecombatMain)
-    .battlefield(P0, &[Permanent::new(ADELINE_RESPLENDENT_CATHAR)])
-    .battlefield(P1, &[Permanent::new(THE_WANDERING_EMPEROR)])
+    .permanents(P0, &[Permanent::new(ADELINE_RESPLENDENT_CATHAR)])
+    .permanents(P1, &[Permanent::new(THE_WANDERING_EMPEROR)])
     .library(P0, &[ISLAND; 6])
     .library(P1, &[ISLAND; 6]);
 

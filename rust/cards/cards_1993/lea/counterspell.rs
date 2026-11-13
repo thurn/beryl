@@ -38,9 +38,9 @@ pub mod scenarios {
         // The artifact goes to its owner's graveyard, not exile, and never reaches the
         // battlefield.
         Scenario::new("Counterspell counters a spell into its owner's graveyard")
-            .battlefield(P0, ISLANDS)
+            .permanents(P0, ISLANDS)
             .hand(P0, &[names::COUNTERSPELL])
-            .battlefield(P1, &[Permanent::new(names::PLAINS)])
+            .permanents(P1, &[Permanent::new(names::PLAINS)])
             .hand(P1, &[props::ARTIFACT, names::PLAINS])
             .library(P0, &[names::ISLAND])
             .at(2, P1, TurnStep::PrecombatMain)
@@ -55,7 +55,7 @@ pub mod scenarios {
         // that targets the artifact, so the artifact resolves. A Plains pays for the artifact,
         // the Islands for Counterspell.
         Scenario::new("Counterspell chooses among spells on the stack")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::ISLAND),
@@ -64,7 +64,7 @@ pub mod scenarios {
                 ],
             )
             .hand(P0, &[props::ARTIFACT, names::COUNTERSPELL, names::PLAINS])
-            .battlefield(P1, ISLANDS)
+            .permanents(P1, ISLANDS)
             .hand(P1, &[names::COUNTERSPELL])
             .library(P1, &[names::ISLAND])
             .actions(&[

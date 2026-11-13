@@ -74,7 +74,7 @@ pub mod scenarios {
     /// counts it, and vigilance keeps her untapped.
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("Adeline's Human arrives attacking")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(ADELINE),
@@ -158,7 +158,7 @@ pub mod scenarios {
             ]),
         // Adeline stays home while the Spellbinder attacks: "you attack" all the same.
         Scenario::new("Adeline's Human arrives when she stays home")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(ADELINE),
@@ -217,8 +217,8 @@ pub mod scenarios {
         // "Attacking that player or a planeswalker they control": its controller picks the
         // planeswalker (CR 508.4), whom the Human's damage then removes loyalty from (CR 120.3c).
         Scenario::new("Adeline's Human attacks a planeswalker")
-            .battlefield(P0, &[Permanent::new(ADELINE)])
-            .battlefield(P1, &[Permanent::new(props::PLANESWALKER)])
+            .permanents(P0, &[Permanent::new(ADELINE)])
+            .permanents(P1, &[Permanent::new(props::PLANESWALKER)])
             .actions(&[
                 Action::AdvanceTo {
                     turn: 1,

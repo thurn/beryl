@@ -136,7 +136,7 @@ pub mod scenarios {
         // Its one target is the creature P0 doesn't control; P1 finds a Plains, which enters
         // tapped, from a library with a nonbasic land too.
         Scenario::new("Winds of Abandon exiles a creature; its controller fetches a tapped basic")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::PLAINS),
@@ -145,7 +145,7 @@ pub mod scenarios {
                 ],
             )
             .hand(P0, &[WINDS, names::PLAINS])
-            .battlefield(P1, &[Permanent::new(SPELLBINDER)])
+            .permanents(P1, &[Permanent::new(SPELLBINDER)])
             .library(P1, &[names::TUNDRA, names::PLAINS, names::ISLAND])
             .actions(&[
                 Action::cast(P0, WINDS),
@@ -170,9 +170,9 @@ pub mod scenarios {
         // Overloaded, it exiles both of P1's creatures and spares P0's; P1 may find two basics
         // and finds the Island, then is done.
         Scenario::new("Winds of Abandon overloaded: a basic per creature exiled")
-            .battlefield(P0, SIX_PLAINS_AND_ADELINE)
+            .permanents(P0, SIX_PLAINS_AND_ADELINE)
             .hand(P0, &[WINDS, names::PLAINS])
-            .battlefield(P1, &[Permanent::new(SPELLBINDER), Permanent::new(TWO_DROP)])
+            .permanents(P1, &[Permanent::new(SPELLBINDER), Permanent::new(TWO_DROP)])
             .library(P1, &[names::ISLAND, names::PLAINS, names::TUNDRA])
             .actions(&[
                 Action::Cast {
@@ -197,12 +197,12 @@ pub mod scenarios {
             ]),
         // A library with no basic land: the search finds nothing and asks nothing.
         Scenario::new("Winds of Abandon: no basic land to find")
-            .battlefield(
+            .permanents(
                 P0,
                 &[Permanent::new(names::PLAINS), Permanent::new(names::PLAINS)],
             )
             .hand(P0, &[WINDS, names::PLAINS])
-            .battlefield(P1, &[Permanent::new(SPELLBINDER)])
+            .permanents(P1, &[Permanent::new(SPELLBINDER)])
             .library(P1, &[names::TUNDRA, TWO_DROP])
             .actions(&[
                 Action::cast(P0, WINDS),
@@ -230,12 +230,12 @@ pub mod scenarios {
         Scenario::new("Winds of Abandon exiles a token before its controller searches")
             .interaction(&[names::STAFF_OF_THE_STORYTELLER])
             .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(
+            .permanents(
                 P0,
                 &[Permanent::new(names::PLAINS), Permanent::new(names::PLAINS)],
             )
             .hand(P0, &[names::WINDS_OF_ABANDON, names::PLAINS])
-            .battlefield(
+            .permanents(
                 P1,
                 &[Permanent::new(names::PLAINS), Permanent::new(names::PLAINS)],
             )

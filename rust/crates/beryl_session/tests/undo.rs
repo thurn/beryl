@@ -392,7 +392,7 @@ impl<L: Layout> Agent<L> for Counting {
 /// tapped.
 const TEFERI_UNTAP: Scenario = Scenario::new("teferi-untap")
     .at(3, P0, TurnStep::PrecombatMain)
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(TEFERI_HERO_OF_DOMINARIA),
@@ -402,7 +402,7 @@ const TEFERI_UNTAP: Scenario = Scenario::new("teferi-untap")
         ],
     )
     .library(P0, &[ISLAND, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS])
-    .battlefield(P1, &[Permanent::new(ISLAND), Permanent::new(PLAINS)])
+    .permanents(P1, &[Permanent::new(ISLAND), Permanent::new(PLAINS)])
     .library(P1, &[ISLAND, ISLAND, ISLAND, ISLAND, ISLAND, ISLAND]);
 
 /// Plays on to the human's next decision or the end, and returns the view there and every

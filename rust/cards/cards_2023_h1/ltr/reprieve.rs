@@ -53,10 +53,10 @@ pub mod scenarios {
         // it never enters, and the mana spent on it, X included, stays spent.
         Scenario::new("Reprieve returns a spell with X to its owner's hand and draws")
             .interaction(&[names::THIEVING_SKYDIVER])
-            .battlefield(P0, &[Permanent::new(names::ISLAND); 4])
+            .permanents(P0, &[Permanent::new(names::ISLAND); 4])
             .hand(P0, &[names::THIEVING_SKYDIVER, names::PLAINS])
             .library(P0, &[names::ISLAND])
-            .battlefield(P1, P1_LANDS)
+            .permanents(P1, P1_LANDS)
             .hand(P1, &[names::REPRIEVE])
             .library(P1, &[names::PLAINS])
             .actions(&[
@@ -83,10 +83,10 @@ pub mod scenarios {
         // P1 counters the artifact; P0 returns the Counterspell to P1's hand, and the artifact
         // resolves.
         Scenario::new("Reprieve on a counterspell saves the spell it targets")
-            .battlefield(P0, &[Permanent::new(names::PLAINS); 3])
+            .permanents(P0, &[Permanent::new(names::PLAINS); 3])
             .hand(P0, &[props::ARTIFACT, names::REPRIEVE])
             .library(P0, &[names::ISLAND])
-            .battlefield(P1, &[Permanent::new(names::ISLAND); 2])
+            .permanents(P1, &[Permanent::new(names::ISLAND); 2])
             .hand(P1, &[names::COUNTERSPELL])
             .library(P1, &[names::PLAINS])
             .actions(&[

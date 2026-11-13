@@ -93,11 +93,11 @@ pub mod scenarios {
     /// time: after two Islands no Island is left to offer.
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("Time Spiral: exiled, the wheel, and chosen lands untapped")
-            .battlefield(P0, SIX_LANDS)
+            .permanents(P0, SIX_LANDS)
             .hand(P0, &[names::TIME_SPIRAL, names::ISLAND])
             .graveyard(P0, &[names::PLAINS])
             .library(P0, &[names::ISLAND; 6])
-            .battlefield(P1, &[Permanent::new(names::TUNDRA).tapped()])
+            .permanents(P1, &[Permanent::new(names::TUNDRA).tapped()])
             .hand(P1, &[names::PLAINS])
             .graveyard(P1, &[names::ISLAND])
             .library(P1, &[names::PLAINS; 6])
@@ -129,10 +129,10 @@ pub mod scenarios {
                 count(P1, Zone::Library, None, 1),
             ]),
         Scenario::new("Time Spiral with empty graveyards: six lands untapped, any player's")
-            .battlefield(P0, SIX_LANDS)
+            .permanents(P0, SIX_LANDS)
             .hand(P0, &[names::TIME_SPIRAL])
             .library(P0, &[names::ISLAND; 7])
-            .battlefield(P1, &[Permanent::new(names::TUNDRA).tapped()])
+            .permanents(P1, &[Permanent::new(names::TUNDRA).tapped()])
             .library(P1, &[names::PLAINS; 7])
             .actions(&[
                 Action::cast(P0, names::TIME_SPIRAL),

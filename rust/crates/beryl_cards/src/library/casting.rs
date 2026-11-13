@@ -39,7 +39,7 @@ const HITS: [[Action; 5]; 4] = [hit!(1), hit!(3), hit!(5), hit!(7)];
 pub const SCENARIOS: &[Scenario] =
     &[
         Scenario::new("An effect that lets a player cast a card offers no land")
-            .battlefield(P0, &[Permanent::new(MALCOLM)])
+            .permanents(P0, &[Permanent::new(MALCOLM)])
             .library(P0, &[names::ISLAND; 7])
             .library(P1, &[names::PLAINS, names::PLAINS, names::PLAINS])
             .actions(&[
@@ -97,7 +97,7 @@ const TELEPATH: &str = "Jace, Telepath Unbound";
 pub const PERMITTED: &[Scenario] =
     &[
         Scenario::new("A card a player may cast this turn is not one they may cast the next")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(JACE).transformed(),
@@ -106,7 +106,7 @@ pub const PERMITTED: &[Scenario] =
             )
             .graveyard(P0, &[names::OUST])
             .hand(P0, &[names::ISLAND])
-            .battlefield(P1, &[Permanent::new(JACE)])
+            .permanents(P1, &[Permanent::new(JACE)])
             .library(P0, &[names::ISLAND, names::ISLAND])
             .library(P1, &[names::PLAINS, names::ISLAND])
             .actions(&[

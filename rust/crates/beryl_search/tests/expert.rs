@@ -98,10 +98,10 @@ const fn counter_scenario(
     Scenario::new("counterspell discipline")
         .at(4, P1, TurnStep::PrecombatMain)
         .hand(P1, spell)
-        .battlefield(P1, their_lands)
+        .permanents(P1, their_lands)
         .library(P1, LIBRARY)
         .hand(P0, hand)
-        .battlefield(P0, lands)
+        .permanents(P0, lands)
         .library(P0, LIBRARY)
 }
 
@@ -131,9 +131,9 @@ fn winds_of_abandon_fetches_a_basic() {
     const WINDS: Scenario = Scenario::new("Winds of Abandon on the expert's creature")
         .at(3, P1, TurnStep::PrecombatMain)
         .hand(P1, &[names::WINDS_OF_ABANDON])
-        .battlefield(P1, &[Permanent::new(PLAINS), Permanent::new(PLAINS)])
+        .permanents(P1, &[Permanent::new(PLAINS), Permanent::new(PLAINS)])
         .library(P1, LIBRARY)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(PLAINS),
@@ -228,7 +228,7 @@ fn mana_tithe_only_against_a_tapped_out_caster() {
 fn strip_mine_takes_the_dual_of_an_opponent_short_of_lands() {
     const STRIP: Scenario = Scenario::new("strip")
         .at(5, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(names::STRIP_MINE),
@@ -237,7 +237,7 @@ fn strip_mine_takes_the_dual_of_an_opponent_short_of_lands() {
             ],
         )
         .library(P0, LIBRARY)
-        .battlefield(P1, &[Permanent::new(names::TUNDRA), Permanent::new(ISLAND)])
+        .permanents(P1, &[Permanent::new(names::TUNDRA), Permanent::new(ISLAND)])
         .library(P1, LIBRARY);
     let (t, mut s) = arrange(&STRIP);
     let (d, c) = expert_at(&t, &mut s, casts(""), |_, d| {
@@ -257,7 +257,7 @@ fn strip_mine_takes_the_dual_of_an_opponent_short_of_lands() {
 fn get_lost_leaves_a_sphinx_that_comes_back() {
     const SPHINX: Scenario = Scenario::new("sphinx")
         .at(5, P1, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(names::SPHINX_OF_FALSE_CONCLUSIONS),
@@ -266,7 +266,7 @@ fn get_lost_leaves_a_sphinx_that_comes_back() {
         )
         .library(P1, LIBRARY)
         .hand(P0, &[names::GET_LOST])
-        .battlefield(P0, &[Permanent::new(PLAINS), Permanent::new(PLAINS)])
+        .permanents(P0, &[Permanent::new(PLAINS), Permanent::new(PLAINS)])
         .library(P0, LIBRARY);
     let (t, mut s) = arrange(&SPHINX);
     let (d, c) = expert_at(&t, &mut s, casts(""), |s, d| {
@@ -286,10 +286,10 @@ fn jace_bounces_only_when_that_saves_him() {
     ];
     const THREATENED: Scenario = Scenario::new("threatened")
         .at(5, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, JACE)
+        .permanents(P0, JACE)
         .hand(P0, &[PLAINS, ISLAND, PLAINS])
         .library(P0, LIBRARY)
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(names::SPHINX_OF_FALSE_CONCLUSIONS),
@@ -299,10 +299,10 @@ fn jace_bounces_only_when_that_saves_him() {
         .library(P1, LIBRARY);
     const SAFE: Scenario = Scenario::new("safe")
         .at(5, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, JACE)
+        .permanents(P0, JACE)
         .hand(P0, &[PLAINS, ISLAND, PLAINS, ISLAND])
         .library(P0, LIBRARY)
-        .battlefield(P1, &[Permanent::new(names::THUNDERTRAP_TRAINER)])
+        .permanents(P1, &[Permanent::new(names::THUNDERTRAP_TRAINER)])
         .library(P1, LIBRARY);
     let walker = |d: &Decision| d.kind == DecisionKind::Priority;
     let ability = |t: &GameTable, s: &State, o: Opt| match o {
@@ -335,7 +335,7 @@ fn jace_bounces_only_when_that_saves_him() {
 fn attacks_with_everything_for_lethal() {
     const LETHAL: Scenario = Scenario::new("lethal")
         .at(7, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(names::ELITE_SPELLBINDER),
@@ -345,7 +345,7 @@ fn attacks_with_everything_for_lethal() {
         )
         .library(P0, LIBRARY)
         .life(P1, 4)
-        .battlefield(P1, &[Permanent::new(names::SPHINX_OF_FALSE_CONCLUSIONS)])
+        .permanents(P1, &[Permanent::new(names::SPHINX_OF_FALSE_CONCLUSIONS)])
         .library(P1, LIBRARY);
     let (t, mut s) = arrange(&LETHAL);
     let mut attackers = 0;
@@ -373,7 +373,7 @@ fn attacks_with_everything_for_lethal() {
 fn bounces_both_flying_blockers_for_lethal() {
     const TWO_BOUNCES: Scenario = Scenario::new("two bounces")
         .at(7, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(names::SPHINX_OF_FALSE_CONCLUSIONS),
@@ -383,7 +383,7 @@ fn bounces_both_flying_blockers_for_lethal() {
         )
         .library(P0, LIBRARY)
         .life(P1, 4)
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(names::ELITE_SPELLBINDER),
@@ -405,7 +405,7 @@ fn no_wheel_without_seven_cards_to_draw() {
     const THIN: Scenario = Scenario::new("thin library")
         .at(9, P0, TurnStep::PrecombatMain)
         .hand(P0, &[names::TIMETWISTER])
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(ISLAND),
@@ -432,7 +432,7 @@ fn flash_removal_answers_teferi_before_it_locks_us_out() {
     const LOCK: Scenario = Scenario::new("teferi lock")
         .at(9, P1, TurnStep::PrecombatMain)
         .hand(P1, &[names::TEFERI_TIME_RAVELER])
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(names::TUNDRA),
@@ -445,7 +445,7 @@ fn flash_removal_answers_teferi_before_it_locks_us_out() {
         .library(P1, LIBRARY)
         .life(P0, 6)
         .hand(P0, &[names::AANGS_ICEBERG])
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(PLAINS),
@@ -487,11 +487,11 @@ fn play_turn(t: &GameTable, s: &mut State, turn: u16) -> Option<Outcome> {
 fn no_attack_that_wins_only_unblocked() {
     const TRADE: Scenario = Scenario::new("trade")
         .at(7, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, &[Permanent::new(names::MALCOLM_ALLURING_SCOUNDREL)])
+        .permanents(P0, &[Permanent::new(names::MALCOLM_ALLURING_SCOUNDREL)])
         .library(P0, LIBRARY)
         .life(P0, 6)
         .life(P1, 2)
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(names::ELITE_SPELLBINDER),
@@ -513,7 +513,7 @@ fn removal_but_not_oust_opens_lethal() {
     const OPEN: Scenario = Scenario::new("open")
         .at(7, P0, TurnStep::PrecombatMain)
         .hand(P0, &[names::OUST, names::GET_LOST])
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(PLAINS),
@@ -529,7 +529,7 @@ fn removal_but_not_oust_opens_lethal() {
         .library(P0, LIBRARY)
         .life(P0, 5)
         .life(P1, 10)
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(names::THUNDERTRAP_TRAINER),
@@ -550,9 +550,9 @@ fn removal_aims_at_the_creature_that_kills_us() {
         .at(7, P0, TurnStep::PrecombatMain)
         .life(P0, 6)
         .hand(P0, &[names::SWIFT_RECONFIGURATION])
-        .battlefield(P0, &[Permanent::new(PLAINS)])
+        .permanents(P0, &[Permanent::new(PLAINS)])
         .library(P0, LIBRARY)
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(names::ADELINE_RESPLENDENT_CATHAR),
@@ -619,7 +619,7 @@ fn jace_wielder_mills_the_opponent_unless_their_jace_is_live() {
     const fn scenario(their_library: &'static [&'static str]) -> Scenario {
         Scenario::new("jace mills")
             .at(5, P0, TurnStep::PrecombatMain)
-            .battlefield(P0, JACE)
+            .permanents(P0, JACE)
             .library(P0, LIBRARY)
             .library(P1, their_library)
     }
@@ -657,7 +657,7 @@ fn teferi_hero_does_not_draw_from_a_thin_library() {
     const fn scenario(library: &'static [&'static str]) -> Scenario {
         Scenario::new("teferi draws")
             .at(5, P0, TurnStep::PrecombatMain)
-            .battlefield(P0, TEFERI)
+            .permanents(P0, TEFERI)
             .library(P0, library)
             .library(P1, LIBRARY)
     }

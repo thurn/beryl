@@ -25,7 +25,7 @@ const fn count(zone: Zone, card: Option<&'static str>, count: u8) -> Action {
 pub const SCENARIOS: &[Scenario] =
     &[
         Scenario::new("A discard paid as a cost is of the card its player chooses")
-            .battlefield(P0, &[Permanent::new(names::ISLAND); 3])
+            .permanents(P0, &[Permanent::new(names::ISLAND); 3])
             .hand(P0, &[THIRST])
             .library(
                 P0,

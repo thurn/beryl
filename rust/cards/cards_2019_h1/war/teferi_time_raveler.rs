@@ -85,14 +85,14 @@ pub mod scenarios {
         // goes on. The other planeswalker is a destination no one picks.
         Scenario::new("combat damage removes Teferi while other attacks remain")
             .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(props::CREATURE),
                     Permanent::new(props::SMALL_CREATURE),
                 ],
             )
-            .battlefield(
+            .permanents(
                 P1,
                 &[Permanent::new(TEFERI), Permanent::new(props::PLANESWALKER)],
             )
@@ -142,14 +142,14 @@ pub mod scenarios {
         // declared (by-w8gv.21.57).
         Scenario::new("combat damage removes Teferi while the other planeswalker is attacked")
             .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(props::CREATURE),
                     Permanent::new(props::SMALL_CREATURE),
                 ],
             )
-            .battlefield(
+            .permanents(
                 P1,
                 &[Permanent::new(TEFERI), Permanent::new(props::PLANESWALKER)],
             )
@@ -191,9 +191,9 @@ pub mod scenarios {
         // CR 101.2 and 307.1: a flash spell in an opponent's hand waits for their own main phase
         // with an empty stack.
         Scenario::new("an opponent's flash spell waits for sorcery timing")
-            .battlefield(P0, &[Permanent::new(TEFERI)])
+            .permanents(P0, &[Permanent::new(TEFERI)])
             .hand(P1, &[props::SMALL_CREATURE])
-            .battlefield(
+            .permanents(
                 P1,
                 &[Permanent::new(names::ISLAND), Permanent::new(names::ISLAND)],
             )
@@ -224,8 +224,8 @@ pub mod scenarios {
                 }),
             ]),
         Scenario::new("−3 returns an opposing artifact and draws a card")
-            .battlefield(P0, &[Permanent::new(TEFERI)])
-            .battlefield(P1, &[Permanent::new(props::ARTIFACT)])
+            .permanents(P0, &[Permanent::new(TEFERI)])
+            .permanents(P1, &[Permanent::new(props::ARTIFACT)])
             .library(P0, &[names::ISLAND])
             .library(P1, &[names::PLAINS])
             .actions(&[
@@ -257,9 +257,9 @@ pub mod scenarios {
                 }),
             ]),
         Scenario::new("+1 lets a sorcery be cast on the opponent's turn, until the next")
-            .battlefield(P0, &[Permanent::new(TEFERI), Permanent::new(names::PLAINS)])
+            .permanents(P0, &[Permanent::new(TEFERI), Permanent::new(names::PLAINS)])
             .hand(P0, &[names::OUST, names::OUST])
-            .battlefield(P1, &[Permanent::new(props::CREATURE)])
+            .permanents(P1, &[Permanent::new(props::CREATURE)])
             .library(P0, &[names::ISLAND, names::ISLAND])
             .library(P1, &[names::PLAINS, names::ISLAND])
             .actions(&[

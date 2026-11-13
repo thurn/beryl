@@ -15,7 +15,7 @@ pub const SCENARIOS: &[Scenario] =
     &[
         Scenario::new("A creature that explores a nonbasic land gets no counter")
             .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::PLAINS),
@@ -25,7 +25,7 @@ pub const SCENARIOS: &[Scenario] =
             )
             .hand(P0, &[names::GET_LOST])
             .library(P0, &[names::PLAINS])
-            .battlefield(
+            .permanents(
                 P1,
                 &[
                     Permanent::new(props::CREATURE),

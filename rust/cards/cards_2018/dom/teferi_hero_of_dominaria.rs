@@ -148,10 +148,10 @@ pub mod scenarios {
         const TEFERIS: &[Permanent] = &[Permanent::new(TEFERI)];
         const CREATURES: &[Permanent] = &[Permanent::new(CREATURE), Permanent::new(ISLAND)];
         Scenario::new(name)
-            .battlefield(P0, TEFERIS)
+            .permanents(P0, TEFERIS)
             .hand(P0, &[PLAINS])
             .library(P0, &[ISLAND])
-            .battlefield(P1, CREATURES)
+            .permanents(P1, CREATURES)
             .library(P1, before)
             .actions(then)
     }
@@ -160,7 +160,7 @@ pub mod scenarios {
         // P0 taps both Plains for two Portable Holes, which find nothing to exile; P1's Island is
         // tapped too. The delayed ability may untap either player's lands, and P0 takes their own.
         Scenario::new("+1 draws, and at the end step untaps up to two lands")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(TEFERI),
@@ -170,7 +170,7 @@ pub mod scenarios {
             )
             .hand(P0, &[HOLE, HOLE])
             .library(P0, &[ISLAND, PLAINS])
-            .battlefield(P1, &[Permanent::new(ISLAND).tapped()])
+            .permanents(P1, &[Permanent::new(ISLAND).tapped()])
             .library(P1, &[ISLAND])
             .actions(&[
                 Action::cast(P0, HOLE),
@@ -198,7 +198,7 @@ pub mod scenarios {
         // taps both Plains for two Portable Holes, and P1 returns Teferi to P0's hand with Sink
         // into Stupor. P0 untaps one Plains and stops.
         Scenario::new("+1's untap comes at the end step after Teferi has left")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(TEFERI),
@@ -208,7 +208,7 @@ pub mod scenarios {
             )
             .hand(P0, &[HOLE, HOLE])
             .library(P0, &[ISLAND])
-            .battlefield(
+            .permanents(
                 P1,
                 &[
                     Permanent::new(ISLAND),
@@ -265,13 +265,13 @@ pub mod scenarios {
         // −8 from 9 leaves Teferi with 1. The emblem exiles a permanent for the draw step's card,
         // and again for the card of Teferi's own +1.
         Scenario::new("−8's emblem exiles a permanent whenever its owner draws")
-            .battlefield(
+            .permanents(
                 P0,
                 &[Permanent::new(TEFERI).counters(CounterKind::Loyalty, 9)],
             )
             .hand(P0, &[PLAINS])
             .library(P0, &[ISLAND, ISLAND])
-            .battlefield(
+            .permanents(
                 P1,
                 &[
                     Permanent::new(HOLE),
@@ -312,7 +312,7 @@ pub mod scenarios {
         // The Mind Sculptor's 0 draws three cards, three draws: the emblem triggers three
         // times (CR 603.2c), each trigger targeting as it goes on the stack.
         Scenario::new("−8's emblem triggers once for each card of a multiple draw")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(TEFERI).counters(CounterKind::Loyalty, 9),
@@ -320,7 +320,7 @@ pub mod scenarios {
                 ],
             )
             .library(P0, &[ISLAND, ISLAND, PLAINS, PLAINS])
-            .battlefield(
+            .permanents(
                 P1,
                 &[
                     Permanent::new(CREATURE),
@@ -353,7 +353,7 @@ pub mod scenarios {
             ]),
         // UI regressions by-svq/by-2ml: useful colors among three lands, then undo next turn.
         Scenario::new("+1 untaps a dual land with an instant in hand")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(TEFERI),

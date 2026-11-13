@@ -51,7 +51,7 @@ pub mod scenarios {
         Scenario::new("Mana Crypt's flip lost: 3 damage to its controller")
             .seed(LOST_SEED)
             .at(2, P1, TurnStep::PostcombatMain)
-            .battlefield(P0, &[Permanent::new(names::MANA_CRYPT)])
+            .permanents(P0, &[Permanent::new(names::MANA_CRYPT)])
             .library(P0, &[names::ISLAND])
             .actions(&[
                 TO_UPKEEP,
@@ -68,7 +68,7 @@ pub mod scenarios {
         Scenario::new("Mana Crypt's flip won: no damage")
             .seed(WON_SEED)
             .at(2, P1, TurnStep::PostcombatMain)
-            .battlefield(P0, &[Permanent::new(names::MANA_CRYPT)])
+            .permanents(P0, &[Permanent::new(names::MANA_CRYPT)])
             .library(P0, &[names::ISLAND])
             .actions(&[
                 TO_UPKEEP,
@@ -81,7 +81,7 @@ pub mod scenarios {
         // {C}{C} from Mana Crypt and {U} from an Island pay for Timetwister's {2}{U}. Neither
         // player can do anything else, so it resolves at once.
         Scenario::new("Mana Crypt's two colorless mana")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::MANA_CRYPT),

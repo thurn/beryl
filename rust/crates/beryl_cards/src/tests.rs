@@ -249,7 +249,7 @@ fn lands_untapped_by_one_effect_untap_in_battlefield_order() {
     const TEFERI: &str = names::TEFERI_HERO_OF_DOMINARIA;
     const LANDS: [&str; 2] = [names::PLAINS, names::ISLAND];
     const UNTAP: Scenario = Scenario::new("one effect untaps a Plains and an Island")
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(TEFERI),
@@ -413,7 +413,7 @@ fn a_search_that_finds_nothing_still_shuffles() {
     const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND); 3];
     const SEARCH: Scenario = Scenario::new("Trinket Mage finds nothing")
         .hand(P0, &[names::TRINKET_MAGE])
-        .battlefield(P0, ISLANDS)
+        .permanents(P0, ISLANDS)
         .library(P0, &[names::MANA_CRYPT, names::OUST, names::PLAINS])
         .library(P1, &[names::PLAINS])
         .actions(&[
@@ -452,7 +452,7 @@ fn a_cleanup_discard_triggers_currency_converter() {
     const HAND: &[&str] = &[names::ISLAND; 8];
     const DISCARD: Scenario = Scenario::new("Currency Converter exiles a cleanup discard")
         .at(3, P0, TurnStep::End)
-        .battlefield(P0, &[Permanent::new(names::CURRENCY_CONVERTER)])
+        .permanents(P0, &[Permanent::new(names::CURRENCY_CONVERTER)])
         .hand(P0, HAND)
         .library(P0, &[names::PLAINS])
         .library(P1, &[names::PLAINS, names::PLAINS])
@@ -579,7 +579,7 @@ fn turning_face_up_asks_for_a_payment_plan() {
     use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
     const PLAN: Scenario = Scenario::new("A face-down Snapcaster Mage turns up with Mana Crypt")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(names::SNAPCASTER_MAGE).face_down(),
@@ -673,7 +673,7 @@ fn a_hidden_pointless_activation_is_left_out() {
     use beryl_scenario::{P0, Permanent, Scenario};
     const SETUP: Scenario = Scenario::new("Currency Converter with nothing exiled")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, &[Permanent::new(names::CURRENCY_CONVERTER)])
+        .permanents(P0, &[Permanent::new(names::CURRENCY_CONVERTER)])
         .hand(P0, &[names::ISLAND])
         .library(P0, &[names::PLAINS])
         .library(beryl_scenario::P1, &[names::PLAINS]);
@@ -715,7 +715,7 @@ fn a_quiet_pointless_activation_makes_no_stop() {
     use beryl_scenario::{P0, P1, Permanent, Scenario};
     const SETUP: Scenario = Scenario::new("Currency Converter alone")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, &[Permanent::new(names::CURRENCY_CONVERTER)])
+        .permanents(P0, &[Permanent::new(names::CURRENCY_CONVERTER)])
         .library(P0, &[names::PLAINS, names::PLAINS])
         .library(P1, &[names::PLAINS, names::PLAINS]);
     // The turn and step of P0's first priority decision, and whether it offered the {T}.
@@ -768,7 +768,7 @@ fn sacrificed_mana_token_cannot_pay_a_graveyard_card_cost() {
     use beryl_scenario::{Action, Assertion, P0, Permanent, Scenario};
     const SCENARIO: Scenario =
         Scenario::new("Abhorrent Oculus pays with Treasure without exiling the token")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::ISLAND),
@@ -812,7 +812,7 @@ fn each_payment_mode_finishes_mana_before_exile_choices() {
     use beryl_engine::event::Event;
     use beryl_scenario::{P0, Permanent, Scenario};
     const SETUP: Scenario = Scenario::new("payment modes before exile")
-        .battlefield(P0, &[Permanent::new(names::ISLAND); 3])
+        .permanents(P0, &[Permanent::new(names::ISLAND); 3])
         .hand(P0, &[names::ABHORRENT_OCULUS])
         .graveyard(
             P0,

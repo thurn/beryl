@@ -236,7 +236,8 @@ fn player(rng: &mut SplitMix64, pools: &Pools) -> PlayerSetup {
     PlayerSetup {
         life: 20,
         hand: leak(hand),
-        battlefield: leak(battlefield),
+        battlefield: &[],
+        permanents: leak(battlefield),
         graveyard: leak(graveyard),
         exile: &[],
         library: &[names::ISLAND; 8],

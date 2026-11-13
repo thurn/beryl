@@ -17,7 +17,7 @@ const ADELINE: &str = names::ADELINE_RESPLENDENT_CATHAR;
 pub const ATTACKING: &[Scenario] =
     &[
         Scenario::new("A token created attacking deals combat damage")
-            .battlefield(P0, &[Permanent::new(ADELINE)])
+            .permanents(P0, &[Permanent::new(ADELINE)])
             .library(P0, &[names::PLAINS])
             .library(P1, &[names::PLAINS])
             .actions(&[
@@ -54,7 +54,7 @@ pub const COPIES: &[Scenario] =
         Scenario::new(
             "A copy of an exiled permanent is made by the players who did not control it",
         )
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(names::PLAINS),
@@ -66,7 +66,7 @@ pub const COPIES: &[Scenario] =
         )
         .hand(P0, &[names::FRACTURED_IDENTITY])
         .library(P0, &[names::PLAINS])
-        .battlefield(P1, &[Permanent::new(props::ARTIFACT)])
+        .permanents(P1, &[Permanent::new(props::ARTIFACT)])
         .library(P1, &[names::PLAINS])
         .actions(&[
             Action::cast(P0, names::FRACTURED_IDENTITY),

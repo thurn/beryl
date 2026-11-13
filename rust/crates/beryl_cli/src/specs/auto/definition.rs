@@ -54,7 +54,7 @@ pub(super) fn table(name: &'static str, turn: u16, active: Seat, step: TurnStep)
         .life(P0, 17)
         .life(P1, 14)
         .graveyard(P0, &[STOCK_UP, REPRIEVE])
-        .battlefield(P1, THEIR_LANDS)
+        .permanents(P1, THEIR_LANDS)
         .hand(P1, THEIR_HAND)
         .graveyard(P1, &[OUST, MANA_DRAIN])
         .library(P0, LANDS)
@@ -167,6 +167,7 @@ pub(super) fn permanent(
     }
 }
 
+#[allow(clippy::large_types_passed_by_value)] // a `Scenario` is a `Copy` value, built by value
 fn probe(name: &str, title: &str, board: Scenario, play: Vec<Action>) -> Candidate {
     let cause = cause_of(&play);
     Candidate {
@@ -235,14 +236,14 @@ pub(super) fn stops(
         out.push(probe(
             "stops-main",
             "Stops: main 2",
-            main.battlefield(P0, open),
+            main.permanents(P0, open),
             Vec::new(),
         ));
         let end = table("stops-their-end", 6, P1, TurnStep::PrecombatMain);
         out.push(probe(
             "stops-their-end",
             "Stops: their end",
-            end.battlefield(P0, open),
+            end.permanents(P0, open),
             Vec::new(),
         ));
     }
@@ -252,13 +253,13 @@ pub(super) fn stops(
     {
         // A land in hand stops the human here, to see what stays offered unpaid.
         let board = table("lands-tapped", 5, P0, TurnStep::PrecombatMain)
-            .battlefield(P0, tapped)
+            .permanents(P0, tapped)
             .hand(P0, LAND_IN_HAND);
         out.push(probe("lands-tapped", "Lands tapped", board, Vec::new()));
     }
     if abilities.iter().any(|(_, a)| a.needs().is_some()) {
         // Nothing paid for and nothing for the ability that needs something: no stop.
-        let board = table("nothing-to-do", 5, P0, TurnStep::PostcombatMain).battlefield(P0, tapped);
+        let board = table("nothing-to-do", 5, P0, TurnStep::PostcombatMain).permanents(P0, tapped);
         out.push(probe("nothing-to-do", "Nothing to do", board, Vec::new()));
     }
     // The same board with what the ability needs: it stops the human here.
@@ -275,7 +276,7 @@ pub(super) fn stops(
         if out.iter().any(|c| c.name == name) {
             continue;
         }
-        let board = table(name, 5, P0, TurnStep::PostcombatMain).battlefield(P0, board);
+        let board = table(name, 5, P0, TurnStep::PostcombatMain).permanents(P0, board);
         out.push(probe(name, title, board, Vec::new()));
     }
     out
@@ -290,8 +291,8 @@ fn activations(
 ) {
     for &(k, a) in abilities {
         let board = table("ability", 5, P0, TurnStep::PrecombatMain)
-            .battlefield(P0, open(a))
-            .battlefield(P1, TARGETS)
+            .permanents(P0, open(a))
+            .permanents(P1, TARGETS)
             .hand(P0, LAND_IN_HAND);
         let play = vec![Action::activate(P0, def.name, k)];
         out.push(probe(
@@ -308,7 +309,7 @@ fn activations(
         .filter(|_| bounceable)
     {
         let board = table("bounced", 5, P0, TurnStep::PrecombatMain)
-            .battlefield(P0, with_decoy(open(a)))
+            .permanents(P0, with_decoy(open(a)))
             .hand(P0, LAND_IN_HAND);
         let play = vec![
             Action::activate(P0, def.name, k),

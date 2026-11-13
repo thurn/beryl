@@ -51,7 +51,7 @@ pub mod scenarios {
         // The artifact and Counterspell to the hand; Oust, then Plains, then Island to the
         // bottom, each under the one before. The sixth card, Tundra, is now on top.
         Scenario::new("Stock Up takes two of five and orders the rest on the bottom")
-            .battlefield(P0, ISLANDS)
+            .permanents(P0, ISLANDS)
             .hand(P0, &[names::STOCK_UP])
             .library(
                 P0,
@@ -86,7 +86,7 @@ pub mod scenarios {
             ]),
         // Four cards: two to the hand, and the order of the other two on the bottom.
         Scenario::new("Stock Up with four cards in the library")
-            .battlefield(P0, ISLANDS)
+            .permanents(P0, ISLANDS)
             .hand(P0, &[names::STOCK_UP])
             .library(
                 P0,
@@ -113,7 +113,7 @@ pub mod scenarios {
             ]),
         // Two cards: both go to the hand, with nothing to choose.
         Scenario::new("Stock Up with two cards in the library")
-            .battlefield(P0, ISLANDS)
+            .permanents(P0, ISLANDS)
             .hand(P0, &[names::STOCK_UP])
             .library(P0, &[props::ARTIFACT, names::PLAINS])
             .library(P1, &[names::ISLAND])

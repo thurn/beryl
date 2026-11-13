@@ -111,10 +111,10 @@ pub mod scenarios {
         ];
         Scenario::new(name)
             .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(P0, THREE_PLAINS)
+            .permanents(P0, THREE_PLAINS)
             .hand(P0, &[names::GET_LOST])
             .library(P0, &[names::PLAINS])
-            .battlefield(P1, SPELLBINDERS_AND_PLAINS)
+            .permanents(P1, SPELLBINDERS_AND_PLAINS)
             .hand(P1, &[names::ISLAND])
             .library(P1, top)
     }
@@ -144,9 +144,9 @@ pub mod scenarios {
         // ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c)): P1's Mana Crypt is
         // an artifact, so passing is P0's only option.
         Scenario::new("Get Lost can't be cast without a target")
-            .battlefield(P0, THREE_PLAINS)
+            .permanents(P0, THREE_PLAINS)
             .hand(P0, &[names::GET_LOST])
-            .battlefield(P1, &[Permanent::new(props::ARTIFACT)])
+            .permanents(P1, &[Permanent::new(props::ARTIFACT)])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::AdvanceTo {
@@ -161,12 +161,12 @@ pub mod scenarios {
             ]),
         // Its mana cost is {1}{W}: two Plains cast it. The oracles caught it costing {1}{W}{W}.
         Scenario::new("Get Lost costs one and a white")
-            .battlefield(
+            .permanents(
                 P0,
                 &[Permanent::new(names::PLAINS), Permanent::new(names::PLAINS)],
             )
             .hand(P0, &[names::GET_LOST, names::ISLAND])
-            .battlefield(P1, &[Permanent::new(SPELLBINDER)])
+            .permanents(P1, &[Permanent::new(SPELLBINDER)])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::cast(P0, names::GET_LOST),
@@ -180,9 +180,9 @@ pub mod scenarios {
         // The Island left in P0's hand keeps the game in P0's main phase once Get Lost has
         // resolved.
         Scenario::new("Get Lost on a planeswalker gives its controller two Maps")
-            .battlefield(P0, THREE_PLAINS)
+            .permanents(P0, THREE_PLAINS)
             .hand(P0, &[names::GET_LOST, names::ISLAND])
-            .battlefield(P1, &[Permanent::new(JACE)])
+            .permanents(P1, &[Permanent::new(JACE)])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::cast(P0, names::GET_LOST),

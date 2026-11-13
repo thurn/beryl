@@ -114,8 +114,8 @@ pub mod scenarios {
         Scenario::new("flashed in during combat, −2 exiles the tapped attacker")
             .at(2, P1, TurnStep::BeginningOfCombat)
             .hand(P0, &[EMPEROR])
-            .battlefield(P0, LANDS)
-            .battlefield(P1, &[Permanent::new(CREATURE)])
+            .permanents(P0, LANDS)
+            .permanents(P1, &[Permanent::new(CREATURE)])
             .library(P0, &[PLAINS, PLAINS])
             .library(P1, &[PLAINS, PLAINS])
             .actions(&[
@@ -164,8 +164,8 @@ pub mod scenarios {
                 }),
             ]),
         Scenario::new("+1 grows a creature and gives it first strike")
-            .battlefield(P0, &[Permanent::new(EMPEROR)])
-            .battlefield(P1, &[Permanent::new(CREATURE)])
+            .permanents(P0, &[Permanent::new(EMPEROR)])
+            .permanents(P1, &[Permanent::new(CREATURE)])
             .library(P0, &[PLAINS, PLAINS])
             .library(P1, &[PLAINS, PLAINS])
             .actions(&[
@@ -199,7 +199,7 @@ pub mod scenarios {
                 }),
             ]),
         Scenario::new("−1 makes a 2/2 Samurai")
-            .battlefield(P0, &[Permanent::new(EMPEROR)])
+            .permanents(P0, &[Permanent::new(EMPEROR)])
             .hand(P0, &[PLAINS])
             .library(P0, &[PLAINS])
             .library(P1, &[PLAINS])

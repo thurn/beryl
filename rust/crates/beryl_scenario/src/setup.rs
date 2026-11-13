@@ -71,8 +71,9 @@ fn decks(scenario: &Scenario) -> [Vec<(u8, &'static str)>; 2] {
     scenario.setup.players.map(|p| {
         p.hand
             .iter()
-            .chain(p.battlefield.iter().filter(|b| !b.token).map(|b| &b.card))
-            .chain(p.battlefield.iter().flat_map(|b| b.exiled_with))
+            .chain(p.battlefield)
+            .chain(p.permanents.iter().filter(|b| !b.token).map(|b| &b.card))
+            .chain(p.permanents.iter().flat_map(|b| b.exiled_with))
             .chain(p.graveyard)
             .chain(p.exile)
             .chain(p.library)
@@ -94,7 +95,7 @@ fn arrange(t: &GameTable, scenario: &Scenario, slots: Slots) -> Result<State, St
             let slot = library_slot(&s, t, p, name);
             s.board().place(slot, Zone::Hand).map_err(full)?;
         }
-        for b in player.battlefield {
+        for b in player.all_permanents() {
             let slot = if b.token {
                 s.board()
                     .place_token(p, token_index(t, b.card)?, b.face, false)

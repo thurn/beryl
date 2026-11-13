@@ -74,7 +74,7 @@ pub mod scenarios {
         Scenario::new("Trinket Mage finds Mana Crypt")
             .interaction(CRYPT_AND_STAFF)
             .hand(P0, &[MAGE])
-            .battlefield(P0, ISLANDS)
+            .permanents(P0, ISLANDS)
             .library(P0, LIBRARY)
             .library(P1, &[names::PLAINS])
             .actions(&[
@@ -95,7 +95,7 @@ pub mod scenarios {
             ]),
         Scenario::new("Trinket Mage finds Portable Hole")
             .hand(P0, &[MAGE])
-            .battlefield(P0, ISLANDS)
+            .permanents(P0, ISLANDS)
             .library(P0, PROP_LIBRARY)
             .library(P1, &[names::PLAINS])
             .actions(&[
@@ -116,7 +116,7 @@ pub mod scenarios {
         Scenario::new("Trinket Mage finds nothing although Mana Crypt is there")
             .interaction(CRYPT_AND_STAFF)
             .hand(P0, &[MAGE])
-            .battlefield(P0, ISLANDS)
+            .permanents(P0, ISLANDS)
             .library(P0, LIBRARY)
             .library(P1, &[names::PLAINS])
             .actions(&[
@@ -133,7 +133,7 @@ pub mod scenarios {
         // nothing without a question.
         Scenario::new("Trinket Mage searches a library without a trinket")
             .hand(P0, &[MAGE])
-            .battlefield(P0, ISLANDS)
+            .permanents(P0, ISLANDS)
             .library(P0, &[props::CREATURE, names::OUST, names::PLAINS])
             .library(P1, &[names::PLAINS])
             .actions(&[
@@ -147,7 +147,7 @@ pub mod scenarios {
             ]),
         Scenario::new("Trinket Mage declines to search")
             .hand(P0, &[MAGE])
-            .battlefield(P0, ISLANDS)
+            .permanents(P0, ISLANDS)
             .library(P0, PROP_LIBRARY)
             .library(P1, &[names::PLAINS])
             .actions(&[
@@ -165,7 +165,7 @@ pub mod scenarios {
         // UI regression by-kac: a known library top must not add a separate Search? prompt.
         Scenario::new("Trinket Mage searches with a known library top")
             .hand(P0, &[MAGE])
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(props::PLANESWALKER),

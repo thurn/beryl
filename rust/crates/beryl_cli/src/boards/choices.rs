@@ -18,7 +18,7 @@ pub(super) const CHOICES: &[Scenario] = &[
     // human a hand to fan out and a creature that may attack.
     Scenario::new("choice-scry")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(AANGS_ICEBERG),
@@ -42,7 +42,7 @@ pub(super) const CHOICES: &[Scenario] = &[
         .graveyard(P0, &[OUST, MANA_DRAIN])
         .exile(P0, &[TIME_SPIRAL])
         .library(P0, &[COUNTERSPELL, ISLAND, PLAINS, ISLAND])
-        .battlefield(P1, &[Permanent::new(ISLAND), Permanent::new(PLAINS)])
+        .permanents(P1, &[Permanent::new(ISLAND), Permanent::new(PLAINS)])
         .graveyard(P1, &[SWIFT_RECONFIGURATION])
         .exile(P1, &[MALCOLM_ALLURING_SCOUNDREL])
         .library(P1, LANDS)
@@ -51,7 +51,7 @@ pub(super) const CHOICES: &[Scenario] = &[
     // Jace, the Mind Sculptor's brainstorm, putting back two of a full hand.
     Scenario::new("choice-jace")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(JACE_THE_MIND_SCULPTOR),
@@ -66,25 +66,25 @@ pub(super) const CHOICES: &[Scenario] = &[
             &[COUNTERSPELL, TEFERI_TIME_RAVELER, WINDS_OF_ABANDON, PLAINS],
         )
         .library(P0, &[ISLAND, OUST, DAMN, PLAINS, ISLAND, PLAINS])
-        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::activate(P0, JACE_THE_MIND_SCULPTOR, 1)]),
     // Thundertrap Trainer looks at the top four for a spell.
     Scenario::new("choice-look")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, &[ISLAND_, ISLAND_, PLAINS_])
+        .permanents(P0, &[ISLAND_, ISLAND_, PLAINS_])
         .hand(P0, &[THUNDERTRAP_TRAINER])
         .library(P0, &[ISLAND, COUNTERSPELL, PLAINS, DAMN, ISLAND, PLAINS])
-        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::cast(P0, THUNDERTRAP_TRAINER)]),
     // Mana Tithe on Thundertrap Trainer, with two lands left to pay.
     Scenario::new("choice-pay")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, &[ISLAND_, ISLAND_, PLAINS_, PLAINS_])
+        .permanents(P0, &[ISLAND_, ISLAND_, PLAINS_, PLAINS_])
         .hand(P0, &[THUNDERTRAP_TRAINER])
         .library(P0, LANDS)
-        .battlefield(P1, &[PLAINS_, ISLAND_])
+        .permanents(P1, &[PLAINS_, ISLAND_])
         .hand(P1, &[MANA_TITHE])
         .library(P1, LANDS)
         .actions(&[
@@ -95,7 +95,7 @@ pub(super) const CHOICES: &[Scenario] = &[
     // castable and playable as its land face.
     Scenario::new("menu-choices")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(JACE_THE_MIND_SCULPTOR),
@@ -106,13 +106,13 @@ pub(super) const CHOICES: &[Scenario] = &[
         )
         .hand(P0, &[SINK_INTO_STUPOR, COUNTERSPELL])
         .library(P0, LANDS)
-        .battlefield(P1, &[Permanent::new(SNAPCASTER_MAGE), ISLAND_, PLAINS_])
+        .permanents(P1, &[Permanent::new(SNAPCASTER_MAGE), ISLAND_, PLAINS_])
         .library(P1, LANDS),
     // Get Lost destroys one of the human's Elite Spellbinders, leaving them two Maps; one
     // makes the other Spellbinder explore, revealing Oust.
     Scenario::new("choice-explore")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(ELITE_SPELLBINDER),
@@ -124,7 +124,7 @@ pub(super) const CHOICES: &[Scenario] = &[
         )
         .hand(P0, &[GET_LOST])
         .library(P0, &[OUST, ISLAND, PLAINS, ISLAND, PLAINS])
-        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[
             Action::cast(P0, GET_LOST),
@@ -133,17 +133,17 @@ pub(super) const CHOICES: &[Scenario] = &[
     // Jace, Vryn's Prodigy loots: it draws Stock Up, then asks for the discard.
     Scenario::new("choice-loot")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, &[Permanent::new(JACE_VRYNS_PRODIGY), ISLAND_, PLAINS_])
+        .permanents(P0, &[Permanent::new(JACE_VRYNS_PRODIGY), ISLAND_, PLAINS_])
         .hand(P0, &[COUNTERSPELL, OUST])
         .library(P0, &[STOCK_UP, ISLAND, PLAINS, ISLAND, PLAINS])
-        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::activate(P0, JACE_VRYNS_PRODIGY, 0)]),
     // The same with a full hand: eight cards to discard from, as wide as a hand is held,
     // beside the ability that asks on the stack.
     Scenario::new("choice-loot-full")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, &[Permanent::new(JACE_VRYNS_PRODIGY), ISLAND_, PLAINS_])
+        .permanents(P0, &[Permanent::new(JACE_VRYNS_PRODIGY), ISLAND_, PLAINS_])
         .hand(
             P0,
             &[
@@ -157,14 +157,14 @@ pub(super) const CHOICES: &[Scenario] = &[
             ],
         )
         .library(P0, &[STOCK_UP, ISLAND, PLAINS, ISLAND, PLAINS])
-        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::activate(P0, JACE_VRYNS_PRODIGY, 0)]),
     // Time Spiral, paid with Mana Crypt and the human's lands, untaps up to six lands, more
     // than the human has tapped, beside the opponent's tapped and untapped ones.
     Scenario::new("choice-untap")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(MANA_CRYPT),
@@ -177,7 +177,7 @@ pub(super) const CHOICES: &[Scenario] = &[
         )
         .hand(P0, &[TIME_SPIRAL])
         .library(P0, LANDS)
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(ISLAND).tapped(),
@@ -192,7 +192,7 @@ pub(super) const CHOICES: &[Scenario] = &[
     // two tapped lands.
     Scenario::new("choice-teferi")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(TEFERI_HERO_OF_DOMINARIA),
@@ -202,30 +202,30 @@ pub(super) const CHOICES: &[Scenario] = &[
             ],
         )
         .library(P0, LANDS)
-        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::activate(P0, TEFERI_HERO_OF_DOMINARIA, 0)]),
     // Trinket Mage searches for up to one artifact of mana value 1 or less, of two; the smart
     // stops search, as the human knows nothing of their library.
     Scenario::new("choice-search")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, &[ISLAND_, ISLAND_, PLAINS_])
+        .permanents(P0, &[ISLAND_, ISLAND_, PLAINS_])
         .hand(P0, &[TRINKET_MAGE])
         .library(
             P0,
             &[MANA_CRYPT, ISLAND, CURRENCY_CONVERTER, PLAINS, ISLAND],
         )
-        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::cast(P0, TRINKET_MAGE)]),
     // Thirst for Discovery draws three, and the human discards one of two basic lands rather
     // than two cards.
     Scenario::new("choice-thirst")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, &[ISLAND_, ISLAND_, PLAINS_])
+        .permanents(P0, &[ISLAND_, ISLAND_, PLAINS_])
         .hand(P0, &[THIRST_FOR_DISCOVERY, PLAINS, ISLAND, COUNTERSPELL])
         .library(P0, &[STOCK_UP, OUST, MANA_DRAIN, ISLAND, PLAINS])
-        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[
             Action::cast(P0, THIRST_FOR_DISCOVERY),
@@ -234,7 +234,7 @@ pub(super) const CHOICES: &[Scenario] = &[
     // The human ends their turn with eight cards in hand, one over the maximum.
     Scenario::new("choice-cleanup")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, &[ISLAND_, PLAINS_])
+        .permanents(P0, &[ISLAND_, PLAINS_])
         .hand(
             P0,
             &[
@@ -249,6 +249,6 @@ pub(super) const CHOICES: &[Scenario] = &[
             ],
         )
         .library(P0, LANDS)
-        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS),
 ];

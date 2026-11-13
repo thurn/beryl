@@ -83,7 +83,7 @@ pub mod scenarios {
         // Counterspell and Oust qualify among the top four; the Trainer takes Oust.
         Scenario::new("Thundertrap Trainer takes a spell")
             .hand(P0, &[TRAINER])
-            .battlefield(P0, ISLANDS.split_at(2).0)
+            .permanents(P0, ISLANDS.split_at(2).0)
             .library(
                 P0,
                 &[
@@ -146,7 +146,7 @@ pub mod scenarios {
             ]),
         Scenario::new("Thundertrap Trainer finds no spell")
             .hand(P0, &[TRAINER])
-            .battlefield(P0, ISLANDS.split_at(2).0)
+            .permanents(P0, ISLANDS.split_at(2).0)
             .library(P0, LANDS)
             .actions(&[
                 Action::Cast {
@@ -174,7 +174,7 @@ pub mod scenarios {
         // has the look of its own, but not offspring's.
         Scenario::new("Thundertrap Trainer with offspring")
             .hand(P0, &[TRAINER])
-            .battlefield(P0, ISLANDS)
+            .permanents(P0, ISLANDS)
             .library(P0, LANDS)
             .actions(&[
                 Action::Cast {

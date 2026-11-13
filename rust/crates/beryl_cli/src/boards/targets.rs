@@ -15,10 +15,10 @@ pub(super) const TARGETS: &[Scenario] = &[
     // Counterspell aimed at the human's Trinket Mage, which the human may save.
     Scenario::new("arrow-spell")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, &[ISLAND_, ISLAND_, ISLAND_, PLAINS_, PLAINS_, PLAINS_])
+        .permanents(P0, &[ISLAND_, ISLAND_, ISLAND_, PLAINS_, PLAINS_, PLAINS_])
         .hand(P0, &[TRINKET_MAGE, REPRIEVE])
         .library(P0, &[MANA_CRYPT, ISLAND, PLAINS, ISLAND, PLAINS])
-        .battlefield(P1, &[ISLAND_, ISLAND_])
+        .permanents(P1, &[ISLAND_, ISLAND_])
         .hand(P1, &[COUNTERSPELL])
         .library(P1, LANDS)
         .actions(&[
@@ -30,10 +30,10 @@ pub(super) const TARGETS: &[Scenario] = &[
     // even though the stack itself needs no arrow between its two spells.
     Scenario::new("arrow-stacked")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, &[PLAINS_, PLAINS_, PLAINS_, ISLAND_])
+        .permanents(P0, &[PLAINS_, PLAINS_, PLAINS_, ISLAND_])
         .hand(P0, &[OUST, REPRIEVE])
         .library(P0, LANDS)
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(TRINKET_MAGE),
@@ -52,13 +52,13 @@ pub(super) const TARGETS: &[Scenario] = &[
     // The opponent's Jace, the Mind Sculptor returns their own Trinket Mage, beside it.
     Scenario::new("arrow-ability")
         .at(4, P1, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[Permanent::new(SNAPCASTER_MAGE), ISLAND_, ISLAND_, PLAINS_],
         )
         .hand(P0, &[THIRST_FOR_DISCOVERY])
         .library(P0, LANDS)
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(JACE_THE_MIND_SCULPTOR),
@@ -75,10 +75,10 @@ pub(super) const TARGETS: &[Scenario] = &[
     // The opponent's Jace, Wielder of Mysteries has the human mill two.
     Scenario::new("arrow-player")
         .at(4, P1, TurnStep::PrecombatMain)
-        .battlefield(P0, &[ISLAND_, ISLAND_, PLAINS_])
+        .permanents(P0, &[ISLAND_, ISLAND_, PLAINS_])
         .hand(P0, &[THIRST_FOR_DISCOVERY])
         .library(P0, LANDS)
-        .battlefield(
+        .permanents(
             P1,
             &[Permanent::new(JACE_WIELDER_OF_MYSTERIES), ISLAND_, PLAINS_],
         )
@@ -90,18 +90,18 @@ pub(super) const TARGETS: &[Scenario] = &[
     // The human's Jace, Wielder of Mysteries asks which player its +1 targets.
     Scenario::new("target-player")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[Permanent::new(JACE_WIELDER_OF_MYSTERIES), ISLAND_, PLAINS_],
         )
         .library(P0, LANDS)
-        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::activate(P0, JACE_WIELDER_OF_MYSTERIES, 1)]),
     // Teferi, Hero of Dominaria's −3 with a Snapcaster Mage on each side.
     Scenario::new("namesake-target")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(TEFERI_HERO_OF_DOMINARIA),
@@ -111,13 +111,13 @@ pub(super) const TARGETS: &[Scenario] = &[
             ],
         )
         .library(P0, LANDS)
-        .battlefield(P1, &[Permanent::new(SNAPCASTER_MAGE), ISLAND_, PLAINS_])
+        .permanents(P1, &[Permanent::new(SNAPCASTER_MAGE), ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::activate(P0, TEFERI_HERO_OF_DOMINARIA, 1)]),
     // Teferi, Time Raveler's −3 announces how many targets, up to one, with targets on both sides; the human then announces one.
     Scenario::new("target-up-to-one")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(TEFERI_TIME_RAVELER),
@@ -127,7 +127,7 @@ pub(super) const TARGETS: &[Scenario] = &[
             ],
         )
         .library(P0, LANDS)
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(STAFF_OF_THE_STORYTELLER),
@@ -144,24 +144,24 @@ pub(super) const TARGETS: &[Scenario] = &[
     // own, which they are still asked to choose.
     Scenario::new("target-own")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, &[Permanent::new(JACE_VRYNS_PRODIGY), PLAINS_, ISLAND_])
+        .permanents(P0, &[Permanent::new(JACE_VRYNS_PRODIGY), PLAINS_, ISLAND_])
         .hand(P0, &[OUST])
         .library(P0, LANDS)
-        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::cast(P0, OUST)]),
     // Snapcaster Mage's trigger targets an instant or sorcery card in the human's graveyard,
     // of three beside a creature card it can't target.
     Scenario::new("target-graveyard")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, &[ISLAND_, ISLAND_, PLAINS_])
+        .permanents(P0, &[ISLAND_, ISLAND_, PLAINS_])
         .hand(P0, &[SNAPCASTER_MAGE])
         .graveyard(
             P0,
             &[COUNTERSPELL, TRINKET_MAGE, THIRST_FOR_DISCOVERY, STOCK_UP],
         )
         .library(P0, LANDS)
-        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::cast(P0, SNAPCASTER_MAGE)]),
 ];

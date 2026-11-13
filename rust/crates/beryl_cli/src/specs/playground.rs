@@ -100,20 +100,16 @@ pub fn generate(card: &'static str) -> Playground {
     if examples.is_empty() {
         // Start from a permanent setup when no test has cast the subject. Move just that
         // permanent to hand and provide its printed mana cost; retain its supporting cards.
-        if let Some(scenario) = scenarios.iter().find(|s| {
-            s.setup.players[0]
-                .battlefield
-                .iter()
-                .any(|p| p.card == card)
-        }) {
+        if let Some(scenario) = scenarios
+            .iter()
+            .find(|s| s.setup.players[0].all_permanents().any(|p| p.card == card))
+        {
             let mut board = auto::with_libraries(scenario).actions(&[]);
             let permanents = board.setup.players[0]
-                .battlefield
-                .iter()
-                .copied()
+                .all_permanents()
                 .filter(|p| p.card != card)
                 .collect::<Vec<_>>();
-            board = board.battlefield(Seat::P0, leak(permanents)).hand(
+            board = board.replace_permanents(Seat::P0, leak(permanents)).hand(
                 Seat::P0,
                 leak([board.setup.players[0].hand, &[card]].concat()),
             );
@@ -350,7 +346,7 @@ fn add_scenarios(
                 .setup
                 .players
                 .iter()
-                .any(|p| p.battlefield.iter().any(|p| p.card == card))
+                .any(|p| p.all_permanents().any(|p| p.card == card))
             && !actions.is_empty()
         {
             points.push((0, "Triggers & effects".to_owned()));
@@ -361,7 +357,7 @@ fn add_scenarios(
                     .setup
                     .players
                     .iter()
-                    .position(|p| p.battlefield.iter().any(|p| p.card == card))
+                    .position(|p| p.all_permanents().any(|p| p.card == card))
                     .unwrap_or(0)
             } else {
                 actor(&actions[i]).unwrap_or(Seat::P0).index()
@@ -482,15 +478,16 @@ fn choice_rich(def: &CardDef, mut board: Scenario, controller: View) -> Scenario
                     continue;
                 }
                 if board.setup.players[owner.index()]
-                    .battlefield
-                    .iter()
+                    .all_permanents()
                     .any(|p| p.card == support.name)
                 {
                     continue;
                 }
-                let mut permanents = board.setup.players[owner.index()].battlefield.to_vec();
+                let mut permanents: Vec<Permanent> = board.setup.players[owner.index()]
+                    .all_permanents()
+                    .collect();
                 permanents.push(Permanent::new(support.name));
-                let candidate = board.battlefield(owner, leak(permanents));
+                let candidate = board.replace_permanents(owner, leak(permanents));
                 let Ok((table, state)) = target_position(&candidate) else {
                     continue;
                 };

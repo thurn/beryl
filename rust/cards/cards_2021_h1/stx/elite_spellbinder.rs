@@ -93,9 +93,9 @@ pub mod scenarios {
         // The exiled artifact costs its owner {2}{W} on their turn: all three Plains.
         Scenario::new("Spellbinder's card costs its owner {2} more")
             .hand(P0, &[SPELLBINDER])
-            .battlefield(P0, THREE_PLAINS)
+            .permanents(P0, THREE_PLAINS)
             .hand(P1, &[ARTIFACT, names::ISLAND])
-            .battlefield(P1, THREE_PLAINS)
+            .permanents(P1, THREE_PLAINS)
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::Cast {
@@ -168,7 +168,7 @@ pub mod scenarios {
         // Only lands: nothing to exile, nothing to ask.
         Scenario::new("Spellbinder sees a hand of lands")
             .hand(P0, &[SPELLBINDER])
-            .battlefield(P0, THREE_PLAINS)
+            .permanents(P0, THREE_PLAINS)
             .hand(P1, &[names::ISLAND, names::PLAINS])
             .actions(&[
                 Action::Cast {

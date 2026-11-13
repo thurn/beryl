@@ -25,7 +25,7 @@ fn waste_evokes_only_for_a_worthwhile_spell() {
         .at(4, P1, TurnStep::PrecombatMain)
         .hand(P0, &[names::SUBTLETY, names::SNAPCASTER_MAGE])
         .hand(P1, &[names::ELITE_SPELLBINDER])
-        .battlefield(P1, &[Permanent::new(names::PLAINS); 3]);
+        .permanents(P1, &[Permanent::new(names::PLAINS); 3]);
 
     for answer_spell in [false, true] {
         let mut live = Live::new(&CARDS, &EVOKE).unwrap();

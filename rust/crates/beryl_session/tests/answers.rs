@@ -50,7 +50,7 @@ fn about(play: &Play) -> u16 {
 const SPRINGS_FOR_A_SPELL: Scenario = Scenario::new("pay life for a spell")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[SINK_INTO_STUPOR, COUNTERSPELL])
-    .battlefield(P0, &[Permanent::new(ISLAND)])
+    .permanents(P0, &[Permanent::new(ISLAND)])
     .library(P0, &[PLAINS; 6])
     .library(P1, &[PLAINS; 6]);
 
@@ -58,7 +58,7 @@ const SPRINGS_FOR_A_SPELL: Scenario = Scenario::new("pay life for a spell")
 const SPRINGS: Scenario = Scenario::new("pay life")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[SINK_INTO_STUPOR])
-    .battlefield(P0, &[Permanent::new(ISLAND)])
+    .permanents(P0, &[Permanent::new(ISLAND)])
     .library(P0, &[PLAINS; 6])
     .library(P1, &[PLAINS; 6]);
 
@@ -113,9 +113,9 @@ fn life_for_a_land_is_put_forward_when_its_mana_pays_for_a_card() {
 const TITHED: Scenario = Scenario::new("unless pays")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[MANA_CRYPT])
-    .battlefield(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
+    .permanents(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
     .hand(P1, &[MANA_TITHE])
-    .battlefield(P1, &[Permanent::new(PLAINS)])
+    .permanents(P1, &[Permanent::new(PLAINS)])
     .library(P0, &[PLAINS; 6])
     .library(P1, &[PLAINS; 6]);
 
@@ -171,7 +171,7 @@ fn a_cost_to_stop_an_effect_shows_what_paying_taps() {
 const LOST: Scenario = Scenario::new("explore")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[GET_LOST])
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(PLAINS),
@@ -226,7 +226,7 @@ fn an_explored_card_goes_to_the_graveyard_or_stays() {
 /// library.
 const JACE: Scenario = Scenario::new("fateseal")
     .at(3, P0, TurnStep::PrecombatMain)
-    .battlefield(P0, &[Permanent::new(JACE_THE_MIND_SCULPTOR)])
+    .permanents(P0, &[Permanent::new(JACE_THE_MIND_SCULPTOR)])
     .library(P0, &[PLAINS; 6])
     .library(P1, &[COUNTERSPELL, PLAINS, PLAINS]);
 
@@ -273,7 +273,7 @@ fn a_fateseal_sends_the_top_card_to_the_bottom_or_leaves_it() {
 const TUCK: Scenario = Scenario::new("top or bottom")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[SUBTLETY, ELITE_SPELLBINDER])
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(ISLAND),
@@ -335,7 +335,7 @@ fn a_spell_goes_on_top_of_its_library_or_under_it() {
 const CONVERT: Scenario = Scenario::new("move")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[THIRST_FOR_DISCOVERY])
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(CURRENCY_CONVERTER),
@@ -390,7 +390,7 @@ fn a_card_that_may_move_is_asked_about() {
 const MAGE: Scenario = Scenario::new("may search")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[TRINKET_MAGE])
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(ISLAND),

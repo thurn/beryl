@@ -23,7 +23,7 @@ pub const VANILLA: &str = names::SAVANNAH_LIONS;
 pub const SCENARIOS: &[Scenario] =
     &[
         Scenario::new("A flyer and a vanilla creature from the store are cast, attack and block")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::PLAINS),
@@ -33,7 +33,7 @@ pub const SCENARIOS: &[Scenario] =
                     Permanent::new(names::PLAINS),
                 ],
             )
-            .battlefield(P1, &[Permanent::new(names::PLAINS)])
+            .permanents(P1, &[Permanent::new(names::PLAINS)])
             .hand(P0, &[FLYER])
             .hand(P1, &[VANILLA])
             .library(P0, &[names::PLAINS, names::PLAINS])

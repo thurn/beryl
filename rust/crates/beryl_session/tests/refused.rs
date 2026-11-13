@@ -101,7 +101,7 @@ fn at_halt(scenario: &Scenario) -> Vec<Seen> {
 fn a_counterspell_with_nothing_to_counter_has_no_target() {
     const SCENARIO: Scenario = Scenario::new("counterspell-no-target")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, ISLANDS)
+        .permanents(P0, ISLANDS)
         .hand(P0, &[COUNTERSPELL, ISLAND])
         .library(P0, LIBRARY)
         .library(P1, LIBRARY)
@@ -118,7 +118,7 @@ fn a_creature_short_of_mana_lacks_it_and_a_second_land_waits() {
     // Island is played it can be, and the other Island waits for the next turn.
     const SCENARIO: Scenario = Scenario::new("no-mana-land-played")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, &[Permanent::new(ISLAND)])
+        .permanents(P0, &[Permanent::new(ISLAND)])
         .hand(P0, &[THUNDERTRAP_TRAINER, ISLAND, ISLAND])
         .library(P0, LIBRARY)
         .library(P1, LIBRARY)
@@ -144,10 +144,10 @@ fn teferi_holds_an_instant_to_sorcery_speed() {
     // flash waits for the main phase whatever Teferi does.
     const SCENARIO: Scenario = Scenario::new("teferi-sorcery-speed")
         .at(3, P0, TurnStep::Upkeep)
-        .battlefield(P0, ISLANDS)
+        .permanents(P0, ISLANDS)
         .hand(P0, &[THIRST_FOR_DISCOVERY, THUNDERTRAP_TRAINER])
         .library(P0, LIBRARY)
-        .battlefield(P1, &[Permanent::new(TEFERI_TIME_RAVELER)])
+        .permanents(P1, &[Permanent::new(TEFERI_TIME_RAVELER)])
         .library(P1, LIBRARY);
     let seen = at_halt(&SCENARIO);
     let [(thirst, held, by), trainer] = &seen[..] else {

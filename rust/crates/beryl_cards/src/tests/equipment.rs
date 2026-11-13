@@ -16,7 +16,7 @@ const RECONFIGURED: Scenario =
     Scenario::new("An Equipment falls off a creature that stops being one")
         .interaction(&[names::SWIFT_RECONFIGURATION])
         .hand(P0, &[names::SWIFT_RECONFIGURATION])
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(props::EQUIPMENT),

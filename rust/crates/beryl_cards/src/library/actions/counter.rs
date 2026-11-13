@@ -13,12 +13,12 @@ use crate::{names, props};
 pub const SCENARIOS: &[Scenario] =
     &[
         Scenario::new("A spell countered into exile is in no graveyard")
-            .battlefield(
+            .permanents(
                 P0,
                 &[Permanent::new(names::ISLAND), Permanent::new(names::ISLAND)],
             )
             .hand(P0, &[props::SMALL_CREATURE])
-            .battlefield(
+            .permanents(
                 P1,
                 &[Permanent::new(names::PLAINS), Permanent::new(names::ISLAND)],
             )

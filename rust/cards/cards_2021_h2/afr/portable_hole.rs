@@ -71,7 +71,7 @@ pub mod scenarios {
         Scenario::new("Portable Hole exiles until it leaves the battlefield")
             // by-8g5: Playground keeps the Hole in slot zero, exercising linked-exile UI.
             .seed(12)
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::PLAINS),
@@ -80,7 +80,7 @@ pub mod scenarios {
             )
             .hand(P0, &[HOLE])
             .library(P0, &[names::ISLAND])
-            .battlefield(
+            .permanents(
                 P1,
                 &[
                     Permanent::new(TWO_DROP),
@@ -112,13 +112,13 @@ pub mod scenarios {
         // The three-drop's mana value is 3, and P0's own two-drop isn't an opponent's: with no
         // legal target the trigger never goes on the stack.
         Scenario::new("Portable Hole with no permanent of mana value 2 or less to exile")
-            .battlefield(
+            .permanents(
                 P0,
                 &[Permanent::new(names::PLAINS), Permanent::new(TWO_DROP)],
             )
             .hand(P0, &[HOLE])
             .library(P0, &[names::ISLAND])
-            .battlefield(P1, &[Permanent::new(THREE_DROP)])
+            .permanents(P1, &[Permanent::new(THREE_DROP)])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::cast(P0, HOLE),
@@ -131,7 +131,7 @@ pub mod scenarios {
         // With the trigger on the stack, P0 returns its target to P1's hand with Sink into
         // Stupor: the trigger does nothing, and the Hole stays.
         Scenario::new("Portable Hole's target gone before the trigger resolves")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::PLAINS),
@@ -142,7 +142,7 @@ pub mod scenarios {
             )
             .hand(P0, &[HOLE, props::REMOVAL])
             .library(P0, &[names::ISLAND])
-            .battlefield(P1, &[Permanent::new(TWO_DROP)])
+            .permanents(P1, &[Permanent::new(TWO_DROP)])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::cast(P0, HOLE),
@@ -161,7 +161,7 @@ pub mod scenarios {
         // P0's two-drop in hand, with flash and the Islands for it, gives P0 a priority to pass
         // between the two resolutions.
         Scenario::new("Portable Hole gone before its trigger resolves")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::PLAINS),
@@ -171,7 +171,7 @@ pub mod scenarios {
             )
             .hand(P0, &[HOLE, TWO_DROP])
             .library(P0, &[names::ISLAND])
-            .battlefield(
+            .permanents(
                 P1,
                 &[
                     Permanent::new(TWO_DROP),

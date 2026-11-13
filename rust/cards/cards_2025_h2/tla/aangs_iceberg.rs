@@ -69,7 +69,7 @@ pub mod scenarios {
         Scenario::new("exiles a permanent until it leaves; waterbend taps a creature to pay")
             .at(2, P1, TurnStep::End)
             .hand(P0, &[ICEBERG])
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(PLAINS),
@@ -78,7 +78,7 @@ pub mod scenarios {
                     Permanent::new(CREATURE),
                 ],
             )
-            .battlefield(
+            .permanents(
                 P1,
                 &[Permanent::new(props::PLANESWALKER).counters(CounterKind::Loyalty, 5)],
             )
@@ -140,7 +140,7 @@ pub mod scenarios {
                 }),
             ]),
         Scenario::new("waterbend taps a creature and an artifact; scry reorders the top")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(ICEBERG),
@@ -182,7 +182,7 @@ pub mod scenarios {
             ]),
         Scenario::new("waterbend uses mana sources without sacrificing them")
             .interaction(&[names::MANA_CRYPT, JACE, names::CURRENCY_CONVERTER])
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(ICEBERG),

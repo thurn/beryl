@@ -91,7 +91,7 @@ pub mod scenarios {
         // With five cards in the graveyard the additional cost can't be paid (CR 118.3), so
         // only passing and the land are offered.
         Scenario::new("Abhorrent Oculus can't be cast with five cards in the graveyard")
-            .battlefield(P0, ISLANDS)
+            .permanents(P0, ISLANDS)
             .hand(P0, &[OCULUS, names::ISLAND])
             .graveyard(P0, SEVEN.split_at(5).0)
             .actions(&[Action::assert(Assertion::Decision {
@@ -102,7 +102,7 @@ pub mod scenarios {
         // The cards are chosen from the bottom of the graveyard up, so the first pick says which
         // of the bottom two stays; the other five go unasked.
         Scenario::new("Abhorrent Oculus exiles six of seven graveyard cards as it's cast")
-            .battlefield(P0, ISLANDS)
+            .permanents(P0, ISLANDS)
             .hand(P0, &[OCULUS])
             .graveyard(P0, SEVEN)
             .actions(&[
@@ -143,7 +143,7 @@ pub mod scenarios {
         // graveyard. Player 0's own upkeep triggers nothing.
         Scenario::new("Abhorrent Oculus manifests dread on each opponent's upkeep only")
             .at(1, P0, TurnStep::PostcombatMain)
-            .battlefield(P0, &[Permanent::new(OCULUS)])
+            .permanents(P0, &[Permanent::new(OCULUS)])
             .library(
                 P0,
                 &[
@@ -192,7 +192,7 @@ pub mod scenarios {
         // CR 701.62a: with one card to look at, that one is manifested, unasked.
         Scenario::new("Manifest dread with one card in the library manifests it")
             .at(1, P0, TurnStep::PostcombatMain)
-            .battlefield(P0, OCULUS_WITH_FLASH_MANA)
+            .permanents(P0, OCULUS_WITH_FLASH_MANA)
             .hand(P0, &[SNAPCASTER])
             .library(P0, &[names::ISLAND])
             .library(P1, &[names::PLAINS])
@@ -210,8 +210,9 @@ pub mod scenarios {
         // CR 701.62a: with no cards to look at, the trigger resolves without manifesting.
         Scenario::new("Manifest dread with an empty library does nothing")
             .at(1, P0, TurnStep::PostcombatMain)
-            .battlefield(P0, OCULUS_WITH_FLASH_MANA)
+            .permanents(P0, OCULUS_WITH_FLASH_MANA)
             .hand(P0, &[SNAPCASTER])
+            .library(P0, &[])
             .library(P1, &[names::PLAINS])
             .actions(&[
                 TO_THEIR_UPKEEP,
@@ -236,7 +237,7 @@ pub mod scenarios {
         // trigger (CR 708.8).
         Scenario::new("A manifested creature turns face up for its mana cost, entering no more")
             .at(1, P0, TurnStep::PostcombatMain)
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(OCULUS),
@@ -274,7 +275,7 @@ pub mod scenarios {
         // card, so it can't be turned face up: player 0 may only pass or cast Snapcaster Mage.
         Scenario::new("A manifested noncreature card can't be turned face up")
             .at(1, P0, TurnStep::PostcombatMain)
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(OCULUS),
@@ -304,9 +305,9 @@ pub mod scenarios {
         // library, revealed as it goes. Its controller gains the 3 life.
         Scenario::new("A face-down permanent leaving the battlefield is revealed")
             .at(1, P0, TurnStep::PostcombatMain)
-            .battlefield(P0, &[Permanent::new(OCULUS)])
+            .permanents(P0, &[Permanent::new(OCULUS)])
             .library(P0, &[SNAPCASTER, names::ISLAND, names::ISLAND])
-            .battlefield(P1, &[Permanent::new(names::PLAINS)])
+            .permanents(P1, &[Permanent::new(names::PLAINS)])
             .hand(P1, &[names::OUST])
             .library(P1, &[names::PLAINS])
             .actions(&[
@@ -336,9 +337,9 @@ pub mod scenarios {
         Scenario::new("Fractured Identity copies a face-down permanent as a 2/2")
             .interaction(&[names::FRACTURED_IDENTITY])
             .at(1, P0, TurnStep::PostcombatMain)
-            .battlefield(P0, &[Permanent::new(OCULUS)])
+            .permanents(P0, &[Permanent::new(OCULUS)])
             .library(P0, &[SNAPCASTER, names::ISLAND, names::ISLAND])
-            .battlefield(
+            .permanents(
                 P1,
                 &[
                     Permanent::new(names::PLAINS),

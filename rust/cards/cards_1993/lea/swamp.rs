@@ -27,12 +27,12 @@ pub mod scenarios {
     /// for black mana.
     pub const SCENARIOS: &[Scenario] = &[Scenario::new("two Swamps pay {B}{B}")
         .interaction(&[names::DAMN])
-        .battlefield(
+        .permanents(
             P0,
             &[Permanent::new(names::SWAMP), Permanent::new(names::SWAMP)],
         )
         .hand(P0, &[names::DAMN])
-        .battlefield(P1, &[Permanent::new(names::ELITE_SPELLBINDER)])
+        .permanents(P1, &[Permanent::new(names::ELITE_SPELLBINDER)])
         .library(P1, &[names::ISLAND])
         .actions(&[
             Action::cast(P0, names::DAMN),

@@ -70,9 +70,9 @@ pub mod scenarios {
     /// pay.
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("No More Lies: the controller pays {3}")
-            .battlefield(P0, P0_LANDS)
+            .permanents(P0, P0_LANDS)
             .hand(P0, &[props::ARTIFACT])
-            .battlefield(P1, P1_LANDS)
+            .permanents(P1, P1_LANDS)
             .hand(P1, &[names::NO_MORE_LIES])
             .library(P1, &[names::ISLAND])
             .actions(&[
@@ -88,9 +88,9 @@ pub mod scenarios {
                 count(P1, Zone::Graveyard, names::NO_MORE_LIES, 1),
             ]),
         Scenario::new("No More Lies: declining to pay exiles the spell")
-            .battlefield(P0, P0_LANDS)
+            .permanents(P0, P0_LANDS)
             .hand(P0, &[props::ARTIFACT])
-            .battlefield(P1, P1_LANDS)
+            .permanents(P1, P1_LANDS)
             .hand(P1, &[names::NO_MORE_LIES])
             .library(P1, &[names::ISLAND])
             .actions(&[
@@ -108,9 +108,9 @@ pub mod scenarios {
         // The planeswalker ({2}{U}{U}) taps four of P0's seven lands, and the three left pay
         // {3}.
         Scenario::new("No More Lies: lands left after paying for the spell pay {3}")
-            .battlefield(P0, SEVEN_LANDS)
+            .permanents(P0, SEVEN_LANDS)
             .hand(P0, &[props::PLANESWALKER])
-            .battlefield(P1, P1_LANDS)
+            .permanents(P1, P1_LANDS)
             .hand(P1, &[names::NO_MORE_LIES])
             .library(P1, &[names::ISLAND])
             .actions(&[
@@ -134,9 +134,9 @@ pub mod scenarios {
                 }),
             ]),
         Scenario::new("No More Lies: a controller who can't pay isn't asked")
-            .battlefield(P0, &[Permanent::new(names::PLAINS)])
+            .permanents(P0, &[Permanent::new(names::PLAINS)])
             .hand(P0, &[props::ARTIFACT])
-            .battlefield(P1, P1_LANDS)
+            .permanents(P1, P1_LANDS)
             .hand(P1, &[names::NO_MORE_LIES])
             .library(P1, &[names::ISLAND])
             .actions(&[

@@ -90,24 +90,24 @@ fn a_costs_mana_is_paid_before_its_cards_leave() {
         assert_eq!(
             script,
             text(&[
-                format!("fly #5 (Abhorrent Oculus) hand>stack cast <- {who}"),
-                format!("tap #1 (Island) <- {who}"),
-                format!("& tap #3 (Island) <- {who}"),
-                format!("& tap #8 (Island) <- {who}"),
-                "& streak #1 > #5 blue 1 <- #1".to_owned(),
-                "& streak #3 > #5 blue 1 <- #3".to_owned(),
-                "& streak #8 > #5 blue 1 <- #8".to_owned(),
-                format!("fly #2 (Counterspell) graveyard>exile exile <- {who}"),
-                format!("& fly #6 (Jace, the Mind Sculptor) graveyard>exile exile <- {who}"),
-                format!("& fly #4 (Oust) graveyard>exile exile <- {who}"),
-                format!("& fly #10 (Portable Hole) graveyard>exile exile <- {who}"),
-                format!("& fly #7 (Sink into Stupor) graveyard>exile exile <- {who}"),
-                format!("& fly #0 (Timetwister) graveyard>exile exile <- {who}"),
+                format!("fly #1 (Abhorrent Oculus) hand>stack cast <- {who}"),
+                format!("tap #0 (Island) <- {who}"),
+                format!("& tap #6 (Island) <- {who}"),
+                format!("& tap #9 (Island) <- {who}"),
+                "& streak #0 > #1 blue 1 <- #0".to_owned(),
+                "& streak #6 > #1 blue 1 <- #6".to_owned(),
+                "& streak #9 > #1 blue 1 <- #9".to_owned(),
+                format!("fly #5 (Counterspell) graveyard>exile exile <- {who}"),
+                format!("& fly #2 (Jace, the Mind Sculptor) graveyard>exile exile <- {who}"),
+                format!("& fly #3 (Oust) graveyard>exile exile <- {who}"),
+                format!("& fly #11 (Portable Hole) graveyard>exile exile <- {who}"),
+                format!("& fly #8 (Sink into Stupor) graveyard>exile exile <- {who}"),
+                format!("& fly #7 (Timetwister) graveyard>exile exile <- {who}"),
             ]),
             "seat {seat}"
         );
         assert!(
-            matches!(cast.stack.as_slice(), [StackItem::Spell { slot: 5, .. }]),
+            matches!(cast.stack.as_slice(), [StackItem::Spell { slot: 1, .. }]),
             "the spell is on the stack as its costs are paid"
         );
     }
@@ -123,10 +123,10 @@ fn mana_paid_as_a_spell_resolves_streaks_into_it_before_it_leaves() {
     let paid = |who: &str| {
         text(&[
             format!("tap #6 (Plains) <- {who}"),
-            "& streak #6 > #257 white 1 <- #6".to_owned(),
-            "-point hostile-target #257 > #1".to_owned(),
-            "vanish #257 (Mana Tithe) stack>graveyard resolve <- #257".to_owned(),
-            "fly #1 (Jace, the Mind Sculptor) stack>battlefield resolve <- #1".to_owned(),
+            "& streak #6 > #258 white 1 <- #6".to_owned(),
+            "-point hostile-target #258 > #2".to_owned(),
+            "vanish #258 (Mana Tithe) stack>graveyard resolve <- #258".to_owned(),
+            "fly #2 (Jace, the Mind Sculptor) stack>battlefield resolve <- #2".to_owned(),
         ])
     };
     assert_eq!(first, paid("you"));
@@ -189,9 +189,9 @@ fn two_abilities_of_one_source_each_emerge_as_their_own() {
 const TITHED: Scenario = Scenario::new("stack targets")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[MANA_CRYPT, COUNTERSPELL])
-    .battlefield(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
+    .permanents(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
     .hand(P1, &[MANA_TITHE])
-    .battlefield(P1, &[Permanent::new(PLAINS)])
+    .permanents(P1, &[Permanent::new(PLAINS)])
     .library(P0, &[PLAINS; 6])
     .library(P1, &[PLAINS; 6]);
 
@@ -230,7 +230,7 @@ fn a_spell_waiting_on_its_target_keeps_the_arrow_under_it() {
 /// P0's Jace, Wielder of Mysteries, whose +1 targets a player.
 const JACE: Scenario = Scenario::new("a player targeted")
     .at(3, P0, TurnStep::PrecombatMain)
-    .battlefield(P0, &[Permanent::new(JACE_WIELDER_OF_MYSTERIES)])
+    .permanents(P0, &[Permanent::new(JACE_WIELDER_OF_MYSTERIES)])
     .library(P0, &[PLAINS; 6])
     .library(P1, &[PLAINS; 6]);
 

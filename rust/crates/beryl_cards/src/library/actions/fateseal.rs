@@ -15,8 +15,9 @@ const JACE: &str = names::JACE_THE_MIND_SCULPTOR;
 pub const SCENARIOS: &[Scenario] =
     &[
         Scenario::new("Looking at the top card of an empty library asks nothing")
-            .battlefield(P0, &[Permanent::new(JACE)])
+            .permanents(P0, &[Permanent::new(JACE)])
             .library(P0, &[names::ISLAND, names::ISLAND])
+            .library(P1, &[])
             .actions(&[
                 Action::activate(P0, JACE, 0),
                 Action::answer(P0, DecisionKind::Target, Pick::Player { player: P1 }),

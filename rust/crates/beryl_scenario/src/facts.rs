@@ -197,7 +197,7 @@ pub fn named(
         names.extend(player.graveyard);
         names.extend(player.exile);
         names.extend(player.library);
-        for permanent in player.battlefield {
+        for permanent in player.all_permanents() {
             names.push(permanent.card);
             names.extend(permanent.exiled_with);
         }

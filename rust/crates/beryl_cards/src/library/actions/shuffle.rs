@@ -22,7 +22,7 @@ const fn count(player: Seat, zone: Zone, count: u8) -> Action {
 pub const SCENARIOS: &[Scenario] =
     &[
         Scenario::new("Each player's hand and graveyard are shuffled into their own library")
-            .battlefield(P0, &[Permanent::new(names::ISLAND); 3])
+            .permanents(P0, &[Permanent::new(names::ISLAND); 3])
             .hand(P0, &[names::TIMETWISTER, names::PLAINS])
             .graveyard(P0, &[props::SORCERY])
             .library(P0, &[names::PLAINS; 7])

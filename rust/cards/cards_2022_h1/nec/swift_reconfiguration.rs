@@ -76,8 +76,8 @@ pub mod scenarios {
         Scenario::new("a creature becomes a noncreature Vehicle that can't crew alone")
             .at(2, P1, TurnStep::PrecombatMain)
             .hand(P0, &[SWIFT])
-            .battlefield(P0, &[Permanent::new(PLAINS)])
-            .battlefield(P1, &[Permanent::new(TWO_DROP)])
+            .permanents(P0, &[Permanent::new(PLAINS)])
+            .permanents(P1, &[Permanent::new(TWO_DROP)])
             .hand(P1, &[PLAINS])
             .library(P0, &[PLAINS])
             .library(P1, &[PLAINS, PLAINS])
@@ -104,7 +104,7 @@ pub mod scenarios {
                 }),
             ]),
         Scenario::new("crewing the Vehicle makes it a creature until end of turn")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(PLAINS),
@@ -169,8 +169,8 @@ pub mod scenarios {
         Scenario::new("Thieving Skydiver kicked for 1 can't take a reconfigured 2-drop")
             .interaction(&[SKYDIVER])
             .hand(P0, &[SWIFT, SKYDIVER])
-            .battlefield(P0, SKYDIVER_LANDS)
-            .battlefield(P1, &[Permanent::new(TWO_DROP)])
+            .permanents(P0, SKYDIVER_LANDS)
+            .permanents(P1, &[Permanent::new(TWO_DROP)])
             .library(P0, &[PLAINS])
             .library(P1, &[PLAINS])
             .actions(&[
@@ -195,8 +195,8 @@ pub mod scenarios {
         Scenario::new("Thieving Skydiver kicked for 2 takes the reconfigured creature")
             .interaction(&[SKYDIVER])
             .hand(P0, &[SWIFT, SKYDIVER])
-            .battlefield(P0, SKYDIVER_LANDS)
-            .battlefield(P1, &[Permanent::new(TWO_DROP)])
+            .permanents(P0, SKYDIVER_LANDS)
+            .permanents(P1, &[Permanent::new(TWO_DROP)])
             .library(P0, &[PLAINS])
             .library(P1, &[PLAINS])
             .actions(&[

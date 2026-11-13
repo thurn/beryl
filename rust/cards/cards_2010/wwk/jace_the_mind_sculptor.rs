@@ -108,7 +108,7 @@ pub mod scenarios {
 
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("+2 puts the top of an opponent's library on the bottom")
-            .battlefield(P0, &[Permanent::new(JACE)])
+            .permanents(P0, &[Permanent::new(JACE)])
             .library(P0, &[ISLAND, PLAINS])
             .library(P1, &[ARTIFACT, PLAINS, ISLAND])
             .actions(&[
@@ -144,7 +144,7 @@ pub mod scenarios {
                 loyalty(7),
             ]),
         Scenario::new("0 draws three and puts two back in the order chosen")
-            .battlefield(P0, &[Permanent::new(JACE)])
+            .permanents(P0, &[Permanent::new(JACE)])
             .hand(P0, &[ARTIFACT])
             .library(P0, &[ISLAND, PLAINS, CREATURE, ISLAND])
             .library(P1, &[PLAINS])
@@ -166,11 +166,11 @@ pub mod scenarios {
                 loyalty(3),
             ]),
         Scenario::new("−1 returns a creature; −12 exiles a library and shuffles in the hand")
-            .battlefield(
+            .permanents(
                 P0,
                 &[Permanent::new(JACE).counters(CounterKind::Loyalty, 13)],
             )
-            .battlefield(P1, &[Permanent::new(CREATURE)])
+            .permanents(P1, &[Permanent::new(CREATURE)])
             .hand(P1, &[PLAINS])
             .library(P0, &[ISLAND, ISLAND])
             .library(P1, &[ISLAND, ISLAND, ISLAND])

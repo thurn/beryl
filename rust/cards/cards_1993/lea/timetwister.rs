@@ -62,7 +62,7 @@ pub mod scenarios {
     /// the library; Timetwister alone goes to the graveyard, after the shuffle.
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("Timetwister with empty graveyards")
-            .battlefield(P0, THREE_ISLANDS)
+            .permanents(P0, THREE_ISLANDS)
             .hand(P0, &[names::TIMETWISTER, names::PLAINS])
             .library(P0, &[names::PLAINS; 7])
             .hand(P1, &[names::ISLAND, names::ISLAND])
@@ -77,7 +77,7 @@ pub mod scenarios {
                 count(P1, Zone::Library, None, 1),
             ]),
         Scenario::new("Timetwister shuffles graveyards away")
-            .battlefield(P0, THREE_ISLANDS)
+            .permanents(P0, THREE_ISLANDS)
             .hand(P0, &[names::TIMETWISTER])
             .graveyard(P0, &[props::INSTANT, names::OUST])
             .library(P0, &[names::PLAINS; 5])

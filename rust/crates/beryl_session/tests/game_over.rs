@@ -152,7 +152,7 @@ static CRYPT_TO_ZERO: Scenario = Scenario::new("Mana Crypt takes the last 3 life
     .seed(2)
     .at(2, P1, TurnStep::PostcombatMain)
     .life(P0, 3)
-    .battlefield(P0, &[Permanent::new(names::MANA_CRYPT)])
+    .permanents(P0, &[Permanent::new(names::MANA_CRYPT)])
     .library(P0, &[names::ISLAND]);
 
 #[test]

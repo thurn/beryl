@@ -13,7 +13,7 @@ use crate::{names, props};
 pub const SCENARIOS: &[Scenario] =
     &[
         Scenario::new("A sorcery that gains flashback is cast from the graveyard and exiled")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::ISLAND),

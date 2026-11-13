@@ -13,7 +13,7 @@ pub const SCENARIOS: &[Scenario] =
     &[
         Scenario::new("Manifest dread manifests the instant and buries the creature")
             .at(1, P0, TurnStep::PostcombatMain)
-            .battlefield(P0, &[Permanent::new(names::ABHORRENT_OCULUS)])
+            .permanents(P0, &[Permanent::new(names::ABHORRENT_OCULUS)])
             .library(P0, &[props::SMALL_CREATURE, props::INSTANT, names::ISLAND])
             .library(P1, &[names::PLAINS])
             .actions(&[

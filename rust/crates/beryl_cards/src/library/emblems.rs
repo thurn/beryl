@@ -16,12 +16,12 @@ const TEFERI: &str = names::TEFERI_HERO_OF_DOMINARIA;
 pub const SCENARIOS: &[Scenario] =
     &[
         Scenario::new("An emblem's ability triggers after the permanent that made it is gone")
-            .battlefield(
+            .permanents(
                 P0,
                 &[Permanent::new(TEFERI).counters(CounterKind::Loyalty, 8)],
             )
             .library(P0, &[names::ISLAND, names::ISLAND])
-            .battlefield(
+            .permanents(
                 P1,
                 &[
                     Permanent::new(props::ARTIFACT),

@@ -44,7 +44,7 @@ pub mod scenarios {
         // opponent's creature is not a legal target (CR 702.6a: "target creature you
         // control"), so P0 chooses between its own two.
         Scenario::new("Leonin Scimitar equips a creature, which gets +1/+1")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(SCIMITAR),
@@ -53,7 +53,7 @@ pub mod scenarios {
                     Permanent::new(names::PLAINS),
                 ],
             )
-            .battlefield(P1, &[Permanent::new(props::SMALL_CREATURE)])
+            .permanents(P1, &[Permanent::new(props::SMALL_CREATURE)])
             .library(P0, &[names::PLAINS])
             .library(P1, &[names::PLAINS])
             .actions(&[

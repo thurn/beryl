@@ -34,17 +34,17 @@ const FOUR_LANDS: &[Permanent] = &[
 /// The opponent's turn, with the human holding only a creature without flash.
 const NOTHING_AT_INSTANT_SPEED: Scenario = Scenario::new("nothing-at-instant-speed")
     .at(2, P1, TurnStep::PrecombatMain)
-    .battlefield(P0, FOUR_LANDS)
+    .permanents(P0, FOUR_LANDS)
     .hand(P0, &[THUNDERTRAP_TRAINER])
     .library(P0, LANDS)
-    .battlefield(P1, &[Permanent::new(ISLAND)])
+    .permanents(P1, &[Permanent::new(ISLAND)])
     .library(P1, LANDS);
 
 /// The human's turn, with a creature to attack an empty board and The Wandering Emperor to
 /// flash in.
 const ATTACK_HOLDING_FLASH: Scenario = Scenario::new("attack-holding-flash")
     .at(3, P0, TurnStep::PrecombatMain)
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(SNAPCASTER_MAGE),
@@ -56,14 +56,14 @@ const ATTACK_HOLDING_FLASH: Scenario = Scenario::new("attack-holding-flash")
     )
     .hand(P0, &[THE_WANDERING_EMPEROR])
     .library(P0, LANDS)
-    .battlefield(P1, &[Permanent::new(ISLAND)])
+    .permanents(P1, &[Permanent::new(ISLAND)])
     .library(P1, LANDS);
 
 /// The opponent's turn before the human's, whose Mana Crypt triggers in their upkeep while
 /// they could flash in The Wandering Emperor.
 const CRYPT_HOLDING_FLASH: Scenario = Scenario::new("crypt-holding-flash")
     .at(2, P1, TurnStep::PrecombatMain)
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(MANA_CRYPT),
@@ -75,17 +75,17 @@ const CRYPT_HOLDING_FLASH: Scenario = Scenario::new("crypt-holding-flash")
     )
     .hand(P0, &[THE_WANDERING_EMPEROR])
     .library(P0, LANDS)
-    .battlefield(P1, &[Permanent::new(ISLAND)])
+    .permanents(P1, &[Permanent::new(ISLAND)])
     .library(P1, LANDS);
 
 /// The opponent's turn, with a creature to attack the human, who could flash in The
 /// Wandering Emperor to block it or, once it attacks, exile it.
 const DEFEND_HOLDING_FLASH: Scenario = Scenario::new("defend-holding-flash")
     .at(2, P1, TurnStep::PrecombatMain)
-    .battlefield(P0, FOUR_LANDS)
+    .permanents(P0, FOUR_LANDS)
     .hand(P0, &[THE_WANDERING_EMPEROR])
     .library(P0, LANDS)
-    .battlefield(
+    .permanents(
         P1,
         &[Permanent::new(SNAPCASTER_MAGE), Permanent::new(ISLAND)],
     )
@@ -321,7 +321,7 @@ fn a_cleared_main_phase_stop_passes_it_by() {
 /// human could counter.
 const TWO_SPELLS_IN_TURN: Scenario = Scenario::new("two-spells-in-turn")
     .at(2, P1, TurnStep::PrecombatMain)
-    .battlefield(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
+    .permanents(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
     .hand(P0, &[COUNTERSPELL])
     .library(P0, LANDS)
     .hand(P1, &[MANA_CRYPT, MANA_CRYPT])

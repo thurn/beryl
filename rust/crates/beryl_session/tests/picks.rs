@@ -28,7 +28,7 @@ const fn converting(exiled: &'static [&'static str]) -> Scenario {
         &[CONVERTER.exiled_with(&[OUST, PLAINS, REPRIEVE, STOCK_UP, TUNDRA, COUNTERSPELL])];
     Scenario::new("choose")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, if exiled.len() == 2 { TWO } else { SIX })
+        .permanents(P0, if exiled.len() == 2 { TWO } else { SIX })
         .library(P0, &[ISLAND; 6])
         .library(P1, &[ISLAND; 6])
 }
@@ -151,7 +151,7 @@ fn one_of_many_exiled_cards_is_chosen_from_a_tray_and_confirmed() {
 /// Two permanents and two cards in hand to pick among.
 const CARDS_TO_PICK: Scenario = Scenario::new("any pick")
     .at(3, P0, TurnStep::PrecombatMain)
-    .battlefield(P0, &[Permanent::new(ISLAND), Permanent::new(MANA_CRYPT)])
+    .permanents(P0, &[Permanent::new(ISLAND), Permanent::new(MANA_CRYPT)])
     .hand(P0, &[OUST, COUNTERSPELL])
     .library(P0, &[PLAINS; 6])
     .library(P1, &[PLAINS; 6]);

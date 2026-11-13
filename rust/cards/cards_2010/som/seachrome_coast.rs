@@ -45,7 +45,7 @@ pub mod scenarios {
     pub const SCENARIOS: &[Scenario] = &[
         // Then its {U} is the only blue mana for Timetwister.
         Scenario::new("Seachrome Coast with two other lands enters untapped")
-            .battlefield(
+            .permanents(
                 P0,
                 &[Permanent::new(names::PLAINS), Permanent::new(names::PLAINS)],
             )
@@ -65,7 +65,7 @@ pub mod scenarios {
                 }),
             ]),
         Scenario::new("Seachrome Coast with three other lands enters tapped")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::PLAINS),
@@ -79,7 +79,7 @@ pub mod scenarios {
         // Its {W} is P0's only white mana for the artifact. The land still to play keeps the
         // game in P0's main phase.
         Scenario::new("Seachrome Coast's white mana")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::SEACHROME_COAST),

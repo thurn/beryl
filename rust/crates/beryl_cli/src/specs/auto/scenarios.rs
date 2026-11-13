@@ -185,8 +185,8 @@ fn with_table(scenario: &Scenario) -> Scenario {
     if theirs.graveyard.is_empty() {
         d = d.graveyard(P1, &[OUST, MANA_DRAIN]);
     }
-    if theirs.battlefield.is_empty() {
-        d = d.battlefield(P1, THEIRS);
+    if theirs.battlefield.is_empty() && theirs.permanents.is_empty() {
+        d = d.permanents(P1, THEIRS);
     }
     if theirs.hand.is_empty() {
         d = d.hand(P1, THEIR_HAND);
@@ -390,7 +390,7 @@ fn with_a_bounce(board: &Scenario) -> Scenario {
     let hand = leak([&[SINK_INTO_STUPOR][..], theirs.hand].concat());
     let lands = leak(
         [
-            theirs.battlefield,
+            &theirs.all_permanents().collect::<Vec<_>>()[..],
             &[
                 Permanent::new(ISLAND),
                 Permanent::new(ISLAND),
@@ -399,5 +399,5 @@ fn with_a_bounce(board: &Scenario) -> Scenario {
         ]
         .concat(),
     );
-    board.hand(P1, hand).battlefield(P1, lands)
+    board.hand(P1, hand).replace_permanents(P1, lands)
 }

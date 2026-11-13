@@ -55,6 +55,16 @@ fn list<T: Mirrored, S: Serializer>(values: &&'static [T], s: S) -> Result<S::Ok
     s.collect_seq(values.iter().map(Json))
 }
 
+/// A player's permanents, plain and otherwise, in battlefield order.
+fn all_permanents(player: &PlayerSetup) -> Vec<Permanent> {
+    player.all_permanents().collect()
+}
+
+#[allow(clippy::ptr_arg)] // the signature `serialize_with` calls
+fn permanent_list<S: Serializer>(values: &Vec<Permanent>, s: S) -> Result<S::Ok, S::Error> {
+    s.collect_seq(values.iter().map(Json))
+}
+
 /// The two players' setups, as an array serializes.
 fn players<S: Serializer>(players: &[PlayerSetup; 2], s: S) -> Result<S::Ok, S::Error> {
     [Json(&players[0]), Json(&players[1])].serialize(s)
@@ -97,8 +107,9 @@ struct SetupDef {
 struct PlayerSetupDef {
     life: i16,
     hand: &'static [&'static str],
-    #[serde(serialize_with = "list")]
-    battlefield: &'static [Permanent],
+    /// The plain permanents and the others together, as one list.
+    #[serde(getter = "all_permanents", serialize_with = "permanent_list")]
+    battlefield: Vec<Permanent>,
     graveyard: &'static [&'static str],
     exile: &'static [&'static str],
     library: &'static [&'static str],

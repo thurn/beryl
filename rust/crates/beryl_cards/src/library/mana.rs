@@ -15,10 +15,10 @@ pub const SCENARIOS: &[Scenario] =
     &[
         Scenario::new("Mana a triggered ability adds is gone once its phase has ended")
             .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(P0, &[Permanent::new(names::ISLAND); 2])
+            .permanents(P0, &[Permanent::new(names::ISLAND); 2])
             .hand(P0, &[names::MANA_DRAIN])
             .library(P0, &[names::PLAINS, names::PLAINS])
-            .battlefield(P1, &[Permanent::new(names::ISLAND); 3])
+            .permanents(P1, &[Permanent::new(names::ISLAND); 3])
             .hand(P1, &[props::UNTARGETED_SPELL])
             .actions(&[
                 Action::cast(P1, props::UNTARGETED_SPELL),

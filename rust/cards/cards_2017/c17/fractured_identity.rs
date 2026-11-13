@@ -103,10 +103,10 @@ pub mod scenarios {
     ) -> Scenario {
         Scenario::new(name)
             .interaction(interaction)
-            .battlefield(P0, FIVE_LANDS)
+            .permanents(P0, FIVE_LANDS)
             .hand(P0, &[IDENTITY])
             .library(P0, &[names::ISLAND])
-            .battlefield(P1, target)
+            .permanents(P1, target)
             .library(P1, &[names::ISLAND])
             .actions(then)
     }
@@ -164,7 +164,7 @@ pub mod scenarios {
         // other player, gets the copy, a 2/2.
         Scenario::new("Fractured Identity on its caster's own token")
             .interaction(&[EMPEROR])
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(EMPEROR),

@@ -219,7 +219,8 @@ pub(super) fn start(def: &'static CardDef, place: Place) -> Scenario {
         PlayerSetup {
             life: 20,
             hand: leak(hand),
-            battlefield: leak(battlefield),
+            battlefield: &[],
+            permanents: leak(battlefield),
             graveyard: leak(graveyard),
             exile: &[],
             library,
@@ -227,7 +228,8 @@ pub(super) fn start(def: &'static CardDef, place: Place) -> Scenario {
         PlayerSetup {
             life: 20,
             hand: leak(without(OPPONENT_HAND, card)),
-            battlefield: leak(opponent),
+            battlefield: &[],
+            permanents: leak(opponent),
             graveyard: leak(without(&[props::SORCERY], card)),
             exile: &[],
             library,

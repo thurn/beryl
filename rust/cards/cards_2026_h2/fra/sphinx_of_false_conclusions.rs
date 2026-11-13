@@ -80,8 +80,8 @@ pub mod scenarios {
     pub const SCENARIOS: &[Scenario] = &[
         // The card dies and leaves a token copy behind; the token dies and leaves nothing.
         Scenario::new("Sphinx dies as a card, then as a token")
-            .battlefield(P0, &[Permanent::new(SPHINX)])
-            .battlefield(
+            .permanents(P0, &[Permanent::new(SPHINX)])
+            .permanents(
                 P1,
                 &[Permanent::new(SPELLBINDER), Permanent::new(SPELLBINDER)],
             )

@@ -44,7 +44,7 @@ fn choices(play: &Play, from: usize) -> Vec<(SavedKind, bool)> {
 const MAIN_PHASE: Scenario = Scenario::new("priority")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[ISLAND, ISLAND, MANA_CRYPT, COUNTERSPELL])
-    .battlefield(P0, &[Permanent::new(ISLAND), Permanent::new(TUNDRA)])
+    .permanents(P0, &[Permanent::new(ISLAND), Permanent::new(TUNDRA)])
     .library(P0, &[PLAINS; 6])
     .library(P1, &[PLAINS; 6]);
 
@@ -117,11 +117,11 @@ fn a_priority_is_answered_by_a_click_on_a_card_or_its_pass_button() {
 const OUST_EITHER: Scenario = Scenario::new("target")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[OUST, PLAINS])
-    .battlefield(
+    .permanents(
         P0,
         &[Permanent::new(PLAINS), Permanent::new(THUNDERTRAP_TRAINER)],
     )
-    .battlefield(P1, &[Permanent::new(ELITE_SPELLBINDER)])
+    .permanents(P1, &[Permanent::new(ELITE_SPELLBINDER)])
     .library(P0, &[PLAINS; 6])
     .library(P1, &[PLAINS; 6]);
 
@@ -189,7 +189,7 @@ fn a_target_is_picked_by_a_click_and_an_own_permanent_is_asked_about() {
 const MAPS: Scenario = Scenario::new("own target")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[GET_LOST])
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(PLAINS),
@@ -249,9 +249,9 @@ fn a_target_of_ones_own_that_is_helped_is_picked_unasked() {
 const TITHED: Scenario = Scenario::new("stack targets")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[MANA_CRYPT, COUNTERSPELL])
-    .battlefield(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
+    .permanents(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
     .hand(P1, &[MANA_TITHE])
-    .battlefield(P1, &[Permanent::new(PLAINS)])
+    .permanents(P1, &[Permanent::new(PLAINS)])
     .library(P0, &[PLAINS; 6])
     .library(P1, &[PLAINS; 6]);
 
@@ -327,7 +327,7 @@ fn a_target_among_spells_opens_unpicked_and_waits_for_its_button() {
 const UNOPPOSED: Scenario = Scenario::new("own spell")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[MANA_CRYPT, COUNTERSPELL])
-    .battlefield(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
+    .permanents(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
     .library(P0, &[PLAINS; 6])
     .library(P1, &[PLAINS; 6]);
 
@@ -383,7 +383,7 @@ fn a_counter_aimed_at_a_lone_own_spell_is_asked_about() {
 const LONE_SPELL: Scenario = Scenario::new("lone spell")
     .at(2, P1, TurnStep::PrecombatMain)
     .hand(P0, &[COUNTERSPELL])
-    .battlefield(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
+    .permanents(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
     .hand(P1, &[MANA_CRYPT])
     .library(P0, &[PLAINS; 6])
     .library(P1, &[PLAINS; 6]);
@@ -438,7 +438,7 @@ fn a_lone_opposing_spell_is_targeted_unasked() {
 const SNAPCASTER: Scenario = Scenario::new("graveyard targets")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[SNAPCASTER_MAGE])
-    .battlefield(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
+    .permanents(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
     .graveyard(P0, &[COUNTERSPELL, STOCK_UP])
     .library(P0, &[PLAINS; 6])
     .library(P1, &[PLAINS; 6]);
@@ -486,8 +486,8 @@ fn a_target_in_a_graveyard_is_picked_from_a_tray() {
 /// P0's Teferi, Time Raveler, with an artifact and a creature of P1's to return.
 const TEFERI_RETURNS: Scenario = Scenario::new("up to one target")
     .at(3, P0, TurnStep::PrecombatMain)
-    .battlefield(P0, &[Permanent::new(TEFERI_TIME_RAVELER)])
-    .battlefield(
+    .permanents(P0, &[Permanent::new(TEFERI_TIME_RAVELER)])
+    .permanents(
         P1,
         &[
             Permanent::new(STAFF_OF_THE_STORYTELLER),
@@ -568,7 +568,7 @@ fn up_to_one_target_is_one_prompt_whose_click_announces_the_count() {
 const TEFERI_UNTAPS: Scenario = Scenario::new("untap")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[COUNTERSPELL])
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(TEFERI_HERO_OF_DOMINARIA),
@@ -577,7 +577,7 @@ const TEFERI_UNTAPS: Scenario = Scenario::new("untap")
             Permanent::new(TUNDRA).tapped(),
         ],
     )
-    .battlefield(P1, &[Permanent::new(ISLAND).tapped()])
+    .permanents(P1, &[Permanent::new(ISLAND).tapped()])
     .library(P0, &[PLAINS; 6])
     .library(P1, &[PLAINS; 6]);
 
@@ -688,7 +688,7 @@ fn an_untap_opens_with_its_lands_picked_and_confirms_by_its_button() {
 const TEFERI_UNTAPS_FOR_REPRIEVE: Scenario = Scenario::new("untap for a white instant")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[REPRIEVE])
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(TEFERI_HERO_OF_DOMINARIA),
@@ -699,7 +699,7 @@ const TEFERI_UNTAPS_FOR_REPRIEVE: Scenario = Scenario::new("untap for a white in
             Permanent::new(PLAINS),
         ],
     )
-    .battlefield(P1, &[Permanent::new(ISLAND).tapped()])
+    .permanents(P1, &[Permanent::new(ISLAND).tapped()])
     .library(P0, &[PLAINS; 6])
     .library(P1, &[PLAINS; 6]);
 
@@ -722,7 +722,7 @@ fn an_untap_prefers_the_lands_that_make_the_most_colors() {
 /// rule asks which to keep.
 const TWO_TEFERIS: Scenario = Scenario::new("legend rule")
     .at(3, P0, TurnStep::PrecombatMain)
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(TEFERI_HERO_OF_DOMINARIA),

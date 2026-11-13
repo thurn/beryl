@@ -146,11 +146,11 @@ const PERMIT: Effect = permit_cast(
 /// the game soon after.
 const VAULT: Scenario = Scenario::new("vault")
     .at(1, P0, TurnStep::PrecombatMain)
-    .battlefield(P0, &[Permanent::new(ISLAND)])
+    .permanents(P0, &[Permanent::new(ISLAND)])
     .hand(P0, &["Open Vault"])
     .graveyard(P0, &[COUNTERSPELL])
     .library(P0, &[ISLAND, ISLAND, ISLAND])
-    .battlefield(P1, &[Permanent::new(PLAINS)])
+    .permanents(P1, &[Permanent::new(PLAINS)])
     .library(P1, &[PLAINS, PLAINS]);
 
 #[test]
@@ -187,10 +187,10 @@ fn a_game_past_a_small_capacity_plays_on_in_large() {
 /// decks' 120).
 const OVERLORD_ARMY: Scenario = Scenario::new("overlord-army")
     .at(1, P0, TurnStep::PrecombatMain)
-    .battlefield(P0, &[Permanent::new(OVERLORD_OF_THE_MISTMOORS); 45])
+    .permanents(P0, &[Permanent::new(OVERLORD_OF_THE_MISTMOORS); 45])
     .library(P0, &[PLAINS; 5])
     .life(P1, 1000)
-    .battlefield(P1, &[Permanent::new(PLAINS)])
+    .permanents(P1, &[Permanent::new(PLAINS)])
     .library(P1, &[PLAINS; 3]);
 
 #[test]
@@ -229,11 +229,11 @@ fn tokens_past_the_small_slots_play_on_in_large() {
 /// `Small` choice record holds (32).
 const ABANDONED_ARMY: Scenario = Scenario::new("abandoned-army")
     .at(1, P1, TurnStep::PrecombatMain)
-    .battlefield(P0, &[Permanent::new(PLAINS); 6])
+    .permanents(P0, &[Permanent::new(PLAINS); 6])
     .hand(P0, &[WINDS_OF_ABANDON])
     .library(P0, &[PLAINS; 3])
     .life(P0, 1000)
-    .battlefield(P1, &[Permanent::new(OVERLORD_OF_THE_MISTMOORS); 17])
+    .permanents(P1, &[Permanent::new(OVERLORD_OF_THE_MISTMOORS); 17])
     .library(P1, &[PLAINS; 43]);
 
 #[test]
@@ -314,7 +314,7 @@ const VOICE: Ability =
 
 const CHORUSES: Scenario = Scenario::new("choruses")
     .at(1, P0, TurnStep::PrecombatMain)
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new("Chorus of Voices"),
@@ -323,7 +323,7 @@ const CHORUSES: Scenario = Scenario::new("choruses")
     )
     .hand(P0, &["Pebble"])
     .library(P0, &[ISLAND; 3])
-    .battlefield(P1, &[Permanent::new(PLAINS)])
+    .permanents(P1, &[Permanent::new(PLAINS)])
     .library(P1, &[PLAINS; 2]);
 
 #[test]
@@ -385,10 +385,10 @@ const MINES_AND_ISLAND: [Permanent; 18] = {
 /// the Snapcaster Mage, or only checking that it can be paid, considers them all.
 const STRIP_MINES: Scenario = Scenario::new("strip-mines")
     .at(1, P0, TurnStep::PrecombatMain)
-    .battlefield(P0, &MINES_AND_ISLAND)
+    .permanents(P0, &MINES_AND_ISLAND)
     .hand(P0, &[SNAPCASTER_MAGE])
     .library(P0, &[ISLAND; 3])
-    .battlefield(P1, &[Permanent::new(PLAINS)])
+    .permanents(P1, &[Permanent::new(PLAINS)])
     .library(P1, &[PLAINS; 2]);
 
 #[test]
@@ -438,10 +438,10 @@ static HOARD: CardDef = CardDef {
 
 const HOARDER: Scenario = Scenario::new("hoarder")
     .at(1, P0, TurnStep::PrecombatMain)
-    .battlefield(P0, &[Permanent::new(ISLAND); 40])
+    .permanents(P0, &[Permanent::new(ISLAND); 40])
     .hand(P0, &["Hoard", SNAPCASTER_MAGE])
     .library(P0, &[ISLAND; 3])
-    .battlefield(P1, &[Permanent::new(PLAINS)])
+    .permanents(P1, &[Permanent::new(PLAINS)])
     .library(P1, &[PLAINS; 2]);
 
 #[test]

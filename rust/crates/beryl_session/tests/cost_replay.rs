@@ -12,7 +12,7 @@ use beryl_session::{
 const SESSION: SessionId = SessionId(1);
 const SETUP: Scenario = Scenario::new("saved exile and mana choices")
     .at(3, P0, TurnStep::Upkeep)
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(names::ISLAND),
@@ -188,7 +188,7 @@ fn old_cost_order_replays_complete_and_partial_casts() {
 fn old_waterbend_saves_restore_a_required_implicit_tap() {
     const BEND: Scenario = Scenario::new("saved waterbend")
         .at(3, P0, TurnStep::Upkeep)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(names::AANGS_ICEBERG),
@@ -238,7 +238,7 @@ fn old_waterbend_saves_restore_a_required_implicit_tap() {
 fn old_waterbend_saves_restore_an_automatic_mana_rock() {
     const BEND: Scenario = Scenario::new("saved rock waterbend")
         .at(3, P0, TurnStep::Upkeep)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(names::AANGS_ICEBERG),

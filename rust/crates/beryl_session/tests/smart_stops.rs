@@ -319,7 +319,7 @@ fn offspring_first(asked: &[Asked]) -> usize {
 
 /// Aang's Iceberg, with three Plains and a creature, which may tap for one of its waterbend {3}.
 const WATERBEND: Scenario = Scenario::new("waterbend")
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(AANGS_ICEBERG),
@@ -447,7 +447,7 @@ fn smart_stops_offer_waterbend_even_when_mana_can_pay() {
 /// Trinket Mage with the mana to cast it, and an artifact in a library the human knows nothing
 /// of.
 const TRINKET: Scenario = Scenario::new("trinket")
-    .battlefield(P0, &[Permanent::new(ISLAND); 3])
+    .permanents(P0, &[Permanent::new(ISLAND); 3])
     .hand(P0, &[TRINKET_MAGE])
     .library(P0, &[ISLAND, MANA_CRYPT, ISLAND])
     .library(P1, &[ISLAND, ISLAND, ISLAND]);
@@ -455,7 +455,7 @@ const TRINKET: Scenario = Scenario::new("trinket")
 /// [`TRINKET`] after Stock Up, which puts three cards the human has seen on the bottom of
 /// their library.
 const STOCKED: Scenario = Scenario::new("stocked")
-    .battlefield(P0, &[Permanent::new(ISLAND); 6])
+    .permanents(P0, &[Permanent::new(ISLAND); 6])
     .hand(P0, &[STOCK_UP, TRINKET_MAGE])
     .library(
         P0,
@@ -466,7 +466,7 @@ const STOCKED: Scenario = Scenario::new("stocked")
 /// [`TRINKET`] after Jace, the Mind Sculptor's 0, which puts two cards from the human's hand
 /// on top of their library: they know the card they draw next.
 const KNOWN_TOP: Scenario = Scenario::new("known top")
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(ISLAND),
@@ -628,8 +628,8 @@ fn smart_damage_takes_the_only_lethal_outcome_and_defaults_real_choices() {
     ] {
         let scenario = Scenario::new("Divide combat damage")
             .at(3, P0, TurnStep::PrecombatMain)
-            .battlefield(P0, BEZA)
-            .battlefield(P1, opponents)
+            .permanents(P0, BEZA)
+            .permanents(P1, opponents)
             .library(P0, &[ISLAND, ISLAND, ISLAND])
             .library(P1, &[ISLAND, ISLAND, ISLAND]);
         let (table, state) = beryl_scenario::position(&CARDS, &scenario).unwrap();

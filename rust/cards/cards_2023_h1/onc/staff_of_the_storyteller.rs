@@ -77,7 +77,7 @@ pub mod scenarios {
         Scenario::new("its own Spirit and a Samurai each add a story counter, spent to draw")
             .interaction(&[EMPEROR])
             .hand(P0, &[STAFF])
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(PLAINS),
@@ -127,7 +127,7 @@ pub mod scenarios {
         // CR 603.2c: Overlord's attack makes two Insects in one event, so one story counter.
         Scenario::new("two tokens created at once add one story counter")
             .interaction(&[names::OVERLORD_OF_THE_MISTMOORS])
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(STAFF),
@@ -152,9 +152,9 @@ pub mod scenarios {
             ]),
         // UI regression by-xd4: resolving a response must not demand a pass on one's own spell.
         Scenario::new("Staff resolves after an opposing flash creature")
-            .battlefield(P0, &[Permanent::new(PLAINS), Permanent::new(PLAINS)])
+            .permanents(P0, &[Permanent::new(PLAINS), Permanent::new(PLAINS)])
             .hand(P0, &[STAFF, PLAINS])
-            .battlefield(P1, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
+            .permanents(P1, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
             .hand(P1, &[names::SNAPCASTER_MAGE])
             .library(P0, &[ISLAND])
             .library(P1, &[ISLAND])

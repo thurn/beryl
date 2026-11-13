@@ -14,7 +14,7 @@ pub const SCENARIOS: &[Scenario] =
         Scenario::new("Damage an effect deals to a player is that player's life lost")
             .seed(LOST_SEED)
             .at(1, P0, TurnStep::PostcombatMain)
-            .battlefield(P1, &[Permanent::new(names::MANA_CRYPT)])
+            .permanents(P1, &[Permanent::new(names::MANA_CRYPT)])
             .library(P0, &[names::ISLAND])
             .library(P1, &[names::ISLAND, names::ISLAND])
             .actions(&[

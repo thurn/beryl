@@ -53,10 +53,10 @@ pub mod scenarios {
         // Tundra is a Plains and an Island: its {U} and the Verge's pay for Counterspell.
         Scenario::new("Floodfarm Verge's {U} with a Tundra")
             .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(P0, &[Permanent::new(VERGE), Permanent::new(names::TUNDRA)])
+            .permanents(P0, &[Permanent::new(VERGE), Permanent::new(names::TUNDRA)])
             .hand(P0, &[names::COUNTERSPELL])
             .library(P0, &[names::ISLAND])
-            .battlefield(P1, P1_PLAINS)
+            .permanents(P1, P1_PLAINS)
             .hand(P1, &[props::ARTIFACT, names::PLAINS])
             .actions(&[
                 artifact_cast(),
@@ -73,10 +73,10 @@ pub mod scenarios {
         // cast Counterspell and has nothing to do, and the artifact resolves.
         Scenario::new("Floodfarm Verge's {U} without a Plains or an Island")
             .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(P0, &[Permanent::new(VERGE), Permanent::new(VERGE)])
+            .permanents(P0, &[Permanent::new(VERGE), Permanent::new(VERGE)])
             .hand(P0, &[names::COUNTERSPELL])
             .library(P0, &[names::ISLAND])
-            .battlefield(P1, P1_PLAINS)
+            .permanents(P1, P1_PLAINS)
             .hand(P1, &[props::ARTIFACT, names::PLAINS])
             .actions(&[
                 artifact_cast(),
@@ -91,7 +91,7 @@ pub mod scenarios {
         // A basic Plains enables the {U}: with the Plains's {W} for the generic mana, the
         // two-drop creature.
         Scenario::new("Floodfarm Verge's {U} with a Plains")
-            .battlefield(P0, &[Permanent::new(VERGE), Permanent::new(names::PLAINS)])
+            .permanents(P0, &[Permanent::new(VERGE), Permanent::new(names::PLAINS)])
             .hand(P0, &[props::SMALL_CREATURE])
             .library(P0, &[names::ISLAND])
             .library(P1, &[names::ISLAND])
@@ -107,7 +107,7 @@ pub mod scenarios {
         // Alone, its {W} pays for the artifact. The land still to play keeps the game in P0's
         // main phase.
         Scenario::new("Floodfarm Verge's {W}")
-            .battlefield(P0, &[Permanent::new(VERGE)])
+            .permanents(P0, &[Permanent::new(VERGE)])
             .hand(P0, &[props::ARTIFACT, names::PLAINS])
             .library(P1, &[names::ISLAND])
             .actions(&[

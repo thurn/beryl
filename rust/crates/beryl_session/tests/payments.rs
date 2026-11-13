@@ -63,7 +63,7 @@ fn permanent(play: &Play, name: &str) -> u16 {
 /// Spellbinder of power 3.
 const CREW: Scenario = Scenario::new("crew")
     .at(3, P0, TurnStep::PrecombatMain)
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(JACE_VRYNS_PRODIGY),
@@ -218,7 +218,7 @@ fn auto_pay_crews_with_what_it_suggests() {
 /// Storyteller and a Jace, Vryn's Prodigy that can be tapped in place of mana.
 const BEND: Scenario = Scenario::new("tap in place of mana")
     .at(3, P0, TurnStep::PrecombatMain)
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(AANGS_ICEBERG),
@@ -319,7 +319,7 @@ fn permanents_are_tapped_in_place_of_mana_and_auto_pay_pays_the_rest() {
 /// The Iceberg with a Mana Crypt, a tapped Currency Converter, a Treasure and three Plains.
 const SOURCES: Scenario = Scenario::new("mana sources")
     .at(3, P0, TurnStep::PrecombatMain)
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(AANGS_ICEBERG),
@@ -402,7 +402,7 @@ fn auto_pay_spares_what_its_mana_would_use_up_and_asks_for_mana_rocks() {
 /// The Iceberg with one Plains and two Snapcaster Mages, alike.
 const ALIKE: Scenario = Scenario::new("two alike")
     .at(3, P0, TurnStep::PrecombatMain)
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(AANGS_ICEBERG),
@@ -443,7 +443,7 @@ fn either_of_two_permanents_alike_can_be_picked_to_pay() {
 const PLANS: Scenario = Scenario::new("payment plans")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[THIEVING_SKYDIVER])
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(ISLAND),
@@ -522,7 +522,7 @@ fn a_payment_plan_is_chosen_by_picking_what_it_taps() {
 const MANUAL: Scenario = Scenario::new("mana by hand")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[THIEVING_SKYDIVER])
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(ISLAND),

@@ -60,7 +60,7 @@ fn pass(play: &mut Play) {
 /// Counterspell and the Plains under it.
 const SCRY: Scenario = Scenario::new("scry")
     .at(3, P0, TurnStep::PrecombatMain)
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(AANGS_ICEBERG),
@@ -188,7 +188,7 @@ fn a_scry_deals_its_cards_between_the_bottom_and_the_top() {
 const STOCK: Scenario = Scenario::new("arrange")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[STOCK_UP])
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(ISLAND),
@@ -296,7 +296,7 @@ fn a_look_takes_its_cards_for_the_hand_and_orders_the_rest_on_the_bottom() {
 const PUT_BACK: Scenario = Scenario::new("put back")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[COUNTERSPELL])
-    .battlefield(P0, &[Permanent::new(JACE_THE_MIND_SCULPTOR)])
+    .permanents(P0, &[Permanent::new(JACE_THE_MIND_SCULPTOR)])
     .library(P0, &[PLAINS, PLAINS, ISLAND, TUNDRA, TUNDRA, TUNDRA])
     .library(P1, &[PLAINS; 6]);
 
@@ -412,7 +412,7 @@ fn cards_are_put_back_from_the_hand_onto_the_library_in_an_order() {
 const ORDER: Scenario = Scenario::new("order")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[THIRST_FOR_DISCOVERY, COUNTERSPELL])
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(TEFERI_HERO_OF_DOMINARIA).counters(CounterKind::Loyalty, 9),
@@ -422,7 +422,7 @@ const ORDER: Scenario = Scenario::new("order")
             Permanent::new(ISLAND),
         ],
     )
-    .battlefield(
+    .permanents(
         P1,
         &[
             Permanent::new(PLAINS),

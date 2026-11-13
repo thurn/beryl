@@ -69,7 +69,7 @@ pub mod scenarios {
                 }),
             ]),
         Scenario::new("Cycling Spara's Headquarters")
-            .battlefield(P0, THREE_PLAINS)
+            .permanents(P0, THREE_PLAINS)
             .hand(P0, &[names::SPARAS_HEADQUARTERS])
             .library(P0, &[names::ISLAND])
             .library(P1, &[names::ISLAND])
@@ -85,7 +85,7 @@ pub mod scenarios {
             ]),
         // Its {U} is the only blue mana for Timetwister.
         Scenario::new("Spara's Headquarters' blue mana")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::SPARAS_HEADQUARTERS),
@@ -108,7 +108,7 @@ pub mod scenarios {
         // Its {W} is the only white mana for the artifact. The land still to play keeps the game
         // in P0's main phase.
         Scenario::new("Spara's Headquarters' white mana")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::SPARAS_HEADQUARTERS),

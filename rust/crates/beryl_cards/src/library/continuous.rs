@@ -17,9 +17,9 @@ const TEFERI: &str = names::TEFERI_TIME_RAVELER;
 pub const SCENARIOS: &[Scenario] =
     &[
         Scenario::new("A rule changed by an effect is changed in the turn it resolves")
-            .battlefield(P0, &[Permanent::new(TEFERI), Permanent::new(names::PLAINS)])
+            .permanents(P0, &[Permanent::new(TEFERI), Permanent::new(names::PLAINS)])
             .hand(P0, &[props::SORCERY])
-            .battlefield(P1, &[Permanent::new(props::CREATURE)])
+            .permanents(P1, &[Permanent::new(props::CREATURE)])
             .library(P0, &[names::ISLAND, names::ISLAND])
             .library(P1, &[names::PLAINS, names::ISLAND])
             .actions(&[

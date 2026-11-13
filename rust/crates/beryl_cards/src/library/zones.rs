@@ -15,7 +15,7 @@ const CONVERTER: &str = names::CURRENCY_CONVERTER;
 pub const PUT_INTO_GRAVEYARD: &[Scenario] =
     &[
         Scenario::new("A land card put into the graveyard from exile is still the card it was")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(CONVERTER),
@@ -59,7 +59,7 @@ pub const PUT_INTO_GRAVEYARD: &[Scenario] =
 /// ([CR 609.3](https://yawgatog.com/resources/magic-rules/#R6093)).
 pub const LOOK_AT: &[Scenario] = &[Scenario::new("Looking at an empty hand finds no card")
     .hand(P0, &[names::ELITE_SPELLBINDER, names::ISLAND])
-    .battlefield(P0, &[Permanent::new(names::PLAINS); 3])
+    .permanents(P0, &[Permanent::new(names::PLAINS); 3])
     .library(P0, &[names::PLAINS])
     .library(P1, &[names::ISLAND])
     .actions(&[

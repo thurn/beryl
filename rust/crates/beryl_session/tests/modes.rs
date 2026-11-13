@@ -54,7 +54,7 @@ fn casts(with: &'static [u8]) -> impl Fn(&Candidate) -> bool {
 const SKYDIVER: Scenario = Scenario::new("ways and x")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[THIEVING_SKYDIVER])
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(ISLAND),
@@ -63,7 +63,7 @@ const SKYDIVER: Scenario = Scenario::new("ways and x")
             Permanent::new(ISLAND),
         ],
     )
-    .battlefield(P1, &[Permanent::new(MANA_CRYPT)])
+    .permanents(P1, &[Permanent::new(MANA_CRYPT)])
     .library(P0, &[PLAINS; 6])
     .library(P1, &[PLAINS; 6]);
 
@@ -114,11 +114,11 @@ fn a_card_with_several_ways_opens_the_choice_among_them() {
 /// and an opponent's creature for the −3 to return.
 const WALKER: Scenario = Scenario::new("walker low")
     .at(3, P0, TurnStep::PrecombatMain)
-    .battlefield(
+    .permanents(
         P0,
         &[Permanent::new(TEFERI_TIME_RAVELER).counters(CounterKind::Loyalty, 1)],
     )
-    .battlefield(P1, &[Permanent::new(SNAPCASTER_MAGE)])
+    .permanents(P1, &[Permanent::new(SNAPCASTER_MAGE)])
     .library(P0, &[PLAINS; 6])
     .library(P1, &[PLAINS; 6]);
 
@@ -218,7 +218,7 @@ fn an_x_is_set_and_then_paid() {
 /// and an Elite Spellbinder to draw.
 const MALCOLM: Scenario = Scenario::new("cast offer")
     .at(3, P0, TurnStep::PrecombatMain)
-    .battlefield(
+    .permanents(
         P0,
         &[Permanent::new(MALCOLM_ALLURING_SCOUNDREL).counters(CounterKind::Chorus, 3)],
     )

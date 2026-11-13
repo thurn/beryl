@@ -71,7 +71,7 @@ pub mod scenarios {
         Scenario::new("Thieving Skydiver kicked steals Mana Crypt over a Map")
             .interaction(&[names::MANA_CRYPT, names::GET_LOST])
             .hand(P0, &[names::GET_LOST, SKYDIVER])
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::PLAINS),
@@ -82,7 +82,7 @@ pub mod scenarios {
                     Permanent::new(names::ISLAND),
                 ],
             )
-            .battlefield(
+            .permanents(
                 P1,
                 &[Permanent::new(CRYPT), Permanent::new(props::CREATURE)],
             )
@@ -168,8 +168,8 @@ pub mod scenarios {
         // itself: a 2/1 that becomes 3/2.
         Scenario::new("Thieving Skydiver kicked steals an Equipment and wears it")
             .hand(P0, &[SKYDIVER])
-            .battlefield(P0, ISLANDS)
-            .battlefield(
+            .permanents(P0, ISLANDS)
+            .permanents(
                 P1,
                 &[
                     Permanent::new(props::EQUIPMENT),
@@ -212,7 +212,7 @@ pub mod scenarios {
         // Unkicked, two mana, and no trigger.
         Scenario::new("Thieving Skydiver unkicked")
             .hand(P0, &[SKYDIVER])
-            .battlefield(P0, ISLANDS.split_at(2).0)
+            .permanents(P0, ISLANDS.split_at(2).0)
             .actions(&[
                 Action::Cast {
                     player: P0,
@@ -236,8 +236,8 @@ pub mod scenarios {
         // trigger is removed as it would go on the stack (CR 603.3d).
         Scenario::new("Thieving Skydiver kicked with no artifact around")
             .hand(P0, &[SKYDIVER])
-            .battlefield(P0, ISLANDS)
-            .battlefield(P1, &[Permanent::new(names::PLAINS)])
+            .permanents(P0, ISLANDS)
+            .permanents(P1, &[Permanent::new(names::PLAINS)])
             .actions(&[
                 Action::Cast {
                     player: P0,

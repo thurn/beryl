@@ -34,8 +34,8 @@ const fn pick(name: &'static str) -> Scenario {
     Scenario::new(name)
         .at(3, P0, TurnStep::PrecombatMain)
         .hand(P0, &[ISLAND, ISLAND, OUST, COUNTERSPELL])
-        .battlefield(P0, PICKERS)
-        .battlefield(P1, WATCHERS)
+        .permanents(P0, PICKERS)
+        .permanents(P1, WATCHERS)
         .library(P0, LANDS)
         .library(P1, LANDS)
 }
@@ -80,8 +80,8 @@ const fn split(name: &'static str) -> Scenario {
     Scenario::new(name)
         .at(3, P0, TurnStep::PrecombatMain)
         .hand(P0, &[STOCK_UP, COUNTERSPELL])
-        .battlefield(P0, SPLITTERS)
-        .battlefield(P1, WATCHERS)
+        .permanents(P0, SPLITTERS)
+        .permanents(P1, WATCHERS)
         .library(
             P0,
             &[
@@ -109,7 +109,7 @@ const fn zone(name: &'static str) -> Scenario {
     Scenario::new(name)
         .at(3, P0, TurnStep::PrecombatMain)
         .hand(P0, &[TRINKET_MAGE, THUNDERTRAP_TRAINER, ABHORRENT_OCULUS])
-        .battlefield(P0, SEARCHERS)
+        .permanents(P0, SEARCHERS)
         .graveyard(
             P0,
             &[
@@ -122,7 +122,7 @@ const fn zone(name: &'static str) -> Scenario {
                 THIRST_FOR_DISCOVERY,
             ],
         )
-        .battlefield(P1, WATCHERS)
+        .permanents(P1, WATCHERS)
         .library(
             P0,
             &[
@@ -147,8 +147,8 @@ const fn order(name: &'static str) -> Scenario {
     Scenario::new(name)
         .at(3, P0, TurnStep::PrecombatMain)
         .hand(P0, &[THIRST_FOR_DISCOVERY, COUNTERSPELL, OUST])
-        .battlefield(P0, ORDERERS)
-        .battlefield(P1, WATCHERS)
+        .permanents(P0, ORDERERS)
+        .permanents(P1, WATCHERS)
         .library(P0, &[PLAINS, ISLAND, DAMN, REPRIEVE, MANA_DRAIN, ISLAND])
         .library(P1, LANDS)
 }
@@ -176,8 +176,8 @@ const fn pay(name: &'static str) -> Scenario {
     Scenario::new(name)
         .at(3, P0, TurnStep::PrecombatMain)
         .hand(P0, &[THIEVING_SKYDIVER, SWIFT_RECONFIGURATION])
-        .battlefield(P0, PAYERS)
-        .battlefield(P1, WATCHERS)
+        .permanents(P0, PAYERS)
+        .permanents(P1, WATCHERS)
         .library(P0, LANDS)
         .library(P1, LANDS)
 }
@@ -208,8 +208,8 @@ const fn declare(name: &'static str, turn: u16, active: Seat) -> Scenario {
     Scenario::new(name)
         .at(turn, active, TurnStep::PrecombatMain)
         .hand(P0, &[COUNTERSPELL])
-        .battlefield(P0, DEFENDERS)
-        .battlefield(P1, ATTACKERS)
+        .permanents(P0, DEFENDERS)
+        .permanents(P1, ATTACKERS)
         .library(P0, LANDS)
         .library(P1, LANDS)
 }
@@ -238,8 +238,8 @@ const fn yes(name: &'static str) -> Scenario {
     Scenario::new(name)
         .at(3, P0, TurnStep::PrecombatMain)
         .hand(P0, &[SINK_INTO_STUPOR, COUNTERSPELL])
-        .battlefield(P0, ASKERS)
-        .battlefield(P1, WATCHERS)
+        .permanents(P0, ASKERS)
+        .permanents(P1, WATCHERS)
         .library(P0, LANDS)
         .library(P1, &[OUST, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS])
 }
@@ -259,8 +259,8 @@ const fn number(name: &'static str) -> Scenario {
     Scenario::new(name)
         .at(3, P0, TurnStep::PrecombatMain)
         .hand(P0, &[THIEVING_SKYDIVER])
-        .battlefield(P0, &[ISLAND_, ISLAND_, ISLAND_, ISLAND_])
-        .battlefield(P1, CRYPT)
+        .permanents(P0, &[ISLAND_, ISLAND_, ISLAND_, ISLAND_])
+        .permanents(P1, CRYPT)
         .library(P0, LANDS)
         .library(P1, LANDS)
 }
@@ -281,8 +281,8 @@ const fn mode(name: &'static str) -> Scenario {
     Scenario::new(name)
         .at(3, P0, TurnStep::PrecombatMain)
         .hand(P0, &[SINK_INTO_STUPOR])
-        .battlefield(P0, OFFERERS)
-        .battlefield(P1, ARTIFACTS)
+        .permanents(P0, OFFERERS)
+        .permanents(P1, ARTIFACTS)
         .library(
             P0,
             &[ELITE_SPELLBINDER, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS],
@@ -305,8 +305,8 @@ const fn stand(name: &'static str) -> Scenario {
     Scenario::new(name)
         .at(3, P0, TurnStep::PrecombatMain)
         .hand(P0, &[ISLAND])
-        .battlefield(P0, OURS)
-        .battlefield(P1, THEIRS)
+        .permanents(P0, OURS)
+        .permanents(P1, THEIRS)
         .library(P0, LANDS)
         .library(P1, LANDS)
 }

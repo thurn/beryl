@@ -17,7 +17,7 @@ const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND); 4];
 pub const DIG: &[Scenario] =
     &[
         Scenario::new("Looking at the top five cards of a library of three looks at them all")
-            .battlefield(P0, ISLANDS)
+            .permanents(P0, ISLANDS)
             .hand(P0, &[names::STOCK_UP])
             .library(P0, &[names::PLAINS, props::ARTIFACT, names::ISLAND])
             .library(P1, &[names::ISLAND])
@@ -53,7 +53,7 @@ const JACE: &str = names::JACE_THE_MIND_SCULPTOR;
 pub const PUT_BACK: &[Scenario] =
     &[
         Scenario::new("The card put back last is on top and is the next drawn")
-            .battlefield(P0, &[Permanent::new(JACE)])
+            .permanents(P0, &[Permanent::new(JACE)])
             .library(
                 P0,
                 &[
@@ -97,9 +97,9 @@ pub const TOP_OR_BOTTOM: &[Scenario] =
     &[
         Scenario::new("A spell's owner puts it on the bottom of their library")
             .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(P0, ISLANDS)
+            .permanents(P0, ISLANDS)
             .hand(P0, &[names::SUBTLETY])
-            .battlefield(
+            .permanents(
                 P1,
                 &[
                     Permanent::new(names::PLAINS),

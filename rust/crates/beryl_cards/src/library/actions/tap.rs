@@ -15,7 +15,7 @@ const TEFERI: &str = names::TEFERI_HERO_OF_DOMINARIA;
 pub const SCENARIOS: &[Scenario] =
     &[
         Scenario::new("Untapping up to two lands offers every tapped land and no other")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(TEFERI),
@@ -26,7 +26,7 @@ pub const SCENARIOS: &[Scenario] =
             )
             .hand(P0, &[props::ARTIFACT, props::ARTIFACT])
             .library(P0, &[names::ISLAND, names::ISLAND])
-            .battlefield(P1, &[Permanent::new(names::ISLAND).tapped()])
+            .permanents(P1, &[Permanent::new(names::ISLAND).tapped()])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::cast(P0, props::ARTIFACT),

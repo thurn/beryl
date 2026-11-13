@@ -72,7 +72,7 @@ pub mod scenarios {
         // Plains in P1's hand keeps P1's main phase a decision once the stack is empty.
         Scenario::new("Subtlety hard cast: the creature spell's owner puts it on top")
             .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::ISLAND),
@@ -82,7 +82,7 @@ pub mod scenarios {
                 ],
             )
             .hand(P0, &[names::SUBTLETY])
-            .battlefield(
+            .permanents(
                 P1,
                 &[
                     Permanent::new(names::PLAINS),
@@ -120,7 +120,7 @@ pub mod scenarios {
             .interaction(&[TEFERI])
             .at(2, P1, TurnStep::PrecombatMain)
             .hand(P0, &[names::SUBTLETY, props::UNTARGETED_SPELL])
-            .battlefield(
+            .permanents(
                 P1,
                 &[
                     Permanent::new(names::PLAINS),
@@ -164,7 +164,7 @@ pub mod scenarios {
         // P0 picks which blue card to exile.
         Scenario::new("Subtlety with mana and blue cards: cast or evoke, then which card to exile")
             .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::ISLAND),
@@ -181,7 +181,7 @@ pub mod scenarios {
                     props::PLANESWALKER,
                 ],
             )
-            .battlefield(
+            .permanents(
                 P1,
                 &[
                     Permanent::new(names::PLAINS),

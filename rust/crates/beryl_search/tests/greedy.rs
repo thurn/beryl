@@ -212,7 +212,7 @@ fn a_crew_cost_taps_the_least_valuable_creature() {
     };
     const CREW: Scenario = Scenario::new("crew")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(JACE_VRYNS_PRODIGY),

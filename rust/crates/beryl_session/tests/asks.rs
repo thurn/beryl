@@ -467,7 +467,7 @@ fn the_observer_does_not_see_handling_for_a_graveyard_exile_cost() {
 
     const SCENARIO: Scenario =
         Scenario::new("Oculus paid from the graveyard with a card still in hand")
-            .battlefield(P0, &[Permanent::new(names::ISLAND); 3])
+            .permanents(P0, &[Permanent::new(names::ISLAND); 3])
             .hand(P0, &[names::ABHORRENT_OCULUS, names::ISLAND])
             .graveyard(
                 P0,

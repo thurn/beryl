@@ -16,13 +16,13 @@ const CONVERTER: &str = names::CURRENCY_CONVERTER;
 pub const SCENARIOS: &[Scenario] =
     &[
         Scenario::new("A card exiled by another permanent is not exiled with this one")
-            .battlefield(
+            .permanents(
                 P0,
                 &[Permanent::new(CONVERTER), Permanent::new(names::PLAINS)],
             )
             .hand(P0, &[props::ARTIFACT, names::ISLAND])
             .library(P0, &[names::PLAINS])
-            .battlefield(P1, &[Permanent::new(props::SMALL_CREATURE)])
+            .permanents(P1, &[Permanent::new(props::SMALL_CREATURE)])
             .library(P1, &[names::PLAINS])
             .actions(&[
                 Action::cast(P0, props::ARTIFACT),

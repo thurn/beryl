@@ -68,7 +68,7 @@ const ISLANDS: &[Permanent] = &[
 const SEARCH: Scenario = Scenario::new("search")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[TRINKET_MAGE])
-    .battlefield(P0, ISLANDS)
+    .permanents(P0, ISLANDS)
     .library(
         P0,
         &[MANA_CRYPT, PLAINS, CURRENCY_CONVERTER, MANA_CRYPT, PLAINS],
@@ -79,7 +79,7 @@ const SEARCH: Scenario = Scenario::new("search")
 const SEARCH_FOR_ONE: Scenario = Scenario::new("search for the one")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[TRINKET_MAGE])
-    .battlefield(P0, ISLANDS)
+    .permanents(P0, ISLANDS)
     .library(P0, &[PLAINS, MANA_CRYPT, PLAINS, PLAINS])
     .library(P1, &[PLAINS; 6]);
 
@@ -171,7 +171,7 @@ fn a_search_lays_out_what_it_finds_and_may_find_nothing() {
 const LOOK: Scenario = Scenario::new("look")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[THUNDERTRAP_TRAINER])
-    .battlefield(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
+    .permanents(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
     .library(
         P0,
         &[PLAINS, COUNTERSPELL, ISLAND, REPRIEVE, PLAINS, PLAINS],
@@ -263,7 +263,7 @@ const PEEK: Scenario = Scenario::new("look at a hand")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[ELITE_SPELLBINDER])
     .hand(P1, &[PLAINS, COUNTERSPELL])
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(PLAINS),
@@ -322,7 +322,7 @@ fn a_look_at_a_hand_opens_with_its_one_card_picked() {
 const THIRST: Scenario = Scenario::new("discard")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[THIRST_FOR_DISCOVERY, COUNTERSPELL])
-    .battlefield(P0, ISLANDS)
+    .permanents(P0, ISLANDS)
     .library(P0, &[ISLAND, PLAINS, REPRIEVE, PLAINS, PLAINS, PLAINS])
     .library(P1, &[PLAINS; 6]);
 
@@ -596,7 +596,7 @@ fn a_card_is_exiled_from_the_hand_for_a_cost_by_a_button() {
 const DELVE: Scenario = Scenario::new("exile from a graveyard")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[ABHORRENT_OCULUS])
-    .battlefield(P0, ISLANDS)
+    .permanents(P0, ISLANDS)
     .graveyard(
         P0,
         &[
@@ -708,7 +708,7 @@ fn cards_are_exiled_from_a_graveyard_for_a_cost_from_the_bottom_up() {
 /// Counterspell.
 const DREAD: Scenario = Scenario::new("manifest dread")
     .at(3, P0, TurnStep::End)
-    .battlefield(P0, &[Permanent::new(ABHORRENT_OCULUS)])
+    .permanents(P0, &[Permanent::new(ABHORRENT_OCULUS)])
     .library(P0, &[SNAPCASTER_MAGE, COUNTERSPELL, ISLAND, PLAINS])
     .library(P1, &[PLAINS; 6]);
 

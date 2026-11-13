@@ -17,6 +17,19 @@ use beryl_card::{
     Castings, CounterKind, DecisionKind, FaceIx, ManaColor, ObjectAbility, Seat, TurnStep, Zone,
 };
 
+mod player;
+
+pub use player::{ME, Player, Resolve, THEM, advance_to, stack, wins};
+
+/// Everything a card file's scenarios module uses: `use beryl_scenario_types::prelude::*;`.
+pub mod prelude {
+    pub use crate::{
+        Action, Assertion, ME, P0, P1, Permanent, Pick, Player, Resolve, Scenario, THEM,
+        advance_to, stack, wins,
+    };
+    pub use beryl_card::{CounterKind, DecisionKind, ManaColor, TurnStep, Zone};
+}
+
 /// The players, in seat order.
 pub const P0: Seat = Seat::P0;
 pub const P1: Seat = Seat::P1;
@@ -54,13 +67,37 @@ pub struct Setup {
 pub struct PlayerSetup {
     pub life: i16,
     pub hand: &'static [&'static str],
-    pub battlefield: &'static [Permanent],
+    /// Untapped permanents with nothing else to say about them, by card name: lands, mostly.
+    /// They come before `permanents` on the battlefield.
+    pub battlefield: &'static [&'static str],
+    /// The permanents that are tapped, tokens, face down or otherwise not plain cards.
+    pub permanents: &'static [Permanent],
     /// Top first.
     pub graveyard: &'static [&'static str],
     pub exile: &'static [&'static str],
-    /// Top first: the whole library, in order.
+    /// Top first: the whole library, in order. A scenario that doesn't set it gets
+    /// [`FILLER_LIBRARY`].
     pub library: &'static [&'static str],
 }
+
+impl PlayerSetup {
+    /// Every permanent on this player's battlefield at the start, in order: the plain ones
+    /// named in `battlefield`, then `permanents`.
+    pub fn all_permanents(&self) -> impl Iterator<Item = Permanent> + '_ {
+        self.battlefield
+            .iter()
+            .map(|&card| Permanent::new(card))
+            .chain(self.permanents.iter().copied())
+    }
+}
+
+/// The library a player starts with when the scenario doesn't give one: a basic land, so that
+/// a player who draws a card doesn't lose the game
+/// ([CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b): "If a player attempted to
+/// draw a card from a library with no cards in it since the last time state-based actions were
+/// checked, that player loses the game"). A scenario that needs an empty library says
+/// `.library(player, &[])`.
+pub const FILLER_LIBRARY: &[&str] = &["Island"];
 
 /// A permanent on the battlefield at the start, under its owner's control. It has been there
 /// since its controller's turn began. A planeswalker has the printed loyalty of its face up
@@ -394,9 +431,10 @@ const NEW_PLAYER: PlayerSetup = PlayerSetup {
     life: 20,
     hand: &[],
     battlefield: &[],
+    permanents: &[],
     graveyard: &[],
     exile: &[],
-    library: &[],
+    library: FILLER_LIBRARY,
 };
 
 /// The builder: `Scenario::new(name)` starts at turn 1's precombat main phase, player 0
@@ -415,6 +453,20 @@ impl Scenario {
             actions: &[],
             interaction: &[],
         }
+    }
+
+    /// A setup with no name yet, for several scenarios that start from the same position:
+    /// `const BASE: Scenario = Scenario::setup().hand(..)`, then `BASE.titled("..")` in each.
+    pub const fn setup() -> Scenario {
+        Scenario::new("")
+    }
+
+    /// This scenario, with the name `name`: one of several that share a setup. (Not `named`:
+    /// the card build refuses `.named(` in a card file, which would type a face's name.)
+    #[must_use]
+    pub const fn titled(mut self, name: &'static str) -> Scenario {
+        self.name = name;
+        self
     }
 
     #[must_use]
@@ -444,9 +496,31 @@ impl Scenario {
         self
     }
 
+    /// Untapped permanents with nothing else to say about them, by card name.
     #[must_use]
-    pub const fn battlefield(mut self, player: Seat, cards: &'static [Permanent]) -> Scenario {
+    pub const fn battlefield(mut self, player: Seat, cards: &'static [&'static str]) -> Scenario {
         self.setup.players[player.index()].battlefield = cards;
+        self
+    }
+
+    /// Permanents that are tapped, tokens, face down, or have counters or exiled cards: see
+    /// [`Permanent`]'s builder.
+    #[must_use]
+    pub const fn permanents(mut self, player: Seat, permanents: &'static [Permanent]) -> Scenario {
+        self.setup.players[player.index()].permanents = permanents;
+        self
+    }
+
+    /// The whole battlefield of `player`, plain permanents included, for tools that rebuild
+    /// a setup: clears the plain list that [`Scenario::battlefield`] sets.
+    #[must_use]
+    pub const fn replace_permanents(
+        mut self,
+        player: Seat,
+        permanents: &'static [Permanent],
+    ) -> Scenario {
+        self.setup.players[player.index()].battlefield = &[];
+        self.setup.players[player.index()].permanents = permanents;
         self
     }
 
@@ -463,7 +537,7 @@ impl Scenario {
         self
     }
 
-    /// The whole library, top first.
+    /// The whole library, top first, in place of [`FILLER_LIBRARY`].
     #[must_use]
     pub const fn library(mut self, player: Seat, cards: &'static [&'static str]) -> Scenario {
         self.setup.players[player.index()].library = cards;

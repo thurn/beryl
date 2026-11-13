@@ -32,10 +32,10 @@ const ICEBERG: &[Permanent] = &[Permanent::new(AANGS_ICEBERG), PLAINS_, PLAINS_,
 const fn scry(name: &'static str) -> Scenario {
     Scenario::new(name)
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, ICEBERG)
+        .permanents(P0, ICEBERG)
         .hand(P0, &[COUNTERSPELL])
         .library(P0, &[COUNTERSPELL, ISLAND, PLAINS, ISLAND])
-        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
 }
 
@@ -48,7 +48,7 @@ pub(super) const VERBS: &[Scenario] = &[
     // opponent's turn returns their Stock Up to their hand with Reprieve, drawing a card.
     Scenario::new("verbs-zones")
         .at(3, P0, TurnStep::Upkeep)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 ISLAND_, ISLAND_, ISLAND_, ISLAND_, ISLAND_, ISLAND_, ISLAND_, PLAINS_, PLAINS_,
@@ -66,7 +66,7 @@ pub(super) const VERBS: &[Scenario] = &[
             ],
         )
         .library(P0, LANDS)
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(TRINKET_MAGE),
@@ -106,7 +106,7 @@ pub(super) const VERBS: &[Scenario] = &[
     // so Mana Crypt comes back, and attacks with Adeline, whose Human token enters attacking.
     Scenario::new("verbs-piles")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(JACE_WIELDER_OF_MYSTERIES),
@@ -126,7 +126,7 @@ pub(super) const VERBS: &[Scenario] = &[
         .hand(P0, &[SNAPCASTER_MAGE, PORTABLE_HOLE, ELITE_SPELLBINDER])
         .graveyard(P0, &[THIRST_FOR_DISCOVERY])
         .library(P0, DRAWS)
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(ADELINE_RESPLENDENT_CATHAR),
@@ -183,7 +183,7 @@ pub(super) const VERBS: &[Scenario] = &[
     // untaps and Mana Crypt flips its coin.
     Scenario::new("verbs-combat")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(TRINKET_MAGE),
@@ -195,7 +195,7 @@ pub(super) const VERBS: &[Scenario] = &[
             ],
         )
         .library(P0, LANDS)
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(BEZA_THE_BOUNDING_SPRING),
@@ -227,10 +227,10 @@ pub(super) const VERBS: &[Scenario] = &[
     Scenario::new("verbs-burn")
         .seed(BURN_SEED)
         .at(2, P1, TurnStep::PostcombatMain)
-        .battlefield(P0, &[Permanent::new(MANA_CRYPT), ISLAND_, ISLAND_, ISLAND_])
+        .permanents(P0, &[Permanent::new(MANA_CRYPT), ISLAND_, ISLAND_, ISLAND_])
         .hand(P0, &[THIRST_FOR_DISCOVERY])
         .library(P0, LANDS)
-        .battlefield(P1, &[ISLAND_, ISLAND_, ISLAND_])
+        .permanents(P1, &[ISLAND_, ISLAND_, ISLAND_])
         .hand(P1, &[STOCK_UP])
         .library(P1, LANDS),
     // Changes on a card where it lies: a seventh land piles the first seat's lands; its
@@ -242,7 +242,7 @@ pub(super) const VERBS: &[Scenario] = &[
     // chooses it, so both seats' recordings play the same game.
     Scenario::new("verbs-place")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(THE_WANDERING_EMPEROR),
@@ -257,7 +257,7 @@ pub(super) const VERBS: &[Scenario] = &[
         )
         .hand(P0, &[ISLAND, THIEVING_SKYDIVER, SWIFT_RECONFIGURATION])
         .library(P0, LANDS)
-        .battlefield(P1, &[Permanent::new(CURRENCY_CONVERTER), ISLAND_, PLAINS_])
+        .permanents(P1, &[Permanent::new(CURRENCY_CONVERTER), ISLAND_, PLAINS_])
         .hand(P1, &[OUST])
         .library(P1, LANDS)
         .actions(&[
@@ -283,7 +283,7 @@ pub(super) const VERBS: &[Scenario] = &[
     // cast in its own main phase, which asks it once more before its recording ends.
     Scenario::new("verbs-reveal")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(SNAPCASTER_MAGE).face_down(),
@@ -294,7 +294,7 @@ pub(super) const VERBS: &[Scenario] = &[
         )
         .hand(P0, &[TRINKET_MAGE])
         .library(P0, &[ISLAND, PLAINS, ISLAND, MANA_CRYPT, PLAINS, ISLAND])
-        .battlefield(P1, &[PLAINS_, PLAINS_])
+        .permanents(P1, &[PLAINS_, PLAINS_])
         .hand(P1, &[OUST, PORTABLE_HOLE])
         .library(P1, LANDS)
         .actions(&[

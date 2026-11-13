@@ -11,7 +11,7 @@ use crate::names;
 pub const SCENARIOS: &[Scenario] = &[Scenario::new("A flip won does nothing a loss would")
     .seed(WON_SEED)
     .at(1, P0, TurnStep::PostcombatMain)
-    .battlefield(P1, &[Permanent::new(names::MANA_CRYPT)])
+    .permanents(P1, &[Permanent::new(names::MANA_CRYPT)])
     .library(P0, &[names::ISLAND])
     .library(P1, &[names::ISLAND, names::ISLAND])
     .actions(&[

@@ -372,7 +372,7 @@ pub(super) fn playground_probes(def: &'static CardDef) -> Vec<Moment> {
 /// affordability and payment; this only builds a testing position.
 pub(super) fn fund_cast(def: &CardDef, mut board: Scenario) -> Scenario {
     let cost = def.front().cost;
-    let mut permanents = board.setup.players[0].battlefield.to_vec();
+    let mut permanents: Vec<Permanent> = board.setup.players[0].all_permanents().collect();
     let basics = ["Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes"];
     for (name, count) in basics.into_iter().zip(cost.symbols) {
         if beryl_cards::CARDS.cards().iter().any(|d| d.name == name) {
@@ -386,6 +386,6 @@ pub(super) fn fund_cast(def: &CardDef, mut board: Scenario) -> Scenario {
         Permanent::new(ISLAND),
         usize::from(cost.generic) + 2,
     ));
-    board = board.battlefield(P0, leak(permanents));
+    board = board.replace_permanents(P0, leak(permanents));
     board
 }

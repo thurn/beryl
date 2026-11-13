@@ -191,7 +191,7 @@ use beryl_cards::names;
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 
 const EXILE_PAYMENT_SETUP: Scenario = Scenario::new("mana before an exile selection")
-    .battlefield(P0, &[Permanent::new(names::ISLAND); 3])
+    .permanents(P0, &[Permanent::new(names::ISLAND); 3])
     .hand(P0, &[names::ABHORRENT_OCULUS])
     .graveyard(
         P0,

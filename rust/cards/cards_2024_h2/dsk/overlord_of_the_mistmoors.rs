@@ -125,7 +125,7 @@ pub mod scenarios {
         // of its controller's end steps removes one; with the last gone it is a 6/6.
         Scenario::new("Overlord cast for impending")
             .hand(P0, &[OVERLORD])
-            .battlefield(P0, plains(4))
+            .permanents(P0, plains(4))
             .library(P0, &[names::PLAINS, names::PLAINS, names::PLAINS])
             .library(P1, &[names::ISLAND, names::ISLAND, names::ISLAND])
             .actions(&[
@@ -186,7 +186,7 @@ pub mod scenarios {
         // are not attacking.
         Scenario::new("Overlord cast in full, then attacking")
             .hand(P0, &[OVERLORD])
-            .battlefield(P0, plains(7))
+            .permanents(P0, plains(7))
             .library(P0, &[names::PLAINS])
             .library(P1, &[names::ISLAND])
             .actions(&[

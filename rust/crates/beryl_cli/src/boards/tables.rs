@@ -19,10 +19,10 @@ use super::shorthand::{FISH_TOKEN, ISLAND_, LANDS, PLAINS_, SAMURAI_TOKEN, TREAS
 pub(super) const fn converter(name: &'static str, actions: &'static [Action]) -> Scenario {
     Scenario::new(name)
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, CONVERTER_TABLE)
+        .permanents(P0, CONVERTER_TABLE)
         .hand(P0, &[THIRST_FOR_DISCOVERY])
         .library(P0, &[TUNDRA, MANA_CRYPT, COUNTERSPELL, ISLAND, PLAINS])
-        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(actions)
 }
@@ -37,7 +37,7 @@ pub(super) const fn wu_mirror(
     Scenario::new(name)
         .at(14, active, TurnStep::PrecombatMain)
         .life(P0, 14)
-        .battlefield(P0, MIRROR_YOURS)
+        .permanents(P0, MIRROR_YOURS)
         .hand(
             P0,
             &[
@@ -68,7 +68,7 @@ pub(super) const fn wu_mirror(
         )
         .library(P0, LANDS)
         .life(P1, 11)
-        .battlefield(P1, MIRROR_THEIRS)
+        .permanents(P1, MIRROR_THEIRS)
         .hand(P1, &[FRACTURED_IDENTITY, COUNTERSPELL, REPRIEVE])
         .graveyard(
             P1,

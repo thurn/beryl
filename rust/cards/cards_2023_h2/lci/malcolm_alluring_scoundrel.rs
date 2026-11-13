@@ -110,7 +110,7 @@ pub mod scenarios {
         // Four hits: each loots, and the fourth discards the Spellbinder it drew and casts it free
         // in the combat damage step.
         Scenario::new("Malcolm's fourth chorus counter casts the discard")
-            .battlefield(P0, &[Permanent::new(MALCOLM)])
+            .permanents(P0, &[Permanent::new(MALCOLM)])
             // Malcolm's draws in turns 1, 3, 5 and 7 and the draw steps of 3, 5 and 7: Islands,
             // then the Spellbinder last.
             .library(

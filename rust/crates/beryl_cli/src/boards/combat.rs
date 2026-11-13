@@ -20,9 +20,9 @@ pub(super) const COMBAT: &[Scenario] = &[
     Scenario::new("game-over")
         .at(3, P0, TurnStep::PrecombatMain)
         .life(P0, 3)
-        .battlefield(P0, &[PLAINS_, ISLAND_])
+        .permanents(P0, &[PLAINS_, ISLAND_])
         .library(P0, LANDS)
-        .battlefield(
+        .permanents(
             P1,
             &[Permanent::new(BEZA_THE_BOUNDING_SPRING), PLAINS_, ISLAND_],
         )
@@ -38,7 +38,7 @@ pub(super) const COMBAT: &[Scenario] = &[
     // whose triggers wait together.
     Scenario::new("order-long")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(ADELINE_RESPLENDENT_CATHAR),
@@ -48,7 +48,7 @@ pub(super) const COMBAT: &[Scenario] = &[
             ],
         )
         .library(P0, LANDS)
-        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[
             choose(P0, DecisionKind::Attacker, ADELINE_RESPLENDENT_CATHAR),
@@ -59,9 +59,9 @@ pub(super) const COMBAT: &[Scenario] = &[
     // and its draw from the empty library wins them the game instead.
     Scenario::new("game-over-jace")
         .at(4, P1, TurnStep::PrecombatMain)
-        .battlefield(P0, &[ISLAND_, PLAINS_])
+        .permanents(P0, &[ISLAND_, PLAINS_])
         .library(P0, LANDS)
-        .battlefield(
+        .permanents(
             P1,
             &[Permanent::new(JACE_WIELDER_OF_MYSTERIES), ISLAND_, PLAINS_],
         )
@@ -74,7 +74,7 @@ pub(super) const COMBAT: &[Scenario] = &[
     // then Trinket Mage, second in its row, blocks Beza, first in hers.
     Scenario::new("combat-blockers")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(SNAPCASTER_MAGE),
@@ -91,7 +91,7 @@ pub(super) const COMBAT: &[Scenario] = &[
             ],
         )
         .library(P0, LANDS)
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(BEZA_THE_BOUNDING_SPRING),
@@ -119,7 +119,7 @@ pub(super) const COMBAT: &[Scenario] = &[
     // turns on, while Snapcaster Mage stays home.
     Scenario::new("combat-declare")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(ELITE_SPELLBINDER),
@@ -135,7 +135,7 @@ pub(super) const COMBAT: &[Scenario] = &[
         )
         .hand(P0, &[OVERLORD_OF_THE_MISTMOORS])
         .library(P0, LANDS)
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(STAFF_OF_THE_STORYTELLER),
@@ -159,7 +159,7 @@ pub(super) const COMBAT: &[Scenario] = &[
     // blocks Trinket Mage, and Subtlety flies over.
     Scenario::new("combat-double-block")
         .at(4, P1, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(SNAPCASTER_MAGE),
@@ -178,7 +178,7 @@ pub(super) const COMBAT: &[Scenario] = &[
             ],
         )
         .library(P0, LANDS)
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(BEZA_THE_BOUNDING_SPRING),
@@ -217,9 +217,9 @@ pub(super) const COMBAT: &[Scenario] = &[
     // what it attacks.
     Scenario::new("attack-past-walker")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, &[Permanent::new(SNAPCASTER_MAGE), ISLAND_, PLAINS_])
+        .permanents(P0, &[Permanent::new(SNAPCASTER_MAGE), ISLAND_, PLAINS_])
         .library(P0, LANDS)
-        .battlefield(
+        .permanents(
             P1,
             &[Permanent::new(THE_WANDERING_EMPEROR), ISLAND_, PLAINS_],
         )
@@ -229,12 +229,12 @@ pub(super) const COMBAT: &[Scenario] = &[
     // attacking, asks what it attacks.
     Scenario::new("attack-token")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[Permanent::new(ADELINE_RESPLENDENT_CATHAR), PLAINS_, PLAINS_],
         )
         .library(P0, LANDS)
-        .battlefield(
+        .permanents(
             P1,
             &[Permanent::new(THE_WANDERING_EMPEROR), ISLAND_, PLAINS_],
         )
@@ -249,7 +249,7 @@ pub(super) const COMBAT: &[Scenario] = &[
     // Snapcaster Mage is tapped.
     Scenario::new("crew")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(JACE_VRYNS_PRODIGY),
@@ -261,7 +261,7 @@ pub(super) const COMBAT: &[Scenario] = &[
         )
         .hand(P0, &[SWIFT_RECONFIGURATION])
         .library(P0, LANDS)
-        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[
             Action::cast(P0, SWIFT_RECONFIGURATION),

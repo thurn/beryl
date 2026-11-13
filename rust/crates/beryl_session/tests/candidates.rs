@@ -107,7 +107,7 @@ fn a_loyalty_ability_says_which_of_the_cards_abilities_it_is() {
 /// to attack, each with a trigger on attacking.
 const OVERLORD: Scenario = Scenario::new("overlord attacks")
     .at(3, P0, TurnStep::PrecombatMain)
-    .battlefield(
+    .permanents(
         P0,
         &[
             Permanent::new(OVERLORD_OF_THE_MISTMOORS),

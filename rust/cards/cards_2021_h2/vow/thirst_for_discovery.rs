@@ -79,7 +79,7 @@ pub mod scenarios {
 
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("Thirst for Discovery: discarding a basic land instead")
-            .battlefield(P0, ISLANDS)
+            .permanents(P0, ISLANDS)
             .hand(P0, &[THIRST])
             .library(P0, DRAWS)
             .library(P1, &[names::ISLAND])
@@ -92,7 +92,7 @@ pub mod scenarios {
             ]),
         // Declining, P0 discards two cards, and the Plains may be one of them.
         Scenario::new("Thirst for Discovery: discarding two cards with a basic land in hand")
-            .battlefield(P0, ISLANDS)
+            .permanents(P0, ISLANDS)
             .hand(P0, &[THIRST])
             .library(P0, DRAWS)
             .library(P1, &[names::ISLAND])
@@ -108,7 +108,7 @@ pub mod scenarios {
             ]),
         // Tundra is a Plains Island but not basic: no choice, two discards.
         Scenario::new("Thirst for Discovery: two nonbasic cards with no basic land")
-            .battlefield(P0, ISLANDS)
+            .permanents(P0, ISLANDS)
             .hand(P0, &[THIRST])
             .library(
                 P0,
@@ -132,7 +132,7 @@ pub mod scenarios {
         // having drawn from an empty library
         // ([CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b)).
         Scenario::new("Thirst for Discovery with fewer than two cards to discard")
-            .battlefield(P0, ISLANDS)
+            .permanents(P0, ISLANDS)
             .hand(P0, &[THIRST])
             .library(P0, &[props::ARTIFACT])
             .library(P1, &[names::ISLAND])

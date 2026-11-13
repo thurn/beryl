@@ -24,7 +24,7 @@ pub(super) const TABLE: &[Scenario] = &[
     // a land and Stock Up, and the human has nothing to do until their next main phase.
     Scenario::new("opponent-turn")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(P0, &[ISLAND_, ISLAND_, PLAINS_])
+        .permanents(P0, &[ISLAND_, ISLAND_, PLAINS_])
         .hand(P0, &[THUNDERTRAP_TRAINER])
         .library(
             P0,
@@ -38,7 +38,7 @@ pub(super) const TABLE: &[Scenario] = &[
                 JACE_THE_MIND_SCULPTOR,
             ],
         )
-        .battlefield(P1, &[ISLAND_, ISLAND_, ISLAND_])
+        .permanents(P1, &[ISLAND_, ISLAND_, ISLAND_])
         .hand(P1, &[PLAINS, STOCK_UP])
         .library(P1, LANDS)
         .actions(&[
@@ -68,7 +68,7 @@ pub(super) const TABLE: &[Scenario] = &[
     // Skydiver just cast beside one that has been there.
     Scenario::new("marks")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(TRINKET_MAGE).counters(CounterKind::PlusOne, 2),
@@ -84,14 +84,14 @@ pub(super) const TABLE: &[Scenario] = &[
         )
         .hand(P0, &[THIEVING_SKYDIVER])
         .library(P0, LANDS)
-        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::cast(P0, THIEVING_SKYDIVER)]),
     // A Snapcaster Mage flashed in beside one that has been there, and a Thundertrap Trainer
     // cast with offspring beside its token copy; a land to play keeps the human's priority.
     Scenario::new("signals")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(SNAPCASTER_MAGE),
@@ -107,7 +107,7 @@ pub(super) const TABLE: &[Scenario] = &[
         )
         .hand(P0, &[SNAPCASTER_MAGE, THUNDERTRAP_TRAINER, ISLAND])
         .library(P0, LANDS)
-        .battlefield(P1, &[ISLAND_, PLAINS_])
+        .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[
             Action::cast(P0, SNAPCASTER_MAGE),
@@ -117,7 +117,7 @@ pub(super) const TABLE: &[Scenario] = &[
     // the human's priority after combat.
     Scenario::new("marks-damage")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(ABHORRENT_OCULUS),
@@ -129,7 +129,7 @@ pub(super) const TABLE: &[Scenario] = &[
         )
         .hand(P0, &[PLAINS])
         .library(P0, LANDS)
-        .battlefield(P1, &[Permanent::new(SUBTLETY), ISLAND_, PLAINS_])
+        .permanents(P1, &[Permanent::new(SUBTLETY), ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[
             choose(P0, DecisionKind::Attacker, ABHORRENT_OCULUS),
@@ -141,7 +141,7 @@ pub(super) const TABLE: &[Scenario] = &[
     // Skydiver steals Mana Crypt.
     Scenario::new("tokens")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(SNAPCASTER_MAGE),
@@ -168,7 +168,7 @@ pub(super) const TABLE: &[Scenario] = &[
             ],
         )
         .library(P0, LANDS)
-        .battlefield(P1, &[Permanent::new(MANA_CRYPT), ISLAND_, PLAINS_])
+        .permanents(P1, &[Permanent::new(MANA_CRYPT), ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[
             Action::cast(P0, GET_LOST),
@@ -182,7 +182,7 @@ pub(super) const TABLE: &[Scenario] = &[
     // Snapcaster Mage could be its target.
     Scenario::new("walker-low")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(TEFERI_TIME_RAVELER).counters(CounterKind::Loyalty, 1),
@@ -191,14 +191,14 @@ pub(super) const TABLE: &[Scenario] = &[
             ],
         )
         .library(P0, LANDS)
-        .battlefield(P1, &[Permanent::new(SNAPCASTER_MAGE), ISLAND_, PLAINS_])
+        .permanents(P1, &[Permanent::new(SNAPCASTER_MAGE), ISLAND_, PLAINS_])
         .library(P1, LANDS),
     // A crowded table, nine and ten nonland permanents a side, among them planeswalkers, a pile
     // of twins, counters and a tapped one: the opponent casts Stock Up, which the human may
     // counter.
     Scenario::new("crowded")
         .at(4, P1, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(SNAPCASTER_MAGE),
@@ -220,7 +220,7 @@ pub(super) const TABLE: &[Scenario] = &[
         )
         .hand(P0, &[COUNTERSPELL, MANA_DRAIN, OUST, ISLAND])
         .library(P0, LANDS)
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(BEZA_THE_BOUNDING_SPRING),
@@ -249,7 +249,7 @@ pub(super) const TABLE: &[Scenario] = &[
     // every permanent (by-lomm).
     Scenario::new("piles-crowded")
         .at(5, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(SNAPCASTER_MAGE),
@@ -283,7 +283,7 @@ pub(super) const TABLE: &[Scenario] = &[
             &[TIME_SPIRAL, SUBTLETY, MALCOLM_ALLURING_SCOUNDREL, GET_LOST],
         )
         .library(P0, &[ISLAND; 30])
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(TRINKET_MAGE),
@@ -318,7 +318,7 @@ pub(super) const TABLE: &[Scenario] = &[
     // Hole in theirs.
     Scenario::new("walkers")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(TEFERI_HERO_OF_DOMINARIA).counters(CounterKind::Loyalty, 9),
@@ -334,7 +334,7 @@ pub(super) const TABLE: &[Scenario] = &[
         )
         .hand(P0, &[PORTABLE_HOLE, COUNTERSPELL, OUST, ISLAND])
         .library(P0, LANDS)
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(JACE_VRYNS_PRODIGY)
@@ -380,7 +380,7 @@ pub(super) const TABLE: &[Scenario] = &[
     // the opponent's Jace, Telepath Unbound −9 in theirs, both left on the battlefield.
     Scenario::new("emblems")
         .at(3, P0, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(TEFERI_HERO_OF_DOMINARIA).counters(CounterKind::Loyalty, 9),
@@ -389,7 +389,7 @@ pub(super) const TABLE: &[Scenario] = &[
             ],
         )
         .library(P0, LANDS)
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(JACE_VRYNS_PRODIGY)

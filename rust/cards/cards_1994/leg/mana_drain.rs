@@ -64,13 +64,13 @@ pub mod scenarios {
             "Mana Drain: the countered spell's mana value at the caster's next main phase",
         )
         .at(2, P1, TurnStep::PrecombatMain)
-        .battlefield(
+        .permanents(
             P0,
             &[Permanent::new(names::ISLAND), Permanent::new(names::ISLAND)],
         )
         .hand(P0, &[names::MANA_DRAIN])
         .library(P0, &[names::PLAINS])
-        .battlefield(
+        .permanents(
             P1,
             &[
                 Permanent::new(names::ISLAND),
@@ -110,7 +110,7 @@ pub mod scenarios {
         ]),
         // P1 counters P0's artifact with Counterspell, and P0 drains the Counterspell.
         Scenario::new("Mana Drain on the caster's own turn: mana at that turn's postcombat main")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::ISLAND),
@@ -119,7 +119,7 @@ pub mod scenarios {
                 ],
             )
             .hand(P0, &[props::ARTIFACT, names::MANA_DRAIN, names::PLAINS])
-            .battlefield(
+            .permanents(
                 P1,
                 &[Permanent::new(names::ISLAND), Permanent::new(names::ISLAND)],
             )

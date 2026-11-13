@@ -43,9 +43,9 @@ pub mod scenarios {
         const PLAINS: &[Permanent] = &[Permanent::new(names::PLAINS)];
         const SPELLBINDERS: &[Permanent] = &[Permanent::new(SPELLBINDER)];
         Scenario::new(name)
-            .battlefield(P0, PLAINS)
+            .permanents(P0, PLAINS)
             .hand(P0, &[names::OUST, names::PLAINS])
-            .battlefield(P1, SPELLBINDERS)
+            .permanents(P1, SPELLBINDERS)
             .library(P1, top)
     }
 
@@ -62,7 +62,7 @@ pub mod scenarios {
         // ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c)): P1's only
         // permanent is a noncreature artifact, so passing is P0's only option.
         Scenario::new("Oust can't be cast without a target")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::PLAINS),
@@ -71,7 +71,7 @@ pub mod scenarios {
                 ],
             )
             .hand(P0, &[names::OUST])
-            .battlefield(P1, &[Permanent::new(props::ARTIFACT)])
+            .permanents(P1, &[Permanent::new(props::ARTIFACT)])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::AdvanceTo {
@@ -127,7 +127,7 @@ pub mod scenarios {
         // UI regression by-97z: the lower spell's target stays legible beneath a response. P0's
         // own Counterspell keeps each of P0's priorities a decision.
         Scenario::new("Oust beneath an opposing counterspell")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::PLAINS),
@@ -136,7 +136,7 @@ pub mod scenarios {
                 ],
             )
             .hand(P0, &[names::OUST, props::INSTANT, names::PLAINS])
-            .battlefield(
+            .permanents(
                 P1,
                 &[
                     Permanent::new(SPELLBINDER),

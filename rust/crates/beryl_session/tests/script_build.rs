@@ -49,17 +49,17 @@ fn a_spell_flies_to_the_stack_and_a_counterspell_takes_it_off() {
     assert_eq!(
         first,
         text(&[
-            "fly #256 (Portable Hole) hand>stack cast <- opponent",
-            "tap #258 (Plains) <- opponent",
-            "& streak #258 > #256 white 1 <- #258",
+            "fly #257 (Portable Hole) hand>stack cast <- opponent",
+            "tap #259 (Plains) <- opponent",
+            "& streak #259 > #257 white 1 <- #259",
         ])
     );
     assert_eq!(
         second,
         text(&[
-            "fly #256 (Portable Hole) hand>stack cast <- you",
-            "tap #258 (Plains) <- you",
-            "& streak #258 > #256 white 1 <- #258",
+            "fly #257 (Portable Hole) hand>stack cast <- you",
+            "tap #259 (Plains) <- you",
+            "& streak #259 > #257 white 1 <- #259",
         ])
     );
     // The first answers. Their Islands tap together, each sending its mana into the spell; the
@@ -69,29 +69,29 @@ fn a_spell_flies_to_the_stack_and_a_counterspell_takes_it_off() {
     assert_eq!(
         first,
         text(&[
-            "fly #1 (Counterspell) hand>stack cast at #256 <- you",
-            "& +point hostile-target #1 > #256",
+            "fly #1 (Counterspell) hand>stack cast at #257 <- you",
+            "& +point hostile-target #1 > #257",
             "tap #0 (Island) <- you",
             "& tap #2 (Island) <- you",
             "& streak #0 > #1 blue 1 <- #0",
             "& streak #2 > #1 blue 1 <- #2",
-            "-point hostile-target #1 > #256",
-            "vanish #256 (Portable Hole) stack>graveyard counter <- #1",
+            "-point hostile-target #1 > #257",
+            "vanish #257 (Portable Hole) stack>graveyard counter <- #1",
             "& vanish #1 (Counterspell) stack>graveyard resolve <- #1",
         ])
     );
     assert_eq!(
         second,
         text(&[
-            "fly #1 (Counterspell) hand>stack cast at #256 <- opponent",
-            "& +point hostile-target #1 > #256",
+            "fly #1 (Counterspell) hand>stack cast at #257 <- opponent",
+            "& +point hostile-target #1 > #257",
             "tap #0 (Island) <- opponent",
             "& tap #2 (Island) <- opponent",
             "& streak #0 > #1 blue 1 <- #0",
             "& streak #2 > #1 blue 1 <- #2",
             "dwell #1",
-            "-point hostile-target #1 > #256",
-            "vanish #256 (Portable Hole) stack>graveyard counter <- #1",
+            "-point hostile-target #1 > #257",
+            "vanish #257 (Portable Hole) stack>graveyard counter <- #1",
             "& vanish #1 (Counterspell) stack>graveyard resolve <- #1",
         ])
     );
@@ -393,11 +393,11 @@ fn a_sweepers_creatures_vanish_together() {
         2,
     );
     let lines = [
-        "vanish #4 (Adeline, Resplendent Cathar) battlefield>graveyard destroy <- #0",
-        "& vanish #512 battlefield>gone destroy <- #0",
-        "& vanish #258 (Elite Spellbinder) battlefield>graveyard destroy <- #0",
-        "& vanish #257 (Snapcaster Mage) battlefield>graveyard destroy <- #0",
-        "vanish #0 (Damn) stack>graveyard resolve <- #0",
+        "vanish #0 (Adeline, Resplendent Cathar) battlefield>graveyard destroy <- #1",
+        "& vanish #512 battlefield>gone destroy <- #1",
+        "& vanish #257 (Elite Spellbinder) battlefield>graveyard destroy <- #1",
+        "& vanish #256 (Snapcaster Mage) battlefield>graveyard destroy <- #1",
+        "vanish #1 (Damn) stack>graveyard resolve <- #1",
     ];
     assert_eq!(first, text(&lines));
     assert_eq!(second, text(&lines));
@@ -503,28 +503,28 @@ fn a_permanent_put_into_a_library_takes_its_place() {
     assert_eq!(
         first,
         text(&[
-            "fly #0 (Oust) hand>stack cast at #256 <- you",
-            "& +point hostile-target #0 > #256",
-            "tap #2 (Plains) <- you",
-            "& streak #2 > #0 white 1 <- #2",
-            "-point hostile-target #0 > #256",
-            "vanish #256 (Elite Spellbinder) battlefield>library @1 effect <- #0",
-            "count opponent life 23 <- #0",
-            "vanish #0 (Oust) stack>graveyard resolve <- #0",
+            "fly #1 (Oust) hand>stack cast at #256 <- you",
+            "& +point hostile-target #1 > #256",
+            "tap #3 (Plains) <- you",
+            "& streak #3 > #1 white 1 <- #3",
+            "-point hostile-target #1 > #256",
+            "vanish #256 (Elite Spellbinder) battlefield>library @1 effect <- #1",
+            "count opponent life 23 <- #1",
+            "vanish #1 (Oust) stack>graveyard resolve <- #1",
         ])
     );
     assert_eq!(
         second,
         text(&[
-            "fly #0 (Oust) hand>stack cast at #256 <- opponent",
-            "& +point hostile-target #0 > #256",
-            "tap #2 (Plains) <- opponent",
-            "& streak #2 > #0 white 1 <- #2",
-            "dwell #0",
-            "-point hostile-target #0 > #256",
-            "vanish #256 (Elite Spellbinder) battlefield>library @1 effect <- #0",
-            "count you life 23 <- #0",
-            "vanish #0 (Oust) stack>graveyard resolve <- #0",
+            "fly #1 (Oust) hand>stack cast at #256 <- opponent",
+            "& +point hostile-target #1 > #256",
+            "tap #3 (Plains) <- opponent",
+            "& streak #3 > #1 white 1 <- #3",
+            "dwell #1",
+            "-point hostile-target #1 > #256",
+            "vanish #256 (Elite Spellbinder) battlefield>library @1 effect <- #1",
+            "count you life 23 <- #1",
+            "vanish #1 (Oust) stack>graveyard resolve <- #1",
         ])
     );
 }

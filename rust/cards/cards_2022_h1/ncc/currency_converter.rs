@@ -134,7 +134,7 @@ pub mod scenarios {
         // The loot discards Oust, which the trigger exiles. Next turn the Converter puts it into
         // the graveyard: a nonland card, so a Rogue.
         Scenario::new("Currency Converter exiles its own loot's discard for a Rogue")
-            .battlefield(P0, LOOTING)
+            .permanents(P0, LOOTING)
             .hand(P0, &[names::OUST])
             .library(P0, &[names::PLAINS, names::PLAINS, names::PLAINS])
             .library(P1, &[names::ISLAND, names::ISLAND])
@@ -168,7 +168,7 @@ pub mod scenarios {
         // nothing to return and makes nothing.
         Scenario::new("Currency Converter declines to exile another loot's discard")
             .interaction(&[names::JACE_VRYNS_PRODIGY])
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(CONVERTER),
@@ -195,7 +195,7 @@ pub mod scenarios {
         // each card, both exiled.
         Scenario::new("Currency Converter exiles Thirst for Discovery's discards")
             .interaction(&[names::THIRST_FOR_DISCOVERY])
-            .battlefield(P0, CASTING_THIRST)
+            .permanents(P0, CASTING_THIRST)
             .hand(P0, &[names::THIRST_FOR_DISCOVERY])
             .library(
                 P0,
@@ -226,7 +226,7 @@ pub mod scenarios {
         // both. Next turn it returns the land of the two, for a Treasure.
         Scenario::new("Currency Converter chooses among its exiled cards")
             .interaction(&[names::JACE_VRYNS_PRODIGY])
-            .battlefield(P0, LOOTING_WITH_JACE)
+            .permanents(P0, LOOTING_WITH_JACE)
             .hand(P0, &[names::ISLAND, names::OUST])
             .library(P0, &[names::PLAINS, names::PLAINS, names::PLAINS])
             .library(P1, &[names::ISLAND, names::ISLAND])
@@ -264,10 +264,10 @@ pub mod scenarios {
         // to the cards that Converter exiled (CR 607.2a), so Oust goes to the graveyard for a
         // Rogue. The creature makes the target a choice, which the oracles are then told.
         Scenario::new("Currency Converter's ability returns a card after the Converter left")
-            .battlefield(P0, LOOTING_BESIDE_A_CREATURE)
+            .permanents(P0, LOOTING_BESIDE_A_CREATURE)
             .hand(P0, &[names::OUST, props::SMALL_CREATURE])
             .library(P0, &[names::PLAINS, names::PLAINS, names::PLAINS])
-            .battlefield(P1, ISLANDS)
+            .permanents(P1, ISLANDS)
             .hand(P1, &[names::SINK_INTO_STUPOR])
             .library(P1, &[names::ISLAND, names::ISLAND])
             .actions(&[
@@ -294,10 +294,10 @@ pub mod scenarios {
         // P1 returns the Converter to P0's hand after it exiled Oust. Recast, it is a new object
         // (CR 400.7), and Oust was exiled with the old one: its {T} finds nothing.
         Scenario::new("Currency Converter's exiled cards stay with the Converter that exiled them")
-            .battlefield(P0, LOOTING_AND_RECASTING)
+            .permanents(P0, LOOTING_AND_RECASTING)
             .hand(P0, &[names::OUST])
             .library(P0, &[names::PLAINS, names::PLAINS])
-            .battlefield(P1, ISLANDS)
+            .permanents(P1, ISLANDS)
             .hand(P1, &[names::SINK_INTO_STUPOR])
             .library(P1, &[names::ISLAND])
             .actions(&[

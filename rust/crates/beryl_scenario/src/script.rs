@@ -186,8 +186,11 @@ pub fn setup_source(scenario: &Scenario) -> String {
             let _ = writeln!(text, "    .life(P{p}, {})", player.life);
         }
         if !player.battlefield.is_empty() {
-            let permanents: Vec<String> = player.battlefield.iter().map(permanent_source).collect();
-            let _ = writeln!(text, "    .battlefield(P{p}, &[{}])", permanents.join(", "));
+            let _ = writeln!(text, "    .battlefield(P{p}, &{:?})", player.battlefield);
+        }
+        if !player.permanents.is_empty() {
+            let permanents: Vec<String> = player.permanents.iter().map(permanent_source).collect();
+            let _ = writeln!(text, "    .permanents(P{p}, &[{}])", permanents.join(", "));
         }
         for (zone, cards) in [
             ("hand", player.hand),

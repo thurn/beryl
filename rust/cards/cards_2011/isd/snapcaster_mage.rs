@@ -75,7 +75,7 @@ pub mod scenarios {
         // the graveyard. The Plains in P1's hand keeps P1's main phase a decision afterward.
         Scenario::new("Snapcaster Mage: flashback a counterspell, then exile it")
             .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::ISLAND),
@@ -86,7 +86,7 @@ pub mod scenarios {
             )
             .hand(P0, &[SNAPCASTER])
             .graveyard(P0, &[names::COUNTERSPELL])
-            .battlefield(
+            .permanents(
                 P1,
                 &[
                     Permanent::new(names::ISLAND),
@@ -113,7 +113,7 @@ pub mod scenarios {
         // resolves.
         Scenario::new("Snapcaster Mage: a flashback spell returned to hand is exiled")
             .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::ISLAND),
@@ -124,7 +124,7 @@ pub mod scenarios {
             )
             .hand(P0, &[SNAPCASTER])
             .graveyard(P0, &[names::COUNTERSPELL])
-            .battlefield(
+            .permanents(
                 P1,
                 &[
                     Permanent::new(names::PLAINS),
@@ -163,7 +163,7 @@ pub mod scenarios {
         // two candidates are passing and the {B}{B} cast.
         Scenario::new("Snapcaster Mage: flashback is the one alternative cost")
             .interaction(&[names::DAMN])
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::ISLAND),
@@ -176,7 +176,7 @@ pub mod scenarios {
             )
             .hand(P0, &[SNAPCASTER])
             .graveyard(P0, &[names::DAMN])
-            .battlefield(P1, &[Permanent::new(SPELLBINDER)])
+            .permanents(P1, &[Permanent::new(SPELLBINDER)])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::cast(P0, SNAPCASTER),
@@ -191,7 +191,7 @@ pub mod scenarios {
             ]),
         // Oust gains flashback on turn 1 and P0 leaves it; by P0's next turn it has none.
         Scenario::new("Snapcaster Mage: flashback ends with the turn")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::ISLAND),
@@ -218,7 +218,7 @@ pub mod scenarios {
         // Nothing in P0's graveyard is an instant or sorcery: the trigger has no target and does
         // nothing.
         Scenario::new("Snapcaster Mage with no instant or sorcery to target")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::ISLAND),

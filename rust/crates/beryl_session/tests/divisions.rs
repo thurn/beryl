@@ -71,8 +71,8 @@ impl<L: Layout> Agent<L> for BlockAll {
 /// 2/2, and a Jace, Vryn's Prodigy, a 0/2: four damage is lethal to both.
 const DOUBLE_BLOCK: Scenario = Scenario::new("combat damage")
     .at(3, P0, TurnStep::PrecombatMain)
-    .battlefield(P0, &[Permanent::new(BEZA_THE_BOUNDING_SPRING)])
-    .battlefield(
+    .permanents(P0, &[Permanent::new(BEZA_THE_BOUNDING_SPRING)])
+    .permanents(
         P1,
         &[
             Permanent::new(TRINKET_MAGE),
@@ -204,7 +204,7 @@ fn combat_damage_is_divided_by_picking_the_blockers_that_die() {
 const RECIPIENTS: Scenario = Scenario::new("recipients")
     .at(3, P0, TurnStep::PrecombatMain)
     .hand(P0, &[ISLAND])
-    .battlefield(
+    .permanents(
         P1,
         &[
             Permanent::new(TRINKET_MAGE),

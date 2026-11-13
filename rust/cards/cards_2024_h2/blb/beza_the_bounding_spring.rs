@@ -141,9 +141,9 @@ pub mod scenarios {
         Scenario::new("Beza with every comparison true")
             .life(P0, 15)
             .hand(P0, &[BEZA])
-            .battlefield(P0, PLAINS)
+            .permanents(P0, PLAINS)
             .library(P0, &[names::ISLAND])
-            .battlefield(P1, BEHIND)
+            .permanents(P1, BEHIND)
             .hand(P1, &[names::PLAINS, names::PLAINS])
             .library(P1, &[names::ISLAND])
             .actions(&[
@@ -166,9 +166,9 @@ pub mod scenarios {
         // tie is not more, so nothing.
         Scenario::new("Beza with every comparison tied")
             .hand(P0, &[BEZA])
-            .battlefield(P0, PLAINS)
+            .permanents(P0, PLAINS)
             .library(P0, &[names::ISLAND])
-            .battlefield(P1, TIED)
+            .permanents(P1, TIED)
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::cast(P0, BEZA),
@@ -185,9 +185,9 @@ pub mod scenarios {
         // creatures are tied and P1 has more cards in hand: no Fish, but a card.
         Scenario::new("Beza compares as its ability resolves")
             .hand(P0, &[BEZA, names::SINK_INTO_STUPOR])
-            .battlefield(P0, RESPONDING)
+            .permanents(P0, RESPONDING)
             .library(P0, &[names::ISLAND])
-            .battlefield(P1, AHEAD_IN_CREATURES)
+            .permanents(P1, AHEAD_IN_CREATURES)
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::cast(P0, BEZA),
@@ -213,9 +213,9 @@ pub mod scenarios {
         // The Treasure offers no activation of its own (§10): P0 may pass or counter.
         Scenario::new("Beza's Treasure pays for Counterspell")
             .hand(P0, &[BEZA, names::COUNTERSPELL, names::ISLAND])
-            .battlefield(P0, PLAINS)
+            .permanents(P0, PLAINS)
             .library(P0, &[names::ISLAND])
-            .battlefield(P1, &[PLAIN, PLAIN, ISLAND, ISLAND, ISLAND])
+            .permanents(P1, &[PLAIN, PLAIN, ISLAND, ISLAND, ISLAND])
             .hand(P1, &[props::REMOVAL])
             .library(P1, &[names::ISLAND])
             .actions(&[

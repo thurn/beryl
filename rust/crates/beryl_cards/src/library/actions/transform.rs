@@ -18,10 +18,10 @@ pub const SCENARIOS: &[Scenario] =
     &[
         Scenario::new("A card returned to hand in response is not exiled to return transformed")
             .at(1, P0, TurnStep::PrecombatMain)
-            .battlefield(P0, &[Permanent::new(JACE)])
+            .permanents(P0, &[Permanent::new(JACE)])
             .graveyard(P0, &[names::PLAINS; 4])
             .library(P0, &[names::ISLAND, names::ISLAND])
-            .battlefield(P1, &[Permanent::new(names::ISLAND); 3])
+            .permanents(P1, &[Permanent::new(names::ISLAND); 3])
             .hand(P1, &[props::REMOVAL])
             .library(P1, &[names::PLAINS])
             .actions(&[

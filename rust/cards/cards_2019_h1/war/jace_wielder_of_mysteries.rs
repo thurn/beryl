@@ -98,7 +98,7 @@ pub mod scenarios {
 
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("+1 mills the target player two, then draws")
-            .battlefield(P0, &[Permanent::new(JACE)])
+            .permanents(P0, &[Permanent::new(JACE)])
             .hand(P0, &[PLAINS])
             .library(P0, &[ISLAND, ISLAND])
             .library(P1, &[PLAINS, PLAINS, ISLAND])
@@ -121,7 +121,7 @@ pub mod scenarios {
             ]),
         // Milling his own last two cards, Jace draws from the empty library: a win, not a loss.
         Scenario::new("+1 milling his controller empty wins on the draw")
-            .battlefield(P0, &[Permanent::new(JACE)])
+            .permanents(P0, &[Permanent::new(JACE)])
             .library(P0, &[ISLAND, PLAINS])
             .library(P1, &[ISLAND])
             .actions(&[
@@ -134,23 +134,25 @@ pub mod scenarios {
         // A creature with flash gives P0 something to pass in the upkeep.
         Scenario::new("the draw step's draw from an empty library wins")
             .at(3, P0, TurnStep::Upkeep)
-            .battlefield(P0, ISLANDS_AND_JACE)
+            .permanents(P0, ISLANDS_AND_JACE)
             .hand(P0, &[props::SMALL_CREATURE])
+            .library(P0, &[])
             .library(P1, &[ISLAND])
             .actions(&[Action::pass(P0), outcome(Ending::Win { player: P0 })]),
         // The replacement is Jace's controller's alone: the opponent drawing from an empty
         // library still loses (CR 704.5b).
         Scenario::new("the opponent's draw from an empty library still loses")
             .at(2, P1, TurnStep::Upkeep)
-            .battlefield(P0, &[Permanent::new(JACE)])
+            .permanents(P0, &[Permanent::new(JACE)])
             .library(P0, &[ISLAND])
-            .battlefield(P1, ISLANDS)
+            .permanents(P1, ISLANDS)
             .hand(P1, &[props::SMALL_CREATURE])
+            .library(P1, &[])
             .actions(&[Action::pass(P1), outcome(Ending::Win { player: P0 })]),
         // At exactly eight loyalty Jace dies before the ability resolves: no replacement. Five
         // cards are drawn, two draws fail, and the library is empty: a win.
         Scenario::new("−8 draws the library empty and wins")
-            .battlefield(
+            .permanents(
                 P0,
                 &[Permanent::new(JACE).counters(CounterKind::Loyalty, 8)],
             )
@@ -163,7 +165,7 @@ pub mod scenarios {
             ]),
         // With cards left after the seven, there is no win.
         Scenario::new("−8 with cards left after the seven doesn't win")
-            .battlefield(
+            .permanents(
                 P0,
                 &[Permanent::new(JACE).counters(CounterKind::Loyalty, 9)],
             )

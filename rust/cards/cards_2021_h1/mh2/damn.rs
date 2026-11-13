@@ -64,7 +64,7 @@ pub mod scenarios {
     pub const SCENARIOS: &[Scenario] = &[
         // For {B}{B}, one target: P0 destroys P1's Elite Spellbinder and keeps its own two-drop.
         Scenario::new("Damn for {B}{B} destroys its target alone")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::SWAMP),
@@ -73,7 +73,7 @@ pub mod scenarios {
                 ],
             )
             .hand(P0, &[names::DAMN])
-            .battlefield(P1, &[Permanent::new(SPELLBINDER)])
+            .permanents(P1, &[Permanent::new(SPELLBINDER)])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::cast(P0, names::DAMN),
@@ -86,7 +86,7 @@ pub mod scenarios {
         // and the overloaded cast. It asks for no target and destroys every creature, P0's own
         // among them.
         Scenario::new("Damn overloaded destroys each creature, targeting none")
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::PLAINS),
@@ -97,7 +97,7 @@ pub mod scenarios {
                 ],
             )
             .hand(P0, &[names::DAMN])
-            .battlefield(P1, &[Permanent::new(SPELLBINDER), Permanent::new(TWO_DROP)])
+            .permanents(P1, &[Permanent::new(SPELLBINDER), Permanent::new(TWO_DROP)])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::assert(Assertion::Decision {
@@ -137,7 +137,7 @@ pub mod scenarios {
         // Adeline's Human is the token, and a token's maker is on the battlefield with it.
         Scenario::new("Damn overloaded takes tokens and face-down creatures at once")
             .interaction(&[names::ADELINE_RESPLENDENT_CATHAR])
-            .battlefield(
+            .permanents(
                 P0,
                 &[
                     Permanent::new(names::PLAINS),
@@ -149,7 +149,7 @@ pub mod scenarios {
                 ],
             )
             .hand(P0, &[names::DAMN])
-            .battlefield(
+            .permanents(
                 P1,
                 &[
                     Permanent::new(SPELLBINDER),

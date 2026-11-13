@@ -101,8 +101,8 @@ fn varies(t: &GameTable, s: &State, viewer: Seat, hidden: &[Slot]) {
 #[test]
 fn a_bounced_permanent_stays_known_in_hand() {
     const BOUNCE: Scenario = Scenario::new("Teferi returns Mana Crypt")
-        .battlefield(P0, &[Permanent::new(names::TEFERI_TIME_RAVELER)])
-        .battlefield(P1, &[Permanent::new(names::MANA_CRYPT)])
+        .permanents(P0, &[Permanent::new(names::TEFERI_TIME_RAVELER)])
+        .permanents(P1, &[Permanent::new(names::MANA_CRYPT)])
         .hand(P1, &[names::COUNTERSPELL, names::MANA_TITHE, names::OUST])
         .library(P0, &[names::ISLAND, names::PLAINS])
         .library(
@@ -139,7 +139,7 @@ fn a_spell_returned_to_hand_stays_known() {
     const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND); 4];
     const LANDS: &[Permanent] = &[Permanent::new(names::PLAINS), Permanent::new(names::ISLAND)];
     const RETURN: Scenario = Scenario::new("Reprieve returns Thieving Skydiver")
-        .battlefield(P0, ISLANDS)
+        .permanents(P0, ISLANDS)
         .hand(
             P0,
             &[
@@ -153,7 +153,7 @@ fn a_spell_returned_to_hand_stays_known() {
             P0,
             &[names::ISLAND, names::MANA_DRAIN, names::SNAPCASTER_MAGE],
         )
-        .battlefield(P1, LANDS)
+        .permanents(P1, LANDS)
         .hand(P1, &[names::REPRIEVE])
         .library(P1, &[names::PLAINS])
         .actions(&[
@@ -182,7 +182,7 @@ fn a_tutored_card_stays_known_in_hand() {
     const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND); 3];
     const TUTOR: Scenario = Scenario::new("Trinket Mage reveals Mana Crypt")
         .hand(P0, &[names::TRINKET_MAGE])
-        .battlefield(P0, ISLANDS)
+        .permanents(P0, ISLANDS)
         .library(
             P0,
             &[
@@ -215,9 +215,9 @@ fn a_tutored_card_stays_known_in_hand() {
 #[test]
 fn a_permanent_put_into_a_library_stays_known_there() {
     const OUST: Scenario = Scenario::new("Oust tucks Elite Spellbinder")
-        .battlefield(P0, &[Permanent::new(names::PLAINS)])
+        .permanents(P0, &[Permanent::new(names::PLAINS)])
         .hand(P0, &[names::OUST, names::PLAINS])
-        .battlefield(P1, &[Permanent::new(names::ELITE_SPELLBINDER)])
+        .permanents(P1, &[Permanent::new(names::ELITE_SPELLBINDER)])
         .library(
             P1,
             &[
@@ -249,7 +249,7 @@ fn a_permanent_put_into_a_library_stays_known_there() {
 #[test]
 fn brainstorm_put_backs_are_known_to_their_owner_alone() {
     const BRAINSTORM: Scenario = Scenario::new("Jace brainstorms")
-        .battlefield(P0, &[Permanent::new(names::JACE_THE_MIND_SCULPTOR)])
+        .permanents(P0, &[Permanent::new(names::JACE_THE_MIND_SCULPTOR)])
         .hand(P0, &[names::STAFF_OF_THE_STORYTELLER])
         .library(
             P0,
@@ -297,7 +297,7 @@ fn brainstorm_put_backs_are_known_to_their_owner_alone() {
 #[test]
 fn a_fatesealed_card_stays_known_once_drawn() {
     const FATESEAL: Scenario = Scenario::new("Jace fateseals and keeps the top")
-        .battlefield(P0, &[Permanent::new(names::JACE_THE_MIND_SCULPTOR)])
+        .permanents(P0, &[Permanent::new(names::JACE_THE_MIND_SCULPTOR)])
         // A land to play keeps player 0 in their main phase after Jace's ability.
         .hand(P0, &[names::PLAINS])
         .library(P0, &[names::ISLAND, names::PLAINS])
@@ -349,10 +349,10 @@ fn a_fatesealed_card_stays_known_once_drawn() {
 fn brainstorming_hides_a_known_hand_card() {
     const JACE: &[Permanent] = &[Permanent::new(names::JACE_THE_MIND_SCULPTOR)];
     const HIDDEN: Scenario = Scenario::new("Jace fateseals, then the opponent brainstorms")
-        .battlefield(P0, JACE)
+        .permanents(P0, JACE)
         .hand(P0, &[names::PLAINS])
         .library(P0, &[names::ISLAND, names::PLAINS])
-        .battlefield(P1, JACE)
+        .permanents(P1, JACE)
         .library(
             P1,
             &[
@@ -401,7 +401,7 @@ fn brainstorming_hides_a_known_hand_card() {
 #[test]
 fn scried_cards_are_known_where_they_went() {
     const SCRY: Scenario = Scenario::new("Aang's Iceberg scries an Island to the bottom")
-        .battlefield(
+        .permanents(
             P0,
             &[
                 Permanent::new(names::AANGS_ICEBERG),

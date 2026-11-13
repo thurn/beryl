@@ -34,20 +34,20 @@ fn a_card_cast_with_flashback_flies_from_the_graveyard() {
     let [first, second] = script(names::SNAPCASTER_MAGE, name, 5);
     let cast = |who: &str| {
         let mut lines = vec![
-            format!("fly #4 (Counterspell) graveyard>stack cast flashback at #261 <- {who}"),
-            "& +point hostile-target #4 > #261".to_owned(),
-            format!("tap #3 (Island) <- {who}"),
+            format!("fly #0 (Counterspell) graveyard>stack cast flashback at #257 <- {who}"),
+            "& +point hostile-target #0 > #257".to_owned(),
+            format!("tap #4 (Island) <- {who}"),
             format!("& tap #5 (Island) <- {who}"),
-            "& streak #3 > #4 blue 1 <- #3".to_owned(),
-            "& streak #5 > #4 blue 1 <- #5".to_owned(),
+            "& streak #4 > #0 blue 1 <- #4".to_owned(),
+            "& streak #5 > #0 blue 1 <- #5".to_owned(),
         ];
         if who == "opponent" {
-            lines.push("dwell #4".to_owned());
+            lines.push("dwell #0".to_owned());
         }
         lines.extend([
-            "-point hostile-target #4 > #261".to_owned(),
-            "vanish #261 (Timetwister) stack>graveyard counter <- #4".to_owned(),
-            "& vanish #4 (Counterspell) stack>exile resolve <- #4".to_owned(),
+            "-point hostile-target #0 > #257".to_owned(),
+            "vanish #257 (Timetwister) stack>graveyard counter <- #0".to_owned(),
+            "& vanish #0 (Counterspell) stack>exile resolve <- #0".to_owned(),
         ]);
         text(&lines)
     };
@@ -62,17 +62,17 @@ fn a_card_cast_from_exile_flies_to_the_stack() {
     let [first, second] = script(names::ELITE_SPELLBINDER, name, 10);
     let cast = |who: &str| {
         let mut lines = vec![format!(
-            "fly #259 (Portable Hole) exile>stack cast <- {who}"
+            "fly #260 (Portable Hole) exile>stack cast <- {who}"
         )];
         // The three lands tap together, and then each sends its mana, which is its own
         // ability's doing.
-        let lands = [257, 258, 261];
+        let lands = [257, 259, 261];
         for (i, land) in lands.into_iter().enumerate() {
             let and = if i == 0 { "" } else { "& " };
             lines.push(format!("{and}tap #{land} (Plains) <- {who}"));
         }
         for land in lands {
-            lines.push(format!("& streak #{land} > #259 white 1 <- #{land}"));
+            lines.push(format!("& streak #{land} > #260 white 1 <- #{land}"));
         }
         text(&lines)
     };

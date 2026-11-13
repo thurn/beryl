@@ -15,7 +15,7 @@ const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
 /// stack, the player announces these while applying the effect."
 pub const SCENARIOS: &[Scenario] = &[Scenario::new("A player who may choose a card chooses none")
     .hand(P0, &[SPELLBINDER])
-    .battlefield(P0, &[Permanent::new(names::PLAINS); 3])
+    .permanents(P0, &[Permanent::new(names::PLAINS); 3])
     .library(P0, &[names::PLAINS])
     .hand(P1, &[props::ARTIFACT, names::ISLAND])
     .library(P1, &[names::ISLAND])

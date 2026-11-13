@@ -51,7 +51,19 @@ static CYCLER: CardDef = CardDef {
     tokens: &[],
 };
 
-static CARDS: CardTable = CardTable::new(&[&LAND, &OTHER, &BEAR, &CYCLER]);
+/// The basic land `FILLER_LIBRARY` fills a library with when a scenario gives none.
+static ISLAND: CardDef = CardDef {
+    name: "Island",
+    faces: &[Face {
+        types: Types::LAND,
+        subtypes: Subtypes::of(&[Subtype::Island]),
+        abilities: &[Ability::tap_for_mana(ManaSet::one(ManaColor::Blue))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static CARDS: CardTable = CardTable::new(&[&LAND, &OTHER, &BEAR, &CYCLER, &ISLAND]);
 
 const L: &str = "Test Land";
 /// Nine cards: one too many to keep after playing a land, and two kinds to discard.
@@ -78,7 +90,7 @@ fn a_scenario_sets_up_its_position() {
         .at(4, P1, TurnStep::PostcombatMain)
         .life(P0, 7)
         .hand(P1, &[L, "Other Land"])
-        .battlefield(P0, &[Permanent::new(L).tapped(), Permanent::new(L)])
+        .permanents(P0, &[Permanent::new(L).tapped(), Permanent::new(L)])
         .graveyard(P1, &[L])
         .exile(P0, &["Other Land"])
         .library(P0, &[L, L])
@@ -117,7 +129,7 @@ fn a_scenario_sets_up_its_position() {
 #[test]
 fn a_permanent_starts_with_cards_exiled_with_it() {
     const S: Scenario = Scenario::new("exiled with")
-        .battlefield(
+        .permanents(
             P0,
             &[Permanent::new(L).exiled_with(&["Other Land", "Other Land"])],
         )
@@ -133,7 +145,7 @@ fn a_scenario_casts_resolves_activates_and_attacks() {
     const BEAR: &str = "Test Bear";
     const S: Scenario = Scenario::new("cast and attack")
         .hand(P0, &[BEAR, "Test Cycler"])
-        .battlefield(
+        .permanents(
             P0,
             &[Permanent::new(L), Permanent::new(L), Permanent::new(L)],
         )
@@ -344,22 +356,28 @@ fn advancing_to_a_step_without_priority_fails_the_scenario() {
 #[test]
 fn a_game_that_ends_first_fails_an_advance() {
     // The player on the draw has no library: they lose in their draw step.
-    const S: Scenario = Scenario::new("decked").actions(&[
-        Action::AdvanceTo {
-            turn: 3,
-            step: TurnStep::PrecombatMain,
-        },
-        Action::Assert {
+    const S: Scenario = Scenario::new("decked")
+        .library(P0, &[])
+        .library(P1, &[])
+        .actions(&[
+            Action::AdvanceTo {
+                turn: 3,
+                step: TurnStep::PrecombatMain,
+            },
+            Action::Assert {
+                assertion: Assertion::Outcome {
+                    outcome: Ending::Win { player: P0 },
+                },
+            },
+        ]);
+    const T: Scenario = Scenario::new("decked")
+        .library(P0, &[])
+        .library(P1, &[])
+        .actions(&[Action::Assert {
             assertion: Assertion::Outcome {
                 outcome: Ending::Win { player: P0 },
             },
-        },
-    ]);
-    const T: Scenario = Scenario::new("decked").actions(&[Action::Assert {
-        assertion: Assertion::Outcome {
-            outcome: Ending::Win { player: P0 },
-        },
-    }]);
+        }]);
     let e = error(&S);
     assert!(e.contains("action 0: the game is over (Win(P0))"), "{e}");
     run(&CARDS, &T).unwrap();
@@ -397,7 +415,7 @@ fn the_dump_traces_where_each_action_began() {
     const B: &str = "Test Bear";
     const S: Scenario = Scenario::new("traced")
         .hand(P0, &[B])
-        .battlefield(P0, &[Permanent::new(L), Permanent::new(L)])
+        .permanents(P0, &[Permanent::new(L), Permanent::new(L)])
         .actions(&[
             Action::cast(P0, B),
             Action::Resolve,
