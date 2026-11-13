@@ -8,7 +8,7 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{TARGET, destroy};
+use beryl_card::effect::build::{TARGET, destroy_without_regeneration};
 use beryl_card::{
     Ability, CardDef, CastingOption, Filter, Objects, TargetKind, TargetSpec, Types, Zone, card,
     mana,
@@ -20,14 +20,18 @@ const CREATURES: Filter = Filter::Types(Types::CREATURE);
 /// ([CR 202.2](https://yawgatog.com/resources/magic-rules/#R2022)): "An object is the color or
 /// colors of the mana symbols in its mana cost". The cube lists it with white for its
 /// overload.
+///
+/// Neither spell lets the creatures it destroys regenerate
+/// ([CR 701.19c](https://yawgatog.com/resources/magic-rules/#R70119c)): "they cause
+/// regeneration shields to not be applied."
 pub static CARD: CardDef = card(
     names::DAMN,
     &[printed::DAMN
         .abilities(&[
             Ability::spell()
                 .targeting(&[TargetSpec::one(TargetKind::Permanent, CREATURES)])
-                .effect(&destroy(TARGET)),
-            Ability::spell().effect(&destroy(Objects::All {
+                .effect(&destroy_without_regeneration(TARGET)),
+            Ability::spell().effect(&destroy_without_regeneration(Objects::All {
                 zone: Zone::Battlefield,
                 filter: CREATURES,
             })),

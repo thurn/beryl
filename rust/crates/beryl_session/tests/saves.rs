@@ -325,7 +325,9 @@ fn a_recorded_halt_the_game_no_longer_makes_is_skipped() {
 
 #[test]
 fn an_answer_no_candidate_does_stops_the_replay_naming_the_step() {
-    let (game, _, answers) = played(3, 30);
+    // The decks are dealt at random from every implemented card (`fuzz_deck`), so a new card
+    // changes the game: 60 answers leave room for the human to play a card in most deals.
+    let (game, _, answers) = played(3, 60);
     let mut file = game.replay().clone();
     let cast = answers
         .iter()

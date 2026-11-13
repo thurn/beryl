@@ -19,7 +19,16 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
 - `card-escalations.json`: cards the card vocabulary (`beryl_card`) can't
   express yet, by name, each with the mechanic it needs, the rule that mechanic
   falls under and the ability's Oracle text. The `card-writing` skill adds
-  entries, and `just card brief` prints a card's entry.
+  entries, and `just card brief` prints a card's entry. An entry with
+  `"partial": true` is a card whose file exists but leaves out the ability its
+  `text` quotes.
+- `card-text-allowlist.json`: card files whose rendered rules text differs from
+  their Oracle text, each with the exact word diff the `card-text` check
+  (`tools/src/beryl_tools/card_text.py`) allows. Its `reason` is `wording` (the
+  definition does what the card says and the renderer has no template for
+  Oracle's words) or `escalated` (a clause is left out, and
+  `card-escalations.json` has a partial entry for the card). Its `note` says
+  why. Entries may only be removed, except a `wording` entry for a new card.
 - `card-printings.csv`: the specific printing chosen for each card.
 - `rules-version.json`: the Comprehensive Rules release that every citation in
   the code is checked against.

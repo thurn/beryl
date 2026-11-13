@@ -245,6 +245,18 @@ def join_spell_paragraphs(text: str, context: Context) -> str:
     return "\n".join(out)
 
 
+# "Creature spell or planeswalker spell": two kinds of spell, each with its own noun.
+SPELL_PAIR: re.Pattern[str] = re.compile(r"\b(\w+) spell or (\w+) spell\b")
+
+
+def share_spell_noun(text: str, context: Context) -> str:
+    """Writes two kinds of spell with one "spell": Oracle says "target instant or sorcery
+    spell" on most cards and "target creature spell or planeswalker spell" on some, for the
+    same set of spells, and the renderer says the first. "Choose up to one target creature
+    spell or planeswalker spell" becomes "... target creature or planeswalker spell"."""
+    return SPELL_PAIR.sub(r"\1 or \2 spell", text)
+
+
 Normalization = Callable[[str, Context], str]
 
 # The normalizations, in the order they run.
@@ -254,6 +266,7 @@ NORMALIZATIONS: list[Normalization] = [
     unify_whitespace,
     unify_self_reference,
     neuter_pronouns,
+    share_spell_noun,
     sort_mana_choices,
     unify_mana_symbols,
     lower_sentence_starts,

@@ -6,6 +6,29 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- Five card definitions did less than their Oracle text said, and every check
+  passed. Thieving Skydiver stole an Equipment without attaching it to itself
+  ([CR 701.3a](https://yawgatog.com/resources/magic-rules/#R7013a)): its comment
+  said "No Equipment is among the cards", though Kaldra Compleat was in a
+  decklist. Damn's creatures could have regenerated
+  ([CR 701.19c](https://yawgatog.com/resources/magic-rules/#R70119c)), which
+  nothing showed because no card regenerates yet. Currency Converter would have
+  exiled a discarded card that a replacement effect had already sent to exile,
+  because its definition said "that card", not "that card from your graveyard".
+  Elite Spellbinder said "cast" for "play", and Subtlety's text rendered
+  differently; those two behaved correctly. The XMage and Forge oracles only
+  compare the two engines inside the scenarios the card's author wrote, and an
+  author who skipped a clause also wrote no scenario that reached it. Found by
+  the Oracle text diff (`just card render`) the day it landed. Prevention: the
+  `card-text` check fails CI on any difference between a card's rendered text
+  and its Oracle text that `data/card-text-allowlist.json` doesn't pin as
+  wording or as a partial escalation, so a left-out clause can't land quietly.
+  The test `every_instruction_of_a_card_is_carried_out_by_its_own_scenarios`
+  fails on any branch of a card's effect data that its own scenarios never
+  reach, so a clause can't be written and left untested. When a scenario needs a
+  card nobody has implemented, implement one, even one in no deck: Leonin
+  Scimitar exists so that the Skydiver's attach is tested in all three engines.
+
 - A continuous effect on a locked-in set was applied to only some of its
   members, or to none, once the set was large (CR 611.2c, 613.7). The layers
   listed one entry for each permanent an effect changed, in a list of 192, and

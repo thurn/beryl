@@ -1,0 +1,103 @@
+{
+  "Beza, the Bounding Spring": {
+    "reason": "wording",
+    "note": "Oracle puts each instruction before its condition (\"create a Treasure token if an opponent controls more lands than you\"); the renderer puts the condition first. Same four intervening-if clauses.",
+    "diff": [
+      "Beza, the Bounding Spring: when ~ enters , [-create a Treasure token-] if an opponent controls more lands than you {+, create a Treasure token+} . [-you gain 4 life-] if an opponent has more life than you {+, you gain 4 life+} . [-create two 1/1 blue Fish creature tokens-] if an opponent controls more creatures than you {+, create two 1/1 blue Fish creature tokens+} . [-draw a card-] if an opponent has more cards in hand than you {+, draw a card+} ."
+    ]
+  },
+  "Currency Converter": {
+    "reason": "wording",
+    "note": "The last ability chooses one card exiled with the Converter and puts it into the graveyard only if one was chosen; Oracle says \"put a card exiled with this artifact\", which is the same instruction. \"Otherwise\" after \"if it's a land card\" is \"if it's a nonland card\".",
+    "diff": [
+      "Currency Converter: {T} : [-put-] {+choose+} a card exiled with ~ {+. if you do , put it+} into its owner's graveyard . if it's a land card , create a Treasure token . [-if it's a nonland card-] {+otherwise+} , create a 2/2 black Rogue creature token ."
+    ]
+  },
+  "Elite Spellbinder": {
+    "reason": "wording",
+    "note": "The definition chooses a nonland card in the hand it looked at and exiles it, which is what \"you may exile a nonland card from it\" does; the renderer writes the choice and the exile as two sentences.",
+    "diff": [
+      "Elite Spellbinder: when ~ enters , look at target opponent's hand . you may [-exile-] {+choose+} a nonland card [-from-] {+in that player's hand . exile+} it . for as long as that card remains exiled , its owner may play it . a spell cast this way costs {2} more to cast ."
+    ]
+  },
+  "Jace, Vryn's Prodigy // Jace, Telepath Unbound": {
+    "reason": "wording",
+    "note": "\"Exile Jace, then return him\" and \"Exile ~. Return it\" are the same two instructions in order; \"card in your graveyard\" and \"card from your graveyard\" name the same target.",
+    "diff": [
+      "Jace, Vryn's Prodigy: {T} : draw a card , then discard a card . if there are five or more cards in your graveyard , exile ~ [-, then-] {+.+} return it to the battlefield transformed under its owner's control .",
+      "Jace, Telepath Unbound: -3 : you may cast target instant or sorcery card [-from-] {+in+} your graveyard this turn . if that spell would be put into your graveyard , exile it instead ."
+    ]
+  },
+  "Jace, Wielder of Mysteries": {
+    "reason": "wording",
+    "note": "\"Then\" orders two instructions that the renderer writes as two sentences in the same order.",
+    "diff": [
+      "Jace, Wielder of Mysteries: -8 : draw seven cards . [-then-] if your library has no cards in it , you win the game ."
+    ]
+  },
+  "Malcolm, Alluring Scoundrel": {
+    "reason": "wording",
+    "note": "Oracle says \"it\" for Malcolm where the renderer names the card.",
+    "diff": [
+      "Malcolm, Alluring Scoundrel: whenever ~ deals combat damage to a player , put a chorus counter on [-it-] {+~+} . draw a card , then discard a card . if there are four or more chorus counters on ~ , you may cast the discarded card without paying its mana cost ."
+    ]
+  },
+  "Mana Drain": {
+    "reason": "wording",
+    "note": "The delayed trigger adds {C} equal to the countered spell's mana value, carried from the first sentence (`Amount::ManaValue(TARGET)`); the renderer calls it \"that amount\".",
+    "diff": [
+      "Mana Drain: counter target spell . at the beginning of your next main phase , add an amount of {C} equal to that [-spell's mana value-] {+amount+} ."
+    ]
+  },
+  "Sphinx of False Conclusions": {
+    "reason": "wording",
+    "note": "Oracle says \"it\" for the Sphinx where the renderer names the card.",
+    "diff": [
+      "Sphinx of False Conclusions: when ~ dies , if it isn't a token , create a token that's a copy of [-it-] {+~+} ."
+    ]
+  },
+  "Swift Reconfiguration": {
+    "reason": "wording",
+    "note": "The Aura's one Oracle sentence is three static abilities in the definition (set types to artifact, add Vehicle, grant crew 5), each rendered as its own sentence.",
+    "diff": [
+      "Swift Reconfiguration: enchanted permanent is [-a Vehicle-] {+an+} artifact [-with crew 5-] and [-it-] loses all other card types .",
+      "Swift Reconfiguration: {+enchanted permanent is a Vehicle in addition to its other types .+}",
+      "Swift Reconfiguration: {+enchanted permanent has crew 5 .+}"
+    ]
+  },
+  "The Wandering Emperor": {
+    "reason": "wording",
+    "note": "Oracle says \"its\" for the Emperor where the renderer names the card.",
+    "diff": [
+      "The Wandering Emperor: as long as ~ entered this turn , you may activate [-its-] {+The Wandering Emperor's+} loyalty abilities any time you could cast an instant ."
+    ]
+  },
+  "Thirst for Discovery": {
+    "reason": "wording",
+    "note": "\"Then\" orders two instructions that the renderer writes as two sentences in the same order.",
+    "diff": [
+      "Thirst for Discovery: draw three cards . [-then-] discard two cards unless you discard a basic land card ."
+    ]
+  },
+  "Time Spiral": {
+    "reason": "wording",
+    "note": "The untap is the caster's (\"you untap up to six lands\"); the renderer leaves out the subject of an instruction its controller carries out.",
+    "diff": [
+      "Time Spiral: exile ~ . each player shuffles their hand and graveyard into their library , then draws seven cards . [-you-] untap up to six lands ."
+    ]
+  },
+  "Trinket Mage": {
+    "reason": "wording",
+    "note": "\"Reveal that card\" and \"reveal it\" name the card just found.",
+    "diff": [
+      "Trinket Mage: when ~ enters , you may search your library for an artifact card with mana value 1 or less , reveal [-that card-] {+it+} , put it into your hand , then shuffle ."
+    ]
+  },
+  "Winds of Abandon": {
+    "reason": "wording",
+    "note": "Oracle words the land search per exiled creature, the renderer per player and their exiled permanents: each controller searches for as many basic lands as creatures of theirs were exiled, the same instruction.",
+    "diff": [
+      "Winds of Abandon: exile target creature you don't control . [-for-] each [-creature exiled this way , its controller-] {+player+} searches their library for a basic land card [-.-] {+for each of+} those [-players put those cards-] {+permanents they controlled , puts them+} onto the battlefield tapped , then [-shuffle-] {+shuffles+} ."
+    ]
+  }
+}

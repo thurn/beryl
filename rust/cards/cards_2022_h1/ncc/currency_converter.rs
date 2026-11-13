@@ -11,8 +11,8 @@
 use crate::tokens::TREASURE;
 use crate::{names, printed};
 use beryl_card::effect::build::{
-    EXILED_WITH_THIS, IF_YOU_DO, THAT_CARD, THOSE, YOU, choose, create_tokens, discard, draw,
-    exile_linked, if_else, if_then, may, put_into_graveyard, sequence,
+    EXILED_WITH_THIS, IF_YOU_DO, THAT_CARD_FROM_YOUR_GRAVEYARD, THOSE, YOU, choose, create_tokens,
+    discard, draw, exile_linked, if_else, if_then, may, put_into_graveyard, sequence,
 };
 use beryl_card::{
     Ability, CardDef, Condition, Cost, CostPart, Effect, Filter, ManaCost, Players, Prompt,
@@ -26,13 +26,14 @@ pub use crate::tokens::ROGUE_TOKEN;
 /// The Rogue token: a 2/2 black Rogue creature token.
 pub static ROGUE: CardDef = card(ROGUE_TOKEN, &[printed::token::ROGUE_TOKEN]);
 
-/// "That card" is the card as it was put into the graveyard: once it has left, it is a new
-/// object ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)) and nothing is
-/// asked. The exile is linked to the last ability
+/// "That card from your graveyard" is the card as it was put into the graveyard: once it has
+/// left, it is a new object ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007))
+/// and nothing is asked. A discarded card that a replacement effect put somewhere else, as
+/// madness exiles it, was never in the graveyard and is not exiled with this. The exile is linked to the last ability
 /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second ability
 /// refers only to cards in the exile zone that were put there as a result of an instruction
 /// to exile them in the first ability."
-static EXILE_DISCARDED: Effect = may(YOU, &exile_linked(THAT_CARD));
+static EXILE_DISCARDED: Effect = may(YOU, &exile_linked(THAT_CARD_FROM_YOUR_GRAVEYARD));
 
 /// Draws, then discards ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)):
 /// "The controller of the spell or ability follows its instructions in the order written."

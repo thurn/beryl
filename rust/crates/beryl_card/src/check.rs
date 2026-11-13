@@ -271,7 +271,7 @@ const fn moved_by(effect: &Effect) -> Option<&Objects> {
         | Effect::CounterInto {
             spells: objects, ..
         }
-        | Effect::Destroy(objects)
+        | Effect::Destroy { objects, .. }
         | Effect::Exile(objects)
         | Effect::ExileUntilThisLeaves(objects)
         | Effect::ExileLinked(objects)
@@ -304,7 +304,7 @@ impl Moved {
             Objects::Target(target) if target.index() < 29 => 1 << target.index(),
             Objects::This => Moved::THIS,
             Objects::AttachedTo => Moved::ATTACHED_TO,
-            Objects::TriggeredOn => Moved::TRIGGERED_ON,
+            Objects::TriggeredOn | Objects::TriggeredOnIn(_) => Moved::TRIGGERED_ON,
             _ => 0,
         }
     }
@@ -504,6 +504,10 @@ impl Scope<'_> {
             Some(objects) => self.objects(objects),
             None => Ok(()),
         };
+        let to = match operands.to {
+            Some(objects) => self.objects(objects),
+            None => Ok(()),
+        };
         let amount = match operands.amount {
             Some(amount) => self.amount(amount),
             None => Ok(()),
@@ -512,7 +516,10 @@ impl Scope<'_> {
             Some(filter) => self.filter(filter),
             None => Ok(()),
         };
-        both(both(players, others), both(objects, both(amount, filter)))
+        both(
+            both(players, others),
+            both(both(objects, to), both(amount, filter)),
+        )
     }
 
     /// A cost paid as an effect resolves ([`Effect::Unless`]): mana alone, or the discard
@@ -582,7 +589,7 @@ impl Scope<'_> {
             | Objects::Those
             | Objects::Paid(_)
             | Objects::ExiledWithThis => Ok(()),
-            Objects::TriggeredOn => match self.ability.trigger() {
+            Objects::TriggeredOn | Objects::TriggeredOnIn(_) => match self.ability.trigger() {
                 Some(_) => Ok(()),
                 None => Err(Malformed::TriggeredOn),
             },

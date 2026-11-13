@@ -213,7 +213,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         Effect::ForEachPlayer { .. }
         | Effect::Counter(_)
         | Effect::CounterInto { .. }
-        | Effect::Destroy(_)
+        | Effect::Destroy { .. }
         | Effect::Exile(_)
         | Effect::ExileUntilThisLeaves(_)
         | Effect::ExileLinked(_)
@@ -227,6 +227,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::AddCounters { .. }
         | Effect::RemoveCounters { .. }
         | Effect::Modify { .. }
+        | Effect::Attach { .. }
         | Effect::ChangeRule { .. }
         | Effect::GainFlashback(_)
         | Effect::Delay { .. } => Some(Players::You),

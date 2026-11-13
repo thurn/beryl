@@ -16,7 +16,9 @@
 A card someone found the vocabulary cannot express has an entry in data/card-escalations.json
 (ESCALATIONS): the mechanic it needs, the rule that mechanic falls under and the ability's Oracle
 text. Its brief shows that entry as a section after the Oracle text, so the next writer knows the
-card is blocked until the mechanic exists.
+card is blocked until the mechanic exists. An entry with `"partial": true` is a card whose file
+exists but leaves out the ability its `text` quotes, a gap data/card-text-allowlist.json pins
+(card_text.py).
 
 Never Forge's script, nor anything derived from one (K16): this module does not import forge.py
 and reads nothing under Forge's checkout. A part whose source is missing (offline with no
@@ -168,6 +170,16 @@ def escalation(name: str, path: Path) -> str | None:
     entry = cast(dict[str, Json], json.loads(path.read_text())).get(name)
     if entry is None:
         return None
+    if entry.get("partial") is True:
+        return (
+            f"Partly written: its file leaves out an ability the vocabulary cannot express "
+            f"yet, and data/card-text-allowlist.json pins the missing words.\n"
+            f"- Missing mechanic: {entry.get('mechanic', '?')}\n"
+            f"- Rule: {entry.get('rule', '?')}\n"
+            f"- Left out: {entry.get('text', '?')}\n\n"
+            "Once beryl_card has an entry for that mechanic, finish the definition and delete "
+            "this entry and the allowlist's in the same commit."
+        )
     return (
         f"Escalated: the vocabulary cannot express it yet.\n"
         f"- Missing mechanic: {entry.get('mechanic', '?')}\n"

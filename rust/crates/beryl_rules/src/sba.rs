@@ -37,8 +37,9 @@ pub(crate) fn check<L: Layout>(
     }
     layers::refresh(s, t, sink)?;
     let (graveyard, tokens, legendary) = doomed(s, t);
+    let loose = loose_equipment(s, t);
     let legends = legend_group_in(s, t, &legendary, Bitboard::EMPTY).is_some();
-    if graveyard.is_empty() && tokens.is_empty() && !legends {
+    if graveyard.is_empty() && tokens.is_empty() && loose.is_empty() && !legends {
         s.reset_state_based_checks();
         return Ok(false);
     }
@@ -46,10 +47,16 @@ pub(crate) fn check<L: Layout>(
         s.end_game(Outcome::Stalled(StallReason::StateBasedIterations));
         return Ok(true);
     }
+    // Unattaching has no event, so the order is nothing.
+    for slot in s.in_candidate_order(loose) {
+        s.unattach(slot);
+    }
     if graveyard.is_empty() && tokens.is_empty() {
-        s.ask(Pending::LegendRule {
-            kept: Bitboard::EMPTY,
-        });
+        if legends {
+            s.ask(Pending::LegendRule {
+                kept: Bitboard::EMPTY,
+            });
+        }
         return Ok(true);
     }
     // "As a single event": the one batch below is every action of this check that has an
@@ -141,6 +148,34 @@ fn doomed<L: Layout>(s: &State<L>, t: &GameTable) -> Doomed<L> {
     let tokens =
         (away & L::TOKEN_POOL).filter(|slot| s.object(slot).flags().has(ObjectFlags::TOKEN));
     (graveyard, tokens, legendary)
+}
+
+/// The Equipment attached to a permanent that may not be equipped by it
+/// ([CR 704.5n](https://yawgatog.com/resources/magic-rules/#R7045n)): "If an Equipment or
+/// Fortification is attached to an illegal permanent or to a player, it becomes unattached
+/// from that permanent or player. It remains on the battlefield." What may be equipped is
+/// `attach::may_equip`'s (CR 301.5c). An Equipment whose creature left the battlefield is
+/// already attached to nothing (`zone::leave` detaches it).
+fn loose_equipment<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::Slot> {
+    // A game none of whose cards is an Equipment never asks.
+    if !t.subtypes().has(Subtype::Equipment).possible() {
+        return Bitboard::EMPTY;
+    }
+    let mut loose = Bitboard::EMPTY;
+    for (slot, d) in s.permanents() {
+        let Some(host) = s.object(slot).attached_to() else {
+            continue;
+        };
+        // An Aura's is CR 704.5m's, above. An Equipment that lost the subtype is an object
+        // that may equip nothing (CR 301.5c).
+        if t.subtypes().has(Subtype::Aura).of(d.subtypes) {
+            continue;
+        }
+        if !crate::actions::attach::may_equip_in(s, t, slot, host) {
+            loose.insert(slot);
+        }
+    }
+    loose
 }
 
 /// Ends the game if a player has lost.

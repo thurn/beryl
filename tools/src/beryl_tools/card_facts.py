@@ -370,7 +370,8 @@ def cost_text(ability: Json, cost: Json, parts: list[Json]) -> str | None:
 
 def keyword_cost(ability: Json, cost: Json, parts: list[Json]) -> str | None:
     """An activated ability's keyword and its cost where its cost is a keyword's (cycling,
-    crew, waterbend), as its text starts; None for any other."""
+    crew, waterbend) or the ability is a keyword's (equip), as its text starts; None for any
+    other."""
     actions = [p["action"] for p in parts]
     instructions = cast(list[Json], ability.get("instructions", []))
     if actions == ["Discard"] and parts[0].get("of") == "This":
@@ -382,6 +383,11 @@ def keyword_cost(ability: Json, cost: Json, parts: list[Json]) -> str | None:
         # with total power N or greater: This permanent becomes an artifact creature until end
         # of turn."
         return f"Crew {parts[0]['total_power']}"
+    kinds = [i["kind"] for i in instructions]
+    if not parts and kinds == ["Attach"] and instructions[0].get("objects") == "This":
+        # CR 702.6a: "Equip [cost]" means "[Cost]: Attach this permanent to target creature
+        # you control. Activate only as a sorcery."
+        return f"Equip {cost.get('mana', '')}"
     if any("for_generic" in p for p in parts):
         # Waterbend {N}: each permanent tapped for it pays for {1}.
         return f"waterbend {cost.get('mana', '')}"

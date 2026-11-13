@@ -53,6 +53,16 @@ def test_neuter_pronouns_writes_a_character_as_it() -> None:
     )
 
 
+def test_share_spell_noun_says_spell_once_for_two_kinds() -> None:
+    text = "Choose up to one target creature spell or planeswalker spell."
+    assert render_diff.share_spell_noun(text, PLAIN) == (
+        "Choose up to one target creature or planeswalker spell."
+    )
+    assert render_diff.share_spell_noun("Counter target spell.", PLAIN) == (
+        "Counter target spell."
+    )
+
+
 def test_sort_mana_choices_puts_a_choice_in_color_order() -> None:
     assert render_diff.sort_mana_choices("{T}: Add {G}, {W}, or {U}.", PLAIN) == (
         "{T}: Add {W}, {U}, or {G}."

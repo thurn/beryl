@@ -369,6 +369,13 @@ fn answer(
 
 #[test]
 fn a_game_resumed_from_its_save_plays_on_as_if_it_never_stopped() {
+    // Against the greedy agent, which keeps no state between decisions. A resumed game
+    // replays the random agent's past choices without drawing from its stream, so it chooses
+    // differently from the game that never stopped.
+    let start = |seed, stops| StartGame {
+        opponent: "greedy".to_owned(),
+        ..start(seed, stops)
+    };
     // The same game played through without stopping.
     let mut game = Game::new(&CARDS, &start(3, StopsSetting::EXACT), SESSION).unwrap();
     let mut expected = vec![to_human(&mut game)];

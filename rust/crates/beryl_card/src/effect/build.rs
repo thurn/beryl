@@ -24,7 +24,7 @@ use crate::counter::CounterKind;
 use crate::definition::CardDef;
 use crate::effect::{
     Amount, CastTerms, Comparison, Condition, CopyException, Effect, Found, LibraryOrder,
-    LibraryPosition, Objects, Players, Recipients, Taken,
+    LibraryPosition, Objects, Players, Recipients, Regeneration, Taken,
 };
 use crate::filter::Filter;
 use crate::ids::Zone;
@@ -41,6 +41,9 @@ pub const THOSE: Objects = Objects::Those;
 
 /// "That card", "that spell", of a triggered ability's event: [`Objects::TriggeredOn`].
 pub const THAT_CARD: Objects = Objects::TriggeredOn;
+
+/// "That card from your graveyard": [`Objects::TriggeredOnIn`].
+pub const THAT_CARD_FROM_YOUR_GRAVEYARD: Objects = Objects::TriggeredOnIn(Zone::Graveyard);
 /// "The cards exiled with this": [`Objects::ExiledWithThis`].
 pub const EXILED_WITH_THIS: Objects = Objects::ExiledWithThis;
 
@@ -202,7 +205,24 @@ pub const fn counter_and_exile(spells: Objects) -> Effect {
 
 /// [`Effect::Destroy`]: "destroy [permanents]".
 pub const fn destroy(objects: Objects) -> Effect {
-    Effect::Destroy(objects)
+    Effect::Destroy {
+        objects,
+        regeneration: Regeneration::Allowed,
+    }
+}
+
+/// [`Effect::Destroy`] with [`Regeneration::Forbidden`]: "destroy [permanents]. They can't be
+/// regenerated."
+pub const fn destroy_without_regeneration(objects: Objects) -> Effect {
+    Effect::Destroy {
+        objects,
+        regeneration: Regeneration::Forbidden,
+    }
+}
+
+/// [`Effect::Attach`]: "attach [objects] to [host]".
+pub const fn attach(objects: Objects, to: Objects) -> Effect {
+    Effect::Attach { objects, to }
 }
 
 /// [`Effect::Exile`]: "exile [objects]".

@@ -219,6 +219,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
                 Objects::Target(_)
                 | Objects::Those
                 | Objects::TriggeredOn
+                | Objects::TriggeredOnIn(_)
                 | Objects::ExiledWithThis
                 | Objects::InZoneOf { .. }
                 | Objects::CardsIn { .. }

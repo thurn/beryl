@@ -317,6 +317,26 @@ def test_an_escalated_card_brief_shows_its_missing_mechanic(
     assert "Escalation" not in sections(brief_of("Lightning Bolt", sources))
 
 
+def test_a_partly_written_card_brief_says_what_its_file_leaves_out(
+    sources: card.Sources, cached: Path
+) -> None:
+    sources.escalations.write_text(
+        json.dumps(
+            {
+                "Lightning Bolt": {
+                    "mechanic": "damage to any target",
+                    "rule": "CR 120.3",
+                    "text": "Lightning Bolt deals 3 damage to any target.",
+                    "partial": True,
+                }
+            }
+        )
+    )
+    escalated = part(brief_of("Lightning Bolt", sources), "Escalation")
+    assert "Partly written" in escalated
+    assert "Left out: Lightning Bolt deals 3 damage" in escalated
+
+
 def test_a_card_is_found_by_slug_face_or_case(sources: card.Sources) -> None:
     with card_store.Store(sources.store) as store:
         for name in ("counterspell", "COUNTERSPELL", "mana-leak", "Ice", "fire-ice"):

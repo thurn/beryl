@@ -110,6 +110,18 @@ impl fmt::Debug for Custom {
     }
 }
 
+/// Equip's target: "target creature you control" (CR 702.6a).
+const EQUIP_TARGET: [TargetSpec; 1] = [TargetSpec::one(
+    TargetKind::Permanent,
+    Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),
+)];
+
+/// Equip's effect: "Attach this permanent to target creature you control" (CR 702.6a).
+const ATTACH_TO_TARGET: Effect = Effect::Attach {
+    objects: Objects::This,
+    to: Objects::Target(SpecIx::new(0)),
+};
+
 /// Crew's effect (CR 702.122a): "This permanent becomes an artifact creature until end of
 /// turn."
 const BECOME_ARTIFACT_CREATURE: Effect = Effect::Modify {
@@ -372,6 +384,16 @@ impl Ability {
     /// retain all of its prior card types and subtypes."
     pub const fn crew(n: u8) -> Ability {
         Ability::activated(Cost::crew(n)).effect(&BECOME_ARTIFACT_CREATURE)
+    }
+
+    /// Equip ([CR 702.6a](https://yawgatog.com/resources/magic-rules/#R7026a)): "Equip is an
+    /// activated ability of Equipment cards. 'Equip [cost]' means '[Cost]: Attach this
+    /// permanent to target creature you control. Activate only as a sorcery.'"
+    pub const fn equip(mana: ManaCost) -> Ability {
+        Ability::activated(Cost::mana(mana))
+            .targeting(&EQUIP_TARGET)
+            .effect(&ATTACH_TO_TARGET)
+            .as_a_sorcery()
     }
 
     /// Offspring's triggered ability

@@ -2,9 +2,11 @@
 //! name (plan, Verification: "Scenarios use basic lands and a small set of designated prop
 //! cards, so one card's change cannot break another card's tests").
 //!
-//! Each plays one role scenarios need, and was chosen from the implemented pool (plan K14: no
-//! new card for this) for text that stays out of a scenario's way: no upkeep trigger, no static
-//! ability reaching other objects, no mana ability to add payment plans, nothing that happens
+//! Each plays one role scenarios need, chosen for text that stays out of a scenario's way. A
+//! role no implemented card fills is filled by implementing a real card for it, even one in no
+//! deck, so that `XMage` and Forge can play the same scenarios. A prop has no upkeep trigger, no
+//! static ability reaching an object it isn't attached to, no mana ability to add payment
+//! plans, nothing that happens
 //! while it sits in a hand, a graveyard or a library. Mana Crypt, the old favourite, is the
 //! counterexample: its upkeep coin flip asks a question of every scenario that passes a turn.
 //!
@@ -44,6 +46,10 @@ pub const UNTARGETED_SPELL: &str = "Timetwister";
 /// A planeswalker with no static or triggered ability: Jace, the Mind Sculptor, loyalty 3.
 pub const PLANESWALKER: &str = "Jace, the Mind Sculptor";
 
+/// An Equipment: Leonin Scimitar, {1}, "Equipped creature gets +1/+1. Equip {1}". It is in no
+/// deck: it was implemented for scenarios that need an Equipment.
+pub const EQUIPMENT: &str = "Leonin Scimitar";
+
 /// A nonbasic land: Tundra, a Plains Island with no rules text.
 pub const NONBASIC_LAND: &str = "Tundra";
 
@@ -52,6 +58,7 @@ pub const ALL: &[&str] = &[
     CREATURE,
     SMALL_CREATURE,
     ARTIFACT,
+    EQUIPMENT,
     INSTANT,
     REMOVAL,
     SORCERY,

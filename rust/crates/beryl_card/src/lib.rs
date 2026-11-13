@@ -54,7 +54,7 @@ pub use definition::{
 };
 pub use effect::{
     Amount, CastTerms, Comparison, Condition, CopyException, Effect, Found, LibraryOrder,
-    LibraryPosition, Objects, Players, Recipients, Taken,
+    LibraryPosition, Objects, Players, Recipients, Regeneration, Taken,
 };
 pub use filter::Filter;
 pub use ids::{Seat, TurnStep, Zone};

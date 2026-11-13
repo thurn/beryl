@@ -170,6 +170,12 @@ means `python3 ~/enact/scripts/enact.py`.
   `Object` or `State` (plan K4).
 - Helpers used by two or more cards go in the shared library, not in a card
   file.
+- A card definition implements every clause of its Oracle text, including one
+  that no card in the decks makes happen yet. A clause the vocabulary can't say
+  is escalated in `data/card-escalations.json`, never left out with a comment.
+- It's fine to implement a card that is in no deck only so that scenarios can
+  use it (Leonin Scimitar exists to be stolen by Thieving Skydiver). Pick a real
+  card, so that XMage and Forge can play the same scenarios.
 - The kernel, rules and card crates have no runtime dependencies. When you add a
   dependency elsewhere, its `Cargo.toml` comment says what it replaces.
 - Forge is used only as a test oracle. No card data, vocabulary or design may

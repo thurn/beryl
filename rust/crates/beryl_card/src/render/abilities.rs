@@ -340,6 +340,19 @@ impl Ctx {
         if let Some(Measure::TotalPower(n)) = cost.measure() {
             return Some(format!("Crew {n}"));
         }
+        // Equip's whole ability (CR 702.6a): "[Cost]: Attach this permanent to target creature
+        // you control. Activate only as a sorcery."
+        let equips = matches!(
+            ability.body(),
+            Behavior::Data(Effect::Attach {
+                objects: Objects::This,
+                to: Objects::Target(_),
+            })
+        ) && ability.timing() == Timing::Sorcery
+            && cost.parts().is_empty();
+        if equips {
+            return Some(format!("Equip {}", mana_text(cost.mana)));
+        }
         let draws_one = matches!(
             ability.body(),
             Behavior::Data(Effect::Draw {

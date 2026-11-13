@@ -13,10 +13,19 @@ and builders a card definition is made of.
 
 ## Rules
 
-- **Only the card file**, plus `data/card-escalations.json` when you escalate.
-  Never edit the vocabulary (`rust/crates/beryl_card`), the engine
-  (`beryl_rules`, `beryl_kernel`), the renderer, tools, other cards, or any
-  allowlist or divergence file under `data/`.
+- **Only card files.** Write the card's file, plus the file of any card its
+  scenarios need (see "Cards for scenarios"), plus `data/card-escalations.json`
+  when you escalate and a `wording` entry in `data/card-text-allowlist.json`
+  (see "Reading failures"). Never edit the vocabulary
+  (`rust/crates/beryl_card`), the engine (`beryl_rules`, `beryl_kernel`), the
+  renderer, tools, other existing cards, or any other allowlist or divergence
+  file under `data/`.
+- **Every clause, always.** Implement every sentence of the Oracle text, even
+  one that no card in the decks makes happen today. "No Equipment is among the
+  cards, so attaching never comes up" is how Thieving Skydiver shipped without
+  its attach: the decks change, and the definition must already be right. If
+  the vocabulary can't say a clause, escalate (below); never leave it out with
+  a comment.
 - **No new vocabulary.** Use only entries that exist. If the card needs one that
   doesn't, escalate (below).
 - **No Rust body.** A definition is `static` and `const` data built from
@@ -28,8 +37,9 @@ and builders a card definition is made of.
   translate.
 - **Never weaken a check.** Don't skip a step, delete a failing scenario, or add
   an entry to `data/oracle-divergences.json` or any allowlist to make a check
-  pass. A failing scenario, oracle or render diff means your definition is wrong
-  until you have shown otherwise (see "Reading failures").
+  pass, apart from a `wording` entry as "Reading failures" describes. A failing
+  scenario, oracle or render diff means your definition is wrong until you have
+  shown otherwise.
 
 ## Steps
 
@@ -56,15 +66,21 @@ and builders a card definition is made of.
      as a link to `https://yawgatog.com/resources/magic-rules/#R<rule without
      dots>` and a quote of the rule's text, like the comments in the model
      card. `just citations` checks the quotes against the pinned rules release.
-5. **Write scenarios.** The file's `scenarios` module needs at least one
-   hand-written `Scenario` for each ability, ending in `Action::assert`s on what
-   the ability did. Copy the model card's scenarios. In scenarios:
+5. **Write scenarios.** The file's `scenarios` module needs hand-written
+   `Scenario`s that, between them, carry out every part of every ability: each
+   branch of an `if_then` or `if_else`, the inside of each `may` (answered yes)
+   and each `unless`. Each ends in `Action::assert`s on what it did. The test
+   `every_instruction_of_a_card_is_carried_out_by_its_own_scenarios` names any
+   part none of them reaches. A part is only checked against XMage and Forge if
+   a scenario reaches it. Copy the model card's scenarios. In scenarios:
    - Only implemented cards exist: cards with a file under `rust/cards`, or
      complete from the store, named by `names::<CARD>`, plus the stand-ins in
-     `props::` (`props::CREATURE`, `props::ARTIFACT`, ...). Today only Island,
-     Plains and Swamp are basic lands with files, so a card that needs {G} or
-     {R} to cast cannot be cast in a scenario: escalate it with the mechanic
-     "no implemented land makes {G}" (or {R}).
+     `props::` (`props::CREATURE`, `props::ARTIFACT`, `props::EQUIPMENT`, ...).
+     If a scenario needs a card nobody has implemented, implement one (see
+     "Cards for scenarios") rather than leave the part untested. Today only
+     Island, Plains and Swamp are basic lands with files, so a card that needs
+     {G} or {R} to cast cannot be cast in a scenario: escalate it with the
+     mechanic "no implemented land makes {G}" (or {R}).
    - `Action::cast` puts the spell on the stack, and each `Action::Resolve`
      resolves the top object: a creature spell, then its enters trigger.
    - Give each player a library with a card or two more than the scenario
@@ -76,9 +92,29 @@ and builders a card definition is made of.
 7. **Check fully.** Run `just card check "<name>"`, which also plays the
    scenarios in XMage and Forge (about a minute; it waits for the shared oracle
    lock). Then run `just citations`.
-8. **Commit and push.** Commit only the card file as `feat: <card name>` and
-   run `enact push` in the worktree. If it exits with code 2, fix what it
-   reports and run it again.
+8. **Commit and push.** Commit the card file, with any card file written for
+   its scenarios, as `feat: <card name>`, and run `enact push` in the worktree.
+   If it exits with code 2, fix what it reports and run it again.
+
+## Cards for scenarios
+
+It is fine, and expected, to implement a card only so that a scenario can use
+it. We can't wait for every card to be written before a definition has good
+tests. When a part of your card needs another card to happen (an Equipment to
+steal, a creature with a particular ability, a spell to counter):
+
+- Use a prop from `props::` if one fits.
+- Otherwise pick the simplest real card in the card store that sets the
+  situation up (`just card brief` works on any card), and write it as you write
+  any card, in its own file with its own scenarios, checked with
+  `just card check`. A real card, not an invented one, so that XMage and Forge
+  can play the same scenarios. Leonin Scimitar was written this way for Thieving
+  Skydiver: it is in no deck. Its doc comment says that it was implemented for
+  scenarios.
+- If other cards will need the same role, add it to `props::` with a doc
+  comment.
+- Name another card in your scenario with `Scenario::interaction`, unless it is
+  a prop.
 
 ## Reading failures
 
@@ -90,14 +126,18 @@ and builders a card definition is made of.
   wrong. Reread the Oracle text and rulings. If Beryl agrees with neither XMage
   nor Forge, Beryl is wrong.
 - `render` fails: it prints the rendered text against the Oracle text, with
-  `[-removed-]` and `{+added+}` words. Different instructions, amounts, targets,
-  conditions or order mean the definition is wrong: fix it. When every other
-  step passes and the only differences are the renderer's wording for the same
-  instructions (for example `you gain 1 life [-and-] {+.+} draw a card`,
-  "it" for the card's name, or one sentence split in two), the renderer lacks a
-  template, which you may not change. Commit the card anyway and quote the diff
-  in the commit body. `just card render --all` lists every such mismatch by
-  cause.
+  `[-removed-]` and `{+added+}` words. Oracle words the render lacks (a `[-...-]`
+  with no matching `{+...+}`) mean a clause is missing: implement it, or
+  escalate it as partial (below). Different instructions, amounts, targets,
+  conditions or order also mean the definition is wrong: fix it. Only when the
+  definition does exactly what the card says and the difference is the
+  renderer's wording for the same instructions (for example
+  `you gain 1 life [-and-] {+.+} draw a card`, "it" for the card's name, or one
+  sentence split in two) may you pin it: add an entry to
+  `data/card-text-allowlist.json` with `"reason": "wording"`, a `note` saying
+  why the two texts mean the same thing, and the exact `diff` lines that
+  `just card render "<name>"` prints. The `card-text` check in CI fails on any
+  difference that isn't pinned exactly. A missing clause is never `wording`.
 
 ## Escalating
 
@@ -132,3 +172,17 @@ To escalate:
 3. Commit only that entry as `chore: escalate <card name>`, with the missing
    mechanic in the body, and push it as in step 8. `just card brief` now shows
    the entry to the next writer.
+
+When the card already has a file (never delete a card implementation), or only
+one clause of a card you are writing is out of reach, escalate it as partial
+instead: keep the file with everything the vocabulary can say, and
+
+1. add the card's entry to `data/card-escalations.json` with `"partial": true`
+   and the left-out clause as its `text`;
+2. pin the render diff in `data/card-text-allowlist.json` with
+   `"reason": "escalated"`, its `note` naming the missing mechanic;
+3. say in the definition's comment which clause is missing and point to the
+   escalation.
+
+`just card brief` then shows the card as partly written, and the `card-text`
+check holds the gap to exactly those words until someone finishes it.

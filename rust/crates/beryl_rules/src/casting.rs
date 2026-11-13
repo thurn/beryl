@@ -6,9 +6,10 @@
 //! on the card (`beryl_kernel`'s contract, "Stores"), and its terms become entries on the
 //! spell as it is cast.
 
-use beryl_card::{CastTerms, Objects, Players};
+use beryl_card::{CastTerms, Filter, Objects, Players, Types};
 
 use crate::bitboard::Bitboard;
+use crate::filter::Evaluate;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -161,6 +162,14 @@ pub(crate) fn permit_instruction<L: Layout>(
     // Each permission is an entry of its own card, so the order they start in is nothing.
     for slot in run.state().in_candidate_order(cards) {
         let card = run.state().object_ref(slot);
+        // CR 701.18b: "To play a card means to play that card as a land or to cast that card
+        // as a spell, whichever is appropriate." Only casting is permitted here.
+        if terms.played {
+            let (game, _) = run.resolving();
+            if Filter::Types(Types::LAND).matches(game.state, game.table, slot, player) {
+                no_primitive(&terms);
+            }
+        }
         let (extra, exile) = (terms.costs_more, terms.exiled_instead);
         let (game, resolution) = run.resolving();
         allow(game, resolution, card, player, extra, this_turn, exile)?;

@@ -9,28 +9,39 @@
 // End of the generated card header.
 
 use crate::{names, printed};
-use beryl_card::effect::build::{TARGET, modify};
+use beryl_card::effect::build::{TARGET, THIS, attach, if_then, modify, sequence};
 use beryl_card::{
-    Ability, CardDef, CastingKind, CastingOption, Condition, Duration, Filter, Keywords, ManaCost,
-    Modification, TargetKind, TargetSpec, Trigger, Types, card,
+    Ability, CardDef, CastingKind, CastingOption, Condition, Duration, Effect, Filter, Keywords,
+    ManaCost, Modification, Subtype, TargetKind, TargetSpec, Trigger, Types, card,
 };
+
+/// Gains control of the artifact for as long as the effect lasts, which it doesn't say, so
+/// indefinitely ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a)). An
+/// Equipment then moves onto the Skydiver, unless it can't equip it
+/// ([CR 701.3b](https://yawgatog.com/resources/magic-rules/#R7013b)): "If an effect tries to
+/// attach an Aura, Equipment, or Fortification to an object or player it can't be attached
+/// to, the Aura, Equipment, or Fortification doesn't move." It still changes control.
+static STEAL: Effect = sequence(&[
+    modify(TARGET, Modification::Control, Duration::Indefinite),
+    if_then(
+        Condition::Is(TARGET, Filter::Subtype(Subtype::Equipment)),
+        &attach(TARGET, THIS),
+    ),
+]);
 
 pub static CARD: CardDef = card(
     names::THIEVING_SKYDIVER,
     &[printed::THIEVING_SKYDIVER
         .keywords(Keywords::FLYING)
         .abilities(&[
-            // X is the kicker's (CR 107.3m), the trigger's own. "Gain control of target
-            // artifact": for as long as the effect lasts, which it doesn't say, so
-            // indefinitely ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a)).
-            // No Equipment is among the cards, so attaching never comes up.
+            // X is the kicker's (CR 107.3m), the trigger's own.
             Ability::triggered(&Trigger::ENTERS)
                 .targeting(&[TargetSpec::one(
                     TargetKind::Permanent,
                     Filter::All(&[Filter::Types(Types::ARTIFACT), Filter::ManaValueAtMostX]),
                 )])
                 .only_if(&Condition::Paid(CastingKind::Kicker))
-                .effect(&modify(TARGET, Modification::Control, Duration::Indefinite)),
+                .effect(&STEAL),
         ])
         .casting(&[CastingOption::Kicker {
             cost: ManaCost::X,
@@ -150,6 +161,51 @@ pub mod scenarios {
                         player: P1,
                         card: crate::tokens::MAP_TOKEN,
                         count: 2,
+                    },
+                },
+            ]),
+        // Kicked for 1, the Skydiver takes the opponent's Leonin Scimitar and attaches it to
+        // itself: a 2/1 that becomes 3/2.
+        Scenario::new("Thieving Skydiver kicked steals an Equipment and wears it")
+            .hand(P0, &[SKYDIVER])
+            .battlefield(P0, ISLANDS)
+            .battlefield(
+                P1,
+                &[
+                    Permanent::new(props::EQUIPMENT),
+                    Permanent::new(props::CREATURE),
+                ],
+            )
+            .library(P0, &[names::ISLAND])
+            .library(P1, &[names::PLAINS])
+            .actions(&[
+                Action::Cast {
+                    player: P0,
+                    card: SKYDIVER,
+                    face: FaceIx::FRONT,
+                    costs: Castings::only(0),
+                },
+                Action::Answer {
+                    player: P0,
+                    kind: DecisionKind::X,
+                    pick: Pick::Number { n: 1 },
+                },
+                Action::Resolve,
+                Action::Resolve,
+                Action::Assert {
+                    assertion: Assertion::Controls {
+                        player: P0,
+                        card: props::EQUIPMENT,
+                        count: 1,
+                    },
+                },
+                Action::Assert {
+                    assertion: Assertion::Pt {
+                        player: P0,
+                        card: SKYDIVER,
+                        token: false,
+                        power: 3,
+                        toughness: 2,
                     },
                 },
             ]),

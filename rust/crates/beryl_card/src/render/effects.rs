@@ -12,7 +12,7 @@ use crate::continuous::Duration;
 use crate::definition::CardDef;
 use crate::effect::{
     Amount, CopyException, Effect, Found, LibraryOrder, LibraryPosition, Objects, Players,
-    Recipients, Taken,
+    Recipients, Regeneration, Taken,
 };
 use crate::ids::Zone;
 
@@ -98,7 +98,20 @@ impl Ctx {
                     ),
                 ]
             }
-            Effect::Destroy(objects) => vec![self.acts(("destroy", "destroys"), objects, "")],
+            Effect::Destroy {
+                objects,
+                regeneration,
+            } => {
+                let destroy = self.acts(("destroy", "destroys"), objects, "");
+                match regeneration {
+                    Regeneration::Allowed => vec![destroy],
+                    Regeneration::Forbidden => vec![destroy, self.not_regenerated(objects)],
+                }
+            }
+            Effect::Attach { objects, to } => {
+                let host = self.objects(to);
+                vec![self.acts(("attach", "attaches"), objects, &format!(" to {host}"))]
+            }
             Effect::Exile(objects) | Effect::ExileLinked(objects) => {
                 vec![self.acts(("exile", "exiles"), objects, "")]
             }
@@ -354,7 +367,12 @@ impl Ctx {
                     Duration::UntilYourNextTurn => (String::new(), what, " until your next turn"),
                 };
                 self.may = true;
-                let cast = self.clause(player, ("cast", "casts"), |_| format!("{it}{after}"));
+                let verb = if terms.played {
+                    ("play", "plays")
+                } else {
+                    ("cast", "casts")
+                };
+                let cast = self.clause(player, verb, |_| format!("{it}{after}"));
                 let mut clauses = vec![format!("{before}{cast}")];
                 if terms.costs_more > 0 {
                     clauses.push(format!(
@@ -659,4 +677,35 @@ pub(super) fn duration_suffix(duration: Duration) -> &'static str {
 /// targets.
 pub(super) fn says_nothing(body: Behavior) -> bool {
     matches!(body, Behavior::Data(Effect::Sequence([])))
+}
+
+impl Ctx {
+    /// "It can't be regenerated", or "They can't be regenerated" after several
+    /// ([CR 701.19c](https://yawgatog.com/resources/magic-rules/#R70119c)). An overload card's
+    /// text serves both of its spells, so it names what was destroyed instead of using a
+    /// pronoun that "each" would make wrong: "A creature destroyed this way can't be
+    /// regenerated."
+    fn not_regenerated(&mut self, objects: Objects) -> String {
+        let overloaded = self.face.is_some_and(|face| {
+            face.casting
+                .iter()
+                .any(|option| matches!(option, crate::CastingOption::Overload { .. }))
+        });
+        if overloaded
+            && let Objects::Target(n) = objects
+            && let Some(&spec) = self.targets.get(n.index())
+        {
+            let noun = self.target_noun(spec);
+            return format!(
+                "{} destroyed this way can't be regenerated",
+                with_article(&noun)
+            );
+        }
+        let they = if self.is_plural(objects) {
+            "they"
+        } else {
+            "it"
+        };
+        format!("{they} can't be regenerated")
+    }
 }

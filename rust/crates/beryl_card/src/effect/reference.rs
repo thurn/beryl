@@ -41,6 +41,11 @@ pub enum Objects {
     /// since is a new object
     /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), and this is nothing.
     TriggeredOn,
+    /// [`Objects::TriggeredOn`] while it is in its owner's `zone`: "that card from your
+    /// graveyard". A discarded card that a replacement effect put somewhere else
+    /// ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)) is not in the
+    /// graveyard, and this is nothing.
+    TriggeredOnIn(Zone),
     /// "The cards exiled with this": those in exile that an ability of this object exiled,
     /// linked to it ([`crate::Effect::ExileLinked`];
     /// [CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second ability
@@ -167,7 +172,11 @@ impl Objects {
     pub const fn needs_a_resolution(&self) -> bool {
         match self {
             Objects::This | Objects::AttachedTo | Objects::ExiledWithThis => false,
-            Objects::Target(_) | Objects::Those | Objects::Paid(_) | Objects::TriggeredOn => true,
+            Objects::Target(_)
+            | Objects::Those
+            | Objects::Paid(_)
+            | Objects::TriggeredOn
+            | Objects::TriggeredOnIn(_) => true,
             Objects::All { filter, .. } => filter.needs_a_resolution(),
             Objects::InZoneOf {
                 players, filter, ..

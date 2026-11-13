@@ -64,6 +64,7 @@ pub fn applied(spec: &LayerSpec) -> Result<(), Unapplied> {
         Objects::Target(_)
         | Objects::Those
         | Objects::TriggeredOn
+        | Objects::TriggeredOnIn(_)
         | Objects::ExiledWithThis
         | Objects::InZoneOf { .. }
         | Objects::CardsIn { .. }

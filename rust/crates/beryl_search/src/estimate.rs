@@ -224,7 +224,7 @@ impl Effects {
                 count,
                 ..
             } => e.tokens = amount(count),
-            Effect::Destroy(objects)
+            Effect::Destroy { objects, .. }
             | Effect::Exile(objects)
             | Effect::ExileUntilThisLeaves(objects)
             | Effect::ReturnToHand(objects)

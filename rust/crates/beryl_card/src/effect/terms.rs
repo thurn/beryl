@@ -35,6 +35,12 @@ pub struct CastTerms {
     /// ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)): "Effects that use
     /// the word 'instead' are replacement effects."
     pub exiled_instead: bool,
+    /// "May play it" rather than "may cast it"
+    /// ([CR 701.18b](https://yawgatog.com/resources/magic-rules/#R70118b)): "To play a card
+    /// means to play that card as a land or to cast that card as a spell, whichever is
+    /// appropriate." For a nonland card the two are the same. The engine has no permission
+    /// to play a land from outside a hand, and stops on one (`no_primitive`).
+    pub played: bool,
 }
 
 impl CastTerms {
@@ -42,6 +48,7 @@ impl CastTerms {
     pub const PLAIN: CastTerms = CastTerms {
         costs_more: 0,
         exiled_instead: false,
+        played: false,
     };
 
     /// These terms, with "a spell cast this way costs {`generic`} more to cast".
@@ -49,6 +56,15 @@ impl CastTerms {
     pub const fn costing_more(self, generic: u8) -> CastTerms {
         CastTerms {
             costs_more: generic,
+            ..self
+        }
+    }
+
+    /// These terms, worded "may play it" (CR 701.18b).
+    #[must_use]
+    pub const fn played(self) -> CastTerms {
+        CastTerms {
+            played: true,
             ..self
         }
     }

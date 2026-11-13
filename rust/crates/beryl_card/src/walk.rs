@@ -205,6 +205,7 @@ impl Objects {
             | Objects::Those
             | Objects::Paid(_)
             | Objects::TriggeredOn
+            | Objects::TriggeredOnIn(_)
             | Objects::ExiledWithThis => {}
             Objects::All { filter, .. } => filter.filters(visit),
             Objects::InZoneOf {
@@ -282,7 +283,7 @@ impl Effect {
         for players in [operands.players, operands.others].into_iter().flatten() {
             players.filters(visit);
         }
-        if let Some(objects) = operands.objects {
+        for objects in [operands.objects, operands.to].into_iter().flatten() {
             objects.filters(visit);
         }
         if let Some(amount) = operands.amount {
@@ -332,7 +333,7 @@ mod tests {
         Players::EachOpponent,
         Filter::Not(&Filter::Types(Types::CREATURE)),
     ))
-    .effect(&Effect::Destroy(Objects::All {
+    .effect(&crate::effect::build::destroy(Objects::All {
         zone: Zone::Battlefield,
         filter: Filter::ManaValueAtMost(2),
     }))

@@ -52,6 +52,7 @@ from . import (
     card_files,
     card_header,
     card_names,
+    card_text,
     citations,
     conventions,
     discarded_push,
@@ -542,6 +543,9 @@ def rust_lane(fast: bool = False, packages: list[str] | None = None) -> Lane:
             ],
             rerun=failed_tests,
         )
+        # Every card file's rendered rules text against its Oracle text (card_text.py), once
+        # the tests have built the scenario binary.
+        .step("card-text", [sys.executable, "-m", "beryl_tools.checks", "card-text"])
     )
 
 
@@ -779,6 +783,7 @@ if __name__ == "__main__":
         "rust-tests": rust_tests_step,
         "fast-rust-tests": fast_rust_tests_step,
         "card-names": card_names.step,
+        "card-text": card_text.step,
         "card-headers": card_header.step,
         "card-crates": card_crates.step,
         "file-length": file_length.step,

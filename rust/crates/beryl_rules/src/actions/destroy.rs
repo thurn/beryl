@@ -38,6 +38,12 @@ pub fn destroy_all<L: Layout>(
 
 /// [`Effect::Destroy`](beryl_card::Effect::Destroy): "Destroy [objects]." The outcome is the
 /// permanents that left the battlefield.
+///
+/// Its `regeneration` is not read: the engine has no regeneration shields yet, so every
+/// destruction already behaves as "can't be regenerated" does
+/// ([CR 701.19c](https://yawgatog.com/resources/magic-rules/#R70119c)): "they cause
+/// regeneration shields to not be applied." A regeneration shield, when one is added, must not
+/// apply to a destruction with [`Regeneration::Forbidden`](beryl_card::Regeneration::Forbidden).
 pub(crate) fn instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     objects: Objects,

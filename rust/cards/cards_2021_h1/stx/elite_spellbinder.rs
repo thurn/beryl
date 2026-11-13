@@ -36,7 +36,9 @@ const A_NONLAND_CARD_FROM_IT: Objects = Objects::InZoneOf {
 /// ([CR 601.3](https://yawgatog.com/resources/magic-rules/#R6013)), and the {2} is a cost
 /// increase ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f)): the total cost
 /// is the mana cost "plus all additional costs and cost increases". The card is nonland, so
-/// playing it is casting it. The whole hand is looked at, for one card to exile.
+/// playing it is casting it ([CR 701.18b](https://yawgatog.com/resources/magic-rules/#R70118b)):
+/// "To play a card means to play that card as a land or to cast that card as a spell,
+/// whichever is appropriate." The whole hand is looked at, for one card to exile.
 static SPELLBIND: Effect = sequence(&[
     look_at(YOU, THEIR_HAND),
     may_choose(
@@ -51,7 +53,7 @@ static SPELLBIND: Effect = sequence(&[
         owner_of(THOSE),
         THOSE,
         Duration::Indefinite,
-        CastTerms::PLAIN.costing_more(2),
+        CastTerms::PLAIN.costing_more(2).played(),
     ),
 ]);
 

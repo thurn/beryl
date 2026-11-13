@@ -51,6 +51,18 @@ use crate::mana::{ManaColor, ManaSet};
 use crate::prompt::Prompt;
 use crate::target::Takes;
 
+/// Whether a destroyed permanent may be regenerated
+/// ([CR 701.19c](https://yawgatog.com/resources/magic-rules/#R70119c)): "Effects that say that a
+/// permanent can't be regenerated don't preclude such abilities from being activated or such
+/// spells from being cast; rather, they cause regeneration shields to not be applied."
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Regeneration {
+    /// A regeneration shield applies, as it does to most destruction.
+    Allowed,
+    /// "[It] can't be regenerated": no regeneration shield applies.
+    Forbidden,
+}
+
 /// One instruction, or several composed
 /// ([CR 609.1](https://yawgatog.com/resources/magic-rules/#R6091)): "An effect is something
 /// that happens in the game as a result of a spell or ability."
@@ -143,7 +155,11 @@ pub enum Effect {
     /// "Destroy [permanents]"
     /// ([CR 701.8a](https://yawgatog.com/resources/magic-rules/#R7018a)): "To destroy a
     /// permanent, move it from the battlefield to its owner's graveyard."
-    Destroy(Objects),
+    Destroy {
+        objects: Objects,
+        /// Whether a regeneration shield may replace the destruction.
+        regeneration: Regeneration,
+    },
     /// "Exile [objects]"
     /// ([CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a)): "To exile an
     /// object, move it to the exile zone from wherever it is."
@@ -373,6 +389,14 @@ pub enum Effect {
         modification: Modification,
         duration: Duration,
     },
+    /// "Attach [objects] to [host]": an Equipment the objects name moves onto the one
+    /// creature `to` names
+    /// ([CR 701.3a](https://yawgatog.com/resources/magic-rules/#R7013a)): "To attach an Aura,
+    /// Equipment, or Fortification to an object or player means to take it from where it
+    /// currently is and put it onto that object or player." Equip's ability says it
+    /// ([`crate::Ability::equip`]), and so does Thieving Skydiver's "attach it to this
+    /// creature".
+    Attach { objects: Objects, to: Objects },
     /// "[Rule change] [duration]": a continuous effect from a resolving spell or ability that
     /// changes a rule of the game for the players it names
     /// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311)): "Some continuous
@@ -521,7 +545,7 @@ impl Effect {
             Effect::LookAt { .. }
             | Effect::Counter(_)
             | Effect::CounterInto { .. }
-            | Effect::Destroy(_)
+            | Effect::Destroy { .. }
             | Effect::Exile(_)
             | Effect::ExileUntilThisLeaves(_)
             | Effect::ExileLinked(_)
@@ -544,6 +568,7 @@ impl Effect {
             | Effect::AddMana { .. }
             | Effect::AddManaOfKind { .. }
             | Effect::Modify { .. }
+            | Effect::Attach { .. }
             | Effect::FlipCoin(_)
             | Effect::DealDamage { .. }
             | Effect::ChangeRule { .. }
@@ -580,7 +605,7 @@ impl Effect {
     /// ([`crate::Ability::takes_target`]).
     pub const fn takes(&self, target: SpecIx, how: Takes) -> bool {
         match *self {
-            Effect::Destroy(objects)
+            Effect::Destroy { objects, .. }
             | Effect::Exile(objects)
             | Effect::ExileUntilThisLeaves(objects)
             | Effect::ExileLinked(objects)
@@ -616,7 +641,8 @@ impl Effect {
             Effect::May { effect, .. }
             | Effect::Unless { effect, .. }
             | Effect::ForEachPlayer { effect, .. } => effect.takes(target, how),
-            Effect::Draw { .. }
+            Effect::Attach { .. }
+            | Effect::Draw { .. }
             | Effect::Discard { .. }
             | Effect::Mill { .. }
             | Effect::Scry { .. }

@@ -14,7 +14,8 @@ stops the rest:
 5. `render`: the rules text the card's definition renders to against its Oracle text in the
    card store, normalized (render_diff.py). A difference fails the step and prints the
    paragraphs that differ, since a definition that reads differently from the card most often
-   does something different (plan K13).
+   does something different, unless data/card-text-allowlist.json pins exactly that difference
+   (card_text.py).
 
 Each step prints one line, its name, `pass`, `fail` or `skip`, and what it found; a failure
 then prints the command's output. The command exits 1 when a step fails.
@@ -31,7 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from . import card, card_store, paths, render_diff, set_groups, store_cards
+from . import card, card_store, card_text, paths, render_diff, set_groups, store_cards
 
 Json = card_store.Json
 
@@ -206,6 +207,12 @@ def render(target: Card) -> Outcome:
     diff = render_diff.compare(target.name, list(target.oracle), found[0][1])
     if diff.matches:
         return Outcome("pass", "matches its Oracle text")
+    allowlist = card_text.load(card_text.ALLOWLIST)
+    escalations = card_text.load(card_text.ESCALATIONS)
+    pinned = {target.name: allowlist[target.name]} if target.name in allowlist else {}
+    if not card_text.problems({target.name: diff}, pinned, escalations):
+        reason = cast(Json, pinned[target.name])["reason"]
+        return Outcome("pass", f"differs as {card_text.ALLOWLIST.name} pins ({reason})")
     return Outcome(
         "fail",
         f"{len(diff.lines)} {'paragraph differs' if len(diff.lines) == 1 else 'paragraphs differ'}"

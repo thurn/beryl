@@ -48,6 +48,15 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   for a fast loop), and compares the rules text its definition renders to with
   its Oracle text. `just card render <name>` prints that comparison, and
   `just card render --all` the match rate over every card file.
+- Two checks hold a definition to its card. The `card-text` step of the rust
+  lane renders every card file and fails on any difference from its Oracle text
+  that `data/card-text-allowlist.json` doesn't pin exactly. The test
+  `every_instruction_of_a_card_is_carried_out_by_its_own_scenarios` (in
+  `beryl_cards`) fails on any part of a card's effect data, such as one branch
+  of an `If`, that none of the card's own scenarios carries out. The oracles
+  only compare what a scenario reaches, so a part no scenario reaches is
+  untested. When a scenario needs a card nobody has implemented, implement one,
+  even one in no deck (the `card-writing` skill, "Cards for scenarios").
 - `beryl_cli script-check` runs every card's spec moments from both seats and
   every UI fixture's recording, checking each animation script against its
   assertions (the `script` lane in `docs/checks.md`).

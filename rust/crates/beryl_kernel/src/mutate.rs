@@ -157,6 +157,37 @@ impl<L: Layout> State<L> {
         self.flags.derived_dirty = true;
     }
 
+    /// Attaches the Equipment in `slot` to the permanent in `host`, both on the battlefield
+    /// ([CR 701.3a](https://yawgatog.com/resources/magic-rules/#R7013a)): "To attach an Aura,
+    /// Equipment, or Fortification to an object or player means to take it from where it
+    /// currently is and put it onto that object or player." The rules decide that it may.
+    ///
+    /// It gets a new timestamp
+    /// ([CR 701.3c](https://yawgatog.com/resources/magic-rules/#R7013c)): "Attaching an Aura,
+    /// Equipment, or Fortification on the battlefield to a different object or player causes
+    /// the Aura, Equipment, or Fortification to receive a new timestamp."
+    #[inline]
+    pub fn attach(&mut self, slot: L::Slot, host: L::Slot) {
+        debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
+        debug_assert_eq!(self.object(host).zone, Zone::Battlefield);
+        let timestamp = self.zones.next_timestamp;
+        self.zones.next_timestamp = timestamp.wrapping_add(1);
+        let o = self.object_mut(slot);
+        o.attached_to = Some(host);
+        o.timestamp = timestamp;
+        self.flags.derived_dirty = true;
+    }
+
+    /// Unattaches the permanent in `slot` from what it is attached to, leaving it on the
+    /// battlefield ([CR 704.5n](https://yawgatog.com/resources/magic-rules/#R7045n)): "If an
+    /// Equipment or Fortification is attached to an illegal permanent or to a player, it
+    /// becomes unattached from that permanent or player. It remains on the battlefield."
+    #[inline]
+    pub fn unattach(&mut self, slot: L::Slot) {
+        self.object_mut(slot).attached_to = None;
+        self.flags.derived_dirty = true;
+    }
+
     /// Makes the card just put on the stack the spell its caster chose: `face` up, under
     /// their control ([CR 601.2a](https://yawgatog.com/resources/magic-rules/#R6012a)): "It
     /// has all the characteristics of the card (or the copy of a card) associated with it,

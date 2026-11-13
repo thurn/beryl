@@ -33,6 +33,15 @@ const UNREACHED: &[(&str, &str)] = &[
         "as offspring's trigger",
     ),
     (
+        "Leonin Scimitar: ability 1 (Activated)",
+        "equip targets a creature its controller controls, and a generated position gives the \
+         Equipment's controller none; the card's hand-written scenario equips one",
+    ),
+    (
+        "Leonin Scimitar: ability 0 (Static)",
+        "it changes only the creature the Equipment is attached to, as equip",
+    ),
+    (
         "Jace, Wielder of Mysteries: ability 0 (Replacement)",
         "it replaces a draw from an empty library, and a generated position's library empties \
          only under the −8, whose own second sentence wins the game first",

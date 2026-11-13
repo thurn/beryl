@@ -158,6 +158,7 @@ impl<L: Layout> Scene<'_, L> {
             | Objects::AttachedTo
             | Objects::Those
             | Objects::TriggeredOn
+            | Objects::TriggeredOnIn(_)
             | Objects::ExiledWithThis
             | Objects::All { .. }
             | Objects::InZoneOf { .. }
@@ -204,6 +205,9 @@ impl<L: Layout> Scene<'_, L> {
             Objects::Those => self.registers.outcome.objects,
             Objects::TriggeredOn => (self.subject.info.object)
                 .filter(|&object| s.is_current(object))
+                .map_or(Bitboard::EMPTY, |object| Bitboard::single(object.slot)),
+            Objects::TriggeredOnIn(zone) => (self.subject.info.object)
+                .filter(|&object| s.is_current(object) && s.object(object.slot).zone() == zone)
                 .map_or(Bitboard::EMPTY, |object| Bitboard::single(object.slot)),
             // CR 607.2a: "The second ability refers only to cards in the exile zone that
             // were put there as a result of an instruction to exile them in the first

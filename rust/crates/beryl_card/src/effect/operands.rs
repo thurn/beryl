@@ -19,6 +19,8 @@ pub struct Operands<'a> {
     /// A second set of players, as the players whose library another looks at.
     pub others: Option<&'a Players>,
     pub objects: Option<&'a Objects>,
+    /// A second set of objects, as the creature an Equipment is attached to.
+    pub to: Option<&'a Objects>,
     pub amount: Option<&'a Amount>,
     pub filter: Option<&'a Filter>,
 }
@@ -28,6 +30,7 @@ impl<'a> Operands<'a> {
         players: None,
         others: None,
         objects: None,
+        to: None,
         amount: None,
         filter: None,
     };
@@ -75,6 +78,9 @@ impl<'a> Operands<'a> {
             None => false,
         };
         let objects = match self.objects {
+            Some(objects) => objects.names_paid(),
+            None => false,
+        } || match self.to {
             Some(objects) => objects.names_paid(),
             None => false,
         };
@@ -127,7 +133,7 @@ impl Effect {
             | Effect::CounterInto {
                 spells: objects, ..
             }
-            | Effect::Destroy(objects)
+            | Effect::Destroy { objects, .. }
             | Effect::Exile(objects)
             | Effect::ExileUntilThisLeaves(objects)
             | Effect::ExileLinked(objects)
@@ -139,6 +145,10 @@ impl Effect {
             | Effect::PutIntoLibrary { objects, .. }
             | Effect::Explore(objects)
             | Effect::Modify { objects, .. } => Operands::of_objects(objects),
+            Effect::Attach { objects, to } => Operands {
+                to: Some(to),
+                ..Operands::of_objects(objects)
+            },
             Effect::Draw { player, count }
             | Effect::Discard { player, count }
             | Effect::Mill { player, count }

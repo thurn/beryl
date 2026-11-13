@@ -90,6 +90,9 @@ impl Ctx {
             }
             .to_owned(),
             Objects::TriggeredOn => self.triggered_on(),
+            Objects::TriggeredOnIn(zone) => {
+                format!("{} from {}", self.triggered_on(), owners_zone(zone))
+            }
             Objects::ExiledWithThis => format!("the cards exiled with {}", self.this),
             Objects::All { zone, filter } => {
                 let kind = Kind::of_zone(zone);
@@ -158,6 +161,7 @@ impl Ctx {
             | Objects::AttachedTo
             | Objects::Those
             | Objects::TriggeredOn
+            | Objects::TriggeredOnIn(_)
             | Objects::Paid(_) => self.objects(objects),
         }
     }
@@ -190,7 +194,7 @@ impl Ctx {
     pub(super) fn objects_possessive(&mut self, objects: Objects) -> String {
         match objects {
             Objects::Those => if self.plural { "their" } else { "its" }.to_owned(),
-            Objects::TriggeredOn | Objects::Paid(_) => "its".to_owned(),
+            Objects::TriggeredOn | Objects::TriggeredOnIn(_) | Objects::Paid(_) => "its".to_owned(),
             Objects::This if self.this_is_it => "its".to_owned(),
             Objects::Target(n) => match self.target(n) {
                 Some(phrase) => format!("{phrase}'s"),
@@ -210,7 +214,11 @@ impl Ctx {
             | Objects::InZoneOf { .. }
             | Objects::CardsIn { .. }
             | Objects::ExiledWithThis => true,
-            Objects::This | Objects::AttachedTo | Objects::TriggeredOn | Objects::Paid(_) => false,
+            Objects::This
+            | Objects::AttachedTo
+            | Objects::TriggeredOn
+            | Objects::TriggeredOnIn(_)
+            | Objects::Paid(_) => false,
         }
     }
 
@@ -377,11 +385,28 @@ impl Ctx {
             Condition::Did => "you do".to_owned(),
             Condition::Paid(kind) => self.paid_condition(kind, true),
             Condition::Compare(left, comparison, right) => self.compare(left, comparison, right),
+            // A permanent target said before is "that artifact" in a condition about it:
+            // "If that artifact is an Equipment". A card is "it": "If it's a land card".
             Condition::Is(objects, filter) => {
-                let what = self.objects(objects);
-                let noun = self
-                    .noun(filter, Kind::Card(None))
-                    .indefinite(Kind::Card(None));
+                let permanent = match objects {
+                    Objects::Target(n) => self
+                        .targets
+                        .get(n.index())
+                        .copied()
+                        .filter(|spec| spec.kind == TargetKind::Permanent),
+                    _ => None,
+                };
+                let (what, kind) = match permanent {
+                    Some(spec) => {
+                        let head = self.noun(kind_of(spec.filter), Kind::Permanent);
+                        (
+                            format!("that {}", head.singular(Kind::Permanent)),
+                            Kind::Permanent,
+                        )
+                    }
+                    None => (self.objects(objects), Kind::Card(None)),
+                };
+                let noun = self.noun(filter, kind).indefinite(kind);
                 format!("{} {noun}", be(&what, self.is_plural(objects), true))
             }
             Condition::EnteredThisTurn(objects) => {
@@ -571,6 +596,24 @@ impl Ctx {
             Amount::Life(Players::You) => Some(("have", "life".to_owned())),
             _ => None,
         }
+    }
+}
+
+/// "Your graveyard": a zone of the controller's own, where a card they own is.
+fn owners_zone(zone: Zone) -> String {
+    format!("your {}", zone_name(zone))
+}
+
+/// The part of a target's filter that names what kind of object it is, for "that artifact":
+/// its card types, without "with mana value X or less" or who controls it.
+fn kind_of(filter: Filter) -> Filter {
+    match filter {
+        Filter::All(parts) => parts
+            .iter()
+            .copied()
+            .find(|part| matches!(part, Filter::Types(_)))
+            .unwrap_or(Filter::Any),
+        other => other,
     }
 }
 
