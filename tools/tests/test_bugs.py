@@ -188,6 +188,7 @@ def test_import_resets_sender_status_and_preserves_evidence(
 ) -> None:
     root = tmp_path / "bugs"
     monkeypatch.setenv("BERYL_BUGS", str(root))
+    monkeypatch.setattr(bugs, "run_bd", lambda _args: "[]")
     key = "20261108-143012-arrow-jumps"
     bundle = tmp_path / "reports.zip"
     with ZipFile(bundle, "w") as archive:
@@ -214,3 +215,70 @@ def test_import_resets_sender_status_and_preserves_evidence(
         archive.writestr(f"reports/{key}/../../unexpected", "unexpected")
     assert cli.main(["bugs", "import", str(bundle)]) == 1
     assert not (root / "unexpected").exists()
+
+
+def test_import_keeps_a_bead_this_tracker_has(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "bugs"
+    monkeypatch.setenv("BERYL_BUGS", str(root))
+    synced: str = "20261108-143012-arrow-jumps"
+    unsynced = "20261108-150000-other-report"
+    bundle = tmp_path / "reports.zip"
+    with ZipFile(bundle, "w") as archive:
+        archive.writestr(
+            "manifest.json",
+            json.dumps(
+                {
+                    "format": "beryl-bug-reports",
+                    "version": 1,
+                    "reports": [synced, unsynced],
+                }
+            ),
+        )
+        for key, bead in ((synced, "by-sender"), (unsynced, "by-missing")):
+            archive.writestr(
+                f"reports/{key}/report.md",
+                REPORT.replace("20261108-143012-arrow-jumps", key).replace(
+                    "status: open\nbead:", f"status: filed\nbead: {bead}"
+                ),
+            )
+
+    def fake_bd(args: list[str]) -> str:
+        assert args[:2] == ["list", "--all"] and "bug-report" in args
+        return json.dumps(
+            [
+                {"id": "by-local", "external_ref": f"bug-report:{synced}"},
+                {"id": "by-unrelated", "external_ref": None},
+            ]
+        )
+
+    monkeypatch.setattr(bugs, "run_bd", fake_bd)
+    assert cli.main(["bugs", "import", str(bundle)]) == 0
+    kept = bugs.load(root / synced)
+    reset = bugs.load(root / unsynced)
+    assert kept is not None and kept.status == "filed" and kept.bead == "by-local"
+    assert reset is not None and reset.status == "open" and not reset.bead
+
+
+def test_import_without_bd_imports_as_open(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "bugs"
+    monkeypatch.setenv("BERYL_BUGS", str(root))
+    key = "20261108-143012-arrow-jumps"
+    bundle = tmp_path / "reports.zip"
+    with ZipFile(bundle, "w") as archive:
+        archive.writestr(
+            "manifest.json",
+            json.dumps({"format": "beryl-bug-reports", "version": 1, "reports": [key]}),
+        )
+        archive.writestr(f"reports/{key}/report.md", REPORT)
+
+    def failing_bd(_args: list[str]) -> str:
+        raise RuntimeError("bd list: no database")
+
+    monkeypatch.setattr(bugs, "run_bd", failing_bd)
+    assert cli.main(["bugs", "import", str(bundle)]) == 0
+    saved = bugs.load(root / key)
+    assert saved is not None and saved.status == "open" and not saved.bead

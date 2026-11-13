@@ -397,7 +397,8 @@ def stage_bundle(archive: zipfile.ZipFile, staging: Path) -> list[str]:
         report = load(staging / key)
         if report is None or report.fields.get("id") != key:
             raise ValueError(f"missing or invalid report {key}")
-        # Sender-side filing state has no authority in this tracker.
+        # Sender-side filing state has no authority in this tracker; `import_cmd`
+        # restores `filed` only for a report this tracker has a bead for.
         update(report, status="open", bead="", fixed="", fix="")
     return ids
 
@@ -418,6 +419,28 @@ def adopt_report(staged: Path, root: Path) -> bool:
     return True
 
 
+def filed_beads() -> dict[str, str]:
+    """This tracker's bug-report beads, keyed by their report's ID.
+
+    `file_bead` gives each bead the external ref `bug-report:<report id>`, so a report
+    filed on another machine whose beads were synced here (`enact sync`) is found by its
+    ID alone. If `bd` fails, no bead is found and imported reports stay open.
+    """
+    try:
+        found = json.loads(
+            run_bd(["list", "--all", "--label", LABEL, "--limit", "0", "--json"])
+        )
+    except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
+        print(f"bugs: can't list beads, importing as open: {error}", file=sys.stderr)
+        return {}
+    prefix = f"{LABEL}:"
+    return {
+        str(bead["external_ref"]).removeprefix(prefix): str(bead["id"])
+        for bead in found
+        if str(bead.get("external_ref") or "").startswith(prefix)
+    }
+
+
 def import_cmd(args: argparse.Namespace) -> int:
     root = bugs_dir()
     root.mkdir(parents=True, exist_ok=True)
@@ -426,9 +449,18 @@ def import_cmd(args: argparse.Namespace) -> int:
             staging = Path(temp)
             with zipfile.ZipFile(args.bundle) as archive:
                 keys = stage_bundle(archive, staging)
+            beads = filed_beads()
             for key in keys:
+                # The sender's `bead:` field isn't trusted, but a bead in this tracker
+                # whose external ref names the report is: the report was filed already.
+                bead = beads.get(key, "")
+                if bead:
+                    report = load(staging / key)
+                    if report is not None:
+                        update(report, status="filed", bead=bead)
+                filed = f" (filed as {bead})" if bead else ""
                 if adopt_report(staging / key, root):
-                    print(f"imported {key}")
+                    print(f"imported {key}{filed}")
                 else:
                     print(f"already saved {key}")
     except (OSError, ValueError, RuntimeError, zipfile.BadZipFile) as error:
@@ -475,7 +507,10 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     v.add_argument("--priority", default="1", help="the beads' priority (0-4)")
     v.add_argument("--dry-run", action="store_true")
     v.set_defaults(func=file_cmd)
-    v = verbs.add_parser("import", help="save reports from a ZIP for local triage")
+    v = verbs.add_parser(
+        "import",
+        help="save reports from a ZIP for local triage, keeping beads filed here",
+    )
     v.add_argument("bundle", type=Path)
     v.set_defaults(func=import_cmd)
     v = verbs.add_parser("done", help="mark reports fixed and move them to done/")
