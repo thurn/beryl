@@ -17,6 +17,7 @@ def own_cache(
     cache = tmp_path_factory.mktemp("cache")
     monkeypatch.setenv("BERYL_CACHE", str(cache))
     monkeypatch.setenv("BERYL_CI_BEADS", "off")
+    monkeypatch.setenv("BERYL_SPEED", "off")
     monkeypatch.delenv("BERYL_CHECK_RESULTS", raising=False)
     monkeypatch.setattr(caches, "free_space", lambda _: 10 * caches.LOW_DISK)
     return cache

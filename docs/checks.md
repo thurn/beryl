@@ -81,10 +81,20 @@ Mac, and its fast check skips the browser checks and `motion` (see
 - A run that goes over budget still passes, and files a `check-budget` bead
   (`budget.py`) to speed up, move or delete its slowest steps instead of raising
   the budget. The deadline, at least 600 s, only catches a hang.
-- Budgets and deadlines are measured in load-adjusted seconds: while the load
-  average is above the number of cores, the clock runs proportionally slower, up
-  to 8x. So a check that would pass on a quiet machine also passes on a busy
-  one.
+- Budgets and deadlines are measured in seconds on the reference machine (the
+  one the budgets were set on) with nothing else running. While the load average
+  is above the number of cores, the clock runs proportionally slower, up to 8x.
+  On a machine slower than the reference, it also runs slower by that machine's
+  speed factor (`speed.py`). So a check takes the same budget seconds on a busy
+  or slow machine as on an idle reference one.
+- The speed factor is this machine's time for a fixed CPU workload divided by
+  the reference's time in `data/speed-reference.json`. The first check run on a
+  machine with no saved time measures it in the background, and the factor
+  applies from the next run; `just speed` measures it on demand. Run
+  `just speed --reference` on the reference machine and commit the file to set
+  the reference. Neither needs a quiet machine: each round of the workload is
+  adjusted for load the same way the clock is, and the best of five rounds over
+  about a minute is kept. Until both times exist, the factor is 1.
 - A lane killed by its deadline automatically reruns once with a fresh deadline,
   so if a push still times out, some step is slow or hung. Find it before
   pushing again.

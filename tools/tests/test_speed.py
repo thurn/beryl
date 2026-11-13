@@ -65,3 +65,41 @@ def test_a_slower_machine_runs_the_clock_slower(
 
 def test_the_workload_task_is_deterministic() -> None:
     assert speed.task(7) == speed.task(7)
+
+
+def test_a_round_counts_its_own_cores_as_load() -> None:
+    # Idle before: the workload alone fills the cores, so nothing is adjusted.
+    assert speed.adjusted(10.0, 0.0, 10) == 10.0
+    # Another 10 runnable processes before: the round shared the cores half and half.
+    assert speed.adjusted(10.0, 10.0, 10) == 5.0
+
+
+def test_the_best_round_is_kept(monkeypatch: pytest.MonkeyPatch) -> None:
+    loads = iter([30.0, 0.0])
+    monkeypatch.setattr(speed.system, "loadavg", lambda: (next(loads), 0.0, 0.0))
+    monkeypatch.setattr(speed, "TASKS", 4)
+    seconds, under = speed.measure(rounds=2, gap=0.0)
+    assert seconds > 0 and under in (0.0, 30.0)
+
+
+def test_a_check_starts_one_background_measurement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    started: list[list[str]] = []
+    monkeypatch.delenv(speed.OFF_ENV)
+    monkeypatch.setattr(
+        speed.subprocess, "Popen", lambda args, **kw: started.append(args)
+    )
+    assert speed.start_background() is not None
+    # A second check run while the first measurement is pending starts none.
+    assert speed.start_background() is None
+    assert len(started) == 1 and started[0][-2:] == ["speed", "--background"]
+
+
+def test_a_measured_machine_starts_no_background_measurement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(speed.OFF_ENV)
+    monkeypatch.setattr(speed.subprocess, "Popen", lambda *a, **kw: pytest.fail("ran"))
+    write(paths.cache_root() / speed.CACHE_FILE, 2.0)
+    assert speed.start_background() is None

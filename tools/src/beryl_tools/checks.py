@@ -646,6 +646,9 @@ def counts_lane() -> Lane:
 
 
 def fast(args: argparse.Namespace) -> int:
+    started = speed.start_background()
+    if started:
+        print(f"check: {started}")
     base = branch_base()
     changed: list[str] | None = changed_paths(base)
     problems = hygiene.problems(base, changed or [])
@@ -717,6 +720,9 @@ def changed_cards(changed: list[str] | None) -> list[str]:
 
 
 def slow(args: argparse.Namespace) -> int:
+    measuring = speed.start_background()
+    if measuring:
+        print(f"ci: {measuring}")
     started = time.monotonic()
     lanes = {
         "repo": repo_lane(),
