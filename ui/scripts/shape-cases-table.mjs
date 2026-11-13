@@ -40,9 +40,10 @@ function damageLeft(state, view) {
         .reduce((sum, { pt }) => sum + Math.max(0, pt?.power ?? 0), 0);
 }
 
-/** The line `prompt` draws from each attacker or blocker to what it is aimed at, and none
- * for a prompt that declares nothing or whose lines the session leaves out (an attack with
- * one thing to aim at): which lines, and each as the stage names it. With them, for a prompt
+/** The line `prompt` draws from each attacker or blocker to what it is aimed at, none to a
+ * player (Arena's attacker at the player has only its chevron), and none for a prompt that
+ * declares nothing or whose lines the session leaves out: which lines, and each as the
+ * stage names it. With them, for a prompt
  * that declares blocks over `view`, the damage still on its way to the player (`damageLeft`),
  * and null for any other, or with no view given. */
 export function declared(prompt, view) {
@@ -55,6 +56,7 @@ export function declared(prompt, view) {
         damage:
             state.arrow === "block" && view ? damageLeft(state, view) : null,
         lines: (state.lined ? state.pairs : [])
+            .filter(({ to }) => to.kind !== "player")
             .map(({ from, to }) => `${state.arrow} ${from} ${named(to)}`)
             .sort(),
     };
