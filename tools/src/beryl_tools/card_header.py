@@ -1,4 +1,4 @@
-"""A card file's generated header (docs/project-50k.md K2, "A card file"): its card's faces as
+"""A card file's generated header: its card's faces as
 printed, from the card store, between two marker lines at the top of the file.
 
 Each face gives its name and mana cost, its type line with its power and toughness, loyalty or

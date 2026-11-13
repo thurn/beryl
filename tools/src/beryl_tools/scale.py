@@ -1,4 +1,4 @@
-"""The scale rehearsal (docs/project-50k.md, Acceptance, "Scale rehearsal"): whether the compiler
+"""The scale rehearsal: whether the compiler
 copes with 50,000 implemented cards.
 
 `scale` writes a scratch workspace under `$BERYL_CACHE/scale` (never in the tree) that builds
@@ -31,8 +31,7 @@ Every run is made under the machine's normal load, a load average of 20 to 40 on
 (docs/benchmarking.md, "Timing under load"); there is no quiet run to wait for. The clock
 removes the load beyond the cores, but not the slowdown from sharing caches and memory below
 that, so the times still move with load: four cold checks took 41 to 56 s against the 60 s
-budget, and one-edit medians ranged from 2.2 to 3.2 s against 2 s (docs/project-50k.md, "Scale
-rehearsal"). So:
+budget, and one-edit medians ranged from 2.2 to 3.2 s against 2 s. So:
 
 - `--assert` is how a budget is judged. Run it under normal load with `--edits 8` or more, and
   read each time with its load and CPU-seconds. When a change is meant to move a time, compare
@@ -43,7 +42,7 @@ rehearsal"). So:
   margin. The times are printed in its log, where their trend shows.
 
 The rehearsal holds the machine for minutes, so it runs in the nightly, never in a check. It
-then prints what scripts cost (plan K24): the seconds
+then prints what scripts cost: the seconds
 `beryl_cli script-check` takes to play every spec moment of each pooled card from both seats,
 per card and extrapolated to the N clones, reported with no bar.
 """
@@ -104,7 +103,7 @@ class Budget:
     held: str | None = None
 
 
-# The plan's four budgets (docs/project-50k.md, Acceptance, "Scale rehearsal").
+# The plan's four budgets.
 BUDGETS: dict[str, Budget] = {
     "cold check": Budget(60, 60, "s"),
     "release build": Budget(180, 180, "s"),
@@ -378,7 +377,7 @@ def scale(args: argparse.Namespace) -> int:
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
         "scale",
-        help="build cloned cards at scale and time the compiler (docs/project-50k.md)",
+        help="build cloned cards at scale and time the compiler",
     )
     p.add_argument(
         "--cards", type=int, default=DEFAULT_CARDS, help="definitions to build"

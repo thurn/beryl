@@ -1,4 +1,4 @@
-//! Mana in a script (plan K23; `manaMotes` in `ManaFlow.tsx`): a streak from what made it
+//! Mana in a script: a streak from what made it
 //! into the spell or ability it pays for, which changes no table, and a count of the pool for
 //! what is left there or spent from it. What each unit pays for is the engine's word: the
 //! entry its mana ability was activated to pay for (`hear.rs`).

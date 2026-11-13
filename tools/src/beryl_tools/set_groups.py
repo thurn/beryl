@@ -1,6 +1,5 @@
 """data/set-groups.json: the crates card files go in, each the first-printing sets of a
-calendar year or part of one (docs/project-50k.md, K8: "Card files are grouped by first-printing
-set, in many crates"), which `by cards` writes beside the card store and `card crates` updates,
+calendar year or part of one, which `by cards` writes beside the card store and `card crates` updates,
 and the paths a card's file belongs at.
 
 A group is a crate name and its set codes. Each first-printing set goes in the crate of the

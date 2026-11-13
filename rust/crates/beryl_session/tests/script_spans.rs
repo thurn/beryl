@@ -1,4 +1,4 @@
-//! The arrows, lines, lifts and mana of the scripts the session builds (plan K23), and the
+//! The arrows, lines, lifts and mana of the scripts the session builds, and the
 //! rule invariants that hold them (K24): a hand-written expectation per verb for both seats,
 //! the sequences behind two themes of repeated bug reports, and for each invariant a
 //! hand-built script that breaks it: the last two, a step whose cause was not there.

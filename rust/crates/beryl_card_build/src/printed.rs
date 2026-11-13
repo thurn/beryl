@@ -1,6 +1,4 @@
-//! A face's printed characteristics, generated from its card store record (plan K2: "Printed
-//! characteristics are generated from Scryfall for the whole pool into the card store", since
-//! "Nobody types a cost or type line"). A card file's face starts from the constant written
+//! A face's printed characteristics, generated from its card store record. A card file's face starts from the constant written
 //! here and adds its abilities.
 
 use std::fmt::Write as _;

@@ -1,5 +1,4 @@
-//! The generated scenarios of the cards built from library effects (plan K3,
-//! [`crate::derive`]): they pass where the hand-written ones do, they are the same each time,
+//! The generated scenarios of the cards built from library effects: they pass where the hand-written ones do, they are the same each time,
 //! and they exercise every ability of their card.
 
 use beryl_engine::card::CardDef;
@@ -10,7 +9,7 @@ use super::plays_alike_in_every_slot_order;
 use crate::{CARDS, derive};
 
 /// The cards with a Rust body, which get no generated scenarios: none since the port to
-/// effect data (plan K1).
+/// effect data.
 const CUSTOM: &[&str] = &[];
 
 /// The abilities of generated cards that no generated scenario exercises, and why. An entry

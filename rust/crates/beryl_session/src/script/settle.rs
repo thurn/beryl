@@ -2,7 +2,7 @@
 //! derived state changes with no event (summoning sickness, power and toughness, a blocker's
 //! part in combat, a mana pool), and a cast taken back leaves none. Each difference left
 //! between the working table and the view's becomes a step here, so that the script replays
-//! to the view exactly (plan K24). The stack's entries are told apart by the engine's names
+//! to the view exactly. The stack's entries are told apart by the engine's names
 //! for them (`hear.rs`), which both tables carry.
 
 use super::build::Builder;

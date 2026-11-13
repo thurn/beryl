@@ -1,4 +1,4 @@
-//! The arrows and lines of a script (plan K23): which a table calls for, and the steps that
+//! The arrows and lines of a script: which a table calls for, and the steps that
 //! begin and end them as the builder plays its steps. The UI drew these afresh from every
 //! view (`boardArrows` in `Board.tsx`), so an arrow could outlive what it pointed at; here
 //! each is a span with a beginning and an end, held to the rule invariants (`check.rs`).

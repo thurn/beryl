@@ -9,9 +9,9 @@
 //! [`GameTable`]). Players see the game only through an [`Observation`].
 //!
 //! Nothing is defined here. A caller stays on this crate until it moves to the two behind it
-//! (`docs/project-50k.md`, Crates).
+//!.
 
-// The game state and everything that writes it are the kernel's (plan K6).
+// The game state and everything that writes it are the kernel's.
 pub use beryl_kernel::{
     bitboard, chance, decision, filter, fixed, ids, observation, query, relayout, rng, state,
     table, two_player,

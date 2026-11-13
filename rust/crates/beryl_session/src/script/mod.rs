@@ -1,5 +1,4 @@
-//! The script: what one seat's screen does between two views (plan K23 to K26,
-//! `docs/project-50k.md`, Target architecture, Presentation). The session builds one beside each
+//! The script: what one seat's screen does between two views. The session builds one beside each
 //! view, per seat; the stage plays it and guesses nothing. A script says what happens and in
 //! what order. It holds no geometry and no timing: where things lie is the stage's layout, and
 //! how long a verb takes is the design language's data (`data/ui-conventions.json`).
@@ -60,7 +59,7 @@
 //! where a planeswalker could be attacked. One ends in a beat of its own before the beat
 //! that moves either of its ends, and is not drawn again at a card that changed zones. A
 //! script draws no mark: all six are a prompt's, which the session's prompt state will give
-//! (plan K26).
+//!.
 //!
 //! Spans change no table, so replay cannot hold them. The rule invariants do ([`carried`],
 //! `check.rs`), which a debug build runs with the replay check on every script it builds.
@@ -113,8 +112,7 @@
 //!
 //! [`Step::cause`] names the spell, ability, permanent or player a step comes from; none is
 //! the rules of the game (a turn-based action, a state-based action). It is the engine's: the
-//! tag the engine keeps beside each event it records (plan K23,
-//! [`beryl_engine::event::Cause`]) says a player's own action (a cast, a cost, a trigger put
+//! tag the engine keeps beside each event it records says a player's own action (a cast, a cost, a trigger put
 //! on the stack), the effect of the resolving spell or ability, down to its leaving the
 //! stack, or the effect of an ability that never was on the stack, as a land's mana is. A
 //! step that shows an event has that event's cause, and the rule invariants hold every step

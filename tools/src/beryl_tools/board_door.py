@@ -5,7 +5,7 @@ no invariant kept. It is public because scenarios, checkpoints, tools and tests 
 positions through it; the rules change the state only through the mutators (the kernel's
 contract, "The board door" and "Mutators"). `beryl_rules` holds `&mut State` in every rules
 module, so the compiler cannot keep the door shut there: this check refuses it where the rules
-live, outside their tests, and says what to add instead (docs/project-50k.md, K6).
+live, outside their tests, and says what to add instead.
 """
 
 from __future__ import annotations

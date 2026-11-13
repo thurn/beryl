@@ -1,9 +1,9 @@
 //! The cards of the vocabulary's paper test that it can already say
-//! (`docs/project-50k.md`, milestone 2): definitions of cards Beryl does not implement,
+//!: definitions of cards Beryl does not implement,
 //! drawn at random from Scryfall's Oracle data, written here so that the claim "this card
 //! fits" is one the compiler checks. Their Oracle text is quoted above each.
 //!
-//! Printed characteristics are generated from Scryfall (plan K2), so a subtype today's
+//! Printed characteristics are generated from Scryfall, so a subtype today's
 //! `Subtype` lacks is left out; what is under test is the abilities.
 
 use beryl_card::effect::build::{

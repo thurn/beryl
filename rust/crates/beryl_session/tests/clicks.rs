@@ -1,7 +1,7 @@
-//! The pick shape's prompts answered by clicks alone (plan K26): a priority, a choice of
+//! The pick shape's prompts answered by clicks alone: a priority, a choice of
 //! targets, and a choice among permanents on the table. Each test holds the prompt's state
 //! after each click of one worked example to a text written by hand from what the screen
-//! shows (plan K24), and checks that the clicks end where the picks a UI holding the prompt's
+//! shows, and checks that the clicks end where the picks a UI holding the prompt's
 //! state itself would send end.
 
 use std::sync::mpsc::channel;

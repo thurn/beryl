@@ -1,7 +1,7 @@
 //! What the dump says of each card a scenario names: its faces' abilities, costs, casting
 //! options and the facts of their effect data, read from the definition alone by a walk
-//! (plan K1: tools read effect data). The oracle exporters translate a scenario's decisions
-//! into each oracle's terms from these (`docs/project-50k.md`, "Card pool pipeline"), so they
+//!. The oracle exporters translate a scenario's decisions
+//! into each oracle's terms from these, so they
 //! keep no table keyed by card name. Nothing here names a card or adds to the vocabulary.
 
 use std::collections::{BTreeMap, HashMap};

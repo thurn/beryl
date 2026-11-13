@@ -1,4 +1,4 @@
-//! A prompt's state as text, for the hand-written expectations of tests (plan K24) and anyone
+//! A prompt's state as text, for the hand-written expectations of tests and anyone
 //! debugging. It says what the screen shows: the title, the shape's state, the marks and the
 //! buttons. It leaves out the revision, which counts clicks.
 //!

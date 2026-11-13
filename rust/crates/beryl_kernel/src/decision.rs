@@ -9,7 +9,7 @@ use crate::state::State;
 use beryl_card::{Castings, FaceIx, ManaColor, ObjectAbility, Prompt};
 
 // The kinds are vocabulary: a scenario names the kind of question it answers, and a card's
-// scenarios compile against `beryl_card` alone (`docs/project-50k.md`, Crates).
+// scenarios compile against `beryl_card` alone.
 pub use beryl_card::DecisionKind;
 
 /// What `next` returns: a decision to make, or the end of the game. A decision is a flat

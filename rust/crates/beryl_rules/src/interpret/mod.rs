@@ -1,4 +1,4 @@
-//! The interpreter: what an ability's [`Behavior`] does to a game (plan K1).
+//! The interpreter: what an ability's [`Behavior`] does to a game.
 //!
 //! A [`Behavior::Custom`] is a Rust body, called with the game and the resolution. A
 //! [`Behavior::Data`] is effect data: [`run`] carries out its instructions with the

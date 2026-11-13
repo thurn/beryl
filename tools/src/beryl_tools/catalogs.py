@@ -1,7 +1,6 @@
 """data/catalogs.json: Scryfall's catalogs of types and keywords, and the counter kinds the
 pool's Oracle text names, which `by cards` writes beside the card store. The generated subtype
-and counter lists are built from it, not written by hand (docs/project-50k.md, "Card pool
-pipeline").
+and counter lists are built from it, not written by hand.
 
 Scryfall serves each catalog at https://api.scryfall.com/catalog/<name>
 (https://scryfall.com/docs/api/catalogs), cached here like the bulk files (scryfall.py). It has

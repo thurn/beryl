@@ -1,5 +1,5 @@
 // What the stage asks of a layout: where everything on a table rests, and the fixed places
-// motion runs between. The stage knows no geometry of its own (plan K25); the desktop's layout
+// motion runs between. The stage knows no geometry of its own; the desktop's layout
 // is desktop.ts, and a phone's is its own.
 import type {
   ObjectView,

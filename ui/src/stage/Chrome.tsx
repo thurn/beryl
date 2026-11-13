@@ -1,4 +1,4 @@
-// The desktop's chrome around the stage's cards (plan K25): everything on the game screen that
+// The desktop's chrome around the stage's cards: everything on the game screen that
 // is neither motion nor a prompt, drawn by React. What shows the table (life, mana, the piles,
 // the turn's step) is
 // drawn from the stage's table, so that what a step changes shows as the step plays; what

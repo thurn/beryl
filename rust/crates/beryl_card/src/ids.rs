@@ -1,6 +1,6 @@
 //! The identifiers card definitions share with the game state: players' seats, zones, steps
 //! and kinds of counter. This crate holds them and the kernel crate depends on it
-//! (`docs/project-50k.md`, Crates).
+//!.
 
 use std::fmt;
 

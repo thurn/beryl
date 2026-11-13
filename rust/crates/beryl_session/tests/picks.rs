@@ -1,8 +1,8 @@
-//! Picks of cards held by where the cards lie, whatever the pick is for (plan K10 and K26): a
+//! Picks of cards held by where the cards lie, whatever the pick is for: a
 //! card chosen among those exiled with a permanent, by clicks alone, and a pick of every
 //! purpose from a decision built here, as a card with a purpose new to the list would ask it.
 //! The first holds the prompt's state after each click to a text written by hand from what
-//! the screen shows (plan K24) and ends where the picks a UI holding the prompt's state itself
+//! the screen shows and ends where the picks a UI holding the prompt's state itself
 //! would send end.
 
 #[path = "common/play.rs"]
@@ -158,7 +158,7 @@ const CARDS_TO_PICK: Scenario = Scenario::new("any pick")
 
 /// The session holds a pick of cards for any purpose, from the decision alone: where the cards
 /// lie says how they are picked, so a purpose added to the list needs no entry in the session
-/// to be answered by clicks (plan K10). Each pick here takes two cards, of two permanents and
+/// to be answered by clicks. Each pick here takes two cards, of two permanents and
 /// then of two cards in hand, and is confirmed by its button.
 #[test]
 fn a_pick_of_cards_for_any_purpose_is_answered_by_clicks() {

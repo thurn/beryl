@@ -99,7 +99,7 @@ impl {ty} {{
 }
 
 /// The builder calls that would type a printed characteristic of a face in a card file, which
-/// its `printed` constant holds instead (plan K2: "Nobody types a cost or type line").
+/// its `printed` constant holds instead.
 const TYPED: [&str; 8] = [
     ".cost(",
     ".supertypes(",

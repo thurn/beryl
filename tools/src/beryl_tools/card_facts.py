@@ -7,7 +7,7 @@ Where Beryl's questions and an oracle's differ, the difference follows from what
 from which card it is: a loyalty ability's text in XMage starts with its loyalty change, a land
 with one mana ability taps by that ability's text, a spell that scries asks the cards for the
 bottom as one target list. Each rule below says what difference it encodes. No rule names a
-card (docs/project-50k.md, "Card pool pipeline").
+card.
 """
 
 from __future__ import annotations

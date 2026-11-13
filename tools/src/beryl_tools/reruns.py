@@ -1,4 +1,4 @@
-"""Reruns (plan K21): how a step that failed names its failed checks for its one rerun
+"""Reruns: how a step that failed names its failed checks for its one rerun
 (checks.py, `run_lane`), and whether the rerun proved each of them a flake."""
 
 from __future__ import annotations

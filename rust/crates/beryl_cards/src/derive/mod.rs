@@ -1,4 +1,4 @@
-//! Generated scenarios for the cards built only from library effects (plan K3): "Library
+//! Generated scenarios for the cards built only from library effects: "Library
 //! effects carry hand-written scenarios; a card built only from them gets generated
 //! scenarios."
 //!

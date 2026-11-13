@@ -1,4 +1,4 @@
-// The game as the player watches it on the stage (plan K25). Each view the session sends goes
+// The game as the player watches it on the stage. Each view the session sends goes
 // to the page's stage with its script (feed.ts), and the screen takes it when the stage says
 // its script has played out.
 import { useEffect, useState, useSyncExternalStore } from "react";

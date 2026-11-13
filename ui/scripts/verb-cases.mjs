@@ -1,4 +1,4 @@
-// The verb suite's cases (plan K24 and K25): what each verb's check asks of the runs verbs.mjs
+// The verb suite's cases: what each verb's check asks of the runs verbs.mjs
 // plays for it, from one seat in one layout (verb-run.mjs says what a run is). Nothing here
 // touches a page.
 import assert from "node:assert/strict";

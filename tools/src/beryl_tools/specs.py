@@ -424,7 +424,7 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.add_argument(
         "cards",
         nargs="*",
-        help="card slugs or names, e.g. currency-converter or 'Teferi, Time Raveler'",
+        help="card slugs or names, e.g. currency-converter or 'Example Card Name'",
     )
     p.add_argument("--moment", help="only this moment, by its name")
     p.add_argument(

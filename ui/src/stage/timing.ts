@@ -1,6 +1,6 @@
 // How each step is played, from the design language's data (data/ui-conventions.json, `verbs`):
 // a verb's duration, delay and stagger in stage milliseconds and its curve, with Arena's
-// measured beside them as reference (data/arena-motion.json, plan K27). Where a verb has
+// measured beside them as reference (data/arena-motion.json). Where a verb has
 // several cases (a draw, a discard), a step of a case is played with
 // that case's own (`cases`), and with the verb's where the case has none. A verb with a number
 // not taken has none, and one with no duration snaps. The effects a step begins are the data's

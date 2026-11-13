@@ -1,6 +1,5 @@
 //! The cards complete from the card store: a pool card that needs no file, because its record
-//! says all there is to it (plan K2: "keyword-only creatures need no authoring"; the run epic:
-//! "an unimplemented card is a record in the card store, never a file").
+//! says all there is to it.
 //!
 //! Such a card is a single-faced creature whose Oracle text, with its reminder text removed,
 //! is empty or only keyword abilities the engine has. The engine's keywords are the

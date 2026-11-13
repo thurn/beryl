@@ -1,4 +1,4 @@
-// The prompt on the stage (plan K26). The session holds a prompt's state: what may be picked,
+// The prompt on the stage. The session holds a prompt's state: what may be picked,
 // what is picked, what each button says and whether it can be pressed. This draws that state
 // and sends the session what the player did: a click on a card, an ability or a player, a
 // press of a button, a card dragged out of the hand. Nothing here works out what a click

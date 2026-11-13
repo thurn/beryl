@@ -1,5 +1,5 @@
-// The sounds of what happens in a game, as each step of a script shows it on the stage (plan
-// K25; rust/crates/beryl_session/src/script/mod.rs, "Sound"): a sound follows a step. It is
+// The sounds of what happens in a game, as each step of a script shows it on the stage
+// (rust/crates/beryl_session/src/script/mod.rs, "Sound"): a sound follows a step. It is
 // picked from the step's verb and what the step carries (the zones and the reason of a card's
 // move, the direction of a tap, what a count counts and whether it rose from the table's
 // value), in a map the compiler holds whole, so a new verb does not build until it has one.

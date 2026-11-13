@@ -1,6 +1,6 @@
 // The phone's chrome over the stage's cards beyond its strips and dock (mobile/chrome.tsx):
 // what the desktop's board shows around its table, composed for a phone from the same
-// components (plan K29; UI Conventions, "The phone"). The menu holds the settings, the log and
+// components. The menu holds the settings, the log and
 // the bug report; a touch on a pile lists its cards, and a touch on a card inspects it; undo
 // and full control's mark stand at the end of the middle band; announcements pass over the
 // table for as long as their steps play.

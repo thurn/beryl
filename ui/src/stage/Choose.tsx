@@ -1,6 +1,6 @@
 // What the screen draws of a prompt that is answered off the cards on the table, besides its
 // bar (PromptBar.tsx): the ways to use a card, an entry of a catalog, and each share of a
-// division. All of it is the session's state as sent (plan K26): which ways there are and
+// division. All of it is the session's state as sent: which ways there are and
 // what each is called, the entries and the one chosen, each recipient's share and what is
 // left to give. A press goes to the session, whose reply is drawn.
 //

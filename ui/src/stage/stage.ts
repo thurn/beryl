@@ -1,4 +1,4 @@
-// The stage (plan K25): it holds the table, plays the scripts the session sends over it on its
+// The stage: it holds the table, plays the scripts the session sends over it on its
 // own clock, and says where every object is at any stage time. One entry per game object, named
 // as scripts name it: a card by its slot, which it keeps through every zone, a token's being
 // used again only after the step that ended it, which removes its node; and an ability on the

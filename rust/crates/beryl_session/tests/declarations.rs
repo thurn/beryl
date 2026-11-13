@@ -1,6 +1,6 @@
-//! The declare shape's prompts answered by clicks alone (plan K26): an attack and a block.
+//! The declare shape's prompts answered by clicks alone: an attack and a block.
 //! Each test holds the prompt's state after each click of one worked example to a text
-//! written by hand from what the screen shows (plan K24), and checks that the clicks end
+//! written by hand from what the screen shows, and checks that the clicks end
 //! where the picks a UI holding the declaration itself would send end.
 
 #[path = "common/play.rs"]

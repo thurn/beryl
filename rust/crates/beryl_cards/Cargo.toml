@@ -10,12 +10,12 @@ publish = false
 workspace = true
 
 [dependencies]
-# The vocabulary a card's effect data is written in (plan K1).
+# The vocabulary a card's effect data is written in.
 beryl_card = { path = "../beryl_card" }
 # The tokens and props card files share, re-exported here.
 beryl_card_shared = { path = "../beryl_card_shared" }
 beryl_engine = { path = "../beryl_engine" }
-# Behind the `scenarios` feature (plan, Crates): the scenarios' value types, all a card file's
+# Behind the `scenarios` feature: the scenarios' value types, all a card file's
 # scenarios name, and the runner, for the rules library's scenarios, the generators and the
 # dump binary.
 beryl_scenario = { path = "../beryl_scenario", optional = true }
@@ -68,7 +68,7 @@ cards_2026_q2 = { path = "../../cards/cards_2026_q2" }
 cards_2026_h2 = { path = "../../cards/cards_2026_h2" }
 
 [build-dependencies]
-# Lists the set crates and writes the tables over them (plan K8).
+# Lists the set crates and writes the tables over them.
 beryl_card_build = { path = "../beryl_card_build" }
 
 [dev-dependencies]
@@ -80,8 +80,7 @@ serde_json = "1"
 
 [features]
 # Every card's scenarios, the `SCENARIOS` table, the generated positions and the dump binary.
-# Tests and tools turn it on; the app never does (plan, Crates: "Scenarios compile only for
-# tests and tools").
+# Tests and tools turn it on; the app never does.
 scenarios = [
     "dep:beryl_scenario",
     "dep:beryl_scenario_types",

@@ -1,4 +1,4 @@
-//! The rule invariants (plan K24): what a script's arrows, lines, marks and lifts must hold
+//! The rule invariants: what a script's arrows, lines, marks and lifts must hold
 //! to whatever cards it shows. Replay cannot check them, since a span changes no table; the
 //! session runs these beside the replay check in a debug build, wherever it builds a script.
 //!

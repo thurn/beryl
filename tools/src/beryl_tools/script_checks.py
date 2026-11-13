@@ -1,5 +1,5 @@
 """The script lane's step (checks.py): `beryl_cli script-check` in a debug build, where every
-script the session builds is held to the replay check and the rule invariants (plan K24). It
+script the session builds is held to the replay check and the rule invariants. It
 plays every card's every spec moment from both seats and records every UI fixture, and reports
 each to the run log itself as `script:<card>/<moment>/<seat>` or
 `script:fixtures/<fixture>/<seat>` (runlog.py), so a panic fails the one check it happened in.
@@ -28,7 +28,7 @@ CHECKER = "beryl_cli"
 
 def lane() -> Lane:
     """Every card's spec moments from both seats and every UI fixture's recording, in a debug
-    build that holds each script to the replay check and the rule invariants (plan K24): one
+    build that holds each script to the replay check and the rule invariants: one
     check per moment, seat and recording."""
     from .checks import Lane  # It imports this module.
 

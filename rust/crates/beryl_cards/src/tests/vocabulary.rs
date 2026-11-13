@@ -1,4 +1,4 @@
-//! The tiering of plan K3: "Library effects carry hand-written scenarios; a card built only
+//! The tiering: "Library effects carry hand-written scenarios; a card built only
 //! from them gets generated scenarios." Every vocabulary entry a card's definition says is
 //! carried out by at least one hand-written scenario, a card's own or a library entry's
 //! ([`crate::library`]): each instruction of effect data, each event a trigger waits for, each

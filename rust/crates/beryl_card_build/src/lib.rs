@@ -1,5 +1,4 @@
-//! What a card crate's build script runs (plan K8: "Card files are grouped by first-printing
-//! set, in many crates, with registries generated at build time").
+//! What a card crate's build script runs.
 //!
 //! A card's file is `rust/cards/<crate>/<set>/<card>.rs`: the crate is its first-printing set's
 //! group in `data/set-groups.json`, and the two modules are the set's code and the card's name
@@ -13,7 +12,7 @@
 //! its set and module, so a misspelled file or constant fails the build, and no crate compiles
 //! a constant it does not use.
 //!
-//! So do printed characteristics ([`printed`], plan K2): the crate's `printed` module holds a
+//! So do printed characteristics ([`printed`]): the crate's `printed` module holds a
 //! `Face` constant for each face of its cards and each token its files name as
 //! `printed::token::<CONSTANT>`, and a card file starts each face from one. A file that types a
 //! cost, type, subtype, color, power, toughness, loyalty or face name fails the build.

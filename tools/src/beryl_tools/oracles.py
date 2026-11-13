@@ -482,7 +482,7 @@ EXPORTER_GAPS: dict[tuple[str, str, str], str] = load_gaps(GAPS)
 
 
 # What the name of each scenario generated from a card's definition starts with
-# (`beryl_cards::derive::PREFIX`, plan K3): the report marks them `generated`.
+# (`beryl_cards::derive::PREFIX`): the report marks them `generated`.
 DERIVED_PREFIX = "generated "
 
 

@@ -1,4 +1,4 @@
-//! Every card renders to rules text (plan K13).
+//! Every card renders to rules text.
 
 use crate::CARDS;
 

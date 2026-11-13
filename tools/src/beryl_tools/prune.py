@@ -1,4 +1,4 @@
-"""The pruning rule (docs/project-50k.md, K18; Target architecture, Checks, "Pruning") as code:
+"""The pruning rule as code:
 `by ci-report --prune` prints each check the rule acts on, with its action and its numbers, for
 the weekly prune to apply in one commit with no judgement of its own.
 
@@ -361,7 +361,7 @@ def report(
         return 0
     print(
         f"ci-report --prune: {len(actions)} checks the pruning rule acts on over the last"
-        f" {days} days (docs/project-50k.md, Checks, Pruning)"
+        f" {days} days"
     )
     for a in actions:
         print(a.line())

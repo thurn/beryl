@@ -1,6 +1,6 @@
 """`by motion`: the stage held to each verb's own values in `data/ui-conventions.json`, with
 Arena's numbers (`data/arena-motion.json`) beside them as reference and no verdict
-(docs/project-50k.md, K27). This is a regression guard: it fails when the stage stops playing a
+. This is a regression guard: it fails when the stage stops playing a
 verb as its values say.
 
 - `by motion --values` needs no browser: each verb's values, and each case's, beside Arena's

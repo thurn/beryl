@@ -1,5 +1,4 @@
-"""`coverage`: which source lines each browser check runs (plan K19; docs/project-50k.md, Target
-architecture, Checks, "Selection"), for choosing the checks a diff can break.
+"""`coverage`: which source lines each browser check runs, for choosing the checks a diff can break.
 
 It plays every ui-test check and every shot in Chromium, one page each, with the scripts' own
 `coverage` hook (ui/scripts/capture.mjs) recording V8's block coverage of the modules under

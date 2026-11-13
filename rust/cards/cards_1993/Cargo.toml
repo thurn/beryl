@@ -13,7 +13,7 @@ path = "lib.rs"
 workspace = true
 
 [dependencies]
-# The vocabulary alone, so that no rules edit rebuilds a card (plan, Crates), and what card
+# The vocabulary alone, so that no rules edit rebuilds a card, and what card
 # files share, which depends on nothing else either.
 beryl_card = { path = "../../crates/beryl_card" }
 beryl_card_shared = { path = "../../crates/beryl_card_shared" }

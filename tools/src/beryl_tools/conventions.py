@@ -1,4 +1,4 @@
-"""The design language as data (docs/project-50k.md, K28): `data/ui-conventions.json` holds
+"""The design language as data: `data/ui-conventions.json` holds
 every ruling on where Beryl's UI follows or leaves MTG Arena, and `docs/ui-conventions.md` is
 generated from it. `by conventions` writes the page; the repo lane fails when it is stale.
 
@@ -86,7 +86,7 @@ TIMINGS = {"duration_ms": "duration", "delay_ms": "delay", "stagger_ms": "stagge
 # An instance's sizes, as multiples of its size at rest: the largest in its motion, and where
 # the motion begins.
 SIZES = ("peak", "start")
-# Thin evidence is no evidence (docs/project-50k.md, Risks): instances, over recordings.
+# Thin evidence is no evidence: instances, over recordings.
 FEWEST = (3, 2)
 
 

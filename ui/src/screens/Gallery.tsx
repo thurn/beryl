@@ -301,7 +301,7 @@ function CombatAndStack() {
         <At x={180} y={241}>
           <StackItem
             source={SAMPLE.infernoTitan}
-            text="When Inferno Titan enters the battlefield, it deals 3 damage divided as you choose among one, two, or three targets."
+            text="When Cinder Colossus enters the battlefield, it deals 3 damage divided as you choose among one, two, or three targets."
             width={136}
             height={172}
             unit={16}

@@ -1,4 +1,4 @@
-"""`card new <name>`: starts a card's file (docs/project-50k.md, Authoring tools).
+"""`card new <name>`: starts a card's file.
 
 It writes `rust/cards/<crate>/<set>/<card>.rs`, where `card path` says the file goes, with the
 generated header (card_header.py) and the smallest definition that compiles: each face its

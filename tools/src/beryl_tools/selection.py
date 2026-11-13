@@ -1,5 +1,4 @@
-"""Choosing the browser checks a change can break, for the fast check (plan K19; docs/project-50k.md,
-Target architecture, Checks, "Selection"). `by ui-test --select` and `by ui-shots --select` run
+"""Choosing the browser checks a change can break, for the fast check. `by ui-test --select` and `by ui-shots --select` run
 only the checks chosen here, worst failure record first, as many as fit a time box, so the
 author repairs what they broke before slow CI sees it.
 

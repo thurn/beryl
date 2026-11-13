@@ -43,7 +43,7 @@ pub enum Timing {
     Sorcery,
 }
 
-/// What an ability does as it resolves (plan K1): effect data, or a Rust function where the
+/// What an ability does as it resolves: effect data, or a Rust function where the
 /// vocabulary cannot say it yet.
 #[derive(Clone, Copy, Debug)]
 pub enum Behavior {

@@ -1,6 +1,6 @@
 // The harness of the kept checks (kept.mjs): the page on a fixture, opened on the stage, on
 // Playwright's paused clock, with page errors, coverage, the hang guard and the run log. Each
-// check holds a property no generic audit can express (plan K20), and says why in a comment.
+// check holds a property no generic audit can express, and says why in a comment.
 import assert from "node:assert/strict";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";

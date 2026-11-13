@@ -1,6 +1,6 @@
 //! A session's panics, told to whoever waits on its views. A session plays on a thread of its
-//! own and emits its views from there. When that thread panics (a debug build's script checks,
-//! plan K24, are assertions), its views just stop: [`Sessions`](beryl_session::Sessions) still
+//! own and emits its views from there. When that thread panics (a debug build's script checks
+//! are assertions), its views just stop: [`Sessions`](beryl_session::Sessions) still
 //! holds the callback, so a caller waiting on the next view waits for its timeout, or forever,
 //! and learns nothing of what broke. Two ways tell it the panic's message and place instead:
 //!

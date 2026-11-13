@@ -7,7 +7,7 @@
 //! casting option is exercised when a spell is cast with it.
 //!
 //! Each instruction of effect data carried out is recorded too, for the bar a library entry
-//! meets (plan K3): "Library effects carry hand-written scenarios".
+//! meets: "Library effects carry hand-written scenarios".
 //!
 //! The record is the `coverage` feature's, which only tests enable; without it [`hit`] is
 //! empty and costs nothing. A thread records only between [`start`] and [`take`], so other

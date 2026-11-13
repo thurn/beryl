@@ -1,4 +1,4 @@
-//! Session games that shrink (plan K24, the nightly fuzz; K12's shrinking): whole games
+//! Session games that shrink: whole games
 //! played through a [`Game`], each update drawn for both seats with its script, in a build with
 //! debug assertions on, so that every script is held to the replay check and the rule
 //! invariants where it is built (`script/build.rs`). `BERYL_FUZZ_GAMES=<n>` plays more games,

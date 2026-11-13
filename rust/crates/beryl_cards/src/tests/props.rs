@@ -1,4 +1,4 @@
-//! What a card's scenarios may name (plan, Verification): their own card, its tokens, basic
+//! What a card's scenarios may name: their own card, its tokens, basic
 //! lands and the designated props ([`crate::props`]), so one card's change cannot break another
 //! card's tests. A scenario about two cards in particular says so with
 //! `Scenario::interaction`.

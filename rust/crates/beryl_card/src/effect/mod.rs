@@ -1,4 +1,4 @@
-//! `Effect`: what a spell or ability does as it resolves, as data (plan K1).
+//! `Effect`: what a spell or ability does as it resolves, as data.
 //!
 //! An effect is a tree of instructions, each one the Comprehensive Rules define, over four
 //! kinds of expression: which objects ([`Objects`]), which players ([`Players`]), how many
@@ -8,7 +8,7 @@
 //! # Saying what the card says
 //!
 //! An entry is designed from its rule and says the card's words, not what they come to in a
-//! two-player game (plan K7): "each opponent" is [`Players::EachOpponent`] and "target
+//! two-player game: "each opponent" is [`Players::EachOpponent`] and "target
 //! opponent" is [`Players::Target`], though both name the same player today. Which players a
 //! target may be is its [`crate::TargetSpec`]'s to say, in the same words
 //! ([`crate::Filter::Whose`]).

@@ -11,5 +11,5 @@ workspace = true
 
 [dependencies]
 # The vocabulary, and nothing else: a card crate's scenarios must not rebuild on a rules edit
-# (plan, Crates).
+#.
 beryl_card = { path = "../beryl_card" }

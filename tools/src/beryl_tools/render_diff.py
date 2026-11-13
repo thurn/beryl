@@ -1,9 +1,8 @@
-"""`card render [names | --all]`: each card's rendered rules text against its Oracle text (plan
-K13, docs/project-50k.md, Authoring tools).
+"""`card render [names | --all]`: each card's rendered rules text against its Oracle text.
 
 A card's definition is data, and `beryl_card::render` turns it back into English. When the English
 differs from the card's Oracle text in the card store, either the definition does something other
-than the card says (a rules error, K13's reason to exist) or a template words it differently.
+than the card says (a rules error, which is the reason this check exists) or a template words it differently.
 
 Both texts go through the same normalizations first (`NORMALIZATIONS`, in order), each a named
 function that absorbs one way Oracle text varies without changing what the card does. Then each

@@ -1,5 +1,4 @@
-// The verb suite's cases for changes on a card where it lies and to a player (plan K24 and
-// K25): what each verb's check asks of the runs verbs.mjs plays for it, as verb-cases.mjs does
+// The verb suite's cases for changes on a card where it lies and to a player: what each verb's check asks of the runs verbs.mjs plays for it, as verb-cases.mjs does
 // for cards changing zone. The moments are `combat` (the board verbs-combat: three attackers,
 // one blocked, one at a planeswalker; a Treasure tapped and sacrificed; life gained) and
 // `place` (verbs-place: a seventh land, a permanent turned face up, one taken across the

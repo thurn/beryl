@@ -1,4 +1,4 @@
-"""`card check <name>`: whether a card works, in the steps of docs/project-50k.md, Authoring tools.
+"""`card check <name>`: whether a card works, in steps.
 
 The steps run in order, each through the command that already does it, and the first failure
 stops the rest:

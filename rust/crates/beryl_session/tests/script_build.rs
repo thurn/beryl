@@ -1,4 +1,4 @@
-//! The scripts the session builds (plan K23, K24), a hand-written expectation per verb, from
+//! The scripts the session builds, a hand-written expectation per verb, from
 //! both seats: small scripted positions played through the engine, each seat's views fed to
 //! its screen, the script between two of them read as text.
 

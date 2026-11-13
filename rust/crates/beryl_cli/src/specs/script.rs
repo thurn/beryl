@@ -1,5 +1,5 @@
 //! A moment's scripts as text, for `specs-script`: what the session told each seat's screen
-//! to show (plan K23), view by view, before anyone films it. A wrong script is a session bug
+//! to show, view by view, before anyone films it. A wrong script is a session bug
 //! (the builder, `beryl_session::script`); a right script played wrongly is the stage's.
 
 use std::fmt::Write as _;

@@ -1,4 +1,4 @@
-//! `script-check`: the script checks (plan K24) as checks of their own, one per moment, seat and
+//! `script-check`: the script checks as checks of their own, one per moment, seat and
 //! recording, as agreed with the CI track (epic by-w8gv.21). It plays every card's every spec
 //! candidate from both seats to its first live decision (each kept moment is one) and records
 //! every UI fixture, in a debug build, where each script the session builds is held to the

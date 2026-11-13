@@ -19,7 +19,7 @@ headless until its UI loads), `shots` (the screens rendered headless), `ui-test`
 played headless), `oracle` (the card scenarios checked against XMage and Forge) and `counts` (the
 rollout benchmark's instruction count held to its bar).
 
-A step that fails is rerun once before its lane fails (plan K21), narrowed to the checks it says
+A step that fails is rerun once before its lane fails, narrowed to the checks it says
 failed where it can name them: a pass on the rerun passes the lane and prints a `flaky: <lane>
 <check>` line for each. A step killed at the deadline, or one that failed to build or start
 (exit `CANNOT_RUN`), is no flake and is not rerun, nor are the static checks (fmt, clippy, tsc).
@@ -59,6 +59,7 @@ from . import (
     file_length,
     hygiene,
     paths,
+    plan_references,
     runlog,
     script_checks,
     speed,
@@ -565,7 +566,8 @@ def names_lane(
 ) -> Lane:
     """No card name in generic code, held to the burn-down list (card_names.py), no other
     player of two, no board door and no failed push thrown away in rules code (two_player.py,
-    board_door.py, discarded_push.py), and every rules citation held to the pinned release
+    board_door.py, discarded_push.py), no citation of a planning document in code
+    (plan_references.py), and every rules citation held to the pinned release
     (citations.py) and card file header to the card store (card_header.py): in the files
     `cited`, or with None in the whole tree, fetching the release's text if `fetch` and it is
     not cached. With `crates` (by default when `cited` is None), the set crates are held to
@@ -573,7 +575,13 @@ def names_lane(
     """
     checks = [sys.executable, "-m", "beryl_tools.checks"]
     lane = Lane("names")
-    for check in ("card-names", "two-player", "board-door", "discarded-push"):
+    for check in (
+        "card-names",
+        "two-player",
+        "board-door",
+        "discarded-push",
+        "plan-references",
+    ):
         lane.step(check, [*checks, check])
     if cited != []:
         flags = ["--fetch"] if fetch else []
@@ -689,7 +697,7 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
         or touched(r"^(tools|rust|ui)/|^data/card-names-allowlist\.json$")
     ):
         lanes.append(names_lane(cited, crates=crates))
-    # The browser checks the change can break, as many as fit the budget (plan K19); none on
+    # The browser checks the change can break, as many as fit the budget; none on
     # Windows (WINDOWS_SKIPS).
     if not every and touched(r"^(rust|ui)/") and not system.WINDOWS:
         lanes += [ui_test_lane(select=True), shots_lane(select=True)]
@@ -789,6 +797,7 @@ if __name__ == "__main__":
         "file-length": file_length.step,
         "two-player": two_player.step,
         "board-door": board_door.step,
+        "plan-references": plan_references.step,
         "discarded-push": discarded_push.step,
         "citations": citations.step,
         "conventions": conventions.step,

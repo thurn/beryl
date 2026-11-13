@@ -1,5 +1,4 @@
-"""The cards complete from the card store, which need no file (docs/project-50k.md K2: "keyword-only
-creatures need no authoring").
+"""The cards complete from the card store, which need no file.
 
 A pool card is complete from the store when it is a single-faced creature, with a mana cost and
 power and toughness the engine can hold, whose Oracle text, with its reminder text removed, is

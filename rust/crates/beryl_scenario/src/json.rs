@@ -1,7 +1,7 @@
 //! The JSON dump of scenarios, for the oracle exporters (architecture §17.2).
 //!
 //! The scenario value types are `beryl_scenario_types`', which a card crate depends on and
-//! which therefore knows no serializer (`docs/project-50k.md`, Crates). So this module
+//! which therefore knows no serializer. So this module
 //! serializes them from outside: each has a mirror here, `…Def`, a serde remote definition
 //! with the type's fields and the dump's attributes. The compiler holds a mirror to its type:
 //! it reads every field it lists by name, and matches an enum's variants exhaustively.

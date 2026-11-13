@@ -1,4 +1,4 @@
-// The verb suite (plan K24 and K25): every verb the stage plays, checked from both seats on
+// The verb suite: every verb the stage plays, checked from both seats on
 // the stage's own clock. `by ui-test` serves the UI and runs this after kept.mjs. Usage:
 //   node scripts/verbs.mjs <base-url> <fixtures-dir> [check...]
 // A check is `verb:<verb>/<seat>/<layout>` (ui/verbs.json lists them), named whole or in

@@ -1,4 +1,4 @@
-//! The stores' shared core (plan K4; the crate's contract, "Stores"): what every store of
+//! The stores' shared core: what every store of
 //! what cards create implements once, and the two moments the kernel ends what is stored:
 //! as a duration ends, and as an object does.
 //!

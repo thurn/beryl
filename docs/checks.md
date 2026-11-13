@@ -34,6 +34,8 @@ branch left `origin/staging`:
     outside tests.
   - `discarded-push`: no kernel or rules module or card file assigns a push's
     result to `_` outside tests.
+  - `plan-references`: no comment in `rust/`, `ui/src`, `ui/scripts` or
+    `tools/src` cites a planning document by decision id.
   - `citations`: `just citations` on the changed files, using the cached rules
     text, and skipped if none is cached. Slow CI runs it on the whole tree and
     downloads the text.

@@ -1,5 +1,4 @@
-//! The Trackers store: what happened this turn that a card of the game reads (plan K4; the
-//! crate's contract, "Stores").
+//! The Trackers store: what happened this turn that a card of the game reads.
 //!
 //! A tracker is noted by the rules as the thing happens ([`State::track`]) and read later
 //! in the same turn ([`State::tracked`]). It is no memo: a memo is written once and lasts

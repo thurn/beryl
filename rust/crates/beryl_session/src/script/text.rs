@@ -1,4 +1,4 @@
-//! A script as text, one step a line, for the hand-written expectations of tests (plan K24),
+//! A script as text, one step a line, for the hand-written expectations of tests,
 //! the specs dump and anyone debugging. It is for reading: it says what each step shows, not
 //! every field a replay needs.
 //!

@@ -6,6 +6,16 @@ use beryl_engine::rng::SplitMix64;
 
 use crate::{CARDS, names};
 
+/// The deck a game starts with when its request names none, as owned name strings. Callers
+/// outside the card crates use this instead of naming a deck.
+#[must_use]
+pub fn default_deck() -> Vec<(u8, String)> {
+    WU_CONTROL
+        .iter()
+        .map(|&(count, name)| (count, name.to_owned()))
+        .collect()
+}
+
 /// The 40-card main deck of `docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt`, the
 /// Milestone 1 mirror: a mythic drafter's deck from the Arena Powered Cube run of 2025-10-30.
 pub const WU_CONTROL: &Decklist = &[

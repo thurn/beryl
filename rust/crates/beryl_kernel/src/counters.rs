@@ -1,5 +1,4 @@
-//! The counters on an object, each kind with its own count (plan K4; the crate's contract,
-//! "Stores").
+//! The counters on an object, each kind with its own count.
 //!
 //! [CR 122.1](https://yawgatog.com/resources/magic-rules/#R1221): "Counters with the same
 //! name or description are interchangeable." The kinds are the vocabulary's list

@@ -1,4 +1,4 @@
-//! Card scenarios played for both seats' scripts (plan K23, K24): small scripted positions
+//! Card scenarios played for both seats' scripts: small scripted positions
 //! played through the engine, each seat's views fed to its screen as the session feeds them.
 
 use beryl_cards::CARDS;

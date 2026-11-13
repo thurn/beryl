@@ -23,7 +23,7 @@ pub enum Phase {
 }
 
 /// The scenarios whose moments' games panic on their session's thread once their first view
-/// is out: a test's stand-in for a script that breaks its checks (plan K24).
+/// is out: a test's stand-in for a script that breaks its checks.
 #[cfg(test)]
 pub(crate) static FAULTS: std::sync::Mutex<Vec<&'static str>> = std::sync::Mutex::new(Vec::new());
 

@@ -1,8 +1,4 @@
 {
-  "names": {
-    "rust/crates/beryl_session/src/sessions.rs": 1,
-    "tools/src/beryl_tools/specs.py": 1,
-    "ui/src/screens/samples.ts": 1
-  },
+  "names": {},
   "mechanics": []
 }

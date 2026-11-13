@@ -1,5 +1,5 @@
 //! The positions generated scenarios start from: basic lands, the designated props and the
-//! card, which the position holds only where the card starts (plan, Verification).
+//! card, which the position holds only where the card starts.
 
 use beryl_engine::TurnStep;
 use beryl_engine::card::{

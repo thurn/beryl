@@ -1,5 +1,5 @@
 //! A prompt's state: its text form, one worked state per shape, and the click command's wire
-//! form. The expected texts are written by hand from what the screen shows (plan K24).
+//! form. The expected texts are written by hand from what the screen shows.
 
 use beryl_engine::card::{Place, Purpose, Shape};
 use beryl_session::prompt::{

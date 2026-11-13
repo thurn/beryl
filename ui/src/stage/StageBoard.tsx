@@ -1,4 +1,4 @@
-// The game's table drawn on the stage (plan K25): the cloth, one node an object or ability
+// The game's table drawn on the stage: the cloth, one node an object or ability
 // where the page's stage has it (playback.ts), and the chrome around them (Chrome.tsx,
 // game/Corner.tsx). The
 // stage plays whatever the session sent; this gives it somewhere to draw, lays the table out

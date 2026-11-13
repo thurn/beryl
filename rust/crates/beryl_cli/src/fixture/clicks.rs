@@ -1,5 +1,5 @@
 //! The clicks a fixture's recording makes on its human's prompts once it has reached its stop
-//! (plan K26): each goes to the session as the UI's would, and the recording keeps the
+//!: each goes to the session as the UI's would, and the recording keeps the
 //! request with its reply, so a replay answers the UI's click only if it is that one. A click
 //! that answers its prompt plays the game on to the human's next decision, whose views the
 //! recording takes as it takes any others.

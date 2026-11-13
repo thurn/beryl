@@ -1,4 +1,4 @@
-// The verb suite's cases for what a script begins and ends (plan K23): `point`, the arrows
+// The verb suite's cases for what a script begins and ends: `point`, the arrows
 // and lines of the moments it watches, and `mark`, played from the script verbs.mjs writes by
 // hand over the table its first moment leaves. A run's `ticks` hold, for every tick the clock
 // took, each line and mark the stage held then with the number of the element that drew it

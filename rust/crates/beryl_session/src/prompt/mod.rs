@@ -1,5 +1,4 @@
-//! Prompts as the session holds and sends them (plan K10 and K26, `docs/project-50k.md`,
-//! Target architecture, Prompts and Presentation).
+//! Prompts as the session holds and sends them.
 //!
 //! The engine asks one pick at a time, and each pick's decision says which prompt it belongs
 //! to: a [`Purpose`](beryl_engine::card::Purpose), its [`Shape`](beryl_engine::card::Shape)
@@ -63,7 +62,7 @@
 //! # Text
 //!
 //! A [`PromptView`] prints as a few lines of text (`text.rs`), for the hand-written
-//! expectations of tests (plan K24).
+//! expectations of tests.
 
 mod ahead;
 mod catalog;

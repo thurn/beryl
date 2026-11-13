@@ -1,7 +1,7 @@
-//! Divisions and catalogs answered by clicks alone (plan K26): combat damage divided among
+//! Divisions and catalogs answered by clicks alone: combat damage divided among
 //! blockers, and the two shapes no card asks yet, an amount divided among recipients and an
 //! entry of a catalog, from decisions built here. Each test holds the prompt's state after
-//! each click to a text written by hand from what the screen shows (plan K24), and checks the
+//! each click to a text written by hand from what the screen shows, and checks the
 //! picks the clicks end in.
 
 #[path = "common/play.rs"]

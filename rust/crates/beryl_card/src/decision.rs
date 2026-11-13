@@ -4,7 +4,7 @@
 //! The decision itself, with its candidates, is the kernel's (`beryl_kernel::decision`, whose
 //! `Opt` the comments below name). The kind is here because a scenario names it: the kind of
 //! question an answer expects is all a card's scenarios need of a decision, and they compile
-//! against this crate alone (`docs/project-50k.md`, Crates).
+//! against this crate alone.
 
 /// What is being decided: the form of one answer. A kind is here when the turn structure or
 /// the casting procedure asks it and its answer has a form of its own; a card's or a

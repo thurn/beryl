@@ -13,15 +13,14 @@
 //!
 //! Other crates import the rules through `beryl_engine`, the facade that re-exports this
 //! crate and the kernel under the paths they had as one crate, until the last caller has
-//! moved (`docs/project-50k.md`, Crates).
+//! moved.
 //!
 //! Rules code cites the Comprehensive Rules at <https://yawgatog.com/resources/magic-rules/>.
 //!
 //! # The contract
 //!
 //! The rules library is what an effect does to a game: free functions over a [`Game`] and a
-//! [`Resolution`], in modules that mirror the Comprehensive Rules (plan K5;
-//! `docs/project-50k.md`, "Rules library"). This is the design every bead of milestone 5
+//! [`Resolution`], in modules that mirror the Comprehensive Rules. This is the design every bead of milestone 5
 //! (epic by-w8gv.9) builds on, written as it will stand when they land; a bead that builds a
 //! part amends its text. What moves an object between zones, the keyword actions, drawing,
 //! counters, damage, life, tokens, the choices, paying a cost, coins, continuous effects,
@@ -117,14 +116,14 @@
 //!    entry whose module is not written still has its arm there. Two entries that differ
 //!    only in where they put a card share one arm, which each one's own names
 //!    ([`zones`]'s for [`library`]'s "put into a library").
-//! 4. The entry's English template (plan K13), a constant directly above its arm. Milestone 8
+//! 4. The entry's English template, a constant directly above its arm. Milestone 8
 //!    writes them; none exists yet.
 //!
 //! A file stays under 800 lines.
 //!
 //! ## Scenarios
 //!
-//! A library function's hand-written scenarios (plan K3) are not in its module: a scenario
+//! A library function's hand-written scenarios are not in its module: a scenario
 //! names real cards, since the oracles play it, and rules code names none. They live in
 //! `beryl_cards`, in a tree that mirrors this one (`library/actions/scry.rs` for
 //! [`actions::scry`]), beside the cards' own. A scenario there uses basic lands, the
@@ -199,7 +198,7 @@ mod trigger;
 mod turn;
 pub mod zones;
 
-// The game state and everything that writes it are the kernel's (`beryl_kernel`, plan K6).
+// The game state and everything that writes it are the kernel's (`beryl_kernel`).
 // The rules name its modules as their own and export none of them whole: a caller reads the
 // kernel from the kernel, or from the facade. What the rules do export of it stands beside
 // items of their own, in `layout`, `profile` and `event`.

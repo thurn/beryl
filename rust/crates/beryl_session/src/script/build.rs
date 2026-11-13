@@ -1,5 +1,5 @@
 //! Builds a seat's script from the table it last showed, the view's events and the view's
-//! table (plan K23). The events are walked in order, each becoming the steps that show it,
+//! table. The events are walked in order, each becoming the steps that show it,
 //! played on a working table as they are written; what the view's table then has that no
 //! event told (`settle.rs`) closes the script. What an event came from, what mana pays for
 //! and which spell or ability on the stack an event is about are the engine's word
@@ -60,7 +60,7 @@ impl Screen {
     /// # Panics
     ///
     /// In a debug build, when the script does not replay to `view`'s table: the replay check
-    /// (plan K24).
+    ///.
     pub fn script(&mut self, view: &PlayerView, heard: &Heard) -> Script {
         let mut after = Table::named(view, &heard.stack);
         // An ability nothing named is told apart by its place, which no script's number is:
@@ -145,7 +145,7 @@ thread_local! {
         const { std::cell::Cell::new(None) };
 }
 
-/// The checks every script a debug build makes is held to (plan K24): it replays from the
+/// The checks every script a debug build makes is held to: it replays from the
 /// table `shown` to the view's, and it keeps the rule invariants over the spans `shown`
 /// had open, leaving open the ones the builder says it does.
 #[cfg(debug_assertions)]

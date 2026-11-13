@@ -1,5 +1,4 @@
-//! Beryl's kernel: the game state and the only code that writes it (plan K6 and K7;
-//! `docs/project-50k.md`, "State" and "Kernel rules").
+//! Beryl's kernel: the game state and the only code that writes it.
 //!
 //! The kernel owns [`State`] and its storage [`Layout`]s, the slots and references that name
 //! objects, the bitboards and fixed queues it is built from, the per-game card table, the
@@ -71,7 +70,7 @@
 //! - Search runs with the sink off and still matches triggers on the event, so the sink
 //!   cannot carry it. A returned value inlines to what the pipeline builds today.
 //! - The kernel knows what changed; only the rules know why. `settle` adds the cause as it
-//!   records (plan K23), so no mutator takes one and no event exists without its change.
+//!   records, so no mutator takes one and no event exists without its change.
 //!
 //! The checks deny warnings (clippy with `-D warnings`), so dropping an event does not pass
 //! them: no visible change happens without one. A mutator takes as an argument what the event needs and the state cannot say,
@@ -128,7 +127,7 @@
 //! ## Stores
 //!
 //! A struct field holds what the Comprehensive Rules give a player, an object or the turn.
-//! What a card creates lives in a store (plan K4): **Effects**, the continuous effects of
+//! What a card creates lives in a store: **Effects**, the continuous effects of
 //! resolved spells and abilities; **Memos**, what an object remembers of how it was cast or
 //! entered; **Trackers**, what happened this turn that a card of the game reads. This is the
 //! design milestone 4 (epic by-w8gv.7) built, each part by the bead named: the shared
@@ -583,7 +582,7 @@
 //! comment why its result is the same in any order.
 //!
 //! Each of these answers for the two-player game, and its rustdoc cites the rule that
-//! changes the answer with more players: no multiplayer logic is written (plan K7).
+//! changes the answer with more players: no multiplayer logic is written.
 //! `Seat` has no `opponent`. The shortcut is the trait [`two_player::TwoPlayerSeat`], in
 //! scope only where a module imports it: the kernel's turn order and test door, and callers
 //! outside the rules that mean the other seat at this table (a view's "opponent", an

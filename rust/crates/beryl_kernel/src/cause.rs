@@ -1,4 +1,4 @@
-//! What an event came from (architecture §8.1, plan K23): the [`Tag`] a recording sink keeps
+//! What an event came from (architecture §8.1): the [`Tag`] a recording sink keeps
 //! beside each event, and the [`Scopes`] the rules open around what they do so the sink can
 //! write it. Search's sink keeps no event and so no tag: opening a scope costs it one branch.
 

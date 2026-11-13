@@ -1,5 +1,5 @@
 """`by video measure`: the timing, path and size of a card's motion, measured the same way in an
-Arena recording and in a folder of Beryl frames (plan K27, docs/project-50k.md).
+Arena recording and in a folder of Beryl frames.
 
 A clip is a span of a recording, cropped and scaled down, or a folder of frames whose names
 start with their time in milliseconds (ui/scripts/film.mjs writes `00120-yours.jpg`). ffmpeg

@@ -1,6 +1,5 @@
 //! The designated prop cards: the few cards besides basic lands that any card's scenarios may
-//! name (plan, Verification: "Scenarios use basic lands and a small set of designated prop
-//! cards, so one card's change cannot break another card's tests").
+//! name.
 //!
 //! Each plays one role scenarios need, chosen for text that stays out of a scenario's way. A
 //! role no implemented card fills is filled by implementing a real card for it, even one in no

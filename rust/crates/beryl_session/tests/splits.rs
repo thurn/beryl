@@ -1,7 +1,7 @@
-//! The split and order shapes' prompts answered by clicks alone (plan K26): a scry, a look
+//! The split and order shapes' prompts answered by clicks alone: a scry, a look
 //! that takes some cards and bottoms the rest, cards put back on the library, and the order
 //! of waiting triggers. Each test holds the prompt's state after each click of one worked
-//! example to a text written by hand from what the screen shows (plan K24), and checks that
+//! example to a text written by hand from what the screen shows, and checks that
 //! the clicks end where the picks a UI holding the prompt's state itself would send end.
 
 #[path = "common/play.rs"]

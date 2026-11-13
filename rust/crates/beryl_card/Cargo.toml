@@ -10,6 +10,6 @@ publish = false
 workspace = true
 
 # Writes `Subtype` and `counter_kinds!` from `data/catalogs.json` at build time, in place of
-# the lists kept by hand (plan K2). A build dependency only: the crate has no runtime one.
+# the lists kept by hand. A build dependency only: the crate has no runtime one.
 [build-dependencies]
 beryl_card_build = { path = "../beryl_card_build" }

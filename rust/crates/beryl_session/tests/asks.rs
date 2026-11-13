@@ -419,7 +419,7 @@ fn abhorrent_oculus_asks_for_graveyard_cards_then_a_card_to_manifest() {
 /// Every prompt the cards' scenarios reach is sent whole, whatever card asks it and whatever
 /// it is for: the shape its purpose fixes, and a title with every hole filled. No list of the
 /// purposes reached or of their titles is kept here, so a card with a new question, or a new
-/// purpose, changes nothing in this file (plan K10).
+/// purpose, changes nothing in this file.
 #[test]
 fn every_prompt_the_scenarios_reach_is_sent_with_its_shape_and_a_whole_title() {
     let shapes: BTreeMap<&str, String> = (Purpose::ALL.iter())

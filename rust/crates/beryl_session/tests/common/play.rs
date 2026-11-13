@@ -1,5 +1,5 @@
 //! A game played through clicks on its prompts, for the hand-written expectations of prompt
-//! tests (plan K24): each click's reply is the prompt's state as text (`prompt/text.rs`), and
+//! tests: each click's reply is the prompt's state as text (`prompt/text.rs`), and
 //! a click that answers plays on to the human's next decision. The same game can be played
 //! by candidates, as a UI that holds a prompt's state itself answers it, to compare where the
 //! two end.

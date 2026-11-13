@@ -1,6 +1,6 @@
-//! The yes-or-no shape's prompts answered by clicks alone (plan K26): each purpose a card
+//! The yes-or-no shape's prompts answered by clicks alone: each purpose a card
 //! reaches, and a plain "may" from a decision built here. Each test holds the prompt's state
-//! to a text written by hand from what the screen shows (plan K24), and checks that the click
+//! to a text written by hand from what the screen shows, and checks that the click
 //! ends where the pick a UI holding the prompt's state itself would send ends.
 
 #[path = "common/play.rs"]

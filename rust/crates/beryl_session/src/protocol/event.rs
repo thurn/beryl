@@ -353,7 +353,7 @@ pub(super) fn game_events<L: Layout>(
 }
 
 /// What the engine said of `events` beyond what [`game_events`] tells the viewer of `obs`
-/// (plan K23), for their screen to build its script from: what each of the view's events came
+///, for their screen to build its script from: what each of the view's events came
 /// from, as `said` has it of each of `events`, and the abilities that arrived on the stack
 /// and left it between them. `stack` names the entries of the view's stack
 /// ([`Heard::stack`]).

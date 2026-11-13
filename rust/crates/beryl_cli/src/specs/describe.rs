@@ -17,7 +17,7 @@ pub fn reach(moment: &'static Moment, view: View) -> Result<beryl_session::Playe
 /// Why a moment's game did not reach the viewer's live decision.
 #[derive(Clone, Debug)]
 pub enum Unreached {
-    /// The session's thread panicked: a debug build's script checks (plan K24) or anything
+    /// The session's thread panicked: a debug build's script checks or anything
     /// else that broke. The message says where ([`crate::panics`]). Or the scripts did not
     /// play from the first view shown, started over ([`restart`]).
     Panicked(String),

@@ -19,7 +19,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 beryl_engine = { path = "../beryl_engine", features = ["coverage"] }
 beryl_scenario = { path = "../beryl_scenario" }
 # Shrinks a failing fuzz game to the few choices that break it, where a failure was a whole
-# game of hundreds of decisions; only the tests use it (plan K12), never the search itself.
+# game of hundreds of decisions; only the tests use it, never the search itself.
 proptest = { version = "1.11.0", default-features = false, features = ["std", "handle-panics"] }
 
 [[test]]

@@ -1,5 +1,4 @@
-"""Which cards slow CI's oracle lane plays (docs/project-50k.md, "Verification": "Oracles run per
-changed card in CI. The full sweep runs nightly").
+"""Which cards slow CI's oracle lane plays.
 
 Slow CI tests staging's commits since master, so the lane plays the cards whose files changed
 since `origin/master`, plus a sample fixed by the commit, so that every run checks something

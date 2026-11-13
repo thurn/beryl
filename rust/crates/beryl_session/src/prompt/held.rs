@@ -1,4 +1,4 @@
-//! The open prompt as the session holds it (plan K26), and the run of picks that answers it.
+//! The open prompt as the session holds it, and the run of picks that answers it.
 //!
 //! A [`Held`] is made when a decision opens a prompt whose shape the session holds, from the
 //! decision as its seat is sent it and the game as it stands. Each click changes it and

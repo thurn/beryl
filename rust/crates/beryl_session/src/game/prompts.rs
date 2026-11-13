@@ -1,4 +1,4 @@
-//! The human's open prompt in a game: its state, which the session holds (plan K26), the
+//! The human's open prompt in a game: its state, which the session holds, the
 //! clicks that change it, and the run of picks a click that answers it stands for.
 
 use beryl_engine::{Choice, Decision, GameTable, Large, Layout, Relayout, State, view};

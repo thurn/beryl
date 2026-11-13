@@ -11,8 +11,7 @@ workspace = true
 
 # A build dependency of every set crate, the shared crate and the registry. It replaces the
 # lists kept by hand: `beryl_cards`' `CARDS` and `SCENARIOS`, the color `mod.rs` files and the
-# committed `names.rs` (plan K8: "A build script lists each set directory. No registry is kept
-# by hand"), and the printed characteristics card files typed (plan K2).
+# committed `names.rs`, and the printed characteristics card files typed.
 [dependencies]
 # The card store's reader, so a build script reads a record as the app does, in place of a
 # second JSON parser.

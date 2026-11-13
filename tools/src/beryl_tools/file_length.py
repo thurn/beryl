@@ -1,4 +1,4 @@
-"""The file-length check: no source file over 800 lines (docs/project-50k.md, K17).
+"""The file-length check: no source file over 800 lines.
 
 A file over the limit is on `data/file-length-allowlist.json` with its length, the burn-down
 list of splits: a listed file may not grow, and the check fails when one is shorter than its

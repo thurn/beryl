@@ -108,7 +108,7 @@ def specs_step(commit: str, out: IO[str]) -> int:
 def fuzz_step(commit: str, out: IO[str]) -> int:
     """`just fuzz` on `commit` at low priority: random engine games and session games at
     length in an optimized build with debug assertions on, so the engine's invariants and every
-    script's replay check and rule invariants run throughout (plan K24). Bounded by games,
+    script's replay check and rule invariants run throughout. Bounded by games,
     never by time. Its outcome goes to the run log as `fuzz:games` (runlog.py)."""
     from . import runlog  # It imports this module.
 

@@ -1,4 +1,4 @@
-// The stage's clock (plan K25; the findings on by-w8gv.21.3). Stage time moves only inside
+// The stage's clock. Stage time moves only inside
 // `advance`, so everything the stage shows is a function of how many milliseconds it was given
 // and never of when it was asked. Live, one requestAnimationFrame loop feeds it the time
 // between frames; because it only sums those, a test that pauses the page's clock (Playwright's

@@ -8,7 +8,6 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use beryl_cards::CARDS;
-use beryl_cards::decks::WU_CONTROL;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use ts_rs::TS;
@@ -23,7 +22,7 @@ use crate::replay::ReplayFile;
 use crate::session::GameSession;
 use crate::{GameUpdate, Prepared, Seat, SessionError, StartGame, bugs, journal};
 
-/// The UI's request for a game: the WU Control mirror against `agent`, the human in seat 0
+/// The UI's request for a game: the default deck's mirror against `agent`, the human in seat 0
 /// under the smart stops.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -35,10 +34,7 @@ pub struct StartRequest {
 
 impl StartRequest {
     pub fn game(&self) -> StartGame {
-        let deck: Vec<(u8, String)> = WU_CONTROL
-            .iter()
-            .map(|&(n, name)| (n, name.to_owned()))
-            .collect();
+        let deck = beryl_cards::decks::default_deck();
         StartGame {
             seed: self.seed.map_or_else(clock_seed, u64::from),
             decks: [deck.clone(), deck],

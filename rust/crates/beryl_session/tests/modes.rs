@@ -1,7 +1,7 @@
-//! The mode and number shapes' prompts answered by clicks alone (plan K26): the ways to use a
+//! The mode and number shapes' prompts answered by clicks alone: the ways to use a
 //! card clicked at a priority, the value of X, a card offered to cast, and the opening's
 //! choices. Each test holds the prompt's state after each click to a text written by hand
-//! from what the screen shows (plan K24), and checks that the clicks end where the picks a UI
+//! from what the screen shows, and checks that the clicks end where the picks a UI
 //! holding the prompt's state itself would send end.
 
 #[path = "common/play.rs"]

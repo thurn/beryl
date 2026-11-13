@@ -1,4 +1,4 @@
-"""`card`: the tools a card is written with (docs/project-50k.md, Authoring tools).
+"""`card`: the tools a card is written with.
 
 `card brief <name>` prints the packet one model writes one card from, in this order:
 

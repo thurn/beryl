@@ -167,7 +167,7 @@ test("a view is delivered though its request fails, and asks again", async () =>
 });
 
 // The card store has a record for every card there is: bundled, it would be most of the
-// page (docs/project-50k.md, "App startup and the UI bundle do not grow with the card store").
+// page.
 // The design language's data is the one file of data/ the UI is built with.
 test("nothing under src imports from data/ but the design language", async () => {
     const ui = resolve(dirname(fileURLToPath(import.meta.url)), "..");

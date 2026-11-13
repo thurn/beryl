@@ -1,6 +1,6 @@
 //! `beryl_scenario render [--json] [NAME]...`: prints the rules text each named card's definition
 //! renders to ([`beryl_card::render`]), each face under its name, or every card written in a file
-//! when none is named, for comparing a definition with the card's Oracle text (plan K13). With
+//! when none is named, for comparing a definition with the card's Oracle text. With
 //! `--json` it prints one JSON object per card and line, `{"name": .., "faces": [{"name": ..,
 //! "text": ..}]}`, which `just card render` reads.
 //!
@@ -14,7 +14,7 @@
 //!
 //! `beryl_scenario run --card NAME`: plays one card's scenarios in the strict runner
 //! ([`beryl_scenario::run`]), for `just card check`: the hand-written ones of its file, those of
-//! the rules library's entries it is listed under, and the ones generated for it (plan K3). It
+//! the rules library's entries it is listed under, and the ones generated for it. It
 //! prints a line per scenario and a count of each kind, and exits 1 when any fails or a
 //! generated run could not be played, and 2 when no card has that name.
 
@@ -82,7 +82,7 @@ fn dump_json(generated: usize, named: &[String]) -> String {
     for (card, of_entry) in beryl_cards::library::by_card() {
         cards.push((card, of_entry));
     }
-    // The generated scenarios of the cards built from library effects (plan K3), each as its
+    // The generated scenarios of the cards built from library effects, each as its
     // card's.
     cards.extend_from_slice(derive::all());
     // The named cards complete from the store, each with its generated scenarios.

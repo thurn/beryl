@@ -1,4 +1,4 @@
-//! The replay check (plan K24): a script played over the table of the view before gives the
+//! The replay check: a script played over the table of the view before gives the
 //! table of the view it came with, exactly. The session runs it in a debug build wherever it
 //! builds a script, as the engine checks its invariants on every debug apply
 //! (`beryl_engine::invariants`), so every test that plays a game holds every script to it.

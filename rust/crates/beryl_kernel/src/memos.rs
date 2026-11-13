@@ -1,5 +1,4 @@
-//! The Memos store: what an object remembers of how it was cast or entered (plan K4; the
-//! crate's contract, "Stores").
+//! The Memos store: what an object remembers of how it was cast or entered.
 //!
 //! A memo is written once, with [`State::remember`], and read by the object's own abilities
 //! through a query by kind: [`State::paid`], [`State::x_of`]. It ends with its object,

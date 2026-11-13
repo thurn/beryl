@@ -1,4 +1,4 @@
-//! Fuzz games that shrink (plan K12). A game is a seed, which deals two fuzz decks and draws
+//! Fuzz games that shrink. A game is a seed, which deals two fuzz decks and draws
 //! the game's randomness, and the choices taken at its decisions, each an index taken modulo
 //! the decision's candidate count; it plays until its choices run out or it ends. proptest
 //! generates the choices, and when a game breaks the property (an invariant or a reference

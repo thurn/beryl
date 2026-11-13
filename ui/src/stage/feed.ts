@@ -1,4 +1,4 @@
-// What feeds the stage (plan K25): each view the session sends goes to the stage with its
+// What feeds the stage: each view the session sends goes to the stage with its
 // script, in the order it came, and the stage plays them one after another on its own clock.
 // The screen around the table (the prompt, the buttons, the log, a choice over the table)
 // takes a view only once its script has played out, which the stage says from inside its

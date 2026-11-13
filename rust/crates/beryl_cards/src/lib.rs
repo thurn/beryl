@@ -5,7 +5,7 @@
 //! (`data/set-groups.json`; `just card path <name>` prints it). No list of them is kept by
 //! hand: each set crate's build script writes its tables from its directories, and this
 //! crate's writes [`CARDS`] and [`scenarios`] over those, crate by crate, then set, then file
-//! (`beryl_card_build`, plan K8). The cards complete from the card store, single-faced
+//! (`beryl_card_build`). The cards complete from the card store, single-faced
 //! creatures with no abilities but keywords the engine has, have no file: each set crate's build
 //! writes their definitions from their records. Nothing may depend on that order: a game numbers its cards
 //! from its decklists (`GameTable`), and everything else looks a card up by name.

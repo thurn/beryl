@@ -1,5 +1,4 @@
-//! Hand-written scenarios of the rules library's entries (plan K3; `beryl_rules`' contract,
-//! "Scenarios"), in a tree that mirrors the library's modules. Rules code names no card and
+//! Hand-written scenarios of the rules library's entries, in a tree that mirrors the library's modules. Rules code names no card and
 //! the oracles play real ones, so an entry's scenario lives here: it uses basic lands, the
 //! designated props ([`crate::props`]) and one card that has the effect.
 

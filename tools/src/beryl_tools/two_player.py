@@ -2,7 +2,7 @@
 
 `Seat` has no `opponent`. The shortcut is a trait in `beryl_kernel::two_player`, in scope
 only where a module imports it, so the modules that assume a table of two are the ones that
-name that module (docs/project-50k.md, K7; the kernel's contract, "Players"). The compiler
+name that module. The compiler
 suggests the import to anyone who writes `.opponent()`: this check refuses it where the rules
 live, and says what to ask the state instead.
 """

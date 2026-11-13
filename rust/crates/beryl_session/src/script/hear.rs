@@ -1,4 +1,4 @@
-//! What the engine says of its events beyond the events (plan K23): what each came from, and
+//! What the engine says of its events beyond the events: what each came from, and
 //! which spell or ability on the stack that is. The engine tags every event it records with
 //! its cause and names a stack entry by its place ([`StackIx`]); [`Names`] follows the stack
 //! through the events and gives each entry the name scripts call it by, and a seat's screen is

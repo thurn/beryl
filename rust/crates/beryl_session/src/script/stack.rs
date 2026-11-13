@@ -1,4 +1,4 @@
-//! The stack in a script (plan K23): the builder follows it by the engine's names. An ability
+//! The stack in a script: the builder follows it by the engine's names. An ability
 //! goes on the stack as the engine says it arrived and leaves as the engine says it left
 //! ([`Move`]), a spell with its card; an event that announces an ability, pays for one or
 //! is one's effect names it ([`Cause::entry`]), and nothing here tells two entries apart by

@@ -1,5 +1,5 @@
 //! Props: a prompt shape no card asks yet, stood on a board so that the UI has it to draw
-//! (plan K26). The session holds the state of an entry chosen from a catalog and of an amount
+//!. The session holds the state of an entry chosen from a catalog and of an amount
 //! divided among recipients, and tests both from a decision built by hand
 //! (`beryl_session`'s `tests/divisions.rs`); a prop builds the same decision in a board's
 //! opening position and records it as the seat's first view would ask it: the prompt as

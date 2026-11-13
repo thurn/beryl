@@ -5,8 +5,7 @@
 //! constants with the `const` builder below.
 //!
 //! This crate depends on the vocabulary (`beryl_card`) and nothing else, so a rules or kernel
-//! edit rebuilds no card crate, even with its scenarios compiled in (`docs/project-50k.md`,
-//! Crates: "Data-only card crates depend on `beryl_card` alone"). The runner that plays a
+//! edit rebuilds no card crate, even with its scenarios compiled in. The runner that plays a
 //! scenario through the engine and the JSON dump the oracle exporters read are
 //! `beryl_scenario`'s, which re-exports every type here; it serializes them from outside, so
 //! no serializer is a dependency of a card crate either.
@@ -43,7 +42,7 @@ pub struct Scenario {
     /// The other cards this scenario is about, when it shows how particular cards interact
     /// ([`Scenario::interaction`]). Any other scenario names only its own card, that card's
     /// tokens, basic lands and the designated props, so one card's change cannot break
-    /// another card's tests (plan, Verification). The oracles don't read it.
+    /// another card's tests. The oracles don't read it.
     pub interaction: &'static [&'static str],
 }
 

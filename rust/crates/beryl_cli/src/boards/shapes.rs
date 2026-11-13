@@ -1,4 +1,4 @@
-//! Boards for the prompt shapes on the stage (plan K26): each a shape's worked example, which
+//! Boards for the prompt shapes on the stage: each a shape's worked example, which
 //! one fixture answers by clicks from the seat that is asked, and another watches from across
 //! the table with the same play scripted.
 

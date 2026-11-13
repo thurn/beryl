@@ -1,6 +1,6 @@
 //! How a script stages a view's events: which beats they are shown in and in what order, and
 //! what the viewer was already looking at. Which events happen at once is the engine's word
-//! ([`Heard::together`], plan K23): events of one group are one beat. What is joined beyond
+//! ([`Heard::together`]): events of one group are one beat. What is joined beyond
 //! that is presentation, each rule read from the engine's tags with the UI Conventions entry
 //! or the Arena timestamp it follows, never from the order the events came in. What the seat
 //! was looking at is read from its own last prompt and view.

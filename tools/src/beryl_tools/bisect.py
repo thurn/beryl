@@ -1,5 +1,4 @@
-"""Bisecting a slow-CI failure (plan K21; docs/project-50k.md, Target architecture, Checks, "After
-a merge").
+"""Bisecting a slow-CI failure.
 
 When a step of `by ci` still fails after its rerun and no quarantine or pending entry excuses it
 (checks.py, `run_lane`), `after` reruns what it named as failed, narrowed as the rerun was, in a

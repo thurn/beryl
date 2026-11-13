@@ -1,5 +1,5 @@
 //! The closed lists a script draws on: the verbs, the marks and the arrows. Each name here is
-//! also an entry of `data/ui-conventions.json`, which holds its look and values (plan K28), and
+//! also an entry of `data/ui-conventions.json`, which holds its look and values, and
 //! a test fails when the two disagree (`tests/script.rs`).
 //!
 //! Arena evidence is given as `<recording id> <time>`, for `just video film`.
@@ -32,7 +32,7 @@ macro_rules! names {
 }
 
 names! {
-    /// A way of moving (plan K23): what the stage does to show one step. A verb is not a game
+    /// A way of moving: what the stage does to show one step. A verb is not a game
     /// event: a land played, a spell cast and a card drawn are all `fly`. The list is closed,
     /// and each verb's duration, delay, stagger and curve are data, measured from Arena (K27).
     Verb {
@@ -113,7 +113,7 @@ names! {
 }
 
 names! {
-    /// What a mark on a card, an ability or a player means (plan K26). The list is closed and
+    /// What a mark on a card, an ability or a player means. The list is closed and
     /// each mark has one look, which `data/ui-conventions.json` describes: scripts and the
     /// session's prompt state both draw on it, and the stage draws nothing else on a card.
     /// What a card's own record says (tapped, summoning sick, counters, attacking) is its

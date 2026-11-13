@@ -50,7 +50,7 @@ impl Pick {
         // do, a division of damage by the blockers that die, targets by objects and players
         // with a count. Every other pick is of cards, and where they lie says how it is
         // made, never what it is for: a purpose added to the list is held with no entry here
-        // (plan K10).
+        //.
         let hidden = matches!(
             prompt.from.map(|lies| lies.zone),
             Some(ZoneName::Hand | ZoneName::Library)

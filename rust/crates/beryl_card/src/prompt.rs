@@ -1,5 +1,4 @@
-//! Prompts: how a player answers a question and what the question is for (plan K10,
-//! `docs/project-50k.md`, Target architecture, Prompts).
+//! Prompts: how a player answers a question and what the question is for.
 //!
 //! The engine asks one factored pick at a time (`docs/engine-architecture.md` §3, §7.1): an
 //! object among objects, an option among options. A player answers a *prompt*: a whole scry, a

@@ -24,8 +24,8 @@ pub enum Filter {
     /// stack or on the battlefield have a controller." Held by reference, as a [`Players`]
     /// names objects and so filters.
     ///
-    /// The players are the card's words, not what they come to in a two-player game (plan
-    /// K7). "You don't control" is `Filter::Not(&Filter::Whose(&Players::You))`, which a
+    /// The players are the card's words, not what they come to in a two-player game.
+    /// "You don't control" is `Filter::Not(&Filter::Whose(&Players::You))`, which a
     /// teammate's object passes and [`Players::EachOpponent`] does not
     /// ([CR 102.3](https://yawgatog.com/resources/magic-rules/#R1023)): "a player's
     /// teammates are the other players on their team, and the player's opponents are all

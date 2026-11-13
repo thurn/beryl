@@ -1,4 +1,4 @@
-// The prompt bar on the stage's boards (plan K26): what the open prompt asks and its buttons,
+// The prompt bar on the stage's boards: what the open prompt asks and its buttons,
 // each as the session sent it. Its words, which button it puts forward and whether one can be
 // pressed are the session's (prompt.ts); a press goes back to it. What is laid out here is
 // only where each stands: the button put forward at the foot of the desktop's dock, where the

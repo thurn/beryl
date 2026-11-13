@@ -1,5 +1,4 @@
-//! Queries: what the rules ask about an object, answered once (plan K6; the crate's contract,
-//! "Queries").
+//! Queries: what the rules ask about an object, answered once.
 //!
 //! A slot holds the game index of a definition and the face that is up. Neither is an answer:
 //! a token's definition is no card, a face-down permanent's says nothing of what it is, a

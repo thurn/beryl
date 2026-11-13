@@ -1,4 +1,4 @@
-"""The run log (docs/project-50k.md, K18): every run of every check `by check` and `by ci` make
+"""The run log: every run of every check `by check` and `by ci` make
 appends one JSON line to `$BERYL_CACHE/ci/runs.jsonl`, under a file lock, since worktrees and
 slow CI write at once. It is this machine's record, never committed. `by ci-report` sums it,
 with the verdicts on each check's failures that verdicts.py records in beads.

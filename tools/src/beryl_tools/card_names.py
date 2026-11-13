@@ -1,7 +1,7 @@
 """The card-names check: no card name in the kernel, rules, session, generic search or UI.
 
 Generic code works from definitions and the protocol, never from which card it is looking at
-(docs/project-50k.md, Conventions). The check scans the code of every generic crate and the UI,
+. The check scans the code of every generic crate and the UI,
 and compares each file's count of card names with `data/card-names-allowlist.json`, the
 project's burn-down list: a count may only fall, and a file the list lacks may not appear. The
 list's second section names the one-card mechanics by identifier, so their removal is tracked.

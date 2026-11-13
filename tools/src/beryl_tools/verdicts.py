@@ -1,4 +1,4 @@
-"""Verdicts and quarantine (docs/project-50k.md, K18 and K21): every failure of a check is given
+"""Verdicts and quarantine: every failure of a check is given
 a verdict the tool infers, and a check that flakes twice in seven days is quarantined.
 
 - **flaky**: the check failed and then passed on the same tree, as on the rerun `run_lane` gives
@@ -269,7 +269,7 @@ def judge(touched: set[str]) -> str:
 
 Entry = dict[str, object]
 DESCRIPTION = (
-    "The failures of this check that reached a verdict (docs/project-50k.md, K18), one JSON"
+    "The failures of this check that reached a verdict, one JSON"
     " comment each, written by `by check` and `by ci` (tools/src/beryl_tools/verdicts.py)."
     " Created closed: nothing schedules it."
 )

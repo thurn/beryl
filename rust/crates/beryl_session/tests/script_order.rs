@@ -1,4 +1,4 @@
-//! The order of a view's steps and what stays put (plan K23, K24): what the old board's checks
+//! The order of a view's steps and what stays put: what the old board's checks
 //! held by watching flights, which on the stage is the session's script. Each test here holds
 //! one of those checks (`ui/scripts/interactions.mjs`, deleted at the cut-over, by-w8gv.21.65)
 //! to a script written by hand:

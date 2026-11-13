@@ -1,4 +1,4 @@
-// The phone's game screen drawn on the stage (plan K25 and K29): the phone's strips
+// The phone's game screen drawn on the stage: the phone's strips
 // (mobile/chrome.tsx), one node an object or ability where the page's stage has it, laid out
 // for the phone (phone.ts) and drawn in the phone's faces (mobile/faces.tsx), and the rest of
 // the chrome the desktop's board has, composed for a phone (PhoneChrome.tsx). The same scripts

@@ -104,7 +104,7 @@ STORE_FACE_FIELDS: tuple[str, ...] = (
 )
 NOT_LEGAL = "not legal in Vintage"
 # Scryfall's set type for the un-sets (Unglued to Unfinity). The pool leaves out a card
-# printed only there, tournament-legal ones included (docs/project-50k.md, the card pool);
+# printed only there, tournament-legal ones included;
 # an un-set printing of a card printed elsewhere stays, and so do the un-sets' basic lands.
 UN_SET = "funny"
 IN_UN_SETS_ONLY = "printed only in un-sets"

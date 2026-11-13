@@ -1,6 +1,4 @@
-//! The vocabulary's lists generated from Scryfall's catalogs, `data/catalogs.json` (plan K2:
-//! "Subtypes, counter kinds and similar lists are generated from Scryfall's catalogs, not
-//! written by hand"): `beryl_card`'s `Subtype` and its `counter_kinds!` list, which its build
+//! The vocabulary's lists generated from Scryfall's catalogs, `data/catalogs.json`: `beryl_card`'s `Subtype` and its `counter_kinds!` list, which its build
 //! script writes with [`vocabulary`], and the subtypes a printed face may have ([`Subtypes`]).
 //! `tools/src/beryl_tools/catalogs.py` writes the file.
 

@@ -6,8 +6,7 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
 
 - `crates/beryl_app` is the Tauri shell: the window, IPC commands,
   `tauri.conf.json`, capabilities and icons. `docs/engine-architecture.md` §16
-  describes the other crates, and `docs/project-50k.md` is the plan for
-  restructuring them to scale.
+  describes the other crates.
 - Each card is one file, `rust/cards/<crate>/<set>/<card>.rs`, placed by the set
   it was first printed in. `just card path <name>` prints the path. Card crates
   depend only on the shared vocabulary crate.

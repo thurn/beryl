@@ -1,4 +1,4 @@
-// The motion and duplicate audits of the stage (plan K25): what `by specs --motion`, the
+// The motion and duplicate audits of the stage: what `by specs --motion`, the
 // driver's `probe.audit` and `spec.audit` judge by (`window.berylStage`). The script the
 // session sent with each view says what was meant, step by step; the stage says when it began
 // and ended each step (`stage.follow`); and the page is measured as a player sees it at every

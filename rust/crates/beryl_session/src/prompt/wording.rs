@@ -8,7 +8,7 @@
 //!
 //! # Arena's words
 //!
-//! The words are MTG Arena's, exactly, case and punctuation too (plan K22). Each entry cites
+//! The words are MTG Arena's, exactly, case and punctuation too. Each entry cites
 //! the moments of the recordings that show them, as `<recording id> <time>` for
 //! `just video film`: two recordings where two show it. Three things hold throughout:
 //!

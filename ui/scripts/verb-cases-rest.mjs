@@ -1,4 +1,4 @@
-// The verb suite's cases for the verbs that move no card (plan K23): `streak`, mana into what
+// The verb suite's cases for the verbs that move no card: `streak`, mana into what
 // it pays for and damage onto what it hits; `announce`, the turn's banner, a scry's pill and a
 // coin; `dwell`, the opponent's spell or ability left to be read; and `set`, the table
 // changing with no motion. A run's `ticks` hold, for every tick the clock took, each streak

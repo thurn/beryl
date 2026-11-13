@@ -146,7 +146,7 @@ impl Stop {
 }
 
 /// The messages of `def`'s recording, or why it could not be made: a session whose thread
-/// panicked (in a debug build, a script that breaks its checks, plan K24) says where.
+/// panicked (in a debug build, a script that breaks its checks) says where.
 pub(crate) fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
     let stop = Arc::new(Stop::parse(def)?);
     let clicks = (def.clicks.iter())

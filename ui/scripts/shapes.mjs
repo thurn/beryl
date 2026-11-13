@@ -1,11 +1,11 @@
-// The shape suite (plan K24 and K26): every prompt shape the stage draws, answered from the
+// The shape suite: every prompt shape the stage draws, answered from the
 // seat that is asked and watched from the seat across the table. `by ui-test` serves the UI
 // and runs this after kept.mjs and verbs.mjs. Usage:
 //   node scripts/shapes.mjs <base-url> <fixtures-dir> [check...]
 // A check is `shape:<shape>/<seat>/<layout>` (ui/shapes.json lists them), named whole or in
 // part to run it alone, and logged by that name.
 //
-// The session holds a prompt's state (plan K26), so a check has no rule of its own to hold
+// The session holds a prompt's state, so a check has no rule of its own to hold
 // the screen to: a fixture recorded with `clicks` (ui/fixtures.json) holds each click with
 // the session's reply, and the check makes those clicks on the stage with the pointer, on
 // the card, the player or the button each names, and holds the screen after each to that

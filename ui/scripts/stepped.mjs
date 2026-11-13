@@ -1,4 +1,4 @@
-// The stepped capture (plan K27, Motion oracle): the verb suite's moments (ui/verbs.json) played
+// The stepped capture: the verb suite's moments (ui/verbs.json) played
 // on the stage, its clock held and stepped in ticks of a sixtieth of a second (on
 // whole milliseconds), screenshotting each tick of the suite's verbs' steps. `by motion`
 // measures the frames with `by video measure`, the tool Arena's numbers were taken with, and

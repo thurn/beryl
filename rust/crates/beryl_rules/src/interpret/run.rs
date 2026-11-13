@@ -101,7 +101,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)): "The controller of
     /// the spell or ability follows its instructions in the order written."
     pub(crate) fn carry_out(&mut self, effect: &'static Effect) -> Flow {
-        // For the bar of a library entry: one hand-written scenario carries it out (plan K3).
+        // For the bar of a library entry: one hand-written scenario carries it out.
         crate::coverage::hit(effect);
         self.registers.outcome = match *effect {
             Effect::Sequence(effects) => {

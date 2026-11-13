@@ -1,5 +1,5 @@
 //! Beryl's card vocabulary: the types a card definition is written in
-//! (`docs/project-50k.md`, Crates).
+//!.
 //!
 //! A card is a [`CardDef`] of [`Face`]s, each with its printed characteristics and its
 //! [`Ability`]s. What an ability does is its [`Behavior`]: [`Effect`] data, which the engine's
@@ -10,7 +10,7 @@
 //! A question a card or the rules ask a player is a [`Prompt`]: a [`Purpose`] from a closed
 //! list, answered in that purpose's [`Shape`] ([`prompt`]).
 //!
-//! This crate knows nothing of the game state. It depends on no other crate (plan K12), and
+//! This crate knows nothing of the game state. It depends on no other crate, and
 //! holds the identifiers definitions share with the state ([`ids`]); the kernel crate depends
 //! on this one.
 //!
