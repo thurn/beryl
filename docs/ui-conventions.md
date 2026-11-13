@@ -655,8 +655,10 @@ happened, and is gone.
   clears from what it now is, for as long as its step. Drawn over its card.
   Beryl: linear.
 - **impact.** A burst of hot light on what a creature strikes or a streak of
-  damage hits, a card or a player's life total, whole as the blow lands and
-  spreading as it fades. Drawn over its card. Beryl: 300 ms, ease-out.
+  damage hits, a card or a player's life total: white-hot with rays and about
+  one and a half of its widths across as the blow lands, spreading a little as
+  it fades in about a third of a second, a ring leaving it. Drawn over its card.
+  Beryl: 300 ms, ease-out.
 - **shake.** The whole table jolts side to side and a little up and down, twice,
   each swing smaller than the last, as a creature's blow lands. Drawn over its
   card. Beryl: 170 ms, linear.

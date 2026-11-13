@@ -80,16 +80,25 @@ void main(){
     float d = min(seg(p, vec2(-hw, 0.), vec2(0., h)), seg(p, vec2(hw, 0.), vec2(0., h)));
     float inside = step(0., p.y)*step(p.y, yv)*step(abs(p.x), hw);
     float fill = inside * pow(clamp(p.y/max(yv, 1.), 0., 1.), 1.25) * 0.95;
-    float w = max(1.3, 0.8*u_px), line = exp(-d*d/(2.*w*w)), glow = exp(-d/6.5)*0.4;
+    // Arena's: a thick white-hot rim along the two lower edges, hottest at the point, and a
+    // translucent fill that is brightest along those edges and fades toward the card.
+    float w = max(2.2, 0.03*hw + 0.8*u_px), line = exp(-d*d/(2.*w*w));
+    float glow = exp(-d/(0.09*hw + 4.))*0.55;
     float apex = exp(-length(p - vec2(0., h))/(h*0.85));
-    float arm = mix(0.5, 1., smoothstep(hw, hw*0.25, abs(p.x)));
-    rgb = (u_col*(fill + glow + line*0.75) + u_hot*(line*(0.3 + 0.95*apex) + fill*apex*0.55))*arm;
+    float arm = mix(0.6, 1., smoothstep(hw, hw*0.25, abs(p.x)));
+    rgb = (u_col*(fill*1.7 + glow + line) + u_hot*(line*(0.65 + 0.9*apex) + fill*apex*0.55))*arm;
     shade = (fill*0.4 + exp(-d/11.)*0.2)*arm;
   } else if (u_kind == 2) {
+    // A dome, open toward the blocker: a bright rim along its arc, thickest at its crown,
+    // and inside it light that is brightest by the rim, fades toward its chord and is a
+    // little uneven, as Arena's is (IEXcjBn3BXk 22:23.0).
     vec2 q = v_p/u_size; float r = max(length(q), 1e-3), d = length(v_p)*(1. - 1./r);
-    float m = smoothstep(-0.15, 0.95, q.y/r), w = max(0.6 + 2.3*m, 0.7*u_px);
-    float line = exp(-d*d/(2.*w*w)), glow = exp(-abs(d)/5.5)*0.35;
-    rgb = u_col*(glow + line*0.85)*m + u_hot*line*m*m*0.75; shade = glow*m*0.25;
+    float m = smoothstep(-0.15, 0.95, q.y/r), w = max(1.5 + 3.5*m, 0.7*u_px);
+    float line = exp(-d*d/(2.*w*w)), glow = exp(-abs(d)/7.)*0.4;
+    float n = noise(vec2(q.x*5. + u_seed*3., r*3.));
+    float fill = step(r, 1.)*smoothstep(0., 0.35, q.y)*pow(r, 1.6)*(0.6 + 0.6*n);
+    rgb = u_col*(glow + line*0.9 + fill*2.6)*m + u_hot*(line*m*m*0.85 + fill*m*0.6);
+    shade = (glow + fill*0.5)*m*0.25;
   } else if (u_kind == 5) {
     vec2 p = v_p + vec2(0., u_size.y*0.5); float t = clamp(p.y/u_size.y, 0., 1.);
     float spread = u_size.x*(1. - 0.85*t) + 1.;

@@ -35,9 +35,21 @@ export interface LitFlare {
   span: number;
 }
 
-/** The effects that are light: a permanent landing, mana landing on what it pays for, and a
- * triggered ability coming to rest on the stack. */
-export const FLARES: ReadonlySet<string> = new Set(["settle", "flash", "beam"]);
+/** The effects that are light: a permanent landing, mana landing on what it pays for, a
+ * triggered ability coming to rest on the stack, and a blow landing. */
+export const FLARES: ReadonlySet<string> = new Set([
+  "settle",
+  "flash",
+  "beam",
+  "impact",
+]);
+
+/** How a blow's burst plays (Arena's, filmed whole at 30 fps, `IEXcjBn3BXk 22:25.37` on a
+ * blocker and `35:35.37` on a player): white-hot and about one and a half of the struck
+ * card's widths across in the frame it lands, with rays, spreading a little and gone in about
+ * a third of a second, a ring leaving it as it fades. `wide` is its width at once and
+ * `spread` how much wider it grows, in the struck thing's half widths. */
+const IMPACT = { wide: 1.5, spread: 0.5, fade: 1.6 };
 
 const TONE: Record<string, Tone> = {
   white: "white",
@@ -243,6 +255,21 @@ function flareLight(scene: Scene, { name, reach, age, span }: LitFlare) {
   const seed = hash(Math.round(reach.middle.x), Math.round(reach.middle.y));
   if (name === "beam") {
     beamLight(scene, reach, share, age);
+    return;
+  }
+  if (name === "impact") {
+    const { wide, spread, fade } = IMPACT;
+    scene.glints.push(
+      glint(
+        "burst",
+        reach.middle,
+        half * (wide + spread * share),
+        "white",
+        2 * (1 - share) ** fade,
+        share,
+        seed,
+      ),
+    );
     return;
   }
   if (name === "settle") {

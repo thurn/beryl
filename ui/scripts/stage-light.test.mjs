@@ -147,16 +147,19 @@ test("an attacker's wedge pops out of its leading edge, and turns gold once bloc
     const wedge = (now, more = {}) =>
         lightOf(now, [], [{ reach, fights: "attacks", since: 1000, ...more }])
             .glints[0];
-    assert.equal(wedge(1000).size.y, 0, "nothing of it as it begins");
-    assert.ok(wedge(1100).size.y > 100 / 6, "past its height on the way");
-    const settled = wedge(1190);
+    // Whole in the frame it begins, a little wide and tall, as Arena's (22:16.53).
+    const first = wedge(1000);
+    assert.ok(first.size.y > 100 / 6 && first.size.x > 50, "whole, and large");
+    assert.ok(first.gain > wedge(1100).gain, "and bright, which settles");
+    const settled = wedge(2000);
     assert.equal(settled.kind, "wedge");
     assert.deepEqual(settled.at, { x: 50, y: 500 }, "on its leading edge");
     assert.deepEqual(settled.up, { x: 0, y: -1 }, "toward the opponent");
     assert.ok(
-        Math.abs(settled.size.y - 100 / 6) < 1e-9,
+        Math.abs(settled.size.y - 100 / 6) < 1e-6,
         "its tip the line's start",
     );
+    assert.ok(Math.abs(settled.size.x - 50) < 1e-6, "as wide as its card");
     assert.equal(settled.warm, 0);
     assert.equal(wedge(2080, { blocked: 2000 }).warm, 0.5);
     assert.equal(wedge(3000, { blocked: 2000 }).warm, 1);
@@ -178,6 +181,9 @@ test("a blocker has a gold crescent under the edge that faces its attacker", () 
     assert.deepEqual([glint.kind, glint.tone], ["crescent", "gold"]);
     assert.equal(glint.at.x, 50);
     assert.ok(glint.at.y > 140, "below its foot");
+    // A dome about a fifth of its width tall, a little clear of its edge (Arena 22:23.0).
+    assert.ok(Math.abs(glint.at.y - (140 + 0.16 * 50)) < 1e-9);
+    assert.ok(Math.abs(glint.size.y - 0.36 * 50) < 1e-9);
     assert.deepEqual(glint.up, { x: 0, y: 1 });
 });
 
@@ -329,14 +335,14 @@ test("a creature's mark of combat begins as the stage first draws it fighting", 
     // What fights as the stage starts over has fought since before it: no pop.
     made.play(fighting(attacks));
     assert.equal(scenes.at(-1).under.glints.length, 1);
-    assert.ok(Math.abs(scenes.at(-1).under.glints[0].size.y - 100 / 6) < 1e-9);
+    assert.ok(Math.abs(scenes.at(-1).under.glints[0].size.y - 100 / 6) < 1e-6);
     // One that begins to fight under the stage's eye pops from that tick.
     made.play(view([1, 2]));
     assert.deepEqual(scenes.at(-1).under.glints, []);
     made.clock.advance(500);
     made.play(fighting(attacks), { beats: [] });
     made.clock.advance(0);
-    assert.equal(scenes.at(-1).under.glints[0].size.y, 0);
+    assert.ok(scenes.at(-1).under.glints[0].size.y > 100 / 6 + 1);
     made.clock.advance(1000);
     assert.equal(scenes.at(-1).under.glints[0].warm, 0);
     // Blocked, it turns gold from the tick that shows it so.

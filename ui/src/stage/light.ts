@@ -144,11 +144,6 @@ const smooth = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 const outCubic = (t: number) => 1 - (1 - clamp(t)) ** 3;
-/** Past its end and back: what pops. */
-const outBack = (t: number) => {
-  const [u, c] = [clamp(t) - 1, 1.9];
-  return 1 + (c + 1) * u ** 3 + c * u ** 2;
-};
 /** A number from 0 to 1 that is always the same for the same two. */
 const hash = (i: number, k: number) => {
   const s = Math.sin(i * 127.1 + k * 311.7) * 43758.5453;
@@ -399,12 +394,20 @@ function fighterLight(scene: Scene, fighter: Fighter, now: number) {
   };
   const up = { x: 0, y: reach.toward };
   if (fights === "blocks") {
-    const open = mix(0.4, 1, outCubic(age / 240));
+    // Arena's is a dome of gold light over the blocker's edge that faces its attacker: a
+    // card's width and a little more across, about a fifth of a width tall, its chord about
+    // a twelfth of a width clear of the edge, a bright rim along its arc and light that fades
+    // back toward the blocker (`IEXcjBn3BXk 22:23.0`). It is there almost whole as the
+    // blocker is declared (`22:21.10`).
+    const open = mix(0.85, 1, outCubic(age / 120));
     scene.glints.push({
       kind: "crescent",
-      at: { x: edge.x, y: edge.y + reach.toward * 4 * k },
+      at: { x: edge.x, y: edge.y + reach.toward * 0.16 * reach.half.x },
       up,
-      size: { x: reach.half.x * 1.12 * open, y: 15 * k * open },
+      size: {
+        x: reach.half.x * 1.1 * open,
+        y: reach.half.x * 0.36 * open,
+      },
       tone: "gold",
       warm: 1,
       gain: clamp(age / 40) * (0.6 + 0.95 * Math.exp(-age / 210)),
@@ -416,15 +419,21 @@ function fighterLight(scene: Scene, fighter: Fighter, now: number) {
   if (reach.ahead <= 0) return;
   const met = blocked === undefined ? Infinity : now - blocked;
   const breath = 0.93 + 0.07 * Math.sin(now * 0.0037 + reach.middle.x);
+  // Arena's chevron is as wide as its card, against its edge. It is there whole in the frame
+  // the attack is declared, a little wide and bright, and has settled two or three frames
+  // later (`IEXcjBn3BXk 22:16.53` to `22:16.63`).
+  const pop = Math.exp(-age / 60);
   scene.glints.push({
     kind: "wedge",
     at: edge,
     up,
-    size: { x: reach.half.x * 0.92, y: reach.ahead * outBack(age / 190) },
+    size: {
+      x: reach.half.x * (1 + 0.1 * pop),
+      y: reach.ahead * (1 + 0.15 * pop),
+    },
     tone: "ember",
     warm: blocked === undefined ? 0 : clamp(met / 160),
-    gain:
-      (1 + 1.3 * Math.exp(-age / 130) + 0.8 * Math.exp(-met / 150)) * breath,
+    gain: (1 + 1.3 * pop + 0.8 * Math.exp(-met / 150)) * breath,
     ring: 0,
   });
   const tip = { x: edge.x, y: edge.y + reach.toward * reach.ahead };
