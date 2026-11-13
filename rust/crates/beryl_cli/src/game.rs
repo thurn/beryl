@@ -7,7 +7,9 @@ use beryl_engine::event::Event;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{GameTable, Outcome, Profile, Replay, Scratch, Small, State, Step};
 use beryl_engine::{apply, next, observe, view};
-use beryl_search::{Agent, Budget, Family, GameAgent, LongSearch, Settings, Widening, agent};
+use beryl_search::{
+    Agent, AgentDecision, Budget, Family, GameAgent, LongSearch, Settings, Widening, agent,
+};
 
 use crate::transcript::Transcript;
 
@@ -110,6 +112,7 @@ pub fn play(
         Scratch::new()
     };
     let mut decisions = 0;
+    let mut asked = [AgentDecision(0); 2];
     let violation = |s: &State, at: &str| {
         s.check_invariants(t)
             .map_err(|v| format!("seed {seed}: invariant violated {at}: {v:?}"))
@@ -124,7 +127,8 @@ pub fn play(
                 }
                 let happened: Vec<Event> = x.events.drain().collect();
                 // A paused resolution is seen where its body stopped (§7.3).
-                let c = agents[d.player.index()].choose(observe(&s, t, &mut x, d.player), &d);
+                let i = d.player.index();
+                let c = agents[i].choose(observe(&s, t, &mut x, d.player), &d, asked[i].take());
                 if let Some(tr) = transcript.as_deref_mut() {
                     tr.decision(t, view(&s, t, &mut x), &d, c, &happened);
                 }

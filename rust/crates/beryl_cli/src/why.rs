@@ -473,7 +473,10 @@ mod tests {
             let mut ordinary = LongSearch::new(&at.t, settings, seed);
             let mut traced = LongSearch::new(&at.t, settings, seed);
             let report = traced.choose_with_tree(obs, &at.d, choices, labels);
-            assert_eq!(report.choice, ordinary.choose(obs, &at.d));
+            assert_eq!(
+                report.choice,
+                ordinary.choose(obs, &at.d, beryl_search::AgentDecision(0))
+            );
             let search = ordinary.last_search().unwrap();
             for (branch, choice) in report.branches.into_iter().zip(choices) {
                 let i = usize::from(choice.0);

@@ -122,7 +122,7 @@ fn screen_game(
             {
                 synced = true;
             }
-            let answer = agent.choose(observe(&s, t, &mut x, d.player), &d);
+            let answer = agent.choose(observe(&s, t, &mut x, d.player), &d, asked);
             asked = asked.next();
             if line.search.is_some() {
                 out.searched += 1;
@@ -476,8 +476,13 @@ mod tests {
             at: usize,
         }
         impl Agent for Crafted {
-            fn choose(&mut self, obs: beryl_engine::Observation<'_>, d: &Decision) -> Choice {
-                let c = self.inner.choose(obs, d);
+            fn choose(
+                &mut self,
+                obs: beryl_engine::Observation<'_>,
+                d: &Decision,
+                at: AgentDecision,
+            ) -> Choice {
+                let c = self.inner.choose(obs, d, at);
                 if Agent::last_search(&self.inner).is_some() {
                     self.seen += 1;
                     if self.seen == self.at {

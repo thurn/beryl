@@ -218,11 +218,10 @@ impl Play {
 
 /// An opponent that casts whatever it can, and otherwise takes each decision's first
 /// candidate.
-pub struct Casts(pub u32);
+pub struct Casts;
 
 impl<L: Layout> Agent<L> for Casts {
-    fn choose(&mut self, _: Observation<'_, L>, d: &Decision<L>) -> Choice {
-        self.0 += 1;
+    fn choose(&mut self, _: Observation<'_, L>, d: &Decision<L>, _: AgentDecision) -> Choice {
         let cast = match &d.candidates {
             Candidates::Options(options) => {
                 (options.iter()).position(|o| matches!(o, Opt::Cast { .. }))
@@ -230,14 +229,6 @@ impl<L: Layout> Agent<L> for Casts {
             Candidates::Objects(_) => None,
         };
         Choice(cast.unwrap_or(0) as u16)
-    }
-
-    fn next_decision(&self) -> Option<AgentDecision> {
-        Some(AgentDecision(self.0))
-    }
-
-    fn rewind(&mut self, to: AgentDecision) {
-        self.0 = to.0;
     }
 }
 

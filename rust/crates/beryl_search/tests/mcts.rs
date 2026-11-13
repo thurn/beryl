@@ -181,7 +181,7 @@ fn exact_stop_chooses_as_the_full_budget(iterations: u32, count: usize, from_end
             }
         }
         assert_eq!(
-            agent.choose(obs, d),
+            agent.choose(obs, d, AgentDecision(0)),
             Choice(most as u16),
             "decision {i}: {full:?}"
         );
@@ -237,6 +237,7 @@ fn searched_game(t: &GameTable, seed: u64, from_end: usize) -> (Vec<Asked>, Vec<
     let mut x = Scratch::new();
     let mut asked = Vec::new();
     let mut acted = Vec::new();
+    let mut own = AgentDecision(0);
     for index in 0.. {
         let Step::Decide(d) = next(&mut s, t, &mut x, &mut Replay) else {
             break;
@@ -244,7 +245,7 @@ fn searched_game(t: &GameTable, seed: u64, from_end: usize) -> (Vec<Asked>, Vec<
         let obs = observe(&s, t, &mut x, d.player);
         let c = if d.player == Seat::P0 {
             let resume_point = search.resume_point().expect("a search resumes");
-            let c = search.choose(obs, &d);
+            let c = search.choose(obs, &d, own.take());
             asked.push(Asked {
                 state: s,
                 decision: d,
@@ -255,7 +256,7 @@ fn searched_game(t: &GameTable, seed: u64, from_end: usize) -> (Vec<Asked>, Vec<
             });
             c
         } else {
-            let c = greedy.choose(obs, &d);
+            let c = greedy.choose(obs, &d, AgentDecision(0));
             if !(d.kind == DecisionKind::Priority && d.candidates.option(c) == Some(Opt::Pass)) {
                 acted.push(index);
             }
@@ -347,10 +348,10 @@ fn a_rebuilt_agent_plays_on_as_the_uninterrupted_one() {
             }
             let mut rebuilt = Mcts::resumed(&t, Sight::Hidden, REUSING, seed, a.resume_point);
             let mut x = Scratch::new();
-            for b in &asked[r..=k] {
+            for (at, b) in (r..=k).zip(&asked[r..=k]) {
                 let obs = observe(&b.state, &t, &mut x, Seat::P0);
                 assert_eq!(
-                    rebuilt.choose(obs, &b.decision),
+                    rebuilt.choose(obs, &b.decision, AgentDecision(at as u32)),
                     b.choice,
                     "seed {seed}: rebuilt before decision {r}, at {k}"
                 );
@@ -360,10 +361,11 @@ fn a_rebuilt_agent_plays_on_as_the_uninterrupted_one() {
     assert!(inside_chain, "a rebuild inside a reuse chain");
 }
 
-/// An agent rewound to one of its own decisions, as a game taken back is, searches it again
-/// from the seed it had there: a decision searched fresh the first time gets the same move.
+/// An agent asked again one of its own decisions, as a game taken back by an undo asks it,
+/// searches it again from the seed it had there: a decision searched fresh the first time
+/// gets the same move.
 #[test]
-fn a_rewound_agent_searches_a_decision_again_as_it_did() {
+fn an_agent_asked_again_searches_a_decision_as_it_did() {
     let t = mirror();
     let (seed, from_end) = REUSE_GAMES[0];
     let (asked, _) = searched_game(&t, seed, from_end);
@@ -374,14 +376,20 @@ fn a_rewound_agent_searches_a_decision_again_as_it_did() {
     let mut agent = Mcts::new(&t, Sight::Hidden, REUSING, seed);
     let mut x = Scratch::new();
     for (k, a) in asked.iter().enumerate() {
-        agent.choose(observe(&a.state, &t, &mut x, Seat::P0), &a.decision);
-        assert_eq!(agent.next_decision(), Some(AgentDecision(k as u32 + 1)));
+        agent.choose(
+            observe(&a.state, &t, &mut x, Seat::P0),
+            &a.decision,
+            AgentDecision(k as u32),
+        );
     }
     for &k in fresh.iter().rev() {
-        agent.rewind(AgentDecision(k as u32));
         let a = &asked[k];
         assert_eq!(
-            agent.choose(observe(&a.state, &t, &mut x, Seat::P0), &a.decision),
+            agent.choose(
+                observe(&a.state, &t, &mut x, Seat::P0),
+                &a.decision,
+                AgentDecision(k as u32)
+            ),
             a.choice,
             "rewound to decision {k}"
         );

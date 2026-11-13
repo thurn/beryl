@@ -4,7 +4,7 @@
 mod common;
 
 use beryl_engine::{Profile, Replay, Scratch, State, Step, apply, next, observe};
-use beryl_search::{Agent, FrozenExpertAgent, RandomAgent};
+use beryl_search::{Agent, AgentDecision, FrozenExpertAgent, RandomAgent};
 use common::mirror;
 
 /// 64-bit FNV-1a, stable across runs and releases.
@@ -29,11 +29,13 @@ fn moves() -> u64 {
         }
         let mut s = State::new(&t, seed, Profile::SMART).unwrap();
         let x = &mut Scratch::new();
+        let mut asked = [AgentDecision(0); 2];
         let outcome = loop {
             match next(&mut s, &t, x, &mut Replay) {
                 Step::Over(outcome) => break outcome,
                 Step::Decide(d) => {
-                    let c = agents[d.player.index()].choose(observe(&s, &t, x, d.player), &d);
+                    let i = d.player.index();
+                    let c = agents[i].choose(observe(&s, &t, x, d.player), &d, asked[i].take());
                     h = fnv(h, u8::try_from(c.0).expect("a choice of a Small game"));
                     apply(&mut s, &t, x, &mut Replay, c);
                 }
@@ -45,8 +47,11 @@ fn moves() -> u64 {
 }
 
 /// A change that moves this pin is a change to the reference opponent: every result measured
-/// against it is void. Only an engine or card fix may do that, on purpose.
+/// against it is void. Only an engine or card fix may do that, on purpose. It moved once
+/// besides, with its rules unchanged, when every agent came to draw each decision's randomness
+/// from its seed and the decision's index: the frozen expert deals the cards it cannot see in
+/// its combat simulations that way, and the random opponent here picks that way.
 #[test]
 fn frozen_moves_never_change() {
-    assert_eq!(moves(), 15_721_975_428_907_575_390);
+    assert_eq!(moves(), 2_371_047_557_203_317_184);
 }

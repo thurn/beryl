@@ -11,7 +11,7 @@ use beryl_engine::{
     Decision, GameTable, Layout, Outcome, Profile, Replay, Scratch, State, Step, apply, next,
     observe,
 };
-use beryl_search::{Agent, RandomAgent};
+use beryl_search::{Agent, AgentDecision, RandomAgent};
 
 /// A game between two fuzz decks drawn from `seed`, under the exact profile on even seeds and
 /// smart stops on odd ones.
@@ -46,13 +46,15 @@ pub fn play<L: Layout>(
     agents: &mut [impl Agent<L>; 2],
     mut watch: impl FnMut(&State<L>, &Decision<L>),
 ) -> Outcome {
+    let mut asked = [AgentDecision(0); 2];
     loop {
         match next(s, t, x, &mut Replay) {
             Step::Over(outcome) => return outcome,
             Step::Decide(d) => {
                 watch(s, &d);
                 // A paused resolution is seen where its body stopped (§7.3).
-                let c = agents[d.player.index()].choose(observe(s, t, x, d.player), &d);
+                let i = d.player.index();
+                let c = agents[i].choose(observe(s, t, x, d.player), &d, asked[i].take());
                 apply(s, t, x, &mut Replay, c);
             }
         }

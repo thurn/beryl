@@ -50,11 +50,41 @@ impl AgentDecision {
     pub fn next(self) -> Self {
         AgentDecision(self.0 + 1)
     }
+
+    /// This decision, stepping `self` on to the next: how a caller that asks an agent every
+    /// one of its decisions in order counts them.
+    #[must_use]
+    pub fn take(&mut self) -> Self {
+        let at = *self;
+        *self = at.next();
+        at
+    }
+
+    /// The random stream an agent seeded with `seed` draws from for this decision alone: a
+    /// pure function of the seed and the decision's index, so an agent asked its decision `n`
+    /// draws the same whatever it was asked before, or whether it was asked at all.
+    #[must_use]
+    pub fn rng(self, seed: u64) -> SplitMix64 {
+        // The stream's `n`th draw seeds the decision's own stream, rather than the stream
+        // started `n` draws on, whose draws would repeat the next decision's one place later.
+        let mut seeds = SplitMix64::new(seed);
+        seeds.skip(u64::from(self.0));
+        SplitMix64::new(seeds.next_u64())
+    }
 }
 
 /// A player: answers decisions from what its seat can see.
+///
+/// Each call names the decision's index among the agent's own, `at`, counted by the caller,
+/// and an agent's randomness for that decision comes from its seed and `at` alone
+/// ([`AgentDecision::rng`]). An agent therefore has no stream to keep in step with the game:
+/// a game resumed from its save, whose replay answers the agent's recorded decisions without
+/// asking it, or taken back by an undo, asks it the next decision by its index and it answers
+/// as the uninterrupted game's agent did. An agent that keeps something else from one decision
+/// to the next ([`Mcts`] keeps its trees) must treat an `at` other than the one after its last
+/// as a game that jumped there, and forget what it kept.
 pub trait Agent<L: Layout = Small> {
-    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice;
+    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>, at: AgentDecision) -> Choice;
 
     /// The search behind the last answer; none if it was answered without one, or by an
     /// agent that does not search.
@@ -62,29 +92,19 @@ pub trait Agent<L: Layout = Small> {
         None
     }
 
-    /// For an agent a game resumed midway must rebuild ([`Mcts::resumed`]), the decision the
-    /// rebuilt agent must be asked first to play on as this one; none for an agent whose
-    /// state follows the game when it is asked every decision again.
+    /// For an agent a game resumed midway must rebuild ([`Mcts::resumed`]) because it keeps
+    /// something besides its seed from one decision to the next, the decision the rebuilt
+    /// agent must be asked first to play on as this one; none for an agent that answers each
+    /// decision from the game, its seed and the decision's index alone.
     fn resume_point(&self) -> Option<AgentDecision> {
         None
     }
-
-    /// Its next decision's index among its own, to go back to with [`Agent::rewind`]; none
-    /// for an agent that cannot go back, which plays on from where it is.
-    fn next_decision(&self) -> Option<AgentDecision> {
-        None
-    }
-
-    /// Goes back to stand before its own decision `to`, which [`Agent::next_decision`] named,
-    /// as a game taken back to there does: it forgets what it kept from the decisions since,
-    /// and searches each again from the same seed it had.
-    fn rewind(&mut self, _to: AgentDecision) {}
 }
 
 /// A boxed agent, as the registry builds them, plays like the agent inside.
 impl<L: Layout, T: Agent<L> + ?Sized> Agent<L> for Box<T> {
-    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
-        (**self).choose(obs, d)
+    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>, at: AgentDecision) -> Choice {
+        (**self).choose(obs, d, at)
     }
 
     fn last_search(&self) -> Option<&Search> {
@@ -94,14 +114,6 @@ impl<L: Layout, T: Agent<L> + ?Sized> Agent<L> for Box<T> {
     fn resume_point(&self) -> Option<AgentDecision> {
         (**self).resume_point()
     }
-
-    fn next_decision(&self) -> Option<AgentDecision> {
-        (**self).next_decision()
-    }
-
-    fn rewind(&mut self, to: AgentDecision) {
-        (**self).rewind(to);
-    }
 }
 
 /// An agent for a player game, which plays in [`Small`] and, should the game outgrow it, goes
@@ -110,8 +122,8 @@ pub trait GameAgent: Agent<Small> + Agent<Large> {}
 
 impl<T: Agent<Small> + Agent<Large> + ?Sized> GameAgent for T {}
 
-/// A [`Small`] agent that can play on in [`Large`] as it would have in `Small`: the same
-/// streams, and the same place among its own decisions.
+/// A [`Small`] agent that can play on in [`Large`] as it would have in `Small`, with the same
+/// seed and whatever else it keeps from one decision to the next.
 pub trait Widen: Agent<Small> {
     type Large: Agent<Large>;
 
@@ -132,8 +144,8 @@ impl<A: Widen> Widening<A> {
 }
 
 impl<A: Widen> Agent<Small> for Widening<A> {
-    fn choose(&mut self, obs: Observation<'_, Small>, d: &Decision) -> Choice {
-        self.small.choose(obs, d)
+    fn choose(&mut self, obs: Observation<'_, Small>, d: &Decision, at: AgentDecision) -> Choice {
+        self.small.choose(obs, d, at)
     }
 
     fn last_search(&self) -> Option<&Search> {
@@ -143,22 +155,19 @@ impl<A: Widen> Agent<Small> for Widening<A> {
     fn resume_point(&self) -> Option<AgentDecision> {
         self.small.resume_point()
     }
-
-    fn next_decision(&self) -> Option<AgentDecision> {
-        self.small.next_decision()
-    }
-
-    fn rewind(&mut self, to: AgentDecision) {
-        self.small.rewind(to);
-    }
 }
 
 impl<A: Widen> Agent<Large> for Widening<A> {
-    fn choose(&mut self, obs: Observation<'_, Large>, d: &Decision<Large>) -> Choice {
+    fn choose(
+        &mut self,
+        obs: Observation<'_, Large>,
+        d: &Decision<Large>,
+        at: AgentDecision,
+    ) -> Choice {
         let small = &self.small;
         self.large
             .get_or_insert_with(|| small.widen())
-            .choose(obs, d)
+            .choose(obs, d, at)
     }
 
     fn last_search(&self) -> Option<&Search> {
@@ -171,62 +180,24 @@ impl<A: Widen> Agent<Large> for Widening<A> {
             None => self.small.resume_point(),
         }
     }
-
-    fn next_decision(&self) -> Option<AgentDecision> {
-        match &self.large {
-            Some(large) => large.next_decision(),
-            None => self.small.next_decision(),
-        }
-    }
-
-    /// A game taken back to before it outgrew [`Small`] goes on in [`Large`] all the same, so
-    /// the agent widened rewinds, if there is one yet; else the small one, which it widens from.
-    fn rewind(&mut self, to: AgentDecision) {
-        match &mut self.large {
-            Some(large) => large.rewind(to),
-            None => self.small.rewind(to),
-        }
-    }
 }
 
-/// Picks uniformly among the candidates, from its own seeded stream, so a seed reproduces its
-/// games. Each decision takes exactly one draw, so its own decision `n` is answered by the
-/// stream's draw `n`, and it can stand before any of its decisions ([`Agent::rewind`]): a
-/// game resumed from its save, whose replay answers the agent's decisions from the record,
-/// moves it past them and plays on as if it never stopped.
+/// Picks uniformly among the candidates, drawing each decision from its seed and the
+/// decision's index ([`AgentDecision::rng`]), so a seed reproduces its games.
 #[derive(Clone, Debug)]
 pub struct RandomAgent {
     seed: u64,
-    rng: SplitMix64,
-    decision: AgentDecision,
 }
 
 impl RandomAgent {
     pub fn new(seed: u64) -> Self {
-        Self {
-            seed,
-            rng: SplitMix64::new(seed),
-            decision: AgentDecision(0),
-        }
+        Self { seed }
     }
 }
 
 impl<L: Layout> Agent<L> for RandomAgent {
-    fn choose(&mut self, _obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
-        self.decision.0 += 1;
-        Choice(self.rng.below(d.len() as u64) as u16)
-    }
-
-    fn next_decision(&self) -> Option<AgentDecision> {
-        Some(self.decision)
-    }
-
-    fn rewind(&mut self, to: AgentDecision) {
-        self.rng = SplitMix64::new(self.seed);
-        // `SplitMix64` steps its state by a fixed increment per draw, so skipping `to` draws
-        // is one multiply.
-        self.rng.skip(u64::from(to.0));
-        self.decision = to;
+    fn choose(&mut self, _obs: Observation<'_, L>, d: &Decision<L>, at: AgentDecision) -> Choice {
+        Choice(at.rng(self.seed).below(d.len() as u64) as u16)
     }
 }
 
@@ -249,7 +220,7 @@ impl GreedyAgent {
 }
 
 impl<L: Layout> Agent<L> for GreedyAgent {
-    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
+    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>, _at: AgentDecision) -> Choice {
         self.policy.choose(&self.table, obs, d)
     }
 }

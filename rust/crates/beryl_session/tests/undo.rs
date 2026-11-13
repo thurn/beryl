@@ -361,30 +361,26 @@ fn passing_on_goes_past_the_stops_in_its_step() {
     assert!(passed >= 5, "only {passed} passes on");
 }
 
-/// An opponent that takes each decision's first candidate, counting its decisions, and
-/// records each decision it is rewound to, in `log`.
+/// An opponent that takes each decision's first candidate and records, in `log`, the index
+/// among its own of each decision it is asked.
 struct Counting(Arc<Mutex<AgentLog>>);
 
 #[derive(Default)]
 struct AgentLog {
-    next: u32,
-    rewinds: Vec<u32>,
+    asked: Vec<u32>,
+}
+
+impl AgentLog {
+    /// The index of the decision after the last one asked.
+    fn next(&self) -> u32 {
+        self.asked.last().map_or(0, |&n| n + 1)
+    }
 }
 
 impl<L: Layout> Agent<L> for Counting {
-    fn choose(&mut self, _: Observation<'_, L>, _: &Decision<L>) -> Choice {
-        self.0.lock().unwrap().next += 1;
+    fn choose(&mut self, _: Observation<'_, L>, _: &Decision<L>, at: AgentDecision) -> Choice {
+        self.0.lock().unwrap().asked.push(at.0);
         Choice(0)
-    }
-
-    fn next_decision(&self) -> Option<AgentDecision> {
-        Some(AgentDecision(self.0.lock().unwrap().next))
-    }
-
-    fn rewind(&mut self, to: AgentDecision) {
-        let mut log = self.0.lock().unwrap();
-        log.next = to.0;
-        log.rewinds.push(to.0);
     }
 }
 
@@ -478,7 +474,7 @@ fn undo_goes_back_across_turns_to_teferis_untap() {
     let d = deciding(&untap).unwrap();
     assert!(d.prompt.is(Purpose::Untap) && d.prompt.most == 2);
     assert_eq!((untap.turn.number, untap.turn.step), (3, Step::End));
-    let agent_there = log.lock().unwrap().next;
+    let agent_there = log.lock().unwrap().next();
     // The two tapped lands it may untap.
     let lands: Vec<u16> = d
         .candidates
@@ -500,7 +496,7 @@ fn undo_goes_back_across_turns_to_teferis_untap() {
     let (next_turn, views) = to_human_watching(&mut game);
     assert_eq!(tapped_in_their_turn(&views, &lands), [true, true]);
     assert_eq!(next_turn.turn.number, 5);
-    let agent_after = log.lock().unwrap().next;
+    let agent_after = log.lock().unwrap().next();
     assert!(agent_after > agent_there, "the agent decided in its turn");
 
     // One undo from the next turn goes back to the untap, asked again as it was.
@@ -510,11 +506,7 @@ fn undo_goes_back_across_turns_to_teferis_untap() {
     let back = game.undo().unwrap();
     assert!(back.undone && back.events.is_empty());
     assert_eq!(without_id(back.clone()), without_id(untap.clone()));
-    assert_eq!(
-        log.lock().unwrap().rewinds,
-        [agent_there],
-        "the agent goes back"
-    );
+    let asked_before_undo = log.lock().unwrap().asked.len();
     assert_eq!(
         game.replay().log.last(),
         Some(&Entry::Undo),
@@ -538,11 +530,13 @@ fn undo_goes_back_across_turns_to_teferis_untap() {
         }
     }
     assert_eq!(view.turn.number, 5);
+    let log = log.lock().unwrap();
     assert_eq!(
-        log.lock().unwrap().next,
-        agent_after,
-        "the agent decides again"
+        log.asked.get(asked_before_undo),
+        Some(&agent_there),
+        "the agent goes back with the game"
     );
+    assert_eq!(log.next(), agent_after, "the agent decides again");
     assert_eq!(hand(&view), hand(&next_turn), "the same card is drawn");
 }
 

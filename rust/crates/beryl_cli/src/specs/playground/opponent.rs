@@ -101,7 +101,18 @@ impl Opponent {
 }
 
 impl<L: Layout> Agent<L> for Opponent {
-    fn choose(&mut self, obs: Observation<'_, L>, decision: &Decision<L>) -> Choice {
+    /// Asked one of its decisions again, as a game taken back by an undo asks it, it first
+    /// goes back to stand before that decision.
+    fn choose(
+        &mut self,
+        obs: Observation<'_, L>,
+        decision: &Decision<L>,
+        at: AgentDecision,
+    ) -> Choice {
+        let index = usize::try_from(at.0).expect("decision index fits usize");
+        if index < self.history.len() {
+            self.go_back(index);
+        }
         let state = obs.unmasked_root();
         let taken = boards::lock(&self.progress).taken;
         self.history.push(taken);
@@ -123,17 +134,14 @@ impl<L: Layout> Agent<L> for Opponent {
         {
             return pass;
         }
-        self.script.choose(obs, decision)
+        self.script.choose(obs, decision, at)
     }
+}
 
-    fn next_decision(&self) -> Option<AgentDecision> {
-        Some(AgentDecision(
-            u32::try_from(self.history.len()).expect("decision index fits u32"),
-        ))
-    }
-
-    fn rewind(&mut self, to: AgentDecision) {
-        let index = usize::try_from(to.0).expect("decision index fits usize");
+impl Opponent {
+    /// Forgets its decisions from its own decision `index` on, and the script's progress
+    /// through them.
+    fn go_back(&mut self, index: usize) {
         let taken = self.history[index];
         self.history.truncate(index);
         self.progress = Shared::default();

@@ -11,7 +11,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use beryl_engine::{Choice, Decision, Scratch, State, observe};
-use beryl_search::{Agent, Family, LongSearch, Settings};
+use beryl_search::{Agent, AgentDecision, Family, LongSearch, Settings};
 
 use crate::anchor_replay::walk;
 use crate::game::{mirror, parse_work};
@@ -99,6 +99,7 @@ fn agreement(dir: &Path, entrant: &str, n: usize, budget: Option<u64>) -> Result
                 let c = search.choose(
                     observe(&p.state, &t, &mut x, p.decision.player),
                     &p.decision,
+                    AgentDecision(0),
                 );
                 let visits = search.last_search().map_or(0.0, |s| {
                     let total: u32 = s.visits.iter().sum();

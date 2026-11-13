@@ -20,7 +20,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use beryl_cards::CARDS;
 use beryl_cards::decks::fuzz_deck;
 use beryl_engine::{Choice, Decision, GameTable, Layout, Observation, Profile, Seat, State};
-use beryl_search::Agent;
+use beryl_search::{Agent, AgentDecision};
 use proptest::collection::vec;
 use proptest::prelude::*;
 use proptest::test_runner::{Config, RngAlgorithm, TestError, TestRng, TestRunner};
@@ -73,7 +73,7 @@ impl Picks {
 }
 
 impl<L: Layout> Agent<L> for Picks {
-    fn choose(&mut self, _: Observation<'_, L>, d: &Decision<L>) -> Choice {
+    fn choose(&mut self, _: Observation<'_, L>, d: &Decision<L>, _: AgentDecision) -> Choice {
         // The loop stops the game before the agent's decision once the choices have run out.
         Choice(self.take(d.len()).expect("a choice left for the agent"))
     }

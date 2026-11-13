@@ -23,7 +23,7 @@ use beryl_engine::{
     TurnStep, Zone,
 };
 use beryl_scenario::{Action, P0, P1, Permanent, Scenario};
-use beryl_search::{Agent, Budget, GameAgent};
+use beryl_search::{Agent, AgentDecision, Budget, GameAgent};
 use beryl_session::protocol::{OutcomeView, PlayerView, Status};
 use beryl_session::{Game, Prepared, Seat, SessionId, StopsSetting};
 
@@ -47,7 +47,7 @@ impl Script {
 }
 
 impl<L: Layout> Agent<L> for Script {
-    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
+    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>, _: AgentDecision) -> Choice {
         if d.kind == DecisionKind::Priority
             && let Some(action) = self.casts.front()
             && let Some(c) = beryl_scenario::answer(&self.table, obs.unmasked_root(), d, action)

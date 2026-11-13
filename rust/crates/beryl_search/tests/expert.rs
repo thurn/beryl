@@ -10,7 +10,7 @@ use beryl_engine::{
     Replay, Scratch, Seat, Slot, State, Step, TurnStep, ZoneKey, apply, next, view,
 };
 use beryl_scenario::{P0, P1, Permanent, Scenario, position};
-use beryl_search::{Agent, ExpertAgent, RandomAgent};
+use beryl_search::{Agent, AgentDecision, ExpertAgent, RandomAgent};
 use common::{mirror, play};
 
 const ISLAND: &str = names::ISLAND;
@@ -40,6 +40,7 @@ fn expert_at(
     stop: impl Fn(&State, &Decision) -> bool,
 ) -> (Decision, Choice) {
     let mut expert = ExpertAgent::new(t, 7);
+    let mut asked = AgentDecision(0);
     let mut x = Scratch::new();
     loop {
         let Step::Decide(d) = next(s, t, &mut x, &mut Replay) else {
@@ -49,7 +50,7 @@ fn expert_at(
         let c = if d.player == P1 {
             script(t, &shown, &d)
         } else {
-            let c = expert.choose(Observation::new(&shown, P0), &d);
+            let c = expert.choose(Observation::new(&shown, P0), &d, asked.take());
             if stop(&shown, &d) {
                 return (d, c);
             }
@@ -468,6 +469,7 @@ fn flash_removal_answers_teferi_before_it_locks_us_out() {
 /// ends.
 fn play_turn(t: &GameTable, s: &mut State, turn: u16) -> Option<Outcome> {
     let mut experts = [ExpertAgent::new(t, 7), ExpertAgent::new(t, 8)];
+    let mut asked = [AgentDecision(0); 2];
     let mut x = Scratch::new();
     loop {
         let d = match next(s, t, &mut x, &mut Replay) {
@@ -476,7 +478,8 @@ fn play_turn(t: &GameTable, s: &mut State, turn: u16) -> Option<Outcome> {
             Step::Decide(d) => d,
         };
         let shown = *view(s, t, &mut x);
-        let c = experts[usize::from(d.player == P1)].choose(Observation::new(&shown, d.player), &d);
+        let i = usize::from(d.player == P1);
+        let c = experts[i].choose(Observation::new(&shown, d.player), &d, asked[i].take());
         apply(s, t, &mut x, &mut Replay, c);
     }
 }
@@ -581,6 +584,7 @@ fn subtlety_is_not_evoked_on_an_empty_stack() {
         .library(P1, LIBRARY);
     let (t, mut s) = arrange(&IDLE);
     let mut expert = ExpertAgent::new(&t, 7);
+    let mut asked = AgentDecision(0);
     let mut x = Scratch::new();
     while s.turn().number() <= 6 {
         let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) else {
@@ -590,7 +594,7 @@ fn subtlety_is_not_evoked_on_an_empty_stack() {
         let c = if d.player == P1 {
             casts("")(&t, &shown, &d)
         } else {
-            let c = expert.choose(Observation::new(&shown, P0), &d);
+            let c = expert.choose(Observation::new(&shown, P0), &d, asked.take());
             if let Some(o) = d.candidates.option(c) {
                 assert_ne!(cast_name(&t, &shown, o), Some(names::SUBTLETY));
             }

@@ -44,11 +44,10 @@ fn choices(play: &Play, from: usize) -> Vec<(SavedKind, bool)> {
 
 /// An opponent that blocks with everything it can, and otherwise takes each decision's first
 /// candidate.
-struct BlockAll(u32);
+struct BlockAll;
 
 impl<L: Layout> Agent<L> for BlockAll {
-    fn choose(&mut self, _: Observation<'_, L>, d: &Decision<L>) -> Choice {
-        self.0 += 1;
+    fn choose(&mut self, _: Observation<'_, L>, d: &Decision<L>, _: AgentDecision) -> Choice {
         let block = match &d.candidates {
             Candidates::Options(options) => {
                 (options.iter()).position(|o| matches!(o, Opt::Block(_)))
@@ -56,14 +55,6 @@ impl<L: Layout> Agent<L> for BlockAll {
             Candidates::Objects(_) => None,
         };
         Choice(block.unwrap_or(0) as u16)
-    }
-
-    fn next_decision(&self) -> Option<AgentDecision> {
-        Some(AgentDecision(self.0))
-    }
-
-    fn rewind(&mut self, to: AgentDecision) {
-        self.0 = to.0;
     }
 }
 
@@ -84,11 +75,7 @@ const DOUBLE_BLOCK: Scenario = Scenario::new("combat damage")
 
 /// Under full control, attacks with Beza into a double block, to the division of its damage.
 fn divided() -> Play {
-    let mut play = Play::with(
-        &DOUBLE_BLOCK,
-        Some(Box::new(BlockAll(0))),
-        StopsSetting::EXACT,
-    );
+    let mut play = Play::with(&DOUBLE_BLOCK, Some(Box::new(BlockAll)), StopsSetting::EXACT);
     while play.decision().kind != Kind::DamageDivision {
         let attacks = |c: &Candidate| matches!(c, Candidate::Attack { .. });
         match play.decision().kind {

@@ -10,8 +10,8 @@ use beryl_engine::{
 
 use crate::values::{CardInfo, info};
 use crate::{
-    AGENTS, Budget, DEEP_SEARCHER, DEEP_SEER, DEEP_SEER_UNANCHORED, Family, GameAgent, Knowledge,
-    RETIRED, deep_family,
+    AGENTS, AgentDecision, Budget, DEEP_SEARCHER, DEEP_SEER, DEEP_SEER_UNANCHORED, Family,
+    GameAgent, Knowledge, RETIRED, deep_family,
 };
 
 /// Basic Swamps and black vanilla creatures complete from the card store, with no file. Twelve
@@ -114,12 +114,14 @@ fn the_derived_only_champion_plays_to_the_end() {
 fn play(t: &GameTable, mut agents: [Box<dyn GameAgent + Send>; 2]) -> Outcome {
     let mut s: State<Small> = State::new(t, 7, Profile::SMART).unwrap();
     let mut x = Scratch::new();
+    let mut asked = [AgentDecision(0); 2];
     loop {
         match next(&mut s, t, &mut x, &mut Replay) {
             Step::Over(outcome) => return outcome,
             Step::Decide(d) => {
                 let d: Decision<Small> = d;
-                let c = agents[d.player.index()].choose(observe(&s, t, &mut x, d.player), &d);
+                let i = d.player.index();
+                let c = agents[i].choose(observe(&s, t, &mut x, d.player), &d, asked[i].take());
                 apply(&mut s, t, &mut x, &mut Replay, c);
             }
         }

@@ -591,6 +591,7 @@ impl<L: beryl_engine::Layout> beryl_search::Agent<L> for BlockAll {
         &mut self,
         _: beryl_engine::Observation<'_, L>,
         decision: &beryl_engine::Decision<L>,
+        _: beryl_search::AgentDecision,
     ) -> beryl_engine::Choice {
         use beryl_engine::{Choice, Opt};
 

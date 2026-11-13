@@ -419,6 +419,61 @@ fn a_game_resumed_from_its_save_plays_on_as_if_it_never_stopped() {
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
+/// The human's decisions a resume is tried at, and the views after it compared.
+const RESUME_AT: usize = 24;
+const RESUME_VIEWS: usize = 20;
+
+/// For each of the human's first [`RESUME_AT`] decisions, a game resumed from its save there
+/// shows the same next [`RESUME_VIEWS`] views as the game that never stopped, against
+/// `opponent` in the games of `seeds`. A replay answers the agent's recorded decisions without
+/// asking it, so this holds only because an agent's randomness for each decision comes from
+/// its seed and the decision's index among its own, which the game counts over the decisions
+/// the replay answers too.
+fn resumes_play_on_as_if_never_stopped(opponent: &str, seeds: std::ops::Range<u64>) {
+    for seed in seeds {
+        let start = StartGame {
+            opponent: opponent.to_owned(),
+            ..start(seed, StopsSetting::EXACT)
+        };
+        let mut game = Game::new(&CARDS, &start, SESSION).unwrap();
+        let mut views = vec![to_human(&mut game)];
+        let mut saves = Vec::new();
+        while views.len() <= RESUME_AT + RESUME_VIEWS
+            && matches!(views.last().unwrap().status, Status::Deciding { .. })
+        {
+            saves.push(game.replay().clone());
+            let next = play(&mut game, views.last().unwrap());
+            views.push(next);
+        }
+        for (k, save) in saves.iter().enumerate().take(RESUME_AT) {
+            let (mut resumed, view) = Game::from_replay(&CARDS, save, SESSION).unwrap();
+            assert_eq!(
+                view, views[k],
+                "{opponent}, seed {seed}: resumed at decision {k}"
+            );
+            let mut view = view;
+            for (n, expected) in views.iter().enumerate().skip(k + 1).take(RESUME_VIEWS) {
+                view = play(&mut resumed, &view);
+                assert_eq!(
+                    &view, expected,
+                    "{opponent}, seed {seed}: resumed at decision {k}, decision {n}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn a_game_against_the_random_agent_resumes_at_any_decision() {
+    resumes_play_on_as_if_never_stopped("random", 0..6);
+}
+
+/// The expert deals the cards it cannot see from its seed when it simulates combat.
+#[test]
+fn a_game_against_the_expert_resumes_at_any_decision() {
+    resumes_play_on_as_if_never_stopped("expert", 0..3);
+}
+
 #[test]
 fn only_an_unfinished_game_that_still_replays_is_resumed() {
     let dir = replay_dir("no-resume");

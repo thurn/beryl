@@ -7,8 +7,9 @@
 //! decisions again, so its root visits and mean rewards show why it chose as it did. A search
 //! that chooses other than the log did is marked: the agent's code changed since the game, the
 //! replay drifted, or the agent is not the one that played. `--turn N` searches only turn
-//! `N`'s decisions and ends the transcript there; skipping the searches before it moves the
-//! agent's random stream, so its searches sample afresh rather than repeat the game's.
+//! `N`'s decisions and ends the transcript there. Each search is asked by the decision's
+//! index among the agent's own, counted over the decisions it skips too, so it samples as the
+//! game's agent did there, but without the trees a search may keep from the decision before.
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -17,7 +18,7 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{Choice, Seat, Small};
 use beryl_engine::{observe, view};
-use beryl_search::{Agent, Budget, GameAgent, Search, agent};
+use beryl_search::{Agent, AgentDecision, Budget, GameAgent, Search, agent};
 use beryl_session::ReplayFile;
 
 use crate::game;
@@ -97,6 +98,9 @@ fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result
         [recorded, "human"]
     };
     let mut transcript = Transcript::new(names);
+    // The agent's own decisions, searched or not, so each is searched from the seed the
+    // recorded agent had there.
+    let mut own = AgentDecision(0);
     loop {
         match walk.next()? {
             Walked::Over { outcome, happened } => {
@@ -119,8 +123,16 @@ fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result
                     break;
                 }
                 let (t, s, x) = (&walk.t, &walk.s, &mut walk.x);
-                let search = if d.player == bot && only.is_none_or(|n| turn == n) {
-                    let chose = Agent::<Small>::choose(&mut opponent, observe(s, t, x, bot), &d);
+                let at = if d.player == bot {
+                    Some(own.take())
+                } else {
+                    None
+                };
+                let search = if let Some(at) = at
+                    && only.is_none_or(|n| turn == n)
+                {
+                    let chose =
+                        Agent::<Small>::choose(&mut opponent, observe(s, t, x, bot), &d, at);
                     Some((chose, Agent::<Small>::last_search(&opponent).cloned()))
                 } else {
                     None

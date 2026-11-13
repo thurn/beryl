@@ -18,7 +18,7 @@ use beryl_engine::{
     Layout, Misfit, Observation, Outcome, Profile, Relayout, Replay, Scratch, Seat, Slot, SlotId,
     Small, StallReason, State, Step, Zone, ZoneKey, apply, next,
 };
-use beryl_search::{Agent, GreedyAgent, RandomAgent};
+use beryl_search::{Agent, AgentDecision, GreedyAgent, RandomAgent};
 use common::{agents, fingerprint, game, games, mirror, play};
 
 /// Every fourth game is played in the [`Large`] layout from its start, so the layout a game
@@ -89,6 +89,7 @@ fn a_widened_game_plays_on_as_the_small_one() {
         let (mut xs, mut xl) = (Scratch::new(), Scratch::<Large>::new());
         let mut agents = agents(seed);
         let mut decisions = 0;
+        let mut asked = [AgentDecision(0); 2];
         loop {
             let step = next(&mut small, &t, &mut xs, &mut Replay);
             assert_eq!(
@@ -98,7 +99,11 @@ fn a_widened_game_plays_on_as_the_small_one() {
             );
             assert!(small.widen() == large, "seed {seed}, decision {decisions}");
             let Step::Decide(d) = step else { break };
-            let c = agents[d.player.index()].choose(Observation::new(&small, d.player), &d);
+            let c = agents[d.player.index()].choose(
+                Observation::new(&small, d.player),
+                &d,
+                asked[d.player.index()].take(),
+            );
             apply(&mut small, &t, &mut xs, &mut Replay, c);
             apply(&mut large, &t, &mut xl, &mut Replay, c);
             decisions += 1;
@@ -293,6 +298,7 @@ fn a_sixty_card_game_round_trips_between_the_layouts() {
         assert!(dealt_wide == small.widen(), "seed {seed}");
         let (mut x, mut agents) = (Scratch::new(), agents(seed));
         let mut decisions = 0;
+        let mut asked = [AgentDecision(0); 2];
         loop {
             let wide = small.widen();
             assert!(wide.try_relayout::<Small>(&t) == Ok(small), "seed {seed}");
@@ -301,7 +307,11 @@ fn a_sixty_card_game_round_trips_between_the_layouts() {
                 break;
             };
             assert_eq!(d.relayout::<Large>().relayout::<Small>(), d, "seed {seed}");
-            let c = agents[d.player.index()].choose(Observation::new(&small, d.player), &d);
+            let c = agents[d.player.index()].choose(
+                Observation::new(&small, d.player),
+                &d,
+                asked[d.player.index()].take(),
+            );
             apply(&mut small, &t, &mut x, &mut Replay, c);
             decisions += 1;
         }
@@ -372,12 +382,17 @@ fn record(seed: u64) -> (Vec<Choice>, Vec<u64>) {
     let mut x = Scratch::new();
     let mut agents = agents(seed);
     let (mut choices, mut hashes) = (Vec::new(), Vec::new());
+    let mut asked = [AgentDecision(0); 2];
     loop {
         match next(&mut s, &t, &mut x, &mut Replay) {
             Step::Over(_) => return (choices, hashes),
             Step::Decide(d) => {
                 hashes.push(fingerprint(&s));
-                let c = agents[d.player.index()].choose(Observation::new(&s, d.player), &d);
+                let c = agents[d.player.index()].choose(
+                    Observation::new(&s, d.player),
+                    &d,
+                    asked[d.player.index()].take(),
+                );
                 choices.push(c);
                 apply(&mut s, &t, &mut x, &mut Replay, c);
             }
@@ -408,7 +423,7 @@ fn a_seed_and_its_choices_reproduce_every_state_hash() {
 struct Observer;
 
 impl Agent for Observer {
-    fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
+    fn choose(&mut self, obs: Observation<'_>, d: &Decision, _at: AgentDecision) -> Choice {
         let mut h = DefaultHasher::new();
         for slot in Slot::all() {
             (obs.knows(slot), obs.card(slot), obs.object(slot)).hash(&mut h);
@@ -452,8 +467,8 @@ fn agents_decide_the_same_on_a_redeterminized_state() {
                         assert_eq!(det.object(slot), s.object(slot), "slot {slot}");
                     }
                 }
-                let ours = Observer.choose(Observation::new(s, viewer), d);
-                let theirs = Observer.choose(Observation::new(&det, viewer), d);
+                let ours = Observer.choose(Observation::new(s, viewer), d, AgentDecision(0));
+                let theirs = Observer.choose(Observation::new(&det, viewer), d, AgentDecision(0));
                 assert_eq!(
                     ours, theirs,
                     "seed {seed}: the view of a determinized state differs"
@@ -529,10 +544,11 @@ fn perf_counts_stay_in_their_bands() {
     // (greedy, seed): decisions, silent, state-based checks, state copies, layer recomputes,
     // solver runs, events.
     let pinned: [(bool, u64, [u64; 7]); 6] = [
-        (false, 0, [170, 611, 716, 66, 55, 51, 738]),
-        (false, 1, [216, 722, 854, 144, 71, 73, 881]),
-        // Paying mana before exile choices reduces this game's solver look-ahead work.
-        (false, 2, [212, 688, 810, 86, 77, 67, 858]),
+        // The random games, as the random agent draws each decision from its seed and the
+        // decision's index among its own.
+        (false, 0, [173, 534, 659, 92, 55, 61, 744]),
+        (false, 1, [225, 698, 838, 178, 66, 65, 886]),
+        (false, 2, [178, 581, 720, 96, 59, 73, 770]),
         (true, 0, [115, 442, 527, 62, 41, 41, 555]),
         (true, 1, [138, 531, 604, 66, 52, 43, 665]),
         (true, 2, [406, 913, 1205, 206, 101, 91, 1366]),

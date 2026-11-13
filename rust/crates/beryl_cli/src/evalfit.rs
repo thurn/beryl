@@ -10,7 +10,9 @@
 use std::thread;
 
 use beryl_engine::{Outcome, Profile, Replay, Scratch, Seat, State, Step, apply, next, observe};
-use beryl_search::{Budget, CardValues, FEATURES, NAMES, WEIGHTS, features, sigmoid};
+use beryl_search::{
+    AgentDecision, Budget, CardValues, FEATURES, NAMES, WEIGHTS, features, sigmoid,
+};
 
 use crate::game::{agents, mirror};
 
@@ -26,6 +28,7 @@ fn positions(seed: u64, names: [&str; 2]) -> Result<Vec<Sample>, String> {
     let mut x = Scratch::new();
     let mut turn = 0;
     let mut at_turns = Vec::new();
+    let mut asked = [AgentDecision(0); 2];
     let outcome = loop {
         match next(&mut s, &t, &mut x, &mut Replay) {
             Step::Over(outcome) => break outcome,
@@ -39,7 +42,8 @@ fn positions(seed: u64, names: [&str; 2]) -> Result<Vec<Sample>, String> {
                     }
                     at_turns.push(diff);
                 }
-                let c = agents[d.player.index()].choose(observe(&s, &t, &mut x, d.player), &d);
+                let i = d.player.index();
+                let c = agents[i].choose(observe(&s, &t, &mut x, d.player), &d, asked[i].take());
                 apply(&mut s, &t, &mut x, &mut Replay, c);
             }
         }

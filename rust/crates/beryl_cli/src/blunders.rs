@@ -35,7 +35,7 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
     Decision, GameTable, Profile, Replay, Scratch, State, Step, apply, next, observe, view,
 };
-use beryl_search::{Agent, Budget, DEEP_SEARCHER};
+use beryl_search::{Agent, AgentDecision, Budget, DEEP_SEARCHER};
 use beryl_session::replay::Entry as LogEntry;
 use beryl_session::{ReplayFile, StopsSetting};
 use serde::Serialize;
@@ -157,9 +157,11 @@ pub fn play(e: &Entry, at: &Reached, agent: &mut dyn Agent) -> Vec<String> {
     let (t, mut s, mut d) = (&at.t, at.s, at.d);
     let mut x = Scratch::new();
     let mut chosen = Vec::new();
+    // The agent's own decisions, counted from the position: it is asked every one from there.
+    let mut own = AgentDecision(0);
     loop {
         let shown = labels(t, view(&s, t, &mut x), &d);
-        let c = agent.choose(observe(&s, t, &mut x, d.player), &d);
+        let c = agent.choose(observe(&s, t, &mut x, d.player), &d, own.take());
         chosen.push(shown[usize::from(c.0)].clone());
         apply(&mut s, t, &mut x, &mut Replay, c);
         match next(&mut s, t, &mut x, &mut Replay) {
@@ -430,6 +432,7 @@ mod tests {
             &mut self,
             obs: beryl_engine::Observation<'_>,
             d: &Decision,
+            _: AgentDecision,
         ) -> beryl_engine::Choice {
             let mut x = Scratch::new();
             let root = obs.unmasked_root();
@@ -525,15 +528,15 @@ mod tests {
 
             // With no budget for an iteration, the guarded decision uses the default.
             let mut planner = beryl_search::LongSearch::new(&at.t, settings(0), seed);
-            let choice = planner.choose(obs, &at.d);
+            let choice = planner.choose(obs, &at.d, AgentDecision(0));
             assert_eq!(planner.last_search().unwrap().rollouts, 0);
             assert_eq!(shown[usize::from(choice.0)], "done", "{name}");
 
             let mut first = beryl_search::LongSearch::new(&at.t, settings(20_000), seed);
             let mut second = beryl_search::LongSearch::new(&at.t, settings(20_000), seed);
             assert_eq!(
-                first.choose(obs, &at.d),
-                second.choose(obs, &at.d),
+                first.choose(obs, &at.d, AgentDecision(0)),
+                second.choose(obs, &at.d, AgentDecision(0)),
                 "{name}"
             );
         }

@@ -334,11 +334,14 @@ impl Widen for Mcts<Small> {
 impl<L: Layout> Agent<L> for Mcts<L> {
     /// The candidate visited most across the trees, the first of equals. A decision with one
     /// candidate is never searched, nor is passing with one's own object on top of the stack.
-    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
-        let decision = self.decision;
+    ///
+    /// Asked a decision other than the one after its last (a game resumed, or taken back by an
+    /// undo), it forgets the trees it kept and searches afresh.
+    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>, at: AgentDecision) -> Choice {
+        let decision = at;
+        let kept = self.kept.take().filter(|_| at == self.decision);
         self.decision = decision.next();
         self.last = None;
-        let kept = self.kept.take();
         if d.len() < 2 {
             return Choice(0);
         }
@@ -396,16 +399,6 @@ impl<L: Layout> Agent<L> for Mcts<L> {
     /// decision whose fresh search planted them, re-searched from there.
     fn resume_point(&self) -> Option<AgentDecision> {
         Some(self.kept.as_ref().map_or(self.decision, |k| k.chain))
-    }
-
-    fn next_decision(&self) -> Option<AgentDecision> {
-        Some(self.decision)
-    }
-
-    fn rewind(&mut self, to: AgentDecision) {
-        self.decision = to;
-        self.kept = None;
-        self.last = None;
     }
 }
 

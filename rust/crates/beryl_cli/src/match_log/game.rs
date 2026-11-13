@@ -7,7 +7,7 @@
 //! as they stand up to the point its last logged line says a rebuilt agent must start
 //! from: the next decision, or, inside a chain of decisions reusing one search's trees, the
 //! decision that planted them, re-searched from there to the same answers. The expert yardstick
-//! starts at the first decision to rebuild its combat plan and random stream. Every other
+//! starts at the first decision to rebuild its combat plan. Every other
 //! agent is asked again for real, cheaply and deterministically, so its own state follows
 //! the game. A replayed answer that differs from the logged one stops the game: the binary
 //! no longer plays as the run did.
@@ -118,6 +118,8 @@ pub enum Resume {
 /// A seat's agent and, for a search, how far the log answers for it.
 struct Seated {
     agent: Box<dyn Agent>,
+    /// The agent's next decision among its own, asked or taken from the log.
+    own: AgentDecision,
     seat: u8,
     search: Option<Progress>,
 }
@@ -140,6 +142,7 @@ impl Seated {
         };
         if replays {
             p.asked = p.asked.next();
+            self.own = self.own.next();
         }
         replays
     }
@@ -147,7 +150,7 @@ impl Seated {
     /// Asks the agent decision `d`, and logs its answer.
     fn ask(&mut self, obs: Observation<'_>, d: &Decision) -> Line {
         let start = Instant::now();
-        let c = self.agent.choose(obs, d);
+        let c = self.agent.choose(obs, d, self.own.take());
         let ms = start.elapsed().as_millis() as u64;
         if let Some(p) = self.search.as_mut() {
             p.asked = p.asked.next();
@@ -237,6 +240,7 @@ fn seat(t: &GameTable, g: &Game<'_>, build: &Build<'_>) -> Result<Vec<Seated>, S
         };
         players.push(Seated {
             agent: build(t, e, seed, start)?,
+            own: AgentDecision(0),
             seat: players.len() as u8,
             search: matches!(e, Entrant::Search(_)).then_some(Progress {
                 from,

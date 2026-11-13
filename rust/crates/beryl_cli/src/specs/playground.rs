@@ -10,7 +10,7 @@ use beryl_engine::Seat;
 use beryl_engine::card::{AbilityKind, CardDef, TargetKind, Types};
 use beryl_engine::filter::Evaluate;
 use beryl_scenario::{Action, Permanent, Scenario};
-use beryl_search::Agent;
+use beryl_search::{Agent, AgentDecision};
 use beryl_session::{GameUpdate, Prepared, Sessions, StopsSetting};
 use serde_json::{Value, json};
 
@@ -557,6 +557,7 @@ fn prepare(variant: &Variant) -> Result<(beryl_engine::GameTable, beryl_engine::
         Scripted::new(&moment.board, Seat::P1, &table, Arc::clone(&progress))?,
     ];
     let mut scratch = beryl_engine::Scratch::new();
+    let mut asked = [AgentDecision(0); 2];
     for _ in 0..512 {
         let step = beryl_engine::next(&mut state, &table, &mut scratch, &mut beryl_engine::Replay);
         let beryl_engine::Step::Decide(decision) = step else {
@@ -585,6 +586,7 @@ fn prepare(variant: &Variant) -> Result<(beryl_engine::GameTable, beryl_engine::
         let choice = agents[decision.player.index()].choose(
             beryl_engine::observe(&state, &table, &mut scratch, decision.player),
             &decision,
+            asked[decision.player.index()].take(),
         );
         beryl_engine::apply(
             &mut state,

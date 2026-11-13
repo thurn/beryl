@@ -38,7 +38,7 @@ fn settings(family: &str, work: u64, threads: u32) -> Settings {
 fn search(t: &GameTable, settings: Settings, seed: u64, s: &State, d: &Decision) -> Search {
     let mut agent = LongSearch::new(t, settings, seed);
     let mut x = Scratch::new();
-    agent.choose(observe(s, t, &mut x, d.player), d);
+    agent.choose(observe(s, t, &mut x, d.player), d, AgentDecision(0));
     agent.last_search().expect("a search").clone()
 }
 
@@ -176,17 +176,19 @@ fn expert_anchored_search_replays_a_game_from_its_seed() {
     let mut replay = LongSearch::resumed(&t, settings, 5, AgentDecision(0));
     let mut opponent = GreedyAgent::new(&t);
     let mut checked = 0;
+    let mut own = AgentDecision(0);
     while let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) {
         let obs = observe(&s, &t, &mut x, d.player);
         let choice = if d.player == Seat::BOTH[0] {
-            let choice = first.choose(obs, &d);
-            assert_eq!(choice, replay.choose(obs, &d));
+            let at = own.take();
+            let choice = first.choose(obs, &d, at);
+            assert_eq!(choice, replay.choose(obs, &d, at));
             assert_eq!(first.last_search(), replay.last_search());
             assert_eq!(first.resume_point(), Some(AgentDecision(0)));
             checked += usize::from(first.last_search().is_some_and(|s| s.anchor.is_some()));
             choice
         } else {
-            opponent.choose(obs, &d)
+            opponent.choose(obs, &d, AgentDecision(0))
         };
         apply(&mut s, &t, &mut x, &mut Replay, choice);
     }

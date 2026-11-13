@@ -902,9 +902,19 @@ impl<L: Layout> LongSearch<L> {
         &mut self,
         obs: Observation<'_, L>,
         d: &Decision<L>,
+        at: AgentDecision,
         capture: Option<&mut Capture<L>>,
     ) -> Choice {
-        let decision = self.decision;
+        let decision = at;
+        if at != self.decision {
+            // A game resumed, or taken back by an undo: what was kept from the decisions
+            // before belongs to another line of play.
+            self.kept = None;
+            self.combat_plan = combat::Plan::default();
+            if self.expert.is_some() {
+                self.expert = Some(ExpertAgent::new(&self.table, self.seed));
+            }
+        }
         self.decision = decision.next();
         self.last = None;
         let kept = self.kept.take();
@@ -939,7 +949,7 @@ impl<L: Layout> LongSearch<L> {
                 )
                 .choose(&start, d)
             }
-            Some(expert) => expert.choose(obs, d),
+            Some(expert) => expert.choose(obs, d, decision),
             None => self.policy.choose(&self.table, obs, d),
         });
         let guards = |b: Choice| {
@@ -997,8 +1007,10 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
     /// [`Options::means`], [`by_means`]'s; with [`Options::anchor`], the guarded default
     /// answer unless it is clearly beaten. A decision with one
     /// candidate is never searched, nor is passing with one's own object on top of the stack.
-    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
-        self.choose_traced(obs, d, None)
+    /// Asked a decision other than the one after its last (a game resumed, or taken back by an
+    /// undo), it forgets its kept trees and combat plan and searches afresh.
+    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>, at: AgentDecision) -> Choice {
+        self.choose_traced(obs, d, at, None)
     }
 
     fn last_search(&self) -> Option<&Search> {
@@ -1008,24 +1020,10 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
     fn resume_point(&self) -> Option<AgentDecision> {
         let options = self.settings.family.options;
         if self.expert.is_some() || (options.anchor && options.combat) {
-            // Match replay must rebuild the combat plan and the expert's random stream too.
+            // Match replay must rebuild the combat plan, the expert's included.
             return Some(AgentDecision(0));
         }
         Some(self.kept.as_ref().map_or(self.decision, |k| k.chain))
-    }
-
-    fn next_decision(&self) -> Option<AgentDecision> {
-        Some(self.decision)
-    }
-
-    fn rewind(&mut self, to: AgentDecision) {
-        self.decision = to;
-        self.combat_plan = combat::Plan::default();
-        if self.expert.is_some() {
-            self.expert = Some(ExpertAgent::new(&self.table, self.seed));
-        }
-        self.kept = None;
-        self.last = None;
     }
 }
 
@@ -2099,8 +2097,8 @@ mod tests {
             let obs = observe(&s, &t, &mut x, d.player);
             let mut anchored = LongSearch::<Small>::new(&t, settings(anchor), i as u64);
             let mut plain = LongSearch::<Small>::new(&t, settings(Options::default()), i as u64);
-            let c = anchored.choose(obs, &d);
-            let free = plain.choose(obs, &d);
+            let c = anchored.choose(obs, &d, AgentDecision(0));
+            let free = plain.choose(obs, &d, AgentDecision(0));
             assert!(plain.last_search().is_none_or(|s| s.anchor.is_none()));
             let Some(search) = anchored.last_search() else {
                 continue;
@@ -2327,7 +2325,7 @@ mod tests {
         for (i, (s, d, greedy)) in chosen.into_iter().enumerate() {
             let obs = observe(&s, &t, &mut x, d.player);
             let mut guarded_search = LongSearch::<Small>::new(&t, settings, i as u64);
-            let c = guarded_search.choose(obs, &d);
+            let c = guarded_search.choose(obs, &d, AgentDecision(0));
             let search = guarded_search.last_search().expect("searched");
             match search.anchor {
                 Some(a) => {
@@ -2363,12 +2361,12 @@ mod tests {
                 continue;
             }
             let obs = observe(&s, &t, &mut x, d.player);
-            let expert = ExpertAgent::new(&t, 5).choose(obs, &d);
+            let expert = ExpertAgent::new(&t, 5).choose(obs, &d, AgentDecision(0));
             if expert == greedy {
                 continue;
             }
             let mut anchored = LongSearch::new(&t, settings, 5);
-            let choice = anchored.choose(obs, &d);
+            let choice = anchored.choose(obs, &d, AgentDecision(0));
             if let Some(check) = anchored.last_search().expect("searched").anchor {
                 assert_eq!(check.greedy, expert);
                 assert_ne!(check.search, expert);

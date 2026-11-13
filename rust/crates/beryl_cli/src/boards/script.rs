@@ -8,7 +8,7 @@ use beryl_engine::{
     Choice, Decision, DecisionKind, GameTable, Layout, Observation, Seat, TurnStep,
 };
 use beryl_scenario::{Action, Pick, Scenario};
-use beryl_search::Agent;
+use beryl_search::{Agent, AgentDecision};
 use beryl_session::trigger_to_stack;
 use std::fmt::Write as _;
 
@@ -187,7 +187,14 @@ impl Scripted {
 }
 
 impl<L: Layout> Agent<L> for Scripted {
-    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
+    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>, _: AgentDecision) -> Choice {
+        self.answer(obs, d)
+    }
+}
+
+impl Scripted {
+    /// The script's answer to `d`: its next action once that is due, else a pass or a default.
+    fn answer<L: Layout>(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
         let s = obs.unmasked_root();
         let next = self.script.front().map(|&(_, a, _)| a);
         // An action waits for the other seat's actions before it: a response is cast once
@@ -217,7 +224,7 @@ impl<L: Layout> Agent<L> for Scripted {
                 if matches!(pick, Pick::No) {
                     return done;
                 }
-                return self.choose(obs, d);
+                return self.answer(obs, d);
             }
         }
         // A target its script names that was the only one, chosen without asking: the seat is
@@ -230,7 +237,7 @@ impl<L: Layout> Agent<L> for Scripted {
             && d.player == self.seat
         {
             self.take();
-            return self.choose(obs, d);
+            return self.answer(obs, d);
         }
         if let Some(action) = next.filter(|_| due) {
             let kind = match action {

@@ -50,7 +50,6 @@ use beryl_engine::card::{
     Ability, CastingKind, CastingOption, Castings, Face, FaceIx, Keywords, ManaColor,
     ObjectAbility, Purpose, Types,
 };
-use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{ObjectFlags, StackEntry, Tracker};
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
@@ -59,7 +58,7 @@ use beryl_engine::{
 };
 
 use super::rollout::{Candidate, Inline, Policy, RolloutPolicy, best};
-use crate::{Agent, Widen};
+use crate::{Agent, AgentDecision, Widen};
 
 /// The most lands we cast Mana Crypt with.
 const CRYPT_LANDS: i32 = 3;
@@ -105,11 +104,11 @@ const MAP_TOKEN: &str = "Map Token";
 const JACE_TELEPATH_UNBOUND: &str = "Jace, Telepath Unbound";
 
 /// The expert, for one game: the table, the rollout policy it builds on and falls back to,
-/// and the stream and working memory its combat simulations use.
+/// the seed its combat simulations deal hidden cards from, and their working memory.
 pub struct ExpertAgent {
     table: GameTable,
     policy: RolloutPolicy,
-    rng: SplitMix64,
+    seed: u64,
     x: Scratch,
     plan: combat::Plan,
 }
@@ -119,7 +118,7 @@ impl ExpertAgent {
         ExpertAgent {
             table: t.clone(),
             policy: RolloutPolicy::new(t),
-            rng: SplitMix64::new(seed),
+            seed,
             x: Scratch::unchecked(),
             plan: combat::Plan::default(),
         }
@@ -127,19 +126,20 @@ impl ExpertAgent {
 }
 
 /// The frozen expert has no [`Large`](beryl_engine::Large) copy, the engine being generic
-/// only since it froze: in a game widened into `Large`, the current expert plays on, drawing
-/// from the frozen one's stream.
+/// only since it froze: in a game widened into `Large`, the current expert plays on from the
+/// frozen one's seed.
 impl Widen for ExpertAgent {
     type Large = crate::ExpertAgent<beryl_engine::Large>;
 
     fn widen(&self) -> Self::Large {
-        crate::ExpertAgent::drawing_from(&self.table, self.rng)
+        crate::ExpertAgent::new(&self.table, self.seed)
     }
 }
 
 impl Agent for ExpertAgent {
-    fn choose(&mut self, obs: Observation<'_>, d: &Decision) -> Choice {
+    fn choose(&mut self, obs: Observation<'_>, d: &Decision, at: AgentDecision) -> Choice {
         let t = &self.table;
+        let mut rng = at.rng(self.seed);
         let e = Expert::new(self.policy.view(t, obs, d.player, true));
         match d.kind {
             DecisionKind::Priority => best(d, |c| c.option().map(|o| e.action(o))),
@@ -155,7 +155,7 @@ impl Agent for ExpertAgent {
                     plan: &mut self.plan,
                     nested: false,
                 };
-                let start = obs.determinize(t, &mut self.rng);
+                let start = obs.determinize(t, &mut rng);
                 sim.choose(&start, d)
             }
             DecisionKind::YesNo if d.prompt.purpose == Purpose::PayLife => e.pay_life(d),
@@ -182,7 +182,7 @@ impl Agent for ExpertAgent {
                 })
             }
             DecisionKind::PaymentPlan => {
-                let mut start = obs.determinize(t, &mut self.rng);
+                let mut start = obs.determinize(t, &mut rng);
                 let mut inline = Inline {
                     policy: &self.policy,
                     t,

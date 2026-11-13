@@ -200,7 +200,7 @@ const TITHED: Scenario = Scenario::new("stack targets")
 /// begins once its target is chosen.
 #[test]
 fn a_spell_waiting_on_its_target_keeps_the_arrow_under_it() {
-    let mut play = Play::against(&TITHED, Some(Box::new(Casts(0))));
+    let mut play = Play::against(&TITHED, Some(Box::new(Casts)));
     let crypt = play.named(MANA_CRYPT, ZoneName::Hand, Side::You)[0];
     let counterspell = play.named(COUNTERSPELL, ZoneName::Hand, Side::You)[0];
     let cast =

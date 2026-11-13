@@ -12,7 +12,9 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
     Choice, Decision, GameTable, Profile, Replay, Scratch, State, Step, apply, next, observe, view,
 };
-use beryl_search::{Agent, Budget, DEEP_SEARCHER, LongSearch, RolloutPolicy, Settings, agent};
+use beryl_search::{
+    Agent, AgentDecision, Budget, DEEP_SEARCHER, LongSearch, RolloutPolicy, Settings, agent,
+};
 use beryl_session::save::Chosen;
 use serde::{Deserialize, Serialize};
 
@@ -498,6 +500,7 @@ fn collect(
     let mut counts = [0, 0];
     let mut rng = SplitMix64::new(seed ^ 0xCA11_DA7A);
     let mut ended = false;
+    let mut asked = [AgentDecision(0); 2];
     while !clock.done() && history.len() < max_decisions {
         let d = match next(&mut s, t, &mut x, &mut Replay) {
             Step::Over(outcome) => {
@@ -516,9 +519,10 @@ fn collect(
             );
         }
         let seat = d.player.index();
-        let chosen = players[seat].choose(observe(&s, t, &mut x, d.player), &d);
+        let at = asked[seat].take();
+        let chosen = players[seat].choose(observe(&s, t, &mut x, d.player), &d, at);
         let greedy = policy.choose(t, observe(&s, t, &mut x, d.player), &d);
-        let expert = experts[seat].choose(observe(&s, t, &mut x, d.player), &d);
+        let expert = experts[seat].choose(observe(&s, t, &mut x, d.player), &d, at);
         let state = *view(&s, t, &mut x);
         let events = x.events.drain().collect::<Vec<_>>();
         tr.note(&format!("decision {}", history.len()));

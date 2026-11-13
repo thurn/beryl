@@ -40,11 +40,10 @@ fn choices(play: &Play, from: usize) -> Vec<(SavedKind, bool)> {
 
 /// An opponent that attacks with every creature it is offered, and otherwise takes each
 /// decision's first candidate.
-struct AttackAll(u32);
+struct AttackAll;
 
 impl<L: Layout> Agent<L> for AttackAll {
-    fn choose(&mut self, _: Observation<'_, L>, d: &Decision<L>) -> Choice {
-        self.0 += 1;
+    fn choose(&mut self, _: Observation<'_, L>, d: &Decision<L>, _: AgentDecision) -> Choice {
         let attack = match &d.candidates {
             Candidates::Options(options) => {
                 (options.iter()).position(|o| matches!(o, Opt::Attack(_)))
@@ -52,14 +51,6 @@ impl<L: Layout> Agent<L> for AttackAll {
             Candidates::Objects(_) => None,
         };
         Choice(attack.unwrap_or(0) as u16)
-    }
-
-    fn next_decision(&self) -> Option<AgentDecision> {
-        Some(AgentDecision(self.0))
-    }
-
-    fn rewind(&mut self, to: AgentDecision) {
-        self.0 = to.0;
     }
 }
 
@@ -307,7 +298,7 @@ const BLOCK: Scenario = Scenario::new("block")
 /// The game at the human's declaration of blockers against every creature of `scenario`'s
 /// opponent.
 fn blocking(scenario: &Scenario) -> Play {
-    let mut play = Play::against(scenario, Some(Box::new(AttackAll(0))));
+    let mut play = Play::against(scenario, Some(Box::new(AttackAll)));
     pass_to(&mut play, Kind::Blocker);
     assert!(play.decision().prompt.is(Purpose::Block));
     play

@@ -39,17 +39,7 @@ impl Game {
                 .strip_prefix(self.paused.as_slice())
                 .unwrap_or(&paused),
         );
-        for e in &fresh {
-            match e.event {
-                Event::Damage {
-                    source,
-                    to: Recipient::Player(player),
-                    ..
-                } => self.hurt_by[player.index()] = Some(source),
-                Event::LifeLoss { player, .. } => self.hurt_by[player.index()] = None,
-                _ => {}
-            }
-        }
+        self.note_hurt(&fresh);
         // The loser's cause, from the event that ended the game.
         if let At::Over {
             outcome: Outcome::Win(winner),
@@ -68,6 +58,30 @@ impl Game {
         self.events = fresh;
         self.paused = paused;
         self.draw()
+    }
+
+    /// Keeps, for each player, what dealt the damage that last lowered their life in `events`,
+    /// which names the culprit should they lose by it.
+    fn note_hurt(&mut self, events: &[Tagged<Large>]) {
+        for e in events {
+            match e.event {
+                Event::Damage {
+                    source,
+                    to: Recipient::Player(player),
+                    ..
+                } => self.hurt_by[player.index()] = Some(source),
+                Event::LifeLoss { player, .. } => self.hurt_by[player.index()] = None,
+                _ => {}
+            }
+        }
+    }
+
+    /// Drops the engine's events since the last view, as a replay does where live play drew a
+    /// view, still noting what hurt each player ([`Game::note_hurt`]): a game replayed to its
+    /// end names the culprit of its loss as live play did.
+    pub(super) fn skip_events(&mut self) {
+        let events = self.board.drain_events();
+        self.note_hurt(&events);
     }
 
     /// The human's view now, with the events of the latest view.

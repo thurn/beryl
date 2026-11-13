@@ -332,7 +332,7 @@ const TWO_SPELLS_IN_TURN: Scenario = Scenario::new("two-spells-in-turn")
 /// end step"), and passing it is a pass of its own.
 #[test]
 fn passing_on_stops_for_a_spell_the_opponent_casts() {
-    let mut play = Play::against(&TWO_SPELLS_IN_TURN, Some(Box::new(Casts(0))));
+    let mut play = Play::against(&TWO_SPELLS_IN_TURN, Some(Box::new(Casts)));
     let crypts = |play: &Play, zone| play.named(MANA_CRYPT, zone, Side::Opponent).len();
     // The first Mana Crypt is on the stack: the human passes on, past its resolution.
     let first = play.decision();

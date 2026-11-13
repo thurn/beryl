@@ -121,7 +121,7 @@ const TITHED: Scenario = Scenario::new("unless pays")
 
 /// Casts the Mana Crypt and lets the Mana Tithe that answers it resolve to its question.
 fn tithed() -> Play {
-    let mut play = Play::against(&TITHED, Some(Box::new(Casts(0))));
+    let mut play = Play::against(&TITHED, Some(Box::new(Casts)));
     play.choose(|c| matches!(c, Candidate::Cast { .. }));
     pass(&mut play);
     assert!(play.decision().prompt.is(Purpose::UnlessPays));

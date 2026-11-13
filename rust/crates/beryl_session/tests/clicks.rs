@@ -261,7 +261,7 @@ const TITHED: Scenario = Scenario::new("stack targets")
 /// asked about in the title while it is the one picked (UI Conventions, exception 7).
 #[test]
 fn a_target_among_spells_opens_unpicked_and_waits_for_its_button() {
-    let tithed = || Play::against(&TITHED, Some(Box::new(Casts(0))));
+    let tithed = || Play::against(&TITHED, Some(Box::new(Casts)));
     let mut play = tithed();
     let crypt = play.named(MANA_CRYPT, ZoneName::Hand, Side::You)[0];
     let counterspell = play.named(COUNTERSPELL, ZoneName::Hand, Side::You)[0];
@@ -392,7 +392,7 @@ const LONE_SPELL: Scenario = Scenario::new("lone spell")
 /// prompt asks, and the log has the target as the session's answer. Full control asks.
 #[test]
 fn a_lone_opposing_spell_is_targeted_unasked() {
-    let lone = || Play::against(&LONE_SPELL, Some(Box::new(Casts(0))));
+    let lone = || Play::against(&LONE_SPELL, Some(Box::new(Casts)));
     let mut play = lone();
     let counterspell = play.named(COUNTERSPELL, ZoneName::Hand, Side::You)[0];
     let crypt = play.named(MANA_CRYPT, ZoneName::Stack, Side::Opponent)[0];

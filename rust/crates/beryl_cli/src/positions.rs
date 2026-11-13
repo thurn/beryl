@@ -32,7 +32,7 @@ use beryl_engine::{
     Choice, GameTable, Profile, Replay, Scratch, State, Step, apply, next, next_in_step, observe,
     view,
 };
-use beryl_search::{Agent, DEEP_SEARCHER, LongSearch, Settings};
+use beryl_search::{Agent, AgentDecision, DEEP_SEARCHER, LongSearch, Settings};
 use beryl_session::checkpoint::Checkpoint;
 use serde::{Deserialize, Serialize};
 
@@ -226,6 +226,7 @@ fn cut_game(t: &GameTable, b: &Build, g: u32) -> Result<GameCuts, String> {
     let seed = game_seed(b.seed, 0, g);
     let seeds = seat_seeds(seed);
     let mut agents = seeds.map(|s| LongSearch::<beryl_engine::Small>::new(t, b.settings, s));
+    let mut asked = [AgentDecision(0); 2];
     let mut s = State::new(t, seed, Profile::SMART).map_err(|e| e.to_string())?;
     let mut x = Scratch::new();
     let mut at = (s.turn().number(), s.turn().step());
@@ -272,7 +273,8 @@ fn cut_game(t: &GameTable, b: &Build, g: u32) -> Result<GameCuts, String> {
             }
             Some(Step::Over(_)) => break,
             Some(Step::Decide(d)) => {
-                let c = agents[d.player.index()].choose(observe(&s, t, &mut x, d.player), &d);
+                let i = d.player.index();
+                let c = agents[i].choose(observe(&s, t, &mut x, d.player), &d, asked[i].take());
                 apply(&mut s, t, &mut x, &mut Replay, c);
             }
         }
@@ -295,12 +297,13 @@ fn estimates(
     let mut searches =
         seat_seeds(seed).map(|s| LongSearch::<beryl_engine::Small>::new(t, settings, s));
     let mut found: [Option<f64>; 2] = [None; 2];
+    let mut asked = [AgentDecision(0); 2];
     while s.turn().number() <= position.turn + SCORE_TURNS {
         let Step::Decide(d) = next(&mut s, t, &mut x, &mut Replay) else {
             return Ok(None);
         };
         let seat = d.player.index();
-        let c = searches[seat].choose(observe(&s, t, &mut x, d.player), &d);
+        let c = searches[seat].choose(observe(&s, t, &mut x, d.player), &d, asked[seat].take());
         if found[seat].is_none()
             && d.len() > 1
             && let Some(search) = Agent::last_search(&searches[seat])
@@ -388,6 +391,7 @@ pub fn sample(dir: &Path, count: usize) -> Result<String, String> {
             &mut greedy,
             observe(&s, &t, &mut x, d.player),
             &d,
+            AgentDecision(0),
         );
         let happened: Vec<_> = x.events.drain().collect();
         let mut transcript = Transcript::new(["player 0", "player 1"]);
@@ -450,6 +454,7 @@ mod tests {
             let mut agents = [0, 1].map(|i| (info.new)(&t, i, beryl_search::Budget::DEFAULT));
             let mut x = Scratch::new();
             let mut decisions = 0;
+            let mut asked = [AgentDecision(0); 2];
             loop {
                 match next(&mut s, &t, &mut x, &mut Replay) {
                     Step::Over(_) => break,
@@ -458,6 +463,7 @@ mod tests {
                             &mut agents[d.player.index()],
                             observe(&s, &t, &mut x, d.player),
                             &d,
+                            asked[d.player.index()].take(),
                         );
                         apply(&mut s, &t, &mut x, &mut Replay, c);
                         decisions += 1;

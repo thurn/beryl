@@ -214,10 +214,17 @@ pub struct Game {
     human: Seat,
     session: SessionId,
     agent: Box<dyn GameAgent + Send>,
+    /// The index among the agent's own of its next decision: how many of its decisions the
+    /// game has applied, whether the agent made them or a replay answered them from the record,
+    /// so a game resumed from its save asks the agent the decision it would have been asked
+    /// had it never stopped.
+    agent_next: AgentDecision,
     /// The agent's latest decisions and their searches ([`crate::ai`]).
     moves: AgentMoves,
     /// An agent answering the human's decisions in their place, if any.
     stand_in: Option<Box<dyn GameAgent + Send>>,
+    /// The index among the stand-in's own of the next decision it answers.
+    stand_in_next: AgentDecision,
     /// When the stand-in hands the human's decisions back to them, if ever.
     hand_over: Option<HandOver>,
     review: Option<crate::ReviewViews>,
@@ -398,8 +405,10 @@ impl Game {
             human,
             session,
             agent,
+            agent_next: AgentDecision(0),
             moves: AgentMoves::default(),
             stand_in: None,
+            stand_in_next: AgentDecision(0),
             hand_over: None,
             review: None,
             at: At::Playing,
@@ -433,6 +442,7 @@ impl Game {
             &self.table,
             SplitMix64::new(self.replay.seed ^ 0x9e37_79b9).next_u64(),
         )?);
+        self.stand_in_next = AgentDecision(0);
         Ok(())
     }
 
@@ -452,7 +462,7 @@ impl Game {
                     let obs = observe(&b.state, &self.table, &mut b.scratch, d.player);
                     let d = d.relayout();
                     let labels = crate::protocol::candidate_labels(&self.table, obs, &d);
-                    (self.agent.choose(obs, &d), labels)
+                    (self.agent.choose(obs, &d, self.agent_next), labels)
                 });
                 self.note_agent_move(kind, candidates, c, started);
                 self.agent_decides(c);
@@ -471,30 +481,6 @@ impl Game {
                 ..OpenDecision::new(*id, open, self.cancellable(), self.undoable())
             }),
             _ => None,
-        }
-    }
-
-    /// The agent's next decision among its own, in the layout the game is in.
-    fn agent_next(&self) -> Option<AgentDecision> {
-        match &self.board {
-            Boards::Small(_) => Agent::<Small>::next_decision(&*self.agent),
-            Boards::Large(_) => Agent::<Large>::next_decision(&*self.agent),
-        }
-    }
-
-    /// Moves the agent past its next decision without asking it, where a replay answers that
-    /// decision from the record. An agent that draws each decision from its own seeded stream
-    /// then stands where it stood in the recorded game, so a game resumed from its save plays
-    /// on as it would have without stopping. An agent that cannot go back keeps no such place
-    /// and is left as it is.
-    pub(super) fn agent_skips_decision(&mut self) {
-        let Some(AgentDecision(n)) = self.agent_next() else {
-            return;
-        };
-        let to = AgentDecision(n + 1);
-        match &self.board {
-            Boards::Small(_) => Agent::<Small>::rewind(&mut *self.agent, to),
-            Boards::Large(_) => Agent::<Large>::rewind(&mut *self.agent, to),
         }
     }
 
@@ -550,6 +536,7 @@ impl Game {
             unreachable!("the agent decides at its decision");
         };
         self.apply(&d, c, ChoiceOrigin::Explicit);
+        self.agent_next = self.agent_next.next();
         self.at = At::Playing;
     }
 
@@ -610,12 +597,12 @@ impl Game {
             Open::Decision(d) => on_board!(&mut self.board, b => {
                 let d = without_floating(d.relayout());
                 // These confirmations are for the human. A stand-in has only the one
-                // ordinary payment choice and need not advance its random stream.
+                // ordinary payment choice and is not asked.
                 if d.prompt.purpose == Purpose::Waterbend && d.len() == 1 {
                     0
                 } else {
                     let obs = observe(&b.state, &self.table, &mut b.scratch, self.human);
-                    stand_in.choose(obs, &d).0
+                    stand_in.choose(obs, &d, self.stand_in_next.take()).0
                 }
             }),
             Open::Halt => 0,

@@ -79,7 +79,7 @@ impl<L: Layout> LongSearch<L> {
                 levels: Vec::new(),
             }),
         };
-        let choice = self.choose_traced(obs, d, Some(&mut capture));
+        let choice = self.choose_traced(obs, d, self.decision, Some(&mut capture));
         TreeReport {
             choice,
             branches: capture.branches,

@@ -24,7 +24,9 @@ use beryl_engine::{
     Answers, Choice, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch, State,
     Step, Stops, apply, apply_decided, next, observe,
 };
-use beryl_search::{Agent, FrozenExpertAgent, GreedyAgent, Inline, RolloutPolicy, rollout};
+use beryl_search::{
+    Agent, AgentDecision, FrozenExpertAgent, GreedyAgent, Inline, RolloutPolicy, rollout,
+};
 
 /// The seed the corpus games are played from.
 pub const SEED: u64 = 0x00C0_FFEE;
@@ -149,6 +151,7 @@ fn cut(t: &GameTable, seed: u64, agents: &mut [Box<dyn Agent>; 2], out: &mut Vec
     let mut s = State::new(t, seed, Profile::SMART).expect("decks that fit Small");
     let mut x = Scratch::new();
     let mut cuts = CUTS.iter().peekable();
+    let mut asked = [AgentDecision(0); 2];
     while let Some(&&turn) = cuts.peek() {
         let Step::Decide(d) = next(&mut s, t, &mut x, &mut Replay) else {
             return;
@@ -157,7 +160,8 @@ fn cut(t: &GameTable, seed: u64, agents: &mut [Box<dyn Agent>; 2], out: &mut Vec
             out.push(s);
             cuts.next();
         }
-        let c = agents[d.player.index()].choose(observe(&s, t, &mut x, d.player), &d);
+        let i = d.player.index();
+        let c = agents[i].choose(observe(&s, t, &mut x, d.player), &d, asked[i].take());
         apply(&mut s, t, &mut x, &mut Replay, c);
     }
 }

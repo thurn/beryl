@@ -1,8 +1,8 @@
 //! Taking back the human's answers: undo points, and the cast in progress that can be cancelled.
 
 use beryl_engine::state::{ObjectRef, StackEntry};
-use beryl_engine::{Large, Relayout, Small, TurnStep, paused_events};
-use beryl_search::{Agent, AgentDecision};
+use beryl_engine::{Large, Relayout, TurnStep, paused_events};
+use beryl_search::AgentDecision;
 
 use crate::SessionError;
 use crate::protocol::{PlayerView, StopsSetting};
@@ -42,9 +42,9 @@ pub(super) struct UndoPoint {
     pub(super) seen: (u16, TurnStep),
     pub(super) answered: Option<Vec<StackEntry<Large>>>,
     pub(super) before_cast: Option<BeforeCast>,
-    /// The agent's next decision among its own then ([`Agent::next_decision`]), which it goes
-    /// back to.
-    pub(super) agent: Option<AgentDecision>,
+    /// The index among the agent's own of its next decision then, which the game goes back
+    /// to: the agent is asked that decision again.
+    pub(super) agent: AgentDecision,
     pub(super) hurt_by: [Option<ObjectRef<Large>>; 2],
 }
 
@@ -117,9 +117,9 @@ impl Game {
     /// the decision or halt it answered, asked again. A follow-up sent by the client as part
     /// of that same choice (such as a cast's payment plan) goes back with it.
     /// Each call takes back one more, as far back as the [`UNDO_POINTS`] kept, across the
-    /// agent's decisions and turns: the agent goes back with the game
-    /// ([`Agent::rewind`]) and decides again as play goes on, from the seed it had, so the
-    /// same position gets the same search. This is no rule of the game but a practice tool
+    /// agent's decisions and turns: the agent is asked its decisions since again, by the same
+    /// indices among its own and so from the same seeds, so the same position gets the same
+    /// search. This is no rule of the game but a practice tool
     /// the human asked for, and it shows them what they would not know: what the agent did,
     /// and the cards drawn since, which come out again in the same order. The choice log keeps
     /// the answers and the agent's choices taken back, then an [`Entry::Undo`], so a replay
@@ -146,14 +146,7 @@ impl Game {
         self.before_cast = point.before_cast;
         self.hurt_by = point.hurt_by;
         self.passing = None;
-        if let Some(to) = point.agent
-            && self.agent_next() != Some(to)
-        {
-            match &self.board {
-                Boards::Small(_) => Agent::<Small>::rewind(&mut *self.agent, to),
-                Boards::Large(_) => Agent::<Large>::rewind(&mut *self.agent, to),
-            }
-        }
+        self.agent_next = point.agent;
         self.replay.log.push(Entry::Undo);
         // Stops changed since stay changed. The log has them already, and a replay goes back
         // with the same ones.
@@ -194,7 +187,7 @@ impl Game {
             seen: self.seen,
             answered: self.answered.clone(),
             before_cast: self.before_cast.clone(),
-            agent: self.agent_next(),
+            agent: self.agent_next,
             hurt_by: self.hurt_by,
         });
         if self.undo.len() > UNDO_POINTS {
