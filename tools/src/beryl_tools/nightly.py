@@ -45,7 +45,7 @@ FRESH_HOURS = 20
 # Skip while the 5-minute load average is over this many times the core count: there the
 # checks' clock stops stretching (`clock.MAX_STRETCH`), so the steps' deadlines would kill work
 # that is only slow. Any lower load is this machine's normal state, which the steps run under.
-OVERLOAD_PER_CORE = clock.MAX_STRETCH
+OVERLOAD_PER_CORE: float = clock.MAX_STRETCH
 # Coverage older than this many hours is flagged stale in `by ci-report`.
 STALE_HOURS = 48
 
