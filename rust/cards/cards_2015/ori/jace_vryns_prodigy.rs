@@ -16,7 +16,7 @@
 
 use crate::prelude::*;
 
-/// [CR 712.2]: a double-faced card "has a Magic card face on each side rather than a Magic card
+/// [CR 712.2](https://yawgatog.com/resources/magic-rules/#R7122): a double-faced card "has a Magic card face on each side rather than a Magic card
 /// face on one side and a Magic card back on the other."
 ///
 /// "{T}: Draw a card, then discard a card. If there are five or more cards in your graveyard, exile
@@ -36,7 +36,7 @@ use crate::prelude::*;
 /// wherever it would go to the graveyard: resolving, countered or fizzling ([CR 614.1a]).
 ///
 /// "−9: You get an emblem with 'Whenever you cast a spell, target opponent mills five cards.'"
-/// [CR 114.2]: "This means that [player] puts an emblem with [ability] into the command zone. The
+/// [CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142): "This means that [player] puts an emblem with [ability] into the command zone. The
 /// emblem is both owned and controlled by that player."
 ///
 /// [CR 712.2]: https://yawgatog.com/resources/magic-rules/#R7122

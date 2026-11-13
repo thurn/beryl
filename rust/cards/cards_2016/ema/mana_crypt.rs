@@ -9,7 +9,7 @@
 
 use crate::prelude::*;
 
-/// [CR 705.2]: "If the call matches the result, the player wins the flip. Otherwise, the player
+/// [CR 705.2](https://yawgatog.com/resources/magic-rules/#R7052): "If the call matches the result, the player wins the flip. Otherwise, the player
 /// loses the flip." The damage is noncombat damage from Mana Crypt, which makes its controller lose
 /// that much life ([CR 120.3a]): "Damage dealt to a player by a source without infect causes that
 /// player to lose that much life."

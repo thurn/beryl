@@ -7,7 +7,7 @@
 
 use crate::prelude::*;
 
-/// [CR 118.12a]: "[Do something] unless [a player does something else]" means "[A player may do
+/// [CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a): "[Do something] unless [a player does something else]" means "[A player may do
 /// something else]. If [that player doesn't], [do something]." A controller who can't pay is never
 /// asked.
 ///

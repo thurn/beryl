@@ -7,7 +7,7 @@
 
 use crate::prelude::*;
 
-/// [CR 305.6]: "An object with the land card type and a basic land type has the intrinsic ability
+/// [CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056): "An object with the land card type and a basic land type has the intrinsic ability
 /// '{T}: Add [mana symbol],' ... for Islands, {U}".
 ///
 /// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056
@@ -19,7 +19,7 @@ pub static CARD: CardDef = Printed::Island
 pub mod scenarios {
     use crate::prelude::*;
 
-    /// [CR 305.1]: "A player who has priority may play a land card from their hand during a main
+    /// [CR 305.1](https://yawgatog.com/resources/magic-rules/#R3051): "A player who has priority may play a land card from their hand during a main
     /// phase of their turn when the stack is empty." Not in another player's turn: when the active
     /// player passes, the other player with an Island in hand has nothing to decide.
     ///

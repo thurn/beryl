@@ -7,7 +7,7 @@
 
 use crate::prelude::*;
 
-/// [CR 305.6]: "An object with the land card type and a basic land type has the intrinsic ability
+/// [CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056): "An object with the land card type and a basic land type has the intrinsic ability
 /// '{T}: Add [mana symbol],' ... for Swamps, {B}".
 ///
 /// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056

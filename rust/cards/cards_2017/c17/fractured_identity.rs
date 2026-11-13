@@ -18,7 +18,7 @@ use crate::prelude::*;
 /// permanent's copiable values (CR 707.2): not its counters, so a planeswalker's copy enters with
 /// its printed loyalty (CR 306.5b).
 ///
-/// [CR 111.2]: "The player who creates a token is its owner. The token enters the battlefield under
+/// [CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112): "The player who creates a token is its owner. The token enters the battlefield under
 /// that player's control."
 ///
 /// [CR 608.2h]: https://yawgatog.com/resources/magic-rules/#R6082h

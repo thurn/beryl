@@ -14,7 +14,7 @@ use crate::prelude::*;
 
 /// "+2: Look at the top card of target player's library. You may put that card on the bottom of
 /// that player's library." Looking shows the card to Jace's controller alone, an exception to
-/// [CR 401.2]: "Players can't look at or change the order of cards in a library." Moving it within
+/// [CR 401.2](https://yawgatog.com/resources/magic-rules/#R4012): "Players can't look at or change the order of cards in a library." Moving it within
 /// the library is no zone change, so it stays the same object.
 ///
 /// "0: Draw three cards, then put two cards from your hand on top of your library in any order."

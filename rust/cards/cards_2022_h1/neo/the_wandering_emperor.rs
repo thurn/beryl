@@ -25,7 +25,7 @@ pub static SAMURAI: CardDef = Token::SamuraiToken.keywords(Keywords::VIGILANCE).
 /// as The Wandering Emperor entered this turn".
 ///
 /// "+1: Put a +1/+1 counter on up to one target creature. It gains first strike until end of turn."
-/// [CR 702.7a]: "First strike is a static ability that modifies the rules for the combat damage
+/// [CR 702.7a](https://yawgatog.com/resources/magic-rules/#R7027a): "First strike is a static ability that modifies the rules for the combat damage
 /// step."
 ///
 /// "−1: Create a 2/2 white Samurai creature token with vigilance." [CR 111.2]: "The player who
