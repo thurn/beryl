@@ -21,6 +21,11 @@ root = ".worktrees"   # inside the checkout; gitignored
 # where the next worktree's first command clones them from (tools/src/beryl_tools/warm.py).
 remove = 'f="$ENACT_WORKTREE_PATH/tools/src/beryl_tools/warm.py"; [ -f "$f" ] || f="$ENACT_REPO/tools/src/beryl_tools/warm.py"; python3 "$f" remove'
 
+[push]
+# Land this host's pushes through Enact's merge queue: one fast check for a batch of up to 8
+# branches, instead of one per push plus a re-check whenever another push lands first.
+queue = true
+
 # Beads labeled tier:light (mechanical work) run on a cheaper model.
 [tiers.light.claude]
 model = "sonnet"
