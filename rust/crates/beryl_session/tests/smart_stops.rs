@@ -161,7 +161,7 @@ fn only_own_doings(a: &Asked) -> bool {
     let Some(before) = &a.after_previous else {
         return false;
     };
-    let own = |e: &StackEntry| e.controller == HUMAN;
+    let own = |e: &StackEntry| e.controller() == HUMAN;
     let kept = before
         .iter()
         .zip(&a.stack)
@@ -243,7 +243,7 @@ impl<L: beryl_engine::Layout> beryl_search::Agent<L> for CastsWhenever {
 /// resolves without asking them again. Returns how many times the opponent's spell or ability
 /// was on top when they were asked, and how many of their spells resolved unasked that way.
 fn check_responses(asked: &[Asked]) -> (usize, usize) {
-    let theirs = |e: &StackEntry| e.controller != HUMAN;
+    let theirs = |e: &StackEntry| e.controller() != HUMAN;
     let mut responses = 0;
     for a in asked.iter().filter(|a| priority_on_a_stack(a)) {
         assert!(

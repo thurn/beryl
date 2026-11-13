@@ -21,7 +21,7 @@ pub fn target_takes<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> bo
     let Pending::Casting(c) = *s.pending() else {
         return false;
     };
-    let announcing = matches!(c.step, CastStep::TargetCount | CastStep::Target);
+    let announcing = matches!(c.step, CastStep::TargetCount | CastStep::Target { .. });
     let ability = s.stack().last().and_then(|entry| entry_ability(t, entry));
     let how = match s.object(slot).zone() {
         Zone::Battlefield => Takes::Removal,

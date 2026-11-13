@@ -123,9 +123,9 @@ impl<L: Layout> Agent<L> for Opponent {
                 .iter()
                 .map(|s| {
                     (
-                        self.table.def(s.card).face_name(s.face),
-                        s.is_spell(),
-                        s.controller,
+                        self.table.def(s.card()).face_name(s.face()),
+                        s.spell().is_some(),
+                        s.controller(),
                     )
                 })
                 .eq(expected.iter().copied())

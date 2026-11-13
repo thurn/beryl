@@ -20,7 +20,7 @@ use crate::ids::Seat;
 use crate::layers;
 use crate::layout::Layout;
 use crate::resolution::Resolution;
-use crate::state::{PendingTrigger, State, Tracker, TriggerInfo, ZoneKey};
+use crate::state::{AbilityRef, PendingTrigger, State, Tracker, TriggerInfo, ZoneKey};
 use crate::table::GameTable;
 
 pub(crate) use run::{Run, no_primitive};
@@ -98,7 +98,7 @@ pub(crate) fn mana_ability<L: Layout>(
     {
         debug_assert!(mana.includes(color));
         let activation = activation();
-        let (player, source) = (activation.controller, activation.source);
+        let (player, source) = (activation.of.controller, activation.of.source);
         let added = s.add_mana(player, source, color, mana.amount);
         sink.note_from(source, added);
         return layers::refresh(s, t, sink);
@@ -107,13 +107,13 @@ pub(crate) fn mana_ability<L: Layout>(
     let activation = activation();
     let mut resolution = Resolution::of_trigger(&activation, ability);
     resolution.mana = color;
-    if let Some(source) = activation.source {
+    if let Some(source) = activation.of.source {
         sink.enter_source(|| source);
     }
     let mut game = Game::new(s, t, sink);
     let flow = resolve(&mut game, &mut resolution);
     let done = finish(&mut game, flow).map(|_| ());
-    if activation.source.is_some() {
+    if activation.of.source.is_some() {
         sink.leave();
     }
     done
@@ -153,11 +153,13 @@ pub(crate) fn static_condition_holds<L: Layout>(
     }
     let (card, face) = s.copiable(slot).record(t);
     let subject = PendingTrigger {
-        source: Some(s.object_ref(slot)),
-        card,
-        face,
-        ability: index,
-        controller: s.controller(slot),
+        of: AbilityRef {
+            source: Some(s.object_ref(slot)),
+            card,
+            face,
+            ability: index,
+            controller: s.controller(slot),
+        },
         info: TriggerInfo::default(),
     };
     condition_holds(s, t, &subject, ability)
@@ -179,11 +181,13 @@ pub(crate) fn names_nothing<L: Layout>(
     }
     let (card, face) = s.copiable(slot).record(t);
     let subject = PendingTrigger {
-        source: Some(s.object_ref(slot)),
-        card,
-        face,
-        ability: AbilityIx::default(),
-        controller: s.controller(slot),
+        of: AbilityRef {
+            source: Some(s.object_ref(slot)),
+            card,
+            face,
+            ability: AbilityIx::default(),
+            controller: s.controller(slot),
+        },
         info: TriggerInfo::default(),
     };
     let scene = Scene {

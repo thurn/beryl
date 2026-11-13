@@ -1,7 +1,7 @@
 //! The game events a view carries, built from the engine's events.
 
 use beryl_engine::event::{Event, Recipient};
-use beryl_engine::state::StackEntry;
+use beryl_engine::state::{self, StackEntry};
 use beryl_engine::{GameTable, Layout, Observation, SlotId};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -181,14 +181,17 @@ fn ability_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>
         unreachable!("an ability's event");
     };
     let entry = StackEntry {
-        object: source,
-        controller,
-        ability: Some(ability),
-        card,
-        face,
+        item: state::StackItem::Activated {
+            of: state::AbilityRef {
+                source,
+                card,
+                face,
+                ability,
+                controller,
+            },
+        },
         targets,
         x,
-        ..StackEntry::default()
     };
     GameEvent::Ability {
         item: stack_item(t, obs, &entry),
@@ -219,21 +222,20 @@ fn cast_item<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) ->
     };
     // A spell gone back to a hidden zone since (bounced to its owner's hand) keeps its slot,
     // its targets and X; the costs its card was cast with are its card's to say.
-    let entry = match obs.card(spell.slot) {
-        Some(card) => StackEntry {
-            card,
-            face: obs.object(spell.slot).face(),
-            costs,
-            ..StackEntry::default()
-        },
-        None => StackEntry::default(),
+    let (card, face, costs) = match obs.card(spell.slot) {
+        Some(card) => (card, obs.object(spell.slot).face(), costs),
+        None => Default::default(),
     };
     let entry = StackEntry {
-        object: Some(spell),
-        controller,
+        item: state::StackItem::Spell {
+            object: spell,
+            controller,
+            card,
+            face,
+            costs,
+        },
         targets,
         x,
-        ..entry
     };
     stack_item_cast(t, obs, &entry, flashback && obs.card(spell.slot).is_some())
 }

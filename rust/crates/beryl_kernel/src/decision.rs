@@ -228,7 +228,7 @@ impl<L: Layout> Opt<L> {
             Opt::Trigger(i) => s
                 .triggers()
                 .get(Into::<usize>::into(i))
-                .and_then(|tr| tr.source)
+                .and_then(|tr| tr.of.source)
                 .map(|r| r.slot),
             Opt::Pass
             | Opt::Play

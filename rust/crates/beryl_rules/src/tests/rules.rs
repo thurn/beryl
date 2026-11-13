@@ -7,7 +7,7 @@ use crate::filter::{Evaluate, Filter};
 use crate::game::Game;
 use crate::ids::{CardIx, Seat, Slot};
 use crate::resolution::Resolution;
-use crate::state::{PendingTrigger, Zone, ZoneKey};
+use crate::state::{AbilityRef, PendingTrigger, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{
     Choice, DecisionKind, Decklist, Outcome, Profile, Replay, Scratch, State, Step, apply, next,
@@ -253,7 +253,10 @@ fn a_dual_land_has_a_mana_ability_for_each_basic_land_type() {
         .zip([ManaColor::White, ManaColor::Blue])
     {
         let trigger = PendingTrigger {
-            source: Some(source),
+            of: AbilityRef {
+                source: Some(source),
+                ..PendingTrigger::default().of
+            },
             ..PendingTrigger::default()
         };
         let mut resolution = Resolution::of_trigger(&trigger, ability);

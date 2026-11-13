@@ -177,7 +177,10 @@ fn ability_nth<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) -> 
         } => (t.def(obs.card(slot)?).face(obs.object(slot).face()), i),
         Opt::Trigger(index) => {
             let trigger = obs.triggers()[Into::<usize>::into(index)];
-            (t.def(trigger.card).face(trigger.face), trigger.ability)
+            (
+                t.def(trigger.of.card).face(trigger.of.face),
+                trigger.of.ability,
+            )
         }
         _ => return None,
     };
@@ -191,9 +194,9 @@ fn ability_text<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) ->
         Opt::Trigger(index) => {
             let trigger = obs.triggers()[Into::<usize>::into(index)];
             (
-                trigger.card,
-                trigger.face,
-                FaceAbility::Own(trigger.ability),
+                trigger.of.card,
+                trigger.of.face,
+                FaceAbility::Own(trigger.of.ability),
             )
         }
         _ => return None,
@@ -462,12 +465,12 @@ pub(super) fn trigger<L: Layout>(
     (
         format!(
             "Put {}'s trigger on the stack",
-            t.def(trigger.card).face_name(trigger.face)
+            t.def(trigger.of.card).face_name(trigger.of.face)
         ),
         Candidate::Trigger {
             index: index.into(),
-            source: trigger.source.map(|r| r.slot.num()),
-            ability: trigger.ability.get(),
+            source: trigger.of.source.map(|r| r.slot.num()),
+            ability: trigger.of.ability.get(),
         },
     )
 }

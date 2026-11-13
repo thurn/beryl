@@ -215,7 +215,7 @@ pub(crate) fn create_copies_instruction<L: Layout>(
     };
     let mut originals = run.permanents(of);
     if originals.is_empty() && matches!(of, Objects::This) {
-        let card = run.resolution().entry.card;
+        let card = run.resolution().entry.card();
         copy(run.game(), Copiable::of_card(card))?;
     }
     while let Some(object) = run.next_permanent(&mut originals) {

@@ -34,7 +34,7 @@ pub(crate) fn add_instruction<L: Layout>(
     players: Players,
     mana: ManaSet,
 ) -> Outcome<L> {
-    let (source, color) = (run.resolution().entry.object, run.resolution().mana);
+    let (source, color) = (run.resolution().entry.object(), run.resolution().mana);
     debug_assert!(mana.includes(color));
     let mut added = 0;
     for player in run.in_turn_order(players) {
@@ -53,7 +53,7 @@ pub(crate) fn add_of_kind_instruction<L: Layout>(
     kind: ManaColor,
     amount: Amount,
 ) -> Outcome<L> {
-    let (source, amount) = (run.resolution().entry.object, run.scene().amount(amount));
+    let (source, amount) = (run.resolution().entry.object(), run.scene().amount(amount));
     let mut added = 0;
     for player in run.in_turn_order(players) {
         add(run.game(), player, source, kind, amount);

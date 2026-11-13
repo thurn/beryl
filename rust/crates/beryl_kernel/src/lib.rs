@@ -204,7 +204,10 @@
 //! which landed after it, it is 20,016: the table of locked-in sets, 136. After
 //! by-w8gv.7.8 it is 20,080: the Trackers store's two sets of slots, 64. After
 //! by-w8gv.7.9 it is 20,176: the table of counters, 96. After by-w8gv.9.7 it is 20,216:
-//! each of the players' four sets of rule changes is a word, where it was a byte.
+//! each of the players' four sets of rule changes is a word, where it was a byte. It is
+//! 20,088 since [`state::StackEntry`] holds a [`state::StackItem`], a spell, an activated
+//! ability or a triggered ability with only the fields of its kind: each of the 64 entries
+//! is 56 bytes, two fewer.
 //! The limit is 20,480. Each bead may change the size at its
 //! own push by at most its allotment, whatever landed before it, and reports the size as it
 //! reports the count:

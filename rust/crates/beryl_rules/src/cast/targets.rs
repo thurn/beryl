@@ -2,13 +2,13 @@
 
 use crate::PlayerSet;
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, ManaCost, SpecIx, TargetKind, TargetSpec};
+use crate::card::{Ability, TargetKind, TargetSpec};
 use crate::event::Sink;
 use crate::filter::{self, Evaluate, Filter};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
-use crate::state::{CastStep, Casting, StackEntry, State, Target, Zone};
+use crate::state::{CastKind, CastStep, Casting, StackEntry, State, Target, Zone};
 use crate::table::GameTable;
 
 use super::steps::{ability_event, advance, specs, top};
@@ -140,7 +140,7 @@ pub(super) fn targetable<L: Layout>(
 
 /// The slot of an entry's ability source; a spell has none.
 pub(super) fn source_of<L: Layout>(entry: &StackEntry<L>) -> Option<L::Slot> {
-    entry.object.filter(|_| !entry.is_spell()).map(|r| r.slot)
+    entry.source().map(|r| r.slot)
 }
 
 /// Whether a chosen target is still legal as its spell or ability resolves
@@ -156,7 +156,7 @@ pub(crate) fn still_legal<L: Layout>(
     target: Target<L>,
 ) -> bool {
     let spec = &ability.targets()[target.spec().index()];
-    let you = entry.controller;
+    let you = entry.controller();
     let Some(r) = target.as_object() else {
         return target
             .as_player()
@@ -199,7 +199,7 @@ pub(crate) fn target_trigger<L: Layout>(
         s,
         t,
         Some(ability),
-        entry.controller,
+        entry.controller(),
         None,
         entry.x,
         source_of(&entry),
@@ -208,20 +208,7 @@ pub(crate) fn target_trigger<L: Layout>(
         sink.departed(|| s.stack().len());
         return Ok(());
     }
-    let c = Casting {
-        player: entry.controller,
-        step: CastStep::TargetCount,
-        spec: SpecIx::default(),
-        part: 0,
-        graveyard_from: 0,
-        chosen: Bitboard::EMPTY,
-        left: 0,
-        free: false,
-        resolving: false,
-        remaining: ManaCost::NONE,
-        substituted: 0,
-        triggered: true,
-    };
+    let c = Casting::new(entry.controller(), CastKind::Trigger, CastStep::TargetCount);
     advance(s, t, sink, c)
 }
 

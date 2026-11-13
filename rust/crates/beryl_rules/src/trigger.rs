@@ -5,8 +5,7 @@ use std::cell::OnceCell;
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, CastingKind, Face, FaceAbility, FaceIx, Subject, Trigger, TriggerEvent,
-    Types,
+    Ability, AbilityIx, CastingKind, Face, FaceIx, Subject, Trigger, TriggerEvent, Types,
 };
 use crate::event::{Event, EventKind, Listens, Recipient, Sink};
 use crate::filter::{Evaluate, Filter, is_for};
@@ -16,7 +15,8 @@ use crate::layers;
 use crate::layout::{Layout, Queue, index};
 use crate::query::Copiable;
 use crate::state::{
-    Lki, ObjectRef, PendingTrigger, PermanentTypes, StackEntry, State, TriggerInfo, TurnStep, Zone,
+    AbilityRef, Lki, ObjectRef, PendingTrigger, PermanentTypes, StackEntry, StackItem, State,
+    TriggerInfo, TurnStep, Zone,
 };
 use crate::table::GameTable;
 
@@ -335,11 +335,13 @@ fn enqueue<L: Layout>(
     info: TriggerInfo<L>,
 ) -> Result<(), Full> {
     let pending = PendingTrigger {
-        source,
-        card,
-        face,
-        ability,
-        controller,
+        of: AbilityRef {
+            source,
+            card,
+            face,
+            ability,
+            controller,
+        },
         info,
     };
     if !crate::interpret::intervening_if(s, t, &pending, self::ability(t, card, face, ability)) {
@@ -357,12 +359,14 @@ fn fire_delayed<L: Layout>(
     step: TurnStep,
     active: Seat,
 ) -> Result<(), Full> {
-    s.fire_delayed(|d| match ability(t, d.card, d.face, d.ability).trigger() {
-        Some(trigger) if trigger.delayed => {
-            begins(trigger.event, step) && is_for(&trigger.whose, active, d.controller)
-        }
-        _ => unreachable!("a delayed trigger's ability is a delayed one"),
-    })
+    s.fire_delayed(
+        |d| match ability(t, d.of.card, d.of.face, d.of.ability).trigger() {
+            Some(trigger) if trigger.delayed => {
+                begins(trigger.event, step) && is_for(&trigger.whose, active, d.of.controller)
+            }
+            _ => unreachable!("a delayed trigger's ability is a delayed one"),
+        },
+    )
 }
 
 /// The player who puts the next waiting trigger on the stack, and the triggers they choose
@@ -373,13 +377,13 @@ fn fire_delayed<L: Layout>(
 pub(crate) fn next_to_stack<L: Layout>(s: &State<L>) -> Option<(Seat, L::Queue<L::Index, 64>)> {
     let player = s
         .players_in_turn_order(s.players())
-        .find(|&p| s.triggers().iter().any(|tr| tr.controller == p))?;
+        .find(|&p| s.triggers().iter().any(|tr| tr.of.controller == p))?;
     let mut kept: L::Queue<L::Index, 64> = Default::default();
     let mut firsts: L::Queue<PendingTrigger<L>, 64> = Default::default();
     // Found only once two triggers of one ability have different sources or objects.
     let named = OnceCell::new();
     for (i, tr) in s.triggers().iter().enumerate() {
-        if tr.controller != player || firsts.iter().any(|k| equivalent(s, &named, k, tr)) {
+        if tr.of.controller != player || firsts.iter().any(|k| equivalent(s, &named, k, tr)) {
             continue;
         }
         // The waiting triggers never exceed the capacity of these lists, and the layout's
@@ -406,12 +410,13 @@ fn equivalent<L: Layout>(
     a: &PendingTrigger<L>,
     b: &PendingTrigger<L>,
 ) -> bool {
-    if (a.card, a.face, a.ability, a.controller) != (b.card, b.face, b.ability, b.controller)
+    if (a.of.card, a.of.face, a.of.ability, a.of.controller)
+        != (b.of.card, b.of.face, b.of.ability, b.of.controller)
         || (a.info.player, a.info.amount, a.info.lki) != (b.info.player, b.info.amount, b.info.lki)
     {
         return false;
     }
-    let pairs = [(a.source, b.source), (a.info.object, b.info.object)];
+    let pairs = [(a.of.source, b.of.source), (a.info.object, b.info.object)];
     if pairs.iter().all(|(x, y)| x == y) {
         return true;
     }
@@ -437,12 +442,14 @@ fn equivalent<L: Layout>(
         pairs.iter().find_map(partner).unwrap_or(r)
     };
     let rename = |tr: &PendingTrigger<L>| PendingTrigger {
-        source: renamed(tr.source),
+        of: AbilityRef {
+            source: renamed(tr.of.source),
+            ..tr.of
+        },
         info: TriggerInfo {
             object: renamed(tr.info.object),
             ..tr.info
         },
-        ..*tr
     };
     // It is one renaming only if it makes each of the other: a creature that saw itself
     // enter is no twin of one that saw another.
@@ -469,20 +476,17 @@ pub(crate) fn put_on_stack<L: Layout>(
 ) -> Result<(), Full> {
     let tr = s.take_trigger(index.into());
     // An enters ability's X is its spell's (CR 107.3m), captured as it triggered.
-    let entering = ability(t, tr.card, tr.face, tr.ability)
+    let entering = ability(t, tr.of.card, tr.of.face, tr.of.ability)
         .trigger()
         .is_some_and(|trigger| trigger.is_this(TriggerEvent::Enters));
     s.put_on_stack(
         sink,
         StackEntry {
-            object: tr.source,
-            controller: tr.controller,
-            ability: Some(FaceAbility::Own(tr.ability)),
-            card: tr.card,
-            face: tr.face,
-            info: tr.info,
             x: if entering { tr.info.amount } else { 0 },
-            ..StackEntry::default()
+            ..StackEntry::new(StackItem::Triggered {
+                of: tr.of,
+                info: tr.info,
+            })
         },
     )?;
     crate::cast::target_trigger(s, t, sink)
@@ -504,7 +508,7 @@ pub(crate) fn entered_with<L: Layout>(
     tr: &PendingTrigger<L>,
     kind: CastingKind,
 ) -> bool {
-    match tr.source {
+    match tr.of.source {
         Some(r) if s.is_current(r) => s.paid(r.slot, kind),
         _ => true,
     }

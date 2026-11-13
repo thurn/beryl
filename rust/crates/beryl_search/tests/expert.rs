@@ -635,7 +635,7 @@ fn jace_wielder_mills_the_opponent_unless_their_jace_is_live() {
         let (d, c) = expert_at(&t, &mut s, casts(""), |s, d| {
             s.stack()
                 .last()
-                .is_some_and(|e| t.def(e.card).name == names::JACE_WIELDER_OF_MYSTERIES)
+                .is_some_and(|e| t.def(e.card()).name == names::JACE_WIELDER_OF_MYSTERIES)
                 && matches!(&d.candidates, Candidates::Options(o)
                     if o.iter().any(|o| matches!(o, Opt::Player(_))))
         });

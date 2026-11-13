@@ -197,7 +197,7 @@ impl Boards {
     /// whether it is a triggered ability, putting its targets.
     pub(super) fn casting(&self) -> Option<bool> {
         on_board!(self, b => match b.state.pending() {
-            Pending::Casting(c) => Some(c.triggered),
+            Pending::Casting(c) => Some(c.triggered()),
             _ => None,
         })
     }

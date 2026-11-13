@@ -2,7 +2,7 @@
 //! answered from (the crate's contract, "Resolution"; architecture §7.3). The questions
 //! themselves are [`crate::choices`]'.
 
-use crate::card::{Ability, CastingIx, FaceAbility, ManaColor, Stop};
+use crate::card::{Ability, CastingIx, ManaColor, Stop};
 use crate::cast;
 use crate::decision::{Answers, Choice, Decision, Outcome, StallReason};
 use crate::game::Game;
@@ -11,7 +11,8 @@ use crate::layout::{Layout, Queue, Small};
 use crate::observation::Observation;
 use crate::profile::Stops;
 use crate::state::{
-    ObjectRef, PendingTrigger, StackEntry, Target, TargetPlace, TargetPlaces, TriggerInfo,
+    ObjectRef, PendingTrigger, StackEntry, StackItem, Target, TargetPlace, TargetPlaces,
+    TriggerInfo,
 };
 
 /// One resolution of a spell or ability: what is resolving, and the record its questions are
@@ -70,15 +71,10 @@ impl<'a, L: Layout> Resolution<'a, L> {
     /// answer source: a question pauses it. A mana ability resolves so, never having been
     /// on the stack ([CR 605.3b](https://yawgatog.com/resources/magic-rules/#R6053b)).
     pub(crate) fn of_trigger(trigger: &PendingTrigger<L>, ability: &'static Ability) -> Self {
-        let entry = StackEntry {
-            object: trigger.source,
-            controller: trigger.controller,
-            card: trigger.card,
-            face: trigger.face,
-            ability: Some(FaceAbility::Own(trigger.ability)),
+        let entry = StackEntry::new(StackItem::Triggered {
+            of: trigger.of,
             info: trigger.info,
-            ..StackEntry::default()
-        };
+        });
         Resolution::new(entry, ability, TargetPlaces::NONE, None, &[])
     }
 
@@ -88,20 +84,20 @@ impl<'a, L: Layout> Resolution<'a, L> {
     ///
     /// For an emblem's ability, which has no source.
     pub fn source(&self) -> ObjectRef<L> {
-        self.entry.object.expect("an ability with a source")
+        self.entry.object().expect("an ability with a source")
     }
 
     /// The player who controls the spell or ability
     /// ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)): "The controller of
     /// the spell or ability follows its instructions in the order written."
     pub fn controller(&self) -> Seat {
-        self.entry.controller
+        self.entry.controller()
     }
 
     /// What a triggered ability triggered on, with last-known information for a look-back
-    /// trigger.
+    /// trigger; nothing for a spell or an activated ability.
     pub fn trigger(&self) -> TriggerInfo<L> {
-        self.entry.info
+        self.entry.info().copied().unwrap_or_default()
     }
 
     /// The announced value of X.
@@ -111,7 +107,7 @@ impl<'a, L: Layout> Resolution<'a, L> {
 
     /// Whether the casting option at `option` in the face's list was paid.
     pub fn paid(&self, option: CastingIx) -> bool {
-        self.entry.costs.contains(option)
+        self.entry.costs().contains(option)
     }
 
     /// The target chosen at `place` if it is legal now, `None` if it was not chosen or is

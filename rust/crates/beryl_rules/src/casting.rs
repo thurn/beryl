@@ -79,7 +79,7 @@ pub(crate) fn permit<L: Layout>(
     if !game.state.is_current(object) {
         return Ok(());
     }
-    let source = resolution.entry.card;
+    let source = resolution.entry.card();
     (game.state).start_effect(source, Continuous::Cast(object, terms), duration)
 }
 

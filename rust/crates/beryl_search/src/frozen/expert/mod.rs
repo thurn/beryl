@@ -271,7 +271,7 @@ pub(crate) fn appraise(p: &Policy<'_>, slot: Slot, base: i32) -> Option<i32> {
         && obs
             .stack()
             .last()
-            .is_some_and(|e| e.controller == p.me && p.t.def(e.card).name == names::GET_LOST)
+            .is_some_and(|e| e.controller() == p.me && p.t.def(e.card()).name == names::GET_LOST)
     {
         return Some(0);
     }
@@ -746,29 +746,29 @@ impl Expert<'_> {
         let Opt::Cast { slot, face, costs } = o else {
             return 0;
         };
-        if top.controller == self.me() {
+        if top.controller() == self.me() {
             return 0;
         }
         if self.is(slot, names::SUBTLETY) {
             return self.subtlety(&top, slot, costs);
         }
-        if !top.is_spell() {
+        if top.spell().is_none() {
             // Elite Spellbinder's trigger is about to exile a card from our hand: what we
             // could cast now is better cast than lost, as at their end step.
-            let spellbinder = self.p.t.def(top.card).name == names::ELITE_SPELLBINDER;
+            let spellbinder = self.p.t.def(top.card()).name == names::ELITE_SPELLBINDER;
             return if spellbinder { self.their_end(o) } else { 0 };
         }
         let counter = self.counter_score(&top, slot, face);
         // A wheel we let resolve shuffles our hand away, and their Teferi keeps us to sorcery
         // speed ("Each opponent can cast spells only any time they could cast a sorcery"):
         // what we could cast now is better cast than lost, unless we counter it.
-        let teferi = self.p.t.def(top.card).name == names::TEFERI_TIME_RAVELER;
+        let teferi = self.p.t.def(top.card()).name == names::TEFERI_TIME_RAVELER;
         let countered = self.hand(self.me()).any(|s| {
             self.obs().card(s).is_some_and(|c| {
                 i32::from(self.p.t.def(c).front().cost.mana_value()) <= self.mana(self.me())
             }) && self.counter_score(&top, s, FaceIx::FRONT) > 0
         });
-        if counter == 0 && !countered && (self.p.values.get(top.card).wheel || teferi) {
+        if counter == 0 && !countered && (self.p.values.get(top.card()).wheel || teferi) {
             return self.instant_speed(o, if teferi { -1 } else { 0 });
         }
         counter
@@ -807,7 +807,7 @@ impl Expert<'_> {
             // card either way.
             (Some(names::REPRIEVE), _)
                 if threat >= COUNTER_SPARE.min(min)
-                    && theirs < i32::from(self.p.t.def(top.card).front().cost.mana_value())
+                    && theirs < i32::from(self.p.t.def(top.card()).front().cost.mana_value())
                     && self.draw_safe(1) =>
             {
                 200
@@ -817,7 +817,7 @@ impl Expert<'_> {
             // controller has not the mana to cast it again this turn.
             (Some(names::SINK_INTO_STUPOR), FaceIx::FRONT)
                 if threat >= MAJOR
-                    && theirs < i32::from(self.p.t.def(top.card).front().cost.mana_value()) =>
+                    && theirs < i32::from(self.p.t.def(top.card()).front().cost.mana_value()) =>
             {
                 150
             }
@@ -831,8 +831,8 @@ impl Expert<'_> {
     /// is tempo, behind the counterspells: in full for a spell worth a counter, for evoke
     /// (two cards for it) only for one that would win the game.
     fn subtlety(&self, top: &StackEntry, slot: Slot, costs: Castings) -> i32 {
-        let types = self.p.t.def(top.card).face(top.face).types;
-        if !top.is_spell() || !types.intersects(Types::CREATURE.union(Types::PLANESWALKER)) {
+        let types = self.p.t.def(top.card()).face(top.face()).types;
+        if top.spell().is_none() || !types.intersects(Types::CREATURE.union(Types::PLANESWALKER)) {
             return 0;
         }
         let threat = self.threat(top);
@@ -852,12 +852,13 @@ impl Expert<'_> {
     /// What letting an opponent's spell resolve would cost us: its value, or for a spell
     /// aimed at ours, the value of what it hits; for a wheel, what it gives them over us.
     fn threat(&self, e: &StackEntry) -> i32 {
-        let def = self.p.t.def(e.card);
-        let mut v = i32::from(self.p.values.get(e.card).value);
-        if def.name == names::JACE_WIELDER_OF_MYSTERIES && wins_by_decking(&self.p, e.controller) {
+        let def = self.p.t.def(e.card());
+        let mut v = i32::from(self.p.values.get(e.card()).value);
+        if def.name == names::JACE_WIELDER_OF_MYSTERIES && wins_by_decking(&self.p, e.controller())
+        {
             v = v.max(JACE_WINS);
         }
-        if self.p.values.get(e.card).wheel {
+        if self.p.values.get(e.card()).wheel {
             let theirs = self.hand(self.opp()).count() as i32;
             let ours = self.hand(self.me()).count() as i32;
             // Each player draws seven: they gain 7 - theirs, we 7 - ours.
@@ -894,7 +895,7 @@ impl Expert<'_> {
                 v = v.max(self.value(r.slot) + self.released(r.slot));
             }
         }
-        if !e.costs.is_empty() && def.name == names::THIEVING_SKYDIVER {
+        if !e.costs().is_empty() && def.name == names::THIEVING_SKYDIVER {
             v += 20;
         }
         // Mana Crypt is little to a player with lands enough.
@@ -1389,7 +1390,7 @@ impl Expert<'_> {
             || obs
                 .stack()
                 .iter()
-                .any(|e| self.p.t.def(e.card).name == name)
+                .any(|e| self.p.t.def(e.card()).name == name)
     }
 
     /// `v`, or 0 when casting the card in `slot` would leave less mana than the cheapest
@@ -1806,18 +1807,18 @@ impl Expert<'_> {
         // One of them being aimed now, already paid for: a removal spell, or a walker's
         // bounce (a minus ability).
         let aiming = self.obs().stack().last().is_some_and(|e| {
-            let def = self.p.t.def(e.card);
+            let def = self.p.t.def(e.card());
             let bounce = matches!(
                 def.name,
                 names::JACE_THE_MIND_SCULPTOR | names::TEFERI_TIME_RAVELER
-            ) && e.ability.is_some_and(|a| {
-                def.face(e.face)
+            ) && e.ability().is_some_and(|a| {
+                def.face(e.face())
                     .ability(a)
                     .cost()
                     .loyalty_change()
                     .is_some_and(|l| l < 0)
             });
-            e.controller == self.me()
+            e.controller() == self.me()
                 && (bounce || (def.name != names::OUST && REMOVAL.contains(&def.name)))
         });
         walkers + spells + usize::from(aiming)
@@ -2412,10 +2413,10 @@ impl Expert<'_> {
     /// The target spec of the bounce being cast or activated.
     fn bounce_spec(&self) -> Option<&'static beryl_engine::card::TargetSpec> {
         let e = self.obs().stack().last()?;
-        let face = self.p.t.def(e.card).face(e.face);
-        let a = match e.ability {
+        let face = self.p.t.def(e.card()).face(e.face());
+        let a = match e.ability() {
             Some(ability) => face.ability(ability),
-            None => face.spell_ability_with(e.costs)?,
+            None => face.spell_ability_with(e.costs())?,
         };
         a.targets().first()
     }
@@ -2424,9 +2425,9 @@ impl Expert<'_> {
     /// owner's hand: Sink into Stupor, Teferi's −3, Jace's −1.
     fn bouncing(&self) -> bool {
         self.obs().stack().last().is_some_and(|e| {
-            e.controller == self.me()
+            e.controller() == self.me()
                 && matches!(
-                    self.p.t.def(e.card).name,
+                    self.p.t.def(e.card()).name,
                     names::SINK_INTO_STUPOR
                         | names::TEFERI_TIME_RAVELER
                         | names::JACE_THE_MIND_SCULPTOR
@@ -2444,8 +2445,8 @@ impl Expert<'_> {
         }
         // The Wandering Emperor's +1 for lethal: on the attacker that gets past the blockers.
         if let Some(e) = self.obs().stack().last()
-            && e.controller == self.me()
-            && self.p.t.def(e.card).name == names::THE_WANDERING_EMPEROR
+            && e.controller() == self.me()
+            && self.p.t.def(e.card()).name == names::THE_WANDERING_EMPEROR
             && let Some(pump) = self.emperor_lethal()
             && let beryl_engine::Candidates::Objects(b) = d.candidates
             && b.contains(pump)
@@ -2454,14 +2455,14 @@ impl Expert<'_> {
         }
         // Jace, Telepath Unbound's −3: the card worth casting again.
         if let Some(e) = self.obs().stack().last()
-            && e.controller == self.me()
-            && self.p.t.def(e.card).face_name(e.face) == JACE_TELEPATH_UNBOUND
-            && let Some(ability) = e.ability
+            && e.controller() == self.me()
+            && self.p.t.def(e.card()).face_name(e.face()) == JACE_TELEPATH_UNBOUND
+            && let Some(ability) = e.ability()
             && self
                 .p
                 .t
-                .def(e.card)
-                .face(e.face)
+                .def(e.card())
+                .face(e.face())
                 .ability(ability)
                 .cost()
                 .loyalty_change()
@@ -2474,9 +2475,9 @@ impl Expert<'_> {
         }
         // Swift Reconfiguration: a Vehicle Jace, Vryn's Prodigy still loots and flips.
         if let Some(e) = self.obs().stack().last()
-            && e.controller == self.me()
-            && e.is_spell()
-            && self.p.t.def(e.card).name == names::SWIFT_RECONFIGURATION
+            && e.controller() == self.me()
+            && e.spell().is_some()
+            && self.p.t.def(e.card()).name == names::SWIFT_RECONFIGURATION
             && matches!(d.candidates, beryl_engine::Candidates::Objects(_))
         {
             // In their combat, an attacker ranked as removal there: it is removed from combat
@@ -2544,9 +2545,9 @@ impl Expert<'_> {
     fn crypt_target(&self, d: &Decision) -> Option<Choice> {
         let crypt = self.deadly_crypt()?;
         let e = self.obs().stack().last()?;
-        if e.controller == self.me()
+        if e.controller() == self.me()
             && matches!(
-                self.p.t.def(e.card).name,
+                self.p.t.def(e.card()).name,
                 names::AANGS_ICEBERG | names::TEFERI_TIME_RAVELER
             )
             && let beryl_engine::Candidates::Objects(b) = d.candidates
@@ -2561,8 +2562,8 @@ impl Expert<'_> {
     /// an empty library could win them the game; our own would win it for us.
     fn mill_target(&self, d: &Decision) -> Option<Choice> {
         let e = self.obs().stack().last()?;
-        if e.controller != self.me()
-            || self.p.t.def(e.card).name != names::JACE_WIELDER_OF_MYSTERIES
+        if e.controller() != self.me()
+            || self.p.t.def(e.card()).name != names::JACE_WIELDER_OF_MYSTERIES
             || !matches!(d.candidates, beryl_engine::Candidates::Options(_))
         {
             return None;
@@ -2580,9 +2581,9 @@ impl Expert<'_> {
     fn removal_target(&self, d: &Decision) -> Option<Choice> {
         let turn = self.obs().turn();
         let e = self.obs().stack().last()?;
-        let name = self.p.t.def(e.card).name;
-        if e.controller != self.me()
-            || !(e.is_spell() || name == names::AANGS_ICEBERG)
+        let name = self.p.t.def(e.card()).name;
+        if e.controller() != self.me()
+            || !(e.spell().is_some() || name == names::AANGS_ICEBERG)
             || !REMOVAL.contains(&name)
             || (turn.active() != self.me() && turn.step() == TurnStep::DeclareAttackers)
             || !matches!(d.candidates, beryl_engine::Candidates::Objects(_))
@@ -2649,7 +2650,7 @@ impl Expert<'_> {
             .obs()
             .stack()
             .last()
-            .is_some_and(|e| self.p.t.def(e.card).name == names::OUST);
+            .is_some_and(|e| self.p.t.def(e.card()).name == names::OUST);
         if friendly || oust || !matches!(d.candidates, beryl_engine::Candidates::Objects(_)) {
             return None;
         }
@@ -2730,7 +2731,7 @@ impl Expert<'_> {
     /// Thieving Skydiver's kicker X: the least that reaches the best artifact worth taking.
     fn x(&self, d: &Decision) -> Option<Choice> {
         let e = self.obs().stack().last()?;
-        if self.p.t.def(e.card).name != names::THIEVING_SKYDIVER {
+        if self.p.t.def(e.card()).name != names::THIEVING_SKYDIVER {
             return None;
         }
         let want = self

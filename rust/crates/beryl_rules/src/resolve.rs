@@ -12,7 +12,7 @@
 //! state itself.
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, AbilityKind, CastingOption, FaceAbility};
+use crate::card::{Ability, AbilityKind, CastingOption};
 use crate::cast::{self, entry_ability};
 use crate::chance;
 use crate::decision::{Answers, Decision};
@@ -24,7 +24,7 @@ use crate::layout::{Layout, Queue};
 use crate::resolution::Resolution;
 use crate::scratch::Scratch;
 use crate::state::{
-    CounterKind, Pending, PendingTrigger, StackEntry, State, TargetPlaces, Zone, placed,
+    CounterKind, Pending, PendingTrigger, StackEntry, StackItem, State, TargetPlaces, Zone, placed,
 };
 use crate::table::GameTable;
 
@@ -189,24 +189,13 @@ fn condition_fails<L: Layout>(
     entry: &StackEntry<L>,
     ability: &Ability,
 ) -> bool {
-    if ability.kind() != AbilityKind::Triggered {
+    if ability.kind() != AbilityKind::Triggered || ability.condition().is_none() {
         return false;
     }
-    if ability.condition().is_none() {
-        return false;
-    }
-    let Some(FaceAbility::Own(index)) = entry.ability else {
-        unreachable!("a triggered ability is one of its face's own");
+    let StackItem::Triggered { of, info } = entry.item else {
+        unreachable!("a triggered ability's entry");
     };
-    let pending = PendingTrigger {
-        source: entry.object,
-        card: entry.card,
-        face: entry.face,
-        ability: index,
-        controller: entry.controller,
-        info: entry.info,
-    };
-    !interpret::intervening_if(s, t, &pending, ability)
+    !interpret::intervening_if(s, t, &PendingTrigger { of, info }, ability)
 }
 
 /// Resolves `entry`, the top of `s`'s stack, answering from `record` and then `answers`.
@@ -227,18 +216,19 @@ fn run<L: Layout>(
 ) -> Result<Option<Decision<L>>, Full> {
     s.take_top_of_stack();
     sink.enter_resolution(|| s.stack().len());
-    let face = t.def(entry.card).face(entry.face);
+    let face = t.def(entry.card()).face(entry.face());
     // CR 608.2b: "If all its targets, for every instance of the word "target," are now
     // illegal, the spell or ability doesn't resolve." One that chose no targets is not
     // targeted (CR 115.6) and resolves.
     let legal = ability.map_or(TargetPlaces::NONE, |ability| {
         legal_targets(s, t, entry, ability)
     });
+    let spell = entry.spell();
     if ability.is_some() && !entry.targets.is_empty() && legal.is_empty() {
-        if entry.is_spell() {
+        if spell.is_some() {
             cast::leave_stack(s, t, sink, entry, Zone::Graveyard, Reason::Resolve)?;
         }
-    } else if entry.is_spell() && !face.is_instant_or_sorcery() {
+    } else if spell.is_some() && !face.is_instant_or_sorcery() {
         // An Aura's spell ability, which says what it targets, does its work by entering.
         if let Some(ability) = ability {
             crate::coverage::hit(ability);
@@ -269,7 +259,7 @@ fn run<L: Layout>(
         // is put into its owner's graveyard. As the final part of an ability's resolution, the
         // ability is removed from the stack and ceases to exist." Unless its own effect moved
         // it already, as Time Spiral exiles itself.
-        if entry.is_spell() && entry.object.is_some_and(|r| s.is_current(r)) {
+        if spell.is_some_and(|r| s.is_current(r)) {
             cast::leave_stack(s, t, sink, entry, Zone::Graveyard, Reason::Resolve)?;
         }
         if let Some((object, player, free)) = offer {
@@ -280,7 +270,7 @@ fn run<L: Layout>(
             });
         }
     }
-    if !entry.is_spell() {
+    if spell.is_none() {
         sink.note(Event::AbilityFinished);
     }
     // The entry leaves the stack last, whatever became of a spell's card: one its own effect
@@ -312,11 +302,11 @@ fn enter_battlefield<L: Layout>(
     sink: &mut Sink<L>,
     entry: &StackEntry<L>,
 ) -> Result<(), Full> {
-    let slot = entry.object.expect("a spell's card").slot;
-    let face = t.def(entry.card).face(entry.face);
+    let slot = entry.object().expect("a spell's card").slot;
+    let face = t.def(entry.card()).face(entry.face());
     let mut how = Entry {
-        controller: Some(entry.controller),
-        face: entry.face,
+        controller: Some(entry.controller()),
+        face: entry.face(),
         x: entry.x,
         attach: entry
             .targets
@@ -326,7 +316,7 @@ fn enter_battlefield<L: Layout>(
             .map(|r| r.slot),
         ..Entry::default()
     };
-    for option in entry.costs.paid(face) {
+    for option in entry.costs().paid(face) {
         how.paid = how.paid.with(option.kind());
         if let CastingOption::Impending { counters, .. } = option {
             how.counters = Some((CounterKind::Time, counters));

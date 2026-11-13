@@ -304,7 +304,7 @@ impl<L: Layout> State<L> {
                 .iter()
                 .find(|entry| entry.spell().is_some_and(|spell| spell.slot == slot))
         {
-            let cost = t.def(entry.card).face(entry.face).cost;
+            let cost = t.def(entry.card()).face(entry.face()).cost;
             return cost
                 .mana_value()
                 .saturating_add(cost.x.saturating_mul(entry.x));

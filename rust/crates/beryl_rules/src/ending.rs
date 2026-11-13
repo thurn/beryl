@@ -31,10 +31,10 @@ pub fn lose<L: Layout>(game: &mut Game<'_, L>, resolution: &Resolution<'_, L>, p
 fn by<L: Layout>(resolution: &Resolution<'_, L>) -> LossCause<L> {
     let entry = &resolution.entry;
     LossCause::Effect {
-        source: entry.object,
-        card: entry.card,
-        face: entry.face,
-        ability: entry.ability,
+        source: entry.object(),
+        card: entry.card(),
+        face: entry.face(),
+        ability: entry.ability(),
     }
 }
 

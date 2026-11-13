@@ -385,9 +385,9 @@ impl Runner {
             .stack()
             .iter()
             .map(|e| StackItem {
-                name: self.t.def(e.card).face_name(e.face),
-                spell: e.is_spell(),
-                controller: e.controller,
+                name: self.t.def(e.card()).face_name(e.face()),
+                spell: e.spell().is_some(),
+                controller: e.controller(),
             })
             .collect();
         let (decider, kind, purpose) = match *step {

@@ -202,7 +202,7 @@ impl<L: Layout> Policy<'_, L> {
         } else {
             target
         };
-        if top.is_some_and(|e| e.controller != self.me && e.spell().is_some())
+        if top.is_some_and(|e| e.controller() != self.me && e.spell().is_some())
             && response_target.is_some_and(|spec| {
                 matches!(spec.kind, TargetKind::Spell | TargetKind::SpellOrPermanent)
             })
@@ -438,7 +438,7 @@ impl<L: Layout> Policy<'_, L> {
         .map(|&slot| self.value(slot));
         let on_stack = if spells { self.obs.stack() } else { &[] }
             .iter()
-            .filter_map(|e| e.spell().map(|r| (r.slot, e.controller)))
+            .filter_map(|e| e.spell().map(|r| (r.slot, e.controller())))
             .filter(move |&(slot, controller)| ok(slot, controller))
             .map(|(slot, _)| self.value(slot));
         let graveyard = if graveyard {
@@ -478,19 +478,19 @@ impl<L: Layout> Policy<'_, L> {
     /// ability being put on the stack puts there first (CR 601.2a).
     pub(crate) fn targeting(&self) -> Option<(&'static TargetSpec, bool)> {
         let e: &StackEntry<L> = self.obs.stack().last()?;
-        let def: &'static CardDef = self.t.def(e.card);
-        let face: &'static Face = def.face(e.face);
-        let a = match e.ability {
+        let def: &'static CardDef = self.t.def(e.card());
+        let face: &'static Face = def.face(e.face());
+        let a = match e.ability() {
             Some(ability) => face.ability(ability),
-            None => face.spell_ability_with(e.costs)?,
+            None => face.spell_ability_with(e.costs())?,
         };
         let spec = a.targets().first()?;
-        let index = match e.ability {
+        let index = match e.ability() {
             Some(FaceAbility::Own(i)) => i.get(),
             Some(FaceAbility::Grant(_)) => u8::MAX,
             None => index_of(face, a),
         };
-        let friendly = self.values.get(e.card).friendly(index)
+        let friendly = self.values.get(e.card()).friendly(index)
             || matches!(whose(&spec.filter), Some(Players::You));
         Some((spec, friendly))
     }

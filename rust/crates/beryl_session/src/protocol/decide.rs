@@ -40,7 +40,7 @@ pub(super) fn decision_view<L: Layout>(
     // What asks, by name: the ability resolving, or the spell.
     let asker = match (&item, resolving) {
         (Some(StackItem::Ability { name, .. }), _) => Some(name.as_str()),
-        (Some(StackItem::Spell { .. }), Some(e)) => e.object.and_then(|r| name(t, obs, r.slot)),
+        (Some(StackItem::Spell { .. }), Some(e)) => e.object().and_then(|r| name(t, obs, r.slot)),
         _ => None,
     };
     DecisionView {
@@ -205,7 +205,7 @@ fn decision_source<L: Layout>(
         }
         _ => resolving
             .or_else(|| obs.stack().last())
-            .and_then(|e| e.object)
+            .and_then(beryl_engine::state::StackEntry::object)
             .map(|r| r.slot),
     };
     slot.map(SlotId::num)

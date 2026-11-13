@@ -9,7 +9,7 @@ use crate::game::Game;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::resolution::Resolution;
-use crate::state::{PendingTrigger, TriggerInfo};
+use crate::state::{AbilityRef, PendingTrigger, TriggerInfo};
 use crate::trigger;
 
 /// What is resolving creates a delayed triggered ability: the ability at `ability` on its
@@ -24,11 +24,13 @@ pub fn create<L: Layout>(
 ) -> Result<(), Full> {
     let entry = &resolution.entry;
     let delayed = PendingTrigger {
-        source: entry.object,
-        card: entry.card,
-        face: entry.face,
-        ability,
-        controller: entry.controller,
+        of: AbilityRef {
+            source: entry.object(),
+            card: entry.card(),
+            face: entry.face(),
+            ability,
+            controller: entry.controller(),
+        },
         info: TriggerInfo {
             amount,
             ..TriggerInfo::default()

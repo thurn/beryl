@@ -13,61 +13,121 @@ use crate::object::ObjectRef;
 use crate::state::State;
 
 /// The step a spell's casting or an ability's activation has reached (CR 601.2, 602.2). The
-/// spell or ability is already the top of the stack.
+/// spell or ability is already the top of the stack. Each step carries what only it uses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum CastStep {
+pub enum CastStep<L: Layout = Small> {
     /// Announcing the value of X (CR 601.2b).
     X,
     /// Announcing how many targets to choose for the current spec (CR 601.2c).
     TargetCount,
-    /// Choosing the targets of the current spec (CR 601.2c).
-    Target,
+    /// Choosing the targets of the current spec (CR 601.2c), of which `left` are still to
+    /// choose.
+    Target { left: u8 },
     /// Choosing among payment plans that differ in their consequences (CR 601.2g, 601.2h).
     Plan,
-    /// Paying mana one source at a time, under the `manual_mana` profile.
-    Manual,
-    /// Paying one part of the cost with objects its player chooses, one at a time
-    /// ([CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays
-    /// the total cost."): the part at `part`, of which `left` is what is still to pay, by
-    /// the part's measure. Cards of a graveyard are chosen in graveyard order, bottom first,
-    /// each above the one before, from position `graveyard_from` up, so each set of cards is
-    /// one sequence of answers (§7.2).
-    Objects,
+    /// Paying mana one source at a time, under the `manual_mana` profile: `remaining` is what
+    /// is still to pay.
+    Manual { remaining: ManaCost },
+    /// Paying one part of the cost with objects its player chooses, one at a time.
+    Objects(PayingObjects<L>),
+}
+
+/// Where [`CastStep::Objects`] has got to in paying one part of the cost with objects its
+/// player chooses, one at a time ([CR 601.2h]: "The player pays the total cost.").
+///
+/// Cards of a graveyard are chosen in graveyard order, bottom first, each above the one
+/// before, from position `graveyard_from` up, so each set of cards is one sequence of answers
+/// (§7.2).
+///
+/// [CR 601.2h]: https://yawgatog.com/resources/magic-rules/#R6012h
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct PayingObjects<L: Layout = Small> {
+    /// The part being paid, counting the cost's parts that are not mana from 0 in the order
+    /// printed.
+    pub part: u8,
+    /// The graveyard position the next pick starts from.
+    pub graveyard_from: u8,
+    /// The objects chosen so far for a part whose objects all move once the last is chosen:
+    /// they stay where they are until then.
+    pub chosen: Bitboard<L::Slot>,
+    /// What is still to pay, by the part's measure.
+    pub left: u8,
+}
+
+impl<L: Layout> PayingObjects<L> {
+    /// The first question of the part at `part`, with `left` to pay.
+    pub fn start(part: u8, left: u8) -> PayingObjects<L> {
+        PayingObjects {
+            part,
+            graveyard_from: 0,
+            chosen: Bitboard::EMPTY,
+            left,
+        }
+    }
+}
+
+/// What a [`Casting`] puts on the stack, which decides the steps it takes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CastKind {
+    /// A spell being cast. `free`: cast without paying its mana cost ([CR 118.9]).
+    /// `resolving`: cast during the resolution of another spell or ability, so no player
+    /// receives priority after it is cast ([CR 608.2g]).
+    ///
+    /// [CR 118.9]: https://yawgatog.com/resources/magic-rules/#R1189
+    /// [CR 608.2g]: https://yawgatog.com/resources/magic-rules/#R6082g
+    Spell { free: bool, resolving: bool },
+    /// An activated ability being activated (CR 602.2).
+    Activation,
+    /// A triggered ability being put on the stack: targets only, no costs and no change of
+    /// priority (CR 603.3d).
+    Trigger,
 }
 
 /// A spell being cast or an ability being activated.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Casting<L: Layout = Small> {
     pub player: Seat,
-    pub step: CastStep,
+    pub kind: CastKind,
+    pub step: CastStep<L>,
     /// The target spec being chosen (CR 601.2c).
     pub spec: SpecIx,
-    /// For [`CastStep::Objects`], which part of the cost is being paid, counting its parts
-    /// that are not mana from 0 in the order printed.
-    pub part: u8,
-    /// For [`CastStep::Objects`], the graveyard position picks continue from.
-    pub graveyard_from: u8,
-    /// For [`CastStep::Objects`], the objects chosen so far for a part whose objects all
-    /// move once the last is chosen
-    /// ([CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays
-    /// the total cost."): they stay where they are until then.
-    pub chosen: Bitboard<L::Slot>,
-    /// Targets still to choose for it, or what another step still has to pay.
-    pub left: u8,
-    /// Cast without paying its mana cost
-    /// ([CR 118.9](https://yawgatog.com/resources/magic-rules/#R1189)).
-    pub free: bool,
-    /// Cast during the resolution of another spell or ability, so no player receives priority
-    /// after it is cast ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)).
-    pub resolving: bool,
-    /// What remains to pay under manual payment.
-    pub remaining: ManaCost,
     /// Generic mana of the cost that a part paid with objects rather than with mana
-    /// ([`beryl_card::Measure::ForGeneric`]).
+    /// ([`beryl_card::Measure::ForGeneric`]). The steps after that part read it.
     pub substituted: u8,
-    /// A triggered ability being put on the stack: targets only, no costs and no change of
-    /// priority (CR 603.3d).
-    pub triggered: bool,
+}
+
+impl<L: Layout> Casting<L> {
+    /// A casting of `kind` by `player` that starts at `step`, at the first target spec.
+    pub fn new(player: Seat, kind: CastKind, step: CastStep<L>) -> Casting<L> {
+        Casting {
+            player,
+            kind,
+            step,
+            spec: SpecIx::default(),
+            substituted: 0,
+        }
+    }
+
+    /// Whether this is a spell cast without paying its mana cost (CR 118.9).
+    pub fn free(&self) -> bool {
+        matches!(self.kind, CastKind::Spell { free: true, .. })
+    }
+
+    /// Whether this is a spell cast during another's resolution (CR 608.2g).
+    pub fn resolving(&self) -> bool {
+        matches!(
+            self.kind,
+            CastKind::Spell {
+                resolving: true,
+                ..
+            }
+        )
+    }
+
+    /// Whether this puts a triggered ability on the stack (CR 603.3d).
+    pub fn triggered(&self) -> bool {
+        self.kind == CastKind::Trigger
+    }
 }
 
 /// A paused resolution (architecture §7.3): the answers its body has been given so far, and

@@ -58,16 +58,16 @@ impl<L: Layout> State<L> {
             return Some("a question open".to_owned());
         }
         if let Some(entry) = self.stack.as_slice().first() {
-            return Some(format!("{} on the stack", t.def(entry.card).name));
+            return Some(format!("{} on the stack", t.def(entry.card()).name));
         }
         if let Some(d) = self.delayed.as_slice().first() {
-            return Some(format!("a delayed trigger of {}", t.def(d.card).name));
+            return Some(format!("a delayed trigger of {}", t.def(d.of.card).name));
         }
         if let Some(d) = self.triggers.as_slice().iter().find(|d| {
-            let ability = &t.def(d.card).face(d.face).abilities[d.ability.index()];
+            let ability = &t.def(d.of.card).face(d.of.face).abilities[d.of.ability.index()];
             ability.trigger().is_some_and(|trigger| trigger.delayed)
         }) {
-            return Some(format!("a delayed trigger of {}", t.def(d.card).name));
+            return Some(format!("a delayed trigger of {}", t.def(d.of.card).name));
         }
         self.stores_lingering(t)
     }

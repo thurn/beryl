@@ -156,9 +156,7 @@ impl Game {
         }
         let slot = d.candidates.object(Choice(0))?;
         let theirs = |e: &StackEntry<Large>| {
-            e.ability.is_none()
-                && e.controller != self.human
-                && e.object.is_some_and(|o| o.slot == slot)
+            e.controller() != self.human && e.spell().is_some_and(|o| o.slot == slot)
         };
         self.board.stack().iter().any(theirs).then_some(Choice(0))
     }
@@ -170,7 +168,7 @@ impl Game {
     /// answer. Their priority then would only let them respond to themselves, as an Arena
     /// player auto-passes.
     pub(super) fn own_top(&self) -> bool {
-        let own = |e: &StackEntry<Large>| e.controller == self.human;
+        let own = |e: &StackEntry<Large>| e.controller() == self.human;
         self.board.stack().last().is_some_and(own) && !self.opposed()
     }
 
@@ -185,7 +183,7 @@ impl Game {
             .zip(&now)
             .take_while(|(then, now)| then == now)
             .count();
-        now[kept..].iter().any(|e| e.controller != self.human)
+        now[kept..].iter().any(|e| e.controller() != self.human)
     }
 
     /// Whether the human's priority, with the stack empty, comes in a combat step where they

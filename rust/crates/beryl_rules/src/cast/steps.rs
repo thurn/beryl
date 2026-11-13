@@ -2,7 +2,7 @@
 //! order: announce, targets, pay, and the spell becomes cast.
 
 use crate::bitboard::Bitboard;
-use crate::card::{CastingIx, ManaCost, ObjectAbility, Part, Prompt, Purpose, SpecIx, TargetSpec};
+use crate::card::{CastingIx, ObjectAbility, Part, Prompt, Purpose, TargetSpec};
 use crate::casting;
 use crate::decision::{Candidates, Decision, DecisionKind, Opt};
 use crate::engine::collapse;
@@ -13,7 +13,10 @@ use crate::keywords::flashback;
 use crate::layout::{Layout, Queue, index};
 use crate::mana;
 use crate::profile::Payment;
-use crate::state::{CastStep, Casting, Pending, StackEntry, State, Target, Tracker, Zone};
+use crate::state::{
+    AbilityRef, CastKind, CastStep, Casting, Pending, StackEntry, StackItem, State, Target,
+    Tracker, Zone,
+};
 use crate::table::GameTable;
 
 use super::costs::{spent_by_entry, total_cost, x_range_start};
@@ -47,39 +50,29 @@ pub(crate) fn begin_cast<L: Layout>(
     s.become_spell(slot, face, player);
     s.put_on_stack(
         sink,
-        StackEntry {
-            object: Some(s.object_ref(slot)),
+        StackEntry::new(StackItem::Spell {
+            object: s.object_ref(slot),
             controller: player,
-            ability: None,
             card,
             face,
             costs,
-            ..StackEntry::default()
-        },
+        }),
     )?;
     if let Some(permission) = permission {
         casting::begin_on_spell(s, slot, permission)?;
     }
     let free = resolving.unwrap_or(false);
     let def_face = t.def(card).face(face);
-    let c = Casting {
-        player,
-        step: if x_range_start(def_face, costs, free).is_some() {
-            CastStep::X
-        } else {
-            CastStep::TargetCount
-        },
-        spec: SpecIx::default(),
-        part: 0,
-        graveyard_from: 0,
-        chosen: Bitboard::EMPTY,
-        left: 0,
+    let kind = CastKind::Spell {
         free,
         resolving: resolving.is_some(),
-        remaining: ManaCost::NONE,
-        substituted: 0,
-        triggered: false,
     };
+    let step = if x_range_start(def_face, costs, free).is_some() {
+        CastStep::X
+    } else {
+        CastStep::TargetCount
+    };
+    let c = Casting::new(player, kind, step);
     advance(s, t, sink, c)
 }
 
@@ -104,33 +97,22 @@ pub(crate) fn begin_activate<L: Layout>(
     }
     s.put_on_stack(
         sink,
-        StackEntry {
-            object: Some(s.object_ref(slot)),
-            controller: player,
-            ability: Some(index),
-            card,
-            face,
-            ..StackEntry::default()
-        },
+        StackEntry::new(StackItem::Activated {
+            of: AbilityRef {
+                source: Some(s.object_ref(slot)),
+                card,
+                face,
+                ability: index,
+                controller: player,
+            },
+        }),
     )?;
-    let c = Casting {
-        player,
-        step: if a.cost().mana.x > 0 {
-            CastStep::X
-        } else {
-            CastStep::TargetCount
-        },
-        spec: SpecIx::default(),
-        part: 0,
-        graveyard_from: 0,
-        chosen: Bitboard::EMPTY,
-        left: 0,
-        free: false,
-        resolving: false,
-        remaining: ManaCost::NONE,
-        substituted: 0,
-        triggered: false,
+    let step = if a.cost().mana.x > 0 {
+        CastStep::X
+    } else {
+        CastStep::TargetCount
     };
+    let c = Casting::new(player, CastKind::Activation, step);
     advance(s, t, sink, c)
 }
 
@@ -155,12 +137,14 @@ pub(super) fn advance<L: Layout>(
 ) -> Result<(), Full> {
     loop {
         match c.step {
-            CastStep::X | CastStep::Plan | CastStep::Manual | CastStep::Objects => break,
-            CastStep::TargetCount | CastStep::Target => {
+            CastStep::X | CastStep::Plan | CastStep::Manual { .. } | CastStep::Objects(_) => {
+                break;
+            }
+            CastStep::TargetCount | CastStep::Target { .. } => {
                 let entry = top(s);
                 let specs = specs(t, &entry);
                 let Some(spec) = specs.get(c.spec.index()) else {
-                    if c.triggered {
+                    if c.triggered() {
                         s.settle_question();
                         sink.push(ability_event(&entry));
                         return Ok(());
@@ -174,10 +158,9 @@ pub(super) fn advance<L: Layout>(
                     if spec.optional {
                         break;
                     }
-                    c.left = spec.count;
-                    c.step = CastStep::Target;
+                    c.step = CastStep::Target { left: spec.count };
                 }
-                if c.left > 0 {
+                if c.step != (CastStep::Target { left: 0 }) {
                     break;
                 }
                 c.spec = c.spec.next();
@@ -199,13 +182,12 @@ fn begin_payment<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    mut c: Casting<L>,
+    c: Casting<L>,
 ) -> Result<(), Full> {
-    if top(s).is_spell() {
-        return pay_mana(s, t, sink, c);
+    if c.kind == CastKind::Activation {
+        return parts::pay(s, t, sink, c, 0);
     }
-    c.part = 0;
-    parts::pay(s, t, sink, c)
+    pay_mana(s, t, sink, c)
 }
 
 /// Pays the mana of the total cost: by plan, or one source at a time under manual payment.
@@ -219,11 +201,10 @@ pub(super) fn pay_mana<L: Layout>(
     let cost = total_cost(s, t, &entry, &c);
     match s.profile().payment {
         Payment::Manual => {
-            c.remaining = cost;
             if cost.is_zero() {
                 return after_mana(s, t, sink, c);
             }
-            c.step = CastStep::Manual;
+            c.step = CastStep::Manual { remaining: cost };
             s.ask(Pending::Casting(c));
             Ok(())
         }
@@ -261,11 +242,10 @@ fn after_mana<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    mut c: Casting<L>,
+    c: Casting<L>,
 ) -> Result<(), Full> {
-    if top(s).is_spell() {
-        c.part = 0;
-        return parts::pay(s, t, sink, c);
+    if let CastKind::Spell { .. } = c.kind {
+        return parts::pay(s, t, sink, c, 0);
     }
     finish(s, t, sink, c)
 }
@@ -285,12 +265,19 @@ pub(super) fn finish<L: Layout>(
 ) -> Result<(), Full> {
     s.settle_question();
     let active = s.turn().active();
-    s.give_priority(if c.resolving { active } else { c.player });
+    s.give_priority(if c.resolving() { active } else { c.player });
     let entry = top(s);
-    if let Some(spell) = entry.spell() {
-        let face = t.def(entry.card).face(entry.face);
+    if let StackItem::Spell {
+        object: spell,
+        controller,
+        card,
+        face,
+        costs,
+    } = entry.item
+    {
+        let face = t.def(card).face(face);
         for (i, option) in face.casting.iter().enumerate() {
-            if entry.costs.contains(CastingIx::new(i as u8)) {
+            if costs.contains(CastingIx::new(i as u8)) {
                 crate::coverage::hit(option);
             }
         }
@@ -300,10 +287,10 @@ pub(super) fn finish<L: Layout>(
             sink,
             Event::Cast {
                 spell,
-                controller: entry.controller,
+                controller,
                 targets: entry.targets.clone(),
                 x: entry.x,
-                costs: entry.costs,
+                costs,
                 flashback: flashback::paid(s, spell),
             },
         )?;
@@ -317,11 +304,11 @@ pub(super) fn finish<L: Layout>(
 /// sink: no trigger listens to it and it changes nothing.
 pub(super) fn ability_event<L: Layout>(entry: &StackEntry<L>) -> Event<L> {
     Event::Ability {
-        source: entry.object,
-        controller: entry.controller,
-        card: entry.card,
-        face: entry.face,
-        ability: entry.ability.expect("an ability's entry"),
+        source: entry.object(),
+        controller: entry.controller(),
+        card: entry.card(),
+        face: entry.face(),
+        ability: entry.ability().expect("an ability's entry"),
         targets: entry.targets.clone(),
         x: entry.x,
     }
@@ -334,11 +321,11 @@ fn x_options<L: Layout>(
     c: &Casting<L>,
 ) -> Result<L::Queue<Opt<L>, 64>, Full> {
     let entry = top(s);
-    let face = t.def(entry.card).face(entry.face);
-    let least = if entry.is_spell() {
-        x_range_start(face, entry.costs, c.free).unwrap_or(0)
-    } else {
-        0
+    let least = match entry.item {
+        StackItem::Spell {
+            card, face, costs, ..
+        } => x_range_start(t.def(card).face(face), costs, c.free()).unwrap_or(0),
+        _ => 0,
     };
     let exclude = spent_by_entry(t, &entry);
     let mut out: L::Queue<Opt<L>, 64> = Default::default();
@@ -367,8 +354,6 @@ pub(crate) fn decision<L: Layout>(
         prompt,
         about: Bitboard::EMPTY,
     };
-    // The targets of one spec are one prompt, which says how many are still to choose.
-    let target = Prompt::new(Purpose::Target).most(c.left);
     Ok(match c.step {
         CastStep::X => options(
             DecisionKind::X,
@@ -388,12 +373,13 @@ pub(crate) fn decision<L: Layout>(
                 .part(Part::Count);
             options(DecisionKind::TargetCount, list, count)
         }
-        CastStep::Target => match target_options(s, t, c) {
+        // The targets of one spec are one prompt, which says how many are still to choose.
+        CastStep::Target { left } => match target_options(s, t, c) {
             TargetSet::Objects(b) => Decision {
                 player: c.player,
                 kind: DecisionKind::Target,
                 candidates: Candidates::Objects(collapse(s, b)),
-                prompt: target,
+                prompt: Prompt::new(Purpose::Target).most(left),
                 about: Bitboard::EMPTY,
             },
             TargetSet::Players(p) => {
@@ -402,7 +388,11 @@ pub(crate) fn decision<L: Layout>(
                 for player in s.players_in_seat_order(p) {
                     list.push(Opt::Player(player))?;
                 }
-                options(DecisionKind::Target, list, target)
+                options(
+                    DecisionKind::Target,
+                    list,
+                    Prompt::new(Purpose::Target).most(left),
+                )
             }
         },
         CastStep::Plan => {
@@ -416,12 +406,12 @@ pub(crate) fn decision<L: Layout>(
             let plan = Prompt::new(Purpose::Mana).cost(cost).part(Part::Plan);
             options(DecisionKind::PaymentPlan, list, plan)
         }
-        CastStep::Manual => options(
+        CastStep::Manual { remaining } => options(
             DecisionKind::ManaPayment,
-            mana::manual_options(s, t, c.player, c.remaining, Bitboard::EMPTY)?,
-            Prompt::new(Purpose::Mana).cost(c.remaining),
+            mana::manual_options(s, t, c.player, remaining, Bitboard::EMPTY)?,
+            Prompt::new(Purpose::Mana).cost(remaining),
         ),
-        CastStep::Objects => parts::decision(s, t, c)?,
+        CastStep::Objects(_) => parts::decision(s, t, c)?,
     })
 }
 
@@ -446,17 +436,16 @@ pub(crate) fn perform<L: Layout>(
             let Some(Opt::Number(n)) = option else {
                 unreachable!("a target count");
             };
-            c.left = n;
-            c.step = CastStep::Target;
+            c.step = CastStep::Target { left: n };
         }
-        CastStep::Target => {
+        CastStep::Target { left } => {
             let target = match (option, object) {
                 (Some(Opt::Player(player)), _) => Target::player(c.spec, player),
                 (_, Some(slot)) => Target::object(c.spec, s.object_ref(slot)),
                 _ => unreachable!("a target"),
             };
             s.announce_target(target)?;
-            c.left -= 1;
+            c.step = CastStep::Target { left: left - 1 };
         }
         CastStep::Plan => {
             let Some(Opt::Plan(i)) = option else {
@@ -476,13 +465,14 @@ pub(crate) fn perform<L: Layout>(
             )?;
             return after_mana(s, t, sink, c);
         }
-        CastStep::Objects => return parts::perform(s, t, sink, c, option, object),
-        CastStep::Manual => {
+        CastStep::Objects(_) => return parts::perform(s, t, sink, c, option, object),
+        CastStep::Manual { remaining } => {
             let option = option.expect("a manual payment");
-            c.remaining = mana::manual_pay(s, t, sink, c.player, c.remaining, option)?;
-            if c.remaining.is_zero() {
+            let remaining = mana::manual_pay(s, t, sink, c.player, remaining, option)?;
+            if remaining.is_zero() {
                 return after_mana(s, t, sink, c);
             }
+            c.step = CastStep::Manual { remaining };
         }
     }
     advance(s, t, sink, c)

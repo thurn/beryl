@@ -12,8 +12,8 @@ use beryl_card::{Amount, Comparison, Effect};
 use crate::actions::destroy::destroy;
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, CardDef, CastingOption, Castings, Condition, Cost, Face, FaceAbility,
-    FaceIx, Keywords, LayerSpec, ManaColor, ManaCost, Modification, Objects, Part, Players, Prompt,
+    Ability, AbilityKind, CardDef, CastingOption, Castings, Condition, Cost, Face, FaceIx,
+    Keywords, LayerSpec, ManaColor, ManaCost, Modification, Objects, Part, Players, Prompt,
     Purpose, Replacement, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use crate::card::{CastingKind, Flow};
@@ -26,8 +26,8 @@ use crate::ids::{Seat, Slot};
 use crate::profile::Breakpoint;
 use crate::resolution::Resolution;
 use crate::state::{
-    AttackTarget, Continuous, CounterKind, Duration, LayerChange, ManaPool, MoveReplacement,
-    PendingTrigger, StackEntry, TriggerInfo, TurnStep, Zone, ZoneKey,
+    AbilityRef, AttackTarget, Continuous, CounterKind, Duration, LayerChange, ManaPool,
+    MoveReplacement, PendingTrigger, StackEntry, StackItem, TriggerInfo, TurnStep, Zone, ZoneKey,
 };
 use crate::zone::Place;
 use crate::zones;
@@ -528,9 +528,12 @@ pub(super) fn with_game(
     body: impl FnOnce(&mut Game, &mut Resolution),
 ) {
     let ability = PendingTrigger {
-        source: Some(s.object_ref(slot)),
-        card: s.copiable(slot).record(t).0,
-        controller: s.controller(slot),
+        of: AbilityRef {
+            source: Some(s.object_ref(slot)),
+            card: s.copiable(slot).record(t).0,
+            controller: s.controller(slot),
+            ..AbilityRef::default()
+        },
         ..PendingTrigger::default()
     };
     let mut resolution = Resolution::of_trigger(&ability, &NO_ABILITY);
@@ -754,12 +757,15 @@ fn an_ability_finds_the_cards_exiled_with_its_source_until_a_new_object_is_there
     let land_ref = s.object_ref(land);
     // An ability of the bear as it is now, which stays that object's wherever it goes.
     let ability = PendingTrigger {
-        source: Some(s.object_ref(bear)),
-        card: s.copiable(bear).record(&t).0,
-        controller: p,
+        of: AbilityRef {
+            source: Some(s.object_ref(bear)),
+            card: s.copiable(bear).record(&t).0,
+            controller: p,
+            ..AbilityRef::default()
+        },
         ..PendingTrigger::default()
     };
-    let found = |s: &State| linked::exiled_with(s, ability.source.expect("the bear"));
+    let found = |s: &State| linked::exiled_with(s, ability.of.source.expect("the bear"));
     with_game(&t, &mut s, &mut x, bear, |game, resolution| {
         linked::exile_linked(game, land_ref, resolution.source()).unwrap();
     });
@@ -1030,14 +1036,16 @@ fn triggers_of_twins_are_equivalent_while_the_waiting_triggers_name_both_alike()
     let mut x = Scratch::new();
     let ([first, second], watcher) = twins(&t, &mut s, &mut x, p);
     let trigger = |s: &State, source: Slot, about: Slot| PendingTrigger {
-        source: Some(s.object_ref(source)),
-        card: s.copiable(source).record(&t).0,
-        controller: p,
+        of: AbilityRef {
+            source: Some(s.object_ref(source)),
+            card: s.copiable(source).record(&t).0,
+            controller: p,
+            ..AbilityRef::default()
+        },
         info: TriggerInfo {
             object: Some(s.object_ref(about)),
             ..TriggerInfo::default()
         },
-        ..PendingTrigger::default()
     };
     // Each twin's own ability, on its own entering.
     for twin in [first, second] {
@@ -1071,14 +1079,13 @@ fn triggers_of_twins_are_equivalent_while_the_waiting_triggers_name_both_alike()
     stacked
         .put_on_stack(
             &mut Sink::off(),
-            StackEntry {
-                object: tr.source,
-                controller: p,
-                ability: Some(FaceAbility::Own(tr.ability)),
-                card: tr.card,
+            StackEntry::new(StackItem::Triggered {
+                of: AbilityRef {
+                    controller: p,
+                    ..tr.of
+                },
                 info: tr.info,
-                ..StackEntry::default()
-            },
+            }),
         )
         .unwrap();
     assert_eq!(firsts(&stacked), 2);
@@ -1409,7 +1416,7 @@ fn a_stolen_creatures_dies_trigger_belongs_to_its_last_controller() {
         destroy(game, r).unwrap();
     });
     assert_eq!(s.triggers().len(), 1);
-    assert_eq!(s.triggers()[0].controller, p);
+    assert_eq!(s.triggers()[0].of.controller, p);
     assert!(s.zone(ZoneKey::Of(q, Zone::Graveyard)).contains(sphinx));
     resolve_all(&t, &mut s, &mut x);
     let copy = *s
@@ -1581,14 +1588,16 @@ fn a_permanent_a_triggered_ability_names_is_not_interchangeable_with_its_twin() 
     let mut x = Scratch::new();
     let ([first, second], source) = twins(&t, &mut s, &mut x, p);
     let trigger = |s: &State, about: Slot| PendingTrigger {
-        source: Some(s.object_ref(source)),
-        card: s.copiable(source).record(&t).0,
-        controller: p,
+        of: AbilityRef {
+            source: Some(s.object_ref(source)),
+            card: s.copiable(source).record(&t).0,
+            controller: p,
+            ..AbilityRef::default()
+        },
         info: TriggerInfo {
             object: Some(s.object_ref(about)),
             ..TriggerInfo::default()
         },
-        ..PendingTrigger::default()
     };
 
     let mut on_the_stack = s;
@@ -1596,14 +1605,10 @@ fn a_permanent_a_triggered_ability_names_is_not_interchangeable_with_its_twin() 
     on_the_stack
         .put_on_stack(
             &mut Sink::off(),
-            StackEntry {
-                object: tr.source,
-                controller: tr.controller,
-                ability: Some(FaceAbility::Own(tr.ability)),
-                card: tr.card,
+            StackEntry::new(StackItem::Triggered {
+                of: tr.of,
                 info: tr.info,
-                ..StackEntry::default()
-            },
+            }),
         )
         .unwrap();
     assert_eq!(
@@ -1627,7 +1632,10 @@ fn a_permanent_a_triggered_ability_names_is_not_interchangeable_with_its_twin() 
     // The source of a waiting ability and its twin, too.
     let mut sources = s;
     let own = PendingTrigger {
-        source: Some(sources.object_ref(first)),
+        of: AbilityRef {
+            source: Some(sources.object_ref(first)),
+            ..trigger(&sources, source).of
+        },
         ..trigger(&sources, source)
     };
     sources.queue_trigger(own).unwrap();

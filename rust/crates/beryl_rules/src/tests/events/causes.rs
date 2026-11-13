@@ -254,7 +254,7 @@ fn told(g: &mut Game, stack: &mut Vec<StackEntry>) -> Vec<(Event, Who)> {
 }
 
 fn read(events: &[Tagged], stack: &mut Vec<StackEntry>) -> Vec<(Event, Who)> {
-    let source = |entry: &StackEntry| entry.object.expect("a source").slot;
+    let source = |entry: &StackEntry| entry.object().expect("a source").slot;
     let mut out = Vec::new();
     for (i, e) in events.iter().enumerate() {
         if let Event::StackArrival { entry } = e.event {
@@ -400,7 +400,7 @@ fn an_abilitys_sacrifice_is_its_activators_doing_and_names_the_ability() {
         who(&events, |e| matches!(e, Event::Ability { .. })),
         activating
     );
-    assert!(stack[0].ability.is_some());
+    assert!(stack[0].ability().is_some());
 
     // CR 113.7a: "Once activated or triggered, an ability exists on the stack independently
     // of its source": it resolves and leaves with its source in the graveyard.
@@ -445,7 +445,7 @@ fn an_enters_trigger_is_put_on_the_stack_by_its_controller_and_makes_its_token()
     let (Event::StackArrival { entry }, _) = events[at(arrival)] else {
         unreachable!("an arrival");
     };
-    assert!(entry.ability.is_some());
+    assert!(entry.ability().is_some());
     assert_eq!(who(&events, moves(Reason::Created)), effect);
     assert_eq!(
         who(&events, |e| matches!(e, Event::TokensCreated { .. })),
@@ -610,7 +610,7 @@ fn mana_paid_as_a_spell_resolves_names_that_spell() {
         "the spell above left, the one below stays"
     );
     assert_eq!(stack.len(), 1);
-    assert_eq!(stack[0].object.map(|o| o.slot), Some(sage));
+    assert_eq!(stack[0].object().map(|o| o.slot), Some(sage));
 }
 
 #[test]
@@ -717,8 +717,8 @@ fn a_trigger_from_inside_a_resolution_goes_above_what_waits_below() {
     let at = |is: fn(&Event) -> bool| events.iter().position(|(e, _)| is(e)).unwrap();
     assert!(at(departure) < at(arrival));
     assert_eq!(stack.len(), 2);
-    assert_eq!(stack[0].object.map(|o| o.slot), Some(sage));
-    assert!(stack[1].ability.is_some());
+    assert_eq!(stack[0].object().map(|o| o.slot), Some(sage));
+    assert!(stack[1].ability().is_some());
 
     // The trigger resolves before the sorcery under it: its draw and its leaving are its
     // own, and the sorcery stays.
@@ -731,5 +731,5 @@ fn a_trigger_from_inside_a_resolution_goes_above_what_waits_below() {
         Some((Event::StackDeparture { entry: StackIx(1) }, trigger))
     );
     assert_eq!(stack.len(), 1);
-    assert_eq!(stack[0].object.map(|o| o.slot), Some(sage));
+    assert_eq!(stack[0].object().map(|o| o.slot), Some(sage));
 }

@@ -17,8 +17,8 @@ use crate::ids::Seat;
 use crate::layout::{Layout, PerPlayer, Table};
 use crate::query::Copiable;
 use crate::state::{
-    CountersHeld, PendingTrigger, State, TARGETS, Target, TargetPlace, TargetPlaces, Tracker, Zone,
-    ZoneKey, placed,
+    AbilityRef, CountersHeld, PendingTrigger, State, TARGETS, Target, TargetPlace, TargetPlaces,
+    Tracker, Zone, ZoneKey, placed,
 };
 use crate::table::GameTable;
 use crate::trigger::entered_with;
@@ -137,7 +137,7 @@ pub(crate) struct Scene<'s, L: Layout> {
 
 impl<L: Layout> Scene<'_, L> {
     fn you(&self) -> Seat {
-        self.subject.controller
+        self.subject.of.controller
     }
 
     /// The targets chosen for the `spec`th instance of the word "target" that were legal as
@@ -184,6 +184,7 @@ impl<L: Layout> Scene<'_, L> {
         match objects {
             Objects::This => self
                 .subject
+                .of
                 .source
                 .filter(|&source| s.is_current(source))
                 .map_or(Bitboard::EMPTY, |source| Bitboard::single(source.slot)),
@@ -198,6 +199,7 @@ impl<L: Layout> Scene<'_, L> {
             // attached to nothing.
             Objects::AttachedTo => self
                 .subject
+                .of
                 .source
                 .filter(|&source| s.is_current(source))
                 .and_then(|source| s.object(source.slot).attached_to())
@@ -213,9 +215,8 @@ impl<L: Layout> Scene<'_, L> {
             // were put there as a result of an instruction to exile them in the first
             // ability." An ability of an object that has left still refers to the cards
             // that object exiled, so its slot is asked whether or not it is current.
-            Objects::ExiledWithThis => {
-                (self.subject.source).map_or(Bitboard::EMPTY, |source| s.exiled_with(source.slot))
-            }
+            Objects::ExiledWithThis => (self.subject.of.source)
+                .map_or(Bitboard::EMPTY, |source| s.exiled_with(source.slot)),
             Objects::Paid(_) => {
                 unreachable!("the card table refuses an effect that names what a cost took")
             }
@@ -375,7 +376,10 @@ impl<L: Layout> Scene<'_, L> {
     /// against this scene, as that player's.
     fn value_for(&self, player: Seat, amount: Amount) -> i32 {
         let subject = PendingTrigger {
-            controller: player,
+            of: AbilityRef {
+                controller: player,
+                ..self.subject.of
+            },
             ..*self.subject
         };
         let theirs = Scene {
@@ -515,7 +519,7 @@ impl<L: Layout> Scene<'_, L> {
     /// ([CR 702.96a](https://yawgatog.com/resources/magic-rules/#R70296a)).
     fn paid(&self, kind: CastingKind) -> bool {
         if let Some(costs) = self.costs {
-            let face = self.t.def(self.subject.card).face(self.subject.face);
+            let face = self.t.def(self.subject.of.card).face(self.subject.of.face);
             return costs.paid(face).any(|option| option.kind() == kind);
         }
         kind != CastingKind::Overload && entered_with(self.s, self.subject, kind)

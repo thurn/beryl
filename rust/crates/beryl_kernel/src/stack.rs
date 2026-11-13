@@ -158,51 +158,194 @@ impl TargetPlaces {
     }
 }
 
-/// A spell or ability on the stack ([CR 405.1](https://yawgatog.com/resources/magic-rules/#R4051)):
-/// "When a spell is cast, the physical card is put on the stack (see rule 601.2a). When an
-/// ability is activated or triggers, it goes on top of the stack without any card associated
-/// with it".
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-pub struct StackEntry<L: Layout = Small> {
-    /// The spell's card, or the ability's source; an emblem's ability has none.
-    pub object: Option<ObjectRef<L>>,
-    pub controller: Seat,
-    /// The ability of `face`, or `None` for a spell.
-    pub ability: Option<FaceAbility>,
-    /// The game index and face of the spell's card, or of the card that has the ability,
-    /// which outlast the source ([CR 113.7a](https://yawgatog.com/resources/magic-rules/#R1137a)):
-    /// "Once activated or triggered, an ability exists on the stack independently of its
-    /// source."
+/// An ability of a card, as it exists on the stack or waiting to go on it.
+///
+/// `A` says which abilities it can be: a [`FaceAbility`] for an activated ability, which may
+/// be one another object grants, or an [`AbilityIx`] among the face's own for a triggered
+/// ability.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct AbilityRef<L: Layout = Small, A = FaceAbility> {
+    /// The object with the ability; an emblem's ability has none.
+    pub source: Option<ObjectRef<L>>,
+    /// The game index and face of the card that has the ability, which outlast the source
+    /// ([CR 113.7a]): "Once activated or triggered, an ability exists on the stack
+    /// independently of its source."
+    ///
+    /// [CR 113.7a]: https://yawgatog.com/resources/magic-rules/#R1137a
     pub card: L::Card,
     pub face: FaceIx,
-    /// For a triggered ability: what it triggered on.
-    pub info: TriggerInfo<L>,
+    pub ability: A,
+    /// The player who activated the ability, or who controlled its source when it triggered
+    /// ([CR 603.3a]).
+    ///
+    /// [CR 603.3a]: https://yawgatog.com/resources/magic-rules/#R6033a
+    pub controller: Seat,
+}
+
+/// What a [`StackEntry`] is: a spell, an activated ability or a triggered ability.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum StackItem<L: Layout = Small> {
+    /// A spell: its card, in the stack zone, who controls it, the face cast and the face's
+    /// casting options paid.
+    Spell {
+        object: ObjectRef<L>,
+        controller: Seat,
+        card: L::Card,
+        face: FaceIx,
+        costs: Castings,
+    },
+    /// An activated ability (CR 602.2a).
+    Activated { of: AbilityRef<L> },
+    /// A triggered ability, and what it triggered on (CR 603.3).
+    Triggered {
+        of: AbilityRef<L, AbilityIx>,
+        info: TriggerInfo<L>,
+    },
+}
+
+/// The value a fixed queue's unused places hold. No rule reads it.
+impl<L: Layout> Default for StackItem<L> {
+    fn default() -> Self {
+        StackItem::Activated {
+            of: AbilityRef {
+                source: None,
+                card: L::Card::default(),
+                face: FaceIx::default(),
+                ability: FaceAbility::own(0),
+                controller: Seat::default(),
+            },
+        }
+    }
+}
+
+/// A spell or ability on the stack ([CR 405.1]): "When a spell is cast, the physical card is
+/// put on the stack (see rule 601.2a). When an ability is activated or triggers, it goes on
+/// top of the stack without any card associated with it".
+///
+/// [CR 405.1]: https://yawgatog.com/resources/magic-rules/#R4051
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct StackEntry<L: Layout = Small> {
+    pub item: StackItem<L>,
     pub targets: L::Queue<Target<L>, TARGETS>,
-    /// The announced value of X ([CR 107.3a](https://yawgatog.com/resources/magic-rules/#R1073a)).
+    /// The announced value of X ([CR 107.3a]), or for an enters ability the X of its spell
+    /// ([CR 107.3m]). Spells and abilities both have one.
+    ///
+    /// [CR 107.3a]: https://yawgatog.com/resources/magic-rules/#R1073a
+    /// [CR 107.3m]: https://yawgatog.com/resources/magic-rules/#R1073m
     pub x: u8,
-    /// The face's casting options paid.
-    pub costs: Castings,
 }
 
 impl Copy for StackEntry<Small> {}
 
 impl<L: Layout> StackEntry<L> {
-    pub fn is_spell(&self) -> bool {
-        self.ability.is_none()
+    /// An entry for `item`, with no targets chosen yet and X of 0.
+    pub fn new(item: StackItem<L>) -> StackEntry<L> {
+        StackEntry {
+            item,
+            targets: Default::default(),
+            x: 0,
+        }
     }
 
     /// The spell's card, if this is a spell.
+    #[inline]
     pub fn spell(&self) -> Option<ObjectRef<L>> {
-        self.object.filter(|_| self.is_spell())
+        match self.item {
+            StackItem::Spell { object, .. } => Some(object),
+            _ => None,
+        }
+    }
+
+    /// The spell's card, or the ability's source; an emblem's ability has none.
+    #[inline]
+    pub fn object(&self) -> Option<ObjectRef<L>> {
+        match self.item {
+            StackItem::Spell { object, .. } => Some(object),
+            StackItem::Activated { of } => of.source,
+            StackItem::Triggered { of, .. } => of.source,
+        }
+    }
+
+    /// The ability's source, if this is an ability that has one; never a spell's card.
+    #[inline]
+    pub fn source(&self) -> Option<ObjectRef<L>> {
+        match self.item {
+            StackItem::Spell { .. } => None,
+            StackItem::Activated { of } => of.source,
+            StackItem::Triggered { of, .. } => of.source,
+        }
+    }
+
+    /// Who controls the spell or ability.
+    #[inline]
+    pub fn controller(&self) -> Seat {
+        match self.item {
+            StackItem::Spell { controller, .. } => controller,
+            StackItem::Activated { of } => of.controller,
+            StackItem::Triggered { of, .. } => of.controller,
+        }
+    }
+
+    /// The game index of the spell's card, or of the card that has the ability.
+    #[inline]
+    pub fn card(&self) -> L::Card {
+        match self.item {
+            StackItem::Spell { card, .. } => card,
+            StackItem::Activated { of } => of.card,
+            StackItem::Triggered { of, .. } => of.card,
+        }
+    }
+
+    /// The face of [`StackEntry::card`] the spell was cast as, or that has the ability.
+    #[inline]
+    pub fn face(&self) -> FaceIx {
+        match self.item {
+            StackItem::Spell { face, .. } => face,
+            StackItem::Activated { of } => of.face,
+            StackItem::Triggered { of, .. } => of.face,
+        }
+    }
+
+    /// The ability of the card's face, or `None` for a spell.
+    #[inline]
+    pub fn ability(&self) -> Option<FaceAbility> {
+        match self.item {
+            StackItem::Spell { .. } => None,
+            StackItem::Activated { of } => Some(of.ability),
+            StackItem::Triggered { of, .. } => Some(FaceAbility::Own(of.ability)),
+        }
+    }
+
+    /// What a triggered ability triggered on, if this is one.
+    #[inline]
+    pub fn info(&self) -> Option<&TriggerInfo<L>> {
+        match &self.item {
+            StackItem::Triggered { info, .. } => Some(info),
+            _ => None,
+        }
+    }
+
+    /// The casting options a spell's face was cast with; none for an ability.
+    #[inline]
+    pub fn costs(&self) -> Castings {
+        match self.item {
+            StackItem::Spell { costs, .. } => costs,
+            _ => Castings::NONE,
+        }
     }
 
     /// The slots it names ([`State::named`]): its spell's card or its ability's source,
     /// its targets, and the object a triggered ability triggered on.
     #[inline]
     fn names(&self) -> Bitboard<L::Slot> {
-        let objects = [self.object, self.info.object].into_iter().flatten();
+        let objects = [self.object(), self.info().and_then(|info| info.object)];
         let targets = self.targets.iter().filter_map(|target| target.as_object());
-        objects.chain(targets).map(|r| r.slot).collect()
+        objects
+            .into_iter()
+            .flatten()
+            .chain(targets)
+            .map(|r| r.slot)
+            .collect()
     }
 }
 
@@ -256,15 +399,9 @@ pub struct TriggerInfo<L: Layout = Small> {
 /// An ability that has triggered and waits to be put on the stack.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct PendingTrigger<L: Layout = Small> {
-    /// The object with the ability; an emblem's trigger has none.
-    pub source: Option<ObjectRef<L>>,
-    pub card: L::Card,
-    pub face: FaceIx,
-    /// The ability, among the face's own.
-    pub ability: AbilityIx,
-    /// The player who controlled the source when it triggered
-    /// ([CR 603.3a](https://yawgatog.com/resources/magic-rules/#R6033a)).
-    pub controller: Seat,
+    /// The ability, among the face's own; its controller is the player who controlled the
+    /// source when it triggered.
+    pub of: AbilityRef<L, AbilityIx>,
     pub info: TriggerInfo<L>,
 }
 
@@ -272,7 +409,7 @@ impl<L: Layout> PendingTrigger<L> {
     /// The slots it names ([`State::named`]): its source and the object it triggered on.
     #[inline]
     fn names(&self) -> Bitboard<L::Slot> {
-        let objects = [self.source, self.info.object].into_iter().flatten();
+        let objects = [self.of.source, self.info.object].into_iter().flatten();
         objects.map(|r| r.slot).collect()
     }
 }

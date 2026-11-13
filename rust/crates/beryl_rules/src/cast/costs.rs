@@ -4,7 +4,7 @@
 use crate::bitboard::Bitboard;
 use crate::card::{CastingOption, Castings, Face, ManaCost};
 use crate::layout::Layout;
-use crate::state::{Casting, Pending, StackEntry, State};
+use crate::state::{Casting, Pending, StackEntry, StackItem, State};
 use crate::table::GameTable;
 
 use super::legal::spent_by_cost;
@@ -89,17 +89,18 @@ pub(super) fn total_cost<L: Layout>(
     entry: &StackEntry<L>,
     c: &Casting<L>,
 ) -> ManaCost {
-    let face = t.def(entry.card).face(entry.face);
-    match entry.ability {
-        None => {
-            let increase = entry.spell().map_or(0, |spell| s.cost_increase(spell));
-            spell_cost(face, entry.costs, entry.x, increase, c.free)
+    let face = t.def(entry.card()).face(entry.face());
+    match (entry.item, entry.ability()) {
+        (StackItem::Spell { object, costs, .. }, _) => {
+            let increase = s.cost_increase(object);
+            spell_cost(face, costs, entry.x, increase, c.free())
         }
-        Some(ability) => {
+        (_, Some(ability)) => {
             let mut cost = face.ability(ability).cost().mana.with_x(entry.x);
             cost.generic -= c.substituted;
             cost
         }
+        (_, None) => unreachable!("an ability's entry names its ability"),
     }
 }
 

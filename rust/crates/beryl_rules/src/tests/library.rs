@@ -4,13 +4,13 @@
 
 use crate::actions::{manifest, tap, transform};
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, FaceIx, ManaCost, Prompt, Purpose, Stop, Types};
+use crate::card::{Ability, Castings, FaceIx, ManaCost, Prompt, Purpose, Stop, Types};
 use crate::decision::Candidates;
 use crate::event::{self, Event, Reason};
 use crate::game::Game;
 use crate::ids::{Seat, Slot};
 use crate::resolution::Resolution;
-use crate::state::{ObjectRef, StackEntry, TargetPlaces, TurnStep, Zone, ZoneKey};
+use crate::state::{ObjectRef, StackEntry, StackItem, TargetPlaces, TurnStep, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{
     Choice, Decision, DecisionKind, GameTable, Opt, PlayerSet, Profile, Scratch, State, choices,
@@ -34,12 +34,13 @@ fn resolving<T>(
     answers: &[u8],
     act: impl FnOnce(&mut Game, &mut Resolution) -> Result<T, Stop>,
 ) -> (Result<T, Stop>, Option<Decision>) {
-    let entry = StackEntry {
-        object: Some(source),
+    let entry = StackEntry::new(StackItem::Spell {
+        object: source,
         controller: s.controller(source.slot),
         card: s.copiable(source.slot).record(t).0,
-        ..StackEntry::default()
-    };
+        face: FaceIx::default(),
+        costs: Castings::NONE,
+    });
     let mut resolution = Resolution::new(entry, &ASKS, TargetPlaces::NONE, None, answers);
     let result = act(&mut Game::new(s, t, &mut x.events), &mut resolution);
     crate::layers::refresh(s, t, &mut x.events).unwrap();

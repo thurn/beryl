@@ -510,7 +510,7 @@ impl Policy<'_> {
         if spells {
             for e in self.obs.stack() {
                 if let Some(r) = e.spell()
-                    && ok(r.slot, e.controller)
+                    && ok(r.slot, e.controller())
                 {
                     offer(self.value(r.slot));
                 }
@@ -552,19 +552,19 @@ impl Policy<'_> {
     /// ability being put on the stack puts there first (CR 601.2a).
     pub(crate) fn targeting(&self) -> Option<(&'static TargetSpec, bool)> {
         let e: &StackEntry = self.obs.stack().last()?;
-        let def: &'static CardDef = self.t.def(e.card);
-        let face: &'static Face = def.face(e.face);
-        let a = match e.ability {
+        let def: &'static CardDef = self.t.def(e.card());
+        let face: &'static Face = def.face(e.face());
+        let a = match e.ability() {
             Some(ability) => face.ability(ability),
-            None => face.spell_ability_with(e.costs)?,
+            None => face.spell_ability_with(e.costs())?,
         };
         let spec = a.targets().first()?;
-        let index = match e.ability {
+        let index = match e.ability() {
             Some(FaceAbility::Own(i)) => i.get(),
             Some(FaceAbility::Grant(_)) => u8::MAX,
             None => index_of(face, a),
         };
-        let friendly = self.values.get(e.card).friendly(index)
+        let friendly = self.values.get(e.card()).friendly(index)
             || matches!(whose(&spec.filter), Some(Players::You));
         Some((spec, friendly))
     }

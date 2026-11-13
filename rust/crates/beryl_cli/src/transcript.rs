@@ -363,7 +363,10 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
         Opt::Mulligan => "mulligan".to_owned(),
         Opt::Trigger(i) => {
             let trigger = s.triggers()[usize::from(i)];
-            format!("{} trigger", t.def(trigger.card).face_name(trigger.face))
+            format!(
+                "{} trigger",
+                t.def(trigger.of.card).face_name(trigger.of.face)
+            )
         }
         Opt::Yes => "yes".to_owned(),
         Opt::No => "no".to_owned(),

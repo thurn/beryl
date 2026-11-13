@@ -231,15 +231,21 @@ fn about_to_arrive<L: Layout>(events: &[Tagged<L>], place: StackIx, top: usize) 
 
 #[cfg(test)]
 mod tests {
-    use beryl_engine::card::FaceAbility;
+    use beryl_engine::card::{FaceAbility, FaceIx};
+    use beryl_engine::state::{AbilityRef, StackItem};
 
     use super::*;
 
     fn ability() -> StackEntry {
-        StackEntry {
-            ability: Some(FaceAbility::own(0)),
-            ..StackEntry::default()
-        }
+        StackEntry::new(StackItem::Activated {
+            of: AbilityRef {
+                source: None,
+                card: beryl_engine::CardIx::default(),
+                face: FaceIx::default(),
+                ability: FaceAbility::own(0),
+                controller: Seat::default(),
+            },
+        })
     }
 
     fn tagged(event: Event, cause: Tag) -> Tagged {

@@ -469,7 +469,8 @@ impl Act {
             Opt::Trigger(i) => Act::Trigger {
                 source: o.object_named(s).map(obj),
                 ability: s.triggers().get(Into::<usize>::into(i)).map(|tr| {
-                    let triggered = t.def(tr.card).face(tr.face).abilities[..tr.ability.index()]
+                    let triggered = t.def(tr.of.card).face(tr.of.face).abilities
+                        [..tr.of.ability.index()]
                         .iter()
                         .filter(|a| matches!(a.kind(), AbilityKind::Triggered))
                         .count();

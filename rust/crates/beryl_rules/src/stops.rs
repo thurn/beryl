@@ -29,7 +29,7 @@ pub(crate) fn asks_lone<L: Layout>(profile: Profile, s: &State<L>, d: &Decision<
     (d.prompt.purpose == Purpose::Waterbend && profile.taps_mana == Some(d.player))
         || d.kind == DecisionKind::Target
             && profile.asks_targets == Some(d.player)
-            && matches!(s.pending(), Pending::Casting(c) if !c.triggered)
+            && matches!(s.pending(), Pending::Casting(c) if !c.triggered())
 }
 
 /// The smart stops (§15): "their own main phases, after attackers and after blockers are

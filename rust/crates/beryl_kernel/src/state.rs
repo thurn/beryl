@@ -14,11 +14,11 @@ pub use crate::memos::{MEMOS, Memo, Memos, MemosOf};
 pub use crate::object::{
     AttackTarget, CombatRole, Derived, Flag, GrantRef, Object, ObjectFlags, ObjectRef, SlotSet,
 };
-pub use crate::pending::{CastStep, Casting, Pending, Resolving};
+pub use crate::pending::{CastKind, CastStep, Casting, PayingObjects, Pending, Resolving};
 pub use crate::player::{ManaPool, MulliganStatus, Player};
 pub use crate::stack::{
-    Lki, PendingTrigger, PermanentTypes, StackEntry, TARGETS, Target, TargetPlace, TargetPlaces,
-    TriggerInfo, placed,
+    AbilityRef, Lki, PendingTrigger, PermanentTypes, StackEntry, StackItem, TARGETS, Target,
+    TargetPlace, TargetPlaces, TriggerInfo, placed,
 };
 pub use crate::store::{Duration, Stored};
 pub use crate::trackers::{Tracked, Tracker, Trackers};

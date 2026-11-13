@@ -32,7 +32,7 @@ pub fn start<L: Layout>(
     {
         return Ok(());
     }
-    (game.state).start_effect(resolution.entry.card, effect, duration)?;
+    (game.state).start_effect(resolution.entry.card(), effect, duration)?;
     layers::refresh(game.state, game.table, game.sink)
 }
 
@@ -50,7 +50,7 @@ pub fn start_on_set<L: Layout>(
     change: LayerChange,
     duration: Duration,
 ) -> Result<(), Full> {
-    (game.state).start_effect_on_set(resolution.entry.card, permanents, change, duration)?;
+    (game.state).start_effect_on_set(resolution.entry.card(), permanents, change, duration)?;
     layers::refresh(game.state, game.table, game.sink)
 }
 
@@ -71,7 +71,7 @@ pub fn change_rule<L: Layout>(
     duration: Duration,
 ) -> Result<(), Full> {
     let id = (game.table.rule_id(rule)).expect("a rule change its ability names");
-    let you = resolution.entry.controller;
+    let you = resolution.entry.controller();
     let s = &*game.state;
     let named = (s.players()).filter(|player| filter::is_for(&rule.players, player, you));
     for player in s.players_in_turn_order(named) {
@@ -94,7 +94,7 @@ pub fn gain_control<L: Layout>(
     if !game.on_battlefield(object) {
         return Ok(());
     }
-    let player = resolution.entry.controller;
+    let player = resolution.entry.controller();
     let control = Continuous::Layer(object, LayerChange::Control(player));
     start(game, resolution, control, duration)?;
     game.state.set_summoning_sick(object.slot, true);
@@ -114,7 +114,7 @@ pub(crate) fn instruction<L: Layout>(
     duration: beryl_card::Duration,
 ) -> Result<Outcome<L>, Full> {
     // "You" in what it says is the ability's controller as it resolves.
-    let you = run.resolution().entry.controller;
+    let you = run.resolution().entry.controller();
     let duration = lasting(duration, you);
     let permanents = run.permanents(objects);
     // "Gain control of": each permanent's own effect, which says it has a new controller
@@ -156,7 +156,7 @@ pub(crate) fn change_rule_instruction<L: Layout>(
     rule: &'static RuleChange,
     duration: beryl_card::Duration,
 ) -> Result<Outcome<L>, Full> {
-    let duration = lasting(duration, run.resolution().entry.controller);
+    let duration = lasting(duration, run.resolution().entry.controller());
     let (game, resolution) = run.resolving();
     change_rule(game, resolution, rule, duration)?;
     Ok(Outcome::of(Bitboard::EMPTY, 1))

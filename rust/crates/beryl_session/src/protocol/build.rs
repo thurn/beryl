@@ -414,8 +414,8 @@ fn paid_costs<L: Layout>(t: &GameTable, e: &StackEntry<L>, flashback: bool) -> V
     if flashback {
         return vec![PaidCost::Flashback];
     }
-    e.costs
-        .paid(t.def(e.card).face(e.face))
+    e.costs()
+        .paid(t.def(e.card()).face(e.face()))
         .map(|option| match option {
             CastingOption::Kicker { .. } => PaidCost::Kicker,
             CastingOption::Offspring(_) => PaidCost::Offspring,
@@ -458,8 +458,8 @@ pub(super) fn stack_item_cast<L: Layout>(
             (None, None) => unreachable!("a target is a player or an object"),
         })
         .collect();
-    let source = e.object.map(|r| r.slot.num());
-    match e.ability {
+    let source = e.object().map(|r| r.slot.num());
+    match e.ability() {
         None => StackItem::Spell {
             slot: source.expect("a spell's card"),
             targets,
@@ -467,7 +467,7 @@ pub(super) fn stack_item_cast<L: Layout>(
             paid: paid_costs(t, e, flashback),
         },
         Some(ability) => {
-            let face = t.def(e.card).face(e.face);
+            let face = t.def(e.card()).face(e.face());
             let (list, index) = match ability {
                 FaceAbility::Own(i) => (face.abilities, i.get()),
                 FaceAbility::Grant(i) => (face.grants, i.get()),
@@ -477,7 +477,7 @@ pub(super) fn stack_item_cast<L: Layout>(
                 source,
                 ability: index,
                 granted: matches!(ability, FaceAbility::Grant(_)),
-                name: t.def(e.card).face_name(e.face).to_owned(),
+                name: t.def(e.card()).face_name(e.face()).to_owned(),
                 triggered: kind,
                 taps_to_pay: matches!(
                     face.ability(ability).cost().measure(),
@@ -485,8 +485,8 @@ pub(super) fn stack_item_cast<L: Layout>(
                 )
                 .then_some(true),
                 nth,
-                text: super::rules_text::unprinted(t, e.card, e.face, ability),
-                controller: side(obs, e.controller),
+                text: super::rules_text::unprinted(t, e.card(), e.face(), ability),
+                controller: side(obs, e.controller()),
                 targets,
                 x: e.x,
             }

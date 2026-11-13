@@ -5,7 +5,7 @@ use crate::card::{Ability, Face, FaceAbility, Keywords, ObjectAbility, Types};
 use crate::ids::Seat;
 use crate::layout::Layout;
 use crate::rule_change;
-use crate::state::{StackEntry, State, TurnStep, Zone};
+use crate::state::{StackEntry, StackItem, State, TurnStep, Zone};
 use crate::table::GameTable;
 
 /// The ability a stack entry resolves: an ability of its card's face, or a spell's spell
@@ -15,10 +15,11 @@ pub(crate) fn entry_ability<L: Layout>(
     t: &GameTable,
     entry: &StackEntry<L>,
 ) -> Option<&'static Ability> {
-    let face = t.def(entry.card).face(entry.face);
-    match entry.ability {
-        None => face.spell_ability_with(entry.costs),
-        Some(ability) => Some(face.ability(ability)),
+    let face = t.def(entry.card()).face(entry.face());
+    match entry.item {
+        StackItem::Spell { costs, .. } => face.spell_ability_with(costs),
+        StackItem::Activated { of } => Some(face.ability(of.ability)),
+        StackItem::Triggered { of, .. } => Some(face.ability(FaceAbility::Own(of.ability))),
     }
 }
 

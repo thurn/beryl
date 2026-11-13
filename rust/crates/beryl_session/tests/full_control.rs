@@ -67,7 +67,7 @@ fn play_switching(game: &mut Game, mut switch: Option<StopsSetting>) -> Seen {
         // A spell being cast is on the stack before its targets are chosen (CR 601.2a).
         let cast = matches!(game.state().pending(), Pending::None);
         for e in game.state().stack().iter().filter(|_| cast) {
-            if e.controller != HUMAN && !seen.theirs.contains(e) {
+            if e.controller() != HUMAN && !seen.theirs.contains(e) {
                 seen.theirs.push(*e);
             }
         }
@@ -80,7 +80,7 @@ fn play_switching(game: &mut Game, mut switch: Option<StopsSetting>) -> Seen {
         let turn = game.state().turn();
         if decision.kind == Kind::Priority && !decision.halt {
             for e in game.state().stack() {
-                if e.controller != HUMAN {
+                if e.controller() != HUMAN {
                     seen.answered.push((*e, turn.active()));
                 }
             }

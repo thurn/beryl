@@ -148,7 +148,7 @@ fn searched_positions(t: &GameTable, count: usize, from_end: usize) -> Vec<(Stat
         let mut game = Vec::new();
         play(t, &mut s, &mut Scratch::new(), &mut agents, |s, d| {
             let own_on_top = d.kind == DecisionKind::Priority
-                && s.stack().last().is_some_and(|e| e.controller == d.player);
+                && s.stack().last().is_some_and(|e| e.controller() == d.player);
             if d.len() > 1 && !own_on_top {
                 game.push((*s, *d));
             }

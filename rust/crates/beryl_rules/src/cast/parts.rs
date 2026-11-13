@@ -20,7 +20,10 @@ use crate::game::Game;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
 use crate::mana::{self, Funds};
-use crate::state::{CastStep, Casting, CounterKind, Pending, StackEntry, State, Zone, ZoneKey};
+use crate::state::{
+    CastKind, CastStep, Casting, CounterKind, PayingObjects, Pending, StackEntry, StackItem, State,
+    Zone, ZoneKey,
+};
 use crate::table::GameTable;
 
 use super::costs::total_cost;
@@ -35,21 +38,24 @@ fn part_at<L: Layout>(
     index: u8,
 ) -> Option<&'static CostPart> {
     let index = usize::from(index);
-    if entry.ability.is_some() {
+    let StackItem::Spell {
+        card, face, costs, ..
+    } = entry.item
+    else {
         return entry_ability_of(t, entry).cost().parts().get(index);
-    }
-    let face = t.def(entry.card).face(entry.face);
+    };
+    let face = t.def(card).face(face);
     // Most spells cost mana alone.
-    if face.additional_cost.is_empty() && entry.costs.is_empty() {
+    if face.additional_cost.is_empty() && costs.is_empty() {
         return None;
     }
-    face.cost_parts(entry.costs).nth(index)
+    face.cost_parts(costs).nth(index)
 }
 
 /// The object the cost of `entry` is on: the spell's card, or the ability's source.
 fn itself<L: Layout>(entry: &StackEntry<L>) -> L::Slot {
     let object = entry
-        .object
+        .object()
         .expect("a spell's card or an activated ability's source");
     object.slot
 }
@@ -60,9 +66,18 @@ fn part_being_paid<L: Layout>(
     entry: &StackEntry<L>,
     c: &Casting<L>,
 ) -> (CostAction, &'static Chosen) {
-    match part_at(t, entry, c.part) {
+    match part_at(t, entry, step(c).part) {
         Some(CostPart::Chosen(action, chosen)) => (*action, chosen),
         _ => unreachable!("a part paid with objects"),
+    }
+}
+
+/// Where the casting at [`CastStep::Objects`], the step every function here but [`pay`] runs
+/// in, has got to.
+fn step<L: Layout>(c: &Casting<L>) -> PayingObjects<L> {
+    match c.step {
+        CastStep::Objects(paying) => paying,
+        _ => unreachable!("a casting paying with objects"),
     }
 }
 
@@ -228,7 +243,7 @@ fn pay_with_source<L: Layout>(
     entry: &StackEntry<L>,
     action: CostAction,
 ) -> Result<(), Full> {
-    let source = entry.object.expect("an activated ability's source");
+    let source = entry.object().expect("an activated ability's source");
     match action {
         CostAction::Tap => event::set_tapped(s, t, sink, source, true),
         CostAction::Sacrifice => {
@@ -246,10 +261,10 @@ fn pay_with_source<L: Layout>(
     }
 }
 
-/// Pays the parts of the cost from `c.part` on, in the order printed, stopping at one its
-/// player chooses objects for ([`CastStep::Objects`]); then turns to what follows them. An
-/// ability's parts are paid before its mana and a spell's after it, so a spell's caster sees
-/// the mana spent before choosing the cards it also costs.
+/// Pays the parts of the cost from the part at `from` on, in the order printed, stopping at
+/// one its player chooses objects for ([`CastStep::Objects`]); then turns to what follows
+/// them. An ability's parts are paid before its mana and a spell's after it, so a spell's
+/// caster sees the mana spent before choosing the cards it also costs.
 ///
 /// [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
 /// total cost. First, they pay all costs that don't involve random elements or moving objects
@@ -260,15 +275,17 @@ pub(super) fn pay<L: Layout>(
     t: &GameTable,
     sink: &mut Sink<L>,
     mut c: Casting<L>,
+    from: u8,
 ) -> Result<(), Full> {
     let entry = top(s);
-    while let Some(part) = part_at(t, &entry, c.part) {
+    let mut index = from;
+    while let Some(part) = part_at(t, &entry, index) {
         match *part {
             CostPart::This(action) => pay_with_source(s, t, sink, &entry, action)?,
             CostPart::Loyalty(n) => {
                 // CR 606.4: "The cost to activate a loyalty ability of a permanent is to put
                 // on or remove from that permanent a certain number of loyalty counters".
-                let source = entry.object.expect("an activated ability's source");
+                let source = entry.object().expect("an activated ability's source");
                 let (game, amount) = (&mut Game::new(s, t, sink), n.unsigned_abs());
                 if n > 0 {
                     counters::add(game, source, CounterKind::Loyalty, amount)?;
@@ -278,10 +295,7 @@ pub(super) fn pay<L: Layout>(
             }
             CostPart::Chosen(_, chosen) => match chosen.measure {
                 Measure::Count(n) | Measure::TotalPower(n) => {
-                    c.step = CastStep::Objects;
-                    c.left = n;
-                    c.graveyard_from = 0;
-                    c.chosen = Bitboard::EMPTY;
+                    c.step = CastStep::Objects(PayingObjects::start(index, n));
                     s.ask(Pending::Casting(c));
                     return Ok(());
                 }
@@ -292,12 +306,11 @@ pub(super) fn pay<L: Layout>(
                 unreachable!("the card table refuses a cost the engine cannot pay")
             }
         }
-        c.part += 1;
+        index += 1;
     }
-    if entry.is_spell() {
-        finish(s, t, sink, c)
-    } else {
-        pay_substitutes(s, t, sink, &entry, c)
+    match c.kind {
+        CastKind::Activation => pay_substitutes(s, t, sink, &entry, c),
+        _ => finish(s, t, sink, c),
     }
 }
 
@@ -311,10 +324,9 @@ fn pay_substitutes<L: Layout>(
     mut c: Casting<L>,
 ) -> Result<(), Full> {
     if let Some((part, _, _, most)) = substitute(entry_ability_of(t, entry).cost().parts()) {
-        c.part = part;
-        c.left = most.min(total_cost(s, t, entry, &c).generic);
-        if c.left > 0 && !substitute_options(s, t, &c)?.is_empty() {
-            c.step = CastStep::Objects;
+        let left = most.min(total_cost(s, t, entry, &c).generic);
+        c.step = CastStep::Objects(PayingObjects::start(part, left));
+        if left > 0 && !substitute_options(s, t, &c)?.is_empty() {
             s.ask(Pending::Casting(c));
             return Ok(());
         }
@@ -336,7 +348,8 @@ fn substitute_options<L: Layout>(
     let entry = top(s);
     let cost = total_cost(s, t, &entry, c);
     let mut objects: L::Queue<Opt<L>, 64> = Default::default();
-    if c.left > 0 {
+    let left = step(c).left;
+    if left > 0 {
         let (action, chosen) = part_being_paid(t, &entry, c);
         let able = candidates(s, t, c.player, itself(&entry), action, chosen);
         let mut fewer = cost;
@@ -345,7 +358,7 @@ fn substitute_options<L: Layout>(
         // Candidates are listed in the candidate order, which a `Choice` counts in.
         for slot in s.in_candidate_order(collapse(s, able)) {
             let rest = Bitboard::single(slot);
-            if payable_with_substitutes(s, t, &funds, fewer, c.left - 1, able, rest) {
+            if payable_with_substitutes(s, t, &funds, fewer, left - 1, able, rest) {
                 objects.push(Opt::Object(slot))?;
             }
         }
@@ -375,8 +388,8 @@ fn substitute_options<L: Layout>(
 }
 
 /// The objects the step may choose next, one of each set of interchangeable ones (§7.2).
-/// From a graveyard: the cards from position `c.graveyard_from` up that leave enough above
-/// them for the `c.left - 1` still to choose after, the lowest of interchangeable ones, which
+/// From a graveyard: the cards from position `graveyard_from` up that leave enough above
+/// them for the `left - 1` still to choose after, the lowest of interchangeable ones, which
 /// leaves every choice the others would. So every set of cards is one sequence of answers,
 /// and a graveyard with no more cards than the cost takes asks nothing.
 fn choices<L: Layout>(
@@ -386,7 +399,13 @@ fn choices<L: Layout>(
     c: &Casting<L>,
 ) -> Bitboard<L::Slot> {
     let (action, chosen) = part_being_paid(t, entry, c);
-    let able = candidates(s, t, c.player, itself(entry), action, chosen) & !c.chosen;
+    let PayingObjects {
+        graveyard_from,
+        chosen: picked,
+        left,
+        ..
+    } = step(c);
+    let able = candidates(s, t, c.player, itself(entry), action, chosen) & !picked;
     match (chosen.measure, chosen.zone) {
         (Measure::Count(_), Zone::Graveyard) => {
             let graveyard = s.graveyard(c.player);
@@ -395,12 +414,12 @@ fn choices<L: Layout>(
                 .enumerate()
                 .rev()
                 .filter(|&(_, &slot)| able.contains(slot))
-                .nth(usize::from(c.left) - 1)
+                .nth(usize::from(left) - 1)
                 .expect("enough cards to pay the cost")
                 .0;
             collapse_in_order(
                 s,
-                graveyard[usize::from(c.graveyard_from)..=last]
+                graveyard[usize::from(graveyard_from)..=last]
                     .iter()
                     .copied()
                     .filter(|&slot| able.contains(slot)),
@@ -430,6 +449,7 @@ pub(super) fn decision<L: Layout>(
     let entry = top(s);
     let (action, chosen) = part_being_paid(t, &entry, c);
     let purpose = purpose(action, chosen);
+    let left = step(c).left;
     Ok(match chosen.measure {
         // Each object pays one generic mana, or the rest is paid with mana.
         Measure::ForGeneric(_) => Decision {
@@ -444,7 +464,7 @@ pub(super) fn decision<L: Layout>(
             player: c.player,
             kind: DecisionKind::ChooseObject,
             candidates: Candidates::Objects(choices(s, t, &entry, c)),
-            prompt: Prompt::new(purpose).count(n).most(c.left),
+            prompt: Prompt::new(purpose).count(n).most(left),
             about: Bitboard::EMPTY,
         },
         // The cards lie in the zone the part takes them from, the hand or the graveyard.
@@ -452,7 +472,7 @@ pub(super) fn decision<L: Layout>(
             player: c.player,
             kind: DecisionKind::ChooseObject,
             candidates: Candidates::Objects(choices(s, t, &entry, c)),
-            prompt: Prompt::new(purpose).most(c.left),
+            prompt: Prompt::new(purpose).most(left),
             about: Bitboard::EMPTY,
         },
     })
@@ -505,6 +525,7 @@ pub(super) fn perform<L: Layout>(
     object: Option<L::Slot>,
 ) -> Result<(), Full> {
     let (action, chosen) = part_being_paid(t, &top(s), &c);
+    let mut paying = step(&c);
     match chosen.measure {
         Measure::ForGeneric(_) => {
             // CR 701.67a: "you may tap an untapped artifact or creature you control rather
@@ -514,13 +535,16 @@ pub(super) fn perform<L: Layout>(
                 Some(Opt::Object(slot)) => {
                     pay_with(s, t, sink, action, slot)?;
                     c.substituted += 1;
-                    c.left -= 1;
+                    paying.left -= 1;
                 }
                 _ => return pay_mana(s, t, sink, c),
             }
+            c.step = CastStep::Objects(paying);
             if substitute_options(s, t, &c)?.is_empty() {
                 return pay_mana(s, t, sink, c);
             }
+            s.ask(Pending::Casting(c));
+            return Ok(());
         }
         Measure::TotalPower(_) => {
             // CR 702.122b: "A creature 'crews a Vehicle' when it's tapped to pay the cost to
@@ -528,7 +552,7 @@ pub(super) fn perform<L: Layout>(
             let slot = object.expect("an object to pay with");
             let power = power_of(s, slot);
             pay_with(s, t, sink, action, slot)?;
-            c.left = c.left.saturating_sub(power);
+            paying.left = paying.left.saturating_sub(power);
         }
         Measure::Count(_) => {
             // CR 601.2h: "The player pays the total cost." The cards stay where they are
@@ -537,20 +561,20 @@ pub(super) fn perform<L: Layout>(
             let slot = object.expect("an object to pay with");
             if let Some(i) = s.graveyard(c.player).iter().position(|&g| g == slot) {
                 // The next pick starts above it.
-                c.graveyard_from = i as u8 + 1;
+                paying.graveyard_from = i as u8 + 1;
             }
-            c.chosen.insert(slot);
-            c.left -= 1;
-            if c.left == 0 {
-                pay_with_all(s, t, sink, action, c.chosen)?;
-                c.chosen = Bitboard::EMPTY;
+            paying.chosen.insert(slot);
+            paying.left -= 1;
+            if paying.left == 0 {
+                pay_with_all(s, t, sink, action, paying.chosen)?;
+                paying.chosen = Bitboard::EMPTY;
             }
         }
     }
-    if c.left == 0 && !matches!(chosen.measure, Measure::ForGeneric(_)) {
-        c.part += 1;
-        return pay(s, t, sink, c);
+    if paying.left == 0 && !matches!(chosen.measure, Measure::ForGeneric(_)) {
+        return pay(s, t, sink, c, paying.part + 1);
     }
+    c.step = CastStep::Objects(paying);
     s.ask(Pending::Casting(c));
     Ok(())
 }

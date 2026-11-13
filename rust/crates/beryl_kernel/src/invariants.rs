@@ -200,13 +200,11 @@ impl<L: Layout> State<L> {
             None,
         )?;
         for e in self.stack.iter() {
-            if e.is_spell() {
+            if let Some(r) = e.spell() {
                 check(
-                    e.object.is_some_and(|r| {
-                        self.is_current(r) && self.object(r.slot).zone == Zone::Stack
-                    }),
+                    self.is_current(r) && self.object(r.slot).zone == Zone::Stack,
                     "a spell on the stack names a stale object",
-                    e.object.map(|r| At::Slot(r.slot.index())),
+                    Some(At::Slot(r.slot.index())),
                 )?;
             }
         }

@@ -20,7 +20,7 @@ fn spell_entry<L: Layout>(s: &State<L>, spell: ObjectRef<L>) -> Option<&StackEnt
 /// ([CR 112.2](https://yawgatog.com/resources/magic-rules/#R1122)): "A spell's controller
 /// is, by default, the player who put it on the stack."
 pub fn spell_controller<L: Layout>(s: &State<L>, spell: ObjectRef<L>) -> Option<Seat> {
-    spell_entry(s, spell).map(|e| e.controller)
+    spell_entry(s, spell).map(StackEntry::controller)
 }
 
 /// The mana value of a spell on the stack, X included
@@ -28,7 +28,7 @@ pub fn spell_controller<L: Layout>(s: &State<L>, spell: ObjectRef<L>) -> Option<
 /// number chosen for it while the object is on the stack."
 pub fn spell_mana_value<L: Layout>(s: &State<L>, t: &GameTable, spell: ObjectRef<L>) -> Option<u8> {
     let e = spell_entry(s, spell)?;
-    let cost = t.def(e.card).face(e.face).cost;
+    let cost = t.def(e.card()).face(e.face()).cost;
     Some(cost.mana_value().saturating_add(cost.x.saturating_mul(e.x)))
 }
 

@@ -308,7 +308,10 @@ impl<L: Layout> Mcts<L> {
     /// decisions per seat a game, and the expert never acted there.
     fn passes(obs: Observation<'_, L>, d: &Decision<L>) -> bool {
         d.kind == DecisionKind::Priority
-            && obs.stack().last().is_some_and(|e| e.controller == d.player)
+            && obs
+                .stack()
+                .last()
+                .is_some_and(|e| e.controller() == d.player)
     }
 }
 

@@ -13,8 +13,8 @@ use beryl_card::{
 };
 
 use crate::card::{
-    Ability, FaceAbility, Modification, Part, Place, Players, Prompt, Purpose, SpecIx, Takes,
-    TargetKind, TargetSpec, Types,
+    Ability, FaceAbility, FaceIx, Modification, Part, Place, Players, Prompt, Purpose, SpecIx,
+    Takes, TargetKind, TargetSpec, Types,
 };
 use crate::event::{self, Event, Reason};
 use crate::filter::Filter;
@@ -22,7 +22,9 @@ use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::{Seat, Slot};
 use crate::resolution::Resolution;
-use crate::state::{CounterKind, ObjectRef, StackEntry, Target, TurnStep, Zone, ZoneKey};
+use crate::state::{
+    AbilityRef, CounterKind, ObjectRef, StackEntry, StackItem, Target, TurnStep, Zone, ZoneKey,
+};
 use crate::{Decision, DecisionKind, GameTable, Scratch, State};
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
@@ -69,13 +71,15 @@ fn run(
     targets: &[Target],
     answers: &[u8],
 ) -> (Option<Decision>, Result<bool, Full>) {
-    let mut entry = StackEntry {
-        object: Some(source),
-        controller: s.object(source.slot).owner(),
-        card: s.copiable(source.slot).record(t).0,
-        ability: Some(FaceAbility::own(0)),
-        ..StackEntry::default()
-    };
+    let mut entry = StackEntry::new(StackItem::Activated {
+        of: AbilityRef {
+            source: Some(source),
+            card: s.copiable(source.slot).record(t).0,
+            face: FaceIx::default(),
+            ability: FaceAbility::own(0),
+            controller: s.object(source.slot).owner(),
+        },
+    });
     for &target in targets {
         entry.targets.push(target).unwrap();
     }

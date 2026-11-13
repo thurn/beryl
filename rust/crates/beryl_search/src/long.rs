@@ -922,7 +922,10 @@ impl<L: Layout> LongSearch<L> {
             return Choice(0);
         }
         if d.kind == DecisionKind::Priority
-            && obs.stack().last().is_some_and(|e| e.controller == d.player)
+            && obs
+                .stack()
+                .last()
+                .is_some_and(|e| e.controller() == d.player)
         {
             return Choice(0);
         }

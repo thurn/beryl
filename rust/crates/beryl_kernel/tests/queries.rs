@@ -2,13 +2,13 @@
 //! face-down permanent and a double-faced one.
 
 use beryl_card::{
-    CardDef, FACE_DOWN, Face, FaceIx, ManaCost, Types,
+    CardDef, Castings, FACE_DOWN, Face, FaceIx, ManaCost, Types,
     Zone::{self, Battlefield, Graveyard, Hand, Nowhere, Stack},
 };
 use beryl_kernel::event::Sink;
 use beryl_kernel::mutate::Arrival;
 use beryl_kernel::profile::Profile;
-use beryl_kernel::state::{Derived, StackEntry};
+use beryl_kernel::state::{Derived, StackEntry, StackItem};
 use beryl_kernel::table::CardTable;
 use beryl_kernel::zone::Place;
 use beryl_kernel::{Copiable, GameTable, Observation, Seat, Slot, SlotId, State};
@@ -283,12 +283,14 @@ fn mana_value_counts_x_on_the_stack_and_a_copied_back_face_as_nothing() {
     s.become_spell(blast, FaceIx::FRONT, Seat::P0);
     let (card, face) = s.copiable(blast).record(&t);
     let entry = StackEntry {
-        object: Some(s.object_ref(blast)),
-        controller: Seat::P0,
-        card,
-        face,
         x: 3,
-        ..StackEntry::default()
+        ..StackEntry::new(StackItem::Spell {
+            object: s.object_ref(blast),
+            controller: Seat::P0,
+            card,
+            face,
+            costs: Castings::NONE,
+        })
     };
     s.put_on_stack(&mut beryl_kernel::event::Sink::off(), entry)
         .unwrap();

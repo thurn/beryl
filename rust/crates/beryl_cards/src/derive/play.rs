@@ -260,7 +260,7 @@ pub(super) fn walk(
     let ours = |live: &Live| {
         let t = live.table();
         live.state().stack().iter().any(|entry| {
-            let of = t.def(entry.card);
+            let of = t.def(entry.card());
             std::ptr::eq(of, def) || def.tokens.iter().any(|&token| std::ptr::eq(of, token))
         })
     };

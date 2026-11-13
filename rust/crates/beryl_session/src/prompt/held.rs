@@ -507,7 +507,7 @@ impl Step {
                     return false;
                 };
                 let trigger = &s.triggers()[Into::<usize>::into(i)];
-                trigger.source.map(|r| r.slot.num()) == *source && trigger.ability.get() == *ability
+                trigger.of.source.map(|r| r.slot.num()) == *source && trigger.of.ability.get() == *ability
             }),
             Step::InTurn(_, wanted) => {
                 // The next in turn itself, or else one the engine offers in its place.

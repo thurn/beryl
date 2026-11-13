@@ -280,12 +280,9 @@ fn a_table_past_255_cards_is_refused_by_small_and_plays_in_large() {
             seen_wide |= s
                 .battlefield()
                 .iter()
-                .chain(
-                    s.stack()
-                        .iter()
-                        .filter_map(|e| e.object.as_ref().map(|r| &r.slot)),
-                )
-                .any(|&slot| {
+                .copied()
+                .chain(s.stack().iter().filter_map(|e| e.object().map(|r| r.slot)))
+                .any(|slot| {
                     s.card_behind(slot)
                         .is_some_and(|c| c.to::<CardIx>().is_none())
                 });

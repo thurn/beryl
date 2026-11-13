@@ -7,7 +7,7 @@ use crate::event::{self, Sink};
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
-use crate::state::{PendingTrigger, State, Zone};
+use crate::state::{AbilityRef, PendingTrigger, State, Zone};
 use crate::table::{GameTable, is_sacrificed, is_simple};
 
 use super::pool::{helps, pay_unit};
@@ -249,11 +249,13 @@ pub(crate) fn activate<L: Layout>(
         event::move_one(s, t, sink, slot, Zone::Graveyard, event::Reason::Sacrifice)?;
     }
     let activation = || PendingTrigger {
-        source: Some(source),
-        controller,
-        ability: crate::card::AbilityIx::new(index as u8),
-        card,
-        face,
+        of: AbilityRef {
+            source: Some(source),
+            controller,
+            ability: crate::card::AbilityIx::new(index as u8),
+            card,
+            face,
+        },
         ..PendingTrigger::default()
     };
     crate::interpret::mana_ability(s, t, sink, activation, ability, color)

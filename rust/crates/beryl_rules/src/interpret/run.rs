@@ -22,7 +22,7 @@ use crate::interpret::scene::{Outcome, Registers, Scene};
 use crate::keywords::flashback;
 use crate::layout::{Layout, Queue, Table};
 use crate::resolution::Resolution;
-use crate::state::{ObjectRef, PendingTrigger, State, Zone, placed};
+use crate::state::{AbilityRef, ObjectRef, PendingTrigger, StackItem, State, Zone, placed};
 use crate::zones;
 use crate::{casting, choices, coins, continuous, costs, counters, damage, drawing, ending};
 use crate::{delayed_triggers, emblems, layers, library, life, linked, mana, one_shot, tokens};
@@ -42,15 +42,17 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         let legal = resolving.legal;
         let entry = &resolving.entry;
         let subject = PendingTrigger {
-            source: entry.object,
-            card: entry.card,
-            face: entry.face,
-            ability: match entry.ability {
-                Some(FaceAbility::Own(index)) => index,
-                _ => AbilityIx::default(),
+            of: AbilityRef {
+                source: entry.object(),
+                card: entry.card(),
+                face: entry.face(),
+                ability: match entry.ability() {
+                    Some(FaceAbility::Own(index)) => index,
+                    _ => AbilityIx::default(),
+                },
+                controller: entry.controller(),
             },
-            controller: entry.controller,
-            info: entry.info,
+            info: entry.info().copied().unwrap_or_default(),
         };
         Run {
             game,
@@ -90,7 +92,10 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             s: self.game.state,
             t: self.game.table,
             subject: &self.subject,
-            costs: entry.is_spell().then_some(entry.costs),
+            costs: match entry.item {
+                StackItem::Spell { costs, .. } => Some(costs),
+                _ => None,
+            },
             x: entry.x,
             targets: entry.targets.as_slice(),
             registers: &self.registers,
