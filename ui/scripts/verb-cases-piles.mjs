@@ -63,8 +63,9 @@ export const CASES = {
                 );
             }
         }
-        // Cards put back from a hand fly straight to the library, one after another (not
-        // seen: "Cards a look returns").
+        // Cards put back from a hand fly straight to the library (not seen: "Cards a look
+        // returns"). The engine moves them as one group (CR 401.4), so each leaves a beat
+        // after the one before it, overlapping its flight, as cards exiled together do.
         const returned = flights.filter((s) => routeOf(s) === "hand>library");
         assert.ok(returned.length >= 2, `${returned.length} cards put back`);
         for (const [i, flight] of returned.entries()) {
@@ -82,7 +83,12 @@ export const CASES = {
                 `${what}: straight, not held up`,
             );
             assert.equal(flight.at.to.zones[name], "library", what);
-            if (i) assert.ok(returned[i - 1].to <= flight.from, what);
+            if (i) {
+                assert.ok(
+                    returned[i - 1].from < flight.from,
+                    `${what}: begins after the one before it`,
+                );
+            }
         }
         for (const pile of ["graveyard", "exile"]) {
             const cast = flights.filter((s) => routeOf(s) === `${pile}>stack`);
