@@ -60,6 +60,7 @@ from . import (
     hygiene,
     paths,
     plan_references,
+    python_tests,
     runlog,
     script_checks,
     speed,
@@ -766,18 +767,6 @@ def slow_run(lanes: list[Lane], budget: int, started: float) -> int:
     return report.code
 
 
-def pytest_step(*tests: str) -> int:
-    """Pytest on `tests` (paths under tools/), or on all of them, in four processes
-    (pytest-xdist): most of the suite waits on git and subprocesses, so it takes about half
-    as long, and a loaded machine leaves more workers nothing to run on."""
-    code = subprocess.run(
-        [sys.executable, "-m", "pytest", "-q", "-n", "4", *tests],
-        cwd=paths.TOOLS,
-        check=False,
-    ).returncode
-    return 0 if code == 5 else code  # 5: no tests collected
-
-
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     sub.add_parser("check", help="the fast check (enact push)").set_defaults(func=fast)
     p = sub.add_parser("ci", help="slow CI, or some of its lanes")
@@ -787,7 +776,7 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
 
 if __name__ == "__main__":
     steps: dict[str, Callable[..., int]] = {
-        "pytest": pytest_step,
+        "pytest": python_tests.pytest_step,
         "rust-tests": rust_tests_step,
         "fast-rust-tests": fast_rust_tests_step,
         "card-names": card_names.step,
