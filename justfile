@@ -117,9 +117,9 @@ playground *args:
 scenarios *args:
     {{ by }} scenarios "$@"
 
-# Open top-level beads (epics and beads outside any epic, not bug reports or flaky checks): number and title, one per line
+# Open top-level beads (epics and beads outside any epic, not bug reports or the beads CI files): number and title, one per line
 beads:
-    @bd list --no-parent --exclude-label bug-report,flaky-check --flat -n 0 --json | python3 -c 'import json, sys; [print(i["id"], i["title"]) for i in json.load(sys.stdin)]'
+    @bd list --no-parent --exclude-label bug-report,flaky-check,ci-cut,check-budget,sweep-failure,nightly-failure,role:steward --flat -n 0 --json | python3 -c 'import json, sys; [print(i["id"], i["title"]) for i in json.load(sys.stdin)]'
 
 # The app's bug reports: list, import a ZIP, file as beads, or mark done
 [group('app')]

@@ -425,6 +425,12 @@ class Beads:
 
 STORE: Beads = Beads()
 
+# The sentence every bead the checks file ends its instructions with (flaky.py, budget.py,
+# sweep.py, nightly_failures.py), so the session that picks it up finds the procedure.
+SKILL_NOTE = (
+    " The `cifix` skill (`.agents/skills/cifix/SKILL.md`) says how to work this bead."
+)
+
 
 def history_path() -> Path:
     return paths.cache_root() / "ci" / "history.json"

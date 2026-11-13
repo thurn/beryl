@@ -90,8 +90,7 @@ def body(check: str, flake: Flake, where: str) -> str:
         " when it has never caught a real bug (no `catch` verdict), or move it to the nightly"
         " when it has. If the flake comes from a race in the product rather than in the test,"
         " fix the race instead and say so.\n\n"
-        "Record on this bead which you chose and why. The `flakefix` skill"
-        " (`.agents/skills/flakefix/SKILL.md`) says how to find the cause and close it."
+        "Record on this bead which you chose and why." + verdicts.SKILL_NOTE
     )
 
 

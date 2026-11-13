@@ -103,7 +103,7 @@ def body(commit: str, lane: str, checks: list[str], passed: str, output: str) ->
         f"{lane} check(s) on origin/staging at {commit}.{since}\n\n{listed}\n\n"
         f"Replay them on that commit with `{reproduce(lane, checks)}`; the run log "
         f"(`by ci-report`) has every record. Slow CI does not run these: `just ci` passing "
-        f"proves nothing here.\n\nOutput tail:\n```\n{tail(output)}\n```"
+        f"proves nothing here.{verdicts.SKILL_NOTE}\n\nOutput tail:\n```\n{tail(output)}\n```"
     )
 
 

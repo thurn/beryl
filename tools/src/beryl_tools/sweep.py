@@ -279,7 +279,8 @@ def body(
         "Before deleting a check, ask: could a fast, deterministic test (a Rust unit test, a "
         "Node test with no browser, a check against a recorded fixture) keep most of what this "
         "check protects? If so, write that test. Fix the product when the check caught a real "
-        "break; a check that failed without one is deleted or rewritten.\n\n"
+        "break; a check that failed without one is deleted or rewritten."
+        f"{verdicts.SKILL_NOTE}\n\n"
         f"Output tail:\n```\n{tail}\n```"
     )
 

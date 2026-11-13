@@ -69,6 +69,7 @@ def body(script: str, budget: int, took: str, lanes: list[str], load: str) -> st
         f"each check's timings) and speed them up, move them to slow CI "
         f"(`verdicts.SLOW_ONLY`) or delete them, until `by {script}` fits its budget on "
         f"this machine when it is otherwise idle. Do not raise the budget."
+        f"{verdicts.SKILL_NOTE}"
     )
 
 
@@ -199,7 +200,9 @@ def cut_body(
         " the fast check (`by check`) runs it too, keep it there and take it out of slow CI"
         " alone. Checks listed together failed in the same"
         " runs and go together. Make the cuts without asking anyone, and record on this bead"
-        " what you did with each check and why.\n\nNo cut bead names these checks, which guard"
+        " what you did with each check and why."
+        + verdicts.SKILL_NOTE
+        + "\n\nNo cut bead names these checks, which guard"
         f" something no other check does:\n{keep}"
     )
 
