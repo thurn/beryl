@@ -195,6 +195,21 @@
   opacity: calc((1 - var(--impact)) * 0.55);
   transform: scale(calc(1 + 0.12 * var(--impact)));
 }
+/* The whole table shakes as a blow lands (stage/dom.ts): Arena's camera jolts for about
+   170 ms as each attacker lands, blurring the table for three or four frames, and settles
+   (IEXcjBn3BXk 22:25.37 to 25.50, 35:35.40 to 35.57). Two quick swings side to side and
+   a little up and down, each smaller than the last, from the stage's `--shake` alone. Only
+   while it shakes does the table carry a `translate`, which would make it the containing
+   block of everything in it. */
+:is(.table, .phone-board)[data-shaking] {
+  --shaken: calc(1 - var(--shake));
+  translate: calc(
+      sin(var(--shake) * 720deg) * var(--shaken) * var(--shaken) * 0.7%
+    )
+    calc(
+      sin(var(--shake) * 540deg + 60deg) * var(--shaken) * var(--shaken) * 0.6%
+    );
+}
 /* A ring of light round the frame of a card as one of its numbers changes, and those numbers
    swell and settle with it: its counters' badges, its loyalty, its power and toughness. The
    skin's own pop of a badge (design/components/card-frame.css) is the browser's, which the

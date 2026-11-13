@@ -1699,11 +1699,47 @@
     },
     {
       "verb": "strike",
-      "path": "Winds back, lunges straight at the avatar or its blocker, then drifts back to its slot.",
+      "path": "Rears back about half a card straight away from its target, grows about a tenth and leans about 15 degrees toward its target's side in about 100 ms; hangs there about 300 ms; dashes onto the avatar or its blocker in two or three frames; the table shakes; it stays about 130 ms and drifts back to its slot, still leaning.",
       "gaps": [
-        "First strike as a strike of its own was not measured; sMpAJ0HKDdg 54:55.7's target is a likely reading."
+        "First strike as a strike of its own was not measured; sMpAJ0HKDdg 54:55.7's target is a likely reading.",
+        "The white trail behind a dashing attacker (IEXcjBn3BXk 35:35.30) is not drawn in Beryl.",
+        "The attacker's chevron stays with its card in Arena as it leans; Beryl's wedge is drawn from the card's place and does not lean."
       ],
       "instances": [
+        {
+          "case": "blocked attacker",
+          "recording": "IEXcjBn3BXk",
+          "time": "22:24.9",
+          "span": 1.3,
+          "method": "filmstrip",
+          "why": "whole table, several movers and camera shake: read from frames at 30 fps",
+          "command": "just video film IEXcjBn3BXk 22:24.97 --span 0.53 --fps 30 --cols 4 --width 480",
+          "since": "",
+          "duration_ms": 1220,
+          "delay_ms": null,
+          "stagger_ms": null,
+          "peak": 1.1,
+          "path": "rears back up and away from its blocker leaning left, hangs, dashes onto the blocker in one or two frames, stays on it while the table shakes, drifts back",
+          "curve": null,
+          "note": "Opponent's attacker, blocked by the streamer's 2/2 below and left of it. The blocker's gold line is cut at 22:24.90 as damage begins. By 24.97 the attacker has reared back about half a card and leans about 15 to 20 degrees to its left (toward the blocker's side), grown about a tenth. It hangs there until 25.30 (about 330 ms), dashes at 25.30 to 25.37 (about 70 ms) onto the blocker, covering about two thirds of it, and the table shakes and blurs 25.37 to 25.50. It stays on the blocker until about 25.6 and is back at rest by about 26.12."
+        },
+        {
+          "case": "unblocked attacker",
+          "recording": "IEXcjBn3BXk",
+          "time": "35:35.0",
+          "span": 1.0,
+          "method": "filmstrip",
+          "why": "whole table, several movers and camera shake: read from frames at 30 fps",
+          "command": "just video film IEXcjBn3BXk 35:35.17 --span 0.53 --fps 30 --cols 4 --width 480",
+          "since": "",
+          "duration_ms": 1370,
+          "delay_ms": null,
+          "stagger_ms": 450,
+          "peak": 1.1,
+          "path": "rears back straight down the table leaning right, hangs, dashes up to the avatar with a white trail in two or three frames, lands flat and edge-on to the eye, stays while the table shakes, drifts back",
+          "curve": null,
+          "note": "Streamer's attacker on the opponent's avatar, up and to its right. Rest at 34.97; reared back about half a card down the table, leaning about 15 degrees to its right and grown about a tenth, by 35.05; hangs until 35.27; at 35.30 halfway, a white streak behind it; on the avatar at 35.34, drawn flat as if pressed into the table; the table shakes 35.40 to 35.57. It stays on the avatar until about 35.64 and drifts back slowly; it is back at rest about 36.40 (IEXcjBn3BXk 35:36.0, 10 fps). The second attacker's blow lands about 450 ms later (35.90)."
+        },
         {
           "case": "blocked attacker",
           "recording": "IEXcjBn3BXk",
@@ -1822,23 +1858,27 @@
       ],
       "summary": {
         "duration_ms": {
-          "median": 850,
+          "median": 1000,
           "min": 650,
-          "max": 1300
+          "max": 1370
         },
         "delay_ms": null,
         "stagger_ms": {
-          "median": 285,
+          "median": 350,
           "min": 220,
-          "max": 350
+          "max": 450
         },
-        "peak": null,
+        "peak": {
+          "median": 1.1,
+          "min": 1.1,
+          "max": 1.1
+        },
         "start": null,
         "curve": null,
         "cases": {
           "blocked attacker": {
             "duration_ms": {
-              "median": 1050,
+              "median": 1220,
               "min": 800,
               "max": 1300
             },
@@ -1848,23 +1888,31 @@
               "min": 220,
               "max": 220
             },
-            "peak": null,
+            "peak": {
+              "median": 1.1,
+              "min": 1.1,
+              "max": 1.1
+            },
             "start": null,
             "curve": null
           },
           "unblocked attacker": {
             "duration_ms": {
-              "median": 850,
+              "median": 925,
               "min": 650,
-              "max": 1000
+              "max": 1370
             },
             "delay_ms": null,
             "stagger_ms": {
               "median": 350,
               "min": 220,
-              "max": 350
+              "max": 450
             },
-            "peak": null,
+            "peak": {
+              "median": 1.1,
+              "min": 1.1,
+              "max": 1.1
+            },
             "start": null,
             "curve": null
           }

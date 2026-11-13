@@ -460,12 +460,17 @@ const out = (progress: number) => 1 - (1 - progress) * (1 - progress);
 const inOut = (progress: number) =>
   progress < 0.5 ? 2 * into(progress) : 1 - 2 * into(1 - progress);
 
-/** How a strike is shared out and how far it goes. Arena's attacker pulls back a little,
- * dashes at the avatar or its blocker and drifts back more slowly (data/arena-motion.json,
- * strike: "small pull back, then a straight dash ..., then a drift back"); a strike that
- * begins at 22:25.4 lands at 25.80 of 650 to 800 ms. `wind` and `hit` are the shares of the
- * step by which it has pulled back and has landed, and `back` how far it pulls back, in its
- * own widths. Beryl's cards are whole and lie close, so the blow is where the two first
+/** How a strike is shared out and how far it goes, read off whole-table films of Arena
+ * (IEXcjBn3BXk 22:24.90 and 35:35.03, data/arena-motion.json strike). Arena's attacker
+ * rears back in about 100 ms: it comes away from what it strikes by about half its card's
+ * height, grows about a tenth toward the eye and leans about 15 degrees toward the side its
+ * target is on. It hangs there, poised, for about 300 ms, then dashes onto its target in two
+ * or three frames (about 70 ms), lands flat, and stays on it about 130 ms while the table
+ * shakes, before it drifts back to its place, still leaning, over about 600 ms. `wind`,
+ * `poise`, `hit` and `stay` are the shares of the step by which it has reared back, begins
+ * its dash, has landed and begins to draw back; `back` is how far it rears back, in its own
+ * widths, `raise` how much larger it is drawn while poised and `lean` how far it leans, in
+ * degrees. Beryl's cards are whole and lie close, so the blow is where the two first
  * overlap by `bite` of the striker's width and no further: what is struck stays in sight
  * under the blow, and two creatures that strike each other meet half way (enter.ts). Before
  * a blow that is hardly any way off it still goes `least` of its width. What is much smaller
@@ -477,50 +482,71 @@ const inOut = (progress: number) =>
  * good as back where it rests, all but the last of its slowing: a strike that would pass
  * over it before then is held back (enter.ts `awaited`). */
 export const STRIKE = {
-  wind: 0.15,
-  hit: 0.45,
-  seen: 0.57,
+  wind: 0.08,
+  poise: 0.32,
+  hit: 0.376,
+  stay: 0.48,
+  seen: 0.53,
   home: 0.9,
-  back: 0.3,
+  back: 0.6,
+  raise: 0.1,
+  lean: 15,
   bite: 0.38,
   least: 0.3,
   small: { from: 0.7, to: 0.55, least: 0.6 },
 };
 
-/** How far along its way to the blow a creature is `progress` through its strike, and how
- * far back of where it rests, as a share of how far it pulls back: it pulls back, slowing,
- * dashes from there, quickening all the way to the blow, stays on it a moment and draws back,
- * slowing onto its place. */
-export function struck(progress: number): [toward: number, back: number] {
-  const { wind, hit } = STRIKE;
-  if (progress < wind) return [0, out(progress / wind)];
-  if (progress < hit) {
-    const dash = into((progress - wind) / (hit - wind));
-    return [dash, 1 - dash];
+/** Where a creature is `progress` through its strike, each as a share from 0 to 1: how far
+ * along its way to the blow it is (`toward`), how far back of where it rests as a share of
+ * how far it rears back (`back`), how far up toward the eye it is raised (`raised`) and how
+ * far it leans (`leaning`). It rears back, slowing, and is raised and leans as it does;
+ * hangs there; dashes from there, coming down onto what it strikes as it goes; stays on it a
+ * moment; and draws back, slowing onto its place, leaning less as it goes. */
+export function struck(
+  progress: number,
+): [toward: number, back: number, raised: number, leaning: number] {
+  const { wind, poise, hit, stay } = STRIKE;
+  if (progress < wind) {
+    const rear = out(progress / wind);
+    return [0, rear, rear, rear];
   }
-  return [1 - inOut(Math.min(1, (progress - hit) / (1 - hit))), 0];
+  if (progress < poise) return [0, 1, 1, 1];
+  if (progress < hit) {
+    const share = (progress - poise) / (hit - poise);
+    const dash = (share + into(share)) / 2;
+    return [dash, 1 - dash, 1 - dash, 1];
+  }
+  if (progress < stay) return [1, 0, 0, 1];
+  const home = inOut(Math.min(1, (progress - stay) / (1 - stay)));
+  return [1 - home, 0, 0, 1 - home];
 }
 
 /** A creature's lunge at what it deals combat damage to and its return to where it rests:
- * the blow is `toward` away from it as the step begins, and it first pulls `back` the other
- * way. It is `size` times as large at the blow, by `about`, which gives a pose that large
- * about its card's middle. Never turned, and over everything at rest throughout: at the
- * depth `over` until its blow has been seen, and at `after` from then (`depths`). */
+ * the blow is `toward` away from it as the step begins, and it first rears `back` the other
+ * way, leaning `lean` degrees clockwise. It is `size` times as large at the blow, by
+ * `about`, which gives a pose that large about its card's middle. Over everything at rest
+ * throughout: at the depth `over` until its blow has been seen, and at `after` from then
+ * (`depths`). */
 export const lunge =
   (
     toward: Point,
     back: Point,
     size: number,
+    lean: number,
     about: (pose: Pose, size: number) => Pose,
     [over, after]: readonly [number, number],
   ): Path =>
   (progress, rest) => {
-    const [to, away] = struck(progress);
-    const pose = about(rest, 1 + (size - 1) * to);
+    const [to, away, raised, leaning] = struck(progress);
+    const pose = about(
+      rest,
+      (1 + (size - 1) * to) * (1 + STRIKE.raise * raised),
+    );
     return {
       ...pose,
       x: pose.x + toward.x * to - back.x * away,
       y: pose.y + toward.y * to - back.y * away,
+      turn: rest.turn + lean * leaning,
       depth: progress < STRIKE.seen ? over : after,
     };
   };

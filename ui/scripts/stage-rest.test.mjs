@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { caseOf, effectsOf, timingOf } from "../src/stage/timing.ts";
 import { LIFT, lifts } from "../src/stage/lift.ts";
-import { bowed, bowOf, glide } from "../src/stage/tracks.ts";
+import { bowed, bowOf, glide, STRIKE } from "../src/stage/tracks.ts";
 import { move, object, reach, stage, view } from "./stage-table.mjs";
 
 const card = (slot) => ({ kind: "object", slot });
@@ -194,6 +194,28 @@ test("a reset and a surface taken away leave no streak drawn", () => {
     made.play(view([1, 2]));
     assert.equal(surface.streaks.size, 0);
     assert.deepEqual(made.streaks(), []);
+});
+
+test("a creature's blow bursts on what it strikes and shakes the table", () => {
+    // Arena's camera jolts as each attacker lands (IEXcjBn3BXk 22:25.37, 35:35.40).
+    const act = {
+        verb: "strike",
+        source: 1,
+        to: { kind: "player", player: "opponent" },
+        amount: 2,
+    };
+    assert.deepEqual(
+        effectsOf(act).map(({ name, when, on, into }) => [
+            name,
+            when,
+            on,
+            into,
+        ]),
+        [
+            ["impact", "start", "opponent", STRIKE.hit],
+            ["shake", "start", "opponent", STRIKE.hit],
+        ],
+    );
 });
 
 test("what a streak lands on flashes as it lands, and its source glows as it leaves", () => {

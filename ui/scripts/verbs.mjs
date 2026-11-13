@@ -152,8 +152,20 @@ async function walk({ tick, gap, answers, middle, whole, written }) {
     };
     // Effects are drawn as the model has them (src/stage/dom.ts): an element of each inside
     // what it is on, a node or a player's life total, in its layer, and how far through each
-    // is written there.
-    const lightless = (node, lit) => {
+    // is written there. The table shaking as a blow lands is drawn on the whole table, the
+    // card layer's parent, whatever it is on, and how far through it is written there.
+    const lightless = (node, all) => {
+        const lit = all.filter((effect) => effect.name !== "shake");
+        for (const effect of all.filter((e) => e.name === "shake")) {
+            const table = document.querySelector("[data-shaking]");
+            const through = Number(
+                table?.style.getPropertyValue("--shake") || NaN,
+            );
+            // Two blows at once write one shake: the later begun is drawn.
+            if (!table || !(through >= 0 && through <= 1)) {
+                return `has its shake drawn ${through} through`;
+            }
+        }
         const drawn = [...node.querySelectorAll(":scope > .stage-effect")];
         if (drawn.length !== lit.length) {
             return `has ${drawn.length} effects drawn of ${lit.length}`;

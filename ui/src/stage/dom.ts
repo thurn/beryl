@@ -363,6 +363,20 @@ export class DomSurface implements Surface {
   }
 
   effect(on: On, { name, layer }: Omit<Drawn, "progress">, progress?: number) {
+    // The table shaking as a blow lands is drawn on the whole table, the layer's parent,
+    // whatever the blow landed on: Arena's camera shakes (stage.css `[data-shaking]`).
+    const table = this.#layer.parentElement;
+    if (name === "shake") {
+      if (!table) return;
+      if (progress === undefined) {
+        table.removeAttribute("data-shaking");
+        table.style.removeProperty("--shake");
+        return;
+      }
+      table.setAttribute("data-shaking", "");
+      table.style.setProperty("--shake", String(progress));
+      return;
+    }
     const node = this.#on(on);
     if (!node) return;
     const drawn = node.querySelector(`:scope > .stage-effect-${name}`);

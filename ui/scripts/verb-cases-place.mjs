@@ -177,7 +177,7 @@ export const CASES = {
 
     // A creature lunges at what it deals combat damage to and draws back to where it lay:
     // from its own place, over everything, toward the player's half of the table or its
-    // blocker's card, and never turned or sized. It stops where its card first overlaps the
+    // blocker's card, leaning toward the side it goes, as Arena's does, and never sized. It stops where its card first overlaps the
     // card it strikes, or at the rim of a player's life total, and a burst of light is on what
     // it strikes as the blow lands, when a player's total changes too. What is much smaller
     // than it, it shrinks toward the size of and lands on. The strikes of one combat begin one after another,
@@ -217,9 +217,16 @@ export const CASES = {
             const far = Math.hypot(moved.x, moved.y);
             assert.ok(half.depth >= ALOFT, `${what}: it flies over what rests`);
             assert.deepEqual(
-                [half.turn, half.rotation, half.opacity],
-                [lay.turn, lay.rotation, lay.opacity],
+                [half.rotation, half.opacity],
+                [lay.rotation, lay.opacity],
                 `${what}: it is not turned`,
+            );
+            // It leans no further than Arena's, toward the side it goes (tracks.ts STRIKE).
+            const lean = half.turn - lay.turn;
+            assert.ok(
+                Math.abs(lean) <= STRIKE.lean &&
+                    (Math.abs(moved.x) < 1 || lean * moved.x >= 0),
+                `${what}: it leans ${lean} going ${JSON.stringify(moved)}`,
             );
             // Its own size, unless it dives onto something much smaller than itself (a
             // phone's small permanents and life totals), which it shrinks to the size of.
@@ -301,7 +308,9 @@ export const CASES = {
                 if (small >= STRIKE.small.from) {
                     assert.ok(
                         over > 0.4 * bite &&
-                            (over < bite + 0.5 ||
+                            // Half way through, it now stays on what it struck
+                            // (STRIKE.stay), so it is seen at its blow, to 1% of a width.
+                            (over < bite + 0.01 * lay.width ||
                                 along < STRIKE.least * lay.width + 0.5),
                         `${what}: at the blow they overlap ${over} of a width ${lay.width}`,
                     );
@@ -316,7 +325,7 @@ export const CASES = {
                 }
                 assert.deepEqual(
                     effectsOn(strike.at.middle, to.slot),
-                    ["impact over"],
+                    ["impact over", "shake over"],
                     `${what}: the blow shows on what it strikes`,
                 );
                 if (strike.at.from) {

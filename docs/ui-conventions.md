@@ -496,18 +496,23 @@ stage to; Arena's measured instances are kept beside them as reference in
   8 degrees in about 0.2 s and dims it; an untap restores it in about 0.1 s
   (IEXcjBn3BXk 19:35.3, UrGalw_f35w 19:49.1, 0VsYGs88NXA 31:13.15). Exempt:
   exception 2.
-- **strike.** A creature pulls back, lunges at what it deals combat damage to,
-  which flashes as the blow lands, and draws back; a player's life total changes
-  on that blow. Two creatures that strike each other meet half way, at one time.
-  A strike that would pass over a creature of an earlier strike still on its way
-  out or back waits until that one is home. On something much smaller than
-  itself it lands whole, shrinking as it goes. Each attacker winds back, lunges
-  from its row to the player's avatar or to its blocker, the screen flashes, and
-  it drifts back, 0.65 to 1.3 s in all. A blocked attacker strikes about 0.4 s
-  before an unblocked one. First strike is a strike of its own, seconds earlier
-  (IEXcjBn3BXk 22:25.4, IEXcjBn3BXk 25:55.6, IEXcjBn3BXk 35:35.5, sMpAJ0HKDdg
-  54:54.0, sMpAJ0HKDdg 54:57.5). Beryl: 850 ms, 285 ms apart. Effects: impact as
-  its blow lands (on what it strikes).
+- **strike.** A creature rears back, grows a little toward the eye and leans
+  toward the side of what it deals combat damage to, hangs there a moment, then
+  dashes onto it in a few frames; what it strikes flashes and the whole table
+  shakes as the blow lands; it stays on it a moment and drifts back, leaning
+  less as it goes. A player's life total changes on that blow. Two creatures
+  that strike each other meet half way, at one time. A strike that would pass
+  over a creature of an earlier strike still on its way out or back waits until
+  that one is home. On something much smaller than itself it lands whole,
+  shrinking as it goes. Each attacker rears back about half a card and leans
+  about 15 degrees in about 0.1 s, hangs there about 0.3 s, dashes onto the
+  player's avatar or its blocker in about 0.07 s, the table shakes for about
+  0.17 s, and it stays a moment and drifts back, 1.2 to 1.4 s in all. A blocked
+  attacker strikes about 0.4 s before an unblocked one. First strike is a strike
+  of its own, seconds earlier (IEXcjBn3BXk 22:24.9, IEXcjBn3BXk 22:25.4,
+  IEXcjBn3BXk 25:55.6, IEXcjBn3BXk 35:35.5, sMpAJ0HKDdg 54:54.0, sMpAJ0HKDdg
+  54:57.5). Beryl: 1250 ms, 285 ms apart. Effects: impact as its blow lands (on
+  what it strikes), shake as its blow lands (on what it strikes).
 - **streak.** A streak of light leaves one thing and lands on another, which
   flashes: mana from its source into the spell or ability it pays for, and
   damage from a spell or ability to what it hits. It rises out of its source's
@@ -652,6 +657,9 @@ happened, and is gone.
 - **impact.** A burst of hot light on what a creature strikes or a streak of
   damage hits, a card or a player's life total, whole as the blow lands and
   spreading as it fades. Drawn over its card. Beryl: 300 ms, ease-out.
+- **shake.** The whole table jolts side to side and a little up and down, twice,
+  each swing smaller than the last, as a creature's blow lands. Drawn over its
+  card. Beryl: 170 ms, linear.
 - **flash.** A flare of white light with rays over a spell or ability as the
   mana that pays for it lands, brightest at once, that spreads to about twice
   the card's width and is gone. Drawn over its card. Beryl: 330 ms, linear.

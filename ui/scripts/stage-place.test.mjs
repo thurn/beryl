@@ -200,20 +200,34 @@ test("a creature lunges at the player it strikes and draws back", () => {
     const far = Math.hypot(way.x, way.y);
     const unit = { x: way.x / far, y: way.y / far };
     const reaches = Math.min((50 + 64) / unit.x, (70 + 64) / -unit.y);
-    const left = () =>
-        Math.hypot(1000 - (made.pose(1).x + 50), -400 - (made.pose(1).y + 70));
+    // Its middle, which it is grown and leaned about.
+    const middle = () => {
+        const { x, y, width } = made.pose(1);
+        return { x: x + width / 2, y: y + width * 0.7 };
+    };
+    const left = () => Math.hypot(1000 - middle().x, -400 - middle().y);
     made.clock.advance(STRIKE.wind * 1000);
     assert.ok(Math.abs(left() - far - STRIKE.back * 100) < 1e-9);
-    assert.ok(made.pose(1).y > 0, "it pulls back first");
-    made.clock.advance((STRIKE.hit - STRIKE.wind) * 1000);
+    assert.ok(middle().y > 70, "it rears back first");
+    // Raised toward the eye and leaning toward the side its target is on, the right.
+    assert.ok(Math.abs(made.pose(1).width - 100 * (1 + STRIKE.raise)) < 1e-9);
+    assert.equal(made.pose(1).turn, STRIKE.lean);
+    // It hangs there, poised, until its dash.
+    made.clock.advance((STRIKE.poise - STRIKE.wind) * 1000);
+    assert.ok(Math.abs(left() - far - STRIKE.back * 100) < 1e-9);
+    made.clock.advance((STRIKE.hit - STRIKE.poise) * 1000);
     assert.ok(Math.abs(left() - reaches) < 1e-9);
     assert.ok(
         Math.abs(made.pose(1).x * unit.y - made.pose(1).y * unit.x) < 1e-9,
     );
     assert.ok(made.pose(1).depth >= ALOFT);
     assert.equal(made.pose(1).width, 100);
+    assert.equal(made.pose(1).turn, STRIKE.lean, "it lands leaning");
     assert.deepEqual(at(made.pose(2)), at({ ...made.pose(2), x: 400, y: 0 }));
     const blow = made.pose(1).x;
+    // It stays on what it struck a moment before it draws back.
+    made.clock.advance((STRIKE.stay - STRIKE.hit) * 1000 - 1);
+    assert.ok(Math.abs(made.pose(1).x - blow) < 1e-9);
     made.clock.advance(250);
     const back = made.pose(1);
     assert.ok(back.x > 0 && back.x < blow);
@@ -286,11 +300,14 @@ test("a creature stops where it first overlaps the card it strikes", () => {
         beats: [[strike(1, { kind: "object", slot: 2 })]],
     });
     made.clock.advance(STRIKE.wind * 1000);
-    assert.ok(Math.abs(made.pose(1).x + STRIKE.back * 100) < 1e-9);
+    const { x, width } = made.pose(1);
+    assert.ok(Math.abs(x + width / 2 - 50 + STRIKE.back * 100) < 1e-9);
+    // Straight along the table to its right: it leans to the right.
+    assert.equal(made.pose(1).turn, STRIKE.lean);
     // Cards 100 wide, 400 apart: its edge is `bite` of its width past the other's.
     made.clock.advance((STRIKE.hit - STRIKE.wind) * 1000);
     assert.ok(Math.abs(made.pose(1).x - (300 + STRIKE.bite * 100)) < 1e-9);
-    assert.equal(made.pose(1).y, 0);
+    assert.ok(Math.abs(made.pose(1).y) < 1e-9);
     assert.equal(made.pose(2).x, 400, "what is struck stays where it lies");
 });
 

@@ -188,22 +188,48 @@ function middleAt(way: Way, span: Span, at: number): Point {
  * at a time, in stage ms. */
 const LOOK = { every: 1000 / 60, wait: 25 };
 
+/** Whether a point that goes in a straight line from `from` to `to` passes inside the box
+ * that reaches `half` about the origin (the slab test). */
+function crosses(from: Point, to: Point, half: Point): boolean {
+  let [enter, leave] = [0, 1];
+  for (const side of ["x", "y"] as const) {
+    const move = to[side] - from[side];
+    if (move === 0) {
+      if (Math.abs(from[side]) >= half[side]) return false;
+      continue;
+    }
+    const a = (-half[side] - from[side]) / move;
+    const b = (half[side] - from[side]) / move;
+    enter = Math.max(enter, Math.min(a, b));
+    leave = Math.min(leave, Math.max(a, b));
+    if (enter >= leave) return false;
+  }
+  return true;
+}
+
 /** Whether the strike that goes `way` over `span`, held back by `wait`, meets the earlier
  * one that goes `other` over `theirs` before that one is home (`STRIKE.home` of it): at some
  * time one of the two cards lies over the middle of the other, which is more than brushing
- * past it. */
+ * past it. Between two looks each card is taken to go straight, so a dash that crosses a
+ * card in less than one look still meets it (Arena's takes two or three frames). */
 function meetsOnTheWay(
   [way, span]: [Way, Span],
   [other, theirs]: [Way, Span],
   wait: number,
 ): boolean {
   const home = theirs.from + STRIKE.home * (theirs.to - theirs.from);
-  for (let at = span.from + wait; at < home; at += LOOK.every) {
+  const apart = (at: number): Point => {
     const mine = middleAt(way, span, at - wait);
     const its = middleAt(other, theirs, at);
-    const [x, y] = [Math.abs(mine.x - its.x), Math.abs(mine.y - its.y)];
-    const over = (half: Point) => x < half.x && y < half.y;
-    if (over(way.half) || over(other.half)) return true;
+    return { x: mine.x - its.x, y: mine.y - its.y };
+  };
+  let was = apart(span.from + wait);
+  for (let at = span.from + wait; at < home; at += LOOK.every) {
+    const now = apart(Math.min(at + LOOK.every, home));
+    if (crosses(was, now, way.half) || crosses(was, now, other.half)) {
+      return true;
+    }
+    was = now;
   }
   return false;
 }
@@ -360,7 +386,16 @@ function enters(
         name: act.source,
         track: {
           ...own(
-            lunge(by(way.go), by(STRIKE.back * width), way.size, about, deep),
+            lunge(
+              by(way.go),
+              by(STRIKE.back * width),
+              way.size,
+              // Arena's leans toward the side what it strikes is on, about 15 degrees
+              // (IEXcjBn3BXk 22:24.97 to its left, 35:35.05 to its right).
+              way.unit.x < 0 ? -STRIKE.lean : STRIKE.lean,
+              about,
+              deep,
+            ),
           ),
           turn: veiled ? STRIKE.hit : undefined,
         },
