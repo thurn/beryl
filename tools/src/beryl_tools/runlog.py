@@ -190,10 +190,19 @@ class Run:
             path.unlink(missing_ok=True)
 
     def records(
-        self, lane: str, step: str, passed: bool, seconds: float, results: Path
+        self,
+        lane: str,
+        step: str,
+        passed: bool,
+        seconds: float,
+        results: Path,
+        killed: str | None = None,
     ) -> list[dict[str, object]]:
         """A finished step's records: one per check it reported, and one for the step itself
-        when it reported none, or failed though none of them did."""
+        when it reported none, or failed though none of them did. A step that was killed marks
+        its failures `timeout` with why (`hang`, `wall` or `stopped`, checks.lane_steps): a kill
+        says nothing about a check, so none of them waits for a verdict (verdicts.settle).
+        """
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         load = round(system.loadavg()[0], 2)
         checks = read_results(results)
@@ -209,7 +218,7 @@ class Run:
         for c in checks:
             if c["check"] in pending:
                 c["outcome"] = PENDING_OUTCOMES.get(str(c["outcome"]), c["outcome"])
-        return [
+        records: list[dict[str, object]] = [
             {
                 "time": now,
                 "host": self.host,
@@ -225,13 +234,24 @@ class Run:
             }
             for c in checks
         ]
+        if killed:
+            for r in records:
+                if r["outcome"] == "fail":
+                    r["timeout"] = killed
+        return records
 
     def log(
-        self, lane: str, step: str, passed: bool, seconds: float, results: Path
+        self,
+        lane: str,
+        step: str,
+        passed: bool,
+        seconds: float,
+        results: Path,
+        killed: str | None = None,
     ) -> list[dict[str, object]]:
-        """Logs a finished step's records and returns them."""
+        """Logs a finished step's records and returns them (`records`)."""
         try:
-            records = self.records(lane, step, passed, seconds, results)
+            records = self.records(lane, step, passed, seconds, results, killed)
         except Exception as e:  # Logging never fails a check.
             warn(e)
             return []
@@ -242,15 +262,6 @@ class Run:
         except Exception as e:
             warn(e)
         return records
-
-    def timed_out(self, lanes: set[str]) -> None:
-        """Marks the failures logged so far in `lanes` as the deadline's (`checks.run_all`,
-        which reruns those lanes): a kill says nothing about a check, so none of them waits
-        for a verdict (verdicts.settle). The log on disk keeps them as they were."""
-        with self.lock:
-            for r in self.logged:
-                if r["lane"] in lanes and r["outcome"] == "fail":
-                    r["timeout"] = True
 
     def settle(self) -> list[str]:
         """The verdicts this run reached (verdicts.settle), a line each."""

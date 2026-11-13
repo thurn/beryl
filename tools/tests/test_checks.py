@@ -5,6 +5,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ from beryl_tools import (
     oracles,
     paths,
     reruns,
+    runlog,
     rust_tests,
     tokens,
 )
@@ -37,10 +39,10 @@ def test_only_lanes_that_build_warm_the_caches(
     assert warmed == [True]
 
 
-def test_a_hung_step_is_killed_at_the_deadline_with_its_descendants(
+def test_a_hung_step_is_killed_at_its_hang_limit_with_its_descendants(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setenv("CHECK_DEADLINE_S", "3")
+    monkeypatch.setenv("CHECK_HANG_LIMIT_S", "3")
     # A grandchild in the step's process group, and one that left it for its own session.
     hang = (
         "sleep 600 & echo $! > in-group; "
@@ -52,28 +54,32 @@ def test_a_hung_step_is_killed_at_the_deadline_with_its_descendants(
     assert checks.run_lanes([lane], "check", 60) == 1
     assert time.monotonic() - started < 300
     out = capsys.readouterr().out
-    assert "check hang sleep: TIMED OUT after" in out
-    assert "(deadline 3 s)" in out
+    assert "check hang sleep: APPEARS HUNG: killed after" in out
+    assert "at its hang limit of 3 s ($CHECK_HANG_LIMIT_S)" in out
+    # No rerun of a step that would hang again, and what it was doing when it was killed
+    # (ps lists it; Windows has no ps).
+    assert out.count("check hang sleep:") == 1
+    if not checks.system.WINDOWS:
+        assert "--- processes when it was killed ---" in out
+        assert "sleep 600" in out
     for name in ("in-group", "own-session"):
         pid_file = tmp_path / name
         if (
             pid_file.exists()
-        ):  # Absent only if the deadline came before the shell got there.
+        ):  # Absent only if the limit came before the shell got there.
             assert gone(int(pid_file.read_text()))
+    # Its record is a kill, not a test failure, so no verdict waits on it.
+    killed = runlog.read_log(datetime.min.replace(tzinfo=timezone.utc))
+    assert [r.get("timeout") for r in killed] == ["hang"]
 
 
-def test_a_lane_the_deadline_killed_reruns_once_with_a_fresh_deadline(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    # Slow the first time, as a build after a rebase is, and quick once it is warm.
-    monkeypatch.setenv("CHECK_DEADLINE_S", "2")
-    first = "test -e built || { touch built; sleep 600; }"
-    lane = checks.Lane("build").step("tests", ["sh", "-c", first], tmp_path)
-    assert checks.run_lanes([lane], "check", 60) == 0
-    out = capsys.readouterr().out
-    assert "check build tests: TIMED OUT after" in out
-    assert "the deadline killed build; rerunning once with a fresh deadline" in out
-    assert "check: passed" in out
+def test_a_pass_sets_the_steps_hang_limit(tmp_path: Path) -> None:
+    lane = checks.Lane("build").step("tests", ["true"], tmp_path)
+    assert checks.hang.Limits("ci").limit("build", "tests")[0] == checks.hang.UNKNOWN
+    assert checks.run_lanes([lane], "ci", 60) == 0
+    # A quick pass gives the floor, and only to that script's step.
+    assert checks.hang.Limits("ci").limit("build", "tests")[0] == checks.hang.FLOOR
+    assert checks.hang.Limits("check").limit("build", "tests")[0] == checks.hang.UNKNOWN
 
 
 def gone(pid: int) -> bool:
@@ -128,29 +134,29 @@ def test_load_beyond_the_cores_stretches_the_clock() -> None:
     assert checks.stretch(1000.0, 18) == checks.MAX_STRETCH
 
 
-def test_a_loaded_machine_stretches_the_deadline_and_the_budget(
+def test_a_loaded_machine_stretches_the_hang_limit_and_the_budget(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setattr(os, "cpu_count", lambda: 18)
-    monkeypatch.setenv("CHECK_DEADLINE_S", "1")
+    monkeypatch.setenv("CHECK_HANG_LIMIT_S", "1")
     lane = checks.Lane("busy").step(
         "sleep", [sys.executable, "-c", "import time; time.sleep(1.5)"]
     )
     # The most load slows the clock to an eighth: 1.5 s of sleep is under a second of the
-    # deadline and the budget, with room for a busy machine to start Python.
+    # hang limit and the budget, with room for a busy machine to start Python.
     monkeypatch.setattr(checks.system, "loadavg", lambda: (1000.0, 1000.0, 1000.0))
     assert checks.run_lanes([lane], "ci", 1) == 0
     assert " s on the clock)" in capsys.readouterr().out
     # On a machine to itself the same step runs out of time.
     monkeypatch.setattr(checks.system, "loadavg", lambda: (4.0, 4.0, 4.0))
     assert checks.run_lanes([lane], "ci", 1) == 1
-    assert "ci busy sleep: TIMED OUT after" in capsys.readouterr().out
+    assert "ci busy sleep: APPEARS HUNG: killed after" in capsys.readouterr().out
 
 
 def test_slow_ci_stops_its_steps_before_enacts_wall_clock_kills_it(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # by-tkgu: the load stretched the deadline past Enact's kill, which left no log.
+    # The load stretched a step's time past Enact's kill, which once left no log.
     monkeypatch.setattr(os, "cpu_count", lambda: 18)
     monkeypatch.setattr(checks.system, "loadavg", lambda: (1000.0, 1000.0, 1000.0))
     monkeypatch.setattr(bisect, "time_left", lambda *args: 1.0)
@@ -162,7 +168,7 @@ def test_slow_ci_stops_its_steps_before_enacts_wall_clock_kills_it(
     assert checks.slow_run([lane], 300, started) == 1
     assert time.monotonic() - started < 60
     out = capsys.readouterr().out
-    assert "ci busy sleep: TIMED OUT after" in out
+    assert "ci busy sleep: CUT OFF after" in out
     assert "before Enact's kill" in out
 
 
@@ -593,25 +599,26 @@ class StoppedClock(Clock):
         return self.t
 
 
-def test_a_wait_for_tokens_moves_the_lane_deadline_back(
+def test_a_wait_for_tokens_does_not_count_towards_the_hang_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     clock: StoppedClock = StoppedClock()
-    steps = checks.Steps(1.0, clock, klass="ci")
+    steps = checks.Steps(clock, klass="ci")
     gave_up: list[bool] = []
 
     def slow_lease(klass: str, want: int, give_up: Callable[[], bool]) -> tokens.Lease:
-        # The wait takes 100 s, far past the run's deadline of 1 s.
+        # The wait takes 100 s, far past the step's hang limit of 1 s.
         clock.t += 100.0
         gave_up.append(give_up())
         return tokens.Lease(want, [])
 
     monkeypatch.setattr(checks.tokens, "lease", slow_lease)
-    code, _ = steps.run([sys.executable, "-c", "pass"], Path.cwd(), dict(os.environ), 2)
-    # The step ran, since the deadline does not apply while it waits for tokens.
+    code, _ = steps.run(
+        [sys.executable, "-c", "pass"], Path.cwd(), dict(os.environ), 2, 1.0
+    )
+    # The step ran, since the hang limit does not apply while it waits for tokens.
     assert code == 0 and gave_up == [False]
     assert steps.waited() == (100.0, 100.0)
-    assert steps.left() == 1.0
     # A step that takes no tokens does not wait, and adds nothing.
     steps.run([sys.executable, "-c", "pass"], Path.cwd(), dict(os.environ))
     assert steps.waited() == (100.0, 100.0)

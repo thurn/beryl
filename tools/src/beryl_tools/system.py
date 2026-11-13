@@ -120,18 +120,8 @@ def kill_tree(pid: int) -> None:
             check=False,
         )
         return
-    table = subprocess.run(
-        ["ps", "-A", "-o", "pid=,ppid="], capture_output=True, text=True, check=False
-    ).stdout
-    children: dict[int, list[int]] = {}
-    for row in table.splitlines():
-        child, parent = map(int, row.split())
-        children.setdefault(parent, []).append(child)
-    tree: list[int] = []
-    frontier = [pid]
-    while frontier:
-        frontier = [c for p in frontier for c in children.get(p, [])]
-        tree += frontier
+    rows = ps("pid=,ppid=")
+    tree = descendants(pid, {int(r[0]): int(r[1]) for r in rows})
     sigkill = getattr(signal, "SIGKILL")
     try:
         os.killpg(pid, sigkill)
@@ -142,6 +132,44 @@ def kill_tree(pid: int) -> None:
             os.kill(p, sigkill)
         except (ProcessLookupError, PermissionError):
             pass
+
+
+def ps(columns: str) -> list[list[str]]:
+    """Every process's `columns` (`ps -o`), split on blanks, the last column whole; POSIX only."""
+    count = columns.count(",") + 1
+    table = subprocess.run(
+        ["ps", "-A", "-o", columns], capture_output=True, text=True, check=False
+    ).stdout
+    return [row.split(maxsplit=count - 1) for row in table.splitlines() if row.strip()]
+
+
+def descendants(pid: int, parents: dict[int, int]) -> list[int]:
+    """The processes under `pid`, nearest first, given each process's parent."""
+    children: dict[int, list[int]] = {}
+    for child, parent in parents.items():
+        children.setdefault(parent, []).append(child)
+    tree: list[int] = []
+    frontier = [pid]
+    while frontier:
+        frontier = [c for p in frontier for c in children.get(p, [])]
+        tree += frontier
+    return tree
+
+
+def process_tree(pid: int) -> str:
+    """Process `pid` and every process under it, one line each with how long it has run and
+    its command, for the log of a step killed as hung; empty on Windows or if ps fails.
+    """
+    if WINDOWS:
+        return ""
+    try:
+        rows = {int(r[0]): r for r in ps("pid=,ppid=,etime=,command=") if len(r) == 4}
+    except (OSError, ValueError):
+        return ""
+    tree = [pid, *descendants(pid, {p: int(r[1]) for p, r in rows.items()})]
+    return "\n".join(
+        f"{p:>7} {rows[p][2]:>11} {rows[p][3][:200]}" for p in tree if p in rows
+    )
 
 
 def alive(pid: int) -> bool:

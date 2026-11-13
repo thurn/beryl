@@ -6,9 +6,10 @@ master_branch = "master"
 [checks]
 fast = "uv run --quiet --project tools by check"
 slow = "uv run --quiet --project tools by ci"
-# A backstop behind `by ci`'s own deadline (twice its budget, at least 600 s), which names
-# the step.
-slow_timeout = 1000
+# A backstop that never fires first: it sits above the largest hang limit of any step of
+# `by ci` (`hang.CAP`, 2400 s; tools/src/beryl_tools/hang.py), and `by ci` cuts off a step still
+# running 60 s before it, naming the step (bisect.time_left).
+slow_timeout = 3600
 # Least seconds between one slow-CI run ending and the next starting, so a higher commit rate
 # makes larger batches, not more runs. `by ci` already draws its CPU from the `ci` token class
 # (tools/src/beryl_tools/tokens.py), capped at half the cores. Runs take about 330 s, so this

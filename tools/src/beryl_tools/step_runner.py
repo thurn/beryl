@@ -1,8 +1,9 @@
-"""The steps of a check run (checks.py), each started in its own session and killed at the
-run's deadline, after waiting for the CPU tokens it wants (tokens.py)."""
+"""The steps of a check run (checks.py), each started in its own session and killed when it runs
+past its hang limit (hang.py), after waiting for the CPU tokens it wants (tokens.py)."""
 
 from __future__ import annotations
 
+import math
 import subprocess
 import tempfile
 import threading
@@ -14,31 +15,26 @@ from .clock import Clock
 
 
 class Steps:
-    """A run's steps, each started in its own session, so that once the run's deadline passes,
-    or the run is interrupted, a step can be killed with everything it started."""
+    """A run's steps, each started in its own session, so that a step past its hang limit, or
+    every step once the run is interrupted, can be killed with everything it started."""
 
     def __init__(
         self,
-        deadline: float,
         clock: Clock | None = None,
         wall_limit: float | None = None,
         klass: str = "agent",
     ) -> None:
-        self.deadline = deadline
         self.klass = klass
         self.clock: Clock = clock or Clock()
         # Wall seconds (`Clock.wall`) before someone else's wall clock kills the run, such as
-        # Enact's `slow_timeout`: a loaded machine stretches the deadline past it,
-        # and a run killed from outside prints nothing, so a step still running then is
-        # killed here instead and named as timed out.
+        # Enact's `slow_timeout`: a run killed from outside prints nothing, so a step still
+        # running then is killed here instead and named as cut off.
         self.wall_limit = wall_limit
         self.stopped = threading.Event()
-        # Reentrant: `over` reads the lane's waits under it, and `run` calls `over` under it.
+        # Reentrant: `run` calls `over` under it.
         self.lock = threading.RLock()
         # Adjusted and wall seconds each lane (the thread that runs it) spent waiting for CPU
-        # tokens.
-        # They extend that lane's deadline: a wait is no hang and no slow step, and counting
-        # it once left a lane's tests eight seconds after its clippy step waited 290 s.
+        # tokens, which the lane's and its steps' times leave out (checks.lane_steps).
         self.waits: dict[int, tuple[float, float]] = {}
         # The lanes with heavy steps (`tokens.step_tokens`) still running, which share the
         # pool between them (`play` and `run_lane` keep it).
@@ -52,22 +48,20 @@ class Steps:
         with self.lock:
             return self.waits.get(threading.get_ident(), (0.0, 0.0))
 
-    def left(self) -> float:
-        """Seconds before the deadline, which the calling lane's waits for tokens push back,
-        or the wall limit, whichever comes first."""
-        left = self.deadline + self.waited()[0] - self.clock.now()
-        if self.wall_limit is not None:
-            left = min(left, self.wall_limit - self.clock.wall())
-        return left
+    def wall_left(self) -> float:
+        """Wall seconds before the wall limit, infinite without one."""
+        if self.wall_limit is None:
+            return math.inf
+        return self.wall_limit - self.clock.wall()
 
     def over(self) -> bool:
-        """Whether the run was stopped or its time is up, so no step may start."""
-        return self.stopped.is_set() or self.left() <= 0
+        """Whether the run was stopped or its wall limit passed, so no step may start."""
+        return self.stopped.is_set() or self.walled()
 
     def cut(self) -> bool:
         """Whether a step waiting for tokens must give up: the run was stopped or the wall
-        limit passed. The deadline does not apply while it waits."""
-        return self.stopped.is_set() or self.walled()
+        limit passed. A hang limit does not apply while it waits."""
+        return self.over()
 
     def tokens(self, lane: str, step: str) -> int:
         """The tokens a lane's step wants, its share of the pool (`tokens.step_tokens`)."""
@@ -77,21 +71,22 @@ class Steps:
 
     def walled(self) -> bool:
         """Whether the wall limit has passed, so a step killed now was cut off by it."""
-        return self.wall_limit is not None and self.wall_limit - self.clock.wall() <= 0
-
-    def limit(self) -> str:
-        """What a step that timed out ran into, for its line in the log."""
-        if self.wall_limit is not None and self.walled():
-            return f"the wall limit of {self.wall_limit:.0f} s before Enact's kill"
-        return f"deadline {self.deadline:.0f} s"
+        return self.wall_left() <= 0
 
     def run(
-        self, cmd: list[str], cwd: Path, env: dict[str, str], cores: int = 0
+        self,
+        cmd: list[str],
+        cwd: Path,
+        env: dict[str, str],
+        cores: int = 0,
+        limit: float | None = None,
     ) -> tuple[int | None, str]:
-        """The step's exit code, None when the deadline killed it, and its output. The output
-        goes to a file, not a pipe, so a killed step's straggler cannot hold up reading it.
-        It first waits for up to `cores` CPU tokens (tokens.py); the wait moves the lane's
-        deadline back by as long (`waited`).
+        """The step's exit code, None when it was killed, and its output. The output goes to a
+        file, not a pipe, so a killed step's straggler cannot hold up reading it. It first waits
+        for up to `cores` CPU tokens (tokens.py), and the wait is recorded in `waits`. Then it
+        runs until it exits, the run is stopped, the wall limit passes, or it has run `limit`
+        adjusted seconds, its hang limit (hang.py); the output of a step killed at its hang
+        limit ends with the processes it left running.
         """
         began, wall = self.clock.now(), self.clock.wall()
         lease = tokens.lease(self.klass, cores, self.cut)
@@ -120,22 +115,38 @@ class Steps:
                     **system.own_session(),
                 )
                 self.running.add(proc)
+            started = self.clock.now()
             code: int | None = None
+            hung = ""
             try:
-                while (left := self.left()) > 0:
+                while True:
+                    mine = (
+                        math.inf
+                        if limit is None
+                        else limit - (self.clock.now() - started)
+                    )
+                    left = min(mine, self.wall_left())
+                    if left <= 0:
+                        if mine <= 0:
+                            hung = system.process_tree(proc.pid)
+                        system.kill_tree(proc.pid)
+                        proc.wait()
+                        break
                     try:
                         code = proc.wait(timeout=min(0.5, left))
                         break
                     except subprocess.TimeoutExpired:
                         continue
-                else:
-                    system.kill_tree(proc.pid)
-                    proc.wait()
             finally:
                 with self.lock:
                     self.running.discard(proc)
             out.seek(0)
-            return code, out.read()
+            output = out.read()
+            if hung:
+                output = (
+                    f"{output.rstrip()}\n--- processes when it was killed ---\n{hung}\n"
+                )
+            return code, output
 
     def stop(self) -> None:
         """Kills every running step and starts no more."""

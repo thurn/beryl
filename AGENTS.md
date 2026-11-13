@@ -226,8 +226,9 @@ file or test. The fast check runs only the lanes whose files have changed.
 - The counts in an allowlist under `data/` may only go down.
 - A check that runs over its time budget is sped up, moved or deleted. Never
   raise a budget to make it pass.
-- A lane killed by its deadline reruns once automatically, so if a push still
-  times out, some step is slow or hung. Find it before pushing again.
+- A step killed at its hang limit (several times its slowest pass) is very
+  likely stuck, and a rerun would hang again. Look at the processes its log
+  lists before pushing again.
 - Headless browser checks run at a higher priority than any build and share a
   limited number of page slots across all sessions. Run only the checks your
   change needs (`just ui-test <title>`, `just specs <card>`) rather than a full

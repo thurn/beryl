@@ -109,12 +109,25 @@ Windows leaves `app`, `shots`, `ui-test`, `oracle`, `counts` and `mobile` to the
 Mac, and its fast check skips the browser checks and `motion` (see
 `WINDOWS_SKIPS` in `checks.py`).
 
-## Budgets and deadlines
+## Budgets and hang limits
 
 - A run that goes over budget still passes, and files a `check-budget` bead
   (`budget.py`) to speed up, move or delete its slowest steps instead of raising
-  the budget. The deadline, at least 600 s, only catches a hang.
-- Budgets and deadlines are measured in seconds on the reference machine (the
+  the budget. No timer fails a run for being slow.
+- Each step has a hang limit (`hang.py`): 4x its slowest pass on this machine in
+  the last 30 days, at least 900 s, at most 2400 s, and 1800 s for a step with
+  no pass on record. A step still running at its limit is very likely stuck, so
+  it is killed with everything it started, and its lane fails with an
+  `APPEARS HUNG` line followed by the processes it left running. Its records in
+  the run log carry `"timeout": "hang"`, so it gets no verdict, and bisect does
+  not search it. A hung lane is not rerun. `CHECK_HANG_LIMIT_S` sets every
+  step's limit.
+- Slow CI cuts off a step still running a minute before Enact's `slow_timeout`
+  (an hour, in `.enact.toml`) would kill the whole run, so the log still names
+  the step (`CUT OFF`). The timeout sits above every step's hang limit, so it
+  should never be reached. A bisection after a failed run searches for at most
+  600 s.
+- Budgets and hang limits are measured in seconds on the reference machine (the
   one the budgets were set on) with nothing else running. While the load average
   is above the number of cores, the clock runs proportionally slower, up to 8x.
   On a machine slower than the reference, it also runs slower by that machine's
@@ -128,9 +141,8 @@ Mac, and its fast check skips the browser checks and `motion` (see
   the reference. Neither needs a quiet machine: each round of the workload is
   adjusted for load the same way the clock is, and the best of five rounds over
   about a minute is kept. Until both times exist, the factor is 1.
-- A lane killed by its deadline automatically reruns once with a fresh deadline,
-  so if a push still times out, some step is slow or hung. Find it before
-  pushing again.
+- If a push fails because a step appears hung, look at the processes its log
+  lists before pushing again: a rerun will hang again.
 
 ## Recording CPU use
 
@@ -162,11 +174,11 @@ processes are attributed.
   higher one waits. Work at utility QoS (tournaments, the nightly, the
   justfile's `low`) takes no tokens, because macOS already gives every core to
   normal-priority work first.
-- A check step's wait for tokens does not count against the run's deadline or
-  its budget: it moves that lane's deadline back by as long, and the step's log
-  line reports the wait apart from the step's own time. `just tokens` shows who
-  holds and waits for tokens. `BERYL_CPU_POOL=0` turns the pool off, and
-  `just tokens-run -- COMMAND` runs any command inside a lease.
+- A check step's wait for tokens does not count against its hang limit or the
+  run's budget: the step's log line reports the wait apart from the step's own
+  time. `just tokens` shows who holds and waits for tokens. `BERYL_CPU_POOL=0`
+  turns the pool off, and `just tokens-run -- COMMAND` runs any command inside a
+  lease.
 - The machine runs at most half its core count's worth of browser pages at once,
   across all runs (`ui/scripts/slots.mjs`). Runs that aren't checks share a
   third of those slots. Headless WebKit runs at a higher priority than any

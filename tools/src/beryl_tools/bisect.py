@@ -7,11 +7,12 @@ origin/master..HEAD`), and binary-searches for the first commit at which each fa
 every check whose search has reached the same commits, so checks with one culprit share one
 search. It probes the tip first: a check that passes there is a flake and blames no commit.
 
-Enact kills `by ci` at its `slow_timeout` (.enact.toml), so each probe dies in time to report the
-range the search narrowed to. The log ends with the answer, which Enact copies into the Steward
-bead with the log's tail: per check a `bisect:` line with its culprit and a `record:` line with
-its record over 30 days (runlog.py's Tally, with the verdicts in its ci-check bead). Each probe's
-checks go to the run log with script `bisect` and the probe's commit.
+The search has [`SEARCH`] wall seconds, less if Enact would kill `by ci` at its `slow_timeout`
+(.enact.toml) sooner, so each probe dies in time to report the range the search narrowed to.
+The log ends with the answer, which Enact copies into the Steward bead with the log's tail: per
+check a `bisect:` line with its culprit and a `record:` line with its record over 30 days
+(runlog.py's Tally, with the verdicts in its ci-check bead). Each probe's checks go to the run
+log with script `bisect` and the probe's commit.
 
 A culprit's fast check says whether the failure was a selection miss (K18; verdicts.py): `enact
 push` runs it at the tip it pushes, so it is the first fast check in this host's run log at the
@@ -21,8 +22,8 @@ culprit or a later commit its bead delivered. A check that fast check did not ru
 the miss is unknown and records nothing.
 
 Only a step a rerun can narrow is bisected (`checks.Failure`): not a static check such as clippy,
-nor one that timed out or could not build or start. A bisection that fails reports why and leaves
-the run's verdict alone.
+nor one that was killed (as hung, say) or could not build or start. A bisection that fails
+reports why and leaves the run's verdict alone.
 """
 
 from __future__ import annotations
@@ -45,7 +46,10 @@ from .checks import Failure, Outcome, Steps, WallClock
 from .reruns import unproven
 
 # Enact's `slow_timeout` where .enact.toml does not say.
-ENACT_TIMEOUT = 900.0
+ENACT_TIMEOUT = 3600.0
+# The most wall seconds a search takes. The runner tests nothing else meanwhile, and master
+# waits for its next pass.
+SEARCH = 600.0
 # Wall seconds kept back from Enact's timeout for the report after the last probe.
 MARGIN = 60.0
 # Less than this left, a probe would only be killed: the search stops.
@@ -182,7 +186,7 @@ Probe = Callable[[str, list[Suspect], bool], list[bool] | None]
 
 class Prober:
     """Runs suspects' steps at a commit in the tree, each step once with all its arguments and
-    the steps at once, under a deadline on the wall clock."""
+    the steps at once, under the search's limit on the wall clock."""
 
     def __init__(self, tree: Tree, steps: Steps) -> None:
         self.tree = tree
@@ -191,7 +195,7 @@ class Prober:
     def __call__(
         self, commit: str, group: list[Suspect], prove: bool
     ) -> list[bool] | None:
-        if self.steps.left() < LEAST_PROBE:
+        if self.steps.wall_left() < LEAST_PROBE:
             return None
         if not self.tree.at(commit):
             print(f"bisect: could not check out {commit[:10]} in {self.tree.path}")
@@ -489,8 +493,8 @@ def bisect(outcomes: list[Outcome], started: float, repo: Path) -> None:
     commits = since.split()
     base = out(repo, "rev-parse", f"{commits[0]}^" if commits else "HEAD")
     group = suspects(outcomes)
-    unnamed = [o.lane for o in outcomes if o.failure is None]
-    left = time_left(started, repo)
+    unnamed = [o for o in outcomes if o.failure is None]
+    left = min(SEARCH, time_left(started, repo))
     print(
         f"bisect: {len(group)} failed checks over {len(commits)} commits since"
         f" {BASE} ({base[:10]}), {max(0.0, left):.0f} s to search"
@@ -501,7 +505,7 @@ def bisect(outcomes: list[Outcome], started: float, repo: Path) -> None:
         tree.path.parent.mkdir(parents=True, exist_ok=True)
         try:
             with system.file_lock(tree.path.with_suffix(".lock"), timeout=LEAST_PROBE):
-                steps = Steps(left, WallClock())
+                steps = Steps(WallClock(), wall_limit=left)
                 found = search(commits, base, group, Prober(tree, steps))
         except system.LockHeld:
             print(f"bisect: another bisection holds {tree.path}")
@@ -516,8 +520,13 @@ def bisect(outcomes: list[Outcome], started: float, repo: Path) -> None:
     tallies, _ = runlog.tally(log, history, since)
     blocks = answer(found, commits, base, repo, tallies, beads, missed)
     lines = [
-        f"bisect: {lane}  not bisected: a static check, a timeout or a build that failed"
-        for lane in unnamed
+        f"bisect: {o.lane}  not bisected: "
+        + (
+            "a step appears hung"
+            if o.hung
+            else "a static check, a kill or a failed build"
+        )
+        for o in unnamed
     ]
     for i, block in enumerate(blocks):
         if len(lines) + len(block) > LINES - 1:

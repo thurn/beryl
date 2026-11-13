@@ -1,17 +1,16 @@
 """The checks. `by check` is the fast one `enact push` runs (budget 60 s); `by ci` is slow CI
 on the staging tip (budget 300 s, 450 s on Windows). Both run lanes in parallel, each a
 sequence of timed steps, and print failed lanes last. A run over its budget fails nothing: it
-files a bead to audit its slowest steps (budget.py). A run has a hard deadline, twice its budget
-and at least [`HANG_DEADLINE`] ($CHECK_DEADLINE_S overrides it), to catch a hang: a step still
-running then is killed, with everything it started, and fails its lane. Time a lane spends
-waiting for CPU tokens (tokens.py) counts towards neither: it moves that lane's deadline back,
-and its steps' times leave it out.
+files a bead to audit its slowest steps (budget.py). No timer fails a run for being slow: each
+step has a hang limit (hang.py), several times its slowest pass, and a step still running then
+appears hung, so it is killed with everything it started and fails its lane. Time a lane spends
+waiting for CPU tokens (tokens.py) counts towards neither the budget nor a hang limit.
 
-Budgets and deadlines count load-adjusted seconds ([`Clock`]): while other work oversubscribes
-the machine (other sessions' checks, a game, `just ladder`), the clock runs slower, so a run
-is held to what it would take on a machine to itself, and a hung step still dies. Slow CI also
-stops its steps on the wall clock before Enact's `slow_timeout` would kill it (bisect.time_left),
-so a run the load stretched past that still prints its lanes and names the step it cut off.
+Budgets and hang limits count load-adjusted seconds ([`Clock`]): while other work
+oversubscribes the machine (other sessions' checks, a game, `just ladder`), the clock runs
+slower, so a run is held to what it would take on a machine to itself. Slow CI also stops its
+steps on the wall clock before Enact's `slow_timeout` would kill it (bisect.time_left), so a run
+killed that late still prints its lanes and names the step it cut off.
 
 The fast check runs the lanes whose files changed since the branch left origin/staging,
 `oracle` on the scenarios of each card whose file changed, without Forge's AI games, and for a
@@ -24,7 +23,7 @@ each one last passed can affect, and all of them hourly (slow_ci.py).
 
 A step that fails is rerun once before its lane fails, narrowed to the checks it says
 failed where it can name them: a pass on the rerun passes the lane and prints a `flaky: <lane>
-<check>` line for each. A step killed at the deadline, or one that failed to build or start
+<check>` line for each. A step killed as hung or cut off, or one that failed to build or start
 (exit `CANNOT_RUN`), is no flake and is not rerun, nor are the static checks (fmt, clippy, tsc).
 After the run, each failure it resolves gets a verdict (verdicts.py), and a step whose only
 failing checks are quarantined or pending fails no lane.
@@ -58,6 +57,7 @@ from . import (
     conventions,
     discarded_push,
     file_length,
+    hang,
     hygiene,
     paths,
     plan_references,
@@ -95,8 +95,6 @@ from .rust_tests import (
 from .step_runner import Steps
 
 FAST_BUDGET = 60
-# The least deadline: a hang guard, not a budget, so a slow machine's steps finish.
-HANG_DEADLINE = 600
 # Windows runs the same lanes markedly slower (process start, file system, antivirus).
 SLOW_BUDGET = 450 if system.WINDOWS else 300
 # The lanes Windows leaves to the Mac, which ships the app: the count gate's VM is Lima's and
@@ -171,13 +169,17 @@ class Outcome:
     excused: list[tuple[str, str]] = field(default_factory=list)
     # The step that failed the lane, when it is one a rerun can narrow (`Step.failed`).
     failure: Failure | None = None
-    # Whether the run's deadline killed a step of the lane (`run_all` reruns it once).
-    timed_out: bool = False
-    # Whether that kill was the wall limit's (`Steps.walled`) rather than the deadline's.
-    walled: bool = False
+    # Whether a step of the lane was killed at its hang limit (hang.py).
+    hung: bool = False
 
 
-def run_lane(lane: Lane, run: runlog.Run, env: dict[str, str], steps: Steps) -> Outcome:
+def run_lane(
+    lane: Lane,
+    run: runlog.Run,
+    env: dict[str, str],
+    steps: Steps,
+    limits: hang.Limits,
+) -> Outcome:
     """Runs the lane's steps until one fails, logging each attempt's checks (runlog.py): a
     rerun's own, so a check that failed and then passed shows as both, and the failure is
     marked flaky for its verdict. A step fails no lane when each check it failed is quarantined
@@ -186,7 +188,7 @@ def run_lane(lane: Lane, run: runlog.Run, env: dict[str, str], steps: Steps) -> 
         # The executor may reuse a finished lane's thread, whose waits are not this lane's.
         steps.waits[threading.get_ident()] = (0.0, 0.0)
     try:
-        return lane_steps(lane, run, env, steps)
+        return lane_steps(lane, run, env, steps, limits)
     finally:
         if any(tokens.step_tokens(lane.name, s.name) for s in lane.steps):
             with steps.lock:
@@ -194,7 +196,11 @@ def run_lane(lane: Lane, run: runlog.Run, env: dict[str, str], steps: Steps) -> 
 
 
 def lane_steps(
-    lane: Lane, run: runlog.Run, env: dict[str, str], steps: Steps
+    lane: Lane,
+    run: runlog.Run,
+    env: dict[str, str],
+    steps: Steps,
+    limits: hang.Limits,
 ) -> Outcome:
     """`run_lane`'s work. A lane's and a step's seconds leave out their waits for tokens."""
     script: str = run.script
@@ -209,28 +215,49 @@ def lane_steps(
     timings: list[str] = []
     flaky: list[str] = []
     excused: list[tuple[str, str]] = []
+    hung = False
 
     def attempt(
         step: Step, cmd: list[str]
     ) -> tuple[int | None, list[dict[str, object]], str]:
         """Runs `cmd` for `step`, logging its output and how it ended; its exit code, the
         records it logged and the output that names its failed checks."""
+        nonlocal hung
+        limit, why = limits.limit(lane.name, step.name)
         t, wall, before = clock.now(), clock.wall(), steps.waited()
         with run.step(env) as (step_env, results):
             code, output = steps.run(
-                cmd, step.cwd, step_env, steps.tokens(lane.name, step.name)
+                cmd, step.cwd, step_env, steps.tokens(lane.name, step.name), limit
             )
             # The wait for tokens is reported apart and left out of the step's time.
             after = steps.waited()
             wait = after[0] - before[0]
             seconds = clock.now() - t - wait
             wall = clock.wall() - wall - (after[1] - before[1])
-            records = run.log(lane.name, step.name, code == 0, wall, results)
+            # A kill says nothing about the step's checks: verdicts.py passes it over.
+            killed = None
+            if code is None:
+                killed = "stopped" if steps.stopped.is_set() else "wall"
+                killed = "hang" if seconds >= limit and not steps.walled() else killed
+            records = run.log(lane.name, step.name, code == 0, wall, results, killed)
+        if code == 0:
+            limits.passed(lane.name, step.name, seconds)
         if output.strip():
             log.append(output.rstrip())
         ended = f"{script} {lane.name} {step.name}: "
-        if code is None:
-            ended += f"TIMED OUT after {took(wall, seconds)} ({steps.limit()})"
+        if killed == "hang":
+            hung = True
+            ended += (
+                f"APPEARS HUNG: killed after {took(wall, seconds)} at its hang limit of"
+                f" {limit:.0f} s ({why})"
+            )
+        elif code is None and steps.walled():
+            ended += (
+                f"CUT OFF after {took(wall, seconds)} by the wall limit of"
+                f" {steps.wall_limit or 0:.0f} s before Enact's kill"
+            )
+        elif code is None:
+            ended += f"STOPPED after {took(wall, seconds)}"
         elif code != 0:
             ended += f"FAILED (exit {code}) after {took(wall, seconds)}"
         else:
@@ -275,7 +302,7 @@ def lane_steps(
             timings.append(f"{step.name} {now() - t:.0f} s, excused")
             continue
         if code != 0:
-            timings.append(f"{step.name} {'TIMED OUT' if code is None else 'FAILED'}")
+            timings.append(f"{step.name} {'KILLED' if code is None else 'FAILED'}")
             failure = None
             if step.failed and code not in (None, CANNOT_RUN):
                 failure = Failure(step, step.failed(output), records, lane.warm)
@@ -288,8 +315,7 @@ def lane_steps(
                 flaky,
                 excused,
                 failure,
-                timed_out=code is None,
-                walled=code is None and steps.walled(),
+                hung,
             )
         rerun = " after a rerun" if len(flaky) > flakes else ""
         timings.append(f"{step.name} {now() - t:.0f} s{rerun}")
@@ -321,36 +347,17 @@ def run_all(
     chosen: str = "all",
 ) -> Report:
     """Runs the lanes at once and reports them; with `wall_limit`, a step still running that
-    many wall seconds in is killed (`Steps.wall_limit`)."""
-    deadline = float(os.environ.get("CHECK_DEADLINE_S", max(2 * budget, HANG_DEADLINE)))
+    many wall seconds in is killed (`Steps.wall_limit`). A lane a hung step failed is not run
+    again: its step's hang limit is several times its slowest pass, so a rerun would only hang
+    again."""
     klass = tokens.script_class(script)
-    steps = Steps(deadline, wall_limit=wall_limit, klass=klass)
+    steps = Steps(wall_limit=wall_limit, klass=klass)
+    limits = hang.Limits(script)
     cold = bool(warm.ensure()) if any(lane.warm for lane in lanes) else False
     env = dict(os.environ)
     run = runlog.Run.start(script)
     run.chosen = chosen
-    outcomes = play(lanes, run, env, steps)
-    # The deadline catches a hang, but it also kills lanes that a rebuild after a rebase or a
-    # crowded machine made slow, and a session's answer was to run the whole check again. The
-    # lanes it killed rerun once here instead, with a fresh deadline on the same clock: their
-    # builds are warm by now, so a slow lane finishes and a hung one hangs again and fails.
-    killed = [i for i, o in enumerate(outcomes) if o.timed_out]
-    # The wall limit counts from the run's start on the same clock, so a rerun keeps to it.
-    if killed and (wall_limit is None or wall_limit - steps.clock.wall() > 0):
-        names = {lanes[i].name for i in killed}
-        print(
-            f"{script}: the deadline killed {', '.join(sorted(names))}; rerunning once with a"
-            f" fresh deadline ({load_note()})"
-        )
-        run.timed_out(names)
-        steps = Steps(steps.clock.now() + deadline, steps.clock, wall_limit, klass)
-        again = play([lanes[i] for i in killed], run, env, steps)
-        for i, o in zip(killed, again):
-            first = outcomes[i]
-            o.log = f"{first.log}\n--- rerun after the deadline ---\n{o.log}"
-            o.timings = [*first.timings, "rerun:", *o.timings]
-            o.seconds += first.seconds
-            outcomes[i] = o
+    outcomes = play(lanes, run, env, steps, limits)
     for o in sorted(outcomes, key=lambda o: not o.ok):
         print(f"=== {script} {o.lane}: {'passed' if o.ok else 'FAILED'}\n{o.log}")
     lines = [f"{o.lane} {o.seconds:.0f} s ({', '.join(o.timings)})" for o in outcomes]
@@ -385,7 +392,11 @@ def run_all(
 
 
 def play(
-    lanes: list[Lane], run: runlog.Run, env: dict[str, str], steps: Steps
+    lanes: list[Lane],
+    run: runlog.Run,
+    env: dict[str, str],
+    steps: Steps,
+    limits: hang.Limits,
 ) -> list[Outcome]:
     """Runs the lanes in parallel, each a sequence of steps (`run_lane`)."""
     # Counted before any lane starts, so the first heavy step takes its share, not the pool.
@@ -396,7 +407,9 @@ def play(
     )
     with ThreadPoolExecutor(max_workers=max(1, len(lanes))) as pool:
         try:
-            return list(pool.map(lambda lane: run_lane(lane, run, env, steps), lanes))
+            return list(
+                pool.map(lambda lane: run_lane(lane, run, env, steps, limits), lanes)
+            )
         # Ctrl-C reaches only this process, not the steps' sessions.
         except BaseException:
             steps.stop()

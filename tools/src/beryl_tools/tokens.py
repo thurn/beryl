@@ -9,7 +9,7 @@ that finds none free waits, which costs nothing.
 
 A token is a file in the pool directory, `<cache>/cpu-tokens/<n>`, holding the pid and class of
 the process that took it. The pool's lock file guards every change. A token whose holder has
-exited, such as a check killed at its deadline, is taken back by the next process that looks.
+exited, such as a check step killed as hung, is taken back by the next process that looks.
 
 Each command has a class, highest first: `push` (the fast check of `enact push`), `agent` (a
 command a session runs by hand, such as `just test-rust`) and `ci` (slow CI). A class may take a
@@ -29,7 +29,7 @@ machine is quiet.
 Cargo can share a pool through the GNU make jobserver protocol (the `jobserver` crate cargo uses
 reads `--jobserver-auth=fifo:PATH` from `CARGO_MAKEFLAGS` or `MAKEFLAGS`), but a token is a byte
 read from the FIFO, so a client killed while it holds one loses it for good, and the checks kill
-steps at their deadlines. Nor can it order its waiters by priority. So the pool hands out whole
+steps that hang. Nor can it order its waiters by priority. So the pool hands out whole
 leases instead, and passes their size to cargo (`CARGO_BUILD_JOBS`), nextest
 (`NEXTEST_TEST_THREADS`), the test harness (`RUST_TEST_THREADS`) and Beryl's own search commands
 (`BERYL_CPU_TOKENS`).

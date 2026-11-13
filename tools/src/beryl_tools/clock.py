@@ -1,5 +1,5 @@
 """The checks' clock (checks.py): seconds as the reference machine, with nothing else running,
-would have spent them. Budgets and deadlines hold a run to what it would take there, whether
+would have spent them. Budgets and hang limits (hang.py) hold a run to what it would take there, whether
 other work is slowing this machine down or this machine is slower than the reference
 (speed.py)."""
 
@@ -12,7 +12,7 @@ import time
 from . import speed, system
 
 # The most a busy machine slows a run's clock (`Clock`): a step that hangs dies by this many
-# times its deadline, however loaded the machine.
+# times its hang limit, however loaded the machine.
 MAX_STRETCH = 8.0
 
 
@@ -63,7 +63,7 @@ class Clock:
 
 
 class WallClock(Clock):
-    """Wall seconds, for a deadline that someone else's wall clock enforces (bisect.py)."""
+    """Wall seconds, for a limit that someone else's wall clock enforces (bisect.py)."""
 
     def now(self) -> float:
         return self.wall()

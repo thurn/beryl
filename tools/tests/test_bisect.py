@@ -175,7 +175,7 @@ def test_out_of_time_reports_the_range_left(
         assert f"bisect: ui-test:{title}  {said}" in lines
 
 
-def test_a_probe_that_hangs_dies_at_the_deadline_and_keeps_its_range(
+def test_a_probe_that_hangs_dies_at_the_search_limit_and_keeps_its_range(
     repo: Path,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -202,8 +202,8 @@ def test_a_probe_that_hangs_dies_at_the_deadline_and_keeps_its_range(
 
 @pytest.fixture
 def deadline(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A budget of 0 s, which every run is over, but a deadline the step makes."""
-    monkeypatch.setenv("CHECK_DEADLINE_S", "60")
+    """A budget of 0 s, which every run is over, but a hang limit the step is well under."""
+    monkeypatch.setenv("CHECK_HANG_LIMIT_S", "60")
 
 
 def over_budget_lane() -> checks.Lane:
