@@ -133,8 +133,10 @@ export interface Bow {
 /** The bows of the flights that have one (the motion reviews of fly and emerge,
  * by-w8gv.21.47: "a card cast from hand is a thrown object, and here it slides along a
  * ruler line"): a spell thrown onto the stack, a permanent set down from it, which swings out
- * and settles into its row, and an ability lifting out of its source, farthest a little past
- * half way. An opponent's spell bows half as far, and later: their hand lies over the
+ * and settles into its row. An ability lifting out of its source goes all but straight: Arena's
+ * copy, filmed whole from both seats, sags at most 0.025 of its way toward the middle of the
+ * table (`IEXcjBn3BXk 20:39.43`, `5UHzpVvUkfI 19:48.57`), where a bow of 0.12 toward its
+ * controller's edge put it 2 to 3% of the table's width off Arena's. An opponent's spell bows half as far, and later: their hand lies over the
  * table's far edge, and a full bow carried the card along that edge, half out of sight,
  * before it came down (the third review of fly, there). Arena's own spell bows 0.29 of its
  * line, and its ability's copy and its resolving permanent travel a curve
@@ -149,14 +151,15 @@ export const BOWS = {
   cast: { share: 0.15 },
   theirs: { share: 0.08, peak: 0.6 },
   played: { share: 0.3, back: 1, peak: 0.6, lean: 20 },
-  lifts: { share: 0.12, peak: 0.6 },
+  lifts: { share: 0.02 },
   drawn: { share: 0.2, peak: 0.42 },
 };
 
 /** How the flight of the step `act` bows, if it does, its card's controller sitting at the
  * edge `toward`. */
 export function bowOf(act: Act, toward: number): Bow | undefined {
-  if (act.verb === "emerge") return { ...BOWS.lifts, toward };
+  // An ability sags toward the middle of the table, away from its controller's edge.
+  if (act.verb === "emerge") return { ...BOWS.lifts, toward: -toward };
   if (act.verb !== "fly") return undefined;
   if (act.object.zone === "stack") {
     return { ...(toward < 0 ? BOWS.theirs : BOWS.cast), toward };

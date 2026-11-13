@@ -8,7 +8,8 @@
 //
 // What each says is drawn its own way: an arrow at a target is a bowed arc with a head, from
 // the spell or ability over the top to what it is aimed at; the line from an ability to its
-// source is the same arc, thin and with no head; a line of combat is straight, from the tip
+// source is thin with no head, and on the desktop hangs low over the table between the two
+// (`hung`); a line of combat is straight, from the tip
 // of an attacker's chevron to what it attacks, and from a blocker's edge to its attacker's.
 import type { Arrow } from "../generated/protocol";
 import type { Point, Resting, StageLayout } from "./layout.ts";
@@ -207,6 +208,25 @@ function loop(from: Reach, to: Reach): [Point, Point, Point] {
   return [a, { x: clear + side * out, y: (a.y + b.y) / 2 }, b];
 }
 
+/** The line from an ability `from` to its `source` where it sags to the stage height `sag`,
+ * below both: out of the bottom edge of each, round a point `SAG_ALONG` of the way across from
+ * the source to the ability and as low as puts the middle of the curve at that height.
+ * Arena's leaves the bottom of its source going down, sags to about 0.9 of the table's height
+ * wherever its ends lie, and comes up into the bottom of the stack card, from either seat
+ * (`0VsYGs88NXA 19:39.85`, `2VW6ZzmS8U4 32:16.0`, `5UHzpVvUkfI 19:48.89`): a curve fitted to
+ * the two whole ones, within 0.03 of the table's height of either. */
+function hung(from: Reach, source: Reach, sag: number): [Point, Point, Point] {
+  const bottom = (end: Reach) => ({
+    x: end.middle.x,
+    y: end.middle.y + end.half.y,
+  });
+  const [a, b] = [bottom(from), bottom(source)];
+  // The middle of a curve round `c` is a quarter of each end and half of `c`.
+  const low = 2 * sag - (a.y + b.y) / 2;
+  return [a, { x: b.x + SAG_ALONG * (a.x - b.x), y: low }, b];
+}
+const SAG_ALONG = 0.225;
+
 /** The first `t` of the curve from `a` round `c` to `b`. */
 const part = (
   [a, c, b]: [Point, Point, Point],
@@ -247,18 +267,23 @@ function straight(
  * curve from its first point round its second to its third (a line of combat is straight, its
  * second point half way): what its path is cut from, and what its light is drawn along
  * (light.ts). None where there is nothing to draw: an ability has yet to come clear of the
- * source it lifts out of, or a creature has closed on what it strikes. */
+ * source it lifts out of, or a creature has closed on what it strikes. The line to a source
+ * sags to `sag`, where the layout gives one (`hung`). */
 export function wayOf(
   arrow: Arrow,
   from: Reach,
   to: Reach,
+  sag?: number,
 ): [Point, Point, Point] | null {
   if (arrow === "attack" || arrow === "block") {
     const ends = straight(arrow, from, to);
     return ends ? [ends[0], mix(ends[0], ends[1], 0.5), ends[1]] : null;
   }
   const over = overlap(from, to);
-  if (arrow === "source") return (over ? undefined : arc(from, to)) ?? null;
+  if (arrow === "source") {
+    if (over) return null;
+    return sag === undefined ? (arc(from, to) ?? null) : hung(from, to, sag);
+  }
   // Onto a card from the table in front of it; round the side of one that stands right by;
   // over the top to a player; and into the strip of the stack item under its own. But for
   // that strip, the head lies on the face of what it is aimed at, not at its edge.
@@ -280,9 +305,10 @@ export function shapeOf(
   from: Reach,
   to: Reach,
   shown: number,
+  sag?: number,
 ): Shape | null {
   if (shown <= 0) return null;
-  const whole = wayOf(arrow, from, to);
+  const whole = wayOf(arrow, from, to, sag);
   if (!whole) return null;
   if (arrow === "attack" || arrow === "block") {
     const [a, , b] = whole;

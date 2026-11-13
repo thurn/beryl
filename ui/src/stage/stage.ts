@@ -127,7 +127,10 @@ export class ScriptStage {
   /** The effects each step begins on what it is about, given the table it finds. */
   effects: (act: Act, found?: PlayerView) => readonly Effect[];
   /** What is drawn besides the nodes: effects, spans, streaks and announcements. */
-  readonly #over = new Overlay((on, at, pool) => this.reach(on, at, pool));
+  readonly #over = new Overlay(
+    (on, at, pool) => this.reach(on, at, pool),
+    () => this.#layout.sag,
+  );
   /** How a held card let go travels back to where it rests. */
   release: Timing = SNAP;
   /** What the pointer does on the stage's nodes, for whoever listens (pointer.ts). */

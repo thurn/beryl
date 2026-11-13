@@ -126,4 +126,8 @@ export interface StageLayout {
    * widths, where the line to what it attacks starts: nothing in a layout whose attackers
    * wear none. */
   chevron: number;
+  /** The stage height the line from an ability to its source sags to at its lowest, below
+   * both its ends (lines.ts `hung`); none in a layout where it arcs across between them
+   * instead. */
+  sag?: number;
 }

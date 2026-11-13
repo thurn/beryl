@@ -133,16 +133,16 @@ test("a trigger lifts out of its source the same however its views are batched",
         [400 + 10, 10, 50],
         "it starts on its source",
     );
-    // Half way it is off the straight line by its bow, toward its controller's edge of the
-    // table: a quarter turn from the line, which runs 1590 across and 10 up.
-    const { share, peak } = BOWS.lifts;
-    const off =
-        share * Math.sin(Math.PI * 0.5 ** (Math.log(0.5) / Math.log(peak)));
+    // Half way it is off the straight line by its small sag, away from its controller's edge
+    // toward the middle of the table, as Arena's is: a quarter turn from the line, which runs
+    // 1590 across and 10 up. Its farthest is half way along.
+    const off = BOWS.lifts.share;
+    assert.ok(off <= 0.025, "it goes all but straight");
     const near = (pose) =>
         [pose.x, pose.y, pose.width].map((n) => Math.round(n * 1e6) / 1e6);
     assert.deepEqual(
         near(at(150)),
-        near({ x: 1205 + 10 * off, y: 5 + 1590 * off, width: 75 }),
+        near({ x: 1205 - 10 * off, y: 5 - 1590 * off, width: 75 }),
         "it is half way after half its time, off the line by its bow",
     );
     assert.equal(apart.at(-1)[0], 275);

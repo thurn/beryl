@@ -1252,7 +1252,7 @@
     },
     {
       "verb": "emerge",
-      "path": "A curve from the source to the stack, growing from about a quarter of its size there, easing in.",
+      "path": "All but straight from the middle of the source to the stack, sagging at most 0.025 of its way toward the middle of the table, growing evenly with the way it has come from about a quarter of its size there; slow to start, near even speed, and no settle.",
       "gaps": [
         "Delay from the source settling is taken once (Thraben Inspector); other sources land under sparks."
       ],
@@ -1260,50 +1260,40 @@
         {
           "case": "triggered ability",
           "recording": "IEXcjBn3BXk",
-          "time": "20:39.15",
-          "span": 0.35,
-          "crop": [
-            850,
-            250,
-            700,
-            500
-          ],
+          "time": "20:39.33",
+          "span": 0.5,
+          "crop": null,
           "method": "filmstrip",
           "why": "cannot measure: 3 things moved where 1 card was asked for: crop closer, shorten the span, or pass --cards (clip 20:39.3, crop 800,200,1120,700; Inti's tooltip and the glow moved too)",
-          "command": "just video film IEXcjBn3BXk 20:39.15 --span 0.35 --fps 30 --cols 4 --width 560 --crop 850,250,700,500  then 20:39.45 span 0.6 crop 850,250,1070,500",
-          "since": "",
+          "command": "just video film IEXcjBn3BXk 20:39.33 --span 0.5 --fps 30 --cols 4 --width 720",
+          "since": "Flametongue Kavu settles on the battlefield (20:39.08 at 30 fps; still flying at 20:39.05)",
           "duration_ms": 300,
-          "delay_ms": null,
+          "delay_ms": 300,
           "stagger_ms": null,
           "peak": null,
-          "start": 0.2,
-          "path": "a small card appears on Flametongue Kavu (just landed, 20:39.38), curves right and up to the stack slot at the right edge, growing, resting 20:39.68",
+          "start": 0.22,
+          "path": "Whole table: a copy 0.22 of its size on the stack appears in the middle of Flametongue Kavu (0.50, 0.55 of the table) and goes all but straight right to the stack slot at the right edge (0.91, 0.49), sagging about 0.025 of its way up the table, toward the middle; it grows evenly with the way it has come, and rests 0.185 of the table's width wide.",
           "curve": "ease-in",
-          "note": "peak is by eye: first-visible copy width over rest width from tile widths, about +-30%; not tracker-measured. Copy first visible 20:39.38 (absent 20:39.35), at rest 20:39.68 (30 fps). Starts about 0.2x rest width. Delay not taken: the creature's own landing was only seen at 6 fps (about 20:38.9-39.1), too coarse. step size per frame grows toward the end (slow start, quick arrival, stops without a visible settle) Starts at about 1/5.0 of its size at rest on the stack and grows to it."
+          "note": "Whole table, no crop, read from full-resolution frames. Copy first visible 20:39.43 (absent 20:39.40 at 30 fps; 20:39.38 in the 15 fps sheet), at rest 20:39.73. Along its way at 67 ms steps 0.11, 0.30, 0.57, 0.86, 1.0: slow start, then near even speed, and it stops without a settle. Inti's tooltip lies over it mid-way. About 0.12 s after it rests a white flare blooms on the card's left edge and a beam of light runs back along the way it came, for about 0.27 s, with orange sparks. No line to the source is drawn: the prompt to target a creature follows."
         },
         {
           "case": "triggered ability",
           "recording": "5UHzpVvUkfI",
-          "time": "19:48.45",
-          "span": 0.55,
-          "crop": [
-            880,
-            180,
-            1040,
-            700
-          ],
+          "time": "19:48.52",
+          "span": 0.4,
+          "crop": null,
           "method": "filmstrip",
           "why": "cannot measure: 5 things moved where 1 card was asked for: crop closer, shorten the span, or pass --cards (tried twice, crops 880,180,1040,700 and 900,200,1000,420)",
-          "command": "just video film 5UHzpVvUkfI 19:48.45 --span 0.55 --fps 30 --cols 5 --width 400 --crop 880,180,1040,700",
-          "since": "Thraben Inspector settles on the battlefield (about 19:48.30, from an 8 fps strip, so +-0.12 s)",
-          "duration_ms": 330,
-          "delay_ms": 250,
+          "command": "just video film 5UHzpVvUkfI 19:48.52 --span 0.4 --fps 30 --cols 4 --width 720",
+          "since": "Thraben Inspector settles on the battlefield (19:48.27, from a 15 fps strip of its landing at 19:47.7)",
+          "duration_ms": 300,
+          "delay_ms": 300,
           "stagger_ms": null,
           "peak": null,
-          "start": 0.22,
-          "path": "small copy on the creature, then a rising arc to the right to the stack slot, growing",
+          "start": 0.25,
+          "path": "Whole table: a copy 0.25 of its size on the stack appears in the right half of Thraben Inspector (0.52, 0.33 of the table) and goes all but straight right and down to the stack slot at the right edge (0.90, 0.45), sagging about 0.013 of its way down the table, toward the middle; it grows evenly with the way it has come, and rests 0.167 of the table's width wide.",
           "curve": "ease-in",
-          "note": "peak is by eye: first-visible copy width over rest width from tile widths, about +-30%; not tracker-measured. First visible 19:48.55, at rest 19:48.88. Starts about 0.22x rest width. The thin source line begins 19:48.72 (see point/source line). step size per frame grows toward the end (slow start, quick arrival, stops without a visible settle) Starts at about 1/4.5 of its size at rest on the stack and grows to it."
+          "note": "Whole table, no crop, read from full-resolution frames. Copy first visible 19:48.57, at rest 19:48.87. Along its way at 67 ms steps 0.10, 0.33, 0.64, 0.94, 1.0 (the frames alternate, a 60 fps game in a 30 fps recording). The streamer's cursor passes over the source at 19:48.65 to 19:48.83 and shows its card large on the left: not part of the trigger. Gold sparks hang along the way from 19:48.75; a white flare blooms on the card's left edge at 19:48.97 and runs back along the way as a beam, gone by 19:49.23 (about 0.27 s)."
         },
         {
           "case": "triggered ability",
@@ -1433,9 +1423,9 @@
           "max": 350
         },
         "delay_ms": {
-          "median": 190,
+          "median": 300,
           "min": 130,
-          "max": 250
+          "max": 300
         },
         "stagger_ms": {
           "median": 300,
@@ -1444,7 +1434,7 @@
         },
         "peak": null,
         "start": {
-          "median": 0.24,
+          "median": 0.25,
           "min": 0.19,
           "max": 0.3
         },
@@ -1454,12 +1444,12 @@
             "duration_ms": {
               "median": 275,
               "min": 240,
-              "max": 330
+              "max": 300
             },
             "delay_ms": {
-              "median": 250,
-              "min": 250,
-              "max": 250
+              "median": 300,
+              "min": 300,
+              "max": 300
             },
             "stagger_ms": {
               "median": 300,
@@ -1468,8 +1458,8 @@
             },
             "peak": null,
             "start": {
-              "median": 0.26,
-              "min": 0.2,
+              "median": 0.27,
+              "min": 0.22,
               "max": 0.3
             },
             "curve": "ease-in"
@@ -3033,9 +3023,9 @@
           "delay_ms": 170,
           "stagger_ms": null,
           "peak": null,
-          "path": "a thin pale-green arc from the stack card back to its source creature; draws in from the source end outward over about 4 frames",
+          "path": "a thin pale-green line that hangs low over the table: its lower part, from near the bottom player's avatar up into the bottom of the stack card, is what shows against this table's art",
           "curve": "ease-out",
-          "note": "First frame 19:48.72 (short stub under the copy), full length by about 19:48.85. Stays up to at least 19:49.42 (8 fps strip); end not filmed. Draw-in is a few frames, not a cut."
+          "note": "First frame 19:48.72 (a stub under the copy), its lower part whole by about 19:48.85, and still there at 19:49.42. The two other whole frames (0VsYGs88NXA 19:39.85, 2VW6ZzmS8U4 32:16.0) show it whole: out of the bottom of the source, down to about 0.9 of the table's height and up into the bottom of the stack card, for either seat's trigger."
         },
         {
           "case": "source line",

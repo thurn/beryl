@@ -29,7 +29,8 @@ own values, a duration of null lasting as long as the step that begins it. A ver
 are those its steps begin, each `when` its step starts or ends, or as a strike's `blow` lands:
 every step's, or only those of a `case`, or `into` a zone. One is `on` what the step is about,
 unless it says it is on what the step `struck` (what a strike or a streak lands on) or on its
-`source` (what a streak leaves). A case with effects of its own begins none of its verb's.
+`source` (what a streak leaves). One may begin a `delay` of stage milliseconds after that edge
+of its step. A case with effects of its own begins none of its verb's.
 """
 
 from __future__ import annotations
@@ -185,9 +186,13 @@ def use_problems(where: str, verb: dict[str, Any], data: dict[str, Any]) -> list
         for left_out in use.get("except", []):
             if left_out not in verb.get("cases", {}):
                 found.append(f"{where}: {left_out!r} is not one of its cases")
-        if set(use) - {"effect", "when", "case", "into", "except", "on"}:
+        delay = use.get("delay", 0)
+        if not isinstance(delay, int) or delay < 0:
+            found.append(f"{where}: an effect's delay is a whole number of ms")
+        if set(use) - {"effect", "when", "case", "into", "except", "on", "delay"}:
             found.append(
-                f"{where}: an effect's use is effect, when, case, into, except and on"
+                f"{where}: an effect's use is effect, when, case, into, except, on"
+                " and delay"
             )
     return found
 
@@ -398,6 +403,7 @@ def uses(verb: dict[str, Any]) -> str:
                 *([f"(into the {use['into']})"] if "into" in use else []),
                 *([f"(but not {', '.join(use['except'])})"] if "except" in use else []),
                 *([ON_WORDS[use["on"]]] if "on" in use else []),
+                *([f"{use['delay']} ms later"] if "delay" in use else []),
             ]
         )
         for use in verb.get("effects", [])

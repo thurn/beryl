@@ -350,6 +350,8 @@ interface Use {
   into?: string;
   except?: readonly string[];
   on?: string;
+  /** How long after its edge of the step it begins, where that is not its look's own delay. */
+  delay?: number;
 }
 
 const looks = new Map(
@@ -399,7 +401,7 @@ export function effectsOf(act: Act, table?: PlayerView): Effect[] {
         on,
         into: use.when === "blow" ? STRIKE.hit : undefined,
         duration: look.duration ?? undefined,
-        delay: look.delay ?? 0,
+        delay: use.delay ?? look.delay ?? 0,
         ease: CURVES[look.curve] ?? SNAP.ease,
       },
     ];

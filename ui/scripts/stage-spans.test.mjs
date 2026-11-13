@@ -136,6 +136,33 @@ test("the line to a source grows out of the source, once the ability is clear of
     assert.equal(shapeOf("source", card(10, 10), source, 1), null);
 });
 
+test("on the desktop the line to a source hangs low between them, as Arena's does", () => {
+    // Arena's leaves the bottom of the source, sags far below both and comes up into the
+    // bottom of the stack card (`0VsYGs88NXA 19:39.85`, `2VW6ZzmS8U4 32:16.0`): a stage 900
+    // high whose layout sags it to 810, 0.9 of its height.
+    const ability = card(1400, 200);
+    const source = card(600, 100, 1);
+    const shape = shapeOf("source", ability, source, 1, 810);
+    assert.deepEqual(
+        shape.from,
+        { x: 1450, y: 340 },
+        "into the ability's bottom",
+    );
+    assert.deepEqual(
+        shape.to,
+        { x: 650, y: 240 },
+        "out of the source's bottom",
+    );
+    // Drawn from the source: out of it, round the low point, into the ability.
+    const [, round] = numbers(shape.d).slice(2);
+    assert.equal(round, 1330, "round a point far below both");
+    // Its lowest point lies below both ends, toward the bottom of the table.
+    const [ax, ay, cx, cy, bx, by] = numbers(shape.d);
+    const lowest = 0.25 * ay + 0.5 * cy + 0.25 * by;
+    assert.equal(lowest, 810, "its middle sags to 0.9 of the stage's height");
+    assert.ok(cx > Math.min(ax, bx) && cx < Math.max(ax, bx), "between them");
+});
+
 const point = (span, arrow, from, to) => ({
     act: { verb: "point", span, arrow, from, to },
 });

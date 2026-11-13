@@ -65,8 +65,16 @@ export class Overlay {
    * before it, and its mark does not pop. */
   #fresh = true;
 
-  constructor(reach: Reaching) {
+  /** The stage height the line from an ability to its source hangs toward, if it does
+   * (layout.ts `StageLayout.sag`), as the layout now has it. */
+  readonly #sag: () => number | undefined;
+
+  constructor(
+    reach: Reaching,
+    sag: () => number | undefined = () => undefined,
+  ) {
     this.#reach = reach;
+    this.#sag = sag;
   }
 
   /** Plays the step `act` over the stage times `from` to `to`, if it begins or ends a span
@@ -110,7 +118,7 @@ export class Overlay {
       (arrow: Arrow) => prompt && arrow === "source",
       ({ arrow, from, to, shown }) => {
         const [a, b] = [this.#reach(from, now), this.#reach(to, now)];
-        return a && b ? shapeOf(arrow, a, b, shown) : null;
+        return a && b ? shapeOf(arrow, a, b, shown, this.#sag()) : null;
       },
     );
   }
@@ -122,7 +130,8 @@ export class Overlay {
   light(now: number, lines: readonly Line[], held: Held): Lit {
     const lit = lines.flatMap((line): LitLine[] => {
       const [a, b] = [this.#reach(line.from, now), this.#reach(line.to, now)];
-      const way = line.shape && a && b ? wayOf(line.arrow, a, b) : null;
+      const way =
+        line.shape && a && b ? wayOf(line.arrow, a, b, this.#sag()) : null;
       return way && a && b ? [{ ...line, way, from: a, to: b }] : [];
     });
     const first = this.#fresh ? -Infinity : now;
