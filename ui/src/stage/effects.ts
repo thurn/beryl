@@ -64,7 +64,7 @@ export class Effects {
   /** Begins those of `effects` that a step begins at this `edge` of it, which is at stage
    * time `at`, the step showing its card for `span`: each on what it says it is on, or else on
    * `about`, what the step is about, and only on a node the stage holds (`held`). One that
-   * would take no time is not begun; one of its name already there gives way to it. */
+   * would take no time is not begun; one of its name already there gives way to it as it begins. */
   begin(
     about: On | undefined,
     effects: readonly Effect[],
@@ -79,9 +79,15 @@ export class Effects {
       const from = at + effect.delay + (effect.into ?? 0) * span;
       const to = from + (effect.duration ?? span);
       if (effect.when !== edge || to <= from) continue;
-      this.#running = this.#running.filter(
-        (other) => other.on !== on || other.effect.name !== effect.name,
-      );
+      // One of its name on the same thing gives way to it: one yet to begin is dropped, and
+      // one under way ends as this one begins, so that it is taken off the page then, not
+      // left drawn where it was.
+      this.#running = this.#running.flatMap((other) => {
+        if (other.on !== on || other.effect.name !== effect.name)
+          return [other];
+        if (other.from >= from) return [];
+        return [{ ...other, to: Math.min(other.to, from) }];
+      });
       this.#running.push({ on, effect, from, to });
     }
   }
