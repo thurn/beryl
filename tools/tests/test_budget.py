@@ -93,19 +93,19 @@ def run(i: int, checks: dict[str, float], host: str = "mac") -> list[dict[str, o
 CHECKS = {
     "rust:costly": 50.0,
     "rust:cheap": 1.0,
-    "ui-test:drag": 30.0,
-    "ui-test:caught": 20.0,
+    "ui:drag": 30.0,
+    "ui:caught": 20.0,
     "app:smoke": 100.0,
 }
 CAUGHT: dict[str, list[verdicts.Entry]] = {
-    "ui-test:caught": [
+    "ui:caught": [
         {"time": "2026-11-12T00:00:00+00:00", "verdict": "catch", "commit": "x"}
     ]
 }
 
 
 def runs(
-    first: int = 0, count: int = budget.RUNS, **more: float
+    first: int = 0, count: int = check_value.RUNS, **more: float
 ) -> list[dict[str, object]]:
     return [r for i in range(first, first + count) for r in run(i, {**CHECKS, **more})]
 
@@ -116,7 +116,7 @@ def slow(store: FakeBd, records: list[dict[str, object]], cpu: float) -> list[st
 
 def test_slow_ci_over_its_cpu_budget_files_a_bead_per_lane_naming_the_cuts() -> None:
     store = FakeBd()
-    # 201 CPU s a run; cutting `rust:costly` and `ui-test:drag` leaves 121.
+    # 201 CPU s a run; cutting `rust:costly` and `ui:drag` leaves 121.
     lines = slow(store, runs() + run(99, {"rust:costly": 9999.0}, host="pc"), 125)
     assert lines[0] == "ci budget: a full run uses 201 CPU seconds, over 125"
     rust, ui = store.issues
@@ -127,7 +127,7 @@ def test_slow_ci_over_its_cpu_budget_files_a_bead_per_lane_naming_the_cuts() -> 
         rust["description"]
     )
     assert "rust:cheap`:" not in str(rust["description"])
-    assert ui["title"] == "Cut 1 checks from slow CI's ui-test lane"
+    assert ui["title"] == "Cut 1 checks from slow CI's ui lane"
     # The app is costlier than anything named, but no cut bead names it.
     assert "- delete: `app:smoke`" not in str(rust["description"]) + str(
         ui["description"]
@@ -138,8 +138,8 @@ def test_a_check_that_caught_a_bug_is_moved_to_the_nightly() -> None:
     store = FakeBd()
     slow(store, runs(), 90)
     ui = str(store.issues[-1]["description"])
-    assert "- move to the nightly: `ui-test:caught`: 10 runs, 1 catches" in ui
-    assert "- delete: `ui-test:drag`" in ui
+    assert "- move to the nightly: `ui:caught`: 10 runs, 1 catches" in ui
+    assert "- delete: `ui:drag`" in ui
 
 
 def test_slow_ci_under_its_budget_files_nothing() -> None:
@@ -152,7 +152,7 @@ def test_slow_ci_under_its_budget_files_nothing() -> None:
 
 def test_one_noisy_run_is_not_the_median() -> None:
     store = FakeBd()
-    records = runs() + run(budget.RUNS, {**CHECKS, "rust:costly": 5000.0})
+    records = runs() + run(check_value.RUNS, {**CHECKS, "rust:costly": 5000.0})
     assert slow(store, records, 250)[0].endswith("of 250 CPU seconds")
 
 
@@ -174,7 +174,7 @@ def test_after_a_cut_closes_only_runs_since_count() -> None:
         issue["closed_at"] = "2026-11-13T10:09:30Z"
     # The cut checks are gone from the runs after the close; until there are enough of those,
     # the runs from before it would only name the same checks again.
-    gone = {c: s for c, s in CHECKS.items() if c not in ("rust:costly", "ui-test:drag")}
+    gone = {c: s for c, s in CHECKS.items() if c not in ("rust:costly", "ui:drag")}
     after = [r for i in range(10, 13) for r in run(i, gone)]
     assert slow(store, runs() + after, 100) == [
         "ci budget: 3 of 10 runs since a cut bead closed at 2026-11-13T10:09:30+00:00;"
@@ -184,7 +184,7 @@ def test_after_a_cut_closes_only_runs_since_count() -> None:
     slow(store, runs() + after, 100)
     rust, ui = (str(i["description"]) for i in store.issues[2:])
     assert "- delete: `rust:cheap`" in rust and "rust:costly" not in rust
-    assert "- move to the nightly: `ui-test:caught`" in ui and "ui-test:drag" not in ui
+    assert "- move to the nightly: `ui:caught`" in ui and "ui:drag" not in ui
 
 
 def test_too_few_runs_measure_nothing() -> None:
@@ -195,10 +195,17 @@ def test_too_few_runs_measure_nothing() -> None:
 
 
 def test_a_full_run_sums_each_checks_median_over_the_checks_still_run() -> None:
-    # Slow CI ran the ui-test lane in one run of three: a full run still counts it once.
-    records = run(0, {"rust:a": 10.0, "ui-test:b": 40.0}) + run(1, {"rust:a": 12.0})
+    # Slow CI ran the ui lane in one run of three: a full run still counts it once.
+    records = run(0, {"rust:a": 10.0, "ui:b": 40.0}) + run(1, {"rust:a": 12.0})
     records += run(2, {"rust:a": 11.0})
     scores = check_value.score(records, {}, datetime.fromisoformat("2026-10-01T00:00Z"))
     assert check_value.full_run(scores, set()) == 51.0
     assert check_value.full_run(scores, set(), last=1) == 51.0
-    assert check_value.full_run(scores, {"ui-test:b"}) == 11.0
+    assert check_value.full_run(scores, {"ui:b"}) == 11.0
+
+
+def test_a_lane_moved_out_of_slow_ci_costs_a_full_run_nothing() -> None:
+    # `ui-test` ran in every one of these runs, but the browser sweep runs it now.
+    records = [r for i in range(3) for r in run(i, {"rust:a": 10.0, "ui-test:b": 40.0})]
+    scores = check_value.score(records, {}, datetime.fromisoformat("2026-10-01T00:00Z"))
+    assert check_value.full_run(scores, set()) == 10.0

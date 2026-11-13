@@ -8,12 +8,12 @@ prints its id and files nothing.
 Slow CI (`by ci`) has a budget in CPU seconds ([`SLOW_CPU_BUDGET`]), since the machine is never
 quiet and wall seconds measure its load as much as the checks. After each run, `slow_report`
 compares a full run's CPU seconds (check_value.full_run: each check's median CPU seconds, summed
-over the checks that ran in one of their lane's last [`RUNS`] runs, so one noisy run files
+over the checks that ran in one of their lane's last [`check_value.RUNS`] runs, so one noisy run files
 nothing) with the budget. Over it, it files one P1 bead per lane, labeled [`CUT_LABEL`], naming
 the checks to cut, chosen lowest value first by check_value.cuts, with each check's runs,
 catches and CPU seconds: delete a check that caught nothing in the window, move one that caught
 something to the nightly. The checks in [`KEEP`] are never named. While any cut bead is open it files nothing more, and once the last one
-closes it counts only the runs that started after it closed, and waits for [`RUNS`] of them, so
+closes it counts only the runs that started after it closed, and waits for [`check_value.RUNS`] of them, so
 the checks that bead cut are not counted, nor named, again.
 
 Nothing here fails a run: a bd call that fails is reported and the run goes on (verdicts.Beads).
@@ -113,9 +113,6 @@ def report(
 # films, fixtures) and stop before the Rust unit tests that cost a fraction of a second each
 # and that the fast check runs too. Never raise it.
 SLOW_CPU_BUDGET = 800
-# How many runs a full run's checks are taken from (check_value.full_run), and how many runs
-# after a cut bead closes are measured before another is filed.
-RUNS: int = check_value.RUNS
 CUT_LABEL = "ci-cut"
 LANE_KEY = "beryl_cut_lane"
 CUT_PRIORITY = "1"
@@ -186,7 +183,7 @@ def cut_body(
     keep = "\n".join(f"- `{c}`: {why}" for c, why in KEEP.items())
     return (
         f"Slow CI on {host} is over its CPU budget: a full run (each check's median CPU"
-        f" seconds, summed over the checks of each lane's last {RUNS} runs) uses {whole:.0f}"
+        f" seconds, summed over the checks of each lane's last {check_value.RUNS} runs) uses {whole:.0f}"
         " CPU seconds, and the budget is"
         f" {budget:.0f} (`SLOW_CPU_BUDGET`, tools/src/beryl_tools/budget.py). `just ci-value`"
         " scores every check by the real bugs it caught in the last"
@@ -264,17 +261,17 @@ def slow_report(
     if history is None:
         history = store.history(store.checks())
     scores = check_value.score(mine, history, since).since(closed)
-    if len(scores.runs) < RUNS:
+    if len(scores.runs) < check_value.RUNS:
         after = f" since a cut bead closed at {closed}" if closed else ""
         return [
-            f"ci budget: {len(scores.runs)} of {RUNS} runs{after}; not measured yet"
+            f"ci budget: {len(scores.runs)} of {check_value.RUNS} runs{after}; not measured yet"
         ]
-    whole = check_value.full_run(scores, set(), RUNS)
+    whole = check_value.full_run(scores, set(), check_value.RUNS)
     if whole <= budget:
         return [f"ci budget: a full run uses {whole:.0f} of {budget:.0f} CPU seconds"]
     scores.groups = [g for g in scores.groups if not any(kept(c) for c in g.checks)]
     by_lane: dict[str, list[check_value.Group]] = {}
-    for g in check_value.cuts(scores, budget, RUNS):
+    for g in check_value.cuts(scores, budget, check_value.RUNS):
         by_lane.setdefault(scores.lanes[g.checks[0]], []).append(g)
     lines = [f"ci budget: a full run uses {whole:.0f} CPU seconds, over {budget:.0f}"]
     lines += [

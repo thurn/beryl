@@ -258,11 +258,18 @@ def order(g: Group) -> tuple[float, float, str]:
 
 
 def alive(scores: Scores, last: int | None = None) -> set[str]:
-    """The checks that ran in one of their lane's `last` runs (of all, when not given): those
-    slow CI still runs. A check deleted since is in older runs only."""
+    """The checks that ran in one of their lane's `last` runs (of all, when not given), in a
+    lane slow CI still has (`slow_ci.LANES`): those slow CI still runs. A check deleted since is
+    in older runs only, and a lane moved out (to the browser sweep, say) is in none of them.
+    """
+    from . import (
+        slow_ci,
+    )  # It imports checks, which imports this module by way of budget.
+
+    lanes = set(slow_ci.LANES)
     by_lane: dict[str, list[tuple[str, RunKey]]] = {}
     for k, run in scores.runs.items():
-        for lane in {scores.lanes.get(check, "") for check in run}:
+        for lane in {scores.lanes.get(check, "") for check in run} & lanes:
             by_lane.setdefault(lane, []).append((scores.started.get(k, ""), k))
     found: set[str] = set()
     for lane, runs in by_lane.items():
