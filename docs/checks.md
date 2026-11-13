@@ -106,9 +106,11 @@ check skips the browser checks and `motion` (see `WINDOWS_SKIPS` in
 
 ## The browser sweep
 
-The full browser lanes are not slow CI's. `just sweep` (`sweep.py`), from a
-launchd agent every 3 hours (`just sweep-install`), runs them on
-`origin/staging` at utility priority on the Mac:
+The full browser lanes are not slow CI's. `just sweep` (`sweep.py`) runs them on
+`origin/staging` at utility priority on the Mac. Slow CI starts one in the
+background after a run when none has run in 3 hours, so the sweep keeps pace
+while staging moves with nothing to install; `just sweep-install` also adds a
+launchd agent that fires every 3 hours.
 
 - `shots`: `just ui-shots`, which renders every screen in `ui/shots.json` and
   fails on any page error.

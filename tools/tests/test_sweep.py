@@ -1,6 +1,8 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+import pytest
 
 from beryl_tools import nightly_failures, slow_ci, sweep, verdicts
 
@@ -159,3 +161,25 @@ def test_a_failure_files_a_steward_bead_with_its_culprit_and_a_repeat_comments()
     assert (
         second["title"] == "Fix sweep ui-test failure: ui-test:tokens wear their frame"
     )
+
+
+def test_slow_ci_starts_a_sweep_only_when_one_is_due(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sweep.sys, "platform", "darwin")
+    started: list[list[str]] = []
+
+    def start(by: list[str], log: Path) -> bool:
+        started.append(by)
+        return True
+
+    def background(at: datetime) -> str:
+        return sweep.start_background(now=lambda: at, start=start)
+
+    assert "started" in background(NOW), "no sweep on record"
+    fire(Runner())  # A sweep that began at NOW.
+    assert background(NOW + timedelta(hours=1)) == "sweep: next due in 120 min"
+    with sweep.system.file_lock(sweep.folder() / ".lock", timeout=0):
+        assert background(NOW + timedelta(hours=4)) == "sweep: one is running"
+    assert "started" in background(NOW + timedelta(hours=4))
+    assert started == [["sweep"], ["sweep"]]

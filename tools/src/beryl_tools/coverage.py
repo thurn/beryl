@@ -391,12 +391,12 @@ def refresh(commit: str) -> str:
     """Starts measuring `commit` in the background at low priority, unless it is the newest
     coverage already or another coverage run holds the lock, and returns a line saying which.
 
-    Slow CI calls this after an hourly full sweep whose browser lanes passed. Without it,
-    coverage is measured only nightly, and a line of ui/src changed since then is one coverage
-    cannot place, so slow CI runs every browser check (selection.py's `Chooser.unboxed`). The
-    run starts from the main checkout's tools, as the nightly agent's does, in a session of its
-    own: slow CI runs in a worktree that Enact deletes when it ends, ending every process left
-    inside it."""
+    The browser sweep calls this after a sweep that passed (sweep.py). Without it, coverage is
+    measured only nightly, and a line of ui/src changed since then is one coverage cannot
+    place, so the fast check's selection plays every browser check (selection.py's
+    `Chooser.unboxed`). The
+    run starts from the main checkout's tools, as the nightly agent's does ([`detached`]).
+    """
     if system.WINDOWS:
         return "coverage: not refreshed: this host records no coverage"
     try:
@@ -410,26 +410,36 @@ def refresh(commit: str) -> str:
             pass
     except system.LockHeld:
         return "coverage: not refreshed: another coverage run is in progress"
+    log = folder() / "refresh.log"
+    if not detached(["coverage", "--commit", commit], log):
+        return "coverage: not refreshed: needs the main checkout and uv"
+    return f"coverage: measuring {commit[:10]} in the background ({log})"
+
+
+def detached(by: list[str], log: Path) -> bool:
+    """Starts `by <by>` from the main checkout's tools at low priority in a session of its own,
+    its output to `log`, so that it outlives slow CI's worktree, which Enact deletes when the
+    run ends, ending every process left inside it. False when there is no main checkout or uv.
+    """
     main = paths.main_checkout()
     uv = shutil.which("uv")
     if main is None or uv is None:
-        return "coverage: not refreshed: needs the main checkout and uv"
-    command = [uv, "run", "--quiet", "--project", str(main / "tools")]
-    command += ["by", "coverage", "--commit", commit]
+        return False
+    command = [uv, "run", "--quiet", "--project", str(main / "tools"), "by", *by]
     # Not slow CI's: its worktree's environment, or its run log's results file.
     leave = {"VIRTUAL_ENV", "PYTHONPATH", runlog.RESULTS_ENV}
     env = {k: v for k, v in os.environ.items() if k not in leave}
-    with open(folder() / "refresh.log", "w") as log:
+    with open(log, "w") as out:
         subprocess.Popen(
             system.utility(command),
             cwd=main,
             env=env,
-            stdout=log,
+            stdout=out,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
             start_new_session=True,
         )
-    return f"coverage: measuring {commit[:10]} in the background ({log.name})"
+    return True
 
 
 def remove_tree(tree: Path) -> None:

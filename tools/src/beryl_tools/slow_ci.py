@@ -18,7 +18,7 @@ or ui/, and so on. Within a lane, the Rust lane tests only the packages the chan
 The full browser lanes (`shots`, `ui-test`) and the phone builds (`mobile`), [`SWEPT`], are not
 slow CI's: the fast check plays the browser checks a change can break, and the browser sweep
 (sweep.py) runs all three on origin/staging every few hours, filing what fails without blocking
-master. Slow CI keeps one small browser check, `ui-smoke` (`checks.SMOKE_TITLES`).
+master. A run starts the sweep in the background when one is due (`sweep.start_background`). Slow CI keeps one small browser check, `ui-smoke` (`checks.SMOKE_TITLES`).
 
 The tools are not judged by path. Each lane's pass records its fingerprint ([`fingerprint`]):
 its steps' commands, the source of every module of tools/src they run or import, of the modules
@@ -59,6 +59,7 @@ from . import (
     runlog,
     script_checks,
     speed,
+    sweep,
     system,
 )
 from .changes import changed_paths, master_base, run_git
@@ -546,6 +547,12 @@ def slow(args: argparse.Namespace) -> int:
 
     budget = int(os.environ.get("CI_BUDGET_S", checks.SLOW_BUDGET))
     every = len(chosen.whole) == len(chosen.why)
-    return checks.slow_run(
+    code = checks.slow_run(
         lanes, budget, started, "all" if every else "affected", passed
     )
+    if not args.lanes and commit:
+        try:
+            print(f"ci: {sweep.start_background()}")
+        except Exception as e:  # Starting the sweep never fails slow CI.
+            runlog.warn(e)
+    return code

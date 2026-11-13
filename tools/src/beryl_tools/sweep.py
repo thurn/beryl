@@ -11,7 +11,8 @@ slow CI keeps only a few browser checks (`checks.SMOKE_TITLES`) and this sweep r
 Every 3 hours, at about 8 commits an hour, a failure leaves about 24 commits to search, where
 a nightly would leave about 190.
 
-A firing skips when origin/staging has not moved since the last sweep, when the machine is
+Slow CI starts a sweep in the background after a run when one is due ([`start_background`]),
+so no agent need be installed while staging moves. A firing skips when origin/staging has not moved since the last sweep, when the machine is
 overloaded (`nightly.OVERLOAD_PER_CORE`) or when another sweep still runs. Otherwise it runs
 `by sweep-run` in a detached worktree of the tip with that commit's own tools
 (`coverage.in_tree`). A sweep that passes starts a coverage run of its commit in the background
@@ -183,6 +184,43 @@ def logged(record: dict[str, object]) -> dict[str, object]:
     """`record`, appended to the log."""
     append(record)
     return record
+
+
+def last_began(records: list[dict[str, object]]) -> datetime | None:
+    """When the last sweep that ran (passed or failed) began, or None."""
+    for r in reversed(records):
+        if r.get("outcome") in ("ok", "failed") and r.get("commit"):
+            try:
+                return datetime.fromisoformat(str(r["time"]))
+            except (KeyError, ValueError):
+                continue
+    return None
+
+
+def start_background(
+    now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+    start: Callable[[list[str], Path], bool] = coverage.detached,
+) -> str:
+    """Starts `by sweep` in the background from the main checkout's tools when one is due: no
+    sweep has run in [`EVERY`] and none is running. Returns a line saying which. Slow CI calls
+    this after each run on the Mac, so the sweep keeps its interval while staging moves, which
+    is when it has something to find, with no agent installed; `just sweep-install` adds the
+    launchd agent for the hours when nothing is pushed."""
+    if sys.platform != "darwin":
+        return "sweep: not started: the Mac runs the browser sweep"
+    began = last_began(read_log())
+    if began is not None and now() - began < EVERY:
+        due = (began + EVERY - now()) // timedelta(minutes=1)
+        return f"sweep: next due in {due} min"
+    try:
+        with system.file_lock(folder() / ".lock", timeout=0):
+            pass
+    except system.LockHeld:
+        return "sweep: one is running"
+    log = folder() / "background.log"
+    if not start(["sweep"], log):
+        return "sweep: not started: needs the main checkout and uv"
+    return f"sweep: started in the background ({log})"
 
 
 def last_passed(records: list[dict[str, object]]) -> str:
