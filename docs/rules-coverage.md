@@ -583,6 +583,41 @@ nothing when absent.
 Every rules bug a new mechanism exposes also gets a [bugs.md](bugs.md) entry
 saying how its class could be prevented, ideally through the type system.
 
+## Census
+
+`just census` counts, over the pool's cards, which mechanics in Forge's card
+scripts the vocabulary lacks. It reads only kind names (ability APIs, trigger
+modes, static modes, replacement events and keywords) and never keeps a
+parameter or emits a definition (K16). `data/census-coverage.json` lists the
+kinds `beryl_card` covers, each with its entry; a test fails when an entry no
+longer exists. The report goes to `$BERYL_CACHE/census.json`, ordered by the
+cards that only that kind blocks. On 2026-11-12, 19.0% of 32,177 pool cards used
+only covered kinds. The top 15 uncovered kinds, with the cards each blocks alone
+and in all:
+
+| Kind                  | Alone | Cards |
+| --------------------- | ----: | ----: |
+| `trigger:ChangesZone` | 1,814 | 6,641 |
+| `effect:ChangeZone`   | 1,210 | 5,155 |
+| `static:Continuous`   | 1,094 | 4,199 |
+| `effect:Effect`       |   315 | 1,622 |
+| `effect:PumpAll`      |   305 |   919 |
+| `effect:Animate`      |   239 |   781 |
+| `effect:Tap`          |   190 | 1,426 |
+| `static:ReduceCost`   |   178 |   485 |
+| `effect:Charm`        |   154 |   759 |
+| `effect:DamageAll`    |   150 |   384 |
+| `effect:Untap`        |   149 |   458 |
+| `keyword:Trample`     |   145 |   990 |
+| `effect:Cleanup`      |   140 | 2,503 |
+| `keyword:etbCounter`  |   140 |   463 |
+| `trigger:DamageDone`  |   127 |   799 |
+
+Some kinds are broader than one vocabulary entry (`ChangeZone` covers return,
+exile and put-into-library), so they stay uncovered until a single entry
+matches. `effect:Cleanup` is Forge bookkeeping that Beryl needs no counterpart
+for; it stays listed because the file has no "not needed" state.
+
 ## Open questions
 
 - **Scope beyond the supported decks.** Build text changes and same-layer

@@ -28,6 +28,14 @@ HARNESS_CLASS = "beryl.BerylForgeHarness"
 
 JsonObject = dict[str, object]
 
+
+def scripts() -> Path:
+    """Forge's card scripts in the cached checkout (read only by the census, census.py)."""
+    from . import oracles
+
+    return oracles.checkout(oracles.FORGE) / "forge-gui" / "res" / "cardsfolder"
+
+
 # Beryl's TurnStep variants as Forge's PhaseType names.
 PHASES: Mapping[str, str] = {
     "Untap": "UNTAP",

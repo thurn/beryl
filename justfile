@@ -159,6 +159,11 @@ card command *args:
 cards *args:
     {{ by }} cards "$@"
 
+# Count the mechanics in Forge's scripts that the vocabulary lacks, by pool cards blocked (--top N)
+[group('data')]
+census *args:
+    {{ by }} census "$@"
+
 # Hold every Comprehensive Rules link and quotation in the tree to the rules page (network; --refresh)
 [group('data')]
 citations *args:

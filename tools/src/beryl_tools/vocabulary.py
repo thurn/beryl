@@ -17,12 +17,15 @@ from . import nearest, paths
 SOURCES: Path = paths.RUST / "crates" / "beryl_card" / "src"
 
 ENUM: re.Pattern[str] = re.compile(r"^\s*pub enum (\w+)")
+# The body of a `bitset! { Keywords(u64) { FLYING = 8, ... } }`: its constants are entries like
+# an enum's variants (`Keywords::FLYING`).
+BITSET: re.Pattern[str] = re.compile(r"^\s*(\w+)\(u\d+\)\s*\{")
 IMPL: re.Pattern[str] = re.compile(
     r"^\s*impl(?:<[^>]*>)?\s+(?:[\w:<>]+\s+for\s+)?(\w+)"
 )
 FUNCTION: re.Pattern[str] = re.compile(r"^\s*pub (?:const )?fn (\w+)")
 CONSTANT: re.Pattern[str] = re.compile(r"^\s*pub const ([A-Z][A-Z0-9_]*)\s*:")
-VARIANT: re.Pattern[str] = re.compile(r"^\s*([A-Z]\w*)\s*(?:[({,]|$)")
+VARIANT: re.Pattern[str] = re.compile(r"^\s*([A-Z]\w*)\s*(?:[({,=]|$)")
 # String and character literals, whose braces and slashes are not code.
 LITERAL: re.Pattern[str] = re.compile(r'"(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)\'')
 # A citation of the Comprehensive Rules with the rule it quotes, `([CR 701.6a](url)): "To
@@ -92,7 +95,7 @@ def entries_of(path: Path, root: Path) -> list[Entry]:
         text = code(line)
         opened = depth + text.count("{") - text.count("}")
         if opened > depth:
-            if enum := ENUM.match(line):
+            if enum := ENUM.match(line) or BITSET.match(line):
                 scopes.append(("enum", enum.group(1), opened))
             elif impl := IMPL.match(line):
                 scopes.append(("impl", impl.group(1), opened))
