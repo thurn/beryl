@@ -41,6 +41,32 @@ in the turn the user invoked you, so do all of the planning below in that turn.
 
 Nothing in this workflow waits for the user.
 
+## One group in one session
+
+The scheduled routine `beryl-ci-steward-watch` runs every 30 minutes on this
+Mac. A scheduled run cannot start other sessions, so it works the CI beads
+itself, one group per run, instead of running the vizier. Slow-CI Steward
+beads come first; the routine handles those before it reaches this section.
+A session working alone this way:
+
+1. **Chooses one group.** Take the beads that are waiting for a session (open
+   with no assignee, no parent, not deferred). Group them as in planning
+   step 2 and pick the group with the highest-priority bead, at most four
+   beads. Read only as far as grouping needs.
+2. **Claims them** with `enact claim <bead>` for each. Exit code 3 means
+   another session got that bead first: drop it from the group, and stop if
+   none are left.
+3. **Works them** as [Worker: one CI bead](#worker-one-ci-bead) says, in one
+   worktree, then lands the change with `enact push`. There is no vizier, so
+   when the output includes `watch_ci`, watch slow CI with
+   `enact ci --wait <sha>` until it passes, and fix any Steward bead it files
+   as `steward.md` says.
+4. **Closes** each bead with `enact close <bead> --reason "<cause and
+   action>"`, or releases it as "Closing" below says.
+5. **Leaves notes for the next run.** On each waiting bead outside its group
+   whose cause it noticed while grouping, it appends the suspected cause and
+   group (`bd update <bead> --append-notes`), so the next run starts there.
+
 ## Where the evidence is
 
 - The bead: the checks it names (in its description and in its metadata:
