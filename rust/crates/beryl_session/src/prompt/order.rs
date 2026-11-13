@@ -17,6 +17,7 @@ use beryl_engine::{Candidates, Choice, Decision, GameTable, Layout, Opt, State};
 
 use super::held::{Clicked, Run, Step, Table, Want};
 use super::{ButtonId, Click, PromptButton, PromptView, ShapeBody};
+use crate::protocol::ObjectId;
 use crate::protocol::{Candidate, DecisionView};
 use crate::script::Subject;
 
@@ -28,7 +29,7 @@ pub(crate) struct Order {
     items: Vec<u16>,
     /// What names each candidate's trigger in the decisions after the first, as the indexes
     /// shift: the slot of its source and which of the source's abilities it is.
-    named: Vec<(Option<u16>, u8)>,
+    named: Vec<(Option<ObjectId>, u8)>,
     confirm: String,
 }
 

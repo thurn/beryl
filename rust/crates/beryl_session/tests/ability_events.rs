@@ -10,6 +10,7 @@ use beryl_engine::{
 };
 use beryl_scenario::Action;
 use beryl_session::StopsSetting;
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{GameEvent, Moment, Side, StackItem, TargetRef, player_view};
 
 /// The events of `card`'s scenario named `name` as its first `actions` actions play out, and
@@ -20,7 +21,7 @@ fn events(
     name: &str,
     actions: usize,
     viewer: Seat,
-) -> (Vec<GameEvent>, impl Fn(&str) -> u16) {
+) -> (Vec<GameEvent>, impl Fn(&str) -> ObjectId) {
     let (_, scenarios) = beryl_cards::scenarios()
         .iter()
         .find(|&&(c, _)| c == card)
@@ -79,7 +80,7 @@ fn events(
         StopsSetting::SMART,
         x.events.events(),
     );
-    let slots: Vec<(String, u16)> = view
+    let slots: Vec<(String, ObjectId)> = view
         .objects
         .iter()
         .filter_map(|o| Some((o.name.clone()?, o.slot)))

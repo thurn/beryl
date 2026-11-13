@@ -20,9 +20,7 @@ use beryl_engine::{Choice, Decision, Layout, Opt, SlotId as _, State};
 
 use super::ahead;
 use super::held::{Clicked, Run, Step, Table, Want, alike, button, named, options};
-use super::{
-    ButtonId, Click, Marked, ObjectId, Pair, PartName, PromptView, ShapeBody, ids, slots_of,
-};
+use super::{ButtonId, Click, Marked, ObjectId, Pair, PartName, PromptView, ShapeBody};
 use crate::protocol::{Candidate, DecisionView, Side};
 use crate::script::{Arrow, Mark, Subject};
 
@@ -38,11 +36,11 @@ pub(crate) struct Declare {
     lined: bool,
     /// The creatures that can be declared, each with what it can be aimed at: those the
     /// decision offers, in its order, then the ones that stand for one of those.
-    able: Vec<(u16, Vec<Subject>)>,
+    able: Vec<(ObjectId, Vec<Subject>)>,
     /// The creatures declared and aimed, in the order they were.
     pairs: Vec<Pair>,
     /// The creatures declared whose aim the next click gives.
-    aiming: Vec<u16>,
+    aiming: Vec<ObjectId>,
     /// The prompt asks the aim alone, of creatures the engine has declared already: what
     /// they can be aimed at. A click on one answers.
     aims: Option<Vec<Subject>>,
@@ -82,7 +80,7 @@ impl Declare {
             cancel: prompt.words.cancel.clone(),
         };
         if prompt.part == PartName::Aim {
-            declare.aiming = slots_of(&prompt.about);
+            declare.aiming.clone_from(&prompt.about);
             declare.aims = Some(aims(table, d));
             return Some(declare);
         }
@@ -100,7 +98,7 @@ impl Declare {
                 .able
                 .push((slot, aim.map_or_else(Vec::new, |aim| aims(table, &aim))));
         }
-        let offered: Vec<u16> = declare.able.iter().map(|&(slot, _)| slot).collect();
+        let offered: Vec<ObjectId> = declare.able.iter().map(|&(slot, _)| slot).collect();
         for (slot, stands_for) in table.stand_ins(&offered) {
             let aims = declare.aims_of(stands_for).to_vec();
             declare.able.push((slot, aims));
@@ -109,7 +107,7 @@ impl Declare {
     }
 
     /// What the creature in `slot` can be aimed at.
-    fn aims_of(&self, slot: u16) -> &[Subject] {
+    fn aims_of(&self, slot: ObjectId) -> &[Subject] {
         (self.able.iter())
             .find(|&&(able, _)| able == slot)
             .map_or(&[], |(_, aims)| aims)
@@ -128,18 +126,15 @@ impl Declare {
             .collect()
     }
 
-    fn declared(&self, slot: u16) -> bool {
-        self.aiming.contains(&slot) || self.pairs.iter().any(|pair| pair.from == ObjectId(slot))
+    fn declared(&self, slot: ObjectId) -> bool {
+        self.aiming.contains(&slot) || self.pairs.iter().any(|pair| pair.from == slot)
     }
 
     /// Declares the creature in `slot`: aimed at once where it has one thing to aim at, and
     /// awaiting its aim otherwise. Attackers await theirs together, a blocker alone.
-    fn declare(&mut self, slot: u16) {
+    fn declare(&mut self, slot: ObjectId) {
         match *self.aims_of(slot) {
-            [to] => self.pairs.push(Pair {
-                from: ObjectId(slot),
-                to,
-            }),
+            [to] => self.pairs.push(Pair { from: slot, to }),
             _ if self.purpose == Purpose::Block => self.aiming = vec![slot],
             _ => self.aiming.push(slot),
         }
@@ -168,7 +163,7 @@ impl Declare {
                 button: ButtonId::Auto,
             } if !self.auto.is_empty() => {
                 // As they lie on the table.
-                let mut rest: Vec<u16> = (self.able.iter().map(|&(slot, _)| slot))
+                let mut rest: Vec<ObjectId> = (self.able.iter().map(|&(slot, _)| slot))
                     .filter(|&slot| !self.declared(slot))
                     .collect();
                 rest.sort_unstable();
@@ -192,10 +187,7 @@ impl Declare {
                 return Clicked::Answers(Run::new(self.purpose, steps));
             }
             for from in self.aiming.drain(..) {
-                self.pairs.push(Pair {
-                    from: ObjectId(from),
-                    to: on,
-                });
+                self.pairs.push(Pair { from, to: on });
             }
             return Clicked::Changed;
         }
@@ -207,7 +199,7 @@ impl Declare {
         }
         if self.declared(slot) {
             self.aiming.retain(|&aiming| aiming != slot);
-            self.pairs.retain(|pair| pair.from != ObjectId(slot));
+            self.pairs.retain(|pair| pair.from != slot);
             return Clicked::Changed;
         }
         if !self.able.iter().any(|&(able, _)| able == slot) {
@@ -228,8 +220,8 @@ impl Declare {
 
     pub(crate) fn show(&self, view: &mut PromptView) {
         let marked = |mark: Mark| move |on: Subject| Marked { on, mark };
-        let card = |slot: u16| Subject::Object { slot };
-        let declared = (self.pairs.iter().map(|pair| pair.from.0))
+        let card = |slot: ObjectId| Subject::Object { slot };
+        let declared = (self.pairs.iter().map(|pair| pair.from))
             .chain(self.aiming.iter().copied())
             .map(card);
         let able = (self.able.iter().map(|&(slot, _)| slot))
@@ -261,7 +253,7 @@ impl Declare {
             arrow: self.arrow,
             pairs: self.pairs.clone(),
             lined: self.lined,
-            aiming: ids(self.aiming.iter().copied()),
+            aiming: self.aiming.clone(),
         };
     }
 }
@@ -277,8 +269,10 @@ fn aims<L: Layout>(table: &Table<'_, L>, d: &Decision<L>) -> Vec<Subject> {
             Opt::Defender(None) => aims.push(Subject::Player {
                 player: Side::Opponent,
             }),
-            Opt::Defender(Some(slot)) => aims.push(Subject::Object { slot: slot.num() }),
-            Opt::Object(slot) => attackers.push(slot.num()),
+            Opt::Defender(Some(slot)) => aims.push(Subject::Object {
+                slot: ObjectId(slot.num()),
+            }),
+            Opt::Object(slot) => attackers.push(ObjectId(slot.num())),
             _ => {}
         }
     }
@@ -303,7 +297,7 @@ pub(crate) struct Aims {
     /// ([CR 509.1h](https://yawgatog.com/resources/magic-rules/#R5091h): "An attacking
     /// creature with one or more creatures declared as blockers for it becomes a blocked
     /// creature"), so the blockers aimed at one attacker after the first follow the first.
-    taken: Vec<(u16, u16)>,
+    taken: Vec<(ObjectId, ObjectId)>,
 }
 
 impl Aims {
@@ -322,7 +316,7 @@ impl Aims {
 
     /// Notes that the engine took the attacker in `took` for the one in `aimed`, and so will
     /// take the other for the first where the two differ.
-    fn take(&mut self, aimed: u16, took: u16) {
+    fn take(&mut self, aimed: ObjectId, took: ObjectId) {
         self.taken
             .retain(|&(from, _)| from != aimed && from != took);
         self.taken.push((aimed, took));
@@ -340,7 +334,7 @@ impl Aims {
         d: &Decision<L>,
         options: &[Opt<L>],
     ) -> Option<usize> {
-        let card = |slot: u16| Subject::Object { slot };
+        let card = |slot: ObjectId| Subject::Object { slot };
         match d.prompt.part {
             Part::Pick => {
                 // An aim the engine did not ask had one answer: the attacker its blocker is
@@ -350,10 +344,10 @@ impl Aims {
                     && let Some(blocker) = L::Slot::from_num(pair.from.0)
                     && let Some(took) = s.object(blocker).blocked_attackers().first()
                 {
-                    self.take(aimed, took.num());
+                    self.take(aimed, ObjectId(took.num()));
                 }
-                let itself = |pair: &Pair| named(d, options, card(pair.from.0));
-                let stands = |pair: &Pair| alike(s, options, card(pair.from.0));
+                let itself = |pair: &Pair| named(d, options, card(pair.from));
+                let stands = |pair: &Pair| alike(s, options, card(pair.from));
                 let first = |found: &dyn Fn(&Pair) -> Option<usize>| {
                     (self.left.iter().enumerate())
                         .filter_map(|(at, pair)| Some((found(pair)?, at)))
@@ -374,7 +368,7 @@ impl Aims {
                 }
                 let found = named(d, options, pair.to).or_else(|| alike(s, options, pair.to))?;
                 if let Opt::Object(took) = options[found] {
-                    self.take(aimed, took.num());
+                    self.take(aimed, ObjectId(took.num()));
                 }
                 Some(found)
             }

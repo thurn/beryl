@@ -26,7 +26,7 @@ pub(crate) struct YesNo {
     places: Option<[PlaceName; 2]>,
     buttons: Vec<PromptButton>,
     /// The permanents a yes that pays would tap, by the engine's default payment.
-    taps: Vec<u16>,
+    taps: Vec<ObjectId>,
 }
 
 impl YesNo {

@@ -16,7 +16,8 @@
 use beryl_engine::card::Purpose;
 
 use super::held::{Clicked, Run, Step, button};
-use super::{ButtonId, Click, PromptButton, PromptView, ShapeBody, ids, slots_of};
+use super::{ButtonId, Click, PromptButton, PromptView, ShapeBody};
+use crate::protocol::ObjectId;
 use crate::protocol::{Candidate, DecisionView};
 
 /// The state of a prompt of the mode shape.
@@ -26,7 +27,7 @@ pub(crate) struct Mode {
     /// under a choice of ways.
     answers: Purpose,
     /// The cards the choice is about.
-    about: Vec<u16>,
+    about: Vec<ObjectId>,
     buttons: Vec<PromptButton>,
 }
 
@@ -82,7 +83,7 @@ impl Mode {
             .collect();
         Mode {
             answers: purpose,
-            about: slots_of(&decision.prompt.about),
+            about: decision.prompt.about.clone(),
             buttons,
         }
     }
@@ -90,7 +91,7 @@ impl Mode {
     /// The choice among `ways` to use the card in `slot`, at a priority whose candidates are
     /// called `labels`: a button for each, under its candidate's label or, for an ability the
     /// priority does not offer, its own and never enabled; and `cancel` to go back.
-    pub(crate) fn act(labels: &[String], slot: u16, ways: &[Way], cancel: &str) -> Mode {
+    pub(crate) fn act(labels: &[String], slot: ObjectId, ways: &[Way], cancel: &str) -> Mode {
         let way = |way: &Way| match *way {
             Way::Offered(index) => {
                 let label = &labels[usize::from(index)];
@@ -138,7 +139,7 @@ impl Mode {
         view.marks = Vec::new();
         view.buttons.clone_from(&self.buttons);
         view.body = ShapeBody::Mode {
-            about: ids(self.about.iter().copied()),
+            about: self.about.clone(),
         };
     }
 }

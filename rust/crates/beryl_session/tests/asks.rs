@@ -173,7 +173,7 @@ fn a_token_awaiting_its_attack_target_is_public_from_both_seats() {
             "attackTarget declare attack aim: \"Choose attack target\" 0/0 \
              you's battlefield about 1"
         );
-        let slots: Vec<u16> = decision.prompt.about.iter().map(|&id| id.into()).collect();
+        let slots = decision.prompt.about.clone();
         assert_eq!(slots.len(), 1);
         assert_eq!(observer.status, Status::Thinking);
         assert_eq!(observer.pending_attackers, Some(slots.clone()));

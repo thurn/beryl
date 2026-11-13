@@ -18,7 +18,8 @@ use self::damage::Damage;
 use self::priority::Priority;
 use super::held::{Clicked, Run, Step, Table, Want, button, offered};
 use super::wording::{AIMED, Holes, OWN_TARGET, Wording};
-use super::{ButtonId, Click, Marked, PartName, PromptButton, PromptView, ShapeBody, ids};
+use super::{ButtonId, Click, Marked, PartName, PromptButton, PromptView, ShapeBody};
+use crate::protocol::ObjectId;
 use crate::protocol::{Candidate, DecisionView, ObjectView, Side, TargetRef, ZoneName};
 use crate::script::{Mark, Subject};
 
@@ -112,7 +113,7 @@ pub(crate) struct Objects {
     /// stand for one of those ([`Table::stand_ins`]).
     eligible: Vec<Subject>,
     /// The cards laid out to pick from; empty when they are picked where they lie.
-    tray: Vec<u16>,
+    tray: Vec<ObjectId>,
     least: u8,
     most: u8,
     picked: Vec<Subject>,
@@ -159,11 +160,11 @@ enum Opens {
     Instead(Vec<Subject>),
 }
 
-fn card(slot: u16) -> Subject {
+fn card(slot: ObjectId) -> Subject {
     Subject::Object { slot }
 }
 
-fn object(view: &[ObjectView], slot: u16) -> Option<&ObjectView> {
+fn object(view: &[ObjectView], slot: ObjectId) -> Option<&ObjectView> {
     view.iter().find(|o| o.slot == slot)
 }
 
@@ -206,7 +207,7 @@ impl Objects {
         // effect whose target is being chosen would take the object.
         let taken = |on: &Subject| match *on {
             Subject::Object { slot } => {
-                L::Slot::from_num(slot).is_some_and(|slot| target_takes(table.s, table.t, slot))
+                L::Slot::from_num(slot.0).is_some_and(|slot| target_takes(table.s, table.t, slot))
             }
             _ => false,
         };
@@ -274,7 +275,7 @@ impl Objects {
         let offered = offered(decision);
         let ends = (decision.candidates.iter()).any(|c| c.option == Candidate::Done);
         let objects = &table.view.objects;
-        let public = |&slot: &u16| {
+        let public = |&slot: &ObjectId| {
             object(objects, slot).is_some_and(|o| {
                 matches!(
                     o.zone,
@@ -493,7 +494,7 @@ impl Objects {
             self.buttons()
         };
         view.body = ShapeBody::Pick {
-            tray: ids(self.tray.iter().copied()),
+            tray: self.tray.clone(),
             least: self.least,
             most: self.most,
             picked: self.picked.clone(),
@@ -548,7 +549,7 @@ fn offered_targets(decision: &DecisionView) -> (Vec<Subject>, Vec<u8>) {
 /// Adds to `eligible`, what a decision offers, the cards that stand for one of its objects
 /// ([`Table::stand_ins`]).
 fn with_stand_ins<L: Layout>(table: &Table<'_, L>, eligible: &mut Vec<Subject>) {
-    let offered: Vec<u16> = (eligible.iter())
+    let offered: Vec<ObjectId> = (eligible.iter())
         .filter_map(|on| match *on {
             Subject::Object { slot } => Some(slot),
             _ => None,

@@ -13,9 +13,9 @@ use beryl_engine::{
 };
 
 use super::{
-    CardHandling, CardType, Combat, CounterView, DecisionId, Facing, Keyword, ManaPool, ObjectView,
-    PaidCost, PlayerState, PlayerView, Players, PowerToughness, Side, StackItem, Status,
-    StopsSetting, TargetRef, TurnView, decision_view, game_events, halt_view, outcome_view,
+    CardHandling, CardType, Combat, CounterView, DecisionId, Facing, Keyword, ManaPool, ObjectId,
+    ObjectView, PaidCost, PlayerState, PlayerView, Players, PowerToughness, Side, StackItem,
+    Status, StopsSetting, TargetRef, TurnView, decision_view, game_events, halt_view, outcome_view,
 };
 
 /// Where the game stands, as the session knows it: what [`player_view`] turns into a [`Status`].
@@ -60,7 +60,11 @@ pub fn player_view<L: Layout>(
         let state = player_state(t, obs, p);
         for slots in [&state.library, &state.graveyard] {
             objects.extend(slots.iter().map(|&slot| {
-                object_view(t, obs, L::Slot::from_num(slot).expect("a slot of the game"))
+                object_view(
+                    t,
+                    obs,
+                    L::Slot::from_num(slot.0).expect("a slot of the game"),
+                )
             }));
         }
         // Unordered zones: their objects say where they are.
@@ -159,7 +163,7 @@ pub fn player_view<L: Layout>(
 pub(super) fn pending_attackers<L: Layout>(
     obs: Observation<'_, L>,
     moment: Moment<'_, L>,
-) -> Option<Vec<u16>> {
+) -> Option<Vec<ObjectId>> {
     let decision = match moment {
         Moment::Deciding(_, d, _)
         | Moment::Thinking {
@@ -275,8 +279,8 @@ pub(crate) fn side<L: Layout>(obs: Observation<'_, L>, p: Seat) -> Side {
 }
 
 /// Slots as the protocol numbers them. A set of objects is sent in the candidate order.
-pub(crate) fn slots<S: SlotId>(slots: impl IntoIterator<Item = S>) -> Vec<u16> {
-    slots.into_iter().map(SlotId::num).collect()
+pub(crate) fn slots<S: SlotId>(slots: impl IntoIterator<Item = S>) -> Vec<ObjectId> {
+    slots.into_iter().map(|slot| ObjectId(slot.num())).collect()
 }
 
 /// The name of the face up of the object in `slot`, if the viewer knows it; for a face-down
@@ -318,9 +322,9 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
             count,
         })
         .collect();
-    let some = |s: Option<L::Slot>| s.map(SlotId::num);
+    let some = |s: Option<L::Slot>| s.map(|s| ObjectId(s.num()));
     ObjectView {
-        slot: slot.num(),
+        slot: ObjectId(slot.num()),
         zone: o.zone().into(),
         owner: side(obs, o.owner()),
         controller: side(obs, obs.controller(slot)),
@@ -359,7 +363,7 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
                 target, blocked, ..
             } => Some(Combat::Attacking {
                 planeswalker: match target {
-                    AttackTarget::Planeswalker(walker) => Some(walker.num()),
+                    AttackTarget::Planeswalker(walker) => Some(ObjectId(walker.num())),
                     AttackTarget::Player(_) | AttackTarget::Removed => None,
                 },
                 target_departed: (target == AttackTarget::Removed).then_some(true),
@@ -454,11 +458,13 @@ pub(super) fn stack_item_cast<L: Layout>(
             (Some(player), _) => TargetRef::Player {
                 player: side(obs, player),
             },
-            (None, Some(o)) => TargetRef::Object { slot: o.slot.num() },
+            (None, Some(o)) => TargetRef::Object {
+                slot: ObjectId(o.slot.num()),
+            },
             (None, None) => unreachable!("a target is a player or an object"),
         })
         .collect();
-    let source = e.object().map(|r| r.slot.num());
+    let source = e.object().map(|r| ObjectId(r.slot.num()));
     match e.ability() {
         None => StackItem::Spell {
             slot: source.expect("a spell's card"),

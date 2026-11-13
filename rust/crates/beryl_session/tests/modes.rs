@@ -16,6 +16,7 @@ use beryl_engine::state::CounterKind;
 use beryl_engine::{Seat, TurnStep};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_session::prompt::{ButtonId, Click};
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{Candidate, Kind, Side, ZoneName};
 use beryl_session::replay::Entry;
 use beryl_session::save::Kind as SavedKind;
@@ -320,7 +321,7 @@ fn the_opening_is_played_by_its_buttons() {
     assert_eq!(play.press(option(0)), None);
     assert_eq!(play.game.state(), picked.game.state());
 
-    let hand: Vec<u16> = (play.view.objects.iter())
+    let hand: Vec<ObjectId> = (play.view.objects.iter())
         .filter(|o| o.zone == ZoneName::Hand && o.owner == Side::You)
         .map(|o| o.slot)
         .collect();

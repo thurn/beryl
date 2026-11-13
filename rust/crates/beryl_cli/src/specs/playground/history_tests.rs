@@ -5,7 +5,8 @@
 use super::*;
 use beryl_engine::card::Purpose;
 use beryl_session::protocol::{
-    Candidate, CandidateIndex, CardHandling, GameEvent, Kind, PlayerView, Side, Status, ZoneName,
+    Candidate, CandidateIndex, CardHandling, GameEvent, Kind, ObjectId, PlayerView, Side, Status,
+    ZoneName,
 };
 use std::sync::mpsc::channel;
 use std::time::Duration;
@@ -222,7 +223,7 @@ fn linked_exile_can_be_reviewed_with_host_slot_zero() {
     exercise("Portable Hole", "exiles until", false, |v| {
         v.objects
             .iter()
-            .any(|o| o.zone == ZoneName::Exile && o.exiled_by == Some(0))
+            .any(|o| o.zone == ZoneName::Exile && o.exiled_by == Some(ObjectId(0)))
     });
 }
 

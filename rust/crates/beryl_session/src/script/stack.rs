@@ -9,6 +9,7 @@ use super::build::{Builder, activator};
 use super::hear::{Cause, Move};
 use super::staging::Told;
 use super::{Act, Fact, Subject};
+use crate::protocol::ObjectId;
 use crate::protocol::{GameEvent, StackItem, Why, ZoneName};
 
 /// An ability the engine said arrived on the stack, which no view has shown: the opponent's,
@@ -153,7 +154,7 @@ impl Builder<'_> {
     /// before that goes (Arena, `I3Te0m1bBFw 26:56.75`).
     pub(super) fn lift_ahead(&mut self, i: usize, told: &[Told]) {
         let after = self.after;
-        let leaving: Vec<u16> = (i..told.len())
+        let leaving: Vec<ObjectId> = (i..told.len())
             .take_while(|&j| j == i || told[j].together)
             .filter_map(|j| match self.events[j] {
                 GameEvent::ZoneChange {

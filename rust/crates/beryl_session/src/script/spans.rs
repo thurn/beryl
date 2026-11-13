@@ -11,6 +11,7 @@
 use super::build::Builder;
 use super::table::{Entry, Table};
 use super::{Act, Arrow, Open, Span, Step, Subject};
+use crate::protocol::ObjectId;
 use crate::protocol::{
     CardHandling, Combat, ObjectView, OutcomeView, PlayerView, Side, StackItem, Status, TargetRef,
     ZoneName,
@@ -20,13 +21,13 @@ use crate::protocol::{
 /// ability's from the bottom of the stack, then combat's in the order of the battlefield.
 /// `aimless`: the attackers whose line is not drawn, what they attack being not yet chosen
 /// ([`crate::protocol::PlayerView::pending_attackers`]).
-pub(super) fn wanted(table: &Table, aimless: &[u16]) -> Vec<Open> {
+pub(super) fn wanted(table: &Table, aimless: &[ObjectId]) -> Vec<Open> {
     let mut spans = aimed(table);
     spans.extend(combat(table, aimless));
     spans
 }
 
-fn permanent(table: &Table, slot: u16) -> Option<&ObjectView> {
+fn permanent(table: &Table, slot: ObjectId) -> Option<&ObjectView> {
     let object = table.objects.get(&slot);
     object.filter(|o| o.zone == ZoneName::Battlefield)
 }
@@ -41,7 +42,7 @@ fn aimed(table: &Table) -> Vec<Open> {
             spans.push(span);
         }
     };
-    let permanent = |slot: u16| permanent(table, slot);
+    let permanent = |slot: ObjectId| permanent(table, slot);
     for entry in &table.stack {
         let from = entry.subject();
         let (targets, controller) = match &entry.item {
@@ -95,10 +96,10 @@ fn aimed(table: &Table) -> Vec<Open> {
 
 /// The lines of the combat `table` shows: each blocker's to its attacker, and each attacker's
 /// to the planeswalker it attacks.
-pub(super) fn combat(table: &Table, aimless: &[u16]) -> Vec<Open> {
+pub(super) fn combat(table: &Table, aimless: &[ObjectId]) -> Vec<Open> {
     let mut spans = Vec::new();
     let mut want = |arrow, from, to| spans.push(Open::Point { arrow, from, to });
-    let permanent = |slot: u16| permanent(table, slot);
+    let permanent = |slot: ObjectId| permanent(table, slot);
     for &slot in &table.battlefield {
         let Some(object) = permanent(slot).filter(|_| !aimless.contains(&slot)) else {
             continue;

@@ -16,7 +16,9 @@ fn ids(slots: &[u16]) -> Vec<ObjectId> {
 }
 
 const fn card(slot: u16) -> Subject {
-    Subject::Object { slot }
+    Subject::Object {
+        slot: ObjectId(slot),
+    }
 }
 
 fn marked(mark: Mark, on: &[Subject]) -> impl Iterator<Item = Marked> + '_ {

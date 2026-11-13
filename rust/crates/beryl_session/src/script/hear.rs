@@ -10,6 +10,7 @@ use beryl_engine::state::StackEntry;
 use beryl_engine::{Layout, Seat, SlotId as _};
 
 use super::Subject;
+use crate::protocol::ObjectId;
 use crate::protocol::{Side, StackItem};
 
 /// What an event came from, as the engine's tag says it
@@ -28,7 +29,10 @@ pub enum Cause<P = Side> {
     Effect { entry: Option<Subject> },
     /// The effect of an ability of the object in `slot` that never was on the stack, and the
     /// spell or ability whose payment it was activated in: what its mana pays for.
-    Object { slot: u16, entry: Option<Subject> },
+    Object {
+        slot: ObjectId,
+        entry: Option<Subject>,
+    },
 }
 
 impl<P> Cause<P> {
@@ -129,7 +133,7 @@ impl Names {
     fn name<L: Layout>(&mut self, entry: &StackEntry<L>) -> Subject {
         if let Some(spell) = entry.spell() {
             return Subject::Object {
-                slot: spell.slot.num(),
+                slot: ObjectId(spell.slot.num()),
             };
         }
         self.abilities += 1;
@@ -168,7 +172,7 @@ impl Names {
                 Tag::Player { player, .. } => Cause::Player { player, entry },
                 Tag::Effect { .. } => Cause::Effect { entry },
                 Tag::Object { source, .. } => Cause::Object {
-                    slot: source.slot.num(),
+                    slot: ObjectId(source.slot.num()),
                     entry,
                 },
             };
@@ -191,9 +195,9 @@ impl Names {
     pub fn agree<'a, L: Layout>(&mut self, stack: impl IntoIterator<Item = &'a StackEntry<L>>) {
         let mut kept = 0;
         for entry in stack {
-            let spell = entry
-                .spell()
-                .map(|s| Subject::Object { slot: s.slot.num() });
+            let spell = entry.spell().map(|s| Subject::Object {
+                slot: ObjectId(s.slot.num()),
+            });
             let same = match (self.stack.get(kept), spell) {
                 (Some(&name), Some(spell)) => name == spell,
                 (Some(Subject::Ability { .. }), None) => true,
@@ -220,11 +224,9 @@ fn about_to_arrive<L: Layout>(events: &[Tagged<L>], place: StackIx, top: usize) 
         return None;
     }
     events[1..].iter().find_map(|later| match &later.event {
-        Event::StackArrival { entry } => Some(
-            entry
-                .spell()
-                .map(|s| Subject::Object { slot: s.slot.num() }),
-        ),
+        Event::StackArrival { entry } => Some(entry.spell().map(|s| Subject::Object {
+            slot: ObjectId(s.slot.num()),
+        })),
         _ => None,
     })?
 }

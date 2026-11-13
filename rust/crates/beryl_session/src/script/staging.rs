@@ -8,7 +8,8 @@
 use beryl_engine::card::Purpose;
 
 use super::hear::{Cause, Heard};
-use crate::prompt::{Lies, ShapeBody, slots_of};
+use crate::prompt::{Lies, ShapeBody};
+use crate::protocol::ObjectId;
 use crate::protocol::{
     CardHandling, GameEvent, Kind, PlayerView, Side, Status, TargetRef, Why, ZoneName,
 };
@@ -30,7 +31,7 @@ pub(super) fn tell(
     view: &PlayerView,
     heard: &Heard,
     causes: &[Cause],
-    looked: &[u16],
+    looked: &[ObjectId],
     pregame: bool,
 ) -> Vec<Told> {
     let events = &view.events;
@@ -94,7 +95,7 @@ fn staged(previous: &GameEvent, was: Cause, event: &GameEvent, by: Cause) -> boo
 }
 
 /// Whether event `i`'s cards do not travel.
-fn still(events: &[GameEvent], i: usize, looked: &[u16], pregame: bool) -> bool {
+fn still(events: &[GameEvent], i: usize, looked: &[ObjectId], pregame: bool) -> bool {
     match events[i] {
         GameEvent::ZoneChange {
             slot,
@@ -219,7 +220,7 @@ pub(super) fn order(events: &[GameEvent], told: &[Told]) -> Vec<usize> {
 /// The cards `view` has its seat looking at, or watching the opponent handle: one of them put
 /// into a graveyard next is there with no flight (`seenInChoice` and `directToGraveyard` in
 /// `beats.ts`; Arena, `iRr-GeSF0lI 21:23.9`).
-pub(super) fn looked(view: &PlayerView) -> Vec<u16> {
+pub(super) fn looked(view: &PlayerView) -> Vec<ObjectId> {
     let top = |player: Side, count: u8| {
         let library = match player {
             Side::You => &view.players.you.library,
@@ -252,7 +253,7 @@ pub(super) fn looked(view: &PlayerView) -> Vec<u16> {
                 }
             ) =>
             {
-                slots_of(&prompt.about)
+                prompt.about.clone()
             }
             _ => Vec::new(),
         };
@@ -270,6 +271,7 @@ pub(super) fn looked(view: &PlayerView) -> Vec<u16> {
 #[cfg(test)]
 mod tests {
     use super::{GameEvent, Side, TargetRef, Told, order};
+    use crate::protocol::ObjectId;
 
     /// Beats of the given lengths, in order.
     fn beats(lengths: &[usize]) -> Vec<Told> {
@@ -282,9 +284,11 @@ mod tests {
     }
 
     fn blow(source: u16, slot: u16) -> GameEvent {
-        let to = TargetRef::Object { slot };
+        let to = TargetRef::Object {
+            slot: ObjectId(slot),
+        };
         GameEvent::Damage {
-            source,
+            source: ObjectId(source),
             to,
             amount: 1,
             combat: true,
@@ -299,7 +303,7 @@ mod tests {
             player: Side::Opponent,
         };
         let at_player = GameEvent::Damage {
-            source: 2,
+            source: ObjectId(2),
             to: player,
             amount: 1,
             combat: true,
@@ -315,10 +319,12 @@ mod tests {
     /// beat of its own keeps its place.
     #[test]
     fn a_payments_sources_tap_together() {
-        let tap = |slot| GameEvent::Tap { slot };
+        let tap = |slot| GameEvent::Tap {
+            slot: ObjectId(slot),
+        };
         let mana = |slot| GameEvent::Mana {
             player: Side::You,
-            source: Some(slot),
+            source: Some(ObjectId(slot)),
             color: crate::protocol::Mana::White,
             amount: 1,
         };
@@ -332,8 +338,8 @@ mod tests {
     #[test]
     fn only_one_combat_damages_blows_are_paired() {
         let burn = GameEvent::Damage {
-            source: 9,
-            to: TargetRef::Object { slot: 1 },
+            source: ObjectId(9),
+            to: TargetRef::Object { slot: ObjectId(1) },
             amount: 1,
             combat: false,
         };

@@ -22,6 +22,7 @@ use crate::prompt::ahead;
 use crate::prompt::held::{Clicked, Run, Step, Table, Want, button, options};
 use crate::prompt::{ButtonId, Click, Marked, PromptView, ShapeBody};
 use crate::protocol::DecisionView;
+use crate::protocol::ObjectId;
 use crate::script::{Mark, Subject};
 
 /// The state of a division of combat damage.
@@ -29,11 +30,11 @@ use crate::script::{Mark, Subject};
 pub(crate) struct Damage {
     /// The blockers, by kind: those of one kind are interchangeable, and the engine offers
     /// one of them at a time (architecture §7.2).
-    kinds: Vec<Vec<u16>>,
+    kinds: Vec<Vec<ObjectId>>,
     /// What each set of picks leaves, by the kinds picked, ascending.
     after: BTreeMap<Vec<usize>, Left>,
     /// The blockers picked to be dealt lethal damage, in the order they were.
-    picked: Vec<u16>,
+    picked: Vec<ObjectId>,
     confirm: String,
 }
 
@@ -68,17 +69,17 @@ impl Damage {
     /// The kind of the blocker in `slot`: that of one it is interchangeable with as the
     /// prompt opens, or a new one.
     fn kind_of<L: Layout>(&mut self, table: &Table<'_, L>, slot: L::Slot) -> usize {
-        let alike = |kind: &Vec<u16>| {
-            kind.contains(&slot.num())
-                || L::Slot::from_num(kind[0])
+        let alike = |kind: &Vec<ObjectId>| {
+            kind.contains(&ObjectId(slot.num()))
+                || L::Slot::from_num(kind[0].0)
                     .is_some_and(|first| interchangeable(table.s, first, slot))
         };
         let kind = self.kinds.iter().position(alike).unwrap_or_else(|| {
             self.kinds.push(Vec::new());
             self.kinds.len() - 1
         });
-        if !self.kinds[kind].contains(&slot.num()) {
-            self.kinds[kind].push(slot.num());
+        if !self.kinds[kind].contains(&ObjectId(slot.num())) {
+            self.kinds[kind].push(ObjectId(slot.num()));
         }
         kind
     }
@@ -128,7 +129,7 @@ impl Damage {
         }
     }
 
-    fn kind(&self, slot: u16) -> Option<usize> {
+    fn kind(&self, slot: ObjectId) -> Option<usize> {
         self.kinds.iter().position(|kind| kind.contains(&slot))
     }
 
@@ -142,7 +143,7 @@ impl Damage {
     }
 
     /// The blockers of `kind` not picked.
-    fn unpicked(&self, kind: usize) -> impl Iterator<Item = u16> + '_ {
+    fn unpicked(&self, kind: usize) -> impl Iterator<Item = ObjectId> + '_ {
         (self.kinds[kind].iter().copied()).filter(|slot| !self.picked.contains(slot))
     }
 
@@ -190,7 +191,7 @@ impl Damage {
         let left = self.left().unwrap_or(&none);
         let suggested = (left.suggested).and_then(|kind| self.unpicked(kind).next());
         let marked = |mark: Mark| {
-            move |slot: u16| Marked {
+            move |slot: ObjectId| Marked {
                 on: Subject::Object { slot },
                 mark,
             }

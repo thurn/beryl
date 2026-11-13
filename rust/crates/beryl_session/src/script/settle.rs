@@ -9,6 +9,7 @@ use super::build::Builder;
 use super::moves::{COUNTERS, counted, set_counters};
 use super::table::Table;
 use super::{Act, Fact, Subject, Tally};
+use crate::protocol::ObjectId;
 use crate::protocol::{ObjectView, Side, StackItem, Why, ZoneName};
 
 impl Builder<'_> {
@@ -17,7 +18,7 @@ impl Builder<'_> {
     pub(super) fn settle(&mut self) {
         self.open = false;
         let after = self.after;
-        let gone: Vec<(u16, ZoneName)> = self
+        let gone: Vec<(ObjectId, ZoneName)> = self
             .table
             .objects
             .values()
@@ -53,7 +54,7 @@ impl Builder<'_> {
             .filter(|o| self.mulligan(o) && hand(after, o.owner) >= hand(&self.table, o.owner))
             .map(|o| o.owner)
             .collect();
-        let redealt: Vec<u16> = after
+        let redealt: Vec<ObjectId> = after
             .objects
             .values()
             .filter(|o| {

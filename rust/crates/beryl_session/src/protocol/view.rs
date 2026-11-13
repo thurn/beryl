@@ -1,5 +1,6 @@
 //! The view types: what the UI draws of the game, relative to the viewer.
 
+use beryl_engine::SlotId;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -7,6 +8,38 @@ use super::{
     CardType, Counter, DecisionView, Declaration, GameEvent, Keyword, OutcomeView, Step,
     StopsSetting, ZoneName,
 };
+
+/// An object on the wire: its public slot, the number a [`Subject::Object`](crate::script::Subject) and an
+/// [`ObjectView`](crate::protocol::ObjectView) name it by.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TS)]
+#[serde(transparent)]
+#[ts(type = "number")]
+pub struct ObjectId(pub u16);
+
+impl ObjectId {
+    /// The wire name of the object in an engine `slot`.
+    pub fn of(slot: impl SlotId) -> Self {
+        ObjectId(slot.num())
+    }
+}
+
+impl From<u16> for ObjectId {
+    fn from(slot: u16) -> Self {
+        ObjectId(slot)
+    }
+}
+
+impl std::fmt::Display for ObjectId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl From<ObjectId> for u16 {
+    fn from(id: ObjectId) -> Self {
+        id.0
+    }
+}
 
 /// Everything the UI draws for one player at one moment: the game as they see it, where it
 /// stands (their open decision, the opponent deciding, a step beginning, a stop or the end),
@@ -26,11 +59,11 @@ pub struct PlayerView {
     /// Public attackers whose destination is still being chosen.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub pending_attackers: Option<Vec<u16>>,
+    pub pending_attackers: Option<Vec<ObjectId>>,
     pub turn: TurnView,
     pub players: Players,
     /// Permanents, in the order they entered.
-    pub battlefield: Vec<u16>,
+    pub battlefield: Vec<ObjectId>,
     /// Every object in a zone, by slot: the battlefield, the stack, and each player's library,
     /// hand, graveyard and exile.
     pub objects: Vec<ObjectView>,
@@ -161,9 +194,9 @@ pub struct PlayerState {
     /// Where they are in the mulligan (CR 103.5): kept, once the game begins.
     pub mulligan: Declaration,
     /// Bottom first.
-    pub library: Vec<u16>,
+    pub library: Vec<ObjectId>,
     /// Bottom first.
-    pub graveyard: Vec<u16>,
+    pub graveyard: Vec<ObjectId>,
     /// The emblems' names.
     pub emblems: Vec<String>,
 }
@@ -184,7 +217,7 @@ pub struct ManaPool {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ObjectView {
-    pub slot: u16,
+    pub slot: ObjectId,
     pub zone: ZoneName,
     pub owner: Side,
     pub controller: Side,
@@ -210,13 +243,13 @@ pub struct ObjectView {
     /// 6: Ability-adding effects, keyword counters, ability-removing effects, and effects that say an object
     /// can't have an ability are applied"), so that one gained until end of turn shows.
     pub keywords: Vec<Keyword>,
-    pub attached_to: Option<u16>,
+    pub attached_to: Option<ObjectId>,
     /// The permanent that exiled it until it leaves (CR 610.3).
-    pub exiled_by: Option<u16>,
+    pub exiled_by: Option<ObjectId>,
     /// The object whose linked ability exiled it, if that object's other abilities may still
     /// find it among the cards "exiled with" it
     /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)).
-    pub exiled_with: Option<u16>,
+    pub exiled_with: Option<ObjectId>,
     pub combat: Option<Combat>,
 }
 
@@ -241,7 +274,7 @@ pub enum Combat {
     /// Attacking a player or the named planeswalker, or still in combat after the target left.
     #[serde(rename_all = "camelCase")]
     Attacking {
-        planeswalker: Option<u16>,
+        planeswalker: Option<ObjectId>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         target_departed: Option<bool>,
@@ -249,7 +282,7 @@ pub enum Combat {
     },
     /// Blocking the attacker in `attacker`, if it is still in combat.
     #[serde(rename_all = "camelCase")]
-    Blocking { attacker: Option<u16> },
+    Blocking { attacker: Option<ObjectId> },
 }
 
 /// A spell or ability on the stack.
@@ -258,7 +291,7 @@ pub enum Combat {
 pub enum StackItem {
     /// The spell in `slot`, whose object says what it is and who controls it.
     Spell {
-        slot: u16,
+        slot: ObjectId,
         targets: Vec<TargetRef>,
         /// The announced value of X.
         x: u8,
@@ -271,7 +304,7 @@ pub enum StackItem {
     /// to other objects, when `granted`), from the object in `source`, which may have left its
     /// zone since; an emblem's ability has none.
     Ability {
-        source: Option<u16>,
+        source: Option<ObjectId>,
         ability: u8,
         granted: bool,
         name: String,
@@ -321,5 +354,5 @@ pub enum PaidCost {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum TargetRef {
     Player { player: Side },
-    Object { slot: u16 },
+    Object { slot: ObjectId },
 }

@@ -21,6 +21,7 @@ use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_search::{Agent, AgentDecision};
 use beryl_session::StopsSetting;
 use beryl_session::prompt::{ButtonId, Click, Clicked, Held};
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{Candidate, Kind, Side, ZoneName};
 use beryl_session::replay::Entry;
 use beryl_session::save::Kind as SavedKind;
@@ -234,7 +235,7 @@ fn an_amount_is_divided_among_recipients() {
     let d = numbers(1, 3, prompt).about(among(&creatures));
     let view = asked(&table, &state, &d);
     let mut held = Held::opening(&view, &state, &table, Some(&d)).expect("a held prompt");
-    let about: Vec<u16> = held.view().about.iter().map(|&id| id.into()).collect();
+    let about: Vec<ObjectId> = held.view().about.clone();
     let [a, b, c] = about[..] else {
         panic!("three recipients");
     };
@@ -250,7 +251,7 @@ fn an_amount_is_divided_among_recipients() {
              confirm(Submit)\n"
         )
     );
-    let share = |n: u8, on: u16| Click::Number {
+    let share = |n: u8, on: ObjectId| Click::Number {
         n,
         on: Some(card(on)),
     };
@@ -319,7 +320,7 @@ fn an_amount_is_divided_among_recipients() {
         panic!("the button answers");
     };
     assert_eq!(run.answer(&state, &d), Some(Choice(1)), "the number 2");
-    let second = numbers(1, 2, prompt.most(3)).about(among(&[b, c]));
+    let second = numbers(1, 2, prompt.most(3)).about(among(&[b.0, c.0]));
     assert_eq!(run.answer(&state, &second), Some(Choice(1)), "the number 2");
     assert_eq!(run.rest(), None);
 }

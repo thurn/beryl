@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::{Arrow, Mark, Span, Subject, Verb};
+use crate::protocol::ObjectId;
 use crate::protocol::{
     CardHandling, Counter, Mana, ManaPool, ObjectView, Side, StackItem, Step as TurnStep, Why,
     ZoneName,
@@ -76,7 +77,7 @@ pub enum Act {
     /// The creature in `source` deals `amount` combat damage to `to`, a player or the
     /// creature or planeswalker whose record `object` is.
     Strike {
-        source: u16,
+        source: ObjectId,
         to: Subject,
         amount: u8,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -248,7 +249,7 @@ pub enum Fact {
     Object { object: ObjectView },
     /// A library's order, bottom first, after a shuffle. Its cards' records change by steps
     /// of their own.
-    Library { player: Side, order: Vec<u16> },
+    Library { player: Side, order: Vec<ObjectId> },
     /// A spell or ability on the stack as it now is, its targets changed.
     Item { subject: Subject, item: StackItem },
 }
@@ -266,6 +267,6 @@ pub enum Notice {
     Coin {
         player: Side,
         won: bool,
-        source: u16,
+        source: ObjectId,
     },
 }

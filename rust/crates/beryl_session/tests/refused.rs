@@ -10,6 +10,7 @@ use beryl_engine::{
     DecisionKind, Observation, Profile, Replay, Scratch, Seat, Step, TurnStep, next,
 };
 use beryl_scenario::{Action, P0, P1, Permanent, Scenario};
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{Moment, PlayerView, RefusalView, player_view};
 use beryl_session::{DecisionId, SessionId, Status, StopsSetting};
 
@@ -33,7 +34,7 @@ fn seen(v: &PlayerView) -> Vec<Seen> {
     let Status::Deciding { decision } = &v.status else {
         panic!("no decision is open");
     };
-    let name = |slot: u16| {
+    let name = |slot: ObjectId| {
         v.objects
             .iter()
             .find(|o| o.slot == slot)

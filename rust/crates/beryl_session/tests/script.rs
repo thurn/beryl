@@ -3,8 +3,9 @@
 use std::path::PathBuf;
 
 use beryl_session::protocol::{
-    CardHandling, CardType, Combat, Counter, CounterView, Facing, Mana, ManaPool, ObjectView,
-    PaidCost, PowerToughness, Side, StackItem, Step as TurnStep, TargetRef, Why, ZoneName,
+    CardHandling, CardType, Combat, Counter, CounterView, Facing, Mana, ManaPool, ObjectId,
+    ObjectView, PaidCost, PowerToughness, Side, StackItem, Step as TurnStep, TargetRef, Why,
+    ZoneName,
 };
 use beryl_session::script::{
     Act, Arrow, Fact, Mark, Notice, Reset, Script, Span, Step, Stream, Subject, Tally, Verb,
@@ -13,7 +14,7 @@ use beryl_session::script::{
 /// A card the viewer knows, lying in `zone`.
 fn card(slot: u16, name: &str, zone: ZoneName) -> ObjectView {
     ObjectView {
-        slot,
+        slot: ObjectId(slot),
         zone,
         owner: Side::You,
         controller: Side::You,
@@ -53,7 +54,9 @@ fn creature(slot: u16, name: &str, power: i8, toughness: i8) -> ObjectView {
 }
 
 fn object(slot: u16) -> Subject {
-    Subject::Object { slot }
+    Subject::Object {
+        slot: ObjectId(slot),
+    }
 }
 
 fn player(player: Side) -> Subject {
@@ -73,7 +76,7 @@ fn caused(act: Act, cause: Subject) -> Step {
 
 fn spell(slot: u16, targets: Vec<TargetRef>) -> StackItem {
     StackItem::Spell {
-        slot,
+        slot: ObjectId(slot),
         targets,
         x: 0,
         paid: Vec::new(),
@@ -82,7 +85,7 @@ fn spell(slot: u16, targets: Vec<TargetRef>) -> StackItem {
 
 fn trigger(source: Option<u16>, name: &str, targets: Vec<TargetRef>) -> StackItem {
     StackItem::Ability {
-        source,
+        source: source.map(ObjectId),
         ability: 0,
         granted: false,
         name: name.to_owned(),
@@ -203,7 +206,7 @@ fn cards_fly_to_where_their_records_put_them() {
     let bolt = spell(
         9,
         vec![
-            TargetRef::Object { slot: 12 },
+            TargetRef::Object { slot: ObjectId(12) },
             TargetRef::Player {
                 player: Side::Opponent,
             },
@@ -221,7 +224,7 @@ fn cards_fly_to_where_their_records_put_them() {
         "fly #9 (Fireball) hand>stack cast at #12, opponent"
     );
     let kicked = StackItem::Spell {
-        slot: 9,
+        slot: ObjectId(9),
         targets: Vec::new(),
         x: 3,
         paid: vec![PaidCost::Kicker],
@@ -264,7 +267,7 @@ fn cards_fly_to_where_their_records_put_them() {
     );
     // An aura lands on its permanent; a stolen permanent crosses the battlefield.
     let aura = ObjectView {
-        attached_to: Some(12),
+        attached_to: Some(ObjectId(12)),
         ..card(9, "Pacifism", ZoneName::Battlefield)
     };
     assert_eq!(
@@ -335,7 +338,11 @@ fn cards_appear_and_vanish_with_no_flight() {
 
 #[test]
 fn abilities_emerge_and_cards_turn() {
-    let from_source = trigger(Some(12), "Mulldrifter", vec![TargetRef::Object { slot: 5 }]);
+    let from_source = trigger(
+        Some(12),
+        "Mulldrifter",
+        vec![TargetRef::Object { slot: ObjectId(5) }],
+    );
     assert_eq!(
         line(Act::Emerge {
             id: 3,
@@ -399,7 +406,7 @@ fn damage_strikes_or_streaks_and_numbers_count() {
     };
     assert_eq!(
         line(Act::Strike {
-            source: 5,
+            source: ObjectId(5),
             to: object(9),
             amount: 2,
             object: Some(hurt.clone()),
@@ -408,7 +415,7 @@ fn damage_strikes_or_streaks_and_numbers_count() {
     );
     assert_eq!(
         line(Act::Strike {
-            source: 5,
+            source: ObjectId(5),
             to: player(Side::Opponent),
             amount: 2,
             object: None,
@@ -508,7 +515,7 @@ fn the_table_sets_and_the_stage_dwells_and_announces() {
         summoning_sick: true,
         damage: 1,
         combat: Some(Combat::Attacking {
-            planeswalker: Some(20),
+            planeswalker: Some(ObjectId(20)),
             target_departed: None,
             blocked: false,
         }),
@@ -519,7 +526,9 @@ fn the_table_sets_and_the_stage_dwells_and_announces() {
         "set #12 (Grizzly Bears) battlefield tapped sick 2/2 damage 1 attacking #20"
     );
     let blocker = ObjectView {
-        combat: Some(Combat::Blocking { attacker: Some(12) }),
+        combat: Some(Combat::Blocking {
+            attacker: Some(ObjectId(12)),
+        }),
         ..creature(9, "Hill Giant", 3, 3)
     };
     assert_eq!(
@@ -529,14 +538,18 @@ fn the_table_sets_and_the_stage_dwells_and_announces() {
     assert_eq!(
         set(Fact::Library {
             player: Side::You,
-            order: vec![3, 1, 2],
+            order: [3, 1, 2].map(ObjectId).to_vec(),
         }),
         "set you library 3"
     );
     assert_eq!(
         set(Fact::Item {
             subject: Subject::Ability { id: 3 },
-            item: trigger(Some(12), "Mulldrifter", vec![TargetRef::Object { slot: 6 }]),
+            item: trigger(
+                Some(12),
+                "Mulldrifter",
+                vec![TargetRef::Object { slot: ObjectId(6) }]
+            ),
         }),
         "set a3 at #6"
     );
@@ -560,7 +573,7 @@ fn the_table_sets_and_the_stage_dwells_and_announces() {
         announce(Notice::Coin {
             player: Side::You,
             won: false,
-            source: 4
+            source: ObjectId(4)
         }),
         "announce coin you lost by #4"
     );

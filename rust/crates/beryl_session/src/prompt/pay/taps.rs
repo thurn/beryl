@@ -23,13 +23,14 @@ use super::Outlook;
 use crate::preview::tapped;
 use crate::prompt::ahead::forced;
 use crate::prompt::held::{self, Run, Want, options};
+use crate::protocol::ObjectId;
 use crate::protocol::mana_text;
 use crate::script::Subject;
 
 /// A mana ability to activate: its permanent and the color of mana it makes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Activation {
-    slot: u16,
+    slot: ObjectId,
     color: ManaColor,
 }
 
@@ -55,7 +56,7 @@ pub(super) struct Due {
     /// How much the picks pay toward: the units of the cost that are not paid already.
     need: u16,
     /// The ways each permanent that could pay can, by slot.
-    sources: BTreeMap<u16, Vec<Contribution>>,
+    sources: BTreeMap<ObjectId, Vec<Contribution>>,
     /// Mana pays what the picks leave, by the engine's payment plan. Otherwise permanents
     /// alone pay.
     mana_pays: bool,
@@ -127,7 +128,7 @@ impl Due {
             {
                 roles.push(Contribution {
                     mana: Some(Activation {
-                        slot: slot.num(),
+                        slot: ObjectId(slot.num()),
                         color,
                     }),
                     amount: amount.into(),
@@ -151,7 +152,7 @@ impl Due {
                 }
             }
             if !roles.is_empty() {
-                sources.insert(slot.num(), roles);
+                sources.insert(ObjectId(slot.num()), roles);
             }
         }
         Due {
@@ -196,8 +197,8 @@ type Selection = (u8, u8, Vec<Contribution>);
 /// reach a total with a given smallest contribution. A set can overpay with a source of
 /// several units only when omitting even its smallest contribution would leave it short.
 fn roles(
-    selected: &[u16],
-    sources: &BTreeMap<u16, Vec<Contribution>>,
+    selected: &[ObjectId],
+    sources: &BTreeMap<ObjectId, Vec<Contribution>>,
     need: u16,
 ) -> Option<Vec<Contribution>> {
     if selected.len() > usize::from(need) {
@@ -245,8 +246,8 @@ fn roles(
 /// The way each of `selected` pays toward `need` where permanents alone pay, each by being
 /// tapped: none once the picks before the last pay it all, as the engine asks for no more.
 fn in_turn(
-    selected: &[u16],
-    sources: &BTreeMap<u16, Vec<Contribution>>,
+    selected: &[ObjectId],
+    sources: &BTreeMap<ObjectId, Vec<Contribution>>,
     need: u16,
 ) -> Option<Vec<Contribution>> {
     let mut total = 0;
@@ -273,11 +274,11 @@ fn in_turn(
 fn cover<L: Layout>(
     before: &State<L>,
     due: &Due,
-    picked: &[u16],
+    picked: &[ObjectId],
     remaining: u16,
-) -> Option<Vec<u16>> {
-    let forgone = |slot: u16| {
-        let Some(slot) = L::Slot::from_num(slot) else {
+) -> Option<Vec<ObjectId>> {
+    let forgone = |slot: ObjectId| {
+        let Some(slot) = L::Slot::from_num(slot.0) else {
             return 0;
         };
         let attacks = before.derived(slot).types.contains(Types::CREATURE)
@@ -320,9 +321,9 @@ pub(super) fn outlook<L: Layout>(
     t: &GameTable,
     first: &Decision<L>,
     due: &Due,
-    picked: &[u16],
+    picked: &[ObjectId],
 ) -> Option<Outlook> {
-    let ways = |picked: &[u16]| {
+    let ways = |picked: &[ObjectId]| {
         if due.mana_pays {
             roles(picked, &due.sources, due.need)
         } else {
@@ -331,7 +332,7 @@ pub(super) fn outlook<L: Layout>(
     };
     // The picks as the engine takes them, each permanent's mana before any is tapped
     // otherwise, if it takes them all: whatever pays the rest.
-    let taken = |picked: &[u16]| {
+    let taken = |picked: &[ObjectId]| {
         let roles = ways(picked)?;
         let activations: Vec<_> = roles.iter().filter_map(|r| r.mana).collect();
         let taps: Vec<_> = (picked.iter().zip(&roles))
@@ -417,27 +418,29 @@ struct Line {
     plan: Option<u16>,
     activations: Vec<Activation>,
     /// The permanents tapped by a pick of theirs.
-    tappers: Vec<u16>,
+    tappers: Vec<ObjectId>,
     /// Those of them the engine took in place of a permanent picked.
-    stood: Vec<u16>,
+    stood: Vec<ObjectId>,
     /// Everything the payment taps or sacrifices for mana.
-    tapped: Vec<u16>,
+    tapped: Vec<ObjectId>,
 }
 
 impl Line {
     /// Notes the pick of `option`, made for the permanent in `picked` if for one picked.
-    fn take<L: Layout>(&mut self, option: Opt<L>, picked: Option<u16>) {
+    fn take<L: Layout>(&mut self, option: Opt<L>, picked: Option<ObjectId>) {
         let pick = |want: Want| held::Step::One(Part::Pick, want);
         match option {
             Opt::Mana { slot, color } => {
-                let slot = slot.num();
+                let slot = ObjectId(slot.num());
                 self.activations.push(Activation { slot, color });
                 self.steps.push(pick(Want::Mana { slot, color }));
             }
             Opt::Pool(color) => self.steps.push(pick(Want::Pool(color))),
             Opt::Object(slot) => {
-                self.tappers.push(slot.num());
-                let on = Subject::Object { slot: slot.num() };
+                self.tappers.push(ObjectId(slot.num()));
+                let on = Subject::Object {
+                    slot: ObjectId(slot.num()),
+                };
                 self.steps.push(held::Step::Among(Part::Pick, vec![on]));
             }
             Opt::Done => self.steps.push(pick(Want::Done)),
@@ -446,9 +449,9 @@ impl Line {
         }
         // The permanent the engine takes in place of the one picked.
         if let (Opt::Mana { slot, .. } | Opt::Object(slot), Some(picked)) = (option, picked)
-            && slot.num() != picked
+            && ObjectId(slot.num()) != picked
         {
-            self.stood.push(slot.num());
+            self.stood.push(ObjectId(slot.num()));
         }
     }
 
@@ -473,7 +476,7 @@ fn automatic<L: Layout>(
     before: &State<L>,
     t: &GameTable,
     first: &Decision<L>,
-    taps: &[u16],
+    taps: &[ObjectId],
     activations: &[Activation],
     remaining: u16,
 ) -> Option<Line> {
@@ -485,7 +488,7 @@ fn automatic<L: Layout>(
     };
     let safe = |line: &Line| {
         before.battlefield().iter().copied().all(|slot| {
-            let n = slot.num();
+            let n = ObjectId(slot.num());
             !line.tapped.contains(&n)
                 || line.tappers.contains(&n)
                 || line.activations.iter().any(|m| m.slot == n)
@@ -507,7 +510,7 @@ fn automatic<L: Layout>(
         let Opt::Mana { slot, color } = option else {
             continue;
         };
-        if explicit(slot) || funded.iter().any(|m| m.slot == slot.num()) {
+        if explicit(slot) || funded.iter().any(|m| m.slot == ObjectId(slot.num())) {
             continue;
         }
         let Some((amount, false)) = mana_contribution(before, t, first.player, slot) else {
@@ -518,7 +521,7 @@ fn automatic<L: Layout>(
         }
         left = left.saturating_sub(u16::from(amount));
         funded.push(Activation {
-            slot: slot.num(),
+            slot: ObjectId(slot.num()),
             color,
         });
         let plan = line(before, t, first, taps, &funded, Some(remaining))?;
@@ -539,7 +542,7 @@ fn line<L: Layout>(
     before: &State<L>,
     t: &GameTable,
     first: &Decision<L>,
-    taps: &[u16],
+    taps: &[ObjectId],
     activations: &[Activation],
     mut spare: Option<u16>,
 ) -> Option<Line> {
@@ -571,14 +574,14 @@ fn line<L: Layout>(
             // Mana floating pays before anything is tapped for more.
             (i, None)
         } else if let Some(activation) = activations.get(line.activations.len()) {
-            let wanted = L::Slot::from_num(activation.slot)?;
+            let wanted = L::Slot::from_num(activation.slot.0)?;
             let made = |o| {
                 matches!(o, Opt::Mana { slot, color }
                     if activation.color == color && alike(before, slot, wanted))
             };
             (find(&made)?, Some(activation.slot))
         } else if let Some(&picked) = taps.get(made) {
-            let wanted = L::Slot::from_num(picked)?;
+            let wanted = L::Slot::from_num(picked.0)?;
             made += 1;
             let tapped = |o| matches!(o, Opt::Object(slot) if alike(before, slot, wanted));
             (find(&tapped)?, Some(picked))

@@ -33,6 +33,7 @@ use beryl_engine::TurnStep;
 use beryl_engine::card::Purpose;
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_session::CandidateIndex;
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{Candidate, PlayerView, Side, StackItem, ZoneName};
 use beryl_session::script::{Act, Screen};
 use common::{script, text, views, views_heard};
@@ -107,7 +108,13 @@ fn a_costs_mana_is_paid_before_its_cards_leave() {
             "seat {seat}"
         );
         assert!(
-            matches!(cast.stack.as_slice(), [StackItem::Spell { slot: 1, .. }]),
+            matches!(
+                cast.stack.as_slice(),
+                [StackItem::Spell {
+                    slot: ObjectId(1),
+                    ..
+                }]
+            ),
             "the spell is on the stack as its costs are paid"
         );
     }
@@ -142,7 +149,7 @@ fn two_abilities_of_one_source_each_emerge_as_their_own() {
     let name = "its own Spirit and a Samurai each add a story counter, spent to draw";
     let all = views(names::STAFF_OF_THE_STORYTELLER, name, |_, _, _| {});
     for seat in 0..2 {
-        let emerged: Vec<(u32, Option<u16>, u8, u8)> = (all[..=3].iter())
+        let emerged: Vec<(u32, Option<ObjectId>, u8, u8)> = (all[..=3].iter())
             .flat_map(|seats| {
                 seats[seat]
                     .script
@@ -168,7 +175,7 @@ fn two_abilities_of_one_source_each_emerge_as_their_own() {
         // this artifact.": the card's first and second abilities, and of its triggered ones.
         assert_eq!(
             emerged,
-            [(1, Some(2), 0, 0), (2, Some(2), 1, 1)],
+            [(1, Some(ObjectId(2)), 0, 0), (2, Some(ObjectId(2)), 1, 1)],
             "seat {seat}"
         );
         let who = ["you", "opponent"][seat];
@@ -203,8 +210,7 @@ fn a_spell_waiting_on_its_target_keeps_the_arrow_under_it() {
     let mut play = Play::against(&TITHED, Some(Box::new(Casts)));
     let crypt = play.named(MANA_CRYPT, ZoneName::Hand, Side::You)[0];
     let counterspell = play.named(COUNTERSPELL, ZoneName::Hand, Side::You)[0];
-    let cast =
-        |slot: u16| move |c: &Candidate| matches!(c, Candidate::Cast { slot: s, .. } if *s == slot);
+    let cast = |slot: ObjectId| move |c: &Candidate| matches!(c, Candidate::Cast { slot: s, .. } if *s == slot);
     let answered = played(&mut play, cast(crypt));
     let tithe = play.named(MANA_TITHE, ZoneName::Stack, Side::Opponent)[0];
     let aimed = format!("point hostile-target #{tithe} > #{crypt}");

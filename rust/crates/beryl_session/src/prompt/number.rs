@@ -15,6 +15,7 @@ use beryl_engine::card::Purpose;
 use super::held::{Clicked, Run, Step};
 use super::wording::X_VALUE;
 use super::{ButtonId, Click, Marked, PromptButton, PromptView, ShapeBody};
+use crate::protocol::ObjectId;
 use crate::protocol::{Candidate, DecisionView};
 use crate::script::{Mark, Subject};
 
@@ -38,7 +39,7 @@ struct Value {
     /// What it means, where it means more than itself: the total cost an X makes.
     detail: Option<String>,
     /// The permanents the engine's default payment at this value would tap.
-    taps: Vec<u16>,
+    taps: Vec<ObjectId>,
 }
 
 impl Number {

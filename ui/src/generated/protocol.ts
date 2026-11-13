@@ -168,11 +168,11 @@ handling?: CardHandling,
 /**
  * Public attackers whose destination is still being chosen.
  */
-pendingAttackers?: Array<number>, turn: TurnView, players: Players, 
+pendingAttackers?: Array<ObjectId>, turn: TurnView, players: Players, 
 /**
  * Permanents, in the order they entered.
  */
-battlefield: Array<number>, 
+battlefield: Array<ObjectId>, 
 /**
  * Every object in a zone, by slot: the battlefield, the stack, and each player's library,
  * hand, graveyard and exile.
@@ -237,11 +237,11 @@ mulligan: Declaration,
 /**
  * Bottom first.
  */
-library: Array<number>, 
+library: Array<ObjectId>, 
 /**
  * Bottom first.
  */
-graveyard: Array<number>, 
+graveyard: Array<ObjectId>, 
 /**
  * The emblems' names.
  */
@@ -251,7 +251,7 @@ export type Declaration = "undeclared" | "willMulligan" | "kept";
 
 export type ManaPool = { white: number, blue: number, black: number, red: number, green: number, colorless: number, };
 
-export type ObjectView = { slot: number, zone: ZoneName, owner: Side, controller: Side, 
+export type ObjectView = { slot: ObjectId, zone: ZoneName, owner: Side, controller: Side, 
 /**
  * The name of the face up, which keys its record in the card store
  * ([`crate::card_records`]); none for a card the viewer has not seen. A face-down
@@ -281,17 +281,17 @@ pt: PowerToughness | null,
  * 6: Ability-adding effects, keyword counters, ability-removing effects, and effects that say an object
  * can't have an ability are applied"), so that one gained until end of turn shows.
  */
-keywords: Array<Keyword>, attachedTo: number | null, 
+keywords: Array<Keyword>, attachedTo: ObjectId | null, 
 /**
  * The permanent that exiled it until it leaves (CR 610.3).
  */
-exiledBy: number | null, 
+exiledBy: ObjectId | null, 
 /**
  * The object whose linked ability exiled it, if that object's other abilities may still
  * find it among the cards "exiled with" it
  * ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)).
  */
-exiledWith: number | null, combat: Combat | null, };
+exiledWith: ObjectId | null, combat: Combat | null, };
 
 export type Facing = "up" | "down";
 
@@ -299,9 +299,9 @@ export type PowerToughness = { power: number, toughness: number, };
 
 export type CounterView = { kind: Counter, count: number, };
 
-export type Combat = { "kind": "attacking", planeswalker: number | null, targetDeparted?: boolean, blocked: boolean, } | { "kind": "blocking", attacker: number | null, };
+export type Combat = { "kind": "attacking", planeswalker: ObjectId | null, targetDeparted?: boolean, blocked: boolean, } | { "kind": "blocking", attacker: ObjectId | null, };
 
-export type StackItem = { "kind": "spell", slot: number, targets: Array<TargetRef>, 
+export type StackItem = { "kind": "spell", slot: ObjectId, targets: Array<TargetRef>, 
 /**
  * The announced value of X.
  */
@@ -311,7 +311,7 @@ x: number,
  * they change, as an overload cost turns each "target" into "each", its printed text
  * does not say.
  */
-paid: Array<PaidCost>, } | { "kind": "ability", source: number | null, ability: number, granted: boolean, name: string, 
+paid: Array<PaidCost>, } | { "kind": "ability", source: ObjectId | null, ability: number, granted: boolean, name: string, 
 /**
  * A triggered ability rather than an activated one.
  */
@@ -340,7 +340,7 @@ x: number, };
 
 export type PaidCost = "kicker" | "offspring" | "impending" | "overload" | "evoke" | "flashback";
 
-export type TargetRef = { "kind": "player", player: Side, } | { "kind": "object", slot: number, };
+export type TargetRef = { "kind": "player", player: Side, } | { "kind": "object", slot: ObjectId, };
 
 export type DecisionView = { 
 /**
@@ -376,7 +376,7 @@ passOn: PassTo | null,
  * damage is divided; the land asking for life. None for priority and the other combat
  * declarations.
  */
-source: number | null, 
+source: ObjectId | null, 
 /**
  * The session halts the viewer here: a priority where passing is all they can do,
  * which the engine would pass for them, offered under the smart stops at the start of
@@ -409,9 +409,9 @@ refused: Array<Refused>, };
 
 export type PassTo = { "kind": "resolve" } | { "kind": "combatDamage" } | { "kind": "step", step: Step, } | { "kind": "nextTurn" };
 
-export type Refused = { slot: number, reason: RefusalView, };
+export type Refused = { slot: ObjectId, reason: RefusalView, };
 
-export type RefusalView = { "kind": "timing", by: number | null, } | { "kind": "landPlayed" } | { "kind": "mana" } | { "kind": "cost" } | { "kind": "target" };
+export type RefusalView = { "kind": "timing", by: ObjectId | null, } | { "kind": "landPlayed" } | { "kind": "mana" } | { "kind": "cost" } | { "kind": "target" };
 
 export type CandidateView = { 
 /**
@@ -427,7 +427,7 @@ payments: Array<Payment>,
  * For a candidate that declares a blocker: the attackers it may block, by slot, one of
  * each set of interchangeable attackers (architecture §7.2). None otherwise.
  */
-blocks: Array<number>, 
+blocks: Array<ObjectId>, 
 /**
  * For a candidate that activates an ability of the object's own face, or puts a waiting
  * trigger on the stack: how many paragraphs of its face's text say abilities of its kind
@@ -457,14 +457,14 @@ plan: number | null,
 /**
  * Permanents, by slot.
  */
-taps: Array<number>, 
+taps: Array<ObjectId>, 
 /**
  * For a payment at a value of X: the total mana cost that value makes, as Oracle text
  * writes costs, so the UI can say what each X costs.
  */
 cost: string | null, };
 
-export type Candidate = { "kind": "object", slot: number, } | { "kind": "pass" } | { "kind": "playLand", slot: number, } | { "kind": "play" } | { "kind": "draw" } | { "kind": "keep" } | { "kind": "mulligan" } | { "kind": "trigger", index: number, source: number | null, ability: number, } | { "kind": "yes" } | { "kind": "no" } | { "kind": "done" } | { "kind": "attack", slot: number, } | { "kind": "defender", planeswalker: number | null, } | { "kind": "block", slot: number, } | { "kind": "lethal", slot: number, } | { "kind": "cast", slot: number, face: number, costs: Array<number>, } | { "kind": "activate", slot: number, ability: number, granted: boolean, } | { "kind": "mana", slot: number, color: Mana, } | { "kind": "pool", color: Mana, } | { "kind": "number", n: number, } | { "kind": "plan", index: number, } | { "kind": "player", player: Side, } | { "kind": "turnFaceUp", slot: number, };
+export type Candidate = { "kind": "object", slot: ObjectId, } | { "kind": "pass" } | { "kind": "playLand", slot: ObjectId, } | { "kind": "play" } | { "kind": "draw" } | { "kind": "keep" } | { "kind": "mulligan" } | { "kind": "trigger", index: number, source: ObjectId | null, ability: number, } | { "kind": "yes" } | { "kind": "no" } | { "kind": "done" } | { "kind": "attack", slot: ObjectId, } | { "kind": "defender", planeswalker: ObjectId | null, } | { "kind": "block", slot: ObjectId, } | { "kind": "lethal", slot: ObjectId, } | { "kind": "cast", slot: ObjectId, face: number, costs: Array<number>, } | { "kind": "activate", slot: ObjectId, ability: number, granted: boolean, } | { "kind": "mana", slot: ObjectId, color: Mana, } | { "kind": "pool", color: Mana, } | { "kind": "number", n: number, } | { "kind": "plan", index: number, } | { "kind": "player", player: Side, } | { "kind": "turnFaceUp", slot: ObjectId, };
 
 export type OutcomeView = { "kind": "win", winner: Side, 
 /**
@@ -519,20 +519,20 @@ yours: Array<Step>,
  */
 theirs: Array<Step>, };
 
-export type GameEvent = { "kind": "zoneChange", slot: number, from: ZoneName, to: ZoneName, reason: Why, 
+export type GameEvent = { "kind": "zoneChange", slot: ObjectId, from: ZoneName, to: ZoneName, reason: Why, 
 /**
  * Whether a spell went to the top or the bottom of its owner's library.
  */
-libraryTop?: boolean, } | { "kind": "damage", source: number, to: TargetRef, amount: number, combat: boolean, } | { "kind": "draw", player: Side, cards: number, 
+libraryTop?: boolean, } | { "kind": "damage", source: ObjectId, to: TargetRef, amount: number, combat: boolean, } | { "kind": "draw", player: Side, cards: number, 
 /**
  * The public slots drawn, top first. Older recordings carry only the count.
  */
-slots?: Array<number>, } | { "kind": "scry", player: Side, top: number, bottom: number, } | { "kind": "libraryShuffled", player: Side, } | { "kind": "reveal", slot: number, } | { "kind": "lifeGain", player: Side, amount: number, } | { "kind": "lifeLoss", player: Side, amount: number, } | { "kind": "countersAdded", slot: number, counter: Counter, amount: number, } | { "kind": "countersRemoved", slot: number, counter: Counter, amount: number, } | { "kind": "tap", slot: number, } | { "kind": "untap", slot: number, } | { "kind": "mana", player: Side, 
+slots?: Array<ObjectId>, } | { "kind": "scry", player: Side, top: number, bottom: number, } | { "kind": "libraryShuffled", player: Side, } | { "kind": "reveal", slot: ObjectId, } | { "kind": "lifeGain", player: Side, amount: number, } | { "kind": "lifeLoss", player: Side, amount: number, } | { "kind": "countersAdded", slot: ObjectId, counter: Counter, amount: number, } | { "kind": "countersRemoved", slot: ObjectId, counter: Counter, amount: number, } | { "kind": "tap", slot: ObjectId, } | { "kind": "untap", slot: ObjectId, } | { "kind": "mana", player: Side, 
 /**
  * The mana ability's permanent, or the spell or ability that added it, in the slot
  * it had then: a source sacrificed for mana has left it by the time the view shows.
  */
-source: number | null, color: Mana, amount: number, } | { "kind": "resolutionPayment", player: Side, item: StackItem, } | { "kind": "abilityFinished" } | { "kind": "tokensCreated", controller: Side, tokens: Array<number>, } | { "kind": "cast", slot: number, controller: Side, 
+source: ObjectId | null, color: Mana, amount: number, } | { "kind": "resolutionPayment", player: Side, item: StackItem, } | { "kind": "abilityFinished" } | { "kind": "tokensCreated", controller: Side, tokens: Array<ObjectId>, } | { "kind": "cast", slot: ObjectId, controller: Side, 
 /**
  * The spell as it went on the stack: an opponent's spell that resolves unanswered
  * is gone from the stack by the next view, which shows its cast and resolution
@@ -546,11 +546,11 @@ item: StackItem, } | { "kind": "ability", item: StackItem,
  * a loyalty ability of a permanent is to put on or remove from that permanent a certain
  * number of loyalty counters, as shown by the loyalty symbol in the ability's cost."
  */
-loyalty: number | null, } | { "kind": "attack", player: Side, attackers: Array<number>, } | { "kind": "block", player: Side, blocker: number, attacker: number, } | { "kind": "stepBegins", step: Step, active: Side, } | { "kind": "gainControl", slot: number, player: Side, } | { "kind": "coinFlip", player: Side, won: boolean, 
+loyalty: number | null, } | { "kind": "attack", player: Side, attackers: Array<ObjectId>, } | { "kind": "block", player: Side, blocker: ObjectId, attacker: ObjectId, } | { "kind": "stepBegins", step: Step, active: Side, } | { "kind": "gainControl", slot: ObjectId, player: Side, } | { "kind": "coinFlip", player: Side, won: boolean, 
 /**
  * The permanent whose ability flipped it.
  */
-source: number, } | { "kind": "lose", player: Side, } | { "kind": "win", player: Side, };
+source: ObjectId, } | { "kind": "lose", player: Side, } | { "kind": "win", player: Side, };
 
 export type Kind = "priority" | "playOrDraw" | "keepOrMulligan" | "triggerOrder" | "attacker" | "attackTarget" | "blocker" | "blockTarget" | "damageDivision" | "x" | "targetCount" | "target" | "paymentPlan" | "manaPayment" | "castOffer" | "yesNo" | "chooseObject" | "chooseUpTo";
 
@@ -591,7 +591,7 @@ export type ScriptStep = { act: Act,
  */
 cause?: Subject, };
 
-export type Subject = { "kind": "object", slot: number, } | { "kind": "ability", id: number, } | { "kind": "player", player: Side, };
+export type Subject = { "kind": "object", slot: ObjectId, } | { "kind": "ability", id: number, } | { "kind": "player", player: Side, };
 
 export type Act = { "verb": "fly", from: ZoneName, why: Why, object: ObjectView, 
 /**
@@ -602,7 +602,7 @@ at?: number,
 /**
  * The spell it becomes, when it goes to the stack.
  */
-item?: StackItem, } | { "verb": "appear", from: ZoneName, why: Why, object: ObjectView, at?: number, item?: StackItem, } | { "verb": "vanish", subject: Subject, from: ZoneName, why: Why, object?: ObjectView, at?: number, } | { "verb": "emerge", id: number, item: StackItem, } | { "verb": "flip", object: ObjectView, } | { "verb": "tap", object: ObjectView, } | { "verb": "strike", source: number, to: Subject, amount: number, object?: ObjectView, } | { "verb": "streak", 
+item?: StackItem, } | { "verb": "appear", from: ZoneName, why: Why, object: ObjectView, at?: number, item?: StackItem, } | { "verb": "vanish", subject: Subject, from: ZoneName, why: Why, object?: ObjectView, at?: number, } | { "verb": "emerge", id: number, item: StackItem, } | { "verb": "flip", object: ObjectView, } | { "verb": "tap", object: ObjectView, } | { "verb": "strike", source: ObjectId, to: Subject, amount: number, object?: ObjectView, } | { "verb": "streak", 
 /**
  * A player, for mana out of their pool. None when the source has no place on the
  * table.
@@ -613,9 +613,9 @@ export type Stream = { "kind": "mana", color: Mana, } | { "kind": "damage" };
 
 export type Tally = { "kind": "life", player: Side, life: number, } | { "kind": "pool", player: Side, mana: ManaPool, } | { "kind": "counters", counter: Counter, object: ObjectView, } | { "kind": "stats", object: ObjectView, };
 
-export type Fact = { "kind": "turn", number: number, active: Side, step: Step, } | { "kind": "object", object: ObjectView, } | { "kind": "library", player: Side, order: Array<number>, } | { "kind": "item", subject: Subject, item: StackItem, };
+export type Fact = { "kind": "turn", number: number, active: Side, step: Step, } | { "kind": "object", object: ObjectView, } | { "kind": "library", player: Side, order: Array<ObjectId>, } | { "kind": "item", subject: Subject, item: StackItem, };
 
-export type Notice = { "kind": "turn", active: Side, } | { "kind": "scry", player: Side, top: number, bottom: number, } | { "kind": "coin", player: Side, won: boolean, source: number, };
+export type Notice = { "kind": "turn", active: Side, } | { "kind": "scry", player: Side, top: number, bottom: number, } | { "kind": "coin", player: Side, won: boolean, source: ObjectId, };
 
 export type Span = "begin" | "end";
 

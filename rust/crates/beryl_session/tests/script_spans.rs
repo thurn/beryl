@@ -8,7 +8,7 @@ mod common;
 use beryl_cards::{CARDS, names};
 use beryl_search::Budget;
 use beryl_session::protocol::{
-    Candidate, Kind, ObjectView, Side, StackItem, TargetRef, Why, ZoneName,
+    Candidate, Kind, ObjectId, ObjectView, Side, StackItem, TargetRef, Why, ZoneName,
 };
 use beryl_session::script::{
     Act, Arrow, Follow, Heard, Notice, Open, Screen, Script, Span, Step, Subject, Table, carried,
@@ -205,7 +205,7 @@ fn a_line_at_a_planeswalker_never_points_at_the_player_first() {
         game.choose(game.answer(decision.id, index).unwrap());
     }
     // Both creatures awaited their choice in a view of their own.
-    assert_eq!(pending, [0, 512]);
+    assert_eq!(pending, [ObjectId(0), ObjectId(512)]);
     // Each line is begun once, at the planeswalker, and ended once, as combat ends.
     assert_eq!(
         lines,
@@ -301,9 +301,13 @@ fn an_arrow_ends_before_its_target_moves_and_does_not_follow_it() {
     let view = &views(names::PORTABLE_HOLE, HOLE, |_, _, _| {})[6][0];
     assert!(matches!(
         view.stack.as_slice(),
-        [StackItem::Ability { targets, .. }] if *targets == [TargetRef::Object { slot: 256 }]
+        [StackItem::Ability { targets, .. }] if *targets == [TargetRef::Object { slot: ObjectId(256) }]
     ));
-    let creature = view.objects.iter().find(|o| o.slot == 256).unwrap();
+    let creature = view
+        .objects
+        .iter()
+        .find(|o| o.slot == ObjectId(256))
+        .unwrap();
     assert_eq!(creature.zone, ZoneName::Hand);
     // A spell returned to its owner's hand takes no arrow there with it (by-8uw): the
     // arrow at it, and its own at what it would have countered, end before it goes.
@@ -449,8 +453,10 @@ fn counterspell() -> (Table, Script) {
 /// The counterspell's arrow at the spell it counters.
 const ARROW: Open = Open::Point {
     arrow: Arrow::HostileTarget,
-    from: Subject::Object { slot: 1 },
-    to: Subject::Object { slot: 257 },
+    from: Subject::Object { slot: ObjectId(1) },
+    to: Subject::Object {
+        slot: ObjectId(257),
+    },
 };
 
 fn step(act: Act) -> Step {
@@ -478,7 +484,9 @@ fn an_arrow_at_a_thing_that_is_moving_or_gone_breaks_a_rule() {
     let source = Open::Point {
         arrow: Arrow::Source,
         from: Subject::Ability { id: 9 },
-        to: Subject::Object { slot: 257 },
+        to: Subject::Object {
+            slot: ObjectId(257),
+        },
     };
     let gone = Script {
         reset: None,
@@ -534,7 +542,7 @@ fn two_visuals_of_one_thing_break_a_rule() {
          #1 moves twice in one beat: one visual per thing"
     );
     // A card on the table coming to be again.
-    let crypt: ObjectView = table.objects[&257].clone();
+    let crypt: ObjectView = table.objects[&ObjectId(257)].clone();
     let again = Script {
         reset: None,
         beats: vec![vec![step(Act::Appear {
@@ -558,9 +566,15 @@ fn two_visuals_of_one_thing_break_a_rule() {
 fn taking_off_the_stack_what_it_does_not_hold_breaks_a_rule() {
     let (mut table, whole) = counterspell();
     // The spell countered, its card on the stack, but no entry for it on the table's stack.
-    table
-        .stack
-        .retain(|e| !matches!(e.item, StackItem::Spell { slot: 257, .. }));
+    table.stack.retain(|e| {
+        !matches!(
+            e.item,
+            StackItem::Spell {
+                slot: ObjectId(257),
+                ..
+            }
+        )
+    });
     assert_eq!(
         broken(&table, &[], &whole),
         "`vanish #257 (Portable Hole) stack>graveyard counter <- #1`: \
@@ -589,7 +603,7 @@ fn flip() -> (Step, &'static str) {
     let notice = Notice::Coin {
         player: Side::You,
         won: false,
-        source: 0,
+        source: ObjectId(0),
     };
     let cause = Some(Subject::Ability { id: 1 });
     let act = Act::Announce { notice };

@@ -9,6 +9,7 @@ use crate::prompt::mode::{Chosen, Mode, Way};
 use crate::prompt::open::act_prompt;
 use crate::prompt::wording::{PassLeads, pass_words};
 use crate::prompt::{ButtonId, Click, Marked, PromptButton, PromptView, ShapeBody};
+use crate::protocol::ObjectId;
 use crate::protocol::{Candidate, DecisionView, PassTo, Side, own_activated};
 use crate::script::{Mark, Subject};
 
@@ -37,7 +38,7 @@ pub(crate) struct Priority {
 /// A card a click on uses.
 #[derive(Clone, Debug)]
 struct Used {
-    slot: u16,
+    slot: ObjectId,
     name: Option<String>,
     /// The ways to use it, in the order the choice among them shows them.
     ways: Vec<Way>,
@@ -49,7 +50,7 @@ struct Used {
 }
 
 /// The card a candidate of a priority uses, and whether it does more than make mana.
-fn used(option: &Candidate) -> Option<(u16, bool)> {
+fn used(option: &Candidate) -> Option<(ObjectId, bool)> {
     match *option {
         Candidate::PlayLand { slot }
         | Candidate::Cast { slot, .. }
@@ -62,7 +63,7 @@ fn used(option: &Candidate) -> Option<(u16, bool)> {
 
 impl Priority {
     pub(super) fn open<L: Layout>(table: &Table<'_, L>, decision: &DecisionView) -> Priority {
-        let name = |slot: u16| {
+        let name = |slot: ObjectId| {
             (table.view.objects.iter())
                 .find(|o| o.slot == slot)
                 .and_then(|o| o.name.clone())
@@ -94,7 +95,7 @@ impl Priority {
             card.ways = in_face_order(table, decision, card.slot, std::mem::take(&mut card.ways));
         }
         // Either of two interchangeable cards uses the one the engine offers for both.
-        let offered: Vec<u16> = cards.iter().map(|card| card.slot).collect();
+        let offered: Vec<ObjectId> = cards.iter().map(|card| card.slot).collect();
         for (stand_in, offered) in table.stand_ins(&offered) {
             let of = (cards.iter())
                 .find(|card| card.slot == offered)
@@ -233,7 +234,7 @@ impl Priority {
 fn in_face_order<L: Layout>(
     table: &Table<'_, L>,
     decision: &DecisionView,
-    slot: u16,
+    slot: ObjectId,
     offered: Vec<Way>,
 ) -> Vec<Way> {
     let activates = |way: &Way, ability: u8| match *way {
@@ -254,7 +255,7 @@ fn in_face_order<L: Layout>(
         ),
         Way::Unusable { .. } => false,
     };
-    let (Some(d), Some(object)) = (table.d, L::Slot::from_num(slot)) else {
+    let (Some(d), Some(object)) = (table.d, L::Slot::from_num(slot.0)) else {
         return offered;
     };
     if !offered.iter().any(own) {

@@ -15,7 +15,7 @@ use beryl_engine::card::{Part, Purpose};
 
 use super::held::{Clicked, Run, Step, Table, Want, offered};
 use super::{ButtonId, Click, Marked, PartName, Pile, PlaceName, PromptButton, PromptView};
-use super::{ObjectId, ShapeBody, ids};
+use super::{ObjectId, ShapeBody};
 use crate::protocol::{Candidate, DecisionView};
 use crate::script::{Mark, Subject};
 
@@ -70,7 +70,7 @@ impl Split {
         // The cards still to deal out lie together: on top of the library, where the first
         // not among the picks ends them, or in the hand.
         let lies = prompt.from?;
-        let cards: Vec<u16> = (table.laid_out(lies, table.record.count).into_iter())
+        let cards: Vec<ObjectId> = (table.laid_out(lies, table.record.count).into_iter())
             .take_while(|&slot| !table.takes(&[slot], &offered).is_empty())
             .collect();
         let ends = (decision.candidates.iter()).any(|c| c.option == Candidate::Done);
@@ -90,7 +90,7 @@ impl Split {
                 Pile {
                     place: rest,
                     label: rest_label,
-                    cards: ids(cards),
+                    cards,
                     exactly: None,
                     closed: false,
                 },
@@ -101,13 +101,13 @@ impl Split {
     }
 
     /// The pile `slot` is in, and where in it.
-    fn find(&self, slot: u16) -> Option<(usize, usize)> {
+    fn find(&self, slot: ObjectId) -> Option<(usize, usize)> {
         (self.piles.iter().enumerate())
-            .find_map(|(pile, p)| Some((pile, p.cards.iter().position(|&c| c == ObjectId(slot))?)))
+            .find_map(|(pile, p)| Some((pile, p.cards.iter().position(|&c| c == slot)?)))
     }
 
     /// Moves the card in `slot` to pile `to`, before what is at `at` there now, or to its end.
-    fn drop(&mut self, slot: u16, to: usize, at: Option<usize>) -> Clicked {
+    fn drop(&mut self, slot: ObjectId, to: usize, at: Option<usize>) -> Clicked {
         let Some((from, i)) = self.find(slot) else {
             return Clicked::Same;
         };
@@ -126,7 +126,7 @@ impl Split {
             return Clicked::Same;
         }
         self.piles[from].cards.remove(i);
-        self.piles[to].cards.insert(at, ObjectId(slot));
+        self.piles[to].cards.insert(at, slot);
         Clicked::Changed
     }
 
@@ -178,7 +178,7 @@ impl Split {
         view.marks = (self.piles.iter())
             .filter(|pile| !pile.closed)
             .flat_map(|pile| pile.cards.iter())
-            .map(|&ObjectId(slot)| Marked {
+            .map(|&slot| Marked {
                 on: Subject::Object { slot },
                 mark: Mark::Eligible,
             })
@@ -199,7 +199,7 @@ impl Split {
 
 /// The picks of `part` that put `cards`, a pile's as listed, in `place`; none for no cards.
 fn picked(part: Part, place: Option<PlaceName>, cards: &[ObjectId]) -> Option<Step> {
-    let cards = cards.iter().map(|&ObjectId(slot)| Subject::Object { slot });
+    let cards = cards.iter().map(|&slot| Subject::Object { slot });
     if cards.len() == 0 {
         return None;
     }

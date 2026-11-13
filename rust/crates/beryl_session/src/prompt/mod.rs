@@ -82,12 +82,13 @@ mod view;
 mod wording;
 mod yes_no;
 
+pub use crate::protocol::ObjectId;
 pub(crate) use ahead::forced;
 pub use held::{Clicked, Held, Run, add_opening_state};
 pub(crate) use open::{halt_prompt, prompt_view};
 pub use order::trigger_to_stack;
+pub(crate) use view::purpose_decl;
 pub use view::{
-    ButtonId, Click, ClickReply, ClickRequest, Lies, Marked, ObjectId, Pair, PartName, Pile,
-    PlaceName, PromptButton, PromptView, ShapeBody, Share, Words, shape_name,
+    ButtonId, Click, ClickReply, ClickRequest, Lies, Marked, Pair, PartName, Pile, PlaceName,
+    PromptButton, PromptView, ShapeBody, Share, Words, shape_name,
 };
-pub(crate) use view::{ids, purpose_decl, slots_of};

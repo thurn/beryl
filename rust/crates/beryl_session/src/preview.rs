@@ -15,6 +15,7 @@ use beryl_engine::{
 
 use crate::Status;
 use crate::prompt::forced;
+use crate::protocol::ObjectId;
 use crate::protocol::{Payment, PlayerView, Side, TargetRef, mana_text};
 
 /// Adds to `view`, at the open decision `d` in `s`, the ways each candidate is paid
@@ -55,7 +56,7 @@ fn choice(i: usize) -> Choice {
 /// player, a planeswalker they control, or a battle they protect." The engine asks it as the
 /// pick after the blocker, with evasion pruning the attackers (architecture §11); identical
 /// attackers are one candidate (§7.2).
-fn blocks<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Vec<Vec<u16>> {
+fn blocks<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Vec<Vec<ObjectId>> {
     let Candidates::Options(opts) = &d.candidates else {
         return vec![Vec::new(); d.len()];
     };
@@ -70,9 +71,11 @@ fn blocks<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Vec<Vec<u1
             apply(&mut copy, t, &mut scratch, &mut Replay, choice(i));
             match next(&mut copy, t, &mut scratch, &mut Replay) {
                 // The attackers offered, which are objects.
-                Step::Decide(d) if d.kind == DecisionKind::BlockTarget => {
-                    d.candidates.objects().map(SlotId::num).collect()
-                }
+                Step::Decide(d) if d.kind == DecisionKind::BlockTarget => d
+                    .candidates
+                    .objects()
+                    .map(|slot| ObjectId(slot.num()))
+                    .collect(),
                 _ => Vec::new(),
             }
         })
@@ -114,7 +117,9 @@ fn targets<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Vec<Vec<T
                 }) => match candidates {
                     Candidates::Objects(objects) => copy
                         .in_candidate_order(objects)
-                        .map(|slot| TargetRef::Object { slot: slot.num() })
+                        .map(|slot| TargetRef::Object {
+                            slot: ObjectId(slot.num()),
+                        })
                         .collect(),
                     Candidates::Options(opts) => opts
                         .iter()
@@ -270,7 +275,11 @@ fn priced<L: Layout>(at: Payment, s: &State<L>, t: &GameTable) -> Payment {
 /// ([CR 111.10a](https://yawgatog.com/resources/magic-rules/#R11110a)): "{T}, Sacrifice this
 /// token: Add one mana of any color." A permanent sacrificed otherwise, as Strip Mine for its
 /// own ability, paid no mana.
-pub(crate) fn tapped<L: Layout>(before: &State<L>, after: &State<L>, t: &GameTable) -> Vec<u16> {
+pub(crate) fn tapped<L: Layout>(
+    before: &State<L>,
+    after: &State<L>,
+    t: &GameTable,
+) -> Vec<ObjectId> {
     let untapped = |s: &State<L>, slot| {
         let o = s.object(slot);
         o.zone() == Zone::Battlefield && !o.is_tapped()
@@ -292,7 +301,7 @@ pub(crate) fn tapped<L: Layout>(before: &State<L>, after: &State<L>, t: &GameTab
                 sacrifices_for_mana(slot)
             }
         })
-        .map(|slot| slot.num())
+        .map(|slot| ObjectId(slot.num()))
         .collect()
 }
 
@@ -339,7 +348,7 @@ mod tests {
                                 p.plan,
                                 p.taps
                                     .iter()
-                                    .map(|&t| named(Slot::from_num(t).unwrap()))
+                                    .map(|&t| named(Slot::from_num(t.0).unwrap()))
                                     .collect(),
                             )
                         })
@@ -443,7 +452,8 @@ mod tests {
         let mut seen = None;
         beryl_scenario::visit(&CARDS, &SCENARIO, |t, s, d| {
             if d.prompt.purpose == Purpose::UnlessPays {
-                let untapped = |slot: u16| !s.object(Slot::from_num(slot).unwrap()).is_tapped();
+                let untapped =
+                    |ObjectId(slot): ObjectId| !s.object(Slot::from_num(slot).unwrap()).is_tapped();
                 let paid = payments(s, t, d);
                 let yes = (0..d.len())
                     .position(|i| d.candidates.option(choice(i)) == Some(Opt::Yes))
@@ -489,7 +499,8 @@ mod tests {
             ]);
         let mut taps = Vec::new();
         beryl_scenario::visit(&CARDS, &SCENARIO, |t, s, d| {
-            let named = |slot: u16| s.definition_name(t, Slot::from_num(slot).unwrap());
+            let named =
+                |ObjectId(slot): ObjectId| s.definition_name(t, Slot::from_num(slot).unwrap());
             taps = payments(s, t, d)
                 .into_iter()
                 .zip((0..d.len()).map(|i| d.candidates.option(choice(i))))
@@ -601,7 +612,9 @@ mod tests {
                     assert!(b.is_empty(), "only a blocker blocks");
                     return None;
                 };
-                let attackers = b.into_iter().map(|a| named(&s, Slot::from_num(a).unwrap()));
+                let attackers = b
+                    .into_iter()
+                    .map(|a| named(&s, Slot::from_num(a.0).unwrap()));
                 Some((named(&s, blocker), attackers.collect::<Vec<_>>()))
             })
             .collect();
@@ -630,7 +643,9 @@ mod tests {
             .permanents(P0, TEFERI)
             .permanents(P1, STAFF);
         let (t, mut s) = beryl_scenario::position(&CARDS, &scenario).unwrap();
-        let named = |s: &State, slot: u16| s.definition_name(&t, Slot::from_num(slot).unwrap());
+        let named = |s: &State, ObjectId(slot): ObjectId| {
+            s.definition_name(&t, Slot::from_num(slot).unwrap())
+        };
         let mut scratch = Scratch::new();
         // Teferi's −3, its third ability: "Return up to one target artifact, creature, or
         // enchantment to its owner's hand."

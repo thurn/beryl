@@ -15,6 +15,7 @@ use super::stack::Held;
 use super::staging::{self, Told};
 use super::table::Table;
 use super::{Act, Fact, Notice, Open, Reset, Script, Step, Stream, Subject, Tally, check};
+use crate::protocol::ObjectId;
 use crate::protocol::{
     CardType, Counter, GameEvent, ObjectView, PlayerView, Side, StackItem, Step as TurnStep,
     TargetRef, Why, ZoneName,
@@ -30,7 +31,7 @@ pub struct Screen {
     /// shown yet.
     held: Vec<Held>,
     /// The cards the latest view had the seat looking at.
-    looked: Vec<u16>,
+    looked: Vec<ObjectId>,
     /// The arrows, lines and lifts its scripts have begun and not ended: the next script
     /// ends them.
     spans: Vec<Open>,
@@ -44,7 +45,7 @@ pub struct Screen {
     broken: Vec<(Subject, Subject)>,
     /// The attackers whose target the latest view had still to be chosen
     /// ([`PlayerView::pending_attackers`]).
-    aimless: Vec<u16>,
+    aimless: Vec<ObjectId>,
 }
 
 impl Screen {
@@ -192,15 +193,15 @@ pub(super) struct Builder<'a> {
     /// was not as the view before ended and no event has declared it since, so their
     /// records may say no more than that they attack and a line drawn from one would point
     /// at the player before the planeswalker (by-m0wf).
-    pub(super) aimless: Vec<u16>,
+    pub(super) aimless: Vec<ObjectId>,
     /// The attackers whose target is still to be chosen as the view ends.
-    pub(super) pending: &'a [u16],
+    pub(super) pending: &'a [ObjectId],
     /// The players whose pools' losses have gone into what they paid for, and whether a
     /// step ends in the script, which empties every pool.
     drained: Vec<Side>,
     empties: bool,
     /// Where the latest step that carries each object's record is: its beat and its place there.
-    pub(super) touched: BTreeMap<u16, (usize, usize)>,
+    pub(super) touched: BTreeMap<ObjectId, (usize, usize)>,
 }
 
 impl<'a> Builder<'a> {
@@ -420,7 +421,7 @@ impl<'a> Builder<'a> {
 
     /// The spell in `slot` is announced: as its cast completed it, if the table has it another
     /// way.
-    fn cast(&mut self, slot: u16, controller: Side, item: &StackItem, cause: Option<Subject>) {
+    fn cast(&mut self, slot: ObjectId, controller: Side, item: &StackItem, cause: Option<Subject>) {
         let subject = Subject::Object { slot };
         let entry = self.table.stack.iter().find(|e| e.subject() == subject);
         let Some(entry) = entry else { return };
@@ -435,7 +436,7 @@ impl<'a> Builder<'a> {
         self.dwell(controller, subject);
     }
 
-    fn gain_control(&mut self, slot: u16, player: Side, cause: Option<Subject>) {
+    fn gain_control(&mut self, slot: ObjectId, player: Side, cause: Option<Subject>) {
         if let Some(mut object) = self.permanent(slot) {
             object.controller = player;
             self.emit(
@@ -474,7 +475,7 @@ impl<'a> Builder<'a> {
         }
     }
 
-    pub(super) fn permanent(&self, slot: u16) -> Option<ObjectView> {
+    pub(super) fn permanent(&self, slot: ObjectId) -> Option<ObjectView> {
         self.table
             .objects
             .get(&slot)
@@ -482,7 +483,7 @@ impl<'a> Builder<'a> {
             .cloned()
     }
 
-    fn counters(&mut self, slot: u16, counter: Counter, by: i16, cause: Option<Subject>) {
+    fn counters(&mut self, slot: ObjectId, counter: Counter, by: i16, cause: Option<Subject>) {
         let Some(mut object) = self.table.objects.get(&slot).cloned() else {
             return;
         };
@@ -515,7 +516,7 @@ impl<'a> Builder<'a> {
 
     fn damage(
         &mut self,
-        source: u16,
+        source: ObjectId,
         to: &TargetRef,
         amount: u8,
         combat: bool,

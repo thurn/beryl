@@ -23,6 +23,7 @@ use beryl_engine::{
 };
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_session::prompt::{ButtonId, Click, Clicked, Held};
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{Candidate, Side, ZoneName};
 use beryl_session::replay::Entry;
 use beryl_session::save::Kind as SavedKind;
@@ -41,8 +42,8 @@ fn choices(play: &Play, from: usize) -> Vec<(SavedKind, bool)> {
 }
 
 /// The cards the open prompt marks with `mark`, by slot, ascending.
-fn marked(play: &Play, mark: Mark) -> Vec<u16> {
-    let mut slots: Vec<u16> = (play.decision().prompt.marks.iter())
+fn marked(play: &Play, mark: Mark) -> Vec<ObjectId> {
+    let mut slots: Vec<ObjectId> = (play.decision().prompt.marks.iter())
         .filter(|marked| marked.mark == mark)
         .filter_map(|marked| match marked.on {
             beryl_session::script::Subject::Object { slot } => Some(slot),
@@ -54,7 +55,7 @@ fn marked(play: &Play, mark: Mark) -> Vec<u16> {
 }
 
 /// The one permanent of the human's named `name`.
-fn permanent(play: &Play, name: &str) -> u16 {
+fn permanent(play: &Play, name: &str) -> ObjectId {
     play.named(name, ZoneName::Battlefield, Side::You)[0]
 }
 
@@ -576,7 +577,7 @@ fn mana_is_paid_one_source_at_a_time_by_picking_them() {
     let (table, mut state, d) = by_hand();
     let view = play::asked(&table, &state, &d);
     let named = |name: &str| {
-        let mut slots: Vec<u16> = (view.objects.iter())
+        let mut slots: Vec<ObjectId> = (view.objects.iter())
             .filter(|o| o.name.as_deref() == Some(name) && o.zone == ZoneName::Battlefield)
             .map(|o| o.slot)
             .collect();
@@ -600,7 +601,7 @@ fn mana_is_paid_one_source_at_a_time_by_picking_them() {
             cards(&[island, plains[0]]),
         )
     );
-    let on = |slot: u16| Click::On { on: card(slot) };
+    let on = |slot: ObjectId| Click::On { on: card(slot) };
     // The second Plains pays {1}: the Island is left to pay {U}, which no Plains can.
     let clicked = held.click(&state, &table, Some(&d), on(plains[1]));
     assert!(matches!(clicked, Clicked::Changed));
@@ -638,9 +639,9 @@ fn mana_is_paid_one_source_at_a_time_by_picking_them() {
         };
         asked = next;
     }
-    let slots: Vec<u16> = (picks.iter())
+    let slots: Vec<ObjectId> = (picks.iter())
         .map(|pick| match pick {
-            Opt::Mana { slot, .. } => slot.num(),
+            Opt::Mana { slot, .. } => ObjectId(slot.num()),
             other => panic!("a pick that is no source: {other:?}"),
         })
         .collect();

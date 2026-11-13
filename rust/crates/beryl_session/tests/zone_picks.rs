@@ -17,6 +17,7 @@ use beryl_engine::card::Purpose;
 use beryl_engine::{Seat, TurnStep};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_session::prompt::ButtonId;
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{Candidate, Kind, Side, ZoneName};
 use beryl_session::replay::Entry;
 use beryl_session::save::Kind as SavedKind;
@@ -49,12 +50,12 @@ fn cast_to(play: &mut Play, purpose: Purpose) {
 }
 
 /// Picks the card in `slot`, as a UI that holds the prompt's state itself does.
-fn pick(play: &mut Play, slot: u16) {
+fn pick(play: &mut Play, slot: ObjectId) {
     play.choose(|c| *c == Candidate::Object { slot });
 }
 
 /// The human's cards named `name` in `zone`.
-fn mine(play: &Play, name: &str, zone: ZoneName) -> Vec<u16> {
+fn mine(play: &Play, name: &str, zone: ZoneName) -> Vec<ObjectId> {
     play.named(name, zone, Side::You)
 }
 
@@ -479,13 +480,13 @@ fn a_cleanup_discards_down_to_the_hand_size_by_its_button() {
     let mut play = Play::scenario(&CLEANUP);
     pass(&mut play);
     assert!(play.decision().prompt.is(Purpose::Cleanup));
-    let hand: Vec<u16> = (play.view.objects.iter())
+    let hand: Vec<ObjectId> = (play.view.objects.iter())
         .filter(|o| o.zone == ZoneName::Hand && o.owner == Side::You)
         .map(|o| o.slot)
         .collect();
     assert_eq!(hand.len(), 9);
     let islands = mine(&play, ISLAND, ZoneName::Hand);
-    let offered = |play: &Play, slot: u16| {
+    let offered = |play: &Play, slot: ObjectId| {
         (play.decision().candidates.iter()).any(|c| c.option == Candidate::Object { slot })
     };
     let (twin, island) = if offered(&play, islands[0]) {
@@ -504,7 +505,7 @@ fn a_cleanup_discards_down_to_the_hand_size_by_its_button() {
             cards(&hand),
         )
     );
-    let rest = |gone: &[u16]| -> Vec<u16> {
+    let rest = |gone: &[ObjectId]| -> Vec<ObjectId> {
         (hand.iter().copied())
             .filter(|slot| !gone.contains(slot))
             .collect()
@@ -636,7 +637,7 @@ fn cards_are_exiled_from_a_graveyard_for_a_cost_from_the_bottom_up() {
     else {
         panic!("eight cards in the graveyard");
     };
-    let named = |slot: u16| play.object(slot).name.clone().unwrap();
+    let named = |slot: ObjectId| play.object(slot).name.clone().unwrap();
     assert_eq!(
         [oust, low_plains, plains, low_island, island].map(named),
         [OUST, PLAINS, PLAINS, ISLAND, ISLAND]
@@ -658,7 +659,7 @@ fn cards_are_exiled_from_a_graveyard_for_a_cost_from_the_bottom_up() {
     );
     // All but the lower Plains and the lower Island.
     let wanted = [oust, tithe, reprieve, plains, counterspell, island];
-    let line = |slots: &[u16]| {
+    let line = |slots: &[ObjectId]| {
         let slots: Vec<String> = slots.iter().map(|slot| format!(" #{slot}")).collect();
         slots.concat()
     };
@@ -785,7 +786,7 @@ fn to_the_bottom() -> Play {
 #[test]
 fn a_mulligan_puts_its_cards_on_the_bottom_by_one_button() {
     let mut play = to_the_bottom();
-    let hand: Vec<u16> = (play.view.objects.iter())
+    let hand: Vec<ObjectId> = (play.view.objects.iter())
         .filter(|o| o.zone == ZoneName::Hand && o.owner == Side::You)
         .map(|o| o.slot)
         .collect();

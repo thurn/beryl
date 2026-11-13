@@ -20,6 +20,7 @@ use beryl_engine::{Seat, TurnStep};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_search::Budget;
 use beryl_session::prompt::{ButtonId, Click, ClickReply, ClickRequest, ShapeBody};
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{Candidate, DecisionView, Kind, Side, ZoneName};
 use beryl_session::replay::{Entry, ReplayFile};
 use beryl_session::save::Kind as SavedKind;
@@ -300,7 +301,7 @@ fn a_target_among_spells_opens_unpicked_and_waits_for_its_button() {
     assert_eq!(play.on(crypt).as_deref(), Some(open.as_str()));
     assert_eq!(play.on(tithe).as_deref(), Some(on_tithe.as_str()));
     // The button answers, as picking the Mana Tithe does.
-    let cast = |play: &mut Play, target: u16| {
+    let cast = |play: &mut Play, target: ObjectId| {
         play.choose(|c| matches!(c, Candidate::Cast { slot, .. } if *slot == crypt));
         play.choose(|c| matches!(c, Candidate::Cast { slot, .. } if *slot == counterspell));
         play.choose(|c| *c == Candidate::Object { slot: target });

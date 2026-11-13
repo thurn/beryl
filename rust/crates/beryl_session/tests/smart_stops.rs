@@ -13,6 +13,7 @@ use beryl_engine::state::{CounterKind, StackEntry};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_search::Budget;
 use beryl_session::prompt::{Click, ClickReply, ClickRequest, PromptView};
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{Candidate, Kind, Side, StackItem, ZoneName};
 use beryl_session::replay::Entry;
 use beryl_session::script::{Mark, Subject};
@@ -445,7 +446,7 @@ fn asked_after_waterbend(stops: StopsSetting) -> Vec<(Kind, bool)> {
                 .find(|o| o.name.as_deref() == Some(JACE_VRYNS_PRODIGY))
                 .unwrap()
                 .slot;
-            let on = |slot: u16, revision: u32| ClickRequest {
+            let on = |slot: ObjectId, revision: u32| ClickRequest {
                 decision: decision.id,
                 revision,
                 click: Click::On {
@@ -466,7 +467,8 @@ fn asked_after_waterbend(stops: StopsSetting) -> Vec<(Kind, bool)> {
             assert_eq!(marked(&changed, Mark::Suggested).len(), 2);
             // A click on nothing that pays changes nothing; taking the pick back restores
             // the default.
-            let ClickReply::Open { prompt: same } = game.click(on(u16::MAX, 1)).unwrap() else {
+            let ClickReply::Open { prompt: same } = game.click(on(ObjectId(u16::MAX), 1)).unwrap()
+            else {
                 panic!("the payment stays open");
             };
             assert_eq!(same, changed);
@@ -581,7 +583,7 @@ fn asked_after_trinket_mage(scenario: &Scenario, stops: StopsSetting) -> Vec<Kin
                 break;
             }
         }
-        let name = |slot: u16| {
+        let name = |slot: ObjectId| {
             view.objects
                 .iter()
                 .find(|o| o.slot == slot)

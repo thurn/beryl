@@ -43,7 +43,7 @@ impl Objects {
         let lies = prompt.from?;
         let cards = table.laid_out(lies, table.record.count);
         let offered = offered(decision);
-        let about = |&slot: &u16| prompt.about.contains(&ObjectId(slot));
+        let about = |&slot: &ObjectId| prompt.about.contains(&slot);
         let in_graveyard = lies.zone == ZoneName::Graveyard;
         let (opens, takes) = match prompt.part {
             // A yes picks among the cards the question is about.
@@ -65,7 +65,7 @@ impl Objects {
         };
         // A card offered that the cards laid out do not show is still one to pick.
         let missing = offered.iter().copied().filter(|slot| !takes.contains(slot));
-        let takes: Vec<u16> = match opens {
+        let takes: Vec<ObjectId> = match opens {
             Opens::Picks => takes.iter().copied().chain(missing).collect(),
             _ => takes,
         };
@@ -87,7 +87,7 @@ impl Objects {
             // What a search can find, by name: the library's order is not the viewer's to
             // learn ([CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a): the
             // shuffle that follows leaves it so "that no player knows their order").
-            let name = |&slot: &u16| table.object(slot).and_then(|o| o.name.clone());
+            let name = |&slot: &ObjectId| table.object(slot).and_then(|o| o.name.clone());
             let mut found = takes.clone();
             found.sort_by_key(|slot| (name(slot), *slot));
             found
@@ -135,13 +135,13 @@ impl Objects {
 pub(super) struct Pile {
     /// The cards from the bottom up, each with its kind: the place in the pile of the lowest
     /// card it is interchangeable with.
-    cards: Vec<(u16, usize)>,
+    cards: Vec<(ObjectId, usize)>,
 }
 
 impl Pile {
     /// The pile of `cards`, listed from the top down, on `table`.
-    fn of<L: Layout>(table: &Table<'_, L>, cards: &[u16]) -> Pile {
-        let up: Vec<u16> = cards.iter().rev().copied().collect();
+    fn of<L: Layout>(table: &Table<'_, L>, cards: &[ObjectId]) -> Pile {
+        let up: Vec<ObjectId> = cards.iter().rev().copied().collect();
         let kind = |i: usize| {
             (0..i)
                 .find(|&lower| !table.takes(&up[i..=i], &up[lower..=lower]).is_empty())

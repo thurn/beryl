@@ -3,12 +3,13 @@
 
 use super::build::Builder;
 use super::{Act, Fact, Subject};
+use crate::protocol::ObjectId;
 use crate::protocol::{Combat, GameEvent, ObjectView};
 
 impl Builder<'_> {
     /// The attackers are declared: each that did not tap to attack takes its part in combat
     /// with no motion.
-    pub(super) fn attack(&mut self, attackers: &[u16], cause: Option<Subject>) {
+    pub(super) fn attack(&mut self, attackers: &[ObjectId], cause: Option<Subject>) {
         for &slot in attackers {
             self.declare(slot);
             if let Some(mut object) = self.permanent(slot)
@@ -23,7 +24,7 @@ impl Builder<'_> {
 
     /// The attacker in `slot` has its record as it is declared, or as the view ends: its line
     /// may be drawn, unless what it attacks is still to be chosen as the view ends.
-    pub(super) fn declare(&mut self, slot: u16) {
+    pub(super) fn declare(&mut self, slot: ObjectId) {
         if !self.pending.contains(&slot) {
             self.aimless.retain(|&s| s != slot);
         }
@@ -36,7 +37,7 @@ impl Builder<'_> {
     /// ([CR 509.1h](https://yawgatog.com/resources/magic-rules/#R5091h): "An attacking
     /// creature with one or more creatures declared as blockers for it becomes a blocked
     /// creature"): each record says so with no motion, and the line between them begins.
-    pub(super) fn block(&mut self, blocker: u16, attacker: u16, cause: Option<Subject>) {
+    pub(super) fn block(&mut self, blocker: ObjectId, attacker: ObjectId, cause: Option<Subject>) {
         if let Some(mut object) = self.permanent(blocker) {
             let blocking = Some(Combat::Blocking {
                 attacker: Some(attacker),
@@ -63,7 +64,7 @@ impl Builder<'_> {
     /// combat"): each record says so with no motion, and the lines of combat end, so that a
     /// combat that begins and ends in one script does not leave them to its last beat.
     pub(super) fn end_combat(&mut self) {
-        let fighting: Vec<u16> = (self.table.battlefield.iter())
+        let fighting: Vec<ObjectId> = (self.table.battlefield.iter())
             .filter(|slot| self.permanent(**slot).is_some_and(|o| o.combat.is_some()))
             .copied()
             .collect();
@@ -76,7 +77,7 @@ impl Builder<'_> {
         }
     }
 
-    pub(super) fn tap(&mut self, slot: u16, tapped: bool, cause: Option<Subject>) {
+    pub(super) fn tap(&mut self, slot: ObjectId, tapped: bool, cause: Option<Subject>) {
         let Some(mut object) = self.permanent(slot) else {
             return;
         };

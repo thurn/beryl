@@ -16,6 +16,7 @@ use beryl_engine::{Choice, Decision, DecisionKind, Layout, Opt, Seat, Small, Tur
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_session::StopsSetting;
 use beryl_session::prompt::{ButtonId, Click, Clicked, Held};
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{Candidate, Kind, Side, ZoneName};
 use play::{Casts, Play, asked, position};
 
@@ -38,9 +39,9 @@ fn say(play: &mut Play, yes: bool) {
 }
 
 /// The one card the open prompt is about.
-fn about(play: &Play) -> u16 {
+fn about(play: &Play) -> ObjectId {
     match play.decision().prompt.about[..] {
-        [slot] => slot.into(),
+        [slot] => slot,
         ref cards => panic!("the prompt is about {cards:?}"),
     }
 }
@@ -291,11 +292,11 @@ const TUCK: Scenario = Scenario::new("top or bottom")
 /// Under full control, casts the Elite Spellbinder, casts Subtlety with it on the stack and
 /// aims Subtlety's trigger at it. Returns the game at the trigger's question and the
 /// Spellbinder's slot.
-fn tucking() -> (Play, u16) {
+fn tucking() -> (Play, ObjectId) {
     let mut play = Play::with(&TUCK, None, StopsSetting::EXACT);
     let binder = play.named(ELITE_SPELLBINDER, ZoneName::Hand, Side::You)[0];
     let subtlety = play.named(SUBTLETY, ZoneName::Hand, Side::You)[0];
-    let cast = |slot: u16| move |c: &Candidate| matches!(c, Candidate::Cast { slot: s, costs, .. } if *s == slot && costs.is_empty());
+    let cast = |slot: ObjectId| move |c: &Candidate| matches!(c, Candidate::Cast { slot: s, costs, .. } if *s == slot && costs.is_empty());
     play.choose(cast(binder));
     play.choose(cast(subtlety));
     pass(&mut play);
@@ -349,7 +350,7 @@ const CONVERT: Scenario = Scenario::new("move")
 
 /// Casts Thirst for Discovery and discards the Island it drew, to the Currency Converter's
 /// question about it. Returns the game and the Island's slot.
-fn discarding() -> (Play, u16) {
+fn discarding() -> (Play, ObjectId) {
     let mut play = Play::scenario(&CONVERT);
     play.choose(|c| matches!(c, Candidate::Cast { .. }));
     pass(&mut play);

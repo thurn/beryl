@@ -5,7 +5,8 @@ use beryl_engine::card::{ManaCost, Prompt, Purpose};
 use beryl_engine::{Decision, GameTable, Layout, Observation, Zone};
 
 use super::wording::{Holes, cancel_word, end_words, pile_word, wording};
-use super::{Lies, PromptView, ShapeBody, Words, ids};
+use super::{Lies, PromptView, ShapeBody, Words};
+use crate::protocol::ObjectId;
 use crate::protocol::{mana_text, name, shown, side, slots};
 
 /// The prompt the pick `d` asks belongs to, as the seat `obs` sees for is sent it; `asker`
@@ -33,7 +34,7 @@ pub(crate) fn prompt_view<L: Layout>(
         from: about.map(|slot| obs.object(slot).zone()),
     };
     PromptView {
-        about: ids(slots(obs.in_candidate_order(d.about))),
+        about: slots(obs.in_candidate_order(d.about)),
         from: shown.map(|card| Lies {
             player: side(obs, card.owner()),
             zone: card.zone().into(),
@@ -51,13 +52,13 @@ pub(crate) fn halt_prompt() -> PromptView {
 /// The choice among the ways to use the card in `slot`, named `name` if the viewer knows it,
 /// which a click on it opens over a priority (`Purpose::Act`), before its state: its buttons
 /// are the ways ([`Mode::act`](super::mode::Mode::act)).
-pub(crate) fn act_prompt(slot: u16, name: Option<&str>) -> PromptView {
+pub(crate) fn act_prompt(slot: ObjectId, name: Option<&str>) -> PromptView {
     let holes = Holes {
         name,
         ..Holes::default()
     };
     PromptView {
-        about: ids([slot]),
+        about: vec![slot],
         ..worded(&Prompt::new(Purpose::Act), None, &holes)
     }
 }

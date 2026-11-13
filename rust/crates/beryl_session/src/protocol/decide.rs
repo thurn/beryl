@@ -8,6 +8,7 @@ use beryl_engine::{
     SlotId, Zone, ZoneKey, can_declare_blockers, next_step_stop, next_stop, refusal,
 };
 
+use super::ObjectId;
 use super::{
     Candidate, CandidateView, DecisionId, DecisionView, Kind, PassTo, RefusalView, Refused,
     StackItem, StopsSetting, candidate, name, stack_item,
@@ -26,7 +27,9 @@ pub(super) fn decision_view<L: Layout>(
         Candidates::Objects(_) => (d.candidates.objects())
             .map(|slot| CandidateView {
                 label: name(t, obs, slot).unwrap_or("a hidden card").to_owned(),
-                option: Candidate::Object { slot: slot.num() },
+                option: Candidate::Object {
+                    slot: ObjectId(slot.num()),
+                },
                 payments: Vec::new(),
                 blocks: Vec::new(),
                 nth: None,
@@ -75,7 +78,7 @@ pub(super) fn refused<L: Layout>(t: &GameTable, obs: Observation<'_, L>) -> Vec<
         .filter_map(|slot| {
             let reason = match refusal(obs, t, slot)? {
                 Refusal::Timing { by } => RefusalView::Timing {
-                    by: by.map(SlotId::num),
+                    by: by.map(|slot| ObjectId(slot.num())),
                 },
                 Refusal::LandPlayed => RefusalView::LandPlayed,
                 Refusal::Mana => RefusalView::Mana,
@@ -83,7 +86,7 @@ pub(super) fn refused<L: Layout>(t: &GameTable, obs: Observation<'_, L>) -> Vec<
                 Refusal::Target => RefusalView::Target,
             };
             Some(Refused {
-                slot: slot.num(),
+                slot: ObjectId(slot.num()),
                 reason,
             })
         })
@@ -181,7 +184,7 @@ fn decision_source<L: Layout>(
     obs: Observation<'_, L>,
     d: &Decision<L>,
     resolving: Option<&StackEntry<L>>,
-) -> Option<u16> {
+) -> Option<ObjectId> {
     let slot = match (d.kind, d.prompt.purpose) {
         // The land entering asks.
         (_, Purpose::PayLife) => d.about.sole(),
@@ -208,5 +211,5 @@ fn decision_source<L: Layout>(
             .and_then(beryl_engine::state::StackEntry::object)
             .map(|r| r.slot),
     };
-    slot.map(SlotId::num)
+    slot.map(|slot| ObjectId(slot.num()))
 }

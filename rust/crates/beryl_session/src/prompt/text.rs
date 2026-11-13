@@ -73,7 +73,7 @@ fn cards(ids: &[ObjectId]) -> Each<impl Iterator<Item = Card> + Clone + '_> {
 /// Where a subject sorts in a mark's line: cards by slot, then abilities, then players.
 fn rank(subject: Subject) -> (u8, u32) {
     match subject {
-        Subject::Object { slot } => (0, slot.into()),
+        Subject::Object { slot } => (0, slot.0.into()),
         Subject::Ability { id } => (1, id),
         Subject::Player { player } => (2, u32::from(player == Side::Opponent)),
     }

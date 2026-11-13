@@ -4,7 +4,7 @@ use beryl_engine::card::{Part, Place, Purpose, Shape};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::protocol::{DecisionId, Side, ZoneName};
+use crate::protocol::{DecisionId, ObjectId, Side, ZoneName};
 use crate::script::{Arrow, Mark, Subject};
 
 /// The open prompt as its seat sees it: what the decision's pick belongs to, and everything
@@ -105,41 +105,6 @@ pub(crate) fn purpose_decl() -> String {
         .map(|purpose| format!("\"{}\"", purpose.name()))
         .collect();
     format!("type Purpose = {};", names.join(" | "))
-}
-
-/// An object on the wire: its public slot, the number a [`Subject::Object`] and an
-/// [`ObjectView`](crate::protocol::ObjectView) name it by.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TS)]
-#[serde(transparent)]
-#[ts(type = "number")]
-pub struct ObjectId(pub u16);
-
-impl From<u16> for ObjectId {
-    fn from(slot: u16) -> Self {
-        ObjectId(slot)
-    }
-}
-
-impl std::fmt::Display for ObjectId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-impl From<ObjectId> for u16 {
-    fn from(id: ObjectId) -> Self {
-        id.0
-    }
-}
-
-/// The objects in `slots`, as the wire names them.
-pub(crate) fn ids(slots: impl IntoIterator<Item = u16>) -> Vec<ObjectId> {
-    slots.into_iter().map(ObjectId).collect()
-}
-
-/// The slots of the objects `ids` names.
-pub(crate) fn slots_of(ids: &[ObjectId]) -> Vec<u16> {
-    ids.iter().map(|id| id.0).collect()
 }
 
 /// Which part of a prompt a pick answers ([`Part`]).

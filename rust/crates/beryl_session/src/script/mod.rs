@@ -157,9 +157,9 @@ pub use table::{Entry, Piles, Table, Turn};
 pub(crate) use text::wire;
 pub use verb::{Arrow, Mark, Span, Verb};
 
-use crate::protocol::Side;
 #[cfg(doc)]
 use crate::protocol::{GameEvent, ObjectView, PlayerView};
+use crate::protocol::{ObjectId, Side};
 
 /// What one seat's screen does between the view before and the view this came with.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, TS)]
@@ -201,7 +201,7 @@ pub struct Step {
 pub enum Subject {
     /// A card or token, by slot. A spell on the stack is its card.
     Object {
-        slot: u16,
+        slot: ObjectId,
     },
     /// An ability on the stack, by the number its `emerge` gave it.
     Ability {

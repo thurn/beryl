@@ -18,6 +18,7 @@ use beryl_engine::state::CounterKind;
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_session::StopsSetting;
 use beryl_session::prompt::{ButtonId, Click};
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{Candidate, Kind, Side, ZoneName};
 use beryl_session::replay::Entry;
 use beryl_session::save::Kind as SavedKind;
@@ -36,7 +37,7 @@ fn choices(play: &Play, from: usize) -> Vec<(SavedKind, bool)> {
 }
 
 /// A card dropped into pile `pile` before what is at `at` there.
-fn drop(slot: u16, pile: u8, at: u16) -> Click {
+fn drop(slot: ObjectId, pile: u8, at: u16) -> Click {
     Click::Drop {
         on: card(slot),
         pile,
@@ -45,7 +46,7 @@ fn drop(slot: u16, pile: u8, at: u16) -> Click {
 }
 
 /// The card named `name` in the human's library.
-fn in_library(play: &Play, name: &str) -> u16 {
+fn in_library(play: &Play, name: &str) -> ObjectId {
     play.named(name, ZoneName::Library, Side::You)[0]
 }
 
@@ -314,11 +315,11 @@ fn to_the_put_back(play: &mut Play) {
 fn cards_are_put_back_from_the_hand_onto_the_library_in_an_order() {
     let mut play = Play::scenario(&PUT_BACK);
     to_the_put_back(&mut play);
-    let hand: Vec<u16> = (play.view.objects.iter())
+    let hand: Vec<ObjectId> = (play.view.objects.iter())
         .filter(|o| o.zone == ZoneName::Hand && o.owner == Side::You)
         .map(|o| o.slot)
         .collect();
-    let line = |slots: &[u16]| {
+    let line = |slots: &[ObjectId]| {
         let slots: Vec<String> = slots.iter().map(|slot| format!(" #{slot}")).collect();
         slots.concat()
     };
@@ -326,7 +327,7 @@ fn cards_are_put_back_from_the_hand_onto_the_library_in_an_order() {
     let counterspell = play.named(COUNTERSPELL, ZoneName::Hand, Side::You)[0];
     // The engine offers one of the two Plains for both (architecture §7.2): the other is
     // the one clicked.
-    let offered = |slot: u16| {
+    let offered = |slot: ObjectId| {
         (play.decision().candidates.iter()).any(|c| c.option == Candidate::Object { slot })
     };
     let plains = play.named(PLAINS, ZoneName::Hand, Side::You);
@@ -348,7 +349,7 @@ fn cards_are_put_back_from_the_hand_onto_the_library_in_an_order() {
             line(&hand)
         )
     );
-    let without = |gone: &[u16]| -> Vec<u16> {
+    let without = |gone: &[ObjectId]| -> Vec<ObjectId> {
         (hand.iter().copied())
             .filter(|slot| !gone.contains(slot))
             .collect()

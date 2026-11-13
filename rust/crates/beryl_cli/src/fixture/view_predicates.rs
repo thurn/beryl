@@ -1,6 +1,7 @@
 //! The questions the stopping conditions ask of a [`PlayerView`].
 
 use super::condition::Mark;
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{
     Candidate, CandidateView, CardType, ObjectView, Side, StackItem, TargetRef, ZoneName,
 };
@@ -44,7 +45,7 @@ pub(super) fn namesake_candidates(view: &PlayerView) -> bool {
 /// The open decision's candidates, if any.
 /// Whether the human may play a card named `card` off the battlefield more than one way.
 pub(super) fn ways_to_play(view: &PlayerView, card: &str) -> bool {
-    let off_battlefield = |slot: u16| {
+    let off_battlefield = |slot: ObjectId| {
         view.objects.iter().any(|o| {
             o.slot == slot && o.zone != ZoneName::Battlefield && o.name.as_deref() == Some(card)
         })
@@ -74,7 +75,7 @@ pub(super) fn playable_pair(view: &PlayerView) -> bool {
     let Status::Deciding { decision } = &view.status else {
         return false;
     };
-    let in_hand = |slot: u16| {
+    let in_hand = |slot: ObjectId| {
         view.objects
             .iter()
             .find(|o| o.slot == slot && o.zone == ZoneName::Hand)
@@ -98,7 +99,7 @@ pub(super) fn playable_pair(view: &PlayerView) -> bool {
 /// Whether a card in exile links, by `host`, to a permanent on the battlefield.
 pub(super) fn exiled_by_permanent(
     view: &PlayerView,
-    host: impl Fn(&ObjectView) -> Option<u16>,
+    host: impl Fn(&ObjectView) -> Option<ObjectId>,
 ) -> bool {
     view.objects.iter().any(|o| {
         o.zone == ZoneName::Exile
@@ -289,7 +290,7 @@ pub(super) fn targets_beside_source(view: &PlayerView) -> bool {
     else {
         return false;
     };
-    let permanent = |slot: u16| {
+    let permanent = |slot: ObjectId| {
         view.objects
             .iter()
             .find(|o| o.slot == slot && o.zone == ZoneName::Battlefield)

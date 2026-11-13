@@ -1,5 +1,6 @@
 //! The conditions on the view a recording stops at.
 
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{
     Candidate, CardType, Combat, Counter, Kind, ObjectView, Side, StackItem, Step, TargetRef,
     ZoneName,
@@ -302,7 +303,7 @@ impl Condition {
     }
 
     pub(crate) fn holds(&self, view: &PlayerView) -> bool {
-        let name = |slot: u16| {
+        let name = |slot: ObjectId| {
             view.objects
                 .iter()
                 .find(|o| o.slot == slot)
@@ -395,7 +396,7 @@ impl Condition {
     }
     /// Whether one of the conditions specs add holds.
     fn holds_for_spec(&self, view: &PlayerView) -> bool {
-        let name = |slot: u16| {
+        let name = |slot: ObjectId| {
             view.objects
                 .iter()
                 .find(|o| o.slot == slot)

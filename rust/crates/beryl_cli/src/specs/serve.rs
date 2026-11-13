@@ -42,6 +42,7 @@ use std::time::{Duration, Instant};
 use beryl_scenario::Action;
 use beryl_session::bugs::SpecMoment;
 use beryl_session::ipc;
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{Candidate, GameEvent, PlayerView, Side};
 use beryl_session::script::Follow;
 use beryl_session::{CandidateIndex, DecisionId, GameUpdate, Sessions, Status};
@@ -598,7 +599,7 @@ pub(super) fn recorded_cast_moves(
     moves
 }
 
-fn named(view: &PlayerView, slot: u16, card: &str) -> bool {
+fn named(view: &PlayerView, slot: ObjectId, card: &str) -> bool {
     view.objects
         .iter()
         .any(|o| o.slot == slot && o.name.as_deref() == Some(card))

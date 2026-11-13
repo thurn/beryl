@@ -588,7 +588,7 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
             for o in &view.objects {
                 if o.name.is_some() {
                     assert!(
-                        seen.knows(Seat::P0, Slot::from_num(o.slot).unwrap()),
+                        seen.knows(Seat::P0, Slot::from_num(o.slot.0).unwrap()),
                         "seed {seed}: slot {} is named but unknown",
                         o.slot
                     );

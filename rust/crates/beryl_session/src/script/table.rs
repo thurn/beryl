@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 
 use super::{Act, Fact, Subject, Tally};
+use crate::protocol::ObjectId;
 use crate::protocol::{
     ManaPool, ObjectView, PlayerState, PlayerView, Side, StackItem, Status, Step as TurnStep,
     ZoneName,
@@ -16,9 +17,9 @@ use crate::protocol::{
 #[derive(Clone, Debug, Serialize)]
 pub struct Table {
     /// Every object in a zone, by slot.
-    pub objects: BTreeMap<u16, ObjectView>,
+    pub objects: BTreeMap<ObjectId, ObjectView>,
     /// Permanents, in the order they entered.
-    pub battlefield: Vec<u16>,
+    pub battlefield: Vec<ObjectId>,
     /// Bottom first.
     pub stack: Vec<Entry>,
     pub you: Piles,
@@ -41,9 +42,9 @@ pub struct Piles {
     pub life: i16,
     pub mana: ManaPool,
     /// Bottom first.
-    pub library: Vec<u16>,
+    pub library: Vec<ObjectId>,
     /// Bottom first.
-    pub graveyard: Vec<u16>,
+    pub graveyard: Vec<ObjectId>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -91,7 +92,7 @@ impl Table {
     /// view's stack, bottom first, and then of the spell or ability whose resolution asks the
     /// viewer ([`super::Heard::stack`]). An ability `names` has no number for stays unnumbered.
     pub fn named(view: &PlayerView, names: &[Subject]) -> Table {
-        let objects: BTreeMap<u16, ObjectView> =
+        let objects: BTreeMap<ObjectId, ObjectView> =
             view.objects.iter().map(|o| (o.slot, o.clone())).collect();
         let resolving = match &view.status {
             Status::Deciding { decision } => decision.resolving.as_ref(),
@@ -162,7 +163,7 @@ impl Table {
 
     /// The order `zone` keeps its cards in, for the cards `owner` owns: none for a hand, exile
     /// and the stack, whose cards say where they are.
-    pub fn order(&self, zone: ZoneName, owner: Side) -> Option<&Vec<u16>> {
+    pub fn order(&self, zone: ZoneName, owner: Side) -> Option<&Vec<ObjectId>> {
         match zone {
             ZoneName::Battlefield => Some(&self.battlefield),
             ZoneName::Library => Some(&self.piles(owner).library),
@@ -171,7 +172,7 @@ impl Table {
         }
     }
 
-    fn order_mut(&mut self, zone: ZoneName, owner: Side) -> Option<&mut Vec<u16>> {
+    fn order_mut(&mut self, zone: ZoneName, owner: Side) -> Option<&mut Vec<ObjectId>> {
         match zone {
             ZoneName::Battlefield => Some(&mut self.battlefield),
             ZoneName::Library => Some(&mut self.piles_mut(owner).library),
@@ -329,7 +330,7 @@ impl Table {
     }
 
     /// Takes `slot` out of `zone`'s order, and its spell off the stack if it leaves that.
-    fn leave(&mut self, slot: u16, zone: ZoneName, owner: Side, moved: bool) {
+    fn leave(&mut self, slot: ObjectId, zone: ZoneName, owner: Side, moved: bool) {
         if let Some(order) = self.order_mut(zone, owner) {
             order.retain(|&s| s != slot);
         }
@@ -340,7 +341,7 @@ impl Table {
     }
 
     /// The object in `slot` is no more.
-    fn remove(&mut self, slot: u16) -> Result<(), String> {
+    fn remove(&mut self, slot: ObjectId) -> Result<(), String> {
         let object = self
             .objects
             .remove(&slot)

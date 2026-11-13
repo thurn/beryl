@@ -19,6 +19,7 @@ use beryl_engine::{Decision, GameTable, Layout, State};
 use self::taps::Due;
 use super::held::{Clicked, Run, Step, Table, Want, button};
 use super::{ButtonId, Click, Marked, PartName, PromptView, ShapeBody};
+use crate::protocol::ObjectId;
 use crate::protocol::{Candidate, DecisionView, mana_text};
 use crate::script::{Mark, Subject};
 
@@ -27,7 +28,7 @@ use crate::script::{Mark, Subject};
 pub(crate) struct Pay {
     how: How,
     /// The permanents picked to pay, in the order they were.
-    picked: Vec<u16>,
+    picked: Vec<ObjectId>,
     /// What the picks come to.
     now: Outlook,
     /// The whole cost, as the screen writes it.
@@ -51,9 +52,9 @@ enum How {
 #[derive(Clone, Debug)]
 pub(crate) struct Outlook {
     /// The permanents a click can add.
-    eligible: Vec<u16>,
+    eligible: Vec<ObjectId>,
     /// The permanents the default would tap beyond those picked.
-    suggested: Vec<u16>,
+    suggested: Vec<ObjectId>,
     /// What is still to pay, as the screen writes it.
     left: String,
     /// The picks pay the cost in full.
@@ -102,7 +103,7 @@ impl Pay {
         s: &State<L>,
         t: &GameTable,
         d: &Decision<L>,
-        picked: &[u16],
+        picked: &[ObjectId],
     ) -> Option<Outlook> {
         match &self.how {
             How::Plans(plans) => plans.outlook(picked),
@@ -158,7 +159,7 @@ impl Pay {
 
     pub(crate) fn show(&self, view: &mut PromptView) {
         let marked = |mark: Mark| {
-            move |&slot: &u16| Marked {
+            move |&slot: &ObjectId| Marked {
                 on: Subject::Object { slot },
                 mark,
             }
@@ -194,7 +195,7 @@ impl Pay {
 struct Plans {
     purpose: Purpose,
     /// Each plan: its index among the engine's, and what it taps.
-    offered: Vec<(u16, Vec<u16>)>,
+    offered: Vec<(u16, Vec<ObjectId>)>,
     cost: String,
 }
 
@@ -222,17 +223,17 @@ impl Plans {
     }
 
     /// What the picks of `picked` come to: none if no plan taps them all.
-    fn outlook(&self, picked: &[u16]) -> Option<Outlook> {
-        let open: Vec<&(u16, Vec<u16>)> = (self.offered.iter())
+    fn outlook(&self, picked: &[ObjectId]) -> Option<Outlook> {
+        let open: Vec<&(u16, Vec<ObjectId>)> = (self.offered.iter())
             .filter(|(_, taps)| picked.iter().all(|slot| taps.contains(slot)))
             .collect();
         // The plan that taps exactly what is picked; or else the default, the first that taps
         // it all: the engine lists the plan it would choose first.
         let exact = open.iter().find(|(_, taps)| taps.len() == picked.len());
         let &(index, ref default) = *exact.or(open.first())?;
-        let unpicked = |slot: &&u16| !picked.contains(slot);
-        let suggested: Vec<u16> = default.iter().filter(unpicked).copied().collect();
-        let mut eligible: Vec<u16> = (open.iter().flat_map(|(_, taps)| taps))
+        let unpicked = |slot: &&ObjectId| !picked.contains(slot);
+        let suggested: Vec<ObjectId> = default.iter().filter(unpicked).copied().collect();
+        let mut eligible: Vec<ObjectId> = (open.iter().flat_map(|(_, taps)| taps))
             .filter(unpicked)
             .copied()
             .collect();

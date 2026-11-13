@@ -10,6 +10,7 @@
 use super::build::Builder;
 use super::hear::Cause;
 use super::{Act, Stream, Subject, Tally};
+use crate::protocol::ObjectId;
 use crate::protocol::{Mana, ManaPool, Side};
 
 const COLORS: [Mana; 6] = [
@@ -44,7 +45,7 @@ impl Builder<'_> {
     pub(super) fn mana(
         &mut self,
         said: Cause,
-        (player, source): (Side, Option<u16>),
+        (player, source): (Side, Option<ObjectId>),
         color: Mana,
         amount: u8,
     ) {
@@ -66,7 +67,7 @@ impl Builder<'_> {
     }
 
     /// Whether the open beat takes the object in `slot` from sight where it lay.
-    fn leaving(&self, slot: u16) -> bool {
+    fn leaving(&self, slot: ObjectId) -> bool {
         let gone = Subject::Object { slot };
         self.open
             && self.beats.last().is_some_and(|beat| {

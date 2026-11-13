@@ -18,6 +18,7 @@ use beryl_engine::{
 use beryl_scenario::Scenario;
 use beryl_search::{Agent, AgentDecision, Budget, GameAgent};
 use beryl_session::prompt::{ButtonId, Click, ClickReply, ClickRequest};
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{
     Candidate, DecisionView, Moment, ObjectView, Side, ZoneName, player_view,
 };
@@ -36,7 +37,7 @@ pub struct Play {
 }
 
 /// A card by its slot.
-pub const fn card(slot: u16) -> Subject {
+pub const fn card(slot: ObjectId) -> Subject {
     Subject::Object { slot }
 }
 
@@ -161,7 +162,7 @@ impl Play {
     }
 
     /// Clicks the card in `slot`.
-    pub fn on(&mut self, slot: u16) -> Option<String> {
+    pub fn on(&mut self, slot: ObjectId) -> Option<String> {
         self.click(Click::On { on: card(slot) })
     }
 
@@ -199,8 +200,8 @@ impl Play {
     }
 
     /// The objects named `name` in `zone` that `side` controls, by slot, ascending.
-    pub fn named(&self, name: &str, zone: ZoneName, side: Side) -> Vec<u16> {
-        let mut slots: Vec<u16> = (self.view.objects.iter())
+    pub fn named(&self, name: &str, zone: ZoneName, side: Side) -> Vec<ObjectId> {
+        let mut slots: Vec<ObjectId> = (self.view.objects.iter())
             .filter(|o| o.name.as_deref() == Some(name) && o.zone == zone && o.controller == side)
             .map(|o| o.slot)
             .collect();
@@ -209,7 +210,7 @@ impl Play {
     }
 
     /// The object in `slot`.
-    pub fn object(&self, slot: u16) -> &ObjectView {
+    pub fn object(&self, slot: ObjectId) -> &ObjectView {
         (self.view.objects.iter())
             .find(|o| o.slot == slot)
             .expect("an object of the view")

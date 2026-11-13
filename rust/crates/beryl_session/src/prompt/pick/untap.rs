@@ -5,6 +5,7 @@ use beryl_engine::{Layout, Replay, Scratch, Seat, SlotId as _, Step as Played, a
 
 use crate::prompt::ahead::{self, forced};
 use crate::prompt::held::{Run, Step, Table, Want};
+use crate::protocol::ObjectId;
 use crate::protocol::Side;
 use crate::script::Subject;
 
@@ -21,10 +22,10 @@ pub(super) fn opening<L: Layout>(
     eligible: &[Subject],
     most: usize,
 ) -> Vec<Subject> {
-    let controls = |slot: u16| {
+    let controls = |slot: ObjectId| {
         (table.view.objects.iter()).any(|o| o.slot == slot && o.controller == Side::You)
     };
-    let mut own: Vec<u16> = (eligible.iter())
+    let mut own: Vec<ObjectId> = (eligible.iter())
         .filter_map(|on| match *on {
             Subject::Object { slot } if controls(slot) => Some(slot),
             _ => None,
@@ -34,7 +35,7 @@ pub(super) fn opening<L: Layout>(
     let picks = match table.d {
         Some(d) if most < own.len() => {
             let viewer = d.player;
-            let score = |picks: &[u16]| {
+            let score = |picks: &[ObjectId]| {
                 let made = picks.iter().map(|&slot| colors(table, slot));
                 (
                     castable(table, viewer, picks),
@@ -43,7 +44,7 @@ pub(super) fn opening<L: Layout>(
                 )
             };
             // The first of the best: the choices come in order, and a later one must beat it.
-            let mut best: Option<(Vec<u16>, _)> = None;
+            let mut best: Option<(Vec<ObjectId>, _)> = None;
             for picks in choices(&own, most) {
                 let scored = score(&picks);
                 if best.as_ref().is_none_or(|(_, top)| scored > *top) {
@@ -61,7 +62,7 @@ pub(super) fn opening<L: Layout>(
 }
 
 /// Every way of choosing `k` of `items`, in order.
-fn choices(items: &[u16], k: usize) -> Vec<Vec<u16>> {
+fn choices(items: &[ObjectId], k: usize) -> Vec<Vec<ObjectId>> {
     if k == 0 {
         return vec![Vec::new()];
     }
@@ -76,8 +77,8 @@ fn choices(items: &[u16], k: usize) -> Vec<Vec<u16>> {
 }
 
 /// The kinds of mana the permanent in `slot` makes, as a set: those its mana abilities name.
-fn colors<L: Layout>(table: &Table<'_, L>, slot: u16) -> u8 {
-    let Some(slot) = L::Slot::from_num(slot) else {
+fn colors<L: Layout>(table: &Table<'_, L>, slot: ObjectId) -> u8 {
+    let Some(slot) = L::Slot::from_num(slot.0) else {
         return 0;
     };
     let face = table.shown.copiable(slot).face(table.t);
@@ -91,7 +92,7 @@ fn colors<L: Layout>(table: &Table<'_, L>, slot: u16) -> u8 {
 /// with them on a copy of the game, played on to the next decision. A spell with nothing to
 /// target yet counts, as a counterspell held for the opponent's turn. Only cards in their
 /// hand now count, so nothing the rest of the resolution draws says anything here.
-fn castable<L: Layout>(table: &Table<'_, L>, viewer: Seat, picks: &[u16]) -> usize {
+fn castable<L: Layout>(table: &Table<'_, L>, viewer: Seat, picks: &[ObjectId]) -> usize {
     let Some(mut d) = table.d.cloned() else {
         return 0;
     };

@@ -17,6 +17,7 @@ use beryl_engine::{Candidates, Choice, Decision, Layout, Observation, Opt, TurnS
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_search::{Agent, AgentDecision};
 use beryl_session::prompt::{ButtonId, Click};
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{Candidate, Kind, Side, ZoneName};
 use beryl_session::replay::Entry;
 use beryl_session::save::Kind as SavedKind;
@@ -148,7 +149,7 @@ fn attackers_are_declared_by_clicks_and_confirmed_by_their_count() {
     let mut picked = Play::scenario(&ATTACK);
     pass_to(&mut picked, Kind::Attacker);
     let from = picked.game.replay().log.len();
-    let attacks = |slot: u16| move |c: &Candidate| *c == Candidate::Attack { slot };
+    let attacks = |slot: ObjectId| move |c: &Candidate| *c == Candidate::Attack { slot };
     picked.choose(attacks(mages[0]));
     picked.choose(attacks(binder));
     picked.choose(|c| *c == Candidate::Done);
@@ -511,7 +512,7 @@ fn token_made() -> Play {
 fn a_creature_made_attacking_is_aimed_by_one_click() {
     let mut play = token_made();
     let emperor = play.named(THE_WANDERING_EMPEROR, ZoneName::Battlefield, Side::Opponent)[0];
-    let token: u16 = play.decision().prompt.about[0].into();
+    let token = play.decision().prompt.about[0];
     let open = format!(
         "declare attack: Choose attack target\n\
          declare attack:\n\

@@ -26,6 +26,7 @@ use super::pick::Pick;
 use super::split::Split;
 use super::yes_no::YesNo;
 use super::{ButtonId, Click, Lies, PromptButton, PromptView};
+use crate::protocol::ObjectId;
 use crate::protocol::{
     Candidate, DecisionView, ObjectView, PlayerView, Side, Status, ZoneName, mana_text,
 };
@@ -229,7 +230,7 @@ impl<L: Layout> Table<'_, L> {
     }
 
     /// The object in `slot` as the viewer sees it.
-    pub(crate) fn object(&self, slot: u16) -> Option<&ObjectView> {
+    pub(crate) fn object(&self, slot: ObjectId) -> Option<&ObjectView> {
         self.view.objects.iter().find(|o| o.slot == slot)
     }
 
@@ -237,8 +238,8 @@ impl<L: Layout> Table<'_, L> {
     /// which the decision offers in its place (architecture §7.2: the engine offers one
     /// candidate for interchangeable objects). Only a card the viewer knows by name stands for
     /// another: whether two cards they cannot tell apart are alike is not theirs to learn.
-    fn stands_for(&self, o: &ObjectView, offered: &[u16]) -> Option<u16> {
-        let slot = |num: u16| L::Slot::from_num(num);
+    fn stands_for(&self, o: &ObjectView, offered: &[ObjectId]) -> Option<ObjectId> {
+        let slot = |ObjectId(num): ObjectId| L::Slot::from_num(num);
         o.name.as_ref()?;
         offered.iter().copied().find(|&c| {
             // Interchangeable objects are of one card, so of one name: most are told apart
@@ -252,7 +253,7 @@ impl<L: Layout> Table<'_, L> {
 
     /// The cards a click takes as one of `offered`: each not offered itself, with the first of
     /// `offered` it stands for.
-    pub(crate) fn stand_ins(&self, offered: &[u16]) -> Vec<(u16, u16)> {
+    pub(crate) fn stand_ins(&self, offered: &[ObjectId]) -> Vec<(ObjectId, ObjectId)> {
         (self.view.objects.iter())
             .filter(|o| !offered.contains(&o.slot))
             .filter_map(|o| Some((o.slot, self.stands_for(o, offered)?)))
@@ -261,8 +262,8 @@ impl<L: Layout> Table<'_, L> {
 
     /// Those of `cards` a pick among `offered` can take: the cards offered and those that
     /// stand for one of them.
-    pub(crate) fn takes(&self, cards: &[u16], offered: &[u16]) -> Vec<u16> {
-        let stands = |&slot: &u16| {
+    pub(crate) fn takes(&self, cards: &[ObjectId], offered: &[ObjectId]) -> Vec<ObjectId> {
+        let stands = |&slot: &ObjectId| {
             (self.object(slot)).is_some_and(|o| self.stands_for(o, offered).is_some())
         };
         (cards.iter().copied())
@@ -275,13 +276,13 @@ impl<L: Layout> Table<'_, L> {
     /// search looks through; a hand; a graveyard from the top down, its cards alone
     /// ([CR 111.6](https://yawgatog.com/resources/magic-rules/#R1116): "A token isn't a
     /// card").
-    pub(crate) fn laid_out(&self, lies: Lies, count: u8) -> Vec<u16> {
+    pub(crate) fn laid_out(&self, lies: Lies, count: u8) -> Vec<ObjectId> {
         let players = &self.view.players;
         let player = match lies.player {
             Side::You => &players.you,
             Side::Opponent => &players.opponent,
         };
-        let known = |slot: &u16| self.object(*slot).is_some_and(|o| o.name.is_some());
+        let known = |slot: &ObjectId| self.object(*slot).is_some_and(|o| o.name.is_some());
         match lies.zone {
             ZoneName::Library => {
                 let top = if count == 0 {
@@ -305,7 +306,7 @@ impl<L: Layout> Table<'_, L> {
 }
 
 /// The cards `decision` offers, in its order.
-pub(crate) fn offered(decision: &DecisionView) -> Vec<u16> {
+pub(crate) fn offered(decision: &DecisionView) -> Vec<ObjectId> {
     (decision.candidates.iter())
         .filter_map(|c| match c.option {
             Candidate::Object { slot } => Some(slot),
@@ -356,7 +357,7 @@ pub(crate) enum Want {
     No,
     /// The mana ability of the permanent in this slot, for mana of this color.
     Mana {
-        slot: u16,
+        slot: ObjectId,
         color: ManaColor,
     },
     /// A unit of floating mana of this color.
@@ -366,7 +367,7 @@ pub(crate) enum Want {
     /// The waiting trigger of this ability of the object in this slot, as a trigger is named
     /// from one decision to the next ([`Candidate::Trigger`]).
     Trigger {
-        source: Option<u16>,
+        source: Option<ObjectId>,
         ability: u8,
     },
 }
@@ -495,7 +496,7 @@ impl Step {
             Step::One(_, Want::Yes) => position(Opt::Yes),
             Step::One(_, Want::No) => position(Opt::No),
             Step::One(_, Want::Mana { slot, color }) => options.iter().position(
-                |&o| matches!(o, Opt::Mana { slot: s, color: c } if s.num() == *slot && c == *color),
+                |&o| matches!(o, Opt::Mana { slot: s, color: c } if s.num() == slot.0 && c == *color),
             ),
             Step::One(_, Want::Pool(color)) => position(Opt::Pool(*color)),
             Step::One(_, Want::Plan(plan)) => options.iter().position(
@@ -507,7 +508,7 @@ impl Step {
                     return false;
                 };
                 let trigger = &s.triggers()[Into::<usize>::into(i)];
-                trigger.of.source.map(|r| r.slot.num()) == *source && trigger.of.ability.get() == *ability
+                trigger.of.source.map(|r| ObjectId(r.slot.num())) == *source && trigger.of.ability.get() == *ability
             }),
             Step::InTurn(_, wanted) => {
                 // The next in turn itself, or else one the engine offers in its place.
@@ -553,7 +554,7 @@ pub(crate) fn named<L: Layout>(d: &Decision<L>, options: &[Opt<L>], on: Subject)
             | Opt::Block(slot)
             | Opt::Defender(Some(slot)),
             Subject::Object { slot: wanted },
-        ) => slot.num() == wanted,
+        ) => ObjectId(slot.num()) == wanted,
         // The player deciding is the viewer.
         (Opt::Player(player), Subject::Player { player: wanted }) => {
             (player == d.player) == (wanted == Side::You)
@@ -570,7 +571,7 @@ pub(crate) fn alike<L: Layout>(s: &State<L>, options: &[Opt<L>], on: Subject) ->
     let Subject::Object { slot } = on else {
         return None;
     };
-    let wanted = L::Slot::from_num(slot)?;
+    let wanted = L::Slot::from_num(slot.0)?;
     options.iter().position(|&o| {
         matches!(
             o,

@@ -15,6 +15,7 @@ use beryl_engine::card::{Prompt, Purpose, Shape};
 use beryl_engine::{Bitboard, Decision, DecisionKind, Seat, SlotId as _, TurnStep, Zone, ZoneKey};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_session::prompt::{ButtonId, Click, Clicked, Held, ShapeBody};
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{Candidate, Side, ZoneName};
 use beryl_session::script::{Mark, Subject};
 use play::{Play, asked, card, cards, position};
@@ -42,7 +43,7 @@ fn to_the_choice(play: &mut Play) {
     }
 }
 
-fn exiled(play: &Play, name: &str) -> u16 {
+fn exiled(play: &Play, name: &str) -> ObjectId {
     play.named(name, ZoneName::Exile, Side::You)[0]
 }
 
@@ -83,7 +84,7 @@ fn one_of_many_exiled_cards_is_chosen_from_a_tray_and_confirmed() {
     to_the_choice(&mut play);
     let (oust, plains) = (exiled(&play, OUST), exiled(&play, PLAINS));
     // The tray lists the six as the decision offers them.
-    let offered: Vec<u16> = (play.decision().candidates.iter())
+    let offered: Vec<ObjectId> = (play.decision().candidates.iter())
         .filter_map(|c| match c.option {
             Candidate::Object { slot } => Some(slot),
             _ => None,
@@ -109,8 +110,8 @@ fn one_of_many_exiled_cards_is_chosen_from_a_tray_and_confirmed() {
         play.press(ButtonId::Confirm).as_deref(),
         Some(open.as_str())
     );
-    let others = |picked: u16| {
-        let rest: Vec<u16> = offered.iter().copied().filter(|&s| s != picked).collect();
+    let others = |picked: ObjectId| {
+        let rest: Vec<ObjectId> = offered.iter().copied().filter(|&s| s != picked).collect();
         cards(&rest)
     };
     assert_eq!(
@@ -190,7 +191,7 @@ fn a_pick_of_cards_for_any_purpose_is_answered_by_clicks() {
             let mut held = Held::opening(&view, &state, &table, Some(&d))
                 .unwrap_or_else(|| panic!("the session does not hold a pick for {purpose:?}"));
             let offered: Vec<Subject> = (state.in_candidate_order(among))
-                .map(|slot| card(slot.num()))
+                .map(|slot| card(ObjectId(slot.num())))
                 .collect();
             assert_eq!(offered.len(), 2);
             // Each card offered is marked, as one to pick or as one a prompt opens with.

@@ -16,6 +16,7 @@ use beryl_engine::{Choice, Decision, Layout, Observation, Seat, State, TurnStep}
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_search::{Agent, AgentDecision, Budget};
 use beryl_session::prompt::ShapeBody;
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{
     Candidate, DecisionView, Kind, PassTo, Side, StackItem, Step, ZoneName,
 };
@@ -413,13 +414,13 @@ fn to_human_watching(game: &mut Game) -> (PlayerView, Vec<PlayerView>) {
 }
 
 /// Whether the object in `slot` is tapped in `view`.
-fn tapped(view: &PlayerView, slot: u16) -> bool {
+fn tapped(view: &PlayerView, slot: ObjectId) -> bool {
     view.objects.iter().any(|o| o.slot == slot && o.tapped)
 }
 
 /// Whether each of `lands` is tapped in the first view of the opponent's turn 4, among
 /// `views`.
-fn tapped_in_their_turn(views: &[PlayerView], lands: &[u16]) -> Vec<bool> {
+fn tapped_in_their_turn(views: &[PlayerView], lands: &[ObjectId]) -> Vec<bool> {
     let view = views
         .iter()
         .find(|v| v.turn.number == 4)
@@ -482,7 +483,7 @@ fn undo_goes_back_across_turns_to_teferis_untap() {
     assert_eq!((untap.turn.number, untap.turn.step), (3, Step::End));
     let agent_there = log.lock().unwrap().next();
     // The two tapped lands it may untap.
-    let lands: Vec<u16> = d
+    let lands: Vec<ObjectId> = d
         .candidates
         .iter()
         .filter_map(|c| match c.option {

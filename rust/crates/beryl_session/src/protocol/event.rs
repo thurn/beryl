@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::{
-    Counter, Mana, Side, StackItem, Step, TargetRef, Why, ZoneName, side, slots, stack_item,
-    stack_item_cast,
+    Counter, Mana, ObjectId, Side, StackItem, Step, TargetRef, Why, ZoneName, side, slots,
+    stack_item, stack_item_cast,
 };
 use crate::script::{Heard, Move, Said, Subject};
 
@@ -18,7 +18,7 @@ use crate::script::{Heard, Move, Said, Subject};
 pub enum GameEvent {
     /// The object now in `slot` arrived from another zone.
     ZoneChange {
-        slot: u16,
+        slot: ObjectId,
         from: ZoneName,
         to: ZoneName,
         reason: Why,
@@ -28,7 +28,7 @@ pub enum GameEvent {
         library_top: Option<bool>,
     },
     Damage {
-        source: u16,
+        source: ObjectId,
         to: TargetRef,
         amount: u8,
         combat: bool,
@@ -39,7 +39,7 @@ pub enum GameEvent {
         /// The public slots drawn, top first. Older recordings carry only the count.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
-        slots: Option<Vec<u16>>,
+        slots: Option<Vec<ObjectId>>,
     },
     Scry {
         player: Side,
@@ -53,7 +53,7 @@ pub enum GameEvent {
     /// ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a)): "To reveal a card,
     /// show that card to all players for a brief time."
     Reveal {
-        slot: u16,
+        slot: ObjectId,
     },
     LifeGain {
         player: Side,
@@ -64,20 +64,20 @@ pub enum GameEvent {
         amount: u8,
     },
     CountersAdded {
-        slot: u16,
+        slot: ObjectId,
         counter: Counter,
         amount: u8,
     },
     CountersRemoved {
-        slot: u16,
+        slot: ObjectId,
         counter: Counter,
         amount: u8,
     },
     Tap {
-        slot: u16,
+        slot: ObjectId,
     },
     Untap {
-        slot: u16,
+        slot: ObjectId,
     },
     /// Mana added to a player's mana pool
     /// ([CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064)): "When an effect
@@ -87,7 +87,7 @@ pub enum GameEvent {
         player: Side,
         /// The mana ability's permanent, or the spell or ability that added it, in the slot
         /// it had then: a source sacrificed for mana has left it by the time the view shows.
-        source: Option<u16>,
+        source: Option<ObjectId>,
         color: Mana,
         amount: u8,
     },
@@ -100,10 +100,10 @@ pub enum GameEvent {
     AbilityFinished,
     TokensCreated {
         controller: Side,
-        tokens: Vec<u16>,
+        tokens: Vec<ObjectId>,
     },
     Cast {
-        slot: u16,
+        slot: ObjectId,
         controller: Side,
         /// The spell as it went on the stack: an opponent's spell that resolves unanswered
         /// is gone from the stack by the next view, which shows its cast and resolution
@@ -123,7 +123,7 @@ pub enum GameEvent {
     },
     Attack {
         player: Side,
-        attackers: Vec<u16>,
+        attackers: Vec<ObjectId>,
     },
     /// `player` declared the creature in `blocker` a blocker of the one in `attacker`
     /// ([CR 509.1a](https://yawgatog.com/resources/magic-rules/#R5091a): "For each of the
@@ -131,22 +131,22 @@ pub enum GameEvent {
     /// event for each blocker of a declaration.
     Block {
         player: Side,
-        blocker: u16,
-        attacker: u16,
+        blocker: ObjectId,
+        attacker: ObjectId,
     },
     StepBegins {
         step: Step,
         active: Side,
     },
     GainControl {
-        slot: u16,
+        slot: ObjectId,
         player: Side,
     },
     CoinFlip {
         player: Side,
         won: bool,
         /// The permanent whose ability flipped it.
-        source: u16,
+        source: ObjectId,
     },
     Lose {
         player: Side,
@@ -162,7 +162,9 @@ pub(super) fn recipient<L: Layout>(obs: Observation<'_, L>, to: Recipient<L>) ->
         Recipient::Player(player) => TargetRef::Player {
             player: side(obs, player),
         },
-        Recipient::Permanent(o) => TargetRef::Object { slot: o.slot.num() },
+        Recipient::Permanent(o) => TargetRef::Object {
+            slot: ObjectId(o.slot.num()),
+        },
     }
 }
 
@@ -248,7 +250,7 @@ fn counters_event<L: Layout>(e: &Event<L>) -> GameEvent {
             kind,
             amount,
         } => GameEvent::CountersAdded {
-            slot: object.slot.num(),
+            slot: ObjectId(object.slot.num()),
             counter: kind.into(),
             amount,
         },
@@ -257,7 +259,7 @@ fn counters_event<L: Layout>(e: &Event<L>) -> GameEvent {
             kind,
             amount,
         } => GameEvent::CountersRemoved {
-            slot: object.slot.num(),
+            slot: ObjectId(object.slot.num()),
             counter: kind.into(),
             amount,
         },
@@ -280,7 +282,7 @@ fn mana_event<L: Layout>(obs: Observation<'_, L>, e: &Event<L>) -> GameEvent {
     };
     GameEvent::Mana {
         player: side(obs, player),
-        source: source.map(|o| o.slot.num()),
+        source: source.map(|o| ObjectId(o.slot.num())),
         color: color.into(),
         amount,
     }
@@ -297,8 +299,8 @@ fn block_event<L: Layout>(obs: Observation<'_, L>, e: &Event<L>) -> GameEvent {
     };
     GameEvent::Block {
         player: side(obs, player),
-        blocker: blocker.slot.num(),
-        attacker: attacker.slot.num(),
+        blocker: ObjectId(blocker.slot.num()),
+        attacker: ObjectId(attacker.slot.num()),
     }
 }
 
@@ -337,7 +339,7 @@ pub(super) fn game_events<L: Layout>(
         .iter()
         .filter_map(|e| {
             if let Event::DrawCard { slot } = e {
-                drawn.push(slot.num());
+                drawn.push(ObjectId(slot.num()));
                 return None;
             }
             // Said for whoever follows the stack through the events, which a seat's screen
@@ -419,7 +421,7 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
             reason,
             library_top,
         } => GameEvent::ZoneChange {
-            slot: object.slot.num(),
+            slot: ObjectId(object.slot.num()),
             from: from.into(),
             to: to.into(),
             reason: reason.into(),
@@ -431,7 +433,7 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
             amount,
             combat,
         } => GameEvent::Damage {
-            source: source.slot.num(),
+            source: ObjectId(source.slot.num()),
             to: recipient(obs, to),
             amount,
             combat,
@@ -440,7 +442,9 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
             library_event(obs, e)
         }
         Event::DrawCard { .. } => unreachable!("draw slots are grouped with their draw"),
-        Event::Reveal { slot } => GameEvent::Reveal { slot: slot.num() },
+        Event::Reveal { slot } => GameEvent::Reveal {
+            slot: ObjectId(slot.num()),
+        },
         Event::LifeGain { player, amount } => GameEvent::LifeGain {
             player: side(player),
             amount,
@@ -451,10 +455,10 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
         },
         Event::CountersAdded { .. } | Event::CountersRemoved { .. } => counters_event(e),
         Event::Tap { object } => GameEvent::Tap {
-            slot: object.slot.num(),
+            slot: ObjectId(object.slot.num()),
         },
         Event::Untap { object } => GameEvent::Untap {
-            slot: object.slot.num(),
+            slot: ObjectId(object.slot.num()),
         },
         Event::Mana { .. } => mana_event(obs, e),
         Event::ResolutionPayment { player, ref item } => GameEvent::ResolutionPayment {
@@ -473,7 +477,7 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
         Event::Cast {
             spell, controller, ..
         } => GameEvent::Cast {
-            slot: spell.slot.num(),
+            slot: ObjectId(spell.slot.num()),
             controller: side(controller),
             item: cast_item(t, obs, e),
         },
@@ -487,7 +491,7 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
             active: side(active),
         },
         Event::GainControl { object, player } => GameEvent::GainControl {
-            slot: object.slot.num(),
+            slot: ObjectId(object.slot.num()),
             player: side(player),
         },
         Event::CoinFlip {
@@ -497,7 +501,7 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
         } => GameEvent::CoinFlip {
             player: side(player),
             won,
-            source: source.slot.num(),
+            source: ObjectId(source.slot.num()),
         },
         Event::Lose { player, .. } => GameEvent::Lose {
             player: side(player),

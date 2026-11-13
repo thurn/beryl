@@ -1,6 +1,7 @@
 //! What holds at a moment's first live decision.
 
 use beryl_engine::card::{CardDef, Purpose};
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{Candidate as Offer, PlayerView, Side, StackItem, Status, ZoneName};
 use serde_json::json;
 
@@ -12,7 +13,7 @@ use crate::fixture::Condition;
 /// checked to hold, so the vocabulary and this stay in step.
 pub fn snapshot(view: &PlayerView, def: &'static CardDef) -> Vec<String> {
     let mut out = Vec::new();
-    let name_of = |slot: u16| {
+    let name_of = |slot: ObjectId| {
         view.objects
             .iter()
             .find(|o| o.slot == slot)
@@ -113,7 +114,7 @@ pub fn snapshot(view: &PlayerView, def: &'static CardDef) -> Vec<String> {
 
 /// The stack's top, and where the card and its tokens are.
 fn places(view: &PlayerView, def: &'static CardDef, out: &mut Vec<String>) {
-    let name_of = |slot: u16| {
+    let name_of = |slot: ObjectId| {
         view.objects
             .iter()
             .find(|o| o.slot == slot)

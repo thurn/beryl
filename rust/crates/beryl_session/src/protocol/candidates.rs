@@ -11,6 +11,7 @@ use beryl_engine::{
     Candidates, Decision, GameTable, Layout, Observation, Opt, Seat, SlotId, Zone, ZoneKey,
 };
 
+use super::ObjectId;
 use super::{Candidate, CandidateView, Mana, Side, ability_order, face_name, name, side};
 
 /// What each candidate of `d` is called, to the seat `obs` sees for: as the UI names the
@@ -33,6 +34,7 @@ pub(super) fn candidate<L: Layout>(
     obs: Observation<'_, L>,
     o: Opt<L>,
 ) -> CandidateView {
+    let id = |slot: L::Slot| ObjectId::of(slot);
     let named = |slot: L::Slot| name(t, obs, slot).unwrap_or("a hidden card");
     let player = |p: Seat| match side(obs, p) {
         Side::You => "you",
@@ -46,7 +48,7 @@ pub(super) fn candidate<L: Layout>(
                 "Play {}",
                 land_face_name(t, obs, slot).unwrap_or("a hidden card")
             ),
-            Candidate::PlayLand { slot: slot.num() },
+            Candidate::PlayLand { slot: id(slot) },
         ),
         // Composed: the recordings' games begin with the choice made.
         Opt::Play => ("Play".to_owned(), Candidate::Play),
@@ -69,7 +71,7 @@ pub(super) fn candidate<L: Layout>(
         Opt::Done => ("Done".to_owned(), Candidate::Done),
         Opt::Attack(slot) => (
             format!("Attack with {}", named(slot)),
-            Candidate::Attack { slot: slot.num() },
+            Candidate::Attack { slot: id(slot) },
         ),
         Opt::Defender(None) => (
             format!("Attack {}", player(obs.turn().active().opponent())),
@@ -78,16 +80,16 @@ pub(super) fn candidate<L: Layout>(
         Opt::Defender(Some(slot)) => (
             format!("Attack {}", named(slot)),
             Candidate::Defender {
-                planeswalker: Some(slot.num()),
+                planeswalker: Some(id(slot)),
             },
         ),
         Opt::Block(slot) => (
             format!("Block with {}", named(slot)),
-            Candidate::Block { slot: slot.num() },
+            Candidate::Block { slot: id(slot) },
         ),
         Opt::Lethal(slot) => (
             format!("Assign lethal damage to {}", named(slot)),
-            Candidate::Lethal { slot: slot.num() },
+            Candidate::Lethal { slot: id(slot) },
         ),
         Opt::Cast { slot, face, costs } => cast_candidate(t, obs, slot, face, costs),
         Opt::Activate { slot, ability } => (
@@ -117,13 +119,10 @@ pub(super) fn candidate<L: Layout>(
                 player: side(obs, p),
             },
         ),
-        Opt::Object(slot) => (
-            named(slot).to_owned(),
-            Candidate::Object { slot: slot.num() },
-        ),
+        Opt::Object(slot) => (named(slot).to_owned(), Candidate::Object { slot: id(slot) }),
         Opt::TurnFaceUp(slot) => (
             format!("Turn {} face up", named(slot)),
-            Candidate::TurnFaceUp { slot: slot.num() },
+            Candidate::TurnFaceUp { slot: id(slot) },
         ),
     };
     CandidateView {
@@ -162,7 +161,7 @@ fn mana_candidate<L: Layout>(
     (
         format!("{verb} {name} for {symbol}"),
         Candidate::Mana {
-            slot: slot.num(),
+            slot: ObjectId::of(slot),
             color: color.into(),
         },
     )
@@ -295,7 +294,7 @@ fn cast_candidate<L: Layout>(
     (
         format!("Cast {spell}{}", casting_options(t, obs, slot, face, costs)),
         Candidate::Cast {
-            slot: slot.num(),
+            slot: ObjectId::of(slot),
             face: face.get(),
             costs: costs.indices().map(CastingIx::get).collect(),
         },
@@ -449,7 +448,7 @@ pub(super) fn activate<S: SlotId>(slot: S, ability: ObjectAbility) -> Candidate 
         ObjectAbility::Granted(k) => (k, true),
     };
     Candidate::Activate {
-        slot: slot.num(),
+        slot: ObjectId::of(slot),
         ability,
         granted,
     }
@@ -469,7 +468,7 @@ pub(super) fn trigger<L: Layout>(
         ),
         Candidate::Trigger {
             index: index.into(),
-            source: trigger.of.source.map(|r| r.slot.num()),
+            source: trigger.of.source.map(|r| ObjectId::of(r.slot)),
             ability: trigger.of.ability.get(),
         },
     )

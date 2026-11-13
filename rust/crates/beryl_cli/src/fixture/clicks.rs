@@ -8,6 +8,7 @@ use std::sync::mpsc::Receiver;
 
 use beryl_session::ipc::{self, FixtureMessage};
 use beryl_session::prompt::{ButtonId, Click, ClickReply, ClickRequest, PromptView};
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{PlayerView, Side};
 use beryl_session::script::Subject;
 use beryl_session::{DecisionId, GameUpdate, Status};
@@ -86,8 +87,9 @@ impl Written {
                     .filter(|o| o.name.as_deref() == Some(name))
                     .map(|o| o.slot)
             };
-            let marked =
-                |slot: &u16| (prompt.marks.iter()).any(|m| m.on == Subject::Object { slot: *slot });
+            let marked = |slot: &ObjectId| {
+                (prompt.marks.iter()).any(|m| m.on == Subject::Object { slot: *slot })
+            };
             named()
                 .find(marked)
                 .or_else(|| named().next())
@@ -336,7 +338,7 @@ mod tests {
         let Subject::Object { slot } = on else {
             panic!("a card, not {on:?}");
         };
-        assert_eq!(piles[0].cards, [slot.into()]);
+        assert_eq!(piles[0].cards, [slot]);
         assert_eq!(*done, ClickReply::Answered);
     }
 

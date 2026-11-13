@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::{DecisionId, Kind, Mana, Side, StackItem, Step, TargetRef};
+use super::{DecisionId, Kind, Mana, ObjectId, Side, StackItem, Step, TargetRef};
 use crate::prompt::PromptView;
 
 /// The viewer's decision, its candidates in the order a [`CandidateIndex`] counts them.
@@ -33,7 +33,7 @@ pub struct DecisionView {
     /// the stack (which a target, an X or a payment is chosen for); the attacker whose combat
     /// damage is divided; the land asking for life. None for priority and the other combat
     /// declarations.
-    pub source: Option<u16>,
+    pub source: Option<ObjectId>,
     /// The session halts the viewer here: a priority where passing is all they can do,
     /// which the engine would pass for them, offered under the smart stops at the start of
     /// their own precombat main phase (an end-turn button), so their turn never ends unseen.
@@ -59,7 +59,7 @@ pub struct DecisionView {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Refused {
-    pub slot: u16,
+    pub slot: ObjectId,
     pub reason: RefusalView,
 }
 
@@ -71,7 +71,7 @@ pub enum RefusalView {
     /// Only at sorcery speed, which it is not. `by`: the opponent's permanent limiting the
     /// viewer to sorcery speed, as Teferi, Time Raveler does, if the card could be cast now
     /// but for it.
-    Timing { by: Option<u16> },
+    Timing { by: Option<ObjectId> },
     /// A land, and the viewer has played their land this turn.
     LandPlayed,
     /// Its mana cost can't be paid.
@@ -107,7 +107,7 @@ pub struct CandidateView {
     pub payments: Vec<Payment>,
     /// For a candidate that declares a blocker: the attackers it may block, by slot, one of
     /// each set of interchangeable attackers (architecture §7.2). None otherwise.
-    pub blocks: Vec<u16>,
+    pub blocks: Vec<ObjectId>,
     /// For a candidate that activates an ability of the object's own face, or puts a waiting
     /// trigger on the stack: how many paragraphs of its face's text say abilities of its kind
     /// (activated, mana abilities among them, or triggered) before the one that says it, as
@@ -136,7 +136,7 @@ pub struct Payment {
     /// consume or leave floating, architecture §10).
     pub plan: Option<u16>,
     /// Permanents, by slot.
-    pub taps: Vec<u16>,
+    pub taps: Vec<ObjectId>,
     /// For a payment at a value of X: the total mana cost that value makes, as Oracle text
     /// writes costs, so the UI can say what each X costs.
     pub cost: Option<String>,
@@ -148,11 +148,11 @@ pub struct Payment {
 pub enum Candidate {
     /// The object in this slot, for a decision among objects.
     Object {
-        slot: u16,
+        slot: ObjectId,
     },
     Pass,
     PlayLand {
-        slot: u16,
+        slot: ObjectId,
     },
     Play,
     Draw,
@@ -163,40 +163,40 @@ pub enum Candidate {
     /// onto the stack) still name it.
     Trigger {
         index: u16,
-        source: Option<u16>,
+        source: Option<ObjectId>,
         ability: u8,
     },
     Yes,
     No,
     Done,
     Attack {
-        slot: u16,
+        slot: ObjectId,
     },
     /// Attack the planeswalker in `planeswalker`, or the defending player.
     Defender {
-        planeswalker: Option<u16>,
+        planeswalker: Option<ObjectId>,
     },
     Block {
-        slot: u16,
+        slot: ObjectId,
     },
     Lethal {
-        slot: u16,
+        slot: ObjectId,
     },
     /// Cast with face `face` up, paying the face's casting options at the indices in `costs`.
     Cast {
-        slot: u16,
+        slot: ObjectId,
         face: u8,
         costs: Vec<u8>,
     },
     /// The ability at index `ability` among the object's own, or, when `granted`, among
     /// those other objects grant it.
     Activate {
-        slot: u16,
+        slot: ObjectId,
         ability: u8,
         granted: bool,
     },
     Mana {
-        slot: u16,
+        slot: ObjectId,
         color: Mana,
     },
     Pool {
@@ -213,6 +213,6 @@ pub enum Candidate {
     },
     /// Turn the face-down permanent in `slot` face up, paying its card's mana cost.
     TurnFaceUp {
-        slot: u16,
+        slot: ObjectId,
     },
 }

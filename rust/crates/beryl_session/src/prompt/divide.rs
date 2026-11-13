@@ -19,7 +19,8 @@ use beryl_engine::Layout;
 use beryl_engine::card::{Part, Purpose};
 
 use super::held::{Clicked, Run, Step, Table, Want, button};
-use super::{ButtonId, Click, Marked, PromptView, ShapeBody, Share, slots_of};
+use super::{ButtonId, Click, Marked, PromptView, ShapeBody, Share};
+use crate::protocol::ObjectId;
 use crate::protocol::{Candidate, DecisionView, Side};
 use crate::script::{Mark, Subject};
 
@@ -32,9 +33,9 @@ pub(crate) struct Divide {
     /// The least a recipient may be given.
     least: u8,
     /// Each recipient and its share, in the order the engine asks for them.
-    shares: Vec<(u16, u8)>,
+    shares: Vec<(ObjectId, u8)>,
     /// The recipients the viewer controls.
-    friendly: Vec<u16>,
+    friendly: Vec<ObjectId>,
     confirm: String,
 }
 
@@ -48,8 +49,9 @@ impl Divide {
         decision: &DecisionView,
     ) -> Option<Divide> {
         let prompt = &decision.prompt;
-        let yours =
-            |slot: &u16| (table.object(*slot)).is_some_and(|object| object.controller == Side::You);
+        let yours = |slot: &ObjectId| {
+            (table.object(*slot)).is_some_and(|object| object.controller == Side::You)
+        };
         let offered = (decision.candidates.iter()).filter_map(|c| match c.option {
             Candidate::Number { n } => Some(n),
             _ => None,
@@ -60,8 +62,8 @@ impl Divide {
             purpose,
             total: most.saturating_add(least.saturating_mul(others)),
             least,
-            shares: prompt.about.iter().map(|&id| (id.0, least)).collect(),
-            friendly: slots_of(&prompt.about).into_iter().filter(yours).collect(),
+            shares: prompt.about.iter().map(|&id| (id, least)).collect(),
+            friendly: prompt.about.clone().into_iter().filter(yours).collect(),
             confirm: prompt.words.confirm.clone(),
         })
     }

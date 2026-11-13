@@ -3,6 +3,7 @@
 
 use super::build::Builder;
 use super::{Act, Subject};
+use crate::protocol::ObjectId;
 use crate::protocol::{
     Counter, CounterView, Facing, GameEvent, ObjectView, Side, StackItem, TargetRef, Why, ZoneName,
 };
@@ -43,7 +44,7 @@ impl Builder<'_> {
     pub(super) fn zone_change(
         &mut self,
         i: usize,
-        slot: u16,
+        slot: ObjectId,
         (from, to): (ZoneName, ZoneName),
         why: Why,
         library_top: Option<bool>,
@@ -112,7 +113,7 @@ impl Builder<'_> {
     /// show that card to all players for a brief time." It is held up to be read where it
     /// lies, named as the seat's view comes to name it. One that goes on to a zone that shows
     /// its face is not: its flight there shows it.
-    pub(super) fn reveal(&mut self, i: usize, slot: u16, cause: Option<Subject>) {
+    pub(super) fn reveal(&mut self, i: usize, slot: ObjectId, cause: Option<Subject>) {
         let Some(was) = self.table.objects.get(&slot) else {
             return;
         };
@@ -213,7 +214,7 @@ impl Builder<'_> {
     /// The record of the object in `slot` once event `i` has put it in `to`: the view's, as
     /// it was before the events still to come, where the object ends there; else what the
     /// seat knows of the card, in that zone.
-    fn arrived(&self, i: usize, slot: u16, to: ZoneName) -> Option<ObjectView> {
+    fn arrived(&self, i: usize, slot: ObjectId, to: ZoneName) -> Option<ObjectView> {
         let later = &self.events[i + 1..];
         let moves = |e: &GameEvent| match e {
             GameEvent::ZoneChange { slot: s, .. } => *s == slot,
@@ -295,7 +296,7 @@ impl Builder<'_> {
 
     /// The spell the card in `slot` becomes as event `i` puts it on the stack: as its cast
     /// goes on to announce it, or as the view's stack has it, or with nothing chosen yet.
-    fn spell(&self, i: usize, slot: u16) -> StackItem {
+    fn spell(&self, i: usize, slot: ObjectId) -> StackItem {
         let announced = self.events[i + 1..].iter().find_map(|e| match e {
             GameEvent::Cast { slot: s, item, .. } if *s == slot => Some(item),
             _ => None,

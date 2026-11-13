@@ -11,6 +11,7 @@ use beryl_engine::state::Pending;
 use beryl_engine::{Observation, Scratch, TurnStep, view};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_session::prompt::ButtonId;
+use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{Candidate, CandidateView, Kind, Moment, StackItem, player_view};
 use beryl_session::{DecisionId, SessionId, Status, StopsSetting};
 use play::Play;
@@ -132,7 +133,8 @@ fn a_waiting_trigger_says_which_paragraph_of_its_card_it_is() {
     assert_eq!(play.press(ButtonId::Confirm), None, "both attack");
     let order = play.decision();
     assert_eq!(order.kind, Kind::TriggerOrder);
-    let source = |play: &Play, slot: Option<u16>| play.object(slot.expect("a source")).name.clone();
+    let source =
+        |play: &Play, slot: Option<ObjectId>| play.object(slot.expect("a source")).name.clone();
     let mut waiting: Vec<_> = (order.candidates.iter())
         .map(|c| match c.option {
             Candidate::Trigger { source: slot, .. } => (source(&play, slot), c.nth),

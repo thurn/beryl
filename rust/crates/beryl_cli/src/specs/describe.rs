@@ -116,7 +116,7 @@ pub(super) fn restart(
 pub(super) fn events_line(view: &beryl_session::PlayerView) -> Option<String> {
     let name = |slot: &serde_json::Value| {
         slot.as_u64()
-            .and_then(|s| view.objects.iter().find(|o| u64::from(o.slot) == s))
+            .and_then(|s| view.objects.iter().find(|o| u64::from(o.slot.0) == s))
             .and_then(|o| o.name.clone())
             .unwrap_or_else(|| format!("#{slot}"))
     };
