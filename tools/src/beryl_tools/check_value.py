@@ -17,8 +17,11 @@ scored, and cut, as one. Two checks are grouped when they failed in exactly the 
 at least [`GROUP_FAILURES`] times. A run in which more than [`MASS`] checks of one lane failed
 was broken as a whole (a build error, a crashed server), and its failures group nothing.
 
-[`cuts`] gives the budget detector the lowest-value groups whose removal brings the median run's
-CPU seconds under a budget.
+Slow CI runs only the lanes, and of the rust lane only the packages, a change can affect, so
+most runs leave checks out, and a run's own total says little about what slow CI costs. The
+cost of a full run ([`full_run`]) is instead the sum of each check's median CPU seconds, over
+the checks slow CI still runs. [`cuts`] gives the budget detector (budget.py) the lowest-value
+groups whose removal brings a full run under a budget.
 """
 
 from __future__ import annotations
@@ -33,6 +36,8 @@ from datetime import datetime, timedelta, timezone
 from . import runlog, verdicts
 
 DAYS = 30
+# A full run counts the checks that ran in one of their lane's last this many runs (`alive`).
+RUNS = 10
 GROUP_FAILURES = 2
 MASS = 20
 
@@ -87,10 +92,24 @@ class Group:
 
 @dataclass
 class Scores:
-    """Every group, lowest value first, and each run's CPU seconds by check, for `cuts`."""
+    """Every group, lowest value first, and for `full_run`: each run's CPU seconds by check, when
+    each run started (its first record's time), each check's lane, and each check's cost, the
+    median CPU seconds of one run of it (measured when any record was)."""
 
     groups: list[Group]
     runs: dict[RunKey, dict[str, float]]
+    started: dict[RunKey, str] = field(default_factory=dict)
+    lanes: dict[str, str] = field(default_factory=dict)
+    cost: dict[str, float] = field(default_factory=dict)
+
+    def since(self, after: str) -> Scores:
+        """These scores with only the runs that started after `after` (a run-log time), and only
+        the groups with a check in one of them."""
+        runs = {k: v for k, v in self.runs.items() if self.started.get(k, "") > after}
+        ran = {check for run in runs.values() for check in run}
+        groups = [g for g in self.groups if ran.intersection(g.checks)]
+        started = {k: self.started[k] for k in runs if k in self.started}
+        return Scores(groups, runs, started, self.lanes, self.cost)
 
 
 def slow_ci(records: Iterable[dict[str, object]]) -> list[dict[str, object]]:
@@ -173,6 +192,7 @@ def score(
     lanes, overall = ratios(ci)
     found: dict[str, Numbers] = {}
     runs: dict[RunKey, dict[str, float]] = {}
+    started: dict[RunKey, str] = {}
     failed: dict[tuple[RunKey, str], int] = {}
     for r in ci:
         check = str(r.get("check"))
@@ -185,6 +205,8 @@ def score(
         n.costs.append(spent)
         run = runs.setdefault(key(r), {})
         run[check] = run.get(check, 0.0) + spent
+        when = str(r.get("time"))
+        started[key(r)] = min(started.get(key(r), when), when)
         if r.get("outcome") == "fail":
             n.failures.add(key(r))
             failed[(key(r), n.lane)] = failed.get((key(r), n.lane), 0) + 1
@@ -196,13 +218,20 @@ def score(
         groups.setdefault(
             shared if len(shared) >= GROUP_FAILURES else alone, []
         ).append(check)
-    scored = [group(members, found, history, since) for members in groups.values()]
-    return Scores(sorted(scored, key=order), runs)
+    costs = {
+        check: statistics.median(n.measured or n.costs) for check, n in found.items()
+    }
+    scored = [
+        group(members, found, costs, history, since) for members in groups.values()
+    ]
+    lanes = {check: n.lane for check, n in found.items()}
+    return Scores(sorted(scored, key=order), runs, started, lanes, costs)
 
 
 def group(
     members: list[str],
     found: dict[str, Numbers],
+    costs: dict[str, float],
     history: dict[str, list[verdicts.Entry]],
     since: datetime,
 ) -> Group:
@@ -217,12 +246,8 @@ def group(
                 continue
             if recent and e.get("verdict") == "catch":
                 caught.add(str(e.get("commit")))
-    cpu = 0.0
-    estimated = False
-    for check in members:
-        n = found[check]
-        estimated |= not n.measured
-        cpu += statistics.median(n.measured or n.costs)
+    cpu = sum(costs[c] for c in members)
+    estimated = any(not found[c].measured for c in members)
     runs = max(found[c].runs for c in members)
     return Group(tuple(members), runs, len(caught), cpu, estimated)
 
@@ -232,23 +257,42 @@ def order(g: Group) -> tuple[float, float, str]:
     return g.value(), -g.cpu, g.checks[0]
 
 
-def median_run(runs: dict[RunKey, dict[str, float]], cut: set[str]) -> float:
-    totals = [sum(s for c, s in run.items() if c not in cut) for run in runs.values()]
-    return statistics.median(totals) if totals else 0.0
+def alive(scores: Scores, last: int | None = None) -> set[str]:
+    """The checks that ran in one of their lane's `last` runs (of all, when not given): those
+    slow CI still runs. A check deleted since is in older runs only."""
+    by_lane: dict[str, list[tuple[str, RunKey]]] = {}
+    for k, run in scores.runs.items():
+        for lane in {scores.lanes.get(check, "") for check in run}:
+            by_lane.setdefault(lane, []).append((scores.started.get(k, ""), k))
+    found: set[str] = set()
+    for lane, runs in by_lane.items():
+        for _, k in sorted(runs)[-last if last else 0 :]:
+            found.update(c for c in scores.runs[k] if scores.lanes.get(c, "") == lane)
+    return found
 
 
-def cuts(scores: Scores, budget: float) -> list[Group]:
-    """The lowest-value groups whose removal brings the median slow-CI run to `budget` CPU
-    seconds or under; none when it is under already. A group that has caught a bug may be
-    among them: whoever acts on the list moves such a group to the nightly instead of
-    deleting it."""
-    cut: set[str] = set()
+def full_run(scores: Scores, cut: set[str], last: int | None = None) -> float:
+    """The CPU seconds of a slow-CI run of every lane, without the checks in `cut`: the sum of
+    each check's cost (`Scores.cost`), over the checks still run (`alive`)."""
+    return sum((scores.cost.get(c, 0.0) for c in alive(scores, last) - cut), 0.0)
+
+
+def cuts(scores: Scores, budget: float, last: int | None = None) -> list[Group]:
+    """The lowest-value groups whose removal brings a full slow-CI run (`full_run`, of the
+    checks in each lane's `last` runs when given) to `budget` CPU seconds or under; none when
+    it is under already. A group that has caught a bug may be among them: whoever acts on the
+    list moves such a group to the nightly instead of deleting it."""
+    running = alive(scores, last)
+    whole = sum((scores.cost.get(c, 0.0) for c in running), 0.0)
     chosen: list[Group] = []
     for g in scores.groups:
-        if median_run(scores.runs, cut) <= budget:
+        if whole <= budget:
             break
+        members = running.intersection(g.checks)
+        if not members:
+            continue
         chosen.append(g)
-        cut.update(g.checks)
+        whole -= sum(scores.cost.get(c, 0.0) for c in members)
     return chosen
 
 
@@ -260,15 +304,15 @@ def report(args: argparse.Namespace) -> int:
     records = runlog.read_log(since)
     store = verdicts.STORE
     scores = score(records, store.history(store.checks()), since)
-    chosen = cuts(scores, args.budget) if args.budget is not None else []
-    median = median_run(scores.runs, set())
+    chosen = cuts(scores, args.budget, RUNS) if args.budget is not None else []
+    whole = full_run(scores, set(), RUNS)
     if args.json:
         print(
             json.dumps(
                 {
                     "since": since.isoformat(timespec="seconds"),
                     "runs": len(scores.runs),
-                    "median_run_cpu_seconds": round(median, 1),
+                    "full_run_cpu_seconds": round(whole, 1),
                     "groups": [g.json() for g in scores.groups],
                     "cuts": [g.json() for g in chosen],
                 },
@@ -278,7 +322,8 @@ def report(args: argparse.Namespace) -> int:
         return 0
     print(
         f"ci-value: {len(scores.groups)} checks and groups over {len(scores.runs)} slow-CI runs"
-        f" in the last {args.days} days; the median run used {median:.0f} CPU seconds"
+        f" in the last {args.days} days; a full run uses {whole:.0f} CPU seconds (each"
+        f" check's median, summed over the checks of each lane's last {RUNS} runs)"
     )
     print(f"\n{'value':>9} {'catches':>7} {'runs':>5} {'cpu s':>8}  check")
     for g in scores.groups:
@@ -288,10 +333,10 @@ def report(args: argparse.Namespace) -> int:
         print(f"{shown:>9} {g.catches:7} {g.runs:5} {g.cpu:7.2f}{mark}  {g.name()}")
     print("\n~ estimated from wall seconds: no CPU time measured yet")
     if args.budget is not None:
-        after = median_run(scores.runs, {c for g in chosen for c in g.checks})
+        after = full_run(scores, {c for g in chosen for c in g.checks}, RUNS)
         print(
-            f"\nci-value: cutting {len(chosen)} checks and groups brings the median run"
-            f" from {median:.0f} to {after:.0f} CPU seconds (budget {args.budget:.0f})"
+            f"\nci-value: cutting {len(chosen)} checks and groups brings a full run"
+            f" from {whole:.0f} to {after:.0f} CPU seconds (budget {args.budget:.0f})"
         )
         for g in chosen:
             print(f"cut: {g.name()}")
@@ -308,6 +353,6 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.add_argument(
         "--budget",
         type=float,
-        help="also list the cuts that bring the median run under this many CPU seconds",
+        help="also list the cuts that bring a full run under this many CPU seconds",
     )
     p.set_defaults(func=report)

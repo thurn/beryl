@@ -1,7 +1,8 @@
 """The checks. `by check` is the fast one `enact push` runs (budget 60 s); `by ci` is slow CI
-on the staging tip (budget 300 s, 450 s on Windows). Both run lanes in parallel, each a
-sequence of timed steps, and print failed lanes last. A run over its budget fails nothing: it
-files a bead to audit its slowest steps (budget.py). No timer fails a run for being slow: each
+on the staging tip (300 s, 450 s on Windows, shown for reference). Both run lanes in parallel,
+each a sequence of timed steps, and print failed lanes last. A run over its budget fails
+nothing: the fast check files a bead to audit its slowest steps, and slow CI, whose budget is
+in CPU seconds, files beads naming the checks to cut (budget.py). No timer fails a run for being slow: each
 step has a hang limit (hang.py), several times its slowest pass, and a step still running then
 appears hung, so it is killed with everything it started and fails its lane. Time a lane spends
 waiting for CPU tokens (tokens.py) counts towards neither the budget nor a hang limit.
@@ -96,7 +97,9 @@ from .rust_tests import (
 from .step_runner import Steps
 
 FAST_BUDGET = 60
-# Windows runs the same lanes markedly slower (process start, file system, antivirus).
+# Slow CI's wall seconds, shown beside its run time; going over files nothing, since slow CI's
+# budget is in CPU seconds (`budget.SLOW_CPU_BUDGET`). Windows runs the same lanes markedly
+# slower (process start, file system, antivirus).
 SLOW_BUDGET = 450 if system.WINDOWS else 300
 # The lanes Windows leaves to the Mac, which ships the app: the count gate's VM is Lima's and
 # the phone toolchains are set up on macOS; the app and the browser lanes hung headless Chrome
@@ -381,6 +384,10 @@ def run_all(
             print(f"{why}: {o.lane} {check}")
     for line in run.settle():
         print(line)
+    if script == "ci":
+        # After `settle`, so this run's records are in the log the detector reads.
+        for line in slow_budget():
+            print(line)
     # The run's time for its budget is its longest lane's, waits for tokens left out
     # (`lane_steps`): lanes run at once, and a wait is time the machine spent on other work.
     elapsed = max((o.seconds for o in outcomes), default=0.0)
@@ -393,12 +400,20 @@ def run_all(
         # A run slowed by other work (a game, `just ladder` on every core) looks like a slow
         # step in every lane at once; the load says which it was before anyone bisects.
         print(f"{script}: {load_note()}")
-        if not failed:
+        if not failed and script != "ci":
             spent = took(steps.clock.wall(), elapsed)
             print(budget_beads.report(script, budget, spent, lines, load_note()))
     code = 1 if failed else 0
     clock = steps.clock
     return Report(code, outcomes, over, clock.loaded(), cold, clock.wall())
+
+
+def slow_budget() -> list[str]:
+    """Slow CI's CPU budget check (`budget.slow_report`), which never fails a run."""
+    try:
+        return budget_beads.slow_report()
+    except Exception as e:  # The budget check never fails a run.
+        return [f"ci budget: not checked: {e}"]
 
 
 def play(

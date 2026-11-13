@@ -58,9 +58,9 @@ formatted commit subjects.
 
 ## Slow CI
 
-`just ci` (300 s budget; 450 s on Windows) runs the lanes below, plus the fast
-check's lanes, but only those that what changed since each lane last passed can
-affect (`slow_ci.py`):
+`just ci` (an 800 CPU-second budget; see below) runs the lanes below, plus the
+fast check's lanes, but only those that what changed since each lane last passed
+can affect (`slow_ci.py`):
 
 - Each lane's base is the commit at which it last passed on this machine
   (`$BERYL_CACHE/ci/lane-passes.json`), or where staging left `origin/master`. A
@@ -126,9 +126,25 @@ Mac, and its fast check skips the browser checks and `motion` (see
 
 ## Budgets and hang limits
 
-- A run that goes over budget still passes, and files a `check-budget` bead
-  (`budget.py`) to speed up, move or delete its slowest steps instead of raising
-  the budget. No timer fails a run for being slow.
+- A run that goes over budget still passes. No timer fails a run for being slow.
+  A fast check over its 60 s budget files a `check-budget` bead (`budget.py`) to
+  speed up, move or delete its slowest steps instead of raising the budget.
+- Slow CI's budget is in CPU seconds (`budget.SLOW_CPU_BUDGET`, 800), because
+  the machine is never quiet and wall seconds measure its load. Its summary line
+  still shows wall seconds against 300 s (450 s on Windows), which files
+  nothing. After each run on the Mac, slow CI estimates a full run: each check's
+  median CPU seconds, summed over the checks that ran in one of their lane's
+  last 10 runs (`check_value.full_run`). When that is over the budget, it files
+  one P1 `ci-cut` bead per lane naming the lowest-value checks (see below) whose
+  removal brings a full run under the budget, with each check's runs, catches
+  and CPU seconds. The agent working a bead deletes each check that caught
+  nothing in 30 days and moves each one that caught something to the nightly,
+  after first asking whether a fast, deterministic test could keep what the
+  check protects. A check the fast check also runs leaves slow CI alone. The
+  checks in `budget.KEEP` (the app and phone apps starting, clippy, the UI's
+  typecheck, the `names` lane) are never named. While a `ci-cut` bead is open
+  nothing more is filed; once the last one closes, only runs that started after
+  it count, and slow CI waits for 10 of them.
 - Each step has a hang limit (`hang.py`): 4x its slowest pass on this machine in
   the last 30 days, at least 900 s, at most 2400 s, and 1800 s for a step with
   no pass on record. A step still running at its limit is very likely stuck, so
@@ -167,9 +183,11 @@ CPU-second, lowest value first (`check_value.py`). CPU time, not wall time, is
 the cost, because the machine is never quiet. Records from before the run log
 measured CPU time are estimated from their wall seconds and marked `~`. Checks
 that failed in exactly the same runs, such as the variants of one verb, are
-scored as one group, since together they cost the sum but catch only once.
-`--budget <cpu seconds>` also lists the lowest-value groups whose removal brings
-the median slow-CI run under that budget.
+scored as one group, since together they cost the sum but catch only once. A
+full run's cost is each check's median CPU seconds, summed over the checks slow
+CI still runs, because most runs leave out the lanes and Rust packages a change
+cannot affect. `--budget <cpu seconds>` also lists the lowest-value groups whose
+removal brings a full run under that budget.
 
 ## Recording CPU use
 

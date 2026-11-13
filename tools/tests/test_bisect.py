@@ -5,7 +5,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Iterable
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -210,22 +210,28 @@ def over_budget_lane() -> checks.Lane:
     return checks.Lane("slow").step("true", [sys.executable, "-c", "pass"])
 
 
-def test_over_budget_passes_and_files_a_bead(
+def test_slow_ci_over_its_wall_budget_files_by_cpu_alone(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, deadline: None
 ) -> None:
+    """Slow CI's wall seconds file nothing; its CPU budget check runs once the run is logged."""
     monkeypatch.setattr(os, "cpu_count", lambda: 18)
     monkeypatch.setattr(checks.system, "loadavg", lambda: (2.0, 2.0, 2.0))
-    filed: list[str] = []
+    wall: list[str] = []
     monkeypatch.setattr(
-        checks.budget_beads,
-        "report",
-        lambda script, *args: filed.append(script) or f"{script}: over budget: filed",
+        checks.budget_beads, "report", lambda script, *args: wall.append(script) or ""
     )
+    logged: list[int] = []
+
+    def slow_report() -> list[str]:
+        logged.append(len(runlog.read_log(datetime.now(timezone.utc) - timedelta(1))))
+        return ["ci budget: checked"]
+
+    monkeypatch.setattr(checks.budget_beads, "slow_report", slow_report)
     assert checks.slow_run([over_budget_lane()], 0, time.monotonic()) == 0
     out = capsys.readouterr().out
-    assert filed == ["ci"]
+    assert wall == [] and logged == [1]
     assert out.count("ci: passed in") == 1
-    assert "ci: over budget: filed" in out
+    assert "ci budget: checked" in out
 
 
 def test_a_wall_limit_kill_on_a_quiet_machine_still_fails(

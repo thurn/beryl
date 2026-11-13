@@ -114,7 +114,7 @@ def test_a_steps_own_failure_record_is_not_a_check() -> None:
     assert set(groups) == {("rust:a::t",), ("python:pytest",)}
 
 
-def test_cuts_take_the_lowest_value_until_the_median_run_fits() -> None:
+def test_cuts_take_the_lowest_value_until_a_full_run_fits() -> None:
     records: list[dict[str, object]] = []
     for c in ("a", "b", "c"):
         records += [
@@ -165,5 +165,5 @@ def test_the_command_reports_groups_and_cuts(
     args = argparse.Namespace(days=30, json=True, budget=1.0)
     assert check_value.report(args) == 0
     out = json.loads(capsys.readouterr().out)
-    assert out["runs"] == 3 and out["median_run_cpu_seconds"] == 4.0
+    assert out["runs"] == 3 and out["full_run_cpu_seconds"] == 4.0
     assert [g["checks"] for g in out["cuts"]] == [["rust:a"]]
