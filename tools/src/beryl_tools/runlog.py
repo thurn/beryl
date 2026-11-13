@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import nightly, paths, prune, system, verdicts
+from . import flaky, nightly, paths, prune, system, verdicts
 
 # The file a step appends its checks' results to, one JSON object a line: check, outcome, seconds.
 RESULTS_ENV = "BERYL_CHECK_RESULTS"
@@ -200,9 +200,10 @@ class Run:
         cpu: float | None = None,
     ) -> list[dict[str, object]]:
         """A finished step's records: one per check it reported, and one for the step itself
-        when it reported none, or failed though none of them did. A step that was killed marks
-        its failures `timeout` with why (`hang`, `wall` or `stopped`, checks.lane_steps): a kill
-        says nothing about a check, so none of them waits for a verdict (verdicts.settle).
+        (marked `whole`) when it reported none, or failed though none of them did. A step that
+        was killed marks its failures `timeout` with why (`hang`, `wall` or `stopped`,
+        checks.lane_steps): a kill says nothing about a check, so none of them waits for a
+        verdict (verdicts.settle).
 
         `cpu` is the CPU seconds of the step's whole process tree, which each record gets a share
         of as `cpu_seconds` (none where it is None, as on Windows). A step that ran many checks
@@ -218,6 +219,7 @@ class Run:
                     "check": f"{lane}:{step}",
                     "outcome": "pass" if passed else "fail",
                     "seconds": round(seconds, 3),
+                    "whole": True,
                 }
             )
         pending = verdicts.pending_checks()
@@ -250,9 +252,11 @@ class Run:
             }
             for c in checks
         ]
-        if cpu is not None:
-            for r, c in zip(records, checks):
+        for r, c in zip(records, checks):
+            if cpu is not None:
                 r["cpu_seconds"] = round(share(c), 3)
+            if c.get("whole"):
+                r["whole"] = True
         if killed:
             for r in records:
                 if r["outcome"] == "fail":
@@ -284,13 +288,20 @@ class Run:
         return records
 
     def settle(self) -> list[str]:
-        """The verdicts this run reached (verdicts.settle), a line each."""
+        """The verdicts this run reached (verdicts.settle), and the delete beads its flakes
+        filed (flaky.py), a line each."""
         with self.lock:
             records = list(self.logged)
         try:
-            return verdicts.settle(
+            lines = verdicts.settle(
                 records, self.script, self.place, self.tree, self.commit, self.host
             )
+            flakes = {
+                str(r["check"]): flaky.Flake(str(r["lane"]), bool(r.get("whole")))
+                for r in records
+                if r.get("flaky")
+            }
+            return lines + flaky.report(flakes, self.script, self.commit)
         except Exception as e:  # Neither do verdicts.
             warn(e)
             return []
@@ -425,8 +436,6 @@ def report(args: argparse.Namespace) -> int:
     store = verdicts.STORE
     history = store.history(store.checks())
     verdicts.save_history(history)
-    if args.quarantined:
-        return quarantined_report(history, args.json)
     if args.prune:
         return prune.report(records, history, since, args.days, args.json)
     checks, lanes = tally(records, history, since)
@@ -468,20 +477,6 @@ def report(args: argparse.Namespace) -> int:
     return 0
 
 
-def quarantined_report(history: dict[str, list[verdicts.Entry]], as_json: bool) -> int:
-    held = verdicts.quarantine(history)
-    if as_json:
-        print(json.dumps({"quarantined": held}, indent=2))
-        return 0
-    print(
-        f"ci-report: {len(held)} quarantined checks ({verdicts.QUARANTINE_FLAKES} flakes in"
-        f" {verdicts.QUARANTINE_DAYS} days): they run and are logged, but fail no run"
-    )
-    for check, times in held.items():
-        print(f"{check}  flaky at {', '.join(times)}")
-    return 0
-
-
 def pending_report(records: list[dict[str, object]], as_json: bool) -> int:
     """The pending list, each entry with its check's latest outcome in the log."""
     last = {str(r.get("check")): str(r.get("outcome")) for r in records}
@@ -515,11 +510,6 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.add_argument("--days", type=int, default=30, help="how far back (default 30)")
     p.add_argument("--json", action="store_true", help="JSON instead of a table")
     which = p.add_mutually_exclusive_group()
-    which.add_argument(
-        "--quarantined",
-        action="store_true",
-        help="only the quarantined checks, with their flakes",
-    )
     which.add_argument(
         "--pending",
         action="store_true",

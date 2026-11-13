@@ -179,9 +179,7 @@ def test_the_report_totals_each_check_and_lane_costliest_first(
     )
     with open(runlog.log_path(), "a") as f:
         f.write("not a record\n")
-    args = argparse.Namespace(
-        days=30, json=True, quarantined=False, pending=False, prune=False
-    )
+    args = argparse.Namespace(days=30, json=True, pending=False, prune=False)
     assert runlog.report(args) == 0
     out = json.loads(capsys.readouterr().out)
     assert list(out["checks"]) == ["ui-test:drag", "rust:beryl_rules::tests::a"]
@@ -198,9 +196,7 @@ def test_the_report_totals_each_check_and_lane_costliest_first(
     assert list(out["lanes"]) == ["ui-test", "rust"]
     assert (
         runlog.report(
-            argparse.Namespace(
-                days=60, json=False, quarantined=False, pending=False, prune=False
-            )
+            argparse.Namespace(days=60, json=False, pending=False, prune=False)
         )
         == 0
     )
@@ -232,9 +228,7 @@ def test_backfilled_failures_count_as_runs_and_rewrites_as_stale_updates(
             record("ui-test:drag", runlog.REWRITE, 0.0, days_ago=1, backfilled=True),
         ]
     )
-    args = argparse.Namespace(
-        days=30, json=True, quarantined=False, pending=False, prune=False
-    )
+    args = argparse.Namespace(days=30, json=True, pending=False, prune=False)
     assert runlog.report(args) == 0
     assert json.loads(capsys.readouterr().out)["checks"]["ui-test:drag"] == {
         "runs": 2,
@@ -316,9 +310,7 @@ def test_the_report_counts_selection_misses_per_100_landed_commits(
 
     monkeypatch.setattr(verdicts, "STORE", Verdicts())
     monkeypatch.setattr(runlog, "landed", lambda since: 150)
-    args = argparse.Namespace(
-        days=30, json=True, quarantined=False, pending=False, prune=False
-    )
+    args = argparse.Namespace(days=30, json=True, pending=False, prune=False)
     assert runlog.report(args) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["misses"] == {"misses": 2, "landed": 150, "per_100": 1.33}

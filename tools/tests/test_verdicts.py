@@ -16,8 +16,28 @@ class FakeBd(verdicts.Beads):
     def __init__(self) -> None:
         self.issues: dict[str, dict[str, object]] = {}
         self.stewards: list[dict[str, object]] = []
+        # The beads flaky.py filed, by id.
+        self.filed: dict[str, dict[str, object]] = {}
 
     def bd(self, *args: str) -> tuple[int, str]:
+        if args[0] == "create" and "--id" not in args:
+            bead = f"by-f{len(self.filed) + 1}"
+            self.filed[bead] = {
+                "id": bead,
+                "status": "open",
+                "title": args[args.index("--title") + 1],
+                "priority": args[args.index("--priority") + 1],
+                "metadata": json.loads(args[args.index("--metadata") + 1]),
+                "comments": [],
+            }
+            return 0, bead + "\n"
+        if args[:2] == ("comments", "add") and args[2] in self.filed:
+            comments = self.filed[args[2]]["comments"]
+            assert isinstance(comments, list)
+            comments.append(args[3])
+            return 0, ""
+        if args[:3] == ("list", "--label", "flaky-check"):
+            return 0, json.dumps(list(self.filed.values()))
         if args[0] == "create":
             bead = args[args.index("--id") + 1]
             if bead in self.issues:
@@ -95,9 +115,12 @@ def one(check: str, passes: bool) -> checks.Lane:
     return checks.Lane(lane).step(lane, step)
 
 
-def flaky(check: str, root: Path) -> checks.Lane:
-    """A lane whose one check fails, and passes on the rerun."""
+def flaky(check: str, root: Path, whole: bool = False) -> checks.Lane:
+    """A lane whose one check fails, and passes on the rerun; with `whole`, a step that reports
+    no checks of its own."""
     fails, passes = reports(check, "fail", "false")[2], reports(check, "pass")[2]
+    if whole:
+        fails, passes = "false", "true"
     once = f"if [ -e ran ]; then {passes}; else touch ran; {fails}; fi"
     lane = check.split(":")[0]
     return checks.Lane(lane).step(lane, ["sh", "-c", once], root, rerun=checks.whole)
@@ -251,54 +274,51 @@ def test_the_items_of_a_rust_file_end_where_their_brackets_close() -> None:
     ]
 
 
-def flakes(bd: FakeBd, check: str, *days_ago: float) -> None:
-    for days in days_ago:
-        when = datetime.now(timezone.utc) - timedelta(days=days)
-        bd.record(
-            check, check.split(":")[0], {"time": when.isoformat(), "verdict": "flaky"}
-        )
-
-
-def test_two_flakes_in_seven_days_quarantine_a_check(
+def test_a_flaky_check_files_one_bead_to_delete_it(
     tmp_path: Path, bd: FakeBd, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    flakes(bd, "ui-test:scry", 1, 8)
-    lanes = [one("ui-test:scry", False)]
-    assert checks.run_lanes(lanes, "check", 60) == 1
-    flakes(bd, "ui-test:scry", 2)
-    assert checks.run_lanes(lanes, "check", 60) == 0
-    out = capsys.readouterr().out
-    assert "quarantined: ui-test ui-test:scry" in out
-    assert [r["outcome"] for r in logged()][-1] == "fail"
-    # Not when another check fails beside it.
-    scry, drag = reports("ui-test:scry", "fail"), reports(
-        "ui-test:drag", "fail", "false"
+    assert checks.run_lanes([flaky("ui-test:scry", tmp_path)], "check", 60) == 0
+    [(bead, filed)] = bd.filed.items()
+    assert filed["title"] == "Delete flaky check ui-test:scry"
+    assert filed["priority"] == "1"
+    assert filed["metadata"] == {"beryl_flaky_check": "ui-test:scry"}
+    assert f"flaky: ui-test:scry: filed {bead} to delete it" in capsys.readouterr().out
+    # A second flake while the bead is open comments on it instead of filing another.
+    (tmp_path / "ran").unlink()
+    assert checks.run_lanes([flaky("ui-test:scry", tmp_path)], "check", 60) == 0
+    assert list(bd.filed) == [bead]
+    [comment] = bd.filed[bead]["comments"]  # pyre-ignore[23]: a list, from FakeBd
+    assert str(comment).startswith("Flaked again in `by check`")
+    assert (
+        f"flaky: ui-test:scry: {bead} is open to delete it" in capsys.readouterr().out
     )
-    lane = checks.Lane("ui-test").step("ui-test", ["sh", "-c", f"{scry[2]}; {drag[2]}"])
-    assert checks.run_lanes([lane], "check", 60) == 1
-    capsys.readouterr()
+    # A step that names no checks of its own asks for the flaky test inside it.
+    (tmp_path / "ran").unlink()
+    assert (
+        checks.run_lanes([flaky("ui-test:drag", tmp_path, whole=True)], "check", 60)
+        == 0
+    )
+    assert "Delete the flaky test in step ui-test:ui-test" in [
+        f["title"] for f in bd.filed.values()
+    ]
+    # Once it is closed, the next flake files a new one.
+    bd.filed[bead]["status"] = "closed"
+    (tmp_path / "ran").unlink()
+    assert checks.run_lanes([flaky("ui-test:scry", tmp_path)], "check", 60) == 0
+    assert len(bd.filed) == 3
 
-    assert runlog.report(report_args(quarantined=True)) == 0
-    held = json.loads(capsys.readouterr().out)["quarantined"]
-    assert list(held) == ["ui-test:scry"] and len(held["ui-test:scry"]) == 2
 
-
-def test_backfilled_flakes_quarantine_nothing(bd: FakeBd) -> None:
-    for days in (1, 2):
+def test_a_check_that_flaked_before_still_fails_the_run(bd: FakeBd) -> None:
+    for days in (1, 2, 3):
         when = datetime.now(timezone.utc) - timedelta(days=days)
-        entry: verdicts.Entry = {
-            "time": when.isoformat(),
-            "verdict": "flaky",
-            "backfilled": True,
-        }
-        bd.record("ui-test:scry", "ui-test", entry)
-    assert verdicts.quarantine(bd.history(bd.checks())) == {}
-    flakes(bd, "ui-test:scry", 1, 2)
-    assert list(verdicts.quarantine(bd.history(bd.checks()))) == ["ui-test:scry"]
+        bd.record(
+            "ui-test:scry", "ui-test", {"time": when.isoformat(), "verdict": "flaky"}
+        )
+    assert checks.run_lanes([one("ui-test:scry", False)], "check", 60) == 1
+    assert bd.filed == {}
 
 
 def test_a_build_failure_is_never_excused(tmp_path: Path, bd: FakeBd) -> None:
-    flakes(bd, "app:smoke", 1, 2)
     lane = checks.Lane("app").step(
         "smoke", ["sh", "-c", f"exit {checks.CANNOT_RUN}"], rerun=checks.whole
     )
@@ -345,7 +365,6 @@ def report_args(**more: object) -> argparse.Namespace:
     args = {
         "days": 30,
         "json": True,
-        "quarantined": False,
         "pending": False,
         "prune": False,
     }

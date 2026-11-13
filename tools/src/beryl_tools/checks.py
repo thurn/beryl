@@ -22,11 +22,12 @@ rollout benchmark's instruction count held to its bar), and runs those that what
 each one last passed can affect, and all of them hourly (slow_ci.py).
 
 A step that fails is rerun once before its lane fails, narrowed to the checks it says
-failed where it can name them: a pass on the rerun passes the lane and prints a `flaky: <lane>
-<check>` line for each. A step killed as hung or cut off, or one that failed to build or start
+failed where it can name them: a pass on the rerun passes the lane, prints a `flaky: <lane>
+<check>` line for each and files a bead to delete each flaky check (flaky.py). The rerun only
+detects a flake: no check is ever excused for flaking. A step killed as hung or cut off, or one that failed to build or start
 (exit `CANNOT_RUN`), is no flake and is not rerun, nor are the static checks (fmt, clippy, tsc).
 After the run, each failure it resolves gets a verdict (verdicts.py), and a step whose only
-failing checks are quarantined or pending fails no lane.
+failing checks are pending (verdicts.PENDING) fails no lane.
 
 Slow CI bisects a failure that survives its rerun over the commits since master (bisect.py).
 """
@@ -165,7 +166,7 @@ class Outcome:
     timings: list[str]
     # The checks that failed and then passed on the rerun; a step's name where it reran whole.
     flaky: list[str] = field(default_factory=list)
-    # Failures that failed no step: why (quarantined or pending), and the check.
+    # Failures that failed no step: why (`pending`), and the check.
     excused: list[tuple[str, str]] = field(default_factory=list)
     # The step that failed the lane, when it is one a rerun can narrow (`Step.failed`).
     failure: Failure | None = None
@@ -182,8 +183,8 @@ def run_lane(
 ) -> Outcome:
     """Runs the lane's steps until one fails, logging each attempt's checks (runlog.py): a
     rerun's own, so a check that failed and then passed shows as both, and the failure is
-    marked flaky for its verdict. A step fails no lane when each check it failed is quarantined
-    or pending (verdicts.excused), unless it never ran its checks."""
+    marked flaky for its verdict and its delete bead. A step fails no lane when each check it
+    failed is pending (verdicts.excused), unless it never ran its checks."""
     with steps.lock:
         # The executor may reuse a finished lane's thread, whose waits are not this lane's.
         steps.waits[threading.get_ident()] = (0.0, 0.0)

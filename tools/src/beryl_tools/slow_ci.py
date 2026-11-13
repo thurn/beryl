@@ -89,7 +89,7 @@ UI_DATA: re.Pattern[str] = re.compile(
     r"^data/(arena-motion\.json|ui-conventions\.json|card-store\.tsv)$"
 )
 # The modules that decide whether a step's results fail its lane: its reruns, and the
-# quarantined, pending and slow-only checks.
+# pending and slow-only checks.
 JUDGES: tuple[str, ...] = ("reruns", "verdicts", "slow_only")
 # The modules whose imports [`closure`] does not follow: `checks` and `cli` import every step's
 # module, and this one the helpers of every lane.

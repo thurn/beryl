@@ -109,6 +109,21 @@ Windows leaves `app`, `shots`, `ui-test`, `oracle`, `counts` and `mobile` to the
 Mac, and its fast check skips the browser checks and `motion` (see
 `WINDOWS_SKIPS` in `checks.py`).
 
+## Flaky checks
+
+- A step that fails is rerun once, narrowed to the checks it says failed. A
+  check that passes on the rerun is flaky: its lane passes, it prints a
+  `flaky: <lane> <check>` line, and it files a P1 `flaky-check` bead
+  (`flaky.py`) to delete the check. Each check has at most one open bead; a
+  later flake comments on it.
+- The agent working that bead first asks whether a fast, deterministic test (a
+  Rust unit test, a Node test with no browser, a check against a recorded
+  fixture) could keep most of what the check protects. If so, it writes that
+  test and deletes the check. If not, it deletes the check when it has never
+  caught a bug, or moves it to the nightly when it has.
+- There is no quarantine. Every check that runs can fail CI, except those on
+  `verdicts.PENDING`, each tied to the bead whose work will make it pass.
+
 ## Budgets and hang limits
 
 - A run that goes over budget still passes, and files a `check-budget` bead

@@ -1,8 +1,8 @@
-"""Verdicts and quarantine: every failure of a check is given
-a verdict the tool infers, and a check that flakes twice in seven days is quarantined.
+"""Verdicts: every failure of a check is given a verdict the tool infers.
 
 - **flaky**: the check failed and then passed on the same tree, as on the rerun `run_lane` gives
-  a failed step (checks.py).
+  a failed step (checks.py). The flake fails no lane, and files a bead to delete the check
+  (flaky.py).
 - **stale** or **catch**: a check that failed passed in a later run from the same place (the
   branch, or slow CI), on another tree. The paths that changed between the two trees say which
   (for slow CI, those the Steward's commits changed, when a Steward fixed it):
@@ -15,11 +15,9 @@ a verdict the tool infers, and a check that flakes twice in seven days is quaran
 
 Each verdict is a comment on the check's bead (one closed bead per check that has ever failed,
 labeled `ci-check`), so the record is in git, shared by every machine and survives a cache wipe;
-passes and timings stay in the run log (runlog.py). Quarantine reads the verdicts from those
-beads, so it is the same on every host. A quarantined check still runs and is logged, but its
-failure fails no run and so files no bead. A check on the [`PENDING`] list is one a named bead's
-work must make pass one day: it runs and is logged as pending-fail or pending-pass, and fails no
-run either.
+passes and timings stay in the run log (runlog.py). No check runs without being able to fail
+CI, except one on the [`PENDING`] list: one a named bead's work must make pass one day. It runs
+and is logged as pending-fail or pending-pass, and fails no run.
 
 Nothing here fails a check: a git or bd call that fails is reported and the run goes on.
 """
@@ -45,8 +43,6 @@ from . import paths, system
 # Re-exported: the fast check, the pruning rule and their tests read them as verdicts.SLOW_ONLY.
 from .slow_only import SLOW_ONLY as SLOW_ONLY, SlowOnly as SlowOnly
 
-QUARANTINE_FLAKES = 2
-QUARANTINE_DAYS = 7
 # An unresolved failure whose check has not passed since is forgotten after this long: the
 # check was deleted or renamed, or the diff to a pass would be too wide to say anything.
 UNRESOLVED_DAYS = 14
@@ -464,46 +460,17 @@ def refresh_history() -> int:
     return 0
 
 
-# Quarantine.
-
-
-def flakes(found: Iterable[Entry], at: datetime) -> list[str]:
-    """The times of the flaky verdicts in the quarantine window before `at`. A verdict
-    backfilled from the slow-CI history before the run log (`backfilled`) quarantines nothing:
-    its race was fixed before the rerun existed, and quarantine is for flakes seen since.
-    """
-    since = at - timedelta(days=QUARANTINE_DAYS)
-    times: list[str] = []
-    for e in found:
-        if e.get("backfilled"):
-            continue
-        try:
-            when = datetime.fromisoformat(str(e.get("time")))
-        except ValueError:
-            continue
-        if e.get("verdict") == "flaky" and since <= when <= at:
-            times.append(str(e["time"]))
-    return times
-
-
-def quarantine(history: dict[str, list[Entry]]) -> dict[str, list[str]]:
-    """The quarantined checks, each with its flakes' times."""
-    at = now()
-    found = {check: flakes(e, at) for check, e in history.items()}
-    return {c: t for c, t in sorted(found.items()) if len(t) >= QUARANTINE_FLAKES}
+# Pending checks.
 
 
 def excused(records: list[dict[str, object]]) -> list[tuple[str, str]]:
-    """Why a failed step's failure fails no run: (`quarantined` or `pending`, check) for each
-    check it failed; none unless each is quarantined or pending."""
-    failing = [str(r["check"]) for r in records if r["outcome"] == "fail"]
-    pending = [str(r["check"]) for r in records if r["outcome"] == "pending-fail"]
-    if not failing and not pending:
+    """Why a failed step's failure fails no run: (`pending`, check) for each check it failed;
+    none when it failed a check that is not pending."""
+    if any(r["outcome"] == "fail" for r in records):
         return []
-    held = quarantine(STORE.history(failing)) if failing else {}
-    if any(c not in held for c in failing):
-        return []
-    return [("quarantined", c) for c in failing] + [("pending", c) for c in pending]
+    return [
+        ("pending", str(r["check"])) for r in records if r["outcome"] == "pending-fail"
+    ]
 
 
 # Settling a run's failures.

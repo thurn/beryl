@@ -5,18 +5,16 @@ the weekly prune to apply in one commit with no judgement of its own.
 | Record                                        | Action              |
 | --------------------------------------------- | ------------------- |
 | Three stale updates and no catch              | Delete              |
-| Quarantined, never caught anything            | Delete              |
-| Quarantined, has caught a bug                 | Fix                 |
 | Never failed, in the costliest tenth          | Run in slow CI only |
 | A `keep` comment in its source, with a reason | Keep                |
 
 Stale updates and flakes count over the report's window: the stale verdicts on the check's bead
 and the rewrites the backfill logged (runlog.REWRITE), as by-w8gv.20.4 counted them when it
 applied the rule by hand. A catch counts whenever it was: a check that once caught a bug is not
-deleted for growing old. Quarantine is today's (verdicts.quarantine). The costliest tenth ranks
-the tests the fast check could leave out (SLOW_ONLY_LANES) by their seconds per run in it, those
-already in verdicts.SLOW_ONLY by the numbers they moved with, so that each week does not move
-another tenth. Pending checks (verdicts.PENDING) are left out, as are checks that no longer run:
+deleted for growing old. A flaky check is not a row: each flake files its own bead to delete the
+check (flaky.py). The costliest tenth ranks the tests the fast check could leave out
+(SLOW_ONLY_LANES) by their seconds per run in it, those already in verdicts.SLOW_ONLY by the
+numbers they moved with, so that each week does not move another tenth. Pending checks (verdicts.PENDING) are left out, as are checks that no longer run:
 those missing from the latest slow-CI run of their lane.
 """
 
@@ -40,13 +38,9 @@ COSTLIEST_SHARE = 10
 SLOW_ONLY_LANES = ("rust",)
 
 STALE = "three stale updates and no catch"
-UNCAUGHT = "quarantined, never caught anything"
-CAUGHT = "quarantined, has caught a bug"
 COSTLY = "never failed, in the costliest tenth"
 ROWS: dict[str, str] = {
     STALE: "delete",
-    UNCAUGHT: "delete",
-    CAUGHT: "fix",
     COSTLY: "slow-only",
 }
 
@@ -63,7 +57,6 @@ class Record:
     seconds: float = 0.0
     fast_runs: int = 0
     fast_seconds: float = 0.0
-    quarantined: bool = False
 
     def per_run(self) -> float:
         return self.seconds / self.runs if self.runs else 0.0
@@ -160,8 +153,6 @@ def records(
                 continue
             rec.stale += recent and verdict == "stale"
             rec.flakes += recent and verdict == "flaky"
-    for check in verdicts.quarantine(history):
-        found.setdefault(check, Record()).quarantined = True
     return found
 
 
@@ -184,8 +175,6 @@ def costliest(found: dict[str, Record], running: set[str]) -> set[str]:
 
 def row(check: str, r: Record, tenth: set[str], judged: bool) -> str:
     """The row of the rule's table a check's record falls in, if any."""
-    if r.quarantined:
-        return CAUGHT if r.catches else UNCAUGHT
     if r.stale >= STALE_TO_DELETE and not r.catches:
         return STALE
     if check in tenth and not r.failures and not judged:

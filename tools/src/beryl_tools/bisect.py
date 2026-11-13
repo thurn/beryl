@@ -1,6 +1,6 @@
 """Bisecting a slow-CI failure.
 
-When a step of `by ci` still fails after its rerun and no quarantine or pending entry excuses it
+When a step of `by ci` still fails after its rerun and no pending entry excuses it
 (checks.py, `run_lane`), `after` reruns what it named as failed, narrowed as the rerun was, in a
 detached worktree under the cache at the commits since master (`git rev-list --first-parent
 origin/master..HEAD`), and binary-searches for the first commit at which each fails. A probe runs

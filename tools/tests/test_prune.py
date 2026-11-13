@@ -102,9 +102,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def prune(capsys: pytest.CaptureFixture[str]) -> dict[str, tuple[str, str, str]]:
     """Each acted-on check's (action, row, keep reason), from `ci-report --prune --json`."""
-    args = argparse.Namespace(
-        days=30, json=True, quarantined=False, pending=False, prune=True
-    )
+    args = argparse.Namespace(days=30, json=True, pending=False, prune=True)
     assert runlog.report(args) == 0
     out = json.loads(capsys.readouterr().out)
     return {a["check"]: (a["action"], a["row"], a["keep"]) for a in out["actions"]}
@@ -117,12 +115,11 @@ def test_each_row_of_the_rule_with_keeps_pending_and_gone_checks(
     history = {
         "ui-test:stale": [verdict("stale")],
         "ui-test:stale and caught long ago": [verdict("catch", 200)],
-        "ui-test:quarantined": flakes,
-        "ui-test:quarantined and caught": [verdict("catch", 90), *flakes],
+        # Flakes are no row: each files its own bead to delete the check (flaky.py).
+        "ui-test:flaky twice": flakes,
         "ui-test:flaky once": flakes[:1],
-        "ui-test:old flakes": [verdict("flaky", 1, backfilled=True)] * 2,
-        "rust:beryl_rules::tests::kept_test": flakes,
-        "rust:beryl_rules::product_kept": flakes,
+        "rust:beryl_rules::tests::kept_test": [],
+        "rust:beryl_rules::product_kept": [],
     }
     monkeypatch.setattr(verdicts, "STORE", Store(history))
     pending = verdicts.Pending("ui-test:pending", "board", "by-x")
@@ -142,6 +139,8 @@ def test_each_row_of_the_rule_with_keeps_pending_and_gone_checks(
     for c in checks[-5:-1] + ["ui-test:gone"]:
         log += rewrites(c, 3)
     log += rewrites("shots:plain", 2)
+    log += rewrites("rust:beryl_rules::tests::kept_test", 3)
+    log += rewrites("rust:beryl_rules::product_kept", 3)
     runlog.append(log)
     assert prune(capsys) == {
         "ui-test:stale": ("delete", "three stale updates and no catch", ""),
@@ -160,18 +159,16 @@ def test_each_row_of_the_rule_with_keeps_pending_and_gone_checks(
             "three stale updates and no catch",
             "the only shot of the kept state",
         ),
-        "ui-test:quarantined": ("delete", "quarantined, never caught anything", ""),
         "rust:beryl_rules::product_kept": (
             "delete",
-            "quarantined, never caught anything",
+            "three stale updates and no catch",
             "",
         ),
         "rust:beryl_rules::tests::kept_test": (
             "keep",
-            "quarantined, never caught anything",
+            "three stale updates and no catch",
             "the one test of the engine's undo",
         ),
-        "ui-test:quarantined and caught": ("fix", "quarantined, has caught a bug", ""),
     }
 
 

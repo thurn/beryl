@@ -352,7 +352,7 @@ precheck:
 ci *lanes:
     {{ by }} ci "$@"
 
-# Each check's runs, failures, verdicts and seconds, costliest first, with lane totals (--days 30, --json, --quarantined, --pending)
+# Each check's runs, failures, verdicts and seconds, costliest first, with lane totals (--days 30, --json, --pending, --prune)
 [group('checks')]
 ci-report *args:
     {{ by }} ci-report "$@"
