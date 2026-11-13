@@ -9,6 +9,7 @@ import {
     beside,
     bows,
     rises,
+    sags,
     effectsOn,
     leavesFrom,
     middleOf,
@@ -232,8 +233,8 @@ export const CASES = {
     },
 
     // A trigger lifts out of its source: it begins small in the source's middle, wherever the
-    // source rests when the step begins, and ends on the stack, along an arc that bows
-    // toward its controller's edge of the table; the source stays as it is.
+    // source rests when the step begins, and ends on the stack, all but straight, sagging a
+    // little toward the middle of the table; the source stays as it is.
     // The lift is the same whether the session sent the moment whole or cut it into views
     // (the most re-filed motion: 12 reports on by-w8gv.21, each another batching). Where the
     // battlefield makes room for the stack, the source glides to its new place meanwhile.
@@ -267,7 +268,8 @@ export const CASES = {
             );
             assert.ok(half.depth >= ALOFT, "it flies over what rests");
             const mine = lift.act.item.controller === "you";
-            bows(start, half, end, mine ? "yours" : "theirs", "the lift");
+            // Arena's copy, filmed whole from both seats, sags at most 0.025 of its way.
+            sags(start, half, end, mine ? "yours" : "theirs", "the lift", 0.03);
             assert.equal(lift.at.to.zones[ability], "stack");
             const after = lift.at.to.poses[source];
             const next = run.steps[run.steps.indexOf(lift) + 1];

@@ -8,6 +8,17 @@
 // that a span is one element from the step that begins it to the step that ends it, and the
 // two themes the reports kept coming back to. Nothing here touches a page.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+/** How long after an ability lifts its line to its source begins, in stage ms
+ * (data/ui-conventions.json, `point`'s "source line" case): Arena's starts as the copy nears
+ * the stack. */
+const SOURCE_LINE_DELAY = JSON.parse(
+    readFileSync(
+        new URL("../../data/ui-conventions.json", import.meta.url),
+        "utf8",
+    ),
+).verbs.find((verb) => verb.name === "point").cases["source line"].delay;
 
 /** What the stage names a script's subject (src/stage/spans.ts `namedBy`). */
 const named = (subject) =>
@@ -235,10 +246,9 @@ function combatLinesThatFlickered(runs) {
 }
 
 /** The line from an ability to its source (UI Conventions, "A line from an ability to its
- * source"; the first motion review's finding on the lift, by-w8gv.21.14): it begins with the
- * lift, at the very time the ability leaves its source, is drawn from the tick the ability
- * comes clear of the source and stretches with it, and stays for as long as the ability is
- * on the stack. */
+ * source"): it begins the source line's delay after the ability leaves its source, once the
+ * ability has landed on the stack, as Arena's does, comes in whole, and stays for as long as
+ * the ability is on the stack. */
 function sourceLine(run) {
     const lift = run.edges.find(
         (edge) => edge.verb === "emerge" && edge.edge === "start",
@@ -252,11 +262,20 @@ function sourceLine(run) {
             act.arrow === "source" && named(act.from) === `a${lift.act.id}`,
     );
     assert.ok(line, "the lifted ability has no line to its source");
-    assert.equal(line.from, lift.at, "the line begins as the ability lifts");
-    const during = line.held.filter((tick) => tick.at <= landed.at);
+    assert.equal(
+        line.from,
+        lift.at + SOURCE_LINE_DELAY,
+        "the line begins its delay after the ability lifts",
+    );
+    // Arena's appears whole in one frame once the copy rests on the stack (`2VW6ZzmS8U4
+    // 32:15.94`, `0VsYGs88NXA 19:39.67`).
     assert.ok(
-        during.some((tick) => tick.drawn),
-        "no line joins the ability to its source while it lifts",
+        line.from >= landed.at,
+        "the line begins before the ability lands",
+    );
+    assert.ok(
+        line.held.some((tick) => tick.at >= line.whole && tick.drawn),
+        "no line joins the ability to its source once it has come in",
     );
     const gone = run.edges.find(
         (edge) =>
