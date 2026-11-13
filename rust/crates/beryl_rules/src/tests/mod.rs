@@ -11,6 +11,7 @@ mod invariants;
 mod library;
 mod mulligan;
 mod payment;
+mod regeneration;
 mod replay;
 mod rules;
 mod static_abilities;

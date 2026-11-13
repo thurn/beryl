@@ -133,6 +133,16 @@ impl<L: Layout> State<L> {
         }
     }
 
+    /// Removes the damage marked on the permanent `object`, as it regenerates ([CR 120.6]):
+    /// "All damage marked on a permanent is removed when it regenerates".
+    ///
+    /// [CR 120.6]: https://yawgatog.com/resources/magic-rules/#R1206
+    #[inline]
+    pub fn remove_damage(&mut self, object: ObjectRef<L>) {
+        debug_assert!(self.is_current(object));
+        self.object_mut(object.slot).damage = 0;
+    }
+
     /// Turns the face-down permanent in `slot` face up. It stays the same object, with its
     /// counters, damage and status, and does not enter again ([CR 708.8]): "As a face-down
     /// permanent is turned face up, its copiable values revert to its normal copiable values. Any

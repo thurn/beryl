@@ -214,6 +214,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::Counter(_)
         | Effect::CounterInto { .. }
         | Effect::Destroy { .. }
+        | Effect::Regenerate(_)
         | Effect::Exile(_)
         | Effect::ExileUntilThisLeaves(_)
         | Effect::ExileLinked(_)

@@ -97,7 +97,7 @@
 //!
 //! | Rules | Module | Built, and to come |
 //! | --- | --- | --- |
-//! | CR 701, keyword actions | `actions/`, a file for each, named as the rules name it | [`actions::counter`], [`actions::destroy`], [`actions::discard`], [`actions::exile`], [`actions::explore`], [`actions::fateseal`], [`actions::manifest`], [`actions::manifest_dread`], [`actions::mill`], [`actions::reveal`], [`actions::sacrifice`], [`actions::scry`], [`actions::search`], [`actions::shuffle`], [`actions::tap`] (tap and untap), [`actions::transform`] |
+//! | CR 701, keyword actions | `actions/`, a file for each, named as the rules name it | [`actions::counter`], [`actions::destroy`], [`actions::discard`], [`actions::exile`], [`actions::explore`], [`actions::fateseal`], [`actions::manifest`], [`actions::manifest_dread`], [`actions::mill`], [`actions::regenerate`], [`actions::reveal`], [`actions::sacrifice`], [`actions::scry`], [`actions::search`], [`actions::shuffle`], [`actions::tap`] (tap and untap), [`actions::transform`] |
 //! | CR 702, keyword abilities | `keywords/`, a file for each | [`keywords::flashback`]; kicker |
 //! | any other rule | a module named for the rule's title | [`ending`] the game (CR 104), [`mana`], which the engine's payment solver shares (CR 106), [`tokens`] (CR 111), [`emblems`] (CR 114), [`costs`] (CR 118), [`life`] (CR 119), [`damage`] (CR 120), [`drawing`] (CR 121), [`counters`] (CR 122), [`zones`] (CR 400), [`library`] (CR 401), [`stack`] (CR 405), [`casting`] spells as an effect allows (CR 601), [`delayed_triggers`] (CR 603.7), [`linked`] abilities (CR 607), [`choices`] made while resolving (CR 608.2d), [`one_shot`] effects (CR 610), [`continuous`] effects (CR 611), [`coins`] (CR 705); copies (CR 707) |
 //!

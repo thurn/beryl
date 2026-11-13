@@ -293,6 +293,11 @@ pub const fn destroy_without_regeneration(objects: Objects) -> Effect {
     }
 }
 
+/// [`Effect::Regenerate`]: "regenerate [permanents]".
+pub const fn regenerate(objects: Objects) -> Effect {
+    Effect::Regenerate(objects)
+}
+
 /// [`Effect::Attach`]: "attach [objects] to [host]".
 pub const fn attach(objects: Objects, to: Objects) -> Effect {
     Effect::Attach { objects, to }

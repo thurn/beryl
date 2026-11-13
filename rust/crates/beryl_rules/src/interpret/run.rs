@@ -10,8 +10,8 @@
 use beryl_card::{Effect, Objects, Players};
 
 use crate::actions::{
-    attach, counter, destroy, discard, exile, explore, fateseal, manifest_dread, mill, sacrifice,
-    scry, search, shuffle, tap, transform,
+    attach, counter, destroy, discard, exile, explore, fateseal, manifest_dread, mill, regenerate,
+    sacrifice, scry, search, shuffle, tap, transform,
 };
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityIx, FaceAbility, Flow, Stop};
@@ -176,7 +176,11 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::LookAt { player, cards } => zones::look_at_instruction(self, player, cards),
             Effect::Counter(objects) => counter::instruction(self, objects)?,
             Effect::CounterInto { spells, zone } => counter::into_instruction(self, spells, zone)?,
-            Effect::Destroy { objects, .. } => destroy::instruction(self, objects)?,
+            Effect::Destroy {
+                objects,
+                regeneration,
+            } => destroy::instruction(self, objects, regeneration)?,
+            Effect::Regenerate(objects) => regenerate::instruction(self, objects)?,
             Effect::Attach { objects, to } => attach::instruction(self, objects, to),
             Effect::Exile(objects) => exile::instruction(self, objects)?,
             Effect::ExileUntilThisLeaves(objects) => {

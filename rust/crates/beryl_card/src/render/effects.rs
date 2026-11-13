@@ -108,6 +108,9 @@ impl Ctx {
                     Regeneration::Forbidden => vec![destroy, self.not_regenerated(objects)],
                 }
             }
+            Effect::Regenerate(objects) => {
+                vec![self.acts(("regenerate", "regenerates"), objects, "")]
+            }
             Effect::Attach { objects, to } => {
                 let host = self.objects(to);
                 vec![self.acts(("attach", "attaches"), objects, &format!(" to {host}"))]

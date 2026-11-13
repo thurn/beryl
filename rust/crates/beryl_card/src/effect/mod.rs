@@ -160,6 +160,12 @@ pub enum Effect {
         /// Whether a regeneration shield may replace the destruction.
         regeneration: Regeneration,
     },
+    /// "Regenerate [permanents]": the next time each would be destroyed this turn, a
+    /// regeneration shield replaces the destruction
+    /// ([CR 701.19a](https://yawgatog.com/resources/magic-rules/#R70119a)): "If the effect of a
+    /// resolving spell or ability regenerates a permanent, it creates a replacement effect that
+    /// protects the permanent the next time it would be destroyed this turn."
+    Regenerate(Objects),
     /// "Exile [objects]"
     /// ([CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a)): "To exile an
     /// object, move it to the exile zone from wherever it is."
@@ -546,6 +552,7 @@ impl Effect {
             | Effect::Counter(_)
             | Effect::CounterInto { .. }
             | Effect::Destroy { .. }
+            | Effect::Regenerate(_)
             | Effect::Exile(_)
             | Effect::ExileUntilThisLeaves(_)
             | Effect::ExileLinked(_)
@@ -642,6 +649,7 @@ impl Effect {
             | Effect::Unless { effect, .. }
             | Effect::ForEachPlayer { effect, .. } => effect.takes(target, how),
             Effect::Attach { .. }
+            | Effect::Regenerate(_)
             | Effect::Draw { .. }
             | Effect::Discard { .. }
             | Effect::Mill { .. }

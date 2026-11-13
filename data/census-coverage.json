@@ -17,6 +17,7 @@
   "effect:Mill": "Effect::Mill",
   "effect:Pump": "Effect::Modify",
   "effect:PutCounter": "Effect::AddCounters",
+  "effect:Regenerate": "Effect::Regenerate",
   "effect:RemoveCounter": "Effect::RemoveCounters",
   "effect:Sacrifice": "Effect::Sacrifice",
   "effect:Scry": "Effect::Scry",

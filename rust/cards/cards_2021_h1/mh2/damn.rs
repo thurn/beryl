@@ -120,5 +120,46 @@ pub mod scenarios {
                 ME.has_cards(Zone::Graveyard, 2),
                 THEM.has(Zone::Graveyard, Card::SnapcasterMage, 1),
             ]),
+        // A creature with a regeneration shield is still destroyed: Damn's "can't be regenerated"
+        // keeps the shield from applying (CR 701.19c). Drudge Skeletons is the creature that
+        // regenerates.
+        Scenario::new("Damn for {B}{B} destroys a creature with a regeneration shield")
+            .interaction(&[Card::DrudgeSkeletons])
+            .battlefield(
+                P0,
+                &[Card::Swamp, Card::Swamp, Card::Swamp, Card::DrudgeSkeletons],
+            )
+            .hand(P0, &[Card::Damn])
+            .library(P1, &[Card::Island])
+            .actions(&[
+                ME.activates(Card::DrudgeSkeletons, 0),
+                Resolve,
+                ME.casts(Card::Damn),
+                ME.controls(Card::DrudgeSkeletons, 0),
+                ME.has(Zone::Graveyard, Card::DrudgeSkeletons, 1),
+            ]),
+        // Overloaded, the same: P1 regenerates its Skeletons when P0 passes priority, and Damn
+        // destroys them.
+        Scenario::new("Damn overloaded destroys a creature with a regeneration shield")
+            .interaction(&[Card::DrudgeSkeletons])
+            .battlefield(
+                P0,
+                &[Card::Plains, Card::Plains, Card::Plains, Card::Plains],
+            )
+            .hand(P0, &[Card::Damn])
+            .battlefield(P1, &[Card::Swamp, Card::DrudgeSkeletons])
+            .library(P1, &[Card::Island])
+            .actions(&[
+                ME.passes(),
+                THEM.activates(Card::DrudgeSkeletons, 0),
+                Action::Cast {
+                    player: P0,
+                    card: Card::Damn,
+                    face: FaceIx::FRONT,
+                    costs: Castings::only(0),
+                },
+                THEM.controls(Card::DrudgeSkeletons, 0),
+                THEM.has(Zone::Graveyard, Card::DrudgeSkeletons, 1),
+            ]),
     ];
 }

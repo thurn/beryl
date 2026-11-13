@@ -11,6 +11,7 @@ pub mod fateseal;
 pub mod manifest;
 pub mod manifest_dread;
 pub mod mill;
+pub mod regenerate;
 pub mod reveal;
 pub mod sacrifice;
 pub mod scry;

@@ -134,6 +134,7 @@ impl Effect {
                 spells: objects, ..
             }
             | Effect::Destroy { objects, .. }
+            | Effect::Regenerate(objects)
             | Effect::Exile(objects)
             | Effect::ExileUntilThisLeaves(objects)
             | Effect::ExileLinked(objects)

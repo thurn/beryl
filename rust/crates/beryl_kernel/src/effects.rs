@@ -12,7 +12,7 @@
 //! Built so far: an object (by-w8gv.7.2), a player (by-w8gv.7.3) and a locked-in set of
 //! objects ([`sets`], by-w8gv.7.5) as the affected side, and the layer change, the
 //! zone-change replacement, the rule change, the permission to cast and the cost change
-//! (by-w8gv.7.4) as payloads. The game as a side is designed in the contract and built with
+//! (by-w8gv.7.4) as payloads, and the regeneration shield ([`regeneration`]). The game as a side is designed in the contract and built with
 //! its first user.
 //!
 //! [`State::rule_applies`] is the one question about a rule change, whether a static
@@ -30,6 +30,7 @@ use crate::state::State;
 use crate::store::{Duration, Ended};
 use crate::table::GameTable;
 
+pub mod regeneration;
 mod sets;
 mod store;
 
@@ -71,6 +72,8 @@ pub enum Continuous<L: Layout = Small> {
     Cast(ObjectRef<L>, Permission),
     /// Changes what the spell costs.
     Cost(ObjectRef<L>, CostChange),
+    /// A regeneration shield on the permanent ([`regeneration`]).
+    Regeneration(ObjectRef<L>),
 }
 
 impl<L: Layout> Continuous<L> {
@@ -81,7 +84,8 @@ impl<L: Layout> Continuous<L> {
             Continuous::Layer(object, _)
             | Continuous::Move(object, _)
             | Continuous::Cast(object, _)
-            | Continuous::Cost(object, _) => Subject::Object(object),
+            | Continuous::Cost(object, _)
+            | Continuous::Regeneration(object) => Subject::Object(object),
             Continuous::Rule(subject, _) => subject,
         }
     }
@@ -95,6 +99,7 @@ impl<L: Layout> Continuous<L> {
             Continuous::Rule(_, rule) => Payload::Rule(rule),
             Continuous::Cast(_, terms) => Payload::Cast(terms),
             Continuous::Cost(_, change) => Payload::Cost(change),
+            Continuous::Regeneration(_) => Payload::Regeneration,
         }
     }
 }
@@ -334,6 +339,8 @@ pub enum Payload {
     Cast(Permission),
     /// Changes what the affected spell costs.
     Cost(CostChange),
+    /// Replaces the next destruction of the affected permanent ([`regeneration`]).
+    Regeneration,
 }
 
 impl Payload {
@@ -346,6 +353,7 @@ impl Payload {
             Payload::Rule(_) => Kinds::RULE,
             Payload::Cast(_) => Kinds::CAST,
             Payload::Cost(_) => Kinds::COST,
+            Payload::Regeneration => Kinds::REGENERATION,
         }
     }
 }
@@ -361,6 +369,7 @@ impl Kinds {
     const RULE: u16 = 1 << 2;
     const CAST: u16 = 1 << 3;
     const COST: u16 = 1 << 4;
+    const REGENERATION: u16 = 1 << 5;
 }
 
 /// A continuous effect from a resolved spell or ability
@@ -615,7 +624,8 @@ impl<L: Layout> State<L> {
                 | Continuous::Move(object, _)
                 | Continuous::Rule(Subject::Object(object), _)
                 | Continuous::Cast(object, _)
-                | Continuous::Cost(object, _) => {
+                | Continuous::Cost(object, _)
+                | Continuous::Regeneration(object) => {
                     debug_assert!(self.is_current(object));
                     self.keyed.insert(object.slot);
                 }

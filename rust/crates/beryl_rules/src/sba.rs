@@ -1,6 +1,7 @@
 //! State-based actions (architecture §8.4).
 
 use crate::PlayerSet;
+use crate::actions::regenerate;
 use crate::bitboard::Bitboard;
 use crate::card::{Subtype, Supertypes, Types};
 use crate::decision::{Outcome, StallReason};
@@ -36,7 +37,7 @@ pub(crate) fn check<L: Layout>(
         return Ok(true);
     }
     layers::refresh(s, t, sink)?;
-    let (graveyard, tokens, legendary) = doomed(s, t);
+    let (mut graveyard, tokens, legendary) = doomed(s, t);
     let loose = loose_equipment(s, t);
     let legends = legend_group_in(s, t, &legendary, Bitboard::EMPTY).is_some();
     if graveyard.is_empty() && tokens.is_empty() && loose.is_empty() && !legends {
@@ -58,6 +59,14 @@ pub(crate) fn check<L: Layout>(
             });
         }
         return Ok(true);
+    }
+    // A creature with lethal damage is destroyed (CR 704.5g), so a regeneration shield
+    // replaces that ([CR 614.8](https://yawgatog.com/resources/magic-rules/#R6148)):
+    // "Regeneration is a destruction-replacement effect." With no shield on any permanent,
+    // one bit test.
+    if s.has_regeneration_shields() {
+        let lethal = destroyed_for_damage(s, t, graveyard);
+        graveyard &= !regenerate::regenerate_any(s, t, sink, lethal)?;
     }
     // "As a single event": the one batch below is every action of this check that has an
     // event, and a batch's events are kept as one group (`event::move_batch`).
@@ -147,6 +156,29 @@ fn doomed<L: Layout>(s: &State<L>, t: &GameTable) -> Doomed<L> {
     .fold(Bitboard::EMPTY, |away, zone| away | s.in_zone(zone));
     let tokens = (away & L::TOKEN_POOL).filter(|slot| s.object(slot).is_token());
     (graveyard, tokens, legendary)
+}
+
+/// Those of `graveyard`, the permanents [`doomed`] found, that go there only because they are
+/// destroyed for lethal damage (CR 704.5g), which a regeneration shield may replace. A
+/// creature with toughness 0 is put into its owner's graveyard and not destroyed
+/// ([CR 704.5f](https://yawgatog.com/resources/magic-rules/#R7045f)), and neither is an
+/// Aura attached to nothing or a planeswalker with no loyalty, so no shield saves them.
+/// Only a game with a shield asks, so [`doomed`], which every check calls, reads no more.
+fn destroyed_for_damage<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    graveyard: Bitboard<L::Slot>,
+) -> Bitboard<L::Slot> {
+    let aura = t.subtypes().has(Subtype::Aura);
+    graveyard.filter(|slot| {
+        let (d, o) = (s.derived(slot), s.object(slot));
+        let lethal = d.types.contains(Types::CREATURE)
+            && d.toughness > 0
+            && i16::from(o.damage()) >= i16::from(d.toughness);
+        let unattached = o.attached_to().is_none() && aura.of(d.subtypes);
+        let no_loyalty = d.types.contains(Types::PLANESWALKER) && o.counters().loyalty == 0;
+        lethal && !unattached && !no_loyalty
+    })
 }
 
 /// The Equipment attached to a permanent that may not be equipped by it
