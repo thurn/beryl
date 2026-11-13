@@ -31,9 +31,9 @@ implemented cards need.
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Layers              | A static ability affects its own permanent or the one it is attached to; the card table refuses any other set. Layers 2, 4, 6, 7a and 7c. Timestamps order everything. | Sets chosen by a filter, layers 3, 5, 7b and 7d, ability removal, CR 613.6 and 613.8, a permanent "as it would exist"     |
 | Replacement effects | Five cases, each written by hand: three ways to enter tapped, "exile it instead" on one object, and a draw replaced by winning or losing                               | One pipeline for moves, draws, damage and destruction, with the ordering choice of CR 616.1 and replacements outside play |
-| Triggers            | 11 kinds of event in a `u16` mask. "Dies" matches only "when this dies". Only permanents and emblems listen.                                                           | Look-back for anything leaving, state triggers, abilities that work in a graveyard or on the stack                        |
+| Triggers            | 9 kinds of event in a `u16` set. "Dies" matches only "when this dies". Only permanents and emblems listen.                                                             | Look-back for anything leaving, state triggers, abilities that work in a graveyard or on the stack                        |
 | Characteristics     | Layer results exist for permanents. Everywhere else an object has its printed values.                                                                                  | A color or an ability given to cards in every zone; characteristic-defining abilities read in every zone                  |
-| Copies              | A token whose `card` is the copied definition, with one exception flag (`ObjectFlags::ONE_ONE`)                                                                        | A card that is a copy, exceptions that are copied in turn, copies with a duration, copies of spells                       |
+| Copies              | A token whose `card` is the copied definition, with one exception flag (`Flag::OneOne`)                                                                                | A card that is a copy, exceptions that are copied in turn, copies with a duration, copies of spells                       |
 | Rule changes        | Two things governed (casting spells, activating loyalty abilities) at two timings                                                                                      | Cost increases, reductions and floors, "can't" effects keyed on a chosen name, permissions for a class of cards           |
 | Mana                | Six counts in a pool                                                                                                                                                   | Mana that remembers what it may be spent on and what it does to the spell                                                 |
 | Objects             | One slot is one card or token. Abilities on the stack have no identity. Every permanent is in the battlefield list.                                                    | Abilities as targets, one permanent made of several cards, permanents that are treated as though they don't exist         |
@@ -135,10 +135,11 @@ this document.
 
 ### 1. Events and listeners
 
-- **Kinds.** The listener mask is a `u16` with eleven kinds, two of which are
-  not events (`RULE_CHANGE`, `DRAW_REPLACEMENT`). It becomes a typed set of 64
-  kinds for triggers and a second for replacements, so a replacement's gate is
-  its own AND.
+- **Kinds.** What something listens to is `Listens`, a typed set over a `u16`:
+  the nine events of `EventKind` and two bits that are not events
+  (`RULE_CHANGE`, `DRAW_REPLACEMENT`). It becomes a typed set of 64 kinds for
+  triggers and a second for replacements, so a replacement's gate is its own
+  AND.
 - **Abilities outside the battlefield** (CR 113.6). An ability says where it
   works, defaulting from its kind. `GameTable` records, for each card, the zones
   other than the battlefield in which some ability of it works. The state keeps
@@ -340,7 +341,7 @@ are built with their first card.
   bit by `State::card_behind` and restored by the zone move. The additions and
   the copy's duration are a layer 1 entry of the Effects store. The copy
   mutators keep the fields equal to what layer 1 gives, and an invariant checks
-  it. `ObjectFlags::ONE_ONE` becomes an addition.
+  it. `Flag::OneOne` becomes an addition.
 - **Entering as a copy** is a replacement of the class CR 616.1c names. The
   choice is not a target. The other replacements of entering are then found
   against the copy.
