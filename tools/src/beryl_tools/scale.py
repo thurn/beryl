@@ -23,9 +23,14 @@ clocks are (`clock.Clock`: wall time over the load beyond the cores and the spee
 CPU-seconds beside each are what scales with machines. With `--assert`, a measure over its
 budget makes the run exit non-zero. A budget missed after three recorded attempts holds that
 measure to its recorded value plus 10% instead, naming the follow-up bead that owns it.
+`--assert-memory` asserts only the largest compiler process, which the machine's load does not
+move.
 
 The rehearsal holds the machine for minutes, so it runs in the nightly (nightly.py), never in a
-check: no check asserts a time. It then prints what scripts cost (plan K24): the seconds
+check. The nightly passes `--assert-memory`, not `--assert`: the times have margins of a few
+seconds and the nightly shares the machine with other sessions, so asserting them would file
+Steward beads for a busy night. They are printed in the nightly's log, and `--assert` is for a
+rehearsal on a quiet machine. It then prints what scripts cost (plan K24): the seconds
 `beryl_cli script-check` takes to play every spec moment of each pooled card from both seats,
 per card and extrapolated to the N clones, reported with no bar.
 """
@@ -164,9 +169,13 @@ def shown(value: float, unit: str) -> str:
     return f"{value / GIB:.2f} GiB" if unit == "B" else f"{value:.1f} s"
 
 
-def missed(values: dict[str, float]) -> list[str]:
-    """The measures over their limits."""
-    return [name for name, value in values.items() if value > BUDGETS[name].limit]
+def missed(values: dict[str, float], times: bool = True) -> list[str]:
+    """The measures over their limits; with `times` false, only those in bytes."""
+    return [
+        name
+        for name, value in values.items()
+        if value > BUDGETS[name].limit and (times or BUDGETS[name].unit == "B")
+    ]
 
 
 def report(
@@ -341,8 +350,8 @@ def scale(args: argparse.Namespace) -> int:
     if not args.no_scripts:
         print("scale: script checks", file=sys.stderr)
         print(script_report(measure_scripts(pool), pool, args.cards))
-    over = missed(measures(runs))
-    if args.assert_ and over:
+    over = missed(measures(runs), times=args.assert_)
+    if (args.assert_ or args.assert_memory) and over:
         print(f"scale: over budget: {', '.join(over)}", file=sys.stderr)
         return 1
     return 0
@@ -367,6 +376,11 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         dest="assert_",
         action="store_true",
         help="exit non-zero when a measure misses its budget",
+    )
+    p.add_argument(
+        "--assert-memory",
+        action="store_true",
+        help="exit non-zero only when the largest compiler process misses its budget",
     )
     p.add_argument(
         "--no-scripts",

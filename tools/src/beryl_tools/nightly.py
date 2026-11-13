@@ -3,7 +3,7 @@ agent (`just nightly-install`): today, removing the cache folders of checkouts t
 (`by prune-caches`), coverage of origin/staging (`by coverage`), the checks' verdicts the fast
 check orders by (`by ci-history`), every card's spec (`by specs --check`, the sweep the tests
 sample), the fuzz (`just fuzz`: engine and session games at length, the script checks on
-throughout), the scale rehearsal at 50,000 cards held to its budgets (`by scale --assert`), the
+throughout), the scale rehearsal at 50,000 cards held to its memory budget (`by scale --assert-memory`), the
 stage's verbs held to their own values in a stepped capture (`by motion`) and
 every card scenario in the oracles (`by oracle`, which slow CI plays only some of). It costs no
 agent tokens and needs no session open. Its record is this machine's,
@@ -118,15 +118,17 @@ def fuzz_step(commit: str, out: IO[str]) -> int:
 
 
 def scale_step(commit: str, out: IO[str]) -> int:
-    """The scale rehearsal at 50,000 cards with its budgets asserted (`by scale --assert`,
-    scale.py) on `commit` at low priority: minutes of the whole machine, which no check may
-    take. Its outcome goes to the run log as `scale:rehearsal`."""
+    """The scale rehearsal at 50,000 cards (`by scale`, scale.py) on `commit` at low priority:
+    minutes of the whole machine, which no check may take. It fails on a build that breaks or
+    a compiler process over its memory budget, not on the times, which other sessions' load
+    moves past their margins (scale.py). Its outcome goes to the run log as
+    `scale:rehearsal`."""
     from . import runlog  # It imports this module.
 
     run = runlog.Run("nightly", commit, place="nightly")
     began = time.monotonic()
     with run.step(dict(os.environ)) as (env, results):
-        command = [sys.executable, "-m", "beryl_tools.cli", "scale", "--assert"]
+        command = [sys.executable, "-m", "beryl_tools.cli", "scale", "--assert-memory"]
         code = coverage.in_tree(commit, system.utility(command), out, env)
         run.log("scale", "rehearsal", code == 0, time.monotonic() - began, results)
     return code

@@ -120,6 +120,15 @@ def test_a_measure_over_its_budget_is_missed() -> None:
     assert "MISSED" in scale.report(2000, 4, False, 41, runs(61.0))
 
 
+def test_the_nightly_holds_only_memory_which_load_does_not_move() -> None:
+    slow = runs(61.0)
+    assert scale.missed(scale.measures(slow), times=False) == []
+    slow["release build"].rss = 5 * 2**30
+    assert scale.missed(scale.measures(slow), times=False) == [
+        "largest compiler process"
+    ]
+
+
 def test_card_seconds_sum_each_cards_checks_and_skip_recordings() -> None:
     lines = [
         '{"check": "script:counterspell/start/yours", "outcome": "pass", "seconds": 0.5}',
