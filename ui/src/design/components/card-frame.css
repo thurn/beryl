@@ -460,7 +460,9 @@
   display: block;
   aspect-ratio: auto;
   padding: 0;
-  border-radius: 0 0 50% 50% / 0 0 18% 18%;
+  /* Top corners match the card frame radius so the scan's white card border
+     doesn't poke out; the bottom keeps the plate's curve. */
+  border-radius: 4.75% 4.75% 50% 50% / 3.5% 3.5% 18% 18%;
   overflow: hidden;
   background: #0b0a09;
 }
