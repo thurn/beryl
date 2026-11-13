@@ -5,7 +5,7 @@
 // is glow.ts's, which the browser checks see.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { flaresOf, SETTLE, STREAK } from "../src/stage/flare.ts";
+import { flaresOf, SETTLE, STREAK, TRAIL } from "../src/stage/flare.ts";
 import { lightOf as layered, sought, widthOf } from "../src/stage/light.ts";
 import { wayOf } from "../src/stage/lines.ts";
 import { move, object, recorder, stage, view } from "./stage-table.mjs";
@@ -161,7 +161,10 @@ test("an attacker's wedge pops out of its leading edge, and turns gold once bloc
     );
     assert.ok(Math.abs(settled.size.x - 50) < 1e-6, "as wide as its card");
     assert.equal(settled.warm, 0);
-    assert.equal(wedge(2080, { blocked: 2000 }).warm, 0.5);
+    // Gold within a frame of its block (Arena 22:21.10).
+    const turning = wedge(2010, { blocked: 2000 }).warm;
+    assert.ok(turning > 0 && turning < 1);
+    assert.equal(wedge(2033, { blocked: 2000 }).warm, 1);
     assert.equal(wedge(3000, { blocked: 2000 }).warm, 1);
     // A layout whose attackers wear no mark draws none (the phone's).
     const bare = { ...reach, ahead: 0 };
@@ -348,8 +351,8 @@ test("a creature's mark of combat begins as the stage first draws it fighting", 
     // Blocked, it turns gold from the tick that shows it so.
     made.play(fighting({ ...attacks, blocked: true }), { beats: [] });
     made.clock.advance(0);
-    made.clock.advance(80);
-    assert.equal(scenes.at(-1).under.glints[0].warm, 0.5);
+    made.clock.advance(40);
+    assert.equal(scenes.at(-1).under.glints[0].warm, 1);
     // The stage taken off its surface paints no more on it.
     made.unmount(surface);
     assert.equal(scenes.at(-1), undefined);
@@ -425,4 +428,41 @@ test("mana in flight is a ribbon of its color, and what lands bursts and is gone
     assert.ok(beam(240).size.x < beam(60).size.x / 2, "it thins to a streak");
     assert.ok(beam(60).gain > beam(240).gain && beam(299).gain < 0.01);
     assert.ok(landed("beam", 60, 300).dots.length > 0, "with sparks behind it");
+});
+
+test("a dashing creature leaves a trail of light back along its way", () => {
+    // Arena's dash draws a white streak behind the card, widest at it (35:35.30).
+    const [now, was] = [card(0, 0), card(0, 400)];
+    const trail = (age, past = was) =>
+        flaresOf(
+            layered(0, [], []),
+            [],
+            [{ name: "trail", reach: now, was: past, age, span: 150 }],
+        ).over.ribbons;
+    const [ribbon] = trail(0);
+    assert.deepEqual(ribbon.curve[0], now.middle, "it starts at the card");
+    assert.deepEqual(
+        ribbon.curve[2],
+        was.middle,
+        "and runs back to where it was",
+    );
+    assert.equal(ribbon.cut, "beam", "narrowing behind it");
+    assert.equal(ribbon.wide, 70 * TRAIL.wide, "of its longer half");
+    assert.ok(trail(100)[0].gain < ribbon.gain, "and fades");
+    // A card that has hardly moved leaves none.
+    assert.deepEqual(trail(0, card(0, 10)), []);
+});
+
+test("a striking creature's wedge leans with its card", () => {
+    // Arena's chevron stays on its card's edge as the card leans (35:35.05).
+    const leaning = { ...card(0, 500), lean: 90 };
+    const [wedge] = lightOf(
+        5000,
+        [],
+        [{ reach: leaning, fights: "attacks", since: 0 }],
+    ).glints;
+    // Turned a quarter clockwise, its leading edge, up the stage, now faces right.
+    assert.ok(Math.abs(wedge.up.x - 1) < 1e-9 && Math.abs(wedge.up.y) < 1e-9);
+    assert.ok(Math.abs(wedge.at.x - (50 + 70)) < 1e-9);
+    assert.ok(Math.abs(wedge.at.y - 570) < 1e-9);
 });

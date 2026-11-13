@@ -14,7 +14,13 @@ import {
   type EffectSurface,
   type On,
 } from "./effects.ts";
-import { FLARES, flaresOf, type LitFlare, type LitStreak } from "./flare.ts";
+import {
+  FLARES,
+  flaresOf,
+  TRAIL,
+  type LitFlare,
+  type LitStreak,
+} from "./flare.ts";
 import type { Name, Resting } from "./layout.ts";
 import { lightOf, type Fighter, type Lit, type LitLine } from "./light.ts";
 import { shapeOf, wayOf, type Reach } from "./lines.ts";
@@ -162,7 +168,10 @@ export class Overlay {
       .under(now, FLARES)
       .flatMap(({ on, name, age, span }): LitFlare[] => {
         const reach = this.#reach(on, now);
-        return reach ? [{ name, reach, age, span }] : [];
+        // A trail runs back to where its card was a moment ago (flare.ts `TRAIL`).
+        const was =
+          name === "trail" ? this.#reach(on, now - TRAIL.lag) : undefined;
+        return reach ? [{ name, reach, age, span, was }] : [];
       });
     return flaresOf(lightOf(now, lit, fighters), streaks, flares);
   }

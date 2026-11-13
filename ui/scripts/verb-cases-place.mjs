@@ -308,9 +308,10 @@ export const CASES = {
                 if (small >= STRIKE.small.from) {
                     assert.ok(
                         over > 0.4 * bite &&
-                            // Half way through, it now stays on what it struck
-                            // (STRIKE.stay), so it is seen at its blow, to 1% of a width.
-                            (over < bite + 0.01 * lay.width ||
+                            // Half way through, it stays on what it struck (STRIKE.stay),
+                            // so it is seen at its blow: to 3% of the bite, as this
+                            // measures a card's length by CARD_ASPECT, not the layout's.
+                            (over < bite * 1.03 + 0.5 ||
                                 along < STRIKE.least * lay.width + 0.5),
                         `${what}: at the blow they overlap ${over} of a width ${lay.width}`,
                     );

@@ -26,6 +26,9 @@ export interface Reach {
   round: boolean;
   toward: -1 | 0 | 1;
   ahead: number;
+  /** How far its card is turned from how it lies, clockwise in degrees: a striking
+   * creature leans (tracks.ts `STRIKE.lean`), and the marks it wears lean with it. */
+  lean?: number;
 }
 
 /** A player's life total as an end of a line, its art lying from `corner` about `middle`
@@ -68,6 +71,7 @@ export const reachOfCard = (
   round: false,
   toward: resting.object?.controller === "opponent" ? 1 : -1,
   ahead: layout.chevron * pose.width,
+  ...(pose.turn ? { lean: pose.turn } : {}),
 });
 
 /** A line as it is drawn at one stage time: its path in stage pixels, and where it leaves

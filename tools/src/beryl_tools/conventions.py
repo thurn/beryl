@@ -71,10 +71,10 @@ VALUES = ("duration", "delay", "stagger", "curve")
 # What the stage plays an effect with: a duration of null is its step's.
 EFFECT_VALUES = ("duration", "delay", "curve")
 # Where an effect is drawn against the card it is on, which end of its step begins it (or the
-# blow of a strike, part of the way through), and what it is on when that is not what its step
+# blow or the dash of a strike, part of the way through), and what it is on when that is not what its step
 # is about.
 LAYERS = ("under", "over")
-WHENS = ("start", "end", "blow")
+WHENS = ("start", "end", "blow", "dash")
 ONS = ("struck", "source")
 
 MOTION: Path = paths.REPO / "data" / "arena-motion.json"
@@ -383,6 +383,7 @@ WHEN_WORDS = {
     "start": "as it begins",
     "end": "as it ends",
     "blow": "as its blow lands",
+    "dash": "as it dashes",
 }
 
 

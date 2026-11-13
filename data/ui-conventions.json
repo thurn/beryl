@@ -211,6 +211,30 @@
       }
     },
     {
+      "kind": "exception",
+      "number": 9,
+      "name": "Attack lines to the player",
+      "rule": "While the defending player controls a planeswalker, each unblocked attacker has a line to what it attacks, the player included, so that which one it attacks can be read. Arena draws a line only to a planeswalker attacked; an attack on the player has only its chevron.",
+      "reports": [
+        "by-922",
+        "by-m0wf",
+        "by-986a"
+      ],
+      "arena": {
+        "does": "An attacker at a planeswalker has a thin red line to it; an attacker at the player has none, only its chevron.",
+        "evidence": [
+          {
+            "recording": "UrGalw_f35w",
+            "time": "48:56.6"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "22:16.53"
+          }
+        ]
+      }
+    },
+    {
       "kind": "settled",
       "name": "Tokens",
       "rule": "They appear at their slot; they do not fly out of their source.",
@@ -1627,6 +1651,11 @@
           "effect": "shake",
           "when": "blow",
           "on": "struck"
+        },
+        {
+          "effect": "trail",
+          "when": "dash",
+          "on": "source"
         }
       ]
     },
@@ -2189,6 +2218,16 @@
       "layer": "over",
       "values": {
         "duration": 170,
+        "delay": null,
+        "curve": "linear"
+      }
+    },
+    {
+      "name": "trail",
+      "shows": "A streak of white light behind a creature as it dashes at what it strikes, widest at the card and thinning behind it, about as long as the card goes in a few frames, gone as the blow lands.",
+      "layer": "over",
+      "values": {
+        "duration": 150,
         "delay": null,
         "curve": "linear"
       }

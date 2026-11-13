@@ -388,11 +388,15 @@ function fighterLight(scene: Scene, fighter: Fighter, now: number) {
   if (reach.toward === 0) return;
   const k = sized(reach);
   const age = now - since;
+  // Its marks lean with its card, about the card's middle, as Arena's chevron stays with
+  // its striking card (`IEXcjBn3BXk 35:35.05`).
+  const turn = ((reach.lean ?? 0) * Math.PI) / 180;
+  const [cos, sin] = [Math.cos(turn), Math.sin(turn)];
+  const up = { x: -sin * reach.toward || 0, y: cos * reach.toward };
   const edge = {
-    x: reach.middle.x,
-    y: reach.middle.y + reach.toward * reach.half.y,
+    x: reach.middle.x + up.x * reach.half.y,
+    y: reach.middle.y + up.y * reach.half.y,
   };
-  const up = { x: 0, y: reach.toward };
   if (fights === "blocks") {
     // Arena's is a dome of gold light over the blocker's edge that faces its attacker: a
     // card's width and a little more across, about a fifth of a width tall, its chord about
@@ -402,7 +406,10 @@ function fighterLight(scene: Scene, fighter: Fighter, now: number) {
     const open = mix(0.85, 1, outCubic(age / 120));
     scene.glints.push({
       kind: "crescent",
-      at: { x: edge.x, y: edge.y + reach.toward * 0.16 * reach.half.x },
+      at: {
+        x: edge.x + up.x * 0.16 * reach.half.x,
+        y: edge.y + up.y * 0.16 * reach.half.x,
+      },
       up,
       size: {
         x: reach.half.x * 1.1 * open,
@@ -410,7 +417,7 @@ function fighterLight(scene: Scene, fighter: Fighter, now: number) {
       },
       tone: "gold",
       warm: 1,
-      gain: clamp(age / 40) * (0.6 + 0.95 * Math.exp(-age / 210)),
+      gain: clamp(age / 40) * (0.85 + 0.8 * Math.exp(-age / 210)),
       ring: 0,
     });
     return;
@@ -432,11 +439,16 @@ function fighterLight(scene: Scene, fighter: Fighter, now: number) {
       y: reach.ahead * (1 + 0.15 * pop),
     },
     tone: "ember",
-    warm: blocked === undefined ? 0 : clamp(met / 160),
+    // Gold in the frame its blocker is declared, as Arena's turns as the blocker lands
+    // (`IEXcjBn3BXk 22:21.10`).
+    warm: blocked === undefined ? 0 : clamp(met / 33),
     gain: (1 + 1.3 * pop + 0.8 * Math.exp(-met / 150)) * breath,
     ring: 0,
   });
-  const tip = { x: edge.x, y: edge.y + reach.toward * reach.ahead };
+  const tip = {
+    x: edge.x + up.x * reach.ahead,
+    y: edge.y + up.y * reach.ahead,
+  };
   burst(scene.dots, tip, age - 60, "ember", 7, reach.middle.x, 0.7 * k);
 }
 

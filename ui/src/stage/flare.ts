@@ -33,6 +33,8 @@ export interface LitFlare {
   reach: Reach;
   age: number;
   span: number;
+  /** Where what it is on was `TRAIL.lag` ago, for a trail. */
+  was?: Reach;
 }
 
 /** The effects that are light: a permanent landing, mana landing on what it pays for, a
@@ -42,7 +44,13 @@ export const FLARES: ReadonlySet<string> = new Set([
   "flash",
   "beam",
   "impact",
+  "trail",
 ]);
+
+/** How the trail behind a dashing creature is drawn (Arena's, `IEXcjBn3BXk 35:35.30`, a
+ * streak of white light behind the card, widest at it): back to where the card was `lag`
+ * stage ms ago, `wide` of its longer half across at the card. */
+export const TRAIL = { lag: 70, wide: 0.55 };
 
 /** How a blow's burst plays (Arena's, filmed whole at 30 fps, `IEXcjBn3BXk 22:25.37` on a
  * blocker and `35:35.37` on a player): white-hot and about one and a half of the struck
@@ -249,12 +257,31 @@ function flecks(
 /** The light of one effect: a burst with rays about what it is on. A permanent landing
  * swells to its brightest, throws a ring and flecks, and is gone; mana landing on a spell is
  * brightest at once and spreads as it fades. */
-function flareLight(scene: Scene, { name, reach, age, span }: LitFlare) {
+function flareLight(scene: Scene, flare: LitFlare) {
+  const { name, reach, age, span } = flare;
   const share = clamp(age / (span || 1));
   const half = Math.max(reach.half.x, reach.half.y);
   const seed = hash(Math.round(reach.middle.x), Math.round(reach.middle.y));
   if (name === "beam") {
     beamLight(scene, reach, share, age);
+    return;
+  }
+  if (name === "trail") {
+    const { was } = flare;
+    if (!was) return;
+    const [a, b] = [reach.middle, was.middle];
+    if (Math.hypot(a.x - b.x, a.y - b.y) < half * 0.5) return;
+    // From the card back along its way, narrowing to nothing where it was.
+    scene.ribbons.push({
+      curve: [a, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, b],
+      from: 0,
+      to: 1,
+      cut: "beam",
+      wide: half * TRAIL.wide,
+      tone: "white",
+      gain: 1.3 * (1 - share) ** 0.8,
+      seed,
+    });
     return;
   }
   if (name === "impact") {

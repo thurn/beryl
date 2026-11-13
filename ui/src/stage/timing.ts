@@ -387,7 +387,13 @@ export function effectsOf(act: Act, table?: PlayerView): Effect[] {
   const hits = act.verb === "strike" || act.verb === "streak";
   const struck = hits ? namedBy(act.to) : undefined;
   const from = act.verb === "streak" ? act.from : undefined;
-  const source = from && from.kind !== "player" ? namedBy(from) : undefined;
+  // What a strike leaves is the creature that strikes.
+  const source =
+    act.verb === "strike"
+      ? act.source
+      : from && from.kind !== "player"
+        ? namedBy(from)
+        : undefined;
   const elsewhere: Record<string, On | undefined> = { struck, source };
   return (own.length > 0 ? own : fit).flatMap((use): Effect[] => {
     const look = looks.get(use.effect);
@@ -399,7 +405,12 @@ export function effectsOf(act: Act, table?: PlayerView): Effect[] {
         layer: look.layer,
         when: use.when === "end" ? "end" : "start",
         on,
-        into: use.when === "blow" ? STRIKE.hit : undefined,
+        into:
+          use.when === "blow"
+            ? STRIKE.hit
+            : use.when === "dash"
+              ? STRIKE.poise
+              : undefined,
         duration: look.duration ?? undefined,
         delay: use.delay ?? look.delay ?? 0,
         ease: CURVES[look.curve] ?? SNAP.ease,

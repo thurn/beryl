@@ -214,6 +214,8 @@ test("a creature's blow bursts on what it strikes and shakes the table", () => {
         [
             ["impact", "start", "opponent", STRIKE.hit],
             ["shake", "start", "opponent", STRIKE.hit],
+            // And a trail of light behind the creature as it dashes (35:35.30).
+            ["trail", "start", 1, STRIKE.poise],
         ],
     );
 });

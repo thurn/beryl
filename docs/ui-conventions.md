@@ -59,6 +59,13 @@ removes an entry; nothing else does.
    is a gold beam with a head and a crescent under the blocker, cut as combat
    damage begins (I3Te0m1bBFw 31:35.05, IEXcjBn3BXk 22:16.53, IEXcjBn3BXk
    22:22.3, IEXcjBn3BXk 35:26.0).
+9. **Attack lines to the player.** While the defending player controls a
+   planeswalker, each unblocked attacker has a line to what it attacks, the
+   player included, so that which one it attacks can be read. Arena draws a line
+   only to a planeswalker attacked; an attack on the player has only its chevron
+   (by-922, by-m0wf, by-986a). An attacker at a planeswalker has a thin red line
+   to it; an attacker at the player has none, only its chevron (UrGalw_f35w
+   48:56.6, IEXcjBn3BXk 22:16.53).
 
 ## Settled as Arena
 
@@ -512,7 +519,8 @@ stage to; Arena's measured instances are kept beside them as reference in
   of its own, seconds earlier (IEXcjBn3BXk 22:24.9, IEXcjBn3BXk 22:25.4,
   IEXcjBn3BXk 25:55.6, IEXcjBn3BXk 35:35.5, sMpAJ0HKDdg 54:54.0, sMpAJ0HKDdg
   54:57.5). Beryl: 1250 ms, 285 ms apart. Effects: impact as its blow lands (on
-  what it strikes), shake as its blow lands (on what it strikes).
+  what it strikes), shake as its blow lands (on what it strikes), trail as it
+  dashes (on what it leaves).
 - **streak.** A streak of light leaves one thing and lands on another, which
   flashes: mana from its source into the spell or ability it pays for, and
   damage from a spell or ability to what it hits. It rises out of its source's
@@ -662,6 +670,10 @@ happened, and is gone.
 - **shake.** The whole table jolts side to side and a little up and down, twice,
   each swing smaller than the last, as a creature's blow lands. Drawn over its
   card. Beryl: 170 ms, linear.
+- **trail.** A streak of white light behind a creature as it dashes at what it
+  strikes, widest at the card and thinning behind it, about as long as the card
+  goes in a few frames, gone as the blow lands. Drawn over its card. Beryl: 150
+  ms, linear.
 - **flash.** A flare of white light with rays over a spell or ability as the
   mana that pays for it lands, brightest at once, that spreads to about twice
   the card's width and is gone. Drawn over its card. Beryl: 330 ms, linear.

@@ -470,9 +470,9 @@ const inOut = (progress: number) =>
  * `poise`, `hit` and `stay` are the shares of the step by which it has reared back, begins
  * its dash, has landed and begins to draw back; `back` is how far it rears back, in its own
  * widths, `raise` how much larger it is drawn while poised and `lean` how far it leans, in
- * degrees. Beryl's cards are whole and lie close, so the blow is where the two first
- * overlap by `bite` of the striker's width and no further: what is struck stays in sight
- * under the blow, and two creatures that strike each other meet half way (enter.ts). Before
+ * degrees. The blow is where the two overlap by `bite` of the striker's width, as Arena's
+ * covers about two thirds of the blocker it lands on (IEXcjBn3BXk 22:25.37), and two
+ * creatures that strike each other meet half way (enter.ts). Before
  * a blow that is hardly any way off it still goes `least` of its width. What is much smaller
  * than the striker (a phone's small permanents and its life totals) it dives onto instead,
  * shrinking as it goes, or it would lie over the neighbours more than over what it strikes:
@@ -491,7 +491,7 @@ export const STRIKE = {
   back: 0.6,
   raise: 0.1,
   lean: 15,
-  bite: 0.38,
+  bite: 0.62,
   least: 0.3,
   small: { from: 0.7, to: 0.55, least: 0.6 },
 };
