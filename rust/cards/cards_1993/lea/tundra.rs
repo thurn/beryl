@@ -5,8 +5,7 @@
 //! ({T}: Add {W} or {U}.)
 // End of the generated card header.
 
-use crate::{names, printed};
-use beryl_card::{Ability, CardDef, ManaColor, ManaSet, card};
+use crate::prelude::*;
 
 /// Not basic, but it has both basic land types, and with them both intrinsic mana abilities
 /// ([CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056)): "An object with the land
@@ -16,62 +15,26 @@ use beryl_card::{Ability, CardDef, ManaColor, ManaSet, card};
 /// that "doesn't require a target ..., it could add mana to a player's mana pool when it
 /// resolves, it's not a loyalty ability ..., and its cost and effect don't move any card to or
 /// from a library."
-pub static CARD: CardDef = card(
-    names::TUNDRA,
-    &[printed::TUNDRA.abilities(&[
+pub static CARD: CardDef = Printed::Tundra
+    .abilities(&[
         Ability::tap_for_mana(ManaSet::one(ManaColor::White)),
         Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
-    ])],
-);
+    ])
+    .card();
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_card::{DecisionKind, TurnStep, Zone};
-    use beryl_scenario_types::{Action, Assertion, P0, Scenario};
-
-    use crate::names;
+    use crate::prelude::*;
 
     /// Tundra is not a Plains or an Island card, so it is a candidate of its own beside them.
     pub const SCENARIOS: &[Scenario] = &[Scenario::new("Tundra played beside a Plains in hand")
-        .hand(P0, &[names::TUNDRA, names::PLAINS])
+        .hand(P0, &[Card::Tundra, Card::Plains])
         .actions(&[
-            Action::Assert {
-                assertion: Assertion::Decision {
-                    player: P0,
-                    kind: DecisionKind::Priority,
-                    candidates: 3,
-                },
-            },
-            Action::PlayLand {
-                player: P0,
-                card: names::TUNDRA,
-            },
-            Action::AdvanceTo {
-                turn: 1,
-                step: TurnStep::PostcombatMain,
-            },
-            Action::Assert {
-                assertion: Assertion::Count {
-                    player: P0,
-                    zone: Zone::Battlefield,
-                    card: Some(names::TUNDRA),
-                    count: 1,
-                },
-            },
-            Action::Assert {
-                assertion: Assertion::Tapped {
-                    player: P0,
-                    card: names::TUNDRA,
-                    count: 0,
-                },
-            },
-            Action::Assert {
-                assertion: Assertion::Count {
-                    player: P0,
-                    zone: Zone::Hand,
-                    card: Some(names::PLAINS),
-                    count: 1,
-                },
-            },
+            ME.deciding(DecisionKind::Priority, 3),
+            ME.plays(Card::Tundra),
+            advance_to(1, TurnStep::PostcombatMain),
+            ME.has(Zone::Battlefield, Card::Tundra, 1),
+            ME.tapped(Card::Tundra, 0),
+            ME.has(Zone::Hand, Card::Plains, 1),
         ])];
 }

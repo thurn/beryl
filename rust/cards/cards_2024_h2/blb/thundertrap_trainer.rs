@@ -9,172 +9,86 @@
 //! of your library in a random order.
 // End of the generated card header.
 
-use crate::{names, printed};
-use beryl_card::effect::build::{you, dig};
-use beryl_card::{
-    Ability, CardDef, CastingOption, Effect, Filter, LibraryOrder, ManaCost, Taken, Trigger, Types,
-    card,
-};
+use crate::prelude::*;
 
-const NONCREATURE_NONLAND: Filter = Filter::Not(&Filter::Types(Types::CREATURE.union(Types::LAND)));
-
-/// The look, the optional reveal
+/// "Look at the top four cards of your library. You may reveal a noncreature, nonland card
+/// from among them and put it into your hand. Put the rest on the bottom of your library in a
+/// random order." The look, the optional reveal
 /// ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a)): "To reveal a card,
 /// show that card to all players for a brief time", and the rest to the bottom in a random
 /// order ([CR 401.4](https://yawgatog.com/resources/magic-rules/#R4014)): "That library's
 /// owner doesn't reveal the order in which the cards go into the library."
-static DIG: Effect = dig(
-    you(),
-    4,
-    Taken::MayReveal(NONCREATURE_NONLAND),
-    LibraryOrder::Random,
-);
-
-pub static CARD: CardDef = card(
-    names::THUNDERTRAP_TRAINER,
-    &[printed::THUNDERTRAP_TRAINER
-        .abilities(&[
-            Ability::offspring(),
-            Ability::triggered(&Trigger::ENTERS).effect(&DIG),
-        ])
-        .casting(&[CastingOption::Offspring(ManaCost::generic(4))])],
-);
+pub static CARD: CardDef = Printed::ThundertrapTrainer
+    .abilities(&[
+        Ability::offspring(),
+        Ability::triggered(&Trigger::ENTERS).effect(&dig(
+            you(),
+            4,
+            Taken::MayReveal(Filter::Not(&Filter::Types(
+                Types::CREATURE.union(Types::LAND),
+            ))),
+            LibraryOrder::Random,
+        )),
+    ])
+    .casting(&[CastingOption::Offspring(ManaCost::generic(4))])
+    .card();
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_card::{Castings, FaceIx};
+    use crate::prelude::*;
 
-    use beryl_card::{DecisionKind, TurnStep, Zone};
-
-    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
-
-    use crate::{names, props};
-
-    const TRAINER: &str = names::THUNDERTRAP_TRAINER;
-
-    const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND); 6];
-
-    const fn library(count: u8) -> Action {
-        Action::Assert {
-            assertion: Assertion::Count {
-                player: P0,
-                zone: Zone::Library,
-                card: None,
-                count,
-            },
-        }
-    }
-
-    const fn hand(count: u8) -> Action {
-        Action::Assert {
-            assertion: Assertion::Count {
-                player: P0,
-                zone: Zone::Hand,
-                card: None,
-                count,
-            },
-        }
-    }
+    const TRAINER: &str = Card::ThundertrapTrainer;
 
     /// Eight lands: no card among the top four qualifies, so nothing is asked.
-    const LANDS: &[&str] = &[names::PLAINS; 8];
+    const LANDS: &[&str] = &[Card::Plains; 8];
 
     pub const SCENARIOS: &[Scenario] = &[
         // Counterspell and Oust qualify among the top four; the Trainer takes Oust.
         Scenario::new("Thundertrap Trainer takes a spell")
             .hand(P0, &[TRAINER])
-            .permanents(P0, ISLANDS.split_at(2).0)
+            .battlefield(P0, &[Card::Island; 2])
             .library(
                 P0,
                 &[
-                    names::PLAINS,
-                    props::INSTANT,
-                    props::CREATURE,
-                    names::OUST,
-                    names::ISLAND,
+                    Card::Plains,
+                    Prop::Instant,
+                    Prop::Creature,
+                    Card::Oust,
+                    Card::Island,
                 ],
             )
-            .library(P1, &[names::PLAINS])
+            .library(P1, &[Card::Plains])
             .actions(&[
-                Action::Cast {
-                    player: P0,
-                    card: TRAINER,
-                    face: FaceIx::FRONT,
-                    costs: Castings::NONE,
-                },
-                Action::Resolve,
-                Action::Resolve,
-                Action::Answer {
-                    player: P0,
-                    kind: DecisionKind::YesNo,
-                    pick: Pick::Yes,
-                },
-                Action::Assert {
-                    assertion: Assertion::Decision {
-                        player: P0,
-                        kind: DecisionKind::ChooseObject,
-                        candidates: 2,
-                    },
-                },
-                Action::Answer {
-                    player: P0,
-                    kind: DecisionKind::ChooseObject,
-                    pick: Pick::Card { card: names::OUST },
-                },
-                Action::Assert {
-                    assertion: Assertion::Count {
-                        player: P0,
-                        zone: Zone::Hand,
-                        card: Some(names::OUST),
-                        count: 1,
-                    },
-                },
-                library(4),
+                ME.casts(TRAINER),
+                Resolve,
+                Resolve,
+                ME.yes(),
+                ME.deciding(DecisionKind::ChooseObject, 2),
+                ME.picks(Card::Oust),
+                ME.has(Zone::Hand, Card::Oust, 1),
+                ME.has_cards(Zone::Library, 4),
                 // The fifth card, below the four, is on top now.
-                Action::AdvanceTo {
-                    turn: 3,
-                    step: TurnStep::PrecombatMain,
-                },
-                Action::Assert {
-                    assertion: Assertion::Count {
-                        player: P0,
-                        zone: Zone::Hand,
-                        card: Some(names::ISLAND),
-                        count: 1,
-                    },
-                },
+                advance_to(3, TurnStep::PrecombatMain),
+                ME.has(Zone::Hand, Card::Island, 1),
             ]),
         Scenario::new("Thundertrap Trainer finds no spell")
             .hand(P0, &[TRAINER])
-            .permanents(P0, ISLANDS.split_at(2).0)
+            .battlefield(P0, &[Card::Island; 2])
             .library(P0, LANDS)
             .actions(&[
-                Action::Cast {
-                    player: P0,
-                    card: TRAINER,
-                    face: FaceIx::FRONT,
-                    costs: Castings::NONE,
-                },
-                Action::Resolve,
-                Action::Assert {
-                    assertion: Assertion::Stack { count: 1 },
-                },
-                Action::Resolve,
-                library(8),
-                hand(0),
-                Action::Assert {
-                    assertion: Assertion::Controls {
-                        player: P0,
-                        card: TRAINER,
-                        count: 1,
-                    },
-                },
+                ME.casts(TRAINER),
+                Resolve,
+                stack(1),
+                Resolve,
+                ME.has_cards(Zone::Library, 8),
+                ME.has_cards(Zone::Hand, 0),
+                ME.controls(TRAINER, 1),
             ]),
         // Offspring paid: two enters triggers, ordered by their controller; the 1/1 token copy
         // has the look of its own, but not offspring's.
         Scenario::new("Thundertrap Trainer with offspring")
             .hand(P0, &[TRAINER])
-            .permanents(P0, ISLANDS)
+            .battlefield(P0, &[Card::Island; 6])
             .library(P0, LANDS)
             .actions(&[
                 Action::Cast {
@@ -183,46 +97,19 @@ pub mod scenarios {
                     face: FaceIx::FRONT,
                     costs: Castings::only(0),
                 },
-                Action::Resolve,
-                Action::Answer {
-                    player: P0,
-                    kind: DecisionKind::TriggerOrder,
-                    pick: Pick::Card { card: TRAINER },
-                },
-                Action::Assert {
-                    assertion: Assertion::Stack { count: 2 },
-                },
-                Action::Resolve,
-                Action::Resolve,
+                Resolve,
+                ME.chooses(DecisionKind::TriggerOrder, TRAINER),
+                stack(2),
+                Resolve,
+                Resolve,
                 // The token's own enters trigger, if offspring's resolved last; otherwise the look.
-                Action::Resolve,
-                Action::Assert {
-                    assertion: Assertion::Stack { count: 0 },
-                },
-                Action::Assert {
-                    assertion: Assertion::Pt {
-                        player: P0,
-                        card: TRAINER,
-                        token: true,
-                        power: 1,
-                        toughness: 1,
-                    },
-                },
-                Action::Assert {
-                    assertion: Assertion::Pt {
-                        player: P0,
-                        card: TRAINER,
-                        token: false,
-                        power: 1,
-                        toughness: 2,
-                    },
-                },
-                library(8),
-                hand(0),
-                Action::AdvanceTo {
-                    turn: 1,
-                    step: TurnStep::End,
-                },
+                Resolve,
+                stack(0),
+                ME.token_pt(TRAINER, 1, 1),
+                ME.pt(TRAINER, 1, 2),
+                ME.has_cards(Zone::Library, 8),
+                ME.has_cards(Zone::Hand, 0),
+                advance_to(1, TurnStep::End),
             ]),
     ];
 }

@@ -6,11 +6,7 @@
 //! seven cards. You untap up to six lands.
 // End of the generated card header.
 
-use crate::{names, printed};
-use beryl_card::effect::build::{
-    each_player, this, you, draw, exile, sequence, shuffle_into, untap_up_to,
-};
-use beryl_card::{Ability, CardDef, Effect, Filter, Objects, Types, Zone, card};
+use crate::prelude::*;
 
 /// The instructions in order ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)):
 /// "The controller of the spell or ability follows its instructions in the order written."
@@ -23,132 +19,94 @@ use beryl_card::{Ability, CardDef, Effect, Filter, Objects, Types, Zone, card};
 /// draws seven in turn order ([CR 101.4](https://yawgatog.com/resources/magic-rules/#R1014)).
 ///
 /// "Up to six lands" are any lands, whoever controls them.
-static SPIRAL: Effect = sequence(&[
-    exile(this()),
-    shuffle_into(
-        each_player(),
-        Objects::CardsIn {
-            players: &each_player(),
-            zones: &[Zone::Hand, Zone::Graveyard],
-        },
-    ),
-    draw(each_player(), 7),
-    untap_up_to(
-        you(),
-        6,
-        Objects::All {
-            zone: Zone::Battlefield,
-            filter: Filter::Types(Types::LAND),
-        },
-    ),
-]);
-
-pub static CARD: CardDef = card(
-    names::TIME_SPIRAL,
-    &[printed::TIME_SPIRAL.abilities(&[Ability::spell().effect(&SPIRAL)])],
-);
+pub static CARD: CardDef = Printed::TimeSpiral
+    .abilities(&[Ability::spell().effect(&sequence(&[
+        exile(this()),
+        shuffle_into(
+            each_player(),
+            Objects::CardsIn {
+                players: &each_player(),
+                zones: &[Zone::Hand, Zone::Graveyard],
+            },
+        ),
+        draw(each_player(), 7),
+        untap_up_to(
+            you(),
+            6,
+            Objects::All {
+                zone: Zone::Battlefield,
+                filter: Filter::Types(Types::LAND),
+            },
+        ),
+    ]))])
+    .card();
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_card::DecisionKind;
-    use beryl_card::Seat;
-    use beryl_card::Zone;
-
-    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
-
-    use crate::names;
+    use crate::prelude::*;
 
     /// Six lands to cast it with, all tapped by the casting.
-    const SIX_LANDS: &[Permanent] = &[
-        Permanent::new(names::ISLAND),
-        Permanent::new(names::ISLAND),
-        Permanent::new(names::PLAINS),
-        Permanent::new(names::PLAINS),
-        Permanent::new(names::PLAINS),
-        Permanent::new(names::PLAINS),
+    const SIX_LANDS: &[&str] = &[
+        Card::Island,
+        Card::Island,
+        Card::Plains,
+        Card::Plains,
+        Card::Plains,
+        Card::Plains,
     ];
-
-    const fn count(player: Seat, zone: Zone, card: Option<&'static str>, count: u8) -> Action {
-        Action::assert(Assertion::Count {
-            player,
-            zone,
-            card,
-            count,
-        })
-    }
-
-    const fn tapped(player: Seat, card: &'static str, count: u8) -> Action {
-        Action::assert(Assertion::Tapped {
-            player,
-            card,
-            count,
-        })
-    }
-
-    const fn untap(card: &'static str) -> Action {
-        Action::answer(P0, DecisionKind::ChooseUpTo, Pick::Card { card })
-    }
 
     /// P1's tapped Tundra is a land P0 may untap too. Interchangeable lands are one choice each
     /// time: after two Islands no Island is left to offer.
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("Time Spiral: exiled, the wheel, and chosen lands untapped")
-            .permanents(P0, SIX_LANDS)
-            .hand(P0, &[names::TIME_SPIRAL, names::ISLAND])
-            .graveyard(P0, &[names::PLAINS])
-            .library(P0, &[names::ISLAND; 6])
-            .permanents(P1, &[Permanent::new(names::TUNDRA).tapped()])
-            .hand(P1, &[names::PLAINS])
-            .graveyard(P1, &[names::ISLAND])
-            .library(P1, &[names::PLAINS; 6])
+            .battlefield(P0, SIX_LANDS)
+            .hand(P0, &[Card::TimeSpiral, Card::Island])
+            .graveyard(P0, &[Card::Plains])
+            .library(P0, &[Card::Island; 6])
+            .permanents(P1, &[Permanent::new(Card::Tundra).tapped()])
+            .hand(P1, &[Card::Plains])
+            .graveyard(P1, &[Card::Island])
+            .library(P1, &[Card::Plains; 6])
             .actions(&[
-                Action::cast(P0, names::TIME_SPIRAL),
-                Action::assert(Assertion::Decision {
-                    player: P0,
-                    kind: DecisionKind::ChooseUpTo,
-                    candidates: 4,
-                }),
-                untap(names::ISLAND),
-                untap(names::ISLAND),
-                Action::assert(Assertion::Decision {
-                    player: P0,
-                    kind: DecisionKind::ChooseUpTo,
-                    candidates: 3,
-                }),
-                untap(names::PLAINS),
-                Action::answer(P0, DecisionKind::ChooseUpTo, Pick::Done),
-                tapped(P0, names::ISLAND, 0),
-                tapped(P0, names::PLAINS, 3),
-                tapped(P1, names::TUNDRA, 1),
-                count(P0, Zone::Exile, Some(names::TIME_SPIRAL), 1),
-                count(P0, Zone::Graveyard, None, 0),
-                count(P0, Zone::Hand, None, 7),
-                count(P0, Zone::Library, None, 1),
-                count(P1, Zone::Graveyard, None, 0),
-                count(P1, Zone::Hand, None, 7),
-                count(P1, Zone::Library, None, 1),
+                ME.casts(Card::TimeSpiral),
+                ME.deciding(DecisionKind::ChooseUpTo, 4),
+                ME.picks_up_to(Card::Island),
+                ME.picks_up_to(Card::Island),
+                ME.deciding(DecisionKind::ChooseUpTo, 3),
+                ME.picks_up_to(Card::Plains),
+                ME.done_picking(),
+                ME.tapped(Card::Island, 0),
+                ME.tapped(Card::Plains, 3),
+                THEM.tapped(Card::Tundra, 1),
+                ME.has(Zone::Exile, Card::TimeSpiral, 1),
+                ME.has_cards(Zone::Graveyard, 0),
+                ME.has_cards(Zone::Hand, 7),
+                ME.has_cards(Zone::Library, 1),
+                THEM.has_cards(Zone::Graveyard, 0),
+                THEM.has_cards(Zone::Hand, 7),
+                THEM.has_cards(Zone::Library, 1),
             ]),
         Scenario::new("Time Spiral with empty graveyards: six lands untapped, any player's")
-            .permanents(P0, SIX_LANDS)
-            .hand(P0, &[names::TIME_SPIRAL])
-            .library(P0, &[names::ISLAND; 7])
-            .permanents(P1, &[Permanent::new(names::TUNDRA).tapped()])
-            .library(P1, &[names::PLAINS; 7])
+            .battlefield(P0, SIX_LANDS)
+            .hand(P0, &[Card::TimeSpiral])
+            .library(P0, &[Card::Island; 7])
+            .permanents(P1, &[Permanent::new(Card::Tundra).tapped()])
+            .library(P1, &[Card::Plains; 7])
             .actions(&[
-                Action::cast(P0, names::TIME_SPIRAL),
-                untap(names::TUNDRA),
-                untap(names::PLAINS),
-                untap(names::PLAINS),
-                untap(names::PLAINS),
-                untap(names::PLAINS),
-                untap(names::ISLAND),
+                ME.casts(Card::TimeSpiral),
+                ME.picks_up_to(Card::Tundra),
+                ME.picks_up_to(Card::Plains),
+                ME.picks_up_to(Card::Plains),
+                ME.picks_up_to(Card::Plains),
+                ME.picks_up_to(Card::Plains),
+                ME.picks_up_to(Card::Island),
                 // Six chosen: no more is asked.
-                tapped(P0, names::ISLAND, 1),
-                tapped(P0, names::PLAINS, 0),
-                tapped(P1, names::TUNDRA, 0),
-                count(P0, Zone::Graveyard, None, 0),
-                count(P0, Zone::Hand, None, 7),
-                count(P1, Zone::Hand, None, 7),
+                ME.tapped(Card::Island, 1),
+                ME.tapped(Card::Plains, 0),
+                THEM.tapped(Card::Tundra, 0),
+                ME.has_cards(Zone::Graveyard, 0),
+                ME.has_cards(Zone::Hand, 7),
+                THEM.has_cards(Zone::Hand, 7),
             ]),
     ];
 }

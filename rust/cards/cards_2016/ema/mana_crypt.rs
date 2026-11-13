@@ -7,20 +7,15 @@
 //! {T}: Add {C}{C}.
 // End of the generated card header.
 
-use crate::{names, printed};
-use beryl_card::effect::build::{
-    if_you_lose_the_flip, you, deal_damage_to, flip_coin, if_then, sequence,
-};
-use beryl_card::{Ability, CardDef, ManaColor, ManaSet, Players, Trigger, TurnStep, card};
+use crate::prelude::*;
 
 /// [CR 705.2](https://yawgatog.com/resources/magic-rules/#R7052): "If the call matches the
 /// result, the player wins the flip. Otherwise, the player loses the flip." The damage is
 /// noncombat damage from Mana Crypt, which makes its controller lose that much life
 /// ([CR 120.3a](https://yawgatog.com/resources/magic-rules/#R1203a)): "Damage dealt to a
 /// player by a source without infect causes that player to lose that much life."
-pub static CARD: CardDef = card(
-    names::MANA_CRYPT,
-    &[printed::MANA_CRYPT.abilities(&[
+pub static CARD: CardDef = Printed::ManaCrypt
+    .abilities(&[
         Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::You)).effect(&sequence(&[
             flip_coin(you()),
             if_then(if_you_lose_the_flip(), &deal_damage_to(you(), 3)),
@@ -29,86 +24,41 @@ pub static CARD: CardDef = card(
             colors: 1 << ManaColor::Colorless as u8,
             amount: 2,
         }),
-    ])],
-);
+    ])
+    .card();
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_card::{TurnStep, Zone};
-    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Scenario};
-
-    use crate::names;
+    use crate::prelude::*;
 
     /// From P1's turn 2 to P0's upkeep, where the flip's trigger waits on the stack. P0's pass
     /// resolves it: P1 has nothing to do but pass, which the engine settles silently (§7.2).
-    const TO_UPKEEP: Action = Action::AdvanceTo {
-        turn: 3,
-        step: TurnStep::Upkeep,
-    };
+    const TO_UPKEEP: Action = advance_to(3, TurnStep::Upkeep);
 
     /// The seeds are chosen so that the game's one coin flip comes out each way.
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("Mana Crypt's flip lost: 3 damage to its controller")
             .seed(LOST_SEED)
             .at(2, P1, TurnStep::PostcombatMain)
-            .permanents(P0, &[Permanent::new(names::MANA_CRYPT)])
-            .library(P0, &[names::ISLAND])
-            .actions(&[
-                TO_UPKEEP,
-                Action::pass(P0),
-                Action::assert(Assertion::Life {
-                    player: P0,
-                    life: 17,
-                }),
-                Action::assert(Assertion::Life {
-                    player: P1,
-                    life: 20,
-                }),
-            ]),
+            .battlefield(P0, &[Card::ManaCrypt])
+            .actions(&[TO_UPKEEP, ME.passes(), ME.life(17), THEM.life(20)]),
         Scenario::new("Mana Crypt's flip won: no damage")
             .seed(WON_SEED)
             .at(2, P1, TurnStep::PostcombatMain)
-            .permanents(P0, &[Permanent::new(names::MANA_CRYPT)])
-            .library(P0, &[names::ISLAND])
-            .actions(&[
-                TO_UPKEEP,
-                Action::pass(P0),
-                Action::assert(Assertion::Life {
-                    player: P0,
-                    life: 20,
-                }),
-            ]),
+            .battlefield(P0, &[Card::ManaCrypt])
+            .actions(&[TO_UPKEEP, ME.passes(), ME.life(20)]),
         // {C}{C} from Mana Crypt and {U} from an Island pay for Timetwister's {2}{U}. Neither
         // player can do anything else, so it resolves at once.
         Scenario::new("Mana Crypt's two colorless mana")
-            .permanents(
-                P0,
-                &[
-                    Permanent::new(names::MANA_CRYPT),
-                    Permanent::new(names::ISLAND),
-                ],
-            )
-            .hand(P0, &[names::TIMETWISTER])
-            .library(P0, &[names::PLAINS; 7])
-            .library(P1, &[names::PLAINS; 7])
+            .battlefield(P0, &[Card::ManaCrypt, Card::Island])
+            .hand(P0, &[Card::Timetwister])
+            .library(P0, &[Card::Plains; 7])
+            .library(P1, &[Card::Plains; 7])
             .actions(&[
-                Action::cast(P0, names::TIMETWISTER),
-                Action::assert(Assertion::Tapped {
-                    player: P0,
-                    card: names::MANA_CRYPT,
-                    count: 1,
-                }),
-                Action::assert(Assertion::Tapped {
-                    player: P0,
-                    card: names::ISLAND,
-                    count: 1,
-                }),
-                Action::assert(Assertion::Count {
-                    player: P0,
-                    zone: Zone::Graveyard,
-                    card: Some(names::TIMETWISTER),
-                    count: 1,
-                }),
+                ME.casts(Card::Timetwister),
+                ME.tapped(Card::ManaCrypt, 1),
+                ME.tapped(Card::Island, 1),
+                ME.has(Zone::Graveyard, Card::Timetwister, 1),
             ]),
     ];
 

@@ -32,6 +32,15 @@ and builders a card definition is made of.
   vocabulary constructors (`draw(you(), 1)`, `Ability::triggered(...)`). Write no
   `fn` in the definition and no `impl`. Small `const fn` helpers inside the
   `scenarios` module are fine.
+- **Write it in the house style.** One `use crate::prelude::*;` at the top and
+  one in `scenarios`. Name cards as `Card::Counterspell`, faces as
+  `Printed::Counterspell`, tokens as `Token::Clue` and props as
+  `Prop::Artifact`. A card of one face is
+  `pub static CARD: CardDef = Printed::X.abilities(&[..]).card();`. Write each
+  effect inline in `CARD`, and explain the abilities in `CARD`'s doc comment, one
+  paragraph each; name an effect as a separate `static` only when it is used
+  twice or is too long to read inline. `rust/cards/cards_2010/wwk/` has Jace,
+  the Mind Sculptor as a model.
 - **Never from Forge.** Don't read Forge's card scripts or code. The
   brief's XMage class is a reference for what the card does, never code to
   translate.
@@ -58,33 +67,42 @@ and builders a card definition is made of.
    brief, and copy their shape. For each ability in the Oracle text, find the
    vocabulary entries that say it (the brief lists the likely ones with their
    files; read the entry's doc comment there). Things that trip writers up:
-   - `printed::<CARD>` carries the mana cost, types, power and toughness, but
+   - `Printed::<Card>` carries the mana cost, types, power and toughness, but
      not keywords. Add them with `.keywords(Keywords::FLYING)`, or
      `Keywords::FLASH.union(Keywords::FLYING)` for several.
    - Instructions in one ability go in order in `sequence(&[...])`.
    - Each rule the card relies on gets a comment citing the Comprehensive Rules,
-     as a link to `https://yawgatog.com/resources/magic-rules/#R<rule without
-     dots>` and a quote of the rule's text, like the comments in the model
-     card. `just citations` checks the quotes against the pinned rules release.
+     as a reference, `[CR 118.12a]`, with the link
+     `[CR 118.12a]: https://yawgatog.com/resources/magic-rules/#R11812a` at the
+     end of the doc comment, and a quote of the rule's text, like the comments in
+     the model card. `just citations shorten <file>` turns inline links into
+     references, and `just citations` checks the quotes against the pinned rules
+     release.
 5. **Write scenarios.** The file's `scenarios` module needs hand-written
    `Scenario`s that, between them, carry out every part of every ability: each
    branch of an `if_then` or `if_else`, the inside of each `may` (answered yes)
-   and each `unless`. Each ends in `Action::assert`s on what it did. The test
+   and each `unless`. Each ends in assertions on what it did, written with the
+   `ME` and `THEM` shorthands (`ME.casts(card)`, `ME.yes()`,
+   `THEM.has(Zone::Hand, card, 1)`; `beryl_scenario_types`' `player.rs` lists
+   them all). The test
    `every_instruction_of_a_card_is_carried_out_by_its_own_scenarios` names any
    part none of them reaches. A part is only checked against XMage and Forge if
    a scenario reaches it. Copy the model card's scenarios. In scenarios:
    - Only implemented cards exist: cards with a file under `rust/cards`, or
-     complete from the store, named by `names::<CARD>`, plus the stand-ins in
-     `props::` (`props::CREATURE`, `props::ARTIFACT`, `props::EQUIPMENT`, ...).
+     complete from the store, named by `Card::<Card>`, plus the stand-ins in
+     `Prop::` (`Prop::Creature`, `Prop::Artifact`, `Prop::Equipment`, ...).
      If a scenario needs a card nobody has implemented, implement one (see
      "Cards for scenarios") rather than leave the part untested. Today only
      Island, Plains and Swamp are basic lands with files, so a card that needs
      {G} or {R} to cast cannot be cast in a scenario: escalate it with the
      mechanic "no implemented land makes {G}" (or {R}).
-   - `Action::cast` puts the spell on the stack, and each `Action::Resolve`
-     resolves the top object: a creature spell, then its enters trigger.
-   - Give each player a library with a card or two more than the scenario
-     draws, or a player loses for drawing from an empty library.
+   - `ME.casts(card)` puts the spell on the stack, and each `Resolve` resolves
+     the top object: a creature spell, then its enters trigger.
+   - A player whose library the scenario doesn't set starts with one Island.
+     Give a player who draws more than once a longer library, or they lose for
+     drawing from an empty one. `.library(P0, &[])` is an empty library.
+   - `.battlefield(P0, &[..])` takes plain card names; tapped permanents,
+     tokens and permanents with counters go in `.permanents(P0, &[..])`.
    - Generated scenarios (cast it, activate it) are added for you; they don't
      count as hand-written.
 6. **Check fast.** Run `just card check "<name>" --no-oracles` (seconds once
@@ -107,7 +125,7 @@ it. We can't wait for every card to be written before a definition has good
 tests. When a part of your card needs another card to happen (an Equipment to
 steal, a creature with a particular ability, a spell to counter):
 
-- Use a prop from `props::` if one fits.
+- Use a prop from `Prop::` if one fits.
 - Otherwise pick the simplest real card in the card store that sets the
   situation up (`just card brief` works on any card), and write it as you write
   any card, in its own file with its own scenarios, checked with
@@ -115,8 +133,8 @@ steal, a creature with a particular ability, a spell to counter):
   can play the same scenarios. Leonin Scimitar was written this way for Thieving
   Skydiver: it is in no deck. Its doc comment says that it was implemented for
   scenarios.
-- If other cards will need the same role, add it to `props::` with a doc
-  comment.
+- If other cards will need the same role, add it to `props.rs` in
+  `beryl_card_shared`, both as a constant and in `Prop`, with a doc comment.
 - Name another card in your scenario with `Scenario::interaction`, unless it is
   a prop.
 
@@ -125,7 +143,7 @@ steal, a creature with a particular ability, a spell to counter):
 - `build` fails: a type or name error. Read the vocabulary entry's signature in
   its file.
 - `beryl` fails with `UnknownCard("<name>")`: a scenario uses a card that is not
-  implemented. Use another card or a `props::` stand-in.
+  implemented. Use another card or a `Prop::` stand-in.
 - `beryl` or `oracles` fails on an assertion: the definition or the scenario is
   wrong. Reread the Oracle text and rulings. If Beryl agrees with neither XMage
   nor Forge, Beryl is wrong.

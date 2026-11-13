@@ -22,8 +22,8 @@ reads where it reads it in the tree:
   the lints, edition and release profile are the tree's.
 
 A clone of card file `f` numbered `i` is `f` with its card renamed "<name> i" (each face
-"<face> i" for a card with several faces): every `names::` and `printed::` constant of the
-card and its faces becomes the clone's, so it keeps its abilities, faces and scenarios.
+"<face> i" for a card with several faces): every `names::` and `printed::` constant, and
+every `Card::` and `Printed::` one, of the card and its faces becomes the clone's, so it keeps its abilities, faces and scenarios.
 
 The crates follow the shipped grouping (data/set-groups.json: the first-printing sets of a year,
 or of a half or quarter of one, of at most 1,200 cards): with no `--crates`, there are as many as N cards make at the tree's mean
@@ -56,6 +56,8 @@ WARM = "warm"
 COPIED = ("data/catalogs.json", "rust/crates/beryl_card/src/characteristics.rs")
 # A constant a card file reads from the crate's `names` or `printed` module.
 CONSTANT: re.Pattern[str] = re.compile(r"\b(names|printed)::([A-Z0-9_]+)\b")
+# The same read from the crate's generated `Card` or `Printed` type.
+CAMEL: re.Pattern[str] = re.compile(r"\b(Card|Printed)::([A-Z][A-Za-z0-9]*)\b")
 FIRST_SET: re.Pattern[str] = re.compile(r'"first_set":"([^"]+)"')
 
 
@@ -110,15 +112,29 @@ def renames(source: Source, index: int) -> dict[str, str]:
     return out
 
 
+def camel_renames(source: Source, index: int) -> dict[str, str]:
+    """Each CamelCase constant of the card and its faces, with the clone's."""
+    out = {set_groups.camel(source.name): set_groups.camel(clone_name(source, index))}
+    for face in source.faces():
+        out[set_groups.camel(face)] = set_groups.camel(f"{face} {index}")
+    return out
+
+
 def clone(source: Source, index: int) -> str:
     """`source`'s file as clone number `index`: its own constants are the clone's."""
     table: dict[str, str] = renames(source, index)
+
+    camels: dict[str, str] = camel_renames(source, index)
 
     def rename(found: re.Match[str]) -> str:
         module, constant = found.group(1), found.group(2)
         return f"{module}::{table.get(constant, constant)}"
 
-    return CONSTANT.sub(rename, source.text)
+    def rename_camel(found: re.Match[str]) -> str:
+        module, constant = found.group(1), found.group(2)
+        return f"{module}::{camels.get(constant, constant)}"
+
+    return CAMEL.sub(rename_camel, CONSTANT.sub(rename, source.text))
 
 
 def clone_record(source: Source, index: int, set_code: str) -> card_store.Json:

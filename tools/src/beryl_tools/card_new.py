@@ -37,22 +37,22 @@ Json = card_store.Json
 def definition(record: Json) -> str:
     """The source of the card's smallest definition, after its header."""
     faces = cast(list[Json], record["faces"])
-    printed = ", ".join(
-        f"printed::{set_groups.constant(str(f['name']))}" for f in faces
-    )
+    if len(faces) == 1:
+        card = f"Printed::{set_groups.camel(str(faces[0]['name']))}.card()"
+    else:
+        printed = ", ".join(
+            f"Printed::{set_groups.camel(str(f['name']))}" for f in faces
+        )
+        card = f"card(\n    Card::{set_groups.camel(str(record['name']))},\n    &[{printed}],\n)"
     return (
         "\n"
-        "use crate::{names, printed};\n"
-        "use beryl_card::{CardDef, card};\n"
+        "use crate::prelude::*;\n"
         "\n"
-        "pub static CARD: CardDef = card(\n"
-        f"    names::{set_groups.constant(str(record['name']))},\n"
-        f"    &[{printed}],\n"
-        ");\n"
+        f"pub static CARD: CardDef = {card};\n"
         "\n"
         '#[cfg(feature = "scenarios")]\n'
         "pub mod scenarios {\n"
-        "    use beryl_scenario_types::Scenario;\n"
+        "    use crate::prelude::*;\n"
         "\n"
         "    pub const SCENARIOS: &[Scenario] = &[];\n"
         "}\n"

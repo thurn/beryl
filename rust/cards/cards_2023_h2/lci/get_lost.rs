@@ -7,14 +7,7 @@
 //! Activate only as a sorcery.")
 // End of the generated card header.
 
-use crate::{names, printed};
-use beryl_card::effect::build::{
-    its_controller, target, create_tokens, destroy, explore, sequence,
-};
-use beryl_card::{
-    Ability, CardDef, Cost, CostPart, Filter, ManaCost, Players, TargetKind, TargetSpec, Types,
-    card,
-};
+use crate::prelude::*;
 
 /// "Its controller" is the permanent's controller as it was destroyed
 /// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "If an effect requires
@@ -23,23 +16,19 @@ use beryl_card::{
 /// the current information of that object if it's in the public zone it was expected to be
 /// in; if it's no longer in that zone, ... the effect uses the object's last known
 /// information."
-pub static CARD: CardDef = card(
-    names::GET_LOST,
-    &[printed::GET_LOST.abilities(&[Ability::spell()
-        .targeting(&[TargetSpec::one(
-            TargetKind::Permanent,
-            Filter::Types(
-                Types::CREATURE
-                    .union(Types::ENCHANTMENT)
-                    .union(Types::PLANESWALKER),
-            ),
-        )])
+pub static CARD: CardDef = Printed::GetLost
+    .abilities(&[Ability::spell()
+        .target(&TargetSpec::permanent(Filter::Types(
+            Types::CREATURE
+                .union(Types::ENCHANTMENT)
+                .union(Types::PLANESWALKER),
+        )))
         .effect(&sequence(&[
             destroy(target()),
             create_tokens(its_controller(), &MAP, 2),
-        ]))])],
-)
-.creating(&[&MAP]);
+        ]))])
+    .card()
+    .creating(&[&MAP]);
 
 /// The Map token's name: its subtype plus the word "Token" (CR 111.4).
 pub use crate::tokens::MAP_TOKEN;
@@ -49,194 +38,136 @@ pub use crate::tokens::MAP_TOKEN;
 /// colorless Map artifact token with "{1}, {T}, Sacrifice this token: Target creature you
 /// control explores. Activate only as a sorcery.""
 /// Explore is [CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a).
-pub static MAP: CardDef = card(
-    MAP_TOKEN,
-    &[
-        printed::token::MAP_TOKEN.abilities(&[Ability::activated(Cost::of(
-            ManaCost::generic(1),
-            &[CostPart::TAP, CostPart::SACRIFICE],
-        ))
-        .targeting(&[TargetSpec::one(
-            TargetKind::Permanent,
-            Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),
-        )])
-        .as_a_sorcery()
-        .effect(&explore(target()))]),
-    ],
-);
+pub static MAP: CardDef = Token::MapToken
+    .abilities(&[Ability::activated(Cost::of(
+        ManaCost::generic(1),
+        &[CostPart::TAP, CostPart::SACRIFICE],
+    ))
+    .target(&TargetSpec::permanent(Filter::All(&[
+        Filter::Types(Types::CREATURE),
+        Filter::Whose(&Players::You),
+    ])))
+    .as_a_sorcery()
+    .effect(&explore(target()))])
+    .card();
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_card::CounterKind;
-    use beryl_card::{DecisionKind, Seat, TurnStep, Zone};
-
-    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+    use crate::prelude::*;
 
     use super::MAP;
-    use crate::{names, props};
 
-    const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
-
-    const JACE: &str = names::JACE_THE_MIND_SCULPTOR;
+    const SPELLBINDER: &str = Card::EliteSpellbinder;
 
     const MAP_NAME: &str = MAP.name;
-
-    const THREE_PLAINS: &[Permanent] = &[
-        Permanent::new(names::PLAINS),
-        Permanent::new(names::PLAINS),
-        Permanent::new(names::PLAINS),
-    ];
-
-    const fn count(player: Seat, zone: Zone, card: &'static str, count: u8) -> Action {
-        Action::assert(Assertion::Count {
-            player,
-            zone,
-            card: Some(card),
-            count,
-        })
-    }
-
-    const fn library(top: &'static [&'static str]) -> Action {
-        Action::assert(Assertion::Library { player: P1, top })
-    }
 
     /// In P1's turn 2, P0 destroys one of P1's two Elite Spellbinders with Get Lost at instant
     /// speed; P1 then sacrifices a Map, paying {1} with their Plains, and their other Spellbinder
     /// explores the top of `top`. The Island in P1's hand keeps their priority a decision.
     const fn exploring(name: &'static str, top: &'static [&'static str]) -> Scenario {
-        const SPELLBINDERS_AND_PLAINS: &[Permanent] = &[
-            Permanent::new(SPELLBINDER),
-            Permanent::new(SPELLBINDER),
-            Permanent::new(names::PLAINS),
-        ];
         Scenario::new(name)
             .at(2, P1, TurnStep::PrecombatMain)
-            .permanents(P0, THREE_PLAINS)
-            .hand(P0, &[names::GET_LOST])
-            .library(P0, &[names::PLAINS])
-            .permanents(P1, SPELLBINDERS_AND_PLAINS)
-            .hand(P1, &[names::ISLAND])
+            .battlefield(P0, &[Card::Plains; 3])
+            .hand(P0, &[Card::GetLost])
+            .library(P0, &[Card::Plains])
+            .battlefield(P1, &[SPELLBINDER, SPELLBINDER, Card::Plains])
+            .hand(P1, &[Card::Island])
             .library(P1, top)
     }
 
-    const LET_P0_ACT: Action = Action::pass(P1);
+    const LET_P0_ACT: Action = THEM.passes();
 
-    const GET_LOST: Action = Action::cast(P0, names::GET_LOST);
+    const GET_LOST: Action = ME.casts(Card::GetLost);
 
-    const SACRIFICE_A_MAP: Action = Action::activate(P1, MAP_NAME, 0);
-
-    /// Explore ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)): "...that
-    /// permanent's controller reveals the top card of their library. If a land card is revealed
-    /// this way, that player puts that card into their hand. Otherwise, that player puts a +1/+1
-    /// counter on the exploring permanent and may put the revealed card into their graveyard." With
-    /// nothing to reveal, no land is revealed, so the creature gets the counter.
-    const fn counters(count: u8) -> Action {
-        Action::assert(Assertion::Counters {
-            player: P1,
-            card: SPELLBINDER,
-            kind: CounterKind::PlusOne,
-            count,
-        })
-    }
+    const SACRIFICE_A_MAP: Action = THEM.activates(MAP_NAME, 0);
 
     pub const SCENARIOS: &[Scenario] = &[
         // With no legal target it can't be cast
         // ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c)): P1's Mana Crypt is
         // an artifact, so passing is P0's only option.
         Scenario::new("Get Lost can't be cast without a target")
-            .permanents(P0, THREE_PLAINS)
-            .hand(P0, &[names::GET_LOST])
-            .permanents(P1, &[Permanent::new(props::ARTIFACT)])
-            .library(P1, &[names::ISLAND])
+            .battlefield(P0, &[Card::Plains; 3])
+            .hand(P0, &[Card::GetLost])
+            .battlefield(P1, &[Prop::Artifact])
             .actions(&[
-                Action::AdvanceTo {
-                    turn: 1,
-                    step: TurnStep::PrecombatMain,
-                },
-                Action::assert(Assertion::Decision {
-                    player: P0,
-                    kind: DecisionKind::Priority,
-                    candidates: 1,
-                }),
+                advance_to(1, TurnStep::PrecombatMain),
+                ME.deciding(DecisionKind::Priority, 1),
             ]),
         // Its mana cost is {1}{W}: two Plains cast it. The oracles caught it costing {1}{W}{W}.
         Scenario::new("Get Lost costs one and a white")
-            .permanents(
-                P0,
-                &[Permanent::new(names::PLAINS), Permanent::new(names::PLAINS)],
-            )
-            .hand(P0, &[names::GET_LOST, names::ISLAND])
-            .permanents(P1, &[Permanent::new(SPELLBINDER)])
-            .library(P1, &[names::ISLAND])
+            .battlefield(P0, &[Card::Plains, Card::Plains])
+            .hand(P0, &[Card::GetLost, Card::Island])
+            .battlefield(P1, &[SPELLBINDER])
             .actions(&[
-                Action::cast(P0, names::GET_LOST),
-                count(P1, Zone::Graveyard, SPELLBINDER, 1),
-                Action::assert(Assertion::Tapped {
-                    player: P0,
-                    card: names::PLAINS,
-                    count: 2,
-                }),
+                ME.casts(Card::GetLost),
+                THEM.has(Zone::Graveyard, SPELLBINDER, 1),
+                ME.tapped(Card::Plains, 2),
             ]),
         // The Island left in P0's hand keeps the game in P0's main phase once Get Lost has
         // resolved.
         Scenario::new("Get Lost on a planeswalker gives its controller two Maps")
-            .permanents(P0, THREE_PLAINS)
-            .hand(P0, &[names::GET_LOST, names::ISLAND])
-            .permanents(P1, &[Permanent::new(JACE)])
-            .library(P1, &[names::ISLAND])
+            .battlefield(P0, &[Card::Plains; 3])
+            .hand(P0, &[Card::GetLost, Card::Island])
+            .battlefield(P1, &[Card::JaceTheMindSculptor])
             .actions(&[
-                Action::cast(P0, names::GET_LOST),
-                count(P1, Zone::Graveyard, JACE, 1),
-                count(P1, Zone::Battlefield, MAP_NAME, 2),
-                count(P0, Zone::Battlefield, MAP_NAME, 0),
+                ME.casts(Card::GetLost),
+                THEM.has(Zone::Graveyard, Card::JaceTheMindSculptor, 1),
+                THEM.has(Zone::Battlefield, MAP_NAME, 2),
+                ME.has(Zone::Battlefield, MAP_NAME, 0),
             ]),
+        // Explore ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)): "...that
+        // permanent's controller reveals the top card of their library. If a land card is
+        // revealed this way, that player puts that card into their hand. Otherwise, that player
+        // puts a +1/+1 counter on the exploring permanent and may put the revealed card into
+        // their graveyard." With nothing to reveal, no land is revealed, so the creature gets
+        // the counter.
         exploring(
             "Get Lost on a creature gives two Maps; one explores a land into hand",
-            &[names::PLAINS, names::ISLAND],
+            &[Card::Plains, Card::Island],
         )
         .actions(&[
             LET_P0_ACT,
             GET_LOST,
-            count(P1, Zone::Graveyard, SPELLBINDER, 1),
-            count(P1, Zone::Battlefield, MAP_NAME, 2),
-            count(P0, Zone::Battlefield, MAP_NAME, 0),
+            THEM.has(Zone::Graveyard, SPELLBINDER, 1),
+            THEM.has(Zone::Battlefield, MAP_NAME, 2),
+            ME.has(Zone::Battlefield, MAP_NAME, 0),
             SACRIFICE_A_MAP,
-            count(P1, Zone::Battlefield, MAP_NAME, 1),
-            count(P1, Zone::Hand, names::PLAINS, 1),
-            library(&[names::ISLAND]),
-            counters(0),
+            THEM.has(Zone::Battlefield, MAP_NAME, 1),
+            THEM.has(Zone::Hand, Card::Plains, 1),
+            THEM.library_top(&[Card::Island]),
+            THEM.counters(SPELLBINDER, CounterKind::PlusOne, 0),
         ]),
         exploring(
             "A Map explores a nonland into a counter and the graveyard",
-            &[names::OUST, names::ISLAND],
+            &[Card::Oust, Card::Island],
         )
         .actions(&[
             LET_P0_ACT,
             GET_LOST,
             SACRIFICE_A_MAP,
-            Action::answer(P1, DecisionKind::YesNo, Pick::Yes),
-            counters(1),
-            count(P1, Zone::Graveyard, names::OUST, 1),
-            library(&[names::ISLAND]),
+            THEM.yes(),
+            THEM.counters(SPELLBINDER, CounterKind::PlusOne, 1),
+            THEM.has(Zone::Graveyard, Card::Oust, 1),
+            THEM.library_top(&[Card::Island]),
         ]),
         exploring(
             "A Map explores a nonland into a counter, left on top",
-            &[names::OUST, names::ISLAND],
+            &[Card::Oust, Card::Island],
         )
         .actions(&[
             LET_P0_ACT,
             GET_LOST,
             SACRIFICE_A_MAP,
-            Action::answer(P1, DecisionKind::YesNo, Pick::No),
-            counters(1),
-            count(P1, Zone::Graveyard, names::OUST, 0),
-            library(&[names::OUST, names::ISLAND]),
+            THEM.no(),
+            THEM.counters(SPELLBINDER, CounterKind::PlusOne, 1),
+            THEM.has(Zone::Graveyard, Card::Oust, 0),
+            THEM.library_top(&[Card::Oust, Card::Island]),
         ]),
         exploring("A Map explores an empty library into a counter", &[]).actions(&[
             LET_P0_ACT,
             GET_LOST,
             SACRIFICE_A_MAP,
-            counters(1),
+            THEM.counters(SPELLBINDER, CounterKind::PlusOne, 1),
         ]),
     ];
 }

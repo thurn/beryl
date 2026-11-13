@@ -5,48 +5,30 @@
 //! ({T}: Add {B}.)
 // End of the generated card header.
 
-use crate::{names, printed};
-use beryl_card::{Ability, CardDef, ManaColor, ManaSet, card};
+use crate::prelude::*;
 
 /// [CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056): "An object with the land
 /// card type and a basic land type has the intrinsic ability '{T}: Add [mana symbol],' ... for
 /// Swamps, {B}".
-pub static CARD: CardDef = card(
-    names::SWAMP,
-    &[printed::SWAMP.abilities(&[Ability::tap_for_mana(ManaSet::one(ManaColor::Black))])],
-);
+pub static CARD: CardDef = Printed::Swamp
+    .abilities(&[Ability::tap_for_mana(ManaSet::one(ManaColor::Black))])
+    .card();
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_card::Zone;
-    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Scenario};
-
-    use crate::names;
+    use crate::prelude::*;
 
     /// Two Swamps pay Damn's {B}{B}, which two Plains could not: Damn is the one card that asks
     /// for black mana.
     pub const SCENARIOS: &[Scenario] = &[Scenario::new("two Swamps pay {B}{B}")
-        .interaction(&[names::DAMN])
-        .permanents(
-            P0,
-            &[Permanent::new(names::SWAMP), Permanent::new(names::SWAMP)],
-        )
-        .hand(P0, &[names::DAMN])
-        .permanents(P1, &[Permanent::new(names::ELITE_SPELLBINDER)])
-        .library(P1, &[names::ISLAND])
+        .interaction(&[Card::Damn])
+        .battlefield(P0, &[Card::Swamp, Card::Swamp])
+        .hand(P0, &[Card::Damn])
+        .battlefield(P1, &[Card::EliteSpellbinder])
         .actions(&[
-            Action::cast(P0, names::DAMN),
-            Action::Resolve,
-            Action::assert(Assertion::Tapped {
-                player: P0,
-                card: names::SWAMP,
-                count: 2,
-            }),
-            Action::assert(Assertion::Count {
-                player: P1,
-                zone: Zone::Graveyard,
-                card: Some(names::ELITE_SPELLBINDER),
-                count: 1,
-            }),
+            ME.casts(Card::Damn),
+            Resolve,
+            ME.tapped(Card::Swamp, 2),
+            THEM.has(Zone::Graveyard, Card::EliteSpellbinder, 1),
         ])];
 }

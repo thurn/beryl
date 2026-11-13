@@ -18,8 +18,10 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   from the card store (`just card path <name>` says so), and `just card crates`
   writes the set crates.
 - Nobody types a mana cost or type line either. Each card face starts from a
-  `printed::` constant generated from the card store, and each card file's
-  header comment is generated too (`just card header`).
+  `Printed::` constant generated from the card store, and each card file's
+  header comment is generated too (`just card header`). Card files name cards
+  as `Card::Counterspell` and import everything with `use crate::prelude::*;`;
+  code outside the card files uses `beryl_cards::names`.
 - `ui/src/generated/protocol.ts` is generated from `beryl_session` by ts-rs. A
   test fails when it is out of date, and its header explains how to regenerate
   it.

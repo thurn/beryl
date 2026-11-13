@@ -9,11 +9,7 @@
 //! graveyard. Turn it face up any time for its mana cost if it's a creature card.)
 // End of the generated card header.
 
-use crate::{names, printed};
-use beryl_card::effect::build::{you, manifest_dread};
-use beryl_card::{
-    Ability, CardDef, CostPart, Filter, Keywords, Players, Trigger, TurnStep, Zone, card,
-};
+use crate::prelude::*;
 
 /// The six cards are an additional cost
 /// ([CR 118.8](https://yawgatog.com/resources/magic-rules/#R1188)): "Some spells and abilities
@@ -30,352 +26,208 @@ use beryl_card::{
 /// at that were not manifested this way into your graveyard." The ability's controller does,
 /// whether or not Oculus is still there
 /// ([CR 113.7a](https://yawgatog.com/resources/magic-rules/#R1137a)).
-pub static CARD: CardDef = card(
-    names::ABHORRENT_OCULUS,
-    &[printed::ABHORRENT_OCULUS
-        .keywords(Keywords::FLYING)
-        .abilities(&[
-            Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::EachOpponent))
-                .effect(&manifest_dread(you())),
-        ])
-        .additional_cost(&[CostPart::exile(6, Zone::Graveyard, Filter::Any)])],
-);
+pub static CARD: CardDef = Printed::AbhorrentOculus
+    .keywords(Keywords::FLYING)
+    .abilities(&[
+        Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::EachOpponent))
+            .effect(&manifest_dread(you())),
+    ])
+    .additional_cost(&[CostPart::exile(6, Zone::Graveyard, Filter::Any)])
+    .card();
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_card::{DecisionKind, TurnStep, Zone};
+    use crate::prelude::*;
 
-    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
-
-    use crate::{names, props};
-
-    const OCULUS: &str = names::ABHORRENT_OCULUS;
-
-    const SNAPCASTER: &str = names::SNAPCASTER_MAGE;
-
-    const ISLANDS: &[Permanent] = &[Permanent::new(names::ISLAND); 3];
+    const OCULUS: &str = Card::AbhorrentOculus;
 
     // Flash gives the controller a live stop on the opponent's turn, before the next draw.
-    const OCULUS_WITH_FLASH_MANA: &[Permanent] = &[
-        Permanent::new(OCULUS),
-        Permanent::new(names::ISLAND),
-        Permanent::new(names::ISLAND),
-    ];
+    const OCULUS_WITH_FLASH_MANA: &[&str] = &[OCULUS, Card::Island, Card::Island];
 
     /// Six graveyard cards and a seventh at the bottom, top first.
     const SEVEN: &[&str] = &[
-        names::COUNTERSPELL,
-        props::REMOVAL,
-        props::UNTARGETED_SPELL,
-        props::ARTIFACT,
-        names::OUST,
-        props::PLANESWALKER,
-        names::PLAINS,
+        Card::Counterspell,
+        Prop::Removal,
+        Prop::UntargetedSpell,
+        Prop::Artifact,
+        Card::Oust,
+        Prop::Planeswalker,
+        Card::Plains,
     ];
 
     /// From player 0's turn 1 to player 1's upkeep, where the manifest dread trigger waits.
-    const TO_THEIR_UPKEEP: Action = Action::AdvanceTo {
-        turn: 2,
-        step: TurnStep::Upkeep,
-    };
-
-    const fn face_down(card: &'static str, count: u8) -> Action {
-        Action::assert(Assertion::FaceDown {
-            player: P0,
-            card,
-            count,
-        })
-    }
+    const TO_THEIR_UPKEEP: Action = advance_to(2, TurnStep::Upkeep);
 
     pub const SCENARIOS: &[Scenario] = &[
         // With five cards in the graveyard the additional cost can't be paid (CR 118.3), so
         // only passing and the land are offered.
         Scenario::new("Abhorrent Oculus can't be cast with five cards in the graveyard")
-            .permanents(P0, ISLANDS)
-            .hand(P0, &[OCULUS, names::ISLAND])
+            .battlefield(P0, &[Card::Island; 3])
+            .hand(P0, &[OCULUS, Card::Island])
             .graveyard(P0, SEVEN.split_at(5).0)
-            .actions(&[Action::assert(Assertion::Decision {
-                player: P0,
-                kind: DecisionKind::Priority,
-                candidates: 2,
-            })]),
+            .actions(&[ME.deciding(DecisionKind::Priority, 2)]),
         // The cards are chosen from the bottom of the graveyard up, so the first pick says which
         // of the bottom two stays; the other five go unasked.
         Scenario::new("Abhorrent Oculus exiles six of seven graveyard cards as it's cast")
-            .permanents(P0, ISLANDS)
+            .battlefield(P0, &[Card::Island; 3])
             .hand(P0, &[OCULUS])
             .graveyard(P0, SEVEN)
             .actions(&[
-                Action::cast(P0, OCULUS),
-                Action::assert(Assertion::Decision {
-                    player: P0,
-                    kind: DecisionKind::ChooseObject,
-                    candidates: 2,
-                }),
-                Action::choose(P0, DecisionKind::ChooseObject, props::PLANESWALKER),
-                Action::assert(Assertion::Count {
-                    player: P0,
-                    zone: Zone::Graveyard,
-                    card: Some(names::PLAINS),
-                    count: 1,
-                }),
-                Action::assert(Assertion::Count {
-                    player: P0,
-                    zone: Zone::Exile,
-                    card: None,
-                    count: 6,
-                }),
-                Action::assert(Assertion::Tapped {
-                    player: P0,
-                    card: names::ISLAND,
-                    count: 3,
-                }),
-                Action::Resolve,
-                Action::assert(Assertion::Pt {
-                    player: P0,
-                    card: OCULUS,
-                    token: false,
-                    power: 5,
-                    toughness: 5,
-                }),
+                ME.casts(OCULUS),
+                ME.deciding(DecisionKind::ChooseObject, 2),
+                ME.picks(Prop::Planeswalker),
+                ME.has(Zone::Graveyard, Card::Plains, 1),
+                ME.has_cards(Zone::Exile, 6),
+                ME.tapped(Card::Island, 3),
+                Resolve,
+                ME.pt(OCULUS, 5, 5),
             ]),
         // Snapcaster Mage is manifested and Counterspell, the other card looked at, goes to the
         // graveyard. Player 0's own upkeep triggers nothing.
         Scenario::new("Abhorrent Oculus manifests dread on each opponent's upkeep only")
             .at(1, P0, TurnStep::PostcombatMain)
-            .permanents(P0, &[Permanent::new(OCULUS)])
+            .battlefield(P0, &[OCULUS])
             .library(
                 P0,
                 &[
-                    SNAPCASTER,
-                    names::COUNTERSPELL,
-                    names::ISLAND,
-                    names::ISLAND,
+                    Card::SnapcasterMage,
+                    Card::Counterspell,
+                    Card::Island,
+                    Card::Island,
                 ],
             )
-            .library(P1, &[names::PLAINS])
+            .library(P1, &[Card::Plains])
             .actions(&[
                 TO_THEIR_UPKEEP,
-                Action::assert(Assertion::Stack { count: 1 }),
-                Action::Resolve,
-                Action::assert(Assertion::Decision {
-                    player: P0,
-                    kind: DecisionKind::ChooseObject,
-                    candidates: 2,
-                }),
-                Action::choose(P0, DecisionKind::ChooseObject, SNAPCASTER),
-                face_down(SNAPCASTER, 1),
+                stack(1),
+                Resolve,
+                ME.deciding(DecisionKind::ChooseObject, 2),
+                ME.picks(Card::SnapcasterMage),
+                ME.face_down(Card::SnapcasterMage, 1),
                 // CR 708.2a: a 2/2 creature, whatever its card.
-                Action::assert(Assertion::Pt {
-                    player: P0,
-                    card: SNAPCASTER,
-                    token: false,
-                    power: 2,
-                    toughness: 2,
-                }),
-                Action::assert(Assertion::Count {
-                    player: P0,
-                    zone: Zone::Graveyard,
-                    card: Some(names::COUNTERSPELL),
-                    count: 1,
-                }),
-                Action::assert(Assertion::Library {
-                    player: P0,
-                    top: &[names::ISLAND, names::ISLAND],
-                }),
-                Action::AdvanceTo {
-                    turn: 3,
-                    step: TurnStep::Upkeep,
-                },
-                Action::assert(Assertion::Stack { count: 0 }),
+                ME.pt(Card::SnapcasterMage, 2, 2),
+                ME.has(Zone::Graveyard, Card::Counterspell, 1),
+                ME.library_top(&[Card::Island, Card::Island]),
+                advance_to(3, TurnStep::Upkeep),
+                stack(0),
             ]),
         // CR 701.62a: with one card to look at, that one is manifested, unasked.
         Scenario::new("Manifest dread with one card in the library manifests it")
             .at(1, P0, TurnStep::PostcombatMain)
-            .permanents(P0, OCULUS_WITH_FLASH_MANA)
-            .hand(P0, &[SNAPCASTER])
-            .library(P0, &[names::ISLAND])
-            .library(P1, &[names::PLAINS])
+            .battlefield(P0, OCULUS_WITH_FLASH_MANA)
+            .hand(P0, &[Card::SnapcasterMage])
+            .library(P1, &[Card::Plains])
             .actions(&[
                 TO_THEIR_UPKEEP,
-                Action::Resolve,
-                face_down(names::ISLAND, 1),
-                Action::assert(Assertion::Count {
-                    player: P0,
-                    zone: Zone::Library,
-                    card: None,
-                    count: 0,
-                }),
+                Resolve,
+                ME.face_down(Card::Island, 1),
+                ME.has_cards(Zone::Library, 0),
             ]),
         // CR 701.62a: with no cards to look at, the trigger resolves without manifesting.
         Scenario::new("Manifest dread with an empty library does nothing")
             .at(1, P0, TurnStep::PostcombatMain)
-            .permanents(P0, OCULUS_WITH_FLASH_MANA)
-            .hand(P0, &[SNAPCASTER])
+            .battlefield(P0, OCULUS_WITH_FLASH_MANA)
+            .hand(P0, &[Card::SnapcasterMage])
             .library(P0, &[])
-            .library(P1, &[names::PLAINS])
+            .library(P1, &[Card::Plains])
             .actions(&[
                 TO_THEIR_UPKEEP,
-                Action::assert(Assertion::Stack { count: 1 }),
-                Action::Resolve,
-                Action::assert(Assertion::Count {
-                    player: P0,
-                    zone: Zone::Library,
-                    card: None,
-                    count: 0,
-                }),
-                Action::assert(Assertion::Count {
-                    player: P0,
-                    zone: Zone::Battlefield,
-                    card: None,
-                    count: 3,
-                }),
-                Action::assert(Assertion::Stack { count: 0 }),
+                stack(1),
+                Resolve,
+                ME.has_cards(Zone::Library, 0),
+                ME.has_cards(Zone::Battlefield, 3),
+                stack(0),
             ]),
         // CR 116.2b: player 0 turns it face up in player 1's upkeep, paying {1}{U}. Snapcaster
         // Mage's enters trigger, which Counterspell in the graveyard would give a target, doesn't
         // trigger (CR 708.8).
         Scenario::new("A manifested creature turns face up for its mana cost, entering no more")
             .at(1, P0, TurnStep::PostcombatMain)
-            .permanents(
-                P0,
-                &[
-                    Permanent::new(OCULUS),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                ],
-            )
-            .graveyard(P0, &[names::COUNTERSPELL])
-            .library(P0, &[SNAPCASTER, names::ISLAND])
-            .library(P1, &[names::PLAINS])
+            .battlefield(P0, &[OCULUS, Card::Island, Card::Island])
+            .graveyard(P0, &[Card::Counterspell])
+            .library(P0, &[Card::SnapcasterMage, Card::Island])
+            .library(P1, &[Card::Plains])
             .actions(&[
                 TO_THEIR_UPKEEP,
-                Action::Resolve,
-                Action::choose(P0, DecisionKind::ChooseObject, SNAPCASTER),
+                Resolve,
+                ME.picks(Card::SnapcasterMage),
                 Action::TurnFaceUp {
                     player: P0,
-                    card: SNAPCASTER,
+                    card: Card::SnapcasterMage,
                 },
-                face_down(SNAPCASTER, 0),
-                Action::assert(Assertion::Tapped {
-                    player: P0,
-                    card: names::ISLAND,
-                    count: 2,
-                }),
-                Action::assert(Assertion::Pt {
-                    player: P0,
-                    card: SNAPCASTER,
-                    token: false,
-                    power: 2,
-                    toughness: 1,
-                }),
-                Action::assert(Assertion::Stack { count: 0 }),
+                ME.face_down(Card::SnapcasterMage, 0),
+                ME.tapped(Card::Island, 2),
+                ME.pt(Card::SnapcasterMage, 2, 1),
+                stack(0),
             ]),
         // CR 701.40b: a face-down Counterspell is a 2/2 creature, but its card isn't a creature
         // card, so it can't be turned face up: player 0 may only pass or cast Snapcaster Mage.
         Scenario::new("A manifested noncreature card can't be turned face up")
             .at(1, P0, TurnStep::PostcombatMain)
-            .permanents(
-                P0,
-                &[
-                    Permanent::new(OCULUS),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                ],
-            )
-            .hand(P0, &[SNAPCASTER])
-            .library(P0, &[names::COUNTERSPELL, names::ISLAND])
-            .library(P1, &[names::PLAINS])
+            .battlefield(P0, &[OCULUS, Card::Island, Card::Island])
+            .hand(P0, &[Card::SnapcasterMage])
+            .library(P0, &[Card::Counterspell, Card::Island])
+            .library(P1, &[Card::Plains])
             .actions(&[
                 TO_THEIR_UPKEEP,
-                Action::Resolve,
-                Action::choose(P0, DecisionKind::ChooseObject, names::COUNTERSPELL),
-                Action::assert(Assertion::Creature {
-                    player: P0,
-                    card: names::COUNTERSPELL,
-                    creature: true,
-                }),
-                Action::assert(Assertion::Decision {
-                    player: P0,
-                    kind: DecisionKind::Priority,
-                    candidates: 2,
-                }),
+                Resolve,
+                ME.picks(Card::Counterspell),
+                ME.creature(Card::Counterspell, true),
+                ME.deciding(DecisionKind::Priority, 2),
             ]),
         // CR 708.9: Oust puts the face-down Snapcaster Mage second from the top of its owner's
         // library, revealed as it goes. Its controller gains the 3 life.
         Scenario::new("A face-down permanent leaving the battlefield is revealed")
             .at(1, P0, TurnStep::PostcombatMain)
-            .permanents(P0, &[Permanent::new(OCULUS)])
-            .library(P0, &[SNAPCASTER, names::ISLAND, names::ISLAND])
-            .permanents(P1, &[Permanent::new(names::PLAINS)])
-            .hand(P1, &[names::OUST])
-            .library(P1, &[names::PLAINS])
+            .battlefield(P0, &[OCULUS])
+            .library(P0, &[Card::SnapcasterMage, Card::Island, Card::Island])
+            .battlefield(P1, &[Card::Plains])
+            .hand(P1, &[Card::Oust])
+            .library(P1, &[Card::Plains])
             .actions(&[
                 TO_THEIR_UPKEEP,
-                Action::Resolve,
-                Action::choose(P0, DecisionKind::ChooseObject, SNAPCASTER),
-                Action::AdvanceTo {
-                    turn: 2,
-                    step: TurnStep::PrecombatMain,
-                },
-                Action::cast(P1, names::OUST),
-                Action::answer(P1, DecisionKind::Target, Pick::Card { card: SNAPCASTER }),
-                Action::Resolve,
-                Action::assert(Assertion::Library {
-                    player: P0,
-                    top: &[names::ISLAND, SNAPCASTER],
-                }),
-                Action::assert(Assertion::Life {
-                    player: P0,
-                    life: 23,
-                }),
+                Resolve,
+                ME.picks(Card::SnapcasterMage),
+                advance_to(2, TurnStep::PrecombatMain),
+                THEM.casts(Card::Oust),
+                THEM.targets(Card::SnapcasterMage),
+                Resolve,
+                ME.library_top(&[Card::Island, Card::SnapcasterMage]),
+                ME.life(23),
                 // On to combat: the tests read what each player knows here.
-                Action::pass(P1),
+                THEM.passes(),
             ]),
         // CR 708.2: the copy Fractured Identity makes of the face-down Snapcaster Mage is a 2/2
         // with no text, for player 1, the one player other than its controller.
         Scenario::new("Fractured Identity copies a face-down permanent as a 2/2")
-            .interaction(&[names::FRACTURED_IDENTITY])
+            .interaction(&[Card::FracturedIdentity])
             .at(1, P0, TurnStep::PostcombatMain)
-            .permanents(P0, &[Permanent::new(OCULUS)])
-            .library(P0, &[SNAPCASTER, names::ISLAND, names::ISLAND])
-            .permanents(
+            .battlefield(P0, &[OCULUS])
+            .library(P0, &[Card::SnapcasterMage, Card::Island, Card::Island])
+            .battlefield(
                 P1,
                 &[
-                    Permanent::new(names::PLAINS),
-                    Permanent::new(names::PLAINS),
-                    Permanent::new(names::PLAINS),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Island,
+                    Card::Island,
                 ],
             )
-            .hand(P1, &[names::FRACTURED_IDENTITY])
-            .library(P1, &[names::PLAINS])
+            .hand(P1, &[Card::FracturedIdentity])
+            .library(P1, &[Card::Plains])
             .actions(&[
                 TO_THEIR_UPKEEP,
-                Action::Resolve,
-                Action::choose(P0, DecisionKind::ChooseObject, SNAPCASTER),
-                Action::AdvanceTo {
-                    turn: 2,
-                    step: TurnStep::PrecombatMain,
-                },
-                Action::cast(P1, names::FRACTURED_IDENTITY),
-                Action::answer(P1, DecisionKind::Target, Pick::Card { card: SNAPCASTER }),
-                Action::Resolve,
-                Action::assert(Assertion::Count {
-                    player: P0,
-                    zone: Zone::Exile,
-                    card: Some(SNAPCASTER),
-                    count: 1,
-                }),
-                Action::assert(Assertion::Count {
-                    player: P1,
-                    zone: Zone::Battlefield,
-                    card: None,
-                    count: 6,
-                }),
+                Resolve,
+                ME.picks(Card::SnapcasterMage),
+                advance_to(2, TurnStep::PrecombatMain),
+                THEM.casts(Card::FracturedIdentity),
+                THEM.targets(Card::SnapcasterMage),
+                Resolve,
+                ME.has(Zone::Exile, Card::SnapcasterMage, 1),
+                THEM.has_cards(Zone::Battlefield, 6),
                 // On to combat: the tests read the copy here.
-                Action::pass(P1),
+                THEM.passes(),
             ]),
     ];
 }

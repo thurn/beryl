@@ -107,6 +107,12 @@ def constant(name: str) -> str:
     return card_module(name).upper()
 
 
+def camel(name: str) -> str:
+    """A card's name as an associated constant of a set crate's generated `Card` and `Printed`
+    types: its module's words, each capitalized, as `JaceVrynsProdigy`."""
+    return "".join(word[:1].upper() + word[1:] for word in card_module(name).split("_"))
+
+
 def file_name(record: Json) -> str:
     """The name a card record's file is spelled from, the one the engine knows the card by:
     both halves of a split card ("Fire // Ice"), else its front face's."""

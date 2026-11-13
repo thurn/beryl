@@ -10,212 +10,110 @@
 //! their library.
 // End of the generated card header.
 
-use crate::{names, printed};
-use beryl_card::effect::build::{
-    target, target_player, you, draw, exile, fateseal, put_back, return_to_hand, sequence,
-    shuffle_into,
-};
-use beryl_card::{
-    Ability, CardDef, Effect, Filter, Objects, TargetKind, TargetSpec, Types, Zone, card,
-};
-
-const A_PLAYER: &[TargetSpec] = &[TargetSpec::one(TargetKind::Player, Filter::Any)];
-
-pub static CARD: CardDef = card(
-    names::JACE_THE_MIND_SCULPTOR,
-    &[printed::JACE_THE_MIND_SCULPTOR.abilities(&[
-        Ability::loyalty(2).targeting(A_PLAYER).effect(&FATESEAL),
-        Ability::loyalty(0).effect(&BRAINSTORM),
-        Ability::loyalty(-1)
-            .targeting(&[TargetSpec::one(
-                TargetKind::Permanent,
-                Filter::Types(Types::CREATURE),
-            )])
-            .effect(&BOUNCE),
-        Ability::loyalty(-12)
-            .targeting(A_PLAYER)
-            .effect(&EXILE_LIBRARY),
-    ])],
-);
+use crate::prelude::*;
 
 /// "+2: Look at the top card of target player's library. You may put that card on the
 /// bottom of that player's library." Looking shows the card to Jace's controller alone, an
 /// exception to [CR 401.2](https://yawgatog.com/resources/magic-rules/#R4012): "Players can't
 /// look at or change the order of cards in a library." Moving it within the library is no
 /// zone change, so it stays the same object.
-static FATESEAL: Effect = fateseal(you(), target_player());
-
+///
 /// "0: Draw three cards, then put two cards from your hand on top of your library in any
 /// order." Each card chosen goes on top of the one before, so the second is the top card.
 /// [CR 121.2](https://yawgatog.com/resources/magic-rules/#R1212): "If a player is instructed to
 /// draw multiple cards, that player performs that many individual card draws."
-static BRAINSTORM: Effect = sequence(&[draw(you(), 3), put_back(you(), 2)]);
-
+///
 /// "−1: Return target creature to its owner's hand."
 /// [CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003): "If an object would go to
 /// any library, graveyard, or hand other than its owner's, it goes to its owner's
 /// corresponding zone."
-static BOUNCE: Effect = return_to_hand(target());
-
+///
 /// "−12: Exile all cards from target player's library, then that player shuffles their hand
 /// into their library." [CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a):
 /// "To exile an object, move it to the exile zone from wherever it is." Then
 /// [CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a): "To shuffle a library
 /// ... randomize the cards within it so that no player knows their order."
-static EXILE_LIBRARY: Effect = sequence(&[
-    exile(Objects::InZoneOf {
-        zone: Zone::Library,
-        players: &target_player(),
-        filter: Filter::Any,
-    }),
-    shuffle_into(
-        target_player(),
-        Objects::InZoneOf {
-            zone: Zone::Hand,
-            players: &target_player(),
-            filter: Filter::Any,
-        },
-    ),
-]);
+pub static CARD: CardDef = Printed::JaceTheMindSculptor
+    .abilities(&[
+        Ability::loyalty(2)
+            .target(&TargetSpec::player())
+            .effect(&fateseal(you(), target_player())),
+        Ability::loyalty(0).effect(&sequence(&[draw(you(), 3), put_back(you(), 2)])),
+        Ability::loyalty(-1)
+            .target(&TargetSpec::creature())
+            .effect(&return_to_hand(target())),
+        Ability::loyalty(-12)
+            .target(&TargetSpec::player())
+            .effect(&sequence(&[
+                exile(library_of(&target_player())),
+                shuffle_into(target_player(), hand_of(&target_player())),
+            ])),
+    ])
+    .card();
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_card::CounterKind;
-    use beryl_card::{DecisionKind, TurnStep, Zone};
+    use crate::prelude::*;
 
-    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
-
-    use crate::{names, props};
-
-    const JACE: &str = names::JACE_THE_MIND_SCULPTOR;
-
-    const ISLAND: &str = names::ISLAND;
-
-    const PLAINS: &str = names::PLAINS;
-
-    const ARTIFACT: &str = props::ARTIFACT;
-
-    const CREATURE: &str = props::CREATURE;
-
-    const fn loyalty(count: u8) -> Action {
-        Action::assert(Assertion::Counters {
-            player: P0,
-            card: JACE,
-            kind: CounterKind::Loyalty,
-            count,
-        })
-    }
+    const JACE: &str = Card::JaceTheMindSculptor;
 
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("+2 puts the top of an opponent's library on the bottom")
-            .permanents(P0, &[Permanent::new(JACE)])
-            .library(P0, &[ISLAND, PLAINS])
-            .library(P1, &[ARTIFACT, PLAINS, ISLAND])
+            .battlefield(P0, &[JACE])
+            .library(P0, &[Card::Island, Card::Plains])
+            .library(P1, &[Prop::Artifact, Card::Plains, Card::Island])
             .actions(&[
-                Action::activate(P0, JACE, 0),
-                Action::answer(P0, DecisionKind::Target, Pick::Player { player: P1 }),
-                Action::Resolve,
-                Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+                ME.activates(JACE, 0), // +2
+                ME.targets_player(THEM),
+                Resolve,
+                ME.yes(),
                 // Assertions read the next open decision: by then, the opponent has drawn the
                 // Plains that the artifact left on top.
-                Action::assert(Assertion::Library {
-                    player: P1,
-                    top: &[ISLAND, ARTIFACT],
-                }),
-                Action::assert(Assertion::Count {
-                    player: P1,
-                    zone: Zone::Hand,
-                    card: Some(PLAINS),
-                    count: 1,
-                }),
-                loyalty(5),
+                THEM.library_top(&[Card::Island, Prop::Artifact]),
+                THEM.has(Zone::Hand, Card::Plains, 1),
+                ME.has_loyalty(JACE, 5),
                 // The next turn, Jace looks at his own top card and keeps it there.
-                Action::AdvanceTo {
-                    turn: 3,
-                    step: TurnStep::PrecombatMain,
-                },
-                Action::activate(P0, JACE, 0),
-                Action::answer(P0, DecisionKind::Target, Pick::Player { player: P0 }),
-                Action::answer(P0, DecisionKind::YesNo, Pick::No),
-                Action::assert(Assertion::Library {
-                    player: P0,
-                    top: &[PLAINS],
-                }),
-                loyalty(7),
+                advance_to(3, TurnStep::PrecombatMain),
+                ME.activates(JACE, 0),
+                ME.targets_player(ME),
+                ME.no(),
+                ME.library_top(&[Card::Plains]),
+                ME.has_loyalty(JACE, 7),
             ]),
         Scenario::new("0 draws three and puts two back in the order chosen")
-            .permanents(P0, &[Permanent::new(JACE)])
-            .hand(P0, &[ARTIFACT])
-            .library(P0, &[ISLAND, PLAINS, CREATURE, ISLAND])
-            .library(P1, &[PLAINS])
+            .battlefield(P0, &[JACE])
+            .hand(P0, &[Prop::Artifact])
+            .library(P0, &[Card::Island, Card::Plains, Prop::Creature, Card::Island])
+            .library(P1, &[Card::Plains])
             .actions(&[
-                Action::activate(P0, JACE, 1),
-                Action::Resolve,
-                Action::choose(P0, DecisionKind::ChooseObject, ARTIFACT),
-                Action::choose(P0, DecisionKind::ChooseObject, ISLAND),
-                Action::assert(Assertion::Library {
-                    player: P0,
-                    top: &[ISLAND, ARTIFACT, ISLAND],
-                }),
-                Action::assert(Assertion::Count {
-                    player: P0,
-                    zone: Zone::Hand,
-                    card: None,
-                    count: 2,
-                }),
-                loyalty(3),
+                ME.activates(JACE, 1), // 0
+                Resolve,
+                ME.picks(Prop::Artifact),
+                ME.picks(Card::Island),
+                ME.library_top(&[Card::Island, Prop::Artifact, Card::Island]),
+                ME.has_cards(Zone::Hand, 2),
+                ME.has_loyalty(JACE, 3),
             ]),
         Scenario::new("−1 returns a creature; −12 exiles a library and shuffles in the hand")
-            .permanents(
-                P0,
-                &[Permanent::new(JACE).counters(CounterKind::Loyalty, 13)],
-            )
-            .permanents(P1, &[Permanent::new(CREATURE)])
-            .hand(P1, &[PLAINS])
-            .library(P0, &[ISLAND, ISLAND])
-            .library(P1, &[ISLAND, ISLAND, ISLAND])
+            .permanents(P0, &[Permanent::new(JACE).counters(CounterKind::Loyalty, 13)])
+            .battlefield(P1, &[Prop::Creature])
+            .hand(P1, &[Card::Plains])
+            .library(P0, &[Card::Island, Card::Island])
+            .library(P1, &[Card::Island, Card::Island, Card::Island])
             .actions(&[
-                Action::activate(P0, JACE, 2),
-                Action::Resolve,
-                Action::assert(Assertion::Count {
-                    player: P1,
-                    zone: Zone::Hand,
-                    card: Some(CREATURE),
-                    count: 1,
-                }),
-                loyalty(12),
-                Action::AdvanceTo {
-                    turn: 3,
-                    step: TurnStep::PrecombatMain,
-                },
-                Action::activate(P0, JACE, 3),
-                Action::answer(P0, DecisionKind::Target, Pick::Player { player: P1 }),
+                ME.activates(JACE, 2), // −1
+                Resolve,
+                THEM.has(Zone::Hand, Prop::Creature, 1),
+                ME.has_loyalty(JACE, 12),
+                advance_to(3, TurnStep::PrecombatMain),
+                ME.activates(JACE, 3), // −12
+                ME.targets_player(THEM),
                 // Turn 2's draw left two Islands, now exiled; the hand of three is the library.
-                Action::assert(Assertion::Count {
-                    player: P1,
-                    zone: Zone::Exile,
-                    card: Some(ISLAND),
-                    count: 2,
-                }),
-                Action::assert(Assertion::Count {
-                    player: P1,
-                    zone: Zone::Library,
-                    card: None,
-                    count: 3,
-                }),
-                Action::assert(Assertion::Count {
-                    player: P1,
-                    zone: Zone::Hand,
-                    card: None,
-                    count: 0,
-                }),
+                THEM.has(Zone::Exile, Card::Island, 2),
+                THEM.has_cards(Zone::Library, 3),
+                THEM.has_cards(Zone::Hand, 0),
                 // Loyalty 0: put into its owner's graveyard (CR 704.5i).
-                Action::assert(Assertion::Count {
-                    player: P0,
-                    zone: Zone::Graveyard,
-                    card: Some(JACE),
-                    count: 1,
-                }),
+                ME.has(Zone::Graveyard, JACE, 1),
             ]),
     ];
 }

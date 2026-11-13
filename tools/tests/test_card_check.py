@@ -94,10 +94,7 @@ def test_new_writes_the_header_and_the_smallest_definition(
     text = path.read_text()
     assert text.startswith("// Generated from the card store")
     assert "//! Copy target spell.\n// End of the generated card header.\n" in text
-    assert (
-        "card(\n    names::ANCESTRAL_RECALL,\n    &[printed::ANCESTRAL_RECALL],\n);"
-        in text
-    )
+    assert "pub static CARD: CardDef = Printed::AncestralRecall.card();" in text
     assert "pub const SCENARIOS: &[Scenario] = &[];" in text
     assert no_rustfmt == [["rustfmt", "--edition", "2024", str(path)]]
     out = capsys.readouterr().out
@@ -112,7 +109,7 @@ def test_new_gives_each_face_its_printed_constant(
 ) -> None:
     assert new("Fire // Ice", sources) == 0
     text = (sources.cards / "cards_1993" / "lea" / "fire_ice.rs").read_text()
-    assert "&[printed::FIRE, printed::ICE]" in text
+    assert "card(\n    Card::FireIce,\n    &[Printed::Fire, Printed::Ice],\n)" in text
 
 
 @pytest.mark.parametrize(

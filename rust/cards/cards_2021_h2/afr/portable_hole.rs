@@ -6,9 +6,7 @@
 //! or less until this artifact leaves the battlefield.
 // End of the generated card header.
 
-use crate::{names, printed};
-use beryl_card::effect::build::{target, exile_until_this_leaves};
-use beryl_card::{Ability, CardDef, Filter, Players, TargetKind, TargetSpec, Trigger, Types, card};
+use crate::prelude::*;
 
 /// "Exile target ... until this artifact leaves the battlefield"
 /// ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)): "A second one-shot effect
@@ -16,53 +14,27 @@ use beryl_card::{Ability, CardDef, Filter, Players, TargetKind, TargetSpec, Trig
 /// object to its previous zone." A target gone, or no longer matching, by resolution stops
 /// the ability ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)); a Hole
 /// gone first exiles nothing ([CR 610.3b](https://yawgatog.com/resources/magic-rules/#R6103b)).
-pub static CARD: CardDef = card(
-    names::PORTABLE_HOLE,
-    &[
-        printed::PORTABLE_HOLE.abilities(&[Ability::triggered(&Trigger::ENTERS)
-            .targeting(&[TargetSpec::one(
-                TargetKind::Permanent,
-                Filter::All(&[
-                    Filter::Not(&Filter::Types(Types::LAND)),
-                    Filter::Whose(&Players::EachOpponent),
-                    Filter::ManaValueAtMost(2),
-                ]),
-            )])
-            .effect(&exile_until_this_leaves(target()))]),
-    ],
-);
+pub static CARD: CardDef = Printed::PortableHole
+    .abilities(&[Ability::triggered(&Trigger::ENTERS)
+        .target(&TargetSpec::permanent(Filter::All(&[
+            Filter::Not(&Filter::Types(Types::LAND)),
+            Filter::Whose(&Players::EachOpponent),
+            Filter::ManaValueAtMost(2),
+        ])))
+        .effect(&exile_until_this_leaves(target()))])
+    .card();
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_card::{DecisionKind, Seat, TurnStep, Zone};
-    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Scenario};
+    use crate::prelude::*;
 
-    use crate::{names, props};
-
-    const HOLE: &str = names::PORTABLE_HOLE;
+    const HOLE: &str = Card::PortableHole;
 
     /// Mana value 2: a legal target.
-    const TWO_DROP: &str = props::SMALL_CREATURE;
+    const TWO_DROP: &str = Prop::SmallCreature;
 
     /// Mana value 3: not a legal target.
-    const THREE_DROP: &str = props::CREATURE;
-
-    const fn count(player: Seat, zone: Zone, card: &'static str, count: u8) -> Action {
-        Action::assert(Assertion::Count {
-            player,
-            zone,
-            card: Some(card),
-            count,
-        })
-    }
-
-    const fn controls(player: Seat, card: &'static str, count: u8) -> Action {
-        Action::assert(Assertion::Controls {
-            player,
-            card,
-            count,
-        })
-    }
+    const THREE_DROP: &str = Prop::Creature;
 
     pub const SCENARIOS: &[Scenario] = &[
         // P1's two-drop is the one legal target: not their three-drop, not P0's own two-drop. On
@@ -71,129 +43,98 @@ pub mod scenarios {
         Scenario::new("Portable Hole exiles until it leaves the battlefield")
             // by-8g5: Playground keeps the Hole in slot zero, exercising linked-exile UI.
             .seed(12)
-            .permanents(
-                P0,
-                &[
-                    Permanent::new(names::PLAINS),
-                    Permanent::new(TWO_DROP).sick(),
-                ],
-            )
+            .battlefield(P0, &[Card::Plains])
+            .permanents(P0, &[Permanent::new(TWO_DROP).sick()])
             .hand(P0, &[HOLE])
-            .library(P0, &[names::ISLAND])
-            .permanents(
+            .library(P0, &[Card::Island])
+            .battlefield(
                 P1,
                 &[
-                    Permanent::new(TWO_DROP),
-                    Permanent::new(THREE_DROP),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
+                    TWO_DROP,
+                    THREE_DROP,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
                 ],
             )
-            .hand(P1, &[props::REMOVAL])
-            .library(P1, &[names::ISLAND, names::ISLAND])
+            .hand(P1, &[Prop::Removal])
+            .library(P1, &[Card::Island, Card::Island])
             .actions(&[
-                Action::cast(P0, HOLE),
-                Action::Resolve,
-                Action::Resolve,
-                count(P1, Zone::Exile, TWO_DROP, 1),
-                controls(P1, THREE_DROP, 1),
-                Action::AdvanceTo {
-                    turn: 2,
-                    step: TurnStep::PrecombatMain,
-                },
-                Action::cast(P1, props::REMOVAL),
-                Action::choose(P1, DecisionKind::Target, HOLE),
-                Action::Resolve,
-                count(P0, Zone::Hand, HOLE, 1),
-                count(P1, Zone::Exile, TWO_DROP, 0),
-                controls(P1, TWO_DROP, 1),
+                ME.casts(HOLE),
+                Resolve,
+                Resolve,
+                THEM.has(Zone::Exile, TWO_DROP, 1),
+                THEM.controls(THREE_DROP, 1),
+                advance_to(2, TurnStep::PrecombatMain),
+                THEM.casts(Prop::Removal),
+                THEM.targets(HOLE),
+                Resolve,
+                ME.has(Zone::Hand, HOLE, 1),
+                THEM.has(Zone::Exile, TWO_DROP, 0),
+                THEM.controls(TWO_DROP, 1),
             ]),
         // The three-drop's mana value is 3, and P0's own two-drop isn't an opponent's: with no
         // legal target the trigger never goes on the stack.
         Scenario::new("Portable Hole with no permanent of mana value 2 or less to exile")
-            .permanents(
-                P0,
-                &[Permanent::new(names::PLAINS), Permanent::new(TWO_DROP)],
-            )
+            .battlefield(P0, &[Card::Plains, TWO_DROP])
             .hand(P0, &[HOLE])
-            .library(P0, &[names::ISLAND])
-            .permanents(P1, &[Permanent::new(THREE_DROP)])
-            .library(P1, &[names::ISLAND])
+            .library(P0, &[Card::Island])
+            .battlefield(P1, &[THREE_DROP])
             .actions(&[
-                Action::cast(P0, HOLE),
-                Action::Resolve,
-                Action::assert(Assertion::Stack { count: 0 }),
-                controls(P0, HOLE, 1),
-                controls(P1, THREE_DROP, 1),
-                controls(P0, TWO_DROP, 1),
+                ME.casts(HOLE),
+                Resolve,
+                stack(0),
+                ME.controls(HOLE, 1),
+                THEM.controls(THREE_DROP, 1),
+                ME.controls(TWO_DROP, 1),
             ]),
         // With the trigger on the stack, P0 returns its target to P1's hand with Sink into
         // Stupor: the trigger does nothing, and the Hole stays.
         Scenario::new("Portable Hole's target gone before the trigger resolves")
-            .permanents(
+            .battlefield(
                 P0,
-                &[
-                    Permanent::new(names::PLAINS),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                ],
+                &[Card::Plains, Card::Island, Card::Island, Card::Island],
             )
-            .hand(P0, &[HOLE, props::REMOVAL])
-            .library(P0, &[names::ISLAND])
-            .permanents(P1, &[Permanent::new(TWO_DROP)])
-            .library(P1, &[names::ISLAND])
+            .hand(P0, &[HOLE, Prop::Removal])
+            .library(P0, &[Card::Island])
+            .battlefield(P1, &[TWO_DROP])
             .actions(&[
-                Action::cast(P0, HOLE),
-                Action::Resolve,
-                Action::assert(Assertion::Stack { count: 1 }),
-                Action::cast(P0, props::REMOVAL),
-                Action::Resolve,
-                count(P1, Zone::Hand, TWO_DROP, 1),
-                Action::Resolve,
-                Action::assert(Assertion::Stack { count: 0 }),
-                count(P1, Zone::Exile, TWO_DROP, 0),
-                controls(P0, HOLE, 1),
+                ME.casts(HOLE),
+                Resolve,
+                stack(1),
+                ME.casts(Prop::Removal),
+                Resolve,
+                THEM.has(Zone::Hand, TWO_DROP, 1),
+                Resolve,
+                stack(0),
+                THEM.has(Zone::Exile, TWO_DROP, 0),
+                ME.controls(HOLE, 1),
             ]),
         // P1 answers the trigger by returning the Hole to P0's hand with Sink into Stupor: the
         // event the exile lasts until has happened, so the two-drop never leaves (CR 610.3b).
         // P0's two-drop in hand, with flash and the Islands for it, gives P0 a priority to pass
         // between the two resolutions.
         Scenario::new("Portable Hole gone before its trigger resolves")
-            .permanents(
-                P0,
-                &[
-                    Permanent::new(names::PLAINS),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                ],
-            )
+            .battlefield(P0, &[Card::Plains, Card::Island, Card::Island])
             .hand(P0, &[HOLE, TWO_DROP])
-            .library(P0, &[names::ISLAND])
-            .permanents(
+            .library(P0, &[Card::Island])
+            .battlefield(
                 P1,
-                &[
-                    Permanent::new(TWO_DROP),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                ],
+                &[TWO_DROP, Card::Island, Card::Island, Card::Island],
             )
-            .hand(P1, &[names::SINK_INTO_STUPOR])
-            .library(P1, &[names::ISLAND])
+            .hand(P1, &[Card::SinkIntoStupor])
             .actions(&[
-                Action::cast(P0, HOLE),
-                Action::Resolve,
-                Action::assert(Assertion::Stack { count: 1 }),
-                Action::pass(P0),
-                Action::cast(P1, names::SINK_INTO_STUPOR),
-                Action::Resolve,
-                Action::Resolve,
-                Action::assert(Assertion::Stack { count: 0 }),
-                count(P0, Zone::Hand, HOLE, 1),
-                count(P1, Zone::Exile, TWO_DROP, 0),
-                controls(P1, TWO_DROP, 1),
+                ME.casts(HOLE),
+                Resolve,
+                stack(1),
+                ME.passes(),
+                THEM.casts(Card::SinkIntoStupor),
+                Resolve,
+                Resolve,
+                stack(0),
+                ME.has(Zone::Hand, HOLE, 1),
+                THEM.has(Zone::Exile, TWO_DROP, 0),
+                THEM.controls(TWO_DROP, 1),
             ]),
     ];
 }

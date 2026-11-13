@@ -8,11 +8,7 @@
 //! your graveyard for its flashback cost. Then exile it.)
 // End of the generated card header.
 
-use crate::{names, printed};
-use beryl_card::effect::build::{target, gain_flashback};
-use beryl_card::{
-    Ability, CardDef, Filter, Keywords, Players, TargetKind, TargetSpec, Trigger, Types, card,
-};
+use crate::prelude::*;
 
 /// Flashback for the card's mana cost, an alternative cost
 /// ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a)): "'Flashback [cost]'
@@ -25,49 +21,23 @@ use beryl_card::{
 /// With no instant or sorcery card in its controller's graveyard the trigger has no target,
 /// and is removed from the stack
 /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d)).
-pub static CARD: CardDef = card(
-    names::SNAPCASTER_MAGE,
-    &[printed::SNAPCASTER_MAGE
-        .keywords(Keywords::FLASH)
-        .abilities(&[Ability::triggered(&Trigger::ENTERS)
-            .targeting(&[TargetSpec::one(
-                TargetKind::GraveyardCard,
-                Filter::All(&[
-                    Filter::Types(Types::INSTANT.union(Types::SORCERY)),
-                    Filter::Whose(&Players::You),
-                ]),
-            )])
-            .effect(&gain_flashback(target()))])],
-);
+pub static CARD: CardDef = Printed::SnapcasterMage
+    .keywords(Keywords::FLASH)
+    .abilities(&[Ability::triggered(&Trigger::ENTERS)
+        .target(&TargetSpec::graveyard_card(Filter::All(&[
+            Filter::Types(Types::INSTANT.union(Types::SORCERY)),
+            Filter::Whose(&Players::You),
+        ])))
+        .effect(&gain_flashback(target()))])
+    .card();
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_card::{DecisionKind, TurnStep, Zone};
+    use crate::prelude::*;
 
-    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Scenario};
+    const SNAPCASTER: &str = Card::SnapcasterMage;
 
-    use crate::{names, props};
-
-    const SNAPCASTER: &str = names::SNAPCASTER_MAGE;
-
-    const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
-
-    const fn priority_candidates(candidates: u8) -> Action {
-        Action::assert(Assertion::Decision {
-            player: P0,
-            kind: DecisionKind::Priority,
-            candidates,
-        })
-    }
-
-    const fn count(player: beryl_card::Seat, zone: Zone, card: &'static str, count: u8) -> Action {
-        Action::assert(Assertion::Count {
-            player,
-            zone,
-            card: Some(card),
-            count,
-        })
-    }
+    const SPELLBINDER: &str = Card::EliteSpellbinder;
 
     pub const SCENARIOS: &[Scenario] = &[
         // Flashed in against P1's Timetwister, it gives the Counterspell in P0's graveyard
@@ -75,170 +45,122 @@ pub mod scenarios {
         // the graveyard. The Plains in P1's hand keeps P1's main phase a decision afterward.
         Scenario::new("Snapcaster Mage: flashback a counterspell, then exile it")
             .at(2, P1, TurnStep::PrecombatMain)
-            .permanents(
-                P0,
-                &[
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                ],
-            )
+            .battlefield(P0, &[Card::Island; 4])
             .hand(P0, &[SNAPCASTER])
-            .graveyard(P0, &[names::COUNTERSPELL])
-            .permanents(
-                P1,
-                &[
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                ],
-            )
-            .hand(P1, &[names::TIMETWISTER, names::PLAINS])
-            .library(P1, &[names::PLAINS])
+            .graveyard(P0, &[Card::Counterspell])
+            .battlefield(P1, &[Card::Island; 3])
+            .hand(P1, &[Card::Timetwister, Card::Plains])
+            .library(P1, &[Card::Plains])
             .actions(&[
-                Action::cast(P1, names::TIMETWISTER),
-                Action::cast(P0, SNAPCASTER),
+                THEM.casts(Card::Timetwister),
+                ME.casts(SNAPCASTER),
                 // Snapcaster, then its trigger, which no one can respond to.
-                Action::Resolve,
-                Action::pass(P1),
+                Resolve,
+                THEM.passes(),
                 // Counterspell resolves at once: neither player can respond.
-                Action::cast(P0, names::COUNTERSPELL),
-                count(P1, Zone::Graveyard, names::TIMETWISTER, 1),
-                count(P0, Zone::Exile, names::COUNTERSPELL, 1),
-                count(P0, Zone::Graveyard, names::COUNTERSPELL, 0),
+                ME.casts(Card::Counterspell),
+                THEM.has(Zone::Graveyard, Card::Timetwister, 1),
+                ME.has(Zone::Exile, Card::Counterspell, 1),
+                ME.has(Zone::Graveyard, Card::Counterspell, 0),
             ]),
         // P1 answers the flashback Counterspell with Sink into Stupor, which would return it to
         // P0's hand: cast with flashback, it is exiled instead (CR 702.34a), and the creature
         // resolves.
         Scenario::new("Snapcaster Mage: a flashback spell returned to hand is exiled")
             .at(2, P1, TurnStep::PrecombatMain)
-            .permanents(
-                P0,
-                &[
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                ],
-            )
+            .battlefield(P0, &[Card::Island; 4])
             .hand(P0, &[SNAPCASTER])
-            .graveyard(P0, &[names::COUNTERSPELL])
-            .permanents(
+            .graveyard(P0, &[Card::Counterspell])
+            .battlefield(
                 P1,
                 &[
-                    Permanent::new(names::PLAINS),
-                    Permanent::new(names::PLAINS),
-                    Permanent::new(names::PLAINS),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
                 ],
             )
-            .hand(P1, &[props::CREATURE, props::REMOVAL, names::PLAINS])
-            .library(P1, &[names::ISLAND])
+            .hand(P1, &[Prop::Creature, Prop::Removal, Card::Plains])
+            .library(P1, &[Card::Island])
             .actions(&[
-                Action::cast(P1, props::CREATURE),
-                Action::cast(P0, SNAPCASTER),
+                THEM.casts(Prop::Creature),
+                ME.casts(SNAPCASTER),
                 // Snapcaster resolves; P1, who could cast Sink into Stupor, passes as its trigger
                 // resolves and again with the creature alone on the stack.
-                Action::Resolve,
-                Action::pass(P1),
-                Action::pass(P1),
-                Action::cast(P0, names::COUNTERSPELL),
-                Action::cast(P1, props::REMOVAL),
-                Action::choose(P1, DecisionKind::Target, names::COUNTERSPELL),
-                Action::Resolve,
-                count(P0, Zone::Exile, names::COUNTERSPELL, 1),
-                count(P0, Zone::Hand, names::COUNTERSPELL, 0),
-                Action::Resolve,
-                Action::assert(Assertion::Controls {
-                    player: P1,
-                    card: props::CREATURE,
-                    count: 1,
-                }),
+                Resolve,
+                THEM.passes(),
+                THEM.passes(),
+                ME.casts(Card::Counterspell),
+                THEM.casts(Prop::Removal),
+                THEM.targets(Card::Counterspell),
+                Resolve,
+                ME.has(Zone::Exile, Card::Counterspell, 1),
+                ME.has(Zone::Hand, Card::Counterspell, 0),
+                Resolve,
+                THEM.controls(Prop::Creature, 1),
             ]),
         // Damn given flashback is cast for its mana cost only: the flashback cost is the
         // alternative cost, so overload can't be added (CR 118.9a), though P0 could pay it. The
         // two candidates are passing and the {B}{B} cast.
         Scenario::new("Snapcaster Mage: flashback is the one alternative cost")
-            .interaction(&[names::DAMN])
-            .permanents(
+            .interaction(&[Card::Damn])
+            .battlefield(
                 P0,
                 &[
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::SWAMP),
-                    Permanent::new(names::SWAMP),
-                    Permanent::new(names::PLAINS),
-                    Permanent::new(names::PLAINS),
+                    Card::Island,
+                    Card::Island,
+                    Card::Swamp,
+                    Card::Swamp,
+                    Card::Plains,
+                    Card::Plains,
                 ],
             )
             .hand(P0, &[SNAPCASTER])
-            .graveyard(P0, &[names::DAMN])
-            .permanents(P1, &[Permanent::new(SPELLBINDER)])
-            .library(P1, &[names::ISLAND])
+            .graveyard(P0, &[Card::Damn])
+            .battlefield(P1, &[SPELLBINDER])
+            .library(P1, &[Card::Island])
             .actions(&[
-                Action::cast(P0, SNAPCASTER),
-                Action::Resolve,
-                Action::Resolve,
-                priority_candidates(2),
-                Action::cast(P0, names::DAMN),
-                Action::choose(P0, DecisionKind::Target, SPELLBINDER),
-                Action::Resolve,
-                count(P1, Zone::Graveyard, SPELLBINDER, 1),
-                count(P0, Zone::Exile, names::DAMN, 1),
+                ME.casts(SNAPCASTER),
+                Resolve,
+                Resolve,
+                ME.deciding(DecisionKind::Priority, 2),
+                ME.casts(Card::Damn),
+                ME.targets(SPELLBINDER),
+                Resolve,
+                THEM.has(Zone::Graveyard, SPELLBINDER, 1),
+                ME.has(Zone::Exile, Card::Damn, 1),
             ]),
         // Oust gains flashback on turn 1 and P0 leaves it; by P0's next turn it has none.
         Scenario::new("Snapcaster Mage: flashback ends with the turn")
-            .permanents(
-                P0,
-                &[
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::PLAINS),
-                ],
-            )
+            .battlefield(P0, &[Card::Island, Card::Island, Card::Plains])
             .hand(P0, &[SNAPCASTER])
-            .graveyard(P0, &[names::OUST])
-            .library(P0, &[props::INSTANT])
-            .library(P1, &[props::INSTANT])
+            .graveyard(P0, &[Card::Oust])
+            .library(P0, &[Prop::Instant])
+            .library(P1, &[Prop::Instant])
             .actions(&[
-                Action::cast(P0, SNAPCASTER),
-                Action::Resolve,
-                Action::Resolve,
-                priority_candidates(2),
-                Action::AdvanceTo {
-                    turn: 3,
-                    step: TurnStep::PrecombatMain,
-                },
-                priority_candidates(1),
-                count(P0, Zone::Graveyard, names::OUST, 1),
+                ME.casts(SNAPCASTER),
+                Resolve,
+                Resolve,
+                ME.deciding(DecisionKind::Priority, 2),
+                advance_to(3, TurnStep::PrecombatMain),
+                ME.deciding(DecisionKind::Priority, 1),
+                ME.has(Zone::Graveyard, Card::Oust, 1),
             ]),
         // Nothing in P0's graveyard is an instant or sorcery: the trigger has no target and does
         // nothing.
         Scenario::new("Snapcaster Mage with no instant or sorcery to target")
-            .permanents(
-                P0,
-                &[
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::PLAINS),
-                ],
-            )
+            .battlefield(P0, &[Card::Island, Card::Island, Card::Plains])
             .hand(P0, &[SNAPCASTER])
-            .graveyard(P0, &[names::PLAINS, props::CREATURE])
-            .library(P1, &[names::ISLAND])
+            .graveyard(P0, &[Card::Plains, Prop::Creature])
+            .library(P1, &[Card::Island])
             .actions(&[
-                Action::cast(P0, SNAPCASTER),
-                Action::Resolve,
-                Action::assert(Assertion::Stack { count: 0 }),
-                priority_candidates(1),
-                Action::assert(Assertion::Controls {
-                    player: P0,
-                    card: SNAPCASTER,
-                    count: 1,
-                }),
+                ME.casts(SNAPCASTER),
+                Resolve,
+                stack(0),
+                ME.deciding(DecisionKind::Priority, 1),
+                ME.controls(SNAPCASTER, 1),
             ]),
     ];
 }

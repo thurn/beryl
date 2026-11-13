@@ -6,9 +6,7 @@
 //! Draw a card.
 // End of the generated card header.
 
-use crate::{names, printed};
-use beryl_card::effect::build::{target, you, draw, return_to_hand, sequence};
-use beryl_card::{Ability, CardDef, Filter, TargetKind, TargetSpec, card};
+use crate::prelude::*;
 
 /// The spell leaves the stack without resolving, to its owner's hand
 /// ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)): "If an object would go to
@@ -21,91 +19,62 @@ use beryl_card::{Ability, CardDef, Filter, TargetKind, TargetSpec, card};
 /// A copy of a spell returned this way would cease to exist
 /// ([CR 704.5e](https://yawgatog.com/resources/magic-rules/#R7045e)): "If a copy of a spell
 /// is in a zone other than the stack, it ceases to exist." No card here copies a spell yet.
-pub static CARD: CardDef = card(
-    names::REPRIEVE,
-    &[printed::REPRIEVE.abilities(&[Ability::spell()
-        .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
-        .effect(&sequence(&[return_to_hand(target()), draw(you(), 1)]))])],
-);
+pub static CARD: CardDef = Printed::Reprieve
+    .abilities(&[Ability::spell()
+        .target(&TargetSpec::spell())
+        .effect(&sequence(&[return_to_hand(target()), draw(you(), 1)]))])
+    .card();
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_card::{Castings, FaceIx};
-
-    use beryl_card::{DecisionKind, Seat, Zone};
-    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
-
-    use crate::{names, props};
-
-    const fn count(player: Seat, zone: Zone, card: &'static str, count: u8) -> Action {
-        Action::assert(Assertion::Count {
-            player,
-            zone,
-            card: Some(card),
-            count,
-        })
-    }
-
-    const P1_LANDS: &[Permanent] = &[Permanent::new(names::PLAINS), Permanent::new(names::ISLAND)];
+    use crate::prelude::*;
 
     pub const SCENARIOS: &[Scenario] = &[
         // Thieving Skydiver kicked for X = 1 taps three of four Islands. Returned to P0's hand,
         // it never enters, and the mana spent on it, X included, stays spent.
         Scenario::new("Reprieve returns a spell with X to its owner's hand and draws")
-            .interaction(&[names::THIEVING_SKYDIVER])
-            .permanents(P0, &[Permanent::new(names::ISLAND); 4])
-            .hand(P0, &[names::THIEVING_SKYDIVER, names::PLAINS])
-            .library(P0, &[names::ISLAND])
-            .permanents(P1, P1_LANDS)
-            .hand(P1, &[names::REPRIEVE])
-            .library(P1, &[names::PLAINS])
+            .interaction(&[Card::ThievingSkydiver])
+            .battlefield(P0, &[Card::Island; 4])
+            .hand(P0, &[Card::ThievingSkydiver, Card::Plains])
+            .battlefield(P1, &[Card::Plains, Card::Island])
+            .hand(P1, &[Card::Reprieve])
+            .library(P1, &[Card::Plains])
             .actions(&[
                 Action::Cast {
                     player: P0,
-                    card: names::THIEVING_SKYDIVER,
+                    card: Card::ThievingSkydiver,
                     face: FaceIx::FRONT,
                     costs: Castings::only(0),
                 },
-                Action::answer(P0, DecisionKind::X, Pick::Number { n: 1 }),
+                ME.x(1),
                 // P0 has nothing to do with the stack full; the Plains to play keeps the game in
                 // P0's main phase once it is empty.
-                Action::cast(P1, names::REPRIEVE),
-                count(P0, Zone::Hand, names::THIEVING_SKYDIVER, 1),
-                count(P0, Zone::Battlefield, names::THIEVING_SKYDIVER, 0),
-                Action::assert(Assertion::Tapped {
-                    player: P0,
-                    card: names::ISLAND,
-                    count: 3,
-                }),
-                count(P1, Zone::Hand, names::PLAINS, 1),
-                count(P1, Zone::Graveyard, names::REPRIEVE, 1),
+                THEM.casts(Card::Reprieve),
+                ME.has(Zone::Hand, Card::ThievingSkydiver, 1),
+                ME.has(Zone::Battlefield, Card::ThievingSkydiver, 0),
+                ME.tapped(Card::Island, 3),
+                THEM.has(Zone::Hand, Card::Plains, 1),
+                THEM.has(Zone::Graveyard, Card::Reprieve, 1),
             ]),
         // P1 counters the artifact; P0 returns the Counterspell to P1's hand, and the artifact
         // resolves.
         Scenario::new("Reprieve on a counterspell saves the spell it targets")
-            .permanents(P0, &[Permanent::new(names::PLAINS); 3])
-            .hand(P0, &[props::ARTIFACT, names::REPRIEVE])
-            .library(P0, &[names::ISLAND])
-            .permanents(P1, &[Permanent::new(names::ISLAND); 2])
-            .hand(P1, &[names::COUNTERSPELL])
-            .library(P1, &[names::PLAINS])
+            .battlefield(P0, &[Card::Plains; 3])
+            .hand(P0, &[Prop::Artifact, Card::Reprieve])
+            .battlefield(P1, &[Card::Island; 2])
+            .hand(P1, &[Card::Counterspell])
+            .library(P1, &[Card::Plains])
             .actions(&[
-                Action::cast(P0, props::ARTIFACT),
-                Action::pass(P0),
-                Action::cast(P1, names::COUNTERSPELL),
-                Action::cast(P0, names::REPRIEVE),
-                Action::answer(
-                    P0,
-                    DecisionKind::Target,
-                    Pick::Card {
-                        card: names::COUNTERSPELL,
-                    },
-                ),
-                Action::Resolve,
-                count(P1, Zone::Hand, names::COUNTERSPELL, 1),
-                count(P0, Zone::Hand, names::ISLAND, 1),
-                Action::Resolve,
-                count(P0, Zone::Battlefield, props::ARTIFACT, 1),
+                ME.casts(Prop::Artifact),
+                ME.passes(),
+                THEM.casts(Card::Counterspell),
+                ME.casts(Card::Reprieve),
+                ME.targets(Card::Counterspell),
+                Resolve,
+                THEM.has(Zone::Hand, Card::Counterspell, 1),
+                ME.has(Zone::Hand, Card::Island, 1),
+                Resolve,
+                ME.has(Zone::Battlefield, Prop::Artifact, 1),
             ]),
     ];
 }

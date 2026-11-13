@@ -6,9 +6,7 @@
 //! it instead of putting it into its owner's graveyard.
 // End of the generated card header.
 
-use crate::{names, printed};
-use beryl_card::effect::build::{its_controller, target, counter_and_exile, unless_pays};
-use beryl_card::{Ability, CardDef, Filter, ManaCost, TargetKind, TargetSpec, card};
+use crate::prelude::*;
 
 /// "Unless" as [CR 118.12a](https://yawgatog.com/resources/magic-rules/#R11812a) reads it. The
 /// second sentence modifies the first
@@ -16,134 +14,88 @@ use beryl_card::{Ability, CardDef, Filter, ManaCost, TargetKind, TargetSpec, car
 /// may modify the meaning of earlier text (for example, ... 'Counter target spell. If that
 /// spell is countered this way, put it on top of its owner's library instead of into its
 /// owner's graveyard.')", so the countered spell goes straight to exile.
-pub static CARD: CardDef = card(
-    names::NO_MORE_LIES,
-    &[printed::NO_MORE_LIES.abilities(&[Ability::spell()
-        .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
+pub static CARD: CardDef = Printed::NoMoreLies
+    .abilities(&[Ability::spell()
+        .target(&TargetSpec::spell())
         .effect(&unless_pays(
             &counter_and_exile(target()),
             its_controller(),
             ManaCost::generic(3),
-        ))])],
-);
+        ))])
+    .card();
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_card::{DecisionKind, Seat, TurnStep, Zone};
-
-    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
-
-    use crate::{names, props};
-
-    /// One land for the artifact, three for the tax.
-    const P0_LANDS: &[Permanent] = &[
-        Permanent::new(names::PLAINS),
-        Permanent::new(names::PLAINS),
-        Permanent::new(names::PLAINS),
-        Permanent::new(names::PLAINS),
-    ];
-
-    /// Seven lands: four for the planeswalker, three for the tax.
-    const SEVEN_LANDS: &[Permanent] = &[
-        Permanent::new(names::ISLAND),
-        Permanent::new(props::NONBASIC_LAND),
-        Permanent::new(names::PLAINS),
-        Permanent::new(names::PLAINS),
-        Permanent::new(names::ISLAND),
-        Permanent::new(names::PLAINS),
-        Permanent::new(names::PLAINS),
-    ];
-
-    const P1_LANDS: &[Permanent] = &[Permanent::new(names::PLAINS), Permanent::new(names::ISLAND)];
-
-    const fn count(player: Seat, zone: Zone, card: &'static str, count: u8) -> Action {
-        Action::assert(Assertion::Count {
-            player,
-            zone,
-            card: Some(card),
-            count,
-        })
-    }
+    use crate::prelude::*;
 
     /// P1 has a card to draw, so the game waits in their turn 2 once the stack is empty. The
     /// artifact is the spell to counter: it costs {1}, so three of P0's four lands stay free to
     /// pay.
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("No More Lies: the controller pays {3}")
-            .permanents(P0, P0_LANDS)
-            .hand(P0, &[props::ARTIFACT])
-            .permanents(P1, P1_LANDS)
-            .hand(P1, &[names::NO_MORE_LIES])
-            .library(P1, &[names::ISLAND])
+            // One land for the artifact, three for the tax.
+            .battlefield(P0, &[Card::Plains; 4])
+            .hand(P0, &[Prop::Artifact])
+            .battlefield(P1, &[Card::Plains, Card::Island])
+            .hand(P1, &[Card::NoMoreLies])
             .actions(&[
-                Action::cast(P0, props::ARTIFACT),
-                Action::cast(P1, names::NO_MORE_LIES),
-                Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-                count(P0, Zone::Battlefield, props::ARTIFACT, 1),
-                Action::assert(Assertion::Tapped {
-                    player: P0,
-                    card: names::PLAINS,
-                    count: 4,
-                }),
-                count(P1, Zone::Graveyard, names::NO_MORE_LIES, 1),
+                ME.casts(Prop::Artifact),
+                THEM.casts(Card::NoMoreLies),
+                ME.yes(),
+                ME.has(Zone::Battlefield, Prop::Artifact, 1),
+                ME.tapped(Card::Plains, 4),
+                THEM.has(Zone::Graveyard, Card::NoMoreLies, 1),
             ]),
         Scenario::new("No More Lies: declining to pay exiles the spell")
-            .permanents(P0, P0_LANDS)
-            .hand(P0, &[props::ARTIFACT])
-            .permanents(P1, P1_LANDS)
-            .hand(P1, &[names::NO_MORE_LIES])
-            .library(P1, &[names::ISLAND])
+            .battlefield(P0, &[Card::Plains; 4])
+            .hand(P0, &[Prop::Artifact])
+            .battlefield(P1, &[Card::Plains, Card::Island])
+            .hand(P1, &[Card::NoMoreLies])
             .actions(&[
-                Action::cast(P0, props::ARTIFACT),
-                Action::cast(P1, names::NO_MORE_LIES),
-                Action::answer(P0, DecisionKind::YesNo, Pick::No),
-                count(P0, Zone::Exile, props::ARTIFACT, 1),
-                count(P0, Zone::Graveyard, props::ARTIFACT, 0),
-                Action::assert(Assertion::Tapped {
-                    player: P0,
-                    card: names::PLAINS,
-                    count: 1,
-                }),
+                ME.casts(Prop::Artifact),
+                THEM.casts(Card::NoMoreLies),
+                ME.no(),
+                ME.has(Zone::Exile, Prop::Artifact, 1),
+                ME.has(Zone::Graveyard, Prop::Artifact, 0),
+                ME.tapped(Card::Plains, 1),
             ]),
         // The planeswalker ({2}{U}{U}) taps four of P0's seven lands, and the three left pay
         // {3}.
         Scenario::new("No More Lies: lands left after paying for the spell pay {3}")
-            .permanents(P0, SEVEN_LANDS)
-            .hand(P0, &[props::PLANESWALKER])
-            .permanents(P1, P1_LANDS)
-            .hand(P1, &[names::NO_MORE_LIES])
-            .library(P1, &[names::ISLAND])
+            // Seven lands: four for the planeswalker, three for the tax.
+            .battlefield(
+                P0,
+                &[
+                    Card::Island,
+                    Prop::NonbasicLand,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Island,
+                    Card::Plains,
+                    Card::Plains,
+                ],
+            )
+            .hand(P0, &[Prop::Planeswalker])
+            .battlefield(P1, &[Card::Plains, Card::Island])
+            .hand(P1, &[Card::NoMoreLies])
             .actions(&[
-                Action::cast(P0, props::PLANESWALKER),
-                Action::cast(P1, names::NO_MORE_LIES),
-                Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-                Action::AdvanceTo {
-                    turn: 1,
-                    step: TurnStep::End,
-                },
-                Action::assert(Assertion::Controls {
-                    player: P0,
-                    card: props::PLANESWALKER,
-                    count: 1,
-                }),
-                Action::assert(Assertion::Count {
-                    player: P1,
-                    zone: Zone::Graveyard,
-                    card: Some(names::NO_MORE_LIES),
-                    count: 1,
-                }),
+                ME.casts(Prop::Planeswalker),
+                THEM.casts(Card::NoMoreLies),
+                ME.yes(),
+                advance_to(1, TurnStep::End),
+                ME.controls(Prop::Planeswalker, 1),
+                THEM.has(Zone::Graveyard, Card::NoMoreLies, 1),
             ]),
         Scenario::new("No More Lies: a controller who can't pay isn't asked")
-            .permanents(P0, &[Permanent::new(names::PLAINS)])
-            .hand(P0, &[props::ARTIFACT])
-            .permanents(P1, P1_LANDS)
-            .hand(P1, &[names::NO_MORE_LIES])
-            .library(P1, &[names::ISLAND])
+            .battlefield(P0, &[Card::Plains])
+            .hand(P0, &[Prop::Artifact])
+            .battlefield(P1, &[Card::Plains, Card::Island])
+            .hand(P1, &[Card::NoMoreLies])
             .actions(&[
-                Action::cast(P0, props::ARTIFACT),
-                Action::cast(P1, names::NO_MORE_LIES),
-                count(P0, Zone::Exile, props::ARTIFACT, 1),
-                count(P0, Zone::Graveyard, props::ARTIFACT, 0),
+                ME.casts(Prop::Artifact),
+                THEM.casts(Card::NoMoreLies),
+                ME.has(Zone::Exile, Prop::Artifact, 1),
+                ME.has(Zone::Graveyard, Prop::Artifact, 0),
             ]),
     ];
 }

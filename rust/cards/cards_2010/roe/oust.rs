@@ -5,9 +5,7 @@
 //! Put target creature into its owner's library second from the top. Its controller gains 3 life.
 // End of the generated card header.
 
-use crate::{names, printed};
-use beryl_card::effect::build::{its_controller, target, gain_life, put_into_library, sequence};
-use beryl_card::{Ability, CardDef, Filter, LibraryPosition, TargetKind, TargetSpec, Types, card};
+use crate::prelude::*;
 
 /// "Second from the top" is under one card, or the top of an empty library. "Its controller"
 /// is the creature's as it was on the battlefield: in a library it has no controller
@@ -15,46 +13,29 @@ use beryl_card::{Ability, CardDef, Filter, LibraryPosition, TargetKind, TargetSp
 /// the controller of a card that doesn't have one (because it's not a permanent or spell),
 /// use its owner instead." Owner and controller differ only for a stolen creature, which
 /// goes to its owner's library while its controller gains the life.
-pub static CARD: CardDef = card(
-    names::OUST,
-    &[printed::OUST.abilities(&[Ability::spell()
-        .targeting(&[TargetSpec::one(
-            TargetKind::Permanent,
-            Filter::Types(Types::CREATURE),
-        )])
+pub static CARD: CardDef = Printed::Oust
+    .abilities(&[Ability::spell()
+        .target(&TargetSpec::creature())
         .effect(&sequence(&[
             put_into_library(target(), LibraryPosition::FromTop(2)),
             gain_life(its_controller(), 3),
-        ]))])],
-);
+        ]))])
+    .card();
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_card::{DecisionKind, Seat, TurnStep, Zone};
-    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Scenario};
+    use crate::prelude::*;
 
-    use crate::{names, props};
-
-    const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
+    const SPELLBINDER: &str = Card::EliteSpellbinder;
 
     /// P0 casts Oust on P1's Elite Spellbinder, whose library is `top`. The Plains left in P0's
     /// hand keeps the game in P0's main phase once Oust has resolved.
     const fn oust_onto(name: &'static str, top: &'static [&'static str]) -> Scenario {
-        const PLAINS: &[Permanent] = &[Permanent::new(names::PLAINS)];
-        const SPELLBINDERS: &[Permanent] = &[Permanent::new(SPELLBINDER)];
         Scenario::new(name)
-            .permanents(P0, PLAINS)
-            .hand(P0, &[names::OUST, names::PLAINS])
-            .permanents(P1, SPELLBINDERS)
+            .battlefield(P0, &[Card::Plains])
+            .hand(P0, &[Card::Oust, Card::Plains])
+            .battlefield(P1, &[SPELLBINDER])
             .library(P1, top)
-    }
-
-    const fn library(top: &'static [&'static str]) -> Action {
-        Action::assert(Assertion::Library { player: P1, top })
-    }
-
-    const fn life(player: Seat, life: i16) -> Action {
-        Action::assert(Assertion::Life { player, life })
     }
 
     pub const SCENARIOS: &[Scenario] = &[
@@ -62,27 +43,13 @@ pub mod scenarios {
         // ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c)): P1's only
         // permanent is a noncreature artifact, so passing is P0's only option.
         Scenario::new("Oust can't be cast without a target")
-            .permanents(
-                P0,
-                &[
-                    Permanent::new(names::PLAINS),
-                    Permanent::new(names::PLAINS),
-                    Permanent::new(names::PLAINS),
-                ],
-            )
-            .hand(P0, &[names::OUST])
-            .permanents(P1, &[Permanent::new(props::ARTIFACT)])
-            .library(P1, &[names::ISLAND])
+            .battlefield(P0, &[Card::Plains; 3])
+            .hand(P0, &[Card::Oust])
+            .battlefield(P1, &[Prop::Artifact])
+            .library(P1, &[Card::Island])
             .actions(&[
-                Action::AdvanceTo {
-                    turn: 1,
-                    step: TurnStep::PrecombatMain,
-                },
-                Action::assert(Assertion::Decision {
-                    player: P0,
-                    kind: DecisionKind::Priority,
-                    candidates: 1,
-                }),
+                advance_to(1, TurnStep::PrecombatMain),
+                ME.deciding(DecisionKind::Priority, 1),
             ]),
         // Second from the top of an empty library is its top: the creature is its only card.
         oust_onto(
@@ -90,73 +57,43 @@ pub mod scenarios {
             &[],
         )
         .actions(&[
-            Action::cast(P0, names::OUST),
-            library(&[SPELLBINDER]),
-            life(P1, 23),
-            life(P0, 20),
+            ME.casts(Card::Oust),
+            THEM.library_top(&[SPELLBINDER]),
+            THEM.life(23),
+            ME.life(20),
         ]),
         oust_onto(
             "Oust on a library of one puts the creature under it",
-            &[names::ISLAND],
+            &[Card::Island],
         )
         .actions(&[
-            Action::cast(P0, names::OUST),
-            library(&[names::ISLAND, SPELLBINDER]),
+            ME.casts(Card::Oust),
+            THEM.library_top(&[Card::Island, SPELLBINDER]),
         ]),
         oust_onto(
             "Oust puts the creature second from the top and its controller gains 3",
-            &[names::ISLAND, names::PLAINS],
+            &[Card::Island, Card::Plains],
         )
         .actions(&[
-            Action::cast(P0, names::OUST),
-            library(&[names::ISLAND, SPELLBINDER, names::PLAINS]),
-            Action::assert(Assertion::Count {
-                player: P1,
-                zone: Zone::Battlefield,
-                card: Some(SPELLBINDER),
-                count: 0,
-            }),
-            Action::assert(Assertion::Count {
-                player: P0,
-                zone: Zone::Graveyard,
-                card: Some(names::OUST),
-                count: 1,
-            }),
-            life(P1, 23),
+            ME.casts(Card::Oust),
+            THEM.library_top(&[Card::Island, SPELLBINDER, Card::Plains]),
+            THEM.has(Zone::Battlefield, SPELLBINDER, 0),
+            ME.has(Zone::Graveyard, Card::Oust, 1),
+            THEM.life(23),
         ]),
         // UI regression by-97z: the lower spell's target stays legible beneath a response. P0's
         // own Counterspell keeps each of P0's priorities a decision.
         Scenario::new("Oust beneath an opposing counterspell")
-            .permanents(
-                P0,
-                &[
-                    Permanent::new(names::PLAINS),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                ],
-            )
-            .hand(P0, &[names::OUST, props::INSTANT, names::PLAINS])
-            .permanents(
-                P1,
-                &[
-                    Permanent::new(SPELLBINDER),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                ],
-            )
-            .hand(P1, &[props::INSTANT])
-            .library(P0, &[names::ISLAND])
-            .library(P1, &[names::ISLAND])
+            .battlefield(P0, &[Card::Plains, Card::Island, Card::Island])
+            .hand(P0, &[Card::Oust, Prop::Instant, Card::Plains])
+            .battlefield(P1, &[SPELLBINDER, Card::Island, Card::Island])
+            .hand(P1, &[Prop::Instant])
             .actions(&[
-                Action::cast(P0, names::OUST),
-                Action::pass(P0),
-                Action::cast(P1, props::INSTANT),
-                Action::pass(P0),
-                Action::assert(Assertion::Controls {
-                    player: P1,
-                    card: SPELLBINDER,
-                    count: 1,
-                }),
+                ME.casts(Card::Oust),
+                ME.passes(),
+                THEM.casts(Prop::Instant),
+                ME.passes(),
+                THEM.controls(SPELLBINDER, 1),
             ]),
     ];
 }

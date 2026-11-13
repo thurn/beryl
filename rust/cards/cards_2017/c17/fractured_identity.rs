@@ -6,11 +6,7 @@
 //! copy of it.
 // End of the generated card header.
 
-use crate::{names, printed};
-use beryl_card::effect::build::{
-    its_controller, target, create_copy, each_player_other_than, exile, sequence,
-};
-use beryl_card::{Ability, CardDef, Filter, TargetKind, TargetSpec, Types, card};
+use crate::prelude::*;
 
 /// "Its controller" and "it" are the permanent as it last existed on the battlefield
 /// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "If an effect requires
@@ -25,64 +21,40 @@ use beryl_card::{Ability, CardDef, Filter, TargetKind, TargetSpec, Types, card};
 ///
 /// [CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112): "The player who creates a
 /// token is its owner. The token enters the battlefield under that player's control."
-pub static CARD: CardDef = card(
-    names::FRACTURED_IDENTITY,
-    &[printed::FRACTURED_IDENTITY.abilities(&[Ability::spell()
-        .targeting(&[TargetSpec::one(
-            TargetKind::Permanent,
-            Filter::Not(&Filter::Types(Types::LAND)),
-        )])
+pub static CARD: CardDef = Printed::FracturedIdentity
+    .abilities(&[Ability::spell()
+        .target(&TargetSpec::permanent(Filter::Not(&Filter::Types(
+            Types::LAND,
+        ))))
         .effect(&sequence(&[
             exile(target()),
             create_copy(each_player_other_than(&its_controller()), target()),
-        ]))])],
-);
+        ]))])
+    .card();
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_card::CounterKind;
-
-    use beryl_card::{Seat, Zone};
-    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Scenario};
-
+    use crate::prelude::*;
     use crate::tokens::SAMURAI_TOKEN;
-    use crate::{names, props};
 
-    const IDENTITY: &str = names::FRACTURED_IDENTITY;
+    const IDENTITY: &str = Card::FracturedIdentity;
 
-    const PLANESWALKER: &str = props::PLANESWALKER;
+    const PLANESWALKER: &str = Prop::Planeswalker;
 
-    const EMPEROR: &str = names::THE_WANDERING_EMPEROR;
+    const EMPEROR: &str = Card::TheWanderingEmperor;
 
-    const JACE: &str = names::JACE_VRYNS_PRODIGY;
+    const JACE: &str = Card::JaceVrynsProdigy;
 
     /// Jace, Vryn's Prodigy's back face (CR 712.6d).
     const TELEPATH: &str = "Jace, Telepath Unbound";
 
-    const FIVE_LANDS: &[Permanent] = &[
-        Permanent::new(names::PLAINS),
-        Permanent::new(names::PLAINS),
-        Permanent::new(names::ISLAND),
-        Permanent::new(names::ISLAND),
-        Permanent::new(names::ISLAND),
+    const FIVE_LANDS: &[&str] = &[
+        Card::Plains,
+        Card::Plains,
+        Card::Island,
+        Card::Island,
+        Card::Island,
     ];
-
-    const fn controls(player: Seat, card: &'static str, count: u8) -> Action {
-        Action::assert(Assertion::Controls {
-            player,
-            card,
-            count,
-        })
-    }
-
-    const fn loyalty(player: Seat, card: &'static str, count: u8) -> Action {
-        Action::assert(Assertion::Counters {
-            player,
-            card,
-            kind: CounterKind::Loyalty,
-            count,
-        })
-    }
 
     /// P0 casts Fractured Identity on P1's one nonland permanent, `target`; P0 gets a copy of it,
     /// which `then` checks.
@@ -103,11 +75,9 @@ pub mod scenarios {
     ) -> Scenario {
         Scenario::new(name)
             .interaction(interaction)
-            .permanents(P0, FIVE_LANDS)
+            .battlefield(P0, FIVE_LANDS)
             .hand(P0, &[IDENTITY])
-            .library(P0, &[names::ISLAND])
             .permanents(P1, target)
-            .library(P1, &[names::ISLAND])
             .actions(then)
     }
 
@@ -117,17 +87,12 @@ pub mod scenarios {
             "Fractured Identity on a planeswalker: the copy has its printed loyalty",
             &[Permanent::new(PLANESWALKER).counters(CounterKind::Loyalty, 6)],
             &[
-                Action::cast(P0, IDENTITY),
-                Action::Resolve,
-                Action::assert(Assertion::Count {
-                    player: P1,
-                    zone: Zone::Exile,
-                    card: Some(PLANESWALKER),
-                    count: 1,
-                }),
-                controls(P1, PLANESWALKER, 0),
-                controls(P0, PLANESWALKER, 1),
-                loyalty(P0, PLANESWALKER, 3),
+                ME.casts(IDENTITY),
+                Resolve,
+                THEM.has(Zone::Exile, PLANESWALKER, 1),
+                THEM.controls(PLANESWALKER, 0),
+                ME.controls(PLANESWALKER, 1),
+                ME.has_loyalty(PLANESWALKER, 3),
             ],
         ),
         fracture_with(
@@ -135,15 +100,11 @@ pub mod scenarios {
             &[JACE],
             &[Permanent::new(JACE)],
             &[
-                Action::cast(P0, IDENTITY),
-                Action::Resolve,
-                controls(P1, JACE, 0),
-                controls(P0, JACE, 1),
-                Action::assert(Assertion::Creature {
-                    player: P0,
-                    card: JACE,
-                    creature: true,
-                }),
+                ME.casts(IDENTITY),
+                Resolve,
+                THEM.controls(JACE, 0),
+                ME.controls(JACE, 1),
+                ME.creature(JACE, true),
             ],
         ),
         // CR 707.8a: the copy of a transformed permanent enters with its back face up.
@@ -152,49 +113,41 @@ pub mod scenarios {
             &[JACE],
             &[Permanent::new(JACE).transformed()],
             &[
-                Action::cast(P0, IDENTITY),
-                Action::Resolve,
-                controls(P1, TELEPATH, 0),
-                controls(P0, JACE, 0),
-                controls(P0, TELEPATH, 1),
-                loyalty(P0, TELEPATH, 5),
+                ME.casts(IDENTITY),
+                Resolve,
+                THEM.controls(TELEPATH, 0),
+                ME.controls(JACE, 0),
+                ME.controls(TELEPATH, 1),
+                ME.has_loyalty(TELEPATH, 5),
             ],
         ),
         // P0 targets their own Samurai token: it is exiled and ceases to exist, and P1, the one
         // other player, gets the copy, a 2/2.
         Scenario::new("Fractured Identity on its caster's own token")
             .interaction(&[EMPEROR])
-            .permanents(
+            .battlefield(
                 P0,
                 &[
-                    Permanent::new(EMPEROR),
-                    Permanent::new(names::PLAINS),
-                    Permanent::new(names::PLAINS),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
+                    EMPEROR,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
                 ],
             )
             .hand(P0, &[IDENTITY])
-            .library(P0, &[names::ISLAND])
-            .library(P1, &[names::ISLAND])
             .actions(&[
-                Action::activate(P0, EMPEROR, 2),
-                Action::Resolve,
-                controls(P0, SAMURAI_TOKEN, 1),
-                Action::cast(P0, IDENTITY),
-                Action::choose(P0, beryl_card::DecisionKind::Target, SAMURAI_TOKEN),
-                Action::Resolve,
-                controls(P0, SAMURAI_TOKEN, 0),
-                controls(P0, EMPEROR, 1),
-                controls(P1, SAMURAI_TOKEN, 1),
-                Action::assert(Assertion::Pt {
-                    player: P1,
-                    card: SAMURAI_TOKEN,
-                    token: true,
-                    power: 2,
-                    toughness: 2,
-                }),
+                ME.activates(EMPEROR, 2),
+                Resolve,
+                ME.controls(SAMURAI_TOKEN, 1),
+                ME.casts(IDENTITY),
+                ME.targets(SAMURAI_TOKEN),
+                Resolve,
+                ME.controls(SAMURAI_TOKEN, 0),
+                ME.controls(EMPEROR, 1),
+                THEM.controls(SAMURAI_TOKEN, 1),
+                THEM.token_pt(SAMURAI_TOKEN, 2, 2),
             ]),
     ];
 }

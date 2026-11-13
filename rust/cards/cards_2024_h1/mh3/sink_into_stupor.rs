@@ -11,12 +11,7 @@
 //! {T}: Add {U}.
 // End of the generated card header.
 
-use crate::{names, printed};
-use beryl_card::effect::build::{target, return_to_hand};
-use beryl_card::{
-    Ability, CardDef, Filter, ManaColor, ManaSet, Players, Replacement, TargetKind, TargetSpec,
-    Types, card,
-};
+use crate::prelude::*;
 
 /// [CR 712.8b](https://yawgatog.com/resources/magic-rules/#R7128b): "A player casting a modal
 /// double-faced card ... chooses which face they are casting"; only the instant can be, and
@@ -27,18 +22,18 @@ use beryl_card::{
 /// A spell returned to its owner's hand leaves the stack without resolving; a permanent
 /// leaves the battlefield.
 pub static CARD: CardDef = card(
-    names::SINK_INTO_STUPOR,
+    Card::SinkIntoStupor,
     &[
-        printed::SINK_INTO_STUPOR.abilities(&[Ability::spell()
-            .targeting(&[TargetSpec::one(
+        Printed::SinkIntoStupor.abilities(&[Ability::spell()
+            .target(&TargetSpec::one(
                 TargetKind::SpellOrPermanent,
                 Filter::All(&[
                     Filter::Whose(&Players::EachOpponent),
                     Filter::Not(&Filter::Types(Types::LAND)),
                 ]),
-            )])
+            ))
             .effect(&return_to_hand(target()))]),
-        printed::SOPORIFIC_SPRINGS.abilities(&[
+        Printed::SoporificSprings.abilities(&[
             Ability::replacing(Replacement::EntersTappedUnlessPayLife(3)),
             Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
         ]),
@@ -47,122 +42,73 @@ pub static CARD: CardDef = card(
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_card::{DecisionKind, Seat, TurnStep, Zone};
-
-    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
-
-    use crate::{names, props};
+    use crate::prelude::*;
 
     const SPRINGS: &str = "Soporific Springs";
-
-    const THREE_ISLANDS: &[Permanent] = &[
-        Permanent::new(names::ISLAND),
-        Permanent::new(names::ISLAND),
-        Permanent::new(names::ISLAND),
-    ];
-
-    const fn count(player: Seat, zone: Zone, card: &'static str, count: u8) -> Action {
-        Action::assert(Assertion::Count {
-            player,
-            zone,
-            card: Some(card),
-            count,
-        })
-    }
-
-    const fn springs_tapped(count: u8) -> Action {
-        Action::assert(Assertion::Tapped {
-            player: P0,
-            card: SPRINGS,
-            count,
-        })
-    }
-
-    const fn life(life: i16) -> Action {
-        Action::assert(Assertion::Life { player: P0, life })
-    }
 
     /// The only legal target is chosen silently: lands are not "nonland", and P0's own objects
     /// are not an opponent's.
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("Sink into Stupor returns a spell to its owner's hand")
             .at(2, P1, TurnStep::PrecombatMain)
-            .permanents(P0, THREE_ISLANDS)
-            .hand(P0, &[names::SINK_INTO_STUPOR])
-            .permanents(P1, THREE_ISLANDS)
-            .hand(P1, &[names::TIMETWISTER])
-            .library(P0, &[names::PLAINS])
+            .battlefield(P0, &[Card::Island; 3])
+            .hand(P0, &[Card::SinkIntoStupor])
+            .battlefield(P1, &[Card::Island; 3])
+            .hand(P1, &[Card::Timetwister])
+            .library(P0, &[Card::Plains])
             .actions(&[
-                Action::cast(P1, names::TIMETWISTER),
-                Action::cast(P0, names::SINK_INTO_STUPOR),
-                count(P1, Zone::Hand, names::TIMETWISTER, 1),
-                count(P1, Zone::Graveyard, names::TIMETWISTER, 0),
-                count(P0, Zone::Graveyard, names::SINK_INTO_STUPOR, 1),
+                THEM.casts(Card::Timetwister),
+                ME.casts(Card::SinkIntoStupor),
+                THEM.has(Zone::Hand, Card::Timetwister, 1),
+                THEM.has(Zone::Graveyard, Card::Timetwister, 0),
+                ME.has(Zone::Graveyard, Card::SinkIntoStupor, 1),
             ]),
         Scenario::new("Sink into Stupor returns a nonland permanent, never a land")
-            .permanents(P0, THREE_ISLANDS)
-            .hand(P0, &[names::SINK_INTO_STUPOR])
-            .permanents(
-                P1,
-                &[
-                    Permanent::new(props::ARTIFACT),
-                    Permanent::new(names::ISLAND),
-                ],
-            )
-            .library(P1, &[names::PLAINS])
+            .battlefield(P0, &[Card::Island; 3])
+            .hand(P0, &[Card::SinkIntoStupor])
+            .battlefield(P1, &[Prop::Artifact, Card::Island])
+            .library(P1, &[Card::Plains])
             .actions(&[
-                Action::cast(P0, names::SINK_INTO_STUPOR),
-                count(P1, Zone::Hand, props::ARTIFACT, 1),
-                count(P1, Zone::Battlefield, names::ISLAND, 1),
+                ME.casts(Card::SinkIntoStupor),
+                THEM.has(Zone::Hand, Prop::Artifact, 1),
+                THEM.has(Zone::Battlefield, Card::Island, 1),
             ]),
         // Played as Soporific Springs paying 3 life, it taps for the {U} of the other copy cast
         // as Sink into Stupor.
         Scenario::new("Soporific Springs: 3 life paid, it enters untapped")
-            .permanents(
-                P0,
-                &[Permanent::new(names::ISLAND), Permanent::new(names::ISLAND)],
-            )
-            .hand(P0, &[names::SINK_INTO_STUPOR, names::SINK_INTO_STUPOR])
-            .permanents(P1, &[Permanent::new(props::ARTIFACT)])
-            .library(P1, &[names::PLAINS])
+            .battlefield(P0, &[Card::Island, Card::Island])
+            .hand(P0, &[Card::SinkIntoStupor, Card::SinkIntoStupor])
+            .battlefield(P1, &[Prop::Artifact])
+            .library(P1, &[Card::Plains])
             .actions(&[
-                Action::PlayLand {
-                    player: P0,
-                    card: names::SINK_INTO_STUPOR,
-                },
-                Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
-                life(17),
-                count(P0, Zone::Battlefield, SPRINGS, 1),
-                springs_tapped(0),
-                Action::cast(P0, names::SINK_INTO_STUPOR),
-                springs_tapped(1),
-                count(P1, Zone::Hand, props::ARTIFACT, 1),
+                ME.plays(Card::SinkIntoStupor),
+                ME.yes(),
+                ME.life(17),
+                ME.has(Zone::Battlefield, SPRINGS, 1),
+                ME.tapped(SPRINGS, 0),
+                ME.casts(Card::SinkIntoStupor),
+                ME.tapped(SPRINGS, 1),
+                THEM.has(Zone::Hand, Prop::Artifact, 1),
             ]),
         Scenario::new("Soporific Springs: no life paid, it enters tapped")
-            .hand(P0, &[names::SINK_INTO_STUPOR])
-            .library(P1, &[names::PLAINS])
+            .hand(P0, &[Card::SinkIntoStupor])
+            .library(P1, &[Card::Plains])
             .actions(&[
-                Action::PlayLand {
-                    player: P0,
-                    card: names::SINK_INTO_STUPOR,
-                },
-                Action::answer(P0, DecisionKind::YesNo, Pick::No),
-                life(20),
-                springs_tapped(1),
+                ME.plays(Card::SinkIntoStupor),
+                ME.no(),
+                ME.life(20),
+                ME.tapped(SPRINGS, 1),
             ]),
         // CR 119.4: a player "may [pay life] only if their life total is greater than or equal to
         // the amount of the payment."
         Scenario::new("Soporific Springs: with 2 life, it enters tapped unasked")
             .life(P0, 2)
-            .hand(P0, &[names::SINK_INTO_STUPOR])
-            .library(P1, &[names::PLAINS])
+            .hand(P0, &[Card::SinkIntoStupor])
+            .library(P1, &[Card::Plains])
             .actions(&[
-                Action::PlayLand {
-                    player: P0,
-                    card: names::SINK_INTO_STUPOR,
-                },
-                life(2),
-                springs_tapped(1),
+                ME.plays(Card::SinkIntoStupor),
+                ME.life(2),
+                ME.tapped(SPRINGS, 1),
             ]),
     ];
 }

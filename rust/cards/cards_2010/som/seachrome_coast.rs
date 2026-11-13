@@ -6,97 +6,55 @@
 //! {T}: Add {W} or {U}.
 // End of the generated card header.
 
-use crate::{names, printed};
-use beryl_card::{Ability, CardDef, ManaColor, ManaSet, Replacement, card};
+use crate::prelude::*;
 
 /// The entering replacement ([CR 614.1d](https://yawgatog.com/resources/magic-rules/#R6141d)):
 /// "Continuous effects that read "[This permanent] enters . . ." ... are replacement
 /// effects." It counts the lands its controller controls as it would enter, which are all
 /// other lands.
-pub static CARD: CardDef = card(
-    names::SEACHROME_COAST,
-    &[printed::SEACHROME_COAST.abilities(&[
+pub static CARD: CardDef = Printed::SeachromeCoast
+    .abilities(&[
         Ability::replacing(Replacement::EntersTappedUnlessFewLands(2)),
         Ability::tap_for_mana(ManaSet::one(ManaColor::White)),
         Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
-    ])],
-);
+    ])
+    .card();
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_card::Zone;
-    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Scenario};
-
-    use crate::{names, props};
-
-    const fn coast_tapped(count: u8) -> Action {
-        Action::assert(Assertion::Tapped {
-            player: P0,
-            card: names::SEACHROME_COAST,
-            count,
-        })
-    }
-
-    const PLAY: Action = Action::PlayLand {
-        player: P0,
-        card: names::SEACHROME_COAST,
-    };
+    use crate::prelude::*;
 
     pub const SCENARIOS: &[Scenario] = &[
         // Then its {U} is the only blue mana for Timetwister.
         Scenario::new("Seachrome Coast with two other lands enters untapped")
-            .permanents(
-                P0,
-                &[Permanent::new(names::PLAINS), Permanent::new(names::PLAINS)],
-            )
-            .hand(P0, &[names::SEACHROME_COAST, names::TIMETWISTER])
-            .library(P0, &[names::ISLAND; 7])
-            .library(P1, &[names::ISLAND; 8])
+            .battlefield(P0, &[Card::Plains, Card::Plains])
+            .hand(P0, &[Card::SeachromeCoast, Card::Timetwister])
+            .library(P0, &[Card::Island; 7])
+            .library(P1, &[Card::Island; 8])
             .actions(&[
-                PLAY,
-                coast_tapped(0),
-                Action::cast(P0, names::TIMETWISTER),
-                coast_tapped(1),
-                Action::assert(Assertion::Count {
-                    player: P0,
-                    zone: Zone::Graveyard,
-                    card: Some(names::TIMETWISTER),
-                    count: 1,
-                }),
+                ME.plays(Card::SeachromeCoast),
+                ME.tapped(Card::SeachromeCoast, 0),
+                ME.casts(Card::Timetwister),
+                ME.tapped(Card::SeachromeCoast, 1),
+                ME.has(Zone::Graveyard, Card::Timetwister, 1),
             ]),
         Scenario::new("Seachrome Coast with three other lands enters tapped")
-            .permanents(
-                P0,
-                &[
-                    Permanent::new(names::PLAINS),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::TUNDRA),
-                ],
-            )
-            .hand(P0, &[names::SEACHROME_COAST])
-            .library(P1, &[names::ISLAND])
-            .actions(&[PLAY, coast_tapped(1)]),
+            .battlefield(P0, &[Card::Plains, Card::Island, Card::Tundra])
+            .hand(P0, &[Card::SeachromeCoast])
+            .actions(&[
+                ME.plays(Card::SeachromeCoast),
+                ME.tapped(Card::SeachromeCoast, 1),
+            ]),
         // Its {W} is P0's only white mana for the artifact. The land still to play keeps the
         // game in P0's main phase.
         Scenario::new("Seachrome Coast's white mana")
-            .permanents(
-                P0,
-                &[
-                    Permanent::new(names::SEACHROME_COAST),
-                    Permanent::new(names::ISLAND),
-                ],
-            )
-            .hand(P0, &[props::ARTIFACT, names::PLAINS])
-            .library(P1, &[names::ISLAND])
+            .battlefield(P0, &[Card::SeachromeCoast, Card::Island])
+            .hand(P0, &[Prop::Artifact, Card::Plains])
             .actions(&[
-                Action::cast(P0, props::ARTIFACT),
-                coast_tapped(1),
-                Action::Resolve,
-                Action::assert(Assertion::Controls {
-                    player: P0,
-                    card: props::ARTIFACT,
-                    count: 1,
-                }),
+                ME.casts(Prop::Artifact),
+                ME.tapped(Card::SeachromeCoast, 1),
+                Resolve,
+                ME.controls(Prop::Artifact, 1),
             ]),
     ];
 }

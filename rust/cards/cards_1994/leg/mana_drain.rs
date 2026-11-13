@@ -6,51 +6,33 @@
 //! that spell's mana value.
 // End of the generated card header.
 
-use crate::{names, printed};
-use beryl_card::effect::build::{
-    carried, target, you, add_mana_of_kind, counter, delay_carrying, sequence,
-};
-use beryl_card::{
-    Ability, Amount, CardDef, Effect, Filter, ManaColor, Players, TargetKind, TargetSpec, Trigger,
-    card,
-};
-
-/// The place of the delayed ability among the face's abilities.
-const ADD_COLORLESS: u8 = 1;
-
-pub static CARD: CardDef =
-    card(
-        names::MANA_DRAIN,
-        &[printed::MANA_DRAIN.abilities(&[
-            Ability::spell()
-                .targeting(&[TargetSpec::one(TargetKind::Spell, Filter::Any)])
-                .effect(&COUNTER_AND_DELAY),
-            // CR 106.4: "When an effect instructs a player to add mana, that mana goes into
-            // a player's mana pool."
-            Ability::triggered(&Trigger::main_phase(Players::You).next())
-                .effect(&add_mana_of_kind(you(), ManaColor::Colorless, carried())),
-        ])],
-    );
+use crate::prelude::*;
 
 /// The mana value is the spell's as it was on the stack, X included
 /// ([CR 202.3e](https://yawgatog.com/resources/magic-rules/#R2023e)): "X is treated as the
 /// number chosen for it while the object is on the stack." The second sentence creates a
 /// delayed triggered ability ([CR 603.7a](https://yawgatog.com/resources/magic-rules/#R6037a)):
 /// "Delayed triggered abilities are created during the resolution of spells or abilities".
-static COUNTER_AND_DELAY: Effect = sequence(&[
-    counter(target()),
-    delay_carrying(ADD_COLORLESS, Amount::ManaValue(target())),
-]);
+///
+/// The delayed ability is the face's ability 1.
+pub static CARD: CardDef = Printed::ManaDrain
+    .abilities(&[
+        Ability::spell()
+            .target(&TargetSpec::spell())
+            .effect(&sequence(&[
+                counter(target()),
+                delay_carrying(1, Amount::ManaValue(target())),
+            ])),
+        // CR 106.4: "When an effect instructs a player to add mana, that mana goes into
+        // a player's mana pool."
+        Ability::triggered(&Trigger::main_phase(Players::You).next())
+            .effect(&add_mana_of_kind(you(), ManaColor::Colorless, carried())),
+    ])
+    .card();
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_card::ManaColor as Color;
-
-    use beryl_card::{DecisionKind, TurnStep, Zone};
-
-    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
-
-    use crate::{names, props};
+    use crate::prelude::*;
 
     /// P0 counters P1's Timetwister (mana value 3) in P1's precombat main phase. The mana waits
     /// for P0's own next main phase: not P1's postcombat main, but P0's precombat main of turn 3,
@@ -64,106 +46,39 @@ pub mod scenarios {
             "Mana Drain: the countered spell's mana value at the caster's next main phase",
         )
         .at(2, P1, TurnStep::PrecombatMain)
-        .permanents(
-            P0,
-            &[Permanent::new(names::ISLAND), Permanent::new(names::ISLAND)],
-        )
-        .hand(P0, &[names::MANA_DRAIN])
-        .library(P0, &[names::PLAINS])
-        .permanents(
-            P1,
-            &[
-                Permanent::new(names::ISLAND),
-                Permanent::new(names::ISLAND),
-                Permanent::new(names::ISLAND),
-            ],
-        )
-        .hand(P1, &[names::TIMETWISTER])
+        .battlefield(P0, &[Card::Island, Card::Island])
+        .hand(P0, &[Card::ManaDrain])
+        .library(P0, &[Card::Plains])
+        .battlefield(P1, &[Card::Island; 3])
+        .hand(P1, &[Card::Timetwister])
         .actions(&[
-            Action::cast(P1, names::TIMETWISTER),
-            Action::cast(P0, names::MANA_DRAIN),
-            Action::assert(Assertion::Count {
-                player: P1,
-                zone: Zone::Graveyard,
-                card: Some(names::TIMETWISTER),
-                count: 1,
-            }),
-            Action::AdvanceTo {
-                turn: 2,
-                step: TurnStep::PostcombatMain,
-            },
-            Action::assert(Assertion::Mana {
-                player: P0,
-                color: Color::Colorless,
-                amount: 0,
-            }),
-            Action::AdvanceTo {
-                turn: 3,
-                step: TurnStep::PrecombatMain,
-            },
-            Action::pass(P0),
-            Action::assert(Assertion::Mana {
-                player: P0,
-                color: Color::Colorless,
-                amount: 3,
-            }),
+            THEM.casts(Card::Timetwister),
+            ME.casts(Card::ManaDrain),
+            THEM.has(Zone::Graveyard, Card::Timetwister, 1),
+            advance_to(2, TurnStep::PostcombatMain),
+            ME.mana(ManaColor::Colorless, 0),
+            advance_to(3, TurnStep::PrecombatMain),
+            ME.passes(),
+            ME.mana(ManaColor::Colorless, 3),
         ]),
         // P1 counters P0's artifact with Counterspell, and P0 drains the Counterspell.
         Scenario::new("Mana Drain on the caster's own turn: mana at that turn's postcombat main")
-            .permanents(
-                P0,
-                &[
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::ISLAND),
-                    Permanent::new(names::PLAINS),
-                ],
-            )
-            .hand(P0, &[props::ARTIFACT, names::MANA_DRAIN, names::PLAINS])
-            .permanents(
-                P1,
-                &[Permanent::new(names::ISLAND), Permanent::new(names::ISLAND)],
-            )
-            .hand(P1, &[props::INSTANT])
-            .library(P1, &[names::ISLAND])
+            .battlefield(P0, &[Card::Island, Card::Island, Card::Plains])
+            .hand(P0, &[Prop::Artifact, Card::ManaDrain, Card::Plains])
+            .battlefield(P1, &[Card::Island, Card::Island])
+            .hand(P1, &[Prop::Instant])
             .actions(&[
-                Action::cast(P0, props::ARTIFACT),
-                Action::pass(P0),
-                Action::cast(P1, props::INSTANT),
-                Action::cast(P0, names::MANA_DRAIN),
-                Action::answer(
-                    P0,
-                    DecisionKind::Target,
-                    Pick::Card {
-                        card: props::INSTANT,
-                    },
-                ),
-                Action::assert(Assertion::Count {
-                    player: P1,
-                    zone: Zone::Graveyard,
-                    card: Some(props::INSTANT),
-                    count: 1,
-                }),
-                Action::assert(Assertion::Count {
-                    player: P0,
-                    zone: Zone::Battlefield,
-                    card: Some(props::ARTIFACT),
-                    count: 1,
-                }),
-                Action::assert(Assertion::Mana {
-                    player: P0,
-                    color: Color::Colorless,
-                    amount: 0,
-                }),
-                Action::AdvanceTo {
-                    turn: 1,
-                    step: TurnStep::PostcombatMain,
-                },
-                Action::pass(P0),
-                Action::assert(Assertion::Mana {
-                    player: P0,
-                    color: Color::Colorless,
-                    amount: 2,
-                }),
+                ME.casts(Prop::Artifact),
+                ME.passes(),
+                THEM.casts(Prop::Instant),
+                ME.casts(Card::ManaDrain),
+                ME.targets(Prop::Instant),
+                THEM.has(Zone::Graveyard, Prop::Instant, 1),
+                ME.has(Zone::Battlefield, Prop::Artifact, 1),
+                ME.mana(ManaColor::Colorless, 0),
+                advance_to(1, TurnStep::PostcombatMain),
+                ME.passes(),
+                ME.mana(ManaColor::Colorless, 2),
             ]),
     ];
 }

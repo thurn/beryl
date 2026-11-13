@@ -2,7 +2,7 @@
 //! card's scenarios or the rules library's name. Such a token's definition stays in the file of
 //! the card that creates it.
 
-use crate::printed;
+use crate::Token;
 use beryl_card::{Ability, CardDef, Cost, CostPart, ManaSet, card};
 
 /// A token's name where the effect creating it gives none
@@ -28,7 +28,7 @@ pub const TREASURE_TOKEN: &str = "Treasure Token";
 /// ability ..., and its cost and effect don't move any card to or from a library."
 pub static TREASURE: CardDef = card(
     TREASURE_TOKEN,
-    &[printed::token::TREASURE_TOKEN.abilities(&[Ability::mana(
+    &[Token::TreasureToken.abilities(&[Ability::mana(
         Cost::of_parts(&[CostPart::TAP, CostPart::SACRIFICE]),
         // W, U, B, R and G.
         ManaSet {

@@ -8,29 +8,10 @@
 //! more to cast.
 // End of the generated card header.
 
-use crate::{names, printed};
-use beryl_card::effect::build::{
-    target_player, those, you, exile, look_at, may_choose, owner_of, permit_cast, sequence,
-};
-use beryl_card::{
-    Ability, CardDef, CastTerms, Duration, Effect, Filter, Keywords, Objects, Place, Players,
-    Prompt, Purpose, TargetKind, TargetSpec, Trigger, Types, Zone, card,
-};
+use crate::prelude::*;
 
-/// "Target opponent's hand".
-const THEIR_HAND: Objects = Objects::InZoneOf {
-    zone: Zone::Hand,
-    players: &target_player(),
-    filter: Filter::Any,
-};
-
-/// "A nonland card from it".
-const A_NONLAND_CARD_FROM_IT: Objects = Objects::InZoneOf {
-    zone: Zone::Hand,
-    players: &target_player(),
-    filter: Filter::Not(&Filter::Types(Types::LAND)),
-};
-
+/// "Target opponent's hand" is looked at in full, for "a nonland card from it" to exile.
+///
 /// Looking at a hand shows it to the looker alone; the exiled card is public. Its owner may
 /// cast it from exile for as long as it stays there
 /// ([CR 601.3](https://yawgatog.com/resources/magic-rules/#R6013)), and the {2} is a cost
@@ -39,164 +20,74 @@ const A_NONLAND_CARD_FROM_IT: Objects = Objects::InZoneOf {
 /// playing it is casting it ([CR 701.18b](https://yawgatog.com/resources/magic-rules/#R70118b)):
 /// "To play a card means to play that card as a land or to cast that card as a spell,
 /// whichever is appropriate." The whole hand is looked at, for one card to exile.
-static SPELLBIND: Effect = sequence(&[
-    look_at(you(), THEIR_HAND),
-    may_choose(
-        you(),
-        A_NONLAND_CARD_FROM_IT,
-        Prompt::new(Purpose::Look)
-            .most(1)
-            .places(Place::Exile, Place::None),
-    ),
-    exile(those()),
-    permit_cast(
-        owner_of(those()),
-        those(),
-        Duration::Indefinite,
-        CastTerms::PLAIN.costing_more(2).played(),
-    ),
-]);
-
-pub static CARD: CardDef = card(
-    names::ELITE_SPELLBINDER,
-    &[printed::ELITE_SPELLBINDER
-        .keywords(Keywords::FLYING)
-        .abilities(&[Ability::triggered(&Trigger::ENTERS)
-            .targeting(&[TargetSpec::one(
-                TargetKind::Player,
-                Filter::Whose(&Players::EachOpponent),
-            )])
-            .effect(&SPELLBIND)])],
-);
+pub static CARD: CardDef = Printed::EliteSpellbinder
+    .keywords(Keywords::FLYING)
+    .abilities(&[Ability::triggered(&Trigger::ENTERS)
+        .target(&TargetSpec::opponent())
+        .effect(&sequence(&[
+            look_at(you(), hand_of(&target_player())),
+            may_choose(
+                you(),
+                cards_in(
+                    Zone::Hand,
+                    &target_player(),
+                    Filter::Not(&Filter::Types(Types::LAND)),
+                ),
+                Prompt::new(Purpose::Look)
+                    .most(1)
+                    .places(Place::Exile, Place::None),
+            ),
+            exile(those()),
+            permit_cast(
+                owner_of(those()),
+                those(),
+                Duration::Indefinite,
+                CastTerms::PLAIN.costing_more(2).played(),
+            ),
+        ]))])
+    .card();
 
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use beryl_card::{Castings, FaceIx};
+    use crate::prelude::*;
 
-    use beryl_card::{DecisionKind, TurnStep, Zone};
-
-    use beryl_scenario_types::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
-
-    use crate::{names, props};
-
-    const SPELLBINDER: &str = names::ELITE_SPELLBINDER;
-
-    const ARTIFACT: &str = props::ARTIFACT;
-
-    const THREE_PLAINS: &[Permanent] = &[
-        Permanent::new(names::PLAINS),
-        Permanent::new(names::PLAINS),
-        Permanent::new(names::PLAINS),
-    ];
+    const SPELLBINDER: &str = Card::EliteSpellbinder;
 
     pub const SCENARIOS: &[Scenario] = &[
         // The exiled artifact costs its owner {2}{W} on their turn: all three Plains.
         Scenario::new("Spellbinder's card costs its owner {2} more")
             .hand(P0, &[SPELLBINDER])
-            .permanents(P0, THREE_PLAINS)
-            .hand(P1, &[ARTIFACT, names::ISLAND])
-            .permanents(P1, THREE_PLAINS)
-            .library(P1, &[names::ISLAND])
+            .battlefield(P0, &[Card::Plains; 3])
+            .hand(P1, &[Prop::Artifact, Card::Island])
+            .battlefield(P1, &[Card::Plains; 3])
+            .library(P1, &[Card::Island])
             .actions(&[
-                Action::Cast {
-                    player: P0,
-                    card: SPELLBINDER,
-                    face: FaceIx::FRONT,
-                    costs: Castings::NONE,
-                },
-                Action::Resolve,
+                ME.casts(SPELLBINDER),
+                Resolve,
                 // The enters trigger, which targets the one opponent, resolves up to its question.
-                Action::Assert {
-                    assertion: Assertion::Stack { count: 1 },
-                },
-                Action::Resolve,
-                Action::Answer {
-                    player: P0,
-                    kind: DecisionKind::YesNo,
-                    pick: Pick::Yes,
-                },
-                Action::Assert {
-                    assertion: Assertion::Count {
-                        player: P1,
-                        zone: Zone::Exile,
-                        card: Some(ARTIFACT),
-                        count: 1,
-                    },
-                },
-                Action::Assert {
-                    assertion: Assertion::Count {
-                        player: P1,
-                        zone: Zone::Hand,
-                        card: Some(ARTIFACT),
-                        count: 0,
-                    },
-                },
-                Action::AdvanceTo {
-                    turn: 2,
-                    step: TurnStep::PrecombatMain,
-                },
+                stack(1),
+                Resolve,
+                ME.yes(),
+                THEM.has(Zone::Exile, Prop::Artifact, 1),
+                THEM.has(Zone::Hand, Prop::Artifact, 0),
+                advance_to(2, TurnStep::PrecombatMain),
                 // Pass, an Island to play, the one P0 saw or the one just drawn, and the artifact.
-                Action::Assert {
-                    assertion: Assertion::Decision {
-                        player: P1,
-                        kind: DecisionKind::Priority,
-                        candidates: 4,
-                    },
-                },
-                Action::Cast {
-                    player: P1,
-                    card: ARTIFACT,
-                    face: FaceIx::FRONT,
-                    costs: Castings::NONE,
-                },
-                Action::Assert {
-                    assertion: Assertion::Tapped {
-                        player: P1,
-                        card: names::PLAINS,
-                        count: 3,
-                    },
-                },
-                Action::Resolve,
-                Action::Assert {
-                    assertion: Assertion::Controls {
-                        player: P1,
-                        card: ARTIFACT,
-                        count: 1,
-                    },
-                },
+                THEM.deciding(DecisionKind::Priority, 4),
+                THEM.casts(Prop::Artifact),
+                THEM.tapped(Card::Plains, 3),
+                Resolve,
+                THEM.controls(Prop::Artifact, 1),
             ]),
         // Only lands: nothing to exile, nothing to ask.
         Scenario::new("Spellbinder sees a hand of lands")
             .hand(P0, &[SPELLBINDER])
-            .permanents(P0, THREE_PLAINS)
-            .hand(P1, &[names::ISLAND, names::PLAINS])
+            .battlefield(P0, &[Card::Plains; 3])
+            .hand(P1, &[Card::Island, Card::Plains])
             .actions(&[
-                Action::Cast {
-                    player: P0,
-                    card: SPELLBINDER,
-                    face: FaceIx::FRONT,
-                    costs: Castings::NONE,
-                },
-                Action::AdvanceTo {
-                    turn: 1,
-                    step: TurnStep::PostcombatMain,
-                },
-                Action::Assert {
-                    assertion: Assertion::Count {
-                        player: P1,
-                        zone: Zone::Exile,
-                        card: None,
-                        count: 0,
-                    },
-                },
-                Action::Assert {
-                    assertion: Assertion::Count {
-                        player: P1,
-                        zone: Zone::Hand,
-                        card: None,
-                        count: 2,
-                    },
-                },
+                ME.casts(SPELLBINDER),
+                advance_to(1, TurnStep::PostcombatMain),
+                THEM.has_cards(Zone::Exile, 0),
+                THEM.has_cards(Zone::Hand, 2),
             ]),
     ];
 }
