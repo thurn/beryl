@@ -138,6 +138,41 @@ fn tuned_values_are_the_hand_tuned_ones() {
     assert_eq!(tuned.get(card(names::ISLAND)).value, 10);
     assert!(tuned.get(card(names::MANA_CRYPT)).never_cast);
     assert!(!estimated.get(card(names::MANA_CRYPT)).never_cast);
-    // Jace, the Mind Sculptor's loyalty of 3, estimated at 15 a loyalty counter.
-    assert_eq!(estimated.get(card(names::JACE_THE_MIND_SCULPTOR)).value, 45);
+    assert_eq!(
+        estimated.get(card(names::JACE_THE_MIND_SCULPTOR)).value,
+        crate::estimate::estimate(t.def(card(names::JACE_THE_MIND_SCULPTOR)))
+    );
+}
+
+/// Prints each tuned card's features and hand-tuned value as CSV, the data the estimate's
+/// weights were fitted to (`crate::estimate`): `cargo test -p beryl_search --lib
+/// overlay_features -- --ignored --nocapture`.
+#[test]
+#[ignore = "prints the data the estimate's weights were fitted to"]
+fn overlay_features() {
+    for tuning in super::TUNINGS {
+        let def = every_card()
+            .into_iter()
+            .find(|d| d.name == tuning.name)
+            .unwrap();
+        let f = crate::estimate::features(def);
+        println!(
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            def.name.replace(',', ""),
+            tuning.value.unwrap_or(0),
+            f.mana_value,
+            f.body,
+            f.keywords,
+            f.loyalty,
+            f.land,
+            f.cards,
+            f.tokens,
+            f.removal,
+            f.counters,
+            f.mana,
+            f.repeatable,
+            f.options,
+            f.extra_costs
+        );
+    }
 }

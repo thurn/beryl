@@ -5,6 +5,7 @@
 //! are measured against. [`AGENTS`] names every agent a game can be played against.
 
 mod combat;
+mod estimate;
 mod eval;
 mod expert;
 mod frozen;

@@ -1,8 +1,8 @@
 //! What the rollout policy knows about each card of a game (architecture §19.1, decision
-//! D21): a value, estimated from mana value and stats, and a few flags of card knowledge,
-//! each derived from what the card's definition says its abilities do (plan K9). Hand-tuned
-//! values for the supported decks come from the per-deck overlay ([`crate::overlay`]),
-//! which [`Knowledge::Tuned`] applies on top. Built once per game, indexed by game-table
+//! D21): a value and a few flags of card knowledge, each flag derived from what the card's
+//! definition says its abilities do (plan K9). [`Knowledge::Estimate`] estimates every
+//! value from the definition ([`crate::estimate`]); [`Knowledge::Tuned`] takes hand-tuned
+//! values for the supported decks from the per-deck overlay ([`crate::overlay`]). Built once per game, indexed by game-table
 //! index (§6.4), so a decision reads it with one load.
 
 use beryl_engine::card::{
@@ -11,6 +11,7 @@ use beryl_engine::card::{
 use beryl_engine::query::DefinitionKey;
 use beryl_engine::{CardId, CardIx, GameTable, LargeCardIx};
 
+use crate::estimate::estimate;
 use crate::overlay;
 
 /// One card's entry.
@@ -63,12 +64,15 @@ pub struct CardValues {
 /// Where card knowledge comes from, from the most general to the most hand-made.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Knowledge {
-    /// Every card's value estimated from what its face shows (mana value, stats, loyalty),
-    /// and its flags derived from its definition.
+    /// Every card's value estimated from what its definition says it does
+    /// ([`crate::estimate`]), and its flags derived from its definition: all the AI knows of
+    /// a deck nobody has tuned for. Its family name is `estimate`.
     Estimate,
-    /// [`Knowledge::Estimate`] with the per-deck overlay applied on top ([`crate::overlay`]):
-    /// the values, the cards never cast and the abilities never activated that were
-    /// hand-tuned for the WU Control mirror. A card with no overlay entry is as estimated.
+    /// The derived flags with the per-deck overlay applied on top ([`crate::overlay`]): the
+    /// values, the cards never cast and the abilities never activated that were hand-tuned
+    /// for the WU Control mirror. A card with no overlay entry, such as a token, is valued by
+    /// what its face shows ([`shown`]), as it was when the overlay was tuned. Its family name
+    /// is `tuned`.
     #[default]
     Tuned,
 }
@@ -118,14 +122,17 @@ impl CardValues {
 /// What `knowledge` knows of the card `def`.
 pub(crate) fn info(def: &CardDef, knowledge: Knowledge) -> CardInfo {
     let mut info = derive(def);
-    if knowledge == Knowledge::Tuned {
-        overlay::apply(def.name, &mut info);
+    match knowledge {
+        Knowledge::Estimate => info.value = estimate(def),
+        Knowledge::Tuned => {
+            info.value = shown(def.front());
+            overlay::apply(def.name, &mut info);
+        }
     }
     info
 }
 
-/// What the definition says of the card: its estimated value and the flags its abilities'
-/// effect data states. A flag of ability `i` is read from the front face, as the policy
+/// The flags the card's abilities' effect data states, with no value yet. A flag of ability `i` is read from the front face, as the policy
 /// reads it, and only for the first eight abilities, which the bits hold.
 fn derive(def: &CardDef) -> CardInfo {
     let front = def.front();
@@ -140,7 +147,7 @@ fn derive(def: &CardDef) -> CardInfo {
     };
     let abilities = || def.faces.iter().flat_map(|f| f.abilities);
     CardInfo {
-        value: estimate(front),
+        value: 0,
         wheel: abilities()
             .any(|a| a.kind() == AbilityKind::Spell && effect(a).is_some_and(Effect::wheels)),
         never_cast: false,
@@ -189,10 +196,12 @@ fn helps_first_target(a: &Ability, e: &Effect) -> bool {
     !a.targets().is_empty() && e.helps_target(SpecIx::new(0))
 }
 
-/// A value from what the face shows, for cards and tokens without a hand-tuned one: a
-/// creature by its stats and evasion, a planeswalker by its loyalty, anything else by its
-/// mana value.
-fn estimate(face: &Face) -> i16 {
+/// A value from what the face shows, for cards and tokens the overlay has no value for under
+/// [`Knowledge::Tuned`]: a creature by its stats and evasion, a planeswalker by its loyalty,
+/// anything else by its mana value. The tuned agents' rollouts depend on it, so it stays as
+/// it was when the overlay was tuned (`rollouts_never_change`); [`crate::estimate`] reads
+/// much more of a card.
+fn shown(face: &Face) -> i16 {
     let mana_value = i16::from(face.cost.mana_value());
     if face.types.intersects(Types::CREATURE) {
         let stats = i16::from(face.power.unwrap_or(0)) + i16::from(face.toughness.unwrap_or(0));
