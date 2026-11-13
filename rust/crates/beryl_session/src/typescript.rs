@@ -8,7 +8,7 @@ use crate::bugs::{BugReport, BugSaved, PageInfo, Region, UiLogEntry, UiLogReques
 use crate::card_records::{CardEntry, CardFace, CardImages, CardRecords, CardRecordsRequest};
 use crate::ipc::{
     AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, Fixture, FixtureMessage, PassOnRequest,
-    SetStopsRequest, UndoRequest,
+    Platform, SetStopsRequest, UndoRequest,
 };
 use crate::journal::Level;
 use crate::prompt::{
@@ -60,6 +60,7 @@ pub fn typescript() -> String {
     let cfg = Config::new();
     let decls = [
         AppInfo::decl(&cfg),
+        Platform::decl(&cfg),
         Fixture::decl(&cfg),
         FixtureMessage::decl(&cfg),
         StartRequest::decl(&cfg),

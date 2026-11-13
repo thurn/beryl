@@ -123,7 +123,14 @@ fn completed_games_are_appended_and_counted_in_reports() {
 
     let report = report();
     let write = || {
-        let saved = bugs::write(&reports, &report, &Images::default(), &sessions).unwrap();
+        let saved = bugs::write(
+            &reports,
+            &report,
+            &Images::default(),
+            &sessions,
+            &bugs::Environment::current(),
+        )
+        .unwrap();
         std::fs::read_to_string(std::path::Path::new(&saved.path).join("report.md")).unwrap()
     };
     let first = write();

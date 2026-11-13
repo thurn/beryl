@@ -377,7 +377,9 @@ recordings do not show them.
   can use uses it, and one it has no use for shows the card whole; a card in
   your hand is read by a touch and played by carrying it out of the hand. The
   Revealed Cards lie in the opponent's strip beside their graveyard, at a pile's
-  size with no pill, and a touch opens them as it opens a pile.
+  size with no pill, and a touch opens them as it opens a pile. The bug reporter
+  freezes the whole page and saves both that frame and the region the player
+  selects.
 
 ## Verbs
 

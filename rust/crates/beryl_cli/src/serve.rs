@@ -20,8 +20,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 use beryl_session::bugs::{self, BugReport, Images, UiLogRequest};
 use beryl_session::card_records::CardRecordsRequest;
 use beryl_session::ipc::{
-    self, AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, PassOnRequest, SetStopsRequest,
-    UndoRequest,
+    self, AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, PassOnRequest, Platform,
+    SetStopsRequest, UndoRequest,
 };
 use beryl_session::prompt::ClickRequest;
 use beryl_session::{GameUpdate, SessionError, Sessions, StartRequest, agents};
@@ -185,7 +185,8 @@ pub(crate) fn invoke(sessions: &Sessions, command: &str, args: Value) -> Value {
         ipc::APP_INFO => answer::<_, ()>(Ok(AppInfo {
             version: format!("{} (live)", env!("CARGO_PKG_VERSION")),
             smoke: false,
-            mobile: false,
+            platform: Platform::current(),
+            simulator: false,
         })),
         ipc::UI_READY => answer::<_, ()>(Ok(())),
         ipc::LIST_AGENTS => answer::<_, ()>(Ok(agents())),
@@ -226,7 +227,14 @@ pub(crate) fn invoke(sessions: &Sessions, command: &str, args: Value) -> Value {
             reason: "no window snapshot in a browser".to_owned(),
         })),
         ipc::REPORT_BUG => answer(request::<BugReport>(args).and_then(|r| {
-            bugs::write(&bugs::dir(), &r, &Images::default(), sessions).map_err(|e| json!(e))
+            bugs::write(
+                &bugs::dir(),
+                &r,
+                &Images::default(),
+                sessions,
+                &bugs::Environment::current(),
+            )
+            .map_err(|e| json!(e))
         })),
         ipc::UI_LOG => answer(request::<UiLogRequest>(args).map(bugs::ui_log)),
         ipc::CARD_RECORDS => card_records(args),

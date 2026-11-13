@@ -7,14 +7,24 @@ import "./design/fonts";
 import "./design/tokens.css";
 import "./design/components";
 import "./screens/styles";
+import { appInfo, isNativeApp } from "./ipc";
 import { installDiagnostics } from "./diagnostics";
 import { installAudio } from "./audio/sound";
 
 installDiagnostics();
 void installAudio();
 
-createRoot(document.getElementById("root") as HTMLElement).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+function render() {
+  createRoot(document.getElementById("root") as HTMLElement).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+}
+
+// Native card art URLs need the platform before the first render of a resumed game.
+if (isNativeApp()) {
+  void appInfo().then(render, render);
+} else {
+  render();
+}

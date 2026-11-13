@@ -386,9 +386,17 @@ def launch_until_ready(udid: str, seconds: int) -> bool:
     if alive(pid):
         print(f"ios-smoke: the app appears hung, it did not exit in {seconds + 30} s")
     records = journal(udid, pid)
+    return smoke_result(records, "ios-smoke")
+
+
+def smoke_result(records: list[dict[str, Any]], label: str) -> bool:
+    """Prints snapshot timing and errors from one mobile smoke run."""
     for record in records:
-        if record.get("level") in ("warn", "error"):
-            print(f"ios-smoke: {record.get('source')}: {record.get('message')}")
+        message = record.get("message", "")
+        if record.get("level") in ("warn", "error") or message.startswith(
+            "window snapshot in "
+        ):
+            print(f"{label}: {record.get('source')}: {message}")
     return any(r.get("message") == READY for r in records)
 
 

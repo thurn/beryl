@@ -122,9 +122,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
+name = "beryl-mobile"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "tauri",
+ "tauri-plugin",
+]
+
+[[package]]
 name = "beryl_app"
 version = "0.1.0"
 dependencies = [
+ "beryl-mobile",
  "beryl_session",
  "block2",
  "objc2",
@@ -136,6 +146,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
+ "tokio",
  "ureq",
  "webview2-com",
  "windows",

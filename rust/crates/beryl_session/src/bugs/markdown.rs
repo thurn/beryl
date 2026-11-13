@@ -6,7 +6,7 @@ use crate::ai::AgentMove;
 use crate::ledger::Counts;
 use crate::protocol::Status;
 
-use super::{BugReport, SpecMoment, body, commit};
+use super::{BugReport, Environment, SpecMoment, body, commit};
 
 /// Where the game stood.
 pub(super) struct Game {
@@ -53,6 +53,7 @@ pub(super) struct Markdown<'a> {
     pub(super) id: &'a str,
     pub(super) title: &'a str,
     pub(super) created: &'a str,
+    pub(super) environment: &'a Environment,
     pub(super) report: &'a BugReport,
     pub(super) moves: &'a [AgentMove],
     pub(super) screenshot: bool,
@@ -111,6 +112,17 @@ pub(super) fn front_matter(out: &mut String, m: &Markdown<'_>, viewport: &str) {
         opt(g.decision.map(|d| d.to_string())),
     )
     .expect("a String takes writes");
+    writeln!(out, "platform: {}", m.environment.platform.as_str()).expect("a String takes writes");
+    if let Some(device) = &m.environment.device {
+        writeln!(
+            out,
+            "os: {}\nmodel: {}\nsimulator: {}",
+            quote(&device.os),
+            quote(&device.model),
+            device.simulator,
+        )
+        .expect("a String takes writes");
+    }
     if let Some(counts) = &m.counts {
         writeln!(
             out,

@@ -9,10 +9,12 @@ use serde_json::json;
 #[cfg(desktop)]
 #[tauri::command]
 pub async fn export_bugs(app: tauri::AppHandle) -> Result<Option<u32>, SessionError> {
+    use tauri::Manager;
     use tauri_plugin_dialog::DialogExt;
 
     tauri::async_runtime::spawn_blocking(move || {
-        let folders = bugs::archive::active(&bugs::dir()).map_err(export_error)?;
+        let folders =
+            bugs::archive::active(&app.state::<crate::BugDirectory>().0).map_err(export_error)?;
         if folders.is_empty() {
             return Ok(Some(0));
         }

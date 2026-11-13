@@ -14,6 +14,7 @@ import type {
   Events,
   Fixture,
   GameUpdate,
+  Platform,
   SessionId,
   StopsSetting,
 } from "./generated/protocol";
@@ -411,7 +412,12 @@ const browserFixture: Fixture = {
     {
       kind: "response",
       command: "app_info",
-      value: { version: "browser", smoke: false, mobile: false },
+      value: {
+        version: "browser",
+        smoke: false,
+        platform: "linux",
+        simulator: false,
+      },
     },
     { kind: "response", command: "ui_ready", value: null },
     { kind: "response", command: "list_agents", value: [] },
@@ -492,10 +498,12 @@ export const canReportBugs = () =>
   ("__TAURI_INTERNALS__" in window || liveBase() !== undefined);
 
 /** Whether the app can snapshot its window, for a report's frozen frame. */
-export const canCaptureWindow = () => "__TAURI_INTERNALS__" in window;
+export const canCaptureWindow = () =>
+  isNativeApp() && platform !== undefined && platform !== "linux";
 
 /** Only the desktop app can open a native save dialog for report bundles. */
-export const canExportBugs = (mobile: boolean) => !mobile && canCaptureWindow();
+export const canExportBugs = () =>
+  isNativeApp() && platform !== undefined && !isMobile(platform);
 export const exportBugs = () => call("export_bugs", {});
 
 async function chooseTransport(): Promise<Transport> {
@@ -558,7 +566,18 @@ export function transport(): Promise<Transport> {
 const call = async <C extends Command>(command: C, args: Args<C>) =>
   (await transport()).invoke(command, args);
 
-export const appInfo = () => call("app_info", {});
+let platform: Platform | undefined;
+let appInfoReply: Promise<Result<"app_info">> | undefined;
+
+export const isNativeApp = () => "__TAURI_INTERNALS__" in window;
+export const isMobile = (platform: Platform) =>
+  platform === "ios" || platform === "android";
+
+export const appInfo = () =>
+  (appInfoReply ??= call("app_info", {}).then((info) => {
+    platform = info.platform;
+    return info;
+  }));
 
 export const uiReady = () => call("ui_ready", {});
 
@@ -619,7 +638,7 @@ export const captureWindow = () => call("capture_window", {});
 /** The app's URL for `path` on its `beryl-art` scheme. WebView2 and Android's WebView serve
  * custom schemes at http://<scheme>.localhost instead. */
 const artSchemeUrl = (path: string) =>
-  /Windows|Android/.test(navigator.userAgent)
+  platform === "windows" || platform === "android"
     ? `http://beryl-art.localhost${path}`
     : `beryl-art://localhost${path}`;
 

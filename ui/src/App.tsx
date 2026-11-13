@@ -4,6 +4,7 @@ import {
   appInfo,
   canExportBugs,
   canReportBugs,
+  isMobile,
   isRelayedGame,
   uiReady,
   type OutcomeView,
@@ -69,8 +70,8 @@ function Main() {
   const [exportReports, setExportReports] = useState(false);
   useEffect(() => {
     void appInfo().then((info) => {
-      setMobile(info.mobile);
-      setExportReports(canExportBugs(info.mobile));
+      setMobile(isMobile(info.platform));
+      setExportReports(canExportBugs());
       uiReady();
     });
   }, []);

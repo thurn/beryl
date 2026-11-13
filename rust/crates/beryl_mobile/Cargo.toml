@@ -1,0 +1,19 @@
+[package]
+name = "beryl-mobile"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+links = "beryl-mobile"
+
+[build-dependencies]
+# Compiles the native iOS library and registers the Android Gradle project.
+tauri-plugin = { version = "2", features = ["build"] }
+
+[target.'cfg(any(target_os = "ios", target_os = "android"))'.dependencies]
+# Calls the Swift and Kotlin plugin from Rust and decodes their replies.
+tauri = "2"
+serde = { version = "1", features = ["derive"] }
+
+[lints]
+workspace = true

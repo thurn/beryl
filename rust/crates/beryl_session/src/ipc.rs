@@ -114,6 +114,43 @@ pub struct ConcedeRequest {
     pub session: SessionId,
 }
 
+/// The operating system hosting the app or live server.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+pub enum Platform {
+    Macos,
+    Windows,
+    Linux,
+    Ios,
+    Android,
+}
+
+impl Platform {
+    pub const fn current() -> Self {
+        if cfg!(target_os = "macos") {
+            Self::Macos
+        } else if cfg!(windows) {
+            Self::Windows
+        } else if cfg!(target_os = "ios") {
+            Self::Ios
+        } else if cfg!(target_os = "android") {
+            Self::Android
+        } else {
+            Self::Linux
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Macos => "macos",
+            Self::Windows => "windows",
+            Self::Linux => "linux",
+            Self::Ios => "ios",
+            Self::Android => "android",
+        }
+    }
+}
+
 /// What the app is.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -121,8 +158,9 @@ pub struct AppInfo {
     pub version: String,
     /// Running under `just smoke`.
     pub smoke: bool,
-    /// Running on a phone (a Tauri mobile target): the UI takes its portrait layout.
-    pub mobile: bool,
+    pub platform: Platform,
+    /// Running in the iOS Simulator or Android Emulator.
+    pub simulator: bool,
 }
 
 /// A recorded stream of the app's messages, which the UI's fixture transport replays.

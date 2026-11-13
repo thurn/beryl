@@ -35,7 +35,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use ts_rs::TS;
 
-use crate::ipc::{CHOOSE, Fixture, FixtureMessage, GAME_UPDATE, SET_STOPS};
+use crate::ipc::{CHOOSE, Fixture, FixtureMessage, GAME_UPDATE, Platform, SET_STOPS};
 use crate::journal::{self, Level};
 use crate::{SessionError, Sessions};
 
@@ -230,6 +230,27 @@ pub fn dir() -> PathBuf {
     home.join("Library/Application Support/ca.thurn.beryl/bugs")
 }
 
+/// The operating system and, for a phone report, the device that filed it.
+pub struct Environment {
+    pub platform: Platform,
+    pub device: Option<Device>,
+}
+
+impl Environment {
+    pub const fn current() -> Self {
+        Self {
+            platform: Platform::current(),
+            device: None,
+        }
+    }
+}
+
+pub struct Device {
+    pub os: String,
+    pub model: String,
+    pub simulator: bool,
+}
+
 /// Writes `report` into a new folder under `dir`, with its `images` and what `sessions` knows
 /// of the game.
 #[allow(clippy::too_many_lines)] // A block per file the report holds.
@@ -238,6 +259,7 @@ pub fn write(
     report: &BugReport,
     images: &Images,
     sessions: &Sessions,
+    environment: &Environment,
 ) -> Result<BugSaved, SessionError> {
     let now = SystemTime::now();
     let title = title(&report.description);
@@ -351,6 +373,7 @@ pub fn write(
             id: &id,
             title: &title,
             created: &journal::utc(now),
+            environment,
             report,
             moves: &moves,
             screenshot: images.screenshot.is_some(),
@@ -535,7 +558,15 @@ mod tests {
             screenshot: Some(b"hi".to_vec()),
             window: None,
         };
-        let saved = write(&dir, &report, &images, &sessions).unwrap();
+        let environment = Environment {
+            platform: Platform::Ios,
+            device: Some(Device {
+                os: "26.5".to_owned(),
+                model: "iPhone18,3".to_owned(),
+                simulator: true,
+            }),
+        };
+        let saved = write(&dir, &report, &images, &sessions, &environment).unwrap();
         let folder = PathBuf::from(&saved.path);
         assert!(saved.id.ends_with("-the-button-it-vanished"));
         let md = std::fs::read_to_string(folder.join("report.md")).unwrap();
@@ -543,6 +574,9 @@ mod tests {
         assert!(md.contains("title: \"The button: it vanished\""));
         assert!(md.contains("status: open\n"));
         assert!(md.contains("kind: ai\n"));
+        assert!(
+            md.contains("platform: ios\nos: \"26.5\"\nmodel: \"iPhone18,3\"\nsimulator: true\n")
+        );
         assert!(md.contains("## The AI's latest decisions"));
         assert!(md.contains("![What the player saw](screenshot.png)"));
         assert_eq!(std::fs::read(folder.join("screenshot.png")).unwrap(), b"hi");
@@ -579,6 +613,7 @@ mod tests {
             &note("Mana never shows"),
             &Images::default(),
             &sessions,
+            &Environment::current(),
         )
         .unwrap();
         let viewer_note = BugReport {
@@ -591,10 +626,19 @@ mod tests {
             },
             ..note("Arrow is wrong")
         };
-        let viewer = write(&dir, &viewer_note, &Images::default(), &sessions).unwrap();
+        let viewer = write(
+            &dir,
+            &viewer_note,
+            &Images::default(),
+            &sessions,
+            &Environment::current(),
+        )
+        .unwrap();
         let viewer_md =
             std::fs::read_to_string(PathBuf::from(viewer.path).join("report.md")).unwrap();
         assert!(viewer_md.contains("kind: spec-viewer\n"));
+        assert!(viewer_md.contains(&format!("platform: {}\n", Platform::current().as_str())));
+        assert!(!viewer_md.contains("\nsimulator:"));
         assert!(viewer_md.contains("spec: llanowar-elves/tap/theirs\n"));
         assert!(viewer_md.contains("viewport: 1280×800 CSS px at 2× scale\n"));
         assert!(viewer_md.contains("/specs/llanowar-elves#tap-theirs"));

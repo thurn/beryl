@@ -1,5 +1,5 @@
 // Whether the UI takes its portrait phone layout (mobile/): on a phone, as the app says
-// (`AppInfo.mobile`, a Tauri mobile target), or forced with `?phone` for headless runs at phone
+// (`AppInfo.platform`, a Tauri mobile target), or forced with `?phone` for headless runs at phone
 // viewports (`just ui-shots`, `just ui-test`).
 import { useSyncExternalStore } from "react";
 

@@ -156,7 +156,13 @@ pub(super) fn write_report(
     report.spec = Some(spec);
     report.spec_viewer = spec_viewer;
     let root = bugs::dir();
-    match bugs::write(&root, &report, &Images::default(), sessions) {
+    match bugs::write(
+        &root,
+        &report,
+        &Images::default(),
+        sessions,
+        &bugs::Environment::current(),
+    ) {
         Ok(saved) => {
             bugs::filing::enqueue(&root, &saved.id, None);
             json!({ "ok": saved })

@@ -194,10 +194,7 @@ def launch_until_ready(seconds: int) -> bool:
             break
         time.sleep(0.25)
     records = journal(int(pid))
-    for record in records:
-        if record.get("level") in ("warn", "error"):
-            print(f"android-smoke: {record.get('source')}: {record.get('message')}")
-    return any(r.get("message") == mobile.READY for r in records)
+    return mobile.smoke_result(records, "android-smoke")
 
 
 def journal(pid: int) -> list[dict[str, Any]]:

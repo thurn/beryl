@@ -9,11 +9,12 @@ mod games;
 mod links;
 mod snapshot;
 
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use beryl_session::bugs::{self, BugReport, BugSaved, Images, UiLogRequest};
 use beryl_session::card_records::{CardRecords, CardRecordsRequest};
-use beryl_session::ipc::{self, AppInfo};
+use beryl_session::ipc::{self, AppInfo, Platform};
 use beryl_session::{SessionError, Sessions, journal};
 use serde_json::json;
 use tauri::Manager;
@@ -32,12 +33,43 @@ const SMOKE_ENV: &str = "BERYL_SMOKE";
 #[cfg(target_os = "android")]
 const SMOKE_PROPERTY: &str = "debug.beryl.smoke";
 
+struct BugDirectory(PathBuf);
+
+#[cfg_attr(desktop, allow(clippy::unused_async))] // Only phones await a native plugin.
+async fn report_environment(_app: &tauri::AppHandle) -> bugs::Environment {
+    let environment = bugs::Environment::current();
+    #[cfg(mobile)]
+    let environment = match _app
+        .state::<beryl_mobile::Mobile<tauri::Wry>>()
+        .device()
+        .await
+    {
+        Ok(device) => bugs::Environment {
+            device: Some(bugs::Device {
+                os: device.os,
+                model: device.model,
+                simulator: device.simulator,
+            }),
+            ..environment
+        },
+        Err(e) => {
+            journal::warn("app", format!("no device details: {e}"), json!(null));
+            environment
+        }
+    };
+    environment
+}
+
 #[tauri::command]
-fn app_info() -> AppInfo {
+async fn app_info(app: tauri::AppHandle) -> AppInfo {
     AppInfo {
         version: env!("CARGO_PKG_VERSION").to_owned(),
         smoke: smoke_seconds().is_some(),
-        mobile: cfg!(mobile),
+        platform: Platform::current(),
+        simulator: report_environment(&app)
+            .await
+            .device
+            .is_some_and(|device| device.simulator),
     }
 }
 
@@ -50,13 +82,6 @@ fn ui_ready(app: tauri::AppHandle) {
         return;
     }
     println!("beryl: ui ready");
-    // A phone has no window snapshot yet: there the UI loading passes alone. Its stdout goes
-    // to the system log, so `just ios-smoke` reads the journal; and iOS apps never quit, so
-    // tao panics on `app.exit`: the process ends itself.
-    if cfg!(mobile) {
-        journal::info("app", "ui ready", json!(null));
-        std::process::exit(0);
-    }
     tauri::async_runtime::spawn(async move {
         let started = Instant::now();
         let result = match snapshot::capture(&app).await {
@@ -68,30 +93,39 @@ fn ui_ready(app: tauri::AppHandle) {
             }
             Err(e) => Err(e),
         };
-        match result {
+        let status = match result {
             Ok((
                 captured,
                 Images {
                     window: Some(png), ..
                 },
             )) if png.starts_with(b"\x89PNG") => {
-                println!(
-                    "beryl: window snapshot in {} ms, its PNG ({} bytes) by {} ms",
+                let message = format!(
+                    "window snapshot in {} ms, its PNG ({} bytes) by {} ms",
                     captured.as_millis(),
                     png.len(),
                     started.elapsed().as_millis()
                 );
-                app.exit(0);
+                println!("beryl: {message}");
+                journal::info("app", message, json!(null));
+                journal::info("app", "ui ready", json!(null));
+                0
             }
-            Ok(_) => {
-                eprintln!("beryl: the window snapshot made no PNG");
-                app.exit(1);
+            failure => {
+                let message = match failure {
+                    Ok(_) => "the window snapshot made no PNG".to_owned(),
+                    Err(e) => format!("no window snapshot: {e}"),
+                };
+                eprintln!("beryl: {message}");
+                journal::error("app", message, json!(null));
+                1
             }
-            Err(e) => {
-                eprintln!("beryl: no window snapshot: {e}");
-                app.exit(1);
-            }
-        }
+        };
+        // iOS does not support app.exit: tao panics, so the process ends itself.
+        #[cfg(mobile)]
+        std::process::exit(status);
+        #[cfg(desktop)]
+        app.exit(status);
     });
 }
 
@@ -145,11 +179,13 @@ async fn report_bug(app: tauri::AppHandle, request: BugReport) -> Result<BugSave
         None => Images::default(),
     };
     let encoded = started.elapsed();
+    let environment = report_environment(&app).await;
     let sessions = app.state::<Sessions>();
-    let root = bugs::dir();
-    let saved = bugs::write(&root, &request, &images, &sessions).inspect_err(|e| {
-        journal::error("bugs", format!("report not written: {e}"), json!(null));
-    })?;
+    let root = app.state::<BugDirectory>();
+    let saved =
+        bugs::write(&root.0, &request, &images, &sessions, &environment).inspect_err(|e| {
+            journal::error("bugs", format!("report not written: {e}"), json!(null));
+        })?;
     journal::debug(
         "bugs",
         "report timing",
@@ -166,7 +202,7 @@ async fn report_bug(app: tauri::AppHandle, request: BugReport) -> Result<BugSave
             (Some(repo), Some(uv), Some(path)) => Some((repo, uv, path)),
             _ => None,
         };
-        bugs::filing::enqueue(&root, &saved.id, bundled);
+        bugs::filing::enqueue(&root.0, &saved.id, bundled);
     }
     Ok(saved)
 }
@@ -219,6 +255,8 @@ pub fn run() {
     journal::install_panic_hook();
     bugs::set_build_commit(env!("BERYL_COMMIT"));
     let builder = tauri::Builder::default().plugin(links::plugin());
+    #[cfg(mobile)]
+    let builder = builder.plugin(beryl_mobile::init());
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_dialog::init());
     builder
@@ -268,7 +306,13 @@ pub fn run() {
         .setup(|app| {
             // A phone's data directory has no fixed path: reports go in its own.
             #[cfg(mobile)]
-            bugs::set_dir(app.path().app_data_dir()?.join("bugs"));
+            let bug_dir = {
+                let default = app.path().app_data_dir()?.join("bugs");
+                bugs::set_dir(default.clone());
+                std::env::var_os("BERYL_BUGS").map_or(default, PathBuf::from)
+            };
+            #[cfg(desktop)]
+            let bug_dir = bugs::dir();
             match app.path().app_log_dir() {
                 Ok(dir) => {
                     if let Err(e) = journal::open(&dir.join("beryl.jsonl")) {
@@ -280,10 +324,11 @@ pub fn run() {
             journal::info(
                 "app",
                 "started",
-                json!({ "smoke": smoke_seconds().is_some(), "bugs": bugs::dir() }),
+                json!({ "smoke": smoke_seconds().is_some(), "bugs": bug_dir }),
             );
             app.manage(games::sessions(app.handle()));
             app.manage(Snapshots::default());
+            app.manage(BugDirectory(bug_dir));
             let dir = app.path().app_cache_dir()?.join("art");
             app.manage(ArtCache::new(dir, art::SCRYFALL));
             // The main window starts hidden (tauri.conf.json) so a smoke run never shows it.
