@@ -28,6 +28,7 @@ def test_an_exporter_or_harness_change_plays_every_card() -> None:
         "tools/src/beryl_tools/forge.py",
         "tools/src/beryl_tools/xmage_java.py",
         "tools/src/beryl_tools/card_facts.py",
+        "rust/crates/beryl_scenario/src/facts.rs",
         "tools/src/beryl_tools/oracles.py",
         "tools/oracles/BerylForgeHarness.java",
         "data/oracle-divergences.json",

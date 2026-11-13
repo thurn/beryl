@@ -18,9 +18,14 @@ from . import card_files
 from .changes import changed_paths, git
 
 # The files the exporters and the harnesses are built from: the exporters and the rules they
-# share, the oracle runner with its pins, the Java harnesses, and the oracles' allowlists.
+# share, the scenario dump they read (`beryl_scenario dump`: its JSON, its card facts and the
+# scenario types), the oracle runner with its pins, the Java harnesses, and the oracles'
+# allowlists.
 HARNESS: re.Pattern[str] = re.compile(
     r"^tools/src/beryl_tools/(xmage\w*|forge|card_facts|oracles)\.py$"
+    r"|^rust/crates/beryl_scenario/src/(json|facts)\.rs$"
+    r"|^rust/crates/beryl_scenario_types/"
+    r"|^rust/crates/beryl_cards/src/bin/beryl_scenario\.rs$"
     r"|^tools/oracles/"
     r"|^data/oracle-[\w-]+\.json$"
 )
