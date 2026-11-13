@@ -27,6 +27,7 @@ class FakeBd(verdicts.Beads):
                 "status": "open",
                 "title": args[args.index("--title") + 1],
                 "priority": args[args.index("--priority") + 1],
+                "acceptance": args[args.index("--acceptance") + 1],
                 "metadata": json.loads(args[args.index("--metadata") + 1]),
                 "comments": [],
             }
@@ -298,9 +299,9 @@ def test_a_flaky_check_files_one_bead_to_delete_it(
         checks.run_lanes([flaky("ui-test:drag", tmp_path, whole=True)], "check", 60)
         == 0
     )
-    assert "Delete the flaky test in step ui-test:ui-test" in [
-        f["title"] for f in bd.filed.values()
-    ]
+    [step] = [f for f in bd.filed.values() if f["title"] != filed["title"]]
+    assert step["title"] == "Delete the flaky test in step ui-test:ui-test"
+    assert str(step["acceptance"]).endswith("The step stays.")
     # Once it is closed, the next flake files a new one.
     bd.filed[bead]["status"] = "closed"
     (tmp_path / "ran").unlink()

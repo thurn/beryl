@@ -58,6 +58,15 @@ def title(check: str, flake: Flake) -> str:
     return f"Delete flaky check {check}"
 
 
+def acceptance(check: str, flake: Flake) -> str:
+    """What closes the bead. A step's own record stands for every test in it, so the step stays
+    and only the flaky test inside it goes."""
+    done = "or it is replaced by a deterministic test, and this bead records which and why."
+    if flake.whole:
+        return f"The flaky test inside `{check}` no longer runs in CI, {done} The step stays."
+    return f"`{check}` no longer runs in CI, {done}"
+
+
 def body(check: str, flake: Flake, where: str) -> str:
     what = (
         f"The step `{check}`, which names no checks of its own,"
@@ -112,8 +121,7 @@ def report(
             "--description",
             body(check, flake, where),
             "--acceptance",
-            f"`{check}` no longer runs in CI, or it is replaced by a deterministic test,"
-            " and this bead records which and why.",
+            acceptance(check, flake),
             "--priority",
             PRIORITY,
             "--labels",
