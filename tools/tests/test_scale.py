@@ -78,10 +78,7 @@ def test_the_workspace_is_the_trees_structure(tmp_path: Path) -> None:
     groups = json.loads((tmp_path / "data" / "set-groups.json").read_text())
     assert [g["crate"] for g in groups["groups"]] == names
     workspace = (tmp_path / "rust" / "Cargo.toml").read_text()
-    assert (
-        'members = ["cards/*", "crates/beryl_cards", "crates/beryl_card_names", "crates/warm"]'
-        in workspace
-    )
+    assert 'members = ["cards/*", "crates/beryl_cards", "crates/warm"]' in workspace
     assert "[profile.release]" in workspace
     for copied in scale_workspace.COPIED:
         assert (tmp_path / copied).is_file()

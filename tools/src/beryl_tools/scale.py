@@ -14,7 +14,7 @@ prints what that cost against the plan's budgets ([`BUDGETS`]):
   the registry and every set crate are compiled and linked as the app's release build would
   (without scenarios, which the app never compiles).
 - one-edit rebuild: the same `cargo check` after a change to one card file, which reruns that
-  crate's build script and the names crate's and rechecks the registry; the median of
+  crate's build script and rechecks it and the registry; the median of
   `--edits` edits ([`REBUILDS`] by default), with each edit's time printed as the spread.
 - largest compiler process: the highest peak resident set of any single process of the three
   builds (`/usr/bin/time -l`), which is a `rustc`.

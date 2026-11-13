@@ -5,10 +5,9 @@
 //! group in `data/set-groups.json`, and the two modules are the set's code and the card's name
 //! spelled as [`names::set_module`] and [`names::card_module`] spell them. Nothing lists the
 //! files by hand: a set crate's `build.rs` calls [`set_crate`], which writes the crate's module
-//! tree, its tables and the name constants its files use, and `beryl_cards`' calls
-//! [`registry`], which writes the tables over every set crate; `beryl_card_names`' calls
-//! [`card_names`], which writes the card name constants `beryl_cards::names` re-exports. A new
-//! card is one new file.
+//! tree, its tables and the name constants of its cards and of those its files use, and
+//! `beryl_cards`' calls [`registry`], which writes the tables over every set crate and
+//! `beryl_cards::names`, which re-exports each set crate's names. A new card is one new file.
 //!
 //! Names come from the card store, `data/card-store.tsv` ([`store`]): a file is found there by
 //! its set and module, so a misspelled file or constant fails the build, and no crate compiles
@@ -28,8 +27,8 @@ pub mod printed;
 pub mod store;
 
 pub use generate::{
-    Printed, card_names, names_source, registry, registry_source, set_crate, set_crate_source,
-    shared, shared_source, typed_characteristic,
+    Printed, names_source, registry, registry_source, set_crate, set_crate_source, shared,
+    shared_source, typed_characteristic,
 };
 
 #[cfg(test)]

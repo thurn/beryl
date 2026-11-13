@@ -11,11 +11,9 @@ reads where it reads it in the tree:
   `printed` faces from the scratch store, and checks each clone as it checks a real file.
 - `rust/crates/beryl_cards`: the registry over the set crates, whose build script is
   `beryl_card_build::registry`, as `beryl_cards`' is, and whose `lib.rs` joins the set
-  crates' tables in a `CardTable` as `beryl_cards` does. Its binary, `all`, reads every card through
+  crates' tables in a `CardTable` and includes the generated `names`, which re-export each set
+  crate's, as `beryl_cards` does. Its binary, `all`, reads every card through
   `std::hint::black_box`, so a release build links every definition.
-- `rust/crates/beryl_card_names`: the tree's names crate, copied, whose build script,
-  `beryl_card_build::card_names`, writes a constant for each clone; the registry re-exports it
-  as `names`, as `beryl_cards` does.
 - `data/card-store.tsv`: a scratch store with a record for each clone (its original's, renamed
   and placed in its scratch set), the real records of the cards the clones' files name, and
   every token. `data/set-groups.json` gives each scratch crate its sets; `data/catalogs.json`
@@ -47,13 +45,9 @@ from typing import cast
 from . import card_crates, card_files, card_store, paths, set_groups
 
 CRATES: Path = paths.RUST / "crates"
-# The registry crate's name in the workspace, and its binary's. It is the tree's registry's name,
-# so the names crate's build script finds the registry's sources where it looks in the tree.
+# The registry crate's name in the workspace, and its binary's.
 REGISTRY = "beryl_cards"
 BINARY = "all"
-# The crate of card name constants: the tree's own crate copied, since its build script finds
-# the cards by its own directory.
-NAMES = "beryl_card_names"
 # A crate of nothing that depends on the checkout's crates the cards use, which the rehearsal
 # builds before the clock starts: `beryl_scenario_types` is an optional dependency, which
 # Cargo will not build by name.
@@ -209,7 +203,9 @@ REGISTRY_LIB = """//! The rehearsal's registry: the set crates' tables joined as
 
 use beryl_kernel::table::CardTable;
 
-pub use beryl_card_names as names;
+pub mod names {
+    include!(concat!(env!("OUT_DIR"), "/names.rs"));
+}
 
 include!(concat!(env!("OUT_DIR"), "/tables.rs"));
 
@@ -248,18 +244,6 @@ fn main() {
 """
 
 
-def names_crate_files() -> dict[str, str]:
-    """The tree's names crate's files, with its path to the build helper made absolute."""
-    tree = CRATES / NAMES
-    files = {
-        f: (tree / f).read_text() for f in ("Cargo.toml", "build.rs", "src/lib.rs")
-    }
-    files["Cargo.toml"] = files["Cargo.toml"].replace(
-        '"../beryl_card_build"', f'"{(CRATES / "beryl_card_build").as_posix()}"'
-    )
-    return files
-
-
 def registry_manifest(crates: list[str]) -> str:
     """The registry's manifest. `beryl_card_build::registry` requires each set crate among its
     dependencies and in its `scenarios` feature, as it does of `beryl_cards`."""
@@ -278,7 +262,6 @@ path = "src/main.rs"
 
 [dependencies]
 beryl_card = {{ path = "{(CRATES / 'beryl_card').as_posix()}" }}
-beryl_card_names = {{ path = "../{NAMES}" }}
 beryl_kernel = {{ path = "{(CRATES / 'beryl_kernel').as_posix()}" }}
 beryl_scenario_types = {{ path = "{(CRATES / 'beryl_scenario_types').as_posix()}", optional = true }}
 {depends}
@@ -314,9 +297,7 @@ publish = false
 
 def workspace_manifest(tree: str) -> str:
     """The tree's workspace manifest with the scratch crates as its members."""
-    members = (
-        f'members = ["cards/*", "crates/{REGISTRY}", "crates/{NAMES}", "crates/{WARM}"]'
-    )
+    members = f'members = ["cards/*", "crates/{REGISTRY}", "crates/{WARM}"]'
     return re.sub(r"^members = \[.*\]$", members, tree, count=1, flags=re.M)
 
 
@@ -397,11 +378,6 @@ def generate(root: Path, plan_: list[Crate], pool: list[Source]) -> list[str]:
     (registry / "build.rs").write_text(REGISTRY_BUILD)
     (registry / "src" / "lib.rs").write_text(REGISTRY_LIB)
     (registry / "src" / "main.rs").write_text(REGISTRY_MAIN)
-    for file, text in names_crate_files().items():
-        (root / "rust" / "crates" / NAMES / file).parent.mkdir(
-            parents=True, exist_ok=True
-        )
-        (root / "rust" / "crates" / NAMES / file).write_text(text)
     warm = root / "rust" / "crates" / WARM
     (warm / "src").mkdir(parents=True)
     (warm / "Cargo.toml").write_text(warm_manifest())

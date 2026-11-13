@@ -235,12 +235,21 @@ fn a_new_file_is_listed_with_no_other_edit() {
     .unwrap();
     assert!(tables.contains("    &cards_1993::CARDS,\n"), "{tables}");
     assert!(tables.contains("    &cards_1993::SCENARIOS,\n"), "{tables}");
-    for constant in ["FIRE_ICE", "FOREST", "ISLAND", "LIM_DULS_VAULT", "PLAINS"] {
+    // The files' cards reach the registry's names through their crate's own names, so that no
+    // edit to a file changes the registry's.
+    assert!(
+        names.contains("pub use cards_1993::own_names::*;"),
+        "{names}"
+    );
+    let own = after.split("pub mod names").next().unwrap();
+    assert!(own.contains("pub const FIRE_ICE: &str = "), "{after}");
+    for constant in ["FOREST", "ISLAND", "LIM_DULS_VAULT", "PLAINS"] {
         assert!(
             names.contains(&format!("pub const {constant}: &str = ")),
             "{names}"
         );
     }
+    assert!(!names.contains("FIRE_ICE"), "{names}");
 }
 
 #[test]
