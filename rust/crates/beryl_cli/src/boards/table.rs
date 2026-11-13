@@ -244,6 +244,83 @@ pub(super) const TABLE: &[Scenario] = &[
         .hand(P1, &[STOCK_UP])
         .library(P1, LANDS)
         .actions(&[Action::cast(P1, STOCK_UP)]),
+    // More permanents than the phone's rows can show at full width: fourteen creatures and
+    // twelve other nonland permanents on each side, with tapped copies that cannot stack.
+    Scenario::new("crowded-max")
+        .at(4, P0, TurnStep::PrecombatMain)
+        .permanents(
+            P0,
+            &[
+                Permanent::new(SNAPCASTER_MAGE),
+                Permanent::new(SNAPCASTER_MAGE).tapped(),
+                Permanent::new(TRINKET_MAGE),
+                Permanent::new(TRINKET_MAGE).tapped(),
+                Permanent::new(JACE_VRYNS_PRODIGY),
+                Permanent::new(THUNDERTRAP_TRAINER),
+                Permanent::new(THUNDERTRAP_TRAINER).tapped(),
+                Permanent::new(BEZA_THE_BOUNDING_SPRING),
+                Permanent::new(SUBTLETY),
+                Permanent::new(SUBTLETY).tapped(),
+                Permanent::new(ELITE_SPELLBINDER),
+                Permanent::new(MALCOLM_ALLURING_SCOUNDREL),
+                Permanent::new(THIEVING_SKYDIVER),
+                Permanent::new(ABHORRENT_OCULUS),
+                Permanent::new(STAFF_OF_THE_STORYTELLER),
+                Permanent::new(STAFF_OF_THE_STORYTELLER).counters(CounterKind::Story, 2),
+                Permanent::new(STAFF_OF_THE_STORYTELLER).tapped(),
+                Permanent::new(CURRENCY_CONVERTER),
+                Permanent::new(CURRENCY_CONVERTER).tapped(),
+                Permanent::new(MANA_CRYPT),
+                Permanent::new(MANA_CRYPT).tapped(),
+                Permanent::new(PORTABLE_HOLE),
+                Permanent::new(PORTABLE_HOLE).tapped(),
+                Permanent::new(TEFERI_HERO_OF_DOMINARIA),
+                Permanent::new(JACE_THE_MIND_SCULPTOR),
+                Permanent::new(THE_WANDERING_EMPEROR),
+                ISLAND_,
+                ISLAND_,
+                PLAINS_,
+                PLAINS_,
+            ],
+        )
+        .hand(P0, &[COUNTERSPELL])
+        .library(P0, LANDS)
+        .permanents(
+            P1,
+            &[
+                Permanent::new(SNAPCASTER_MAGE),
+                Permanent::new(SNAPCASTER_MAGE).tapped(),
+                Permanent::new(TRINKET_MAGE),
+                Permanent::new(TRINKET_MAGE).tapped(),
+                Permanent::new(JACE_VRYNS_PRODIGY),
+                Permanent::new(THUNDERTRAP_TRAINER),
+                Permanent::new(THUNDERTRAP_TRAINER).tapped(),
+                Permanent::new(BEZA_THE_BOUNDING_SPRING),
+                Permanent::new(SUBTLETY),
+                Permanent::new(SUBTLETY).tapped(),
+                Permanent::new(ELITE_SPELLBINDER),
+                Permanent::new(MALCOLM_ALLURING_SCOUNDREL),
+                Permanent::new(THIEVING_SKYDIVER),
+                Permanent::new(ABHORRENT_OCULUS),
+                Permanent::new(STAFF_OF_THE_STORYTELLER),
+                Permanent::new(STAFF_OF_THE_STORYTELLER).counters(CounterKind::Story, 2),
+                Permanent::new(STAFF_OF_THE_STORYTELLER).tapped(),
+                Permanent::new(CURRENCY_CONVERTER),
+                Permanent::new(CURRENCY_CONVERTER).tapped(),
+                Permanent::new(MANA_CRYPT),
+                Permanent::new(MANA_CRYPT).tapped(),
+                Permanent::new(PORTABLE_HOLE),
+                Permanent::new(PORTABLE_HOLE).tapped(),
+                Permanent::new(TEFERI_HERO_OF_DOMINARIA),
+                Permanent::new(JACE_THE_MIND_SCULPTOR),
+                Permanent::new(THE_WANDERING_EMPEROR),
+                ISLAND_,
+                ISLAND_,
+                PLAINS_,
+                PLAINS_,
+            ],
+        )
+        .library(P1, LANDS),
     // Six other permanents a side, a back row reaching past the opponent's piles in the far
     // corner, and thick libraries, graveyards and exiles on both sides: the piles lie clear of
     // every permanent (by-lomm).

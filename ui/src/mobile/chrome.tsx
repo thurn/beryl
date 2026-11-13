@@ -2,7 +2,13 @@
 // each player's piles and life orb, the menu, the phase icon in the middle, and the dock
 // answering the decisions the desktop's does. The stage draws the cards among these
 // (stage/PhoneStageBoard.tsx).
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import type { PlayerView, Side } from "../generated/protocol";
 import { CardBack } from "../components/Card";
 import { PhaseIcon } from "../components/Controls";
@@ -11,6 +17,7 @@ import { Incoming, LifeChange } from "../game/Life";
 import { zonePiles } from "../game/zoneViews";
 import { PileTop } from "./faces";
 import { phaseOf, PILE, type Band, type Viewport } from "./layout";
+import { phoneFrame } from "./sizing.ts";
 
 /** `side`'s library and graveyard in their strip: an offset edge behind each pile that holds
  * anything, and with `tops` its top card, a back for the library. Without, whoever draws the
@@ -124,23 +131,49 @@ export function Middle({ band, view }: { band: Band; view: PlayerView }) {
 export function useViewport() {
   const ref = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState<Viewport>();
+  const [frameStyle, setFrameStyle] = useState<CSSProperties>();
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
+    const insetBottom = parseFloat(getComputedStyle(el).paddingBottom) || 0;
     const measure = () => {
-      // The board starts below the top safe area, and its padding is the bottom one's.
+      // The board begins below the top safe area. On a narrow phone its CSS box is the
+      // 375px layout scaled to the screen, including enough height for the bottom safe area.
+      const insetTop = parseFloat(getComputedStyle(el).top) || 0;
+      const frame = phoneFrame(
+        window.innerWidth,
+        window.innerHeight - insetTop,
+      );
+      setFrameStyle(
+        frame.scale < 1
+          ? {
+              width: frame.width,
+              height: frame.height,
+              right: "auto",
+              bottom: "auto",
+              margin: 0,
+              transform: `scale(${frame.scale})`,
+              transformOrigin: "top left",
+              paddingBottom: insetBottom / frame.scale,
+            }
+          : undefined,
+      );
       setViewport({
-        width: el.clientWidth,
-        height: el.clientHeight,
-        insetBottom: parseFloat(getComputedStyle(el).paddingBottom) || 0,
+        width: frame.width,
+        height: frame.height,
+        insetBottom: insetBottom / frame.scale,
       });
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
-    return () => observer.disconnect();
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
   }, []);
-  return { ref, viewport };
+  return { ref, viewport, frameStyle };
 }
 
 function MenuIcon() {

@@ -355,24 +355,26 @@ recordings do not show them.
   card rests unseen under its owner's graveyard and is listed in that
   graveyard's sheet under exile's name, while one held by a permanent remains
   tucked under it. An emblem stands after its controller's other permanents, and
-  its ability lifts from that card. Sounds follow the same steps. What the
-  desktop shows around its table is composed for the phone from the same pieces.
-  On the phone's start screen, the opponent list scrolls between the sound and
-  credits controls at the top and the seed and game buttons at the bottom. The
-  game result shows over the board with its reason and any culprit card
-  centered, and the full-width result buttons stay above the bottom safe area
-  when the result is shown or put aside. The opening shows the coin above two
-  centered rows of cards, with bottom picks in slots beneath the hand and
-  full-width actions above the bottom safe area. The menu button opens the
-  settings with the log and the bug report in them. Undo and full control's mark
-  stand at the end of the middle band, across from the phase. Unspent mana lies
-  beside its player's life total, and the combat damage on its way on the
-  total's rim. A touch on a graveyard, or on a library with a known card, lists
-  its cards; a touch on a card shows it whole, and a touch beside it puts it
-  away. The turn's banner crosses the middle band, a combat step's lies under
-  the opponent's strip, and a scry's pill beside its player's lands, past the
-  end of their row; a coin is tossed just above the middle band. A prompt picked
-  on the table is the desktop's: the button it puts forward stands in the
+  its ability lifts from that card. Crowded rows overlap rather than shrinking
+  creature cards below 56px high. The phone centers a board at most 430px wide
+  and scales a 375px board to fit narrower screens. Sounds follow the same
+  steps. What the desktop shows around its table is composed for the phone from
+  the same pieces. On the phone's start screen, the opponent list scrolls
+  between the sound and credits controls at the top and the seed and game
+  buttons at the bottom. The game result shows over the board with its reason
+  and any culprit card centered, and the full-width result buttons stay above
+  the bottom safe area when the result is shown or put aside. The opening shows
+  the coin above two centered rows of cards, with bottom picks in slots beneath
+  the hand and full-width actions above the bottom safe area. The menu button
+  opens the settings with the log and the bug report in them. Undo and full
+  control's mark stand at the end of the middle band, across from the phase.
+  Unspent mana lies beside its player's life total, and the combat damage on its
+  way on the total's rim. A touch on a graveyard, or on a library with a known
+  card, lists its cards; a touch on a card shows it whole, and a touch beside it
+  puts it away. The turn's banner crosses the middle band, a combat step's lies
+  under the opponent's strip, and a scry's pill beside its player's lands, past
+  the end of their row; a coin is tossed just above the middle band. A prompt
+  picked on the table is the desktop's: the button it puts forward stands in the
   player's strip where the turn button is, with the one that passes on beside
   it; what it asks is a pill over that strip, and its other buttons are stacked
   over the turn button. A touch on a card the prompt can use uses it, and one it

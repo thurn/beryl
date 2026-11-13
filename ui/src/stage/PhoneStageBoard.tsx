@@ -103,7 +103,7 @@ export function PhoneStageBoard({
   );
   const number = prompts.number.bind(prompts);
   const answers = { waiting, press, cancel, suggest, number };
-  const { ref, viewport } = useViewport();
+  const { ref, viewport, frameStyle } = useViewport();
   const { layer, surface } = useSurface(stage);
   const { table, counts, resting } = useSyncExternalStore(
     stage.subscribe,
@@ -193,6 +193,7 @@ export function PhoneStageBoard({
       data-opening={opening || undefined}
       inert={opening}
       ref={ref}
+      style={frameStyle}
       onPointerDown={(e) => {
         feed.skip();
         // A touch beside every card puts the inspected one away.

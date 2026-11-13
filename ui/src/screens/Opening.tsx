@@ -42,7 +42,7 @@ export function Opening({
   onPlan(picks: Intent[]): void;
 }) {
   const phone = usePhone();
-  const { ref, viewport } = useViewport();
+  const { ref, viewport, frameStyle } = useViewport();
   const [inspecting, setInspecting] = useState<ObjectView["slot"]>();
   const { you } = view.players;
   const { flipWinner } = view.turn;
@@ -168,6 +168,7 @@ export function Opening({
       style={
         phone
           ? ({
+              ...frameStyle,
               "--opening-coin-size": `${coinSize}px`,
               "--opening-hand-width": `${CARDS_PER_ROW * cardWidth + (CARDS_PER_ROW - 1) * CARD_GAP}px`,
               "--opening-slot-width": `${slotWidth}px`,

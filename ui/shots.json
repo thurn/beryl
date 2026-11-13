@@ -1214,6 +1214,234 @@
         ".phone-sheet-card[aria-label=\"Malcolm, Alluring Scoundrel\"]"
       ],
       "expect": ".inspect"
+    },
+    {
+      "name": "phone-stage-menu-se",
+      "route": "/?phone&fixture=phone-main#/game",
+      "width": 375,
+      "height": 647,
+      "click": ".phone-menu"
+    },
+    {
+      "name": "phone-stage-inspect-se",
+      "route": "/?phone&fixture=phone-main#/game",
+      "width": 375,
+      "height": 647,
+      "click": {
+        "selector": ".card-el[data-zone=hand][data-card]",
+        "position": {
+          "x": 40,
+          "y": 24
+        }
+      },
+      "expect": ".inspect"
+    },
+    {
+      "name": "phone-stage-graveyard-se",
+      "route": "/?phone&fixture=phone-main#/game",
+      "width": 375,
+      "height": 647,
+      "click": "[data-pile=graveyard][data-side=you]"
+    },
+    {
+      "name": "phone-stage-order-long-se",
+      "route": "/?phone&fixture=order-long#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-stage-blockers-se",
+      "route": "/?phone&fixture=combat-blockers#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-stage-arrow-ability-se",
+      "route": "/?phone&fixture=arrow-ability#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-stage-revealed-se",
+      "route": "/?phone&fixture=verbs-reveal-theirs#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-stage-revealed-open-se",
+      "route": "/?phone&fixture=verbs-reveal-theirs#/game",
+      "width": 375,
+      "height": 647,
+      "click": "[data-pile=revealed]"
+    },
+    {
+      "name": "phone-stage-pick-se",
+      "route": "/?phone&fixture=shape-pick&at=1#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-stage-pick-target-se",
+      "route": "/?phone&fixture=shape-pick&at=10#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-stage-split-back-se",
+      "route": "/?phone&fixture=shape-split&at=7#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-stage-zone-graveyard-se",
+      "route": "/?phone&fixture=shape-zone&at=6#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-stage-order-se",
+      "route": "/?phone&fixture=shape-order&at=4#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-stage-pay-crew-se",
+      "route": "/?phone&fixture=shape-pay&at=6#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-stage-declare-block-se",
+      "route": "/?phone&fixture=shape-declare&at=9#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-stage-declare-attack-se",
+      "route": "/?phone&fixture=shape-declare&at=25#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-stage-yes-life-se",
+      "route": "/?phone&fixture=shape-yes&at=5#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-stage-yes-fateseal-se",
+      "route": "/?phone&fixture=shape-yes&at=3#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-stage-yes-move-se",
+      "route": "/?phone&fixture=shape-yes&at=8#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-stage-number-se",
+      "route": "/?phone&fixture=shape-number&at=2#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-stage-mode-ways-se",
+      "route": "/?phone&fixture=shape-yes&at=1#/game",
+      "click": "[data-stage=\"5\"]",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-stage-mode-offer-se",
+      "route": "/?phone&fixture=shape-mode&at=12#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-stage-catalog-se",
+      "route": "/?phone&fixture=shape-catalog&at=1#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-stage-divide-se",
+      "route": "/?phone&fixture=shape-divide&at=1#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-attack-max",
+      "route": "/?phone&fixture=phone-attack#/game",
+      "width": 430,
+      "height": 850
+    },
+    {
+      "name": "phone-respond-max",
+      "route": "/?phone&fixture=phone-respond#/game",
+      "width": 430,
+      "height": 850
+    },
+    {
+      "name": "phone-crowded",
+      "route": "/?phone&fixture=combat-blockers&at=1#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "phone-crowded-se",
+      "route": "/?phone&fixture=combat-blockers&at=1#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-crowded-stack",
+      "route": "/?phone&fixture=crowded&at=2#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "phone-crowded-stack-se",
+      "route": "/?phone&fixture=crowded&at=2#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-piles-crowded",
+      "route": "/?phone&fixture=piles-crowded#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "phone-piles-crowded-se",
+      "route": "/?phone&fixture=piles-crowded#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-stack-overload",
+      "route": "/?phone&fixture=stack-overload#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "phone-stack-overload-se",
+      "route": "/?phone&fixture=stack-overload#/game",
+      "width": 375,
+      "height": 647
+    },
+    {
+      "name": "phone-crowded-max",
+      "route": "/?phone&fixture=crowded-max#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
+      "name": "phone-crowded-max-se",
+      "route": "/?phone&fixture=crowded-max#/game",
+      "width": 375,
+      "height": 647
     }
   ]
 }

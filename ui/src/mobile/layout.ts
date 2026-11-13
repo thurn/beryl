@@ -14,6 +14,7 @@ import type {
 import type { Phase } from "../components/Controls";
 import { referenced, twins } from "../game/decisions";
 import { emblemObjects } from "../game/zoneViews";
+import { creatureHeight } from "./sizing.ts";
 
 /** A card scan's width over its height. */
 export const RATIO = 0.716;
@@ -29,7 +30,6 @@ export const STRIP = { opponent: 48, you: 60 } as const;
 /** The middle: the phase icon on the gold line, and the stack when it holds anything. */
 export const MIDDLE = { idle: 44, stack: 110 } as const;
 /** The tallest a creature may stand. */
-const CREATURE_MAX = 128;
 /** Between creature rows. */
 const ROW_GAP = 8;
 /** The stack's cards: their width and the step between them. */
@@ -243,7 +243,7 @@ function placeRow(
 }
 
 /** A side's creatures in the band `band`: in one, two or three rows, the groups split evenly,
- * whichever gives the tallest card (up to `CREATURE_MAX`). The opponent's rows stand at the
+ * whichever gives the tallest card (up to 128px). The opponent's rows stand at the
  * band's foot with their fullest nearest the middle; yours at its head. */
 function placeCreatures(
   groups: ObjectView[][],
@@ -263,7 +263,7 @@ function placeCreatures(
     if (side === "opponent") rows.reverse();
     const byHeight = (room - (rows.length - 1) * ROW_GAP - 12) / rows.length;
     const byWidth = Math.min(...rows.map((row) => fitAcross(row, width)));
-    const h = Math.min(byHeight, byWidth, CREATURE_MAX);
+    const h = creatureHeight(byHeight, byWidth);
     if (h > best.h + 1) best = { h, rows };
   }
   const h = Math.floor(best.h);

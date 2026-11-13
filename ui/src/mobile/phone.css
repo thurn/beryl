@@ -23,6 +23,8 @@ body.phone {
   left: 0;
   right: 0;
   bottom: 0;
+  max-width: 430px;
+  margin-inline: auto;
   padding-bottom: env(safe-area-inset-bottom, 0px);
   overflow: clip;
   background: var(--tabletop);
@@ -428,6 +430,19 @@ body.phone {
   min-width: 84px;
   padding: 0 12px;
 }
+/* A catalog has the opponent's half of a short phone for its whole column. */
+.phone-board .stage-entries {
+  align-items: flex-start;
+  min-height: 200px;
+  overflow-y: auto;
+}
+.phone-board .stage-entries ul {
+  gap: 0;
+}
+.phone-board .stage-entry {
+  height: 40px;
+  font-size: 18px;
+}
 /* A player the open prompt marks: the whole orb takes the touch. */
 .phone-orb > .life-hit {
   left: 0;
@@ -438,6 +453,10 @@ body.phone {
 }
 
 /* The start screen leaves its footer in reach while the opponent list scrolls. */
+body.phone :is(.phone-start-screen, .phone-start-status) {
+  max-width: 430px;
+  margin-inline: auto;
+}
 body.phone .phone-start-screen {
   display: flex;
   flex-direction: column;
@@ -603,6 +622,8 @@ body.phone
 /* The game's result and the way back to it share the same bottom gutter. */
 body.phone .phone-game-over {
   position: fixed;
+  max-width: 430px;
+  margin-inline: auto;
   padding: max(30dvh, env(safe-area-inset-top, 0px)) 16px 0;
   text-align: center;
 }
@@ -626,8 +647,9 @@ body.phone .phone-game-over {
 }
 body.phone :is(.phone-game-over > .dock, .phone-result-return) {
   position: fixed;
-  inset: auto 16px calc(16px + env(safe-area-inset-bottom, 0px));
-  width: auto;
+  inset: auto auto calc(16px + env(safe-area-inset-bottom, 0px)) 50%;
+  width: min(calc(100vw - 32px), 398px);
+  transform: translateX(-50%);
   min-width: 0;
   max-width: none;
 }
@@ -653,6 +675,11 @@ body.phone .game-toast {
 body.phone .phone-opening {
   position: fixed;
   top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 430px;
+  margin-inline: auto;
   padding-block: calc(88px - var(--opening-coin-size) / 2)
     calc(16px + env(safe-area-inset-bottom, 0px));
 }
