@@ -23,30 +23,49 @@ beryl_scenario_types = { path = "../beryl_scenario_types", optional = true }
 # The set crates, `rust/cards/*`: one per group of data/set-groups.json that has a card file.
 # Cargo makes this the one list kept by hand, with the feature's below; the build script says
 # so when a new crate is missing from either.
-cards_1993_1994 = { path = "../../cards/cards_1993_1994" }
-cards_1994_1996 = { path = "../../cards/cards_1994_1996" }
-cards_1996_1998 = { path = "../../cards/cards_1996_1998" }
-cards_1999_2000 = { path = "../../cards/cards_1999_2000" }
-cards_2001_2002 = { path = "../../cards/cards_2001_2002" }
-cards_2003_2005 = { path = "../../cards/cards_2003_2005" }
-cards_2005_2007 = { path = "../../cards/cards_2005_2007" }
-cards_2007_2009 = { path = "../../cards/cards_2007_2009" }
-cards_2009_2011 = { path = "../../cards/cards_2009_2011" }
-cards_2011_2013 = { path = "../../cards/cards_2011_2013" }
-cards_2013_2014 = { path = "../../cards/cards_2013_2014" }
-cards_2014_2016 = { path = "../../cards/cards_2014_2016" }
-cards_2016_2017 = { path = "../../cards/cards_2016_2017" }
-cards_2018_2019 = { path = "../../cards/cards_2018_2019" }
-cards_2019_2020 = { path = "../../cards/cards_2019_2020" }
-cards_2020_2021 = { path = "../../cards/cards_2020_2021" }
-cards_2021_2022 = { path = "../../cards/cards_2021_2022" }
-cards_2022 = { path = "../../cards/cards_2022" }
-cards_2022_2023 = { path = "../../cards/cards_2022_2023" }
-cards_2023_2024 = { path = "../../cards/cards_2023_2024" }
-cards_2024_2025 = { path = "../../cards/cards_2024_2025" }
-cards_2025 = { path = "../../cards/cards_2025" }
-cards_2025_2026 = { path = "../../cards/cards_2025_2026" }
-cards_2026 = { path = "../../cards/cards_2026" }
+cards_1993 = { path = "../../cards/cards_1993" }
+cards_1994 = { path = "../../cards/cards_1994" }
+cards_1995 = { path = "../../cards/cards_1995" }
+cards_1996 = { path = "../../cards/cards_1996" }
+cards_1997 = { path = "../../cards/cards_1997" }
+cards_1998 = { path = "../../cards/cards_1998" }
+cards_1999 = { path = "../../cards/cards_1999" }
+cards_2000 = { path = "../../cards/cards_2000" }
+cards_2001 = { path = "../../cards/cards_2001" }
+cards_2002 = { path = "../../cards/cards_2002" }
+cards_2003 = { path = "../../cards/cards_2003" }
+cards_2004 = { path = "../../cards/cards_2004" }
+cards_2005 = { path = "../../cards/cards_2005" }
+cards_2006 = { path = "../../cards/cards_2006" }
+cards_2007 = { path = "../../cards/cards_2007" }
+cards_2008 = { path = "../../cards/cards_2008" }
+cards_2009 = { path = "../../cards/cards_2009" }
+cards_2010 = { path = "../../cards/cards_2010" }
+cards_2011 = { path = "../../cards/cards_2011" }
+cards_2012 = { path = "../../cards/cards_2012" }
+cards_2013 = { path = "../../cards/cards_2013" }
+cards_2014 = { path = "../../cards/cards_2014" }
+cards_2015 = { path = "../../cards/cards_2015" }
+cards_2016 = { path = "../../cards/cards_2016" }
+cards_2017 = { path = "../../cards/cards_2017" }
+cards_2018 = { path = "../../cards/cards_2018" }
+cards_2019_h1 = { path = "../../cards/cards_2019_h1" }
+cards_2019_h2 = { path = "../../cards/cards_2019_h2" }
+cards_2020_h1 = { path = "../../cards/cards_2020_h1" }
+cards_2020_h2 = { path = "../../cards/cards_2020_h2" }
+cards_2021_h1 = { path = "../../cards/cards_2021_h1" }
+cards_2021_h2 = { path = "../../cards/cards_2021_h2" }
+cards_2022_h1 = { path = "../../cards/cards_2022_h1" }
+cards_2022_h2 = { path = "../../cards/cards_2022_h2" }
+cards_2023_h1 = { path = "../../cards/cards_2023_h1" }
+cards_2023_h2 = { path = "../../cards/cards_2023_h2" }
+cards_2024_h1 = { path = "../../cards/cards_2024_h1" }
+cards_2024_h2 = { path = "../../cards/cards_2024_h2" }
+cards_2025_h1 = { path = "../../cards/cards_2025_h1" }
+cards_2025_h2 = { path = "../../cards/cards_2025_h2" }
+cards_2026_q1 = { path = "../../cards/cards_2026_q1" }
+cards_2026_q2 = { path = "../../cards/cards_2026_q2" }
+cards_2026_h2 = { path = "../../cards/cards_2026_h2" }
 
 [build-dependencies]
 # Lists the set crates and writes the tables over them (plan K8).
@@ -66,30 +85,49 @@ serde_json = "1"
 scenarios = [
     "dep:beryl_scenario",
     "dep:beryl_scenario_types",
-    "cards_1993_1994/scenarios",
-    "cards_1994_1996/scenarios",
-    "cards_1996_1998/scenarios",
-    "cards_1999_2000/scenarios",
-    "cards_2001_2002/scenarios",
-    "cards_2003_2005/scenarios",
-    "cards_2005_2007/scenarios",
-    "cards_2007_2009/scenarios",
-    "cards_2009_2011/scenarios",
-    "cards_2011_2013/scenarios",
-    "cards_2013_2014/scenarios",
-    "cards_2014_2016/scenarios",
-    "cards_2016_2017/scenarios",
-    "cards_2018_2019/scenarios",
-    "cards_2019_2020/scenarios",
-    "cards_2020_2021/scenarios",
-    "cards_2021_2022/scenarios",
-    "cards_2022/scenarios",
-    "cards_2022_2023/scenarios",
-    "cards_2023_2024/scenarios",
-    "cards_2024_2025/scenarios",
-    "cards_2025/scenarios",
-    "cards_2025_2026/scenarios",
-    "cards_2026/scenarios",
+    "cards_1993/scenarios",
+    "cards_1994/scenarios",
+    "cards_1995/scenarios",
+    "cards_1996/scenarios",
+    "cards_1997/scenarios",
+    "cards_1998/scenarios",
+    "cards_1999/scenarios",
+    "cards_2000/scenarios",
+    "cards_2001/scenarios",
+    "cards_2002/scenarios",
+    "cards_2003/scenarios",
+    "cards_2004/scenarios",
+    "cards_2005/scenarios",
+    "cards_2006/scenarios",
+    "cards_2007/scenarios",
+    "cards_2008/scenarios",
+    "cards_2009/scenarios",
+    "cards_2010/scenarios",
+    "cards_2011/scenarios",
+    "cards_2012/scenarios",
+    "cards_2013/scenarios",
+    "cards_2014/scenarios",
+    "cards_2015/scenarios",
+    "cards_2016/scenarios",
+    "cards_2017/scenarios",
+    "cards_2018/scenarios",
+    "cards_2019_h1/scenarios",
+    "cards_2019_h2/scenarios",
+    "cards_2020_h1/scenarios",
+    "cards_2020_h2/scenarios",
+    "cards_2021_h1/scenarios",
+    "cards_2021_h2/scenarios",
+    "cards_2022_h1/scenarios",
+    "cards_2022_h2/scenarios",
+    "cards_2023_h1/scenarios",
+    "cards_2023_h2/scenarios",
+    "cards_2024_h1/scenarios",
+    "cards_2024_h2/scenarios",
+    "cards_2025_h1/scenarios",
+    "cards_2025_h2/scenarios",
+    "cards_2026_q1/scenarios",
+    "cards_2026_q2/scenarios",
+    "cards_2026_h2/scenarios",
 ]
 
 [[bin]]

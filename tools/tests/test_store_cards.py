@@ -94,12 +94,13 @@ def test_path_says_a_complete_card_needs_no_file(
     assert card.run_path(argparse.Namespace(name="Grizzly Bears"), sources) == 0
     printed = capsys.readouterr().out
     assert "Grizzly Bears is complete from the store, with no file" in printed
-    assert "cards_1993_1994" in printed
+    assert "cards_1993" in printed
 
 
 def test_a_crate_is_three_files_that_differ_only_in_its_name() -> None:
-    assert card_crates.years("cards_1993_1994") == "from 1993 to 1994"
     assert card_crates.years("cards_2022") == "in 2022"
+    assert card_crates.years("cards_2024_h1") == "in the first half of 2024"
+    assert card_crates.years("cards_2026_q3") == "in the third quarter of 2026"
     files = card_crates.files_of("cards_2022")
     assert 'name = "cards_2022"' in files["Cargo.toml"]
     assert "beryl_card_build::set_crate();" in files["build.rs"]
@@ -128,3 +129,27 @@ def test_the_tree_holds_every_crate_current() -> None:
     assert card_crates.extra() == []
     wanted = card_crates.wanted()
     assert wanted == [g.crate for g in set_groups.load() if g.crate in wanted]
+
+
+def test_card_crates_moves_a_file_to_its_new_crate_and_removes_the_old_crate(
+    tmp_path: Path,
+) -> None:
+    store = tmp_path / "store.tsv"
+    record = creature("Grizzly Bears") | {"first_released": "1993-08-05"}
+    card_store.write(store, [card_store.line("card", "Grizzly Bears", record)])
+    old = tmp_path / "cards" / "cards_1993_1994"
+    (old / "lea").mkdir(parents=True)
+    (old / "lea" / "grizzly_bears.rs").write_text("card")
+    for name, text in card_crates.files_of("cards_1993_1994").items():
+        (old / name).write_text(text)
+    groups = tmp_path / "set-groups.json"
+    card_crates.regroup(tmp_path / "cards", store, groups)
+    assert set_groups.load(groups) == [set_groups.Group("cards_1993", ["lea"])]
+    moved = tmp_path / "cards" / "cards_1993" / "lea" / "grizzly_bears.rs"
+    assert moved.read_text() == "card"
+    assert not (old / "lea").exists()
+    assert card_crates.remove(old)
+    assert not old.exists()
+    # A crate that still holds a card file is never removed.
+    assert not card_crates.remove(tmp_path / "cards" / "cards_1993")
+    assert moved.exists()

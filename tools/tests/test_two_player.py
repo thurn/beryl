@@ -23,10 +23,10 @@ def test_rules_code_may_not_name_the_two_player_module(tmp_path: Path) -> None:
     write(tmp_path, "rust/crates/beryl_rules/src/combat.rs", "\n" + IMPORT)
     write(tmp_path, "rust/crates/beryl_rules/src/lib.rs", "use k::two_player;\n")
     write(tmp_path, "rust/crates/beryl_engine/src/turn.rs", IMPORT)
-    write(tmp_path, "rust/cards/cards_1993_1994/lea/a.rs", IMPORT)
+    write(tmp_path, "rust/cards/cards_1993/lea/a.rs", IMPORT)
     rule, root, beside, card = two_player.check(tmp_path)
     assert rule.startswith("rust/crates/beryl_rules/src/combat.rs:2: ")
     assert root.startswith("rust/crates/beryl_rules/src/lib.rs:1: ")
     assert beside.startswith("rust/crates/beryl_engine/src/turn.rs:1: ")
-    assert card.startswith("rust/cards/cards_1993_1994/lea/a.rs:1: ")
+    assert card.startswith("rust/cards/cards_1993/lea/a.rs:1: ")
     assert "opponents_of" in rule

@@ -82,17 +82,17 @@ fn private_helper() {}
 }
 
 CARD_FILES = {
-    "cards_1993_1994/lea/counterspell.rs": """pub static CARD: CardDef = CardDef {
+    "cards_1993/lea/counterspell.rs": """pub static CARD: CardDef = CardDef {
     body: Behavior::Data(&counter(TARGET)),
 };
 pub const SCENARIOS: &[Scenario] = &[Effect::GainLife];
 """,
-    "cards_1993_1994/lea/mana_leak.rs": """pub static CARD: CardDef = CardDef {
+    "cards_1993/lea/mana_leak.rs": """pub static CARD: CardDef = CardDef {
     // Effect::GainLife is only named in a comment.
     body: Behavior::Data(&unless(counter(TARGET))),
 };
 """,
-    "cards_1993_1994/lea/healing_salve.rs": """pub static CARD: CardDef = CardDef {
+    "cards_1993/lea/healing_salve.rs": """pub static CARD: CardDef = CardDef {
     body: Behavior::Data(&Effect::GainLife { amount: 3 }),
 };
 """,
@@ -254,7 +254,7 @@ def test_an_implemented_cards_brief_has_all_five_parts(
         "effect/mod.rs:9)" in vocabulary_part and '"Counter [spell]"' in vocabulary_part
     )
     nearest_part = part(text, "Nearest implemented cards")
-    leak = (sources.cards / "cards_1993_1994" / "lea" / "mana_leak.rs").as_posix()
+    leak = (sources.cards / "cards_1993" / "lea" / "mana_leak.rs").as_posix()
     # Its uses come from its definition: the comment and the scenarios name no entry.
     assert f"- Mana Leak: {leak}\n  uses build::counter, build::TARGET" in nearest_part
     assert "Counterspell:" not in nearest_part
@@ -311,12 +311,12 @@ def test_path_prints_a_cards_file_or_says_it_has_none(
 ) -> None:
     assert card.run_path(argparse.Namespace(name="mana leak"), sources) == 0
     printed = capsys.readouterr().out.strip()
-    assert printed == (sources.cards / "cards_1993_1994/lea/mana_leak.rs").as_posix()
+    assert printed == (sources.cards / "cards_1993/lea/mana_leak.rs").as_posix()
     assert card.run_path(argparse.Namespace(name="Fire // Ice"), sources) == 1
     captured = capsys.readouterr()
     assert captured.out == ""
     assert "Fire // Ice is a record in the card store with no file" in captured.err
-    assert "cards_1993_1994/lea/fire_ice.rs" in captured.err
+    assert "cards_1993/lea/fire_ice.rs" in captured.err
 
 
 READS: list[str] = []

@@ -1,5 +1,6 @@
 """data/set-groups.json and the paths of card files (set_groups.py)."""
 
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -17,73 +18,69 @@ def sizes(groups: list[Group], sets: dict[str, SetInfo]) -> list[int]:
     return [sum(sets[c].cards for c in g.sets if c in sets) for g in groups]
 
 
-def test_the_first_run_partitions_sets_oldest_first_within_bounds() -> None:
+TODAY = date(2026, 11, 12)
+
+
+def test_sets_are_grouped_by_year_and_large_years_split() -> None:
     sets = {
-        "new": SetInfo("2001-01-01", 400),
+        "new": SetInfo("2001-03-01", 400),
         "old": SetInfo("1993-08-05", 300),
-        "mid": SetInfo("1995-01-01", 900),
-        "huge": SetInfo("1999-01-01", 2000),
-        "late": SetInfo("2002-01-01", 200),
+        "mid": SetInfo("1993-01-01", 900),
+        # 2010 holds 1,300 cards, so it is split into halves; its first half holds 1,250, so
+        # that half is split into quarters.
+        "jan": SetInfo("2010-01-01", 700),
+        "may": SetInfo("2010-05-01", 550),
+        "aug": SetInfo("2010-08-01", 50),
+        # The current year and later ones are split into halves however small.
+        "now": SetInfo("2026-09-01", 10),
+        "next": SetInfo("2027-02-01", 10),
     }
-    groups = set_groups.extend([], sets)
-    assert [g.sets for g in groups] == [["old", "mid"], ["huge"], ["new", "late"]]
-    assert [g.crate for g in groups] == [
-        "cards_1993_1995",
-        "cards_1999",
-        "cards_2001_2002",
+    groups = set_groups.extend([], sets, TODAY)
+    assert [(g.crate, g.sets) for g in groups] == [
+        ("cards_1993", ["mid", "old"]),
+        ("cards_2001", ["new"]),
+        ("cards_2010_q1", ["jan"]),
+        ("cards_2010_q2", ["may"]),
+        ("cards_2010_h2", ["aug"]),
+        ("cards_2026_h2", ["now"]),
+        ("cards_2027_h1", ["next"]),
     ]
-    assert sizes(groups, sets) == [1200, 2000, 600]
 
 
-def test_a_new_set_moves_no_existing_set() -> None:
-    sets = {"a": SetInfo("2020-01-01", 1000), "b": SetInfo("2021-01-01", 900)}
-    first = set_groups.extend([], sets)
-    # A new set, and one Scryfall dates before every other, join the newest group or open one.
-    sets |= {
-        "c": SetInfo("2022-01-01", 500),
-        "d": SetInfo("2023-01-01", 700),
-        "early": SetInfo("1990-01-01", 50),
-    }
-    again = set_groups.extend(first, sets)
-    assert [g.sets for g in first] == [["a"], ["b"]]
-    assert [g.sets for g in again] == [["a"], ["b", "early", "c"], ["d"]]
-    assert again[-1].crate == "cards_2023"
+def test_a_split_is_kept_and_a_set_moves_only_when_its_year_overflows() -> None:
+    sets = {"a": SetInfo("2020-01-01", 600), "b": SetInfo("2021-08-01", 900)}
+    first = set_groups.extend([], sets, TODAY)
+    assert [g.crate for g in first] == ["cards_2020", "cards_2021"]
+    # A new set that keeps its year under the cap joins it; one that takes it over splits it.
+    sets |= {"c": SetInfo("2020-12-01", 500), "d": SetInfo("2021-02-01", 400)}
+    again = set_groups.extend(first, sets, TODAY)
+    assert [(g.crate, g.sets) for g in again] == [
+        ("cards_2020", ["a", "c"]),
+        ("cards_2021_h1", ["d"]),
+        ("cards_2021_h2", ["b"]),
+    ]
+    # Once split, a year stays split though its sets shrink, and the current year stays split
+    # in later years.
+    smaller = {"b": sets["b"], "now": SetInfo("2026-01-01", 10)}
+    split = set_groups.extend(set_groups.extend([], smaller, TODAY), smaller, TODAY)
+    later = set_groups.extend([*again, *split], smaller, date(2030, 1, 1))
+    assert [g.crate for g in later] == ["cards_2021_h2", "cards_2026_h1"]
 
 
-def test_regenerating_the_committed_groups_with_a_new_set_moves_none(
-    tmp_path: Path,
-) -> None:
-    path = tmp_path / "set-groups.json"
-    path.write_bytes(set_groups.GROUPS.read_bytes())
-    before = set_groups.SetGroups(set_groups.load(path)).crates
-    added: card_store.Json = {
-        "first_set": "zzz",
-        "first_released": "2030-01-01",
-        "name": "New Card",
-    }
-    after = set_groups.SetGroups(
-        set_groups.update(path, [*committed_cards(), added])
-    ).crates
-    assert {c: after[c] for c in before} == before
-    assert after["zzz"] in {g.crate for g in set_groups.load(path)}
-
-
-def test_the_committed_groups_cover_every_first_printing_set_within_bounds() -> None:
+def test_the_committed_groups_follow_the_rule_and_cover_every_set() -> None:
     records = committed_cards()
     sets = set_groups.first_sets(records)
     groups = set_groups.load()
-    # `by cards` wrote them from this store: running it again changes nothing.
+    # `card crates` wrote them from this store: running it again changes nothing.
     assert set_groups.extend(groups, sets) == groups
     placed = [c for g in groups for c in g.sets]
     assert len(placed) == len(set(placed))
-    assert set(sets) <= set(placed)
-    crates = [g.crate for g in groups]
-    assert len(crates) == len(set(crates))
+    assert set(sets) == set(placed)
     for group, size in zip(groups, sizes(groups, sets)):
-        alone = len(group.sets) == 1 and size > set_groups.MAXIMUM
-        assert size <= set_groups.MAXIMUM or alone, group.crate
-    # Only the newest group may still be filling.
-    assert min(sizes(groups[:-1], sets)) >= set_groups.MINIMUM
+        assert set_groups.CRATE.match(group.crate), group.crate
+        quarter = group.crate[-2] == "q"
+        assert size <= set_groups.CAP or quarter, group.crate
+        assert all(sets[c].released[:4] in group.crate for c in group.sets)
 
 
 def test_every_card_has_a_path_of_its_own() -> None:

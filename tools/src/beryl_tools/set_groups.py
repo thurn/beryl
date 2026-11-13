@@ -1,18 +1,19 @@
-"""data/set-groups.json: the crates card files go in, each a run of first-printing sets
-(docs/project-50k.md, K8: "Card files are grouped by first-printing set, in many crates"), which
-`by cards` writes beside the card store, and the paths a card's file belongs at.
+"""data/set-groups.json: the crates card files go in, each the first-printing sets of a
+calendar year or part of one (docs/project-50k.md, K8: "Card files are grouped by first-printing
+set, in many crates"), which `by cards` writes beside the card store and `card crates` updates,
+and the paths a card's file belongs at.
 
-A group is a crate name and its set codes. The first run partitions every first-printing set,
-oldest first (by its earliest first printing's release date, then code), into runs of 500 to
-1,500 cards (`MINIMUM`, `MAXIMUM`): an era a crate. A set of more than 1,500 cards is a group
-by itself. Later runs keep every set where the file has it, so a refresh or a new set never
-moves a card file to another crate: each new set, oldest first, joins the newest group while
-that holds at most 1,500 cards, and opens a group of its own otherwise. A set that has no cards
-any more keeps its place.
-
-A crate is named for the years of its sets when it is made, `cards_1993_1994`, or `cards_2024`
-for one year, with `_part_2`, `_part_3` and so on for a name already taken, and keeps its name
-as later sets join it.
+A group is a crate name and its set codes. Each first-printing set goes in the crate of the
+year of its earliest first printing's release date, `cards_2010`. A year whose sets hold more
+than `CAP` cards is split by release date into halves, `cards_2024_h1` (January to June) and
+`cards_2024_h2` (July to December), and a half over `CAP` into quarters, `cards_2026_q1` to
+`cards_2026_q4`; quarters are not split further. The current year and later ones are split into
+halves from the start, since recent years always grow past `CAP`, so a set does not move when
+its year fills. A split is kept once made: a crate named in the file keeps its year or half
+split even when its sets shrink or the year is past. The rest is a function of the store's
+sets alone, so a set moves only when its year or half first grows past `CAP`, and `card crates`
+then moves its card files. The cap keeps the one-edit rebuild in budget: it is mostly the
+recheck of the edited crate, which grows with the crate's cards (K8, Measurements).
 
 A card's file is `rust/cards/<crate>/<set module>/<card module>.rs` (`SetGroups.card_path`): a
 set's module is its code (`m10`), and a card's is its name in lowercase ASCII words joined by
@@ -28,9 +29,11 @@ by them, so a file out of place fails the build.
 from __future__ import annotations
 
 import json
+import re
 import unicodedata
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 from typing import cast
 
@@ -38,14 +41,16 @@ from . import paths
 
 GROUPS: Path = paths.REPO / "data" / "set-groups.json"
 CARDS: Path = paths.REPO / "rust" / "cards"
-MINIMUM = 500
-MAXIMUM = 1500
+CAP = 1200
 RULE = (
-    "Crates of card files (`by cards`; tools/src/beryl_tools/set_groups.py specifies them): "
-    "first-printing sets oldest first in runs of 500 to 1,500 cards, a larger set alone. A set "
-    "never moves: a new one joins the newest crate while it holds at most 1,500 cards, else "
-    "opens one. A crate is named for its sets' years when made and keeps its name."
+    "Crates of card files (`by cards`, `card crates`; tools/src/beryl_tools/set_groups.py "
+    "specifies them): each first-printing set in the crate of its first release's year, "
+    "cards_<year>. A year of more than 1,200 cards, and the current year and later ones, are "
+    "split into halves by release date (cards_<year>_h1, _h2), and a half of more than 1,200 "
+    "into quarters (_q1 to _q4). A split, once made, is kept."
 )
+# A crate name the rule makes: a year, then a half or quarter of it.
+CRATE: re.Pattern[str] = re.compile(r"^cards_(\d{4})(?:_([hq])([1-4]))?$")
 # Rust's strict and reserved keywords, which name no module unescaped.
 KEYWORDS: frozenset[str] = frozenset(
     "abstract as async await become box break const continue crate do dyn else enum extern "
@@ -121,74 +126,59 @@ def first_sets(records: Iterable[Json]) -> dict[str, SetInfo]:
     return {c: SetInfo(dates[c], counts[c]) for c in dates}
 
 
-def penalty(total: int, single: bool) -> float:
-    """How far a run of sets holding `total` cards is from a group's bounds."""
-    if single and total > MAXIMUM:
-        return 0.0
-    if total > MAXIMUM:
-        return float("inf")
-    return float(max(0, MINIMUM - total))
+def parents(crate: str) -> list[str]:
+    """The crates `crate` was split from: a half's year, a quarter's half and year. None for a
+    year, or for a name the rule does not make."""
+    found = CRATE.match(crate)
+    if not found or not found.group(2):
+        return []
+    year, part, number = found.group(1), found.group(2), int(found.group(3))
+    if part == "h":
+        return [f"cards_{year}"]
+    return [f"cards_{year}_h{(number + 1) // 2}", f"cards_{year}"]
 
 
-def partition(sizes: list[int]) -> list[int]:
-    """The ends of the runs splitting `sizes` in order with the least `penalty`, then the
-    fewest runs."""
-    best: list[tuple[float, int, int]] = [(0.0, 0, 0)]  # (penalty, runs, start)
-    for end in range(1, len(sizes) + 1):
-        options: list[tuple[float, int, int]] = []
-        total = 0
-        for start in range(end - 1, -1, -1):
-            total += sizes[start]
-            if total > MAXIMUM and start < end - 1:
-                break
-            cost, runs, _ = best[start]
-            options.append((cost + penalty(total, start == end - 1), runs + 1, start))
-        best.append(min(options))
-    ends: list[int] = []
-    end = len(sizes)
-    while end:
-        ends.append(end)
-        end = best[end][2]
-    return ends[::-1]
+def part_of(crate: str, released: str) -> str:
+    """The part of the split crate `crate`, a year or a half, that a set released on
+    `released` goes in."""
+    month = int(released[5:7])
+    found = CRATE.match(crate)
+    if found and not found.group(2):
+        return f"{crate}_h{1 if month <= 6 else 2}"
+    return f"{crate.rsplit('_', 1)[0]}_q{(month - 1) // 3 + 1}"
 
 
-def crate_name(years: list[str], taken: set[str]) -> str:
-    low, high = min(years), max(years)
-    base = f"cards_{low}" if low == high else f"cards_{low}_{high}"
-    name, part = base, 2
-    while name in taken:
-        name, part = f"{base}_part_{part}", part + 1
-    return name
+def extend(
+    existing: list[Group], sets: Mapping[str, SetInfo], today: date | None = None
+) -> list[Group]:
+    """The groups of `sets` by the rule, keeping each split `existing` has made. Groups are in
+    date order, and each group's sets oldest first."""
+    current: int = (today or date.today()).year
+    split: set[str] = {parent for g in existing for parent in parents(g.crate)}
+    groups: list[Group] = []
 
+    def place(crate: str, codes: list[str], depth: int) -> None:
+        # `crate` is a year at depth 0, a half at 1 and a quarter at 2.
+        total = sum(sets[c].cards for c in codes)
+        must = (
+            crate in split
+            or total > CAP
+            or (depth == 0 and int(crate.removeprefix("cards_")) >= current)
+        )
+        if depth == 2 or not must:
+            groups.append(Group(crate, codes))
+            return
+        parts: dict[str, list[str]] = {}
+        for code in codes:
+            parts.setdefault(part_of(crate, sets[code].released), []).append(code)
+        for part in sorted(parts):
+            place(part, parts[part], depth + 1)
 
-def extend(existing: list[Group], sets: Mapping[str, SetInfo]) -> list[Group]:
-    """`existing` with every set of `sets` it lacks placed: partitioned when there is no group
-    yet, else each joining the newest group or opening one. No placed set moves."""
-    groups = [Group(g.crate, list(g.sets)) for g in existing]
-    placed = {code for g in groups for code in g.sets}
-    new = sorted(
-        (c for c in sets if c not in placed), key=lambda c: (sets[c].released, c)
-    )
-    taken: set[str] = {g.crate for g in groups}
-
-    def opened(codes: list[str]) -> Group:
-        group = Group(crate_name([sets[c].released[:4] for c in codes], taken), codes)
-        taken.add(group.crate)
-        return group
-
-    if not groups:
-        start = 0
-        for end in partition([sets[c].cards for c in new]):
-            groups.append(opened(new[start:end]))
-            start = end
-        return groups
-    for code in new:
-        last = groups[-1]
-        held = sum(sets[c].cards for c in last.sets if c in sets)
-        if held + sets[code].cards <= MAXIMUM:
-            last.sets.append(code)
-        else:
-            groups.append(opened([code]))
+    years: dict[str, list[str]] = {}
+    for code in sorted(sets, key=lambda c: (sets[c].released, c)):
+        years.setdefault(f"cards_{sets[code].released[:4]}", []).append(code)
+    for crate in sorted(years):
+        place(crate, years[crate], 0)
     return groups
 
 
@@ -213,7 +203,8 @@ def write(path: Path, groups: list[Group]) -> None:
 
 
 def update(path: Path, records: Iterable[Json]) -> list[Group]:
-    """Places the first-printing sets of these card records in the groups at `path`."""
+    """Groups the first-printing sets of these card records by the rule, keeping the splits
+    the file at `path` has made, and writes them there."""
     groups = extend(load(path), first_sets(records))
     write(path, groups)
     return groups

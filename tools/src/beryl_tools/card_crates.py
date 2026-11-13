@@ -1,6 +1,10 @@
 """`card crates`: writes the set crates under `rust/cards` from `data/set-groups.json`, and the
 list of them in `beryl_cards`' manifest, the one list Cargo makes someone keep.
 
+It first groups the store's sets again (`set_groups.update`), moves each card file whose set
+is now in another crate to its new path, and removes the files it wrote for a crate that has
+no card left. A set moves when its year or half of a year first grows past the cap.
+
 A group of set-groups.json gets a crate when it has a card file or a card complete from the
 store (store_cards.py), whose definition the crate's build script writes with no file. A crate
 is three files that differ only in its name: `Cargo.toml`, a `build.rs` that calls
@@ -71,11 +75,23 @@ include!(concat!(env!("OUT_DIR"), "/cards.rs"));
 """
 
 
+# The files `card crates` writes in each crate's directory.
+WRITTEN: frozenset[str] = frozenset({"Cargo.toml", "build.rs", "lib.rs"})
+
+
 def years(name: str) -> str:
-    """The years a crate's name gives, as its `lib.rs` says them: `cards_1993_1994` is "from
-    1993 to 1994", `cards_2022` is "in 2022"."""
-    parts = name.removeprefix("cards_").split("_")
-    return f"in {parts[0]}" if len(parts) == 1 else f"from {parts[0]} to {parts[-1]}"
+    """When a crate's cards were first printed, as its `lib.rs` says it: `cards_2022` is "in
+    2022", `cards_2024_h1` "in the first half of 2024" and `cards_2026_q3` "in the third
+    quarter of 2026". A name the rule does not make, such as a scratch crate of `just scale`, is
+    in the sets the file gives it."""
+    found = set_groups.CRATE.match(name)
+    if not found:
+        return "in the sets data/set-groups.json gives it"
+    year, part, number = found.groups()
+    if not part:
+        return f"in {year}"
+    order = ("first", "second", "third", "fourth")[int(number) - 1]
+    return f"in the {order} {'half' if part == 'h' else 'quarter'} of {year}"
 
 
 def files_of(name: str) -> dict[str, str]:
@@ -155,18 +171,61 @@ def step(*_changed: str) -> int:
     return 1 if found else 0
 
 
+def regroup(
+    root: Path = set_groups.CARDS,
+    store: Path = card_store.STORE,
+    groups_file: Path = set_groups.GROUPS,
+) -> None:
+    """Groups the store's sets again and moves each card file to the path that gives it,
+    removing the set directory it leaves empty."""
+    with card_store.Store(store) as opened:
+        records = [record for kind, record in opened if kind == "card"]
+        groups = set_groups.SetGroups(set_groups.update(groups_file, records))
+        for path in card_files.files(root):
+            name = card_files.name_of(path, opened)
+            record = opened.card(name) if name else None
+            if record is None:
+                continue
+            target = groups.card_path(record, root)
+            if target != path:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                path.rename(target)
+                if not any(path.parent.iterdir()):
+                    path.parent.rmdir()
+                print(f"{path} -> {target}")
+
+
+def remove(crate: Path) -> bool:
+    """Removes a crate's directory if it holds only the files `card crates` writes and empty
+    set directories, which moving its card files away leaves."""
+    found = [p for p in crate.rglob("*") if p.is_file()]
+    if any(p.parent != crate or p.name not in WRITTEN for p in found):
+        return False
+    for path in found:
+        path.unlink()
+    for directory in sorted(crate.rglob("*"), reverse=True):
+        directory.rmdir()
+    crate.rmdir()
+    return True
+
+
 def run(_args: argparse.Namespace) -> int:
-    """`card crates`: writes every set crate and `beryl_cards`' list of them."""
+    """`card crates`: groups the sets, moves card files to their crates, and writes every set
+    crate and `beryl_cards`' list of them."""
+    regroup()
+    for path in extra():
+        if remove(path):
+            print(f"removed {path.relative_to(paths.REPO).as_posix()}")
+        else:
+            print(
+                f"card crates: {path.relative_to(paths.REPO).as_posix()} has no card file "
+                "and no card complete from the store; remove it",
+                file=sys.stderr,
+            )
     for path, text in changes().items():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
         print(path.relative_to(paths.REPO).as_posix())
-    for path in extra():
-        print(
-            f"card crates: {path.relative_to(paths.REPO).as_posix()} has no card file "
-            "and no card complete from the store; remove it",
-            file=sys.stderr,
-        )
     return 0
 
 

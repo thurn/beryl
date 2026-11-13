@@ -25,8 +25,8 @@ A clone of card file `f` numbered `i` is `f` with its card renamed "<name> i" (e
 "<face> i" for a card with several faces): every `names::` and `printed::` constant of the
 card and its faces becomes the clone's, so it keeps its abilities, faces and scenarios.
 
-The crates follow the shipped grouping (data/set-groups.json: first-printing sets in runs of
-500 to 1,500 cards): with no `--crates`, there are as many as N cards make at the tree's mean
+The crates follow the shipped grouping (data/set-groups.json: the first-printing sets of a year,
+or of a half or quarter of one, of at most 1,200 cards): with no `--crates`, there are as many as N cards make at the tree's mean
 group size, sized and split into sets as the tree's groups are, in order and cycled.
 """
 

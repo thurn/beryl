@@ -1,36 +1,51 @@
 {
-  "rule": "Crates of card files (`by cards`; tools/src/beryl_tools/set_groups.py specifies them): first-printing sets oldest first in runs of 500 to 1,500 cards, a larger set alone. A set never moves: a new one joins the newest crate while it holds at most 1,500 cards, else opens one. A crate is named for its sets' years when made and keeps its name.",
+  "rule": "Crates of card files (`by cards`, `card crates`; tools/src/beryl_tools/set_groups.py specifies them): each first-printing set in the crate of its first release's year, cards_<year>. A year of more than 1,200 cards, and the current year and later ones, are split into halves by release date (cards_<year>_h1, _h2), and a half of more than 1,200 into quarters (_q1 to _q4). A split, once made, is kept.",
   "groups": [
     {
-      "crate": "cards_1993_1994",
+      "crate": "cards_1993",
       "sets": [
         "lea",
         "leb",
-        "arn",
-        "atq",
-        "leg"
+        "arn"
       ]
     },
     {
-      "crate": "cards_1994_1996",
+      "crate": "cards_1994",
       "sets": [
+        "atq",
+        "leg",
         "drk",
         "fem",
-        "phpr",
-        "ice",
-        "hml",
-        "all",
-        "mir"
+        "phpr"
       ]
     },
     {
-      "crate": "cards_1996_1998",
+      "crate": "cards_1995",
       "sets": [
-        "mgb",
+        "ice",
+        "hml"
+      ]
+    },
+    {
+      "crate": "cards_1996",
+      "sets": [
+        "all",
+        "mir",
+        "mgb"
+      ]
+    },
+    {
+      "crate": "cards_1997",
+      "sets": [
         "vis",
         "por",
         "wth",
-        "tmp",
+        "tmp"
+      ]
+    },
+    {
+      "crate": "cards_1998",
+      "sets": [
         "sth",
         "exo",
         "p02",
@@ -38,142 +53,187 @@
       ]
     },
     {
-      "crate": "cards_1999_2000",
+      "crate": "cards_1999",
       "sets": [
         "ulg",
         "ptk",
         "uds",
         "s99",
-        "mmq",
+        "mmq"
+      ]
+    },
+    {
+      "crate": "cards_2000",
+      "sets": [
         "nem",
         "pcy",
         "inv"
       ]
     },
     {
-      "crate": "cards_2001_2002",
+      "crate": "cards_2001",
       "sets": [
         "pls",
         "apc",
-        "ody",
+        "ody"
+      ]
+    },
+    {
+      "crate": "cards_2002",
+      "sets": [
         "tor",
         "jud",
         "ons"
       ]
     },
     {
-      "crate": "cards_2003_2005",
+      "crate": "cards_2003",
       "sets": [
         "lgn",
         "scg",
         "8ed",
-        "mrd",
-        "dst",
-        "5dn",
-        "chk",
-        "bok"
+        "mrd"
       ]
     },
     {
-      "crate": "cards_2005_2007",
+      "crate": "cards_2004",
       "sets": [
+        "dst",
+        "5dn",
+        "chk"
+      ]
+    },
+    {
+      "crate": "cards_2005",
+      "sets": [
+        "bok",
         "sok",
-        "rav",
+        "rav"
+      ]
+    },
+    {
+      "crate": "cards_2006",
+      "sets": [
         "gpt",
         "dis",
         "csp",
         "tsb",
-        "tsp",
-        "plc"
+        "tsp"
       ]
     },
     {
-      "crate": "cards_2007_2009",
+      "crate": "cards_2007",
       "sets": [
+        "plc",
         "fut",
-        "lrw",
+        "lrw"
+      ]
+    },
+    {
+      "crate": "cards_2008",
+      "sets": [
         "mor",
         "shm",
         "eve",
         "drb",
-        "ala",
-        "con"
+        "ala"
       ]
     },
     {
-      "crate": "cards_2009_2011",
+      "crate": "cards_2009",
       "sets": [
+        "con",
         "arb",
         "m10",
         "hop",
-        "zen",
+        "zen"
+      ]
+    },
+    {
+      "crate": "cards_2010",
+      "sets": [
         "wwk",
         "roe",
         "arc",
         "m11",
         "v10",
         "ddf",
-        "som",
-        "mbs",
-        "nph"
+        "som"
       ]
     },
     {
-      "crate": "cards_2011_2013",
+      "crate": "cards_2011",
       "sets": [
+        "mbs",
+        "nph",
         "cmd",
         "m12",
         "v11",
-        "isd",
+        "isd"
+      ]
+    },
+    {
+      "crate": "cards_2012",
+      "sets": [
         "dka",
         "avr",
         "pc2",
         "m13",
         "ddj",
-        "rtr",
-        "gtc"
+        "rtr"
       ]
     },
     {
-      "crate": "cards_2013_2014",
+      "crate": "cards_2013",
       "sets": [
+        "gtc",
         "dgm",
         "m14",
         "ddl",
         "ths",
-        "c13",
+        "c13"
+      ]
+    },
+    {
+      "crate": "cards_2014",
+      "sets": [
         "bng",
         "jou",
         "cns",
         "m15",
         "ddn",
-        "ktk"
+        "ktk",
+        "c14"
       ]
     },
     {
-      "crate": "cards_2014_2016",
+      "crate": "cards_2015",
       "sets": [
-        "c14",
         "frf",
         "dtk",
         "ori",
         "ddp",
         "bfz",
-        "c15",
-        "ogw",
-        "ddq",
-        "soi"
+        "c15"
       ]
     },
     {
-      "crate": "cards_2016_2017",
+      "crate": "cards_2016",
       "sets": [
+        "ogw",
+        "ddq",
+        "soi",
         "ema",
         "emn",
         "cn2",
         "kld",
         "mps",
-        "c16",
+        "c16"
+      ]
+    },
+    {
+      "crate": "cards_2017",
+      "sets": [
         "aer",
         "akh",
         "mp2",
@@ -183,7 +243,7 @@
       ]
     },
     {
-      "crate": "cards_2018_2019",
+      "crate": "cards_2018",
       "sets": [
         "rix",
         "dom",
@@ -193,61 +253,81 @@
         "c18",
         "grn",
         "g18",
-        "gnt",
-        "med",
-        "rna",
-        "war"
+        "gnt"
       ]
     },
     {
-      "crate": "cards_2019_2020",
+      "crate": "cards_2019_h1",
       "sets": [
-        "mh1",
+        "med",
+        "rna",
+        "war",
+        "mh1"
+      ]
+    },
+    {
+      "crate": "cards_2019_h2",
+      "sets": [
         "m20",
         "c19",
         "eld",
-        "gn2",
+        "gn2"
+      ]
+    },
+    {
+      "crate": "cards_2020_h1",
+      "sets": [
         "thb",
         "c20",
         "iko"
       ]
     },
     {
-      "crate": "cards_2020_2021",
+      "crate": "cards_2020_h2",
       "sets": [
         "m21",
         "jmp",
         "znc",
         "znr",
         "sld",
-        "cmr",
+        "cmr"
+      ]
+    },
+    {
+      "crate": "cards_2021_h1",
+      "sets": [
         "khc",
         "khm",
         "c21",
         "sta",
-        "stx"
+        "stx",
+        "mh2"
       ]
     },
     {
-      "crate": "cards_2021_2022",
+      "crate": "cards_2021_h2",
       "sets": [
-        "mh2",
         "afc",
         "afr",
         "mic",
         "mid",
         "voc",
-        "vow",
-        "nec",
-        "neo"
+        "vow"
       ]
     },
     {
-      "crate": "cards_2022",
+      "crate": "cards_2022_h1",
       "sets": [
+        "nec",
+        "neo",
         "ncc",
         "snc",
-        "clb",
+        "clb"
+      ]
+    },
+    {
+      "crate": "cards_2022_h2",
+      "sets": [
         "2x2",
         "dmc",
         "dmu",
@@ -255,13 +335,13 @@
         "gn3",
         "bot",
         "brc",
-        "bro"
+        "bro",
+        "j22"
       ]
     },
     {
-      "crate": "cards_2022_2023",
+      "crate": "cards_2023_h1",
       "sets": [
-        "j22",
         "one",
         "onc",
         "moc",
@@ -269,19 +349,24 @@
         "mul",
         "mat",
         "ltc",
-        "ltr",
-        "cmm",
-        "woc",
-        "woe"
+        "ltr"
       ]
     },
     {
-      "crate": "cards_2023_2024",
+      "crate": "cards_2023_h2",
       "sets": [
+        "cmm",
+        "woc",
+        "woe",
         "who",
         "lcc",
         "lci",
-        "rex",
+        "rex"
+      ]
+    },
+    {
+      "crate": "cards_2024_h1",
+      "sets": [
         "mkc",
         "mkm",
         "clu",
@@ -289,13 +374,13 @@
         "big",
         "otc",
         "otj",
-        "m3c"
+        "m3c",
+        "mh3"
       ]
     },
     {
-      "crate": "cards_2024_2025",
+      "crate": "cards_2024_h2",
       "sets": [
-        "mh3",
         "acr",
         "blb",
         "blc",
@@ -304,42 +389,52 @@
         "dsc",
         "dsk",
         "fdn",
-        "j25",
-        "dft",
-        "drc"
+        "j25"
       ]
     },
     {
-      "crate": "cards_2025",
+      "crate": "cards_2025_h1",
       "sets": [
+        "dft",
+        "drc",
         "tdc",
         "tdm",
         "fic",
-        "fin",
+        "fin"
+      ]
+    },
+    {
+      "crate": "cards_2025_h2",
+      "sets": [
         "eoc",
         "eoe",
         "spe",
         "spm",
-        "tla"
+        "tla",
+        "tle"
       ]
     },
     {
-      "crate": "cards_2025_2026",
+      "crate": "cards_2026_q1",
       "sets": [
-        "tle",
         "ecc",
         "ecl",
         "tmc",
-        "tmt",
-        "soc",
-        "sos",
-        "msc"
+        "tmt"
       ]
     },
     {
-      "crate": "cards_2026",
+      "crate": "cards_2026_q2",
       "sets": [
-        "msh",
+        "soc",
+        "sos",
+        "msc",
+        "msh"
+      ]
+    },
+    {
+      "crate": "cards_2026_h2",
+      "sets": [
         "hob",
         "hoc",
         "slz",

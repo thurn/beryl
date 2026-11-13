@@ -1,0 +1,27 @@
+[package]
+name = "cards_2011"
+version = "0.1.0"
+description = "The cards first printed in the sets of the group cards_2011"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+path = "lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+# The vocabulary alone, so that no rules edit rebuilds a card (plan, Crates), and what card
+# files share, which depends on nothing else either.
+beryl_card = { path = "../../crates/beryl_card" }
+beryl_card_shared = { path = "../../crates/beryl_card_shared" }
+beryl_scenario_types = { path = "../../crates/beryl_scenario_types", optional = true }
+
+[build-dependencies]
+beryl_card_build = { path = "../../crates/beryl_card_build" }
+
+[features]
+# The cards' scenarios, which tests and tools compile and the app never does.
+scenarios = ["dep:beryl_scenario_types"]

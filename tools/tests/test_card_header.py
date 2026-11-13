@@ -61,7 +61,7 @@ def test_a_rewrite_replaces_the_header_and_keeps_the_notes_below_it() -> None:
 
 
 def test_a_stale_header_fails_the_names_lane(tmp_path: Path) -> None:
-    real = paths.REPO / "rust/cards/cards_1993_1994/lea/counterspell.rs"
+    real = paths.REPO / "rust/cards/cards_1993/lea/counterspell.rs"
     copy = tmp_path / "lea" / "counterspell.rs"
     copy.parent.mkdir()
     shutil.copy(real, copy)
@@ -74,7 +74,7 @@ def test_a_stale_header_fails_the_names_lane(tmp_path: Path) -> None:
 def test_the_names_lane_checks_the_changed_card_files_headers(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    counterspell = "rust/cards/cards_1993_1994/lea/counterspell.rs"
+    counterspell = "rust/cards/cards_1993/lea/counterspell.rs"
     lane = checks.names_lane([counterspell, "tools/src/beryl_tools/card.py"])
     steps = {step.name: step.cmd for step in lane.steps}
     assert steps["card-headers"][-2:] == ["card-headers", counterspell]

@@ -127,13 +127,13 @@ def test_the_check_over_a_tree(tmp_path: Path) -> None:
 
 
 def test_a_card_file_names_its_card_by_its_path(tmp_path: Path) -> None:
-    lea, wwk = "rust/cards/cards_1993_1994/lea", "rust/cards/cards_2009_2011/wwk"
+    lea, wwk = "rust/cards/cards_1993/lea", "rust/cards/cards_2010/wwk"
     for path in (
         f"{lea}/counterspell.rs",
         f"{wwk}/jace_the_mind_sculptor.rs",
         # A file in a set its card was not first printed in, and a crate's own files.
         f"{wwk}/counterspell.rs",
-        "rust/cards/cards_1993_1994/lib.rs",
+        "rust/cards/cards_1993/lib.rs",
         "rust/crates/beryl_rules/src/blue/counterspell.rs",
     ):
         write(tmp_path, path, "")
@@ -141,7 +141,7 @@ def test_a_card_file_names_its_card_by_its_path(tmp_path: Path) -> None:
         f"{wwk}/jace_the_mind_sculptor.rs",
         f"{lea}/counterspell.rs",
         f"{wwk}/counterspell.rs",
-        "rust/cards/cards_1993_1994/lib.rs",
+        "rust/cards/cards_1993/lib.rs",
         f"{lea}/deleted.rs",
         "rust/crates/beryl_rules/src/blue/counterspell.rs",
         f"{lea}/counterspell.rs",
