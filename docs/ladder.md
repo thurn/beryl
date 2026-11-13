@@ -7,6 +7,7 @@ is made.
 
 | Date       | Challenger                                         | Champion                                    | Budget | Games | Score | Elo (95%)      | Verdict             | Suite open / fixed | Human games |
 | ---------- | -------------------------------------------------- | ------------------------------------------- | ------ | ----- | ----- | -------------- | ------------------- | ------------------ | ----------- |
+| 2026-11-13 | pimc72/hidden/rollout/tuned/anchor+guard+combat    | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 15 / 5             | ?           |
 | 2026-11-13 | pimc72/hidden/rollout/tuned/anchor+guard+hold      | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 9 / 11             | ?           |
 | 2026-11-13 | pimc72/hidden/rollout/tuned/anchor+guard+order@3M  | pimc72/hidden/rollout/tuned/anchor+guard@3M | 3M     | 1652  | 50.7% | +6 [-13, +24]  | fail                | 13 / 7             | ?           |
 | 2026-11-12 | pimc18/hidden/rollout/tuned/anchor+guard           | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 16 / 4             | ?           |
