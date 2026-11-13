@@ -382,7 +382,10 @@ recordings do not show them.
   and played by carrying it out of the hand. The Revealed Cards lie in the
   opponent's strip beside their graveyard, at a pile's size with no pill, and a
   touch opens them as it opens a pile. The bug reporter freezes the whole page
-  and saves both that frame and the region the player selects.
+  and saves both that frame and the region the player selects. On a phone, the
+  reporter opens from the menu, a touch selects the whole screen or a drag
+  selects a region, the description stays above the keyboard, and a saved report
+  offers Share and Done.
 
 ## Verbs
 

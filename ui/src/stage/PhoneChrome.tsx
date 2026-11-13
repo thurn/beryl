@@ -178,7 +178,10 @@ export function Menu({
           size="small"
           onClick={() => {
             onClose();
-            requestBugReport();
+            // Let React remove the menu before the snapshot freezes the board.
+            requestAnimationFrame(() =>
+              requestAnimationFrame(requestBugReport),
+            );
           }}
         >
           Report Bug

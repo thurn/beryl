@@ -5,9 +5,9 @@ import { check } from "./kept-harness.mjs";
 await check(
     "a bug report uses the viewport from before the keyboard opened",
     async (page) => {
-        await page
-            .getByRole("button", { name: "Report bug", exact: true })
-            .click();
+        await page.evaluate(() =>
+            window.dispatchEvent(new Event("beryl:report-bug")),
+        );
         const surface = page.locator(".bug-surface");
         await surface.waitFor();
         const before = await page.evaluate(() => [innerWidth, innerHeight]);
@@ -29,7 +29,7 @@ await check(
         viewport: { width: 402, height: 874 },
         phone: true,
         hash: "#/",
-        ready: ".bug-button",
+        ready: "body.phone",
         init: () => {
             history.replaceState(null, "", "?live=/report-test&phone#/");
             window.EventSource = class {
@@ -55,6 +55,7 @@ await check(
                         simulator: false,
                     },
                     list_agents: [],
+                    report_bug: { id: "test" },
                 };
                 return Response.json({ ok: responses[command] ?? null });
             };

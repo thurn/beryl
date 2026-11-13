@@ -1,3 +1,5 @@
+@import "./bug-report.css";
+
 /* The game screen on a portrait phone (stage/PhoneStageBoard.tsx), in CSS pixels: the desktop's
    components (design/*.css, screens.css) at phone sizes, after the prototype's DESIGN.md. Its
    values: an 8px side gutter, 48px and 60px strips, 40px buttons with 18px type, 40px icon

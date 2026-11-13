@@ -1,0 +1,99 @@
+/* The report's frozen frame and touch controls cover the full phone viewport. */
+body.phone .bug-preview-frame {
+  height: 100%;
+  background: #211f1c;
+}
+body.phone .bug-surface {
+  touch-action: none;
+}
+body.phone .bug-hint {
+  top: calc(env(safe-area-inset-top) + 14px);
+  left: 12px;
+  transform: none;
+  max-width: calc(100vw - 120px);
+  white-space: nowrap;
+  font-size: 13px;
+}
+body.phone .bug-tools {
+  top: calc(env(safe-area-inset-top) + 8px);
+  right: 8px;
+}
+body.phone .bug-panel {
+  left: 0;
+  top: auto;
+  transform: none;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  border-radius: 12px 12px 0 0;
+  overflow: auto;
+  gap: 8px;
+  animation: none;
+}
+body.phone .bug-panel .bug-tools {
+  top: 8px;
+  right: 8px;
+  padding: 0;
+}
+body.phone .bug-title {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  padding-right: 44px;
+  font-size: 20px;
+}
+body.phone .bug-thumb-button {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  align-self: center;
+  min-width: 40px;
+  min-height: 64px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+body.phone .bug-crop {
+  max-height: 64px;
+}
+body.phone .bug-empty-crop {
+  display: block;
+  width: 120px;
+  height: 64px;
+  background: #211f1c;
+}
+body.phone .bug-text {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 76px;
+  max-height: 144px;
+  font-size: 16px;
+  resize: none;
+  user-select: text;
+  -webkit-user-select: text;
+  touch-action: auto;
+}
+body.phone .bug-ai {
+  min-height: 44px;
+  font-size: 15px;
+}
+body.phone .bug-ai input {
+  width: 40px;
+  height: 40px;
+}
+body.phone .bug-actions .button {
+  min-height: 40px;
+  min-width: 80px;
+}
+body.phone .bug-error {
+  font-size: 13px;
+}
+body.phone .bug-saved-actions {
+  display: flex;
+  gap: 8px;
+}
+body.phone .bug-saved-actions .button {
+  flex: 1;
+  min-height: 48px;
+}

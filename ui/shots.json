@@ -2,6 +2,48 @@
   "$comment": "What `just ui-shots` captures: a route (hash route, optionally ?fixture=<name>[&at=<n>] for a fixture ui/fixtures.json defines, from its nth view) at a viewport size, once an element `waitFor` selects shows, if given, after clicking the element `click` selects, if given, or each element of a list of them in turn, each a selector or `{selector, position}` with the point of the element to click, and then with the pointer over the element `hover` selects, if given. With `expect`, a selector, the shot fails unless an element it selects then shows: what the shot is of, where no check of the screen against its view would miss it (the card under the pointer shown whole). With `compare`, a list of selectors, the shot is their elements cropped side by side, each with a little of the page around it, rather than the whole page. A shot's `known` lists faults its checks report (`screen:`, `controls:`, `stage:`, with \"at <size>\" for the second window) that the screen is known to show until it is fixed, each with the bead or reason in `knownWhy`: the shot fails once one is no longer seen. A shot's `keep` says why it stays though the pruning rule (tools/src/beryl_tools/prune.py) would delete it.",
   "shots": [
     {
+      "name": "phone-bug-select",
+      "route": "/?phone&bugreport=select&fixture=phone-main#/game",
+      "width": 393,
+      "height": 759,
+      "expect": ".bug-selecting"
+    },
+    {
+      "name": "phone-bug-select-se",
+      "route": "/?phone&bugreport=select&fixture=phone-main#/game",
+      "width": 375,
+      "height": 647,
+      "expect": ".bug-selecting"
+    },
+    {
+      "name": "phone-bug-describe",
+      "route": "/?phone&bugreport=describe&fixture=phone-main#/game",
+      "width": 393,
+      "height": 759,
+      "expect": ".bug-panel textarea"
+    },
+    {
+      "name": "phone-bug-describe-se",
+      "route": "/?phone&bugreport=describe&fixture=phone-main#/game",
+      "width": 375,
+      "height": 647,
+      "expect": ".bug-panel textarea"
+    },
+    {
+      "name": "phone-bug-saved",
+      "route": "/?phone&bugreport=saved&fixture=phone-main#/game",
+      "width": 393,
+      "height": 759,
+      "expect": ".bug-phone-saved"
+    },
+    {
+      "name": "phone-bug-saved-se",
+      "route": "/?phone&bugreport=saved&fixture=phone-main#/game",
+      "width": 375,
+      "height": 647,
+      "expect": ".bug-phone-saved"
+    },
+    {
       "name": "phone-main",
       "route": "/?phone&fixture=phone-main#/game",
       "width": 393,

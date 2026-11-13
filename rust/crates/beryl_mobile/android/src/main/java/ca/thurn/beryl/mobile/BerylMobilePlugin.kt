@@ -3,6 +3,7 @@ package ca.thurn.beryl.mobile
 import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Rect
 import android.content.Intent
 import androidx.core.content.FileProvider
 import android.os.Build
@@ -21,6 +22,21 @@ class BerylMobilePlugin(private val activity: Activity) : Plugin(activity) {
 
     override fun load(webView: WebView) {
         this.webView = webView
+        // The IME can cover this WebView without changing its JavaScript visual viewport.
+        var lastKeyboard = -1
+        val visible = Rect()
+        webView.viewTreeObserver.addOnGlobalLayoutListener {
+            webView.getWindowVisibleDisplayFrame(visible)
+            val hidden = (webView.rootView.height - visible.bottom).coerceAtLeast(0)
+            val keyboard = if (hidden > webView.resources.displayMetrics.density * 100) hidden else 0
+            if (keyboard != lastKeyboard) {
+                lastKeyboard = keyboard
+                webView.evaluateJavascript(
+                    "window.dispatchEvent(new CustomEvent('beryl:keyboard-inset', { detail: $keyboard }))",
+                    null
+                )
+            }
+        }
     }
 
     @Command

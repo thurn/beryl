@@ -15,12 +15,15 @@ import {
   canCaptureWindow,
   captureWindow,
   reportBug,
+  canShareBugs,
+  shareBug,
   snapshotUrl,
 } from "../ipc";
 import type { PageInfo, Region } from "../ipc";
 import { diagnostics, note } from "../diagnostics";
 import { freeze, thaw } from "../freeze";
 import { Button } from "./Controls";
+import { usePhone } from "../mobile/phone";
 
 type Stage =
   | { kind: "idle" }
@@ -35,7 +38,7 @@ type Stage =
       saving: boolean;
       error?: string;
     }
-  | { kind: "saved"; frame?: Shot; region: Region };
+  | { kind: "saved"; frame?: Shot; region: Region; id: string };
 
 /** The app's snapshot of the frozen window: its number, and where the app serves it. */
 interface Shot {
@@ -48,6 +51,33 @@ interface Shot {
 const CLICK = 6;
 /** How long "Saved" shows before the page plays on. */
 const SAVED_MS = 900;
+
+/** Headless phone shots can show a report without native bug reporting. */
+export const bugReportPreview = () =>
+  import.meta.env.DEV &&
+  new URLSearchParams(window.location.search).has("fixture") &&
+  /^(select|describe|saved)$/.test(
+    new URLSearchParams(window.location.search).get("bugreport") ?? "",
+  );
+
+function previewStage(): Stage {
+  if (!bugReportPreview()) return { kind: "idle" };
+  const region = whole();
+  const page = {
+    url: window.location.href,
+    width: region.width,
+    height: region.height,
+    scale: window.devicePixelRatio,
+  };
+  switch (new URLSearchParams(window.location.search).get("bugreport")) {
+    case "select":
+      return { kind: "select" };
+    case "describe":
+      return { kind: "describe", region, page, saving: false };
+    default:
+      return { kind: "saved", region, id: "preview" };
+  }
+}
 
 const whole = (): Region => ({
   x: 0,
@@ -75,7 +105,9 @@ const REQUEST = "beryl:report-bug";
 export const requestBugReport = () => window.dispatchEvent(new Event(REQUEST));
 
 export function BugReporter({ route }: { route: string }) {
-  const [stage, setStage] = useState<Stage>({ kind: "idle" });
+  const phone = usePhone();
+  const [stage, setStage] = useState<Stage>(previewStage);
+  const viewport = useVisualViewportBottom(phone && stage.kind !== "idle");
   const open = stage.kind !== "idle";
   // While it is open, a bug button elsewhere hides (screens.css), out of the frame.
   useEffect(() => {
@@ -197,7 +229,7 @@ export function BugReporter({ route }: { route: string }) {
     setStage({ ...stage, saving: true, error: undefined });
     const { log, updates } = diagnostics();
     try {
-      await reportBug({
+      const saved = await reportBug({
         description,
         ai,
         snapshot: stage.frame?.id ?? null,
@@ -206,8 +238,13 @@ export function BugReporter({ route }: { route: string }) {
         uiLog: log,
         updates,
       });
-      setStage({ kind: "saved", frame: stage.frame, region: stage.region });
-      window.setTimeout(close, SAVED_MS);
+      setStage({
+        kind: "saved",
+        frame: stage.frame,
+        region: stage.region,
+        id: saved.id,
+      });
+      if (!phone) window.setTimeout(close, SAVED_MS);
     } catch (e) {
       const error =
         e instanceof Error ? e.message : `Not saved: ${JSON.stringify(e)}`;
@@ -218,7 +255,7 @@ export function BugReporter({ route }: { route: string }) {
   return (
     <>
       {/* The game board has its own, in the gear's column. */}
-      {route !== "/game" && (
+      {!phone && route !== "/game" && (
         <button
           type="button"
           className="icon-button bug-button"
@@ -235,6 +272,7 @@ export function BugReporter({ route }: { route: string }) {
           frame={stage.frame}
           onChoose={(region) => choose(stage.frame, region)}
           onClose={close}
+          phone={phone}
         />
       )}
       {(stage.kind === "describe" || stage.kind === "saved") && (
@@ -256,13 +294,21 @@ export function BugReporter({ route }: { route: string }) {
               saving={stage.saving}
               error={stage.error}
               onSubmit={submit}
+              onReselect={() =>
+                setStage({ kind: "select", frame: stage.frame })
+              }
+              onClose={close}
+              phone={phone}
+              viewport={viewport}
             />
+          ) : phone ? (
+            <PhoneSaved id={stage.id} onClose={close} viewport={viewport} />
           ) : (
             <div className="bug-panel bug-saved" role="status">
               Saved
             </div>
           )}
-          <Tools onClose={close} />
+          {!phone && <Tools onClose={close} />}
         </div>
       )}
     </>
@@ -279,17 +325,23 @@ const box = (r: Region) => ({
 /** The frozen frame, over the live page; none where the app cannot snapshot (a browser),
  * where the frozen page itself shows through. */
 function Frame({ frame }: { frame?: Shot }) {
-  return frame ? <img className="bug-frame" src={frame.url} alt="" /> : null;
+  return frame ? (
+    <img className="bug-frame" src={frame.url} alt="" />
+  ) : bugReportPreview() ? (
+    <div className="bug-frame bug-preview-frame" />
+  ) : null;
 }
 
 function Selector({
   frame,
   onChoose,
   onClose,
+  phone,
 }: {
   frame?: Shot;
   onChoose: (region: Region) => void;
   onClose: () => void;
+  phone: boolean;
 }) {
   // The report opens over the frozen frame.
   useOpenSound();
@@ -309,7 +361,11 @@ function Selector({
     if (!from.current) return;
     const region = span(from.current, { x: e.clientX, y: e.clientY });
     from.current = undefined;
-    onChoose(region.width < CLICK || region.height < CLICK ? whole() : region);
+    const click =
+      e.pointerType === "touch"
+        ? Math.hypot(region.width, region.height) < 10
+        : region.width < CLICK || region.height < CLICK;
+    onChoose(click ? whole() : region);
   };
   return (
     <div className="bug-overlay bug-selecting" data-unfrozen>
@@ -327,7 +383,11 @@ function Selector({
         )}
       </div>
       {!drag && <div className="bug-hint">Drag to select</div>}
-      <Tools onClose={onClose} onWhole={() => onChoose(whole())} />
+      <Tools
+        onClose={onClose}
+        onWhole={() => onChoose(whole())}
+        phone={phone}
+      />
     </div>
   );
 }
@@ -338,6 +398,10 @@ function Describe({
   saving,
   error,
   onSubmit,
+  onReselect,
+  onClose,
+  phone,
+  viewport,
 }: {
   frame?: Shot;
   region: Region;
@@ -345,6 +409,10 @@ function Describe({
   error?: string;
   /** With the description, and whether it reports a play of the AI's. */
   onSubmit: (description: string, ai: boolean) => void;
+  onReselect: () => void;
+  onClose: () => void;
+  phone: boolean;
+  viewport: { bottom: number; height: number };
 }) {
   const [text, setText] = useState("");
   const [ai, setAi] = useState(false);
@@ -352,6 +420,14 @@ function Describe({
   return (
     <form
       className="bug-panel"
+      style={
+        phone
+          ? {
+              bottom: viewport.bottom,
+              maxHeight: `calc(${viewport.height}px - env(safe-area-inset-top) - 8px)`,
+            }
+          : undefined
+      }
       role="dialog"
       aria-label="Report bug"
       onSubmit={(e) => {
@@ -360,7 +436,23 @@ function Describe({
       }}
     >
       <h2 className="bug-title">Report bug</h2>
-      {frame && <Thumb frame={frame} region={region} />}
+      {phone && <Tools onClose={onClose} phone />}
+      {phone ? (
+        <button
+          type="button"
+          className="bug-thumb-button"
+          aria-label="Change region"
+          onClick={onReselect}
+        >
+          {frame ? (
+            <Thumb frame={frame} region={region} phone />
+          ) : (
+            <span className="bug-crop bug-empty-crop" />
+          )}
+        </button>
+      ) : (
+        frame && <Thumb frame={frame} region={region} />
+      )}
       <textarea
         className="bug-text"
         autoFocus
@@ -390,8 +482,18 @@ function Describe({
 }
 
 /** The region, cut from the frozen frame by the page's own drawing of it: no pixels made. */
-function Thumb({ frame, region }: { frame: Shot; region: Region }) {
-  const k = Math.min(1, 480 / region.width, 150 / region.height);
+function Thumb({
+  frame,
+  region,
+  phone = false,
+}: {
+  frame: Shot;
+  region: Region;
+  phone?: boolean;
+}) {
+  const k = phone
+    ? Math.min(1, 240 / region.width, 64 / region.height)
+    : Math.min(1, 480 / region.width, 150 / region.height);
   return (
     <div
       className="bug-crop"
@@ -411,9 +513,11 @@ function Thumb({ frame, region }: { frame: Shot; region: Region }) {
 function Tools({
   onClose,
   onWhole,
+  phone = false,
 }: {
   onClose: () => void;
   onWhole?: () => void;
+  phone?: boolean;
 }) {
   return (
     <div className="bug-tools">
@@ -421,8 +525,8 @@ function Tools({
         <button
           type="button"
           className="bug-tool"
-          aria-label="Whole window"
-          title="Whole window (Space)"
+          aria-label={phone ? "Whole screen" : "Whole window"}
+          title={phone ? "Whole screen" : "Whole window (Space)"}
           onClick={onWhole}
         >
           <svg viewBox="0 0 24 24" role="img" aria-hidden className="bug-whole">
@@ -434,13 +538,100 @@ function Tools({
         type="button"
         className="bug-tool"
         aria-label="Close"
-        title="Close (Esc)"
+        title={phone ? "Close" : "Close (Esc)"}
         onClick={onClose}
       >
         <svg viewBox="0 0 24 24" role="img" aria-hidden className="bug-x">
           <path d="M5.6 3.5 12 9.9l6.4-6.4 2.1 2.1-6.4 6.4 6.4 6.4-2.1 2.1-6.4-6.4-6.4 6.4-2.1-2.1 6.4-6.4-6.4-6.4z" />
         </svg>
       </button>
+    </div>
+  );
+}
+
+/** The keyboard changes the visual viewport without always changing the layout viewport. */
+function useVisualViewportBottom(active: boolean) {
+  const fullHeight = useRef(window.innerHeight);
+  const nativeKeyboard = useRef(0);
+  const [viewportBox, setViewportBox] = useState({
+    bottom: 0,
+    height: window.innerHeight,
+  });
+  useEffect(() => {
+    if (!active) return;
+    // Keep the overlay's original height even if a WebView later resizes innerHeight.
+    fullHeight.current = window.innerHeight;
+    nativeKeyboard.current = 0;
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const update = () => {
+      const bottom = Math.max(
+        0,
+        fullHeight.current - (viewport.height + viewport.offsetTop),
+        nativeKeyboard.current / window.devicePixelRatio,
+      );
+      setViewportBox({
+        bottom,
+        height: Math.min(viewport.height, fullHeight.current - bottom),
+      });
+    };
+    // Android's edge-to-edge WebView reports an unchanged visual viewport over the IME.
+    const onKeyboard = (event: Event) => {
+      nativeKeyboard.current = (event as CustomEvent<number>).detail;
+      update();
+    };
+    update();
+    viewport.addEventListener("resize", update);
+    viewport.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
+    window.addEventListener("beryl:keyboard-inset", onKeyboard);
+    return () => {
+      viewport.removeEventListener("resize", update);
+      viewport.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("beryl:keyboard-inset", onKeyboard);
+    };
+  }, [active]);
+  return viewportBox;
+}
+
+function PhoneSaved({
+  id,
+  onClose,
+  viewport,
+}: {
+  id: string;
+  onClose: () => void;
+  viewport: { bottom: number; height: number };
+}) {
+  const [error, setError] = useState<string>();
+  return (
+    <div
+      className="bug-panel bug-phone-saved"
+      role="status"
+      style={{
+        bottom: viewport.bottom,
+        maxHeight: `calc(${viewport.height}px - 8px)`,
+      }}
+    >
+      <h2 className="bug-title">Saved</h2>
+      {error && <p className="bug-error">{error}</p>}
+      <div className="bug-saved-actions">
+        {canShareBugs() && (
+          <Button
+            onClick={() => {
+              void shareBug(id).catch((e: unknown) =>
+                setError(e instanceof Error ? e.message : String(e)),
+              );
+            }}
+          >
+            Share
+          </Button>
+        )}
+        <Button variant="secondary" onClick={onClose}>
+          Done
+        </Button>
+      </div>
     </div>
   );
 }

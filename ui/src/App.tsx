@@ -9,7 +9,7 @@ import {
   uiReady,
   type OutcomeView,
 } from "./ipc";
-import { BugReporter } from "./components/BugReport";
+import { BugReporter, bugReportPreview } from "./components/BugReport";
 import { Gallery } from "./screens/Gallery";
 import { Testing } from "./screens/Testing";
 import { GameScreen } from "./screens/Game";
@@ -101,7 +101,7 @@ function Main() {
           exportReports={exportReports}
         />
       )}
-      {canReportBugs() && <BugReporter route={path} />}
+      {(canReportBugs() || bugReportPreview()) && <BugReporter route={path} />}
     </MotionConfig>
   );
 }
