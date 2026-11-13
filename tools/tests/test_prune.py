@@ -205,3 +205,9 @@ def test_the_slow_only_filter_names_each_rust_test_by_its_package() -> None:
         r"(package(beryl_cli) & test(/^(bin\/beryl_cli::)?positions::tests::a_seed$/))"
         r" | (package(beryl_search) & test(/^games$/))"
     )
+
+
+def test_no_check_is_left_to_both_slow_ci_and_the_fast_check_alone() -> None:
+    """A check in both lists would run in neither the fast check nor slow CI."""
+    slow = {s.check for s in verdicts.SLOW_ONLY}
+    assert not slow & set(verdicts.FAST_ONLY)

@@ -234,8 +234,10 @@ fn shrink(cases: u32, check: Check) -> Option<(Game, String)> {
     }
 }
 
-/// Every prefix of every fuzz game keeps the invariants and plays without a panic.
+/// Every prefix of every fuzz game keeps the invariants and plays without a panic. The
+/// nightly's `just fuzz` plays it at length; no check runs it.
 #[test]
+#[ignore = "12 shrinking fuzz games, about 11 CPU seconds in a debug build: `just fuzz` plays it"]
 fn fuzz_games_keep_the_invariants() {
     let cases = u32::try_from(games(12)).expect("a game count");
     if let Some((game, why)) = shrink(cases, invariants) {

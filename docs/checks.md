@@ -179,11 +179,13 @@ skill works them as one Enact run, grouped by shared cause.
   and CPU seconds. The agent working a bead deletes each check that caught
   nothing in 30 days and moves each one that caught something to the nightly,
   after first asking whether a fast, deterministic test could keep what the
-  check protects. A check the fast check also runs leaves slow CI alone. The
-  checks in `budget.KEEP` (the app starting, the `ui-smoke` checks, clippy, the
-  UI's typecheck, the `names` lane) are never named. While a `ci-cut` bead is
-  open nothing more is filed; once the last one closes, only runs that started
-  after it count, and slow CI waits for 10 of them.
+  check protects. A check the fast check also runs leaves slow CI alone: a Rust
+  test joins `verdicts.FAST_ONLY`, which slow CI's tests step leaves out, and a
+  test that only the nightly's `just fuzz` should play is marked `#[ignore]`.
+  The checks in `budget.KEEP` (the app starting, the `ui-smoke` checks, clippy,
+  the UI's typecheck, the `names` lane) are never named. While a `ci-cut` bead
+  is open nothing more is filed; once the last one closes, only runs that
+  started after it count, and slow CI waits for 10 of them.
 - Each step has a hang limit (`hang.py`): 4x its slowest pass on this machine in
   the last 30 days, at least 900 s, at most 2400 s, and 1800 s for a step with
   no pass on record. A step still running at its limit is very likely stuck, so

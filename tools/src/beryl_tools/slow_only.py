@@ -1,6 +1,7 @@
 """The checks the fast check leaves to slow CI alone (verdicts.py re-exports them): the
 pruning rule's moves (prune.py) and those a bead placed there, each with its fast-check record
-when it moved."""
+when it moved. Also the reverse, [`FAST_ONLY`]: the checks slow CI leaves to the fast check
+alone."""
 
 from __future__ import annotations
 
@@ -22,7 +23,7 @@ class SlowOnly:
 
 
 SLOW_ONLY: tuple[SlowOnly, ...] = (
-    # The session fuzz's handful of games (beryl_session's fuzz.rs, by-w8gv.21.12): slow CI
+    # The session fuzz's handful of games (beryl_session's fuzz.rs): slow CI
     # and the nightly's `just fuzz` play them, never the fast check.
     SlowOnly(
         "rust:beryl_session::fuzz::session_games_keep_the_script_checks",
@@ -30,63 +31,33 @@ SLOW_ONLY: tuple[SlowOnly, ...] = (
         2.5,
         0,
     ),
-    SlowOnly(
-        "rust:beryl_session::fuzz::a_planted_builder_fault_shrinks_to_a_few_choices",
-        "2026-11-11",
-        2.2,
-        0,
-    ),
-    # Games played whole or at random for the AI's tools and invariants, the slowest tests left
-    # after the long-think arena's and those that set the tests step's length: about 160 test-seconds a
-    # fast check over 14 days and no fast-check failure. Their one slow-CI failure was a single
-    # run (2b51781d) that failed 45 tests at once, which kept the pruning rule from moving them.
-    # Slow CI, which plays them as before, judges them.
-    SlowOnly(
-        "rust:beryl_cli::bin/beryl_cli::positions::tests::a_seed_rebuilds_its_set_and_each_position_plays_on",
-        "2026-11-11",
-        27.1,
-        147,
-    ),
-    SlowOnly(
-        "rust:beryl_search::games::random_games_keep_the_invariants",
-        "2026-11-11",
-        26.8,
-        147,
-    ),
-    SlowOnly(
-        "rust:beryl_cli::bin/beryl_cli::screen::tests::the_champion_against_itself_differs_nowhere",
-        "2026-11-11",
-        23.2,
-        147,
-    ),
-    SlowOnly(
-        "rust:beryl_cli::bin/beryl_cli::hunt::tests::collected_positions_replay_and_detect_drift",
-        "2026-11-11",
-        21.8,
-        147,
-    ),
-    SlowOnly(
-        "rust:beryl_cli::bin/beryl_cli::screen::tests::one_crafted_difference_counts_and_duels_once",
-        "2026-11-11",
-        18.6,
-        147,
-    ),
-    SlowOnly(
-        "rust:beryl_search::mcts::a_rebuilt_agent_plays_on_as_the_uninterrupted_one",
-        "2026-11-11",
-        14.2,
-        147,
-    ),
-    SlowOnly(
-        "rust:beryl_cli::bin/beryl_cli::positions::tests::lingering_rejects_a_cut_and_known_cards_stay_known",
-        "2026-11-11",
-        13.6,
-        147,
-    ),
-    SlowOnly(
-        "rust:beryl_search::shrink::fuzz_games_keep_the_invariants",
-        "2026-11-11",
-        12.2,
-        145,
-    ),
+)
+
+
+# The checks slow CI leaves to the fast check alone: `rust:<binary>::<test path>` for a Rust
+# test (as the run log names it), or `rust:doctests` and `rust:allocations` for the steps
+# cargo test runs beside nextest (rust_tests.py). Each costs slow CI's CPU budget
+# (budget.SLOW_CPU_BUDGET) and caught no bug there in the 30 days before it moved; the fast
+# check still runs it before every push. A check here must not also be in SLOW_ONLY, or no
+# check would run it.
+FAST_ONLY: tuple[str, ...] = (
+    "rust:doctests",
+    "rust:allocations",
+    "rust:beryl_search::rollout::policy::waste_tests::waste_declines_opposing_permanents_in_softmax_mirrors",
+    "rust:beryl_cards::tests::every_card_has_scenarios_and_they_pass",
+    "rust:beryl_session::chance::a_save_replays_the_same_under_another_seed",
+    "rust:beryl_cli::bin/beryl_cli::specs::playground::tests::first_example_offers_the_card_in_hand",
+    "rust:beryl_cli::bin/beryl_cli::specs::playground::tests::every_prepared_example_reaches_its_interaction",
+    "rust:beryl_cards::exhaust::every_scenario_keeps_the_invariants_to_a_depth",
+    "rust:beryl_rules::tests::replay::inline_and_replayed_answers_reach_the_same_state_at_every_decision",
+    "rust:beryl_search::long::every_family_plays_a_game_to_its_end",
+    "rust:beryl_cli::bin/beryl_cli::ladder::tests::positions_start_four_pairs_in_five",
+    "rust:beryl_cards::tests::derive::generating_twice_gives_the_same_scenarios",
+    "rust:beryl_cards::tests::derive::generated_scenarios_pass_in_every_slot_order",
+    "rust:beryl_cli::bin/beryl_cli::screen::tests::a_log_that_no_longer_fits_is_refused_before_any_search",
+    "rust:beryl_session::chance::games_that_found_slot_order_ties_replay_the_same_under_another_seed",
+    "rust:beryl_search::mcts::an_agent_asked_again_searches_a_decision_as_it_did",
+    "rust:beryl_cards::tests::the_dump_is_valid_json_with_every_scenario",
+    "rust:beryl_cards::tests::mutation::every_mutant_of_a_card_is_killed_by_its_scenarios",
+    "rust:beryl_session::sessions::no_view_shows_an_identity_its_viewer_does_not_know",
 )

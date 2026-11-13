@@ -214,7 +214,8 @@ or seconds in the fast check.
    - **Move it.** A `check-budget` step can move from the fast check to slow CI
      (`verdicts.SLOW_ONLY`). A check that once caught a bug (a `catch` verdict)
      can move from slow CI to the nightly (a step in `nightly.STEPS`). A check
-     the fast check also runs leaves slow CI alone and stays in the fast check.
+     the fast check also runs leaves slow CI alone and stays in the fast check
+     (`verdicts.FAST_ONLY` for a Rust test).
    - **Delete it** when it has never caught a bug.
 
    A browser check you change follows `ui/AGENTS.md`. When you delete one, make

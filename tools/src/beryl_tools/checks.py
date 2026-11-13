@@ -520,8 +520,9 @@ def scale_lane() -> Lane:
 
 
 def rust_lane(fast: bool = False, packages: list[str] | None = None) -> Lane:
-    """The rust lane; `fast` leaves out the tests in verdicts.SLOW_ONLY, and `packages` holds
-    clippy and the tests to those packages (`affected_packages`)."""
+    """The rust lane; `fast` leaves out the tests in verdicts.SLOW_ONLY, slow CI's (not `fast`)
+    those in verdicts.FAST_ONLY, and `packages` holds clippy and the tests to those packages
+    (`affected_packages`)."""
     scope = [a for p in packages for a in ("-p", p)] if packages else []
     named = [f"--packages={','.join(packages)}"] if packages else []
     return (

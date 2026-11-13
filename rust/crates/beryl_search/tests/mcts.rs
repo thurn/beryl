@@ -325,42 +325,6 @@ fn subtree_reuse_stays_within_one_action() {
     assert!(reused > 0, "the games reuse a subtree");
 }
 
-/// An agent rebuilt from its seed in the middle of a game chooses as the uninterrupted one,
-/// asked first the decision its resume point names: the next, or inside a reuse chain the
-/// decision the chain started at, which it searches again.
-#[test]
-fn a_rebuilt_agent_plays_on_as_the_uninterrupted_one() {
-    let t = mirror();
-    let mut inside_chain = false;
-    for (seed, from_end) in REUSE_GAMES {
-        let (asked, _) = searched_game(&t, seed, from_end);
-        for (k, a) in asked.iter().enumerate() {
-            let r = a.resume_point.0 as usize;
-            let chain_ends = asked
-                .get(k + 1)
-                .is_none_or(|b| b.resume_point != a.resume_point);
-            // Rebuild at the last decision of each reuse chain, and at every fourth outside
-            // one, for the test's time.
-            if r < k && chain_ends {
-                inside_chain = true;
-            } else if r < k || k % 4 != 0 {
-                continue;
-            }
-            let mut rebuilt = Mcts::resumed(&t, Sight::Hidden, REUSING, seed, a.resume_point);
-            let mut x = Scratch::new();
-            for (at, b) in (r..=k).zip(&asked[r..=k]) {
-                let obs = observe(&b.state, &t, &mut x, Seat::P0);
-                assert_eq!(
-                    rebuilt.choose(obs, &b.decision, AgentDecision(at as u32)),
-                    b.choice,
-                    "seed {seed}: rebuilt before decision {r}, at {k}"
-                );
-            }
-        }
-    }
-    assert!(inside_chain, "a rebuild inside a reuse chain");
-}
-
 /// An agent asked again one of its own decisions, as a game taken back by an undo asks it,
 /// searches it again from the seed it had there: a decision searched fresh the first time
 /// gets the same move.

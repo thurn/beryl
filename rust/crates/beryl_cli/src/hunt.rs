@@ -614,45 +614,6 @@ mod tests {
     }
 
     #[test]
-    fn collected_positions_replay_and_detect_drift() {
-        let t = mirror();
-        let seed = 7;
-        let mut s = State::new(&t, seed, Profile::SMART).unwrap();
-        let mut x = Scratch::new();
-        let policy = RolloutPolicy::with(&t, DEEP_SEARCHER.knowledge);
-        let mut history = Vec::new();
-        for _ in 0..200 {
-            let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) else {
-                break;
-            };
-            let choice = policy.choose(&t, observe(&s, &t, &mut x, d.player), &d);
-            let state = *view(&s, &t, &mut x);
-            let p = Packet {
-                seed,
-                decision: history.len(),
-                turn: state.turn().number(),
-                seat: d.player.get(),
-                kind: format!("{:?}", d.kind),
-                history: history.clone(),
-                labels: labels(&t, &state, &d),
-                chosen: choice.0,
-                ..Packet::default()
-            };
-            let (mut root, replayed) = reconstruct(&t, &p).unwrap();
-            assert_eq!(replayed.len(), d.len());
-            let mut bad = p;
-            bad.labels[0].push_str(" drift");
-            assert!(reconstruct(&t, &bad).is_err());
-            history.push(Chosen::new(&t, &state, &d, choice));
-            apply(&mut s, &t, &mut x, &mut Replay, choice);
-            let mut replay_scratch = Scratch::new();
-            apply(&mut root, &t, &mut replay_scratch, &mut Replay, choice);
-            assert_eq!(format!("{root:?}"), format!("{s:?}"));
-        }
-        assert!(history.len() > 20);
-    }
-
-    #[test]
     fn ranking_requires_three_supported_independent_checks() {
         let mut p = Packet {
             labels: vec!["chosen".into(), "alternative".into()],

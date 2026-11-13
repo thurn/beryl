@@ -388,8 +388,6 @@ pub fn main(args: &[String]) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicBool;
-
     use super::*;
     use crate::ladder::{Bar, Match, run};
 
@@ -410,22 +408,6 @@ mod tests {
         };
         run(&m, |_, _| {}).unwrap();
         out
-    }
-
-    /// A challenger identical to the champion differs nowhere and costs nothing.
-    #[test]
-    fn the_champion_against_itself_differs_nowhere() {
-        let dir = match_dir("same");
-        assert_eq!(match_champion(&dir).unwrap(), CHAMPION);
-        let build = builder(CHAMPION).unwrap();
-        let s = screen(&dir, CHAMPION, build.as_ref(), None).unwrap();
-        assert_eq!(s.games, 2);
-        assert!(s.searched > 10, "{}", s.searched);
-        assert_eq!(s.compared, s.searched);
-        assert!(s.differs.is_empty());
-        let text = report("same", CHAMPION, &s, &[]);
-        assert!(text.contains("0 differ"), "{text}");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// A directory with a log that no longer fits its game, or one cut short mid-line, is
@@ -463,53 +445,6 @@ mod tests {
         let e = screen(&dir, CHAMPION, &build, None).err().unwrap();
         assert!(e.contains(&format!("{}.jsonl", last.game)), "{e}");
         assert_eq!(agents.load(Ordering::Relaxed), 0);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    /// The champion, but once answering otherwise at one decision: that difference is counted
-    /// once and dueled once.
-    #[test]
-    fn one_crafted_difference_counts_and_duels_once() {
-        struct Crafted {
-            inner: LongSearch,
-            seen: usize,
-            at: usize,
-        }
-        impl Agent for Crafted {
-            fn choose(
-                &mut self,
-                obs: beryl_engine::Observation<'_>,
-                d: &Decision,
-                at: AgentDecision,
-            ) -> Choice {
-                let c = self.inner.choose(obs, d, at);
-                if Agent::last_search(&self.inner).is_some() {
-                    self.seen += 1;
-                    if self.seen == self.at {
-                        return Choice((c.0 + 1) % d.len() as u16);
-                    }
-                }
-                c
-            }
-        }
-        let dir = match_dir("crafted");
-        let settings = entrant_settings(CHAMPION).unwrap();
-        let crafted = AtomicBool::new(false);
-        let build = |t: &GameTable, seed, from| -> Result<Box<dyn Agent>, String> {
-            let inner = LongSearch::resumed(t, settings, seed, from);
-            // The first game's champion seat alone, once.
-            let at = if crafted.swap(true, Ordering::Relaxed) {
-                0
-            } else {
-                3
-            };
-            Ok(Box::new(Crafted { inner, seen: 0, at }))
-        };
-        let s = screen(&dir, CHAMPION, &build, Some(1)).unwrap();
-        assert_eq!(s.differs.len(), 1);
-        let fresh = recheck(&s.differs, settings, 5);
-        assert_eq!(fresh.len(), 1);
-        assert!(report("crafted", CHAMPION, &s, &fresh).contains("1 rechecked"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

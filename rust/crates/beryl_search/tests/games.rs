@@ -25,7 +25,9 @@ use common::{agents, fingerprint, fixed_game, game, games, mirror, play};
 /// outgrowing [`Small`](beryl_engine::Small) goes on in is fuzzed too. No capacity may run out
 /// in any deck; how often games stall otherwise depends on the cards dealt, so the stall-rate
 /// target is held on the fixed decks (`mirror_games_rarely_stall`) and only reported here.
+/// The nightly's `just fuzz` plays it at length; no check runs it.
 #[test]
+#[ignore = "40 random games, about 40 CPU seconds in a debug build: `just fuzz` plays it"]
 fn random_games_keep_the_invariants() {
     let n = games(40);
     let mut stalls = Vec::new();

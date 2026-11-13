@@ -118,25 +118,29 @@ def fast_rust_tests_step(*args: str) -> int:
 
 
 def slow_rust_tests_step(*args: str) -> int:
-    """Slow CI's tests step: every test of the packages `--packages=a,b` names, else of the
-    workspace."""
-    return packaged_tests_step(*args, fast=False)
+    """Slow CI's tests step: every test but those it leaves to the fast check alone
+    (verdicts.FAST_ONLY), of the packages `--packages=a,b` names, else of the workspace.
+    """
+    return packaged_tests_step(*args, fast=False, slow=True)
 
 
-def packaged_tests_step(*args: str, fast: bool) -> int:
+def packaged_tests_step(*args: str, fast: bool, slow: bool = False) -> int:
     named = [a.split("=", 1)[1] for a in args if a.startswith("--packages=")]
     only = [a for a in args if not a.startswith("--packages=")]
     packages = named[0].split(",") if named else None
     if packages:
         print(f"rust-tests: the packages the change can break: {' '.join(packages)}")
-    return rust_tests_step(*only, fast=fast, packages=packages)
+    return rust_tests_step(*only, fast=fast, slow=slow, packages=packages)
 
 
 def rust_tests_step(
-    *only: str, fast: bool = False, packages: list[str] | None = None
+    *only: str,
+    fast: bool = False,
+    slow: bool = False,
+    packages: list[str] | None = None,
 ) -> int:
     """The workspace's tests, or `only` those named `<binary> <test>` (`failed_tests`); `fast`
-    leaves out verdicts.SLOW_ONLY's.
+    leaves out verdicts.SLOW_ONLY's, and `slow` verdicts.FAST_ONLY's.
     cargo-nextest runs the test binaries in parallel (cargo test runs them one after another);
     it cannot list the harness-less `allocations` targets and runs no doctest, so cargo test
     runs those beside it once everything is built: the doctests are where a `compile_fail`
@@ -157,9 +161,13 @@ def rust_tests_step(
     # Every test runs past a failure, so that a rerun of those named failed covers the run:
     # nextest would otherwise cancel the rest unrun.
     every = NO_ALLOCATIONS
-    slow_only = slow_only_filter(s.check for s in verdicts.SLOW_ONLY) if fast else ""
-    if slow_only:
-        every += f" & not ({slow_only})"
+    left_out = (
+        slow_only_filter(s.check for s in verdicts.SLOW_ONLY)
+        if fast
+        else slow_only_filter(verdicts.FAST_ONLY) if slow else ""
+    )
+    if left_out:
+        every += f" & not ({left_out})"
     nextest = [
         "cargo",
         "nextest",
@@ -186,6 +194,9 @@ def rust_tests_step(
             del beside["rust:allocations"]
         if "lib" not in kinds:
             del beside["rust:doctests"]
+    if slow:
+        for check in [c for c in beside if c in verdicts.FAST_ONLY]:
+            del beside[check]
     jobs = [nextest] if only else [nextest, *(cmd for cmd, _ in beside.values())]
     junit = nextest_junit()
     junit.unlink(missing_ok=True)

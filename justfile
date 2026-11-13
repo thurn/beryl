@@ -231,12 +231,12 @@ oracle-smoke *args:
 test-rust *args:
     {{ by }} test-rust "$@"
 
-# Random-game fuzzing at length: N engine games, then N session games with every script checked, optimized but with debug assertions on
+# Random-game fuzzing at length: N engine games, then N session games with every script checked, optimized but with debug assertions on (with the fuzz tests no check runs, which are ignored)
 [group('test')]
 fuzz games="10000":
     cd rust && export BERYL_FUZZ_GAMES="$1" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true && \
-    {{ pooled }} cargo test --release -p beryl_search --test games --test shrink -- --nocapture && \
-    {{ pooled }} cargo test --release -p beryl_session --lib fuzz:: -- --nocapture
+    {{ pooled }} cargo test --release -p beryl_search --test games --test shrink -- --nocapture --include-ignored && \
+    {{ pooled }} cargo test --release -p beryl_session --lib fuzz:: -- --nocapture --include-ignored
 
 # The stage's verbs held to Arena's numbers: captured in stepped stage time and measured as Arena's clips were (--values: durations, delays and staggers only)
 [group('test')]

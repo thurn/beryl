@@ -40,8 +40,13 @@ from pathlib import Path
 
 from . import paths, system
 
-# Re-exported: the fast check, the pruning rule and their tests read them as verdicts.SLOW_ONLY.
-from .slow_only import SLOW_ONLY as SLOW_ONLY, SlowOnly as SlowOnly
+# Re-exported: the fast check, the pruning rule and their tests read them as verdicts.SLOW_ONLY,
+# and slow CI's tests step as verdicts.FAST_ONLY.
+from .slow_only import (
+    FAST_ONLY as FAST_ONLY,
+    SLOW_ONLY as SLOW_ONLY,
+    SlowOnly as SlowOnly,
+)
 
 # An unresolved failure whose check has not passed since is forgotten after this long: the
 # check was deleted or renamed, or the diff to a pass would be too wide to say anything.

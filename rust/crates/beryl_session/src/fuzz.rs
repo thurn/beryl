@@ -225,8 +225,10 @@ fn session_games_keep_the_script_checks() {
 }
 
 /// A builder that drops every step tapping a card shrinks to a game of a handful of choices,
-/// whose report names the seed, the choices and the script that failed the replay check.
+/// whose report names the seed, the choices and the script that failed the replay check. The
+/// nightly's `just fuzz` runs it; no check does.
 #[test]
+#[ignore = "about 15 CPU seconds in a debug build: `just fuzz` runs it"]
 fn a_planted_builder_fault_shrinks_to_a_few_choices() {
     fn untapped(script: &mut Script) {
         for beat in &mut script.beats {
