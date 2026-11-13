@@ -75,9 +75,10 @@ def test_a_command_after_the_opponents_spell_passes_priority_first() -> None:
 
 
 def test_payments_replay_the_lands_beryl_tapped() -> None:
-    # Get Lost costs {1}{W}: Beryl taps two of player 0's three Plains.
+    # Get Lost costs {1}{W}: Beryl taps two of player 0's three Plains, which XMage taps by
+    # name, as another card may have an ability of the same text.
     lines = body("Get Lost on a creature gives two Maps; one explores a land into hand")
-    tap = 'activateManaAbility(1, PhaseStep.PRECOMBAT_MAIN, playerB, "{T}: Add {W}");'
+    tap = 'tapSource(1, PhaseStep.PRECOMBAT_MAIN, playerB, "Plains", "{T}: Add {W}");'
     cast = 'castSpell(1, PhaseStep.PRECOMBAT_MAIN, playerB, "Get Lost");'
     assert lines.count(tap) == 2
     assert lines.index(tap) < lines.index(cast)

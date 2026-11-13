@@ -232,3 +232,41 @@ def test_a_casting_option_is_named_by_its_keyword() -> None:
     assert forge.casting_option(cards, "Made-Up Relic", 0b10) == "Kicker"
     with pytest.raises(Unsupported):
         forge.casting_option(cards, "Made-Up Relic", 0b11)
+
+
+def test_a_payment_names_the_mana_sources_beryl_tapped() -> None:
+    # The harness taps these for mana before Forge's AI pays, so it cannot spend another
+    # source. A source of several colors is tapped for a color the cost needs, one that
+    # makes two mana is left to the AI, and an activated card's own tap is its cost.
+    tap: Json = {"parts": [{"action": "Tap", "of": "This"}]}
+
+    def source(*colors: str, amount: int = 1) -> Json:
+        abilities = [
+            {
+                "index": f"Own {i}",
+                "kind": "Mana",
+                "instructions": [],
+                "cost": tap,
+                "produces": {"colors": [color], "amount": amount},
+            }
+            for i, color in enumerate(colors)
+        ]
+        return {"faces": [{"name": "", "abilities": abilities}]}
+
+    cards = Cards(
+        {
+            "Swamp": source("Black"),
+            "Coast": source("White", "Blue"),
+            "Mine": source("Colorless"),
+            "Crypt": source("Colorless", amount=2),
+        }
+    )
+    activate: Json = {"action": "Activate", "player": 0, "card": "Mine"}
+    target: Json = {"action": "Answer", "kind": "Target"}
+    actions: list[Json] = [activate, target, {"action": "Resolve"}]
+    trace: list[Json] = [
+        {"taps": []},
+        {"taps": []},
+        {"taps": ["Mine", "Swamp", "Coast", "Crypt"]},
+    ]
+    assert forge.taps(activate, actions, trace, 0, cards) == ["Swamp", "Coast"]

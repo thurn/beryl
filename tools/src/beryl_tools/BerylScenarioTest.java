@@ -13,11 +13,13 @@ import java.util.stream.Collectors;
 import mage.MageItem;
 import mage.MageObject;
 import mage.abilities.Ability;
+import mage.abilities.mana.ActivatedManaAbilityImpl;
 import mage.cards.Card;
 import mage.cards.Cards;
 import mage.constants.Outcome;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
+import mage.constants.Zone;
 import mage.counters.CounterType;
 import mage.game.Game;
 import mage.game.permanent.Permanent;
@@ -44,6 +46,7 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
     private static final String PASS = "beryl:pass";
     private static final String RESOLVE = "beryl:resolve";
     private static final String OPTIONAL = "beryl:optional:";
+    private static final String TAP = "beryl:tap:";
 
     /**
      * A test player that also takes `passPriority`, `resolveTop` and `setOptionalChoice`. XMage runs a command
@@ -161,6 +164,30 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
                     () -> super.chooseUse(outcome, message, secondMessage, trueText, falseText, source, game));
         }
 
+        /**
+         * Activates the mana ability whose text starts with the text after the tab in
+         * `command`, of an untapped permanent this player controls named before it. XMage's own
+         * `activateManaAbility` takes the first permanent with an ability of that text, which
+         * may be another card than Beryl tapped, as a Seachrome Coast for "{T}: Add {W}" where
+         * Beryl tapped a Plains.
+         */
+        private void tap(String command, Game game) {
+            String[] parts = command.split("\t", 2);
+            for (Permanent permanent : game.getBattlefield().getAllActivePermanents(getId())) {
+                if (permanent.isTapped() || !permanent.getName().equals(parts[0])) {
+                    continue;
+                }
+                for (ActivatedManaAbilityImpl ability : permanent.getAbilities(game)
+                        .getAvailableActivatedManaAbilities(Zone.BATTLEFIELD, getId(), game)) {
+                    if (ability.toString().startsWith(parts[1])) {
+                        activateAbility(ability.copy(), game);
+                        return;
+                    }
+                }
+            }
+            Assert.fail("no untapped " + parts[0] + " of " + getName() + " has " + parts[1]);
+        }
+
         @Override
         public boolean priority(Game game) {
             // The optional choices of questions that never came.
@@ -185,6 +212,11 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
                     pass(game);
                     return false;
                 }
+                if (action.getAction().startsWith(TAP)) {
+                    getActions().remove(action);
+                    tap(action.getAction().substring(TAP.length()), game);
+                    return true;
+                }
                 break;
             }
             return super.priority(game);
@@ -208,6 +240,14 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
      */
     protected void resolveTop(int turn, PhaseStep step, TestPlayer player) {
         player.addAction(new PlayerAction("resolve the top object", turn, step, RESOLVE));
+    }
+
+    /**
+     * `player` activates the mana ability whose text starts with `text` of an untapped
+     * permanent named `card` that it controls, at its first priority in this turn and step.
+     */
+    protected void tapSource(int turn, PhaseStep step, TestPlayer player, String card, String text) {
+        player.addAction(new PlayerAction("tap " + card, turn, step, TAP + card + "\t" + text));
     }
 
     /** `choice` answers `player`'s next question, if it comes by the end of `step`. */

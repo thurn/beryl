@@ -13,7 +13,7 @@ card.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import cast
 
 Json = dict[str, object]
@@ -117,21 +117,26 @@ class Cards:
         cost = cast(Json, ability.get("cost", {}))
         parts = cast(list[Json], cost.get("parts", []))
         if ability["kind"] == "Loyalty":
-            # XMage writes a loyalty ability's cost as "+N", "0" or "-N" (CR 606.4).
+            # XMage writes a loyalty ability's cost as "+N", "0" or "-N" (CR 606.4), where
+            # the Oracle text writes a minus sign.
             amount = cast(int, parts[0]["amount"])
-            return f"+{amount}:" if amount > 0 else f"{amount}:"
-        if ability["kind"] != "Activated":
+            text = f"+{amount}:" if amount > 0 else f"{amount}:"
+            oracle = text.replace("-", "\u2212")
+        elif ability["kind"] == "Activated":
+            cost_written = cost_text(ability, cost, parts)
+            if cost_written is None or not cost_written.endswith(":"):
+                return cost_written
+            text = oracle = cost_written
+        else:
             return None
-        text = cost_text(ability, cost, parts)
-        if text is None or not text.endswith(":"):
-            return text
         # A full cost ends at its colon, where another permanent's ability of the same cost
-        # would match too, as a land's "{T}: Add" does an ability "{T}: Draw". XMage's rule
-        # text goes on as the ability's Oracle text does: its first words tell them apart.
-        written = [p for p in self.paragraphs(card) if p.startswith(f"{text} ")]
+        # would match too, as a land's "{T}: Add" does an ability "{T}: Draw", or Teferi's
+        # "+1:" does Jace's. XMage's rule text goes on as the ability's Oracle text does:
+        # its first words tell them apart.
+        written = [p for p in self.paragraphs(card) if p.startswith(f"{oracle} ")]
         if len(written) != 1:
             return None
-        effect = SELF_REFERENCE.split(written[0][len(text) :], maxsplit=1)[0]
+        effect = SELF_REFERENCE.split(written[0][len(oracle) :], maxsplit=1)[0]
         return " ".join([text, *effect.split()[:EFFECT_WORDS]])
 
     def paragraphs(self, card: str) -> list[str]:
@@ -159,6 +164,19 @@ class Cards:
         if len(colors) != 1:
             return None
         return "{T}: Add " + SYMBOLS[colors[0]] * cast(int, produces["amount"])
+
+    def taps_for_one_mana(self, source: str) -> bool:
+        """Whether every mana ability of `source` costs only tapping it and makes one mana,
+        of a color it may choose: a basic land, Seachrome Coast or Spara's Headquarters, but
+        not Mana Crypt, which makes two, or a source that sacrifices itself."""
+        if source in self.modal_back:
+            return False
+        mana = [a for a in self.abilities(source) if a["kind"] == "Mana"]
+        return bool(mana) and all(
+            a.get("cost") == {"parts": [{"action": "Tap", "of": "This"}]}
+            and cast(Json, a["produces"])["amount"] == 1
+            for a in mana
+        )
 
     def mana_choice(self, source: str) -> bool:
         """Whether XMage could tap `source` for more than one kind of mana, so that a payment
@@ -341,6 +359,35 @@ def named_cards(entries: Iterable[Json]) -> list[str]:
     decks' cards, those the exporters need the Oracle text of, as of a card implemented only
     for scenarios."""
     return sorted({n for e in entries for n in cast(Json, e.get("cards", {}))})
+
+
+# The kinds of answer a player gives while casting a spell or activating an ability, before
+# paying for it (601.2b-601.2c): an X and the targets.
+CAST_CHOICES = ("X", "Target", "TargetCount")
+
+
+def payment_taps(
+    actions: Sequence[Json], taps: Sequence[Sequence[str]], index: int
+) -> list[str] | None:
+    """The names of the permanents Beryl tapped to pay for the cast or activation at
+    `actions[index]`, from `taps`, the trace's taps by position; None past the trace.
+
+    The payment comes after the choices made while casting (601.2b-601.2f: an X, the
+    targets), each a position of its own with nothing tapped yet, so the taps are at the
+    first position past those answers. Reading only the next position left a spell with an X
+    to the oracle's own payment, which could spend a source a later spell needed."""
+    after = index + 1
+    while (
+        after < len(actions)
+        and after + 1 < len(taps)
+        and actions[after]["action"] == "Answer"
+        and actions[after]["kind"] in CAST_CHOICES
+        and not taps[after]
+    ):
+        after += 1
+    if after >= len(taps):
+        return None
+    return list(taps[after])
 
 
 class Unsupported(Exception):

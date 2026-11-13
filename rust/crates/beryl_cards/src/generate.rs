@@ -21,16 +21,12 @@ use crate::{CARDS, names};
 /// The card the dump files generated scenarios under.
 pub const CARD: &str = "Generated";
 
-/// Implemented cards the generator leaves out. The first three are outside the WU Control
-/// deck that V1 plays. Drudge Skeletons is in no deck: it exists only for scenarios. Adding a
-/// card to the pool renumbers every generated scenario, so the oracle exporter gaps listed by
-/// scenario name stop matching, and positions with the new card exposed payments that the
-/// oracles' own AIs make differently from Beryl.
-const OUTSIDE_CUBE: [&str; 4] = [
+/// Implemented cards the generator leaves out: those outside the WU Control deck that V1
+/// plays. Cards in no deck that exist only for scenarios, like Drudge Skeletons, stay in.
+const OUTSIDE_CUBE: [&str; 3] = [
     names::AANGS_ICEBERG,
     names::SWIFT_RECONFIGURATION,
     names::SPHINX_OF_FALSE_CONCLUSIONS,
-    names::DRUDGE_SKELETONS,
 ];
 
 /// The turn every generated scenario is played in.
@@ -45,24 +41,69 @@ pub fn scenarios(count: usize, seed: u64) -> Vec<Scenario> {
         .collect()
 }
 
+/// One way to draw a card from a pool: the card, and a key fixed by its name and which copy of
+/// it this is ([`Pool::draw`]).
+type Entry = (&'static str, u64);
+
+/// Cards to draw from, where adding a card changes few draws.
+///
+/// Drawing by `rng.below(len)` made every draw depend on the pool's size and order, so adding
+/// one implemented card renumbered every generated scenario: the oracle exporter gaps listed
+/// by scenario name went stale, and every position was new to the oracles at once. A draw
+/// here takes one random number whatever the pool's size, and picks the entry whose key mixed
+/// with that number is lowest (rendezvous hashing). A new card changes only the draws it
+/// wins, about one in the pool's size, and the random numbers after it stay the same.
+#[derive(Default)]
+struct Pool(Vec<Entry>);
+
+impl Pool {
+    fn add(&mut self, name: &'static str, copies: u64) {
+        let key = name.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
+            (h ^ u64::from(b)).wrapping_mul(0x100_0000_01b3)
+        });
+        self.0
+            .extend((0..copies).map(|copy| (name, mix(key.wrapping_add(copy)))));
+    }
+
+    /// A card from the pool, chosen by one random number of `rng`.
+    fn draw(&self, rng: &mut SplitMix64) -> &'static str {
+        let r = rng.next_u64();
+        self.0
+            .iter()
+            .min_by_key(|&&(name, key)| (mix(key ^ r), name))
+            .expect("generator pools are never empty")
+            .0
+    }
+
+    /// `n` cards drawn from the pool, repeats allowed.
+    fn some(&self, rng: &mut SplitMix64, n: u64) -> Vec<&'static str> {
+        (0..n).map(|_| self.draw(rng)).collect()
+    }
+}
+
+/// `SplitMix64`'s output function, which spreads every bit of `x` over the result.
+fn mix(x: u64) -> u64 {
+    let mut z = x.wrapping_add(0x9e37_79b9_7f4a_7c15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    z ^ (z >> 31)
+}
+
 /// The cards a generated position draws from.
+#[derive(Default)]
 struct Pools {
     /// Lands, the basics three times over.
-    lands: Vec<&'static str>,
+    lands: Pool,
     /// Permanent cards that can start on the battlefield alone: no Auras, which would need
     /// something to enchant.
-    permanents: Vec<&'static str>,
+    permanents: Pool,
     /// Every card but the basic lands.
-    cards: Vec<&'static str>,
+    cards: Pool,
 }
 
 impl Pools {
     fn new() -> Pools {
-        let mut pools = Pools {
-            lands: Vec::new(),
-            permanents: Vec::new(),
-            cards: Vec::new(),
-        };
+        let mut pools = Pools::default();
         for def in CARDS.cards() {
             if OUTSIDE_CUBE.contains(&def.name) {
                 continue;
@@ -71,24 +112,17 @@ impl Pools {
             let basic = front.supertypes.contains(Supertypes::BASIC);
             if front.types.contains(Types::LAND) {
                 let copies = if basic { 3 } else { 1 };
-                pools.lands.extend(std::iter::repeat_n(def.name, copies));
+                pools.lands.add(def.name, copies);
             } else if !front.is_instant_or_sorcery()
                 && !front.subtypes.contains(Subtype::Aura)
                 && !triggers_before_main(front)
             {
-                pools.permanents.push(def.name);
+                pools.permanents.add(def.name, 1);
             }
             if !basic {
-                pools.cards.push(def.name);
+                pools.cards.add(def.name, 1);
             }
         }
-        // `CARDS` lists cards in the order of their crates, which `just card crates` changes
-        // when it regroups sets. Sorting by name keeps each seed's position the same across a
-        // regrouping, so the oracles' exporter-gap list (`data/oracle-exporter-gaps.json`)
-        // stays current until a card is added.
-        pools.lands.sort_unstable();
-        pools.permanents.sort_unstable();
-        pools.cards.sort_unstable();
         pools
     }
 }
@@ -204,6 +238,19 @@ fn taps_a_mana_source(
         })
 }
 
+/// Whether a library holds a card other than the Islands it started with that its owner
+/// doesn't know the place of, as after Timetwister shuffles a hand and graveyard in. Which
+/// cards a player then draws is chance, and an oracle shuffles its own way: it may draw other
+/// cards, and with them have a spell to cast where Beryl had none, so the game stops for the
+/// final snapshot somewhere else, as in another turn.
+fn chance_in_library(live: &Live) -> bool {
+    let s = live.state();
+    beryl_engine::Seat::BOTH.into_iter().any(|player| {
+        !s.zone(ZoneKey::Of(player, Zone::Library))
+            .all(|slot| live.name(slot) == names::ISLAND || s.knows(player, slot))
+    })
+}
+
 fn leak<T>(v: Vec<T>) -> &'static [T] {
     Vec::leak(v)
 }
@@ -212,31 +259,28 @@ fn pick<T: Copy>(rng: &mut SplitMix64, from: &[T]) -> T {
     from[rng.below(from.len() as u64) as usize]
 }
 
-/// `n` cards drawn from `from`, repeats allowed.
-fn some(rng: &mut SplitMix64, from: &[&'static str], n: u64) -> Vec<&'static str> {
-    (0..n).map(|_| pick(rng, from)).collect()
-}
-
 /// One side of a generated position.
 fn player(rng: &mut SplitMix64, pools: &Pools) -> PlayerSetup {
     let lands = 3 + rng.below(4);
-    let mut battlefield: Vec<Permanent> = some(rng, &pools.lands, lands)
+    let mut battlefield: Vec<Permanent> = pools
+        .lands
+        .some(rng, lands)
         .into_iter()
         .map(Permanent::new)
         .collect();
     // Distinct, so no legend rule applies before the oracles reach the main phase.
     let others = rng.below(3);
-    let mut permanents = some(rng, &pools.permanents, others);
+    let mut permanents = pools.permanents.some(rng, others);
     permanents.sort_unstable();
     permanents.dedup();
     battlefield.extend(permanents.into_iter().map(Permanent::new));
     let held = 1 + rng.below(3);
-    let mut hand = some(rng, &pools.cards, held);
+    let mut hand = pools.cards.some(rng, held);
     if rng.below(2) == 0 {
-        hand.push(pick(rng, &pools.lands));
+        hand.push(pools.lands.draw(rng));
     }
     let buried = rng.below(3);
-    let graveyard = some(rng, &pools.cards, buried);
+    let graveyard = pools.cards.some(rng, buried);
     PlayerSetup {
         life: 20,
         hand: leak(hand),
@@ -263,6 +307,9 @@ fn one(pools: &Pools, seed: u64) -> Option<Scenario> {
     let mut played = 0;
     let mut advanced = false;
     for _ in 0..80 {
+        if chance_in_library(&live) {
+            return None;
+        }
         let s = live.state();
         let turn = *s.turn();
         if turn.number() != TURN || s.outcome().is_some() {
@@ -341,7 +388,7 @@ fn one(pools: &Pools, seed: u64) -> Option<Scenario> {
         live.act(action).ok()?;
     }
     let actions = live.actions().to_vec();
-    if actions.is_empty() {
+    if actions.is_empty() || chance_in_library(&live) {
         return None;
     }
     let scenario = Scenario {
@@ -350,4 +397,36 @@ fn one(pools: &Pools, seed: u64) -> Option<Scenario> {
     };
     beryl_scenario::run(&CARDS, &scenario).ok()?;
     Some(scenario)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Adding a card to a pool of 40 changes about one draw in 41, and leaves the random
+    /// numbers after each draw as they were.
+    #[test]
+    fn adding_a_card_changes_few_draws() {
+        let names: Vec<&'static str> = (0..41)
+            .map(|i| &*String::leak(format!("card {i}")))
+            .collect();
+        let mut before = Pool::default();
+        for &name in &names[..40] {
+            before.add(name, 1);
+        }
+        let mut after = Pool::default();
+        after.add(names[40], 1);
+        for &name in &names[..40] {
+            after.add(name, 1);
+        }
+        let (mut a, mut b) = (SplitMix64::new(7), SplitMix64::new(7));
+        let changed = (0..4100)
+            .filter(|_| before.draw(&mut a) != after.draw(&mut b))
+            .count();
+        assert!(
+            (50..=150).contains(&changed),
+            "{changed} of 4100 draws changed"
+        );
+        assert_eq!(a.next_u64(), b.next_u64());
+    }
 }

@@ -208,6 +208,8 @@ public final class BerylForgeHarness {
         FlipRandom random;
         // The keyword cost (offspring) of the spell being cast, which Forge asks about as it casts.
         String keywordCost;
+        // The mana sources Beryl tapped to pay for the spell or ability being played, by name.
+        JsonArray taps;
 
         Run(JsonObject scenario) {
             this.scenario = scenario;
@@ -488,8 +490,14 @@ public final class BerylForgeHarness {
             return switch (op(step)) {
                 case "answer" -> null; // a priority pass
                 case "play_land" -> List.of(landPlay(player, step));
-                case "cast" -> List.of(cast(player, step));
-                case "activate" -> List.of(activate(player, step));
+                case "cast" -> {
+                    taps = step.getAsJsonArray("taps");
+                    yield List.of(cast(player, step));
+                }
+                case "activate" -> {
+                    taps = step.getAsJsonArray("taps");
+                    yield List.of(activate(player, step));
+                }
                 default -> throw new StepFailed("unknown step " + step);
             };
         }
@@ -976,12 +984,99 @@ public final class BerylForgeHarness {
                 return true;
             }
             int before = getGame().getStack().size();
-            // Targets are already chosen; payment is the AI's.
+            // Targets are already chosen. The AI pays from the mana pool first, so the sources
+            // Beryl tapped go there; the AI pays the rest its own way.
+            floatTaps(sa);
             boolean played = ComputerUtil.handlePlayingSpellAbility(player, sa, null);
             if (!played) {
                 throw new StepFailed("Forge did not play " + sa + " (stack " + before + ")");
             }
             return true;
+        }
+
+        /**
+         * Taps each mana source Beryl tapped for the payment of `paying`, an untapped permanent
+         * of that name this player controls, for mana in the pool. Left to the AI, the payment
+         * could tap another source than Beryl did, as Winds of Abandon paid with the only Swamp
+         * left no {B} for Drudge Skeletons' regeneration. The trace does not say which color a
+         * source of several made, so sources of one color go first, and each of several then
+         * makes a color the cost still needs, if any.
+         */
+        void floatTaps(SpellAbility paying) {
+            JsonArray names = run.taps;
+            run.taps = null;
+            if (names == null) {
+                return;
+            }
+            List<Card> sources = new ArrayList<>();
+            for (JsonElement name : names) {
+                Card found = null;
+                for (Card card : player.getCardsIn(ZoneType.Battlefield)) {
+                    if (!card.isTapped() && !sources.contains(card) && card.getName().equals(name.getAsString())
+                            && !card.getManaAbilities().isEmpty()) {
+                        found = card;
+                        break;
+                    }
+                }
+                if (found == null) {
+                    throw new StepFailed("Forge has no untapped " + name.getAsString() + " to tap for mana");
+                }
+                sources.add(found);
+            }
+            sources.sort(java.util.Comparator.comparingInt(card -> manaOptions(card).size()));
+            for (Card card : sources) {
+                List<Map.Entry<SpellAbility, String>> options = manaOptions(card);
+                Map.Entry<SpellAbility, String> pick = options.get(0);
+                for (Map.Entry<SpellAbility, String> option : options) {
+                    if (needs(paying, option.getValue())) {
+                        pick = option;
+                        break;
+                    }
+                }
+                SpellAbility mana = pick.getKey();
+                // The ability keeps the player last offered it, who gets its mana.
+                mana.setActivatingPlayer(player);
+                if (mana.getManaPart().isComboMana()) {
+                    mana.getManaPart().setExpressChoice(pick.getValue());
+                }
+                if (!ComputerUtil.playNoStack(player, mana, getGame(), true)) {
+                    throw new StepFailed("Forge could not tap " + card + " for mana");
+                }
+            }
+            if (System.getenv("BERYL_FORGE_TRACE") != null) {
+                run.notes.add("floated for " + paying.getHostCard() + ": " + player.getManaPool().totalMana() + " cost " + paying.getPayCosts());
+            }
+        }
+
+        /** Each mana ability of `card` with each color it can make, as a short color name. */
+        static List<Map.Entry<SpellAbility, String>> manaOptions(Card card) {
+            List<Map.Entry<SpellAbility, String>> options = new ArrayList<>();
+            for (SpellAbility mana : card.getManaAbilities()) {
+                forge.game.spellability.AbilityManaPart part = mana.getManaPart();
+                if (part.isComboMana()) {
+                    for (String color : part.getComboColors(mana).split(" ")) {
+                        options.add(Map.entry(mana, color));
+                    }
+                } else {
+                    options.add(Map.entry(mana, part.getOrigProduced()));
+                }
+            }
+            return options;
+        }
+
+        /** Whether the cost of `paying` has more shards of `color` than the pool has mana of it. */
+        boolean needs(SpellAbility paying, String color) {
+            byte code = forge.card.MagicColor.fromName(color);
+            if (code == 0 || paying.getPayCosts() == null) {
+                return false;
+            }
+            int shards = 0;
+            for (forge.card.mana.ManaCostShard shard : paying.getPayCosts().getTotalMana()) {
+                if (shard.isMonoColor() && shard.isColor(code)) {
+                    shards++;
+                }
+            }
+            return shards > player.getManaPool().getAmountOfColor(code);
         }
 
         boolean yes(Set<String> kinds, String question, boolean otherwise) {

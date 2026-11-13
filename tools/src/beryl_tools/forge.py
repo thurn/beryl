@@ -21,7 +21,14 @@ from pathlib import Path
 from typing import cast
 
 from . import card_store, cards, paths
-from .card_facts import Cards, Unsupported, cost_text, keyword_cost, named_cards
+from .card_facts import (
+    Cards,
+    Unsupported,
+    cost_text,
+    keyword_cost,
+    named_cards,
+    payment_taps,
+)
 
 HARNESS: Path = paths.TOOLS / "oracles" / "BerylForgeHarness.java"
 HARNESS_CLASS = "beryl.BerylForgeHarness"
@@ -302,6 +309,27 @@ def step(action: JsonObject, cards: Cards, purpose: object = None) -> JsonObject
     raise Unsupported(f"action {kind}")
 
 
+def taps(
+    action: JsonObject,
+    actions: Sequence[JsonObject],
+    trace: Sequence[JsonObject],
+    index: int,
+    cards: Cards,
+) -> list[str]:
+    """The mana sources Beryl tapped to pay for the cast or activation `action`, at
+    `actions[index]`, which the harness taps for mana before Forge's AI pays the rest: those
+    that only tap for one mana (`Cards.taps_for_one_mana`), less the activated card itself.
+    """
+    found = payment_taps(
+        actions, [cast(list[str], t.get("taps", [])) for t in trace], index
+    )
+    if found is None:
+        return []
+    if action["action"] == "Activate" and action["card"] in found:
+        found.remove(cast(str, action["card"]))
+    return [name for name in found if cards.taps_for_one_mana(name)]
+
+
 def export(
     entries: Sequence[JsonObject], store: Path
 ) -> tuple[list[JsonObject], list[JsonObject]]:
@@ -340,6 +368,10 @@ def export(
                     raise Unsupported("casting a spell with flashback")
                 purpose = trace[i].get("purpose") if i < len(trace) else None
                 converted = step(action, described, purpose)
+                if converted is not None and converted["op"] in ("cast", "activate"):
+                    tapped = taps(action, actions, trace, i, described)
+                    if tapped:
+                        converted["taps"] = tapped
                 if converted is None:
                     unchecked += 1
                 else:

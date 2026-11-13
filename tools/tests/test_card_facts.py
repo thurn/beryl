@@ -45,10 +45,17 @@ def loyalty(i: int, amount: int) -> Json:
     )
 
 
-def test_a_loyalty_abilitys_text_starts_with_its_loyalty_change() -> None:
-    cards = gadget(loyalty(0, 2), loyalty(1, 0), loyalty(2, -3))
+def test_a_loyalty_abilitys_text_is_its_loyalty_change_and_first_words() -> None:
+    # Another planeswalker's "+2:" would match a bare "+2:" too. The Oracle text writes a
+    # minus sign where XMage writes a hyphen.
+    oracle = "+2: Draw a card.\n0: Scry two.\n\u22123: Exile target creature."
+    described: Json = {
+        "Gadget": card(loyalty(0, 2), loyalty(1, 0), loyalty(2, -3)),
+    }
+    cards = Cards(described, {"Gadget": oracle})
     texts = [cards.ability_text("Gadget", "Own", i) for i in range(3)]
-    assert texts == ["+2:", "0:", "-3:"]
+    assert texts == ["+2: Draw a card.", "0: Scry two.", "-3: Exile target creature."]
+    assert Cards(described, {}).ability_text("Gadget", "Own", 0) is None
 
 
 def test_an_activated_abilitys_text_is_its_cost_in_xmages_order() -> None:
