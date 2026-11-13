@@ -316,13 +316,16 @@ console.log(
     `${engine}${throttle > 1 ? ` throttled ${throttle}x` : ""}${phone ? " phone" : ""}`,
 );
 console.log(
-    "fixture                    frames   secs    p50    p95    p99    max  drop%     raf  script  style layout    main     gpu  raster",
+    "fixture                    frames   secs    p50    p95    p99    max  drop%     raf" +
+        (engine === "chromium"
+            ? "  script  style layout    main     gpu  raster"
+            : ""),
 );
 for (const name of names) {
     for (let run = 0; run < runs; run++) {
         const r = await measure(name);
         console.log(
-            `${r.name.padEnd(25)} ${String(r.frames).padStart(7)} ${f(r.seconds)} ${f(r.p50)} ${f(r.p95)} ${f(r.p99)} ${f(r.max)} ${f(100 * r.dropped)} ${f(r.raf).padStart(7)} ${f(r.script).padStart(7)} ${f(r.style)} ${f(r.layout)} ${f(r.main).padStart(7)} ${f(r.gpu).padStart(7)} ${f(r.raster).padStart(7)}`,
+            `${r.name.padEnd(25)} ${String(r.frames).padStart(7)} ${f(r.seconds)} ${f(r.p50)} ${f(r.p95)} ${f(r.p99)} ${f(r.max)} ${f(100 * r.dropped)} ${f(r.raf).padStart(7)}${engine === "chromium" ? ` ${f(r.script).padStart(7)} ${f(r.style)} ${f(r.layout)} ${f(r.main).padStart(7)} ${f(r.gpu).padStart(7)} ${f(r.raster).padStart(7)}` : ""}`,
         );
         for (const e of r.errors) console.log(`  error: ${e}`);
         if (verbs) {

@@ -40,6 +40,14 @@ says how Beryl follows MTG Arena.
   players' seats. The `specs` skill covers it: `just specs --describe`,
   `--film`, `--motion` and `--drive` show what happens at each moment for both
   players as text, as pictures, as an animation report and under Playwright.
+- `just ui-perf <fixtures>` plays fixtures live on a production build and
+  reports frame lengths and the share of dropped frames. `--verbs` lists the
+  animations the long frames came in, and `--browser chromium` adds main-thread,
+  GPU and raster time. The machine is always loaded, so compare builds over
+  several interleaved runs; Chromium's raster time is the steadiest number.
+  Anything that animates every frame should change only `transform` or `opacity`
+  on an element with a layer of its own (`will-change`), or WebKit repaints what
+  lies under it, filters and all, every frame.
 - `just motion` records each animation verb in stepped stage time and compares
   it with its own values in `data/ui-conventions.json` (the `motion` lane in
   `docs/checks.md`).
