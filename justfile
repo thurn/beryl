@@ -132,6 +132,11 @@ bench *args:
 scale *args:
     {{ by }} scale "$@"
 
+# Measure this machine's speed against the reference, for the checks' budgets (--reference, --force)
+[group('bench')]
+speed *args:
+    {{ by }} speed "$@"
+
 # Gungraun instruction counts in the Lima VM (cargo bench flags; default --bench '*_counts')
 [group('bench')]
 bench-count *args:

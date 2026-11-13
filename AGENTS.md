@@ -374,12 +374,16 @@ The checks are split into "lanes", one per kind of file or test.
   of the generic checks can express the property, and explain why in a comment
   (`docs/project-50k.md`, K20).
 
-- Budgets and deadlines are measured in load-adjusted seconds: while the load
-  average is above the number of cores, the clock runs proportionally slower, up
-  to 8x. So a check that would pass on a quiet machine also passes on a busy
-  one. A lane killed by its deadline automatically reruns once with a fresh
-  deadline, so if a push still times out, some step is slow or hung. Find it
-  before pushing again.
+- Budgets and deadlines are measured in seconds on the reference machine, the
+  one the budgets were set on, with nothing else running. While the load average
+  is above the number of cores, the clock runs proportionally slower, up to 8x.
+  On a machine slower than the reference it also runs slower by that machine's
+  speed factor: `just speed` measures it once per machine on a quiet machine,
+  and `just speed --reference` on the reference machine writes
+  `data/speed-reference.json`. So a check takes the same budget seconds on a
+  busy or slow machine as on a quiet reference one. A lane killed by its
+  deadline automatically reruns once with a fresh deadline, so if a push still
+  times out, some step is slow or hung. Find it before pushing again.
 
 - The machine runs at most half its core count's worth of browser pages at once,
   across all runs (`ui/scripts/slots.mjs`). Runs that aren't checks share a

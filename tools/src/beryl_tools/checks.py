@@ -59,6 +59,7 @@ from . import (
     paths,
     runlog,
     script_checks,
+    speed,
     system,
     two_player,
     verdicts,
@@ -442,7 +443,9 @@ def load_note() -> str:
     one, five, fifteen = system.loadavg()
     return (
         f"load average {one:.0f} {five:.0f} {fifteen:.0f} on {os.cpu_count()} cores;"
-        f" the times above are adjusted for load beyond the cores, up to {MAX_STRETCH:.0f}x"
+        f" the times above are adjusted for load beyond the cores, up to {MAX_STRETCH:.0f}x,"
+        f" and for this machine's speed, {speed.factor():.2f}x the reference's time"
+        " (`just speed`)"
     )
 
 

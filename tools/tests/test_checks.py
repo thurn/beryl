@@ -135,7 +135,7 @@ def test_a_loaded_machine_stretches_the_deadline_and_the_budget(
     # deadline and the budget, with room for a busy machine to start Python.
     monkeypatch.setattr(checks.system, "loadavg", lambda: (1000.0, 1000.0, 1000.0))
     assert checks.run_lanes([lane], "ci", 1) == 0
-    assert "on the clock, the machine loaded" in capsys.readouterr().out
+    assert " s on the clock)" in capsys.readouterr().out
     # On a machine to itself the same step runs out of time.
     monkeypatch.setattr(checks.system, "loadavg", lambda: (4.0, 4.0, 4.0))
     assert checks.run_lanes([lane], "ci", 1) == 1

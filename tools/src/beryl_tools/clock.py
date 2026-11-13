@@ -1,5 +1,7 @@
-"""The checks' clock (checks.py): seconds as a machine to itself would have spent them, so
-budgets and deadlines hold a run to what it would take without other work slowing it."""
+"""The checks' clock (checks.py): seconds as the reference machine, with nothing else running,
+would have spent them. Budgets and deadlines hold a run to what it would take there, whether
+other work is slowing this machine down or this machine is slower than the reference
+(speed.py)."""
 
 from __future__ import annotations
 
@@ -7,7 +9,7 @@ import os
 import threading
 import time
 
-from . import system
+from . import speed, system
 
 # The most a busy machine slows a run's clock (`Clock`): a step that hangs dies by this many
 # times its deadline, however loaded the machine.
@@ -25,13 +27,17 @@ def stretch(load: float, cpus: int) -> float:
 
 
 class Clock:
-    """Seconds since it started, as a machine to itself would have spent them: each stretch of
-    wall time divided by how much the load then slowed it (`stretch`). It reads the load as
-    it is asked the time, which a running step does every half second."""
+    """Seconds since it started, as the reference machine with nothing else running would have
+    spent them: each stretch of wall time divided by how much the load then slowed it
+    (`stretch`) and by how much slower this machine is than the reference
+    (`speed.factor`). It reads the load as it is asked the time, which a running step does
+    every half second."""
 
     def __init__(self) -> None:
         self.lock = threading.Lock()
         self.cpus: int = os.cpu_count() or 1
+        # This machine's time for a fixed workload over the reference's (speed.py).
+        self.speed: float = speed.factor()
         # perf_counter, not monotonic: on Windows monotonic ticks every 15.6 ms.
         self.wall_start: float = time.perf_counter()
         self.last: float = self.wall_start
@@ -44,7 +50,7 @@ class Clock:
             t = time.perf_counter()
             load = system.loadavg()[0]
             self.peak = max(self.peak, load)
-            self.adjusted += (t - self.last) / stretch(load, self.cpus)
+            self.adjusted += (t - self.last) / (stretch(load, self.cpus) * self.speed)
             self.last = t
             return self.adjusted
 
@@ -64,7 +70,8 @@ class WallClock(Clock):
 
 
 def took(wall: float, adjusted: float) -> str:
-    """A duration, with the load-adjusted one where the load stretched it."""
-    if wall <= adjusted * 1.1:
+    """A duration: the adjusted seconds, with the wall seconds beside them when the two differ
+    by more than a tenth."""
+    if adjusted * 0.9 <= wall <= adjusted * 1.1:
         return f"{wall:.1f} s"
-    return f"{adjusted:.1f} s ({wall:.0f} s on the clock, the machine loaded)"
+    return f"{adjusted:.1f} s ({wall:.0f} s on the clock)"
