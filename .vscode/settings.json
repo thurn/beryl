@@ -1,0 +1,16 @@
+{
+  "files.watcherExclude": {
+    "**/.worktrees/**": true,
+    "**/target/**": true,
+    "**/node_modules/**": true
+  },
+  "search.exclude": {
+    "**/.worktrees": true,
+    "**/target": true,
+    "**/node_modules": true
+  },
+  "files.exclude": {
+    "**/.worktrees": true
+  },
+  "rust-analyzer.files.excludeDirs": [".worktrees", "rust/target", "ui/node_modules"]
+}
