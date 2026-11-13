@@ -85,10 +85,14 @@ and builders a card definition is made of.
    and each `unless`. Each ends in assertions on what it did, written with the
    `ME` and `THEM` shorthands (`ME.casts(card)`, `ME.yes()`,
    `THEM.has(Zone::Hand, card, 1)`; `beryl_scenario_types`' `player.rs` lists
-   them all). The test
-   `every_instruction_of_a_card_is_carried_out_by_its_own_scenarios` names any
-   part none of them reaches. A part is only checked against XMage and Forge if
-   a scenario reaches it. Copy the model card's scenarios. In scenarios:
+   them all). The test `every_mutant_of_a_card_is_killed_by_its_scenarios`
+   changes one part of the definition at a time (a step dropped, a player or an
+   amount changed, a "may" removed) and names each change that no scenario,
+   hand-written or generated, tells from the card. Fix one by adding a scenario
+   whose outcome it changes, or a witness to the generator
+   (`beryl_cards/src/derive/witness.rs`) when the change is to a vocabulary
+   entry every card using it shares. A part is only checked against XMage and
+   Forge if a scenario shows what it does. Copy the model card's scenarios. In scenarios:
    - Only implemented cards exist: cards with a file under `rust/cards`, or
      complete from the store, named by `Card::<Card>`, plus the stand-ins in
      `Prop::` (`Prop::Creature`, `Prop::Artifact`, `Prop::Equipment`, ...).

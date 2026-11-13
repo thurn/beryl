@@ -35,9 +35,11 @@ use crate::CARDS;
 
 mod play;
 mod position;
+mod witness;
 
 use play::{Answers, Walk, openings, walk};
-use position::{Place, preamble, start};
+use position::{Place, early, preamble, start};
+use witness::{Witness, witnesses};
 
 /// What every generated scenario's name starts with, which the oracles' report marks them by.
 pub const PREFIX: &str = "generated";
@@ -123,6 +125,35 @@ pub fn all() -> &'static [(&'static str, &'static [Scenario])] {
     })
 }
 
+/// Where the scenarios of `def` start: each place of [`Place::of`], and each place the card is
+/// played from again with each of its witnesses. A witness's prelude is played in the main
+/// phase, so a place whose scenarios start before it, or where the card pays for another
+/// spell, gets none, and neither does a witness that names the card itself.
+fn positions(
+    def: &'static CardDef,
+    witnesses: &[&'static Witness],
+) -> Vec<(Place, Option<&'static Witness>)> {
+    let mut out = Vec::new();
+    for place in Place::of(def) {
+        out.push((place, None));
+        if matches!(place, Place::Mana(..)) || early(def, place) {
+            continue;
+        }
+        for &witness in witnesses {
+            let names_card = witness.hand.contains(&def.name)
+                || witness
+                    .mine
+                    .iter()
+                    .chain(witness.theirs)
+                    .any(|p| p.card == def.name);
+            if !names_card {
+                out.push((place, Some(witness)));
+            }
+        }
+    }
+    out
+}
+
 /// `def`'s generated scenarios.
 pub fn for_card(def: &'static CardDef) -> Generated {
     let mut generated = Generated {
@@ -131,16 +162,22 @@ pub fn for_card(def: &'static CardDef) -> Generated {
         cut: 0,
     };
     let mut seen: BTreeSet<String> = BTreeSet::new();
-    for place in Place::of(def) {
-        let start = start(def, place);
+    let witnesses = witnesses(def);
+    for (place, witness) in positions(def, &witnesses) {
+        let start = start(def, place, witness);
         let preamble = preamble(def, place);
-        'openings: for (label, stimuli) in openings(def, place, &start, &preamble) {
+        let prelude = witness.map_or(&[][..], |w| w.prelude);
+        let words = match witness {
+            Some(w) => format!("{} {}", place.words(), w.words),
+            None => place.words(),
+        };
+        'openings: for (label, stimuli) in openings(def, place, &start, prelude, &preamble) {
             // The runs still to play, each a walk to go on with and the answer it is to give
             // the question it stopped at, and the answers some run gave or will give.
             let mut pending: VecDeque<(Walk, Option<usize>)> = VecDeque::new();
-            match Walk::new(&start) {
+            match Walk::new(&start, prelude) {
                 Ok(first) => pending.push_back((first, None)),
-                Err(e) => generated.failures.push(format!("{}: {e}", place.words())),
+                Err(e) => generated.failures.push(format!("{words}: {e}")),
             }
             let mut taken = Answers::new();
             let mut runs = 0;
@@ -154,7 +191,6 @@ pub fn for_card(def: &'static CardDef) -> Generated {
                 let run = match walk(def, &stimuli, from, answer, &mut taken, &mut branches) {
                     Ok(walked) => walked.finish(def, place),
                     Err(e) => {
-                        let words = place.words();
                         generated.failures.push(format!("{label} {words}: {e}"));
                         break;
                     }
@@ -172,9 +208,8 @@ pub fn for_card(def: &'static CardDef) -> Generated {
                     continue;
                 }
                 let name = String::leak(format!(
-                    "{PREFIX} {}: {label} {}",
+                    "{PREFIX} {}: {label} {words}",
                     generated.scenarios.len() + 1,
-                    place.words()
                 ));
                 let scenario = Scenario {
                     name,

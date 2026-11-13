@@ -23,11 +23,14 @@ fixed in the same session. Newest first.
   `card-text` check fails CI on any difference between a card's rendered text
   and its Oracle text that `data/card-text-allowlist.json` doesn't pin as
   wording or as a partial escalation, so a left-out clause can't land quietly.
-  The test `every_instruction_of_a_card_is_carried_out_by_its_own_scenarios`
-  fails on any branch of a card's effect data that its own scenarios never
-  reach, so a clause can't be written and left untested. When a scenario needs a
-  card nobody has implemented, implement one, even one in no deck: Leonin
-  Scimitar exists so that the Skydiver's attach is tested in all three engines.
+  The test `every_mutant_of_a_card_is_killed_by_its_scenarios` changes each part
+  of a card's effect data to a neighbouring value and fails when none of the
+  card's scenarios tells the change from the card, so a clause can't be written
+  and left untested; generated scenarios start from witnesses, positions such as
+  a creature with a regeneration shield, under which a field of an entry
+  matters. When a scenario needs a card nobody has implemented, implement one,
+  even one in no deck: Leonin Scimitar exists so that the Skydiver's attach is
+  tested in all three engines.
 
 - A continuous effect on a locked-in set was applied to only some of its
   members, or to none, once the set was large (CR 611.2c, 613.7). The layers

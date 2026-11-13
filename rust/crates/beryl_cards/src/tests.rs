@@ -15,10 +15,10 @@ use beryl_engine::{
 use crate::{CARDS, decks, names};
 
 mod derive;
-mod effects;
 mod equipment;
 mod facts;
 mod knowledge;
+mod mutation;
 mod props;
 mod render;
 mod store;

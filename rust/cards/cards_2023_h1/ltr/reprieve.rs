@@ -34,7 +34,6 @@ pub mod scenarios {
         // Thieving Skydiver kicked for X = 1 taps three of four Islands. Returned to P0's hand,
         // it never enters, and the mana spent on it, X included, stays spent.
         Scenario::new("Reprieve returns a spell with X to its owner's hand and draws")
-            .interaction(&[Card::ThievingSkydiver])
             .battlefield(P0, &[Card::Island; 4])
             .hand(P0, &[Card::ThievingSkydiver, Card::Plains])
             .battlefield(P1, &[Card::Plains, Card::Island])

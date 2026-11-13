@@ -40,6 +40,30 @@ pub fn trace(cards: &'static CardTable, scenario: &Scenario) -> Result<Vec<Posit
     trace_with(cards, scenario, Slots::Dealt)
 }
 
+/// Runs a scenario like [`run`], and returns its final snapshot: the facts about the position
+/// after its last action that an oracle compares (§17.2), empty when that position is not a
+/// quiet one. Two definitions of a card that pass the same scenario still differ when their
+/// snapshots do.
+pub fn outcome(cards: &'static CardTable, scenario: &Scenario) -> Result<Vec<Assertion>, Failure> {
+    let mut runner = Runner::new(cards, scenario, Slots::Dealt)?;
+    for (i, &action) in scenario.actions.iter().enumerate() {
+        runner.upcoming = upcoming(&scenario.actions[i..]);
+        let fail = |message| Failure {
+            scenario: scenario.name,
+            action: Some(i),
+            message,
+        };
+        runner.position().map_err(fail)?;
+        runner.act(action).map_err(fail)?;
+    }
+    runner.upcoming = None;
+    runner.snapshot().map_err(|message| Failure {
+        scenario: scenario.name,
+        action: None,
+        message,
+    })
+}
+
 /// Runs a scenario like [`trace`], with each deck's slots numbered as `slots` says: its
 /// assertions must pass and its positions match under every numbering.
 pub fn trace_with(

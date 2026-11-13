@@ -44,7 +44,8 @@ pub mod scenarios {
     const LANDS: &[&str] = &[Card::Plains; 8];
 
     pub const SCENARIOS: &[Scenario] = &[
-        // Counterspell and Oust qualify among the top four; the Trainer takes Oust.
+        // Counterspell and Oust qualify among the top four; the Trainer takes Oust. Portable
+        // Hole, fifth, would qualify too, but the Trainer looks at four.
         Scenario::new("Thundertrap Trainer takes a spell")
             .hand(P0, &[TRAINER])
             .battlefield(P0, &[Card::Island; 2])
@@ -55,7 +56,7 @@ pub mod scenarios {
                     Prop::Instant,
                     Prop::Creature,
                     Card::Oust,
-                    Card::Island,
+                    Prop::Artifact,
                 ],
             )
             .library(P1, &[Card::Plains])
@@ -70,7 +71,7 @@ pub mod scenarios {
                 ME.has_cards(Zone::Library, 4),
                 // The fifth card, below the four, is on top now.
                 advance_to(3, TurnStep::PrecombatMain),
-                ME.has(Zone::Hand, Card::Island, 1),
+                ME.has(Zone::Hand, Prop::Artifact, 1),
             ]),
         Scenario::new("Thundertrap Trainer finds no spell")
             .hand(P0, &[TRAINER])

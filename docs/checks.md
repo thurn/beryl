@@ -16,9 +16,10 @@ branch left `origin/staging`:
   just the scale harness's tests.
 - `rust`: rustfmt, clippy and tests, then `card-text`: every card file's
   rendered rules text against its Oracle text, with the differences
-  `data/card-text-allowlist.json` pins (`card_text.py`). The tests include
-  `every_instruction_of_a_card_is_carried_out_by_its_own_scenarios`, which fails
-  on any branch of a card's effect data that none of its scenarios reaches.
+  `data/card-text-allowlist.json` pins (`card_text.py`). The tests include the
+  mutation check `every_mutant_of_a_card_is_killed_by_its_scenarios` (about 3 s
+  over every card file), which fails when changing one node of a card's effect
+  data changes the outcome of none of its scenarios.
 - `script`: `beryl_cli script-check`, when a crate it depends on changed. In a
   debug build it runs every card's spec moments from both seats and every UI
   fixture's recording, checking each animation script against its assertions.

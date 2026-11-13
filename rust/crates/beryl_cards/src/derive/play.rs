@@ -62,6 +62,7 @@ pub(super) fn openings(
     def: &'static CardDef,
     place: Place,
     start: &Scenario,
+    prelude: &[Action],
     preamble: &[Stimulus],
 ) -> Vec<(String, Vec<Stimulus>)> {
     let with = |more: &[Stimulus]| preamble.iter().chain(more).copied().collect::<Vec<_>>();
@@ -99,7 +100,7 @@ pub(super) fn openings(
         let cast = lead.map(|card| Action::cast(P0, card));
         let mut to: Vec<Stimulus> = cast.into_iter().map(Stimulus::Act).collect();
         to.push(Stimulus::Hold);
-        let ran = Walk::new(start).and_then(|w| {
+        let ran = Walk::new(start, prelude).and_then(|w| {
             walk(
                 def,
                 &with(&to),
@@ -210,11 +211,18 @@ pub(super) struct Walk {
 }
 
 impl Walk {
-    pub(super) fn new(start: &Scenario) -> Result<Walk, String> {
+    /// A walk from `start`, with player 0 having taken the actions of `prelude`: a witness's
+    /// (`super::witness`), each question in it answered.
+    pub(super) fn new(start: &Scenario, prelude: &[Action]) -> Result<Walk, String> {
+        let mut live = Live::new(&CARDS, start).map_err(|f| f.message)?;
+        for &action in prelude {
+            live.act(action)
+                .map_err(|e| format!("the witness's prelude: {e}"))?;
+        }
         Ok(Walk {
-            live: Live::new(&CARDS, start).map_err(|f| f.message)?,
+            live,
             run: Run {
-                actions: Vec::new(),
+                actions: prelude.to_vec(),
                 touched: false,
                 unordered: false,
             },

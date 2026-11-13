@@ -10,6 +10,7 @@ use beryl_scenario::{Action, P0, P1, Permanent, PlayerSetup, Scenario};
 
 use super::PREFIX;
 use super::play::Stimulus;
+use super::witness::Witness;
 use crate::{names, props};
 
 /// The turn a scenario's main phase is in, player 0 active.
@@ -151,7 +152,7 @@ fn triggers_before_main(face: &Face) -> bool {
 
 /// Whether the card starts on the battlefield in `place` with an ability that triggers before
 /// the main phase, so that its scenarios play the beginning phase first.
-fn early(def: &'static CardDef, place: Place) -> bool {
+pub(super) fn early(def: &'static CardDef, place: Place) -> bool {
     match place {
         Place::Battlefield(f) | Place::Mana(f, _) => triggers_before_main(def.face(f)),
         Place::Hand | Place::Graveyard => false,
@@ -182,8 +183,9 @@ fn permanent(def: &'static CardDef, f: FaceIx) -> Permanent {
     permanent
 }
 
-/// The position a scenario of `def` starting in `place` begins from, before any action.
-pub(super) fn start(def: &'static CardDef, place: Place) -> Scenario {
+/// The position a scenario of `def` starting in `place` begins from, before any action, with
+/// what `witness` adds.
+pub(super) fn start(def: &'static CardDef, place: Place, witness: Option<&Witness>) -> Scenario {
     let card = def.name;
     let lands = match place {
         Place::Mana(_, land) => vec![land],
@@ -191,6 +193,12 @@ pub(super) fn start(def: &'static CardDef, place: Place) -> Scenario {
     };
     let mut battlefield: Vec<Permanent> = lands.into_iter().map(Permanent::new).collect();
     let mut hand = without(HAND, card);
+    let mut opponent_added: &[Permanent] = &[];
+    if let Some(witness) = witness {
+        battlefield.extend_from_slice(witness.mine);
+        hand.extend_from_slice(witness.hand);
+        opponent_added = witness.theirs;
+    }
     let mut graveyard = without(&[props::INSTANT], card);
     match place {
         Place::Hand => hand.insert(0, card),
@@ -203,6 +211,7 @@ pub(super) fn start(def: &'static CardDef, place: Place) -> Scenario {
     // opponent's turn theirs start untapped.
     let opponent: Vec<Permanent> = OPPONENT_PERMANENTS
         .iter()
+        .chain(opponent_added)
         .filter(|p| p.card != card)
         .map(|&p| Permanent {
             tapped: p.tapped && !early,

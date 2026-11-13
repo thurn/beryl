@@ -456,7 +456,7 @@ are built with their first card.
 | Check               | What it proves                                                                                            | Command                               |
 | ------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------- |
 | Card scenarios      | Each ability does what its text says, with CR citations                                                   | `just test-rust`                      |
-| Ability coverage    | Every instruction of a card is carried out by its own scenarios                                           | `just test-rust`                      |
+| Mutation check      | Every change to one part of a card's effect data changes what one of its scenarios shows                  | `just test-rust`                      |
 | Oracles             | Scenarios agree with XMage and Forge, or the divergence is in `oracle-divergences.json` with its citation | `just oracle <cards>`                 |
 | Classic corpus      | The named interaction of each keystone and its partner comes out as the rules say                         | `just test-rust`                      |
 | Fuzzing, exhaustion | Long random games and every short line from a scenario's end break no invariant                           | `just fuzz`, `just exhaust`           |

@@ -26,6 +26,9 @@ use crate::subtypes::{GameSubtypes, SubtypeNumbers};
 pub struct CardTable {
     cards: Listing,
     from_store: Listing,
+    /// The table [`CardTable::overriding`] puts this one's cards in front of: it finds every
+    /// name this table's cards do not have, and its store is this table's.
+    base: Option<&'static CardTable>,
     /// Each name's first card, built on first use by [`CardTable::get`]. Never iterated: the order
     /// the engine sees is [`CardTable::cards`]'s.
     by_name: std::sync::OnceLock<std::collections::HashMap<&'static str, &'static CardDef>>,
@@ -92,13 +95,33 @@ impl CardTable {
         Self {
             cards,
             from_store,
+            base: None,
             by_name: std::sync::OnceLock::new(),
+        }
+    }
+
+    /// A table of `cards` in front of `base`: [`CardTable::get`] finds a name among `cards`
+    /// first and in `base` after, and the store is `base`'s. A test that plays a changed
+    /// definition of a card in place of the real one builds one of these for each change,
+    /// without building a lookup over the whole card store each time.
+    pub fn overriding(base: &'static CardTable, cards: &'static [&'static CardDef]) -> Self {
+        Self {
+            base: Some(base),
+            ..Self::new(cards)
         }
     }
 
     /// The card called `name`: the first of that name among [`CardTable::cards`], as a scan
     /// would find it, else the card complete from the store of that name.
     pub fn get(&self, name: &str) -> Option<&'static CardDef> {
+        if let Some(base) = self.base {
+            return self
+                .cards()
+                .iter()
+                .copied()
+                .find(|card| card.name == name)
+                .or_else(|| base.get(name));
+        }
         self.by_name
             .get_or_init(|| {
                 let (cards, from_store) = (self.cards(), self.from_store());
@@ -123,7 +146,10 @@ impl CardTable {
     /// walked by nothing that runs over every card.
     #[inline]
     pub fn from_store(&self) -> &'static [&'static CardDef] {
-        self.from_store.all()
+        match self.base {
+            Some(base) => base.from_store(),
+            None => self.from_store.all(),
+        }
     }
 }
 

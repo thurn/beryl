@@ -115,7 +115,6 @@ pub mod scenarios {
         // Skydiver reaches it only with X of at least 2.
         SKYDIVER_SETUP
             .titled("Thieving Skydiver kicked for 1 can't take a reconfigured 2-drop")
-            .interaction(&[Card::ThievingSkydiver])
             .actions(&[
                 ME.casts(SWIFT),
                 Resolve,
@@ -133,7 +132,6 @@ pub mod scenarios {
             ]),
         SKYDIVER_SETUP
             .titled("Thieving Skydiver kicked for 2 takes the reconfigured creature")
-            .interaction(&[Card::ThievingSkydiver])
             .actions(&[
                 ME.casts(SWIFT),
                 Resolve,

@@ -60,13 +60,17 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   procedure.
 - Two checks hold a definition to its card. The `card-text` step of the rust
   lane renders every card file and fails on any difference from its Oracle text
-  that `data/card-text-allowlist.json` doesn't pin exactly. The test
-  `every_instruction_of_a_card_is_carried_out_by_its_own_scenarios` (in
-  `beryl_cards`) fails on any part of a card's effect data, such as one branch
-  of an `If`, that none of the card's own scenarios carries out. The oracles
-  only compare what a scenario reaches, so a part no scenario reaches is
-  untested. When a scenario needs a card nobody has implemented, implement one,
-  even one in no deck (the `card-writing` skill, "Cards for scenarios").
+  that `data/card-text-allowlist.json` doesn't pin exactly. The mutation check
+  `every_mutant_of_a_card_is_killed_by_its_scenarios` (in `beryl_cards`) builds
+  each mutant of a card, its definition with one node changed to a neighbouring
+  value, and fails on any mutant that none of the card's scenarios (its file's,
+  the rules library's and its generated ones) tells from the card, unless
+  `EQUIVALENT` lists it with why the two always do the same. Generated scenarios
+  also start from witnesses (`derive/witness.rs`), position fragments under
+  which a field of a vocabulary entry changes the outcome. The oracles only
+  compare what a scenario reaches, so a part no scenario shows is untested. When
+  a scenario needs a card nobody has implemented, implement one, even one in no
+  deck (the `card-writing` skill, "Cards for scenarios").
 - `just census` counts which mechanics Forge's card scripts use that
   `beryl_card` has no entry for, and how many cards each one blocks, from the
   mapping in `data/census-coverage.json`. It writes its report to

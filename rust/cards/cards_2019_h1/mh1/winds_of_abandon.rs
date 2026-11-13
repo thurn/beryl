@@ -128,6 +128,8 @@ pub mod scenarios {
                     costs: Castings::only(0),
                 },
                 Resolve,
+                // Done, the Island and the Plains, not the Tundra, which is no basic land.
+                THEM.deciding(DecisionKind::ChooseUpTo, 3),
                 THEM.picks_up_to(Card::Island),
                 THEM.done_picking(),
                 THEM.has_cards(Zone::Exile, 2),

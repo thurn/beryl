@@ -28,7 +28,7 @@ pub use beryl_scenario_types::{
 pub use exhaust::{Bounds, Check, Found, Searched, exhaust, invariants};
 pub use json::{Json, to_json};
 pub use run::{
-    Live, answer, describe, run, trace, trace_with, visit, watch, watch_tagged, watch_with,
+    Live, answer, describe, outcome, run, trace, trace_with, visit, watch, watch_tagged, watch_with,
 };
 pub use script::{script, setup_source, source};
 pub use setup::{Slots, position};

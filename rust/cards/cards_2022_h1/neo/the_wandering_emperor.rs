@@ -119,6 +119,28 @@ pub mod scenarios {
                 advance_to(2, TurnStep::Upkeep),
                 THEM.pt(Prop::SmallCreature, 3, 2),
             ]),
+        // The +1's first strike decides a combat: P0's 2/1 becomes a 3/2 first striker and
+        // attacks into P1's 3/1, which blocks. It deals its damage first and kills the blocker,
+        // which deals none back (CR 510.4: "the only creatures that assign combat damage in that
+        // step are those with first strike or double strike").
+        Scenario::new("+1's first strike wins a combat")
+            .battlefield(P0, &[EMPEROR, Prop::SmallCreature])
+            .battlefield(P1, &[Prop::Creature])
+            .library(P0, &[Card::Plains, Card::Plains])
+            .library(P1, &[Card::Plains, Card::Plains])
+            .actions(&[
+                ME.activates(EMPEROR, 1), // +1
+                ME.target_count(1),
+                ME.targets(Prop::SmallCreature),
+                Resolve,
+                advance_to(1, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                ME.attacks_with(Prop::SmallCreature),
+                THEM.chooses(DecisionKind::Blocker, Prop::Creature),
+                advance_to(1, TurnStep::EndOfCombat),
+                ME.controls(Prop::SmallCreature, 1),
+                THEM.controls(Prop::Creature, 0),
+            ]),
         Scenario::new("−1 makes a 2/2 Samurai")
             .battlefield(P0, &[EMPEROR])
             .hand(P0, &[Card::Plains])

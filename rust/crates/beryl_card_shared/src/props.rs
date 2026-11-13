@@ -52,6 +52,16 @@ pub const EQUIPMENT: &str = "Leonin Scimitar";
 /// A nonbasic land: Tundra, a Plains Island with no rules text.
 pub const NONBASIC_LAND: &str = "Tundra";
 
+/// An instant that gives a creature a regeneration shield: Death Ward, {W}, "Regenerate
+/// target creature." It is in no deck: it was implemented for generated scenarios in which a
+/// destroy effect meets a shield.
+pub const REGENERATION: &str = "Death Ward";
+
+/// A creature that steals an artifact: Thieving Skydiver, {1}{U}, a 2/1 flier whose kicker
+/// {X} gains control of target artifact with mana value X or less as it enters. Unkicked, its
+/// trigger does nothing.
+pub const THIEF: &str = "Thieving Skydiver";
+
 /// Every prop, for the check that scenarios name nothing else.
 pub const ALL: &[&str] = &[
     CREATURE,
@@ -64,6 +74,8 @@ pub const ALL: &[&str] = &[
     UNTARGETED_SPELL,
     PLANESWALKER,
     NONBASIC_LAND,
+    REGENERATION,
+    THIEF,
 ];
 
 /// The props as card files name them, `Prop::Creature`: the constants above, each with the name
@@ -93,4 +105,8 @@ impl Prop {
     pub const Equipment: &str = EQUIPMENT;
     /// [`NONBASIC_LAND`].
     pub const NonbasicLand: &str = NONBASIC_LAND;
+    /// [`REGENERATION`].
+    pub const Regeneration: &str = REGENERATION;
+    /// [`THIEF`].
+    pub const Thief: &str = THIEF;
 }

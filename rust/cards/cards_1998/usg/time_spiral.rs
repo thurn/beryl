@@ -66,7 +66,14 @@ pub mod scenarios {
             .hand(P0, &[Card::TimeSpiral, Card::Island])
             .graveyard(P0, &[Card::Plains])
             .library(P0, &[Card::Island; 6])
-            .permanents(P1, &[Permanent::new(Card::Tundra).tapped()])
+            // A tapped creature too, which is no land: the choice leaves it out.
+            .permanents(
+                P1,
+                &[
+                    Permanent::new(Card::Tundra).tapped(),
+                    Permanent::new(Prop::SmallCreature).tapped(),
+                ],
+            )
             .hand(P1, &[Card::Plains])
             .graveyard(P1, &[Card::Island])
             .library(P1, &[Card::Plains; 6])
@@ -81,6 +88,7 @@ pub mod scenarios {
                 ME.tapped(Card::Island, 0),
                 ME.tapped(Card::Plains, 3),
                 THEM.tapped(Card::Tundra, 1),
+                THEM.tapped(Prop::SmallCreature, 1),
                 ME.has(Zone::Exile, Card::TimeSpiral, 1),
                 ME.has_cards(Zone::Graveyard, 0),
                 ME.has_cards(Zone::Hand, 7),
