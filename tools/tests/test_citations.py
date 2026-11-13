@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import citation_migrate, citations, paths
+from beryl_tools import citation_migrate, citation_shorten, citations, paths
 
 # A release's text as Wizards publishes it: a contents section naming the sections, numbered
 # rules with further paragraphs, and a glossary whose numbered senses are no rules.
@@ -128,6 +128,23 @@ def test_text_outside_the_roots_and_a_quotation_not_after_the_link_are_ignored(
     assert problems(tmp_path, "tools/tests/a.py", f"# {cite('1.1')}\n") == []
 
 
+def test_a_reference_is_held_to_its_rule_and_needs_a_definition(tmp_path: Path) -> None:
+    link = "https://yawgatog.com/resources/magic-rules/#"
+    text = (
+        '/// [CR 712.6]: "Each face of a double-faced card has its own set of\n'
+        '/// characteristics." Then [CR 712.6d] and [CR 712.6a]: "a set it lacks".\n'
+        "///\n"
+        f"/// [CR 712.6]: {link}R7126\n"
+        f"/// [CR 712.6a]: {link}R7126\n"
+    )
+    assert problems(tmp_path, "rust/crates/a/src/lib.rs", text) == [
+        "rust/crates/a/src/lib.rs:2: CR 712.6d: no link definition "
+        f"`[CR 712.6d]: {link}R7126d` in the file",
+        'rust/crates/a/src/lib.rs:2: CR 712.6a: the rule does not say "a set it lacks"',
+        "rust/crates/a/src/lib.rs:5: CR 712.6a: the anchor is #R7126, not #R7126a",
+    ]
+
+
 def migrate(tmp_path: Path, text: str) -> tuple[str, list[str], list[str]]:
     path = write(tmp_path, "rust/crates/a/src/lib.rs", text)
     moved, notes = citation_migrate.migrate(
@@ -244,3 +261,22 @@ def test_the_step_skips_and_passes_with_no_text_to_hold_the_tree_to(
         "citations: skipped: the 2026-11-06 rules could not be fetched: "
     )
     assert not citations.cached_text(citations.pinned(paths.REPO)).exists()
+
+
+def test_shortening_moves_each_doc_comments_links_to_its_end() -> None:
+    link = "https://yawgatog.com/resources/magic-rules/#"
+    text = (
+        f'/// One ([CR 712.6]({link}R7126)): "a", and [CR 712.6]({link}R7126) again,\n'
+        f"/// and [CR 104.3a]({link}R1043a).\n"
+        "static A: u8 = 0;\n"
+        f"    // A plain comment keeps [CR 712.6]({link}R7126).\n"
+    )
+    assert citation_shorten.shorten(text) == (
+        '/// One ([CR 712.6]): "a", and [CR 712.6] again,\n'
+        "/// and [CR 104.3a].\n"
+        "///\n"
+        f"/// [CR 712.6]: {link}R7126\n"
+        f"/// [CR 104.3a]: {link}R1043a\n"
+        "static A: u8 = 0;\n"
+        f"    // A plain comment keeps [CR 712.6]({link}R7126).\n"
+    )

@@ -37,7 +37,9 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   code against the rules release pinned in `data/rules-version.json`.
   `just citations migrate <date>` moves the code to a newer rules release: it
   renumbers the citations it can match and lists the ones that need a human
-  decision.
+  decision. `just citations shorten <paths>` rewrites the inline links in doc
+  comments as references, `[CR 118.12a]`, with the links defined at the end of
+  each comment.
 - `just fuzz` plays long random games, and `just exhaust` tries every sequence
   of decisions near the end positions of the scenarios.
 - To start a new card, run `just card brief <name>`. It shows the card's Oracle

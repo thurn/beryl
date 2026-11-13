@@ -10,8 +10,8 @@ use crate::{names, printed};
 use beryl_card::{Ability, CardDef, LayerSpec, Modification, Objects, card, mana};
 
 /// "Equipped creature gets +1/+1": a continuous effect on the creature it is attached to
-/// ([CR 301.5a](https://yawgatog.com/resources/magic-rules/#R3015a)): "Some Equipment have
-/// abilities that affect the equipped creature or the equipped creature's controller."
+/// ([CR 301.5a](https://yawgatog.com/resources/magic-rules/#R3015a)): "The creature an
+/// Equipment is attached to is called the 'equipped creature.'"
 static EQUIPPED_GETS_ONE_ONE: LayerSpec = LayerSpec {
     affected: Objects::AttachedTo,
     condition: None,

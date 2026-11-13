@@ -5,9 +5,12 @@ AGENTS.md has rules code cite the rules with yawgatog links and quotations. Each
 renumbers and rewords rules, which turns a citation into a dead anchor, a quotation the rule no
 longer contains, or a bare rule number that silently names another rule. So the tree cites one
 release, pinned in `data/rules-version.json`, and this check holds each citation in a file under
-`rust/crates`, `ui/src`, `tools/src`, `data` and `docs` to that release's text:
+`rust/crates`, `rust/cards`, `ui/src`, `tools/src`, `data` and `docs` to that release's text:
 
-- a link's anchor is the rule number without its dots, with an `R` before it;
+- a link's anchor is the rule number without its dots, with an `R` before it. A citation
+  may be a link, `[CR 118.12a](https://yawgatog.com/...#R11812a)`, or a reference,
+  `[CR <number>]`, whose link a definition in the same file gives
+  (`[CR 118.12a]: https://yawgatog.com/...#R11812a`), as Markdown and rustdoc read it;
 - the rule exists in the pinned release (for a bare "CR n" too);
 - a quotation that directly follows the citation (`: "..."` or ` "..."`, after an optional
   closing parenthesis, joined across comment lines and split at `...` or `. . .`) is text of that
@@ -40,7 +43,7 @@ from pathlib import Path
 from . import paths, runlog
 
 VERSION_FILE = "data/rules-version.json"
-ROOTS = ("rust/crates", "ui/src", "tools/src", "data", "docs")
+ROOTS = ("rust/crates", "rust/cards", "ui/src", "tools/src", "data", "docs")
 EXTENSIONS = {".rs", ".ts", ".tsx", ".py", ".md", ".json"}
 # Directories under the roots that hold no source of ours.
 SKIPPED_DIRECTORIES = {"node_modules", "target", "generated"}
@@ -53,10 +56,14 @@ STEP_FETCH_TIMEOUT = 10
 
 NUMBER = r"\d{1,3}(?:\.\d+[a-z]*)?"
 RULE_LINE: re.Pattern[str] = re.compile(rf"^({NUMBER})\.?\s+(\S.*)$")
-# A linked citation (groups 1 and 2: number and anchor) or a bare one (group 3: number). A bare
+LINK = r"https://yawgatog\.com/resources/magic-rules/#(\w+)"
+# A linked citation (groups 1 and 2: number and anchor), a reference link's definition (groups
+# 3 and 4), a reference to one (group 5: number) or a bare citation (group 6: number). A bare
 # number needs three digits, so "CR 7" is no citation.
 CITATION: re.Pattern[str] = re.compile(
-    rf"\[CR ({NUMBER})\]\(https://yawgatog\.com/resources/magic-rules/#(\w+)\)"
+    rf"\[CR ({NUMBER})\]\({LINK}\)"
+    rf"|\[CR ({NUMBER})\]: {LINK}"
+    rf"|\[CR ({NUMBER})\](?!\(|: https://)"
     r"|(?<!\[)\bCR (\d{3}(?:\.\d+[a-z]*)?)\b"
 )
 COMMENT_PREFIX: re.Pattern[str] = re.compile(r"^\s*(?:///|//!|//|#|/\*\*?|\*(?!\w))\s?")
@@ -110,6 +117,8 @@ class Citation:
     anchor: str | None
     anchor_span: tuple[int, int] | None
     quotation: str | None
+    # "link", "definition" (of a reference link), "reference" or "bare".
+    kind: str = "link"
 
 
 def anchor_of(number: str) -> str:
@@ -241,17 +250,31 @@ def citations_in(lines: list[str]) -> list[Citation]:
     for index, line in enumerate(lines):
         commented = comment_text(line) is not None
         for match in CITATION.finditer(line):
-            linked = match.group(1) is not None
-            group = 1 if linked else 3
+            kind, group = next(
+                (kind, group)
+                for kind, group in (
+                    ("link", 1),
+                    ("definition", 3),
+                    ("reference", 5),
+                    ("bare", 6),
+                )
+                if match.group(group) is not None
+            )
+            anchored = kind in ("link", "definition")
             text = following_text(lines, index, match.end(), commented)
             found.append(
                 Citation(
                     line=index,
                     number=match.group(group),
                     number_span=match.span(group),
-                    anchor=match.group(2) if linked else None,
-                    anchor_span=match.span(2) if linked else None,
-                    quotation=quotation(text, linked),
+                    anchor=match.group(group + 1) if anchored else None,
+                    anchor_span=match.span(group + 1) if anchored else None,
+                    quotation=(
+                        None
+                        if kind == "definition"
+                        else quotation(text, kind != "bare")
+                    ),
+                    kind=kind,
                 )
             )
     return found
@@ -260,10 +283,18 @@ def citations_in(lines: list[str]) -> list[Citation]:
 def problems_in(rel: str, lines: list[str], rules: dict[str, str]) -> list[str]:
     """Each `file:line: CR n: problem` for the citations in one file's `lines`."""
     found = []
-    for citation in citations_in(lines):
+    cited = citations_in(lines)
+    defined = {c.number for c in cited if c.kind == "definition"}
+    for citation in cited:
         number = citation.number
         where = f"{rel}:{citation.line + 1}: CR {number}"
         expected = anchor_of(number)
+        if citation.kind == "reference" and number not in defined:
+            found.append(
+                f"{where}: no link definition `[CR {number}]: "
+                f"https://yawgatog.com/resources/magic-rules/#{expected}` in the file"
+            )
+            continue
         if citation.anchor is not None and citation.anchor != expected:
             found.append(f"{where}: the anchor is #{citation.anchor}, not #{expected}")
             continue
@@ -352,7 +383,7 @@ def step(*args: str) -> int:
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    from . import citation_migrate
+    from . import citation_migrate, citation_shorten
 
     p = sub.add_parser(
         "citations",
@@ -361,3 +392,4 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.set_defaults(func=run)
     actions = p.add_subparsers(dest="action")
     citation_migrate.register(actions)
+    citation_shorten.register(actions)

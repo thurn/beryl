@@ -31,7 +31,7 @@ LITERAL: re.Pattern[str] = re.compile(r'"(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)\'')
 # A citation of the Comprehensive Rules with the rule it quotes, `([CR 701.6a](url)): "To
 # counter ..."`, and one without: rules words, not what the card says.
 QUOTED_RULE: re.Pattern[str] = re.compile(r'\(?\[CR [^\]]*\]\([^)]*\)\)?:\s*"[^"]*"')
-CITATION: re.Pattern[str] = re.compile(r"\(?\[CR [^\]]*\]\([^)]*\)\)?")
+CITATION: re.Pattern[str] = re.compile(r"\(?\[CR [^\]]*\](?:\([^)]*\))?\)?")
 CAMEL: re.Pattern[str] = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|_")
 
 

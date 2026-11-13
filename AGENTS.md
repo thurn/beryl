@@ -20,7 +20,9 @@ that scales to that size.
 All rules engine code must have comments that point to the part of the
 Comprehensive Rules it implements. Link to
 https://yawgatog.com/resources/magic-rules/ and quote the relevant text from the
-rules release pinned in `data/rules-version.json`.
+rules release pinned in `data/rules-version.json`. In a doc comment, cite as a
+reference, `[CR 118.12a]`, and define its link at the end of the comment;
+`just citations shorten <paths>` rewrites inline links that way.
 
 This file holds the rules that apply to every change. `rust/`, `ui/` and `data/`
 each have their own `AGENTS.md` with the reference material for work in that
