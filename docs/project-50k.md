@@ -652,11 +652,20 @@ and 3.0 s at 74, and 74 was faster in seven of the eight pairs. With
 build script takes 0.25 s and the registry's recheck about 0.2 s (0.05 s more
 than before, for re-exporting the names). The rest is the edited crate's
 recheck: 1.55 s at 37 crates and 0.6 s at 74. So the crate's size is now what
-the rebuild depends on, and the grouping is to change from K8's rule of 500 to
-1,500 cards to one crate per calendar year, split in halves when a year is large
-(by-w8gv.13.18). More crates also cost more to link: the release build took 164,
-212 and 220 CPU-seconds at 37, 74 and 111 crates, while the cold check stayed at
-about 490 CPU-seconds.
+the rebuild depends on. More crates also cost more to link: the release build
+took 164, 212 and 220 CPU-seconds at 37, 74 and 111 crates, while the cold check
+stayed at about 490 CPU-seconds.
+
+So K8's rule of 500 to 1,500 cards a crate changed to one crate per first
+printing year, with a year of more than 1,200 cards split into halves and a half
+of more than 1,200 into quarters (by-w8gv.13.18). The tree's 32,496 cards make
+43 groups of 368 to 1,154 cards, and the rehearsal cycles their sizes into 66
+crates of 387 to 1,212 cards. Measured 2026-11-12 with
+`just scale --assert --edits 8` at a load of 11 to 15, every budget held: the
+cold check took 58.7 s (415 CPU-seconds), the release build 31.4 s (161
+CPU-seconds), the one-edit rebuild a median of 1.4 s (1.4 to 1.6 s over the
+eight edits), and the largest compiler process used 1.13 GiB. The cold check is
+close to its 60 s budget, as it was in earlier runs.
 
 Edits made just after the release build can wait for seconds with the processor
 idle while macOS scans the build scripts' executables, which also inflates the
