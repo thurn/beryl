@@ -14,6 +14,8 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   catalogs plus the counter kinds the pool uses (`catalogs.py`).
 - `card-pool-exclusions.json`: cards left out of the store even though they are
   legal in Vintage.
+- `census-coverage.json`: the Forge mechanics (kind names only) that
+  `beryl_card` covers, each with its entry, for `just census` (`census.py`).
 - `card-printings.csv`: the specific printing chosen for each card.
 - `rules-version.json`: the Comprehensive Rules release that every citation in
   the code is checked against.
