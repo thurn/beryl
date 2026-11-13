@@ -1,128 +1,77 @@
-//! The derived card knowledge, with the overlay on top, is what the hand-written tables gave
-//! before derivation replaced them.
+//! The overlay names only cards that exist, and each tuned ability is still the one it was
+//! tuned for.
 
 use beryl_cards::{CARDS, names};
-use beryl_engine::card::CardDef;
 
-use crate::values::{CardInfo, info};
+use super::{Expect, Shape, TUNINGS, Tuning};
 use crate::{CardValues, Knowledge};
 
-/// The hand-written tables as they stood before derivation replaced them, kept as the
-/// record the derived knowledge is checked against. Each holds a card name and, for an
-/// ability, its index in the front face's abilities.
-mod before {
-    use beryl_cards::names;
-
-    pub const WHEELS: &[&str] = &[names::TIMETWISTER, names::TIME_SPIRAL];
-    pub const EMPTIES: &[(&str, u8)] = &[(names::JACE_WIELDER_OF_MYSTERIES, 2)];
-    pub const NEVER_CAST: &[&str] = &[names::MANA_CRYPT];
-    pub const FRIENDLY: &[(&str, u8)] = &[(names::THE_WANDERING_EMPEROR, 1)];
-    pub const NEVER: &[(&str, u8)] = &[(names::AANGS_ICEBERG, 1)];
-    pub const DRAWS: &[(&str, u8)] = &[
-        (names::ABHORRENT_OCULUS, 0),
-        (names::CURRENCY_CONVERTER, 1),
-        (names::JACE_THE_MIND_SCULPTOR, 1),
-        (names::JACE_VRYNS_PRODIGY, 0),
-        (names::REPRIEVE, 0),
-        (names::STAFF_OF_THE_STORYTELLER, 2),
-        (names::STOCK_UP, 0),
-        (names::TEFERI_HERO_OF_DOMINARIA, 0),
-        (names::THIRST_FOR_DISCOVERY, 0),
-    ];
-}
-
-/// Every card of the two decks the tables were tuned for, and every token or emblem one
-/// makes, once each. The tables covered only these decks, so only these cards are held to
-/// them: a card implemented later has nothing to agree with, and its derived flags are
-/// whatever its effects say.
-fn tuned_cards() -> Vec<&'static CardDef> {
-    let mut defs: Vec<&'static CardDef> = Vec::new();
-    let decks = [
-        beryl_cards::decks::WU_CONTROL,
-        beryl_cards::decks::VINTAGE_WU_CONTROL,
-    ];
-    for &(_, name) in decks.iter().copied().flatten() {
-        let def = CARDS.get(name).expect("a decklist names implemented cards");
-        for &d in std::iter::once(&def).chain(def.tokens) {
-            if !defs.iter().any(|&known| std::ptr::eq(known, d)) {
-                defs.push(d);
+/// One line for each way `tunings` disagrees with the card definitions: a name no card has,
+/// or a tuned ability that is missing or does not have the shape the tuning expects.
+fn mismatches(tunings: &[Tuning]) -> Vec<String> {
+    let mut found = Vec::new();
+    for tuning in tunings {
+        let Some(def) = CARDS.get(tuning.name) else {
+            found.push(format!("{}: no such card", tuning.name));
+            continue;
+        };
+        let abilities = def.front().abilities;
+        for (tune, expect) in tuning.tuned() {
+            match abilities.get(usize::from(expect.index)) {
+                None => found.push(format!(
+                    "{}: {tune:?} names ability {}, but the front face has {}",
+                    tuning.name,
+                    expect.index,
+                    abilities.len()
+                )),
+                Some(a) if !expect.shape.matches(a) => found.push(format!(
+                    "{}: {tune:?} expects ability {} to be {:?}, but it is {:?}",
+                    tuning.name,
+                    expect.index,
+                    expect.shape,
+                    a.kind()
+                )),
+                Some(_) => {}
             }
         }
     }
-    defs
-}
-
-/// The flags the old tables gave `name`.
-fn flags_before(name: &str) -> (bool, bool, u8, u8, u8, u8) {
-    let bits = |list: &[(&str, u8)]| {
-        list.iter()
-            .filter(|(n, _)| *n == name)
-            .fold(0, |bits, &(_, a)| bits | 1 << a)
-    };
-    (
-        before::WHEELS.contains(&name),
-        before::NEVER_CAST.contains(&name),
-        bits(before::FRIENDLY),
-        bits(before::NEVER),
-        bits(before::DRAWS),
-        bits(before::EMPTIES),
-    )
-}
-
-fn flags(info: CardInfo) -> (bool, bool, u8, u8, u8, u8) {
-    (
-        info.wheel,
-        info.never_cast,
-        info.friendly,
-        info.never,
-        info.draws,
-        info.empties,
-    )
+    found
 }
 
 #[test]
-fn tuned_knowledge_is_what_the_tables_gave() {
-    for def in tuned_cards() {
-        assert_eq!(
-            flags(info(def, Knowledge::Tuned)),
-            flags_before(def.name),
-            "{}: (wheel, never_cast, friendly, never, draws, empties)",
-            def.name
-        );
-    }
+fn every_tuning_names_a_card_and_the_abilities_it_was_tuned_for() {
+    assert_eq!(mismatches(TUNINGS), Vec::<String>::new());
 }
 
-/// The cards whose derived flags differ from the old tables, and how: each table left out an
-/// ability that draws, and the overlay keeps the tuned decks playing as the table had them.
-/// Any other difference is a derivation that disagrees with the tables, to be decided from
-/// the card's Oracle text.
+/// A tuning written as though the card's two loyalty abilities were in the other order is
+/// reported for both, by card and ability.
 #[test]
-fn derivation_differs_from_the_tables_only_where_the_overlay_says() {
-    let expected: &[(&str, u8)] = &[
-        (names::JACE_WIELDER_OF_MYSTERIES, 0b110),
-        (names::TEFERI_TIME_RAVELER, 0b100),
-        (names::SPARAS_HEADQUARTERS, 0b1_0000),
-    ];
-    for def in tuned_cards() {
-        let derived = info(def, Knowledge::Estimate);
-        let (wheel, _, friendly, _, draws, empties) = flags_before(def.name);
-        let extra = expected
+fn a_tuning_on_reordered_abilities_is_reported() {
+    let swapped = [Tuning::value(names::JACE_WIELDER_OF_MYSTERIES, 65)
+        .tuned_as_not_drawing(Expect::ability(1, Shape::Loyalty(-8)))
+        .tuned_as_not_drawing(Expect::ability(2, Shape::Loyalty(1)))];
+    let found = mismatches(&swapped);
+    assert_eq!(found.len(), 2, "{found:?}");
+    assert!(found[0].contains("ability 1"), "{found:?}");
+    assert!(found[1].contains("ability 2"), "{found:?}");
+    assert!(
+        found
             .iter()
-            .find(|(name, _)| *name == def.name)
-            .map_or(0, |&(_, bits)| bits);
-        assert_eq!(
-            (
-                derived.wheel,
-                derived.friendly,
-                derived.draws,
-                derived.empties
-            ),
-            (wheel, friendly, draws | extra, empties),
-            "{}: (wheel, friendly, draws, empties)",
-            def.name
-        );
-        assert!(!derived.never_cast && derived.never == 0, "{}", def.name);
-    }
+            .all(|line| line.starts_with(names::JACE_WIELDER_OF_MYSTERIES)),
+        "{found:?}"
+    );
+}
+
+/// A tuning past the front face's last ability, or for a card that does not exist, is
+/// reported.
+#[test]
+fn a_missing_card_or_ability_is_reported() {
+    let wrong = [
+        Tuning::value(names::SPARAS_HEADQUARTERS, 12)
+            .tuned_as_not_drawing(Expect::ability(5, Shape::Cycling)),
+        Tuning::value("No Such Card", 1),
+    ];
+    assert_eq!(mismatches(&wrong).len(), 2);
 }
 
 #[test]

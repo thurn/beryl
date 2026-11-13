@@ -126,7 +126,7 @@ pub(crate) fn info(def: &CardDef, knowledge: Knowledge) -> CardInfo {
         Knowledge::Estimate => info.value = estimate(def),
         Knowledge::Tuned => {
             info.value = shown(def.front());
-            overlay::apply(def.name, &mut info);
+            overlay::apply(def, &mut info);
         }
     }
     info

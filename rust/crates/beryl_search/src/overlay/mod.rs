@@ -13,8 +13,12 @@
 //! and the abilities the decks were tuned as though they did not draw.
 
 use beryl_cards::names;
+use beryl_engine::card::{Ability, AbilityKind, Behavior, CardDef, CostAction, Effect};
 
 use crate::values::CardInfo;
+
+/// The most abilities one card's tuning names.
+const MOST_TUNED_ABILITIES: usize = 2;
 
 /// One card's hand-tuned knowledge.
 #[derive(Clone, Copy, Debug)]
@@ -24,12 +28,66 @@ struct Tuning {
     /// a game-winning planeswalker is about 90 and a basic land 10.
     value: Option<i16>,
     never_cast: bool,
-    /// Bit `i`: never activate ability `i` of the front face.
-    never: u8,
-    /// Bit `i`: ability `i` of the front face draws its controller cards, but the decks were
-    /// tuned with the policy treating it as one that does not, so it is still played while the
-    /// library runs low. Each entry's comment says why.
-    tuned_as_not_drawing: u8,
+    /// The abilities of the front face it tunes, each with what it expects to find there.
+    abilities: [Option<(Tune, Expect)>; MOST_TUNED_ABILITIES],
+}
+
+/// What a tuning does to one ability.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Tune {
+    /// Never activate it.
+    Never,
+    /// It draws its controller cards, but the decks were tuned with the policy treating it as
+    /// one that does not, so it is still played while the library runs low. Each entry's
+    /// comment says why.
+    AsNotDrawing,
+}
+
+/// An ability of the front face, by its position, and what that ability is expected to be.
+/// A card file that inserts, removes or reorders abilities moves the position; the shape
+/// is what notices. [`apply`] tunes the ability only while it still has the expected shape,
+/// and the overlay's tests report every tuning whose ability does not.
+#[derive(Clone, Copy, Debug)]
+struct Expect {
+    index: u8,
+    shape: Shape,
+}
+
+impl Expect {
+    /// Ability `index` of the front face, expected to have `shape`. The derived flags hold
+    /// only the first eight abilities, so a later one cannot be tuned.
+    const fn ability(index: u8, shape: Shape) -> Expect {
+        assert!(index < 8, "only the first eight abilities can be tuned");
+        Expect { index, shape }
+    }
+}
+
+/// What a tuned ability is expected to be, read from its definition.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Shape {
+    /// A loyalty ability that puts on (or, negative, removes) this many loyalty counters.
+    Loyalty(i8),
+    /// Cycling: "[Cost], Discard this card: Draw a card."
+    Cycling,
+    /// An activated ability that is neither a mana ability nor a loyalty ability.
+    Activated,
+}
+
+impl Shape {
+    fn matches(self, a: &Ability) -> bool {
+        let cost = a.cost();
+        match self {
+            Shape::Loyalty(n) => cost.loyalty_change() == Some(n),
+            Shape::Cycling => {
+                a.kind() == AbilityKind::Activated
+                    && cost.does(CostAction::Discard)
+                    && matches!(a.body(), Behavior::Data(Effect::Draw { .. }))
+            }
+            Shape::Activated => {
+                a.kind() == AbilityKind::Activated && cost.loyalty_change().is_none()
+            }
+        }
+    }
 }
 
 impl Tuning {
@@ -38,8 +96,7 @@ impl Tuning {
             name,
             value: Some(value),
             never_cast: false,
-            never: 0,
-            tuned_as_not_drawing: 0,
+            abilities: [None; MOST_TUNED_ABILITIES],
         }
     }
 
@@ -50,18 +107,29 @@ impl Tuning {
         }
     }
 
-    const fn never(self, ability: u8) -> Tuning {
-        Tuning {
-            never: self.never | 1 << ability,
-            ..self
-        }
+    const fn never(self, ability: Expect) -> Tuning {
+        self.tune(Tune::Never, ability)
     }
 
-    const fn tuned_as_not_drawing(self, ability: u8) -> Tuning {
-        Tuning {
-            tuned_as_not_drawing: self.tuned_as_not_drawing | 1 << ability,
-            ..self
+    const fn tuned_as_not_drawing(self, ability: Expect) -> Tuning {
+        self.tune(Tune::AsNotDrawing, ability)
+    }
+
+    const fn tune(mut self, tune: Tune, ability: Expect) -> Tuning {
+        let mut i = 0;
+        while i < MOST_TUNED_ABILITIES {
+            if self.abilities[i].is_none() {
+                self.abilities[i] = Some((tune, ability));
+                return self;
+            }
+            i += 1;
         }
+        panic!("a tuning names more than MOST_TUNED_ABILITIES abilities");
+    }
+
+    /// The abilities it tunes.
+    fn tuned(&self) -> impl Iterator<Item = (Tune, Expect)> + '_ {
+        self.abilities.iter().flatten().copied()
     }
 }
 
@@ -71,7 +139,8 @@ const TUNINGS: &[Tuning] = &[
     Tuning::value(names::TEFERI_HERO_OF_DOMINARIA, 85),
     // −3: "Return up to one target artifact, creature, or enchantment to its owner's hand. Draw
     // a card." Tuned as removal that is used however low the library is.
-    Tuning::value(names::TEFERI_TIME_RAVELER, 80).tuned_as_not_drawing(2),
+    Tuning::value(names::TEFERI_TIME_RAVELER, 80)
+        .tuned_as_not_drawing(Expect::ability(2, Shape::Loyalty(-3))),
     Tuning::value(names::THE_WANDERING_EMPEROR, 80),
     Tuning::value(names::OVERLORD_OF_THE_MISTMOORS, 75),
     Tuning::value(names::FRACTURED_IDENTITY, 70),
@@ -82,8 +151,8 @@ const TUNINGS: &[Tuning] = &[
     // whose static ability makes drawing from an empty library win, so the policy never held
     // them back for a low library, and the −8 is scored by library size instead.
     Tuning::value(names::JACE_WIELDER_OF_MYSTERIES, 65)
-        .tuned_as_not_drawing(1)
-        .tuned_as_not_drawing(2),
+        .tuned_as_not_drawing(Expect::ability(1, Shape::Loyalty(1)))
+        .tuned_as_not_drawing(Expect::ability(2, Shape::Loyalty(-8))),
     Tuning::value(names::SPHINX_OF_FALSE_CONCLUSIONS, 65),
     Tuning::value(names::ABHORRENT_OCULUS, 60),
     Tuning::value(names::MANA_DRAIN, 60),
@@ -92,7 +161,7 @@ const TUNINGS: &[Tuning] = &[
     Tuning::value(names::ELITE_SPELLBINDER, 55),
     Tuning::value(names::GET_LOST, 55),
     // Its waterbend ability sacrifices it, which returns the permanent it exiled.
-    Tuning::value(names::AANGS_ICEBERG, 55).never(1),
+    Tuning::value(names::AANGS_ICEBERG, 55).never(Expect::ability(1, Shape::Activated)),
     Tuning::value(names::WINDS_OF_ABANDON, 50),
     Tuning::value(names::MALCOLM_ALLURING_SCOUNDREL, 50),
     Tuning::value(names::THIEVING_SKYDIVER, 50),
@@ -120,7 +189,8 @@ const TUNINGS: &[Tuning] = &[
     Tuning::value(names::SEACHROME_COAST, 13),
     // Cycling {3}: "{3}, Discard this card: Draw a card." Tuned as a land whose cycling is used
     // however low the library is.
-    Tuning::value(names::SPARAS_HEADQUARTERS, 12).tuned_as_not_drawing(4),
+    Tuning::value(names::SPARAS_HEADQUARTERS, 12)
+        .tuned_as_not_drawing(Expect::ability(4, Shape::Cycling)),
     Tuning::value(names::PLAINS, 10),
     Tuning::value(names::ISLAND, 10),
     // Its coin flips, 3 damage on half its controller's upkeeps, cost more life over the
@@ -129,17 +199,31 @@ const TUNINGS: &[Tuning] = &[
     Tuning::value(names::MANA_CRYPT, 0).never_cast(),
 ];
 
-/// Applies the tuning for the card named `name`, if it has one, to what was derived for it.
-pub(crate) fn apply(name: &str, info: &mut CardInfo) {
-    let Some(tuning) = TUNINGS.iter().find(|tuning| tuning.name == name) else {
+/// Applies the tuning for the card `def`, if it has one, to what was derived for it. An
+/// ability that no longer has the shape its tuning expects is left as derived.
+pub(crate) fn apply(def: &CardDef, info: &mut CardInfo) {
+    let Some(tuning) = TUNINGS.iter().find(|tuning| tuning.name == def.name) else {
         return;
     };
     if let Some(value) = tuning.value {
         info.value = value;
     }
     info.never_cast |= tuning.never_cast;
-    info.never |= tuning.never;
-    info.draws &= !tuning.tuned_as_not_drawing;
+    let abilities = def.front().abilities;
+    for (tune, expect) in tuning.tuned() {
+        let index = usize::from(expect.index);
+        if !abilities
+            .get(index)
+            .is_some_and(|a| expect.shape.matches(a))
+        {
+            continue;
+        }
+        let bit = 1 << expect.index;
+        match tune {
+            Tune::Never => info.never |= bit,
+            Tune::AsNotDrawing => info.draws &= !bit,
+        }
+    }
 }
 
 #[cfg(test)]
