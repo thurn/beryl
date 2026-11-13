@@ -103,6 +103,17 @@ Mac, and its fast check skips the browser checks and `motion` (see
   so if a push still times out, some step is slow or hung. Find it before
   pushing again.
 
+## Recording CPU use
+
+`just cpu sample` samples every process's CPU time every 2 seconds and appends
+one row per minute to `$BERYL_CACHE/cpu/samples.jsonl`; leave it running in a
+terminal while agents work. `just cpu report --hours 3` sums the rows into cores
+used by context (slow CI, fast check, session, editor, desktop, browser, other),
+kind of work (compile, Rust test, browser, oracle, simulator, editor, desktop),
+worktree and the largest executables no rule names, with per-minute and burst
+figures and `top`'s own busy figure for comparison. `cpu.py` explains how
+processes are attributed.
+
 ## Shared machine resources
 
 - The machine runs at most half its core count's worth of browser pages at once,

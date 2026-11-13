@@ -142,6 +142,11 @@ scale *args:
 speed *args:
     {{ by }} speed "$@"
 
+# Record where the CPU goes, by session and kind of work (sample [--interval S --duration S], report [--hours H])
+[group('bench')]
+cpu *args:
+    {{ by }} cpu "$@"
+
 # Gungraun instruction counts in the Lima VM (cargo bench flags; default --bench '*_counts')
 [group('bench')]
 bench-count *args:
