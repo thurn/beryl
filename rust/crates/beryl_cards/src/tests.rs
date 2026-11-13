@@ -18,6 +18,7 @@ mod derive;
 mod facts;
 mod knowledge;
 mod props;
+mod store;
 mod vocabulary;
 
 /// This crate's directory, read at run time: a test binary from the shared target directory

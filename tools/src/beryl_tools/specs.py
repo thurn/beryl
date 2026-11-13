@@ -37,7 +37,17 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from . import card_files, card_store, cards, checks, paths, scryfall, system, warm
+from . import (
+    card_files,
+    card_store,
+    cards,
+    checks,
+    paths,
+    scryfall,
+    store_cards,
+    system,
+    warm,
+)
 from . import nearest as nearest_cards
 from .shots import (
     PHONE,
@@ -95,8 +105,11 @@ slug = nearest_cards.slug
 
 
 def implemented() -> set[str]:
-    """The slugs of the implemented cards: each card with a file, by its name."""
-    return {slug(name) for name in card_files.implemented()}
+    """The slugs of the implemented cards: each card with a file and each complete from the
+    card store, which has none (store_cards.py), by its name. A store card's spec is generated
+    only when someone asks for it by name."""
+    names = [*card_files.implemented(), *store_cards.names()]
+    return {slug(name) for name in names}
 
 
 def oracle(name: str) -> str | None:

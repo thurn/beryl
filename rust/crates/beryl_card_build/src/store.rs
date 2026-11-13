@@ -19,6 +19,8 @@ pub struct Card {
 pub struct Store {
     /// By [`crate::names::card_module`] of the name.
     by_module: HashMap<String, Vec<Card>>,
+    /// Each card's own name, not a face's, with its first set, sorted by name.
+    cards: Vec<Card>,
     /// The names of its tokens and emblems, by [`crate::names::card_module`] of each.
     tokens_by_module: HashMap<String, Vec<String>>,
     /// The store's text, which [`beryl_card_store::Store`] searches for a record.
@@ -110,8 +112,17 @@ impl Store {
                 set.ok_or(format!("{name}: an alias of {target}, which is no card"))?,
             )?;
         }
+        let mut cards: Vec<Card> = sets
+            .iter()
+            .map(|(&name, set)| Card {
+                name: name.to_string(),
+                set: set.clone(),
+            })
+            .collect();
+        cards.sort_unstable_by(|a, b| a.name.cmp(&b.name));
         Ok(Self {
             by_module,
+            cards,
             tokens_by_module,
             text: text.to_string(),
         })
@@ -152,6 +163,14 @@ impl Store {
                 "{set}/{module}.rs: more than one card of {set} is spelled {module}"
             )),
         }
+    }
+
+    /// The cards first printed in one of `sets`, by name: each card's own name, not its faces'.
+    pub fn first_printed_in<'s>(&'s self, sets: &'s [String]) -> impl Iterator<Item = &'s str> {
+        self.cards
+            .iter()
+            .filter(|card| sets.contains(&card.set))
+            .map(|card| card.name.as_str())
     }
 
     /// The name a `names::<constant>` means.

@@ -70,9 +70,30 @@ pub fn cards() -> &'static [Spec] {
     &library().specs
 }
 
-/// The spec of the card `card` names, by its name or its slug, generating nothing.
+/// The spec of the card `card` names, by its name or its slug, generating nothing. A card
+/// complete from the card store, which has no file, gets its spec on its first request, and no
+/// list of every card's spec ([`cards`]) holds it: there are hundreds.
 pub fn spec(card: &str) -> Option<&'static Spec> {
-    library().find(card)
+    library().find(card).or_else(|| from_store(card))
+}
+
+/// The spec of the card complete from the store that `card` names, by its name or its slug,
+/// made once and kept.
+fn from_store(card: &str) -> Option<&'static Spec> {
+    static MADE: std::sync::Mutex<Vec<&'static Spec>> = std::sync::Mutex::new(Vec::new());
+    let def = CARDS
+        .from_store()
+        .iter()
+        .find(|d| d.name == card || slug(d.name) == card)?;
+    let mut made = MADE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(&spec) = made.iter().find(|s| s.card == def.name) {
+        return Some(spec);
+    }
+    let spec: &'static Spec = Box::leak(Box::new(Spec::new(def)));
+    made.push(spec);
+    Some(spec)
 }
 
 /// New specs of `cards`, by name, apart from the library's: a test that changes how their games
@@ -118,12 +139,35 @@ pub fn generate(specs: &[&Spec]) {
     });
 }
 
-/// The scenarios in `card`'s file.
+/// The scenarios in `card`'s file. A card complete from the card store has no file: its
+/// scenarios are the rules library's that play it and those generated from its definition
+/// (`beryl_cards::derive`), made once on its first request.
 fn scenarios(card: &str) -> &'static [Scenario] {
-    beryl_cards::SCENARIOS
+    static MADE: std::sync::Mutex<Vec<(&'static str, &'static [Scenario])>> =
+        std::sync::Mutex::new(Vec::new());
+    if let Some((_, written)) = beryl_cards::SCENARIOS
         .iter()
         .find(|(name, _)| *name == card)
-        .map_or(&[][..], |(_, scenarios)| *scenarios)
+    {
+        return written;
+    }
+    let Some(def) = CARDS.from_store().iter().find(|d| d.name == card) else {
+        return &[];
+    };
+    let mut made = MADE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(&(_, scenarios)) = made.iter().find(|(name, _)| *name == card) {
+        return scenarios;
+    }
+    let mut all: Vec<Scenario> = beryl_cards::library::by_card()
+        .filter(|&(name, _)| name == card)
+        .flat_map(|(_, scenarios)| scenarios.iter().copied())
+        .collect();
+    all.extend(beryl_cards::derive::for_card(def).scenarios);
+    let scenarios: &'static [Scenario] = all.leak();
+    made.push((def.name, scenarios));
+    scenarios
 }
 
 /// One card's spec.

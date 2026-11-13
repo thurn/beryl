@@ -99,6 +99,11 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
     ("library", names::JACE_THE_MIND_SCULPTOR, library::PUT_BACK),
     ("library", names::SUBTLETY, library::TOP_OR_BOTTOM),
     (
+        "keywords::evasion",
+        keywords::evasion::FLYER,
+        keywords::evasion::SCENARIOS,
+    ),
+    (
         "keywords::flashback",
         names::SNAPCASTER_MAGE,
         keywords::flashback::SCENARIOS,

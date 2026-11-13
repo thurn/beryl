@@ -13,7 +13,10 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   depend only on the shared vocabulary crate.
 - Nobody maintains lists of card files by hand. Build scripts
   (`beryl_card_build`) generate each set crate's module list and tables, and
-  `beryl_cards`' registry and `names` from them.
+  `beryl_cards`' registry and `names` from them. A creature whose rules text is
+  only keywords the engine has needs no file: its set crate's build writes it
+  from the card store (`just card path <name>` says so), and `just card crates`
+  writes the set crates.
 - Nobody types a mana cost or type line either. Each card face starts from a
   `printed::` constant generated from the card store, and each card file's
   header comment is generated too (`just card header`).

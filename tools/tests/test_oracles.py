@@ -125,7 +125,9 @@ def fake_oracles(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
         scenarios = [{**e, "status": "pass"} for e in entries]
         return {"pass": len(scenarios), "fail": 0, "scenarios": scenarios}
 
-    monkeypatch.setattr(oracles, "dump_scenarios", lambda path, log: SCENARIOS)
+    monkeypatch.setattr(
+        oracles, "dump_scenarios", lambda path, log, cards=(): SCENARIOS
+    )
     monkeypatch.setattr(oracles, "require_built", lambda: None)
     monkeypatch.setattr(oracles, "check_xmage", check)
     monkeypatch.setattr(oracles, "check_forge", check)

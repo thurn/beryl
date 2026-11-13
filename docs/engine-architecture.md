@@ -438,6 +438,18 @@ pub type Flow = Result<(), Stop>;    // Err: paused at a question, or out of roo
   type, subtype, color, power, toughness, loyalty or face name fails the build.
   Each file opens with a generated header of its card's printed faces, which
   `just card header` rewrites and the `names` lane holds to the store.
+- A card complete from the store has no file (plan K2: "keyword-only creatures
+  need no authoring"): a single-faced creature with a cost the engine can hold
+  whose Oracle text, less reminder text, is empty or only keywords of
+  `Keywords`, read from `characteristics.rs` so the rule follows that list. Its
+  set crate's build script writes its `CardDef`, its printed face with those
+  keywords, into `STORE_CARDS` (`beryl_card_build`'s `complete`), and a file for
+  it, if one is written, replaces that definition. `CARDS.get` finds these
+  cards, but `CARDS.cards()` and `SCENARIOS`, which tests and sweeps walk, hold
+  only the cards with files; a store card's spec and generated scenarios are
+  made when someone names it (`/specs/<card>`, `just oracle <card>`). The set
+  crates themselves are written from `data/set-groups.json` by
+  `just card crates`, which the `card-crates` check holds current.
 
 ### 6.3 Bodies
 

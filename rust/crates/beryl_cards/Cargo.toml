@@ -24,11 +24,16 @@ beryl_scenario_types = { path = "../beryl_scenario_types", optional = true }
 # Cargo makes this the one list kept by hand, with the feature's below; the build script says
 # so when a new crate is missing from either.
 cards_1993_1994 = { path = "../../cards/cards_1993_1994" }
+cards_1994_1996 = { path = "../../cards/cards_1994_1996" }
 cards_1996_1998 = { path = "../../cards/cards_1996_1998" }
+cards_1999_2000 = { path = "../../cards/cards_1999_2000" }
+cards_2001_2002 = { path = "../../cards/cards_2001_2002" }
 cards_2003_2005 = { path = "../../cards/cards_2003_2005" }
 cards_2005_2007 = { path = "../../cards/cards_2005_2007" }
+cards_2007_2009 = { path = "../../cards/cards_2007_2009" }
 cards_2009_2011 = { path = "../../cards/cards_2009_2011" }
 cards_2011_2013 = { path = "../../cards/cards_2011_2013" }
+cards_2013_2014 = { path = "../../cards/cards_2013_2014" }
 cards_2014_2016 = { path = "../../cards/cards_2014_2016" }
 cards_2016_2017 = { path = "../../cards/cards_2016_2017" }
 cards_2018_2019 = { path = "../../cards/cards_2018_2019" }
@@ -40,6 +45,7 @@ cards_2022_2023 = { path = "../../cards/cards_2022_2023" }
 cards_2023_2024 = { path = "../../cards/cards_2023_2024" }
 cards_2024_2025 = { path = "../../cards/cards_2024_2025" }
 cards_2025 = { path = "../../cards/cards_2025" }
+cards_2025_2026 = { path = "../../cards/cards_2025_2026" }
 cards_2026 = { path = "../../cards/cards_2026" }
 
 [build-dependencies]
@@ -61,11 +67,16 @@ scenarios = [
     "dep:beryl_scenario",
     "dep:beryl_scenario_types",
     "cards_1993_1994/scenarios",
+    "cards_1994_1996/scenarios",
     "cards_1996_1998/scenarios",
+    "cards_1999_2000/scenarios",
+    "cards_2001_2002/scenarios",
     "cards_2003_2005/scenarios",
     "cards_2005_2007/scenarios",
+    "cards_2007_2009/scenarios",
     "cards_2009_2011/scenarios",
     "cards_2011_2013/scenarios",
+    "cards_2013_2014/scenarios",
     "cards_2014_2016/scenarios",
     "cards_2016_2017/scenarios",
     "cards_2018_2019/scenarios",
@@ -77,6 +88,7 @@ scenarios = [
     "cards_2023_2024/scenarios",
     "cards_2024_2025/scenarios",
     "cards_2025/scenarios",
+    "cards_2025_2026/scenarios",
     "cards_2026/scenarios",
 ]
 

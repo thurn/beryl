@@ -18,11 +18,14 @@ and reads nothing under Forge's checkout. A part whose source is missing (offlin
 rulings cached, no XMage checkout) says so and the brief goes on. A name the store lacks exits
 1, naming the closest names it has.
 
+`card crates` writes the set crates under rust/cards from data/set-groups.json (card_crates.py).
+
 `card header <name>` (or `--all`) rewrites a card file's generated header (card_header.py).
 
 `card path <name>` prints the card's file, `rust/cards/<crate>/<set>/<card>.rs` by its first
-printing (set_groups.py). A card with no file yet is a record in the store alone: it says so,
-with where the file would go, and exits 1.
+printing (set_groups.py). A card complete from the store (store_cards.py) needs no file: it
+says so and exits 0. Another card with no file yet is a record in the store alone: it says so,
+with where the file would go, and exits 1. `card brief` says so of a complete card too.
 """
 
 from __future__ import annotations
@@ -39,6 +42,7 @@ from pathlib import Path
 from typing import cast
 
 from . import (
+    card_crates,
     card_files,
     card_header,
     card_store,
@@ -46,6 +50,7 @@ from . import (
     paths,
     scryfall,
     set_groups,
+    store_cards,
     vocabulary,
     xmage_classes,
 )
@@ -148,6 +153,8 @@ def brief(record: Json, sources: Sources) -> str:
     name = str(record["name"])
     text = nearest.rules_text(record)
     parts = [f"# {name}\n", section("Oracle text", oracle_text(record))]
+    if (complete := complete_note(record, sources)) is not None:
+        parts.append(section("Complete from the store", complete))
 
     found = rulings(str(record["oracle_id"]))
     if isinstance(found, str):
@@ -208,6 +215,25 @@ def where(path: Path) -> str:
     ).as_posix()
 
 
+def complete_note(record: Json, sources: Sources) -> str | None:
+    """What to say of a card complete from the store (store_cards.py), whose definition the
+    build writes; None for a card that needs a file."""
+    found = store_cards.complete(record)
+    if found is None:
+        return None
+    path = set_groups.SetGroups().card_path(record, sources.cards)
+    said = ", ".join(k.lower().replace("_", " ") for k in found) or "no abilities"
+    if path.is_file():
+        return (
+            f"Its record is all it needs ({said}), but it has a file, {where(path)}, "
+            "which the build uses instead."
+        )
+    return (
+        f"No file is needed: {set_groups.SetGroups().group_of(record)}'s build script writes "
+        f"its definition from its record ({said})."
+    )
+
+
 def run_brief(args: argparse.Namespace, sources: Sources = Sources()) -> int:
     with card_store.Store(sources.store) as store:
         found = find(args.name, store)
@@ -227,6 +253,12 @@ def run_path(args: argparse.Namespace, sources: Sources = Sources()) -> int:
     path = set_groups.SetGroups().card_path(found, sources.cards)
     if path.is_file():
         print(where(path))
+        return 0
+    if store_cards.complete(found) is not None:
+        print(
+            f"{found['name']} is complete from the store, with no file: the build of "
+            f"{set_groups.SetGroups().group_of(found)} writes its definition"
+        )
         return 0
     print(
         f"card: {found['name']} is a record in the card store with no file; its file "
@@ -252,3 +284,4 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     w.add_argument("name", help="the card's name or slug, e.g. 'Lightning Bolt'")
     w.set_defaults(func=run_path)
     card_header.register(commands)
+    card_crates.register(commands)

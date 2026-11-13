@@ -196,11 +196,16 @@ dependencies = [
  "beryl_scenario",
  "beryl_scenario_types",
  "cards_1993_1994",
+ "cards_1994_1996",
  "cards_1996_1998",
+ "cards_1999_2000",
+ "cards_2001_2002",
  "cards_2003_2005",
  "cards_2005_2007",
+ "cards_2007_2009",
  "cards_2009_2011",
  "cards_2011_2013",
+ "cards_2013_2014",
  "cards_2014_2016",
  "cards_2016_2017",
  "cards_2018_2019",
@@ -212,6 +217,7 @@ dependencies = [
  "cards_2023_2024",
  "cards_2024_2025",
  "cards_2025",
+ "cards_2025_2026",
  "cards_2026",
  "serde_json",
 ]
@@ -465,7 +471,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "cards_1994_1996"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
 name = "cards_1996_1998"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_1999_2000"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2001_2002"
 version = "0.1.0"
 dependencies = [
  "beryl_card",
@@ -495,6 +531,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cards_2007_2009"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
 name = "cards_2009_2011"
 version = "0.1.0"
 dependencies = [
@@ -506,6 +552,16 @@ dependencies = [
 
 [[package]]
 name = "cards_2011_2013"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2013_2014"
 version = "0.1.0"
 dependencies = [
  "beryl_card",
@@ -616,6 +672,16 @@ dependencies = [
 
 [[package]]
 name = "cards_2025"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_card_build",
+ "beryl_card_shared",
+ "beryl_scenario_types",
+]
+
+[[package]]
+name = "cards_2025_2026"
 version = "0.1.0"
 dependencies = [
  "beryl_card",

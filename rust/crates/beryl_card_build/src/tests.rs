@@ -1,5 +1,8 @@
 use std::path::{Path, PathBuf};
 
+mod complete;
+
+use crate::complete::Group;
 use crate::files::{card_files, set_crates};
 use crate::names::{card_module, constant, set_module};
 use crate::printed::Subtypes;
@@ -96,7 +99,12 @@ fn subtypes() -> Subtypes {
 
 /// `set_crate_source` of the crate at `dir` over the test store.
 fn crate_source(dir: &Path, store: &Store) -> Result<String, String> {
-    set_crate_source(dir, "../crate", &mut Printed::new(store, &subtypes()))
+    set_crate_source(
+        dir,
+        "../crate",
+        &Group::NONE,
+        &mut Printed::new(store, &subtypes()),
+    )
 }
 
 /// A fresh directory under the system's temporary one, removed when dropped.
@@ -217,7 +225,13 @@ fn a_new_file_is_listed_with_no_other_edit() {
         .map(|(name, _)| name)
         .collect();
     assert_eq!(crates, ["cards_1993"]);
-    let (tables, names) = registry_source(&scratch.0, &scratch.0.join("decks"), &store).unwrap();
+    let (tables, names) = registry_source(
+        &scratch.0,
+        &scratch.0.join("decks"),
+        &scratch.0.join("own"),
+        &store,
+    )
+    .unwrap();
     assert!(tables.contains("    cards_1993::CARDS,\n"), "{tables}");
     assert!(tables.contains("    cards_1993::SCENARIOS,\n"), "{tables}");
     for constant in ["FIRE_ICE", "FOREST", "ISLAND", "LIM_DULS_VAULT", "PLAINS"] {
@@ -311,8 +325,13 @@ fn typed_or_unknown_characteristics_fail_the_build() {
     std::fs::remove_file(island).unwrap();
     scratch.write("lea/plains.rs", "printed::PLAINS");
     let without_plains = Subtypes::named(&["Island"]);
-    let error =
-        set_crate_source(&scratch.0, "..", &mut Printed::new(&store, &without_plains)).unwrap_err();
+    let error = set_crate_source(
+        &scratch.0,
+        "..",
+        &Group::NONE,
+        &mut Printed::new(&store, &without_plains),
+    )
+    .unwrap_err();
     assert!(
         error.contains("Plains: no subtype Plains in data/catalogs.json"),
         "{error}"

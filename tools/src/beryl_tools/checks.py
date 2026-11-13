@@ -48,6 +48,7 @@ from pathlib import Path
 from . import (
     board_door,
     build_paths,
+    card_crates,
     card_files,
     card_header,
     card_names,
@@ -60,6 +61,7 @@ from . import (
     runlog,
     script_checks,
     speed,
+    store_cards,
     system,
     two_player,
     verdicts,
@@ -564,13 +566,16 @@ def ui_lane() -> Lane:
     )
 
 
-def names_lane(cited: list[str] | None = None, fetch: bool = False) -> Lane:
+def names_lane(
+    cited: list[str] | None = None, fetch: bool = False, crates: bool | None = None
+) -> Lane:
     """No card name in generic code, held to the burn-down list (card_names.py), no other
     player of two, no board door and no failed push thrown away in rules code (two_player.py,
     board_door.py, discarded_push.py), and every rules citation held to the pinned release
     (citations.py) and card file header to the card store (card_header.py): in the files
     `cited`, or with None in the whole tree, fetching the release's text if `fetch` and it is
-    not cached.
+    not cached. With `crates` (by default when `cited` is None), the set crates are held to
+    what `just card crates` writes (card_crates.py).
     """
     checks = [sys.executable, "-m", "beryl_tools.checks"]
     lane = Lane("names")
@@ -582,6 +587,8 @@ def names_lane(cited: list[str] | None = None, fetch: bool = False) -> Lane:
         headers = [p for p in cited or [] if card_files.FILE.match(p)]
         if cited is None or headers:
             lane.step("card-headers", [*checks, "card-headers", *headers])
+    if crates or (crates is None and cited is None):
+        lane.step("card-crates", [*checks, "card-crates"])
     return lane
 
 
@@ -673,8 +680,18 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
         lanes.append(ui_lane())
     # The changed files that may cite the rules, held to the cached release's text.
     cited = None if every else [p for p in changed or [] if citations.cites(p)]
-    if cited or touched(r"^(tools|rust|ui)/|^data/card-names-allowlist\.json$"):
-        lanes.append(names_lane(cited))
+    # The set crates as `just card crates` writes them: a card file, a store refresh, a new set
+    # group or a keyword added to the engine can call for a new one.
+    inputs = re.escape(store_cards.KEYWORDS_SOURCE_REL)
+    crates = every or touched(
+        rf"^rust/cards/|^data/(card-store\.tsv|set-groups\.json)$|^{inputs}$"
+    )
+    if (
+        cited
+        or crates
+        or touched(r"^(tools|rust|ui)/|^data/card-names-allowlist\.json$")
+    ):
+        lanes.append(names_lane(cited, crates=crates))
     # The browser checks the change can break, as many as fit the budget (plan K19); none on
     # Windows (WINDOWS_SKIPS).
     if not every and touched(r"^(rust|ui)/") and not system.WINDOWS:
@@ -767,6 +784,7 @@ if __name__ == "__main__":
         "fast-rust-tests": fast_rust_tests_step,
         "card-names": card_names.step,
         "card-headers": card_header.step,
+        "card-crates": card_crates.step,
         "file-length": file_length.step,
         "two-player": two_player.step,
         "board-door": board_door.step,

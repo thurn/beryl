@@ -155,56 +155,23 @@ impl ManaSet {
 /// that are not a card's printed mana cost, such as a kicker cost or what "unless they pay"
 /// asks for.
 ///
-/// It reads the symbols a [`ManaCost`] can hold
-/// ([CR 107.4](https://yawgatog.com/resources/magic-rules/#R1074)): the colored and
-/// colorless symbols `{W}`, `{U}`, `{B}`, `{R}`, `{G}` and `{C}`, numerical symbols such as
-/// `{3}`, and the variable symbol `{X}`.
+/// It reads the symbols a [`ManaCost`] can hold, as [`crate::mana_notation::read`] says.
 ///
 /// # Panics
 ///
 /// On anything else, hybrid, Phyrexian and snow symbols included: in a `const` or `static`,
 /// at compile time.
 pub const fn mana(notation: &str) -> ManaCost {
-    let bytes = notation.as_bytes();
-    let mut cost = ManaCost::NONE;
-    let mut i = 0;
-    while i < bytes.len() {
-        assert!(bytes[i] == b'{', "a mana symbol opens with a brace");
-        i += 1;
-        let start = i;
-        let mut number: u32 = 0;
-        while i < bytes.len() && bytes[i].is_ascii_digit() {
-            number = number * 10 + (bytes[i] - b'0') as u32;
-            assert!(number <= 255, "more generic mana than a cost holds");
-            i += 1;
-        }
-        if i > start {
-            cost.generic += number as u8;
-        } else {
-            assert!(i < bytes.len(), "a mana symbol was left open");
-            match bytes[i] {
-                b'W' => cost.symbols[ManaColor::White as usize] += 1,
-                b'U' => cost.symbols[ManaColor::Blue as usize] += 1,
-                b'B' => cost.symbols[ManaColor::Black as usize] += 1,
-                b'R' => cost.symbols[ManaColor::Red as usize] += 1,
-                b'G' => cost.symbols[ManaColor::Green as usize] += 1,
-                b'C' => cost.symbols[ManaColor::Colorless as usize] += 1,
-                b'X' => cost.x += 1,
-                _ => panic!("a mana symbol a cost cannot hold"),
-            }
-            i += 1;
-        }
-        assert!(
-            i >= bytes.len() || bytes[i] != b'/',
-            "a mana symbol a cost cannot hold"
-        );
-        assert!(
-            i < bytes.len() && bytes[i] == b'}',
-            "a mana symbol closes with a brace"
-        );
-        i += 1;
+    match crate::mana_notation::read(notation) {
+        // The notation's symbols are in the order W, U, B, R, G, C, as `ManaColor` indexes
+        // them.
+        Ok(read) => ManaCost {
+            generic: read.generic,
+            symbols: read.symbols,
+            x: read.x,
+        },
+        Err(why) => panic!("{}", why),
     }
-    cost
 }
 
 #[cfg(test)]

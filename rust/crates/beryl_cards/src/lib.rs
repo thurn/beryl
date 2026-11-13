@@ -5,7 +5,9 @@
 //! (`data/set-groups.json`; `just card path <name>` prints it). No list of them is kept by
 //! hand: each set crate's build script writes its tables from its directories, and this
 //! crate's writes [`CARDS`] and [`SCENARIOS`] over those, crate by crate, then set, then file
-//! (`beryl_card_build`, plan K8). Nothing may depend on that order: a game numbers its cards
+//! (`beryl_card_build`, plan K8). The cards complete from the card store, single-faced
+//! creatures with no abilities but keywords the engine has, have no file: each set crate's build
+//! writes their definitions from their records. Nothing may depend on that order: a game numbers its cards
 //! from its decklists (`GameTable`), and everything else looks a card up by name.
 
 pub mod decks;
@@ -43,8 +45,13 @@ const fn total<T>(parts: &[&[T]]) -> usize {
 
 /// The entries of `parts` in one array, in order: `N` is their [`total`].
 const fn gathered<T: Copy, const N: usize>(parts: &[&[T]]) -> [T; N] {
-    // Any entry fills the array until each is written; a registry of no cards has none.
-    let mut all = [parts[0][0]; N];
+    // Any entry fills the array until each is written: the first part's that has one. A set
+    // crate may have no card files, or no cards complete from the store.
+    let mut first = 0;
+    while parts[first].is_empty() {
+        first += 1;
+    }
+    let mut all = [parts[first][0]; N];
     let (mut at, mut part) = (0, 0);
     while part < parts.len() {
         let mut entry = 0;
@@ -60,8 +67,12 @@ const fn gathered<T: Copy, const N: usize>(parts: &[&[T]]) -> [T; N] {
 
 static ALL_CARDS: [&CardDef; total(SET_CARDS)] = gathered(SET_CARDS);
 
-/// Every card Beryl implements.
-pub static CARDS: CardTable = CardTable::new(&ALL_CARDS);
+static ALL_STORE_CARDS: [&CardDef; total(SET_STORE_CARDS)] = gathered(SET_STORE_CARDS);
+
+/// Every card Beryl implements: those written in files, which [`CardTable::cards`] lists and
+/// tests and sweeps walk, and those complete from the card store, which have no file and which
+/// [`CardTable::get`] finds by name (`beryl_card_build`'s `complete`).
+pub static CARDS: CardTable = CardTable::with_store(&ALL_CARDS, &ALL_STORE_CARDS);
 
 #[cfg(feature = "scenarios")]
 static ALL_SCENARIOS: [(&str, &[beryl_scenario::Scenario]); total(SET_SCENARIOS)] =

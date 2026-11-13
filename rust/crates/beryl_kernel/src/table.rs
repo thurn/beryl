@@ -17,30 +17,48 @@ use crate::rule_changes::{self, RuleChanges, RuleId, RuleKind, Rules, Unchecked}
 use crate::static_ability::{self, Unapplied};
 use crate::subtypes::{GameSubtypes, SubtypeNumbers};
 
-/// Every card the program knows, built once and shared by every thread as a `&'static`.
+/// Every card the program knows, built once and shared by every thread as a `&'static`: the
+/// cards written in files, which [`CardTable::cards`] lists, and the cards complete from the
+/// card store, whose definitions the build writes with no file (`beryl_card_build`'s
+/// `complete`). [`CardTable::get`] finds either. Tests, generators and sweeps walk only
+/// [`CardTable::cards`], so a few hundred store cards add nothing to them; a game numbers its
+/// cards from its decklists (`GameTable`), so neither list's order reaches a game.
 #[derive(Debug)]
 pub struct CardTable {
     cards: &'static [&'static CardDef],
+    from_store: &'static [&'static CardDef],
     /// Each name's first card, built on first use by [`CardTable::get`]. Never iterated: the order
     /// the engine sees is [`CardTable::cards`]'s.
     by_name: std::sync::OnceLock<std::collections::HashMap<&'static str, &'static CardDef>>,
 }
 
 impl CardTable {
+    /// A table of the cards written in files alone.
     pub const fn new(cards: &'static [&'static CardDef]) -> Self {
+        Self::with_store(cards, &[])
+    }
+
+    /// A table of the cards written in files, `cards`, and those complete from the card store,
+    /// `from_store`. A card of both names is found as its file defines it.
+    pub const fn with_store(
+        cards: &'static [&'static CardDef],
+        from_store: &'static [&'static CardDef],
+    ) -> Self {
         Self {
             cards,
+            from_store,
             by_name: std::sync::OnceLock::new(),
         }
     }
 
-    /// The card called `name`: the first of that name in the table, as a scan of
-    /// [`CardTable::cards`] would find it.
+    /// The card called `name`: the first of that name among [`CardTable::cards`], as a scan
+    /// would find it, else the card complete from the store of that name.
     pub fn get(&self, name: &str) -> Option<&'static CardDef> {
         self.by_name
             .get_or_init(|| {
-                let mut map = std::collections::HashMap::with_capacity(self.cards.len());
-                for &card in self.cards {
+                let all = self.cards.len() + self.from_store.len();
+                let mut map = std::collections::HashMap::with_capacity(all);
+                for &card in self.cards.iter().chain(self.from_store) {
                     map.entry(card.name).or_insert(card);
                 }
                 map
@@ -49,9 +67,17 @@ impl CardTable {
             .copied()
     }
 
+    /// The cards written in files, which tests, generators and sweeps walk.
     #[inline]
     pub fn cards(&self) -> &'static [&'static CardDef] {
         self.cards
+    }
+
+    /// The cards complete from the card store, with no file: found by [`CardTable::get`] and
+    /// walked by nothing that runs over every card.
+    #[inline]
+    pub fn from_store(&self) -> &'static [&'static CardDef] {
+        self.from_store
     }
 }
 

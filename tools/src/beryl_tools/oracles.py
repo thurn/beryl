@@ -521,8 +521,10 @@ def apply_gaps(oracle: str, result: dict[str, object]) -> list[str]:
     return sorted(stale)
 
 
-def dump_scenarios(path: Path, log: Path) -> list[dict[str, object]]:
-    """Every card scenario and the generated ones, as `beryl_scenario dump` writes them."""
+def dump_scenarios(path: Path, log: Path, cards: list[str]) -> list[card_store.Json]:
+    """Every card scenario and the generated ones, as `beryl_scenario dump` writes them, and
+    those generated for each of `cards` complete from the card store (store_cards.py).
+    """
     run(
         [
             "cargo",
@@ -539,6 +541,7 @@ def dump_scenarios(path: Path, log: Path) -> list[dict[str, object]]:
             str(path),
             "--generated",
             str(GENERATED),
+            *(arg for card in cards for arg in ("--card", card)),
         ],
         log,
         paths.RUST,
@@ -708,7 +711,7 @@ def oracle(args: argparse.Namespace) -> int:
         # own: two runs may dump at once.
         with tempfile.TemporaryDirectory(prefix="beryl-oracle-") as dump:
             entries = dump_scenarios(
-                Path(dump) / "scenarios.json", log_dir() / "dump.log"
+                Path(dump) / "scenarios.json", log_dir() / "dump.log", args.cards
             )
         # Cards named with --select are a rerun's or a bisection's, narrowing the selection.
         every = sorted({cast(str, e["card"]) for e in entries})

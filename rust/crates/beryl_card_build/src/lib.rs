@@ -19,6 +19,7 @@
 //! cost, type, subtype, color, power, toughness, loyalty or face name fails the build.
 
 pub mod catalogs;
+pub mod complete;
 pub mod files;
 mod generate;
 pub mod names;
