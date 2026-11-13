@@ -308,7 +308,6 @@ possible, pixel for pixel, use the `arena-pixel-match` skill.
 - Do not directly reference planning documents or beads in code (e.g. "plan
   K16"), this gets stale fast. If you touch code with such references, delete
   them.
-- Timeouts which fail CI are forbidden. Write tests which deterministically
-  fail, delete flaky tests. Infrastructure should file a bead when tests are
-  slow, not block. Slow integration tests are strongly discouraged, prefer
-  faster testing strategies.
+- Timeouts only catch hangs: a slow test or run files a bead, never fails CI.
+  Tests fail deterministically; delete flaky ones. Avoid slow integration tests:
+  prefer a fast test that keeps most of their value.
