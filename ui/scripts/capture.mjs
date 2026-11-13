@@ -200,8 +200,8 @@ export async function settle(page) {
  * its own clock's frames (src/stage/clock.ts), after the render that brought the view, and
  * `settle` cannot see that. Done once the cards' transforms are the same three frames running.
  * `timeout` only guards against a hang: a loaded machine stretches a script's play well past
- * its stage time. */
-export async function still(page, timeout = 20000) {
+ * its stage time, so the default is far above a healthy wait. */
+export async function still(page, timeout = 120000) {
     await page.evaluate(async (timeout) => {
         const frame = () => new Promise((r) => requestAnimationFrame(r));
         const sample = () =>

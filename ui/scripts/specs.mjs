@@ -31,7 +31,7 @@ import {
     viewport,
     warm,
     LAYOUT,
-    LONGEST,
+    HANG_MS,
 } from "./moments.mjs";
 
 /** The margin around a cropped element. */
@@ -131,14 +131,14 @@ for (const spec of specs) {
                             { waitUntil: "load" },
                         );
                         await page.waitForSelector("[data-life]", {
-                            timeout: LONGEST,
+                            timeout: HANG_MS,
                         });
                         await play(live);
                         // The page is settled when the stage is at rest.
                         await page.waitForFunction(
                             `(${rest})().settled`,
                             undefined,
-                            { timeout: LONGEST },
+                            { timeout: HANG_MS },
                         );
                         await settle(page);
                         if (

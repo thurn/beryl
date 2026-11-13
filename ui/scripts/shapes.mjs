@@ -61,6 +61,7 @@ import {
     workers,
 } from "./capture.mjs";
 import { CHECK_SECONDS, HangError, hangGuard } from "./hang.mjs";
+import { HANG_MS } from "./moments.mjs";
 import {
     cardsUp,
     carry as carryTo,
@@ -290,7 +291,7 @@ async function holds(page, layout, want, what) {
                 return JSON.stringify({ ...got, buttons: sorted }) === wanted;
             },
             [drawn.toString(), asked, wanted],
-            { timeout: 15_000 },
+            { timeout: HANG_MS },
         );
     } catch {
         // It never did: say how it differs.

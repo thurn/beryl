@@ -4,8 +4,15 @@
 // a script starts watching before anything moves. Motion is not reduced: how things move is
 // what these look at. A page is settled when its stage says so, on no timer.
 
-/** The most to wait for a page to open or to settle. */
+/** The most stage time (ms on the stage's own clock, which tests step by hand) a moment may
+ * take to play out. It does not depend on how busy the machine is. */
 export const LONGEST = 30000;
+
+/** How long to wait, in real milliseconds, for a page to open, answer or settle. A wait this
+ * long means the page is stuck, not slow: a loaded machine takes several times a quiet one's
+ * time, and the slowest wait that ever passed was a few seconds. A timeout here fails the
+ * check as hung (`hang.mjs`). */
+export const HANG_MS = 120000;
 
 /** How many times a request or a seat's opening is tried, and the wait before the first
  * retry, doubled each time: a loaded machine, or a spec server restarting after a rebuild,
@@ -103,7 +110,7 @@ export async function openSeat(page, base, slug, moment, seat, instance) {
             ).href,
         );
         // A cold Vite compiles the whole app for the first page: its first try waits longer.
-        const timeout = n === 1 ? 2 * LONGEST : LONGEST;
+        const timeout = n === 1 ? 2 * HANG_MS : HANG_MS;
         await page.waitForURL(/[?&]live=/, { timeout });
         await page.waitForSelector("[data-life]", { timeout });
         return new URL(page.url()).searchParams.get("live");
@@ -124,7 +131,7 @@ export async function warm(browser, base) {
     try {
         const page = await context.newPage();
         await retried(() =>
-            page.goto(base, { waitUntil: "load", timeout: 4 * LONGEST }),
+            page.goto(base, { waitUntil: "load", timeout: 4 * HANG_MS }),
         );
     } finally {
         await context.close();
@@ -191,11 +198,11 @@ export function rest() {
     return { owed, shown, busy, settled: !owed && shown && !busy };
 }
 
-/** Waits until `page` is at rest (`rest`), asked each frame, or `LONGEST`: an opponent who
- * never answers leaves a view owed for good, and the wait ends there. */
+/** Waits until `page` is at rest (`rest`), asked each frame, or `HANG_MS`: an opponent who
+ * never answers leaves a view owed for good, and the wait ends there as a hang. */
 export async function settled(page) {
     await page
-        .waitForFunction(`(${rest})().settled`, undefined, { timeout: LONGEST })
+        .waitForFunction(`(${rest})().settled`, undefined, { timeout: HANG_MS })
         .catch((e) => {
             if (e.name !== "TimeoutError") throw e;
         });

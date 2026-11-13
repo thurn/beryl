@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { launch, workers } from "./capture.mjs";
 import {
     chosen,
+    HANG_MS,
     LONGEST,
     moving,
     openSeat,
@@ -54,7 +55,7 @@ async function film(pages, lives) {
     await Promise.all(
         pages.map((p) =>
             p.waitForFunction(`!(${rest})().owed`, undefined, {
-                timeout: LONGEST,
+                timeout: HANG_MS,
             }),
         ),
     );
