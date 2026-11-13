@@ -495,106 +495,114 @@ function choose(learned, size, moves, taken) {
     });
 }
 
-for (const [layout, { query, width, height }] of Object.entries(LAYOUTS)) {
-    const size = { width, height };
-    for (const [seat, { whole }] of Object.entries(moment)) {
-        const plays = [
-            { name: seat, fixture: whole, moves: null },
-            ...Object.entries(more ? MORE : {}).map(([name, moves]) => ({
-                name: `${seat}.${name}`,
-                fixture: moments[name][seat],
-                moves,
-            })),
-        ];
-        const taken = new Set();
-        for (const { name, fixture, moves } of plays) {
-            const folder = join(out, layout, name);
-            await rm(folder, { recursive: true, force: true });
-            await mkdir(folder, { recursive: true });
-            const pages = [];
-            try {
-                const end = moves ? await endOf(fixture) : undefined;
-                const first = await open(size, query, fixture);
-                pages.push(first);
-                const learned = await play(first.page, end, []);
-                if (!learned.done)
-                    throw new Error("the moment did not play out");
-                if (end && !isDeepStrictEqual(learned.shows, end.shows)) {
-                    throw new Error(
-                        "the stage did not come to the recording's end",
-                    );
-                }
-                const captures = choose(learned, size, moves, taken);
-                const shots = new Map();
-                for (const capture of captures.filter((c) => c.clip)) {
-                    await mkdir(join(folder, capture.folder));
-                    for (let t = capture.ticks[0]; t <= capture.ticks[1]; t++) {
-                        shots.set(t, [...(shots.get(t) ?? []), capture]);
-                    }
-                }
-                const second = await open(size, query, fixture);
-                pages.push(second);
-                await second.page.exposeFunction(
-                    "berylShoot",
-                    async (tick, at, subject) => {
-                        // The plate, every node hidden, at a step's first tick: what the
-                        // tracker finds its subject against (video_measure.py, PLATE).
-                        const file =
-                            subject === null
-                                ? "plate.png"
-                                : `${at.toFixed(3).padStart(10, "0")}-${seat}.png`;
-                        const here = shots
-                            .get(tick)
-                            .filter((capture) =>
-                                subject === null
-                                    ? capture.ticks[0] === tick
-                                    : capture.subject === subject,
-                            );
-                        for (const capture of here) {
-                            // CSS animations run on the page's time, not the stage's (a
-                            // counter's glow pulses so): they are stopped, so that only the
-                            // stage moves.
-                            await second.page.screenshot({
-                                path: join(folder, capture.folder, file),
-                                clip: capture.clip,
-                                animations: "disabled",
-                            });
-                        }
-                    },
+/** Plays and shoots a seat's plays in `layout`, one after another. Seats share nothing (their
+ * own pages, folders and kinds `taken`), so `by motion` plays them at once: that halves the
+ * capture, which the fast check runs beside its other browser checks. */
+async function shootSeat(layout, query, size, seat, whole) {
+    const plays = [
+        { name: seat, fixture: whole, moves: null },
+        ...Object.entries(more ? MORE : {}).map(([name, moves]) => ({
+            name: `${seat}.${name}`,
+            fixture: moments[name][seat],
+            moves,
+        })),
+    ];
+    const taken = new Set();
+    for (const { name, fixture, moves } of plays) {
+        const folder = join(out, layout, name);
+        await rm(folder, { recursive: true, force: true });
+        await mkdir(folder, { recursive: true });
+        const pages = [];
+        try {
+            const end = moves ? await endOf(fixture) : undefined;
+            const first = await open(size, query, fixture);
+            pages.push(first);
+            const learned = await play(first.page, end, []);
+            if (!learned.done) throw new Error("the moment did not play out");
+            if (end && !isDeepStrictEqual(learned.shows, end.shows)) {
+                throw new Error(
+                    "the stage did not come to the recording's end",
                 );
-                const shoot = [...shots].map(([tick, here]) => [
-                    tick,
-                    [
-                        ...(here.some((capture) => capture.ticks[0] === tick)
-                            ? [null]
-                            : []),
-                        ...new Set(here.map((capture) => capture.subject)),
-                    ],
-                ]);
-                const shot = await play(second.page, end, shoot);
-                if (!isDeepStrictEqual(shot, learned)) {
-                    throw new Error(
-                        "the stage played the moment otherwise the second time",
-                    );
-                }
-                await writeFile(
-                    join(folder, "steps.json"),
-                    `${JSON.stringify({ seat, layout, tick: TICK, steps: captures }, null, 1)}\n`,
-                );
-                const errors = pages.flatMap((p) => p.errors);
-                if (errors.length) throw new Error(errors.join("\n"));
-                const framed = captures.filter((c) => c.clip).length;
-                console.log(
-                    `captured: ${layout}/${name}, ${framed} of ${captures.length} steps shot, ${shots.size} ticks`,
-                );
-            } catch (e) {
-                failed = true;
-                console.error(`FAILED: ${layout}/${name}\n${e.stack ?? e}`);
-            } finally {
-                for (const { context } of pages) await context.close();
             }
+            const captures = choose(learned, size, moves, taken);
+            const shots = new Map();
+            for (const capture of captures.filter((c) => c.clip)) {
+                await mkdir(join(folder, capture.folder));
+                for (let t = capture.ticks[0]; t <= capture.ticks[1]; t++) {
+                    shots.set(t, [...(shots.get(t) ?? []), capture]);
+                }
+            }
+            const second = await open(size, query, fixture);
+            pages.push(second);
+            await second.page.exposeFunction(
+                "berylShoot",
+                async (tick, at, subject) => {
+                    // The plate, every node hidden, at a step's first tick: what the
+                    // tracker finds its subject against (video_measure.py, PLATE).
+                    const file =
+                        subject === null
+                            ? "plate.png"
+                            : `${at.toFixed(3).padStart(10, "0")}-${seat}.png`;
+                    const here = shots
+                        .get(tick)
+                        .filter((capture) =>
+                            subject === null
+                                ? capture.ticks[0] === tick
+                                : capture.subject === subject,
+                        );
+                    for (const capture of here) {
+                        // CSS animations run on the page's time, not the stage's (a
+                        // counter's glow pulses so): they are stopped, so that only the
+                        // stage moves.
+                        await second.page.screenshot({
+                            path: join(folder, capture.folder, file),
+                            clip: capture.clip,
+                            animations: "disabled",
+                        });
+                    }
+                },
+            );
+            const shoot = [...shots].map(([tick, here]) => [
+                tick,
+                [
+                    ...(here.some((capture) => capture.ticks[0] === tick)
+                        ? [null]
+                        : []),
+                    ...new Set(here.map((capture) => capture.subject)),
+                ],
+            ]);
+            const shot = await play(second.page, end, shoot);
+            if (!isDeepStrictEqual(shot, learned)) {
+                throw new Error(
+                    "the stage played the moment otherwise the second time",
+                );
+            }
+            await writeFile(
+                join(folder, "steps.json"),
+                `${JSON.stringify({ seat, layout, tick: TICK, steps: captures }, null, 1)}\n`,
+            );
+            const errors = pages.flatMap((p) => p.errors);
+            if (errors.length) throw new Error(errors.join("\n"));
+            const framed = captures.filter((c) => c.clip).length;
+            console.log(
+                `captured: ${layout}/${name}, ${framed} of ${captures.length} steps shot, ${shots.size} ticks`,
+            );
+        } catch (e) {
+            failed = true;
+            console.error(`FAILED: ${layout}/${name}\n${e.stack ?? e}`);
+        } finally {
+            for (const { context } of pages) await context.close();
         }
     }
+}
+
+for (const [layout, { query, width, height }] of Object.entries(LAYOUTS)) {
+    const size = { width, height };
+    await Promise.all(
+        Object.entries(moment).map(([seat, { whole }]) =>
+            shootSeat(layout, query, size, seat, whole),
+        ),
+    );
 }
 await browser.close();
 process.exit(failed ? 1 : 0);
