@@ -13,6 +13,11 @@
    rust/cards and the vocabulary entries its definition uses.
 5. The XMage class, MIT-licensed, as a reference: its path in the oracle checkout and its source.
 
+A card someone found the vocabulary cannot express has an entry in data/card-escalations.json
+(ESCALATIONS): the mechanic it needs, the rule that mechanic falls under and the ability's Oracle
+text. Its brief shows that entry as a section after the Oracle text, so the next writer knows the
+card is blocked until the mechanic exists.
+
 Never Forge's script, nor anything derived from one (K16): this module does not import forge.py
 and reads nothing under Forge's checkout. A part whose source is missing (offline with no
 rulings cached, no XMage checkout) says so and the brief goes on. A name the store lacks exits
@@ -63,6 +68,10 @@ from . import (
 
 Json = card_store.Json
 
+# Cards the vocabulary cannot express yet, by name: the mechanic each needs (the card-writing
+# skill writes these; see .agents/skills/card-writing/SKILL.md).
+ESCALATIONS: Path = paths.REPO / "data" / "card-escalations.json"
+
 
 @dataclass(frozen=True)
 class Sources:
@@ -73,6 +82,7 @@ class Sources:
     store: Path = card_store.STORE
     vocabulary: Path = vocabulary.SOURCES
     cards: Path = card_files.CARDS
+    escalations: Path = ESCALATIONS
 
 
 def find(name: str, store: card_store.Store) -> Json | str:
@@ -150,6 +160,24 @@ def uses(entry: vocabulary.Entry, code: str) -> bool:
     return re.search(rf"(?<![\w:]){re.escape(written)}\b", code) is not None
 
 
+def escalation(name: str, path: Path) -> str | None:
+    """What data/card-escalations.json says the card named `name` needs, as lines to print;
+    None when it has no entry or the file does not exist."""
+    if not path.is_file():
+        return None
+    entry = cast(dict[str, Json], json.loads(path.read_text())).get(name)
+    if entry is None:
+        return None
+    return (
+        f"Escalated: the vocabulary cannot express it yet.\n"
+        f"- Missing mechanic: {entry.get('mechanic', '?')}\n"
+        f"- Rule: {entry.get('rule', '?')}\n"
+        f"- Ability: {entry.get('text', '?')}\n\n"
+        "Write it only once beryl_card has an entry for that mechanic; then delete this "
+        "entry in the same commit."
+    )
+
+
 def section(title: str, body: str) -> str:
     return f"## {title}\n\n{body.strip()}\n"
 
@@ -161,6 +189,8 @@ def brief(record: Json, sources: Sources) -> str:
     parts = [f"# {name}\n", section("Oracle text", oracle_text(record))]
     if (complete := complete_note(record, sources)) is not None:
         parts.append(section("Complete from the store", complete))
+    if (escalated := escalation(name, sources.escalations)) is not None:
+        parts.append(section("Escalation", escalated))
 
     found = rulings(str(record["oracle_id"]))
     if isinstance(found, str):

@@ -170,7 +170,12 @@ def sources(tmp_path: Path) -> card.Sources:
         write(tmp_path / "vocabulary" / path, text)
     for path, text in CARD_FILES.items():
         write(tmp_path / "cards" / path, text)
-    return card.Sources(store, tmp_path / "vocabulary", tmp_path / "cards")
+    return card.Sources(
+        store,
+        tmp_path / "vocabulary",
+        tmp_path / "cards",
+        tmp_path / "card-escalations.json",
+    )
 
 
 @pytest.fixture
@@ -285,6 +290,31 @@ def test_missing_rulings_and_checkout_are_said_and_the_brief_goes_on(
     assert "Mana Leak" in part(text, "Nearest implemented cards")
     assert "no XMage checkout" in part(text, "XMage class")
     assert "oracle-setup" in part(text, "XMage class")
+
+
+def test_an_escalated_card_brief_shows_its_missing_mechanic(
+    sources: card.Sources, cached: Path
+) -> None:
+    sources.escalations.write_text(
+        json.dumps(
+            {
+                "Lightning Bolt": {
+                    "mechanic": "damage to any target",
+                    "rule": "CR 120.3",
+                    "text": "Lightning Bolt deals 3 damage to any target.",
+                }
+            }
+        )
+    )
+    text = brief_of("Lightning Bolt", sources)
+    assert sections(text)[:2] == ["Oracle text", "Escalation"]
+    escalated = part(text, "Escalation")
+    assert "Missing mechanic: damage to any target" in escalated
+    assert "Rule: CR 120.3" in escalated
+    # Other cards, and a missing file, show no such section.
+    assert "Escalation" not in sections(brief_of("Counterspell", sources))
+    sources.escalations.unlink()
+    assert "Escalation" not in sections(brief_of("Lightning Bolt", sources))
 
 
 def test_a_card_is_found_by_slug_face_or_case(sources: card.Sources) -> None:

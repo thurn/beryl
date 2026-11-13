@@ -16,6 +16,10 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   legal in Vintage.
 - `census-coverage.json`: the Forge mechanics (kind names only) that
   `beryl_card` covers, each with its entry, for `just census` (`census.py`).
+- `card-escalations.json`: cards the card vocabulary (`beryl_card`) can't
+  express yet, by name, each with the mechanic it needs, the rule that mechanic
+  falls under and the ability's Oracle text. The `card-writing` skill adds
+  entries, and `just card brief` prints a card's entry.
 - `card-printings.csv`: the specific printing chosen for each card.
 - `rules-version.json`: the Comprehensive Rules release that every citation in
   the code is checked against.

@@ -183,7 +183,8 @@ Use the cheapest test that covers your change. Agents never open a window;
 1. Logic: `just test-rust` runs the workspace's tests. Test engine and AI
    behavior here, not through the app. `rust/AGENTS.md` lists the card tools:
    the XMage and Forge oracles, the citation check, the fuzzer and
-   `just card brief <name>` for starting a new card.
+   `just card brief <name>` for starting a new card. To write a card, follow the
+   `card-writing` skill.
 2. UI: run `cd ui && npm run typecheck`, and `npm test` for the tests that need
    no browser. `ui/AGENTS.md` lists the browser checks. To reproduce, debug or
    check a card's behavior in the UI, use the `specs` skill.
