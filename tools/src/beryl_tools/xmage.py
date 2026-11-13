@@ -111,6 +111,9 @@ class Exporter:
         self.trace: list[Position] = []
         self.index = 0
         self.taken: set[int] = set()
+        # Whether an earlier payment was left to XMage (`pay`), which may have tapped any
+        # untapped source, so a later payment cannot tap one by name.
+        self.payment_left_to_xmage = False
         # The resolving object and kind of the last answer, for XMage's untap shortcut.
         self.last_answer: tuple[str | None, str] = (None, "")
         # After a yes to a `Cards.may_choose` ability's question: the command for the card chosen.
@@ -475,10 +478,19 @@ class Exporter:
         if source in taps:
             taps.remove(source)
         if any(self.cards.mana_choice(name) for name in taps):
+            self.payment_left_to_xmage = True
             return
         for name in taps:
             text = self.cards.mana_text(name)
             if text is not None:
+                if self.payment_left_to_xmage:
+                    # XMage paid an earlier spell with sources of its own choosing, and may
+                    # have tapped the one Beryl tapped here, so the command would fail or not
+                    # depending on which it chose.
+                    raise Unsupported(
+                        "a payment tapping a source by name after one XMage chose the "
+                        "sources of"
+                    )
                 text = java_string(text)
                 self.emit(f"activateManaAbility({self.at(p)}, {who}, {text});")
 
