@@ -68,6 +68,9 @@
    carries the rule: a `rotate` of nothing would still make every card a stacking context. */
 .stage-node[data-turning] .card-slot > .card {
   rotate: var(--turn);
+  /* A layer of its own while it turns, so the compositor turns it instead of the node's
+     layer being repainted every frame. */
+  will-change: transform;
 }
 /* A card turning over on its way (stage/tracks.ts `flatAt`): the stage says how far it is
    tipped (stage/pose.ts `tippedOf`), and everything in the node, each as large as the card,
@@ -95,6 +98,10 @@
   inset: 0;
   border-radius: calc(var(--frame) * 0.05);
   pointer-events: none;
+  /* Each look below changes only its opacity and transform from frame to frame. With a layer
+     of its own an effect is faded and grown by the compositor; without one, the card it is
+     on, face and all, was repainted every frame the effect played. */
+  will-change: transform, opacity;
 }
 .stage-effect-under {
   z-index: -1;
@@ -282,6 +289,9 @@
 }
 [data-life] > .life-change {
   --drift: var(--loss, var(--gain, 0));
+  /* Moved by the compositor, as an effect is (`.stage-effect`), so the life orb under it is
+     not repainted every frame. */
+  will-change: transform, opacity;
   translate: 0 calc(var(--drift) * (2 - var(--drift)) * 0.85em);
   scale: calc(1 + 0.3 * max(0, 1 - var(--drift) * 6));
   opacity: min(1, (1 - var(--drift)) / 0.3);

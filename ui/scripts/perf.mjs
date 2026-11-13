@@ -97,16 +97,23 @@ function threads(buffer, name) {
     return sum;
 }
 
-/** For each verb, the frames it played in and the share of them that dropped. */
-function byVerb(frames, during) {
+/** For each verb, the frames it played in, the share of them that dropped, how late those
+ * were in all and how much script ran in them. */
+function byVerb(frames, during, scripts) {
     const tally = new Map();
     frames.forEach((length, i) => {
         for (const verb of during[i].length ? during[i] : ["(none)"]) {
-            const t = tally.get(verb) ?? { frames: 0, dropped: 0, over: 0 };
+            const t = tally.get(verb) ?? {
+                frames: 0,
+                dropped: 0,
+                over: 0,
+                script: 0,
+            };
             t.frames += 1;
             if (length > 25) {
                 t.dropped += 1;
                 t.over += length - 1000 / 60;
+                t.script += scripts[i];
             }
             tally.set(verb, t);
         }
@@ -128,19 +135,45 @@ async function measure(name) {
         deviceScaleFactor: 2,
     });
     await served(context);
-    // Times every animation-frame callback, the stage's tick among them, in every engine.
+    // Times every animation-frame callback, the stage's tick among them, and every task
+    // React's scheduler (a MessageChannel) and timers run, in every engine.
     await context.addInitScript(() => {
-        const request = window.requestAnimationFrame.bind(window);
         window.berylFrameScript = 0;
-        window.requestAnimationFrame = (callback) =>
-            request((t) => {
+        window.berylTaskScript = 0;
+        const timed =
+            (callback, into) =>
+            (...args) => {
                 const start = performance.now();
                 try {
-                    callback(t);
+                    return callback(...args);
                 } finally {
-                    window.berylFrameScript += performance.now() - start;
+                    window[into] += performance.now() - start;
                 }
-            });
+            };
+        const request = window.requestAnimationFrame.bind(window);
+        window.requestAnimationFrame = (callback) =>
+            request(timed(callback, "berylFrameScript"));
+        const later = window.setTimeout.bind(window);
+        window.setTimeout = (callback, ...rest) =>
+            typeof callback === "function"
+                ? later(timed(callback, "berylTaskScript"), ...rest)
+                : later(callback, ...rest);
+        const Channel = window.MessageChannel;
+        window.MessageChannel = class extends Channel {
+            constructor() {
+                super();
+                const port = this.port1;
+                const set = Object.getOwnPropertyDescriptor(
+                    MessagePort.prototype,
+                    "onmessage",
+                ).set;
+                Object.defineProperty(port, "onmessage", {
+                    set(callback) {
+                        set.call(port, timed(callback, "berylTaskScript"));
+                    },
+                });
+            }
+        };
     });
     const page = await context.newPage();
     const errors = [];
@@ -197,6 +230,7 @@ async function measure(name) {
     const {
         lengths: frames,
         during,
+        scripts,
         script: rafScript,
     } = await page.evaluate(async () => {
         const lengths = [];
@@ -213,12 +247,18 @@ async function measure(name) {
             if (edge === "start") playing.set(step, name);
             else playing.delete(step);
         });
+        // The script run in each frame's time: its own callbacks and the tasks before it.
+        const scripts = [];
+        let ran = window.berylFrameScript + window.berylTaskScript;
         let last;
         let on = true;
         const frame = (t) => {
             if (last !== undefined) {
                 lengths.push(t - last);
                 during.push([...new Set(playing.values())]);
+                const js = window.berylFrameScript + window.berylTaskScript;
+                scripts.push(js - ran);
+                ran = js;
             }
             last = t;
             if (on) requestAnimationFrame(frame);
@@ -234,7 +274,7 @@ async function measure(name) {
         }
         on = false;
         stop();
-        return { lengths, during, script: window.berylFrameScript };
+        return { lengths, during, scripts, script: window.berylFrameScript };
     });
     const after = await metric();
     const busy = cdp ? threads(await browser.stopTracing(), name) : {};
@@ -260,7 +300,7 @@ async function measure(name) {
         dropped:
             frames.filter((f) => f > 25).length / Math.max(1, frames.length),
         raf: rafScript,
-        verbs: byVerb(frames, during),
+        verbs: byVerb(frames, during, scripts),
         script: spent("ScriptDuration"),
         style: spent("RecalcStyleDuration"),
         layout: spent("LayoutDuration"),
@@ -290,7 +330,7 @@ for (const name of names) {
                 (a, b) => b[1].over - a[1].over,
             )) {
                 console.log(
-                    `  ${verb.padEnd(24)} ${String(t.frames).padStart(6)} frames ${f((100 * t.dropped) / t.frames)}% dropped ${f(t.over)} ms late`,
+                    `  ${verb.padEnd(24)} ${String(t.frames).padStart(6)} frames ${f((100 * t.dropped) / t.frames)}% dropped ${f(t.over)} ms late, ${f(t.script)} ms of it script`,
                 );
             }
         }
