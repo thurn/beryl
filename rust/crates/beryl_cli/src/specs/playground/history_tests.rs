@@ -11,6 +11,10 @@ use beryl_session::protocol::{
 use std::sync::mpsc::channel;
 use std::time::Duration;
 
+/// How long a test waits for the next view before it calls the playground hung. Healthy views
+/// arrive in milliseconds; a loaded machine only slows that, so the limit is far above it.
+const HANG_LIMIT: Duration = Duration::from_secs(120);
+
 fn variant(card: &str, fragment: &str) -> &'static Variant {
     super::super::spec(card)
         .unwrap()
@@ -42,8 +46,8 @@ fn exercise(
     let mut prompts = Vec::new();
     for _ in 0..100 {
         let v = rx
-            .recv_timeout(Duration::from_secs(3))
-            .expect("Playground stalled");
+            .recv_timeout(HANG_LIMIT)
+            .expect("Playground appears hung: no view arrived within the hang limit");
         if check(&v) {
             return;
         }
@@ -316,7 +320,9 @@ fn undo_rewinds_the_opponents_response_too() {
     let mut rewinding = false;
     let mut repeated = false;
     for _ in 0..80 {
-        let v = rx.recv_timeout(Duration::from_secs(3)).unwrap();
+        let v = rx
+            .recv_timeout(HANG_LIMIT)
+            .expect("Playground appears hung: no view arrived within the hang limit");
         responses += usize::from(v.events.iter().any(|e| {
             let e = json!(e);
             e["kind"] == "cast"

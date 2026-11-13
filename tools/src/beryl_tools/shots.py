@@ -46,9 +46,9 @@ from pathlib import Path
 
 from . import checks, paths, selection, suites, system, warm
 
-# Load-adjusted seconds (checks.Clock): a crowded machine stretches Vite's start well past a
-# minute of wall time, and a wall-clock wait failed runs that would pass on a quiet one.
-SERVER_TIMEOUT = 60.0
+# Load-adjusted seconds (checks.Clock) after which Vite is taken to be hung. A crowded machine
+# stretches its start well past a minute, so this sits far above any healthy start.
+SERVER_TIMEOUT = 300.0
 # The game fixtures' definitions, and where they are recorded to: gitignored, served by Vite.
 FIXTURES: Path = paths.UI / "fixtures.json"
 RECORDED: Path = paths.UI / "public" / "fixtures"
@@ -170,7 +170,8 @@ def served_ui(
             if not wait_for_server(url, server):
                 log.seek(0)
                 raise UiError(
-                    log.read().decode(errors="replace") + f"Vite did not serve {url}"
+                    log.read().decode(errors="replace")
+                    + f"Vite appears hung: it did not serve {url} in {SERVER_TIMEOUT:.0f} s"
                 )
             yield url
         finally:
@@ -503,7 +504,7 @@ def ui_live(args: argparse.Namespace) -> int:
             )
             drive = f"http://127.0.0.1:{drive_port}/"
             if not wait_for_server(drive, children[-1]):
-                raise UiError(f"the driver did not answer at {drive}")
+                raise UiError(f"the driver appears hung: it did not answer at {drive}")
             print(f"ui-live: app {app}", flush=True)
             print(f"ui-live: drive {drive} (POST a Playwright snippet)", flush=True)
             print(f"ui-live: screenshots {out}", flush=True)

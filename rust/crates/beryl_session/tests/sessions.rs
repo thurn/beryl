@@ -196,7 +196,7 @@ fn to_decision(views: &std::sync::mpsc::Receiver<beryl_session::GameUpdate>) -> 
     loop {
         let view = views
             .recv_timeout(std::time::Duration::from_secs(120))
-            .expect("the session emits a view")
+            .expect("the session appears hung: it emitted no view within the hang limit")
             .view;
         if matches!(view.status, Status::Deciding { .. } | Status::Over { .. }) {
             return view;
@@ -229,7 +229,7 @@ fn the_latest_view_of_the_game_in_progress_is_kept_for_a_reloaded_ui() {
     let view = loop {
         let update = views
             .recv_timeout(std::time::Duration::from_secs(120))
-            .expect("the session emits a view");
+            .expect("the session appears hung: it emitted no view within the hang limit");
         if update.session == second && matches!(update.view.status, Status::Deciding { .. }) {
             break update.view;
         }

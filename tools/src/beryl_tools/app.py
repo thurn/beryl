@@ -55,13 +55,21 @@ def smoke(args: argparse.Namespace) -> int:
     if not args.no_build:
         if tauri("build", "--debug", "--no-bundle") != 0:
             return checks.CANNOT_RUN
-    run = subprocess.run(
-        [str(BINARY)],
-        env={**os.environ, "BERYL_SMOKE": str(args.seconds)},
-        stdin=subprocess.DEVNULL,
-        check=False,
-        timeout=args.seconds + 10,
-    )
+    # The app exits as soon as its UI reports that it loaded. `--seconds` only bounds a hang:
+    # the app ends itself with an error then, and the timeout here catches one that cannot.
+    try:
+        run = subprocess.run(
+            [str(BINARY)],
+            env={**os.environ, "BERYL_SMOKE": str(args.seconds)},
+            stdin=subprocess.DEVNULL,
+            check=False,
+            timeout=args.seconds + 30,
+        )
+    except subprocess.TimeoutExpired:
+        print(
+            f"smoke: FAILED: the app appears hung, it did not exit in {args.seconds} s"
+        )
+        return 1
     print(f"smoke: {'passed' if run.returncode == 0 else 'FAILED'}")
     return run.returncode
 
@@ -83,7 +91,12 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
         "smoke", help="build and launch the app headless until the UI loads"
     )
-    p.add_argument("--seconds", type=int, default=20, help="fail after this long")
+    p.add_argument(
+        "--seconds",
+        type=int,
+        default=300,
+        help="treat the app as hung after this long; a healthy start exits much sooner",
+    )
     p.add_argument("--no-build", action="store_true")
     p.set_defaults(func=smoke)
     sub.add_parser(

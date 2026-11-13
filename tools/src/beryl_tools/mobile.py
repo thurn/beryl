@@ -383,6 +383,8 @@ def launch_until_ready(udid: str, seconds: int) -> bool:
     deadline = time.monotonic() + seconds + 30
     while alive(pid) and time.monotonic() < deadline:
         time.sleep(0.25)
+    if alive(pid):
+        print(f"ios-smoke: the app appears hung, it did not exit in {seconds + 30} s")
     records = journal(udid, pid)
     for record in records:
         if record.get("level") in ("warn", "error"):
@@ -507,7 +509,12 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
         "ios-smoke", help="build the iOS app and launch it headless until the UI loads"
     )
-    p.add_argument("--seconds", type=int, default=60, help="fail after this long")
+    p.add_argument(
+        "--seconds",
+        type=int,
+        default=600,
+        help="treat the app as hung after this long; a healthy start exits much sooner",
+    )
     p.add_argument("--no-build", action="store_true")
     p.set_defaults(func=smoke)
     p = sub.add_parser(

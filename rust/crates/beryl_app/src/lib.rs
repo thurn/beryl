@@ -23,7 +23,8 @@ use crate::art::ArtCache;
 use crate::snapshot::Snapshots;
 
 /// Set by `just smoke`: run without a visible window or Dock icon and exit once the UI reports
-/// that it loaded, or with an error after this many seconds.
+/// that it loaded. The number of seconds is only a hang limit: the app exits with an error if
+/// the UI has not reported by then.
 const SMOKE_ENV: &str = "BERYL_SMOKE";
 
 /// An Android app inherits no environment: `just android-smoke` sets this system property
@@ -105,7 +106,7 @@ fn smoke_seconds() -> Option<u64> {
         let value = String::from_utf8_lossy(&out.stdout).trim().to_owned();
         (!value.is_empty()).then_some(value)
     });
-    value.map(|v| v.parse().unwrap_or(20))
+    value.map(|v| v.parse().unwrap_or(300))
 }
 
 /// Snapshots the window as drawn now and returns its number ([`ipc::CAPTURE_WINDOW`]).

@@ -188,6 +188,9 @@ def launch_until_ready(seconds: int) -> bool:
     deadline = time.monotonic() + seconds + 30
     while adb("shell", "pidof", PACKAGE).stdout.strip() == pid:
         if time.monotonic() > deadline:
+            print(
+                f"android-smoke: the app appears hung, it did not exit in {seconds + 30} s"
+            )
             break
         time.sleep(0.25)
     records = journal(int(pid))
@@ -218,6 +221,11 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "android-smoke",
         help="build the Android app and launch it headless until the UI loads",
     )
-    p.add_argument("--seconds", type=int, default=60, help="fail after this long")
+    p.add_argument(
+        "--seconds",
+        type=int,
+        default=600,
+        help="treat the app as hung after this long; a healthy start exits much sooner",
+    )
     p.add_argument("--no-build", action="store_true")
     p.set_defaults(func=smoke)

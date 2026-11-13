@@ -8,7 +8,9 @@ use serde_json::{Value, json};
 
 fn next_decision(views: &Receiver<GameUpdate>) -> GameUpdate {
     loop {
-        let update = views.recv_timeout(Duration::from_secs(120)).unwrap();
+        let update = views
+            .recv_timeout(Duration::from_secs(120))
+            .expect("the session appears hung: it emitted no view within 120 s");
         if matches!(
             update.view.status,
             Status::Deciding { .. } | Status::Over { .. }
