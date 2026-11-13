@@ -107,13 +107,12 @@ pub static EMBLEM: CardDef = card(
     ])],
 );
 
-/// The back face's name, which the transformed permanent has (CR 712.6d).
-const TELEPATH: &str = "Jace, Telepath Unbound";
-
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
-    use super::TELEPATH;
     use crate::prelude::*;
+
+    /// The back face's name, which the transformed permanent has (CR 712.6d).
+    const TELEPATH: &str = "Jace, Telepath Unbound";
 
     const JACE: &str = Card::JaceVrynsProdigy;
 

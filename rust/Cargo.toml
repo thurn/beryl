@@ -8,6 +8,10 @@ license = "Apache-2.0"
 
 [workspace.lints.rust]
 unsafe_code = "deny"
+# Every warning is an error, in every build: clippy only checks a debug build with every feature
+# on, so a warning that only a release build or a build without `scenarios` sees would otherwise
+# reach the release build's output and stay there.
+warnings = "deny"
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }

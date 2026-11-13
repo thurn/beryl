@@ -14,7 +14,7 @@ use super::spans;
 use super::stack::Held;
 use super::staging::{self, Told};
 use super::table::Table;
-use super::{Act, Fact, Notice, Open, Reset, Script, Step, Stream, Subject, Tally, check, replay};
+use super::{Act, Fact, Notice, Open, Reset, Script, Step, Stream, Subject, Tally, check};
 use crate::protocol::{
     CardType, Counter, GameEvent, ObjectView, PlayerView, Side, StackItem, Step as TurnStep,
     TargetRef, Why, ZoneName,
@@ -150,7 +150,7 @@ thread_local! {
 /// had open, leaving open the ones the builder says it does.
 #[cfg(debug_assertions)]
 fn verify((before, open): (Table, Vec<Open>), script: &Script, after: &Table, spans: &[Open]) {
-    if let Some(failure) = replay::check(before.clone(), script, after) {
+    if let Some(failure) = super::replay::check(before.clone(), script, after) {
         panic!("a script does not replay to its view: {failure}");
     }
     match check::carried(before, &open, script) {

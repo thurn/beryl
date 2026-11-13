@@ -28,5 +28,10 @@ export default defineConfig({
   css: { devSourcemap: true },
   build: {
     target: "safari16",
+    // The app loads its bundle from disk, not over a network, so one large chunk costs nothing
+    // and splitting it would gain nothing. The default limit of 500 kB only printed a warning.
+    chunkSizeWarningLimit: 4096,
+    // Rolldown printed a report of slow plugin callbacks after every build that nobody reads.
+    rolldownOptions: { checks: { bundlerTimings: false } },
   },
 });
