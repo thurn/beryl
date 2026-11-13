@@ -399,7 +399,7 @@ def specs(args: argparse.Namespace) -> int:
                 warm_specs(spec_port, [])
                 return capture(args, url, env)
         env = {**os.environ, "BERYL_SPECS_PORT": str(spec_port)}
-        with served_ui(env, args.port or None, preview=args.release) as url:
+        with served_ui(env, args.port or None, preview=args.release, hot=True) as url:
             base = url.replace("127.0.0.1", "localhost")
             print(f"playground: {base}playground", flush=True)
             print(f"scenarios: {base}scenarios", flush=True)

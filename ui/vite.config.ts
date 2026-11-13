@@ -15,6 +15,11 @@ export default defineConfig({
     strictPort: true,
     // The stage imports data/ui-conventions.json from the repository root.
     fs: { allow: [".."] },
+    // Browser checks set BERYL_UI_FIXED (tools' `served_ui`): their pages play one fixed tree,
+    // so the server neither watches files nor hot-reloads. A file another step wrote into the
+    // checkout mid-run once made pages in a check re-import modules from a server that then
+    // stopped answering, failing pile checks that had nothing to do with the change.
+    ...(env.BERYL_UI_FIXED ? { hmr: false, watch: null } : {}),
     // The spec pages' live games (`just specs`): beryl_cli specs-serve.
     proxy: {
       "/spec-api": {

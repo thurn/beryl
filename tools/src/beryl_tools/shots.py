@@ -149,11 +149,18 @@ def record_fixtures(into: Path = RECORDED, only: list[str] | None = None) -> int
 
 @contextmanager
 def served_ui(
-    env: dict[str, str], port: int | None = None, preview: bool = False
+    env: dict[str, str],
+    port: int | None = None,
+    preview: bool = False,
+    hot: bool = False,
 ) -> Iterator[str]:
     """Serves ui/ with Vite on `port`, or a free one, for the duration; yields its base URL.
     `preview` serves the production build in ui/dist (`vite preview`) instead of the dev server.
+    The dev server watches files and hot-reloads its pages only when `hot`: a check's pages
+    play the tree as it was when the server started (BERYL_UI_FIXED, ui/vite.config.ts).
     """
+    if not hot:
+        env = {**env, "BERYL_UI_FIXED": "1"}
     port = port or free_port()
     url = f"http://127.0.0.1:{port}/"
     mode = ["preview", "--strictPort"] if preview else []
