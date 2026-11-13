@@ -613,6 +613,24 @@ cost 0.22 s each on average, about 10,800 CPU-seconds for 50,000 clones.
 
 Over four runs the cold check took 41 to 56 s.
 
+After an edit, Cargo rechecks the edited set crate and then `beryl_cards`, which
+depends on every set crate. That second recheck took 0.8 s: 0.4 s to build a
+50,000-entry array of the cards at compile time and most of the rest to compile
+the 50,000 constants of `names` (by-w8gv.13.14). `CardTable::of_parts` now joins
+the set crates' tables when they are first read. The names moved to
+`beryl_card_names`, a crate that depends on no set crate, so it rebuilds
+alongside the edited set crate instead of after it. The registry's recheck fell
+to 0.1 s. Timed alternately against staging on one workspace each at a load of
+about 20, a rebuild took 1.55 to 1.8 s on the clock to its last unit, against
+2.25 to 2.65 s before. That is still close to the budget: the harness divides by
+this machine's speed factor (0.82), and `--assert` gave a median of 2.2 s at a
+load of 19. What remains is the edited crate's own recheck (about 0.9 s for
+1,350 cards, mostly parsing their files and writing the crate's metadata) and
+about 0.4 s in which Cargo checks the times of the card files before any unit
+starts. Both grow with the crate's size (K8). Edits made just after the release
+build can wait for seconds with the processor idle while macOS scans the build
+scripts' executables, which also inflates the first edit above.
+
 The card store is 22.5 MiB with 34,195 card keys. Neither start-up nor the UI
 grew with it. Start-up to the UI's report (`just smoke`'s debug app, median of
 seven launches) is 321 ms, against 313 ms at the commit before the store landed

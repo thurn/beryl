@@ -14,6 +14,8 @@ workspace = true
 beryl_card = { path = "../beryl_card" }
 # The tokens and props card files share, re-exported here.
 beryl_card_shared = { path = "../beryl_card_shared" }
+# Every card name as a constant, re-exported as `names`.
+beryl_card_names = { path = "../beryl_card_names" }
 beryl_engine = { path = "../beryl_engine" }
 # Behind the `scenarios` feature (plan, Crates): the scenarios' value types, all a card file's
 # scenarios name, and the runner, for the rules library's scenarios, the generators and the
@@ -49,7 +51,7 @@ cards_2025_2026 = { path = "../../cards/cards_2025_2026" }
 cards_2026 = { path = "../../cards/cards_2026" }
 
 [build-dependencies]
-# Lists the set crates and writes the tables over them and `names` (plan K8).
+# Lists the set crates and writes the tables over them (plan K8).
 beryl_card_build = { path = "../beryl_card_build" }
 
 [dev-dependencies]

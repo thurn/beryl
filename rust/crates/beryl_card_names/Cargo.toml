@@ -1,0 +1,13 @@
+[package]
+name = "beryl_card_names"
+version = "0.1.0"
+description = "Every card name as a constant, generated from the card files, decklists and card store"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[build-dependencies]
+beryl_card_build = { path = "../beryl_card_build" }

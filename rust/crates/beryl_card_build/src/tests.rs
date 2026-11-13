@@ -7,7 +7,7 @@ use crate::files::{card_files, set_crates};
 use crate::names::{card_module, constant, set_module};
 use crate::printed::Subtypes;
 use crate::store::Store;
-use crate::{Printed, registry_source, set_crate_source, shared_source};
+use crate::{Printed, names_source, registry_source, set_crate_source, shared_source};
 
 /// A record's line: the fields the reader needs, a card's first set and its faces' JSON.
 fn record(kind: &str, name: &str, id: &str, first_set: Option<&str>, faces: &[&str]) -> String {
@@ -225,7 +225,8 @@ fn a_new_file_is_listed_with_no_other_edit() {
         .map(|(name, _)| name)
         .collect();
     assert_eq!(crates, ["cards_1993"]);
-    let (tables, names) = registry_source(
+    let tables = registry_source(&scratch.0);
+    let names = names_source(
         &scratch.0,
         &scratch.0.join("decks"),
         &scratch.0.join("own"),

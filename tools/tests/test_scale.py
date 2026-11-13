@@ -72,13 +72,16 @@ def test_the_workspace_is_the_trees_structure(tmp_path: Path) -> None:
         str(scale_workspace.CRATES / "beryl_card_build")
         in (crate / "Cargo.toml").read_text()
     )
-    registry = (tmp_path / "rust" / "crates" / "registry" / "Cargo.toml").read_text()
+    registry = (tmp_path / "rust" / "crates" / "beryl_cards" / "Cargo.toml").read_text()
     for name in names:
         assert f"\n{name} = " in registry and f'"{name}/scenarios"' in registry
     groups = json.loads((tmp_path / "data" / "set-groups.json").read_text())
     assert [g["crate"] for g in groups["groups"]] == names
     workspace = (tmp_path / "rust" / "Cargo.toml").read_text()
-    assert 'members = ["cards/*", "crates/registry", "crates/warm"]' in workspace
+    assert (
+        'members = ["cards/*", "crates/beryl_cards", "crates/beryl_card_names", "crates/warm"]'
+        in workspace
+    )
     assert "[profile.release]" in workspace
     for copied in scale_workspace.COPIED:
         assert (tmp_path / copied).is_file()
