@@ -63,6 +63,7 @@ from . import (
     file_length,
     hang,
     hygiene,
+    justfile_format,
     paths,
     plan_references,
     python_tests,
@@ -251,8 +252,9 @@ def lane_steps(
             wait = after[0] - before[0]
             seconds = clock.now() - t - wait
             wall = clock.wall() - wall - (after[1] - before[1])
-            # A kill says nothing about the step's checks: verdicts.py passes it over.
-            killed = None
+            # A kill says nothing about the step's checks, nor does a step that could not
+            # run them: verdicts.py passes both over.
+            killed = "cannot-run" if code == CANNOT_RUN else None
             if code is None:
                 killed = "stopped" if steps.stopped.is_set() else "wall"
                 killed = "hang" if seconds >= limit and not steps.walled() else killed
@@ -460,7 +462,7 @@ def repo_lane() -> Lane:
     checks = [sys.executable, "-m", "beryl_tools.checks"]
     return (
         Lane("repo")
-        .step("just", ["just", "--fmt", "--check", "--unstable"])
+        .step("just", [*checks, "just"])
         .step(
             "markdown",
             [sys.executable, "-m", "mdformat", "--check", *markdown_files()],
@@ -773,6 +775,7 @@ def steps() -> dict[str, Callable[..., int]]:
         "card-headers": card_header.step,
         "card-crates": card_crates.step,
         "file-length": file_length.step,
+        "just": justfile_format.step,
         "two-player": two_player.step,
         "board-door": board_door.step,
         "plan-references": plan_references.step,

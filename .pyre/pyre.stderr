@@ -1,0 +1,3 @@
+2026-11-13 13:09:30,629 [PID 23317] INFO No binary specified, looking for `pyre.bin` in PATH
+2026-11-13 13:09:30,629 [PID 23317] INFO Pyre binary is located at `/Users/dthurn/beryl/.worktrees/by-34jc/tools/.venv/bin/pyre.bin`
+2026-11-13 13:09:30,629 [PID 23317] ERROR Invalid configuration: Cannot find any source files to analyze. Either `source_directories` or `targets` must be specified.

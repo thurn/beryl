@@ -171,6 +171,18 @@ def test_a_fix_to_the_check_alone_is_stale_and_to_the_product_a_catch(
     assert bd.verdicts("ui-test:drag") == ["stale", "catch", "flaky", "catch"]
 
 
+def test_a_step_that_could_not_run_waits_for_no_verdict(repo: Path, bd: FakeBd) -> None:
+    cannot = ["sh", "-c", f"exit {checks.CANNOT_RUN}"]
+    assert (
+        checks.run_lanes([checks.Lane("repo").step("just", cannot)], "check", 60) == 1
+    )
+    # Fixed by upgrading a tool, on the same tree: no flake, as the check never ran.
+    assert (
+        checks.run_lanes([checks.Lane("repo").step("just", ["true"])], "check", 60) == 0
+    )
+    assert bd.verdicts("repo:just") == []
+
+
 def test_a_pass_settles_only_failures_from_its_own_place(
     repo: Path, bd: FakeBd
 ) -> None:

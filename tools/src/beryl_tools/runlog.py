@@ -204,9 +204,9 @@ class Run:
     ) -> list[dict[str, object]]:
         """A finished step's records: one per check it reported, and one for the step itself
         (marked `whole`) when it reported none, or failed though none of them did. A step that
-        was killed marks its failures `timeout` with why (`hang`, `wall` or `stopped`,
-        checks.lane_steps): a kill says nothing about a check, so none of them waits for a
-        verdict (verdicts.settle).
+        was killed, or exited `CANNOT_RUN`, marks its failures `timeout` with why (`hang`,
+        `wall`, `stopped` or `cannot-run`, checks.lane_steps): neither says anything about a
+        check, so none of them waits for a verdict (verdicts.settle).
 
         `cpu` is the CPU seconds of the step's whole process tree, which each record gets a share
         of as `cpu_seconds` (none where it is None, as on Windows). A step that ran many checks
