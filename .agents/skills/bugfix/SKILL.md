@@ -149,7 +149,8 @@ Enact, project setup, permission mode), then:
    worktree, or start reproducing beyond what settling an interpretation
    needs. Each bead's notes (`bd update <bead> --append-notes`) and
    `--acceptance` must let a fresh worker start where your reading ended:
-   the interpretation and its evidence, the triage kind, the files, scripts,
+   the interpretation and its evidence, the triage kind (for a UI report,
+   that its fix is verified with `/arena-pixel-match`), the files, scripts,
    specs or fixtures it likely touches, the reproduce commands from
    [Worker step 1](#worker-fixing-one-report), related reports and commits,
    and the line "Follow the `bugfix` skill's 'Worker: fixing one report'
@@ -268,13 +269,17 @@ complaint (planning step 2's order of evidence) and record why on the bead.
    `just conventions` regenerates `docs/ui-conventions.md`). Name the report's
    bead in the entry.
 
-   For UI complaints, inspect the actual interaction headlessly after the fix,
-   including the neighboring cases, and put it beside Arena's: film the same
-   moment in a recording (the `arena-video` skill) and in Beryl (the `specs`
-   skill's `--film`, or `just ui-shots`), and compare what is shown, when, in
-   what words and with which buttons. A final screenshot, passing typecheck,
-   engine event, or DOM presence alone cannot prove the screen behaves as
-   requested. Extend the specs' coverage when necessary.
+   For UI complaints, verify the fix with the `arena-pixel-match` skill
+   (`/arena-pixel-match`): read it and follow it for the reported moment and
+   the neighboring cases. It films the same moment in an Arena recording and
+   in Beryl side by side (through the `arena-video` and `specs` skills), lists
+   every difference in what is shown, where, how large and when, and has you
+   fix them until none is left or each one left is named. The player's report
+   and UI Conventions override Arena there, as that skill says. A final
+   screenshot, passing typecheck, engine event, or DOM presence alone cannot
+   prove the screen behaves as requested. Extend the specs' coverage when
+   necessary. Only when Arena has no such moment does the hand-written
+   expectation below stand in for the side-by-side film.
 
    Record the reproduction, shared cause, tests and commands, and observed
    result against each acceptance criterion in the bead. Keep remaining
@@ -283,8 +288,9 @@ complaint (planning step 2's order of evidence) and record why on the bead.
 3. **Close** it only after the above verification and required CI pass and
    `enact push` has landed the fix, or the AI blunder case meets step 1. You
    close your own reports; the vizier never does. The evidence for closing a
-   UI report, recorded on its bead, is an Arena still or filmstrip beside Beryl's at the same moment,
-   or, where Arena has no such moment, a hand-written expectation (the test
+   UI report, recorded on its bead, is the `arena-pixel-match` side-by-side
+   film of Arena and Beryl at the same moment with its list of differences
+   (fixed, or named and explained), or, where Arena has no such moment, a hand-written expectation (the test
    above, or the UI Conventions entry it follows). Then run
    `just bugs done <bead> --commit <sha>` with the `staging` SHA that
    `enact push` reported, which marks the report done and moves it to
