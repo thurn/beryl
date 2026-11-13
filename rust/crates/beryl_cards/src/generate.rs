@@ -78,6 +78,13 @@ impl Pools {
                 pools.cards.push(def.name);
             }
         }
+        // `CARDS` lists cards in the order of their crates, which `just card crates` changes
+        // when it regroups sets. Sorting by name keeps each seed's position the same across a
+        // regrouping, so the oracles' exporter-gap list (`data/oracle-exporter-gaps.json`)
+        // stays current until a card is added.
+        pools.lands.sort_unstable();
+        pools.permanents.sort_unstable();
+        pools.cards.sort_unstable();
         pools
     }
 }
