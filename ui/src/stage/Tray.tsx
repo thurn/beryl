@@ -34,7 +34,7 @@ export function TrayUnder({
   layer: HTMLElement | null;
 }) {
   const tray = trayOf(prompt);
-  const state = prompt?.state;
+  const state = prompt?.body;
   // An order's row lies over the same shade (`OrderRow`), as do the ways to use a card and
   // a catalog's entries (Choose.tsx).
   const listed =
@@ -117,7 +117,7 @@ export function OrderRow({
     from: number;
     by: number;
   }>();
-  const state = prompt?.state;
+  const state = prompt?.body;
   if (state?.shape !== "order" || !prompt || !decision) return null;
   const items = state.items.flatMap((item) => {
     const id = item.kind === "ability" ? item.id : undefined;

@@ -631,14 +631,10 @@ export type PromptView = {
  */
 revision: number, 
 /**
- * How the prompt is answered.
+ * What the prompt is for. Its [`Shape`] is the purpose's ([`Purpose::shape`]). The wire
+ * writes it as its name, and TypeScript has the closed list of names.
  */
-shape: ShapeName, 
-/**
- * What the prompt is for: a [`Purpose`](beryl_engine::card::Purpose)'s name, each of one
- * shape. A string, so that a new purpose changes no type here.
- */
-purpose: string, 
+purpose: Purpose, 
 /**
  * Which part of the shape the open decision's pick answers: a prompt is a run of picks.
  */
@@ -652,28 +648,15 @@ title: string,
  */
 words: Words, 
 /**
- * What the prompt is about as a whole: the cards looked at on top of a library, a crew
- * cost's power, the life to pay. Zero where its purpose has no such number.
+ * How much the prompt is about as a whole: the cards looked at on top of a library, a
+ * crew cost's power, the life to pay. None where its purpose has no such number.
  */
-count: number, 
-/**
- * What this part still takes: the objects still to pick, the power still to tap.
- */
-most: number, 
-/**
- * Where the cards go: a split's two destinations, or the one a pick or a yes sends a
- * card to and none.
- */
-places: [PlaceName, PlaceName], 
-/**
- * The mana cost the prompt pays or asks about, as Oracle text writes it.
- */
-cost: string | null, 
+count: number | null, 
 /**
  * The objects the question is about, in candidate order: what a yes then picks among,
  * the creatures being aimed, the cards a yes or no or a mode asks about.
  */
-about: Array<number>, 
+about: Array<ObjectId>, 
 /**
  * Whose cards the prompt is among and the zone they lie in: those of the first of
  * `about`, or else of the first object the decision offers. None where it has neither.
@@ -681,21 +664,22 @@ about: Array<number>,
 from: Lies | null, 
 /**
  * The mark on each card, ability and player that has one, at most one each, in no
- * order. Empty until the session holds this shape's state.
+ * order.
  */
 marks: Array<Marked>, 
 /**
- * The buttons, in the order they are laid out. Empty until the session holds this
- * shape's state.
+ * The buttons, in the order they are laid out.
  */
 buttons: Array<PromptButton>, 
 /**
- * What the player has put together so far, where the session holds this shape's state;
- * None where the UI still does.
+ * What the player has put together so far, by the prompt's shape; or that the session
+ * holds no state for the prompt, which the UI then answers by candidate.
  */
-state: ShapeView | null, };
+body: ShapeBody, };
 
-export type ShapeName = "pick" | "order" | "split" | "yesNo" | "number" | "mode" | "catalog" | "divide" | "pay" | "declare";
+export type Purpose = "priority" | "target" | "choose" | "discard" | "cleanup" | "put-on-bottom" | "legend-rule" | "look" | "search" | "untap" | "manifest-dread" | "exile-cost" | "combat-damage" | "trigger-order" | "scry" | "arrange" | "put-back" | "may" | "may-search" | "move" | "fateseal" | "top-or-bottom" | "explore" | "unless-pays" | "pay-life" | "x" | "play-or-draw" | "mulligan" | "cast-offer" | "act" | "color" | "creature-type" | "card-name" | "divide-damage" | "distribute-counters" | "mana" | "crew" | "waterbend" | "attack" | "block";
+
+export type ObjectId = number;
 
 export type PartName = "pick" | "whether" | "instead" | "count" | "first" | "second" | "aim" | "plan";
 
@@ -751,12 +735,12 @@ primary: boolean, };
 
 export type ButtonId = { "kind": "confirm" } | { "kind": "decline" } | { "kind": "auto" } | { "kind": "passOn" } | { "kind": "option", index: number, } | { "kind": "ability", nth: number, };
 
-export type ShapeView = { "shape": "pick", 
+export type ShapeBody = { "shape": "pick", 
 /**
  * The cards laid out to pick from when they are not on the table as it lies: the
  * top of a library, a hand, a graveyard. Empty when they are picked where they lie.
  */
-tray: Array<number>, 
+tray: Array<ObjectId>, 
 /**
  * How few and how many may be picked.
  */
@@ -774,7 +758,12 @@ warned: Array<Subject>, } | { "shape": "order", items: Array<Subject>, } | { "sh
 /**
  * The cards the question is about.
  */
-about: Array<number>, } | { "shape": "number", values: Array<number>, value: number, 
+about: Array<ObjectId>, 
+/**
+ * Where the card the question is about goes on a yes, and on a no; none where the
+ * question sends no card anywhere.
+ */
+places: [PlaceName, PlaceName] | null, } | { "shape": "number", values: Array<number>, value: number, 
 /**
  * What the value means, where it means more than itself: the total cost an X makes.
  */
@@ -782,7 +771,7 @@ detail: string | null, } | { "shape": "mode",
 /**
  * The cards the choice is about.
  */
-about: Array<number>, } | { "shape": "catalog", entries: Array<string>, 
+about: Array<ObjectId>, } | { "shape": "catalog", entries: Array<string>, 
 /**
  * The entry chosen, by index.
  */
@@ -808,13 +797,18 @@ lined: boolean,
 /**
  * The objects picked whose aim the next click gives.
  */
-aiming: Array<number>, };
+aiming: Array<ObjectId>, } | { "shape": "candidates" };
 
-export type Pile = { place: PlaceName, label: string, 
+export type Pile = { 
+/**
+ * Where its cards go; none where they stay where they lie, as the cards a put-back
+ * leaves in the hand do.
+ */
+place: PlaceName | null, label: string, 
 /**
  * The cards in it: where the place keeps an order, as they will lie, the top first.
  */
-cards: Array<number>, 
+cards: Array<ObjectId>, 
 /**
  * How many it must hold for the prompt to confirm, if a number.
  */
@@ -826,9 +820,9 @@ closed: boolean, };
 
 export type Share = { on: Subject, amount: number, };
 
-export type Pair = { from: number, to: Subject, };
+export type Pair = { from: ObjectId, to: Subject, };
 
-export type PlaceName = "none" | "top" | "onTop" | "bottom" | "hand" | "graveyard" | "exile" | "battlefield";
+export type PlaceName = "top" | "onTop" | "bottom" | "hand" | "graveyard" | "exile" | "battlefield";
 
 export type Click = { "kind": "on", on: Subject, } | { "kind": "button", button: ButtonId, } | { "kind": "drop", on: Subject, pile: number, at: number, } | { "kind": "number", n: number, on: Subject | null, } | { "kind": "entry", index: number, };
 

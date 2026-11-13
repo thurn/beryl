@@ -19,82 +19,127 @@ use crate::script::{Arrow, Mark, Subject};
 pub struct PromptView {
     /// Counts this prompt's states from 0. A click names the state it was made on.
     pub revision: u32,
-    /// How the prompt is answered.
-    pub shape: ShapeName,
-    /// What the prompt is for: a [`Purpose`](beryl_engine::card::Purpose)'s name, each of one
-    /// shape. A string, so that a new purpose changes no type here.
-    pub purpose: String,
+    /// What the prompt is for. Its [`Shape`] is the purpose's ([`Purpose::shape`]). The wire
+    /// writes it as its name, and TypeScript has the closed list of names.
+    #[serde(with = "purpose_name")]
+    #[ts(type = "Purpose")]
+    pub purpose: Purpose,
     /// Which part of the shape the open decision's pick answers: a prompt is a run of picks.
     pub part: PartName,
     /// What the prompt asks, in words, from the wording table.
     pub title: String,
     /// The words of the buttons a UI that holds the prompt's state itself puts on it.
     pub words: Words,
-    /// What the prompt is about as a whole: the cards looked at on top of a library, a crew
-    /// cost's power, the life to pay. Zero where its purpose has no such number.
-    pub count: u8,
-    /// What this part still takes: the objects still to pick, the power still to tap.
-    pub most: u8,
-    /// Where the cards go: a split's two destinations, or the one a pick or a yes sends a
-    /// card to and none.
-    pub places: [PlaceName; 2],
-    /// The mana cost the prompt pays or asks about, as Oracle text writes it.
-    pub cost: Option<String>,
+    /// How much the prompt is about as a whole: the cards looked at on top of a library, a
+    /// crew cost's power, the life to pay. None where its purpose has no such number.
+    pub count: Option<u8>,
     /// The objects the question is about, in candidate order: what a yes then picks among,
     /// the creatures being aimed, the cards a yes or no or a mode asks about.
-    pub about: Vec<u16>,
+    pub about: Vec<ObjectId>,
     /// Whose cards the prompt is among and the zone they lie in: those of the first of
     /// `about`, or else of the first object the decision offers. None where it has neither.
     pub from: Option<Lies>,
     /// The mark on each card, ability and player that has one, at most one each, in no
-    /// order. Empty until the session holds this shape's state.
+    /// order.
     pub marks: Vec<Marked>,
-    /// The buttons, in the order they are laid out. Empty until the session holds this
-    /// shape's state.
+    /// The buttons, in the order they are laid out.
     pub buttons: Vec<PromptButton>,
-    /// What the player has put together so far, where the session holds this shape's state;
-    /// None where the UI still does.
-    pub state: Option<ShapeView>,
+    /// What the player has put together so far, by the prompt's shape; or that the session
+    /// holds no state for the prompt, which the UI then answers by candidate.
+    pub body: ShapeBody,
 }
 
 impl PromptView {
     /// Whether the prompt is for `purpose`.
     pub fn is(&self, purpose: Purpose) -> bool {
-        self.purpose == purpose.name()
+        self.purpose == purpose
+    }
+
+    /// How the prompt is answered.
+    pub fn shape(&self) -> Shape {
+        self.purpose.shape()
     }
 }
 
-/// A prompt's shape ([`Shape`]).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub enum ShapeName {
-    Pick,
-    Order,
-    Split,
-    YesNo,
-    Number,
-    Mode,
-    Catalog,
-    Divide,
-    Pay,
-    Declare,
+/// The name of `shape`, as the wire tags a [`ShapeBody`] of it.
+pub fn shape_name(shape: Shape) -> &'static str {
+    match shape {
+        Shape::Pick => "pick",
+        Shape::Order => "order",
+        Shape::Split => "split",
+        Shape::YesNo => "yesNo",
+        Shape::Number => "number",
+        Shape::Mode => "mode",
+        Shape::Catalog => "catalog",
+        Shape::Divide => "divide",
+        Shape::Pay => "pay",
+        Shape::Declare => "declare",
+    }
 }
 
-impl From<Shape> for ShapeName {
-    fn from(shape: Shape) -> Self {
-        match shape {
-            Shape::Pick => ShapeName::Pick,
-            Shape::Order => ShapeName::Order,
-            Shape::Split => ShapeName::Split,
-            Shape::YesNo => ShapeName::YesNo,
-            Shape::Number => ShapeName::Number,
-            Shape::Mode => ShapeName::Mode,
-            Shape::Catalog => ShapeName::Catalog,
-            Shape::Divide => ShapeName::Divide,
-            Shape::Pay => ShapeName::Pay,
-            Shape::Declare => ShapeName::Declare,
-        }
+/// A [`Purpose`] on the wire: its name.
+mod purpose_name {
+    use beryl_engine::card::Purpose;
+    use serde::de::Error as _;
+    use serde::{Deserialize as _, Deserializer, Serializer};
+
+    #[expect(
+        clippy::trivially_copy_pass_by_ref,
+        reason = "serde's `with` passes a reference"
+    )]
+    pub fn serialize<S: Serializer>(purpose: &Purpose, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(purpose.name())
     }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Purpose, D::Error> {
+        let name = String::deserialize(d)?;
+        (Purpose::ALL.iter().copied())
+            .find(|purpose| purpose.name() == name)
+            .ok_or_else(|| D::Error::custom(format!("no purpose is named {name:?}")))
+    }
+}
+
+/// The TypeScript type of a [`Purpose`]: the union of every purpose's name.
+pub(crate) fn purpose_decl() -> String {
+    let names: Vec<String> = (Purpose::ALL.iter())
+        .map(|purpose| format!("\"{}\"", purpose.name()))
+        .collect();
+    format!("type Purpose = {};", names.join(" | "))
+}
+
+/// An object on the wire: its public slot, the number a [`Subject::Object`] and an
+/// [`ObjectView`](crate::protocol::ObjectView) name it by.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TS)]
+#[serde(transparent)]
+#[ts(type = "number")]
+pub struct ObjectId(pub u16);
+
+impl From<u16> for ObjectId {
+    fn from(slot: u16) -> Self {
+        ObjectId(slot)
+    }
+}
+
+impl std::fmt::Display for ObjectId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl From<ObjectId> for u16 {
+    fn from(id: ObjectId) -> Self {
+        id.0
+    }
+}
+
+/// The objects in `slots`, as the wire names them.
+pub(crate) fn ids(slots: impl IntoIterator<Item = u16>) -> Vec<ObjectId> {
+    slots.into_iter().map(ObjectId).collect()
+}
+
+/// The slots of the objects `ids` names.
+pub(crate) fn slots_of(ids: &[ObjectId]) -> Vec<u16> {
+    ids.iter().map(|id| id.0).collect()
 }
 
 /// Which part of a prompt a pick answers ([`Part`]).
@@ -190,7 +235,7 @@ pub enum ButtonId {
     /// Answers with what the player has put together.
     Confirm,
     /// Answers with nothing: pass priority, find nothing, no attackers. Where the prompt asks
-    /// about a pick before it answers ([`ShapeView::Pick`]'s `warned`), it takes the pick back;
+    /// about a pick before it answers ([`ShapeBody::Pick`]'s `warned`), it takes the pick back;
     /// on the choice among a card's ways, open over a priority, it goes back to the priority;
     /// with attackers or blockers declared, it takes the declaration back.
     Decline,
@@ -209,15 +254,16 @@ pub enum ButtonId {
     Ability { nth: u8 },
 }
 
-/// A shape's own state, tagged by its [`Shape`].
+/// What a prompt's player has put together so far, tagged by its [`Shape`]; or that the
+/// session holds no state for the prompt.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "shape", rename_all = "camelCase")]
-pub enum ShapeView {
+pub enum ShapeBody {
     /// Objects picked one click at a time.
     Pick {
         /// The cards laid out to pick from when they are not on the table as it lies: the
         /// top of a library, a hand, a graveyard. Empty when they are picked where they lie.
-        tray: Vec<u16>,
+        tray: Vec<ObjectId>,
         /// How few and how many may be picked.
         least: u8,
         most: u8,
@@ -239,7 +285,10 @@ pub enum ShapeView {
     /// A question with two answers, each a button.
     YesNo {
         /// The cards the question is about.
-        about: Vec<u16>,
+        about: Vec<ObjectId>,
+        /// Where the card the question is about goes on a yes, and on a no; none where the
+        /// question sends no card anywhere.
+        places: Option<[PlaceName; 2]>,
     },
     /// A number among `values`, ascending.
     Number {
@@ -251,7 +300,7 @@ pub enum ShapeView {
     /// One of a few answers, each a button.
     Mode {
         /// The cards the choice is about.
-        about: Vec<u16>,
+        about: Vec<ObjectId>,
     },
     /// One entry of a list.
     Catalog {
@@ -287,25 +336,30 @@ pub enum ShapeView {
         /// than one thing can be attacked, as the script draws them once it is declared.
         lined: bool,
         /// The objects picked whose aim the next click gives.
-        aiming: Vec<u16>,
+        aiming: Vec<ObjectId>,
     },
+    /// The session holds no state for this prompt (a payment whose plans tap the same
+    /// permanents, a pick no shape here takes): the UI answers it by the decision's candidates,
+    /// with buttons it words from the prompt's [`Words`].
+    Candidates,
 }
 
-impl ShapeView {
-    /// The shape this is the state of.
-    pub fn shape(&self) -> Shape {
-        match self {
-            ShapeView::Pick { .. } => Shape::Pick,
-            ShapeView::Order { .. } => Shape::Order,
-            ShapeView::Split { .. } => Shape::Split,
-            ShapeView::YesNo { .. } => Shape::YesNo,
-            ShapeView::Number { .. } => Shape::Number,
-            ShapeView::Mode { .. } => Shape::Mode,
-            ShapeView::Catalog { .. } => Shape::Catalog,
-            ShapeView::Divide { .. } => Shape::Divide,
-            ShapeView::Pay { .. } => Shape::Pay,
-            ShapeView::Declare { .. } => Shape::Declare,
-        }
+impl ShapeBody {
+    /// The shape this is the state of; none where the session holds no state.
+    pub fn shape(&self) -> Option<Shape> {
+        Some(match self {
+            ShapeBody::Pick { .. } => Shape::Pick,
+            ShapeBody::Order { .. } => Shape::Order,
+            ShapeBody::Split { .. } => Shape::Split,
+            ShapeBody::YesNo { .. } => Shape::YesNo,
+            ShapeBody::Number { .. } => Shape::Number,
+            ShapeBody::Mode { .. } => Shape::Mode,
+            ShapeBody::Catalog { .. } => Shape::Catalog,
+            ShapeBody::Divide { .. } => Shape::Divide,
+            ShapeBody::Pay { .. } => Shape::Pay,
+            ShapeBody::Declare { .. } => Shape::Declare,
+            ShapeBody::Candidates => return None,
+        })
     }
 }
 
@@ -313,10 +367,12 @@ impl ShapeView {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Pile {
-    pub place: PlaceName,
+    /// Where its cards go; none where they stay where they lie, as the cards a put-back
+    /// leaves in the hand do.
+    pub place: Option<PlaceName>,
     pub label: String,
     /// The cards in it: where the place keeps an order, as they will lie, the top first.
-    pub cards: Vec<u16>,
+    pub cards: Vec<ObjectId>,
     /// How many it must hold for the prompt to confirm, if a number.
     pub exactly: Option<u8>,
     /// It is settled: no card can be dropped into it or taken out.
@@ -336,7 +392,7 @@ pub struct Share {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Pair {
-    pub from: u16,
+    pub from: ObjectId,
     pub to: Subject,
 }
 
@@ -344,7 +400,6 @@ pub struct Pair {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum PlaceName {
-    None,
     Top,
     OnTop,
     Bottom,
@@ -354,10 +409,11 @@ pub enum PlaceName {
     Battlefield,
 }
 
-impl From<Place> for PlaceName {
-    fn from(place: Place) -> Self {
-        match place {
-            Place::None => PlaceName::None,
+impl PlaceName {
+    /// The place `place` names, if any: [`Place::None`] names none.
+    pub fn of(place: Place) -> Option<PlaceName> {
+        Some(match place {
+            Place::None => return None,
             Place::Top => PlaceName::Top,
             Place::OnTop => PlaceName::OnTop,
             Place::Bottom => PlaceName::Bottom,
@@ -365,7 +421,7 @@ impl From<Place> for PlaceName {
             Place::Graveyard => PlaceName::Graveyard,
             Place::Exile => PlaceName::Exile,
             Place::Battlefield => PlaceName::Battlefield,
-        }
+        })
     }
 }
 

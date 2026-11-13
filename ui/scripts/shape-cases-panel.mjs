@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
  * catalog's entries with the one chosen in brackets, and each recipient's share of a
  * division; none of them for any other prompt. */
 export function panelOf(prompt) {
-    const state = prompt?.state ?? {};
+    const state = prompt?.body ?? {};
     return {
         value: state.shape === "number" ? String(state.value) : null,
         entries:
@@ -32,7 +32,7 @@ export function panelOf(prompt) {
  * the dock's for a number prompt and the recipient's own for a share of a division. A step
  * goes to the next number, so the recording's clicks are held to go one at a time. */
 export async function set(page, click, before) {
-    const { state } = before.prompt;
+    const { body: state } = before.prompt;
     if (click.kind === "entry") {
         await page.locator(`.stage-entry[data-entry="${click.index}"]`).click();
         return;

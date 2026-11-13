@@ -511,7 +511,7 @@ fn token_made() -> Play {
 fn a_creature_made_attacking_is_aimed_by_one_click() {
     let mut play = token_made();
     let emperor = play.named(THE_WANDERING_EMPEROR, ZoneName::Battlefield, Side::Opponent)[0];
-    let token = play.decision().prompt.about[0];
+    let token: u16 = play.decision().prompt.about[0].into();
     let open = format!(
         "declare attack: Choose attack target\n\
          declare attack:\n\

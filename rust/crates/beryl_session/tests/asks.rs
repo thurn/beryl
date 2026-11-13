@@ -6,42 +6,48 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 use beryl_cards::{CARDS, names};
-use beryl_engine::card::{Part, Purpose, Shape};
+use beryl_engine::card::{ManaCost, Part, Prompt, Purpose, Shape};
 use beryl_engine::state::Pending;
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{Observation, Scratch, view};
-use beryl_session::prompt::{Lies, PlaceName, PromptView, ShapeName};
+use beryl_session::prompt::{Lies, PlaceName, PromptView, ShapeBody, shape_name};
 use beryl_session::protocol::{CardHandling, DecisionView, Moment, Side, player_view};
 use beryl_session::{DecisionId, SessionId, Status, StopsSetting};
 
 /// A prompt in one line, as these tests expect it: the decision's kind, then the prompt's
 /// shape, purpose and part, its title, its two numbers, its cost, where its cards go, whose
-/// cards it shows and where they lie, and how many objects it is about.
-fn line(decision: &DecisionView) -> String {
+/// cards it shows and where they lie, and how many objects it is about. The numbers, the
+/// cost and the places are the engine's `record`, which the wire carries only where a
+/// shape's state shows them.
+fn line(decision: &DecisionView, record: &Prompt) -> String {
     let PromptView {
-        shape,
         purpose,
         part,
         title,
         count,
-        most,
-        places,
-        cost,
         about,
         from,
         ..
     } = &*decision.prompt;
-    let mut out = format!(
-        "{} {} {purpose} {}: {title:?} {count}/{most}",
-        name(&decision.kind),
-        name(shape),
-        name(part)
+    assert_eq!(
+        count.unwrap_or(0),
+        record.count,
+        "the wire's count is the record's"
     );
-    if let Some(cost) = cost {
-        write!(out, " {cost}").unwrap();
+    let mut out = format!(
+        "{} {} {} {}: {title:?} {}/{}",
+        name(&decision.kind),
+        shape_name(purpose.shape()),
+        purpose.name(),
+        name(part),
+        record.count,
+        record.most,
+    );
+    if record.cost != ManaCost::default() {
+        write!(out, " {}", beryl_card::render::mana_text(record.cost)).unwrap();
     }
-    for place in places.iter().filter(|&&place| place != PlaceName::None) {
-        write!(out, " >{}", name(place)).unwrap();
+    for place in record.places.into_iter().filter_map(PlaceName::of) {
+        write!(out, " >{}", name(&place)).unwrap();
     }
     if let Some(Lies { player, zone }) = from {
         write!(out, " {}'s {}", name(player), name(zone)).unwrap();
@@ -62,6 +68,12 @@ fn name<T: serde::Serialize>(value: &T) -> String {
 
 /// Every decision `card`'s scenarios meet, as its seat is sent it.
 fn decisions(card: &str) -> Vec<DecisionView> {
+    asked(card).into_iter().map(|(view, _)| view).collect()
+}
+
+/// Every decision `card`'s scenarios meet, as its seat is sent it, with the engine's record
+/// of its prompt.
+fn asked(card: &str) -> Vec<(DecisionView, Prompt)> {
     let (_, scenarios) = beryl_cards::scenarios()
         .iter()
         .find(|&&(name, _)| name == card)
@@ -88,7 +100,7 @@ fn decisions(card: &str) -> Vec<DecisionView> {
             let Status::Deciding { decision } = v.status else {
                 panic!("no decision is open");
             };
-            seen.push(decision);
+            seen.push((decision, d.prompt));
         })
         .unwrap_or_else(|e| panic!("{e}"));
     }
@@ -99,8 +111,8 @@ fn decisions(card: &str) -> Vec<DecisionView> {
 /// come, each in one [`line`].
 fn asks(card: &str, purposes: &[Purpose]) -> Vec<String> {
     let mut seen = Vec::new();
-    for decision in decisions(card) {
-        let asked = line(&decision);
+    for (decision, record) in asked(card) {
+        let asked = line(&decision, &record);
         if purposes.iter().any(|&p| decision.prompt.is(p)) && !seen.contains(&asked) {
             seen.push(asked);
         }
@@ -157,11 +169,11 @@ fn a_token_awaiting_its_attack_target_is_public_from_both_seats() {
             panic!("the attack target is open");
         };
         assert_eq!(
-            line(&decision),
+            line(&decision, &d.prompt),
             "attackTarget declare attack aim: \"Choose attack target\" 0/0 \
              you's battlefield about 1"
         );
-        let slots = decision.prompt.about;
+        let slots: Vec<u16> = decision.prompt.about.iter().map(|&id| id.into()).collect();
         assert_eq!(slots.len(), 1);
         assert_eq!(observer.status, Status::Thinking);
         assert_eq!(observer.pending_attackers, Some(slots.clone()));
@@ -422,22 +434,26 @@ fn abhorrent_oculus_asks_for_graveyard_cards_then_a_card_to_manifest() {
 /// purpose, changes nothing in this file.
 #[test]
 fn every_prompt_the_scenarios_reach_is_sent_with_its_shape_and_a_whole_title() {
-    let shapes: BTreeMap<&str, String> = (Purpose::ALL.iter())
-        .map(|purpose| (purpose.name(), name(&ShapeName::from(purpose.shape()))))
+    let shapes: BTreeMap<&str, &str> = (Purpose::ALL.iter())
+        .map(|purpose| (purpose.name(), shape_name(purpose.shape())))
         .collect();
     let mut reached = BTreeSet::new();
     for &(card, _) in beryl_cards::scenarios() {
         for decision in decisions(card) {
             let prompt = *decision.prompt;
             // The state is the game's to add: a view of a position has none.
-            assert_eq!((prompt.revision, &prompt.state), (0, &None), "{card}");
+            assert_eq!(
+                (prompt.revision, &prompt.body),
+                (0, &ShapeBody::Candidates),
+                "{card}"
+            );
             assert!(
                 prompt.marks.is_empty() && prompt.buttons.is_empty(),
                 "{card}"
             );
-            let purpose = prompt.purpose.as_str();
+            let purpose = prompt.purpose.name();
             assert_eq!(
-                Some(&name(&prompt.shape)),
+                Some(&shape_name(prompt.shape())),
                 shapes.get(purpose),
                 "{card}: {purpose}"
             );
@@ -448,7 +464,7 @@ fn every_prompt_the_scenarios_reach_is_sent_with_its_shape_and_a_whole_title() {
             let unfilled = (title.split('{').skip(1))
                 .any(|rest| rest.starts_with(|c: char| c.is_ascii_lowercase()));
             assert!(!unfilled, "{card}: {purpose} is titled {title:?}");
-            reached.insert(prompt.purpose);
+            reached.insert(purpose);
         }
     }
     // The scenarios reach a prompt of every shape but the two no card asks yet.

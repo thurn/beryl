@@ -412,7 +412,8 @@ impl Condition {
             Condition::Decision(kind) => decision.is_some_and(|d| d.kind == *kind && !d.halt),
             Condition::Prompt(asked) => decision.is_some_and(|d| {
                 let (purpose, part) = asked.split_once(' ').unwrap_or((asked, ""));
-                d.prompt.purpose == purpose && (part.is_empty() || json!(d.prompt.part) == part)
+                d.prompt.purpose.name() == purpose
+                    && (part.is_empty() || json!(d.prompt.part) == part)
             }),
             Condition::Candidates(n) => decision.is_some_and(|d| d.candidates.len() == *n),
             Condition::Tapped(card) => mine(view, card).any(|o| o.tapped),

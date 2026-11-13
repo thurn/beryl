@@ -15,7 +15,6 @@ const card = (slot) => ({ kind: "object", slot });
  * must come to hold `exactly`, and `cards` in the second. */
 const split = (first, second, more = {}) => ({
     revision: 0,
-    shape: "split",
     purpose: "arrange",
     title: "Put one of them into your hand.",
     marks: [...first, ...second].map((slot) => ({
@@ -23,7 +22,7 @@ const split = (first, second, more = {}) => ({
         mark: "eligible",
     })),
     buttons: [],
-    state: {
+    body: {
         shape: "split",
         piles: [
             { place: "hand", label: "Hand", cards: first, exactly: 1 },
@@ -212,10 +211,9 @@ test("a pick's tray is clicked where it is held up, whatever a board says of its
     const { made, prompts, sent } = prompted();
     const asked = {
         ...split([], []),
-        shape: "pick",
         purpose: "search",
         marks: [{ on: card(10), mark: "eligible" }],
-        state: {
+        body: {
             shape: "pick",
             tray: [10],
             least: 0,
@@ -237,7 +235,7 @@ test("a pick's tray is clicked where it is held up, whatever a board says of its
     assert.deepEqual(sent[0].click, { kind: "on", on: card(10) });
     // A pick on the table holds nothing up.
     assert.equal(
-        trayOf({ ...asked, state: { ...asked.state, tray: [] } }),
+        trayOf({ ...asked, body: { ...asked.body, tray: [] } }),
         undefined,
     );
 });

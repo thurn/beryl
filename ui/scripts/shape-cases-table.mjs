@@ -12,7 +12,7 @@ const named = (on) => (on.kind === "object" ? String(on.slot) : on.player);
 /** How much of the cost `prompt` pays is still to pay, as the session wrote it, or how much
  * of what it divides is still to give out; nothing for a prompt of neither. */
 export function leftOf(prompt) {
-    const state = prompt?.state;
+    const state = prompt?.body;
     if (state?.shape === "divide") return String(state.left);
     return state?.shape === "pay" ? state.left : "";
 }
@@ -47,7 +47,7 @@ function damageLeft(state, view) {
  * that declares blocks over `view`, the damage still on its way to the player (`damageLeft`),
  * and null for any other, or with no view given. */
 export function declared(prompt, view) {
-    const state = prompt?.state;
+    const state = prompt?.body;
     if (state?.shape !== "declare") {
         return { arrow: null, lines: [], damage: null };
     }
@@ -111,7 +111,7 @@ function looks({ slots, mark }) {
  * Returns what the state showed of the theme, for the check to hold the recording whole. */
 async function payment(page, dock, before, after) {
     const prompt = after.prompt;
-    if (prompt?.state?.shape !== "pay") return {};
+    if (prompt?.body.shape !== "pay") return {};
     const what = `paying with permanents (${prompt.purpose}, revision ${prompt.revision})`;
     const [paying, suggested, eligible] = [
         "paying",
@@ -130,7 +130,7 @@ async function payment(page, dock, before, after) {
     }
     // One taken back by the click stands as it rests.
     const back =
-        before.prompt.state?.shape === "pay"
+        before.prompt.body.shape === "pay"
             ? marked(before.prompt, "paying").filter(
                   (slot) => !paying.includes(slot),
               )
@@ -276,7 +276,7 @@ async function ticked({ tick, slots, keys }) {
  * that taps it does not stand it up to turn it again (by-1y4: "they physically tap to show
  * their state"): at every tick from the answer on it lies as it lay. */
 async function tapThatPays(page, before, tick) {
-    if (before.prompt.state?.shape !== "pay") return;
+    if (before.prompt.body.shape !== "pay") return;
     const slots = marked(before.prompt, "paying");
     const seen = await page.evaluate(ticked, { tick, slots, keys: [] });
     for (const [i, slot] of slots.entries()) {

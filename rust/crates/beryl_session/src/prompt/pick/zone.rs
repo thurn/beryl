@@ -10,7 +10,7 @@ use beryl_engine::card::Purpose;
 
 use super::{Objects, Opens, card};
 use crate::prompt::held::{Table, offered};
-use crate::prompt::{Lies, PartName};
+use crate::prompt::{Lies, ObjectId, PartName};
 use crate::protocol::{Candidate, DecisionView, Side, ZoneName};
 use crate::script::Subject;
 
@@ -41,9 +41,9 @@ impl Objects {
     ) -> Option<Objects> {
         let prompt = &decision.prompt;
         let lies = prompt.from?;
-        let cards = table.laid_out(lies, prompt.count);
+        let cards = table.laid_out(lies, table.record.count);
         let offered = offered(decision);
-        let about = |slot: &u16| prompt.about.contains(slot);
+        let about = |&slot: &u16| prompt.about.contains(&ObjectId(slot));
         let in_graveyard = lies.zone == ZoneName::Graveyard;
         let (opens, takes) = match prompt.part {
             // A yes picks among the cards the question is about.
@@ -72,10 +72,10 @@ impl Objects {
         let ends = (decision.candidates.iter()).any(|c| c.option == Candidate::Done);
         let all = u8::try_from(takes.len()).unwrap_or(u8::MAX);
         let most = match opens {
-            Opens::Instead(_) => prompt.most.min(all),
-            _ => prompt.most.max(1).min(all),
+            Opens::Instead(_) => table.record.most.min(all),
+            _ => table.record.most.max(1).min(all),
         };
-        let searched = lies.zone == ZoneName::Library && prompt.count == 0;
+        let searched = lies.zone == ZoneName::Library && table.record.count == 0;
         let own_hand = lies
             == Lies {
                 player: Side::You,

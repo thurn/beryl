@@ -14,7 +14,7 @@ use beryl_cards::names::{
 use beryl_engine::card::{Prompt, Purpose, Shape};
 use beryl_engine::{Bitboard, Decision, DecisionKind, Seat, SlotId as _, TurnStep, Zone, ZoneKey};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
-use beryl_session::prompt::{ButtonId, Click, Clicked, Held, ShapeView};
+use beryl_session::prompt::{ButtonId, Click, Clicked, Held, ShapeBody};
 use beryl_session::protocol::{Candidate, Side, ZoneName};
 use beryl_session::script::{Mark, Subject};
 use play::{Play, asked, card, cards, position};
@@ -210,7 +210,7 @@ fn a_pick_of_cards_for_any_purpose_is_answered_by_clicks() {
                 }
                 assert_eq!(marked(&held, on), Some(Mark::Selected), "{purpose:?}");
             }
-            let Some(ShapeView::Pick { picked, .. }) = &held.view().state else {
+            let ShapeBody::Pick { picked, .. } = &held.view().body else {
                 panic!("{purpose:?} is not held as a pick");
             };
             assert_eq!(picked.len(), 2, "{purpose:?}");

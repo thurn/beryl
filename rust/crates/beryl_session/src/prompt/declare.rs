@@ -20,7 +20,9 @@ use beryl_engine::{Choice, Decision, Layout, Opt, SlotId as _, State};
 
 use super::ahead;
 use super::held::{Clicked, Run, Step, Table, Want, alike, button, named, options};
-use super::{ButtonId, Click, Marked, Pair, PartName, PromptView, ShapeView};
+use super::{
+    ButtonId, Click, Marked, ObjectId, Pair, PartName, PromptView, ShapeBody, ids, slots_of,
+};
 use crate::protocol::{Candidate, DecisionView, Side};
 use crate::script::{Arrow, Mark, Subject};
 
@@ -80,7 +82,7 @@ impl Declare {
             cancel: prompt.words.cancel.clone(),
         };
         if prompt.part == PartName::Aim {
-            declare.aiming.clone_from(&prompt.about);
+            declare.aiming = slots_of(&prompt.about);
             declare.aims = Some(aims(table, d));
             return Some(declare);
         }
@@ -127,14 +129,17 @@ impl Declare {
     }
 
     fn declared(&self, slot: u16) -> bool {
-        self.aiming.contains(&slot) || self.pairs.iter().any(|pair| pair.from == slot)
+        self.aiming.contains(&slot) || self.pairs.iter().any(|pair| pair.from == ObjectId(slot))
     }
 
     /// Declares the creature in `slot`: aimed at once where it has one thing to aim at, and
     /// awaiting its aim otherwise. Attackers await theirs together, a blocker alone.
     fn declare(&mut self, slot: u16) {
         match *self.aims_of(slot) {
-            [to] => self.pairs.push(Pair { from: slot, to }),
+            [to] => self.pairs.push(Pair {
+                from: ObjectId(slot),
+                to,
+            }),
             _ if self.purpose == Purpose::Block => self.aiming = vec![slot],
             _ => self.aiming.push(slot),
         }
@@ -187,7 +192,10 @@ impl Declare {
                 return Clicked::Answers(Run::new(self.purpose, steps));
             }
             for from in self.aiming.drain(..) {
-                self.pairs.push(Pair { from, to: on });
+                self.pairs.push(Pair {
+                    from: ObjectId(from),
+                    to: on,
+                });
             }
             return Clicked::Changed;
         }
@@ -199,7 +207,7 @@ impl Declare {
         }
         if self.declared(slot) {
             self.aiming.retain(|&aiming| aiming != slot);
-            self.pairs.retain(|pair| pair.from != slot);
+            self.pairs.retain(|pair| pair.from != ObjectId(slot));
             return Clicked::Changed;
         }
         if !self.able.iter().any(|&(able, _)| able == slot) {
@@ -221,7 +229,7 @@ impl Declare {
     pub(crate) fn show(&self, view: &mut PromptView) {
         let marked = |mark: Mark| move |on: Subject| Marked { on, mark };
         let card = |slot: u16| Subject::Object { slot };
-        let declared = (self.pairs.iter().map(|pair| pair.from))
+        let declared = (self.pairs.iter().map(|pair| pair.from.0))
             .chain(self.aiming.iter().copied())
             .map(card);
         let able = (self.able.iter().map(|&(slot, _)| slot))
@@ -249,12 +257,12 @@ impl Declare {
                 button(ButtonId::Decline, &self.cancel, true, false),
             ]
         };
-        view.state = Some(ShapeView::Declare {
+        view.body = ShapeBody::Declare {
             arrow: self.arrow,
             pairs: self.pairs.clone(),
             lined: self.lined,
-            aiming: self.aiming.clone(),
-        });
+            aiming: ids(self.aiming.iter().copied()),
+        };
     }
 }
 
@@ -339,14 +347,14 @@ impl Aims {
                 // blocking now.
                 if let Some(pair) = self.aiming.take()
                     && let Subject::Object { slot: aimed } = pair.to
-                    && let Some(blocker) = L::Slot::from_num(pair.from)
+                    && let Some(blocker) = L::Slot::from_num(pair.from.0)
                     && s.object(blocker).is_blocking()
                     && let Some(took) = s.object(blocker).combat()
                 {
                     self.take(aimed, took.num());
                 }
-                let itself = |pair: &Pair| named(d, options, card(pair.from));
-                let stands = |pair: &Pair| alike(s, options, card(pair.from));
+                let itself = |pair: &Pair| named(d, options, card(pair.from.0));
+                let stands = |pair: &Pair| alike(s, options, card(pair.from.0));
                 let first = |found: &dyn Fn(&Pair) -> Option<usize>| {
                     (self.left.iter().enumerate())
                         .filter_map(|(at, pair)| Some((found(pair)?, at)))

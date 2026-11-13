@@ -124,7 +124,7 @@ export function Ways({
   space: TraySpace;
 }) {
   const ways = waysOf(prompt);
-  const state = prompt?.state;
+  const state = prompt?.body;
   if (ways.length === 0 || state?.shape !== "mode" || !decision) return null;
   const object = view.objects.find((o) => o.slot === state.about[0]);
   const width = frame(space, ways.length);
@@ -201,7 +201,7 @@ export function Entries({
   prompts: Prompts;
   space: TraySpace;
 }) {
-  const state = prompt?.state;
+  const state = prompt?.body;
   if (state?.shape !== "catalog") return null;
   return (
     <div
@@ -247,7 +247,7 @@ export function Shares({
   stage: ScriptStage;
 }) {
   const { resting } = useSyncExternalStore(stage.subscribe, () => stage.shown);
-  const state = prompt?.state;
+  const state = prompt?.body;
   if (state?.shape !== "divide") return null;
   return (
     <>

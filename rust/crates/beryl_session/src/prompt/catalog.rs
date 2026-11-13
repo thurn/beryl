@@ -7,7 +7,7 @@
 use beryl_engine::card::Purpose;
 
 use super::held::{Clicked, Run, Step, button};
-use super::{ButtonId, Click, PromptView, ShapeView};
+use super::{ButtonId, Click, PromptView, ShapeBody};
 use crate::protocol::{Candidate, DecisionView};
 
 /// The colors by number, as the rules list them
@@ -81,9 +81,9 @@ impl Catalog {
         let label = (self.confirm).replace("{picked}", &u8::from(chosen).to_string());
         view.marks = Vec::new();
         view.buttons = vec![button(ButtonId::Confirm, &label, chosen, chosen)];
-        view.state = Some(ShapeView::Catalog {
+        view.body = ShapeBody::Catalog {
             entries: self.entries.iter().map(|(name, _)| name.clone()).collect(),
             chosen: self.chosen,
-        });
+        };
     }
 }

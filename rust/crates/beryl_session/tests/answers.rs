@@ -40,7 +40,7 @@ fn say(play: &mut Play, yes: bool) {
 /// The one card the open prompt is about.
 fn about(play: &Play) -> u16 {
     match play.decision().prompt.about[..] {
-        [slot] => slot,
+        [slot] => slot.into(),
         ref cards => panic!("the prompt is about {cards:?}"),
     }
 }

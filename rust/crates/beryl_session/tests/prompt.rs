@@ -1,14 +1,19 @@
 //! A prompt's state: its text form, one worked state per shape, and the click command's wire
 //! form. The expected texts are written by hand from what the screen shows.
 
-use beryl_engine::card::{Place, Purpose, Shape};
+use beryl_engine::card::{Purpose, Shape};
 use beryl_session::prompt::{
-    ButtonId, Click, ClickReply, ClickRequest, Marked, Pair, PartName, Pile, PlaceName,
-    PromptButton, PromptView, ShapeName, ShapeView, Share, Words,
+    ButtonId, Click, ClickReply, ClickRequest, Marked, ObjectId, Pair, PartName, Pile, PlaceName,
+    PromptButton, PromptView, ShapeBody, Share, Words,
 };
 use beryl_session::protocol::Side;
 use beryl_session::script::{Arrow, Mark, Subject};
 use beryl_session::{DecisionId, SessionId};
+
+/// The objects in `slots`, as the wire names them.
+fn ids(slots: &[u16]) -> Vec<ObjectId> {
+    slots.iter().copied().map(ObjectId).collect()
+}
 
 const fn card(slot: u16) -> Subject {
     Subject::Object { slot }
@@ -51,29 +56,25 @@ fn prompt(
     title: &str,
     marks: Vec<Marked>,
     buttons: Vec<PromptButton>,
-    shape: ShapeView,
+    shape: ShapeBody,
 ) -> PromptView {
     assert_eq!(
         shape.shape(),
-        purpose.shape(),
+        Some(purpose.shape()),
         "{purpose:?} is not that shape"
     );
     PromptView {
         revision: 0,
-        shape: purpose.shape().into(),
-        purpose: purpose.name().to_owned(),
+        purpose,
         part: PartName::Pick,
         title: title.to_owned(),
         words: Words::default(),
-        count: 0,
-        most: 0,
-        places: [PlaceName::None; 2],
-        cost: None,
+        count: None,
         about: Vec::new(),
         from: None,
         marks,
         buttons,
-        state: Some(shape),
+        body: shape,
     }
 }
 
@@ -93,8 +94,8 @@ fn search() -> Worked {
                 primary(ButtonId::Confirm, "Find 1/2"),
                 button(ButtonId::Decline, "Find Nothing"),
             ],
-            ShapeView::Pick {
-                tray: vec![31, 32, 40],
+            ShapeBody::Pick {
+                tray: ids(&[31, 32, 40]),
                 least: 0,
                 most: 2,
                 picked: vec![card(32)],
@@ -118,7 +119,7 @@ fn trigger_order() -> Worked {
             "Order Triggers",
             Vec::new(),
             vec![primary(ButtonId::Confirm, "Done")],
-            ShapeView::Order {
+            ShapeBody::Order {
                 items: vec![Subject::Ability { id: 2 }, Subject::Ability { id: 1 }],
             },
         ),
@@ -136,19 +137,19 @@ fn scry() -> Worked {
             "Scry",
             marked(Mark::Eligible, &[card(8), card(9)]).collect(),
             vec![primary(ButtonId::Confirm, "Done")],
-            ShapeView::Split {
+            ShapeBody::Split {
                 piles: vec![
                     Pile {
-                        place: Place::Bottom.into(),
+                        place: Some(PlaceName::Bottom),
                         label: "Bottom".to_owned(),
                         cards: Vec::new(),
                         exactly: None,
                         closed: false,
                     },
                     Pile {
-                        place: Place::Top.into(),
+                        place: Some(PlaceName::Top),
                         label: "Top".to_owned(),
-                        cards: vec![9, 8],
+                        cards: ids(&[9, 8]),
                         exactly: None,
                         closed: false,
                     },
@@ -171,19 +172,19 @@ fn arrange() -> Worked {
             "Top Five",
             Vec::new(),
             vec![disabled(ButtonId::Confirm, "Done")],
-            ShapeView::Split {
+            ShapeBody::Split {
                 piles: vec![
                     Pile {
-                        place: Place::Hand.into(),
+                        place: Some(PlaceName::Hand),
                         label: "Hand".to_owned(),
-                        cards: vec![5],
+                        cards: ids(&[5]),
                         exactly: Some(2),
                         closed: false,
                     },
                     Pile {
-                        place: Place::Bottom.into(),
+                        place: Some(PlaceName::Bottom),
                         label: "Bottom".to_owned(),
-                        cards: vec![7, 6, 4, 3],
+                        cards: ids(&[7, 6, 4, 3]),
                         exactly: None,
                         closed: false,
                     },
@@ -205,7 +206,10 @@ fn top_or_bottom() -> Worked {
             "Top or Bottom?",
             Vec::new(),
             vec![button(option(0), "Top"), button(option(1), "Bottom")],
-            ShapeView::YesNo { about: vec![12] },
+            ShapeBody::YesNo {
+                about: ids(&[12]),
+                places: Some([PlaceName::Top, PlaceName::Bottom]),
+            },
         ),
         "yesNo top-or-bottom: Top or Bottom?\n\
          about #12\n\
@@ -221,7 +225,7 @@ fn x() -> Worked {
             "Choose X",
             Vec::new(),
             vec![primary(ButtonId::Confirm, "Done")],
-            ShapeView::Number {
+            ShapeBody::Number {
                 values: vec![0, 1, 2, 3],
                 value: 2,
                 detail: Some("{2}{U}".to_owned()),
@@ -241,7 +245,7 @@ fn play_or_draw() -> Worked {
             "Play or Draw?",
             Vec::new(),
             vec![primary(option(0), "Play"), button(option(1), "Draw")],
-            ShapeView::Mode { about: Vec::new() },
+            ShapeBody::Mode { about: Vec::new() },
         ),
         "mode play-or-draw: Play or Draw?\n\
          0[Play]* 1[Draw]\n",
@@ -256,7 +260,7 @@ fn color() -> Worked {
             "Choose a Color",
             Vec::new(),
             vec![primary(ButtonId::Confirm, "Done")],
-            ShapeView::Catalog {
+            ShapeBody::Catalog {
                 entries: ["White", "Blue", "Black", "Red", "Green"]
                     .map(str::to_owned)
                     .into(),
@@ -286,7 +290,7 @@ fn divide_damage() -> Worked {
             )
             .collect(),
             vec![disabled(ButtonId::Confirm, "Done")],
-            ShapeView::Divide {
+            ShapeBody::Divide {
                 total: 5,
                 left: 2,
                 shares: vec![
@@ -320,7 +324,7 @@ fn crew() -> Worked {
                 .chain(marked(Mark::Eligible, &[card(15), card(16)]))
                 .collect(),
             vec![disabled(ButtonId::Confirm, "Crew")],
-            ShapeView::Pay {
+            ShapeBody::Pay {
                 cost: "3".to_owned(),
                 left: "1".to_owned(),
             },
@@ -354,22 +358,22 @@ fn attack() -> Worked {
                 primary(ButtonId::Confirm, "Attack"),
                 button(ButtonId::Decline, "No Attacks"),
             ],
-            ShapeView::Declare {
+            ShapeBody::Declare {
                 arrow: Arrow::Attack,
                 pairs: vec![
                     Pair {
-                        from: 4,
+                        from: ObjectId(4),
                         to: Subject::Player {
                             player: Side::Opponent,
                         },
                     },
                     Pair {
-                        from: 6,
+                        from: ObjectId(6),
                         to: card(20),
                     },
                 ],
                 lined: true,
-                aiming: vec![8],
+                aiming: ids(&[8]),
             },
         ),
         "declare attack: Declare Attackers\n\
@@ -408,7 +412,7 @@ fn a_state_of_each_shape_prints_as_its_text() {
         assert!(
             worked
                 .iter()
-                .any(|(view, _)| view.shape == ShapeName::from(shape)),
+                .any(|(view, _)| view.body.shape() == Some(shape)),
             "no worked state of shape {shape:?}"
         );
     }
@@ -493,8 +497,11 @@ fn a_click_and_its_reply_on_the_wire() {
     })
     .unwrap();
     assert_eq!(reply["kind"], "open");
-    assert_eq!(reply["prompt"]["shape"], "pick");
-    assert_eq!(reply["prompt"]["state"]["shape"], "pick");
+    assert_eq!(reply["prompt"]["body"]["shape"], "pick");
+    assert_eq!(
+        reply["prompt"]["body"]["tray"],
+        serde_json::json!([31, 32, 40])
+    );
     assert_eq!(reply["prompt"]["purpose"], "search");
     assert_eq!(
         reply["prompt"]["marks"][0],

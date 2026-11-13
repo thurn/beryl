@@ -80,7 +80,7 @@ export function Aim({
   surface: DomSurface;
   stage: ScriptStage;
 }) {
-  const state = prompt?.state;
+  const state = prompt?.body;
   const declares = state?.shape === "declare" ? state : undefined;
   const aiming = declares?.aiming ?? NONE;
   const waits = aiming.length > 0;

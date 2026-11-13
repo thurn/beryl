@@ -8,7 +8,7 @@
 use beryl_engine::card::Purpose;
 
 use super::hear::{Cause, Heard};
-use crate::prompt::{Lies, PlaceName, ShapeName};
+use crate::prompt::{Lies, ShapeBody, slots_of};
 use crate::protocol::{
     CardHandling, GameEvent, Kind, PlayerView, Side, Status, TargetRef, Why, ZoneName,
 };
@@ -234,15 +234,25 @@ pub(super) fn looked(view: &PlayerView) -> Vec<u16> {
     };
     if let Status::Deciding { decision } = &view.status {
         let prompt = &decision.prompt;
-        return match prompt.from {
+        return match (prompt.from, prompt.count) {
             // The top of a library, looked at.
-            Some(Lies {
-                player,
-                zone: ZoneName::Library,
-            }) if prompt.count > 0 => top(player, prompt.count),
+            (
+                Some(Lies {
+                    player,
+                    zone: ZoneName::Library,
+                }),
+                Some(count),
+            ) => top(player, count),
             // A yes or no that sends a card somewhere shows that card.
-            _ if prompt.shape == ShapeName::YesNo && prompt.places[0] != PlaceName::None => {
-                prompt.about.clone()
+            _ if matches!(
+                prompt.body,
+                ShapeBody::YesNo {
+                    places: Some(_),
+                    ..
+                }
+            ) =>
+            {
+                slots_of(&prompt.about)
             }
             _ => Vec::new(),
         };

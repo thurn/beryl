@@ -18,7 +18,7 @@ use self::damage::Damage;
 use self::priority::Priority;
 use super::held::{Clicked, Run, Step, Table, Want, button, offered};
 use super::wording::{AIMED, Holes, OWN_TARGET, Wording};
-use super::{ButtonId, Click, Marked, PartName, PromptButton, PromptView, ShapeName, ShapeView};
+use super::{ButtonId, Click, Marked, PartName, PromptButton, PromptView, ShapeBody, ids};
 use crate::protocol::{Candidate, DecisionView, ObjectView, Side, TargetRef, ZoneName};
 use crate::script::{Mark, Subject};
 
@@ -43,9 +43,6 @@ impl Pick {
         decision: &DecisionView,
     ) -> Option<Pick> {
         let prompt = &decision.prompt;
-        if prompt.shape != ShapeName::Pick {
-            return None;
-        }
         // Three purposes are answered in forms of their own: a priority by what a card can
         // do, a division of damage by the blockers that die, targets by objects and players
         // with a count. Every other pick is of cards, and where they lie says how it is
@@ -183,7 +180,7 @@ impl Objects {
             let most = counts.iter().copied().max().unwrap_or(0).min(all);
             (counts.iter().copied().min().unwrap_or(0).min(most), most)
         } else {
-            let most = prompt.most.max(1).min(all);
+            let most = table.record.most.max(1).min(all);
             (most, most)
         };
         let objects = &table.view.objects;
@@ -293,7 +290,7 @@ impl Objects {
         let mut eligible: Vec<Subject> = offered.iter().copied().map(card).collect();
         with_stand_ins(table, &mut eligible);
         let all = u8::try_from(eligible.len()).unwrap_or(u8::MAX);
-        let most = prompt.most.max(1).min(all);
+        let most = table.record.most.max(1).min(all);
         let picked = if purpose == Purpose::Untap {
             untap::opening(table, &eligible, usize::from(most))
         } else {
@@ -495,13 +492,13 @@ impl Objects {
         } else {
             self.buttons()
         };
-        view.state = Some(ShapeView::Pick {
-            tray: self.tray.clone(),
+        view.body = ShapeBody::Pick {
+            tray: ids(self.tray.iter().copied()),
             least: self.least,
             most: self.most,
             picked: self.picked.clone(),
             warned: self.warned.iter().map(|&(on, _)| on).collect(),
-        });
+        };
     }
 
     /// The confirm button, where a click on an object does not answer, and the button that

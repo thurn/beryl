@@ -19,7 +19,7 @@ use beryl_engine::card::Purpose;
 use beryl_engine::{Seat, TurnStep};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_search::Budget;
-use beryl_session::prompt::{ButtonId, Click, ClickReply, ClickRequest, ShapeView};
+use beryl_session::prompt::{ButtonId, Click, ClickReply, ClickRequest, ShapeBody};
 use beryl_session::protocol::{Candidate, DecisionView, Kind, Side, ZoneName};
 use beryl_session::replay::{Entry, ReplayFile};
 use beryl_session::save::Kind as SavedKind;
@@ -710,7 +710,7 @@ fn an_untap_prefers_the_lands_that_make_the_most_colors() {
     let mut play = Play::scenario(&TEFERI_UNTAPS_FOR_REPRIEVE);
     to_the_untap(&mut play);
     let tundra = play.named(TUNDRA, ZoneName::Battlefield, Side::You)[0];
-    let Some(ShapeView::Pick { picked, .. }) = &play.decision().prompt.state else {
+    let ShapeBody::Pick { picked, .. } = &play.decision().prompt.body else {
         panic!("an untap is a pick the session holds");
     };
     // Reprieve costs {1}{W} and a Plains is untapped: any one land pays for it.
@@ -843,7 +843,7 @@ fn a_session_takes_clicks_and_its_latest_view_keeps_the_prompt() {
         decision = deciding();
     }
     assert!(decision.prompt.is(Purpose::Untap));
-    let Some(ShapeView::Pick { picked, .. }) = &decision.prompt.state else {
+    let ShapeBody::Pick { picked, .. } = &decision.prompt.body else {
         panic!("an untap is a pick the session holds");
     };
     // Unpicking a land changes the prompt and nothing else.
@@ -906,7 +906,7 @@ fn a_save_made_through_clicks_replays() {
         }
         let prompt = &play.decision().prompt;
         if prompt.is(Purpose::Untap) {
-            let Some(ShapeView::Pick { picked, .. }) = &prompt.state else {
+            let ShapeBody::Pick { picked, .. } = &prompt.body else {
                 panic!("an untap is a pick the session holds");
             };
             let picked = picked.len();
@@ -919,7 +919,7 @@ fn a_save_made_through_clicks_replays() {
             );
             continue;
         }
-        if prompt.state.is_none() {
+        if prompt.body == ShapeBody::Candidates {
             // A prompt whose state the session does not hold yet: its first candidate.
             play.choose(|_| true);
             continue;

@@ -360,11 +360,11 @@ fn auto_pay_spares_what_its_mana_would_use_up_and_asks_for_mana_rocks() {
     assert!(play.on(rock).is_some());
     assert_eq!(marked(&play, Mark::Paying), [rock]);
     assert_eq!(marked(&play, Mark::Suggested), [treasure]);
-    let state = play.decision().prompt.state.clone();
+    let body = play.decision().prompt.body.clone();
     assert!(
-        matches!(&state, Some(beryl_session::prompt::ShapeView::Pay { cost, left })
+        matches!(&body, beryl_session::prompt::ShapeBody::Pay { cost, left }
             if cost == "{3}" && left == "{1}"),
-        "{state:?}"
+        "{body:?}"
     );
     // The picks a UI holding the payment sends: the rock's mana, then the Treasure tapped,
     // then the plan that pays the two left with the rock's mana.

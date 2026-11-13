@@ -14,12 +14,11 @@ const marked = (mark, ...slots) =>
 /** A prompt of the pick shape as the session sends it, picked on the table. */
 const pick = (marks, more = {}) => ({
     revision: 0,
-    shape: "pick",
     purpose: "priority",
     title: "",
     marks,
     buttons: [],
-    state: {
+    body: {
         shape: "pick",
         tray: [],
         least: 0,
@@ -203,13 +202,12 @@ test("a prompt answered elsewhere is let be", () => {
     const { made, surface, prompts, sent, click } = prompted();
     // What the opening screen asks, and what the session holds no state of.
     const keeps = pick(marked("eligible", 1), {
-        shape: "mode",
         purpose: "mulligan",
-        state: { shape: "mode", about: [3] },
+        body: { shape: "mode", about: [3] },
     });
     for (const [seq, prompt] of [
         keeps,
-        { ...pick([]), state: null },
+        { ...pick([]), body: { shape: "candidates" } },
     ].entries()) {
         prompts.play(asking(prompt, seq + 1), { beats: [] });
         made.clock.advance(0);
@@ -224,9 +222,8 @@ test("a prompt answered off the table's cards sends what its controls name", asy
     const { made, prompts, sent, reply } = prompted();
     const number = {
         ...pick([]),
-        shape: "number",
         purpose: "x",
-        state: { shape: "number", values: [1, 2], value: 1, detail: null },
+        body: { shape: "number", values: [1, 2], value: 1, detail: null },
     };
     prompts.play(asking(number));
     made.clock.advance(0);
@@ -244,7 +241,7 @@ test("a prompt answered off the table's cards sends what its controls name", asy
     };
     await reply({
         kind: "open",
-        prompt: { ...number, revision: 1, shape: "divide", state: shares },
+        prompt: { ...number, revision: 1, body: shares },
     });
     prompts.number(2, on);
     assert.deepEqual(sent[1].click, { kind: "number", n: 2, on });
@@ -256,7 +253,7 @@ test("a prompt answered off the table's cards sends what its controls name", asy
     };
     await reply({
         kind: "open",
-        prompt: { ...number, revision: 2, shape: "catalog", state: entries },
+        prompt: { ...number, revision: 2, body: entries },
     });
     prompts.entry(1);
     assert.deepEqual(sent[2].click, { kind: "entry", index: 1 });
@@ -265,10 +262,9 @@ test("a prompt answered off the table's cards sends what its controls name", asy
 test("the cards a question is about are held up, but for the card whose ways are chosen among", () => {
     const asks = (shape, purpose, buttons = []) => ({
         ...pick([]),
-        shape,
         purpose,
         buttons,
-        state: { shape, about: [3] },
+        body: { shape, about: [3] },
     });
     assert.deepEqual(trayOf(asks("yesNo", "fateseal")), {
         piles: [{ cards: [3] }],
@@ -291,9 +287,8 @@ test("the choice a click opens over a priority is held, whatever its shape", asy
     click(2);
     const ways = {
         ...pick([], { revision: 1 }),
-        shape: "mode",
         purpose: "act",
-        state: { shape: "mode", about: [2] },
+        body: { shape: "mode", about: [2] },
         buttons: [
             { id: { kind: "option", index: 1 }, label: "Tap for {U}" },
             { id: { kind: "decline" }, label: "Cancel" },
@@ -385,12 +380,11 @@ test("an arrow runs from what asks to a target picked, and the script that casts
 /** A prompt of the declare shape as the session sends it: blockers, each aimed at an attacker. */
 const declare = (marks, pairs, revision = 0, lined = true) => ({
     revision,
-    shape: "declare",
     purpose: "block",
     title: "Choose blockers.",
     marks,
     buttons: [],
-    state: { shape: "declare", arrow: "block", pairs, lined, aiming: [] },
+    body: { shape: "declare", arrow: "block", pairs, lined, aiming: [] },
 });
 
 test("a declaration draws a line from each creature aimed, and the script that plays it takes them over", async () => {
@@ -453,12 +447,11 @@ test("a declaration whose lines the session leaves out draws none, so none goes 
 /** A prompt of the pay shape as the session sends it: a cost of 3, with `left` to pay. */
 const pay = (marks, left, revision = 0) => ({
     revision,
-    shape: "pay",
     purpose: "crew",
     title: "",
     marks,
     buttons: [],
-    state: { shape: "pay", cost: "3", left },
+    body: { shape: "pay", cost: "3", left },
 });
 
 test("a permanent picked to pay lies turned from the pick until the script has tapped it", async () => {

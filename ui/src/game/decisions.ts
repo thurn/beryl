@@ -7,6 +7,7 @@ import type {
   Kind,
   ObjectView,
   PlayerView,
+  Purpose,
 } from "../generated/protocol";
 
 /** A pick a later decision should get: one of its kind, the candidate `wants` names or,
@@ -18,7 +19,7 @@ export interface Intent {
   /** The purpose of the prompt the decision's pick must belong to (`PromptView`'s), for a
    * pick whose kind other prompts are asked in too: a cost's or a rule's pick is a
    * `chooseObject`, a `yesNo` or a `manaPayment` like an effect's. */
-  purpose?: string;
+  purpose?: Purpose;
   wants(option: Candidate): boolean;
   alike?(option: Candidate): boolean;
   picked?(option: Candidate): void;

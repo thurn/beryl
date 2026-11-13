@@ -18,7 +18,7 @@ use beryl_engine::{Decision, GameTable, Layout, State};
 
 use self::taps::Due;
 use super::held::{Clicked, Run, Step, Table, Want, button};
-use super::{ButtonId, Click, Marked, PartName, PromptView, ShapeView};
+use super::{ButtonId, Click, Marked, PartName, PromptView, ShapeBody};
 use crate::protocol::{Candidate, DecisionView, mana_text};
 use crate::script::{Mark, Subject};
 
@@ -73,8 +73,9 @@ impl Pay {
     ) -> Option<Pay> {
         let prompt = &decision.prompt;
         let d = table.d?;
+        let mana = table.cost();
         let (how, now) = if prompt.part == PartName::Plan {
-            let plans = Plans::of(purpose, decision)?;
+            let plans = Plans::of(purpose, decision, mana.clone().unwrap_or_default())?;
             let now = plans.outlook(&[])?;
             (How::Plans(plans), now)
         } else {
@@ -89,7 +90,7 @@ impl Pay {
             how,
             picked: Vec::new(),
             now,
-            cost: (prompt.cost.clone()).unwrap_or_else(|| prompt.count.to_string()),
+            cost: mana.unwrap_or_else(|| table.record.count.to_string()),
             confirm: prompt.words.confirm.clone(),
             auto: prompt.words.auto.clone(),
         })
@@ -176,10 +177,10 @@ impl Pay {
             button(ButtonId::Confirm, &label, paid, paid)
         });
         view.buttons = [auto].into_iter().chain(confirm).collect();
-        view.state = Some(ShapeView::Pay {
+        view.body = ShapeBody::Pay {
             cost: self.cost.clone(),
             left: self.now.left.clone(),
-        });
+        };
     }
 }
 
@@ -198,8 +199,9 @@ struct Plans {
 }
 
 impl Plans {
-    /// The plans `decision` offers, if they can be told apart by what they tap.
-    fn of(purpose: Purpose, decision: &DecisionView) -> Option<Plans> {
+    /// The plans `decision` offers for the mana cost `cost`, as Oracle text writes it, if
+    /// they can be told apart by what they tap.
+    fn of(purpose: Purpose, decision: &DecisionView, cost: String) -> Option<Plans> {
         let mut plans = Vec::new();
         for candidate in &decision.candidates {
             let Candidate::Plan { index } = candidate.option else {
@@ -215,7 +217,7 @@ impl Plans {
         Some(Plans {
             purpose,
             offered: plans,
-            cost: decision.prompt.cost.clone().unwrap_or_default(),
+            cost,
         })
     }
 

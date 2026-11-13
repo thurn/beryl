@@ -12,7 +12,7 @@ use beryl_engine::{Choice, Layout};
 
 use super::ahead;
 use super::held::{Clicked, Run, Step, Table, button};
-use super::{ButtonId, Click, Marked, PlaceName, PromptButton, PromptView, ShapeView};
+use super::{ButtonId, Click, Marked, ObjectId, PlaceName, PromptButton, PromptView, ShapeBody};
 use crate::protocol::{Candidate, DecisionView};
 use crate::script::{Mark, Subject};
 
@@ -21,7 +21,9 @@ use crate::script::{Mark, Subject};
 pub(crate) struct YesNo {
     purpose: Purpose,
     /// The cards the question is about.
-    about: Vec<u16>,
+    about: Vec<ObjectId>,
+    /// Where the card the question is about goes on a yes, and on a no, if it goes anywhere.
+    places: Option<[PlaceName; 2]>,
     buttons: Vec<PromptButton>,
     /// The permanents a yes that pays would tap, by the engine's default payment.
     taps: Vec<u16>,
@@ -41,9 +43,10 @@ impl YesNo {
             u16::try_from(at).ok()
         };
         let (yes, no) = (index(Candidate::Yes)?, index(Candidate::No)?);
-        let places = prompt.places.iter().all(|&place| place != PlaceName::None);
+        let [yes_place, no_place] = table.record.places.map(PlaceName::of);
+        let places = yes_place.zip(no_place).map(|(yes, no)| [yes, no]);
         let primary = match purpose {
-            _ if places => None,
+            _ if places.is_some() => None,
             Purpose::PayLife if !worth_paying(table, yes, no) => Some(no),
             _ => Some(yes),
         };
@@ -63,6 +66,7 @@ impl YesNo {
         Some(YesNo {
             purpose,
             about: prompt.about.clone(),
+            places,
             buttons: vec![answer(yes, &prompt.words.yes), answer(no, &prompt.words.no)],
             taps: (decision.candidates[usize::from(yes)].payments.first())
                 .map(|payment| payment.taps.clone())
@@ -91,9 +95,10 @@ impl YesNo {
             })
             .collect();
         view.buttons.clone_from(&self.buttons);
-        view.state = Some(ShapeView::YesNo {
+        view.body = ShapeBody::YesNo {
             about: self.about.clone(),
-        });
+            places: self.places,
+        };
     }
 }
 

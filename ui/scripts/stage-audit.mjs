@@ -76,7 +76,7 @@ export function watch() {
             );
             frame.prompt = prompt
                 ? {
-                      shape: prompt.shape,
+                      shape: prompt.body.shape,
                       about: prompt.about,
                       names: prompt.about
                           .map((slot) => names.get(slot))

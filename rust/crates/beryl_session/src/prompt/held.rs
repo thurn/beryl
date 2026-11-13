@@ -8,7 +8,7 @@
 
 use std::collections::VecDeque;
 
-use beryl_engine::card::{ManaColor, Part, Purpose};
+use beryl_engine::card::{ManaColor, ManaCost, Part, Prompt, Purpose, Shape};
 use beryl_engine::layout::Queue as _;
 use beryl_engine::{
     Candidates, Choice, Decision, GameTable, Layout, Opt, Scratch, SlotId as _, State,
@@ -25,8 +25,10 @@ use super::pay::Pay;
 use super::pick::Pick;
 use super::split::Split;
 use super::yes_no::YesNo;
-use super::{ButtonId, Click, Lies, PromptButton, PromptView, ShapeName};
-use crate::protocol::{Candidate, DecisionView, ObjectView, PlayerView, Side, Status, ZoneName};
+use super::{ButtonId, Click, Lies, PromptButton, PromptView};
+use crate::protocol::{
+    Candidate, DecisionView, ObjectView, PlayerView, Side, Status, ZoneName, mana_text,
+};
 use crate::script::Subject;
 
 /// The open prompt's state.
@@ -80,25 +82,27 @@ impl Held {
         let Status::Deciding { decision } = &view.status else {
             return None;
         };
-        let purpose = d.map_or(Purpose::Priority, |d| d.prompt.purpose);
+        let record = d.map_or(Prompt::new(Purpose::Priority), |d| d.prompt);
+        let purpose = record.purpose;
         let table = Table {
             s,
             shown,
             t,
             d,
+            record,
             view,
         };
-        let shape = match decision.prompt.shape {
-            ShapeName::Pick => Shaped::Pick(Pick::open(&table, purpose, decision)?),
-            ShapeName::Order => Shaped::Order(Order::open(&table, decision)?),
-            ShapeName::Split => Shaped::Split(Split::open(&table, decision)?),
-            ShapeName::YesNo => Shaped::YesNo(YesNo::open(&table, purpose, decision)?),
-            ShapeName::Number => Shaped::Number(Number::open(purpose, decision)?),
-            ShapeName::Mode => Shaped::Mode(Mode::open(purpose, decision)),
-            ShapeName::Catalog => Shaped::Catalog(Catalog::open(purpose, decision)?),
-            ShapeName::Divide => Shaped::Divide(Divide::open(&table, purpose, decision)?),
-            ShapeName::Pay => Shaped::Pay(Box::new(Pay::open(&table, purpose, decision)?)),
-            ShapeName::Declare => Shaped::Declare(Declare::open(&table, purpose, decision)?),
+        let shape = match purpose.shape() {
+            Shape::Pick => Shaped::Pick(Pick::open(&table, purpose, decision)?),
+            Shape::Order => Shaped::Order(Order::open(&table, decision)?),
+            Shape::Split => Shaped::Split(Split::open(&table, decision)?),
+            Shape::YesNo => Shaped::YesNo(YesNo::open(&table, purpose, decision)?),
+            Shape::Number => Shaped::Number(Number::open(purpose, decision)?),
+            Shape::Mode => Shaped::Mode(Mode::open(purpose, decision)),
+            Shape::Catalog => Shaped::Catalog(Catalog::open(purpose, decision)?),
+            Shape::Divide => Shaped::Divide(Divide::open(&table, purpose, decision)?),
+            Shape::Pay => Shaped::Pay(Box::new(Pay::open(&table, purpose, decision)?)),
+            Shape::Declare => Shaped::Declare(Declare::open(&table, purpose, decision)?),
         };
         let mut held = Held {
             view: (*decision.prompt).clone(),
@@ -212,10 +216,18 @@ pub(crate) struct Table<'a, L: Layout> {
     pub t: &'a GameTable,
     /// The open decision; none at a halt.
     pub d: Option<&'a Decision<L>>,
+    /// The open decision's prompt record: the parameters its shape opens with, which the wire
+    /// carries only where the shape shows them. A halt's is a priority's.
+    pub record: Prompt,
     pub view: &'a PlayerView,
 }
 
 impl<L: Layout> Table<'_, L> {
+    /// The mana cost the prompt pays or asks about, as Oracle text writes it, if any.
+    pub(crate) fn cost(&self) -> Option<String> {
+        (self.record.cost != ManaCost::default()).then(|| mana_text(self.record.cost))
+    }
+
     /// The object in `slot` as the viewer sees it.
     pub(crate) fn object(&self, slot: u16) -> Option<&ObjectView> {
         self.view.objects.iter().find(|o| o.slot == slot)

@@ -40,7 +40,7 @@ pub fn snapshot(view: &PlayerView, def: &'static CardDef) -> Vec<String> {
                 "pick" => String::new(),
                 part => format!(" {part}"),
             };
-            out.push(format!("prompt {}{part}", prompt.purpose));
+            out.push(format!("prompt {}{part}", prompt.purpose.name()));
         }
         if json!(decision.kind) != json!("priority") {
             out.push(format!("{} candidates", decision.candidates.len()));

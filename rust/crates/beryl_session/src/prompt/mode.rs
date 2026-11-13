@@ -16,7 +16,7 @@
 use beryl_engine::card::Purpose;
 
 use super::held::{Clicked, Run, Step, button};
-use super::{ButtonId, Click, PromptButton, PromptView, ShapeView};
+use super::{ButtonId, Click, PromptButton, PromptView, ShapeBody, ids, slots_of};
 use crate::protocol::{Candidate, DecisionView};
 
 /// The state of a prompt of the mode shape.
@@ -82,7 +82,7 @@ impl Mode {
             .collect();
         Mode {
             answers: purpose,
-            about: decision.prompt.about.clone(),
+            about: slots_of(&decision.prompt.about),
             buttons,
         }
     }
@@ -137,8 +137,8 @@ impl Mode {
     pub(crate) fn show(&self, view: &mut PromptView) {
         view.marks = Vec::new();
         view.buttons.clone_from(&self.buttons);
-        view.state = Some(ShapeView::Mode {
-            about: self.about.clone(),
-        });
+        view.body = ShapeBody::Mode {
+            about: ids(self.about.iter().copied()),
+        };
     }
 }

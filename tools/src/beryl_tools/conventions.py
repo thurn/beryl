@@ -63,7 +63,7 @@ LISTS: dict[str, tuple[str, ...]] = {
     "marks": ("means", "look"),
 }
 NAME: re.Pattern[str] = re.compile(r"^[a-z]+(-[a-z]+)*$")
-# A prompt shape's name, as the session's views say it (`beryl_session`'s `ShapeName`).
+# A prompt shape's name, as the session's views tag it (`beryl_session`'s `ShapeBody`).
 SHAPE: re.Pattern[str] = re.compile(r"^[a-z]+([A-Z][a-z]+)*$")
 # What the stage plays a verb with, Beryl's own; null where the verb (or a case, its verb) has
 # none.

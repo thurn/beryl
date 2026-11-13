@@ -186,7 +186,7 @@ pub(super) fn next_view(
 
 #[cfg(test)]
 mod tests {
-    use beryl_session::prompt::ShapeView;
+    use beryl_session::prompt::ShapeBody;
 
     use super::*;
 
@@ -330,13 +330,13 @@ mod tests {
         let ClickReply::Open { prompt } = sorted else {
             panic!("the scry stays open, not {sorted:?}");
         };
-        let Some(ShapeView::Split { piles }) = &prompt.state else {
-            panic!("a split, not {:?}", prompt.state);
+        let ShapeBody::Split { piles } = &prompt.body else {
+            panic!("a split, not {:?}", prompt.body);
         };
         let Subject::Object { slot } = on else {
             panic!("a card, not {on:?}");
         };
-        assert_eq!(piles[0].cards, [slot]);
+        assert_eq!(piles[0].cards, [slot.into()]);
         assert_eq!(*done, ClickReply::Answered);
     }
 

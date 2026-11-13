@@ -8,7 +8,7 @@ use crate::prompt::held::{Clicked, Run, Step, Table};
 use crate::prompt::mode::{Chosen, Mode, Way};
 use crate::prompt::open::act_prompt;
 use crate::prompt::wording::{PassLeads, pass_words};
-use crate::prompt::{ButtonId, Click, Marked, PromptButton, PromptView, ShapeView};
+use crate::prompt::{ButtonId, Click, Marked, PromptButton, PromptView, ShapeBody};
 use crate::protocol::{Candidate, DecisionView, PassTo, Side, own_activated};
 use crate::script::{Mark, Subject};
 
@@ -213,13 +213,13 @@ impl Priority {
             })
             .collect();
         view.buttons.clone_from(&self.buttons);
-        view.state = Some(ShapeView::Pick {
+        view.body = ShapeBody::Pick {
             tray: Vec::new(),
             least: 0,
             most: 1,
             picked: Vec::new(),
             warned: Vec::new(),
-        });
+        };
     }
 }
 

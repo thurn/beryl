@@ -20,7 +20,7 @@ use beryl_engine::{
 
 use crate::prompt::ahead;
 use crate::prompt::held::{Clicked, Run, Step, Table, Want, button, options};
-use crate::prompt::{ButtonId, Click, Marked, PromptView, ShapeView};
+use crate::prompt::{ButtonId, Click, Marked, PromptView, ShapeBody};
 use crate::protocol::DecisionView;
 use crate::script::{Mark, Subject};
 
@@ -209,7 +209,7 @@ impl Damage {
             left.ends,
         )];
         let all: usize = self.kinds.iter().map(Vec::len).sum();
-        view.state = Some(ShapeView::Pick {
+        view.body = ShapeBody::Pick {
             tray: Vec::new(),
             least: 0,
             most: u8::try_from(all).unwrap_or(u8::MAX),
@@ -217,6 +217,6 @@ impl Damage {
                 .map(|&slot| Subject::Object { slot })
                 .collect(),
             warned: Vec::new(),
-        });
+        };
     }
 }

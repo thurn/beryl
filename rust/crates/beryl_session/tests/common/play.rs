@@ -41,8 +41,8 @@ pub const fn card(slot: u16) -> Subject {
 }
 
 /// Cards as a line of a prompt's text lists them: by slot, ascending.
-pub fn cards(slots: &[u16]) -> String {
-    let mut slots = slots.to_vec();
+pub fn cards<T: Copy + Into<u16>>(slots: &[T]) -> String {
+    let mut slots: Vec<u16> = slots.iter().map(|&slot| slot.into()).collect();
     slots.sort_unstable();
     let cards: Vec<String> = slots.iter().map(|slot| format!("#{slot}")).collect();
     cards.join(" ")

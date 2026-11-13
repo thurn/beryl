@@ -11,7 +11,8 @@
 //! confirm[Find 1/2]* decline[Find Nothing]
 //! ```
 //!
-//! The first line is the shape, the purpose and the title. Then the shape's own lines:
+//! The first line is the shape, the purpose and the title. Then the shape's own lines, none
+//! where the session holds no state for the prompt:
 //!
 //! ```text
 //! tray #31 #32                      pick: the cards laid out, if any
@@ -40,7 +41,7 @@
 
 use std::fmt::{self, Display, Formatter, Write as _};
 
-use super::{ButtonId, Marked, Pile, PromptButton, PromptView, ShapeView};
+use super::{ButtonId, Marked, ObjectId, Pile, PromptButton, PromptView, ShapeBody, shape_name};
 use crate::protocol::Side;
 use crate::script::{Mark, Subject, wire};
 
@@ -65,8 +66,8 @@ impl Display for Card {
     }
 }
 
-fn cards(slots: &[u16]) -> Each<impl Iterator<Item = Card> + Clone + '_> {
-    Each(slots.iter().copied().map(Card))
+fn cards(ids: &[ObjectId]) -> Each<impl Iterator<Item = Card> + Clone + '_> {
+    Each(ids.iter().map(|id| Card(id.0)))
 }
 
 /// Where a subject sorts in a mark's line: cards by slot, then abilities, then players.
@@ -81,18 +82,16 @@ fn rank(subject: Subject) -> (u8, u32) {
 impl Display for PromptView {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let PromptView {
-            shape,
             purpose,
             title,
             marks,
             buttons,
-            state,
+            body,
             ..
         } = self;
-        writeln!(f, "{} {purpose}: {title}", wire(*shape))?;
-        if let Some(state) = state {
-            write!(f, "{state}")?;
-        }
+        let purpose = purpose.name();
+        writeln!(f, "{} {purpose}: {title}", shape_name(self.shape()))?;
+        write!(f, "{body}")?;
         for &mark in Mark::ALL {
             let mut on: Vec<Subject> = marks
                 .iter()
@@ -139,10 +138,10 @@ impl Display for PromptButton {
     }
 }
 
-impl Display for ShapeView {
+impl Display for ShapeBody {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            ShapeView::Pick {
+            ShapeBody::Pick {
                 tray,
                 least,
                 most,
@@ -168,16 +167,16 @@ impl Display for ShapeView {
                     writeln!(f, "warned{}", Each(warned.iter()))
                 }
             }
-            ShapeView::Order { items } => writeln!(f, "order{}", Each(items.iter())),
-            ShapeView::Split { piles } => piles.iter().try_for_each(|pile| write!(f, "{pile}")),
-            ShapeView::YesNo { about } | ShapeView::Mode { about } => {
+            ShapeBody::Order { items } => writeln!(f, "order{}", Each(items.iter())),
+            ShapeBody::Split { piles } => piles.iter().try_for_each(|pile| write!(f, "{pile}")),
+            ShapeBody::YesNo { about, .. } | ShapeBody::Mode { about } => {
                 if about.is_empty() {
                     Ok(())
                 } else {
                     writeln!(f, "about{}", cards(about))
                 }
             }
-            ShapeView::Number {
+            ShapeBody::Number {
                 values,
                 value,
                 detail,
@@ -188,7 +187,7 @@ impl Display for ShapeView {
                 }
                 f.write_str("\n")
             }
-            ShapeView::Catalog { entries, chosen } => {
+            ShapeBody::Catalog { entries, chosen } => {
                 f.write_str("catalog")?;
                 for (i, entry) in entries.iter().enumerate() {
                     let star = if *chosen == u16::try_from(i).ok() {
@@ -200,7 +199,7 @@ impl Display for ShapeView {
                 }
                 f.write_str("\n")
             }
-            ShapeView::Divide {
+            ShapeBody::Divide {
                 total,
                 left,
                 shares,
@@ -211,8 +210,8 @@ impl Display for ShapeView {
                 }
                 f.write_str("\n")
             }
-            ShapeView::Pay { cost, left } => writeln!(f, "pay {cost}, {left} left"),
-            ShapeView::Declare {
+            ShapeBody::Pay { cost, left } => writeln!(f, "pay {cost}, {left} left"),
+            ShapeBody::Declare {
                 arrow,
                 pairs,
                 lined,
@@ -221,7 +220,7 @@ impl Display for ShapeView {
                 let lines = if *lined { "" } else { ", no lines" };
                 write!(f, "declare {}{lines}:", arrow.name())?;
                 for pair in pairs {
-                    write!(f, " #{}>{}", pair.from, pair.to)?;
+                    write!(f, " #{}>{}", pair.from.0, pair.to)?;
                 }
                 f.write_str("\n")?;
                 if aiming.is_empty() {
@@ -230,13 +229,15 @@ impl Display for ShapeView {
                     writeln!(f, "aiming{}", cards(aiming))
                 }
             }
+            ShapeBody::Candidates => Ok(()),
         }
     }
 }
 
 impl Display for Pile {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "pile {} \"{}\"", wire(self.place), self.label)?;
+        let place = self.place.map_or_else(|| "none".to_owned(), wire);
+        write!(f, "pile {place} \"{}\"", self.label)?;
         if let Some(n) = self.exactly {
             write!(f, " exactly {n}")?;
         }

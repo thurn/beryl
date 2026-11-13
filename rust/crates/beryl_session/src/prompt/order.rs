@@ -16,7 +16,7 @@ use beryl_engine::layout::Queue as _;
 use beryl_engine::{Candidates, Choice, Decision, GameTable, Layout, Opt, State};
 
 use super::held::{Clicked, Run, Step, Table, Want};
-use super::{ButtonId, Click, PromptButton, PromptView, ShapeView};
+use super::{ButtonId, Click, PromptButton, PromptView, ShapeBody};
 use crate::protocol::{Candidate, DecisionView};
 use crate::script::Subject;
 
@@ -106,9 +106,9 @@ impl Order {
             primary: true,
         }];
         let item = |&item: &u16| Subject::Ability { id: item.into() };
-        view.state = Some(ShapeView::Order {
+        view.body = ShapeBody::Order {
             items: self.items.iter().map(item).collect(),
-        });
+        };
     }
 }
 

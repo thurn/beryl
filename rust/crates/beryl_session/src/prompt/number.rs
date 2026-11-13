@@ -14,7 +14,7 @@ use beryl_engine::card::Purpose;
 
 use super::held::{Clicked, Run, Step};
 use super::wording::X_VALUE;
-use super::{ButtonId, Click, Marked, PromptButton, PromptView, ShapeView};
+use super::{ButtonId, Click, Marked, PromptButton, PromptView, ShapeBody};
 use crate::protocol::{Candidate, DecisionView};
 use crate::script::{Mark, Subject};
 
@@ -104,10 +104,10 @@ impl Number {
             enabled: true,
             primary: true,
         }];
-        view.state = Some(ShapeView::Number {
+        view.body = ShapeBody::Number {
             values: self.values.iter().map(|value| value.n).collect(),
             value: value.n,
             detail: value.detail.clone(),
-        });
+        };
     }
 }

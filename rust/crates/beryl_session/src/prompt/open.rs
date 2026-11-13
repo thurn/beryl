@@ -5,14 +5,15 @@ use beryl_engine::card::{ManaCost, Prompt, Purpose};
 use beryl_engine::{Decision, GameTable, Layout, Observation, Zone};
 
 use super::wording::{Holes, cancel_word, end_words, pile_word, wording};
-use super::{Lies, PromptView, Words};
+use super::{Lies, PromptView, ShapeBody, Words, ids};
 use crate::protocol::{mana_text, name, shown, side, slots};
 
 /// The prompt the pick `d` asks belongs to, as the seat `obs` sees for is sent it; `asker`
 /// names the spell or ability whose resolution asks.
 ///
 /// It says the record and its words. The prompt's state (its marks, its buttons and what is
-/// picked) is not the session's yet: a UI holds it and plans the picks.
+/// picked) is not the session's yet ([`ShapeBody::Candidates`]): [`Held`](super::Held) adds
+/// it where the session holds the shape's state.
 pub(crate) fn prompt_view<L: Layout>(
     t: &GameTable,
     obs: Observation<'_, L>,
@@ -32,29 +33,19 @@ pub(crate) fn prompt_view<L: Layout>(
         from: about.map(|slot| obs.object(slot).zone()),
     };
     PromptView {
-        about: slots(obs.in_candidate_order(d.about)),
+        about: ids(slots(obs.in_candidate_order(d.about))),
         from: shown.map(|card| Lies {
             player: side(obs, card.owner()),
             zone: card.zone().into(),
         }),
-        ..worded(
-            &d.prompt,
-            shown.map(|card| card.zone()),
-            cost.clone(),
-            &holes,
-        )
+        ..worded(&d.prompt, shown.map(|card| card.zone()), &holes)
     }
 }
 
 /// The prompt of a halt ([`DecisionView::halt`](crate::protocol::DecisionView::halt)): a
 /// priority the session asks where the engine asks nothing, with passing its one answer.
 pub(crate) fn halt_prompt() -> PromptView {
-    worded(
-        &Prompt::new(Purpose::Priority),
-        None,
-        None,
-        &Holes::default(),
-    )
+    worded(&Prompt::new(Purpose::Priority), None, &Holes::default())
 }
 
 /// The choice among the ways to use the card in `slot`, named `name` if the viewer knows it,
@@ -66,18 +57,17 @@ pub(crate) fn act_prompt(slot: u16, name: Option<&str>) -> PromptView {
         ..Holes::default()
     };
     PromptView {
-        about: vec![slot],
-        ..worded(&Prompt::new(Purpose::Act), None, None, &holes)
+        about: ids([slot]),
+        ..worded(&Prompt::new(Purpose::Act), None, &holes)
     }
 }
 
-/// `prompt` in the table's words, about no object.
-fn worded(prompt: &Prompt, zone: Option<Zone>, cost: Option<String>, holes: &Holes) -> PromptView {
+/// `prompt` in the table's words, about no object, before the session holds any state of it.
+fn worded(prompt: &Prompt, zone: Option<Zone>, holes: &Holes) -> PromptView {
     let words = wording(prompt, zone);
     PromptView {
         revision: 0,
-        shape: prompt.shape().into(),
-        purpose: prompt.purpose.name().to_owned(),
+        purpose: prompt.purpose,
         part: prompt.part.into(),
         title: holes.title(&words),
         words: Words {
@@ -92,14 +82,11 @@ fn worded(prompt: &Prompt, zone: Option<Zone>, cost: Option<String>, holes: &Hol
                 .unwrap_or_else(|| prompt.places.map(|place| pile_word(prompt.purpose, place)))
                 .map(str::to_owned),
         },
-        count: prompt.count,
-        most: prompt.most,
-        places: prompt.places.map(Into::into),
-        cost,
+        count: (prompt.count > 0).then_some(prompt.count),
         about: Vec::new(),
         from: None,
         marks: Vec::new(),
         buttons: Vec::new(),
-        state: None,
+        body: ShapeBody::Candidates,
     }
 }

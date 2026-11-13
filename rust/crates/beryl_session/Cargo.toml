@@ -20,7 +20,9 @@ beryl_search = { path = "../beryl_search" }
 flate2 = "1.1.10"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
-ts-rs = "12.0.1"
+# A prompt's purpose is written by its name (`purpose_name`), with its TypeScript type
+# given by hand: ts-rs would warn that it cannot read that serde attribute.
+ts-rs = { version = "12.0.1", features = ["no-serde-warnings"] }
 tempfile = "3"
 uuid = { version = "1", features = ["v4"] }
 zip = { version = "8.6", default-features = false, features = ["deflate-flate2-zlib-rs"] }

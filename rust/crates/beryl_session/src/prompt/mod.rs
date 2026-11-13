@@ -16,21 +16,22 @@
 //!   one table keyed by purpose;
 //! - the [`Mark`](crate::script::Mark) on each card, ability and player, from the closed list
 //!   scripts draw on, at most one each;
-//! - the shape's own state ([`ShapeView`]): the cards picked, the piles and their order, an
+//! - the shape's own state ([`ShapeBody`]): the cards picked, the piles and their order, an
 //!   amount, the payment so far.
 //!
 //! The view that opens a decision carries the prompt's first state. It rides the view, so a
 //! reloaded page takes up a prompt as it stood.
 //!
 //! The session holds every shape's state. A prompt it cannot hold (a payment whose plans
-//! tap the same permanents) arrives with no marks, no buttons and no state, and the UI words
-//! its own buttons from the prompt's [`Words`] and answers by candidate.
+//! tap the same permanents) arrives with no marks, no buttons and the body
+//! [`ShapeBody::Candidates`], and the UI words its own buttons from the prompt's [`Words`]
+//! and answers by candidate.
 //!
 //! # Words
 //!
 //! Every title and label comes from one table keyed by purpose (`wording.rs`), filled from
 //! the record and the view. A new purpose is one entry of the purposes' list and one of the
-//! table; nothing on the wire names it but its string.
+//! table; on the wire it is its name, one of TypeScript's `Purpose` literals.
 //!
 //! # Clicks
 //!
@@ -86,6 +87,7 @@ pub use held::{Clicked, Held, Run, add_opening_state};
 pub(crate) use open::{halt_prompt, prompt_view};
 pub use order::trigger_to_stack;
 pub use view::{
-    ButtonId, Click, ClickReply, ClickRequest, Lies, Marked, Pair, PartName, Pile, PlaceName,
-    PromptButton, PromptView, ShapeName, ShapeView, Share, Words,
+    ButtonId, Click, ClickReply, ClickRequest, Lies, Marked, ObjectId, Pair, PartName, Pile,
+    PlaceName, PromptButton, PromptView, ShapeBody, Share, Words, shape_name,
 };
+pub(crate) use view::{ids, purpose_decl, slots_of};

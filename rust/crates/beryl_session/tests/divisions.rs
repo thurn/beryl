@@ -234,7 +234,8 @@ fn an_amount_is_divided_among_recipients() {
     let d = numbers(1, 3, prompt).about(among(&creatures));
     let view = asked(&table, &state, &d);
     let mut held = Held::opening(&view, &state, &table, Some(&d)).expect("a held prompt");
-    let [a, b, c] = held.view().about[..] else {
+    let about: Vec<u16> = held.view().about.iter().map(|&id| id.into()).collect();
+    let [a, b, c] = about[..] else {
         panic!("three recipients");
     };
     let state_of = |held: &Held| held.view().to_string();

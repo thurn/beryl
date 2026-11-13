@@ -57,7 +57,7 @@ interface Answers {
 /** Whether `prompt` is a yes or no that says what its yes would tap: a cost a spell or
  * ability asks for, paid at once by the button. */
 const asksToPay = (prompt: PromptView | undefined) =>
-  prompt?.state?.shape === "yesNo" &&
+  prompt?.body.shape === "yesNo" &&
   prompt.marks.some(({ mark }) => mark === "suggested");
 
 /** The button of `prompt` that shows what it would tap while the pointer is over it or a
@@ -66,7 +66,7 @@ const shows = (
   prompt: PromptView | undefined,
   { id, primary }: PromptButton,
 ) =>
-  prompt?.state?.shape === "pay"
+  prompt?.body.shape === "pay"
     ? id.kind === "auto"
     : asksToPay(prompt) && primary;
 
@@ -76,7 +76,7 @@ const shows = (
  * would tap (stage.css); `suggest` is the dock's to call. */
 export function usePaying({ prompt }: Asked) {
   const [suggesting, suggest] = useState(false);
-  const paying = prompt?.state?.shape === "pay";
+  const paying = prompt?.body.shape === "pay";
   const asking = asksToPay(prompt);
   // A button that goes while the pointer is on it never says the pointer left.
   useEffect(() => {
@@ -182,11 +182,11 @@ function usePresses(
 
 /** What a prompt asks, and for a cost paid with permanents how much of it is still to pay,
  * or for a division how much is still to give out, as the session wrote each. */
-function Asks({ prompt: { title, state } }: { prompt: PromptView }) {
+function Asks({ prompt: { title, body: state } }: { prompt: PromptView }) {
   const left =
-    state?.shape === "pay"
+    state.shape === "pay"
       ? state.left
-      : state?.shape === "divide"
+      : state.shape === "divide"
         ? `${state.left}`
         : undefined;
   return (
@@ -215,8 +215,8 @@ function Stepper({
   sending: boolean;
   number?: (n: number) => void;
 }) {
-  const state = prompt.state;
-  if (state?.shape !== "number" || !number) return null;
+  const state = prompt.body;
+  if (state.shape !== "number" || !number) return null;
   const at = state.values.indexOf(state.value);
   const step = (to: number | undefined, label: string, sign: string) => (
     <button
@@ -479,7 +479,7 @@ export function PhonePromptOver({
   if (!prompt) return null;
   const { others } = standing(prompt);
   const takesBack = decision?.cancellable && cancel;
-  const steps = prompt.state?.shape === "number";
+  const steps = prompt.body.shape === "number";
   const more = others.length > 0 || Boolean(takesBack) || steps;
   // Beside the prompt's other buttons a pill has less room.
   const long = prompt.title.length > (more ? BESIDE : LONG);

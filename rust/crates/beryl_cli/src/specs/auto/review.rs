@@ -276,7 +276,7 @@ fn review_prompt(d: &beryl_session::protocol::DecisionView) -> String {
         return d.prompt.title.clone();
     }
     let mut title = String::new();
-    for (i, ch) in d.prompt.purpose.chars().enumerate() {
+    for (i, ch) in d.prompt.purpose.name().chars().enumerate() {
         match ch {
             _ if i == 0 => title.extend(ch.to_uppercase()),
             '-' => title.push(' '),

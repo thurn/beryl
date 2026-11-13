@@ -57,7 +57,7 @@ const SCRY_TOP = { opponent: 160, you: 580 };
 
 /** The attackers the open prompt has a blocker aimed at: blocked, once it is answered so. */
 export function blockedBy({ prompt }: Asked): ReadonlySet<number> {
-  const state = prompt?.state;
+  const state = prompt?.body;
   if (state?.shape !== "declare" || state.arrow !== "block") return NONE;
   return new Set(
     state.pairs.flatMap(({ to }) => (to.kind === "object" ? [to.slot] : [])),

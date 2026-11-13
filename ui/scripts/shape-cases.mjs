@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
  * held to show none of it. */
 export function onTable(prompt) {
     return (
-        Boolean(prompt.state) &&
+        prompt.body.shape !== "candidates" &&
         !["play-or-draw", "mulligan"].includes(prompt.purpose)
     );
 }
@@ -28,7 +28,7 @@ const asksAbout = (prompt, state) =>
  * order; an order's items, first to resolve first. No card of them shows its back, and none
  * is drawn twice. */
 export function heldUp(prompt) {
-    const state = (prompt && onTable(prompt) && prompt.state) || {};
+    const state = (prompt && onTable(prompt) && prompt.body) || {};
     return {
         piles:
             state.shape === "split"
@@ -174,7 +174,7 @@ const HELD_UP = 850;
  * card of a split to its pile, before the card that lies at `at` there, or a waiting trigger
  * to its place in the order. `from` is a point of it the pointer reaches. */
 export async function carry(page, click, before, from) {
-    const { state } = before.prompt;
+    const { body: state } = before.prompt;
     const to = await page.evaluate(
         placeFor,
         state.shape === "split"
@@ -253,7 +253,7 @@ async function flown({ tick, cards }) {
  * (The opponent's side of it, by-pv6p, by-yfb2 and by-nva, is the `lift` verb's check and
  * this shape's `theirs`.) */
 export async function scryFlight(page, before, ends, tick) {
-    const [bottom, top] = before.prompt.state.piles.map((pile) => pile.cards);
+    const [bottom, top] = before.prompt.body.piles.map((pile) => pile.cards);
     const cards = [...bottom, ...top];
     const seen = await page.evaluate(flown, { tick, cards });
     const last = seen.at(-1);

@@ -47,6 +47,7 @@ import type {
   PlayerView,
   PromptButton,
   PromptView,
+  Purpose,
 } from "../generated/protocol";
 import { isRevealed, type Name, type Point } from "./layout.ts";
 import type { Drop, PointerEvents } from "./pointer.ts";
@@ -89,19 +90,19 @@ const IDLE: Asked = { sending: false, answered: false };
 
 /** The purposes the opening screen answers (screens/Opening.tsx), over a table that shows no
  * dock: who plays first, and whether to keep a hand. */
-const OPENING = new Set(["play-or-draw", "mulligan"]);
+const OPENING = new Set<Purpose>(["play-or-draw", "mulligan"]);
 
 /** Whether the stage holds `prompt`: every shape the session holds the state of, but for
  * what the opening screen asks. */
 export function onTable(prompt: PromptView) {
-  return prompt.state !== null && !OPENING.has(prompt.purpose);
+  return prompt.body.shape !== "candidates" && !OPENING.has(prompt.purpose);
 }
 
 /** The ways to use a card that `prompt` shows, where it is the choice among them a click on
  * the card opened: each is drawn as the card or its ability (Choose.tsx), not as a button of
  * the bar, those it offers and the abilities it cannot use now. None for any other prompt. */
 export function waysOf(prompt: PromptView | undefined): PromptButton[] {
-  if (prompt?.state?.shape !== "mode" || prompt.purpose !== "act") return [];
+  if (prompt?.body?.shape !== "mode" || prompt.purpose !== "act") return [];
   return prompt.buttons.filter(
     ({ id }) => id.kind === "option" || id.kind === "ability",
   );
@@ -112,7 +113,7 @@ export function waysOf(prompt: PromptView | undefined): PromptButton[] {
  * yes or no or a choice among answers is about (the card whose ways are chosen among is
  * shown once a way instead). */
 export function trayOf(prompt: PromptView | undefined): Tray | undefined {
-  const state = prompt?.state;
+  const state = prompt?.body;
   if (state?.shape === "pick" && state.tray.length > 0) {
     return { piles: [{ cards: state.tray }] };
   }
@@ -481,7 +482,7 @@ export class Prompts {
     // A declaration's line, from each attacker or blocker to what it is aimed at, where the
     // session says one is drawn: the script draws the same once it is declared. None goes to
     // a player: Arena's attacker at the player has only its chevron (`IEXcjBn3BXk 22:16.53`).
-    const state = prompt?.state;
+    const state = prompt?.body;
     const declared =
       state?.shape === "declare" && state.lined ? state : undefined;
     for (const { from, to } of declared?.pairs ?? []) {

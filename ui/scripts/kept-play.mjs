@@ -231,7 +231,7 @@ await check(
     async (page) => {
         await page.clock.runFor(2000);
         const view = scry.views.at(-1);
-        const held = view.status.decision.prompt.state.piles.flatMap(
+        const held = view.status.decision.prompt.body.piles.flatMap(
             (pile) => pile.cards,
         );
         assert.ok(held.length > 0, "the scry holds cards up");

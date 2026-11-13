@@ -19,7 +19,7 @@ use beryl_engine::Layout;
 use beryl_engine::card::{Part, Purpose};
 
 use super::held::{Clicked, Run, Step, Table, Want, button};
-use super::{ButtonId, Click, Marked, PromptView, ShapeView, Share};
+use super::{ButtonId, Click, Marked, PromptView, ShapeBody, Share, slots_of};
 use crate::protocol::{Candidate, DecisionView, Side};
 use crate::script::{Mark, Subject};
 
@@ -60,8 +60,8 @@ impl Divide {
             purpose,
             total: most.saturating_add(least.saturating_mul(others)),
             least,
-            shares: prompt.about.iter().map(|&slot| (slot, least)).collect(),
-            friendly: prompt.about.iter().copied().filter(yours).collect(),
+            shares: prompt.about.iter().map(|&id| (id.0, least)).collect(),
+            friendly: slots_of(&prompt.about).into_iter().filter(yours).collect(),
             confirm: prompt.words.confirm.clone(),
         })
     }
@@ -120,7 +120,7 @@ impl Divide {
             })
             .collect();
         view.buttons = vec![button(ButtonId::Confirm, &self.confirm, given, given)];
-        view.state = Some(ShapeView::Divide {
+        view.body = ShapeBody::Divide {
             total: self.total,
             left: self.left(),
             shares: (self.shares.iter())
@@ -129,6 +129,6 @@ impl Divide {
                     amount,
                 })
                 .collect(),
-        });
+        };
     }
 }

@@ -1,5 +1,6 @@
 // The list of shapes is complete (`npm test`, no browser): every prompt shape the session
-// can send (`ShapeName`, src/generated/protocol.ts) has a recording in the shape suite
+// can send (a tag of `ShapeBody`, src/generated/protocol.ts, but for `candidates`, which
+// says the session holds no state) has a recording in the shape suite
 // (ui/shapes.json) from the seat that is asked and from the seat across the table, which
 // shapes.mjs checks in both layouts (`shape:<shape>/<seat>/<layout>`). A new shape, or one
 // whose recording is taken away, fails here.
@@ -13,12 +14,14 @@ const suite = JSON.parse(read("shapes.json"));
 const fixtures = JSON.parse(read("fixtures.json"));
 
 test("every shape the session sends has its four checks", () => {
-    const [, names] =
-        /^export type ShapeName = (.*);$/m.exec(
+    const [, body] =
+        /^export type ShapeBody = ([^]*?)\n\nexport type /m.exec(
             read("src/generated/protocol.ts"),
         ) ?? [];
-    assert.ok(names, "src/generated/protocol.ts declares ShapeName");
-    const shapes = [...names.matchAll(/"(\w+)"/g)].map(([, name]) => name);
+    assert.ok(body, "src/generated/protocol.ts declares ShapeBody");
+    const shapes = [...body.matchAll(/"shape": "(\w+)"/g)]
+        .map(([, name]) => name)
+        .filter((name) => name !== "candidates");
     assert.ok(shapes.length > 0);
     assert.deepEqual([...suite.layouts].sort(), ["desktop", "phone"]);
     for (const shape of shapes) {

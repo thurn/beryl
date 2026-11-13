@@ -50,7 +50,7 @@ const THIN = 2.5;
  * them: each is one thin stroke with no head, so that a heavy arrow always means a target
  * (stage.css). */
 export async function lineLooks(page, held, what) {
-    const state = held.prompt?.state;
+    const state = held.prompt?.body;
     if (state?.shape !== "declare" || !state.lined) return;
     const drawn = (await page.evaluate(lines, state.arrow)).filter(
         (line) => line.key !== null,
@@ -69,7 +69,7 @@ export async function lineLooks(page, held, what) {
  * each to the pointer, in the look of the line the aim will draw, wherever the pointer goes;
  * and none while no creature waits. */
 export async function pointerLines(page, held, what) {
-    const state = held.prompt?.state;
+    const state = held.prompt?.body;
     if (state?.shape !== "declare") return;
     const { width, height } = page.viewportSize();
     const points = [
