@@ -19,5 +19,19 @@
     "scenario": "Fractured Identity on a transformed double-faced card",
     "cr": "CR 707.8a (https://yawgatog.com/resources/magic-rules/#R7078a): \"If the token is a copy of a double-faced permanent with its back face up, the token enters the battlefield with its back face up.\"",
     "reason": "Forge's token copy of the transformed Jace, Telepath Unbound enters with its front face up, as Jace, Vryn's Prodigy."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Spellseeker",
+    "scenario": "Spellseeker finds nothing although an instant is there",
+    "cr": "CR 701.23b (https://yawgatog.com/resources/magic-rules/#R70123b): \"If a player is searching a hidden zone for cards with a stated quality, such as a card with a certain card type or color, that player isn't required to find some or all of those cards even if they're present in that zone.\"",
+    "reason": "XMage's Spellseeker searches with a target of exactly one card (\"from 1 to 1\") whenever one qualifies, so its controller cannot fail to find the card."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Spellseeker",
+    "scenario": "generated 1: cast from hand",
+    "cr": "CR 701.23b (https://yawgatog.com/resources/magic-rules/#R70123b): \"If a player is searching a hidden zone for cards with a stated quality, such as a card with a certain card type or color, that player isn't required to find some or all of those cards even if they're present in that zone.\"",
+    "reason": "XMage's Spellseeker searches with a target of exactly one card (\"from 1 to 1\") whenever one qualifies, so its controller cannot fail to find the card."
   }
 ]
