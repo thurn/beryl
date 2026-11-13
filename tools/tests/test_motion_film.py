@@ -165,7 +165,7 @@ def test_the_brief_gives_a_reviewer_the_prose_the_values_and_every_sheet() -> No
     assert text.startswith("MOTION REVIEW: emerge\n")
     for part in (
         "Shows: An ability lifts out of its source",
-        "Arena's path: A curve from the source to the stack",
+        "Arena's path: All but straight from the middle of the source to the stack",
         "emerge (triggered ability). Beryl: 275 ms",
         "note: Copy first visible 20:39.38.",
         "contact sheet: /c.png",
