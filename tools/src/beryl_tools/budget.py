@@ -123,7 +123,10 @@ CUT_PRIORITY = "1"
 # whole lane.
 KEEP: dict[str, str] = {
     "app:smoke": "the desktop app builds and starts at all",
-    "mobile:mobile-check": "the phone apps build and start at all",
+    "ui-test:Enter on the start screen starts a game": "the browser UI starts a game",
+    "ui-test:a land pressed while a script plays on to it is played": (
+        "the browser UI plays a step of a game"
+    ),
     "rust:clippy": "the whole workspace builds and passes clippy",
     "ui:tsc": "the UI type-checks in strict mode",
     "names:*": "the repository rules AGENTS.md names, a few CPU seconds in all",

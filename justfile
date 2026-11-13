@@ -347,7 +347,7 @@ check:
 precheck:
     cd tools && uv run --quiet python -m beryl_tools.hygiene
 
-# Slow CI: the lanes what changed since each last passed can affect, every lane hourly; or the lanes named, in full: repo, python, scale, rust, script, ui, names, app, shots, ui-test, oracle, counts, mobile (budget 300 s, 450 s on Windows)
+# Slow CI: the lanes what changed since each last passed can affect, every lane hourly; or the lanes named, in full: repo, python, scale, rust, script, ui, names, app, ui-smoke, oracle, counts, and the sweep's shots, ui-test, mobile (budget 300 s, 450 s on Windows)
 [group('checks')]
 ci *lanes:
     {{ by }} ci "$@"
@@ -376,6 +376,21 @@ nightly *args:
 [group('checks')]
 prune-caches *args:
     {{ by }} prune-caches "$@"
+
+# The browser sweep: shots, ui-test and mobile in full on origin/staging, bisecting and filing what fails, unless staging has not moved or the machine is busy
+[group('checks')]
+sweep:
+    {{ by }} sweep
+
+# Load the launchd agent that runs `by sweep` every 3 h (macOS; idempotent)
+[group('checks')]
+sweep-install:
+    {{ by }} sweep-install
+
+# Unload and remove the browser sweep's launchd agent
+[group('checks')]
+sweep-uninstall:
+    {{ by }} sweep-uninstall
 
 # Load the launchd agent that runs `by nightly` at 03:00, hourly until 08:00 (macOS; idempotent)
 [group('checks')]

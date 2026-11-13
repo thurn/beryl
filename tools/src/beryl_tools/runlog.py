@@ -148,12 +148,15 @@ def label(path: Path, chosen: Mapping[str, str], cut: Iterable[str]) -> None:
 
 def place(script: str) -> str:
     """Where a run's checks ran, so a pass settles only failures from the same place
-    (verdicts.settle): the branch, or for slow CI on a detached staging tip, `staging`, else the
+    (verdicts.settle): the branch, or for slow CI or the browser sweep on a detached staging tip,
+    `staging`, else the
     working tree's path."""
     branch = git("symbolic-ref", "--short", "-q", "HEAD")
     if branch:
         return branch
-    return "staging" if script == "ci" else git("rev-parse", "--show-toplevel")
+    return (
+        "staging" if script in ("ci", "sweep") else git("rev-parse", "--show-toplevel")
+    )
 
 
 @dataclass

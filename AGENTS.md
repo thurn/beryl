@@ -199,8 +199,9 @@ Use the cheapest test that covers your change. Agents never open a window;
    `just card brief <name>` for starting a new card. To write a card, follow the
    `card-writing` skill.
 2. UI: run `cd ui && npm run typecheck`, and `npm test` for the tests that need
-   no browser. `ui/AGENTS.md` lists the browser checks. To reproduce, debug or
-   check a card's behavior in the UI, use the `specs` skill.
+   no browser. `ui/AGENTS.md` lists the browser checks. The fast check plays the
+   ones your change can break; slow CI plays only a smoke test. To reproduce,
+   debug or check a card's behavior in the UI, use the `specs` skill.
 3. The app: `just smoke` builds the debug app, launches it without a window and
    waits until the UI reports that it has loaded.
 4. The phone apps: `just ios-smoke` and `just android-smoke` do the same in a
@@ -229,6 +230,9 @@ file or test. The fast check runs only the lanes whose files have changed.
 - A step killed at its hang limit (several times its slowest pass) is very
   likely stuck, and a rerun would hang again. Look at the processes its log
   lists before pushing again.
+- Browser checks: the fast check plays those a change can break, slow CI only a
+  smoke test (`ui-smoke`), and the browser sweep (`just sweep`) all of them on
+  staging every 3 hours, filing a bead for what fails without blocking `master`.
 - Headless browser checks run at a higher priority than any build and share a
   limited number of page slots across all sessions. Run only the checks your
   change needs (`just ui-test <title>`, `just specs <card>`) rather than a full

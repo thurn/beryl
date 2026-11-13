@@ -48,10 +48,8 @@ def test_a_card_file_runs_the_lanes_that_build_and_play_it() -> None:
         "rust",
         "script",
         "app",
-        "shots",
-        "ui-test",
+        "ui-smoke",
         "oracle",
-        "mobile",
     }
     # The rollout benchmark does not depend on the changed package.
     assert set(chosen.left) == {"python", "ui", "counts"}
@@ -66,7 +64,7 @@ def test_the_python_lane_holds_the_scale_lanes_tests() -> None:
 
 def test_a_data_file_the_ui_imports_runs_the_ui_and_browser_lanes() -> None:
     chosen = plan(["data/arena-motion.json"])
-    assert {"python", "ui", "app", "shots", "ui-test"} <= set(chosen.why)
+    assert {"python", "ui", "app", "ui-smoke"} <= set(chosen.why)
     assert "rust" not in chosen.why
 
 
@@ -87,7 +85,7 @@ def test_a_path_no_rule_places_runs_every_lane_in_full() -> None:
 
 def test_each_lane_counts_its_changes_from_its_own_base() -> None:
     bases: dict[str, str] = {lane: "new" for lane in LANES}
-    bases["ui-test"] = "old"  # It failed at `new`, so it keeps its older pass.
+    bases["ui-smoke"] = "old"  # It failed at `new`, so it keeps its older pass.
     chosen = slow_ci.choose(
         LANES,
         bases,
@@ -96,8 +94,8 @@ def test_each_lane_counts_its_changes_from_its_own_base() -> None:
         SCRIPT_INPUTS,
         lambda found: None,
     )
-    assert set(chosen.why) == {"repo", "names", "ui-test"}
-    assert chosen.selective()["ui-test"] == "old"
+    assert set(chosen.why) == {"repo", "names", "ui-smoke"}
+    assert chosen.bases["ui-smoke"] == "old"
 
 
 def lane(step: str) -> checks.Lane:

@@ -141,11 +141,13 @@ class Tree:
     """A detached worktree under the cache, kept between runs so that its builds stay warm. One
     per repository, since git registers a worktree with its repository."""
 
-    def __init__(self, repo: Path) -> None:
+    def __init__(self, repo: Path, name: str = "bisect") -> None:
+        """The tree `name`: slow CI's is `bisect`, and the browser sweep's has its own, so that
+        neither waits for the other."""
         common = out(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
         key = hashlib.sha256(common.encode()).hexdigest()[:12]
         self.repo = repo
-        self.path: Path = paths.cache_root() / "ci" / f"bisect-{key}"
+        self.path: Path = paths.cache_root() / "ci" / f"{name}-{key}"
 
     def at(self, commit: str) -> bool:
         """Checks out `commit`, making the worktree first where git does not know it; whether
@@ -379,6 +381,7 @@ def misses(
     log: list[dict[str, object]],
     history: dict[str, list[verdicts.Entry]],
     repo: Path,
+    script: str = "ci",
 ) -> dict[str, str]:
     """A `miss:` line for each culprit's check that its fast check did not run, recording the
     miss on the check's bead (and in `history`) unless one names the culprit already, and an
@@ -414,7 +417,7 @@ def misses(
                     "time": verdicts.stamp(verdicts.now()),
                     "host": platform.node(),
                     "commit": sha,
-                    "script": "ci",
+                    "script": script,
                     "lane": s.lane,
                     "verdict": "miss",
                     "fast": fast,
@@ -444,11 +447,12 @@ def answer(
     tallies: dict[str, runlog.Tally],
     beads: dict[str, tuple[str, list[str]]],
     missed: dict[str, str],
+    origin: str = "master",
 ) -> list[list[str]]:
     """A `bisect:` line per suspect, then per check it names any `miss:` line and a `record:`
-    line."""
+    line. The `commits` are those since `origin`, as the lines name it."""
     n = len(commits)
-    since = f"({n} commit{'' if n == 1 else 's'} since master)"
+    since = f"({n} commit{'' if n == 1 else 's'} since {origin})"
     blocks: list[list[str]] = []
     for f in found:
         if f.verdict == "culprit":
@@ -460,7 +464,7 @@ def answer(
         elif f.verdict == "flaky":
             said = "flaky: passed at the tip on its bisection rerun"
         elif f.verdict == "master":
-            said = f"fails at {base[:10]} too: no commit since master to blame"
+            said = f"fails at {base[:10]} too: no commit since {origin} to blame"
         elif commits:
             span = f"{commits[f.low][:10]}..{commits[f.high][:10]}"
             said = f"out of time: culprit among {f.high - f.low + 1} commits {span}  {since}"
@@ -490,18 +494,32 @@ def after(outcomes: list[Outcome], started: float, repo: Path = paths.REPO) -> N
 
 def bisect(outcomes: list[Outcome], started: float, repo: Path) -> None:
     since = out(repo, "rev-list", "--first-parent", "--reverse", f"{BASE}..HEAD")
-    commits = since.split()
+    left = min(SEARCH, time_left(started, repo))
+    for line in bisect_since(outcomes, since.split(), left, repo):
+        print(line)
+
+
+def bisect_since(
+    outcomes: list[Outcome],
+    commits: list[str],
+    left: float,
+    repo: Path,
+    origin: str = "master",
+    script: str = "ci",
+) -> list[str]:
+    """Bisects the failed lanes in `outcomes` over `commits` (oldest first, HEAD last), those
+    since `origin`, in `left` wall seconds, printing the search as it goes; returns the answer's
+    lines. A run of `script` other than slow CI's searches in a tree of its own."""
     base = out(repo, "rev-parse", f"{commits[0]}^" if commits else "HEAD")
     group = suspects(outcomes)
     unnamed = [o for o in outcomes if o.failure is None]
-    left = min(SEARCH, time_left(started, repo))
     print(
         f"bisect: {len(group)} failed checks over {len(commits)} commits since"
-        f" {BASE} ({base[:10]}), {max(0.0, left):.0f} s to search"
+        f" {origin} ({base[:10]}), {max(0.0, left):.0f} s to search"
     )
     found: list[Found] = []
     if group:
-        tree = Tree(repo)
+        tree = Tree(repo, "bisect" if script == "ci" else f"bisect-{script}")
         tree.path.parent.mkdir(parents=True, exist_ok=True)
         try:
             with system.file_lock(tree.path.with_suffix(".lock"), timeout=LEAST_PROBE):
@@ -516,9 +534,9 @@ def bisect(outcomes: list[Outcome], started: float, repo: Path) -> None:
     )
     log = runlog.read_log(since)
     beads = delivering(found, commits)
-    missed = misses(found, commits, beads, log, history, repo)
+    missed = misses(found, commits, beads, log, history, repo, script)
     tallies, _ = runlog.tally(log, history, since)
-    blocks = answer(found, commits, base, repo, tallies, beads, missed)
+    blocks = answer(found, commits, base, repo, tallies, beads, missed, origin)
     lines = [
         f"bisect: {o.lane}  not bisected: "
         + (
@@ -535,5 +553,4 @@ def bisect(outcomes: list[Outcome], started: float, repo: Path) -> None:
             )
             break
         lines += block
-    for line in lines:
-        print(line)
+    return lines

@@ -53,8 +53,8 @@ For a change to `ui/` or `rust/`, it also runs as many of the `ui-test` and
 `shots` browser checks as fit in the budget, choosing those the change could
 break according to the coverage data (`just coverage`), worst failure history
 first. The run log's `chosen` field says why each one ran, and `cut` marks the
-ones left to slow CI. The fast check also rejects conflict markers and badly
-formatted commit subjects.
+ones left to the browser sweep. The fast check also rejects conflict markers and
+badly formatted commit subjects.
 
 ## Slow CI
 
@@ -67,28 +67,25 @@ can affect (`slow_ci.py`):
   lane that fails keeps its old base, so it runs again until it passes.
 - A lane runs when a changed path reaches it: Rust and the data files the crates
   read reach the `rust` lane, `ui/` and the data files the UI imports reach
-  `ui`, and both reach `app`, `shots` and `ui-test`. A docs-only change runs
-  just `repo` and `names`. Within a lane, `rust` tests only the packages the
-  change can break, and `shots` and `ui-test` play every check the coverage data
-  says the change can break (`--affected`), or all of them when it cannot say.
+  `ui`, and both reach `app` and `ui-smoke`. A docs-only change runs just `repo`
+  and `names`. Within a lane, `rust` tests only the packages the change can
+  break.
 - Tools changes are judged by fingerprint: each lane's pass records a hash of
   its step commands and of the `tools/src` modules they run or import. A lane
   whose fingerprint changed runs in full, as does a lane reached by a path no
   rule places.
 - Every lane runs in full once an hour (`FULL_EVERY`), or when `$BERYL_CI_FULL`
   is set, so a wrong selection is caught within the hour.
-- The coverage data is measured nightly, and again in the background after each
-  full sweep in which `shots` and `ui-test` pass, so it stays about an hour
-  behind staging. A ui/src line changed since the coverage's commit is one the
-  data cannot place.
 - A lane left out gets a `skip` record in the run log saying why, and
-  `just ci <lanes>` runs the named lanes in full.
+  `just ci <lanes>` runs the named lanes in full, including the browser sweep's.
 
 The lanes slow CI adds to the fast check's:
 
 - `app`: `just smoke`.
-- `shots`: `just ui-shots`, which fails on any page error.
-- `ui-test`: `just ui-test`, which plays the game screen through a fixture.
+- `ui-smoke`: two `ui-test` checks (`checks.SMOKE_TITLES`): the start screen
+  starts a game, and on a recorded game the stage passes priority and plays a
+  land. Each takes about a second and runs on the page's own clock, so slow CI
+  still sees the browser UI start and play.
 - `oracle`: `just oracle --select`, which needs `just oracle-setup` once per
   machine. It runs the cards changed since `origin/master` plus a sample chosen
   from the commit hash, or every card if the exporters or harnesses changed. The
@@ -96,8 +93,6 @@ The lanes slow CI adds to the fast check's:
 - `counts`: `just count-gate`, which checks the rollout benchmark's instruction
   count against the limit in `rust/crates/beryl_bench/count-gate.toml`. That
   file's comments say when the limit may go up.
-- `mobile`: `cargo check` of the app for the iOS Simulator and Android, which
-  needs `just mobile-setup`.
 
 Slow CI runs on two machines: this Mac and Cygnus, a Windows PC. A pass on
 either one moves `master` forward. A failure's Steward bead (the P0 bead Enact
@@ -105,9 +100,44 @@ files to get a slow-CI failure fixed) goes first to a machine on the OS that
 failed, and to any machine after two hours. Slow CI doesn't run on a timer: each
 machine tests `staging` whenever it's free and fixes failures as they appear.
 
-Windows leaves `app`, `shots`, `ui-test`, `oracle`, `counts` and `mobile` to the
-Mac, and its fast check skips the browser checks and `motion` (see
-`WINDOWS_SKIPS` in `checks.py`).
+Windows leaves `app`, `ui-smoke`, `oracle` and `counts` to the Mac, and its fast
+check skips the browser checks and `motion` (see `WINDOWS_SKIPS` in
+`checks.py`).
+
+## The browser sweep
+
+The full browser lanes are not slow CI's. `just sweep` (`sweep.py`), from a
+launchd agent every 3 hours (`just sweep-install`), runs them on
+`origin/staging` at utility priority on the Mac:
+
+- `shots`: `just ui-shots`, which renders every screen in `ui/shots.json` and
+  fails on any page error.
+- `ui-test`: `just ui-test`, which plays the game screen through fixtures,
+  including every verb and prompt shape check.
+- `mobile`: `cargo check` of the app for the iOS Simulator and Android, which
+  needs `just mobile-setup`.
+
+Which browser checks run where:
+
+- The fast check plays the `ui-test` and `shots` checks a change can break, as
+  many as fit its budget. This is the enforced form of "run the checks your
+  change needs".
+- Slow CI plays only `ui-smoke`.
+- The sweep plays all of them, every 3 hours. With about 8 commits an hour, a
+  failure leaves about 24 commits to search.
+
+A firing skips when staging has not moved since the last sweep, when the load is
+over 8 times the cores, or while another sweep runs. A sweep failure never
+blocks `master`. The sweep bisects each failed check over the commits since the
+last sweep that passed (up to 30 minutes), then files one P1 `sweep-failure`
+Steward bead per lane naming the checks, the culprit commit or range and how to
+replay them. A check an open sweep bead already names gets a comment instead.
+Its steps' hang limit is 2 hours, because at utility priority on a loaded
+machine they run many times slower than in a check. A sweep that passes starts a
+coverage run of its commit in the background, so the coverage data the fast
+check chooses by is measured nightly and after each passing sweep. A ui/src line
+changed since the coverage's commit is one the data cannot place. The record is
+in `$BERYL_CACHE/sweep`.
 
 ## Flaky checks
 
@@ -141,10 +171,10 @@ Mac, and its fast check skips the browser checks and `motion` (see
   nothing in 30 days and moves each one that caught something to the nightly,
   after first asking whether a fast, deterministic test could keep what the
   check protects. A check the fast check also runs leaves slow CI alone. The
-  checks in `budget.KEEP` (the app and phone apps starting, clippy, the UI's
-  typecheck, the `names` lane) are never named. While a `ci-cut` bead is open
-  nothing more is filed; once the last one closes, only runs that started after
-  it count, and slow CI waits for 10 of them.
+  checks in `budget.KEEP` (the app starting, the `ui-smoke` checks, clippy, the
+  UI's typecheck, the `names` lane) are never named. While a `ci-cut` bead is
+  open nothing more is filed; once the last one closes, only runs that started
+  after it count, and slow CI waits for 10 of them.
 - Each step has a hang limit (`hang.py`): 4x its slowest pass on this machine in
   the last 30 days, at least 900 s, at most 2400 s, and 1800 s for a step with
   no pass on record. A step still running at its limit is very likely stuck, so

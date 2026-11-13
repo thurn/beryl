@@ -37,12 +37,15 @@ TAIL_LINES = 40
 TAIL_CHARS = 4000
 
 
-def failed_checks(commit: str, since: datetime) -> dict[str, list[str]]:
-    """The nightly's failed checks on `commit` logged from `since` on, by lane, each once."""
+def failed_checks(
+    commit: str, since: datetime, script: str = "nightly"
+) -> dict[str, list[str]]:
+    """The failed checks on `commit` of the runs of `script` (the nightly's by default) logged
+    from `since` on, by lane, each once."""
     found: dict[str, list[str]] = {}
     for r in runlog.read_log(since):
         if (
-            r.get("script") == "nightly"
+            r.get("script") == script
             and r.get("commit") == commit
             and r.get("outcome") == "fail"
         ):
@@ -75,9 +78,10 @@ def host() -> str:
     return os.environ.get("ENACT_HOST") or socket.gethostname().split(".")[0].lower()
 
 
-def open_beads(store: verdicts.Beads) -> dict[str, set[str]]:
-    """Each open nightly bead, with the checks it was filed for."""
-    _, out = store.bd("list", "--label", LABEL, "-n", "0", "--json")
+def open_beads(store: verdicts.Beads, label: str = LABEL) -> dict[str, set[str]]:
+    """Each open bead with `label` (the nightly's by default), with the checks it was filed
+    for."""
+    _, out = store.bd("list", "--label", label, "-n", "0", "--json")
     beads = verdicts.parse_json(out)
     found: dict[str, set[str]] = {}
     for b in beads if isinstance(beads, list) else []:

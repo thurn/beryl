@@ -10,11 +10,15 @@ change that. So master, which moves only when slow CI passes, never moves past a
 would fail, as long as these rules say truly which changes reach which lane.
 
 A lane runs when a path changed since its base reaches it ([`lane_reason`]): the Rust lane for
-a change under rust/ or to a data file a crate reads, the browser lanes for one under rust/ or
-ui/, and so on. Within a lane, the Rust lane tests only the packages the change can break
-(`rust_tests.affected_packages`), the browser lanes play only the checks it can break
-(selection.py, `--affected`), and the oracle lane plays the changed cards and a sample
+a change under rust/ or to a data file a crate reads, the browser smoke lane for one under rust/
+or ui/, and so on. Within a lane, the Rust lane tests only the packages the change can break
+(`rust_tests.affected_packages`), and the oracle lane plays the changed cards and a sample
 (oracle_selection.py). A lane left out gets a `skip` record in the run log that says why.
+
+The full browser lanes (`shots`, `ui-test`) and the phone builds (`mobile`), [`SWEPT`], are not
+slow CI's: the fast check plays the browser checks a change can break, and the browser sweep
+(sweep.py) runs all three on origin/staging every few hours, filing what fails without blocking
+master. Slow CI keeps one small browser check, `ui-smoke` (`checks.SMOKE_TITLES`).
 
 The tools are not judged by path. Each lane's pass records its fingerprint ([`fingerprint`]):
 its steps' commands, the source of every module of tools/src they run or import, of the modules
@@ -25,11 +29,9 @@ cannot diff against, and one a changed path reaches that no rule here places
 
 Every lane runs in full when the last full sweep on this machine began over [`FULL_EVERY`] ago,
 or `$BERYL_CI_FULL` is set. Slow CI runs only while staging moves, so a check that the selection
-wrongly left out fails within the hour, and bisect.py finds the commit that broke it. A full
-sweep in which the browser lanes pass starts a coverage run of its commit in the background
-(`coverage.refresh`), so the browser lanes' choice has coverage at most about an hour old.
+wrongly left out fails within the hour, and bisect.py finds the commit that broke it.
 
-`by ci <lanes>` runs the lanes named, in full.
+`by ci <lanes>` runs the lanes named, in full, the [`SWEPT`] ones too.
 """
 
 from __future__ import annotations
@@ -51,7 +53,6 @@ from pathlib import Path
 from . import (
     bench,
     checks,
-    coverage,
     mobile,
     oracle_selection,
     paths,
@@ -96,7 +97,7 @@ JUDGES: tuple[str, ...] = ("reruns", "verdicts", "slow_only")
 LEAVES: frozenset[str] = frozenset({"checks", "cli", "slow_ci"})
 # The files of the tools' environment, in every fingerprint.
 ENVIRONMENT: tuple[str, ...] = ("pyproject.toml", "uv.lock")
-# The packages whose change the app, mobile and counts lanes build.
+# The packages whose change the app and counts lanes build.
 APP = "beryl_app"
 BENCH = "beryl_bench"
 # Every lane slow CI has, in the order it starts them. `scale` runs the Python tests that read
@@ -110,16 +111,14 @@ LANES: tuple[str, ...] = (
     "ui",
     "names",
     "app",
-    "shots",
-    "ui-test",
+    "ui-smoke",
     "oracle",
     "counts",
-    "mobile",
 )
+# The lanes the browser sweep runs in full every few hours (sweep.py) instead of slow CI, which
+# `by ci` still runs when named.
+SWEPT: tuple[str, ...] = ("shots", "ui-test", "mobile")
 ALWAYS = "always: needs no build"
-# The lanes coverage.py measures. A full sweep in which both pass refreshes the coverage that
-# chooses their checks, so that it is at most about an hour behind staging.
-BROWSER: frozenset[str] = frozenset({"ui-test", "shots"})
 
 
 # What each lane runs of the tools.
@@ -261,11 +260,9 @@ def lane_reason(
         "script": first(script_inputs, checks.CARD_STORE),
         "ui": ui,
         "app": ui or reaches(APP),
-        "shots": browser,
-        "ui-test": browser,
+        "ui-smoke": browser,
         "oracle": first(r"^rust/", oracle_selection.HARNESS.pattern),
         "counts": reaches(BENCH),
-        "mobile": reaches(APP),
     }
     return why.get(lane, "")
 
@@ -365,12 +362,9 @@ def recordable() -> str:
 # The run.
 
 
-def lanes_for(
-    packages: list[str] | None, bases: Mapping[str, str]
-) -> dict[str, Callable[[], checks.Lane]]:
-    """Each lane's constructor, the Rust lane held to `packages` (None: the workspace) and the
-    browser lanes to the checks a change since their `bases` can break (none: every check).
-    """
+def lanes_for(packages: list[str] | None) -> dict[str, Callable[[], checks.Lane]]:
+    """Each lane's constructor, the [`SWEPT`] ones too, the Rust lane held to `packages` (None:
+    the workspace)."""
     return {
         "repo": checks.repo_lane,
         "python": checks.python_lane,
@@ -380,8 +374,9 @@ def lanes_for(
         "ui": checks.ui_lane,
         "names": lambda: checks.names_lane(fetch=True),
         "app": checks.app_lane,
-        "shots": lambda: checks.shots_lane(affected=bases.get("shots", "")),
-        "ui-test": lambda: checks.ui_test_lane(affected=bases.get("ui-test", "")),
+        "ui-smoke": checks.ui_smoke_lane,
+        "shots": checks.shots_lane,
+        "ui-test": checks.ui_test_lane,
         "oracle": checks.oracle_lane,
         "counts": bench.lane,
         "mobile": mobile.lane,
@@ -407,10 +402,6 @@ class Plan:
             return None
         changed = changed_paths(self.bases["rust"])
         return None if changed is None else rust_packages(changed)
-
-    def selective(self) -> dict[str, str]:
-        """The bases of the lanes that run only the checks a change can break."""
-        return {k: v for k, v in self.bases.items() if k not in self.whole}
 
 
 def rust_packages(changed: list[str]) -> list[str] | None:
@@ -524,10 +515,10 @@ def slow(args: argparse.Namespace) -> int:
     started = time.monotonic()
     now = datetime.now(timezone.utc)
     if args.lanes:
-        unknown = set(args.lanes) - set(LANES)
+        unknown = set(args.lanes) - set(LANES) - set(SWEPT)
         if unknown:
             raise SystemExit(
-                f"unknown lanes {sorted(unknown)}; lanes: {' '.join(LANES)}"
+                f"unknown lanes {sorted(unknown)}; lanes: {' '.join(LANES + SWEPT)}"
             )
         names = list(args.lanes)
     else:
@@ -537,7 +528,7 @@ def slow(args: argparse.Namespace) -> int:
                 f"ci: skipping {' '.join(checks.WINDOWS_SKIPS)} on Windows; the Mac's"
                 " slow CI runs them"
             )
-    canonical = {name: make() for name, make in lanes_for(None, {}).items()}
+    canonical = {name: make() for name, make in lanes_for(None).items()}
     prints: dict[str, str] = fingerprints(canonical, paths.TOOLS)
     passes: Passes = Passes.load(passes_path())
     commit: str = recordable()
@@ -546,14 +537,12 @@ def slow(args: argparse.Namespace) -> int:
     else:
         chosen = plan(passes, now, names, prints)
         report(chosen, passes, now, commit)
-    constructors = lanes_for(chosen.packages(), chosen.selective())
+    constructors = lanes_for(chosen.packages())
     lanes = [constructors[lane]() for lane in chosen.why]
 
     def passed(lanes: list[str]) -> None:
         if commit:
             passes.record(lanes, commit, prints)
-        if commit and chosen.full and not args.lanes and BROWSER <= set(lanes):
-            print(f"ci: {coverage.refresh(commit)}")
 
     budget = int(os.environ.get("CI_BUDGET_S", checks.SLOW_BUDGET))
     every = len(chosen.whole) == len(chosen.why)

@@ -73,6 +73,7 @@ HEAVY_STEPS: frozenset[str] = frozenset(
         "app:smoke",
         "shots:ui-shots",
         "ui-test:ui-test",
+        "ui-smoke:ui-test",
         "oracle:oracle",
         "mobile:mobile-check",
         "script:script-check",

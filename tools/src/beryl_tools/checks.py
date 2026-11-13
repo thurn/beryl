@@ -17,10 +17,12 @@ The fast check runs the lanes whose files changed since the branch left origin/s
 `oracle` on the scenarios of each card whose file changed, without Forge's AI games, and for a
 change to ui/ or rust/, `ui-test` and `shots` on the browser checks it can break, as many as fit
 its budget (selection.py). Slow CI has every lane plus `app` (the debug app built and launched
-headless until its UI loads), `shots` (the screens rendered headless), `ui-test` (the game screen
-played headless), `oracle` (the card scenarios checked against XMage and Forge) and `counts` (the
-rollout benchmark's instruction count held to its bar), and runs those that what changed since
-each one last passed can affect, and all of them hourly (slow_ci.py).
+headless until its UI loads), `ui-smoke` (a few browser checks, [`SMOKE_TITLES`]), `oracle` (the
+card scenarios checked against XMage and Forge) and `counts` (the rollout benchmark's
+instruction count held to its bar), and runs those that what changed since each one last passed
+can affect, and all of them hourly (slow_ci.py). The full `shots` (the screens rendered
+headless), `ui-test` (the game screen played headless) and `mobile` lanes run in the browser
+sweep every few hours (sweep.py).
 
 A step that fails is rerun once before its lane fails, narrowed to the checks it says
 failed where it can name them: a pass on the rerun passes the lane, prints a `flaky: <lane>
@@ -112,9 +114,19 @@ WINDOWS_SKIPS: tuple[str, ...] = (
     "counts",
     "mobile",
     "app",
+    "ui-smoke",
     "shots",
     "ui-test",
     "oracle",
+)
+# The `ui-test` checks slow CI's `ui-smoke` lane plays, by title: the start screen starts a game,
+# and on a recorded game the stage passes priority (Space) and plays a land at a click. Each
+# takes about a second, runs on the page's own clock (no wall-clock waits) and has not failed in
+# over 100 slow-CI runs. Every other browser check runs in the fast check's selection and in the
+# browser sweep every few hours (sweep.py).
+SMOKE_TITLES: tuple[str, ...] = (
+    "Enter on the start screen starts a game",
+    "a land pressed while a script plays on to it is played",
 )
 
 BY: list[str] = [sys.executable, "-m", "beryl_tools.cli"]
@@ -608,6 +620,13 @@ def ui_test_lane(select: bool = False, affected: str = "") -> Lane:
     error or a failed interaction fails it."""
     cmd = [*BY, "ui-test", *choice_flags(select, affected)]
     return Lane("ui-test", warm=True).step("ui-test", cmd, rerun=failed_titles)
+
+
+def ui_smoke_lane() -> Lane:
+    """Plays the few [`SMOKE_TITLES`] checks, so slow CI still sees the browser UI start and
+    play, while the full `shots`, `ui-test` and `mobile` lanes run in the sweep."""
+    cmd = [*BY, "ui-test", *SMOKE_TITLES]
+    return Lane("ui-smoke", warm=True).step("ui-test", cmd, rerun=failed_titles)
 
 
 def choice_flags(select: bool, affected: str) -> list[str]:
