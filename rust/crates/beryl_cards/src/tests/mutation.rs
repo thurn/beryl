@@ -196,3 +196,26 @@ fn damn_that_allows_regeneration_is_killed_by_its_generated_scenarios() {
         assert!(killed(mutant.def, &expected), "{} survives", mutant.node);
     }
 }
+
+/// Teferi, Hero of Dominaria's emblem is a card of its own, listed among what Teferi creates:
+/// a Teferi whose emblem's trigger may target nothing is a mutant of Teferi, and its scenarios
+/// tell it from Teferi.
+#[test]
+fn a_mutant_of_an_emblem_is_a_mutant_of_its_card() {
+    let teferi = CARDS
+        .get(crate::names::TEFERI_HERO_OF_DOMINARIA)
+        .expect("Teferi has a file");
+    let emblem = teferi.tokens[0];
+    let expected = expected(scenarios_of(teferi.name));
+    let optional: Vec<_> = mutants(teferi)
+        .into_iter()
+        .filter(|m| m.node == format!("{}: ability 0, target 0", emblem.name))
+        .collect();
+    assert_eq!(optional.len(), 1);
+    let mutant = &optional[0];
+    let mut made = Vec::new();
+    mutant.def.creates(&mut |token| made.push(token));
+    assert!(made.iter().all(|&t| std::ptr::eq(t, mutant.def.tokens[0])));
+    assert!(!std::ptr::eq(mutant.def.tokens[0], emblem));
+    assert!(killed(mutant.def, &expected));
+}

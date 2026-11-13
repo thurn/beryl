@@ -36,9 +36,151 @@ type Neighbours<T> = Vec<(String, T)>;
 
 /// Every mutant of `def`: each neighbour of each node of the effect data of the abilities and
 /// granted abilities of its faces that resolve (spells, activated and triggered abilities),
-/// and each target of those abilities made optional or required. A token the card makes is a
-/// card of its own and is not mutated.
+/// each target of those abilities made optional or required, and each such mutant of a token
+/// or emblem the card makes ([`CardDef::tokens`]).
 pub(super) fn mutants(def: &'static CardDef) -> Vec<Mutant> {
+    let mut out = own_mutants(def);
+    for (k, &token) in def.tokens.iter().enumerate() {
+        for mutant in own_mutants(token) {
+            out.push(Mutant {
+                node: format!("{}: {}", token.name, mutant.node),
+                neighbour: mutant.neighbour,
+                def: making(def, k, mutant.def),
+            });
+        }
+    }
+    out
+}
+
+/// `def` with its `k`th token or emblem replaced by `made`: in [`CardDef::tokens`], so a game's
+/// table holds it, and in every instruction that creates the old one, which names it by
+/// pointer ([`Effect::CreateTokens`], [`Effect::CreateAttackingTokens`],
+/// [`Effect::GetEmblem`]).
+fn making(def: &'static CardDef, k: usize, made: &'static CardDef) -> &'static CardDef {
+    let old = def.tokens[k];
+    let mut tokens = def.tokens.to_vec();
+    tokens[k] = made;
+    let faces: Vec<Face> = def
+        .faces
+        .iter()
+        .map(|face| {
+            with(
+                face,
+                swapped(face.abilities, old, made),
+                swapped(face.grants, old, made),
+            )
+        })
+        .collect();
+    leak(CardDef {
+        name: def.name,
+        faces: leak_slice(faces),
+        tokens: leak_slice(tokens),
+    })
+}
+
+/// `list` with each ability that creates `old` creating `made` instead.
+fn swapped(
+    list: &'static [Ability],
+    old: &'static CardDef,
+    made: &'static CardDef,
+) -> &'static [Ability] {
+    let mut changed = false;
+    let abilities: Vec<Ability> = list
+        .iter()
+        .map(|&ability| match ability.body() {
+            Behavior::Data(effect) => match replaced(effect, old, made) {
+                Some(effect) => {
+                    changed = true;
+                    ability.effect(leak(effect))
+                }
+                None => ability,
+            },
+            Behavior::Custom(_) => ability,
+        })
+        .collect();
+    if changed { leak_slice(abilities) } else { list }
+}
+
+/// `effect` with each instruction that creates `old` creating `made` instead, or `None` if
+/// none does. It walks the same children as [`Effect::any`].
+fn replaced(
+    effect: &'static Effect,
+    old: &'static CardDef,
+    made: &'static CardDef,
+) -> Option<Effect> {
+    let inner = |child: &'static Effect| replaced(child, old, made).map(leak);
+    match *effect {
+        Effect::CreateTokens {
+            player,
+            token,
+            count,
+        } if std::ptr::eq(token, old) => Some(Effect::CreateTokens {
+            player,
+            token: made,
+            count,
+        }),
+        Effect::CreateAttackingTokens {
+            player,
+            token,
+            count,
+            attacking,
+        } if std::ptr::eq(token, old) => Some(Effect::CreateAttackingTokens {
+            player,
+            token: made,
+            count,
+            attacking,
+        }),
+        Effect::GetEmblem { player, emblem } if std::ptr::eq(emblem, old) => {
+            Some(Effect::GetEmblem {
+                player,
+                emblem: made,
+            })
+        }
+        Effect::Sequence(effects) => {
+            let steps: Vec<Option<&'static Effect>> = effects.iter().map(inner).collect();
+            steps.iter().any(Option::is_some).then(|| {
+                Effect::Sequence(leak_slice(
+                    steps
+                        .iter()
+                        .zip(effects)
+                        .map(|(changed, step)| changed.map_or(*step, |c| *c))
+                        .collect(),
+                ))
+            })
+        }
+        Effect::If {
+            condition,
+            then,
+            otherwise,
+        } => {
+            let (new_then, new_otherwise) = (inner(then), otherwise.and_then(inner));
+            (new_then.is_some() || new_otherwise.is_some()).then(|| Effect::If {
+                condition,
+                then: new_then.unwrap_or(then),
+                otherwise: new_otherwise.or(otherwise),
+            })
+        }
+        Effect::May { player, effect } => {
+            inner(effect).map(|effect| Effect::May { player, effect })
+        }
+        Effect::Unless {
+            effect,
+            player,
+            cost,
+        } => inner(effect).map(|effect| Effect::Unless {
+            effect,
+            player,
+            cost,
+        }),
+        Effect::ForEachPlayer { players, effect } => {
+            inner(effect).map(|effect| Effect::ForEachPlayer { players, effect })
+        }
+        _ => None,
+    }
+}
+
+/// The mutants of the abilities on `def`'s own faces.
+fn own_mutants(def: &'static CardDef) -> Vec<Mutant> {
     let mut out = Vec::new();
     for (f, face) in def.faces.iter().enumerate() {
         let face_name = if f == 0 {
