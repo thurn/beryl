@@ -14,6 +14,7 @@ import {
   type EffectSurface,
   type On,
 } from "./effects.ts";
+import { FLARES, flaresOf, type LitFlare, type LitStreak } from "./flare.ts";
 import type { Name, Resting } from "./layout.ts";
 import { lightOf, type Fighter, type Lit, type LitLine } from "./light.ts";
 import { shapeOf, wayOf, type Reach } from "./lines.ts";
@@ -115,7 +116,8 @@ export class Overlay {
   }
 
   /** Everything lit at stage time `now` (light.ts): the `lines` held then, and the marks of
-   * the creatures among `held` that attack or block. A creature's mark begins as the stage
+   * the creatures among `held` that attack or block, the streaks in flight and the bursts of
+   * what has landed. A creature's mark begins as the stage
    * first draws it in combat, which is when the view that says so is shown. */
   light(now: number, lines: readonly Line[], held: Held): Lit {
     const lit = lines.flatMap((line): LitLine[] => {
@@ -142,7 +144,18 @@ export class Overlay {
     }
     this.#fought = fought;
     this.#fresh = false;
-    return lightOf(now, lit, fighters);
+    // The mana and damage in flight, and the bursts of what has landed (flare.ts).
+    const streaks = this.streaks(now).flatMap(
+      ({ key, look, through, shape }): LitStreak[] =>
+        shape ? [{ key, look, through, ...shape }] : [],
+    );
+    const flares = this.#effects
+      .under(now, FLARES)
+      .flatMap(({ on, name, age, span }): LitFlare[] => {
+        const reach = this.#reach(on, now);
+        return reach ? [{ name, reach, age, span }] : [];
+      });
+    return flaresOf(lightOf(now, lit, fighters), streaks, flares);
   }
 
   /** The marks held at stage time `now`, on `on` or on anything. */

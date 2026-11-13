@@ -67,7 +67,7 @@ void main(){ v_p = a_c*u_half; gl_Position = placed(u_at + u_ax*v_p.x + u_ay*v_p
 /** Each shape is drawn about its own middle, `+y` its upward way: 1 a wedge, its base at
  * the foot of its box; 2 a crescent, open toward `+y`; 3 a flash, with a ring that spreads. */
 const GLINT_FRAGMENT = `precision highp float; varying vec2 v_p; uniform int u_kind;
-uniform vec3 u_col, u_hot; uniform vec2 u_size; uniform float u_gain, u_px, u_ring;${LIT}
+uniform vec3 u_col, u_hot; uniform vec2 u_size; uniform float u_gain, u_px, u_ring, u_seed;${NOISE}${LIT}
 float seg(vec2 p, vec2 a, vec2 b){ vec2 pa = p-a, ba = b-a;
   return length(pa - ba*clamp(dot(pa, ba)/dot(ba, ba), 0., 1.)); }
 void main(){
@@ -88,6 +88,15 @@ void main(){
     float m = smoothstep(-0.15, 0.95, q.y/r), w = max(0.6 + 2.3*m, 0.7*u_px);
     float line = exp(-d*d/(2.*w*w)), glow = exp(-abs(d)/5.5)*0.35;
     rgb = u_col*(glow + line*0.85)*m + u_hot*line*m*m*0.75; shade = glow*m*0.25;
+  } else if (u_kind == 4) {
+    float r = length(v_p)/u_size.x; vec2 way = v_p/max(length(v_p), 1e-3);
+    float fine = noise(way*14. + u_seed*31.), broad = noise(way*4. + u_seed*17. + 5.);
+    float spikes = pow(fine, 6.)*4.2 + pow(broad, 3.)*0.4;
+    float edge = smoothstep(1., 0.6, r);
+    float core = exp(-r*r*13.), bloom = exp(-r*r*4.5)*0.55;
+    float rays = spikes*exp(-r*3.4)*smoothstep(0.04, 0.2, r);
+    float ring = exp(-pow((r - 0.25 - u_ring*0.6)*11., 2.))*(1. - u_ring)*step(0.001, u_ring);
+    rgb = (u_hot*(core*1.5 + bloom + rays) + u_col*(bloom*0.6 + rays*0.35 + ring*0.6))*edge;
   } else {
     float r = length(v_p)/u_size.x, core = exp(-r*r*5.5);
     float ring = exp(-pow((r - u_ring)*8., 2.))*(1. - u_ring);
@@ -341,7 +350,7 @@ export class Glow {
     gl.vertexAttribPointer(at, size, gl.FLOAT, false, stride, offset);
   }
 
-  #shape({ kind, at, up, size, tone, warm, gain, ring }: Glint) {
+  #shape({ kind, at, up, size, tone, warm, gain, ring, seed = 0 }: Glint) {
     if (!(gain > 0.003) || size.x <= 0 || size.y <= 0) return;
     const gl = this.#gl;
     const program = this.#glint;
@@ -350,7 +359,7 @@ export class Glow {
     // A wedge's box stands on its base; the others lie about their middle. Each has room
     // round it for its halo.
     const lift = kind === "wedge" ? size.y / 2 : 0;
-    const room = kind === "flash" ? 0 : 26;
+    const room = kind === "flash" || kind === "burst" ? 0 : 26;
     const high = kind === "wedge" ? size.y / 2 : size.y;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.#corners);
     this.#pointed(program, "a_c", 2, 0, 0);
@@ -365,8 +374,9 @@ export class Glow {
     gl.uniform2f(program.uniform("u_size"), size.x, size.y);
     gl.uniform1i(
       program.uniform("u_kind"),
-      kind === "wedge" ? 1 : kind === "crescent" ? 2 : 3,
+      kind === "wedge" ? 1 : kind === "crescent" ? 2 : kind === "burst" ? 4 : 3,
     );
+    gl.uniform1f(program.uniform("u_seed"), seed);
     gl.uniform1f(program.uniform("u_ring"), Math.min(Math.max(ring, 0), 1));
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }

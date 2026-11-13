@@ -23,7 +23,17 @@ export type Curve = readonly [Point, Point, Point];
 /** What a light says by its color (UI Conventions, exception 4): green at what its controller
  * controls and red at what they do not; ember an attack, gold a block; pale what only shows
  * where something came from. */
-export type Tone = "friendly" | "hostile" | "ember" | "gold" | "pale";
+export type Tone =
+  | "friendly"
+  | "hostile"
+  | "ember"
+  | "gold"
+  | "pale"
+  | "white"
+  | "blue"
+  | "black"
+  | "red"
+  | "green";
 
 type Rgb = readonly [number, number, number];
 
@@ -34,6 +44,12 @@ export const TONES: Record<Tone, { glow: Rgb; core: Rgb }> = {
   ember: { glow: [1, 0.15, 0.04], core: [1, 0.8, 0.5] },
   gold: { glow: [1, 0.66, 0.1], core: [1, 0.97, 0.8] },
   pale: { glow: [0.86, 0.72, 0.46], core: [1, 0.95, 0.85] },
+  // The colors of mana (flare.ts), and of the white light a card lands in.
+  white: { glow: [1, 0.9, 0.62], core: [1, 1, 0.96] },
+  blue: { glow: [0.25, 0.66, 0.96], core: [0.89, 0.96, 1] },
+  black: { glow: [0.6, 0.36, 0.84], core: [0.94, 0.89, 1] },
+  red: { glow: [0.95, 0.33, 0.17], core: [1, 0.91, 0.86] },
+  green: { glow: [0.25, 0.75, 0.31], core: [0.91, 1, 0.9] },
 };
 
 /** How a ribbon is cut along its length: an arrow is a thread at its tail that swells to a
@@ -56,9 +72,10 @@ export interface Ribbon {
 
 /** A shape of light at `at`, its own upward way `up` on the stage: a wedge with its base at
  * `at`, `size.x` to each side and `size.y` tall; a crescent of that half-size about `at`,
- * open toward `up`; a flash `size.x` across with a ring `ring` of the way out. */
+ * open toward `up`; a flash `size.x` across with a ring `ring` of the way out; a burst, a
+ * bloom with thin rays out to `size.x` and such a ring, its rays set by `seed`. */
 export interface Glint {
-  kind: "wedge" | "crescent" | "flash";
+  kind: "wedge" | "crescent" | "flash" | "burst";
   at: Point;
   up: Point;
   size: Point;
@@ -67,6 +84,7 @@ export interface Glint {
   warm: number;
   gain: number;
   ring: number;
+  seed?: number;
 }
 
 /** What one layer of light holds at stage time `now`. `dots` are sparks, six numbers each:

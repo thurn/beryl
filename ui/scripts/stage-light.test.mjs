@@ -5,6 +5,7 @@
 // is glow.ts's, which the browser checks see.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { flaresOf, SETTLE, STREAK } from "../src/stage/flare.ts";
 import { lightOf as layered, sought, widthOf } from "../src/stage/light.ts";
 import { wayOf } from "../src/stage/lines.ts";
 import { move, object, recorder, stage, view } from "./stage-table.mjs";
@@ -337,4 +338,64 @@ test("a creature's mark of combat begins as the stage first draws it fighting", 
     // The stage taken off its surface paints no more on it.
     made.unmount(surface);
     assert.equal(scenes.at(-1), undefined);
+});
+
+test("mana in flight is a ribbon of its color, and what lands bursts and is gone", () => {
+    const dark = () => ({
+        under: { now: 0, ribbons: [], glints: [], dots: [] },
+        over: { now: 0, ribbons: [], glints: [], dots: [] },
+    });
+    const curve = [
+        { x: 100, y: 600 },
+        { x: 500, y: 300 },
+        { x: 1200, y: 400 },
+    ];
+    const streak = (look, through) => ({
+        key: `${look} 1`,
+        look,
+        curve,
+        back: through / 2,
+        through,
+        wide: 5,
+    });
+    const flown = (look, through) =>
+        flaresOf(dark(), [streak(look, through)], []).over;
+    // A ribbon from its tail to its head, in its mana's color, and nothing under the cards.
+    const early = flown("blue", 0.2);
+    assert.deepEqual(
+        early.ribbons.map(({ tone, from, to, wide }) => [tone, from, to, wide]),
+        [["blue", 0.1, 0.2, 5 * STREAK.ribbon]],
+    );
+    assert.equal(flown("damage", 0.2).ribbons[0].tone, "ember");
+    assert.deepEqual(
+        flaresOf(dark(), [streak("blue", 0.2)], []).under.ribbons,
+        [],
+    );
+    // What it left glows where it lay, less as the head goes on.
+    const [orb] = early.glints;
+    assert.deepEqual([orb.kind, orb.at], ["flash", curve[0]]);
+    assert.ok(flown("blue", 0.9).glints[0].gain < orb.gain / 2);
+    // The same streak at the same share of its way is the same light.
+    assert.deepEqual(flown("blue", 0.2), early);
+
+    const reach = card(400, 300);
+    const landed = (name, age, span = 470) =>
+        flaresOf(dark(), [], [{ name, reach, age, span }]).over;
+    const burst = (age) => landed("settle", age).glints[0];
+    // A permanent's burst is about its middle. It is dark for the two frames the card lies
+    // whole, brightest `peak` of its time through and gone past `bloomed` of it, when only
+    // its flecks are left.
+    assert.deepEqual([burst(0).kind, burst(0).at], ["burst", reach.middle]);
+    assert.deepEqual([burst(0).gain, burst(66).gain], [0, 0]);
+    const brightest = burst(470 * SETTLE.peak);
+    assert.ok(brightest.gain > burst(120).gain && burst(120).gain > 0);
+    assert.ok(brightest.gain > burst(250).gain);
+    assert.equal(burst(470 * SETTLE.bloomed).gain, 0);
+    assert.ok(brightest.size.x > burst(120).size.x, "it swells");
+    assert.equal(landed("settle", 100).dots.length, 0);
+    assert.ok(landed("settle", 300).dots.length > 0, "it throws flecks");
+    // Mana landing on a spell flares at once and fades.
+    const flare = (age) => landed("flash", age, 330).glints[0];
+    assert.ok(flare(0).gain > flare(150).gain && flare(150).gain > 0);
+    assert.ok(flare(150).size.x > flare(0).size.x, "it spreads");
 });

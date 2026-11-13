@@ -97,6 +97,21 @@ export class Effects {
       }));
   }
 
+  /** The effects under way at stage time `now` that are named in `names`, each with what it
+   * is on, how long ago it began and how long it lasts, in stage milliseconds. */
+  under(now: number, names: ReadonlySet<string>) {
+    return this.#running
+      .filter(
+        (run) => names.has(run.effect.name) && now >= run.from && now < run.to,
+      )
+      .map(({ on, effect, from, to }) => ({
+        on,
+        name: effect.name,
+        age: now - from,
+        span: to - from,
+      }));
+  }
+
   /** The stage no longer holds `on`: its effects went with its node. */
   gone(on: On) {
     this.#running = this.#running.filter((run) => run.on !== on);

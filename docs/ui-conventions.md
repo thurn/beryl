@@ -420,29 +420,30 @@ stage to; Arena's measured instances are kept beside them as reference in
   after a quarter of its time, and then drops onto its place, shrinking as it
   comes down. The player's own land glides straight to its place. The opponent's
   land drops out of their hand into the open table on the side away from where
-  it is going, tilted, and swings back along the table to its place. A played
-  land glides from where it is released to its slot in about 0.3 s, gathering
-  speed, and lands with no flash. The opponent's land leaves their hand face up,
-  drops down into the table on the side away from their lands, tilted, and
-  swings back to its slot, about 0.6 s in all, with no flash. The opponent's
-  spell leaves their hand as a card back and is face up when it reaches the
-  stack, about 0.4 s; the player's own flies from where it is released in about
-  0.35 s. A resolving permanent, either player's, is the smaller battlefield
-  card one frame after it leaves the stack, rises up the screen by about a fifth
-  of the table's height within 0.1 s, crosses to above its slot at that height
-  and drops onto it, about 0.5 s in all, and the slot flashes. A drawn card
-  leaves the library at the lower left turning face up within about 0.2 s, flies
-  right across the table to a place beside the stack growing as it comes, holds
-  there about 0.2 s and drops into the right end of the hand, about 1.1 s in
-  all; three drawn by one spell leave a quarter second apart and fly the same
-  way with no hold, about 0.7 s each. A discard drops to the graveyard at hand
-  size in about 0.2 s (UrGalw_f35w 16:14.8, UrGalw_f35w 16:35.37, UrGalw_f35w
-  16:46.1, pE4XSNi-nZc 20:13.2, UrGalw_f35w 16:46.3, UrGalw_f35w 16:47.15,
-  pE4XSNi-nZc 22:00.0, pE4XSNi-nZc 23:23.5, UrGalw_f35w 17:01.3, UrGalw_f35w
-  16:15.8, WQiYBv23buw 29:14.3, vPdoSA5H5xU 17:46.2, 3sEoP_s4DQE 39:04.3,
-  5UHzpVvUkfI 1:01:50.3, UrGalw_f35w 17:01.03). Beryl: 475 ms, 326 ms apart,
-  ease-out. Effects: settle as it ends (into the battlefield) (but not land
-  played, opponent land played).
+  it is going, tilted, and swings back along the table to its place. A permanent
+  waits on the stack until the flare of the mana that paid for it has gone, and
+  then leaves. A played land glides from where it is released to its slot in
+  about 0.3 s, gathering speed, and lands with no flash. The opponent's land
+  leaves their hand face up, drops down into the table on the side away from
+  their lands, tilted, and swings back to its slot, about 0.6 s in all, with no
+  flash. The opponent's spell leaves their hand as a card back and is face up
+  when it reaches the stack, about 0.4 s; the player's own flies from where it
+  is released in about 0.35 s. A resolving permanent, either player's, is the
+  smaller battlefield card one frame after it leaves the stack, rises up the
+  screen by about a fifth of the table's height within 0.1 s, crosses to above
+  its slot at that height and drops onto it, about 0.5 s in all, and the slot
+  flashes. A drawn card leaves the library at the lower left turning face up
+  within about 0.2 s, flies right across the table to a place beside the stack
+  growing as it comes, holds there about 0.2 s and drops into the right end of
+  the hand, about 1.1 s in all; three drawn by one spell leave a quarter second
+  apart and fly the same way with no hold, about 0.7 s each. A discard drops to
+  the graveyard at hand size in about 0.2 s (UrGalw_f35w 16:14.8, UrGalw_f35w
+  16:35.37, UrGalw_f35w 16:46.1, pE4XSNi-nZc 20:13.2, UrGalw_f35w 16:46.3,
+  UrGalw_f35w 16:47.15, pE4XSNi-nZc 22:00.0, pE4XSNi-nZc 23:23.5, UrGalw_f35w
+  17:01.3, UrGalw_f35w 16:15.8, WQiYBv23buw 29:14.3, vPdoSA5H5xU 17:46.2,
+  3sEoP_s4DQE 39:04.3, 5UHzpVvUkfI 1:01:50.3, UrGalw_f35w 17:01.03). Beryl: 475
+  ms, 326 ms apart, ease-out. Effects: settle as it ends (into the battlefield)
+  (but not land played, opponent land played).
 - **appear.** A card comes to be at its place with no flight: a token, the
   opening hand, a card a look put in the graveyard. Its row makes room in its
   delay, so it shows at a place already open. A token appears whole with a short
@@ -620,8 +621,11 @@ happened, and is gone.
   fades: the card is new here, is leaving whole, or sends a streak. On the
   stack, where the spell that acts on a card lies over it, the light is a rim
   inside the card's own frame. Drawn under its card. Beryl: 300 ms, ease-out.
-- **settle.** A wash of light over a card and a halo around it, bright as it
-  lands and gone as it settles. Drawn over its card. Beryl: 350 ms, ease-out.
+- **settle.** A permanent that lands is whole for two frames, then whitens over
+  its whole face, bursts in a round bloom of white light with thin rays about
+  one and a half cards wide, throws a soft ring to twice its width and flecks
+  that drift off, and stands washed white until the light is gone. Drawn over
+  its card. Beryl: 470 ms, linear.
 - **dissolve.** A card darkens, holds dark, and then breaks up along a stippled
   edge from the top down, for as long as its step: it is destroyed, countered or
   sacrificed. Drawn over its card. Beryl: linear.
@@ -635,9 +639,9 @@ happened, and is gone.
 - **impact.** A burst of hot light on what a creature strikes or a streak of
   damage hits, a card or a player's life total, whole as the blow lands and
   spreading as it fades. Drawn over its card. Beryl: 300 ms, ease-out.
-- **flash.** A flare of pale light over a spell or ability as the mana that pays
-  for it lands, whole at once and gone as it spreads. Drawn over its card.
-  Beryl: 240 ms, ease-out.
+- **flash.** A flare of white light with rays over a spell or ability as the
+  mana that pays for it lands, brightest at once, that spreads to about twice
+  the card's width and is gone. Drawn over its card. Beryl: 330 ms, linear.
 - **pulse.** A ring of light round a card's frame while its numbers swell and
   settle: a counter put on it or taken off, its loyalty, its power and
   toughness. Drawn over its card. Beryl: 320 ms, ease-out.

@@ -30,6 +30,10 @@ export interface StreakShape {
   tail: Point;
   /** Half the width of its head, in stage pixels: its halo is drawn as wide again. */
   wide: number;
+  /** The arc it runs along, from its source round a point off the straight way to its
+   * target, and how far along it its tail is: its light is painted from these (flare.ts). */
+  curve: readonly [Point, Point, Point];
+  back: number;
 }
 
 /** A streak the stage holds, as it is at one stage time: no shape while there is nothing to
@@ -142,6 +146,8 @@ export function cometOf(
     head,
     tail,
     wide,
+    curve: [a, c, b],
+    back,
   };
 }
 

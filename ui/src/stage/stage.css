@@ -134,7 +134,12 @@
   background: rgb(var(--light));
   box-shadow: 0 0 calc(var(--frame) * 0.2) calc(var(--frame) * 0.06)
     rgb(255 226 170 / 85%);
-  opacity: calc((1 - var(--settle)) * 0.6);
+  /* Nothing for two frames, then whole within two more, held past half way, and gone
+     (Arena's card is white from 0.07 s to 0.27 s after it lands, `UrGalw_f35w 17:01.76`). */
+  opacity: calc(
+    clamp(0, (var(--settle) - 0.15) * 8, 1) * min(1, (1 - var(--settle)) * 3) *
+      0.92
+  );
 }
 /* The card darkens at once and holds dark, a warning of what comes, then breaks up from the top
    down along the mask's stippled edge for the rest of its time. */
@@ -309,6 +314,11 @@
 .card-layer[data-light~="under"] .combat-marker {
   display: none;
 }
+/* A streak is painted as light too (stage/flare.ts), over everything at rest: its path is
+   then only the record of it. */
+.card-layer[data-light~="over"] .stage-streak {
+  visibility: hidden;
+}
 .stage-line {
   --tone: 255 233 176;
   fill: none;
@@ -386,7 +396,7 @@
   );
   box-shadow: 0 0 calc(var(--frame) * 0.14) calc(var(--frame) * 0.04)
     rgb(var(--light) / 80%);
-  opacity: calc(1 - var(--flash));
+  opacity: calc((1 - var(--flash)) * (1 - var(--flash)));
   transform: scale(calc(1 + 0.08 * var(--flash)));
 }
 /* An announcement (stage/shown.ts `NoticeSurface`): the chrome draws it for as long as its
