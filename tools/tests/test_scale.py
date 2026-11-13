@@ -67,12 +67,11 @@ def test_the_workspace_is_the_trees_structure(tmp_path: Path) -> None:
             assert name is not None, path
     # The set crates are the tree's but for their paths to the checkout.
     crate = tmp_path / "rust" / "cards" / "cards_s000"
-    assert (crate / "build.rs").read_text() == (
-        scale_workspace.card_crates.BUILD
+    assert (crate / "build.rs").read_text() == (scale_workspace.card_crates.BUILD)
+    assert (
+        str(scale_workspace.CRATES / "beryl_card_build")
+        in (crate / "Cargo.toml").read_text()
     )
-    assert str(scale_workspace.CRATES / "beryl_card_build") in (
-        crate / "Cargo.toml"
-    ).read_text()
     registry = (tmp_path / "rust" / "crates" / "registry" / "Cargo.toml").read_text()
     for name in names:
         assert f"\n{name} = " in registry and f'"{name}/scenarios"' in registry
@@ -161,3 +160,8 @@ def test_the_script_report_extrapolates_at_the_runs_parallelism() -> None:
     assert "counterspell 3.00 s, brainstorm 1.00 s" in text
     # 500 rounds of 4 s, overlapping twofold as the run's 4 s of checks took 2 s.
     assert "2,000 s" in text and "about 1,000 s" in text and "(2.0x)" in text
+
+
+def test_the_rebuild_is_the_median_run() -> None:
+    made = [scale.Run(s, s, s, 0, 0.0) for s in (5.0, 3.0, 9.0)]
+    assert scale.median(made).seconds == 5.0

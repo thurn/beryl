@@ -14,7 +14,7 @@ prints what that cost against the plan's budgets ([`BUDGETS`]):
   the registry and every set crate are compiled and linked as the app's release build would
   (without scenarios, which the app never compiles).
 - one-edit rebuild: the same `cargo check` after a change to one card file, which reruns that
-  crate's build script and the registry's.
+  crate's build script and the registry's; the median of [`REBUILDS`] edits.
 - largest compiler process: the highest peak resident set of any single process of the three
   builds (`/usr/bin/time -l`), which is a `rustc`.
 
@@ -59,6 +59,9 @@ from .scale_workspace import (
 )
 
 DEFAULT_CARDS = 50_000
+# The one-edit rebuild is a few seconds of mostly serial work, which the machine's other load
+# moves by more than its budget's margin: its measure is the median of this many edits.
+REBUILDS = 3
 GIB = 2**30
 # A card's script check in the run log: `script:<card>/<moment>/<seat>`.
 SCRIPT_CHECK: re.Pattern[str] = re.compile(r"^script:([^/]+)/[^/]+/[^/]+$")
@@ -86,10 +89,7 @@ class Budget:
 BUDGETS: dict[str, Budget] = {
     "cold check": Budget(60, 60, "s"),
     "release build": Budget(180, 180, "s"),
-    # Missed after three attempts at 3.7 s (by-w8gv.13.11): an edit rechecks its whole set
-    # crate and then the registry, one after the other. Held at 3.7 s plus 10% until
-    # by-w8gv.13.14 meets the plan's 2 s.
-    "one-edit rebuild": Budget(2, 4.1, "s", held="by-w8gv.13.14"),
+    "one-edit rebuild": Budget(2, 2, "s"),
     "largest compiler process": Budget(4 * GIB, 4 * GIB, "B"),
 }
 
@@ -143,6 +143,11 @@ def timed(cmd: list[str], root: Path) -> Run:
         sys.exit(f"scale: {' '.join(cmd)} failed:\n{run.stderr[-6000:]}")
     wall, cpu, rss = parse_time(run.stderr)
     return Run(adjusted, wall, cpu, rss, timer.peak)
+
+
+def median(runs: list[Run]) -> Run:
+    """The run of median load-adjusted seconds."""
+    return sorted(runs, key=lambda run: run.seconds)[len(runs) // 2]
 
 
 def measures(runs: dict[str, Run]) -> dict[str, float]:
@@ -325,9 +330,14 @@ def scale(args: argparse.Namespace) -> int:
     release = ["cargo", "build", "--release", f"--package={REGISTRY}"]
     runs["release build"] = timed([*release, f"--bin={BINARY}"], root)
     print("scale: one-edit rebuild", file=sys.stderr)
-    edit_card(root, names)
-    runs["one-edit rebuild"] = timed(check, root)
+    rebuilds = []
+    for _ in range(REBUILDS):
+        edit_card(root, names)
+        rebuilds.append(timed(check, root))
+    runs["one-edit rebuild"] = median(rebuilds)
     print(report(args.cards, len(crates), args.crates is not None, len(pool), runs))
+    each = ", ".join(f"{run.seconds:.1f} s" for run in rebuilds)
+    print(f"{'':<26}the {REBUILDS} edits' rebuilds, in order: {each}")
     if not args.no_scripts:
         print("scale: script checks", file=sys.stderr)
         print(script_report(measure_scripts(pool), pool, args.cards))

@@ -591,6 +591,35 @@ each, against today's `beryl_engine` and `beryl_scenario`.
 
 A release binary linking all 10,000 cards with their scenarios is 27.5 MiB.
 
+**Scale rehearsal.** Measured 2026-11-12 (by-w8gv.13.11) with
+`just scale --assert`, under a load average of about 30 on 18 cores. The run
+cloned all 47 card files into 50,000 definitions in 37 set crates, grouped as
+`data/set-groups.json` groups the tree's cards, and built them with the tree's
+build scripts. Times are load-adjusted seconds; CPU-seconds are in brackets.
+
+| Measure                                 | Result             | Budget |
+| --------------------------------------- | ------------------ | ------ |
+| Cold `cargo check`, with scenarios      | 41.3 s (431 CPU-s) | 60 s   |
+| Release build                           | 24.8 s (191 CPU-s) | 180 s  |
+| Rebuild after one edit, median of three | 1.6 s (2 CPU-s)    | 2 s    |
+| Largest compiler process                | 1.43 GiB           | 4 GiB  |
+
+As first built, the cold check took 145 s and peaked at 5.9 GiB. The registry
+re-evaluated every card's scenarios because the set crates' tables were `const`.
+The tables became statics, scenarios are now gathered at run time, and the build
+helper is compiled with optimizations. The first edit after a release build
+rebuilds in 3.6 s; the later edits take about 1.5 s. The scripts of the 47 cards
+cost 0.22 s each on average, about 10,800 CPU-seconds for 50,000 clones.
+
+Over four runs the cold check took 41 to 56 s.
+
+The card store is 22.5 MiB with 34,195 card keys. Neither start-up nor the UI
+grew with it. Start-up to the UI's report (`just smoke`'s debug app, median of
+seven launches) is 321 ms, against 313 ms at the commit before the store landed
+(836c7888^), which is within the launches' spread. The built UI (`ui/dist`) is
+13.69 MB, against 13.76 MB. The debug binary grew from 71.9 to 101.5 MiB, most
+of it the embedded store.
+
 **Forge's vocabulary.** A census of mechanics, not a design input (K16).
 Distinct effect types, static modes, trigger modes and replacement events across
 34,134 scripts, ignoring parameters: 450 in all (195, 82, 139 and 34), plus 222

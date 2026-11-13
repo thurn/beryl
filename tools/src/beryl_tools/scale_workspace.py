@@ -68,14 +68,17 @@ class Source:
     record: card_store.Json
 
     def faces(self) -> list[str]:
-        return [str(f["name"]) for f in cast(list[card_store.Json], self.record["faces"])]
+        return [
+            str(f["name"]) for f in cast(list[card_store.Json], self.record["faces"])
+        ]
 
 
 def sources(
     root: Path = card_files.CARDS, store: Path = card_store.STORE
 ) -> tuple[list[Source], dict[Path, str]]:
     """Every card file under `root` that can be cloned, and each one left out with the reason.
-    No card file reaches another's, so the only reason is a file the store has no card for."""
+    No card file reaches another's, so the only reason is a file the store has no card for.
+    """
     pool: list[Source] = []
     left: dict[Path, str] = {}
     with card_store.Store(store) as opened:
@@ -91,13 +94,16 @@ def sources(
 
 def clone_name(source: Source, index: int) -> str:
     """The clone's name: each part of its original's suffixed with `index`, as the store keys
-    it ("Fire 7 // Ice 7", or "Jace, Vryn's Prodigy 7" for a card keyed by its front face)."""
+    it ("Fire 7 // Ice 7", or "Jace, Vryn's Prodigy 7" for a card keyed by its front face).
+    """
     return " // ".join(f"{part} {index}" for part in source.name.split(" // "))
 
 
 def renames(source: Source, index: int) -> dict[str, str]:
     """Each constant of the card and its faces, with the clone's."""
-    out = {set_groups.constant(source.name): set_groups.constant(clone_name(source, index))}
+    out = {
+        set_groups.constant(source.name): set_groups.constant(clone_name(source, index))
+    }
     for face in source.faces():
         out[set_groups.constant(face)] = set_groups.constant(f"{face} {index}")
     return out
