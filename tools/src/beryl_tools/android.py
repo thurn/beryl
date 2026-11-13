@@ -56,6 +56,9 @@ def adb(*args: str, check: bool = False) -> subprocess.CompletedProcess[str]:
 def build() -> int:
     """Builds the debug app for arm64 through Tauri's CLI ([`APK`])."""
     warm.ensure(tauri=True)
+    # Gradle's incremental APK can retain the old native library as an unreferenced ZIP gap
+    # when the Rust library changes. Repackage from a fresh output to keep installs small.
+    APK.unlink(missing_ok=True)
     started = time.monotonic()
     code = subprocess.run(
         [

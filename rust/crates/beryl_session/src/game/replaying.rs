@@ -7,6 +7,7 @@ use beryl_engine::chance::{Mismatch, Random};
 use beryl_engine::{
     CardTable, Choice, Decision, DecisionKind, GameTable, Large, Opt, Relayout, Seat, view,
 };
+use beryl_search::Budget;
 
 use serde_json::json;
 
@@ -162,13 +163,23 @@ impl Game {
         file: &ReplayFile,
         session: SessionId,
     ) -> Result<(Game, PlayerView), SessionError> {
-        let mut game = Game::begin(cards, file, session)?;
+        Self::from_replay_with_budget(cards, file, session, Budget::DEFAULT)
+    }
+
+    /// Resumes a game with the search budget chosen by its caller.
+    pub fn from_replay_with_budget(
+        cards: &'static CardTable,
+        file: &ReplayFile,
+        session: SessionId,
+        budget: Budget,
+    ) -> Result<(Game, PlayerView), SessionError> {
+        let mut game = Game::begin(cards, file, session, budget)?;
         let mut checks = Checks::new(file);
         match game.replay_log(file, &mut checks) {
             Ok(()) => {}
             Err(SessionError::BadReplay { reason }) => {
                 let rebuilt = checks.rebuild(file, game.board.turn().number(), reason)?;
-                game = Game::begin(cards, &rebuilt, session)?;
+                game = Game::begin(cards, &rebuilt, session, budget)?;
                 game.replay_log(&rebuilt, &mut Checks::new(&rebuilt))?;
             }
             Err(e) => return Err(e),
@@ -186,7 +197,7 @@ impl Game {
         file: &ReplayFile,
         session: SessionId,
     ) -> Result<(Game, PlayerView), SessionError> {
-        let mut game = Game::begin(cards, file, session)?;
+        let mut game = Game::begin(cards, file, session, Budget::DEFAULT)?;
         let mut checks = Checks::new(file);
         game.replay_log(file, &mut checks)?;
         if let Some(turn) = checks
@@ -208,8 +219,9 @@ impl Game {
         cards: &'static CardTable,
         file: &ReplayFile,
         session: SessionId,
+        budget: Budget,
     ) -> Result<Game, SessionError> {
-        let mut game = Game::new(cards, &file.start()?, session)?;
+        let mut game = Game::with_budget(cards, &file.start()?, session, budget)?;
         let Some(from) = &file.from else {
             return Ok(game);
         };

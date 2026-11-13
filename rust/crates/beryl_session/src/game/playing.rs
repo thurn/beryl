@@ -2,17 +2,44 @@
 
 use beryl_engine::card::Purpose;
 use beryl_engine::layout::Queue;
+use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::StackEntry;
 use beryl_engine::{
     Candidates, Choice, Decision, DecisionKind, Large, Layout, Opt, Relayout, State, Step, TurnStep,
 };
+use beryl_search::{AgentDecision, Budget};
 
+use crate::SessionError;
+use crate::ai;
 use crate::checkpoint::Checkpoint;
 use crate::replay::Entry;
 
 use super::{Answer, At, Boards, ChoiceOrigin, Game, Open, on_board};
 
 impl Game {
+    /// Has the agent named `name` answer the human's decisions in their place (UI fixtures):
+    /// [`Game::answer_by_stand_in`] plays each using the desktop budget.
+    pub fn set_stand_in(&mut self, name: &str) -> Result<(), SessionError> {
+        self.set_stand_in_with_budget(name, Budget::DEFAULT)
+    }
+
+    /// Lets a stand-in answer with the search budget chosen by its caller.
+    pub fn set_stand_in_with_budget(
+        &mut self,
+        name: &str,
+        budget: Budget,
+    ) -> Result<(), SessionError> {
+        // The stand-in draws from its own stream, apart from the game's and the agent's.
+        self.stand_in = Some(ai::new_agent(
+            name,
+            &self.table,
+            SplitMix64::new(self.replay.seed ^ 0x9e37_79b9).next_u64(),
+            budget,
+        )?);
+        self.stand_in_next = AgentDecision(0);
+        Ok(())
+    }
+
     /// Plays on from [`At::Playing`] to the next place a view shows: a step beginning, where
     /// the human may be halted, a decision, or the end.
     pub(super) fn play_on(&mut self, replaying: bool) {

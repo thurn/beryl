@@ -159,11 +159,12 @@ pub(crate) fn new_agent(
     name: &str,
     t: &GameTable,
     seed: u64,
+    budget: Budget,
 ) -> Result<Box<dyn GameAgent + Send>, SessionError> {
     let agent = beryl_search::agent(name).ok_or_else(|| SessionError::UnknownAgent {
         name: name.to_owned(),
     })?;
-    Ok((agent.new)(t, seed, Budget::DEFAULT))
+    Ok((agent.new)(t, seed, budget))
 }
 
 #[cfg(test)]

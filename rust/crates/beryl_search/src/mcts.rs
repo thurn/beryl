@@ -73,6 +73,17 @@ impl Budget {
         parallel: true,
     };
 
+    /// The phone's search budget. Four trees bound concurrent search work while keeping
+    /// independent determinizations for hidden information. On the project's 18-core Mac,
+    /// a whole WU Control game against the hidden search at this budget took 368 ms at the
+    /// 95th percentile in the iOS Simulator and 1.18 s in the Android emulator, each over
+    /// 129 decisions. A physical phone has not been measured.
+    pub const PHONE: Budget = Budget {
+        iterations: 64,
+        trees: 4,
+        parallel: true,
+    };
+
     /// Tree `i`'s share of the iterations.
     fn share(self, i: u32) -> u32 {
         let trees = self.trees.max(1);

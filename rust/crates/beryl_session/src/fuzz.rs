@@ -104,7 +104,9 @@ impl Fuzz {
         ];
         let table = GameTable::new(&CARDS, [decks[0].as_slice(), decks[1].as_slice()]).unwrap();
         let state = State::new(&table, self.seed, Profile::SMART).unwrap();
-        let stand_in = crate::ai::new_agent("random", &table, self.seed).unwrap();
+        let stand_in =
+            crate::ai::new_agent("random", &table, self.seed, beryl_search::Budget::DEFAULT)
+                .unwrap();
         Game::prepared(
             Prepared {
                 table,

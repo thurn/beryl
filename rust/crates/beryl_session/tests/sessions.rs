@@ -11,6 +11,7 @@ use beryl_engine::{
     Decision, GameTable, Observation, Relayout, Replay, Scratch, Seat, Slot, SlotId, State, Step,
     next,
 };
+use beryl_search::Budget;
 use beryl_session::preview::add_previews;
 use beryl_session::prompt::add_opening_state;
 use beryl_session::protocol::{
@@ -78,6 +79,53 @@ fn play(game: &mut Game, view: &PlayerView) -> PlayerView {
     let (id, index) = script(view);
     game.choose(game.answer(id, index).unwrap());
     to_human(game)
+}
+
+#[test]
+fn a_resumed_game_keeps_its_callers_search_budget() {
+    let mut start = start(11, StopsSetting::SMART);
+    start.opponent = "mcts-hidden".to_owned();
+    let budget = Budget {
+        iterations: 4,
+        trees: 2,
+        parallel: false,
+    };
+    let mut game = Game::with_budget(&CARDS, &start, SESSION, budget).unwrap();
+    let mut view = to_human(&mut game);
+    for _ in 0..30 {
+        if beryl_session::ai::latest(&game.agent_moves())
+            .iter()
+            .any(|m| m.search.is_some())
+        {
+            break;
+        }
+        view = play(&mut game, &view);
+    }
+    let first = beryl_session::ai::latest(&game.agent_moves());
+    assert!(first.iter().any(|m| m.search.is_some()));
+    assert!(
+        first
+            .iter()
+            .all(|m| m.search.as_ref().is_none_or(|s| s.rollouts <= 4))
+    );
+
+    let (mut resumed, mut view) =
+        Game::from_replay_with_budget(&CARDS, game.replay(), SESSION, budget).unwrap();
+    for _ in 0..30 {
+        if beryl_session::ai::latest(&resumed.agent_moves())
+            .iter()
+            .any(|m| m.search.is_some())
+        {
+            break;
+        }
+        view = play(&mut resumed, &view);
+    }
+    let next = beryl_session::ai::latest(&resumed.agent_moves());
+    assert!(next.iter().any(|m| m.search.is_some()));
+    assert!(
+        next.iter()
+            .all(|m| m.search.as_ref().is_none_or(|s| s.rollouts <= 4))
+    );
 }
 
 #[test]

@@ -135,6 +135,7 @@ name = "beryl_app"
 version = "0.1.0"
 dependencies = [
  "beryl-mobile",
+ "beryl_search",
  "beryl_session",
  "block2",
  "objc2",

@@ -21,7 +21,7 @@ use beryl_engine::{
     Relayout, Seat, Small, State, StepStops, TurnStep, observe, two_player::TwoPlayerSeat as _,
     view,
 };
-use beryl_search::{Agent, AgentDecision, GameAgent};
+use beryl_search::{Agent, AgentDecision, Budget, GameAgent};
 use serde_json::json;
 
 use crate::ai::{self, AgentMove, AgentMoves, SearchView};
@@ -290,6 +290,16 @@ impl Game {
         start: &StartGame,
         session: SessionId,
     ) -> Result<Game, SessionError> {
+        Self::with_budget(cards, start, session, Budget::DEFAULT)
+    }
+
+    /// Sets up a game with the search budget chosen by its caller.
+    pub fn with_budget(
+        cards: &'static CardTable,
+        start: &StartGame,
+        session: SessionId,
+        budget: Budget,
+    ) -> Result<Game, SessionError> {
         let replay = ReplayFile {
             format_version: FORMAT_VERSION,
             legacy_waterbend: false,
@@ -310,6 +320,7 @@ impl Game {
             &start.opponent,
             &table,
             SplitMix64::new(start.seed).next_u64(),
+            budget,
         )?;
         let mut game = Game::assemble(table, &state, replay, start.human, session, agent);
         game.replay.chooser = game.flip_winner.map(Seat::get);
@@ -433,19 +444,6 @@ impl Game {
         }
     }
 
-    /// Has the agent named `name` answer the human's decisions in their place (UI fixtures):
-    /// [`Game::answer_by_stand_in`] plays each.
-    pub fn set_stand_in(&mut self, name: &str) -> Result<(), SessionError> {
-        // The stand-in draws from its own stream, apart from the game's and the agent's.
-        self.stand_in = Some(ai::new_agent(
-            name,
-            &self.table,
-            SplitMix64::new(self.replay.seed ^ 0x9e37_79b9).next_u64(),
-        )?);
-        self.stand_in_next = AgentDecision(0);
-        Ok(())
-    }
-
     /// The next view as the game plays on to the human's next decision or the end: as a step
     /// of the turn begins, before each of the agent's decisions, at the human's decision, and
     /// at the end. None while the human's decision is open, until they answer it, and once
@@ -509,7 +507,7 @@ impl Game {
             search,
         };
         journal::debug(
-            "agent",
+            "ai",
             m.candidates
                 .get(usize::from(c.0))
                 .cloned()
@@ -520,6 +518,7 @@ impl Game {
                 "kind": m.kind,
                 "candidates": m.candidates.len(),
                 "ms": m.ms,
+                "agent": self.replay.opponent,
                 "rollouts": m.search.as_ref().map(|s| s.rollouts),
             }),
         );

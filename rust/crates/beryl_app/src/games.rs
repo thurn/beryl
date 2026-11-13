@@ -19,6 +19,8 @@ pub fn sessions(app: &AppHandle) -> Sessions {
             beryl_session::journal::error("app", format!("view not sent: {e}"), json!(null));
         }
     });
+    #[cfg(mobile)]
+    let sessions = sessions.with_budget(beryl_search::Budget::PHONE);
     match data {
         Some(dir) => sessions.with_ledger(dir.join("games.jsonl")),
         None => sessions,
@@ -27,7 +29,15 @@ pub fn sessions(app: &AppHandle) -> Sessions {
 
 #[tauri::command]
 pub fn list_agents() -> Vec<AgentView> {
-    beryl_session::agents()
+    let agents = beryl_session::agents();
+    #[cfg(mobile)]
+    let agents = agents
+        .into_iter()
+        .filter(|agent| {
+            agent.name != "pimc18-omniscient-30m-anchor" && agent.name != "pimc72-hidden-30m-anchor"
+        })
+        .collect();
+    agents
 }
 
 #[tauri::command]

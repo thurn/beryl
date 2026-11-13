@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use beryl_cards::CARDS;
+use beryl_search::Budget;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use ts_rs::TS;
@@ -56,6 +57,7 @@ pub struct Sessions {
     current: Mutex<Current>,
     /// The latest view emitted, of whichever game emitted last.
     latest: Arc<Mutex<Option<GameUpdate>>>,
+    budget: Budget,
 }
 
 /// A game's replay as of its latest decision, which a bug report copies.
@@ -86,7 +88,15 @@ impl Sessions {
             emit: Arc::new(emit),
             current: Mutex::default(),
             latest: Arc::default(),
+            budget: Budget::DEFAULT,
         }
+    }
+
+    /// Uses `budget` for agents in new and resumed games.
+    #[must_use]
+    pub fn with_budget(mut self, budget: Budget) -> Self {
+        self.budget = budget;
+        self
     }
 
     /// Records completed human games at `path`. Prepared games and fixture stand-ins are
@@ -118,7 +128,12 @@ impl Sessions {
             "replay": replay,
         });
         self.launch(
-            |session| Ok((Game::new(&CARDS, start, session)?, None)),
+            |session| {
+                Ok((
+                    Game::with_budget(&CARDS, start, session, self.budget)?,
+                    None,
+                ))
+            },
             stand_in,
             replay,
             true,
@@ -171,7 +186,8 @@ impl Sessions {
         let path = newest_replay(self.replays.as_ref()?)?;
         let resumed = ReplayFile::load(&path).and_then(|file| {
             // Replayed apart first, so an ended game is left alone without a session.
-            let (_, view) = Game::from_replay(&CARDS, &file, SessionId(0))?;
+            let (_, view) =
+                Game::from_replay_with_budget(&CARDS, &file, SessionId(0), self.budget)?;
             if matches!(view.status, Status::Over { .. }) {
                 return Ok(None);
             }
@@ -208,7 +224,8 @@ impl Sessions {
         });
         self.launch(
             |session| {
-                let (game, view) = Game::from_replay(&CARDS, file, session)?;
+                let (game, view) =
+                    Game::from_replay_with_budget(&CARDS, file, session, self.budget)?;
                 Ok((game, Some(view)))
             },
             None,
@@ -242,7 +259,7 @@ impl Sessions {
         about["session"] = json!(session.0);
         let started = game(session).and_then(|(mut game, first)| {
             if let Some(name) = stand_in {
-                game.set_stand_in(name)?;
+                game.set_stand_in_with_budget(name, self.budget)?;
             }
             if seeded {
                 game.set_commit(build_commit().to_owned());
