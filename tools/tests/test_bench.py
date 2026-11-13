@@ -18,7 +18,7 @@ Currently in use:
 """
 
 
-def quiet() -> bench.Machine:
+def plugged_in() -> bench.Machine:
     return bench.Machine(busy_percent=4.0, on_battery=False, low_power=False)
 
 
@@ -43,22 +43,28 @@ def test_throttling() -> None:
     assert not bench.parse_throttled("CPU_Speed_Limit = 100\n")
 
 
-def test_a_quiet_machine_has_no_problems() -> None:
-    assert bench.problems(quiet()) == []
+def test_load_alone_is_no_reason_to_refuse() -> None:
+    assert bench.problems(plugged_in()) == []
+    busy = bench.Machine(
+        busy_percent=95.0,
+        on_battery=False,
+        low_power=False,
+        builds=["rustc"],
+        busiest=["84.8 ruby"],
+    )
+    assert bench.problems(busy) == []
+    said = bench.load(busy)
+    assert "95%" in said and "84.8 ruby" in said and "rustc" in said
 
 
-def test_each_kind_of_noise_is_reported() -> None:
-    noisy = bench.Machine(
+def test_each_slowed_cpu_is_reported() -> None:
+    slowed = bench.Machine(
         busy_percent=30.0,
         on_battery=True,
         low_power=True,
         throttled=["CPU_Speed_Limit = 80"],
-        builds=["rustc"],
-        busiest=["84.8 ruby"],
     )
-    found = bench.problems(noisy)
-    assert len(found) == 5
-    assert "84.8 ruby" in found[0]
+    assert len(bench.problems(slowed)) == 3
 
 
 def test_cargo_flags_go_before_the_harness_arguments() -> None:

@@ -5,8 +5,9 @@
 //!
 //! macOS has no way to pin a thread to a core. It places threads by quality-of-service
 //! class, and keeps user-interactive threads on the fastest cores while one is free. So a
-//! benchmark sets that class first, runs single-threaded (or with no more threads than
-//! perflevel0 has cores), and runs on a quiet machine (`just bench` checks).
+//! benchmark sets that class first and runs single-threaded (or with no more threads than
+//! perflevel0 has cores). On a loaded machine other work can still take the fast cores; the
+//! ABBA harness counts the rounds that hit as disturbed, and its interval widens with them.
 
 /// Sets the calling thread's quality-of-service class to user-interactive. Returns whether
 /// that worked; always false off macOS, where it does nothing.

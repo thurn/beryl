@@ -71,13 +71,19 @@ def test_a_success_over_twenty_hours_old_runs_again() -> None:
     assert len(fake.commits) == 2
 
 
-def test_high_load_skips_and_a_later_firing_retries() -> None:
+def test_normal_heavy_load_runs() -> None:
     fake = Fake()
-    record = fire(fake, load=9.0)  # Over twice the four cores.
+    fire(fake, load=9.0)  # Over twice the four cores, as this machine usually is.
+    assert fake.commits == ["abc123"]
+
+
+def test_overload_skips_and_a_later_firing_retries() -> None:
+    fake = Fake()
+    record = fire(fake, load=33.0)  # Past the clock's stretch on four cores.
     assert record["outcome"] == "skipped"
     assert "load average" in str(record["reason"])
     assert fake.commits == []
-    fire(fake, now=NOW + timedelta(hours=1), load=8.0)  # Exactly twice: runs.
+    fire(fake, now=NOW + timedelta(hours=1), load=32.0)  # Exactly at it: runs.
     assert fake.commits == ["abc123"]
 
 

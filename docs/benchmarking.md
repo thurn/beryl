@@ -5,8 +5,10 @@ How to measure small optimizations in Beryl without fooling yourself. The
 worked example, `example_*`, that follows every rule here.
 
 The problem: a 2% speedup is smaller than the noise in a wall-clock benchmark on
-a laptop running a browser, a backup agent and a few agents' builds. So we
-measure two ways, and believe a result only when they agree.
+a machine that is always busy. The development Mac runs many agent sessions and
+slow CI at once, and a load average of 20 to 40 on its 18 cores is normal. There
+is no quiet machine to wait for, so every measurement here is made under that
+load. We measure two ways, and believe a result only when they agree.
 
 ## The strategy
 
@@ -14,9 +16,10 @@ measure two ways, and believe a result only when they agree.
 2. **Count instructions** with Gungraun in a Linux VM (`just bench-count`).
    Exact, identical on every run, unaffected by load. The first and fastest
    answer.
-3. **Confirm with interleaved timing** on a quiet Mac (`just bench`): old and
-   new in one executable, timed in A B B A order. This catches what counts miss:
-   cache misses, branch mispredictions, the real allocator.
+3. **Confirm with interleaved timing** on the Mac, under its normal load
+   (`just bench`): old and new in one executable, timed in A B B A order, with
+   the median ratio and its confidence interval as the spread. This catches what
+   counts miss: cache misses, branch mispredictions, the real allocator.
 4. **Track absolute times** with Criterion and saved baselines, for regressions
    over time.
 
@@ -44,7 +47,8 @@ just bench -p beryl_bench --bench example_timing
   `--bench '*_counts'`) in the `beryl-bench` Lima VM, creating it on first use.
 
 - `just bench [--force] [cargo bench flags] [-- harness flags]` builds, checks
-  the machine is quiet, then times. `-- --quick` gives the ABBA harness 30
+  that the CPU is not slowed (battery, Low Power Mode, throttling), then times
+  and logs the load before and after. `-- --quick` gives the ABBA harness 30
   rounds instead of 300; Criterion takes its own flags, such as
   `-- --save-baseline before`. It builds under the `search` profile with
   `-C target-cpu=apple-m4` unless the flags name a `--profile`.
@@ -164,29 +168,39 @@ So counts say what changed; the Mac says what it's worth.
 
 ## Timing on the Mac
 
-### A quiet machine
+### Timing under load
 
-`just bench` builds first (a build heats the machine and loads every core), then
-refuses to time if:
+`just bench` times under whatever load the machine has. It builds first, then
+logs how much of the CPU is in use, the five busiest processes and any compiler
+that is running (`rustc`, `cargo`, `clippy-driver`, `clang`, `swift-frontend`),
+and logs the same again after timing, so a result carries the load it was taken
+under. It refuses to time only when the CPU is slowed for the whole run, which
+would make both versions look slower than the machine normally runs them:
 
-- more than 10% of the CPU is in use (it names the five busiest processes);
-- a compiler is running (`rustc`, `cargo`, `clippy-driver`, `clang`,
-  `swift-frontend`): another worktree's build or an Enact check;
 - the Mac is on battery, or in Low Power Mode;
 - macOS has recorded a thermal or performance warning, or a CPU speed limit.
 
-Before a session of timing:
-
-- Plug in. On a MacBook Pro with a Max chip, choose High Power in System
-  Settings > Battery > Energy Mode.
-- Quit browsers, Electron apps and anything with animations. Pause backups (Time
-  Machine, Arq) and let Spotlight finish indexing.
-- Don't run Enact or other agent sessions that build. Stop the Lima VM if it's
-  busy.
-- Compare runs taken in one sitting, in the same conditions.
-
 `--force` times anyway, for checking that a harness works, not for numbers you
 keep.
+
+To get an answer you can trust under load:
+
+- **Count instructions first.** Counts don't depend on load at all.
+- **Compare old and new in one executable** with the ABBA harness, never two
+  runs taken minutes apart. Other sessions' load at any moment lands on both
+  versions within the same round, so it adds noise to the ratio but no bias.
+- **Read the spread, not one number.** The harness reports the median ratio of B
+  to A and its 95% confidence interval. Start at the default 300 rounds and
+  double `--rounds` until the interval is narrower than the effect you care
+  about. Many rounds disturbed by other load are expected; the median and the
+  interval already allow for them.
+- **Treat absolute times as rough.** Criterion's times per call move with the
+  load, so compare its baselines only alongside the load each run logged.
+- **For whole programs** (builds, tournaments, the scale rehearsal), report
+  CPU-seconds beside wall time, use the load-adjusted clock that the checks use
+  (`tools/src/beryl_tools/clock.py`: wall time divided by the load beyond the
+  cores and by the machine's speed factor), and alternate old and new runs (A B
+  B A) for several rounds, reporting the median and the range.
 
 ### Two kinds of core
 
@@ -203,9 +217,10 @@ free. So:
   benchmarks do, first thing in `main`).
 - Stay single-threaded, or use at most as many threads as `hw.perflevel0` has
   cores.
-- Keep the machine quiet, so a fast core is always free.
-- Watch for the ABBA harness's warning about disturbed rounds: blocks more than
-  25% off their median usually mean a slower core or an interruption.
+- Expect other load to take the fast cores at times. The ABBA harness counts a
+  round with a block more than 25% off its version's median as disturbed (a
+  slower core or an interruption), and notes when over a tenth of the rounds
+  were. Its median and interval allow for them; more rounds narrow the interval.
 
 ### Old against new: the ABBA harness
 
@@ -254,8 +269,9 @@ just bench -p beryl_bench --bench example_timing -- --save-baseline before
 just bench -p beryl_bench --bench example_timing -- --baseline before
 ```
 
-The two runs are minutes apart, so drift between them is exactly what this
-compares. Trust a small change only when counts and ABBA agree.
+The two runs are minutes apart, so drift between them, including any change in
+the machine's load, is exactly what this compares. Trust a small change only
+when counts and ABBA agree.
 
 ## Optimizing something, step by step
 
@@ -265,8 +281,8 @@ compares. Trust a small change only when counts and ABBA agree.
 3. Write the new version next to the old; test that they agree.
 4. `just bench-count`: did the instructions drop, and where? Look at the cache
    lines too.
-5. `just bench` with an ABBA benchmark on a quiet machine: is the interval below
-   1?
+5. `just bench` with an ABBA benchmark: is the interval below 1? If it spans 1,
+   raise `--rounds` before concluding there is no difference.
 6. If counts and time disagree, find out why before deciding: usually memory
    (counts miss cache misses) or the allocator (the VM uses glibc).
 7. Delete the old version. Keep the `_counts` and `_timing` benchmarks for

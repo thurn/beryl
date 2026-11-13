@@ -106,7 +106,8 @@ impl std::fmt::Display for Report {
         if self.disturbed * 10 > self.rounds {
             writeln!(
                 f,
-                "  warning: {} of {} rounds disturbed: a busy machine, or a slower core",
+                "  note: {} of {} rounds disturbed by other load or a slower core; the interval \
+                 allows for them, and more --rounds narrow it",
                 self.disturbed, self.rounds
             )?;
         }

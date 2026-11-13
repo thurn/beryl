@@ -13,8 +13,9 @@ a Steward bead (nightly_failures.py), so it reaches someone. More nightly work j
 [`Step`] in [`STEPS`].
 
 The agent fires at 03:00 and hourly until 08:00. Each firing runs only if the last success is
-over [`FRESH_HOURS`] old and the machine is not busy, so the hourly retries cost nothing once a
-night has succeeded.
+over [`FRESH_HOURS`] old and the load is under [`OVERLOAD_PER_CORE`] times the cores, so the
+hourly retries cost nothing once a night has succeeded. A load of 20 to 40 on this machine's 18
+cores is normal, and the steps run at utility priority, so they run under it.
 """
 
 from __future__ import annotations
@@ -33,7 +34,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import IO
 
-from . import caches, coverage, paths, system
+from . import caches, clock, coverage, paths, system
 
 LABEL = "ca.thurn.beryl.nightly"
 # The agent's first firing, and its last retry.
@@ -41,8 +42,10 @@ FIRST_HOUR = 3
 LAST_HOUR = 8
 # A success this recent skips the run.
 FRESH_HOURS = 20
-# Skip while the 5-minute load average is over this many times the core count.
-BUSY_LOAD_PER_CORE = 2
+# Skip while the 5-minute load average is over this many times the core count: there the
+# checks' clock stops stretching (`clock.MAX_STRETCH`), so the steps' deadlines would kill work
+# that is only slow. Any lower load is this machine's normal state, which the steps run under.
+OVERLOAD_PER_CORE = clock.MAX_STRETCH
 # Coverage older than this many hours is flagged stale in `by ci-report`.
 STALE_HOURS = 48
 
@@ -206,13 +209,14 @@ def skip_reason(
     now: datetime, success: datetime | None, load: float, cores: int
 ) -> str | None:
     """Why this firing should not run, or None. The agent retries hourly, so a skip costs
-    nothing: a run that is fresh enough is never repeated, and a busy machine is tried again.
+    nothing: a run that is fresh enough is never repeated, and an overloaded machine is tried
+    again.
     """
     if success is not None and now - success < timedelta(hours=FRESH_HOURS):
         hours = (now - success).total_seconds() / 3600
         return f"last success {hours:.1f} h ago, under {FRESH_HOURS} h"
-    if load > BUSY_LOAD_PER_CORE * cores:
-        return f"load average {load:.1f} over {BUSY_LOAD_PER_CORE} x {cores} cores"
+    if load > OVERLOAD_PER_CORE * cores:
+        return f"load average {load:.1f} over {OVERLOAD_PER_CORE:.0f} x {cores} cores"
     return None
 
 
@@ -448,7 +452,7 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
         "nightly",
         help=f"the nightly work, unless one succeeded under {FRESH_HOURS} h ago or the "
-        "machine is busy",
+        "machine is overloaded",
     )
     p.set_defaults(func=nightly_command)
     p = sub.add_parser(

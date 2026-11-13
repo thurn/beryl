@@ -1,8 +1,10 @@
 """Benchmarks (docs/benchmarking.md).
 
-- `bench` builds the wall-clock benchmarks, refuses to time them on a machine that is busy, on
-  battery, in Low Power Mode or throttled, then runs them on this Mac. It builds them under the
-  `search` profile for this CPU (architecture §18) unless the arguments name a `--profile`.
+- `bench` builds the wall-clock benchmarks, refuses to time them on battery, in Low Power Mode
+  or throttled, then runs them on this Mac. It times under whatever load the machine has, which
+  is normally heavy (docs/benchmarking.md, "Timing under load"), and reports that load before
+  and after. It builds them under the `search` profile for this CPU (architecture §18) unless
+  the arguments name a `--profile`.
 - `bench-count` runs the Gungraun (Valgrind) instruction-count benchmarks in a Lima Linux VM,
   creating and provisioning it on first use. Counts don't depend on load, so there's no check.
   Each worktree builds into a target dir of its own there: Cargo names a path package's
@@ -32,9 +34,8 @@ from pathlib import Path
 
 from . import paths, system, warm
 
-# At most this much of the machine's CPU may be in use before timing (sampled for a second).
-MAX_BUSY_PERCENT = 10.0
-# Compilers and the like: their bursts come and go faster than one CPU sample.
+# Compilers and the like, named in the load report: their bursts come and go faster than one
+# CPU sample.
 BUILD_PROCESSES = ("rustc", "cargo", "clippy-driver", "clang", "swift-frontend")
 
 VM = "beryl-bench"
@@ -66,7 +67,7 @@ def output(*cmd: str) -> str:
     return run.stdout
 
 
-# Is the machine quiet? Parsing is separate from probing so tests can feed it text.
+# What would skew the timing? Parsing is separate from probing so tests can feed it text.
 
 
 @dataclass
@@ -107,16 +108,22 @@ def parse_throttled(therm: str) -> list[str]:
     return found
 
 
-def problems(m: Machine) -> list[str]:
-    found = []
-    if m.busy_percent > MAX_BUSY_PERCENT:
-        found.append(
-            f"{m.busy_percent:.0f}% of the CPU is in use (at most {MAX_BUSY_PERCENT:.0f}%); "
-            + "busiest: "
-            + "; ".join(m.busiest)
-        )
+def load(m: Machine) -> str:
+    """The load timing runs under, for the log. It is never a reason to refuse: this machine
+    always runs other sessions' builds and checks, and the ABBA harness's interval already
+    widens with the noise they add (docs/benchmarking.md, "Timing under load")."""
+    said = f"{m.busy_percent:.0f}% of the CPU in use"
+    if m.busiest:
+        said += "; busiest: " + "; ".join(m.busiest)
     if m.builds:
-        found.append(f"a build is running: {', '.join(m.builds)}")
+        said += f"; builds running: {', '.join(m.builds)}"
+    return said
+
+
+def problems(m: Machine) -> list[str]:
+    """What slows the CPU for the whole run rather than adding noise to it, so a timing taken
+    then says nothing about the machine as it normally runs."""
+    found = []
     if m.on_battery:
         found.append("on battery: plug in")
     if m.low_power:
@@ -207,14 +214,18 @@ def bench(args: argparse.Namespace) -> int:
     )
     if build.returncode != 0:
         return build.returncode
-    found = problems(probe())
+    before = probe()
+    found = problems(before)
     for p in found:
         log(p)
     if found and not args.force:
-        log("not timing on a noisy machine; fix the above, or pass --force")
+        log("not timing with the CPU slowed; fix the above, or pass --force")
         return 2
+    log(f"timing under load: {load(before)}")
     run = cargo_bench(extra, *profile)
-    return subprocess.run(run, cwd=paths.RUST, env=env, check=False).returncode
+    code = subprocess.run(run, cwd=paths.RUST, env=env, check=False).returncode
+    log(f"load after timing: {load(probe())}")
+    return code
 
 
 # The Lima VM for Gungraun; on Windows, a WSL distribution of the same name.
@@ -508,10 +519,14 @@ def count_gate(args: argparse.Namespace) -> int:
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
         "bench",
-        help="time benchmarks on a quiet machine (cargo bench flags)",
+        help="time benchmarks on this Mac, under its usual load (cargo bench flags)",
         allow_abbrev=False,
     )
-    p.add_argument("--force", action="store_true", help="time even on a noisy machine")
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="time even on battery, in Low Power Mode or throttled",
+    )
     p.set_defaults(func=bench, passthrough=True)
     p = sub.add_parser(
         "bench-count",

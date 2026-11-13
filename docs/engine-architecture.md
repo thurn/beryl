@@ -1262,11 +1262,12 @@ exercises, and `just fuzz` reports those random play never reaches.
 
 Every target in §1 gets a `_counts` Gungraun benchmark and a `_timing` Criterion
 baseline in Milestone 1, following `docs/benchmarking.md`: deterministic inputs
-pinned by a test, instruction counts first, ABBA timing to confirm on a quiet
-machine, single-threaded on a Super core. Milestone 1 gates only what is
-deterministic: the size assertion, zero hot-path allocations, the stall rate and
-the perf-counter bands. The time targets are reported from counts, and timing
-waits for a human on a quiet machine, which an unattended run never has.
+pinned by a test, instruction counts first, ABBA timing to confirm under the
+machine's normal load, single-threaded on a Super core. Milestone 1 gates only
+what is deterministic: the size assertion, zero hot-path allocations, the stall
+rate and the perf-counter bands. The time targets are reported from counts and
+confirmed with ABBA ratios and their intervals, which an unattended run can take
+at any time; no time target is a gate, because load moves absolute times.
 
 **The cube rollout benchmark** is the workload the targets are measured on: a
 pinned corpus of mid-game positions between real cube decks, cut from

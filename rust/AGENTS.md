@@ -68,7 +68,7 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
 ## Benchmarks
 
 Benchmarks follow `docs/benchmarking.md`: `just bench-count` counts instructions
-and `just bench` measures time (it refuses to run on a busy machine).
+and `just bench` measures time under the machine's normal load.
 `just count-gate` checks the rollout benchmark's instruction count against the
 limit in `rust/crates/beryl_bench/count-gate.toml`. That file's comments say
 when the limit may go up.

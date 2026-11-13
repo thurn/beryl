@@ -15,7 +15,7 @@ prints what that cost against the plan's budgets ([`BUDGETS`]):
   (without scenarios, which the app never compiles).
 - one-edit rebuild: the same `cargo check` after a change to one card file, which reruns that
   crate's build script and the names crate's and rechecks the registry; the median of
-  [`REBUILDS`] edits.
+  `--edits` edits ([`REBUILDS`] by default), with each edit's time printed as the spread.
 - largest compiler process: the highest peak resident set of any single process of the three
   builds (`/usr/bin/time -l`), which is a `rustc`.
 
@@ -27,11 +27,23 @@ measure to its recorded value plus 10% instead, naming the follow-up bead that o
 `--assert-memory` asserts only the largest compiler process, which the machine's load does not
 move.
 
-The rehearsal holds the machine for minutes, so it runs in the nightly (nightly.py), never in a
-check. The nightly passes `--assert-memory`, not `--assert`: the times have margins of a few
-seconds and the nightly shares the machine with other sessions, so asserting them would file
-Steward beads for a busy night. They are printed in the nightly's log, and `--assert` is for a
-rehearsal on a quiet machine. It then prints what scripts cost (plan K24): the seconds
+Every run is made under the machine's normal load, a load average of 20 to 40 on 18 cores
+(docs/benchmarking.md, "Timing under load"); there is no quiet run to wait for. The clock
+removes the load beyond the cores, but not the slowdown from sharing caches and memory below
+that, so the times still move with load: four cold checks took 41 to 56 s against the 60 s
+budget, and one-edit medians ranged from 2.2 to 3.2 s against 2 s (docs/project-50k.md, "Scale
+rehearsal"). So:
+
+- `--assert` is how a budget is judged. Run it under normal load with `--edits 8` or more, and
+  read each time with its load and CPU-seconds. When a change is meant to move a time, compare
+  it with the change's base in alternating runs (A B B A) on two workspaces rather than against
+  the budget alone.
+- The nightly (nightly.py) passes `--assert-memory`, not `--assert`. A nightly failure files a
+  Steward bead, so it asserts only the measure whose night-to-night spread is far below its
+  margin. The times are printed in its log, where their trend shows.
+
+The rehearsal holds the machine for minutes, so it runs in the nightly, never in a check. It
+then prints what scripts cost (plan K24): the seconds
 `beryl_cli script-check` takes to play every spec moment of each pooled card from both seats,
 per card and extrapolated to the N clones, reported with no bar.
 """
@@ -66,7 +78,8 @@ from .scale_workspace import (
 
 DEFAULT_CARDS = 50_000
 # The one-edit rebuild is a few seconds of mostly serial work, which the machine's other load
-# moves by more than its budget's margin: its measure is the median of this many edits.
+# moves by more than its budget's margin: its measure is the median of this many edits unless
+# `--edits` asks for more.
 REBUILDS = 3
 GIB: int = 2**30
 # A card's script check in the run log: `script:<card>/<moment>/<seat>`.
@@ -341,13 +354,17 @@ def scale(args: argparse.Namespace) -> int:
     runs["release build"] = timed([*release, f"--bin={BINARY}"], root)
     print("scale: one-edit rebuild", file=sys.stderr)
     rebuilds = []
-    for _ in range(REBUILDS):
+    for _ in range(args.edits):
         edit_card(root, names)
         rebuilds.append(timed(check, root))
     runs["one-edit rebuild"] = median(rebuilds)
     print(report(args.cards, len(crates), args.crates is not None, len(pool), runs))
     each = ", ".join(f"{run.seconds:.1f} s" for run in rebuilds)
-    print(f"{'':<26}the {REBUILDS} edits' rebuilds, in order: {each}")
+    spread = sorted(run.seconds for run in rebuilds)
+    print(
+        f"{'':<26}the {args.edits} edits' rebuilds, in order: {each}; "
+        f"range {spread[0]:.1f} to {spread[-1]:.1f} s"
+    )
     if not args.no_scripts:
         print("scale: script checks", file=sys.stderr)
         print(script_report(measure_scripts(pool), pool, args.cards))
@@ -371,6 +388,12 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         type=int,
         default=None,
         help="set crates holding them (default: as the tree's grouping gives)",
+    )
+    p.add_argument(
+        "--edits",
+        type=lambda text: max(1, int(text)),
+        default=REBUILDS,
+        help=f"one-card edits whose median rebuild is measured (default {REBUILDS})",
     )
     p.add_argument(
         "--assert",
