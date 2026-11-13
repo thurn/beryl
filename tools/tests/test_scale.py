@@ -1,7 +1,8 @@
+import json
 import re
 from pathlib import Path
 
-from beryl_tools import scale
+from beryl_tools import card_store, scale, scale_workspace
 
 TIME = """        3.21 real        10.00 user         1.00 sys
            987654321  maximum resident set size
@@ -9,89 +10,115 @@ TIME = """        3.21 real        10.00 user         1.00 sys
 """
 
 
-def test_the_pool_is_real_cards_that_reach_only_names_and_tokens() -> None:
-    pool = scale.sources()
-    assert len(pool) > 20
+def test_every_card_file_is_in_the_pool() -> None:
+    pool, left = scale_workspace.sources()
+    assert len(pool) > 40 and not left
     assert any(s.name == "Counterspell" for s in pool)
-    for source in pool:
-        assert set(scale.CRATE_PATH.findall(source.text)) <= {
-            "names",
-            "tokens",
-            "props",
-        }
 
 
-def test_a_clone_renames_only_its_own_card() -> None:
-    counterspell = next(s for s in scale.sources() if s.name == "Counterspell")
-    text = scale.clone(counterspell, 7)
-    assert "    names::COUNTERSPELL_7,\n" in text
-    assert "hand(P0, &[names::COUNTERSPELL_7])" in text
-    assert not re.search(r"names::COUNTERSPELL\b", text)
+def test_a_clone_renames_only_its_own_card_and_faces() -> None:
+    pool, _ = scale_workspace.sources()
+    counterspell = next(s for s in pool if s.name == "Counterspell")
+    text = scale_workspace.clone(counterspell, 7)
+    assert "names::COUNTERSPELL_7" in text
+    assert "printed::COUNTERSPELL_7" in text
+    assert not re.search(r"(names|printed)::COUNTERSPELL\b", text)
     assert "props::ARTIFACT" in text  # the other cards stay what they are
     assert ".effect(&counter(TARGET))" in text  # its body and scenarios come along
+    record = scale_workspace.clone_record(counterspell, 7, "z00001")
+    assert record["name"] == "Counterspell 7" and record["first_set"] == "z00001"
 
 
-def test_shard_counts_split_evenly_and_never_leave_one_empty() -> None:
-    assert scale.shard_counts(10, 4) == [3, 3, 3, 1]
-    assert scale.shard_counts(8, 4) == [2, 2, 2, 2]
-    assert scale.shard_counts(2, 5) == [1, 1]
-    assert sum(scale.shard_counts(50_000, 20)) == 50_000
+def test_a_card_of_two_faces_renames_each_face() -> None:
+    pool, _ = scale_workspace.sources()
+    several = next(s for s in pool if len(s.faces()) > 1)
+    renamed = scale_workspace.renames(several, 3)
+    faces = [scale_workspace.set_groups.constant(f) for f in several.faces()]
+    assert all(renamed[face] == f"{face}_3" for face in faces)
+    assert scale_workspace.clone_name(several, 3).endswith(" 3")
 
 
-def test_generated_workspace_holds_every_card_once(tmp_path: Path) -> None:
-    pool = scale.sources()
-    cards = len(pool) + 3  # the pool is cycled
-    shards = scale.generate(tmp_path, cards, 2, pool)
-    assert shards == ["shard0", "shard1"]
-    names = []
-    for shard in shards:
-        lib = (tmp_path / shard / "src" / "lib.rs").read_text()
-        names += re.findall(r'pub const \w+: &str = "(.*? \d+)";', lib)
-        assert (
-            'path = "' + str(scale.CRATES / "beryl_cards")
-            in (tmp_path / shard / "Cargo.toml").read_text()
-        )
-    assert len(names) == cards == len(set(names))
-    # A clone compiles only if its shard depends on every crate its card file uses.
-    used = {
-        crate
-        for source in pool
-        for crate in re.findall(r"^use (\w+)::", source.text, re.MULTILINE)
-    } - {"crate", "super", "std"}
-    manifest = (tmp_path / "shard0" / "Cargo.toml").read_text()
-    assert used and all(f'{crate} = {{ path = "' in manifest for crate in used)
-    assert len(list(tmp_path.glob("shard*/src/c*.rs"))) == cards
-    main = (tmp_path / "all" / "src" / "main.rs").read_text()
-    for shard in shards:
-        # Every table is read through black_box, or the linker would drop the cards.
-        assert f"black_box({shard}::CARDS)" in main
-        assert f"black_box({shard}::SCENARIOS)" in main
-    assert '"all", "shard0", "shard1"' in (tmp_path / "Cargo.toml").read_text()
-    assert (tmp_path / "Cargo.lock").exists()
+def test_the_plan_follows_the_trees_groups() -> None:
+    groups = [(5, 1000), (2, 500)]
+    crates = scale_workspace.plan(3000, None, groups)
+    # The mean group is 750 cards: 4 crates, sized 2:1 as the groups cycle.
+    assert [c.cards for c in crates] == [1000, 500, 1000, 500]
+    assert [len(c.sets) for c in crates] == [5, 2, 5, 2]
+    assert sum(c.cards for c in scale_workspace.plan(7, 3, groups)) == 7
+    assert all(n for c in scale_workspace.plan(3, 9, groups) for _, n in c.sets)
+
+
+def test_shares_are_exact() -> None:
+    assert scale_workspace.shares(10, [1, 1, 1]) == [4, 3, 3]
+    assert sum(scale_workspace.shares(50_000, [7, 3, 11])) == 50_000
+
+
+def test_the_workspace_is_the_trees_structure(tmp_path: Path) -> None:
+    pool, _ = scale_workspace.sources()
+    crates = scale_workspace.plan(len(pool) + 3, 2, [(2, 1)])
+    names = scale_workspace.generate(tmp_path, crates, pool)
+    assert names == ["cards_s000", "cards_s001"]
+    files = sorted((tmp_path / "rust" / "cards").glob("*/*/*.rs"))
+    assert len(files) == len(pool) + 3
+    # Each clone has a record in the scratch store, first printed in its directory's set.
+    with card_store.Store(tmp_path / "data" / "card-store.tsv") as store:
+        for path in files:
+            name = scale_workspace.card_files.name_of(path, store)
+            assert name is not None, path
+    # The set crates are the tree's but for their paths to the checkout.
+    crate = tmp_path / "rust" / "cards" / "cards_s000"
+    assert (crate / "build.rs").read_text() == (
+        scale_workspace.card_crates.BUILD
+    )
+    assert str(scale_workspace.CRATES / "beryl_card_build") in (
+        crate / "Cargo.toml"
+    ).read_text()
+    registry = (tmp_path / "rust" / "crates" / "registry" / "Cargo.toml").read_text()
+    for name in names:
+        assert f"\n{name} = " in registry and f'"{name}/scenarios"' in registry
+    groups = json.loads((tmp_path / "data" / "set-groups.json").read_text())
+    assert [g["crate"] for g in groups["groups"]] == names
+    workspace = (tmp_path / "rust" / "Cargo.toml").read_text()
+    assert 'members = ["cards/*", "crates/registry", "crates/warm"]' in workspace
+    assert "[profile.release]" in workspace
+    for copied in scale_workspace.COPIED:
+        assert (tmp_path / copied).is_file()
 
 
 def test_regenerating_keeps_the_target_directory(tmp_path: Path) -> None:
-    pool = scale.sources()
-    scale.generate(tmp_path, 4, 2, pool)
+    pool, _ = scale_workspace.sources()
+    scale_workspace.generate(tmp_path, scale_workspace.plan(4, 2, [(1, 1)]), pool)
     (tmp_path / "target").mkdir()
     (tmp_path / "target" / "built").write_text("x")
-    scale.generate(tmp_path, 3, 1, pool)
+    scale_workspace.generate(tmp_path, scale_workspace.plan(3, 1, [(1, 1)]), pool)
     assert (tmp_path / "target" / "built").exists()
-    assert not (tmp_path / "shard1").exists()
+    assert not (tmp_path / "rust" / "cards" / "cards_s001").exists()
 
 
 def test_time_report_parsing() -> None:
-    assert scale.parse_time(TIME) == (3.21, 987654321)
+    assert scale.parse_time(TIME) == (3.21, 11.0, 987654321)
 
 
-def test_report_names_the_largest_process() -> None:
-    runs = {
-        "cold cargo check": scale.Run(2.0, 2.0, 2**30),
-        "release build": scale.Run(9.0, 9.0, 3 * 2**30),
+def runs(check: float) -> dict[str, scale.Run]:
+    return {
+        "cold check": scale.Run(check, check, 100.0, 2**30, 4.0),
+        "release build": scale.Run(90.0, 90.0, 300.0, 3 * 2**30, 4.0),
+        "one-edit rebuild": scale.Run(1.0, 1.0, 1.0, 2**29, 4.0),
     }
-    text = scale.report(2000, 4, 41, runs)
-    assert "2,000 cards" in text
-    assert "3.00 GiB   (release build)" in text
+
+
+def test_the_report_gives_each_budget_and_margin() -> None:
+    text = scale.report(2000, 4, False, 41, runs(45.0))
+    assert "2,000 cards" in text and "as the tree's grouping gives" in text
+    assert "45.0 s   budget 60.0 s, margin 15.0 s  ok" in text
+    assert "3.00 GiB   budget 4.00 GiB, margin 1.00 GiB  ok" in text
+    assert "100 s CPU" in text
+
+
+def test_a_measure_over_its_budget_is_missed() -> None:
+    assert scale.missed(scale.measures(runs(45.0))) == []
+    assert scale.missed(scale.measures(runs(61.0))) == ["cold check"]
+    assert "MISSED" in scale.report(2000, 4, False, 41, runs(61.0))
 
 
 def test_card_seconds_sum_each_cards_checks_and_skip_recordings() -> None:
@@ -108,7 +135,7 @@ def test_card_seconds_sum_each_cards_checks_and_skip_recordings() -> None:
 
 
 def source(name: str) -> scale.Source:
-    return scale.Source(Path(f"{name}.rs"), "", name.upper(), name)
+    return scale.Source(Path(f"{name}.rs"), "", name, {"faces": [{"name": name}]})
 
 
 def test_clones_cost_what_their_originals_do_cycled_as_generated() -> None:

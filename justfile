@@ -127,7 +127,7 @@ warm *args:
 bench *args:
     {{ by }} bench "$@"
 
-# Build cloned cards at scale in a scratch workspace and time the compiler (--cards N --crates K)
+# The scale rehearsal: build cloned cards in the set crates and time the compiler (--assert)
 [group('bench')]
 scale *args:
     {{ by }} scale "$@"

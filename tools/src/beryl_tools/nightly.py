@@ -3,7 +3,8 @@ agent (`just nightly-install`): today, removing the cache folders of checkouts t
 (`by prune-caches`), coverage of origin/staging (`by coverage`), the checks' verdicts the fast
 check orders by (`by ci-history`), every card's spec (`by specs --check`, the sweep the tests
 sample), the fuzz (`just fuzz`: engine and session games at length, the script checks on
-throughout), the stage's verbs held to their own values in a stepped capture (`by motion`) and
+throughout), the scale rehearsal at 50,000 cards held to its budgets (`by scale --assert`), the
+stage's verbs held to their own values in a stepped capture (`by motion`) and
 every card scenario in the oracles (`by oracle`, which slow CI plays only some of). It costs no
 agent tokens and needs no session open. Its record is this machine's,
 in `$BERYL_CACHE/nightly`: `log.jsonl` (one line per attempt, skipped or not) and
@@ -116,6 +117,21 @@ def fuzz_step(commit: str, out: IO[str]) -> int:
     return code
 
 
+def scale_step(commit: str, out: IO[str]) -> int:
+    """The scale rehearsal at 50,000 cards with its budgets asserted (`by scale --assert`,
+    scale.py) on `commit` at low priority: minutes of the whole machine, which no check may
+    take. Its outcome goes to the run log as `scale:rehearsal`."""
+    from . import runlog  # It imports this module.
+
+    run = runlog.Run("nightly", commit, place="nightly")
+    began = time.monotonic()
+    with run.step(dict(os.environ)) as (env, results):
+        command = [sys.executable, "-m", "beryl_tools.cli", "scale", "--assert"]
+        code = coverage.in_tree(commit, system.utility(command), out, env)
+        run.log("scale", "rehearsal", code == 0, time.monotonic() - began, results)
+    return code
+
+
 def motion_step(commit: str, out: IO[str]) -> int:
     """The stepped capture of the stage's verbs held to their values (`by motion --more`,
     motion.py) on `commit` at low priority, one run-log record a verb and layout,
@@ -155,6 +171,7 @@ STEPS: list[Step] = [
     Step("history", history_step),
     Step("specs", specs_step),
     Step("fuzz", fuzz_step),
+    Step("scale", scale_step),
     Step("motion", motion_step),
     Step("oracle", oracle_step),
 ]

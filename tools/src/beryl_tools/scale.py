@@ -1,33 +1,33 @@
-"""The scale rehearsal (docs/project-50k.md, Measurements): how the compiler copes with many cards.
+"""The scale rehearsal (docs/project-50k.md, Acceptance, "Scale rehearsal"): whether the compiler
+copes with 50,000 implemented cards.
 
-`scale` generates a scratch Cargo workspace under `$BERYL_CACHE/scale` (never in the tree),
-builds it and prints what it cost: a cold `cargo check`, a release build, a rebuild after
-editing one card, and the largest compiler process's peak memory.
+`scale` writes a scratch workspace under `$BERYL_CACHE/scale` (never in the tree) that builds
+what the tree builds: set crates written and built as `rust/cards/*` are, by the same build
+helper, a registry built as `beryl_cards` is, and a scratch card store, with N clones of the real
+card files in place of the real cards (scale_workspace.py says how). It builds the workspace and
+prints what that cost against the plan's budgets ([`BUDGETS`]):
 
-The workload is real cards. Each of the N definitions is a clone of one of the card files under
-`rust/cards`, cycled until N is reached, with its own card name made
-unique, so it carries its abilities, bodies and scenarios, not a stub. The clones are split over
-K library crates (`shard0` ...), and a final binary, `all`, references every card and scenario
-through `std::hint::black_box`, since the linker would strip tables nothing reads and the
-release numbers would mean nothing. The crates depend on the checkout's own, by path; the engine
-crates are built once in each profile before the clock starts, so only the clones are timed.
+- cold check: `cargo check` of the registry and every set crate with their scenarios, as tests
+  and tools build them, after removing the scratch crates' artifacts; the checkout's own crates
+  are built beforehand, so only the cards' crates, their build scripts and the registry count.
+- release build: `cargo build --release` of the registry's binary, which reads every card, so
+  the registry and every set crate are compiled and linked as the app's release build would
+  (without scenarios, which the app never compiles).
+- one-edit rebuild: the same `cargo check` after a change to one card file, which reruns that
+  crate's build script and the registry's.
+- largest compiler process: the highest peak resident set of any single process of the three
+  builds (`/usr/bin/time -l`), which is a `rustc`.
 
-A clone keeps its `use crate::...` lines working: each shard re-exports the real card modules
-(`crate::tokens`), has a `names` module of its own, the real names plus one constant per clone,
-and a `printed` module re-exporting from the real set crates the printed faces its clones start
-from (a clone's faces are its original's). Files reaching past those (`super::`) are left out of
-the pool.
+Seconds are wall-clock seconds on this machine with all its cores, load-adjusted as the checks'
+clocks are (`clock.Clock`: wall time over the load beyond the cores and the speed factor). The
+CPU-seconds beside each are what scales with machines. With `--assert`, a measure over its
+budget makes the run exit non-zero. A budget missed after three recorded attempts holds that
+measure to its recorded value plus 10% instead, naming the follow-up bead that owns it.
 
-It then prints what scripts cost (plan K24): the seconds `beryl_cli script-check` takes to play
-every spec moment of each pooled card from both seats in a debug build, where every script the
-session builds is held to the replay check and the rule invariants, per card and extrapolated to
-the N clones. A clone is a copy of a real card file, so its scenarios are the same work as its
-original's: the clones' cost is their originals' summed, measured once on the real cards. It is
-reported with no bar.
-
-Budgets are not asserted yet (milestone 7 adds `--assert`: check 60 s, release 180 s, one-card
-rebuild 2 s, 4 GiB). Times are load-adjusted as the checks' are (`checks.Clock`). The one-card
-rebuild is a `cargo check` one, the edit-and-look loop.
+The rehearsal holds the machine for minutes, so it runs in the nightly (nightly.py), never in a
+check: no check asserts a time. It then prints what scripts cost (plan K24): the seconds
+`beryl_cli script-check` takes to play every spec moment of each pooled card from both seats,
+per card and extrapolated to the N clones, reported with no bar.
 """
 
 from __future__ import annotations
@@ -37,7 +37,6 @@ import json
 import math
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -46,28 +45,21 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import card_files, checks, nearest, paths, script_checks
+from . import card_store, clock, nearest, paths, script_checks
+from .scale_workspace import (
+    BINARY,
+    REGISTRY,
+    WARM,
+    Source,
+    edit_card,
+    generate,
+    plan,
+    sources,
+    tree_groups,
+)
 
 DEFAULT_CARDS = 50_000
-DEFAULT_CRATES = 20
-CRATES: Path = paths.RUST / "crates"
-# The modules a clone reaches by `crate::`, which a shard re-exports from `beryl_cards`: the
-# shared tokens, and the props its scenarios name.
-REEXPORTED = ("tokens", "props")
-# A face a clone starts from: `printed::<CONSTANT>` or `printed::token::<CONSTANT>`, which its
-# original's set crate generates.
-PRINTED: re.Pattern[str] = re.compile(r"\bprinted::((?:token::)?[A-Z0-9_]+)\b")
-# What a file may reach in its own crate; others, such as another card's private helper, can't
-# be cloned.
-CRATE_PATH: re.Pattern[str] = re.compile(r"\b(?:crate|super)::(\w+)")
-# The same reached in a group: `use crate::{names, props};`.
-CRATE_GROUP: re.Pattern[str] = re.compile(r"\b(?:crate|super)::\{([^}]*)\}")
-# A card's own name: the constant its definition gives as its name, the `card` builder's
-# first argument or a literal's `name`.
-NAME_FIELD: re.Pattern[str] = re.compile(
-    r"(?:^\s*name: |\bcard\(\s*)names::([A-Z0-9_]+),", re.MULTILINE
-)
-MAX_LINE = 100
+GIB = 2**30
 # A card's script check in the run log: `script:<card>/<moment>/<seat>`.
 SCRIPT_CHECK: re.Pattern[str] = re.compile(r"^script:([^/]+)/[^/]+/[^/]+$")
 # The cards the script cost names by name, the costliest first.
@@ -78,260 +70,137 @@ SCRIPT_SUMMARY: re.Pattern[str] = re.compile(
 )
 
 
-@dataclass
-class Source:
-    """A card file to clone: its text, the constant naming it and that constant's string."""
+@dataclass(frozen=True)
+class Budget:
+    """A measure's bar: the plan's value, in seconds or bytes. `held` names the follow-up bead
+    that owns a budget missed after three attempts, and `limit` is then the recorded value
+    plus 10%, which `--assert` holds the measure to meanwhile."""
 
-    path: Path
-    text: str
-    const: str
-    name: str
-
-
-def sources(root: Path = card_files.CARDS) -> list[Source]:
-    """The real card files that can be cloned: those with a `CardDef` named by `names::...`
-    that reach nothing in their crate but `names` and the shared modules."""
-    names = card_files.constants(root)
-    found = []
-    for path in card_files.files(root):
-        text = path.read_text()
-        field = NAME_FIELD.search(text)
-        grouped = {
-            name.strip()
-            for group in CRATE_GROUP.findall(text)
-            for name in group.split(",")
-        }
-        own = {"names", "printed", *REEXPORTED}
-        reaches = (set(CRATE_PATH.findall(text)) | grouped) - own
-        if field is None or reaches or field.group(1) not in names:
-            continue
-        found.append(Source(path, text, field.group(1), names[field.group(1)]))
-    return found
+    plan: float
+    limit: float
+    unit: str
+    held: str | None = None
 
 
-def clone(source: Source, index: int) -> str:
-    """`source` as card number `index`, its name unique: every use of its `names::` constant
-    becomes `names::<CONST>_<index>`."""
-    unique = re.compile(rf"\bnames::{source.const}\b")
-    text = unique.sub(f"names::{source.const}_{index}", source.text)
-    return "#![allow(warnings)]\n" + text
-
-
-def shard_counts(cards: int, crates: int) -> list[int]:
-    """How many cards each crate holds: as even as can be, none empty."""
-    crates = max(1, min(crates, cards))
-    per = math.ceil(cards / crates)
-    counts = [per] * (cards // per)
-    if cards % per:
-        counts.append(cards % per)
-    return counts
-
-
-def printed_module(picks: list[Source]) -> list[str]:
-    """A shard's `printed` module: each face its clones start from, from its original's set
-    crate (`rust/cards/<crate>/<set>/<card>.rs`)."""
-    faces, tokens = set(), set()
-    for pick in picks:
-        crate = pick.path.parent.parent.name
-        for used in PRINTED.findall(pick.text):
-            (tokens if used.startswith("token::") else faces).add(
-                f"{crate}::printed::{used}"
-            )
-    return [
-        "pub mod printed {",
-        *(f"    pub use {face};" for face in sorted(faces)),
-        "    pub mod token {",
-        *(f"        pub use {token};" for token in sorted(tokens)),
-        "    }",
-        "}",
-    ]
-
-
-def shard_lib(first: int, picks: list[Source]) -> str:
-    """A shard's `lib.rs`: the modules it re-exports, its `names`, its clones and its tables."""
-    ids = range(first, first + len(picks))
-    lines = [
-        "#![allow(warnings)]",
-        f"pub use beryl_cards::{{{', '.join(REEXPORTED)}}};",
-        "",
-        "pub mod names {",
-        "    pub use beryl_cards::names::*;",
-    ]
-    for i, pick in zip(ids, picks, strict=True):
-        lines.append(f'    pub const {pick.const}_{i}: &str = "{pick.name} {i}";')
-    lines.append("}")
-    lines += printed_module(picks)
-    lines += [f"pub mod c{i};" for i in ids]
-    lines.append("pub static CARDS: &[&beryl_card::CardDef] = &[")
-    lines += [f"    &c{i}::CARD," for i in ids]
-    lines += ["];", "pub static SCENARIOS: &[&[beryl_scenario_types::Scenario]] = &["]
-    lines += [f"    c{i}::scenarios::SCENARIOS," for i in ids]
-    lines.append("];")
-    return "\n".join(lines) + "\n"
-
-
-# The checkout's crates a card file may use, which a set crate depends on: the vocabulary and
-# the scenarios' value types.
-CARD_CRATES = ("beryl_card", "beryl_scenario_types")
-
-
-def shard_manifest(name: str) -> str:
-    # `beryl_cards` for its `names`, and the tokens and props it re-exports.
-    dependencies = f'beryl_cards = {{ path = "{CRATES / "beryl_cards"}" }}\n'
-    dependencies += "".join(
-        f'{crate} = {{ path = "{CRATES / crate}" }}\n' for crate in CARD_CRATES
-    )
-    # The set crates, for the printed faces the clones start from.
-    dependencies += "".join(
-        f'{crate} = {{ path = "{path}" }}\n'
-        for crate, path in ((p.name, p) for p in sorted(card_files.CARDS.iterdir()))
-        if (path / "Cargo.toml").is_file()
-    )
-    return f"""[package]
-name = "{name}"
-version = "0.0.0"
-edition = "2024"
-publish = false
-
-[features]
-# A clone's scenarios sit behind its crate's `scenarios` feature, as the real cards' do; the
-# rehearsal builds them, as the tests and tools do.
-default = ["scenarios"]
-scenarios = []
-
-[dependencies]
-{dependencies}"""
-
-
-def main_rs(shards: list[str]) -> str:
-    """The binary: it reads every card and scenario, so the linker keeps them."""
-    lines = [
-        "use std::hint::black_box;",
-        "",
-        "fn main() {",
-        "    let (mut cards, mut scenarios) = (0, 0);",
-    ]
-    for shard in shards:
-        lines += [
-            f"    for card in black_box({shard}::CARDS) {{",
-            "        cards += black_box(card).faces.len();",
-            "    }",
-            f"    for card in black_box({shard}::SCENARIOS) {{",
-            "        for scenario in black_box(*card) {",
-            "            scenarios += black_box(scenario).name.len();",
-            "        }",
-            "    }",
-        ]
-    lines += ['    println!("{cards} {scenarios}");', "}"]
-    return "\n".join(lines) + "\n"
-
-
-def workspace_manifest(shards: list[str]) -> str:
-    """The workspace: the checkout's release profile, so the numbers are the app's."""
-    members = ", ".join(f'"{m}"' for m in ["all", *shards])
-    return f"""[workspace]
-resolver = "3"
-members = [{members}]
-
-[profile.release]
-debug = "line-tables-only"
-codegen-units = 1
-lto = "thin"
-"""
-
-
-def generate(root: Path, cards: int, crates: int, pool: list[Source]) -> list[str]:
-    """Writes the workspace at `root`, keeping its `target` directory; returns the shards'
-    names. The checkout's `Cargo.lock` pins the dependencies the same."""
-    for old in root.glob("*"):
-        if old.name != "target":
-            shutil.rmtree(old) if old.is_dir() else old.unlink()
-    shards = []
-    next_card = 0
-    for number, count in enumerate(shard_counts(cards, crates)):
-        name = f"shard{number}"
-        picks = [pool[i % len(pool)] for i in range(next_card, next_card + count)]
-        src = root / name / "src"
-        src.mkdir(parents=True)
-        for i, pick in zip(range(next_card, next_card + count), picks, strict=True):
-            (src / f"c{i}.rs").write_text(clone(pick, i))
-        (src / "lib.rs").write_text(shard_lib(next_card, picks))
-        (root / name / "Cargo.toml").write_text(shard_manifest(name))
-        shards.append(name)
-        next_card += count
-    binary = root / "all"
-    (binary / "src").mkdir(parents=True)
-    (binary / "src" / "main.rs").write_text(main_rs(shards))
-    manifest = shard_manifest("all")
-    deps = "".join(f'{s} = {{ path = "../{s}" }}\n' for s in shards)
-    (binary / "Cargo.toml").write_text(manifest + deps)
-    (root / "Cargo.toml").write_text(workspace_manifest(shards))
-    shutil.copy(paths.RUST / "Cargo.lock", root / "Cargo.lock")
-    return shards
-
-
-def edit_card(root: Path) -> None:
-    """Changes the first clone's file, as an edit would."""
-    path = root / "shard0" / "src" / "c0.rs"
-    path.write_text(path.read_text() + f"\nconst EDITED: u64 = {time.time_ns()};\n")
+# The plan's four budgets (docs/project-50k.md, Acceptance, "Scale rehearsal").
+BUDGETS: dict[str, Budget] = {
+    "cold check": Budget(60, 60, "s"),
+    "release build": Budget(180, 180, "s"),
+    # Missed after three attempts at 3.7 s (by-w8gv.13.11): an edit rechecks its whole set
+    # crate and then the registry, one after the other. Held at 3.7 s plus 10% until
+    # by-w8gv.13.14 meets the plan's 2 s.
+    "one-edit rebuild": Budget(2, 4.1, "s", held="by-w8gv.13.14"),
+    "largest compiler process": Budget(4 * GIB, 4 * GIB, "B"),
+}
 
 
 @dataclass
 class Run:
-    seconds: float  # load-adjusted
+    """One timed build: its load-adjusted and wall seconds, its CPU-seconds (user and system,
+    every process it waited for), its largest process's peak resident set in bytes and the
+    highest load average while it ran."""
+
+    seconds: float
     wall: float
-    rss: int  # bytes: the largest process's peak resident set
+    cpu: float
+    rss: int
+    load: float
 
 
-def parse_time(output: str) -> tuple[float, int]:
-    """Wall seconds and maximum resident set size in bytes from `/usr/bin/time -l`'s report."""
-    wall = re.search(r"^\s*([\d.]+)\s+real", output, re.MULTILINE)
+def parse_time(output: str) -> tuple[float, float, int]:
+    """Wall seconds, CPU-seconds and the maximum resident set size in bytes from
+    `/usr/bin/time -l`'s report."""
+    found = re.search(
+        r"^\s*([\d.]+)\s+real\s+([\d.]+)\s+user\s+([\d.]+)\s+sys", output, re.M
+    )
     rss = re.search(r"^\s*(\d+)\s+maximum resident set size", output, re.MULTILINE)
-    if wall is None or rss is None:
+    if found is None or rss is None:
         raise RuntimeError("no /usr/bin/time -l report in:\n" + output[-2000:])
-    return float(wall.group(1)), int(rss.group(1))
+    wall, user, system = (float(found.group(i)) for i in (1, 2, 3))
+    return wall, user + system, int(rss.group(1))
+
+
+def cargo_env(root: Path) -> dict[str, str]:
+    env = {**os.environ, "CARGO_TARGET_DIR": str(root / "target")}
+    env.pop("CARGO_BUILD_TARGET_DIR", None)
+    return env
 
 
 def timed(cmd: list[str], root: Path) -> Run:
-    """Runs `cmd` in the workspace under `/usr/bin/time -l`, timing it on the load-adjusted
-    clock; a failure ends the run with the compiler's output."""
-    env = {**os.environ, "CARGO_TARGET_DIR": str(root / "target")}
-    env.pop("CARGO_BUILD_TARGET_DIR", None)
-    clock = checks.Clock()
+    """Runs `cmd` in the workspace's `rust` directory under `/usr/bin/time -l`, on the
+    load-adjusted clock; a failure ends the run with the compiler's output."""
+    timer = clock.Clock()
     run = subprocess.run(
         ["/usr/bin/time", "-l", *cmd],
-        cwd=root,
-        env=env,
+        cwd=root / "rust",
+        env=cargo_env(root),
         capture_output=True,
         text=True,
         check=False,
     )
-    adjusted = clock.now()
+    adjusted = timer.now()
     if run.returncode != 0:
         sys.exit(f"scale: {' '.join(cmd)} failed:\n{run.stderr[-6000:]}")
-    wall, rss = parse_time(run.stderr)
-    return Run(adjusted, wall, rss)
+    wall, cpu, rss = parse_time(run.stderr)
+    return Run(adjusted, wall, cpu, rss, timer.peak)
 
 
-def gib(nbytes: int) -> str:
-    return f"{nbytes / 2**30:.2f} GiB"
+def measures(runs: dict[str, Run]) -> dict[str, float]:
+    """Each budget's measure from the three builds."""
+    return {
+        "cold check": runs["cold check"].seconds,
+        "release build": runs["release build"].seconds,
+        "one-edit rebuild": runs["one-edit rebuild"].seconds,
+        "largest compiler process": float(max(r.rss for r in runs.values())),
+    }
 
 
-def report(cards: int, shards: int, pool: int, runs: dict[str, Run]) -> str:
+def shown(value: float, unit: str) -> str:
+    return f"{value / GIB:.2f} GiB" if unit == "B" else f"{value:.1f} s"
+
+
+def missed(values: dict[str, float]) -> list[str]:
+    """The measures over their limits."""
+    return [name for name, value in values.items() if value > BUDGETS[name].limit]
+
+
+def report(
+    cards: int, crates: int, chosen: bool, pool: int, runs: dict[str, Run]
+) -> str:
+    """Each measure with its budget and margin, and each build's CPU-seconds and load."""
+    how = "as --crates gave" if chosen else "as the tree's grouping gives"
     lines = [
-        f"{cards:,} cards: clones of {pool} real card files, in {shards} crates",
+        f"{cards:,} cards: clones of {pool} real card files, in {crates} set crates "
+        f"({how})",
         "",
     ]
-    for label, run in runs.items():
-        lines.append(
-            f"{label:<26}{checks.took(run.wall, run.seconds):>34}"
-            f"   peak {gib(run.rss)}"
+    for (name, value), run in zip(measures(runs).items(), [*runs.values(), None]):
+        budget = BUDGETS[name]
+        margin = budget.limit - value
+        verdict = "ok" if margin >= 0 else "MISSED"
+        held = f", held to {shown(budget.limit, budget.unit)} ({budget.held})" * bool(
+            budget.held
         )
-    largest = max(runs.items(), key=lambda item: item[1].rss)
-    lines.append(
-        f"{'largest compiler process':<26}{gib(largest[1].rss):>34}   ({largest[0]})"
-    )
+        line = (
+            f"{name:<26}{shown(value, budget.unit):>12}   budget "
+            f"{shown(budget.plan, budget.unit)}{held}, margin "
+            f"{shown(margin, budget.unit)}  {verdict}"
+        )
+        if run is not None:
+            line += (
+                f"\n{'':<26}{run.cpu:>10.0f} s CPU, {run.wall:.1f} s on the clock, "
+                f"peak load {run.load:.0f}, peak process {run.rss / GIB:.2f} GiB"
+            )
+        lines.append(line)
+    lines.append(clock.load_note())
     return "\n".join(lines)
+
+
+def store_note(path: Path) -> str:
+    """The size and card count of the card store at `path`."""
+    with card_store.Store(path) as store:
+        count = len(store.names("card"))
+    return f"{path.stat().st_size / 2**20:.1f} MiB, {count:,} card keys"
 
 
 @dataclass
@@ -382,11 +251,11 @@ def measure_scripts(pool: list[Source]) -> Scripts:
     slugs = sorted({nearest.slug(s.name) for s in pool})
     with tempfile.TemporaryDirectory() as tmp:
         results, printed = Path(tmp) / "results.jsonl", Path(tmp) / "out.txt"
-        clock = checks.Clock()
+        timer = clock.Clock()
         began = time.monotonic()
         with open(printed, "w") as out:
             code = script_checks.run(slugs, results, out=out)
-        wall, adjusted = time.monotonic() - began, clock.now()
+        wall, adjusted = time.monotonic() - began, timer.now()
         output = printed.read_text()
         print(output, end="", file=sys.stderr)
         if code != 0:
@@ -410,7 +279,7 @@ def script_report(scripts: Scripts, pool: list[Source], cards: int) -> str:
     clones = clone_seconds(scripts.cards, pool, cards)
     # The run's checks overlap on its threads: the clones' would as much.
     parallel = max(spent / scripts.checking, 1.0) if scripts.checking > 0 else 1.0
-    run = checks.took(scripts.wall, scripts.seconds)
+    run = clock.took(scripts.wall, scripts.seconds)
     lines = [
         "",
         f"{'script checks':<26}{run:>34}   {scripts.checks:,} checks: the spec moments "
@@ -424,38 +293,48 @@ def script_report(scripts: Scripts, pool: list[Source], cards: int) -> str:
 
 
 def scale(args: argparse.Namespace) -> int:
-    pool = sources()
+    pool, left = sources()
+    for path, why in left.items():
+        print(f"scale: left out {path.relative_to(paths.REPO)}: {why}", file=sys.stderr)
     root = paths.cache_root() / "scale"
-    root.mkdir(exist_ok=True)
-    print(f"scale: generating {args.cards:,} cards in {root}", file=sys.stderr)
-    shards = generate(root, args.cards, args.crates, pool)
-    if (root / "target").exists():
-        # The shards' artifacts and incremental state from an earlier run would make a cold
-        # build warm.
-        subprocess.run(
-            ["cargo", "clean", *[f"--package={s}" for s in ["all", *shards]]],
-            cwd=root,
-            env={**os.environ, "CARGO_TARGET_DIR": str(root / "target")},
-            capture_output=True,
-            check=False,
-        )
-    print("scale: warming the engine crates", file=sys.stderr)
-    timed(["cargo", "check", "--package=beryl_cards"], root)
-    timed(["cargo", "build", "--release", "--package=beryl_cards"], root)
-    runs: dict[str, Run] = {}
-    print("scale: cold cargo check", file=sys.stderr)
-    runs["cold cargo check"] = timed(["cargo", "check", "--workspace"], root)
-    print("scale: release build", file=sys.stderr)
-    runs["release build"] = timed(
-        ["cargo", "build", "--release", "--package=all"], root
+    crates = plan(args.cards, args.crates, tree_groups())
+    print(
+        f"scale: writing {args.cards:,} clones in {len(crates)} crates to {root}",
+        file=sys.stderr,
     )
-    print("scale: one-card rebuild", file=sys.stderr)
-    edit_card(root)
-    runs["one-card rebuild (check)"] = timed(["cargo", "check", "--workspace"], root)
-    print("scale: script checks", file=sys.stderr)
-    scripts = measure_scripts(pool)
-    print(report(args.cards, len(shards), len(pool), runs))
-    print(script_report(scripts, pool, args.cards))
+    names = generate(root, crates, pool)
+    print(f"scale: scratch store {store_note(root / 'data' / 'card-store.tsv')}")
+    print(f"scale: the tree's store {store_note(card_store.STORE)}")
+    # The scratch crates' artifacts and incremental state from an earlier run would make a
+    # cold build warm.
+    subprocess.run(
+        ["cargo", "clean", *[f"--package={n}" for n in [REGISTRY, *names]]],
+        cwd=root / "rust",
+        env=cargo_env(root),
+        capture_output=True,
+        check=False,
+    )
+    print("scale: building the checkout's crates the cards use", file=sys.stderr)
+    timed(["cargo", "check", f"--package={WARM}"], root)
+    timed(["cargo", "build", "--release", f"--package={WARM}"], root)
+    check = ["cargo", "check", f"--package={REGISTRY}", "--features=scenarios"]
+    runs: dict[str, Run] = {}
+    print("scale: cold check", file=sys.stderr)
+    runs["cold check"] = timed(check, root)
+    print("scale: release build", file=sys.stderr)
+    release = ["cargo", "build", "--release", f"--package={REGISTRY}"]
+    runs["release build"] = timed([*release, f"--bin={BINARY}"], root)
+    print("scale: one-edit rebuild", file=sys.stderr)
+    edit_card(root, names)
+    runs["one-edit rebuild"] = timed(check, root)
+    print(report(args.cards, len(crates), args.crates is not None, len(pool), runs))
+    if not args.no_scripts:
+        print("scale: script checks", file=sys.stderr)
+        print(script_report(measure_scripts(pool), pool, args.cards))
+    over = missed(measures(runs))
+    if args.assert_ and over:
+        print(f"scale: over budget: {', '.join(over)}", file=sys.stderr)
+        return 1
     return 0
 
 
@@ -468,7 +347,21 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "--cards", type=int, default=DEFAULT_CARDS, help="definitions to build"
     )
     p.add_argument(
-        "--crates", type=int, default=DEFAULT_CRATES, help="crates holding them"
+        "--crates",
+        type=int,
+        default=None,
+        help="set crates holding them (default: as the tree's grouping gives)",
+    )
+    p.add_argument(
+        "--assert",
+        dest="assert_",
+        action="store_true",
+        help="exit non-zero when a measure misses its budget",
+    )
+    p.add_argument(
+        "--no-scripts",
+        action="store_true",
+        help="skip measuring what the pooled cards' script checks cost",
     )
     p.set_defaults(func=scale)
 
