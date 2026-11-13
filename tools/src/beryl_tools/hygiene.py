@@ -1,12 +1,17 @@
 """What a branch may not carry into staging, which the fast check refuses before any lane runs
 (checks.py): conflict markers, commit subjects that are not short Conventional Commits, and
-symlinks checked out or committed as plain files."""
+symlinks checked out or committed as plain files. The same module holds the cheap source checks
+(file length, Markdown and Python formatting) that cause most failures of the fast check, so
+they fail in seconds, before the build, and `just precheck` runs them on the staged files.
+"""
 
 from __future__ import annotations
 
 import re
+import subprocess
+import sys
 
-from . import checks, paths
+from . import changes, checks, file_length, paths
 
 COMMIT: re.Pattern[str] = re.compile(
     r"^(feat|fix|perf|refactor|test|docs|build|ci|chore|style|revert)"
@@ -19,7 +24,50 @@ TEXT_SUFFIXES = (".py", ".rs", ".md", ".toml", ".json", ".ts", ".tsx", ".css", "
 def problems(base: str, changed: list[str]) -> list[str]:
     """Everything wrong with the branch since `base`, whose `changed` paths are checked for
     conflict markers; one line each."""
-    return conflict_markers(changed) + commit_problems(base) + symlink_problems(base)
+    return (
+        conflict_markers(changed)
+        + commit_problems(base)
+        + symlink_problems(base)
+        + source_problems(changed)
+    )
+
+
+def source_problems(changed: list[str]) -> list[str]:
+    """The checks that need no build and take about 3 seconds in all: no source file over the
+    length limit (file_length.py), and the `changed` Markdown and Python files formatted as
+    mdformat and black would write them."""
+    found = [
+        f"file-length: {line}"
+        for line in file_length.check(paths.REPO, file_length.ALLOWLIST)
+    ]
+    markdown = set(changes.markdown_files())
+    found += unformatted(
+        "mdformat", [p for p in changed if p in markdown and (paths.REPO / p).is_file()]
+    )
+    found += unformatted(
+        "black",
+        [p for p in changed if p.endswith(".py") and (paths.REPO / p).is_file()],
+        "--quiet",
+    )
+    return found
+
+
+def unformatted(tool: str, files: list[str], *flags: str) -> list[str]:
+    """One line per file that `tool --check` would rewrite; none for no files."""
+    if not files:
+        return []
+    out = subprocess.run(
+        [sys.executable, "-m", tool, "--check", *flags, *files],
+        cwd=paths.REPO,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if out.returncode == 0:
+        return []
+    return [
+        f"{tool}: {line}" for line in (out.stdout + out.stderr).splitlines() if line
+    ] + [f"{tool}: run `just fmt`"]
 
 
 def conflict_markers(files: list[str]) -> list[str]:
@@ -72,3 +120,17 @@ def symlink_problems(base: str) -> list[str]:
             rel = row.partition("\t")[2]
             problems.append(f"{rel}: committed a symlink as a file; `{fix}`")
     return problems
+
+
+def staged() -> list[str]:
+    """The added, copied, modified and renamed paths in the index."""
+    out = checks.git("diff", "--cached", "--name-only", "--diff-filter=ACMR")
+    return out.splitlines()
+
+
+if __name__ == "__main__":
+    # `just precheck`: the cheap source checks on the staged files, for a pre-commit hook.
+    found: list[str] = source_problems(staged())
+    for line in found:
+        print(f"precheck: {line}")
+    sys.exit(1 if found else 0)

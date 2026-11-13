@@ -321,6 +321,11 @@ test-py *args:
 check:
     {{ by }} check
 
+# The cheap source checks (file length, Markdown and Python formatting) on the staged files; also the first step of the fast check, so it fails in seconds
+[group('checks')]
+precheck:
+    cd tools && uv run --quiet python -m beryl_tools.hygiene
+
 # Slow CI, or some of its lanes: repo, python, rust, script, ui, app, shots, ui-test, oracle (cards changed since master and a sample; every card when the exporters change; all nightly), counts (budget 300 s, 450 s on Windows)
 [group('checks')]
 ci *lanes:

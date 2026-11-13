@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 import subprocess
@@ -11,6 +12,7 @@ from beryl_tools import (
     bisect,
     build_paths,
     checks,
+    file_length,
     hygiene,
     oracles,
     paths,
@@ -545,3 +547,30 @@ def test_a_session_runs_rust_tests_as_the_check_does() -> None:
         "-p",
         "beryl_app",
     ]
+
+
+def test_a_file_over_the_length_limit_fails_the_fast_check_before_any_lane_starts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    over = f"file-length: tools/src/beryl_tools/long.py: 801 lines, over {file_length.LIMIT}"
+    monkeypatch.setattr(checks, "branch_base", lambda: "")
+    monkeypatch.setattr(checks, "changed_paths", lambda base: ["tools/src/x.py"])
+    monkeypatch.setattr(checks.speed, "start_background", lambda: "")
+    monkeypatch.setattr(hygiene, "source_problems", lambda changed: [over])
+
+    def no_lanes(*args: object) -> int:
+        raise AssertionError("a lane started although a cheap check failed")
+
+    monkeypatch.setattr(checks, "run_lanes", no_lanes)
+    assert checks.fast(argparse.Namespace()) == 1
+
+
+def test_unformatted_markdown_is_named_without_a_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "a.md").write_text("# Title\n* item\n")
+    monkeypatch.setattr(hygiene.paths, "REPO", tmp_path)
+    found = hygiene.unformatted("mdformat", ["a.md"])
+    assert found and found[0].startswith("mdformat:")
+    (tmp_path / "a.md").write_text("# Title\n\n- item\n")
+    assert hygiene.unformatted("mdformat", ["a.md"]) == []
