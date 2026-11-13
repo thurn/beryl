@@ -2,7 +2,16 @@
 // of the table as each turn begins, in a display face over two rosettes of interlaced circles
 // turning against each other on a smoky band, in the player's color (cyan) or the opponent's
 // (ember). It takes no pointer, and one shows at a time.
+import type { ReactNode } from "react";
 import type { Side } from "../generated/protocol";
+
+/** Where an announcement is drawn: an element that is no box of its own (`display:
+ * contents`), always there, on which the stage writes how far through each announcement is
+ * (stage/dom.ts `notice`). Written on the table instead, that number was inherited by every
+ * element on it, and the whole table was restyled every frame of every banner. */
+export function NoticeSlot({ children }: { children?: ReactNode }) {
+  return <div className="stage-notices">{children}</div>;
+}
 
 /** `count` circles of radius `r` whose centers lie `r` from the middle: each passes through the
  * middle, and together they interlace into a rosette. */

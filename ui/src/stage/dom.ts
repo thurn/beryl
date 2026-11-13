@@ -333,10 +333,17 @@ export class DomSurface implements Surface {
   }
 
   notice(kind: string, progress?: number) {
-    // The chrome draws its announcements beside the card layer: both read the number here.
-    const style = this.#layer.parentElement?.style;
-    if (progress === undefined) style?.removeProperty(`--notice-${kind}`);
-    else style?.setProperty(`--notice-${kind}`, String(progress));
+    // The chrome draws its announcements beside the card layer, each inside an element of
+    // its own that is always there (game/TurnBanner.tsx `NoticeSlot`): the number is written on
+    // those, which only the announcements inherit. A table drawn without them has it written
+    // on the table.
+    const table = this.#layer.parentElement;
+    if (!table) return;
+    const wrappers = table.querySelectorAll<HTMLElement>(".stage-notices");
+    for (const { style } of wrappers.length ? wrappers : [table]) {
+      if (progress === undefined) style.removeProperty(`--notice-${kind}`);
+      else style.setProperty(`--notice-${kind}`, String(progress));
+    }
   }
 
   mark(on: On, mark: Mark, shown?: number) {
@@ -363,9 +370,12 @@ export class DomSurface implements Surface {
   }
 
   effect(on: On, { name, layer }: Omit<Drawn, "progress">, progress?: number) {
-    // The table shaking as a blow lands is drawn on the whole table, the layer's parent,
-    // whatever the blow landed on: Arena's camera shakes (stage.css `[data-shaking]`).
-    const table = this.#layer.parentElement;
+    // The table shaking as a blow lands is drawn on the whole table, whatever the blow landed
+    // on: Arena's camera shakes (stage.css `[data-shaking]`). On the desktop that is the stage
+    // the table is scaled in (game/Stage.tsx), which keeps a layer of its own, so a shake moves
+    // that layer; on the phone it is the board, the layer's parent.
+    const board = this.#layer.parentElement;
+    const table = board?.closest<HTMLElement>(".stage") ?? board;
     if (name === "shake") {
       if (!table) return;
       if (progress === undefined) {

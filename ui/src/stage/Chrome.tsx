@@ -33,7 +33,7 @@ import { useStageWidth } from "../game/Stage";
 import { StepBanner, useBannerUp } from "../game/StepBanner";
 import { combatBanner, STEP_NAMES } from "../game/stepLabels";
 import { MANA_POOLS } from "../game/tableRows";
-import { TurnAnnouncement } from "../game/TurnBanner";
+import { NoticeSlot, TurnAnnouncement } from "../game/TurnBanner";
 import {
   exiledWith,
   held as heldBy,
@@ -155,17 +155,19 @@ export function Hud({
           </div>
         );
       })}
-      {scry && (
-        <div
-          className="hud library-choice-hud stage-notice-scry"
-          role="status"
-          style={{ top: SCRY_TOP[scry.notice.player] }}
-        >
-          <Button variant="secondary" onClick={onLog}>
-            {scryWords(scry.notice)}
-          </Button>
-        </div>
-      )}
+      <NoticeSlot>
+        {scry && (
+          <div
+            className="hud library-choice-hud stage-notice-scry"
+            role="status"
+            style={{ top: SCRY_TOP[scry.notice.player] }}
+          >
+            <Button variant="secondary" onClick={onLog}>
+              {scryWords(scry.notice)}
+            </Button>
+          </div>
+        )}
+      </NoticeSlot>
       {opponentActing(view, waiting) && !bannerUp && (
         <div
           className="hud thinking-hud"
@@ -182,19 +184,23 @@ export function Hud({
           />
         </div>
       ))}
-      {banner && (
-        <StepBanner
-          key={`${banner.title}|${banner.detail}`}
-          shown={bannerUp}
-          coin={coin !== undefined}
-          staged={coin !== undefined}
-          {...banner}
-        />
-      )}
+      <NoticeSlot>
+        {banner && (
+          <StepBanner
+            key={`${banner.title}|${banner.detail}`}
+            shown={bannerUp}
+            coin={coin !== undefined}
+            staged={coin !== undefined}
+            {...banner}
+          />
+        )}
+      </NoticeSlot>
       <GameLog log={log} folded open={logOpen} onToggle={onLog} />
-      {turn && (
-        <TurnAnnouncement key={table.turn.number} side={turn.notice.active} />
-      )}
+      <NoticeSlot>
+        {turn && (
+          <TurnAnnouncement key={table.turn.number} side={turn.notice.active} />
+        )}
+      </NoticeSlot>
     </>
   );
 }

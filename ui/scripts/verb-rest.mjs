@@ -84,16 +84,28 @@ export function restSampler({ stage, clock, origin, layer, faults }) {
                 target: middleOf(to),
             };
         });
-        const style = layer.parentElement.style;
+        // Written on each element the chrome draws announcements in (game/TurnBanner.tsx
+        // `NoticeSlot`), or on the table where it draws none; all of them say the same.
+        const table = layer.parentElement;
+        const slots = [...table.querySelectorAll(".stage-notices")];
+        const styles = (slots.length ? slots : [table]).map((e) => e.style);
+        const writtenOf = (kind) => {
+            const all = new Set(
+                styles.map((s) => s.getPropertyValue(`--notice-${kind}`)),
+            );
+            if (all.size > 1)
+                fault(`the ${kind} announcement is written unevenly`);
+            return [...all][0];
+        };
         const notices = stage.shown.notices.map(({ act }) => {
             const kind = act.notice.kind;
-            const written = style.getPropertyValue(`--notice-${kind}`);
+            const written = writtenOf(kind);
             return { kind, through: written === "" ? null : Number(written) };
         });
         // Nothing is left written for an announcement that is over.
         for (const kind of ["turn", "scry", "coin"]) {
             const stale =
-                style.getPropertyValue(`--notice-${kind}`) !== "" &&
+                writtenOf(kind) !== "" &&
                 !notices.some((notice) => notice.kind === kind);
             if (stale) fault(`the ${kind} announcement is still written`);
         }

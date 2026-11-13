@@ -19,7 +19,7 @@ import { GameLog } from "../game/Narration";
 import { Inspect, pileName } from "../game/Piles";
 import { StepBanner, useBannerUp } from "../game/StepBanner";
 import { combatBanner } from "../game/stepLabels";
-import { TurnAnnouncement } from "../game/TurnBanner";
+import { NoticeSlot, TurnAnnouncement } from "../game/TurnBanner";
 import { knownLibraries, zonePiles, type ZonePile } from "../game/zoneViews";
 import { CardScan } from "../mobile/faces";
 import {
@@ -351,36 +351,45 @@ export function Notices({
       : bands.opponentStrip.top + bands.opponentStrip.height + 4;
   return (
     <>
-      {banner && (
-        <div
-          className="phone-announce phone-announce-step"
-          // A coin is tossed mid-table, just above where the turn is announced; a combat
-          // step's banner lies under the opponent's strip.
-          style={{ top: coin ? middle - 95 : edge("opponent") }}
-        >
-          <StepBanner
-            key={`${banner.title}|${banner.detail}`}
-            shown={coin !== undefined || combatUp}
-            coin={coin !== undefined}
-            staged={coin !== undefined}
-            {...banner}
-          />
-        </div>
-      )}
-      {scry && (
-        <div
-          className="phone-pill stage-notice-scry"
-          role="status"
-          style={beside(scry.notice.player)}
-        >
-          {scryWords(scry.notice)}
-        </div>
-      )}
-      {turn && (
-        <div className="phone-announce" style={{ top: middle }}>
-          <TurnAnnouncement key={table.turn.number} side={turn.notice.active} />
-        </div>
-      )}
+      <NoticeSlot>
+        {banner && (
+          <div
+            className="phone-announce phone-announce-step"
+            // A coin is tossed mid-table, just above where the turn is announced; a combat
+            // step's banner lies under the opponent's strip.
+            style={{ top: coin ? middle - 95 : edge("opponent") }}
+          >
+            <StepBanner
+              key={`${banner.title}|${banner.detail}`}
+              shown={coin !== undefined || combatUp}
+              coin={coin !== undefined}
+              staged={coin !== undefined}
+              {...banner}
+            />
+          </div>
+        )}
+      </NoticeSlot>
+      <NoticeSlot>
+        {scry && (
+          <div
+            className="phone-pill stage-notice-scry"
+            role="status"
+            style={beside(scry.notice.player)}
+          >
+            {scryWords(scry.notice)}
+          </div>
+        )}
+      </NoticeSlot>
+      <NoticeSlot>
+        {turn && (
+          <div className="phone-announce" style={{ top: middle }}>
+            <TurnAnnouncement
+              key={table.turn.number}
+              side={turn.notice.active}
+            />
+          </div>
+        )}
+      </NoticeSlot>
     </>
   );
 }

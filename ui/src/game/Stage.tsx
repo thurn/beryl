@@ -57,6 +57,8 @@ export function Stage({ children }: { children: ReactNode }) {
     width: fit.width,
     height: STAGE.height,
     transform: `scale(${fit.scale})`,
+    // What a shake of the stage is scaled by (stage/stage.css `.stage[data-shaking]`).
+    "--stage-scale": fit.scale,
     "--bleed-x": `${fit.x}px`,
     "--bleed-y": `${fit.y}px`,
     "--shift": `${shift}px`,

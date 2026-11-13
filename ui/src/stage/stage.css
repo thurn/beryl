@@ -205,12 +205,9 @@
 /* The whole table shakes as a blow lands (stage/dom.ts): Arena's camera jolts for about
    170 ms as each attacker lands, blurring the table for three or four frames, and settles
    (IEXcjBn3BXk 22:25.37 to 25.50, 35:35.40 to 35.57). Two quick swings side to side and
-   a little up and down, each smaller than the last, from the stage's `--shake` alone. Only
-   while it shakes does the table carry a `translate`, which would make it the containing
-   block of everything in it. */
-/* The two numbers are not inherited: everything on the table would otherwise be restyled
-   every frame of a shake for a number only the table reads. And the table has a layer of its
-   own while it shakes, so the compositor moves it instead of repainting all of it each frame. */
+   a little up and down, each smaller than the last, from the stage's `--shake` alone.
+   The two numbers are not inherited: everything on the table would otherwise be restyled
+   every frame of a shake for a number only the shaken element reads. */
 @property --shake {
   syntax: "<number>";
   inherits: false;
@@ -221,7 +218,32 @@
   inherits: false;
   initial-value: 1;
 }
-:is(.table, .phone-board)[data-shaking] {
+/* On the desktop the stage the table is scaled in shakes (game/Stage.tsx). It is already
+   moved, so it is already the stacking context and containing block of the table and of the
+   undo button beside it, and it keeps a layer of its own: a shake only moves that layer. A
+   layer made for each blow and dropped after it (as the table's was) made WebKit paint the
+   whole table again twice a blow, the frames combat dropped most. Its `translate` is outside
+   its `scale`, so the swing is scaled by `--stage-scale` to be the table's share as before. */
+.stage {
+  will-change: transform;
+}
+.stage[data-shaking] {
+  --shaken: calc(1 - var(--shake));
+  translate: calc(
+      -50% + sin(var(--shake) * 720deg) * var(--shaken) * var(--shaken) * 0.7% *
+        var(--stage-scale, 1)
+    )
+    calc(
+      -50% + sin(var(--shake) * 540deg + 60deg) * var(--shaken) *
+        var(--shaken) * 0.6% * var(--stage-scale, 1)
+    );
+}
+/* On the phone the board shakes, with a layer only while it does. A layer of its own at all
+   times would make the board a stacking context, and its announcements and pills (z-index
+   800) would then fall under the desktop overlays drawn after it (screens/Game.tsx). Its
+   strikes drop no frames as it is: the board is far smaller to paint than the desktop's
+   table. */
+.phone-board[data-shaking] {
   --shaken: calc(1 - var(--shake));
   will-change: transform;
   translate: calc(
@@ -439,12 +461,15 @@
   transform: scale(calc(1 + 0.08 * var(--flash)));
 }
 /* An announcement (stage/shown.ts `NoticeSurface`): the chrome draws it for as long as its
-   step plays, and the stage writes on the table how far through it is, a number from 0 to 1
-   named for its kind. Each look is drawn from that number alone, as an effect's is, and the
+   step plays, and the stage writes how far through it is, a number from 0 to 1 named for its
+   kind, on the element the chrome draws it in (game/TurnBanner.tsx `NoticeSlot`). Each look is drawn from that number alone, as an effect's is, and the
    skin's own keyframes and exits are off. The turn's banner comes up growing a little,
    stands, and sinks toward the player whose turn it is as it goes (Arena's own sinks and the
    opponent's rises, `IEXcjBn3BXk 19:35.2`, `18:35.0`); its rosettes turn against each other
    throughout. */
+.stage-notices {
+  display: contents;
+}
 .stage-notice,
 .stage-notice :is(.turn-banner-ring-outer, .turn-banner-ring-inner) {
   animation: none;
