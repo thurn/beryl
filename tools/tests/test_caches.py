@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import caches, paths, warm
+from beryl_tools import caches, paths, system, warm
 
 NOW: float = time.time()
 DAY: float = timedelta(days=1).total_seconds()
@@ -130,3 +130,67 @@ def test_low_on_disk_it_leaves_the_shared_target_to_a_clone(
         "ios",
     }
     assert "a clone holds the shared target" in out.getvalue()
+
+
+def bisection_tree(cache: Path, name: str = "bisect-0123456789ab") -> dict[str, Path]:
+    """A bisection tree (bisect.py's `Tree`) under `cache`, with a checked-out file, an
+    incremental folder and a recent build in its rust/target, keyed by what each is."""
+    tree = cache / "ci" / name
+    target = tree / "rust" / "target"
+    made = {
+        "checkout": tree / "Cargo.toml",
+        "bisect incremental": target / "debug" / "incremental" / "crate",
+        "bisect deps": target / "debug" / "deps",
+    }
+    for kind in ("bisect incremental", "bisect deps"):
+        made[kind].mkdir(parents=True)
+    (made["bisect deps"] / "libbuild-0123456789abcdef.rlib").write_bytes(b"x" * 1000)
+    (made["bisect incremental"] / "file").write_bytes(b"x" * 1000)
+    made["checkout"].write_text("[workspace]\n")
+    return made
+
+
+def test_low_on_disk_it_prunes_an_idle_bisection_target_but_not_its_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    made = low_disk_cache(tmp_path, monkeypatch, free=0)
+    tree = bisection_tree(tmp_path)
+    out = io.StringIO()
+    assert caches.run(out) == 0
+    # The recent build fits the budget and stays; the incremental sessions go.
+    assert present(tree) == {"checkout", "bisect deps"}
+    assert "folders of bisect-0123456789ab's target" in out.getvalue()
+    assert "deps" in present(made)
+
+
+def test_with_room_on_disk_it_leaves_bisection_targets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    low_disk_cache(tmp_path, monkeypatch, free=caches.LOW_DISK)
+    tree = bisection_tree(tmp_path)
+    assert caches.run(io.StringIO()) == 0
+    assert present(tree) == set(tree)
+
+
+def test_low_on_disk_it_leaves_a_live_bisection_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    low_disk_cache(tmp_path, monkeypatch, free=0)
+    tree = bisection_tree(tmp_path)
+    out = io.StringIO()
+    lock = tmp_path / "ci" / "bisect-0123456789ab.lock"
+    with system.file_lock(lock):
+        assert caches.run(out) == 0
+    assert present(tree) == set(tree)
+    assert "a bisection holds" in out.getvalue()
+
+
+def test_a_dry_run_lists_a_bisection_target_and_removes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    low_disk_cache(tmp_path, monkeypatch, free=0)
+    tree = bisection_tree(tmp_path)
+    out = io.StringIO()
+    assert caches.run(out, dry_run=True) == 0
+    assert present(tree) == set(tree)
+    assert "would remove 1 folders of bisect-0123456789ab's target" in out.getvalue()

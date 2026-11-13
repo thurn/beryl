@@ -14,6 +14,12 @@ by-64fx: Arq's hourly snapshot keeps every deleted file that predates it for hou
 worktree writes about 15 GB of rust/target, so the disk filled between nightlies. warm.py runs
 this before a new checkout's first clone, so it frees space without waiting for the nightly.
 
+Low-disk mode also prunes each bisection tree's rust/target ([`prune_bisections`]). Those trees
+(bisect.py, `Tree`) are kept between slow-CI runs so their builds stay warm, and are never
+removed, so warm.py's `save` never prunes them: on 2026-11-13 Cygnus's slow CI failed with a
+full disk while its bisection tree held 50.8 GB of rust/target, 18.5 GB of it incremental.
+A tree whose bisection holds its lock is left alone, and its checkout is never touched.
+
 Then, whatever the disk, the shared target is held to its budget, the builds unused longest
 going first (warm.py, `prune`): Enact's remove hook does so for each worktree it saves.
 """
@@ -31,7 +37,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import IO
 
-from . import paths, warm
+from . import paths, system, warm
 
 # The cache folders that hold one folder per checkout, named for it (`paths.REPO.name`):
 # shots.py's, specs.py's and motion.py's output.
@@ -155,6 +161,52 @@ def prune_target(target: Path, dry_run: bool = False) -> list[Removed] | None:
         return removed
 
 
+def bisections(cache: Path) -> list[Path]:
+    """The bisection trees under `cache`: bisect.py's `Tree`s, `ci/bisect-<key>` and
+    `ci/bisect-<script>-<key>`, each with its lock at `<tree>.lock`."""
+    root = cache / "ci"
+    if not root.is_dir():
+        return []
+    return sorted(
+        p
+        for p in root.glob("bisect-*")
+        if p.is_dir() and not p.is_symlink() and p.suffix != ".lock"
+    )
+
+
+def prune_bisection(tree: Path, dry_run: bool = False) -> list[Removed] | None:
+    """Removes [`spare`] from the bisection `tree`'s rust/target (unless `dry_run`), then holds
+    the rest to the budget (warm.py, `prune`), and returns what [`spare`] removed with its
+    sizes. None, touching nothing, while a bisection holds the tree's lock: it may be building
+    there. Only rust/target goes, which the next bisection rebuilds; the checkout stays.
+    """
+    target = tree / "rust" / "target"
+    try:
+        with system.file_lock(tree.with_suffix(".lock"), timeout=0):
+            removed: list[Removed] = []
+            if not target.is_dir() or target.is_symlink():
+                return removed
+            for path in spare(target):
+                removed.append(Removed(path, size(path)))
+                if not dry_run:
+                    shutil.rmtree(path, ignore_errors=True)
+            if not dry_run:
+                warm.prune(target)
+            return removed
+    except system.LockHeld:
+        return None
+
+
+def prune_bisections(cache: Path, out: IO[str], dry_run: bool = False) -> None:
+    """[`prune_bisection`] on each of the [`bisections`] under `cache`, reporting to `out`."""
+    for tree in bisections(cache):
+        removed = prune_bisection(tree, dry_run=dry_run)
+        if removed is None:
+            out.write(f"prune-caches: a bisection holds {tree}; left it\n")
+        else:
+            report(removed, out, dry_run, f"folders of {tree.name}'s target")
+
+
 def free_space(path: Path) -> int:
     """The bytes free on the volume that holds `path`."""
     return shutil.disk_usage(path).free
@@ -200,6 +252,7 @@ def run(
             out.write("prune-caches: a clone holds the shared target; left it\n")
         else:
             report(target, out, dry_run, "folders of the shared target")
+        prune_bisections(cache, out, dry_run=dry_run)
     if not dry_run and (cache / "target").is_dir():
         with warm.try_locked() as held:
             if held:

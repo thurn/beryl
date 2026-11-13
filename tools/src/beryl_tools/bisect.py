@@ -139,7 +139,9 @@ def suspects(outcomes: list[Outcome]) -> list[Suspect]:
 
 class Tree:
     """A detached worktree under the cache, kept between runs so that its builds stay warm. One
-    per repository, since git registers a worktree with its repository."""
+    per repository, since git registers a worktree with its repository. Its lock is at
+    `<path>.lock`: `by prune-caches` (caches.py) prunes its rust/target when the disk is low,
+    unless a bisection holds that lock."""
 
     def __init__(self, repo: Path, name: str = "bisect") -> None:
         """The tree `name`: slow CI's is `bisect`, and the browser sweep's has its own, so that
