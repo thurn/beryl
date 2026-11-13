@@ -197,11 +197,17 @@ class Run:
         seconds: float,
         results: Path,
         killed: str | None = None,
+        cpu: float | None = None,
     ) -> list[dict[str, object]]:
         """A finished step's records: one per check it reported, and one for the step itself
         when it reported none, or failed though none of them did. A step that was killed marks
         its failures `timeout` with why (`hang`, `wall` or `stopped`, checks.lane_steps): a kill
         says nothing about a check, so none of them waits for a verdict (verdicts.settle).
+
+        `cpu` is the CPU seconds of the step's whole process tree, which each record gets a share
+        of as `cpu_seconds` (none where it is None, as on Windows). A step that ran many checks
+        has no per-check measurement, so its CPU time is split among them in proportion to their
+        wall `seconds`, evenly if all of those are 0; a skipped check gets none.
         """
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         load = round(system.loadavg()[0], 2)
@@ -218,6 +224,16 @@ class Run:
         for c in checks:
             if c["check"] in pending:
                 c["outcome"] = PENDING_OUTCOMES.get(str(c["outcome"]), c["outcome"])
+        ran = [c for c in checks if c["outcome"] != "skip"]
+        weight = sum(float(str(c["seconds"])) for c in ran)
+
+        def share(c: dict[str, object]) -> float:
+            if cpu is None or c["outcome"] == "skip":
+                return 0.0
+            if weight <= 0:
+                return cpu / len(ran)
+            return cpu * float(str(c["seconds"])) / weight
+
         records: list[dict[str, object]] = [
             {
                 "time": now,
@@ -234,6 +250,9 @@ class Run:
             }
             for c in checks
         ]
+        if cpu is not None:
+            for r, c in zip(records, checks):
+                r["cpu_seconds"] = round(share(c), 3)
         if killed:
             for r in records:
                 if r["outcome"] == "fail":
@@ -248,10 +267,11 @@ class Run:
         seconds: float,
         results: Path,
         killed: str | None = None,
+        cpu: float | None = None,
     ) -> list[dict[str, object]]:
         """Logs a finished step's records and returns them (`records`)."""
         try:
-            records = self.records(lane, step, passed, seconds, results, killed)
+            records = self.records(lane, step, passed, seconds, results, killed, cpu)
         except Exception as e:  # Logging never fails a check.
             warn(e)
             return []

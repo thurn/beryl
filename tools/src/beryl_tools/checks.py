@@ -225,6 +225,7 @@ def lane_steps(
         nonlocal hung
         limit, why = limits.limit(lane.name, step.name)
         t, wall, before = clock.now(), clock.wall(), steps.waited()
+        cpu = steps.cpu_used()
         with run.step(env) as (step_env, results):
             code, output = steps.run(
                 cmd, step.cwd, step_env, steps.tokens(lane.name, step.name), limit
@@ -239,7 +240,15 @@ def lane_steps(
             if code is None:
                 killed = "stopped" if steps.stopped.is_set() else "wall"
                 killed = "hang" if seconds >= limit and not steps.walled() else killed
-            records = run.log(lane.name, step.name, code == 0, wall, results, killed)
+            records = run.log(
+                lane.name,
+                step.name,
+                code == 0,
+                wall,
+                results,
+                killed,
+                None if system.WINDOWS else steps.cpu_used() - cpu,
+            )
         if code == 0:
             limits.passed(lane.name, step.name, seconds)
         if output.strip():

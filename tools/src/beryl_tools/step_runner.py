@@ -4,7 +4,9 @@ past its hang limit (hang.py), after waiting for the CPU tokens it wants (tokens
 from __future__ import annotations
 
 import math
+import os
 import subprocess
+import time
 import tempfile
 import threading
 from pathlib import Path
@@ -12,6 +14,32 @@ from typing import Any
 
 from . import system, tokens
 from .clock import Clock
+
+
+def reap(
+    proc: subprocess.Popen[Any], timeout: float | None
+) -> tuple[int | None, float]:
+    """Waits up to `timeout` seconds (forever for None) for `proc` to exit: its exit code, None
+    if it is still running, and the CPU seconds (user plus system) it and every process under it
+    used. The kernel adds a waited-for process's own waited-for descendants to its usage, so
+    cargo's rustc processes and a test's helpers count, and a process that was orphaned (a
+    daemon, or a browser page launchd started) does not. Windows has no `wait4`: the code is
+    `proc.wait`'s and the CPU time is 0."""
+    if system.WINDOWS:
+        try:
+            return proc.wait(timeout), 0.0
+        except subprocess.TimeoutExpired:
+            return None, 0.0
+    deadline = None if timeout is None else time.monotonic() + timeout
+    while True:
+        # Popen would discard the usage `wait4` returns, so wait here and tell it the result.
+        pid, status, usage = os.wait4(proc.pid, os.WNOHANG)
+        if pid:
+            proc.returncode = os.waitstatus_to_exitcode(status)
+            return proc.returncode, usage.ru_utime + usage.ru_stime
+        if deadline is not None and time.monotonic() >= deadline:
+            return None, 0.0
+        time.sleep(0.02)
 
 
 class Steps:
@@ -36,6 +64,8 @@ class Steps:
         # Adjusted and wall seconds each lane (the thread that runs it) spent waiting for CPU
         # tokens, which the lane's and its steps' times leave out (checks.lane_steps).
         self.waits: dict[int, tuple[float, float]] = {}
+        # The CPU seconds the steps each lane ran have used so far (`reap`), the same way.
+        self.cpu: dict[int, float] = {}
         # The lanes with heavy steps (`tokens.step_tokens`) still running, which share the
         # pool between them (`play` and `run_lane` keep it).
         self.heavy_lanes = 0
@@ -47,6 +77,11 @@ class Steps:
         far."""
         with self.lock:
             return self.waits.get(threading.get_ident(), (0.0, 0.0))
+
+    def cpu_used(self) -> float:
+        """The CPU seconds of the steps the calling thread's lane has run so far."""
+        with self.lock:
+            return self.cpu.get(threading.get_ident(), 0.0)
 
     def wall_left(self) -> float:
         """Wall seconds before the wall limit, infinite without one."""
@@ -130,13 +165,12 @@ class Steps:
                         if mine <= 0:
                             hung = system.process_tree(proc.pid)
                         system.kill_tree(proc.pid)
-                        proc.wait()
+                        self.charge(reap(proc, None)[1])
                         break
-                    try:
-                        code = proc.wait(timeout=min(0.5, left))
+                    code, used = reap(proc, min(0.5, left))
+                    if code is not None:
+                        self.charge(used)
                         break
-                    except subprocess.TimeoutExpired:
-                        continue
             finally:
                 with self.lock:
                     self.running.discard(proc)
@@ -147,6 +181,12 @@ class Steps:
                     f"{output.rstrip()}\n--- processes when it was killed ---\n{hung}\n"
                 )
             return code, output
+
+    def charge(self, seconds: float) -> None:
+        """Adds a finished step's CPU seconds to the calling thread's lane."""
+        with self.lock:
+            me = threading.get_ident()
+            self.cpu[me] = self.cpu.get(me, 0.0) + seconds
 
     def stop(self) -> None:
         """Kills every running step and starts no more."""

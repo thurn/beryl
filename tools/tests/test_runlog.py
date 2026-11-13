@@ -2,13 +2,14 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
-from beryl_tools import checks, oracles, paths, runlog, verdicts
+from beryl_tools import checks, oracles, paths, runlog, system, verdicts
 
 
 def logged() -> list[dict[str, object]]:
@@ -353,3 +354,37 @@ def test_landed_commits_are_master_s_since_the_window_began(
     git("update-ref", "refs/remotes/origin/master", "HEAD")
     monkeypatch.setattr(paths, "REPO", repo)
     assert runlog.landed(datetime.now(timezone.utc) - timedelta(days=1)) == 3
+
+
+BUSY = "import time; t = time.process_time(); [None for _ in iter(lambda: time.process_time() - t < 0.3, False)]"
+
+
+@pytest.mark.skipif(system.WINDOWS, reason="no wait4, so no CPU time on Windows")
+def test_a_step_logs_the_cpu_time_of_its_whole_process_tree_split_by_wall_time() -> (
+    None
+):
+    # The busy loop runs two processes down, as cargo's rustc does.
+    then = f"{sys.executable} -c '{BUSY}'"
+    lane = checks.Lane("rust").step(
+        "tests", reports(("rust:a", "pass", 3.0), ("rust:b", "pass", 1.0), then=then)
+    )
+    assert checks.run_lanes([lane], "ci", 60) == 0
+    a, b = logged()
+    cpu_a, cpu_b = float(a["cpu_seconds"]), float(b["cpu_seconds"])
+    assert cpu_a + cpu_b >= 0.3
+    assert cpu_a == pytest.approx(3 * cpu_b, abs=0.01)
+
+
+def test_checks_share_a_steps_cpu_time_evenly_when_none_has_wall_time() -> None:
+    run = runlog.Run("ci")
+    with run.step({}) as (_, path):
+        path.write_text(
+            "".join(
+                json.dumps({"check": c, "outcome": o, "seconds": 0}) + "\n"
+                for c, o in (("a", "pass"), ("b", "pass"), ("c", "skip"))
+            )
+        )
+        records = run.records("rust", "tests", True, 0.0, path, cpu=2.0)
+    assert [r["cpu_seconds"] for r in records] == [1.0, 1.0, 0.0]
+    with run.step({}) as (_, path):
+        assert "cpu_seconds" not in run.records("rust", "fmt", True, 1.0, path)[0]
