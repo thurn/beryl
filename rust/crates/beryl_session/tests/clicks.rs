@@ -799,7 +799,10 @@ fn a_click_on_another_decision_or_an_earlier_state_is_refused() {
 
 /// The click command through a session, as the app sends it: the reply is the prompt's new
 /// state, the latest view keeps it for a UI that takes the game up again, and a click that
-/// answers closes the decision and plays the game on.
+/// answers says so. Every step waits on the session's thread, which waits on the human, so
+/// nothing here runs beside the game playing on. What a second click finds once the game
+/// does play on depends on how far it got; `sessions.rs` checks that race through `choose`,
+/// and `a_click_on_another_decision_or_an_earlier_state_is_refused` checks the refusal.
 #[test]
 fn a_session_takes_clicks_and_its_latest_view_keeps_the_prompt() {
     let (table, state) = beryl_scenario::position(&CARDS, &TEFERI_UNTAPS).unwrap();
@@ -863,23 +866,11 @@ fn a_session_takes_clicks_and_its_latest_view_keeps_the_prompt() {
     };
     assert_eq!(latest.prompt, prompt);
     assert_eq!(latest.id, decision.id);
-    // The button answers: the decision is closed, and the game plays on to another.
+    // The button answers the untap.
     let confirm = Click::Button {
         button: ButtonId::Confirm,
     };
     assert_eq!(sessions.click(click(1, confirm)), Ok(ClickReply::Answered));
-    // A second click is refused. The game plays on in the background, so by then the player
-    // has no decision open or has a later one: either way, not this one.
-    let again = sessions.click(click(1, confirm));
-    let refused = match again {
-        Err(SessionError::NotDeciding) => true,
-        Err(SessionError::StaleDecision {
-            decision: answered, ..
-        }) => answered == decision.id,
-        _ => false,
-    };
-    assert!(refused, "{again:?}");
-    assert_ne!(deciding().id, decision.id);
 }
 
 fn owned(deck: &[(u8, &str)]) -> Vec<(u8, String)> {
