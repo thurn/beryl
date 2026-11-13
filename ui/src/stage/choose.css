@@ -10,6 +10,17 @@
   align-items: center;
   pointer-events: none;
 }
+/* The ways lie in one row as tall as the tallest, each from the row's top: every card at
+   one height and every label starting at one height under them, however many lines a label
+   wraps to. Centered in the flex row, a way with a longer label stood taller and so drew its
+   card higher than the others. */
+.stage-ways {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: center;
+  align-content: center;
+  align-items: start;
+}
 .stage-way {
   display: flex;
   flex-direction: column;

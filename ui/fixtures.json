@@ -477,6 +477,12 @@
       "where": ["opponent's spell on the stack"]
     },
     {
+      "name": "choice-overload",
+      "board": "choice-overload",
+      "until": "first priority decision for seat 0",
+      "clicks": ["Winds of Abandon", "press decline"]
+    },
+    {
       "name": "menu-choices",
       "board": "menu-choices",
       "until": "first priority decision for seat 0",

@@ -9,7 +9,8 @@
  * totals; each item of the desktop's stack marked as its controller's, with the X it was
  * announced with and the costs a spell was cast with (a phone's stack is its cards' scans
  * alone) and clear of every card of your hand; a player's piles on the stage ending on one
- * line and lying alike; and no card drawn that the view does not have.
+ * line and lying alike; the ways to use a card each drawing its card at one top and size
+ * and its label from one height; and no card drawn that the view does not have.
  * Each is described for a failure message. Nothing on a page with neither. */
 export async function screenFaults(page) {
     return page.evaluate(() => {
@@ -207,6 +208,38 @@ export async function screenFaults(page) {
                 if (pile.lies !== first.lies) {
                     faults.push(`${what} lies ${pile.lies} for ${first.lies}`);
                 }
+            }
+        }
+        // The ways to use a card (src/stage/Choose.tsx `Ways`) lie alike: each way's card
+        // at one top and one size, and each label starting at one height under them, however
+        // many lines it wraps to.
+        const ways = [...document.querySelectorAll(".stage-way")].map((way) => {
+            const box = (selector) =>
+                way.querySelector(selector)?.getBoundingClientRect();
+            const face = box(".stage-way-face");
+            const says = box(".stage-way-says");
+            return {
+                name: way.getAttribute("aria-label"),
+                lies: face
+                    ? [face.top, face.width, face.height]
+                          .map(Math.round)
+                          .join(" ")
+                    : "no card",
+                says: says ? Math.round(says.top) : null,
+            };
+        });
+        for (const way of ways.slice(1)) {
+            const [first] = ways;
+            const what = `the way "${way.name}" against "${first.name}"`;
+            if (way.lies !== first.lies) {
+                faults.push(
+                    `${what}: its card lies ${way.lies} for ${first.lies}`,
+                );
+            }
+            if (way.says !== first.says) {
+                faults.push(
+                    `${what}: its label starts at ${way.says} for ${first.says}`,
+                );
             }
         }
         for (const slot of drawn.keys()) {

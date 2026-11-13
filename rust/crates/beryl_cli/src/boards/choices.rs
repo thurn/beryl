@@ -251,4 +251,21 @@ pub(super) const CHOICES: &[Scenario] = &[
         .library(P0, LANDS)
         .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS),
+    // Winds of Abandon with the mana to overload it, whose two ways to be cast are named at
+    // different lengths ("Cast Winds of Abandon with overload" and its cost wrap to more
+    // lines), and two creatures of the opponent's for it to exile.
+    Scenario::new("choice-overload")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .permanents(P0, &[PLAINS_, PLAINS_, PLAINS_, ISLAND_, ISLAND_, ISLAND_])
+        .hand(P0, &[WINDS_OF_ABANDON])
+        .library(P0, LANDS)
+        .permanents(
+            P1,
+            &[
+                Permanent::new(TRINKET_MAGE),
+                Permanent::new(SNAPCASTER_MAGE),
+                ISLAND_,
+            ],
+        )
+        .library(P1, LANDS),
 ];
