@@ -201,54 +201,122 @@ fn a_humans_own_spell_resolves_without_their_priority_under_smart_stops_only() {
     );
 }
 
+/// The human's main phase with a Thundertrap Trainer to cast and a creature already in play,
+/// and an opponent holding Get Lost with the mana for it: the opponent can answer the Trainer
+/// on the stack by destroying the creature.
+const RESPONSE: Scenario = Scenario::new("response")
+    .permanents(
+        P0,
+        &[
+            Permanent::new(JACE_VRYNS_PRODIGY),
+            Permanent::new(ISLAND),
+            Permanent::new(ISLAND),
+        ],
+    )
+    .hand(P0, &[THUNDERTRAP_TRAINER])
+    .library(P0, &[ISLAND; 8])
+    .permanents(P1, &[Permanent::new(PLAINS), Permanent::new(PLAINS)])
+    .hand(P1, &[GET_LOST])
+    .library(P1, &[PLAINS; 8]);
+
+/// Casts a spell whenever it is offered one, and otherwise takes the first candidate.
+struct CastsWhenever;
+
+impl<L: beryl_engine::Layout> beryl_search::Agent<L> for CastsWhenever {
+    fn choose(
+        &mut self,
+        _: beryl_engine::Observation<'_, L>,
+        decision: &beryl_engine::Decision<L>,
+        _: beryl_search::AgentDecision,
+    ) -> beryl_engine::Choice {
+        use beryl_engine::{Choice, Opt};
+
+        (0..decision.len() as u16)
+            .map(Choice)
+            .find(|&c| matches!(decision.candidates.option(c), Some(Opt::Cast { .. })))
+            .unwrap_or(Choice(0))
+    }
+}
+
+/// Checks the human's answers in a game under smart stops: they are never asked to pass to
+/// their own spell, and once an opponent's response above their spell resolves, their spell
+/// resolves without asking them again. Returns how many times the opponent's spell or ability
+/// was on top when they were asked, and how many of their spells resolved unasked that way.
+fn check_responses(asked: &[Asked]) -> (usize, usize) {
+    let theirs = |e: &StackEntry| e.controller != HUMAN;
+    let mut responses = 0;
+    for a in asked.iter().filter(|a| priority_on_a_stack(a)) {
+        assert!(
+            !only_own_doings(a),
+            "asked to pass to their own spell at {:?}",
+            a.view.turn
+        );
+        if a.stack.last().is_some_and(theirs) {
+            responses += 1;
+        }
+    }
+    // Passing to the opponent's response leaves the human's spell beneath it on top once it
+    // resolves: that spell resolves too, without asking them again.
+    let mut resolved_unasked = 0;
+    for pair in asked.windows(2) {
+        let [then, next] = pair else { unreachable!() };
+        let [below @ .., mine, response] = then.stack.as_slice() else {
+            continue;
+        };
+        if kind(&then.view) != Kind::Priority
+            || !theirs(response)
+            || theirs(mine)
+            || !matches!(then.chosen, Candidate::Pass)
+        {
+            continue;
+        }
+        let mut left = below.to_vec();
+        left.push(*mine);
+        assert!(
+            kind(&next.view) != Kind::Priority || next.stack != left,
+            "asked again at their own spell once the response resolved, at {:?}",
+            next.view.turn
+        );
+        resolved_unasked += usize::from(!next.stack.contains(mine));
+    }
+    (responses, resolved_unasked)
+}
+
 #[test]
 fn an_opponents_response_gives_the_human_priority_until_it_resolves() {
-    let (mut responses, mut resolved_unasked) = (0, 0);
-    // A response leaving the stack from above the human's spell is rare (seed 34 has one,
-    // once the mulligan put its bottom picks after the keep).
-    for seed in 0..64 {
+    let (table, state) = beryl_scenario::position(&CARDS, &RESPONSE).unwrap();
+    let random = beryl_search::agent("random").unwrap();
+    let mut game = Game::prepared(
+        Prepared {
+            opponent: Box::new(CastsWhenever),
+            stand_in: (random.new)(&table, 2, Budget::DEFAULT),
+            scripted: false,
+            hand_over: None,
+            table,
+            state,
+            human: HUMAN,
+            stops: StopsSetting::SMART,
+        },
+        SESSION,
+    );
+    let (_, asked) = play(&mut game);
+    assert_eq!(
+        check_responses(&asked),
+        (1, 1),
+        "Get Lost answered the Trainer once, and the Trainer resolved unasked after it"
+    );
+}
+
+/// Seeded games against instant-speed removal keep [`check_responses`]' rules wherever the
+/// opponent happens to respond, and replay.
+#[test]
+fn games_against_responses_keep_the_smart_stops_and_replay() {
+    for seed in 0..4 {
         let mut game = new_game(seed, get_lost(), StopsSetting::SMART);
         let (views, asked) = play(&mut game);
-        let theirs = |e: &StackEntry| e.controller != HUMAN;
-        for a in asked.iter().filter(|a| priority_on_a_stack(a)) {
-            assert!(
-                !only_own_doings(a),
-                "seed {seed}: asked to pass to their own spell at {:?}",
-                a.view.turn
-            );
-            if a.stack.last().is_some_and(theirs) {
-                responses += 1;
-            }
-        }
-        // Passing to the opponent's response leaves the human's spell beneath it on top once
-        // it resolves: that spell resolves too, without asking them again.
-        for pair in asked.windows(2) {
-            let [then, next] = pair else { unreachable!() };
-            let [below @ .., mine, response] = then.stack.as_slice() else {
-                continue;
-            };
-            if kind(&then.view) != Kind::Priority
-                || !theirs(response)
-                || theirs(mine)
-                || !matches!(then.chosen, Candidate::Pass)
-            {
-                continue;
-            }
-            let mut left = below.to_vec();
-            left.push(*mine);
-            assert!(
-                kind(&next.view) != Kind::Priority || next.stack != left,
-                "seed {seed}: asked again at their own spell once the response resolved"
-            );
-            resolved_unasked += usize::from(!next.stack.contains(mine));
-        }
+        check_responses(&asked);
         assert_replays(&game, &views);
     }
-    assert!(responses > 0, "the opponent never responded");
-    assert!(
-        resolved_unasked > 0,
-        "no spell resolved unasked once a response above it left"
-    );
 }
 
 #[test]

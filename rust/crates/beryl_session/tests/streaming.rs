@@ -100,7 +100,14 @@ fn each_step_and_each_agent_decision_has_a_view_and_each_event_one_view() {
         } else {
             StopsSetting::EXACT
         };
-        let decks = [owned(&fuzz_deck(seed)), owned(&fuzz_deck(seed ^ 1 << 40))];
+        // Fuzz decks reach the most cards; the fixed decks' games are long enough to need many
+        // steps' views.
+        let fixed = seed >= 2;
+        let decks = if fixed {
+            [owned(WU_CONTROL), owned(VINTAGE_WU_CONTROL)]
+        } else {
+            [owned(&fuzz_deck(seed)), owned(&fuzz_deck(seed ^ 1 << 40))]
+        };
         let game_start = start(seed, decks, Seat::P0, stops);
         let mut game = Game::new(&CARDS, &game_start, SESSION).unwrap();
         let views = play_out(&mut game);
@@ -151,7 +158,10 @@ fn each_step_and_each_agent_decision_has_a_view_and_each_event_one_view() {
                 );
             }
         }
-        assert!(began_steps > 50, "seed {seed}: only {began_steps} steps");
+        assert!(
+            !fixed || began_steps > 50,
+            "seed {seed}: only {began_steps} steps"
+        );
 
         // The views' events, in order, are the game's.
         let streamed: Vec<Event<Large>> =

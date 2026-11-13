@@ -314,9 +314,12 @@ impl Game {
             let Some((entry, outcomes)) = steps.peek_mut() else {
                 break;
             };
-            if !dealt {
-                // The entry before played out, and play went on to here.
-                self.chance_spent()?;
+            // The entry before should have played out, with every outcome logged after it. Where
+            // some are still to come, the open decision may be one the record lacks, such as a
+            // priority in the upkeep before a recorded draw's reveal: answering it plays on to
+            // them. Only taking the entry with outcomes still to come is an error.
+            let unspent = (!dealt).then(|| self.chance_spent().err()).flatten();
+            if !dealt && unspent.is_none() {
                 if chance {
                     self.chance.replay(std::mem::take(outcomes));
                 }
@@ -326,6 +329,9 @@ impl Game {
             // Live play's view here took the events so far.
             self.skip_events();
             let took = self.replay_entry(entry, &mut drift)?;
+            if took && let Some(unspent) = unspent {
+                return Err(unspent);
+            }
             self.chance_reproduced()?;
             if took {
                 steps.next();

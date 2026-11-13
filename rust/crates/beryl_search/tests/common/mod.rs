@@ -6,7 +6,7 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use beryl_cards::CARDS;
-use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
+use beryl_cards::decks::{VINTAGE_WU_CONTROL, WU_CONTROL, fuzz_deck};
 use beryl_engine::{
     Decision, GameTable, Layout, Outcome, Profile, Replay, Scratch, State, Step, apply, next,
     observe,
@@ -18,6 +18,22 @@ use beryl_search::{Agent, AgentDecision, RandomAgent};
 pub fn game(seed: u64) -> (GameTable, State) {
     let decks = [fuzz_deck(seed), fuzz_deck(seed.wrapping_add(1 << 32))];
     let t = GameTable::new(&CARDS, [decks[0].as_slice(), decks[1].as_slice()]).unwrap();
+    dealt(t, seed)
+}
+
+/// A game between the two fixed test decks, WU Control against the Vintage Cube WU Control,
+/// shuffled by `seed`, under the profile [`game`] picks. Assertions about how a game goes (how
+/// long it lasts, what it reaches) play these decks, which do not change as cards are written.
+pub fn fixed_game(seed: u64) -> (GameTable, State) {
+    dealt(
+        GameTable::new(&CARDS, [WU_CONTROL, VINTAGE_WU_CONTROL]).unwrap(),
+        seed,
+    )
+}
+
+/// The game `seed` deals from `t`, under the exact profile on even seeds and smart stops on
+/// odd ones.
+fn dealt(t: GameTable, seed: u64) -> (GameTable, State) {
     let profile = if seed.is_multiple_of(2) {
         Profile::EXACT
     } else {

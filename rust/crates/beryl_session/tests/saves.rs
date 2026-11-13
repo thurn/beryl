@@ -4,7 +4,7 @@
 //! upgrades by replaying.
 
 use beryl_cards::CARDS;
-use beryl_cards::decks::fuzz_deck;
+use beryl_cards::decks::{VINTAGE_WU_CONTROL, WU_CONTROL};
 use beryl_session::migrate;
 use beryl_session::perturb::{self, Order, Perturbation};
 use beryl_session::replay::{Entry, FORMAT_VERSION};
@@ -20,12 +20,13 @@ fn owned(deck: &[(u8, &str)]) -> Vec<(u8, String)> {
     deck.iter().map(|&(n, name)| (n, name.to_owned())).collect()
 }
 
-/// A game against the random agent between two fuzz decks drawn from `seed`, the human
-/// asked at every priority.
+/// A game against the random agent between the two fixed test decks, shuffled by `seed`, the
+/// human asked at every priority. The tests below look for answers of particular kinds in the
+/// games these seeds deal, so they play decks that do not change as cards are written.
 fn start(seed: u64) -> StartGame {
     StartGame {
         seed,
-        decks: [owned(&fuzz_deck(seed)), owned(&fuzz_deck(seed ^ 1 << 40))],
+        decks: [owned(WU_CONTROL), owned(VINTAGE_WU_CONTROL)],
         human: Seat::P0,
         opponent: "random".to_owned(),
         stops: StopsSetting::EXACT,
@@ -282,6 +283,36 @@ fn a_priority_the_record_lacks_before_its_next_step_is_passed() {
     assert_eq!(replayed(&file).unwrap(), view);
 }
 
+/// A priority the record lacks, passed unasked, though a card the record reveals after the
+/// answer before it comes only once that priority is passed: here the upkeep's priority before
+/// the draw step's reveal. Replay used to require every outcome logged after an answer to have
+/// happened before the next decision, so it gave up and rebuilt the game from the turn's
+/// beginning.
+#[test]
+fn a_priority_the_record_lacks_before_a_reveal_is_passed() {
+    let (game, view, answers) = played(0, 60);
+    let file = game.replay();
+    let next_when = |at: usize| {
+        file.log[at + 1..].iter().find_map(|e| match e {
+            Entry::Choice(c) => c.when(),
+            _ => None,
+        })
+    };
+    let pass = answers
+        .iter()
+        .find(|a| {
+            let c = chosen(&file.log[a.at]);
+            a.candidates > 1
+                && c.is_priority_pass()
+                && matches!(file.log.get(a.at + 1), Some(Entry::Reveal { .. }))
+                && next_when(a.at).is_some_and(|next| Some(next) > c.when())
+        })
+        .expect("a pass before a reveal");
+    let mut file = file.clone();
+    file.log.remove(pass.at);
+    assert_eq!(replayed(&file).unwrap(), view);
+}
+
 #[test]
 fn a_recorded_pass_where_no_priority_is_open_is_skipped() {
     let (game, view, answers) = played(6, 60);
@@ -324,8 +355,8 @@ fn a_recorded_halt_the_game_no_longer_makes_is_skipped() {
 }
 
 /// A game played by the same script as [`played`] up to the human's first answer that plays a
-/// card, and where that answer went in the log. Which game has one depends on the fuzz decks,
-/// which change as cards are implemented, so it looks through seeds until one does.
+/// card, and where that answer went in the log. Which game has one depends on the shuffle, so
+/// it looks through seeds until one does.
 fn played_to_a_card() -> (Game, usize) {
     for seed in 0..32 {
         let mut game = Game::new(&CARDS, &start(seed), SESSION).unwrap();

@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{Observation, Outcome, Profile, Scratch, State};
 use beryl_search::{RolloutPolicy, rollout};
-use common::{agents, game, mirror, play};
+use common::{agents, fixed_game, game, mirror, play};
 
 struct Counting;
 
@@ -49,7 +49,10 @@ static ALLOCATOR: Counting = Counting;
 
 fn main() {
     for seed in 0..4 {
-        let (t, mut s) = game(seed);
+        // Fuzz decks reach the most cards; the fixed decks' games are long enough to cover
+        // every step of a game.
+        let fixed = seed >= 2;
+        let (t, mut s) = if fixed { fixed_game(seed) } else { game(seed) };
         let mut x = Scratch::new();
         let mut agents = agents(seed);
         let mut rng = SplitMix64::new(seed);
@@ -62,7 +65,7 @@ fn main() {
         });
         COUNTING.store(false, Ordering::Relaxed);
         let allocations = ALLOCATIONS.swap(0, Ordering::Relaxed);
-        assert!(decisions > 40, "seed {seed}: a short game");
+        assert!(!fixed || decisions > 40, "seed {seed}: a short game");
         assert_eq!(
             allocations, 0,
             "seed {seed}: {allocations} allocations in a game that ended {outcome:?}"

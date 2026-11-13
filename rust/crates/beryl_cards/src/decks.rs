@@ -99,16 +99,25 @@ const FUZZ_NONBASICS: usize = 23;
 /// the rest. A limited deck holds "as many duplicates of a card as are included with the
 /// product" (CR 100.2b), and the card pool holds one of each.
 pub fn fuzz_deck(seed: u64) -> Vec<(u8, &'static str)> {
-    let (mut basics, mut nonbasics): (Vec<&CardDef>, Vec<&CardDef>) = CARDS
-        .cards()
+    fuzz_deck_from(seed, CARDS.cards())
+}
+
+/// [`fuzz_deck`] drawn from `cards` instead of every implemented card.
+///
+/// Each nonbasic card gets a rank from a hash of `seed` and its name, and the deck takes the
+/// lowest-ranked ones (rendezvous hashing). A card's rank does not depend on which other cards
+/// exist, so adding or removing a card file changes a seed's deck only when that card ranks
+/// into it, which keeps tests that play fuzz decks stable as cards are written.
+pub fn fuzz_deck_from(seed: u64, cards: &[&CardDef]) -> Vec<(u8, &'static str)> {
+    let (mut basics, mut nonbasics): (Vec<&CardDef>, Vec<&CardDef>) = cards
         .iter()
+        .copied()
         .partition(|c| c.front().supertypes.contains(Supertypes::BASIC));
-    // By name, so that a seed's deck does not change with the table's order, which is the
-    // card files' and moves as files are added.
     basics.sort_unstable_by_key(|c| c.name);
-    nonbasics.sort_unstable_by_key(|c| c.name);
-    SplitMix64::new(seed).shuffle(&mut nonbasics);
+    nonbasics.sort_unstable_by_key(|c| (rank(seed, c.name), c.name));
     nonbasics.truncate(FUZZ_NONBASICS);
+    // By name, so that the deck's order depends only on which cards it holds.
+    nonbasics.sort_unstable_by_key(|c| c.name);
     let mut deck: Vec<(u8, &'static str)> = nonbasics.iter().map(|c| (1, c.name)).collect();
     let lands = FUZZ_DECK - nonbasics.len();
     for (i, c) in basics.iter().enumerate() {
@@ -116,4 +125,58 @@ pub fn fuzz_deck(seed: u64) -> Vec<(u8, &'static str)> {
         deck.push((count as u8, c.name));
     }
     deck
+}
+
+/// A card's place in `seed`'s fuzz deck order: a 64-bit FNV-1a hash of its name, mixed with
+/// `seed` through `SplitMix64` so that every seed orders the cards differently.
+fn rank(seed: u64, name: &str) -> u64 {
+    let hash = name.bytes().fold(0xCBF2_9CE4_8422_2325_u64, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01B3)
+    });
+    SplitMix64::new(seed ^ hash).next_u64()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Writing or deleting one card file changes a seed's fuzz deck only when that card ranks
+    /// into it, and then by that one card alone, so tests that play fuzz decks do not depend on
+    /// which other cards exist. With the pool at a few dozen nonbasic cards a given card lands
+    /// in about 23 of every N decks, so this checks the swap itself rather than a share of seeds.
+    #[test]
+    fn one_card_more_or_less_changes_only_decks_it_joins() {
+        let all = CARDS.cards();
+        for (ix, card) in all.iter().enumerate() {
+            if card.front().supertypes.contains(Supertypes::BASIC) {
+                continue;
+            }
+            let mut fewer = all.to_vec();
+            fewer.remove(ix);
+            for seed in 0..100 {
+                let with = fuzz_deck_from(seed, all);
+                let without = fuzz_deck_from(seed, &fewer);
+                if with.contains(&(1, card.name)) {
+                    let dropped: Vec<_> = without.iter().filter(|c| !with.contains(c)).collect();
+                    let added: Vec<_> = with.iter().filter(|c| !without.contains(c)).collect();
+                    assert_eq!(added, [&(1, card.name)], "seed {seed}, {}", card.name);
+                    assert!(dropped.len() <= 1, "seed {seed}, {}", card.name);
+                } else {
+                    assert_eq!(with, without, "seed {seed}, {}", card.name);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn fuzz_decks_are_legal_and_vary_by_seed() {
+        for seed in 0..20 {
+            let deck = fuzz_deck(seed);
+            assert_eq!(
+                deck.iter().map(|&(n, _)| usize::from(n)).sum::<usize>(),
+                FUZZ_DECK
+            );
+        }
+        assert_ne!(fuzz_deck(0), fuzz_deck(1));
+    }
 }

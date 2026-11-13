@@ -4,7 +4,7 @@
 use std::sync::mpsc::channel;
 
 use beryl_cards::CARDS;
-use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
+use beryl_cards::decks::{VINTAGE_WU_CONTROL, WU_CONTROL, fuzz_deck};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::Pending;
 use beryl_engine::{
@@ -26,8 +26,19 @@ fn owned(deck: &[(u8, &str)]) -> Vec<(u8, String)> {
     deck.iter().map(|&(n, name)| (n, name.to_owned())).collect()
 }
 
-/// A game against the random agent between two fuzz decks drawn from `seed`.
+/// A game against the random agent between the two fixed test decks, shuffled by `seed`.
+/// Tests that need a game to go a certain way (long enough, reaching a decision of the agent's)
+/// play these decks, which do not change as cards are written.
 fn start(seed: u64, stops: StopsSetting) -> StartGame {
+    StartGame {
+        decks: [owned(WU_CONTROL), owned(VINTAGE_WU_CONTROL)],
+        ..fuzz_start(seed, stops)
+    }
+}
+
+/// A game against the random agent between two fuzz decks drawn from `seed`, for rules that
+/// hold whatever the cards.
+fn fuzz_start(seed: u64, stops: StopsSetting) -> StartGame {
     StartGame {
         seed,
         decks: [owned(&fuzz_deck(seed)), owned(&fuzz_deck(seed ^ 1 << 40))],
@@ -565,6 +576,9 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
         } else {
             StopsSetting::EXACT
         };
+        // Fuzz decks reach the most cards; the fixed decks' games count the events compared.
+        let fixed = seed >= 3;
+        let start = if fixed { start } else { fuzz_start };
         let mut game = Game::new(&CARDS, &start(seed, stops), SESSION).unwrap();
         while let Some(view) = game.next_view() {
             let (s, t) = (game.state(), game.table());
@@ -656,7 +670,9 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
                     a.undo_depth = b.undo_depth;
                 }
                 assert_eq!(theirs, view, "seed {seed}");
-                events += view.events.len();
+                if fixed {
+                    events += view.events.len();
+                }
             }
             if matches!(view.status, Status::Deciding { .. }) {
                 let (id, index) = script(&view);
