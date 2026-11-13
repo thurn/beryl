@@ -486,7 +486,8 @@ ladder work continue, and so does UI work outside K30.
   exactly; `rollouts_never_change` holds; the count gate holds with no bump.
 
 - **No one-card logic.** The card-names allowlist is empty, outside the expert
-  system and the per-deck overlay.
+  system (`beryl_search/src/expert/` and `frozen/`) and the per-deck overlay
+  (`beryl_search/src/overlay/`).
 
 - **No oversized files.** The file-length allowlist is empty.
 

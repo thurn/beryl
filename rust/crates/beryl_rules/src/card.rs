@@ -8,7 +8,7 @@ use crate::fixed::Full;
 
 pub use beryl_card::{
     Ability, AbilityIx, AbilityKind, Behavior, CardDef, CastingIx, CastingKind, CastingKinds,
-    CastingOption, Castings, Chosen, Colors, Condition, Cost, CostAction, CostPart, Custom,
+    CastingOption, Castings, Chosen, Colors, Condition, Cost, CostAction, CostPart, Custom, Effect,
     FACE_DOWN, FACE_DOWN_COPY, Face, FaceAbility, FaceIx, GrantIx, Keywords, Layer, LayerSpec,
     ManaColor, ManaCost, ManaSet, Measure, Modification, ObjectAbility, Objects, Part, Place,
     Players, Prompt, Purpose, Replacement, RuleChange, Says, Shape, SpecIx, Subject, Subtype,

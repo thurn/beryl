@@ -40,7 +40,14 @@ SCOPE = (
     "ui/src",
     "tools/src/beryl_tools",
 )
-EXEMPT_DIRECTORIES = {"expert", "frozen", "tests", "generated", "node_modules"}
+EXEMPT_DIRECTORIES = {
+    "expert",
+    "frozen",
+    "overlay",
+    "tests",
+    "generated",
+    "node_modules",
+}
 SUFFIXES = {".rs", ".ts", ".tsx", ".py"}
 # Rust test modules living in their own files, and the TypeScript spelling of one.
 TEST_FILE: re.Pattern[str] = re.compile(

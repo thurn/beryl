@@ -10,8 +10,12 @@ mod expert;
 mod frozen;
 mod long;
 mod mcts;
+mod overlay;
 mod rollout;
 mod values;
+
+#[cfg(test)]
+mod agents_tests;
 
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{Choice, Decision, GameTable, Observation};
@@ -346,14 +350,27 @@ fn mcts_hidden(t: &GameTable, seed: u64, budget: Budget) -> Box<dyn GameAgent + 
 /// game's 62 searched moves and did not lift Jace's 0. 30M engine steps a decision whatever
 /// `budget` says, on every core. Its moves do not depend on the threads.
 fn deep_seer(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
-    deep(
-        t,
-        seed,
-        Method::Pimc { worlds: 18 },
-        Sight::Omniscient,
-        ANCHORED,
-    )
+    deep_family(t, seed, DEEP_SEER, DEEP_WORK)
 }
+
+/// Deep Seer's family: the anchor alone.
+const DEEP_SEER: Family = Family {
+    method: Method::Pimc { worlds: 18 },
+    sight: Sight::Omniscient,
+    leaf: Leaf::Rollout,
+    knowledge: Knowledge::Tuned,
+    options: Options {
+        anchor: true,
+        expert: false,
+        guard: false,
+        mid: false,
+        means: false,
+        hold: false,
+        waste: false,
+        combat: false,
+        order: false,
+    },
+};
 
 /// `pimc72/hidden/rollout/tuned/anchor+guard@30M`: 72 worlds dealt from what the searcher
 /// can see, with the anchor and guard enabled. 30M engine steps a decision whatever
@@ -362,7 +379,7 @@ fn deep_seer(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + S
 /// The ladder's champion (docs/ai-strategy.md §3): always the current best fair agent, so a
 /// promotion changes [`DEEP_SEARCHER`], and its comment names the match that made it.
 fn deep_searcher(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
-    deep_family(t, seed, DEEP_SEARCHER)
+    deep_family(t, seed, DEEP_SEARCHER, DEEP_WORK)
 }
 
 /// The Deep Searcher's family, the ladder's champion, which `beryl_cli ladder` plays at the
@@ -386,55 +403,29 @@ pub const DEEP_SEARCHER: Family = Family {
     },
 };
 
-/// Deep Seer's options: the anchor alone.
-const ANCHORED: Options = Options {
-    anchor: true,
-    expert: false,
-    guard: false,
-    mid: false,
-    means: false,
-    hold: false,
-    waste: false,
-    combat: false,
-    order: false,
-};
-
 /// `pimc18/omniscient/rollout/tuned@30M`, Deep Seer as docs/incidents/2026-11-06-deep-seer-misplays.md
 /// found it.
 fn deep_seer_unanchored(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
-    deep(
-        t,
-        seed,
-        Method::Pimc { worlds: 18 },
-        Sight::Omniscient,
-        Options::default(),
-    )
+    deep_family(t, seed, DEEP_SEER_UNANCHORED, DEEP_WORK)
 }
 
-/// A long-think search of full rollouts and tuned card values by `method` and `sight`, with
-/// `options`, at 30M engine steps a decision, on every core.
-fn deep(
-    t: &GameTable,
-    seed: u64,
-    method: Method,
-    sight: Sight,
-    options: Options,
-) -> Box<dyn GameAgent + Send> {
-    let family = Family {
-        method,
-        sight,
-        leaf: Leaf::Rollout,
-        knowledge: Knowledge::Tuned,
-        options,
-    };
-    deep_family(t, seed, family)
-}
+/// Deep Seer's family before the anchor.
+const DEEP_SEER_UNANCHORED: Family = Family {
+    options: Options {
+        anchor: false,
+        ..DEEP_SEER.options
+    },
+    ..DEEP_SEER
+};
 
-/// A long-think search of `family` at 30M engine steps a decision, on every core.
-fn deep_family(t: &GameTable, seed: u64, family: Family) -> Box<dyn GameAgent + Send> {
+/// The engine steps a long-think agent spends on each decision.
+const DEEP_WORK: u64 = 30_000_000;
+
+/// A long-think search of `family` at `work` engine steps a decision, on every core.
+fn deep_family(t: &GameTable, seed: u64, family: Family, work: u64) -> Box<dyn GameAgent + Send> {
     let settings = Settings {
         family,
-        work: 30_000_000,
+        work,
         threads: std::thread::available_parallelism()
             .map_or(1, |n| u32::try_from(n.get()).unwrap_or(u32::MAX)),
     };
