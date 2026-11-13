@@ -114,12 +114,22 @@ def fast_rust_tests_step(*args: str) -> int:
     """The fast check's tests step: the tests but those the pruning rule moved to slow CI alone
     (verdicts.SLOW_ONLY), of the packages `--packages=a,b` names (`affected_packages`), else
     of the workspace."""
+    return packaged_tests_step(*args, fast=True)
+
+
+def slow_rust_tests_step(*args: str) -> int:
+    """Slow CI's tests step: every test of the packages `--packages=a,b` names, else of the
+    workspace."""
+    return packaged_tests_step(*args, fast=False)
+
+
+def packaged_tests_step(*args: str, fast: bool) -> int:
     named = [a.split("=", 1)[1] for a in args if a.startswith("--packages=")]
     only = [a for a in args if not a.startswith("--packages=")]
     packages = named[0].split(",") if named else None
     if packages:
         print(f"rust-tests: the packages the change can break: {' '.join(packages)}")
-    return rust_tests_step(*only, fast=True, packages=packages)
+    return rust_tests_step(*only, fast=fast, packages=packages)
 
 
 def rust_tests_step(

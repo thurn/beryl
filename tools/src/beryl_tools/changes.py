@@ -43,6 +43,12 @@ def branch_base() -> str:
     return git("rev-parse", "--verify", "--quiet", "HEAD^")
 
 
+def master_base() -> str:
+    """Where HEAD left `origin/master`, for slow CI: master moves only when slow CI passes on
+    staging, so the commits since are those no slow CI run has passed yet."""
+    return git("merge-base", "origin/master", "HEAD")
+
+
 def changed_paths(base: str) -> list[str] | None:
     """Paths changed since `base`, committed or not; None when there is no base."""
     if not base:

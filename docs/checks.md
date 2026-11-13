@@ -57,7 +57,29 @@ badly formatted commit subjects.
 
 ## Slow CI
 
-`just ci` (300 s budget; 450 s on Windows) runs every lane, plus:
+`just ci` (300 s budget; 450 s on Windows) runs the lanes below, plus the fast
+check's lanes, but only those that what changed since each lane last passed can
+affect (`slow_ci.py`):
+
+- Each lane's base is the commit at which it last passed on this machine
+  (`$BERYL_CACHE/ci/lane-passes.json`), or where staging left `origin/master`. A
+  lane that fails keeps its old base, so it runs again until it passes.
+- A lane runs when a changed path reaches it: Rust and the data files the crates
+  read reach the `rust` lane, `ui/` and the data files the UI imports reach
+  `ui`, and both reach `app`, `shots` and `ui-test`. A docs-only change runs
+  just `repo` and `names`. Within a lane, `rust` tests only the packages the
+  change can break, and `shots` and `ui-test` play every check the coverage data
+  says the change can break (`--affected`), or all of them when it cannot say.
+- Tools changes are judged by fingerprint: each lane's pass records a hash of
+  its step commands and of the `tools/src` modules they run or import. A lane
+  whose fingerprint changed runs in full, as does a lane reached by a path no
+  rule places.
+- Every lane runs in full once an hour (`FULL_EVERY`), or when `$BERYL_CI_FULL`
+  is set, so a wrong selection is caught within the hour.
+- A lane left out gets a `skip` record in the run log saying why, and
+  `just ci <lanes>` runs the named lanes in full.
+
+The lanes slow CI adds to the fast check's:
 
 - `app`: `just smoke`.
 - `shots`: `just ui-shots`, which fails on any page error.

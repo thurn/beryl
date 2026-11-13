@@ -14,10 +14,11 @@ so a run the load stretched past that still prints its lanes and names the step 
 The fast check runs the lanes whose files changed since the branch left origin/staging,
 `oracle` on the scenarios of each card whose file changed, without Forge's AI games, and for a
 change to ui/ or rust/, `ui-test` and `shots` on the browser checks it can break, as many as fit
-its budget (selection.py). Slow CI runs every lane plus `app` (the debug app built and launched
+its budget (selection.py). Slow CI has every lane plus `app` (the debug app built and launched
 headless until its UI loads), `shots` (the screens rendered headless), `ui-test` (the game screen
 played headless), `oracle` (the card scenarios checked against XMage and Forge) and `counts` (the
-rollout benchmark's instruction count held to its bar).
+rollout benchmark's instruction count held to its bar), and runs those that what changed since
+each one last passed can affect, and all of them hourly (slow_ci.py).
 
 A step that fails is rerun once before its lane fails, narrowed to the checks it says
 failed where it can name them: a pass on the rerun passes the lane and prints a `flaky: <lane>
@@ -46,7 +47,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import (
-    bench,
     board_door,
     build_paths,
     card_crates,
@@ -59,7 +59,6 @@ from . import (
     discarded_push,
     file_length,
     hygiene,
-    mobile,
     paths,
     plan_references,
     python_tests,
@@ -91,7 +90,7 @@ from .rust_tests import (
     fast_rust_tests_step,
     junit_results,
     nextest_filter,
-    rust_tests_step,
+    slow_rust_tests_step,
 )
 
 FAST_BUDGET = 60
@@ -387,6 +386,7 @@ def run_all(
     script: str,
     budget: int,
     wall_limit: float | None = None,
+    chosen: str = "all",
 ) -> Report:
     """Runs the lanes at once and reports them; with `wall_limit`, a step still running that
     many wall seconds in is killed (`Steps.wall_limit`)."""
@@ -396,6 +396,7 @@ def run_all(
     cold = bool(warm.ensure()) if any(lane.warm for lane in lanes) else False
     env = dict(os.environ)
     run = runlog.Run.start(script)
+    run.chosen = chosen
     outcomes = play(lanes, run, env, steps)
     # The deadline catches a hang, but it also kills lanes that a rebuild after a rebase or a
     # crowded machine made slow, and a session's answer was to run the whole check again. The
@@ -616,19 +617,24 @@ def app_lane() -> Lane:
     return Lane("app", warm=True).step("smoke", [*BY, "smoke"], rerun=whole)
 
 
-def shots_lane(select: bool = False) -> Lane:
+def shots_lane(select: bool = False, affected: str = "") -> Lane:
     """Renders every screen in ui/shots.json headless, or with `select` those the change can
-    break (selection.py); a page error or a crash fails it."""
-    cmd = [*BY, "ui-shots", *(["--select"] if select else [])]
+    break as fit the fast check, or with `affected` all of those it can break since that
+    commit (selection.py); a page error or a crash fails it."""
+    cmd = [*BY, "ui-shots", *choice_flags(select, affected)]
     return Lane("shots", warm=True).step("ui-shots", cmd, rerun=failed_shots)
 
 
-def ui_test_lane(select: bool = False) -> Lane:
+def ui_test_lane(select: bool = False, affected: str = "") -> Lane:
     """Plays the game screen through fixtures it records apart from `shots`' (shots.py), so
-    the two run at once, every check or with `select` those the change can break; a page
+    the two run at once, every check or those the change can break (`shots_lane`); a page
     error or a failed interaction fails it."""
-    cmd = [*BY, "ui-test", *(["--select"] if select else [])]
+    cmd = [*BY, "ui-test", *choice_flags(select, affected)]
     return Lane("ui-test", warm=True).step("ui-test", cmd, rerun=failed_titles)
+
+
+def choice_flags(select: bool, affected: str) -> list[str]:
+    return ["--select"] if select else ["--affected", affected] if affected else []
 
 
 def oracle_lane() -> Lane:
@@ -726,46 +732,24 @@ def changed_cards(changed: list[str] | None) -> list[str]:
     return card_files.cards_in(changed)
 
 
-def slow(args: argparse.Namespace) -> int:
-    measuring = speed.start_background()
-    if measuring:
-        print(f"ci: {measuring}")
-    started = time.monotonic()
-    lanes = {
-        "repo": repo_lane(),
-        "python": python_lane(),
-        "rust": rust_lane(),
-        "script": script_checks.lane(),
-        "ui": ui_lane(),
-        "names": names_lane(fetch=True),
-        "app": app_lane(),
-        "shots": shots_lane(),
-        "ui-test": ui_test_lane(),
-        "oracle": oracle_lane(),
-        "counts": bench.lane(),
-        "mobile": mobile.lane(),
-    }
-    if system.WINDOWS and not args.lanes:
-        print(
-            f"ci: skipping {' '.join(WINDOWS_SKIPS)} on Windows; the Mac's slow CI runs them"
-        )
-        for name in WINDOWS_SKIPS:
-            del lanes[name]
-    chosen = args.lanes or list(lanes)
-    unknown = set(chosen) - set(lanes)
-    if unknown:
-        raise SystemExit(f"unknown lanes {sorted(unknown)}; lanes: {' '.join(lanes)}")
-    budget = int(os.environ.get("CI_BUDGET_S", SLOW_BUDGET))
-    return slow_run([lanes[n] for n in chosen], budget, started)
-
-
-def slow_run(lanes: list[Lane], budget: int, started: float) -> int:
-    """Slow CI on `lanes`, begun at `started` (time.monotonic). A failure that survived its
-    rerun is bisected (bisect.py); a run over budget fails nothing (budget.py)."""
+def slow_run(
+    lanes: list[Lane],
+    budget: int,
+    started: float,
+    chosen: str = "all",
+    passed: Callable[[list[str]], None] | None = None,
+) -> int:
+    """Slow CI on `lanes`, begun at `started` (time.monotonic), its checks logged as `chosen`
+    unless a step says why, telling `passed` the lanes that passed (slow_ci.py). A failure that
+    survived its rerun is bisected (bisect.py); a run over budget fails nothing (budget.py).
+    """
     from . import bisect  # It imports this module.
 
-    report = run_all(lanes, "ci", budget, wall_limit=bisect.time_left(started))
+    left = bisect.time_left(started)
+    report = run_all(lanes, "ci", budget, wall_limit=left, chosen=chosen)
     failed = [o for o in report.outcomes if not o.ok]
+    if passed:
+        passed([o.lane for o in report.outcomes if o.ok])
     if failed:
         bisect.after(failed, started)
     return report.code
@@ -773,15 +757,20 @@ def slow_run(lanes: list[Lane], budget: int, started: float) -> int:
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     sub.add_parser("check", help="the fast check (enact push)").set_defaults(func=fast)
+    from . import slow_ci  # It imports this module.
+
     p = sub.add_parser("ci", help="slow CI, or some of its lanes")
     p.add_argument("lanes", nargs="*")
-    p.set_defaults(func=slow)
+    p.set_defaults(func=slow_ci.slow)
 
 
-if __name__ == "__main__":
-    steps: dict[str, Callable[..., int]] = {
+def steps() -> dict[str, Callable[..., int]]:
+    """The steps `python -m beryl_tools.checks <step>` runs, by name. A function, not a
+    constant: run as `__main__`, this module is imported a second time partway through its
+    own imports, before the step modules are whole."""
+    return {
         "pytest": python_tests.pytest_step,
-        "rust-tests": rust_tests_step,
+        "rust-tests": slow_rust_tests_step,
         "fast-rust-tests": fast_rust_tests_step,
         "card-names": card_names.step,
         "card-text": card_text.step,
@@ -797,4 +786,7 @@ if __name__ == "__main__":
         "build-paths": build_paths.step,
         "rustfmt": card_files.rustfmt_step,
     }
-    sys.exit(steps[sys.argv[1]](*sys.argv[2:]))
+
+
+if __name__ == "__main__":
+    sys.exit(steps()[sys.argv[1]](*sys.argv[2:]))

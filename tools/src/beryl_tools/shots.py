@@ -197,10 +197,21 @@ def fixture_views(name: str) -> int:
     ).returncode
 
 
+def chooser_for(lane: str, args: argparse.Namespace) -> selection.Chooser | None:
+    """The lane's choice of checks for `--select` (the fast check's) or `--affected` (slow
+    CI's); None to run them all."""
+    if args.affected:
+        return selection.Chooser(lane, base=args.affected)
+    return selection.Chooser(lane) if args.select else None
+
+
+AFFECTED_HELP = "every check the change since BASE can break (slow CI, selection.py)"
+
+
 def ui_shots(args: argparse.Namespace) -> int:
     if args.views:
         return fixture_views(args.views)
-    chooser = selection.Chooser("shots") if args.select else None
+    chooser = chooser_for("shots", args)
     if chooser and chooser.choice.idle():
         print("shots: the change reaches no shot")
         return 0
@@ -297,7 +308,7 @@ KEPT_FIXTURES = [
 
 def ui_test(args: argparse.Namespace) -> int:
     recorded = paths.cache_root() / "ui-test" / paths.REPO.name
-    chooser = selection.Chooser("ui-test") if args.select else None
+    chooser = chooser_for("ui-test", args)
     if chooser and chooser.choice.idle():
         print("ui-test: the change reaches no check")
         return 0
@@ -515,6 +526,7 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         action="store_true",
         help="only the shots the branch's change can break, as many as fit (selection.py)",
     )
+    p.add_argument("--affected", metavar="BASE", default="", help=AFFECTED_HELP)
     p.add_argument(
         "--views",
         metavar="FIXTURE",
@@ -535,6 +547,7 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         action="store_true",
         help="only the checks the branch's change can break, as many as fit (selection.py)",
     )
+    p.add_argument("--affected", metavar="BASE", default="", help=AFFECTED_HELP)
     p.set_defaults(func=ui_test)
     p = sub.add_parser(
         "ui-play",

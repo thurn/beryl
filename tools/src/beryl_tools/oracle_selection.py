@@ -14,7 +14,7 @@ import hashlib
 import re
 
 from . import card_files
-from .changes import changed_paths, git
+from .changes import changed_paths, git, master_base
 
 # The files the exporters and the harnesses are built from: the exporters and the rules they
 # share, the scenario dump they read (`beryl_scenario dump`: its JSON, its card facts and the
@@ -67,5 +67,4 @@ def choose(
 def slow_ci(every: list[str]) -> dict[str, str] | None:
     """`choose` among `every` card with scenarios for the commit checked out, against what
     changed since `origin/master`."""
-    base = git("merge-base", "origin/master", "HEAD")
-    return choose(changed_paths(base), git("rev-parse", "HEAD"), every)
+    return choose(changed_paths(master_base()), git("rev-parse", "HEAD"), every)

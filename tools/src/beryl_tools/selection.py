@@ -1,6 +1,10 @@
-"""Choosing the browser checks a change can break, for the fast check. `by ui-test --select` and `by ui-shots --select` run
-only the checks chosen here, worst failure record first, as many as fit a time box, so the
-author repairs what they broke before slow CI sees it.
+"""Choosing the browser checks a change can break. For the fast check, `by ui-test --select`
+and `by ui-shots --select` run only the checks chosen here, worst failure record first, as many
+as fit a time box, so the author repairs what they broke before slow CI sees it. For slow CI,
+`--affected <base>` runs every check chosen against what changed since the commit at which the
+lane last passed (slow_ci.py), with no time box and with the checks the fast check leaves to
+slow CI alone (verdicts.SLOW_ONLY). Where the fast check would fill its box by failure record,
+slow CI runs every check of the lane.
 
 A check is chosen, and its run-log record's `chosen` says why, when:
 
@@ -15,8 +19,8 @@ A check is chosen, and its run-log record's `chosen` says why, when:
   coverage sees: as if each line of that file that uses one of its names had changed;
 - `fixture:<name>`: a Rust or fixture change changed the recording of a fixture it loads, as the
   step recorded it against the recording the coverage run made;
-- `harness`: the harness changed (capture.mjs, audit.mjs, Vite's config, or a kept file
-  outside any check): every check is chosen;
+- `harness`: the harness changed (capture.mjs, audit.mjs, Vite's config, a data file the UI
+  imports, or a kept file outside any check): every check is chosen;
 - `record`: a change no check covers (new code, a file absent from coverage, coverage too old or
   without recordings): the rest of the time box goes to the worst failure records.
 
@@ -77,6 +81,10 @@ COMMON_HARNESS = (
     "ui/vite.config.ts",
     "ui/tsconfig.json",
     "ui/public/*",
+    # The data files ui/src imports, which no coverage line maps.
+    "data/arena-motion.json",
+    "data/ui-conventions.json",
+    "data/card-store.tsv",
 )
 HARNESS: dict[str, tuple[str, ...]] = {
     "ui-test": COMMON_HARNESS,
@@ -681,10 +689,13 @@ def every_check(
 class Chooser:
     """The choice for one lane's step: made from the diff when the step starts, finished with
     the fixtures it records (`run`), and written into its run-log records after (`label`).
+    With `base`, slow CI's choice: against that commit, unboxed, every check when coverage
+    cannot choose.
     """
 
-    def __init__(self, lane: str) -> None:
+    def __init__(self, lane: str, base: str = "") -> None:
         self.lane: str = lane
+        self.whole: bool = bool(base)
         self.clock: checks.Clock = checks.Clock()
         self.started: float = self.clock.now()
         now = datetime.now(timezone.utc)
@@ -693,12 +704,15 @@ class Chooser:
         loaded = Coverage.load()
         fallback = stale(loaded, now)
         self.coverage: Coverage | None = None if fallback else loaded
-        base = checks.branch_base()
+        base = base or checks.branch_base()
+        universe = (every_check if self.whole else lane_checks)(
+            lane, self.log, self.coverage
+        )
         self.choice: Choice = choose(
             lane,
             checks.changed_paths(base) or [],
             diff(base) if base else {},
-            lane_checks(lane, self.log, self.coverage),
+            universe,
             self.coverage,
             base,
             fallback,
@@ -719,6 +733,8 @@ class Chooser:
             ranked += rest
         if only:
             return only
+        if self.whole:
+            return self.unboxed(known)
         if choice.fallback:
             print(f"{self.lane}: choosing by failure record: {choice.fallback}")
         left = BOX - STARTUP - (self.clock.now() - self.started)
@@ -732,6 +748,20 @@ class Chooser:
             f"{self.lane}: running {len(chosen)} of {len(choice.universe)} checks"
             f" ({', '.join(f'{n} by {k}' for k, n in why.items()) or 'none chosen'});"
             f" {len(self.cut)} cut by the {max(left, 0):.0f} s left"
+        )
+        return [c.removeprefix(f"{self.lane}:") for c in chosen]
+
+    def unboxed(self, known: Mapping[str, Record]) -> list[str]:
+        """Slow CI's checks: every chosen one, or every check of the lane when coverage cannot
+        place the change (`fallback`, `fill`). Prints what it chose and why."""
+        choice = self.choice
+        why = choice.fallback or ("a change no coverage maps" if choice.fill else "")
+        if why:
+            choice.reasons = {c: f"every:{why}" for c in choice.universe}
+        chosen = order(choice.reasons, known)
+        print(
+            f"{self.lane}: running {len(chosen)} of {len(choice.universe)} checks"
+            + (f", every one: {why}" if why else ", those the change can break")
         )
         return [c.removeprefix(f"{self.lane}:") for c in chosen]
 
