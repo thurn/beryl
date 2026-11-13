@@ -310,7 +310,7 @@ pub fn vocabulary() {
 
 #[cfg(test)]
 mod tests {
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
 
     use beryl_card_store::Record;
 
@@ -318,7 +318,8 @@ mod tests {
     use crate::printed::{SUPERTYPES, Subtypes, TYPES, TypeLine};
 
     fn root() -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
+        PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").expect("run by cargo"))
+            .join("../../..")
     }
 
     fn catalogs() -> Catalogs {
