@@ -467,6 +467,7 @@ impl Game {
                 let Some(c) = self.found(&d, chosen, drift) else {
                     return self.lenient(&d, chosen, drift);
                 };
+                self.agent_skips_decision();
                 self.agent_decides(c);
             }
             (At::Human(_, Open::Decision(d)), Entry::Auto(chosen)) => {
@@ -612,5 +613,54 @@ impl Game {
         SessionError::BadReplay {
             reason: format!("turn {} {:?}: {what}", turn.number(), turn.step()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use beryl_cards::CARDS;
+    use beryl_cards::decks::WU_CONTROL;
+
+    use crate::protocol::{CandidateIndex, SessionId, Status};
+    use crate::{StartGame, StopsSetting};
+
+    use super::{At, Game, Seat};
+
+    /// A game resumed from its save replays the agent's recorded decisions without asking it.
+    /// Before the replay moved the agent past them, a seeded agent began its stream again
+    /// after a resume, so it chose differently from the game that never stopped.
+    #[test]
+    fn a_replayed_agent_stands_where_the_recorded_one_stood() {
+        let deck: Vec<(u8, String)> = WU_CONTROL
+            .iter()
+            .map(|&(n, name)| (n, name.to_owned()))
+            .collect();
+        let start = StartGame {
+            seed: 5,
+            decks: [deck.clone(), deck],
+            human: Seat::P0,
+            opponent: "random".to_owned(),
+            stops: StopsSetting::EXACT,
+        };
+        let mut game = Game::new(&CARDS, &start, SessionId(1)).unwrap();
+        while game.agent_next().is_some_and(|d| d.0 < 10) {
+            let mut last = None;
+            while let Some(view) = game.next_view() {
+                last = Some(view);
+            }
+            let Some(Status::Deciding { decision }) = last.map(|v| v.status) else {
+                panic!("the game ended before the agent decided ten times");
+            };
+            let pick = CandidateIndex(u16::from(decision.id.seq % 2 == 0));
+            let pick = game
+                .answer(decision.id, pick)
+                .or_else(|_| game.answer(decision.id, CandidateIndex(0)))
+                .unwrap();
+            game.choose(pick);
+        }
+        while game.next_view().is_some() {}
+        assert!(matches!(game.at, At::Human(..)));
+        let (resumed, _) = Game::from_replay(&CARDS, game.replay(), SessionId(2)).unwrap();
+        assert_eq!(resumed.agent_next(), game.agent_next());
     }
 }

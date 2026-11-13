@@ -47,7 +47,10 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   its set crate, plays its scenarios in Beryl, XMage and Forge (`--no-oracles`
   for a fast loop), and compares the rules text its definition renders to with
   its Oracle text. `just card render <name>` prints that comparison, and
-  `just card render --all` the match rate over every card file.
+  `just card render --all` the match rate over every card file. A card the
+  vocabulary cannot yet express is recorded in `data/card-escalations.json`, and
+  its brief says what it is waiting for. The `card-writing` skill is the whole
+  procedure.
 - Two checks hold a definition to its card. The `card-text` step of the rust
   lane renders every card file and fails on any difference from its Oracle text
   that `data/card-text-allowlist.json` doesn't pin exactly. The test
@@ -57,6 +60,10 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   only compare what a scenario reaches, so a part no scenario reaches is
   untested. When a scenario needs a card nobody has implemented, implement one,
   even one in no deck (the `card-writing` skill, "Cards for scenarios").
+- `just census` counts which mechanics Forge's card scripts use that
+  `beryl_card` has no entry for, and how many cards each one blocks, from the
+  mapping in `data/census-coverage.json`. It writes its report to
+  `$BERYL_CACHE/census.json`.
 - `beryl_cli script-check` runs every card's spec moments from both seats and
   every UI fixture's recording, checking each animation script against its
   assertions (the `script` lane in `docs/checks.md`).

@@ -32,7 +32,7 @@ and builders a card definition is made of.
   vocabulary constructors (`draw(YOU, 1)`, `Ability::triggered(...)`). Write no
   `fn` in the definition and no `impl`. Small `const fn` helpers inside the
   `scenarios` module are fine.
-- **Never from Forge.** Don't read Forge's card scripts or code (plan K16). The
+- **Never from Forge.** Don't read Forge's card scripts or code. The
   brief's XMage class is a reference for what the card does, never code to
   translate.
 - **Never weaken a check.** Don't skip a step, delete a failing scenario, or add
@@ -94,7 +94,11 @@ and builders a card definition is made of.
    lock). Then run `just citations`.
 8. **Commit and push.** Commit the card file, with any card file written for
    its scenarios, as `feat: <card name>`, and run `enact push` in the worktree.
-   If it exits with code 2, fix what it reports and run it again.
+   If it exits with code 2, fix what it reports and run it again. If a test
+   outside your card files fails, and passes once your files are moved aside,
+   the card exposed a bug in that test or the engine, not in your definition.
+   Leave the card uncommitted, file a bead naming the test, the card and the
+   failure, and stop.
 
 ## Cards for scenarios
 

@@ -11,9 +11,18 @@ impl SplitMix64 {
         Self(seed)
     }
 
+    /// The stream as it stands after `n` more draws, without drawing them.
+    #[inline]
+    pub fn skip(&mut self, n: u64) {
+        self.0 = self.0.wrapping_add(Self::GAMMA.wrapping_mul(n));
+    }
+
+    /// What each draw adds to the state.
+    const GAMMA: u64 = 0x9E37_79B9_7F4A_7C15;
+
     #[inline]
     pub fn next_u64(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        self.0 = self.0.wrapping_add(Self::GAMMA);
         let mut z = self.0;
         z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
         z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
@@ -66,6 +75,17 @@ mod tests {
         let mut rng = SplitMix64::new(0);
         assert_eq!(rng.next_u64(), 0xE220_A839_7B1D_CDAF);
         assert_eq!(rng.next_u64(), 0x6E78_9E6A_A1B9_65F4);
+    }
+
+    #[test]
+    fn skipping_draws_lands_where_drawing_them_does() {
+        let mut drawn = SplitMix64::new(9);
+        for _ in 0..5 {
+            drawn.next_u64();
+        }
+        let mut skipped = SplitMix64::new(9);
+        skipped.skip(5);
+        assert_eq!(skipped.next_u64(), drawn.next_u64());
     }
 
     #[test]

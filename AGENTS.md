@@ -178,8 +178,9 @@ means `python3 ~/enact/scripts/enact.py`.
   card, so that XMage and Forge can play the same scenarios.
 - The kernel, rules and card crates have no runtime dependencies. When you add a
   dependency elsewhere, its `Cargo.toml` comment says what it replaces.
-- Forge is used only as a test oracle. No card data, vocabulary or design may
-  come from its scripts or code (plan K16).
+- Forge is used only as a test oracle and, in `just census`, as a count of which
+  mechanics its scripts use. No card data, vocabulary or design may come from
+  its scripts or code.
 
 ## Testing your work
 

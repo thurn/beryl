@@ -482,6 +482,22 @@ impl Game {
         }
     }
 
+    /// Moves the agent past its next decision without asking it, where a replay answers that
+    /// decision from the record. An agent that draws each decision from its own seeded stream
+    /// then stands where it stood in the recorded game, so a game resumed from its save plays
+    /// on as it would have without stopping. An agent that cannot go back keeps no such place
+    /// and is left as it is.
+    pub(super) fn agent_skips_decision(&mut self) {
+        let Some(AgentDecision(n)) = self.agent_next() else {
+            return;
+        };
+        let to = AgentDecision(n + 1);
+        match &self.board {
+            Boards::Small(_) => Agent::<Small>::rewind(&mut *self.agent, to),
+            Boards::Large(_) => Agent::<Large>::rewind(&mut *self.agent, to),
+        }
+    }
+
     /// Keeps the agent's decision just made, with its search, and journals it.
     fn note_agent_move(
         &mut self,

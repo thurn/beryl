@@ -1,6 +1,5 @@
 //! Facts about what an effect does, read from its data for code that judges play rather than
-//! runs it: the AI's card knowledge (plan K9, "Generic agents derive card knowledge from
-//! definitions"), and later the exporters and the renderer. Each fact is defined by the
+//! runs it: the AI's card knowledge, which generic agents derive from definitions, and later the exporters and the renderer. Each fact is defined by the
 //! instructions an effect holds, never by a card's name, so a new card that says the same
 //! thing has the same fact with no list to update.
 //!

@@ -9,7 +9,7 @@ model, and the next steps, `just card brief` and `just card check`.
 
 It refuses a card that already has a file, a card complete from the store, whose set crate's
 build writes its definition, and a name the store lacks, with `card brief`'s message. An
-unimplemented card is a record in the store (plan K2), so this is only for starting work on a
+unimplemented card is a record in the store, so this is only for starting work on a
 card someone is about to write.
 """
 

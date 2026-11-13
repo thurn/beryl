@@ -1,5 +1,5 @@
 //! The derived card knowledge, with the overlay on top, is what the hand-written tables gave
-//! before derivation replaced them (bead by-w8gv.15.2).
+//! before derivation replaced them.
 
 use beryl_cards::{CARDS, names};
 use beryl_engine::card::CardDef;
@@ -31,10 +31,18 @@ mod before {
     ];
 }
 
-/// Every card written in a file and every token or emblem it makes, once each.
-fn every_card() -> Vec<&'static CardDef> {
+/// Every card of the two decks the tables were tuned for, and every token or emblem one
+/// makes, once each. The tables covered only these decks, so only these cards are held to
+/// them: a card implemented later has nothing to agree with, and its derived flags are
+/// whatever its effects say.
+fn tuned_cards() -> Vec<&'static CardDef> {
     let mut defs: Vec<&'static CardDef> = Vec::new();
-    for &def in CARDS.cards() {
+    let decks = [
+        beryl_cards::decks::WU_CONTROL,
+        beryl_cards::decks::VINTAGE_WU_CONTROL,
+    ];
+    for &(_, name) in decks.iter().copied().flatten() {
+        let def = CARDS.get(name).expect("a decklist names implemented cards");
         for &d in std::iter::once(&def).chain(def.tokens) {
             if !defs.iter().any(|&known| std::ptr::eq(known, d)) {
                 defs.push(d);
@@ -74,7 +82,7 @@ fn flags(info: CardInfo) -> (bool, bool, u8, u8, u8, u8) {
 
 #[test]
 fn tuned_knowledge_is_what_the_tables_gave() {
-    for def in every_card() {
+    for def in tuned_cards() {
         assert_eq!(
             flags(info(def, Knowledge::Tuned)),
             flags_before(def.name),
@@ -95,7 +103,7 @@ fn derivation_differs_from_the_tables_only_where_the_overlay_says() {
         (names::TEFERI_TIME_RAVELER, 0b100),
         (names::SPARAS_HEADQUARTERS, 0b1_0000),
     ];
-    for def in every_card() {
+    for def in tuned_cards() {
         let derived = info(def, Knowledge::Estimate);
         let (wheel, _, friendly, _, draws, empties) = flags_before(def.name);
         let extra = expected
@@ -142,37 +150,4 @@ fn tuned_values_are_the_hand_tuned_ones() {
         estimated.get(card(names::JACE_THE_MIND_SCULPTOR)).value,
         crate::estimate::estimate(t.def(card(names::JACE_THE_MIND_SCULPTOR)))
     );
-}
-
-/// Prints each tuned card's features and hand-tuned value as CSV, the data the estimate's
-/// weights were fitted to (`crate::estimate`): `cargo test -p beryl_search --lib
-/// overlay_features -- --ignored --nocapture`.
-#[test]
-#[ignore = "prints the data the estimate's weights were fitted to"]
-fn overlay_features() {
-    for tuning in super::TUNINGS {
-        let def = every_card()
-            .into_iter()
-            .find(|d| d.name == tuning.name)
-            .unwrap();
-        let f = crate::estimate::features(def);
-        println!(
-            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
-            def.name.replace(',', ""),
-            tuning.value.unwrap_or(0),
-            f.mana_value,
-            f.body,
-            f.keywords,
-            f.loyalty,
-            f.land,
-            f.cards,
-            f.tokens,
-            f.removal,
-            f.counters,
-            f.mana,
-            f.repeatable,
-            f.options,
-            f.extra_costs
-        );
-    }
 }

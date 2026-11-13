@@ -1,11 +1,10 @@
-//! A card's value estimated from what its definition says it does (plan K9: "Generic agents
-//! derive card knowledge from definitions"), for every card the per-deck overlay
+//! A card's value estimated from what its definition says it does, for every card the per-deck overlay
 //! ([`crate::overlay`]) has no hand-tuned value for. It is what [`crate::Knowledge::Estimate`]
 //! knows of every card, and so what the AI knows of a deck nobody has tuned for.
 //!
 //! The estimate counts a few things a player looks at ([`CardFeatures`]) and weighs each by
 //! a fixed constant. The weights were fitted once, by least squares, to the overlay's values
-//! for the 47 cards it tuned (bead by-w8gv.15.3 records the fit), and are in the overlay's
+//! for the 46 cards it tuned, and are in the overlay's
 //! units: a basic land about 10, a game-winning planeswalker about 90. They are never tuned
 //! to a match result.
 //!
@@ -62,8 +61,7 @@ pub(crate) const SWEEP: i16 = 2;
 /// The weights of [`CardFeatures`], in hundredths of a value point, in the order of the
 /// fields.
 ///
-/// Fitted on 2026-11-12 by least squares to the overlay's 46 hand-tuned values (bead
-/// by-w8gv.15.3; the data is printed by the ignored test `overlay_features`), with every
+/// Fitted on 2026-11-12 by least squares to the overlay's 46 hand-tuned values, with every
 /// weight but [`BASE`] and [`LAND`] held at zero or above, and no weight for a feature that
 /// fewer than two of those cards have (`extra_costs`). The fit's rank correlation with the
 /// overlay is 0.885 (Spearman), against 0.719 for the estimate from mana value, stats and

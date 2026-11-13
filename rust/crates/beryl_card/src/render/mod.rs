@@ -1,5 +1,5 @@
-//! Rendering a definition back to Oracle-style rules text (plan K13): "A definition renders
-//! back to Oracle-style text, which is compared with Scryfall's." A cheap model's typical
+//! Rendering a definition back to Oracle-style rules text, which is compared with
+//! Scryfall's Oracle text. A cheap model's typical
 //! error is a plausible definition that differs from the card, and the rendered text makes
 //! that error mechanical to find. The same templates give the UI the rules text of an
 //! ability ([`render_ability`]).

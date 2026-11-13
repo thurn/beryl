@@ -323,24 +323,42 @@ fn a_recorded_halt_the_game_no_longer_makes_is_skipped() {
     assert_eq!(replayed(&file).unwrap(), view);
 }
 
+/// A game played by the same script as [`played`] up to the human's first answer that plays a
+/// card, and where that answer went in the log. Which game has one depends on the fuzz decks,
+/// which change as cards are implemented, so it looks through seeds until one does.
+fn played_to_a_card() -> (Game, usize) {
+    for seed in 0..32 {
+        let mut game = Game::new(&CARDS, &start(seed), SESSION).unwrap();
+        let mut view = to_human(&mut game);
+        for _ in 0..60 {
+            let Status::Deciding { decision } = &view.status else {
+                break;
+            };
+            let at = game.replay().log.len();
+            let n = decision.candidates.len() as u32;
+            let index = CandidateIndex(((decision.id.seq * 7 + 3) % n) as u16);
+            game.choose(game.answer(decision.id, index).unwrap());
+            view = to_human(&mut game);
+            if let Entry::Choice(Chosen {
+                what:
+                    Some(Described {
+                        act: Act::PlayLand { .. } | Act::Cast { .. },
+                        ..
+                    }),
+                ..
+            }) = &game.replay().log[at]
+            {
+                return (game, at);
+            }
+        }
+    }
+    panic!("no game of 32 has the scripted human play a card");
+}
+
 #[test]
 fn an_answer_no_candidate_does_stops_the_replay_naming_the_step() {
-    // The decks are dealt at random from every implemented card (`fuzz_deck`), so a new card
-    // changes the game: 60 answers leave room for the human to play a card in most deals.
-    let (game, _, answers) = played(3, 60);
+    let (game, cast) = played_to_a_card();
     let mut file = game.replay().clone();
-    let cast = answers
-        .iter()
-        .find(|a| {
-            matches!(
-                chosen(&file.log[a.at]).what,
-                Some(Described {
-                    act: Act::PlayLand { .. } | Act::Cast { .. },
-                    ..
-                })
-            )
-        })
-        .expect("the human plays a card");
     let Entry::Choice(Chosen {
         what:
             Some(Described {
@@ -348,7 +366,7 @@ fn an_answer_no_candidate_does_stops_the_replay_naming_the_step() {
                 ..
             }),
         ..
-    }) = &mut file.log[cast.at]
+    }) = &mut file.log[cast]
     else {
         unreachable!("found above");
     };

@@ -1,6 +1,6 @@
 //! The per-deck overlay: hand-tuned card knowledge for the supported decks, applied on top of
-//! what the rollout policy derives from every card's definition (plan K9: "Hand-tuned
-//! numbers survive only as an optional overlay for supported decks").
+//! what the rollout policy derives from every card's definition. Hand-tuned numbers
+//! survive only here, as an optional overlay for the supported decks.
 //!
 //! It was tuned for the WU Control mirror (`decks::WU_CONTROL`) and the Vintage WU Control
 //! deck before it (`decks::VINTAGE_WU_CONTROL`). A card with no entry keeps what

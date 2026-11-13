@@ -1,4 +1,4 @@
-"""The Forge census (plan K16): which mechanics block the most cards from Beryl's vocabulary.
+"""The Forge census: which mechanics block the most cards from Beryl's vocabulary.
 
 Forge's card scripts are read only to count. For each script of a card in the pool this reads
 the kind names that say what the card does and nothing else: the API name of each ability

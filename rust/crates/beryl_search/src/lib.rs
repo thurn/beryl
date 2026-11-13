@@ -190,23 +190,43 @@ impl<A: Widen> Agent<Large> for Widening<A> {
 }
 
 /// Picks uniformly among the candidates, from its own seeded stream, so a seed reproduces its
-/// games.
+/// games. Each decision takes exactly one draw, so its own decision `n` is answered by the
+/// stream's draw `n`, and it can stand before any of its decisions ([`Agent::rewind`]): a
+/// game resumed from its save, whose replay answers the agent's decisions from the record,
+/// moves it past them and plays on as if it never stopped.
 #[derive(Clone, Debug)]
 pub struct RandomAgent {
+    seed: u64,
     rng: SplitMix64,
+    decision: AgentDecision,
 }
 
 impl RandomAgent {
     pub fn new(seed: u64) -> Self {
         Self {
+            seed,
             rng: SplitMix64::new(seed),
+            decision: AgentDecision(0),
         }
     }
 }
 
 impl<L: Layout> Agent<L> for RandomAgent {
     fn choose(&mut self, _obs: Observation<'_, L>, d: &Decision<L>) -> Choice {
+        self.decision.0 += 1;
         Choice(self.rng.below(d.len() as u64) as u16)
+    }
+
+    fn next_decision(&self) -> Option<AgentDecision> {
+        Some(self.decision)
+    }
+
+    fn rewind(&mut self, to: AgentDecision) {
+        self.rng = SplitMix64::new(self.seed);
+        // `SplitMix64` steps its state by a fixed increment per draw, so skipping `to` draws
+        // is one multiply.
+        self.rng.skip(u64::from(to.0));
+        self.decision = to;
     }
 }
 

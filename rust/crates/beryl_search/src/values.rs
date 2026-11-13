@@ -1,6 +1,6 @@
 //! What the rollout policy knows about each card of a game (architecture §19.1, decision
 //! D21): a value and a few flags of card knowledge, each flag derived from what the card's
-//! definition says its abilities do (plan K9). [`Knowledge::Estimate`] estimates every
+//! definition says its abilities do. [`Knowledge::Estimate`] estimates every
 //! value from the definition ([`crate::estimate`]); [`Knowledge::Tuned`] takes hand-tuned
 //! values for the supported decks from the per-deck overlay ([`crate::overlay`]). Built once per game, indexed by game-table
 //! index (§6.4), so a decision reads it with one load.
