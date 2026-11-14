@@ -265,6 +265,7 @@ impl Ctx {
             TriggerEvent::Discards | TriggerEvent::Draws => "that card",
             TriggerEvent::Casts => "that spell",
             TriggerEvent::CreatesTokens => "those tokens",
+            TriggerEvent::Leaves => "that permanent",
             TriggerEvent::Enters
             | TriggerEvent::Dies
             | TriggerEvent::Attacks

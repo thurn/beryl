@@ -27,8 +27,8 @@ pub struct Listener {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Unmatched {
     /// Its event is not matched against that subject: an object other than the one the
-    /// ability is on entering, dying, attacking or dealing damage, the object itself being
-    /// cast or discarded, or a subject for an event that is about no object.
+    /// ability is on entering, attacking or dealing damage, the object itself being cast or
+    /// discarded, or a subject for an event that is about no object.
     Subject,
     /// Its event is not matched for those players: any but "you", "each opponent" and "each
     /// player", or any but "each player" for an event no player does.
@@ -43,6 +43,9 @@ enum About {
     This,
     /// One object or a set of them, matched by a filter.
     Filtered,
+    /// One object, matched either way: an ability that looks back in time at the
+    /// permanents leaving the battlefield sees each of them, its own permanent among them.
+    Either,
     /// No object.
     Nothing,
 }
@@ -56,7 +59,8 @@ enum About {
 pub fn listens_to(trigger: &Trigger) -> Result<Option<EventKind>, Unmatched> {
     let (kind, about, has_player) = match trigger.event {
         TriggerEvent::Enters => (EventKind::Enters, About::This, false),
-        TriggerEvent::Dies => (EventKind::Dies, About::This, false),
+        TriggerEvent::Dies => (EventKind::Dies, About::Either, false),
+        TriggerEvent::Leaves => (EventKind::Leaves, About::Either, false),
         TriggerEvent::Attacks => (EventKind::Attack, About::This, false),
         TriggerEvent::PlayerAttacks => (EventKind::Attack, About::Filtered, true),
         TriggerEvent::DealsCombatDamageToPlayer => (EventKind::Damage, About::This, true),
@@ -67,8 +71,8 @@ pub fn listens_to(trigger: &Trigger) -> Result<Option<EventKind>, Unmatched> {
         TriggerEvent::Draws => (EventKind::Draw, About::Nothing, true),
     };
     let subject = match (about, trigger.subject) {
-        (About::This, Subject::This)
-        | (About::Filtered, Subject::A(_))
+        (About::This | About::Either, Subject::This)
+        | (About::Filtered | About::Either, Subject::A(_))
         | (About::Nothing, Subject::A(Filter::Any)) => Ok(()),
         _ => Err(Unmatched::Subject),
     };
@@ -120,6 +124,14 @@ mod tests {
         for (trigger, kind) in [
             (Trigger::ENTERS, EventKind::Enters),
             (Trigger::DIES, EventKind::Dies),
+            (
+                Trigger::of(TriggerEvent::Dies, Subject::A(creature)),
+                EventKind::Dies,
+            ),
+            (
+                Trigger::of(TriggerEvent::Leaves, Subject::This),
+                EventKind::Leaves,
+            ),
             (Trigger::ATTACKS, EventKind::Attack),
             (Trigger::attack(Players::EachOpponent), EventKind::Attack),
             (Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER, EventKind::Damage),
@@ -167,9 +179,8 @@ mod tests {
     fn a_subject_the_engine_does_not_match_is_refused() {
         let creature = Subject::A(Filter::Types(Types::CREATURE));
         for trigger in [
-            // Another object entering, dying, attacking or dealing damage.
+            // Another object entering, attacking or dealing damage.
             Trigger::of(TriggerEvent::Enters, creature),
-            Trigger::of(TriggerEvent::Dies, creature),
             Trigger::of(TriggerEvent::Attacks, creature),
             Trigger::of(TriggerEvent::DealsCombatDamageToPlayer, creature),
             // The object itself where the event is matched by a filter.

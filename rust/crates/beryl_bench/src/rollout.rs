@@ -381,7 +381,7 @@ mod tests {
         let c = Corpus::new();
         let turns: Vec<u16> = c.positions.iter().map(|s| s.turn().number()).collect();
         assert_eq!(turns, CUTS.repeat(2 * GAMES as usize));
-        assert_eq!(stable_hash(&c.positions), 15_083_953_094_819_322_849);
+        assert_eq!(stable_hash(&c.positions), 3_118_736_887_667_329_696);
     }
 
     /// Every rollout of the corpus answers every question as it always has and ends the same

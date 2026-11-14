@@ -55,6 +55,7 @@
 //! | move the turn, count toward a budget, end the game | [`State::set_starting_player`], [`State::begin_turn`], [`State::begin_step`], [`State::give_priority`], [`State::pass_priority`], [`State::reset_passes`], [`State::declare_attack`], [`State::set_cleanup_check`], [`State::count_decision`], [`State::count_state_based_check`], [`State::reset_state_based_checks`], [`State::end_game`] | passes reset with priority; the lands played and the decisions offered begin again with the turn; that attackers were declared ends with the combat ([`State::end_combat`]) |
 //! | use the stack | [`State::put_on_stack`], [`State::take_top_of_stack`], [`State::take_off_stack`], which returns the entry, [`State::announce_x`], [`State::announce_target`] | a spell's entry goes on once its card is in the stack zone and comes off before the card leaves, so the zone move keeps the stack's set of objects and these keep its order |
 //! | queue triggers | [`State::queue_trigger`], [`State::take_trigger`], [`State::delay_trigger`], [`State::fire_delayed`] | a delayed trigger that fires waits with the others, once |
+//! | keep and forget last-known information (CR 603.10a) | [`State::record_last_known`], [`State::forget_last_known`] | one row for each object that left, copied from its current layer results before it moves; a row no waiting trigger, stack entry or delayed trigger names is forgotten |
 //! | open and settle a question | [`State::ask`], [`State::settle_question`], [`State::pause_resolution`], [`State::resume_resolution`], [`State::record_answer`] | a question is open or priority is; a paused resolution keeps what each player knew as it began, and only resuming it gives that back |
 //! | start and end what a card creates | [`State::start_effect`], [`State::start_effect_on_set`], [`State::expire`] | an effect's timestamp; the kinds live in its store; the slots a store has entries about; a locked-in set's place in the store's table; `derived_dirty` where the entry is a layer input |
 //!
@@ -99,7 +100,7 @@
 //!
 //! Records stay plain data with `pub` fields. The rules build one and hand it to a mutator;
 //! the kernel stores it and gives it back whole: [`state::StackEntry`],
-//! [`state::PendingTrigger`], [`state::Target`], [`state::TriggerInfo`], [`state::Lki`],
+//! [`state::PendingTrigger`], [`state::Target`], [`state::TriggerInfo`],
 //! [`state::Casting`] and the other payloads of [`state::Pending`], and a
 //! [`decision::Decision`] with its parts. [`state::Derived`] is one going the other way: the
 //! layers compute it, `rederive` stores it, everyone reads it. No invariant ties a record's
@@ -214,7 +215,10 @@
 //! is 56 bytes, two fewer. It is 20,104 since what the permanents listen to is a 64-bit
 //! [`event::Listens`], where it was 16 bits, beside a 64-bit [`event::Replaces`] of what
 //! their static abilities replace: 16 more. After by-bajq.1.4 it is 20,112: the Trackers
-//! store's counts for each player, 8.
+//! store's counts for each player, 8. It is 20,056 since last-known information is a
+//! table of the state ([`last_known`]): each of the 96 waiting and delayed triggers is 6
+//! bytes smaller and each of the 64 stack entries 6, 960 in all, and the table of 16 rows
+//! of 56 bytes, with its length, takes 904 of them.
 //! The limit is 20,480. Each bead may change the size at its
 //! own push by at most its allotment, whatever landed before it, and reports the size as it
 //! reports the count:
@@ -230,6 +234,7 @@
 //! | by-w8gv.7.9 | +104 (landed: +96) | the counters table |
 //! | by-w8gv.7.10 | 0 or lower (landed: 0) | deletes only |
 //! | by-bajq.1.4 | +8 (landed: +8) | three counts for each of two players, padded |
+//! | by-bajq.1.2 | 0 or lower (landed: -56) | last-known information leaves every trigger record for a table of 16 rows |
 //!
 //! With every bead but by-w8gv.7.4 landed the size is at most 20,448, so any order holds
 //! the limit; the target with all landed was at most 20,256, and the milestone ends at
@@ -630,7 +635,7 @@
 //!
 //! A game index means the same card in every layout, and only its width differs
 //! ([`CardId::to`]). Every record of a state that names a card stores `L::Card`, so those
-//! records are generic over the layout ([`Copiable`], `Derived`, `Lki`, `GrantRef`). What is
+//! records are generic over the layout ([`Copiable`], `Derived`, `LastKnown`, `GrantRef`). What is
 //! kept outside any state names a card by the widest index ([`CardId::wide`]): a
 //! [`chance::Random`] reveal. [`GameTable`] is not generic over the layout: it takes a game
 //! index of any width and gives one of the width its caller stores, which is sound because
@@ -664,6 +669,7 @@ pub mod fixed;
 pub mod ids;
 pub mod invariants;
 mod knowledge;
+pub mod last_known;
 pub mod layout;
 pub mod listener;
 pub mod memos;

@@ -174,6 +174,7 @@ fn awaited(def: &'static CardDef, f: FaceIx) -> Vec<(String, Vec<Stimulus>)> {
                 | TriggerEvent::PlayerAttacks
                 | TriggerEvent::DealsCombatDamageToPlayer
                 | TriggerEvent::Dies
+                | TriggerEvent::Leaves
         )
     });
     if attacks && face.types.contains(Types::CREATURE) {

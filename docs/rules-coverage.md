@@ -78,7 +78,7 @@ toward that design; Beryl cannot afford it.
 | R1  | The cards are chosen by what is expensive to retrofit: how card data is written, what the kernel assumes an object is, and what the decision protocol assumes. 24 keystones and about 25 partners. No complete deck.                                                                                                 | Legacy's most-played decks are mostly easy cards, so choosing by popularity delivers the hard cases late. Breadth is cheap to add later; a wrong assumption in the kernel is not.                                                                                                                                                     |
 | R2  | A mechanism that the WU Control mirror does not use costs it nothing. The count gate is never raised for a new mechanism, and a bead that cannot hold it after three attempts stops the run for a human decision.                                                                                                    | This is the one bar an unattended run cannot argue its way past (engine-architecture.md, K1).                                                                                                                                                                                                                                         |
 | R3  | Each family of keystones has a counted rollout corpus with the family in play. Every step of those rollouts is also counted on the same state with the family taken out, and the family's steps stay within 1.25 times that. A miss after three attempts is recorded with its value and cause and files a follow-up. | The count gate cannot see what a mechanism costs when present. Two rollouts, one with the family and one without, play different games, so their difference is mostly the game's and not the mechanism's; one step from one state differs only by the mechanism. At 1.25 times, a search over such a board keeps 80% of its rollouts. |
-| R4  | `State<Small>` stays within 20,480 bytes. Each bead that changes its size has an allotment and reports the size. Last-known information moves out of every waiting trigger into a shared table, which frees about 900 bytes for the rest.                                                                            | A state and its scratch copy must fit the 64 KiB first-level cache of a Performance core.                                                                                                                                                                                                                                             |
+| R4  | `State<Small>` stays within 20,480 bytes. Each bead that changes its size has an allotment and reports the size. Last-known information moves out of every waiting trigger into a shared table (landed: 56 bytes freed, leaving 424 under the limit).                                                                | A state and its scratch copy must fit the 64 KiB first-level cache of a Performance core.                                                                                                                                                                                                                                             |
 | R5  | The layers stay one full recompute from base, applied one layer at a time. A same-layer dependency (CR 613.8) is found by applying one effect to a scratch copy and seeing whether the other changed, never from a table of card pairs.                                                                              | A table of pairs cannot cover 50,000 cards. The trial runs only when two effects share a layer and one writes what the other reads.                                                                                                                                                                                                   |
 | R6  | Each replaceable happening (a move, a draw, damage, destruction) builds a typed value before it changes the state, and replacement effects rewrite that value. There is no general hook on events. A step that may have to ask a player runs as a transaction.                                                       | Principle 1. A typed value per kind keeps each gate one AND and lets the compiler check each rewrite.                                                                                                                                                                                                                                 |
 | R7  | An object's copiable values are a face of a definition plus a short list of additions. `Object::card` holds the definition the object currently has the values of; the card it really is, where that differs, is a memo.                                                                                             | `State::copiable` is read on every hot path, so a copy must cost it nothing. One representation serves copies, copies of copies and merged permanents.                                                                                                                                                                                |
@@ -150,19 +150,28 @@ this document.
   one bitboard of the slots that are in such a zone now, written by the zone
   move behind a capability. Matching walks the battlefield's listeners, then
   that set. A game whose cards have no such ability never writes or reads it.
-- **Look-back** (CR 603.10). `trigger::match_leaving` matches only "when this
-  dies". It becomes the match for every ability that looks back, with any
-  subject, against every permanent of the batch as it last existed, so a
-  creature sees the others die with it and a creature without abilities under
-  Humility has no dies trigger.
-- **Last-known information.** Every waiting trigger, stack entry and delayed
-  trigger carries an 8-byte `Lki`: about 1,280 bytes for 160 records that are
-  nearly always empty. It becomes a table of up to 16 rows keyed by the
-  `ObjectRef` of the object that left, each a copy of its `Derived` row with its
-  counters, written only when something that looks back matched. A reader asks
-  `State::last_known`. The table empties when no waiting trigger, stack entry or
-  delayed trigger names a row. This frees about 900 bytes and lets an effect
-  read any characteristic of an object that has left, not only five of them.
+- **Look-back** (CR 603.10). `trigger::match_look_back` matches every ability
+  that looks back ("dies" and "leaves the battlefield", `TriggerEvent::Leaves`),
+  with either subject, against every permanent of the batch before any of it
+  moves, so a creature sees the others die with it. It reads each permanent's
+  abilities from its copiable values, as the other trigger matching does: when
+  layer 6 can remove abilities (group 2), both must read the layer results, so
+  that a creature without abilities under Humility has no dies trigger.
+- **Last-known information.** Each waiting trigger, stack entry and delayed
+  trigger carried an 8-byte `Lki`. It is now a table of the state
+  (`beryl_kernel::last_known`), of up to 16 rows in `Small` keyed by the
+  `ObjectRef` of the object that left. Each row is a copy of the object's
+  `Derived` row with its three field counters, its token flag, its copiable
+  values and what it was attached to. A row is written only when an ability that
+  looks back matched the object, and a reader asks `State::last_known`. The
+  engine forgets the rows that no waiting trigger, stack entry or delayed
+  trigger names each time a player would receive priority. An effect can now
+  read any characteristic of an object that has left, not only five of them. A
+  `Derived` row is 40 bytes, so a row is 56: the records give back 960 bytes and
+  the table takes 904, and `State<Small>` went from 20,112 to 20,056 bytes
+  rather than freeing about 900. The interpreter's own record of the targets an
+  effect moves (`interpret::scene::Known`, CR 608.2h) stays in the resolution:
+  it keeps every kind of counter and the mana value, which a row does not.
 - **State triggers** (CR 603.8). Checked with the state-based actions behind
   their own kind. Whether one is already waiting or on the stack is found by
   looking there, so no flag is stored.

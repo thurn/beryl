@@ -43,6 +43,7 @@ impl<L: Layout> State<L> {
         self.check_zones()?;
         self.check_players()?;
         self.check_stores(t)?;
+        self.check_last_known()?;
         check(
             self.outcome.is_some() || !self.flags.derived_dirty,
             "derived characteristics are stale",

@@ -164,6 +164,11 @@ impl<L: Layout> State<L> {
             self.delayed.len(),
             capacity(|s: &State<M>| &s.delayed),
         )?;
+        room(
+            "the last-known information",
+            self.last_known.len(),
+            capacity(|s: &State<M>| &s.last_known),
+        )?;
         self.stores_fit::<M>()?;
         for player in self.players.iter() {
             room(

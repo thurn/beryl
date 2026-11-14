@@ -10,7 +10,7 @@ use crate::layout::{Item, Layout, Queue, Table, index};
 mod events;
 
 use crate::state::{
-    AbilityRef, CastStep, Casting, Derived, GrantRef, Lki, Object, ObjectRef, PayingObjects,
+    AbilityRef, CastStep, Casting, Derived, GrantRef, LastKnown, Object, ObjectRef, PayingObjects,
     Pending, PendingTrigger, Player, Resolving, SLOTS, StackEntry, StackItem, State, Target,
     TriggerInfo, Zones,
 };
@@ -140,22 +140,21 @@ impl<L: Layout> Relayout for TriggerInfo<L> {
             object: self.object.map(|r| r.relayout()),
             player: self.player,
             amount: self.amount,
-            lki: self.lki.relayout(),
         }
     }
 }
 
-impl<L: Layout> Relayout for Lki<L> {
-    type In<M: Layout> = Lki<M>;
+impl<L: Layout> Relayout for LastKnown<L> {
+    type In<M: Layout> = LastKnown<M>;
 
-    fn relayout<M: Layout>(&self) -> Lki<M> {
-        Lki {
-            card: card(self.card),
-            power: self.power,
-            toughness: self.toughness,
-            types: self.types,
-            controller: self.controller,
+    fn relayout<M: Layout>(&self) -> LastKnown<M> {
+        LastKnown {
+            object: self.object.relayout(),
+            derived: self.derived.relayout(),
+            counters: self.counters,
             token: self.token,
+            copiable: self.copiable.relayout(),
+            attached_to: self.attached_to.map(|r| r.relayout()),
         }
     }
 }
@@ -491,6 +490,7 @@ impl<L: Layout> Relayout for State<L> {
             stack,
             triggers,
             delayed,
+            last_known,
             effects,
             keyed,
             memos,
@@ -524,6 +524,7 @@ impl<L: Layout> Relayout for State<L> {
             stack: queue(stack.as_slice(), StackEntry::relayout),
             triggers: queue(triggers.as_slice(), PendingTrigger::relayout),
             delayed: queue(delayed.as_slice(), PendingTrigger::relayout),
+            last_known: queue(last_known.as_slice(), LastKnown::relayout),
             effects: effects.relayout(),
             keyed: bits(*keyed),
             memos: memos.relayout(),

@@ -257,7 +257,7 @@ fn advance<L: Layout>(
                     s.set_cleanup_check(false);
                     continue;
                 }
-                Ok(false) => {}
+                Ok(false) => s.forget_last_known(),
                 Err(Full) => {
                     stall(s, StallReason::Capacity);
                     continue;

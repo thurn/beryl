@@ -516,14 +516,17 @@ impl<L: Layout> Scene<'_, L> {
     }
 
     /// Whether there is an object `names` names and every one is a token. The ability's own
-    /// source that has left the battlefield is read as it last was there, which an ability
-    /// that triggered on its leaving kept
+    /// source that has left the battlefield is read as it last was there, from the last-known
+    /// information an ability that triggered on its leaving kept ([`State::last_known`])
     /// ([CR 603.10a](https://yawgatog.com/resources/magic-rules/#R60310a)): "Some zone-change
     /// triggers look back in time."
     fn is_a_token(&self, names: Objects) -> bool {
         let objects = self.objects(names);
         if objects.is_empty() && names == Objects::This {
-            return self.subject.info.lki.token;
+            let source = self.subject.of.source;
+            return source
+                .and_then(|r| self.s.last_known(r))
+                .is_some_and(|row| row.token);
         }
         !objects.is_empty() && objects.all(|slot| self.s.object(slot).is_token())
     }

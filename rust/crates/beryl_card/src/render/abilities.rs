@@ -112,6 +112,7 @@ impl Ctx {
         match trigger.event {
             TriggerEvent::Enters
             | TriggerEvent::Dies
+            | TriggerEvent::Leaves
             | TriggerEvent::Attacks
             | TriggerEvent::DealsCombatDamageToPlayer => {
                 let (word, subject) = match trigger.subject {
@@ -177,12 +178,13 @@ impl Ctx {
         }
     }
 
-    /// What happens to the object: "enters", "dies", "attacks", "deals combat damage to a
+    /// What happens to the object: "enters", "dies", "leaves the battlefield", "attacks", "deals combat damage to a
     /// player".
     pub(super) fn event_verb(&mut self, trigger: &Trigger) -> String {
         match trigger.event {
             TriggerEvent::Enters => "enters".to_owned(),
             TriggerEvent::Dies => "dies".to_owned(),
+            TriggerEvent::Leaves => "leaves the battlefield".to_owned(),
             TriggerEvent::Attacks => "attacks".to_owned(),
             TriggerEvent::DealsCombatDamageToPlayer => {
                 let whom = match trigger.whose {

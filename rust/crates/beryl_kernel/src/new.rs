@@ -130,6 +130,7 @@ impl<L: Layout> State<L> {
             stack: Default::default(),
             triggers: Default::default(),
             delayed: Default::default(),
+            last_known: Default::default(),
             effects: Effects::empty(),
             keyed: Bitboard::EMPTY,
             memos: Memos::empty(),

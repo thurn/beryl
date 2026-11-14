@@ -7,7 +7,7 @@
 //! mutators keep. The entry goes on once the object is there and comes off before the object
 //! leaves; the invariants hold a state to it ([`crate::invariants`]).
 
-use beryl_card::{AbilityIx, Castings, FaceAbility, FaceIx, SpecIx, Types};
+use beryl_card::{AbilityIx, Castings, FaceAbility, FaceIx, SpecIx};
 
 use crate::bitboard::Bitboard;
 use crate::event::Sink;
@@ -349,51 +349,14 @@ impl<L: Layout> StackEntry<L> {
     }
 }
 
-/// Last-known information about a permanent that left the battlefield (architecture §5),
-/// as it last existed there
-/// ([CR 603.10](https://yawgatog.com/resources/magic-rules/#R60310)): the game "looks back in
-/// time" for leaves-the-battlefield abilities.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct Lki<L: Layout = Small> {
-    /// The game index of the card, the copiable values of a token copy.
-    pub card: L::Card,
-    pub power: i8,
-    pub toughness: i8,
-    pub types: PermanentTypes,
-    pub controller: Seat,
-    pub token: bool,
-}
-
-/// The card types of a permanent, in a byte: `beryl_card::Types` keeps every type a
-/// permanent can have in its low byte
-/// ([CR 110.4](https://yawgatog.com/resources/magic-rules/#R1104)): "Instant and sorcery
-/// cards can't enter the battlefield and thus can't be permanents." So last-known
-/// information, kept in every pending trigger and stack entry, stays as small as it was.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct PermanentTypes(u8);
-
-impl PermanentTypes {
-    /// A permanent's types: those of `types` a permanent can have.
-    #[inline]
-    pub fn of(types: Types) -> PermanentTypes {
-        PermanentTypes(types.0.to_le_bytes()[0])
-    }
-
-    /// The card types.
-    #[inline]
-    pub fn types(self) -> Types {
-        Types(u16::from(self.0))
-    }
-}
-
-/// What a triggered ability triggered on: the object and player the event involved, an
-/// amount, and last-known information for look-back triggers.
+/// What a triggered ability triggered on: the object and player the event involved, and an
+/// amount. What an object that has left the battlefield was is read by the object
+/// ([`State::last_known`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct TriggerInfo<L: Layout = Small> {
     pub object: Option<ObjectRef<L>>,
     pub player: Seat,
     pub amount: u8,
-    pub lki: Lki<L>,
 }
 
 /// An ability that has triggered and waits to be put on the stack.

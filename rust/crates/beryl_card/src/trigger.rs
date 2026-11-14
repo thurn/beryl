@@ -46,6 +46,9 @@ pub enum TriggerEvent {
     /// "When [subject] dies": a leaves-the-battlefield ability, which looks back in time
     /// ([CR 603.10a](https://yawgatog.com/resources/magic-rules/#R60310a)).
     Dies,
+    /// "When [subject] leaves the battlefield", for any zone: a leaves-the-battlefield
+    /// ability, which looks back in time (CR 603.10a).
+    Leaves,
     /// "Whenever [subject] attacks"
     /// ([CR 508.3a](https://yawgatog.com/resources/magic-rules/#R5083a)): it "triggers if
     /// that creature is declared as an attacker." Once for each such creature.

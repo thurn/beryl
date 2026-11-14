@@ -41,7 +41,7 @@ use crate::table::{FaceFacts, GameTable};
 /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
 /// [CR 111.3]: https://yawgatog.com/resources/magic-rules/#R1113
 /// [CR 708.2]: https://yawgatog.com/resources/magic-rules/#R7082
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Copiable<L: Layout = Small> {
     card: L::Card,
     /// [`FaceIx::DOWN`] for a face-down permanent's.
@@ -61,6 +61,18 @@ impl<C: CardId> DefinitionKey<C> {
     #[inline]
     pub fn index(self) -> usize {
         self.0.index()
+    }
+}
+
+impl<L: Layout> crate::relayout::Relayout for Copiable<L> {
+    type In<M: Layout> = Copiable<M>;
+
+    fn relayout<M: Layout>(&self) -> Copiable<M> {
+        Copiable {
+            card: crate::relayout::card(self.card),
+            face: self.face,
+            one_one: self.one_one,
+        }
     }
 }
 

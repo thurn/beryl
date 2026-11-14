@@ -4,9 +4,7 @@
 use std::cell::OnceCell;
 
 use crate::bitboard::Bitboard;
-use crate::card::{
-    Ability, AbilityIx, CastingKind, Face, FaceIx, Subject, Trigger, TriggerEvent, Types,
-};
+use crate::card::{Ability, AbilityIx, CastingKind, Face, FaceIx, Subject, Trigger, TriggerEvent};
 use crate::event::{Event, EventKind, Listens, Recipient, Sink};
 use crate::filter::{Evaluate, Filter, is_for};
 use crate::fixed::Full;
@@ -15,8 +13,8 @@ use crate::layers;
 use crate::layout::{Layout, Queue, index};
 use crate::query::Copiable;
 use crate::state::{
-    AbilityRef, Lki, ObjectRef, PendingTrigger, PermanentTypes, StackEntry, StackItem, State,
-    TriggerInfo, TurnStep, Zone,
+    AbilityRef, ObjectRef, PendingTrigger, StackEntry, StackItem, State, TriggerInfo, TurnStep,
+    Zone,
 };
 use crate::table::GameTable;
 
@@ -164,7 +162,6 @@ fn fires<L: Layout>(
         object,
         player,
         amount,
-        lki: Lki::default(),
     };
     let whose = |player: Seat| is_for(&trigger.whose, player, you);
     let about = |object: ObjectRef<L>| about(s, t, trigger.subject, this, you, object);
@@ -258,64 +255,77 @@ fn how_many<L: Layout>(
         .count()
 }
 
-/// Matches the leaves-the-battlefield abilities of a permanent about to move, which look back in
-/// time ([CR 603.10a]), and captures its last-known information for their bodies (architecture §5).
-/// The permanent is still on the battlefield, with every other permanent of the same event.
+/// Matches the abilities that look back in time against the permanents of one event that are
+/// about to leave the battlefield, each with the zone it goes to ([CR 603.10a]): "Some zone-change
+/// triggers look back in time. These are leaves-the-battlefield abilities". For those
+/// ([CR 603.10]), "the game “looks back in time” to determine if those abilities trigger, using
+/// the existence of those abilities and the appearance of objects immediately prior to the
+/// event." Every permanent of the event is still on the battlefield, so each permanent's
+/// abilities are matched against each leaving one as it is now, the permanent's own and those of
+/// the others leaving with it: two creatures that die together each see the other die.
 ///
-/// [CR 700.4](https://yawgatog.com/resources/magic-rules/#R7004): "The term dies means 'is put into
-/// a graveyard from the battlefield.'"
+/// Each leaving permanent that some ability triggered on keeps its last-known information
+/// ([`State::record_last_known`]) for the abilities to read once it has left.
+///
+/// A permanent dies as it goes to a graveyard, whatever its types ([CR 700.4]): "The term dies
+/// means 'is put into a graveyard from the battlefield.'" A filter such as "a creature" is read
+/// against the layer results, so a permanent that is no longer a creature does not die as one.
 ///
 /// [CR 603.10a]: https://yawgatog.com/resources/magic-rules/#R60310a
-pub(crate) fn match_leaving<L: Layout>(
+/// [CR 603.10]: https://yawgatog.com/resources/magic-rules/#R60310
+/// [CR 700.4]: https://yawgatog.com/resources/magic-rules/#R7004
+pub(crate) fn match_look_back<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    slot: L::Slot,
-    to: Zone,
+    leaving: &[(L::Slot, Zone)],
 ) -> Result<(), Full> {
-    let what = s.copiable(slot);
-    if !what.may_listen(t).hears(EventKind::Dies) || to != Zone::Graveyard {
+    let mask = Listens::event(EventKind::Dies) | Listens::event(EventKind::Leaves);
+    if leaving.is_empty() || !t.listens_any().intersects(mask) {
         return Ok(());
     }
-    let lki = lki(s, t, slot);
-    if !lki.types.types().contains(Types::CREATURE) {
+    if !s.listening().unwrap_or(t.listens_any()).intersects(mask) {
         return Ok(());
     }
-    let source = s.object_ref(slot);
-    let (card, face) = what.record(t);
-    // Each is "when this dies": the table has no other under the kind.
-    for l in t.listeners(card, face, EventKind::Dies) {
-        let info = TriggerInfo {
-            object: Some(source),
-            player: lki.controller,
-            amount: 0,
-            lki,
-        };
-        enqueue(
-            s,
-            t,
-            Some(source),
-            card,
-            face,
-            l.ability,
-            lki.controller,
-            info,
-        )?;
+    for &(left, to) in leaving {
+        let object = s.object_ref(left);
+        let waiting = s.triggers().len();
+        for i in 0..s.battlefield().len() {
+            let slot = s.battlefield()[i];
+            let what = s.copiable(slot);
+            let listens = what.may_listen(t);
+            if !listens.intersects(mask) {
+                continue;
+            }
+            let source = s.object_ref(slot);
+            let controller = s.controller(slot);
+            let (card, face) = what.record(t);
+            // CR 700.4: dying is going to a graveyard.
+            let kinds = [
+                (EventKind::Dies, to == Zone::Graveyard),
+                (EventKind::Leaves, true),
+            ];
+            for (kind, happened) in kinds {
+                if !happened || !listens.hears(kind) {
+                    continue;
+                }
+                for l in t.listeners(card, face, kind) {
+                    if !about(s, t, l.trigger.subject, Some(slot), controller, object) {
+                        continue;
+                    }
+                    let info = TriggerInfo {
+                        object: Some(object),
+                        player: s.controller(left),
+                        amount: 0,
+                    };
+                    enqueue(s, t, Some(source), card, face, l.ability, controller, info)?;
+                }
+            }
+        }
+        if s.triggers().len() > waiting {
+            s.record_last_known(left)?;
+        }
     }
     Ok(())
-}
-
-/// A permanent's last-known information, from its current characteristics.
-pub(crate) fn lki<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Lki<L> {
-    let d = s.derived(slot);
-    let o = s.object(slot);
-    Lki {
-        card: s.copiable(slot).record(t).0,
-        power: d.power,
-        toughness: d.toughness,
-        types: PermanentTypes::of(d.types),
-        controller: d.controller,
-        token: o.is_token(),
-    }
 }
 
 /// Records a triggered ability, if its intervening "if" holds now ([CR 603.4]): "When the trigger
@@ -412,7 +422,8 @@ fn equivalent<L: Layout>(
 ) -> bool {
     if (a.of.card, a.of.face, a.of.ability, a.of.controller)
         != (b.of.card, b.of.face, b.of.ability, b.of.controller)
-        || (a.info.player, a.info.amount, a.info.lki) != (b.info.player, b.info.amount, b.info.lki)
+        || (a.info.player, a.info.amount) != (b.info.player, b.info.amount)
+        || !same_last_known(s, a.info.object, b.info.object)
     {
         return false;
     }
@@ -462,6 +473,21 @@ fn equivalent<L: Layout>(
         let other = rename(tr);
         other == *tr || count(tr) == count(&other)
     })
+}
+
+/// Whether two objects that triggers name were alike as they last existed on the
+/// battlefield, where either has left it and has last-known information.
+fn same_last_known<L: Layout>(
+    s: &State<L>,
+    a: Option<ObjectRef<L>>,
+    b: Option<ObjectRef<L>>,
+) -> bool {
+    let known = |r: Option<ObjectRef<L>>| r.and_then(|r| s.last_known(r));
+    match (known(a), known(b)) {
+        (None, None) => true,
+        (Some(x), Some(y)) => x.alike(y),
+        _ => false,
+    }
 }
 
 /// Puts the waiting trigger at `index` on the stack ([CR 603.3]): "The ability becomes the topmost

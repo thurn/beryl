@@ -16,6 +16,11 @@ pub enum EventKind {
     Dies,
     Discard,
     Draw,
+    /// A permanent leaving the battlefield for any zone: matched, as "dies" is, before the
+    /// permanents of the event move ([CR 603.10a]).
+    ///
+    /// [CR 603.10a]: https://yawgatog.com/resources/magic-rules/#R60310a
+    Leaves,
 }
 
 /// The [`EventKind`]s that a card's triggered abilities listen to, as one 64-bit mask, at

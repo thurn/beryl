@@ -10,10 +10,11 @@ use crate::card::{
     Ability, CardDef, Castings, Face, Players, Subject, Subtype, Subtypes, Trigger, TriggerEvent,
     Types,
 };
-use crate::event::{self, Event};
+use crate::event::{self, Entry, Event, Reason};
 use crate::filter::Filter;
 use crate::fixed::Fixed;
 use crate::ids::Seat;
+use crate::ids::Slot;
 use crate::state::{TurnStep, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{CardTable, Decklist, GameTable, Profile, Scratch, State};
@@ -100,8 +101,32 @@ listener!(
     .whose(Players::You)
 );
 
+// "When this leaves the battlefield".
+listener!(
+    KEEPSAKE,
+    "Test Keepsake",
+    Trigger::of(TriggerEvent::Leaves, Subject::This)
+);
+/// "Whenever a creature dies, you gain 1 life", on a creature, which sees itself die too.
+static MOURNER: CardDef = CardDef {
+    name: "Test Mourner",
+    faces: &[Face {
+        types: Types::CREATURE,
+        power: Some(1),
+        toughness: Some(1),
+        abilities: &[Ability::triggered(&Trigger::of(
+            TriggerEvent::Dies,
+            Subject::A(Filter::Types(Types::CREATURE)),
+        ))
+        .effect(&gain_life(you(), 1))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
 static CARDS: CardTable = CardTable::new(&[
     &LAND, &BEAR, &KNIGHT, &HECKLER, &PURIST, &SANCTUARY, &METRONOME, &ARCHIVE, &MARSHAL,
+    &KEEPSAKE, &MOURNER,
 ]);
 
 const DECK: &Decklist = &[
@@ -113,7 +138,9 @@ const DECK: &Decklist = &[
     (1, "Test Metronome"),
     (1, "Test Archive"),
     (1, "Test Marshal"),
-    (31, "Test Land"),
+    (1, "Test Keepsake"),
+    (2, "Test Mourner"),
+    (28, "Test Land"),
 ];
 
 /// A game in the starting player's first main phase, each player with a land in hand so
@@ -237,4 +264,83 @@ fn an_attack_trigger_counts_the_attackers_its_subject_accepts() {
     event::settle(&mut s, &t, &mut x.events, attack(all)).unwrap();
     assert_eq!(s.triggers().len(), 1, "once, however many");
     assert_eq!(s.triggers()[0].info.amount, 2, "the Knights, not the Bear");
+}
+
+/// Moves the permanents in `slots` to `to` together, as one event.
+fn move_together(t: &GameTable, s: &mut State, x: &mut Scratch, slots: &[Slot], to: Zone) {
+    let batch: Bitboard<Slot> = slots.iter().copied().collect();
+    event::move_batch(
+        s,
+        t,
+        &mut x.events,
+        batch,
+        to,
+        Reason::Effect,
+        Entry::default(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn creatures_that_die_together_each_see_the_others_die() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let mourners = [
+        put(&t, &mut s, &mut x, p, "Test Mourner"),
+        put(&t, &mut s, &mut x, p, "Test Mourner"),
+    ];
+    let bear = put(&t, &mut s, &mut x, p, "Test Bear");
+    let dying = [mourners[0], mourners[1], bear];
+    let refs = dying.map(|slot| s.object_ref(slot));
+    move_together(&t, &mut s, &mut x, &dying, Zone::Graveyard);
+    assert_eq!(s.triggers().len(), 6, "each Mourner sees all three die");
+    for r in refs {
+        let row = s.last_known(r).expect("last-known information of each");
+        assert!(row.derived.types.contains(Types::CREATURE) && !row.token);
+        let seen = s.triggers().iter().filter(|tr| tr.info.object == Some(r));
+        assert_eq!(seen.count(), 2, "both Mourners saw it");
+    }
+    let life = s.player(p).life();
+    resolve_all(&t, &mut s, &mut x);
+    assert_eq!(s.player(p).life(), life + 6);
+    assert!(
+        s.last_known_rows().is_empty(),
+        "forgotten once nothing names a row"
+    );
+}
+
+#[test]
+fn a_creature_that_is_exiled_does_not_die() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    let mourner = put(&t, &mut s, &mut x, p, "Test Mourner");
+    let bear = put(&t, &mut s, &mut x, p, "Test Bear");
+    move_together(&t, &mut s, &mut x, &[bear], Zone::Exile);
+    assert!(s.triggers().is_empty() && s.last_known_rows().is_empty());
+    move_together(&t, &mut s, &mut x, &[mourner], Zone::Hand);
+    assert!(s.triggers().is_empty(), "nor does one returned to a hand");
+}
+
+#[test]
+fn a_leaves_trigger_fires_for_every_zone() {
+    let (t, mut s, p) = game();
+    let mut x = Scratch::new();
+    for to in [Zone::Exile, Zone::Hand] {
+        let keepsake = put(&t, &mut s, &mut x, p, "Test Keepsake");
+        let left = s.object_ref(keepsake);
+        move_together(&t, &mut s, &mut x, &[keepsake], to);
+        assert_eq!(s.triggers().len(), 1, "to {to:?}");
+        assert_eq!(s.triggers()[0].info.object, Some(left));
+        assert!(
+            s.last_known(left)
+                .is_some_and(|row| row.derived.types == Types::ARTIFACT)
+        );
+        resolve_all(&t, &mut s, &mut x);
+        assert!(s.last_known_rows().is_empty());
+        if to == Zone::Exile {
+            // Back to the hand, for the next zone.
+            s.move_object(&mut event::Sink::off(), keepsake, Zone::Hand, Place::Top)
+                .unwrap();
+        }
+    }
 }

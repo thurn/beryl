@@ -10,6 +10,7 @@ pub use crate::effects::{
     Affects, Continuous, ContinuousEffect, CostChange, EFFECTS, Effects, EffectsOn, LayerChange,
     LockedIn, MoveReplacement, Payload, Permanents, Permission, Permitted, SETS, Subject,
 };
+pub use crate::last_known::{LAST_KNOWN, LastKnown};
 pub use crate::memos::{MEMOS, Memo, Memos, MemosOf};
 pub use crate::object::{
     AttackTarget, CombatRole, Derived, Flag, GrantRef, Object, ObjectFlags, ObjectRef, SlotSet,
@@ -17,8 +18,8 @@ pub use crate::object::{
 pub use crate::pending::{CastKind, CastStep, Casting, PayingObjects, Pending, Resolving};
 pub use crate::player::{ManaPool, MulliganStatus, Player};
 pub use crate::stack::{
-    AbilityRef, Lki, PendingTrigger, PermanentTypes, StackEntry, StackItem, TARGETS, Target,
-    TargetPlace, TargetPlaces, TriggerInfo, placed,
+    AbilityRef, PendingTrigger, StackEntry, StackItem, TARGETS, Target, TargetPlace, TargetPlaces,
+    TriggerInfo, placed,
 };
 pub use crate::store::{Duration, Stored};
 pub use crate::trackers::{Count, Tracked, Tracker, Trackers};
@@ -171,6 +172,10 @@ pub struct State<L: Layout = Small> {
     /// Delayed triggered abilities waiting for their moment (CR 603.7), which their
     /// ability's [`beryl_card::Trigger`], a delayed one, names.
     pub(crate) delayed: L::Queue<PendingTrigger<L>, 32>,
+    /// The last-known information of permanents that left the battlefield, which abilities
+    /// that look back read ([`crate::last_known`]): [`State::record_last_known`] writes it
+    /// and [`State::forget_last_known`] empties it.
+    pub(crate) last_known: L::Queue<LastKnown<L>, LAST_KNOWN>,
     /// The Effects store ([`crate::effects`]): [`State::start_effect`] and
     /// [`State::expire`] write it.
     pub(crate) effects: Effects<L>,
@@ -212,6 +217,7 @@ impl<L: Layout> std::hash::Hash for State<L> {
             stack,
             triggers,
             delayed,
+            last_known,
             effects,
             memos,
             trackers,
@@ -229,6 +235,7 @@ impl<L: Layout> std::hash::Hash for State<L> {
         stack.hash(h);
         triggers.hash(h);
         delayed.hash(h);
+        last_known.hash(h);
         effects.hash(h);
         memos.hash(h);
         trackers.hash(h);
