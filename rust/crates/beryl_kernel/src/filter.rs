@@ -92,6 +92,7 @@ impl Evaluate for Filter {
             // owner" is used instead, which is what the query answers.
             Filter::Whose(players) => is_for(players, s.controller(slot), you),
             Filter::Tapped => o.flags.has(Flag::Tapped),
+            Filter::Token => o.is_token(),
             Filter::ManaValueAtMost(n) => s.mana_value(t, slot) <= n,
             Filter::ManaValueAtMostX => s.mana_value(t, slot) <= x,
             Filter::PowerAtMost(n) => s.power(t, slot) <= n,

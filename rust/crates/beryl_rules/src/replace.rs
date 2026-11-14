@@ -40,6 +40,15 @@ pub(crate) struct Move<L: Layout> {
     pub to: Zone,
     /// How it enters, if it is put onto the battlefield.
     pub entry: Entry<L>,
+    /// It moves as its spell resolves: a permanent spell becoming a permanent
+    /// ([CR 608.3a]): "If the object that's resolving has no targets, it becomes a permanent
+    /// and enters the battlefield". Only that resolution moves objects for
+    /// [`crate::event::Reason::Resolve`], so a card put onto the battlefield by an effect
+    /// "wasn't cast", whichever zone it left. It is not in [`Entry`], which a batch of moves
+    /// holds 128 of.
+    ///
+    /// [CR 608.3a]: https://yawgatog.com/resources/magic-rules/#R6083a
+    pub cast: bool,
 }
 
 /// Applies the replacement effects of a move to `proposal`: where the object goes
@@ -50,7 +59,7 @@ pub(crate) fn moving<L: Layout>(
     t: &GameTable,
     mut proposal: Move<L>,
 ) -> Result<Move<L>, Full> {
-    proposal.to = destination(s, t, proposal.slot, proposal.to)?;
+    proposal.to = destination(s, t, &proposal)?;
     if proposal.to == Zone::Battlefield {
         proposal.entry = entering(s, t, proposal.slot, proposal.entry)?;
     }
@@ -74,8 +83,8 @@ enum Source<S> {
 /// many.
 const MOST: usize = 16;
 
-/// The zone the object in `slot`, about to be put into `to`, goes to after the replacement
-/// effects that apply to it, read while the layer results are current.
+/// The zone the object of `proposal`, about to be put into its `to`, goes to after the
+/// replacement effects that apply to it, read while the layer results are current.
 ///
 /// Applying them follows [CR 616.1]: "If two or more replacement and/or prevention effects are
 /// attempting to modify the way an event affects an object or player, the affected object's
@@ -104,19 +113,18 @@ const MOST: usize = 16;
 /// [CR 616.1a]: https://yawgatog.com/resources/magic-rules/#R6161a
 /// [CR 616.1e]: https://yawgatog.com/resources/magic-rules/#R6161e
 #[inline]
-fn destination<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    slot: L::Slot,
-    to: Zone,
-) -> Result<Zone, Full> {
+fn destination<L: Layout>(s: &State<L>, t: &GameTable, proposal: &Move<L>) -> Result<Zone, Full> {
     let statics = s
         .replacing()
         .is_some_and(|r| r.replaces(ReplacementKind::Move));
-    if !statics && s.move_replacements(s.object_ref(slot)).next().is_none() {
-        return Ok(to);
+    if !statics
+        && s.move_replacements(s.object_ref(proposal.slot))
+            .next()
+            .is_none()
+    {
+        return Ok(proposal.to);
     }
-    replaced_destination(s, t, slot, to, statics)
+    replaced_destination(s, t, proposal, statics)
 }
 
 /// [`destination`] once some replacement of a move may apply: the loop of CR 616.1.
@@ -124,10 +132,10 @@ fn destination<L: Layout>(
 fn replaced_destination<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    slot: L::Slot,
-    mut to: Zone,
+    proposal: &Move<L>,
     statics: bool,
 ) -> Result<Zone, Full> {
+    let (slot, mut to) = (proposal.slot, proposal.to);
     let object = s.object_ref(slot);
     let mut applied: Fixed<Option<Source<L::Slot>>, MOST> = Fixed::new();
     loop {
@@ -147,6 +155,9 @@ fn replaced_destination<L: Layout>(
         if statics {
             for (permanent, ability, instead) in static_destinations(s, t, slot, to) {
                 add(Source::Ability(permanent, ability), instead)?;
+            }
+            if to == Zone::Battlefield {
+                entering_destinations(s, t, proposal, &mut add)?;
             }
         }
         let Some(&Some((_, instead))) = found.as_slice().first() else {
@@ -217,6 +228,63 @@ fn static_destinations<'a, L: Layout>(
                     Some((p, ability, instead))
                 })
         })
+}
+
+/// Offers to `add` each static ability of a permanent that replaces the object of `proposal`
+/// entering the battlefield as its `entry` says, with the zone it goes to instead, in the order
+/// of the battlefield: "If a nontoken creature would enter and it wasn't cast, exile it
+/// instead." The filter is read for the permanent's controller, of the object as it would
+/// exist on the battlefield ([CR 614.12]): "To determine which replacement effects apply and
+/// how they apply, check the characteristics of the permanent as it would exist on the
+/// battlefield". An enchantment that another effect would make a creature there is a
+/// creature. A permanent entering is not yet on the battlefield, so its own such ability does
+/// not replace its entering, nor that of anything entering with it.
+///
+/// The state as it would be with the object entered is made only for an ability left to ask
+/// ([`layers::entered`]); [`Full`] if making it, or `add`, ran out of room.
+///
+/// [CR 614.12]: https://yawgatog.com/resources/magic-rules/#R61412
+fn entering_destinations<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    proposal: &Move<L>,
+    mut add: impl FnMut(Source<L::Slot>, Zone) -> Result<(), Full>,
+) -> Result<(), Full> {
+    let Move {
+        slot, entry, cast, ..
+    } = *proposal;
+    for &p in s.battlefield() {
+        if !s.copiable(p).may_replace(t).replaces(ReplacementKind::Move) {
+            continue;
+        }
+        let controller = s.controller(p);
+        for (index, a) in (0u8..).zip(trigger::face(s, t, p).abilities) {
+            let Some(&Replacement {
+                replaces: Replaced::Enters { objects, not_cast },
+                rewrite: Rewrite::ToZone(instead),
+            }) = a.replacement()
+            else {
+                continue;
+            };
+            let ability = AbilityIx::new(index);
+            let applies = a.kind() == AbilityKind::Replacement
+                && !(not_cast && cast)
+                && s.has_ability(p, ability)
+                && interpret::static_condition_holds(s, t, p, ability, a);
+            if !applies {
+                continue;
+            }
+            let passes = layers::entered(s, t, slot, entry, |as_it_would_exist| {
+                objects.matches(as_it_would_exist, t, slot, controller)
+            })?;
+            if !passes {
+                continue;
+            }
+            crate::coverage::hit(a);
+            add(Source::Ability(p, ability), instead)?;
+        }
+    }
+    Ok(())
 }
 
 /// What happens instead of `player`'s next draw, the ability that says so and that

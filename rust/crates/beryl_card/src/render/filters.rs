@@ -85,6 +85,7 @@ impl Ctx {
                 }
             },
             Filter::Tapped => noun.adjectives.push("tapped".to_owned()),
+            Filter::Token => noun.adjectives.push("token".to_owned()),
             Filter::ManaValueAtMost(n) => {
                 noun.suffixes.push(format!("with mana value {n} or less"));
             }
@@ -136,6 +137,7 @@ impl Ctx {
                 .adjectives
                 .extend(colors(set).into_iter().map(|c| format!("non{c}"))),
             Filter::Tapped => noun.adjectives.push("untapped".to_owned()),
+            Filter::Token => noun.adjectives.push("nontoken".to_owned()),
             Filter::Whose(players) => {
                 let who = self.controls(*players, false);
                 noun.suffixes.push(who);

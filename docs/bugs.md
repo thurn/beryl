@@ -6,6 +6,17 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- A card manifested while a "nontoken creatures that weren't cast are exiled
+  instead" replacement applied went to exile, but the opponent was made to
+  forget it, so a card in a public zone was hidden from them and the engine's
+  knowledge invariant failed. `actions::manifest::manifest` moved the card and
+  then always made the players who had not seen it forget it, assuming it was
+  now a face-down permanent; a replacement can put it anywhere. A fuzz game with
+  Containment Priest and Abhorrent Oculus found it. Prevention: code that runs
+  after a move reads where the object ended up (its zone and face) rather than
+  where it asked to send it, since every move goes through the replacement
+  pipeline.
+
 - A replacement of an opponent's draws ("If an opponent would draw a card, you
   win the game instead") would have made the drawing player win. What happens
   instead of a draw names players such as "you", and `drawing::draw` read them

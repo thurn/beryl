@@ -98,7 +98,8 @@ impl std::ops::BitOrAssign for Listens {
 pub enum ReplacementKind {
     /// Draws (`beryl_card`'s `Replaced::Draw`).
     Draw,
-    /// An object being put into a zone (`beryl_card`'s `Replaced::PutInto`).
+    /// An object being put into a zone (`beryl_card`'s `Replaced::PutInto`), or entering the
+    /// battlefield (`Replaced::Enters`).
     Move,
 }
 

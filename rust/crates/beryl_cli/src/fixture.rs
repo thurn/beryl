@@ -554,7 +554,8 @@ mod tests {
         let def = Definition {
             name: "t".to_owned(),
             seed: Some(4),
-            decks: Some(["fuzz:1".to_owned(), "fuzz:2".to_owned()]),
+            // Fixed decks: fuzz decks are drawn from every card, so a new card changes the game.
+            decks: Some(["wu-control".to_owned(), "wu-control".to_owned()]),
             board: None,
             agents: Some(["random".to_owned(), "random".to_owned()]),
             stops: None,

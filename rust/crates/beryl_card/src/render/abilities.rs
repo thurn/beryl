@@ -608,6 +608,19 @@ impl Ctx {
                     "if {what} would be put into {place} from anywhere, {instead}"
                 )]
             }
+            (Replaced::Enters { objects, not_cast }, Rewrite::ToZone(instead)) => {
+                let what = with_article(
+                    &self
+                        .noun(*objects, Kind::Permanent)
+                        .singular(Kind::Permanent),
+                );
+                let cast = if not_cast { " and it wasn't cast" } else { "" };
+                let instead = match instead {
+                    Zone::Exile => "exile it instead".to_owned(),
+                    zone => format!("put it into its owner's {} instead", zone_name(zone)),
+                };
+                vec![format!("if {what} would enter{cast}, {instead}")]
+            }
             (Replaced::Draw(players), Rewrite::Instead) => {
                 let condition = ability
                     .condition()

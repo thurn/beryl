@@ -321,6 +321,7 @@ pub fn read_by_the_layers(filter: Filter) -> bool {
         | Filter::Colors(_)
         | Filter::Whose(_)
         | Filter::Tapped
+        | Filter::Token
         | Filter::ManaValueAtMost(_) => true,
         // A power is a result of layer 7, which no filter of an earlier layer may read until
         // the layers order effects by dependency.

@@ -187,6 +187,7 @@ pub(crate) fn move_batch_to<L: Layout>(
             from,
             to,
             entry,
+            cast: reason == Reason::Resolve,
         };
         let m = replace::moving(s, t, proposal)?;
         moves.push((m.slot, m.from, m.to, m.entry))?;

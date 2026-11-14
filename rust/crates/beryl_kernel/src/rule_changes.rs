@@ -187,6 +187,7 @@ fn of_a_spells_characteristics(filter: Filter) -> bool {
         | Filter::Colors(_) => true,
         Filter::Whose(_)
         | Filter::Tapped
+        | Filter::Token
         | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX => false,

@@ -42,8 +42,7 @@ pub enum Malformed {
     NoModification,
     /// A resolving continuous effect of more parts than [`MODIFY_PARTS`].
     Parts,
-    /// [`CopyException::PowerToughness`] other than 1/1, which is all the engine's copy
-    /// makes.
+    /// [`CopyException::PowerToughness`] other than 1/1, which is all the engine's copy makes.
     Copy,
     /// [`Effect::AddMana`] outside a mana ability, whose activator chooses the kind
     /// ([CR 605.1a](https://yawgatog.com/resources/magic-rules/#R6051a)): any other ability
@@ -789,6 +788,7 @@ impl Scope<'_> {
             | Filter::Subtype(_)
             | Filter::Colors(_)
             | Filter::Tapped
+            | Filter::Token
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
             | Filter::ManaValueAtMostX => Ok(()),

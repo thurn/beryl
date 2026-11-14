@@ -26,7 +26,8 @@ use crate::state::Zone;
 /// ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)): "Public zones are zones in
 /// which all players can see the cards' faces, except for those cards that some rule or effect
 /// specifically allow to be face down." Its controller may look at it (CR 708.5); another
-/// player knows it only if they already did.
+/// player knows it only if they already did. A card a replacement effect put somewhere else
+/// instead is not face down, and stays known to whoever saw it go there.
 pub fn manifest<L: Layout>(
     game: &mut Game<'_, L>,
     card: L::Slot,
@@ -41,6 +42,13 @@ pub fn manifest<L: Layout>(
     };
     let (cards, to) = (Bitboard::single(card), Zone::Battlefield);
     event::move_batch(s, game.table, game.sink, cards, to, Reason::Effect, entry)?;
+    // A replacement effect may have put it elsewhere, such as exile ("if a nontoken creature
+    // would enter and it wasn't cast, exile it instead"): then it is no face-down permanent,
+    // and every player saw it go to a public zone.
+    let o = s.object(card);
+    if o.zone() != Zone::Battlefield || o.face() != FaceIx::DOWN {
+        return Ok(());
+    }
     // Each forgets alone: the result is the same in any order.
     let others = s.players().filter(|p| !knew.contains(p) && p != player);
     for p in s.players_in_seat_order(others) {

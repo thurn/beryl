@@ -481,6 +481,7 @@ fn passes<L: Layout>(
         Filter::Colors(colors) => d.colors.intersects(colors),
         Filter::Whose(players) => filter::is_for(players, d.controller, you),
         Filter::Tapped => s.object(s.battlefield()[i]).is_tapped(),
+        Filter::Token => s.object(s.battlefield()[i]).is_token(),
         Filter::ManaValueAtMost(n) => s.mana_value(t, s.battlefield()[i]) <= n,
         Filter::Not(filter) => !passes(s, t, *filter, i, you),
         Filter::All(filters) => filters.iter().all(|&filter| passes(s, t, filter, i, you)),
@@ -492,12 +493,14 @@ fn passes<L: Layout>(
 }
 
 /// The characteristics `filter` reads of a permanent's layer results ([`passes`]): whether it
-/// is tapped and its mana value are the object's, which no layer changes.
+/// is tapped, is a token and its mana value are the object's, which no layer changes.
 pub(super) fn filter_reads(filter: Filter) -> Characteristics {
     match filter {
-        Filter::Any | Filter::Tapped | Filter::ManaValueAtMost(_) | Filter::ManaValueAtMostX => {
-            Characteristics::NONE
-        }
+        Filter::Any
+        | Filter::Tapped
+        | Filter::Token
+        | Filter::ManaValueAtMost(_)
+        | Filter::ManaValueAtMostX => Characteristics::NONE,
         Filter::Types(_) => Characteristics::TYPES,
         Filter::Supertypes(_) => Characteristics::SUPERTYPES,
         Filter::Subtype(_) => Characteristics::SUBTYPES,

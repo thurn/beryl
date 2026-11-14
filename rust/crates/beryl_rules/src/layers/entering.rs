@@ -34,12 +34,28 @@ pub(crate) fn as_it_would_exist<L: Layout>(
     slot: L::Slot,
     entry: Entry<L>,
 ) -> Result<Derived<L>, Full> {
+    entered(s, t, slot, entry, |copy| *copy.derived(slot))
+}
+
+/// What `read` finds in a copy of the state in which the object in `slot` has entered the
+/// battlefield as `entry` says, with the layers applied: the copy [`as_it_would_exist`]
+/// reads, for a caller that asks a filter of the object as it would exist on the
+/// battlefield. The copy stays here, so it is never moved.
+///
+/// [`Full`] as [`as_it_would_exist`] gives it.
+pub(crate) fn entered<L: Layout, R>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    entry: Entry<L>,
+    read: impl FnOnce(&State<L>) -> R,
+) -> Result<R, Full> {
     let mut copy = s.clone();
     let mut sink = Sink::off();
     copy.move_object(&mut sink, slot, Zone::Battlefield, Place::Top)?;
     event::arrive(&mut copy, t, slot, entry)?;
     super::refresh(&mut copy, t, &mut sink)?;
-    Ok(*copy.derived(slot))
+    Ok(read(&copy))
 }
 
 /// The abilities of `face` that the object in `slot` would not have if it entered as

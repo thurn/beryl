@@ -165,7 +165,14 @@ impl Ability {
         }
         match self.replacement().map(|r| &r.replaces) {
             Some(Replaced::Draw(players)) => players.walk(visit),
-            Some(Replaced::PutInto(filter, _)) => filter.walk(visit),
+            Some(
+                Replaced::PutInto(filter, _)
+                | Replaced::Enters {
+                    objects: filter, ..
+                },
+            ) => {
+                filter.walk(visit);
+            }
             Some(Replaced::None | Replaced::ThisEnters) | None => {}
         }
         if let Some(rule) = self.rule() {
@@ -234,6 +241,7 @@ impl Filter {
             | Filter::Subtype(_)
             | Filter::Colors(_)
             | Filter::Tapped
+            | Filter::Token
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
             | Filter::ManaValueAtMostX => {}

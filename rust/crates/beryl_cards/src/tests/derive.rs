@@ -21,6 +21,11 @@ const UNREACHED: &[(&str, &str)] = &[
          trigger exiles; the card's hand-written scenarios destroy and discard under it",
     ),
     (
+        "Containment Priest: ability 0 (Replacement)",
+        "a generated scenario puts onto the battlefield only spells it casts, which were cast; \
+         the card's hand-written scenarios return creatures with Flickerwisp under it",
+    ),
+    (
         "Spara's Headquarters: ability 0 (Mana)",
         "no card of the pool asks for {G}, and automatic payment spends a unit that may be \
          several kinds as the lowest of them, {W}",

@@ -148,6 +148,18 @@ impl Replacement {
             rewrite: Rewrite::ToZone(instead),
         }
     }
+
+    /// "If [objects] would enter and it wasn't cast, put it into [instead] instead": "If a
+    /// nontoken creature would enter and it wasn't cast, exile it instead."
+    pub const fn enters_not_cast(objects: &'static Filter, instead: Zone) -> Replacement {
+        Replacement {
+            replaces: Replaced::Enters {
+                objects,
+                not_cast: true,
+            },
+            rewrite: Rewrite::ToZone(instead),
+        }
+    }
 }
 
 /// The event a replacement effect replaces.
@@ -173,6 +185,17 @@ pub enum Replaced {
     /// An object the filter accepts, read for the permanent's controller, being put into a
     /// zone from any zone.
     PutInto(&'static Filter, Zone),
+    /// An object the filter accepts entering the battlefield from any zone, other than the
+    /// permanent with the ability. The filter is read for the permanent's controller and asked
+    /// of the object as it would exist on the battlefield
+    /// ([CR 614.12](https://yawgatog.com/resources/magic-rules/#R61412)): "To determine which
+    /// replacement effects apply and how they apply, check the characteristics of the
+    /// permanent as it would exist on the battlefield". With `not_cast`, only an object that
+    /// is not the permanent a resolving spell becomes ("and it wasn't cast").
+    Enters {
+        objects: &'static Filter,
+        not_cast: bool,
+    },
 }
 
 /// What a replacement effect has happen instead of the event it replaces.

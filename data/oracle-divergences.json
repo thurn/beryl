@@ -82,5 +82,12 @@
     "scenario": "a card discarded under Rest in Peace is exiled and still discarded",
     "cr": "CR 400.7 (https://yawgatog.com/resources/magic-rules/#R4007): \"An object that moves from one zone to another becomes a new object with no memory of, or relation to, its previous existence. This rule has the following exceptions.\"",
     "reason": "XMage asks whether to exile the discarded card from the graveyard although Rest in Peace exiled it instead. The card in exile is a new object, so the trigger's 'that card from your graveyard' names nothing and there is nothing to ask."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Containment Priest",
+    "scenario": "an enchantment Opalescence would make a creature is exiled",
+    "cr": "CR 614.12 (https://yawgatog.com/resources/magic-rules/#R61412): \"Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c-d.) Such effects may come from the permanent itself if they affect only that permanent (as opposed to a general subset of permanents that includes it). They may also come from other sources. To determine which replacement effects apply and how they apply, check the characteristics of the permanent as it would exist on the battlefield, taking into account replacement effects that have already modified how it enters the battlefield (see rule 616.1), continuous effects from the permanent's own static abilities that would apply to it once it's on the battlefield, and continuous effects that already exist and would apply to the permanent.\"",
+    "reason": "XMage asks whether the returning object is a creature from the card as it is in exile, not as it would exist on the battlefield, so an enchantment Opalescence would make a creature returns instead of being exiled (the card's March of the Machines ruling says it is exiled)"
   }
 ]

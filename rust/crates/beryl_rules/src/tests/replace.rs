@@ -8,6 +8,7 @@
 use beryl_card::effect::build::{win_game, you};
 
 use crate::actions::destroy::destroy;
+use crate::actions::manifest::manifest;
 use crate::bitboard::Bitboard;
 use crate::card::{Ability, CardDef, Face, Players, Replaced, Replacement, Rewrite, Types};
 use crate::continuous;
@@ -19,7 +20,9 @@ use crate::ids::Seat;
 use crate::replacement::Unreplaced;
 use crate::state::{Continuous, Duration, MoveReplacement, TurnStep, Zone};
 use crate::table::TableError;
-use crate::{CardTable, GameTable, Outcome, Profile, Scratch, State, layers, tokens, zones};
+use crate::{
+    CardTable, GameTable, Outcome, Profile, Scratch, State, layers, library, tokens, zones,
+};
 
 use super::LAND;
 use super::events::{put, with_game};
@@ -92,15 +95,32 @@ static ECHO: CardDef = CardDef {
     tokens: &[],
 };
 
-static CARDS: CardTable = CardTable::new(&[&LAND, &REST, &BEAR, &WATCH, &TANGLE, &ECHO]);
+/// "If a nontoken creature would enter and it wasn't cast, exile it instead."
+static PRIEST: CardDef = CardDef {
+    name: "Test Priest",
+    faces: &[Face {
+        types: Types::CREATURE,
+        power: Some(2),
+        toughness: Some(2),
+        abilities: &[Ability::replacing(&Replacement::enters_not_cast(
+            &Filter::All(&[Filter::Not(&Filter::Token), Filter::Types(Types::CREATURE)]),
+            Zone::Exile,
+        ))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
 
-/// A game in the first player's main phase, each deck holding two Rests, three Bears and a
-/// Watch.
+static CARDS: CardTable = CardTable::new(&[&LAND, &REST, &BEAR, &WATCH, &TANGLE, &ECHO, &PRIEST]);
+
+/// A game in the first player's main phase, each deck holding two Rests, three Bears, a Watch
+/// and a Priest.
 fn game() -> (GameTable, State) {
     let deck: &[(u8, &str)] = &[
         (2, "Test Rest"),
         (3, "Test Bear"),
         (1, "Test Watch"),
+        (1, "Test Priest"),
         (9, "Test Land"),
     ];
     let t = GameTable::new(&CARDS, [deck, deck]).unwrap();
@@ -194,4 +214,26 @@ fn a_table_refuses_a_replacement_of_a_move_the_engine_cannot_do() {
             Some(TableError::Replacement { card, unreplaced })
         );
     }
+}
+
+/// A land manifested while a Priest is on the battlefield would be a face-down 2/2 creature
+/// there, which wasn't cast, so it is exiled instead ([CR 614.12]): "check the characteristics
+/// of the permanent as it would exist on the battlefield". It is no face-down permanent, so
+/// both players saw it go to exile ([CR 400.2]): "Public zones are zones in which all players
+/// can see the cards' faces".
+///
+/// [CR 614.12]: https://yawgatog.com/resources/magic-rules/#R61412
+/// [CR 400.2]: https://yawgatog.com/resources/magic-rules/#R4002
+#[test]
+fn a_card_manifested_under_a_priest_is_exiled_face_up() {
+    let (t, mut s) = game();
+    let mut x = Scratch::new();
+    let p = Seat::P0;
+    let priest = put(&t, &mut s, &mut x, p, "Test Priest");
+    let card = library::top(&s, p, 1).sole().unwrap();
+    with_game(&t, &mut s, &mut x, priest, |game, _| {
+        manifest(game, card, p).unwrap();
+    });
+    assert_eq!(s.object(card).zone(), Zone::Exile);
+    assert_eq!(s.who_knows(card), s.players());
 }

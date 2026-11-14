@@ -10,7 +10,9 @@
 //! the engine does in place of a draw: [`instead_of_drawing`] gives what the rules do or
 //! refuses the ability.
 
-use beryl_card::{Ability, Behavior, CardDef, Effect, Players, Replaced, Replacement, Rewrite};
+use beryl_card::{
+    Ability, Behavior, CardDef, Effect, Players, Replaced, Replacement, Rewrite, Zone,
+};
 
 use crate::event::{ReplacementKind, Replaces};
 use crate::filter::reads;
@@ -87,6 +89,10 @@ pub(crate) fn check(def: &CardDef) -> Result<Replaces, Unreplaced> {
                 mask = mask | ReplacementKind::Draw;
             }
             (Replaced::PutInto(_, zone), Rewrite::ToZone(instead)) if zone != instead => {
+                mask = mask | ReplacementKind::Move;
+            }
+            // Entering is a move to the battlefield, replaced as the move's destination is.
+            (Replaced::Enters { .. }, Rewrite::ToZone(instead)) if instead != Zone::Battlefield => {
                 mask = mask | ReplacementKind::Move;
             }
             _ => return Err(Unreplaced::Rewrite),

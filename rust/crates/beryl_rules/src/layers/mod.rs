@@ -7,7 +7,7 @@ pub(crate) mod entering;
 mod granted;
 mod together;
 
-pub(crate) use entering::lost_entering;
+pub(crate) use entering::{entered, lost_entering};
 pub(crate) use together::order_may_matter;
 
 use beryl_kernel::derive::Rederive;
