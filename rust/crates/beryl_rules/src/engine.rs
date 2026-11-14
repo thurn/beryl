@@ -95,7 +95,7 @@ pub fn next<L: Layout>(
     x: &mut Scratch<L>,
     a: &mut dyn Answers<L>,
 ) -> Step<L> {
-    let step = advance::<false, false, L>(s, t, x, a, (s.turn().number(), s.turn().step()), 0);
+    let step = advance(s, t, x, a, Limit::NONE);
     x.settle_counts();
     #[cfg(debug_assertions)]
     assert_sound(s, t, x);
@@ -122,7 +122,16 @@ pub fn next_in_step<L: Layout>(
     a: &mut dyn Answers<L>,
     seen: (u16, TurnStep),
 ) -> Option<Step<L>> {
-    let step = advance::<true, false, L>(s, t, x, a, seen, 0);
+    let step = advance(
+        s,
+        t,
+        x,
+        a,
+        Limit {
+            step: Some(seen),
+            ..Limit::NONE
+        },
+    );
     x.settle_counts();
     // Stopped at a new step, the game has yet to check state-based actions: a player who drew
     // from an empty library has not lost yet, so the invariants need not hold.
@@ -149,7 +158,17 @@ pub fn next_within<L: Layout>(
     end: (u16, TurnStep),
     work_limit: u64,
 ) -> Option<Step<L>> {
-    let step = advance::<false, true, L>(s, t, x, a, end, work_limit);
+    let step = advance(
+        s,
+        t,
+        x,
+        a,
+        Limit {
+            step: None,
+            end: Some(end),
+            work: Some(work_limit),
+        },
+    );
     x.settle_counts();
     #[cfg(debug_assertions)]
     if step.is_some() {
@@ -158,14 +177,55 @@ pub fn next_within<L: Layout>(
     step
 }
 
-/// The engine loop; `STEPS` stops at a new step and `BOUNDED` checks work and turn limits.
-fn advance<const STEPS: bool, const BOUNDED: bool, L: Layout>(
+/// Where [`advance`] returns `None` instead of going on, for [`next_in_step`] and
+/// [`next_within`].
+#[derive(Clone, Copy)]
+struct Limit {
+    /// The turn and step the caller has seen: stop once the game is at any other.
+    step: Option<(u16, TurnStep)>,
+    /// Stop once the game reaches this turn and step or a later one.
+    end: Option<(u16, TurnStep)>,
+    /// Stop once this scratch's [`Counts::decision_work`] leaves less than one loop's worth.
+    work: Option<u64>,
+}
+
+impl Limit {
+    const NONE: Limit = Limit {
+        step: None,
+        end: None,
+        work: None,
+    };
+
+    /// Whether this limit can stop the loop at all.
+    fn is_some(self) -> bool {
+        self.step.is_some() || self.end.is_some() || self.work.is_some()
+    }
+
+    /// Whether the game, now at turn and step `at`, has reached this limit.
+    #[cold]
+    #[inline(never)]
+    fn reached(self, at: (u16, TurnStep), counts: &Counts) -> bool {
+        self.step.is_some_and(|seen| at != seen)
+            || self.end.is_some_and(|end| at >= end)
+            // One loop can silently answer a decision and copy twice to resolve it
+            // transactionally. Reserve those counts before changing the state.
+            || self
+                .work
+                .is_some_and(|work| work.saturating_sub(counts.decision_work()) < 3)
+    }
+}
+
+/// The engine loop, returning `None` once the game reaches `limit`. [`next`], [`next_in_step`]
+/// and [`next_within`] share this one function rather than each having a copy specialized by
+/// a const parameter: with more than one copy, the compiler stops inlining the loop's helpers
+/// (state-based actions, combat pruning, silent passes) into the copy that rollouts run, which
+/// costs rollouts more than the check of `limit`.
+fn advance<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     x: &mut Scratch<L>,
     a: &mut dyn Answers<L>,
-    seen: (u16, TurnStep),
-    work_limit: u64,
+    limit: Limit,
 ) -> Option<Step<L>> {
     // Whether a state-based check found nothing and priority has only been passed since,
     // from one player to the other: a pass changes nothing the check reads, so the next
@@ -179,18 +239,12 @@ fn advance<const STEPS: bool, const BOUNDED: bool, L: Layout>(
         if combat::in_combat(s.turn().step()) {
             combat::prune(s);
         }
-        if STEPS && (s.turn().number(), s.turn().step()) != seen {
+        if limit.is_some() && limit.reached((s.turn().number(), s.turn().step()), &x.counts) {
             return None;
         }
-        // One loop can silently answer a decision and copy twice to resolve it
-        // transactionally. Reserve those counts before changing the state.
-        if BOUNDED
-            && ((s.turn().number(), s.turn().step()) >= seen
-                || work_limit.saturating_sub(x.counts.decision_work()) < 3)
-        {
-            return None;
-        }
-        if *s.pending() == Pending::None {
+        // `matches!` rather than `==`: the derived `PartialEq` of `Pending` is not always
+        // inlined here, and the call costs rollouts about 0.8%.
+        if matches!(s.pending(), Pending::None) {
             // CR 117.5: "Each time a player would get priority, the game first performs all
             // applicable state-based actions as a single event".
             x.counts.state_based_checks += 1;
@@ -264,13 +318,16 @@ fn advance<const STEPS: bool, const BOUNDED: bool, L: Layout>(
 /// in turn order receives priority." The first of two passes in succession resolves nothing
 /// and ends no step.
 fn handed_over<L: Layout>(s: &State<L>, passes: u8) -> bool {
-    passes == 0 && s.turn().passes() == 1 && s.outcome().is_none() && *s.pending() == Pending::None
+    passes == 0
+        && s.turn().passes() == 1
+        && s.outcome().is_none()
+        && matches!(s.pending(), Pending::None)
 }
 
 /// Whether the open decision is priority for a player away from a stop, who passes silently
 /// whatever else they could do, so `next` passes without listing their options.
 fn passes_silently<L: Layout>(s: &State<L>) -> bool {
-    *s.pending() == Pending::None
+    matches!(s.pending(), Pending::None)
         && s.triggers().is_empty()
         && !profile::stops_for(s.profile(), s, s.turn().priority())
         && !s.profile().breaks_at(*s.turn())

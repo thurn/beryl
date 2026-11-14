@@ -26,13 +26,18 @@ use super::timing::{activated, instant_speed, sorcery_timing};
 /// What every check of one player's options reads, found once for all of them: the mana they
 /// could pay with and whether an opponent limits them to sorcery speed, each found at the first
 /// check that needs it.
-pub(super) struct Situation<L: Layout = Small> {
+///
+/// `TARGETS` is whether a spell or ability needs a legal target to be offered. It is false only
+/// for [`payable_responses`]. It is a const parameter rather than a field so that the checks
+/// behind every priority decision are compiled separately from the search's copy: with a
+/// second caller, the compiler stopped inlining [`activation_options`] into the decision
+/// builder that rollouts run, which cost the rollout benchmark about 0.3%.
+pub(super) struct Situation<L: Layout = Small, const TARGETS: bool = true> {
     player: Seat,
     /// None once found if more classes of sources than [`Funds`] holds: a stall for whatever
     /// needed them.
     funds: OnceCell<Option<Funds<L>>>,
     full: Cell<bool>,
-    check_targets: bool,
 }
 
 impl<L: Layout> Situation<L> {
@@ -41,10 +46,22 @@ impl<L: Layout> Situation<L> {
             player,
             funds: OnceCell::new(),
             full: Cell::new(false),
-            check_targets: true,
         }
     }
+}
 
+impl<L: Layout> Situation<L, false> {
+    /// The situation of `player` when a spell or ability with no legal target yet still counts.
+    fn ignoring_targets(player: Seat) -> Situation<L, false> {
+        Situation {
+            player,
+            funds: OnceCell::new(),
+            full: Cell::new(false),
+        }
+    }
+}
+
+impl<L: Layout, const TARGETS: bool> Situation<L, TARGETS> {
     /// The player's funds. Most priority decisions offer nothing that costs mana, as an
     /// opponent's turn with no instant in hand, so the source scan waits until a check needs it.
     fn funds(&self, s: &State<L>, t: &GameTable) -> Option<&Funds<L>> {
@@ -68,10 +85,10 @@ impl<L: Layout> Situation<L> {
 /// Whether a face may be cast now, as far as its card types and the timing rules say: what
 /// [`refused`] checks first, which depends only on the face, so on the card.
 #[inline]
-fn in_time<L: Layout>(
+fn in_time<L: Layout, const TARGETS: bool>(
     s: &State<L>,
     t: &GameTable,
-    now: &Situation<L>,
+    now: &Situation<L, TARGETS>,
     face: &Face,
     from: From,
 ) -> bool {
@@ -101,10 +118,10 @@ fn in_time<L: Layout>(
 /// [CR 601.3](https://yawgatog.com/resources/magic-rules/#R6013): "A player can begin to cast
 /// a spell only if a rule or effect allows that player to cast it and no rule or effect
 /// prohibits that player from casting it."
-fn refused<L: Layout>(
+fn refused<L: Layout, const TARGETS: bool>(
     s: &State<L>,
     t: &GameTable,
-    now: &Situation<L>,
+    now: &Situation<L, TARGETS>,
     slot: L::Slot,
     face_index: FaceIx,
     costs: Castings,
@@ -138,7 +155,7 @@ fn refused<L: Layout>(
     if !parts::spell_payable(s, t, player, slot, face, costs) {
         return Some(Refusal::Cost);
     }
-    (now.check_targets
+    (TARGETS
         && !targetable(
             s,
             t,
@@ -220,10 +237,10 @@ fn cast_sources<L: Layout>(s: &State<L>, player: Seat) -> Bitboard<L::Slot> {
 }
 
 /// Appends the spells `player` can cast now, by card, face and casting options.
-pub(super) fn cast_options<L: Layout>(
+pub(super) fn cast_options<L: Layout, const TARGETS: bool>(
     s: &State<L>,
     t: &GameTable,
-    now: &Situation<L>,
+    now: &Situation<L, TARGETS>,
     cards: Bitboard<L::Slot>,
     from: From,
     out: &mut L::Queue<Opt<L>, 64>,
@@ -282,10 +299,10 @@ pub(super) fn spent_by_cost<S: SlotId>(slot: S, a: &Ability) -> Bitboard<S> {
 ///
 /// [CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025): "A player can't begin to
 /// activate an ability that's prohibited from being activated."
-fn activatable<L: Layout>(
+fn activatable<L: Layout, const TARGETS: bool>(
     s: &State<L>,
     t: &GameTable,
-    now: &Situation<L>,
+    now: &Situation<L, TARGETS>,
     slot: L::Slot,
     ability: ObjectAbility,
 ) -> bool {
@@ -364,7 +381,7 @@ fn activatable<L: Layout>(
         }
         None => funds.pays(s, t, cost, spent),
     });
-    paid && (!now.check_targets || targetable(s, t, Some(a), player, None, 0, Some(slot)))
+    paid && (!TARGETS || targetable(s, t, Some(a), player, None, 0, Some(slot)))
 }
 
 /// Whether activating `ability` of the object in `slot` now would do nothing, as its effect
@@ -386,16 +403,16 @@ pub fn pointless<L: Layout>(
 
 /// Appends the abilities `player` can activate now. CR 117.1b: "A player may activate an
 /// activated ability any time they have priority."
-fn activation_options<L: Layout>(
+fn activation_options<L: Layout, const TARGETS: bool>(
     s: &State<L>,
     t: &GameTable,
-    now: &Situation<L>,
+    now: &Situation<L, TARGETS>,
     out: &mut L::Queue<Opt<L>, 64>,
 ) -> Result<(), Full> {
     let player = now.player;
     // Activations that would do nothing, left out for the player the profile hides them from,
     // where a card of the game has one.
-    let prunes = now.check_targets && s.profile().hides_pointless[player.index()] && t.needy();
+    let prunes = TARGETS && s.profile().hides_pointless[player.index()] && t.needy();
     let objects = s
         .in_zone(Zone::Battlefield)
         .filter(|slot| s.controller(slot) == player)
@@ -461,10 +478,7 @@ pub fn payable_responses<L: Layout>(
     player: Seat,
 ) -> Result<L::Queue<Opt<L>, 64>, Full> {
     debug_assert_ne!(s.turn().active(), player);
-    let now = Situation {
-        check_targets: false,
-        ..Situation::of(player)
-    };
+    let now = Situation::<L, false>::ignoring_targets(player);
     let mut out = Default::default();
     cast_options(
         s,
