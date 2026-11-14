@@ -6,10 +6,12 @@ mod common;
 
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
-    Decision, GameTable, Observation, Profile, Replay, Scratch, Seat, Slot, State, Step, Zone,
-    ZoneKey, apply, next, observe,
+    Choice, Decision, GameTable, Observation, Profile, Replay, Scratch, Seat, Slot, State, Step,
+    Zone, ZoneKey, apply, next, observe,
 };
-use beryl_search::{Agent, AgentDecision, Family, GreedyAgent, LongSearch, Search, Settings};
+use beryl_search::{
+    Agent, AgentDecision, Budget, Family, GreedyAgent, LongSearch, Mcts, Search, Settings, Sight,
+};
 use common::{mirror, play};
 
 /// Positions from a greedy mirror game with more than two candidates, `from_end` such
@@ -199,4 +201,39 @@ fn expert_anchored_search_replays_a_game_from_its_seed() {
 fn families_name_themselves() {
     let f: Family = "ismcts18/hidden/rollout/estimate".parse().unwrap();
     assert_eq!(f.to_string(), "ismcts18/hidden/rollout/estimate");
+}
+
+/// The opponent's Stock Up took five seconds of thinking, half of it ordering the three cards
+/// it put on the bottom of its library, one search a card. Neither search spends anything on
+/// such a pick: its rollouts almost never reach those cards. The positions are real ones
+/// from greedy mirror games, where Stock Up asks the order of the rest.
+#[test]
+fn neither_search_thinks_about_the_order_of_cards_for_the_library_bottom() {
+    let t = mirror();
+    let mut orders = Vec::new();
+    for seed in 0..16 {
+        let mut s = State::new(&t, seed, Profile::SMART).unwrap();
+        let mut agents = [GreedyAgent::new(&t), GreedyAgent::new(&t)];
+        play(&t, &mut s, &mut Scratch::new(), &mut agents, |s, d| {
+            if d.len() > 1 && d.prompt.orders_library_bottom() {
+                orders.push((*s, *d));
+            }
+        });
+    }
+    assert!(!orders.is_empty(), "no game asked for a bottom order");
+    let mut x = Scratch::new();
+    for (s, d) in &orders {
+        let obs = observe(s, &t, &mut x, d.player);
+        let mut long = LongSearch::new(&t, settings("pimc2/hidden/rollout/tuned", 3_000, 1), 1);
+        assert_eq!(long.choose(obs, d, AgentDecision(0)), Choice(0));
+        assert_eq!(long.last_search(), None);
+        let budget = Budget {
+            iterations: 6,
+            trees: 1,
+            parallel: false,
+        };
+        let mut mcts = Mcts::new(&t, Sight::Hidden, budget, 1);
+        assert_eq!(mcts.choose(obs, d, AgentDecision(0)), Choice(0));
+        assert_eq!(mcts.last_search(), None);
+    }
 }

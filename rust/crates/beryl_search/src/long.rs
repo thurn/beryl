@@ -926,7 +926,7 @@ impl<L: Layout> LongSearch<L> {
         self.decision = decision.next();
         self.last = None;
         let kept = self.kept.take();
-        if d.len() < 2 {
+        if d.len() < 2 || d.prompt.orders_library_bottom() {
             return Choice(0);
         }
         if d.kind == DecisionKind::Priority
@@ -1025,7 +1025,10 @@ impl<L: Layout> Agent<L> for LongSearch<L> {
     /// The candidate visited most across the trees, of equals the best by mean; with
     /// [`Options::means`], [`by_means`]'s; with [`Options::anchor`], the guarded default
     /// answer unless it is clearly beaten. A decision with one
-    /// candidate is never searched, nor is passing with one's own object on top of the stack.
+    /// candidate is never searched, nor is passing with one's own object on top of the stack,
+    /// nor a pick that only orders cards bound for the bottom of a library
+    /// ([`Prompt::orders_library_bottom`](beryl_engine::card::Prompt::orders_library_bottom)): its
+    /// rollouts almost never reach those cards, so a search would spend seconds on noise.
     /// Asked a decision other than the one after its last (a game resumed, or taken back by an
     /// undo), it forgets its kept trees and combat plan and searches afresh.
     fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>, at: AgentDecision) -> Choice {

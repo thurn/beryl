@@ -349,7 +349,9 @@ impl Widen for Mcts<Small> {
 
 impl<L: Layout> Agent<L> for Mcts<L> {
     /// The candidate visited most across the trees, the first of equals. A decision with one
-    /// candidate is never searched, nor is passing with one's own object on top of the stack.
+    /// candidate is never searched, nor is passing with one's own object on top of the stack,
+    /// nor a pick that only orders cards bound for the bottom of a library, which its rollouts
+    /// almost never reach.
     ///
     /// Asked a decision other than the one after its last (a game resumed, or taken back by an
     /// undo), it forgets the trees it kept and searches afresh.
@@ -358,7 +360,7 @@ impl<L: Layout> Agent<L> for Mcts<L> {
         let kept = self.kept.take().filter(|_| at == self.decision);
         self.decision = decision.next();
         self.last = None;
-        if d.len() < 2 {
+        if d.len() < 2 || d.prompt.orders_library_bottom() {
             return Choice(0);
         }
         if Self::passes(obs, d) {

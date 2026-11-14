@@ -434,6 +434,16 @@ impl Prompt {
         self.purpose.shape()
     }
 
+    /// Whether this pick only orders cards bound for the bottom of a library: the second part
+    /// of a split, which takes every card left, sending them to the bottom. Which cards go
+    /// there is settled; only their order is left, which matters only once a player reaches
+    /// the bottom of that library.
+    pub const fn orders_library_bottom(self) -> bool {
+        matches!(self.shape(), Shape::Split)
+            && matches!(self.part, Part::Second)
+            && matches!(self.places[1], Place::Bottom)
+    }
+
     /// This prompt, for the pick that answers `part` of it.
     #[must_use]
     pub const fn part(mut self, part: Part) -> Prompt {
