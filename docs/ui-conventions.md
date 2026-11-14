@@ -43,6 +43,16 @@ removes an entry; nothing else does.
    shows no link on the table.
 7. **Own-target warning.** Confirm before a counter or removal spell targets the
    player's own spell or permanent (by-cp2y, by-jmx9).
+8. **Cards put back in one screen.** Cards a player puts from their hand on top
+   of their library (Brainstorm, Jace, the Mind Sculptor's 0) are chosen and
+   ordered in one screen over the shaded table: the library face down at the
+   left, the cards put on it fanned down its face with the top card lowest and
+   in front, and the hand fanned beside it. A click moves a card between the
+   hand and the library, and a drag puts it at a height on the library
+   (by-rm60). Arena has the cards picked in the hand itself, "Put two cards into
+   your library. (ordering will be done in next step)" with Submit, then orders
+   them in an "Order Cards" screen between Bottom and Top (AhTcvQ-lQQQ 4:52,
+   IT6nwh6HtYk 10:35).
 
 ## Settled as Arena
 

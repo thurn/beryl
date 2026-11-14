@@ -181,6 +181,18 @@
       ]
     },
     {
+      "kind": "exception",
+      "number": 8,
+      "name": "Cards put back in one screen",
+      "rule": "Cards a player puts from their hand on top of their library (Brainstorm, Jace, the Mind Sculptor's 0) are chosen and ordered in one screen over the shaded table: the library face down at the left, the cards put on it fanned down its face with the top card lowest and in front, and the hand fanned beside it. A click moves a card between the hand and the library, and a drag puts it at a height on the library.",
+      "reports": [
+        "by-rm60"
+      ],
+      "arena": {
+        "does": "Arena has the cards picked in the hand itself, \"Put two cards into your library. (ordering will be done in next step)\" with Submit, then orders them in an \"Order Cards\" screen between Bottom and Top (AhTcvQ-lQQQ 4:52, IT6nwh6HtYk 10:35)."
+      }
+    },
+    {
       "kind": "settled",
       "name": "Tokens",
       "rule": "They appear at their slot; they do not fly out of their source.",
