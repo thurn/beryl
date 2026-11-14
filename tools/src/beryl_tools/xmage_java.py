@@ -78,13 +78,14 @@ ZONE_COUNTS: dict[str, str] = {
 @dataclass(frozen=True)
 class Faces:
     """What the exporter needs of the decks' cards in the store: backs, land backs, loyalty,
-    mana cost and each face's Oracle text."""
+    toughness, mana cost and each face's Oracle text."""
 
     back: dict[str, str]
     land_back: dict[str, str]
     loyalty: dict[str, int]
     mana_cost: dict[str, str]
     oracle: dict[str, str]
+    toughness: dict[str, int] = field(default_factory=dict)
 
     @staticmethod
     def load(store: Path, also: Iterable[str] = ()) -> Faces:
@@ -93,6 +94,7 @@ class Faces:
         loyalty: dict[str, int] = {}
         mana_cost: dict[str, str] = {}
         oracle: dict[str, str] = {}
+        toughness: dict[str, int] = {}
         for card in listed(store, also)[0]:
             faces = cast(list[Json], card["faces"])
             names = [cast(str, f["name"]) for f in faces]
@@ -101,12 +103,15 @@ class Faces:
                 oracle[name] = cast(str, face.get("oracle_text", ""))
                 if "loyalty" in face:
                     loyalty[name] = int(cast(str, face["loyalty"]))
+                printed = cast(str, face.get("toughness", ""))
+                if printed.isdigit():
+                    toughness[name] = int(printed)
             if len(faces) > 1:
                 back[names[0]] = names[1]
                 front_land = "Land" in cast(str, faces[0]["type_line"])
                 if "Land" in cast(str, faces[1]["type_line"]) and not front_land:
                     land_back[names[0]] = names[1]
-        return Faces(back, land_back, loyalty, mana_cost, oracle)
+        return Faces(back, land_back, loyalty, mana_cost, oracle, toughness)
 
 
 @dataclass

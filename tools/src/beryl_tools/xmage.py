@@ -33,6 +33,8 @@ A scenario or card outside this vocabulary is reported as unsupported, with the 
 
 from __future__ import annotations
 
+import re
+
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import cast
@@ -127,6 +129,8 @@ class Exporter:
         # The `Cards.unless_pays` counterspells on the stack whose payer Beryl has not asked yet, with
         # that payer.
         self.unless_pays: dict[str, str] = {}
+        # The turns in which a trampler was blocked (`trample_division`).
+        self.trampled: set[int] = set()
 
     def player(self, seat: object) -> str:
         return "playerA" if seat == self.active else "playerB"
@@ -652,6 +656,7 @@ class Exporter:
                 f"block({self.turn(p.turn)}, {who}, {java_string(card)}, "
                 f"{java_string(attackers[0])});"
             )
+            self.trample_division(action, card, attackers[0], p)
         elif kind == "TriggerOrder" and card and self.cards.first_trigger_text(card):
             text = java_string(cast(str, self.cards.first_trigger_text(card)))
             self.emit(f"setChoice({who}, {text});")
@@ -669,6 +674,36 @@ class Exporter:
             self.emit(f'setChoice({who}, "X={pick["n"]}");')
         else:
             raise Unsupported(f"answering {kind} with {what}")
+
+    def trample_division(
+        self, action: Json, blocker: str, attacker: str, p: Position
+    ) -> None:
+        """XMage asks how a blocked trampler divides its damage even with one blocker, as
+        amounts for its blockers with the rest trampling over. Beryl asks nothing there: the
+        blocker gets lethal damage, its toughness at the start of combat, and the rest goes to
+        what the trampler attacks. So the amount is queued for the attacking player. A second
+        blocker would make Beryl's division a decision of its own, which this does not
+        translate."""
+        if not self.tramples(attacker):
+            return
+        if p.turn in self.trampled:
+            raise Unsupported("a trampler blocked by more than one creature")
+        self.trampled.add(p.turn)
+        toughness = self.faces.toughness.get(blocker)
+        if toughness is None:
+            raise Unsupported(
+                f"a trampler blocked by {blocker}, whose toughness varies"
+            )
+        seat = 1 - cast(int, action["player"])
+        self.emit(f"setChoiceAmount({self.player(seat)}, {toughness});")
+
+    def tramples(self, card: str) -> bool:
+        """Whether `card`'s Oracle text gives it trample, on a line of keywords."""
+        text = re.sub(r"\([^)]*\)", "", self.faces.oracle.get(card, ""))
+        lines = text.split("\n")
+        return any(
+            "trample" in (k.strip().lower() for k in line.split(",")) for line in lines
+        )
 
     def take(self, who: str, source: str, card: str) -> None:
         """One pick of a `Cards.takes` card: for the hand, queued as one target list once all are

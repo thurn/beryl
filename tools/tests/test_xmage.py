@@ -302,3 +302,40 @@ def test_what_pays_a_cost_is_told_by_the_prompts_purpose() -> None:
         'setChoice(playerA, "Island");',
         'setOptionalChoice(playerA, 1, PhaseStep.PRECOMBAT_MAIN, "Island");',
     ]
+
+
+def test_a_blocked_trampler_queues_lethal_damage_for_its_lone_blocker() -> None:
+    # XMage asks how Colossal Dreadmaw divides its damage even with one blocker; Beryl gives
+    # the 2/1 lethal damage and the rest to the player, so playerA answers 1.
+    attacker, blocker = "Colossal Dreadmaw", "Snapcaster Mage"
+    entry: card_facts.Json = {
+        "setup": {"turn": 1, "active": 0, "step": "PrecombatMain"},
+        "actions": [],
+        "cards": {},
+    }
+    export = xmage_java.Export(card=attacker, scenario="trample", method="trample")
+    faces = xmage_java.Faces.load(card_store.STORE, [attacker, blocker])
+    writer = xmage.Exporter(entry, faces, export)
+    writer.attackers = {1: [attacker]}
+    position = xmage.Position(
+        turn=1,
+        step="DeclareBlockers",
+        decider=1,
+        kind="Blocker",
+        purpose="block",
+        stack=[],
+        flips=[],
+        taps=[],
+        forced=[],
+        flashback=[],
+        face_down=[],
+        creatures=[1, 1],
+    )
+    writer.answer(
+        {"player": 1, "kind": "Blocker", "pick": {"pick": "Card", "card": blocker}},
+        position,
+    )
+    assert export.body == [
+        'block(1, playerB, "Snapcaster Mage", "Colossal Dreadmaw");',
+        "setChoiceAmount(playerA, 1);",
+    ]

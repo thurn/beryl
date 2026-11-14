@@ -355,10 +355,23 @@ class Cards:
 
 
 def named_cards(entries: Iterable[Json]) -> list[str]:
-    """The names of the cards the dump's scenarios describe, each once and sorted: with the
-    decks' cards, those the exporters need the Oracle text of, as of a card implemented only
-    for scenarios."""
-    return sorted({n for e in entries for n in cast(Json, e.get("cards", {}))})
+    """The names of the cards the dump's scenarios describe or start with, each once and
+    sorted: with the decks' cards, those the exporters need the Oracle text of, as of a card
+    implemented only for scenarios or one complete from the card store, which the dump
+    describes only when it has abilities beyond keywords."""
+    names: set[str] = set()
+    for e in entries:
+        names.update(cast(Json, e.get("cards", {})))
+        for setup in cast(
+            list[Json], cast(Json, e.get("setup", {})).get("players", [])
+        ):
+            for zone in ("hand", "graveyard", "exile", "library"):
+                names.update(cast(list[str], setup.get(zone, [])))
+            names.update(
+                cast(str, permanent["card"])
+                for permanent in cast(list[Json], setup.get("battlefield", []))
+            )
+    return sorted(names)
 
 
 # The kinds of answer a player gives while casting a spell or activating an ability, before
