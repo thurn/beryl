@@ -538,9 +538,14 @@ of how the frames travel.
 trait Link: Send {
     fn send(&mut self, frame: &[u8]) -> Result<(), LinkError>;
     fn receive(&mut self) -> Result<Vec<u8>, LinkError>;   // blocks
-    fn peer(&self) -> PeerInfo;        // name, direct or relayed, round trip
+    fn peer(&self) -> PeerInfo;        // name, route, round trip
+    fn try_clone_sender(&self) -> Result<Box<dyn LinkSender>, LinkError>;
 }
 ```
+
+A `LinkSender` can send frames or close the connection from another thread while
+the link waits in `receive`. Sending through either handle keeps frames whole.
+Closing the connection wakes the receiver.
 
 There are three implementations.
 
