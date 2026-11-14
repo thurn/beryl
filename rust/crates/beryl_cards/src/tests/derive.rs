@@ -16,6 +16,11 @@ const CUSTOM: &[&str] = &[];
 /// a generated scenario exercises fails too, so the list stays current.
 const UNREACHED: &[(&str, &str)] = &[
     (
+        "Rest in Peace: ability 1 (Replacement)",
+        "casting it puts nothing into a graveyard: it becomes a permanent, and its enters \
+         trigger exiles; the card's hand-written scenarios destroy and discard under it",
+    ),
+    (
         "Spara's Headquarters: ability 0 (Mana)",
         "no card of the pool asks for {G}, and automatic payment spends a unit that may be \
          several kinds as the lowest of them, {W}",

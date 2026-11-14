@@ -63,6 +63,13 @@
       "Mana Drain: counter target spell . at the beginning of your next main phase , add an amount of {C} equal to that [-spell's mana value-] {+amount+} ."
     ]
   },
+  "Rest in Peace": {
+    "reason": "wording",
+    "note": "\"Exile all graveyards\" means exiling every card in every graveyard; the renderer says \"all cards in all graveyards\". Same instruction.",
+    "diff": [
+      "Rest in Peace: when ~ enters , exile all {+cards in all+} graveyards ."
+    ]
+  },
   "Sphinx of False Conclusions": {
     "reason": "wording",
     "note": "Oracle says \"it\" for the Sphinx where the renderer names the card.",
