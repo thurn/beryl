@@ -88,15 +88,18 @@ pub mod scenarios {
         // The Forest is basic, so Blood Moon leaves it a Forest, and Life and Limb still
         // makes it a creature.
         Scenario::new("a basic Forest is a creature under Blood Moon")
+            .interaction(&[Card::BloodMoon])
             .battlefield(P0, &[LIFE_AND_LIMB, Card::BloodMoon, Card::Forest])
             .actions(&[ME.creature(Card::Forest, true)]),
         // Under Blood Moon Dryad Arbor is a Mountain and no Forest, so what Life and Limb
         // adds to Forests does not reach it and it taps for {R} alone. Whichever came first,
         // this effect is applied after Blood Moon's (CR 613.8a).
         Scenario::new("Dryad Arbor under Blood Moon is no Forest for it")
+            .interaction(&[Card::BloodMoon])
             .battlefield(P0, &[LIFE_AND_LIMB, Card::BloodMoon, Card::DryadArbor])
             .actions(&[ME.creature(Card::DryadArbor, true)]),
         Scenario::new("Blood Moon coming after leaves Dryad Arbor no Forest")
+            .interaction(&[Card::BloodMoon])
             .battlefield(P0, &[Card::DryadArbor, LIFE_AND_LIMB, Card::BloodMoon])
             .actions(&[ME.creature(Card::DryadArbor, true)]),
     ];

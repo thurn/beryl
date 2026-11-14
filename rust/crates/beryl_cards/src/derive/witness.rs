@@ -13,8 +13,10 @@
 //! The mutation check (`tests/mutation.rs`) finds a field no witness covers: a mutant of the
 //! card with that field changed survives every scenario.
 
+use beryl_card::{Filter, Node};
+use beryl_engine::Zone;
 use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Castings, Effect, FaceIx, Players,
+    Ability, AbilityKind, Behavior, CardDef, Castings, Effect, FaceIx, Objects, Players, Types,
 };
 use beryl_scenario::{Action, P0, Permanent};
 use beryl_scenario_types::{ME, Resolve};
@@ -95,6 +97,34 @@ const OWN_ARTIFACT: Witness = Witness {
     prelude: &[],
 };
 
+/// The starting positions put creatures on the opponent's battlefield. A static
+/// effect on creatures its source's controller controls needs one on that side too.
+const OWN_CREATURE: Witness = Witness {
+    words: "with a creature of one's own",
+    mine: &[Permanent::new(props::THIEF)],
+    theirs: &[],
+    hand: &[],
+    prelude: &[],
+};
+
+fn affects_own_creatures(ability: &Ability) -> bool {
+    let Some(Objects::All {
+        zone: Zone::Battlefield,
+        filter,
+    }) = ability.layer().map(|layer| layer.affected)
+    else {
+        return false;
+    };
+    let mut creature = false;
+    let mut own = false;
+    filter.walk(&mut |node| match node {
+        Node::Filter(Filter::Types(types)) => creature |= types.intersects(Types::CREATURE),
+        Node::Filter(Filter::Whose(Players::You)) => own = true,
+        _ => {}
+    });
+    creature && own
+}
+
 /// The witnesses of one instruction's own fields, its children aside.
 fn of(effect: &Effect) -> Vec<&'static Witness> {
     let mut out = Vec::new();
@@ -114,8 +144,7 @@ fn of(effect: &Effect) -> Vec<&'static Witness> {
     out
 }
 
-/// Every witness of every instruction of the effect data of `def`'s abilities that resolve,
-/// each once.
+/// The witnesses of `def`'s static abilities and resolving instructions, each once.
 pub(super) fn witnesses(def: &'static CardDef) -> Vec<&'static Witness> {
     let found = std::cell::RefCell::new(Vec::<&'static Witness>::new());
     let resolves = |a: &Ability| {
@@ -128,6 +157,9 @@ pub(super) fn witnesses(def: &'static CardDef) -> Vec<&'static Witness> {
         .faces
         .iter()
         .flat_map(|face| face.abilities.iter().chain(face.grants));
+    if abilities.clone().any(affects_own_creatures) {
+        found.borrow_mut().push(&OWN_CREATURE);
+    }
     for ability in abilities.filter(|a| resolves(a)) {
         let Behavior::Data(effect) = ability.body() else {
             continue;

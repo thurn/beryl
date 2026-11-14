@@ -65,6 +65,7 @@ pub mod scenarios {
         // "Loses all abilities" began before the Aura was attached, so its timestamp is the
         // earlier and the keyword the Aura grants stays.
         Scenario::new("an Aura attached after Dress Down still gives vigilance")
+            .interaction(&[DRESS_DOWN])
             .battlefield(P0, &[DRESS_DOWN, Card::Plains, Prop::Creature])
             .hand(P0, &[VIGILANCE])
             .actions(&[
@@ -78,6 +79,7 @@ pub mod scenarios {
         // Dress Down, cast with flash after the Aura was attached, has the later timestamp:
         // the creature loses vigilance, though the Aura stays attached.
         Scenario::new("Dress Down after the Aura takes vigilance away")
+            .interaction(&[DRESS_DOWN])
             .battlefield(
                 P0,
                 &[Card::Plains, Card::Island, Card::Island, Prop::Creature],

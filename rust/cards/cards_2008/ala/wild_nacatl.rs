@@ -56,7 +56,6 @@ pub mod scenarios {
     // battlefield.
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("no Mountain and no Plains leaves it a 1/1")
-            .interaction(&[Card::Island])
             .battlefield(P0, &[NACATL, Card::Island])
             .actions(&[ME.pt(NACATL, 1, 1)]),
         Scenario::new("a Mountain gives +1/+1")
@@ -80,11 +79,13 @@ pub mod scenarios {
         // Blood Moon makes Tundra a Mountain, so Tundra gives the Mountain bonus, and the
         // basic Plains still gives the Plains bonus.
         Scenario::new("a land Blood Moon makes a Mountain counts as one")
+            .interaction(&[Card::BloodMoon])
             .battlefield(P0, &[NACATL, Card::Plains, Card::Tundra, Card::BloodMoon])
             .actions(&[ME.pt(NACATL, 3, 3)]),
         // Under Blood Moon Tundra is no longer a Plains, so with a Mountain alone there is
         // no Plains: only the Mountain bonus remains.
         Scenario::new("a land Blood Moon makes a Mountain is no longer a Plains")
+            .interaction(&[Card::BloodMoon])
             .battlefield(P0, &[NACATL, Card::Tundra, Card::BloodMoon])
             .actions(&[ME.pt(NACATL, 2, 2)]),
     ];

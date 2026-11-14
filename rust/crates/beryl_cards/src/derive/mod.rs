@@ -161,9 +161,10 @@ pub fn for_card(def: &'static CardDef) -> Generated {
         failures: Vec::new(),
         cut: 0,
     };
-    let mut seen: BTreeSet<String> = BTreeSet::new();
     let witnesses = witnesses(def);
     for (place, witness) in positions(def, &witnesses) {
+        // Playing the same actions from a witness can exercise a different ability.
+        let mut seen = BTreeSet::new();
         let start = start(def, place, witness);
         let preamble = preamble(def, place);
         let prelude = witness.map_or(&[][..], |w| w.prelude);
@@ -204,7 +205,7 @@ pub fn for_card(def: &'static CardDef) -> Generated {
                 if run.unordered || run.actions.iter().any(block) {
                     continue;
                 }
-                if !run.touched || !seen.insert(format!("{place:?} {:?}", run.actions)) {
+                if !run.touched || !seen.insert(format!("{:?}", run.actions)) {
                     continue;
                 }
                 let name = String::leak(format!(
