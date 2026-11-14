@@ -1335,12 +1335,13 @@ Counted work predicts a frame's cost. It does not measure a real device.
 ### Measurements
 
 These were taken 2026-11-14 on the development machine, an Apple M5 Max, at a
-load average of 48 to 50 from other jobs. They come from a throwaway prototype,
-not from Beryl 3D, and are replaced by the real client's numbers when it exists.
+load average of 13 to 50 from other jobs. They come from three throwaway
+prototypes, not from Beryl 3D, and are replaced by the real client's numbers
+when it exists.
 
-The prototype is a frame's inner loop with no GPU: for 600 cards, advance one
-eased animation each, build a transform, project four corners through a camera
-matrix, write a 64-byte draw record, and sort the records by depth.
+The first prototype is a frame's inner loop with no GPU: for 600 cards, advance
+one eased animation each, build a transform, project four corners through a
+camera matrix, write a 64-byte draw record, and sort the records by depth.
 
 | Measure                                  | Result                 |
 | ---------------------------------------- | ---------------------- |
@@ -1351,6 +1352,32 @@ matrix, write a 64-byte draw record, and sort the records by depth.
 At 54 microseconds, 600 cards use 0.3% of a 60 Hz frame on this machine. The
 spread between runs is the machine's load, which is why the gates count
 instructions instead of timing.
+
+The other two prototypes draw the same scene with a GPU, one with `wgpu` 30.0.2
+used directly and one with the Bevy engine 0.20.1: 600 textured cards, each with
+its own transform changing every frame, drawn into a 1920 by 1080 texture with
+no window, for 2,000 frames. Each number is the median of five runs.
+
+| Measure                             | `wgpu` directly | Bevy         |
+| ----------------------------------- | --------------- | ------------ |
+| Release build from nothing          | 76 seconds      | 546 seconds  |
+| Executable, stripped                | 4.6 MB          | 41.7 MB      |
+| Peak memory while running           | 47 MB           | 185 MB       |
+| Threads alive at the end of the run | 4 to 5          | 24 to 26     |
+| CPU time per frame, all threads     | 0.22 ms         | 4.6 ms       |
+| Draw calls per frame                | 1               | not measured |
+
+- **The `wgpu` prototype's 0.22 milliseconds** is 30 microseconds to build the
+  frame's data and 192 to encode and submit it. At 5,000 cards the two are 85
+  and 160 microseconds: the cost barely grows with the board.
+- **The two frame loops are not alike**, so their frame times are not compared
+  here. The `wgpu` prototype waits for the GPU every frame, and Bevy's loop runs
+  ahead of its renderer.
+- **Bevy was not trimmed to its minimum.** It ran with its default plugins
+  limited to those needed to render, which include its render thread and its
+  task pools. A more careful setup would lower its numbers, but not to those of
+  a program that has no scheduler, no asset system and no second copy of the
+  scene.
 
 ## Sound
 
@@ -1485,7 +1512,10 @@ the reasons are not rediscovered.
   which conflicts with decisions C3, C7 and C12. Every frame, even one that only
   animates, would run Bevy's scheduler and its copy of the scene into the
   renderer, third-party code that cannot be held to a counted, allocation-free
-  budget. It releases a breaking version every three to four months.
+  budget. In the prototypes under [Measurements](#measurements) it used about
+  twenty times the CPU per frame, four times the memory and nine times the
+  executable size of `wgpu` used directly. It releases a breaking version every
+  three to four months.
 - **Porting the web interface's 2D coordinates.** Layout code would port line
   for line, and a check could compare the two clients' positions exactly. But
   perspective, shadows and lighting would stay imitations for good.
