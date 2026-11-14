@@ -47,12 +47,13 @@
    corner. A column of buttons of one size, as wide as the widest (the turn button's width at
    the least), whose foot is where the turn button stands; the question it answers over them,
    wrapped to the column; a caption or the priority pill under the foot. It rises in. It is
-   drawn over the cards at rest and the tray's shade (840, stage.css `.stage-tray`), so that
-   the question is never read through a card, and under the cards that fly (900, pose.ts
-   ALOFT). */
+   drawn over everything at rest: the cards, the tray's shade (840, stage.css `.stage-tray`),
+   the cards a prompt holds up (850 and up, desktop.ts), the order and choose layers (870 and
+   880) and the arrows (850), so that the question and its buttons are never dimmed or read
+   through anything. Only the cards that fly (900, pose.ts ALOFT) pass over it. */
 .dock {
   position: absolute;
-  z-index: 845;
+  z-index: 895;
   right: 39px;
   bottom: 87px;
   display: flex;

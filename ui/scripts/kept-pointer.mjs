@@ -559,40 +559,57 @@ for (const [fixture, at] of [
     );
 }
 
-// The prompt's title and buttons are drawn over every card at rest (a card's depth is a
-// `z-index` the layout gives it, and the dock once had none, so a wide row of permanents was
-// painted over its title). On the attacker step the dock is deeper than every node of the
-// stage that is not held up (850 and over, desktop.ts) or in flight (900 and over).
+// The prompt's title and buttons are drawn over everything at rest: the cards, the tray's
+// shade, the cards a prompt holds up (850 to 899, desktop.ts), the order and choose layers
+// and the arrows; only a card in flight (900 and over) passes over the dock. A layer over it
+// dimmed the question (by-pehx) and a card over it hid the title (by-eidz).
 // Why no audit: the generic overlap audit compares boxes, not paint order, and no fixture
-// has a card standing under the dock's box.
-await check(
-    "the attacker prompt is drawn over the cards at rest",
-    async (page) => {
-        await page.clock.runFor(2000);
-        const { dock, resting } = await page.evaluate(() => {
-            const depth = (e) => Number(getComputedStyle(e).zIndex) || 0;
-            const nodes = [...document.querySelectorAll("[data-stage]")];
-            return {
-                dock: depth(document.querySelector(".dock")),
-                resting: Math.max(
-                    0,
-                    ...nodes.map(depth).filter((d) => d < 850),
-                ),
-            };
-        });
-        assert.ok(resting > 0, "the table's cards are drawn");
-        assert.ok(
-            dock > resting,
-            `the dock (${dock}) is under a card at rest (${resting})`,
-        );
-        assert.ok(dock < 850, `the dock (${dock}) is over a held card`);
-    },
-    {
-        fixture: "combat-declare",
-        at: (await load("combat-declare")).length,
-        ready: ".dock .prompt-title",
-    },
-);
+// has a layer standing under the dock's box.
+for (const fixture of ["combat-declare", "choice-look"]) {
+    await check(
+        `the ${fixture} prompt is drawn over every layer at rest`,
+        async (page) => {
+            await page.clock.runFor(2000);
+            const { dock, layers, top } = await page.evaluate(() => {
+                const depth = (e) => Number(getComputedStyle(e).zIndex) || 0;
+                const layers = [
+                    ...document.querySelectorAll(
+                        "[data-stage], .stage-tray, .stage-choose, .stage-order, .stage-lines, .stage-lights",
+                    ),
+                ]
+                    .map(depth)
+                    .filter((d) => d < 900);
+                const dock = document.querySelector(".dock");
+                const top = [
+                    ...dock.querySelectorAll(".prompt-title, button"),
+                ].map((e) => {
+                    const r = e.getBoundingClientRect();
+                    const hit = document.elementFromPoint(
+                        r.x + r.width / 2,
+                        r.y + r.height / 2,
+                    );
+                    return dock.contains(hit);
+                });
+                return { dock: depth(dock), layers, top };
+            });
+            assert.ok(layers.length > 0, "the stage draws layers");
+            assert.ok(
+                dock > Math.max(...layers),
+                `a layer (${Math.max(...layers)}) is over the dock (${dock})`,
+            );
+            assert.ok(dock < 900, `the dock (${dock}) is over a flying card`);
+            assert.ok(
+                top.length > 0 && top.every(Boolean),
+                "something is drawn over the dock's title or buttons",
+            );
+        },
+        {
+            fixture,
+            at: (await load(fixture)).length,
+            ready: ".dock .prompt-title",
+        },
+    );
+}
 
 // In a target step, a card shows whole clear of every target it might cover (by-isv.17):
 // Fractured Identity's in greedy-turn-9, whose targets fill the table's middle, and Swift
