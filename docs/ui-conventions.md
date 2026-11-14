@@ -73,6 +73,14 @@ restore the old behavior.
   the hand closes up as the card leaves it. Beryl keeps its slots under the
   hand, where a card clicked again comes back (2VW6ZzmS8U4 8:05.4, AhTcvQ-lQQQ
   14:16.3, 6aai5sMxV1o 11:38.5).
+- **The kept opening hand.** When the opening closes, the screen over the table
+  goes at once, and the hand it showed drops from there into the hand at the
+  near edge in about an eighth of a second, slowing as it lands. On the phone
+  the cards drop from the opening's rows. Nothing appears in the hand from
+  nowhere (by-qmbe). Arena's opening screen vanishes in one frame, and the hand,
+  still fanned in the middle of the screen, falls into the hand at the bottom,
+  most of the way in two frames of 30 and at rest after four (3SEgIYXJgdQ
+  13:33.95, 2VW6ZzmS8U4 6:56.25, 2VW6ZzmS8U4 14:07.75).
 - **Permanents that leave.** A permanent that is not a token dissolves where it
   is: destroyed, it breaks into ash at its slot; exiled, it becomes a vortex
   there. Nothing flies to the pile. What it leaves room for closes up only once

@@ -32,6 +32,7 @@ import { phoneLayout } from "../mobile/layout";
 import "../mobile/phone.css";
 import "../mobile/phone-start.css";
 import { Faces } from "./Faces.tsx";
+import { useKeptHand } from "./arrive.ts";
 import { useSurface } from "./mount.ts";
 import { lifeChange } from "./notices.ts";
 import { phone, phoneRevealed, phoneTray } from "./phone.ts";
@@ -116,6 +117,8 @@ export function PhoneStageBoard({
   useLayoutEffect(() => {
     if (viewport) stage.relayout(phone(viewport));
   }, [stage, viewport]);
+  // Once the opening closes, the hand it showed drops into place.
+  useKeptHand(stage, layer, opening);
   const layout = useMemo(
     () => viewport && table && phoneLayout(table, viewport),
     [table, viewport],

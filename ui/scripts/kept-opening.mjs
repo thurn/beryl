@@ -1,5 +1,6 @@
-// The kept checks of the opening's cards for the bottom of the library (kept.mjs), over the
-// `opening-bottom` fixture, whose last view asks the player to put a card on the bottom.
+// The kept checks of the opening's cards (kept.mjs): those put on the bottom of the library,
+// over the `opening-bottom` fixture, whose last view asks the player to put a card on the
+// bottom; and the hand kept, over `opening-keep`, which plays on from the keep.
 import assert from "node:assert/strict";
 import { check, load } from "./kept-harness.mjs";
 
@@ -96,6 +97,79 @@ for (const phone of [false, true]) {
         {
             fixture: "opening-bottom",
             at: asked + 1,
+            ready: ".opening-card",
+            phone,
+            viewport: phone ? { width: 393, height: 759 } : undefined,
+        },
+    );
+}
+
+// The `opening-keep` fixture's views run from the player's keep-or-mulligan decision into the
+// first turns; the page opens on that decision.
+const keepViews = await load("opening-keep");
+const keepAsked = keepViews.findIndex(
+    (v) => v.status.decision?.kind === "keepOrMulligan",
+);
+
+/** The middle of each card of the player's hand, by slot: on the opening screen, or on the
+ * stage. */
+const middles = (page, selector) =>
+    page.evaluate(
+        (selector) =>
+            Object.fromEntries(
+                [...document.querySelectorAll(selector)].map((el) => {
+                    const r = el.getBoundingClientRect();
+                    return [
+                        el.dataset.slot,
+                        { x: r.left + r.width / 2, y: r.top + r.height / 2 },
+                    ];
+                }),
+            ),
+        selector,
+    );
+
+// Why no audit: the generic motion audit times the stage's verbs, and the hand coming back from
+// under the opening is no verb of a script. The player asked that the hand they keep move down
+// into place rather than appear there (by-qmbe), as Arena's drops from the opening screen; this
+// pins that each card starts where the opening showed it and comes down to its place.
+for (const phone of [false, true]) {
+    await check(
+        `the kept hand drops from the opening into place on ${phone ? "phone" : "desktop"}`,
+        async (page) => {
+            await page.getByRole("dialog", { name: "Opening hand" }).waitFor();
+            const shown = await middles(page, ".opening-hand .opening-card");
+            assert.equal(Object.keys(shown).length, 7, "seven cards shown");
+            await page.getByRole("button", { name: /^Keep/ }).click();
+            // The views after the keep arrive on the page's timers: the opening closes with
+            // the first view of the first turn, and the hand starts its drop in that commit.
+            for (let ms = 0; await page.locator(".opening").count(); ms += 4) {
+                assert.ok(ms < 5000, "the opening closes");
+                await page.clock.runFor(4);
+            }
+            const start = await middles(page, '.stage-node[data-zone="hand"]');
+            await page.clock.runFor(1000);
+            const end = await middles(page, '.stage-node[data-zone="hand"]');
+            for (const [slot, from] of Object.entries(shown)) {
+                const [a, b] = [start[slot], end[slot]];
+                assert.ok(a && b, `card ${slot} is in the hand on the stage`);
+                const fall = b.y - from.y;
+                assert.ok(
+                    fall > 40,
+                    `the hand lies below the opening: ${fall}`,
+                );
+                // A frame of the drop may have passed: it starts near the opening's card,
+                // well short of its place.
+                assert.ok(
+                    Math.abs(a.x - from.x) <
+                        0.25 * Math.abs(b.x - from.x) + 8 &&
+                        a.y - from.y < 0.4 * fall,
+                    `card ${slot} starts at the opening's: ${JSON.stringify({ from, a, b })}`,
+                );
+            }
+        },
+        {
+            fixture: "opening-keep",
+            at: keepAsked + 1,
             ready: ".opening-card",
             phone,
             viewport: phone ? { width: 393, height: 759 } : undefined,

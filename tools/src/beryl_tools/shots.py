@@ -259,6 +259,7 @@ def ui_shots(args: argparse.Namespace) -> int:
 KEPT_FIXTURES = [
     "greedy-turn-9",
     "opening-bottom",
+    "opening-keep",
     "opponent-turn",
     "combat-declare",
     "combat-double-block",

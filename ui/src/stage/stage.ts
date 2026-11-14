@@ -52,7 +52,7 @@ import type { Effect, On } from "./effects.ts";
 import { sameDress, sameFace } from "./layout.ts";
 import type { Name, Resting, StageLayout } from "./layout.ts";
 import { heldPose, Pointer } from "./pointer.ts";
-import type { Shown } from "./shown.ts";
+import { nothingShown, type Shown } from "./shown.ts";
 import { samePose, type Pose } from "./pose.ts";
 import { reachOfCard, reachOfLife, reachOfPool } from "./lines.ts";
 import type { Reach } from "./lines.ts";
@@ -117,14 +117,7 @@ export class ScriptStage {
   readonly #following = new Set<(edge: Edge) => void>();
   /** Stage time is passing over what plays (`skip`): no step's edge is told. */
   #skipping = false;
-  #shown: Shown = {
-    table: undefined,
-    resting: new Map(),
-    view: undefined,
-    busy: false,
-    notices: [],
-    counts: [],
-  };
+  #shown: Shown = nothingShown();
   #stale = false;
 
   /** A stage, drawing on `surface` if given one. With `frames` it follows them from the
@@ -355,6 +348,18 @@ export class ScriptStage {
     this.#layout = layout;
     if (!this.#table) return;
     this.#lay(this.clock.now);
+    this.#write(this.clock.now);
+  }
+
+  /** Each entry named in `from` goes from the pose given there to where it rests, as `timing`
+   * says: the kept opening hand drops from where the opening screen showed it (arrive.ts). */
+  arrive(from: ReadonlyMap<Name, Pose>, timing: Timing) {
+    for (const [name, pose] of from) {
+      const entry = this.#entries.get(name);
+      if (!entry) continue;
+      entry.track = home(timing, pose, this.clock.now);
+      entry.moved = true;
+    }
     this.#write(this.clock.now);
   }
 

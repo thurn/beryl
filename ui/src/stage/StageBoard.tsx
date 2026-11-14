@@ -24,6 +24,7 @@ import { STAGE } from "../game/perspective";
 import { useStageWidth } from "../game/Stage";
 import { linked } from "../game/zoneViews";
 import { Aim } from "./Aim.tsx";
+import { useKeptHand } from "./arrive.ts";
 import { Entries, Shares, Ways } from "./Choose.tsx";
 import { Controls, Hud, keptClear, useHovered } from "./Chrome.tsx";
 import type {
@@ -102,6 +103,8 @@ export function StageBoard({
     () => stage.relayout(desktopWith({ hold, logOpen, cleared })),
     [stage, width, hold, logOpen, cleared],
   );
+  // Once the opening closes, the hand it showed drops into place.
+  useKeptHand(stage, layer, hold === "away");
   // A card carried between a tray's piles lands where the desktop lays the tray out.
   useEffect(() => {
     prompts.lands = (tray, at, carried) =>

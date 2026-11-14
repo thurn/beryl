@@ -26,6 +26,16 @@ export interface Shown {
   counts: readonly Counting[];
 }
 
+/** What a stage shows before it has been given anything. */
+export const nothingShown = (): Shown => ({
+  table: undefined,
+  resting: new Map(),
+  view: undefined,
+  busy: false,
+  notices: [],
+  counts: [],
+});
+
 /** A `count` step under way, and the table as it found it. */
 export interface Counting {
   step: ScriptStep;

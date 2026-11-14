@@ -1,7 +1,13 @@
 // The opening over the dimmed table: the coin flip, keeping or mulliganing a hand and
 // the cards put on the bottom.
 import { Button, Dock, DockButtons } from "../components/Controls";
-import { type CSSProperties, useEffect, useState } from "react";
+import {
+  type CSSProperties,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   type CandidateIndex,
   type DecisionView,
@@ -16,6 +22,7 @@ import { useFace } from "../game/faces";
 import { useViewport } from "../mobile/chrome";
 import { usePhone } from "../mobile/phone";
 import { Inspected } from "../stage/PhoneChrome";
+import { noteOpeningHand } from "../stage/arrive";
 import { useGlide } from "./glide";
 
 /** The starting hand size (CR 103.5). */
@@ -82,6 +89,14 @@ export function Opening({
   const [inspector, inspect] = useHoverInspect();
   // A card picked goes down into its slot, and back up when picked again.
   const glide = useGlide();
+  // As the opening closes, the hand kept drops from here into the hand on the table.
+  const cards = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const root = cards.current;
+    return () => {
+      if (root) noteOpeningHand(root);
+    };
+  }, []);
   // A card clicked moves out from under the pointer, which never leaves it: its inspector goes.
   const toggle = (o: ObjectView) => {
     inspect(o).onPointerLeave();
@@ -209,12 +224,13 @@ export function Opening({
         )}
       </div>
       <h2 className="opening-title">{title}</h2>
-      <div className="opening-cards">
+      <div className="opening-cards" ref={cards}>
         <div className="opening-hand">
           {starting !== null &&
             hand.map((o, i) => (
               <div
                 key={o.slot}
+                data-slot={o.slot}
                 className={phone ? undefined : "opening-fan"}
                 style={
                   phone
