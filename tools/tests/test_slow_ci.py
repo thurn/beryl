@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import checks, runlog, selection, slow_ci, verdicts
+from beryl_tools import checks, runlog, script_checks, selection, slow_ci, verdicts
 from beryl_tools.selection import Coverage
 from beryl_tools.slow_ci import LANES, Passes
 
@@ -219,18 +219,13 @@ def test_slow_cis_lanes_leave_their_fast_only_checks_to_the_fast_check() -> None
         name: make() for name, make in slow_ci.lanes_for(None).items()
     }
 
-    def command(lane: str, step: str) -> list[str]:
-        return next(s.cmd for s in lanes[lane].steps if s.name == step)
-
     fast_only = set(verdicts.FAST_ONLY)
-    assert "--slow" in command("python", "pytest")
-    assert "--slow" not in next(
-        s.cmd for s in checks.python_lane().steps if s.name == "pytest"
-    )
-    skips = {
-        f"script:{a[1:]}" for a in command("script", "script-check") if a[0] == "!"
-    }
-    assert skips == {c for c in fast_only if c.startswith("script:")}
+    # The fast check runs the Python tests and the script checks; slow CI leaves them to it,
+    # and keeps the python lane's formatter and type check.
+    assert "pytest" in {s.name for s in checks.python_lane().steps}
+    assert "black" in {s.name for s in lanes["python"].steps}
+    assert lanes["scale"].steps == [] and lanes["script"].steps == []
+    assert [s.name for s in script_checks.lane().steps] == ["script-check"]
     # A whole step the fast check runs too (`<lane>:<step>`) leaves slow CI's lane, and only
     # slow CI's.
     for name, lane in lanes.items():

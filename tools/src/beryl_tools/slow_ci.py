@@ -565,7 +565,9 @@ def slow(args: argparse.Namespace) -> int:
         chosen = plan(passes, now, names, prints)
         report(chosen, passes, now, commit)
     constructors = lanes_for(chosen.packages())
-    lanes = [constructors[lane]() for lane in chosen.why]
+    # A lane whose every step verdicts.FAST_ONLY leaves to the fast check (`scale`, `script`)
+    # has nothing to run.
+    lanes = [lane for name in chosen.why if (lane := constructors[name]()).steps]
 
     def passed(lanes: list[str]) -> None:
         if commit:

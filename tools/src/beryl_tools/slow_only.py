@@ -125,13 +125,15 @@ FAST_ONLY: tuple[str, ...] = (
     "rust:beryl_cli::bin/beryl_cli::specs::playground::history_tests::subtlety_keeps_opponents_bottom_choice_and_viewers_prompt",
     "rust:beryl_search::games::a_sixty_card_game_round_trips_between_the_layouts",
     "rust:beryl_search::mcts::the_exact_stop_chooses_as_the_full_budget",
-    "python:tests/test_checks.py::test_a_hung_step_is_killed_at_its_hang_limit_with_its_descendants",
-    "python:tests/test_bisect.py::test_a_probe_that_hangs_dies_at_the_search_limit_and_keeps_its_range",
-    "python:tests/test_checks.py::test_a_loaded_machine_stretches_the_hang_limit_and_the_budget",
-    "python:tests/test_video_measure.py::test_the_command_measures_a_recording_and_a_folder_of_frames",
-    "script:fixtures/combat-attackers/yours",
-    "script:fixtures/choice-trigger-order/yours",
-    "script:fixtures/late-game/yours",
+    # The tests and script checks the fast check runs whenever their inputs change, the same
+    # changes that started their lanes in slow CI: the Python tests on a change to tools/ or the
+    # card store, those that read card files (the scale lane) on a card change, and every spec
+    # moment and fixture script on a change to what builds and plays them. Slow CI left nearly
+    # all of them to the fast check one by one; the whole steps go, and with them the scale and
+    # script lanes, which have no other step.
+    "python:pytest",
+    "scale:pytest",
+    "script:script-check",
     "ui:test",
     # Formatters and file checks the fast check runs on every push that touches their files:
     # slow CI ran them again on a tree they had already passed.

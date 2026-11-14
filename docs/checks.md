@@ -65,7 +65,9 @@ badly formatted commit subjects.
 `just ci` (an 800 CPU-second budget; see below) runs the lanes below, plus the
 fast check's lanes, but only those that what changed since each lane last passed
 can affect (`slow_ci.py`). It leaves out the steps in `verdicts.FAST_ONLY`, such
-as the formatters, which the fast check already ran on every push:
+as the formatters, the Python tests and the script checks, which the fast check
+already ran on every push that could break them. The `scale` and `script` lanes
+have no other step, so slow CI runs nothing for them:
 
 - Each lane's base is the commit at which it last passed on this machine
   (`$BERYL_CACHE/ci/lane-passes.json`), or where staging left `origin/master`. A
