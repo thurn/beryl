@@ -70,3 +70,12 @@ def test_gate_file_limits_every_gated_play() -> None:
     assert set(gate.limits) == plays
     for limits in gate.limits.values():
         assert set(limits) == set(ui_counts.GATED_METRICS)
+
+
+def test_highest_takes_each_metric_from_the_play_that_counted_most() -> None:
+    plays = [counts(laidOut=990, styled=1020), counts(laidOut=1010, styled=1000)]
+    assert ui_counts.highest(plays)["a/desktop"] == {
+        **counts()["a/desktop"],
+        "laidOut": 1010,
+        "styled": 1020,
+    }

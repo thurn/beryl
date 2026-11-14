@@ -12,27 +12,27 @@
   "limits": {
     "verbs-piles/desktop": {
       "renders": 12030,
-      "mutations": 12866,
-      "styled": 14716,
-      "laidOut": 15984
+      "mutations": 12862,
+      "styled": 14785,
+      "laidOut": 16106
     },
     "verbs-piles/phone": {
-      "renders": 8780,
-      "mutations": 27507,
-      "styled": 27117,
-      "laidOut": 36982
+      "renders": 8744,
+      "mutations": 27485,
+      "styled": 27106,
+      "laidOut": 37108
     },
     "verbs-zones/desktop": {
-      "renders": 9129,
-      "mutations": 9851,
-      "styled": 14221,
-      "laidOut": 6737
+      "renders": 9130,
+      "mutations": 9866,
+      "styled": 14358,
+      "laidOut": 6956
     },
     "verbs-zones/phone": {
-      "renders": 5526,
-      "mutations": 13181,
-      "styled": 16087,
-      "laidOut": 3300
+      "renders": 5527,
+      "mutations": 13178,
+      "styled": 16099,
+      "laidOut": 3308
     }
   }
 }

@@ -12,8 +12,10 @@ the new limits.
 The counts repeat closely but not exactly from run to run: some events (scroll events among
 them) reach the page only in the browser's real rendering steps, which can move a React update
 into a separate commit. Across repeated runs, renders and mutations vary by about 0.1% and the
-style and layout work by up to 1.5%, so the tolerance sits above that noise. The limits were
-measured on macOS. Windows leaves the lane to the Mac, like the other browser lanes, because
+style and layout work by up to about 2.5% (`verbs-zones` on the desktop lays out between 6,890
+and 7,039 objects at one commit). A limit taken from one low run would put ordinary runs over
+the tolerance, so `--update` plays the fixtures `UPDATE_PLAYS` times and writes the highest
+count of each metric. The limits were measured on macOS. Windows leaves the lane to the Mac, like the other browser lanes, because
 its text measures differently and would need limits of its own.
 """
 
@@ -34,6 +36,8 @@ GATE_FILE: Path = paths.REPO / "data" / "ui-counts.json"
 # The metrics the gate holds. `commits`, `styles` and `layouts` count passes, not the work
 # done in them, and are printed only.
 GATED_METRICS: tuple[str, ...] = ("renders", "mutations", "styled", "laidOut")
+# How many times `--gate --update` plays the fixtures; it writes the highest count of each.
+UPDATE_PLAYS = 3
 
 
 @dataclass
@@ -64,6 +68,15 @@ def updated(text: str, measured: dict[str, dict[str, int]]) -> str:
         key: {m: counts[m] for m in GATED_METRICS} for key, counts in measured.items()
     }
     return json.dumps(data, indent=2) + "\n"
+
+
+def highest(plays: list[dict[str, dict[str, int]]]) -> dict[str, dict[str, int]]:
+    """The highest count of each metric of each play over `plays`, which are repeated plays of
+    the same fixtures."""
+    return {
+        key: {m: max(play[key][m] for play in plays) for m in plays[0][key]}
+        for key in plays[0]
+    }
 
 
 def judge(gate: Gate, measured: dict[str, dict[str, int]]) -> tuple[bool, list[str]]:
@@ -147,13 +160,21 @@ def ui_counts(args: argparse.Namespace) -> int:
         return result if isinstance(result, int) else 0
     text = GATE_FILE.read_text()
     gate = load_gate(text)
+    if args.update:
+        plays: list[dict[str, dict[str, int]]] = []
+        for _ in range(UPDATE_PLAYS):
+            result = measure(gate.fixtures, gate.layouts, args.components)
+            if isinstance(result, int):
+                return result
+            plays.append(result)
+        GATE_FILE.write_text(updated(text, highest(plays)))
+        print(
+            f"ui-counts: wrote the highest counts of {UPDATE_PLAYS} plays to {GATE_FILE.name}"
+        )
+        return 0
     result = measure(gate.fixtures, gate.layouts, args.components)
     if isinstance(result, int):
         return result
-    if args.update:
-        GATE_FILE.write_text(updated(text, result))
-        print(f"ui-counts: wrote the measured counts to {GATE_FILE.name}")
-        return 0
     passed, lines = judge(gate, result)
     for line in lines:
         print(f"ui-counts: {line}")
@@ -189,6 +210,6 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.add_argument(
         "--update",
         action="store_true",
-        help="with --gate, write the counts as the limits",
+        help="with --gate, write the highest counts of several plays as the limits",
     )
     p.set_defaults(func=ui_counts)
