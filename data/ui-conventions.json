@@ -723,9 +723,9 @@
     {
       "kind": "settled",
       "name": "The hand's fan",
-      "rule": "Your hand's cards lie along one circle over the near edge, about 14 card widths across, on the desktop and the phone. A card's turn and how far it sinks follow its distance from the fan's middle, so a crowded hand lies nearly flat and a spread one curves, and no card turns or drops further than its neighbors (by-c4f4, by-kgn7, by-pic0).",
+      "rule": "Your hand's cards lie along one circle over the near edge, about 14 card widths across, on the desktop and the phone. A card's turn and how far it sinks follow its distance from the fan's middle, so a crowded hand lies nearly flat and a spread one curves, and no card turns or drops further than its neighbors. Each card's mana cost stands above its top right corner, turned with the card, rather than in its name bar, so that a crowded hand, whose cards cover each other's right parts, still shows every cost (by-c4f4, by-kgn7, by-pic0).",
       "arena": {
-        "does": "Measured from whole-table frames: a card's turn grows by about 0.0275° for each pixel it lies from the middle, with cards 180 pixels wide on a table 1920 wide, at 5, 6, 7, 8, 10 and 18 cards. Its outer cards turn about 11° at 8 cards and 14° to 15° at 10 and 18. Cards sit about one card's width apart until the hand reaches the turn button, then close up.",
+        "does": "Measured from whole-table frames: a card's turn grows by about 0.0275° for each pixel it lies from the middle, with cards 180 pixels wide on a table 1920 wide, at 5, 6, 7, 8, 10 and 18 cards. Its outer cards turn about 11° at 8 cards and 14° to 15° at 10 and 18. Cards sit about one card's width apart until the hand reaches the turn button, then close up. Each card's mana cost floats above its top right corner, over the card beside it, so that every cost shows at 10 cards.",
         "evidence": [
           {
             "recording": "nBj2ikeYCtk",

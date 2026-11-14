@@ -119,3 +119,20 @@
   bottom: calc(100% - 1.6em);
   scale: 1 -1;
 }
+
+/* A hand card's cost, drawn above its top right corner (game/Look.tsx), in place of the one in
+   its name bar. Its symbols are about Arena's size against the card, 0.12 of the card's width,
+   and their bottoms meet the frame's top. In em of the card's type unit. */
+.hand-card .card-name-bar > .mana-cost {
+  display: none;
+}
+.hand-cost {
+  position: absolute;
+  right: 0.5em;
+  bottom: calc(100% - 0.12em);
+  pointer-events: none;
+}
+.hand-cost .mana-cost {
+  padding: 0;
+  font-size: 1.9em;
+}

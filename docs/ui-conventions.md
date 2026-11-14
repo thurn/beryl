@@ -189,14 +189,18 @@ restore the old behavior.
   about 14 card widths across, on the desktop and the phone. A card's turn and
   how far it sinks follow its distance from the fan's middle, so a crowded hand
   lies nearly flat and a spread one curves, and no card turns or drops further
-  than its neighbors (by-c4f4, by-kgn7, by-pic0). Measured from whole-table
-  frames: a card's turn grows by about 0.0275° for each pixel it lies from the
-  middle, with cards 180 pixels wide on a table 1920 wide, at 5, 6, 7, 8, 10 and
-  18 cards. Its outer cards turn about 11° at 8 cards and 14° to 15° at 10 and
-  18\. Cards sit about one card's width apart until the hand reaches the turn
-  button, then close up (nBj2ikeYCtk 1:07.0, sybcO8S7x6A 24:27.0, FGsR_FGChOU
-  2:25.0, kvVLJ_cS_KE 6:24.0, uzg_P976qhc 17:20.0, \_IBqPx0gcag 12:00.0,
-  sybcO8S7x6A 51:04.0).
+  than its neighbors. Each card's mana cost stands above its top right corner,
+  turned with the card, rather than in its name bar, so that a crowded hand,
+  whose cards cover each other's right parts, still shows every cost (by-c4f4,
+  by-kgn7, by-pic0). Measured from whole-table frames: a card's turn grows by
+  about 0.0275° for each pixel it lies from the middle, with cards 180 pixels
+  wide on a table 1920 wide, at 5, 6, 7, 8, 10 and 18 cards. Its outer cards
+  turn about 11° at 8 cards and 14° to 15° at 10 and 18. Cards sit about one
+  card's width apart until the hand reaches the turn button, then close up. Each
+  card's mana cost floats above its top right corner, over the card beside it,
+  so that every cost shows at 10 cards (nBj2ikeYCtk 1:07.0, sybcO8S7x6A 24:27.0,
+  FGsR_FGChOU 2:25.0, kvVLJ_cS_KE 6:24.0, uzg_P976qhc 17:20.0, \_IBqPx0gcag
+  12:00.0, sybcO8S7x6A 51:04.0).
 - **An arrow to the pointer.** While a target is chosen, an arrow runs from the
   spell or ability that asks to the mouse, thin and pale. On something that may
   be chosen it becomes the arrow the choice will draw, in that arrow's color and

@@ -1,6 +1,7 @@
 // A card as the table's skin draws it at a placement: its frame, its marks and how it was
 // cast. The stage draws each object's node with it (stage/Faces.tsx).
-import { Card, CardBack } from "../components/Card";
+import { Card, CardBack, typeUnit } from "../components/Card";
+import { ManaCost } from "../components/Mana";
 import { StackMarks } from "../components/Stack";
 import type { ObjectView, PaidCost } from "../generated/protocol";
 import { faceDownFace, marksOf, useFace } from "./faces";
@@ -85,7 +86,18 @@ export function Look({
   return field ? (
     <div className="on-table">{card_}</div>
   ) : place.look === "hand" ? (
-    <div className="hand-card">{card_}</div>
+    <div className="hand-card">
+      {card_}
+      {/* The cost stands above the card's top right corner rather than in its name bar, where
+          the next card of a crowded hand would cover it, as Arena floats each hand card's cost
+          above the fan (_IBqPx0gcag 12:00, uzg_P976qhc 17:20). Above the frame, it is clear
+          of the next card, which covers only the frame's right part. */}
+      {card.manaCost && (
+        <span className="hand-cost" style={{ fontSize: typeUnit(place.width) }}>
+          <ManaCost cost={card.manaCost} />
+        </span>
+      )}
+    </div>
   ) : (
     card_
   );

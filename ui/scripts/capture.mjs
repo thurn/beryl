@@ -397,8 +397,14 @@ export function cutText(page) {
             // stack's items, which overlap by design, and on the inspector, drawn over the cards
             // but letting the pointer through to them, is not checked. Nor is text that takes
             // no pointer and is painted over the card under it (`paintedOver`), as a banner
-            // passing over a phone's rows is.
-            if (el.closest(".card-el, .stack-item, .inspect")) continue;
+            // passing over a phone's rows is. The one text of a card that is checked is the mana
+            // cost of a card in your hand: the cards of a crowded hand cover each other's right
+            // parts, and every cost must still show, as Arena's do above its fan.
+            if (
+                el.closest(".card-el, .stack-item, .inspect") &&
+                !el.closest(".card-el-hand .mana-cost")
+            )
+                continue;
             // Whether `text`, which lets the pointer through, is what shows at a point a card
             // was hit at: with the pointer given back to it, the hit is its own.
             const paintedOver = (text, x, y) => {
