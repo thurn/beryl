@@ -5,8 +5,7 @@
 //! shows, and checks that the clicks end where the picks a UI holding the
 //! payment itself would send end.
 
-#[path = "common/play.rs"]
-mod play;
+use crate::play;
 
 use beryl_cards::CARDS;
 use beryl_cards::names::{

@@ -5,8 +5,7 @@
 //! the screen shows and ends where the picks a UI holding the prompt's state itself
 //! would send end.
 
-#[path = "common/play.rs"]
-mod play;
+use crate::play;
 
 use beryl_cards::names::{
     COUNTERSPELL, CURRENCY_CONVERTER, ISLAND, MANA_CRYPT, OUST, PLAINS, REPRIEVE, STOCK_UP, TUNDRA,

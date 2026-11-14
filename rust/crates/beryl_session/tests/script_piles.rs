@@ -2,7 +2,7 @@
 //! cards revealed: a hand-written expectation for each, from both seats, beside
 //! `script_build.rs`'s.
 
-mod common;
+use crate::common;
 
 use beryl_cards::names;
 use common::{script, text};

@@ -3,8 +3,7 @@
 //! to a text written by hand from what the screen shows, and checks that the click
 //! ends where the pick a UI holding the prompt's state itself would send ends.
 
-#[path = "common/play.rs"]
-mod play;
+use crate::play;
 
 use beryl_cards::names::{
     COUNTERSPELL, CURRENCY_CONVERTER, ELITE_SPELLBINDER, GET_LOST, ISLAND, JACE_THE_MIND_SCULPTOR,

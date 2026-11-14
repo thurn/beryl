@@ -4,8 +4,7 @@
 //! from what the screen shows, and checks that the clicks end where the picks a UI
 //! holding the prompt's state itself would send end.
 
-#[path = "common/play.rs"]
-mod play;
+use crate::play;
 
 use beryl_cards::names::{
     COUNTERSPELL, ELITE_SPELLBINDER, ISLAND, MALCOLM_ALLURING_SCOUNDREL, MANA_CRYPT, PLAINS,

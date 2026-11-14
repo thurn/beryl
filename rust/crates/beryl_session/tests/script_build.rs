@@ -2,7 +2,7 @@
 //! both seats: small scripted positions played through the engine, each seat's views fed to
 //! its screen, the script between two of them read as text.
 
-mod common;
+use crate::common;
 
 use beryl_cards::decks::WU_CONTROL;
 use beryl_cards::{CARDS, names};

@@ -2,8 +2,7 @@
 //! scenarios reach it: the label it shows, and the paragraph of the card an activation's or
 //! a waiting trigger's ability is.
 
-#[path = "common/play.rs"]
-mod play;
+use crate::play;
 
 use beryl_cards::names::{ADELINE_RESPLENDENT_CATHAR, ISLAND, OVERLORD_OF_THE_MISTMOORS};
 use beryl_cards::{CARDS, names};

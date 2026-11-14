@@ -22,9 +22,8 @@
 //! Copy art" with no browser (`ui/scripts/stage-zones.test.mjs`,
 //! `ui/scripts/card-records.test.mjs`).
 
-mod common;
-#[path = "common/play.rs"]
-mod play;
+use crate::common;
+use crate::play;
 
 use beryl_cards::names::{
     self, COUNTERSPELL, ISLAND, JACE_WIELDER_OF_MYSTERIES, MANA_CRYPT, MANA_TITHE, PLAINS,

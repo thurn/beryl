@@ -4,8 +4,7 @@
 //! example to a text written by hand from what the screen shows, and checks that
 //! the clicks end where the picks a UI holding the prompt's state itself would send end.
 
-#[path = "common/play.rs"]
-mod play;
+use crate::play;
 
 use beryl_cards::names::{
     AANGS_ICEBERG, COUNTERSPELL, CURRENCY_CONVERTER, ISLAND, JACE_THE_MIND_SCULPTOR, MANA_CRYPT,

@@ -1,5 +1,5 @@
 // Generated from rust/crates/beryl_session by ts-rs; do not edit. Regenerate with
-// `BERYL_UPDATE_TS=1 just test-rust -p beryl_session --test typescript`.
+// `BERYL_UPDATE_TS=1 just test-rust -p beryl_session --test session typescript`.
 
 export type AppInfo = { version: string, 
 /**

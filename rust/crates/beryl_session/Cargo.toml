@@ -5,6 +5,8 @@ description = "Game sessions: a game on its own thread, the PlayerView protocol 
 edition.workspace = true
 license.workspace = true
 publish = false
+# The integration tests are one binary, tests/main.rs, which says why.
+autotests = false
 
 [lints]
 workspace = true
@@ -32,3 +34,7 @@ zip = { version = "8.6", default-features = false, features = ["deflate-flate2-z
 beryl_cards = { path = "../beryl_cards", features = ["scenarios"] }
 beryl_scenario = { path = "../beryl_scenario" }
 proptest = { version = "1.11.0", default-features = false, features = ["std", "handle-panics"] }
+
+[[test]]
+name = "session"
+path = "tests/main.rs"

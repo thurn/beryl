@@ -39,6 +39,10 @@ publish = false
 
 [lib]
 path = "lib.rs"
+# A card file has no tests or doctests: its scenarios run in beryl_cards'
+# tests. An empty test binary per crate still cost a link and a launch.
+test = false
+doctest = false
 
 [lints]
 workspace = true

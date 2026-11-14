@@ -4,8 +4,7 @@
 //! each click to a text written by hand from what the screen shows, and checks the
 //! picks the clicks end in.
 
-#[path = "common/play.rs"]
-mod play;
+use crate::play;
 
 use beryl_cards::names::{
     BEZA_THE_BOUNDING_SPRING, ELITE_SPELLBINDER, ISLAND, JACE_VRYNS_PRODIGY, THUNDERTRAP_TRAINER,

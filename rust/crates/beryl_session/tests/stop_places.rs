@@ -13,8 +13,7 @@ use beryl_search::Budget;
 use beryl_session::protocol::{Candidate, Kind, PassTo, Side, Step, StepSet, ZoneName};
 use beryl_session::{CandidateIndex, Game, Prepared, Seat, SessionId, Status, StopsSetting};
 
-#[path = "common/play.rs"]
-mod play;
+use crate::play;
 
 use play::{Casts, Play, to_human};
 

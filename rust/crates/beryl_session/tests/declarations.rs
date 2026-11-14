@@ -3,8 +3,7 @@
 //! written by hand from what the screen shows, and checks that the clicks end
 //! where the picks a UI holding the declaration itself would send end.
 
-#[path = "common/play.rs"]
-mod play;
+use crate::play;
 
 use beryl_cards::names::{
     ADELINE_RESPLENDENT_CATHAR, ELITE_SPELLBINDER, ISLAND, OVERLORD_OF_THE_MISTMOORS,

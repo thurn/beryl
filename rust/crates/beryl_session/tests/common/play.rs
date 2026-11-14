@@ -4,7 +4,7 @@
 //! by candidates, as a UI that holds a prompt's state itself answers it, to compare where the
 //! two end.
 //!
-//! A test file takes it in with `#[path = "common/play.rs"] mod play;`.
+//! A test file takes it in with `use crate::play;` (tests/main.rs declares it).
 
 // Each test file uses the part of this it needs.
 #![allow(dead_code)]

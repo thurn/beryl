@@ -145,7 +145,7 @@ pub fn typescript() -> String {
     ];
     let mut out = String::from(
         "// Generated from rust/crates/beryl_session by ts-rs; do not edit. Regenerate with\n\
-         // `BERYL_UPDATE_TS=1 just test-rust -p beryl_session --test typescript`.\n",
+         // `BERYL_UPDATE_TS=1 just test-rust -p beryl_session --test session typescript`.\n",
     );
     for decl in decls.into_iter().chain(prompt_decls(&cfg)) {
         out.push('\n');

@@ -6,8 +6,7 @@
 
 use std::sync::mpsc::channel;
 
-#[path = "common/play.rs"]
-mod play;
+use crate::play;
 
 use beryl_cards::CARDS;
 use beryl_cards::names::{

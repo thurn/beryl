@@ -26,7 +26,7 @@ fn the_generated_typescript_is_current() {
     let actual = std::fs::read_to_string(&path).unwrap_or_default();
     assert!(
         actual == expected,
-        "{PATH} is stale: run `BERYL_UPDATE_TS=1 just test-rust -p beryl_session --test typescript`"
+        "{PATH} is stale: run `BERYL_UPDATE_TS=1 just test-rust -p beryl_session --test session typescript`"
     );
 }
 

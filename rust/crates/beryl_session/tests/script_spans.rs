@@ -3,7 +3,7 @@
 //! the sequences behind two themes of repeated bug reports, and for each invariant a
 //! hand-built script that breaks it: the last two, a step whose cause was not there.
 
-mod common;
+use crate::common;
 
 use beryl_cards::{CARDS, names};
 use beryl_search::Budget;
