@@ -443,6 +443,7 @@ def ui_perf(args: argparse.Namespace) -> int:
                 + ["--browser", args.browser, "--runs", str(args.runs)]
                 + (["--phone"] if args.phone else [])
                 + (["--verbs"] if args.verbs else [])
+                + (["--art"] if args.art else [])
                 + (["--throttle", str(args.throttle)] if args.throttle > 1 else [])
                 + list(args.fixtures),
                 cwd=paths.UI,
@@ -585,6 +586,11 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "--verbs", action="store_true", help="the long frames by the verb playing"
     )
     p.add_argument("--runs", type=int, default=1, help="plays of each fixture")
+    p.add_argument(
+        "--art",
+        action="store_true",
+        help="card images from the app's cache, not placeholders",
+    )
     p.add_argument(
         "--throttle",
         type=int,

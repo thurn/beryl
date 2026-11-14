@@ -3,6 +3,7 @@
 // its script has played out.
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { play } from "../audio/sound";
+import { note } from "../diagnostics";
 import { soundSteps } from "../audio/steps.ts";
 import { click, startGame, type GameUpdate, type SessionId } from "../ipc";
 import type { LogEntry } from "../game/log";
@@ -11,6 +12,7 @@ import { animationFrames } from "./clock.ts";
 import { desktop } from "./desktop.ts";
 import { skipped, skipping } from "./fault.ts";
 import { Feed } from "./feed.ts";
+import { timeFrames } from "./frames.ts";
 import { Prompts } from "./prompt.ts";
 import { ScriptStage } from "./stage.ts";
 import { caseOf, timingOf } from "./timing.ts";
@@ -42,6 +44,16 @@ export function pageStage() {
       frames: animationFrames,
     });
     soundSteps(stage);
+    // The player's frames, not a driven browser's, whose clock a check may pause.
+    if (animationFrames && !navigator.webdriver) {
+      timeFrames(stage, animationFrames, (run) => {
+        const message = `${run.dropped} of ${run.frames} frames dropped`;
+        // A run that dropped several frames, a tenth of them or more, also reaches the app's
+        // journal, which outlives the page.
+        const lagged = run.dropped >= 3 && run.dropped * 10 >= run.frames;
+        note(lagged ? "warn" : "info", "frames", message, run);
+      });
+    }
     const prompts = new Prompts(stage, click);
     prompts.heard = () => play("select");
     // A check of the audits plants a fault here (fault.ts): none otherwise.

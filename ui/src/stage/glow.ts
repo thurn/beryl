@@ -205,7 +205,10 @@ export class Glow {
     const gl = canvas.getContext("webgl", {
       alpha: true,
       premultipliedAlpha: true,
-      antialias: true,
+      // Every shape fades to nothing before the edge of what it is drawn on, so smoothing
+      // edges would change no pixel, and on a Retina window it holds four samples of each of
+      // two full-stage canvases, about 90 MB each, and resolves them every lit frame.
+      antialias: false,
     });
     if (!gl) return undefined;
     try {

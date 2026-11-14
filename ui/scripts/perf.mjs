@@ -1,7 +1,7 @@
 // Frame timing of recorded fixtures played live, as a player sees them: the stage follows the
 // browser's frames (no stepped clock), and each frame's length is measured in the page. Usage:
 //   node scripts/perf.mjs <base-url> <fixtures-dir> [--browser chromium|webkit]
-//        [--throttle N] [--profile out.cpuprofile] [--phone] [--runs N] [name...]
+//        [--throttle N] [--profile out.cpuprofile] [--phone] [--art] [--runs N] [name...]
 // Serve a production build (`vite build && vite preview`): React's development build is several
 // times slower and would hide what a change does. `--throttle` slows Chromium's CPU N times (CDP
 // `Emulation.setCPUThrottlingRate`), to stand in for an older laptop than this one; WebKit has no
@@ -10,6 +10,8 @@
 // percentile lengths, the share longer than 1.5 frames at 60 Hz (a dropped frame), the longest,
 // and Chromium's time spent in script, style, layout and the rest of the main thread.
 import { writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
 import { chromium, webkit } from "playwright";
 import { serveRecordings } from "./fixture-views.mjs";
@@ -24,6 +26,7 @@ const runs = Number(option(args, "--runs") ?? 1);
 const trace = option(args, "--trace");
 const css = option(args, "--css");
 const verbs = option(args, "--verbs", true);
+const art = option(args, "--art", true);
 const [base, fixtures, ...names] = args;
 if (!base || !fixtures || names.length === 0) {
     console.error(
@@ -97,6 +100,31 @@ function byVerb(frames, during, scripts) {
     return tally;
 }
 
+/** The app's disk cache of Scryfall's card images (rust/crates/beryl_app/src/art.rs), which
+ * `--art` serves the page from in place of Scryfall: a fixture otherwise draws placeholder
+ * cards, and never paints, scales or decodes a card's image as the app does. An image the
+ * app has never shown is downloaded from Scryfall, as the app would. A fixture recorded from
+ * a bug report holds no card records, so its cards stay placeholders. */
+const ART_CACHE = join(homedir(), "Library", "Caches", "ca.thurn.beryl", "art");
+
+async function serveArt(context) {
+    await context.route(
+        /^https:\/\/(cards|backs)\.scryfall\.io\//,
+        async (route) => {
+            const url = new URL(route.request().url());
+            const prefix = url.host.startsWith("backs") ? "backs" : "";
+            try {
+                const body = await readFile(
+                    join(ART_CACHE, prefix, url.pathname),
+                );
+                await route.fulfill({ body, contentType: "image/jpeg" });
+            } catch {
+                await route.continue();
+            }
+        },
+    );
+}
+
 const quantile = (sorted, q) =>
     sorted.length
         ? sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]
@@ -111,6 +139,7 @@ async function measure(name) {
         deviceScaleFactor: 2,
     });
     await serveRecordings(context, fixtures);
+    if (art) await serveArt(context);
     // Times every animation-frame callback, the stage's tick among them, and every task
     // React's scheduler (a MessageChannel) and timers run, in every engine.
     await context.addInitScript(() => {
@@ -155,8 +184,10 @@ async function measure(name) {
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await page.goto(
-        new URL(`/?${phone ? "phone&" : ""}fixture=${name}&at=1#/game`, base)
-            .href,
+        new URL(
+            `/?${phone ? "phone&" : ""}${art ? "art&" : ""}fixture=${name}&at=1#/game`,
+            base,
+        ).href,
     );
     await page.waitForFunction(() => window.berylStage && window.berylFixture);
     await page.evaluate(() => document.fonts.ready.then(() => undefined));

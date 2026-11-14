@@ -47,7 +47,12 @@ says how Beryl follows MTG Arena.
   several interleaved runs; Chromium's raster time is the steadiest number.
   Anything that animates every frame should change only `transform` or `opacity`
   on an element with a layer of its own (`will-change`), or WebKit repaints what
-  lies under it, filters and all, every frame.
+  lies under it, filters and all, every frame. Fixtures draw placeholder cards;
+  `--art` draws the app's card images. Headless engines drop far fewer frames
+  than the app's window, so the app also times its own frames: each animation
+  run that dropped any is a `frames` entry in the UI log, with the dropped
+  frames by verb, which a bug report's `ui.json` carries
+  (`src/stage/frames.ts`).
 - `just ui-counts <fixtures>` counts the work the page does to play fixtures:
   React components rendered (`--components` lists which), DOM mutations, and
   elements Chromium restyled and laid out. It plays on Playwright's paused
