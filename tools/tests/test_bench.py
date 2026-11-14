@@ -213,3 +213,59 @@ def test_a_rise_past_the_tolerance_fails_and_a_drop_asks_for_a_lower_bar() -> No
     assert ok and "lower" in message
     ok, message = bench.judge(GATE, 995_000)
     assert ok and "lower" not in message
+
+
+def test_the_gate_file_gives_each_family_a_bar() -> None:
+    bars = bench.load_families(bench.GATE_FILE.read_text())
+    assert [b.name for b in bars][:2] == ["blank", "attachments"]
+    assert all(1.0 <= b.ratio <= 2.0 for b in bars)
+
+
+def test_a_family_counts_both_sides_then_prints_its_pairing() -> None:
+    counts, steps = bench.family_cargo(["attachments"])
+    assert counts[counts.index("--bench") + 1] == "family_counts"
+    assert counts[-1] == "family_counts::present_cost::*::attachments"
+    assert steps[steps.index("--bench") + 1] == "family_steps"
+    assert steps[-1] == "attachments"
+
+
+def test_a_family_reads_both_counts_and_its_pairing() -> None:
+    def side(name: str, ir: int) -> str:
+        metrics = {"Ir": {"values": {"new": ir}}}
+        profile = {"tool": "Callgrind", "data": {"total": {"metrics": metrics}}}
+        return json.dumps(
+            {
+                "module_path": f"family_counts::present_cost::{name}",
+                "id": "attachments",
+                "profiles": [profile],
+            }
+        )
+
+    out = "\n".join(
+        [
+            side("present", 1_100),
+            side("control", 1_000),
+            '{"family": "attachments", "positions": 12, "paired": 90, "skipped": 10}',
+        ]
+    )
+    present = bench.counted(out, bench.family_benchmark("present", "attachments"))
+    control = bench.counted(out, bench.family_benchmark("control", "attachments"))
+    assert (present, control) == (1_100, 1_000)
+    assert bench.pairing(out, "attachments") == bench.Pairing(90, 10)
+    assert bench.pairing(out, "blank") is None
+
+
+def test_a_family_fails_over_its_ratio_or_with_a_tenth_skipped() -> None:
+    bar = bench.FamilyBar("attachments", 1.25)
+    assert bench.judge_family(bar, 1_250, 1_000, bench.Pairing(90, 10))[0]
+    ok, message = bench.judge_family(bar, 1_251, 1_000, bench.Pairing(90, 10))
+    assert not ok and "over the bar" in message
+    ok, message = bench.judge_family(bar, 1_000, 1_000, bench.Pairing(89, 11))
+    assert not ok and "skipped" in message
+
+
+def test_the_counts_lane_gates_every_family_in_one_step() -> None:
+    steps = {s.name: s.cmd for s in bench.lane().steps}
+    assert steps["count-gate"][-1] == "count-gate"
+    families = steps["count-gate-families"]
+    assert families[families.index("--family") + 1] == "blank"

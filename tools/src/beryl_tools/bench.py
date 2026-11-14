@@ -11,7 +11,8 @@
   artifacts the same in every worktree and trusts mtimes, so a shared dir would let one
   worktree link another's code. Runs take turns under a lock in the VM.
 - `count-gate`, slow CI's `counts` lane, counts one benchmark there and fails when it rises past
-  the bar in `beryl_bench/count-gate.toml`.
+  the bar in `beryl_bench/count-gate.toml`. With `--family <name>` it counts a family's paired
+  rollouts instead, on both sides, and fails when their ratio passes the family's bar there.
 
 Extra arguments go to `cargo bench`: `by bench -p beryl_bench --bench example_abba`.
 """
@@ -349,10 +350,16 @@ fi
 
 
 def count_script(
-    provision: str, cargo: list[str], name: str, checkout: str, live: list[str]
+    provision: str,
+    cargo: list[str],
+    name: str,
+    checkout: str,
+    live: list[str],
+    then: list[list[str]] | None = None,
 ) -> str:
-    """Counts in `name`'s target dir and Gungraun home, as `checkout`'s build. A new target
-    dir starts as a copy of the gate's warm one; those of worktrees not in `live` go."""
+    """Counts in `name`'s target dir and Gungraun home, as `checkout`'s build, running each
+    command of `then` after `cargo` if it succeeded. A new target dir starts as a copy of the
+    gate's warm one; those of worktrees not in `live` go."""
     target = f"{VM_TARGETS}/{shlex.quote(name)}"
     home = f"{VM_GUNGRAUN}/{shlex.quote(name)}"
     keep = " ".join(shlex.quote(n) for n in sorted({*live, name, GATE_NAME}))
@@ -373,7 +380,8 @@ if [ "$(cat {stamp} 2>/dev/null)" != {owner} ]; then
 fi
 """
     env = f"CARGO_TARGET_DIR={target} GUNGRAUN_HOME={home}"
-    return locked(f"{provision}{prepare}{env} {shlex.join(cargo)}\n")
+    commands = " && ".join(f"{env} {shlex.join(c)}" for c in [cargo, *(then or [])])
+    return locked(f"{provision}{prepare}{commands}\n")
 
 
 def wsl_ensure() -> int:
@@ -496,17 +504,111 @@ def judge(gate: Gate, measured: int) -> tuple[bool, str]:
     return True, said
 
 
+# The present-cost gate (docs/benchmarking.md, "The present-cost gate"): each family's paired
+# rollouts, counted on both sides, and their pairing, run natively in the same build.
+FAMILY_BENCH = "family_counts"
+FAMILY_GROUP = "present_cost"
+FAMILY_STEPS = "family_steps"
+# Past this share of steps left out of both sums, the ratio describes too few of them.
+SKIPPED_LIMIT = 0.1
+
+
+@dataclass
+class FamilyBar:
+    name: str
+    ratio: float  # the most the present side may count over the control's
+
+
+@dataclass
+class Pairing:
+    paired: int
+    skipped: int
+
+
+def load_families(text: str) -> list[FamilyBar]:
+    """The families with a bar, `[family.<name>] ratio = 1.25`, in the file's order."""
+    data = tomllib.loads(text)
+    families = data.get("family", {})
+    return [FamilyBar(name, float(bar["ratio"])) for name, bar in families.items()]
+
+
+def family_benchmark(side: str, name: str) -> str:
+    """The family's benchmark on one side, `present` or `control`, as Gungraun names it."""
+    return f"{FAMILY_BENCH}::{FAMILY_GROUP}::{side}::{name}"
+
+
+def family_cargo(names: list[str]) -> list[list[str]]:
+    """Counts both sides of each family as Gungraun JSON, then prints their pairings."""
+    counts = [
+        cargo_bench(
+            ["--bench", FAMILY_BENCH, "--", "--output-format=json"]
+            + [family_benchmark("*", name)]
+        )
+        for name in names
+    ]
+    return [*counts, cargo_bench(["--bench", FAMILY_STEPS, "--", *names])]
+
+
+def pairing(stdout: str, name: str) -> Pairing | None:
+    """The family's steps paired and skipped, from `family_steps`' JSON line."""
+    for line in stdout.splitlines():
+        if not line.startswith("{"):
+            continue
+        try:
+            found = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if found.get("family") == name:
+            return Pairing(int(found["paired"]), int(found["skipped"]))
+    return None
+
+
+def judge_family(
+    bar: FamilyBar, present: int, control: int, steps: Pairing
+) -> tuple[bool, str]:
+    """Fails a ratio over the bar, or more than a tenth of the steps left out."""
+    ratio = present / control
+    total = steps.paired + steps.skipped
+    share = steps.skipped / total if total else 1.0
+    said = (
+        f"family {bar.name}: {present:,} instructions with the family, {control:,} on the "
+        f"controls, ratio {ratio:.3f} against the bar of {bar.ratio}; {steps.paired:,} steps "
+        f"paired, {steps.skipped:,} skipped ({100 * share:.1f}%)"
+    )
+    if share > SKIPPED_LIMIT:
+        return False, (
+            f"{said}: over a tenth of the steps skipped, so the ratio says little. Make the "
+            f"control offer the choices the family's positions do"
+        )
+    if ratio > bar.ratio:
+        return (
+            False,
+            f"{said}: over the bar. Make the mechanism cheaper while it is in play",
+        )
+    return True, said
+
+
 def lane() -> Lane:
     """Counts the rollout benchmark's instructions in the bench VM (`by count-gate`) and
-    fails a rise past the bar in `beryl_bench/count-gate.toml`. The VM builds into its own
+    fails a rise past the bar in `beryl_bench/count-gate.toml`, then each family's present
+    cost (`by count-gate --family <name>`) against its bar there. The VM builds into its own
     target dir, so it needs no warm clone."""
     from .checks import BY, Lane  # It imports this module.
     from .reruns import whole
 
-    return Lane("counts").step("count-gate", [*BY, "count-gate"], rerun=whole)
+    lane = Lane("counts").step("count-gate", [*BY, "count-gate"], rerun=whole)
+    families = [
+        arg
+        for family in load_families(GATE_FILE.read_text())
+        for arg in ("--family", family.name)
+    ]
+    if families:
+        lane.step("count-gate-families", [*BY, "count-gate", *families], rerun=whole)
+    return lane
 
 
-def count_gate(args: argparse.Namespace) -> int:
+def vm_ready() -> int:
+    """Whether the bench VM can count now: 0, or the code to exit with."""
     if platform.machine() not in ("arm64", "aarch64"):
         # The bar counts an aarch64 build's instructions; an x86-64 build runs others.
         log("the gate's bar is for Apple silicon; `just bench-count` compares here")
@@ -518,9 +620,56 @@ def count_gate(args: argparse.Namespace) -> int:
         # Creating it takes minutes, past CI's deadline.
         log(f"no {VM} VM: run `just bench-count` once to create it")
         return 2
-    code = vm_ensure()
+    return vm_ensure()
+
+
+def family_gate(names: list[str]) -> int:
+    """Counts each family named and judges it against its bar: 0 if all pass."""
+    bars = {bar.name: bar for bar in load_families(GATE_FILE.read_text())}
+    unknown = [name for name in names if name not in bars]
+    if unknown:
+        known = ", ".join(bars) or "none"
+        log(f"no bar in {GATE_FILE.name} for {', '.join(unknown)}; families: {known}")
+        return 2
+    runner = locked_version((paths.RUST / "Cargo.lock").read_text(), "gungraun")
+    if runner is None:
+        log("no gungraun in rust/Cargo.lock")
+        return 2
+    first, *rest = family_cargo(names)
+    script = count_script(
+        provision_script(toolchain(), runner),
+        first,
+        GATE_NAME,
+        str(paths.REPO),
+        paths.worktree_names(),
+        then=rest,
+    )
+    run = subprocess.run(
+        vm_command(script), stdout=subprocess.PIPE, text=True, check=False
+    )
+    if run.returncode != 0:
+        return run.returncode
+    failed = False
+    for name in names:
+        present = counted(run.stdout, family_benchmark("present", name))
+        control = counted(run.stdout, family_benchmark("control", name))
+        found = pairing(run.stdout, name)
+        if present is None or control is None or found is None:
+            log(f"Gungraun or {FAMILY_STEPS} reported nothing for the family {name}")
+            return 2
+        ok, message = judge_family(bars[name], present, control, found)
+        log(message)
+        failed |= not ok
+    return 1 if failed else 0
+
+
+def count_gate(args: argparse.Namespace) -> int:
+    code = vm_ready()
     if code != 0:
         return code
+    families: list[str] | None = args.family
+    if families:
+        return family_gate(families)
     runner = locked_version((paths.RUST / "Cargo.lock").read_text(), "gungraun")
     if runner is None:
         log("no gungraun in rust/Cargo.lock")
@@ -573,6 +722,12 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
         "count-gate",
         help="fail when the gated benchmark's instruction count rises past its bar",
+    )
+    p.add_argument(
+        "--family",
+        action="append",
+        help="gate this family's present cost instead (`[family.<name>]` in count-gate.toml);"
+        " repeat for several",
     )
     p.set_defaults(func=count_gate)
 

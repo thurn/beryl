@@ -13,6 +13,9 @@ workspace = true
 beryl_cards = { path = "../beryl_cards" }
 beryl_engine = { path = "../beryl_engine" }
 beryl_search = { path = "../beryl_search" }
+# The present-cost benchmark matches the rollout's choice among the control state's candidates
+# as a save matches an answer (`beryl_session::save::Chosen`).
+beryl_session = { path = "../beryl_session" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2.191"
@@ -45,6 +48,14 @@ harness = false
 
 [[bench]]
 name = "rollout_counts"
+harness = false
+
+[[bench]]
+name = "family_counts"
+harness = false
+
+[[bench]]
+name = "family_steps"
 harness = false
 
 [[test]]

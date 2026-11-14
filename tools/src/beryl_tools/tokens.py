@@ -79,6 +79,7 @@ HEAVY_STEPS: frozenset[str] = frozenset(
         "script:script-check",
         "motion:motion",
         "counts:count-gate",
+        "counts:count-gate-families",
     }
 )
 

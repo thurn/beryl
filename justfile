@@ -182,10 +182,10 @@ tokens-run *args:
 bench-count *args:
     {{ by }} bench-count "$@"
 
-# Fail when the rollout benchmark's instruction count rises past its bar (count-gate.toml)
+# Fail when the rollout benchmark's instruction count rises past its bar, or with --family <name> a family's present cost past its ratio (count-gate.toml)
 [group('bench')]
-count-gate:
-    {{ by }} count-gate
+count-gate *args:
+    {{ by }} count-gate "$@"
 
 # The tools a card is written with: brief <name> prints the packet it is written from, new <name> starts its
 # file, check <name> [--no-oracles] builds it, plays its scenarios in Beryl, XMage and Forge and diffs its

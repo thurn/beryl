@@ -198,10 +198,12 @@ fn replaced(def: &CardDef, rule_changes: &mut RuleChanges) -> Result<Replaces, T
 }
 
 /// The cards a game can contain, each once, and each deck as indices into them: the decks'
-/// cards in decklist order, then the tokens they make, then [`FACE_DOWN_COPY`] last.
+/// cards in decklist order, then the tokens they make, then `extra`, then [`FACE_DOWN_COPY`]
+/// last.
 fn gather(
     cards: &'static CardTable,
     decks: PerSeat<&Decklist>,
+    extra: &[&'static CardDef],
 ) -> Result<(Vec<&'static CardDef>, PerSeat<Vec<usize>>), TableError> {
     let mut defs: Vec<&'static CardDef> = Vec::new();
     let mut indices: PerSeat<Vec<usize>> = Default::default();
@@ -227,6 +229,11 @@ fn gather(
             }
         }
         i += 1;
+    }
+    for &def in extra {
+        if !defs.iter().any(|d| std::ptr::eq(*d, def)) {
+            defs.push(def);
+        }
     }
     defs.push(&FACE_DOWN_COPY);
     Ok((defs, indices))
@@ -270,7 +277,19 @@ impl GameTable {
     /// Decks of any size and any number of distinct cards make a table: whether a game
     /// between them fits a layout is asked where its state is made ([`crate::State::deal`]).
     pub fn new(cards: &'static CardTable, decks: PerSeat<&Decklist>) -> Result<Self, TableError> {
-        let (defs, indices) = gather(cards, decks)?;
+        Self::with_extra(cards, decks, &[])
+    }
+
+    /// [`GameTable::new`], with `extra` given game indices after the tokens and before
+    /// [`FACE_DOWN_COPY`]: cards no deck holds that a tool puts into a game through the board
+    /// door ([`crate::board::Board::set_card`]), as the present-cost benchmark puts a stand-in
+    /// for each card it takes out of a position. A card already in the table keeps its index.
+    pub fn with_extra(
+        cards: &'static CardTable,
+        decks: PerSeat<&Decklist>,
+        extra: &[&'static CardDef],
+    ) -> Result<Self, TableError> {
+        let (defs, indices) = gather(cards, decks, extra)?;
         let last = defs.len() - 1;
         let face_down_copy = (
             CardIx::try_from_index(last).unwrap_or_default(),

@@ -449,7 +449,7 @@ impl<L: Layout> Effects<L> {
     /// Ends the entries `keep` refuses, and each whose set has no member left, and says
     /// what that changed.
     #[inline]
-    fn end(&mut self, keep: impl Fn(&ContinuousEffect<L>) -> bool) -> Ended {
+    pub(crate) fn end(&mut self, keep: impl Fn(&ContinuousEffect<L>) -> bool) -> Ended {
         let mut done = Ended::default();
         let mut kinds = 0;
         let mut rules: L::PerPlayer<Rules> = Table::filled(Rules::NONE);

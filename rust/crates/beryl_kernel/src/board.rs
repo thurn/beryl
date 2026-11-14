@@ -13,6 +13,7 @@ use crate::event::Sink;
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
+use crate::stack::StackItem;
 use crate::state::{
     CounterKind, Flag, ManaPool, Memo, MulliganStatus, Pending, State, Tracker, TurnStep, Zone,
 };
@@ -305,6 +306,37 @@ impl<L: Layout> Board<'_, L> {
         let (card_a, card_b) = (self.0.object(a).card, self.0.object(b).card);
         self.0.object_mut(a).card = card_b;
         self.0.object_mut(b).card = card_a;
+    }
+
+    /// Makes the object in `slot` the game-table card `card`, a card of another name and text
+    /// as no rules action could: a tool's change, such as the present-cost benchmark's
+    /// stand-in for a card it takes out of a position (`beryl_bench::family`). A spell on the
+    /// stack becomes a spell of `card`. Abilities of the old card already triggered, activated
+    /// or on the stack stay that card's. The layer results are stale until the next refresh.
+    pub fn set_card(&mut self, slot: L::Slot, card: L::Card) {
+        let was = self.0.object(slot).card;
+        self.0.object_mut(slot).card = card;
+        for entry in self.0.stack.as_mut_slice() {
+            if let StackItem::Spell {
+                object,
+                card: spell,
+                ..
+            } = &mut entry.item
+                && object.slot == slot
+                && *spell == was
+            {
+                *spell = card;
+            }
+        }
+        self.0.flags.derived_dirty = true;
+    }
+
+    /// Ends every entry of the Effects store that a spell or ability of the game-table card
+    /// `source` created ([`crate::effects::ContinuousEffect::source`]), as though it had
+    /// never resolved.
+    pub fn end_effects_from(&mut self, source: L::Card) {
+        let done = self.0.effects.end(|e| e.source != source);
+        self.0.settle_ended(done);
     }
 
     /// Breaks the state on purpose, for the tests of the invariant check

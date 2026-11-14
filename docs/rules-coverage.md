@@ -168,19 +168,22 @@ this document.
   looking there, so no flag is stored.
 - **This turn's counts.** The Trackers store gains a count kept for each player:
   spells cast this turn and cards drawn this turn, each behind its capability.
-- **The present-cost corpus.** `rollout_counts` gains a corpus for each family:
-  positions cut from greedy games of the WU mirror with the family's cards
-  swapped in, each with a keystone in play. The gate does not compare those
-  rollouts with rollouts of other positions: a card such as Glorious Anthem
-  makes a game with more combat, and Trinisphere one with more passes, and
-  either would move instructions per decision by more than the mechanism does.
-  It pairs each step instead. As a rollout visits a state, the benchmark builds
-  the control state from that same state, with the family's permanents and the
-  effects they are the source of removed, applies the rollout's choice to both
-  for one transition, and counts each. The control state is then thrown away, so
-  the two sides never drift apart. The gate is the sum over the family's steps
-  divided by the sum over the controls' (R3). A step whose choice the control
-  does not offer is left out of both sums and counted in the report.
+- **The present-cost corpus.** A benchmark of its own, `family_counts`, has a
+  corpus for each family: positions cut from greedy games of the WU mirror with
+  the family's cards swapped in, each with a keystone in play. The gate does not
+  compare those rollouts with rollouts of other positions: a card such as
+  Glorious Anthem makes a game with more combat, and Trinisphere one with more
+  passes, and either would move instructions per decision by more than the
+  mechanism does. It pairs each step instead. As a rollout visits a state, the
+  benchmark builds the control state from that same state, with each of the
+  family's permanents and spells replaced by a stand-in (the same card with no
+  static or triggered ability and no keyword) and the effects they are the
+  source of ended, applies the rollout's choice to both for one transition, and
+  counts each. The control state is then thrown away, so the two sides never
+  drift apart. The gate is the sum over the family's steps divided by the sum
+  over the controls' (R3). A step whose choice the control does not offer is
+  left out of both sums and counted in the report. `docs/benchmarking.md`, "The
+  present-cost gate", describes what was built.
 
 ### 2. Layers
 

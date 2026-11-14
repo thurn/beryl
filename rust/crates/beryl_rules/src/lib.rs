@@ -230,6 +230,7 @@ pub use engine::{
 };
 pub use game::Game;
 pub use keywords::flashback::paid as flashback_paid;
+pub use layers::rederive;
 pub use mana::mana_contribution;
 pub use reference::check_references;
 pub use resolution::Resolution;

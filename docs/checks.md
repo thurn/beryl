@@ -108,7 +108,10 @@ The lanes slow CI adds to the fast check's:
   when one tested range adds more than 0.25%, or when the count is more than
   0.5% above the lowest it reached since the limit last moved, and a
   `count-lower` bead when the count is more than 0.5% under the limit
-  (`count_trend.py`).
+  (`count_trend.py`). Its second step, `count-gate-families`, runs
+  `just count-gate --family <name>` for each family with a bar in that file,
+  failing a family whose present cost passes its ratio (`docs/benchmarking.md`,
+  "The present-cost gate").
 
 Slow CI runs on two machines: this Mac and Cygnus, a Windows PC. A pass on
 either one moves `master` forward. A failure's Steward bead (the P0 bead Enact

@@ -62,6 +62,8 @@ just bench -p beryl_bench --bench example_timing
   the bar in `rust/crates/beryl_bench/count-gate.toml`. It is slow CI's `counts`
   lane, so a rule or card the WU Control mirror doesn't use can't slow it down
   unnoticed. The file's comments say when the bar may rise.
+  `just count-gate --family <name>` gates a family's present cost instead
+  ([The present-cost gate](#the-present-cost-gate)).
 
 Name benchmark targets by kind: `<subject>_counts`, `<subject>_abba`,
 `<subject>_timing`.
@@ -90,6 +92,66 @@ and `rollouts_never_change` every corpus rollout's answers and ending.
   `$HOME/gungraun/<worktree>/beryl_bench/rollout_counts/cube_rollout/rollouts.corpus/callgrind.rollouts.corpus.out`.
   The largest cost is building priority decisions (`engine::decision`, about
   19%), then the mana solver's source scan (`mana::source`, about 9%).
+
+## The present-cost gate
+
+The count gate proves a mechanism costs the WU mirror nothing while no card of
+it is in play. The present-cost gate measures what it costs while one is:
+`just count-gate --family <name>` (`beryl_bench::family`,
+`benches/family_counts.rs`).
+
+- **A family** is a name and a list of swaps into `decks::WU_CONTROL`: how many
+  of which card replace as many of which card, so the deck keeps its size
+  (`family::FAMILIES`). `blank` swaps in a Tundra, which has no static or
+  triggered ability, and checks the method: it must measure 1.00. `attachments`
+  swaps in Swift Reconfiguration and Leonin Scimitar, the cards whose static
+  abilities the layers apply.
+- **Its corpus** is cut from seeded games between greedy agents playing the
+  family's deck in both seats: the first decision with a card of the family on
+  the battlefield, on the stack or the source of an effect in force, which is
+  often the turn it arrives, then every third turn after while one is in play.
+  `family::tests::family_corpora_never_change` pins each corpus.
+- **Each step is paired.** Each position is rolled out under the rollout policy.
+  At every decision, with the state S and the policy's choice c, the benchmark
+  builds the control S' (`family::control`): S with each permanent and spell of
+  the family replaced by its stand-in, the same card with no static or triggered
+  ability and no keyword, and every effect a card of the family created ended.
+  It finds the candidate of S' that does what c does, as a save matches a
+  recorded answer (`beryl_session::save::Chosen`), and applies the choice to
+  both and advances each to the next decision. The rollout goes on from S and S'
+  is dropped. A step whose choice S' does not offer is left out of both sums and
+  counted as skipped.
+- **Why the control is rebuilt at every step.** Rolling the same positions out
+  with and without the family plays different games from the first decision.
+  Glorious Anthem makes games with more combat and more creatures dying, which
+  are expensive decisions; Trinisphere makes games where a player can often only
+  pass, the cheapest decision there is. Either moves instructions per decision
+  by more than the mechanism does. Two transitions from the same state differ
+  only by the family.
+- **What is counted.** The transition on S runs in `family::present_step` and
+  the one on S' in `family::control_step`, two functions with the same body.
+  `family_counts` has a benchmark for each side, each running every rollout in
+  full with Callgrind's collection toggled on only inside its function
+  (Gungraun's `EntryPoint::Custom`, Callgrind's `--toggle-collect`). Building
+  S', advancing it to its decision and matching the choice run outside both
+  functions, so neither side counts them.
+- **The gate** reports both sums, their ratio and the steps paired and skipped.
+  It fails when the ratio passes the family's `ratio` in `count-gate.toml`
+  (`[family.<name>] ratio = 1.25`), or when more than a tenth of the steps were
+  skipped, since the ratio then describes too few of them. The steps come from
+  `benches/family_steps.rs`, which runs the same rollouts natively. Slow CI's
+  `counts` lane runs every family with a bar in one step, `count-gate-families`.
+
+What a paired step does not see: work the mechanism did earlier that changed the
+state, such as a card exiled where it would have gone to a graveyard. Both sides
+share that history, and its cost was counted at the step that did it.
+
+To add a family: add it to `family::FAMILIES`, add its name as a
+`#[bench::<name>(FamilyWorkload::new("<name>"))]` on both functions in
+`benches/family_counts.rs`, add `[family.<name>]` with its `ratio` to
+`count-gate.toml`, and pin its corpus and pairing in `family/tests.rs`. Swap out
+cards the family's positions can do without; the count of copies decides how
+often a card of the family is in play.
 
 ## Determinism
 

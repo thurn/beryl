@@ -7,9 +7,12 @@
 //! - [`example`]: the sample subject the `example_*` benchmarks measure.
 //! - [`rollout`]: the rollout benchmark, the `rollout_*` benchmarks' corpus and
 //!   subjects.
+//! - [`family`]: the present-cost benchmark, `family_*`: each family's corpus and its
+//!   rollouts, every step paired with the same step on a control state.
 
 pub mod abba;
 pub mod cores;
 pub mod example;
+pub mod family;
 pub mod rng;
 pub mod rollout;

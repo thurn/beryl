@@ -105,6 +105,14 @@ pub(crate) fn refresh<L: Layout>(
     Ok(())
 }
 
+/// [`refresh`], for a tool that changed a state through the board door
+/// ([`State::board`]) and reads it next: the present-cost benchmark, which takes a card out
+/// of a position and wants the cost of the recompute left out of what it counts after.
+/// [`Full`] as [`refresh`] gives it.
+pub fn rederive<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
+    refresh(s, t, &mut Sink::default())
+}
+
 /// The game's outcome if it is over, and if it is not, [`refresh`] for what the engine's
 /// loop reads next. A recompute with no room for an effect ends the game stalled, as any
 /// capacity that runs out does, so the game is then over.

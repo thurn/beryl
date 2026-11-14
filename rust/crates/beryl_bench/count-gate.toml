@@ -35,3 +35,13 @@
 benchmark = "rollout_counts::cube_rollout::rollouts::corpus"
 instructions = 390_293_470
 tolerance_percent = 1.0
+
+# The present-cost gate (docs/benchmarking.md, "The present-cost gate"): each family's
+# rollouts, every step counted on the state the rollout is at and on the same state with the
+# family taken out. `ratio` is the most the first sum may be over the second. A family over
+# its bar after three attempts is recorded with its cause on its bead, and the bar stays.
+[family.blank]
+ratio = 1.25
+
+[family.attachments]
+ratio = 1.25
