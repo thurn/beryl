@@ -413,10 +413,12 @@ def test_build_binary(packages: list[str]) -> Path | str:
     and its binary a second time (about 20 s under load). The same `cargo test` command finds
     the binary already built; it builds `beryl_cards`' binaries only when `beryl_cards` is in
     scope, so the check adds it when it is not."""
+    from .rust_tests import NIGHTLY_PACKAGE, scope_of
+
     scope = (
-        [a for p in dict.fromkeys([*packages, "beryl_cards"]) for a in ("-p", p)]
+        scope_of(list(dict.fromkeys([*packages, "beryl_cards"])))
         if packages
-        else ["--workspace"]
+        else ["--workspace", "--exclude", NIGHTLY_PACKAGE]
     )
     run = subprocess.run(
         ["cargo", "test", "--locked", *scope, "--no-run", "--message-format=json"],
