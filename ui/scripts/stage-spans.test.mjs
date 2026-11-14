@@ -131,14 +131,16 @@ test("the line to a source grows out of the source, once the ability is clear of
     assert.equal(shapeOf("source", card(10, 10), source, 1), null);
 });
 
-/** The lowest point of the middle of the curve the path `d` makes: a quarter of each end and
- * half of the point it goes round. */
-const middleOf = (d) => {
-    const [ax, ay, cx, cy, bx, by] = numbers(d);
-    return {
-        x: 0.25 * ax + 0.5 * cx + 0.25 * bx,
-        y: 0.25 * ay + 0.5 * cy + 0.25 * by,
-    };
+/** The lowest point of the curve the path `d` makes from its first point round its second
+ * to its third. */
+const lowestOf = (d) => {
+    const [, ay, , cy, , by] = numbers(d);
+    let lowest = -Infinity;
+    for (let t = 0; t <= 1; t += 0.001) {
+        const y = (1 - t) ** 2 * ay + 2 * t * (1 - t) * cy + t ** 2 * by;
+        lowest = Math.max(lowest, y);
+    }
+    return lowest;
 };
 
 test("on the desktop the line to a source far across the table hangs low between them, as Arena's does", () => {
@@ -159,17 +161,22 @@ test("on the desktop the line to a source far across the table hangs low between
         { x: 650, y: 470 },
         "out of the source's bottom",
     );
-    const middle = middleOf(shape.d);
-    assert.equal(middle.y, 810, "its middle sags to 0.9 of the stage's height");
-    assert.ok(middle.x > 650 && middle.x < 1450, "between them");
+    const lowest = lowestOf(shape.d);
+    assert.ok(
+        Math.abs(lowest - 810) < 0.5,
+        `it sags to 0.9 of the stage's height: ${lowest}`,
+    );
+    const [, , cx] = numbers(shape.d);
+    assert.ok(cx > 650 && cx < 1450, "between them");
 });
 
-test("the line to a source near the stack card across the table sags only a little below them", () => {
-    // A source on the far row just left of the stack card: a curve that hung to 0.9 of the
-    // table between the two swung down to the bottom of the screen and back. Its middle lies
-    // below the stack card by about a card's height, well above the 810 it may sag to.
+test("the line to a source on the far row near the stack card sags only a little below it", () => {
+    // An opponent's planeswalker on the far row 270 across from the stack card, as in a
+    // player's report: a curve that hung to 0.9 of the table swung down to the bottom of the
+    // screen and back. Its lowest point lies about 0.32 of 270 below the stack card's bottom, well
+    // above the 810 it may sag to.
     const ability = card(1400, 300);
-    const source = card(1250, 20, 1);
+    const source = card(1130, 40, 1);
     const shape = shapeOf("source", ability, source, 1, 810);
     assert.deepEqual(
         shape.from,
@@ -178,11 +185,11 @@ test("the line to a source near the stack card across the table sags only a litt
     );
     assert.deepEqual(
         shape.to,
-        { x: 1300, y: 160 },
+        { x: 1180, y: 180 },
         "out of the source's bottom",
     );
-    const { y } = middleOf(shape.d);
-    assert.ok(y > 440 && y < 600, `just below the stack card: ${y}`);
+    const y = lowestOf(shape.d);
+    assert.ok(y > 440 && y <= 530, `just below the stack card: ${y}`);
 });
 
 test("the line to a source right under the stack card is a short curve into the source's top", () => {

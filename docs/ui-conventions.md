@@ -599,25 +599,26 @@ stage to; Arena's measured instances are kept beside them as reference in
   widest, and comes up toward the bottom of its ability, fading out before it
   reaches it, from either seat. It hangs to about 0.9 of the table's height
   between ends far apart across it, and only a little below the lower end
-  between ends close together across it; to a source that lies right under its
-  ability it goes down from the bottom of the ability into the top of the
-  source; a phone's arcs across between them. A line of combat is a straight
-  beam that narrows to a dart, from the middle of its creature to the middle of
-  what it points at, over both. Each is one line for as long as it lasts, drawn
-  every moment from where its two ends are, and each is cut whole in a frame as
-  the step that ends it ends, never drained away from its tail, which left a
-  stub of arrow on its target (by-2e5a), which waits until it has stood whole
-  for its end's delay, so that one whose spell resolves at once is still read,
-  and which what follows waits for, so that neither end moves under it. An
-  ability and the line to its source stay a moment after what the ability did,
-  and go in one tick. Every arrow and line is over everything at rest and under
-  what flies. A browser with no WebGL draws each as a path instead. A cyan arc
-  runs from a spell or ability to its target until it resolves. A thin line
-  joins an ability to its source from the frame it lifts. A thin gold line runs
-  from a blocker to its attacker until combat damage is done. An attacker has no
-  line to the player, only its chevron (I3Te0m1bBFw 31:35.05, bJQDi6NIrZA
-  55:08.5, IEXcjBn3BXk 20:39.3, IEXcjBn3BXk 22:21.5, sMpAJ0HKDdg 54:50,
-  IEXcjBn3BXk 25:52.5). Beryl: 66 ms, 0 ms after its cause, in place.
+  between ends close together across it, about a third as far below it as they
+  lie apart (by-olby); to a source that lies right under its ability it goes
+  down from the bottom of the ability into the top of the source; a phone's arcs
+  across between them. A line of combat is a straight beam that narrows to a
+  dart, from the middle of its creature to the middle of what it points at, over
+  both. Each is one line for as long as it lasts, drawn every moment from where
+  its two ends are, and each is cut whole in a frame as the step that ends it
+  ends, never drained away from its tail, which left a stub of arrow on its
+  target (by-2e5a), which waits until it has stood whole for its end's delay, so
+  that one whose spell resolves at once is still read, and which what follows
+  waits for, so that neither end moves under it. An ability and the line to its
+  source stay a moment after what the ability did, and go in one tick. Every
+  arrow and line is over everything at rest and under what flies. A browser with
+  no WebGL draws each as a path instead. A cyan arc runs from a spell or ability
+  to its target until it resolves. A thin line joins an ability to its source
+  from the frame it lifts. A thin gold line runs from a blocker to its attacker
+  until combat damage is done. An attacker has no line to the player, only its
+  chevron (I3Te0m1bBFw 31:35.05, bJQDi6NIrZA 55:08.5, IEXcjBn3BXk 20:39.3,
+  IEXcjBn3BXk 22:21.5, sMpAJ0HKDdg 54:50, IEXcjBn3BXk 25:52.5). Beryl: 66 ms, 0
+  ms after its cause, in place.
 - **mark.** A mark from the list below on a card, an ability or a player, from
   the step that begins it to the step that ends it. The light of what may be
   picked comes up over a moment, on all of it at once. Every other mark is there

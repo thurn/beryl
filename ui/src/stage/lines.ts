@@ -219,8 +219,10 @@ function loop(from: Reach, to: Reach): [Point, Point, Point] {
  * sags to about 0.9 of the table's height, a curve fitted to those whole ones within 0.03 of
  * the table's height. It sags no lower than its ends need, though: a curve that hung to 0.9
  * of the table between a source and a stack card close together across it was a tall loop
- * down through the buttons and back. So its middle lies below the lower of its two ends by a
- * clearance and by `SAG_DEEP` of how far apart they are across, and no lower than `sag`. A
+ * down through the buttons and back, and one from a planeswalker on the far row just left of
+ * the stack card swung down to the bottom of the screen. So its lowest point lies below the lower
+ * of its two ends by `SAG_DEEP` of how far apart they are across (half a card at least), and
+ * no lower than `sag`. A
  * source that lies under the stack card, below its bottom edge, has a short curve from the
  * bottom of the stack card down into the top of the source instead. */
 function hung(from: Reach, source: Reach, sag: number): [Point, Point, Point] {
@@ -238,16 +240,18 @@ function hung(from: Reach, source: Reach, sag: number): [Point, Point, Point] {
   const b = edge(source, 1);
   const deepest = Math.min(
     sag,
-    Math.max(a.y, b.y) + source.half.y + SAG_DEEP * across,
+    Math.max(a.y, b.y) + Math.max(source.half.y / 2, SAG_DEEP * across),
   );
-  // The middle of a curve round `c` is a quarter of each end and half of `c`.
-  const low = 2 * deepest - (a.y + b.y) / 2;
+  // A curve from `a` round `c` to `b` is lowest at (a.y b.y - c.y²) / (a.y + b.y - 2 c.y),
+  // which is `deepest` where `c` lies this low.
+  const low = deepest + Math.sqrt((deepest - a.y) * (deepest - b.y));
   return [a, { x: b.x + SAG_ALONG * (a.x - b.x), y: low }, b];
 }
 /** How much lower than its lower end the line to a source sags for each pixel its ends lie
- * apart across the table. Arena's, from a source half a table away, reaches 0.9 of the
- * table's height. */
-const SAG_DEEP = 0.3;
+ * apart across the table: both of Arena's whole ones, from sources 628 and 787 stage pixels
+ * across from the stack card, sag about 0.32 of that below the stack card's bottom, to 0.9
+ * of the table's height. */
+const SAG_DEEP = 0.32;
 /** How far to one side the short line into a source that lies under the stack card bows,
  * as a share of how far it falls. */
 const SAG_BOW = 0.25;
