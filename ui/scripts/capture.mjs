@@ -570,7 +570,7 @@ export async function crowdedControls(page) {
                 : undefined;
         const controls = [
             ...document.querySelectorAll(
-                "button, [role=button], a[href], input, select, .life-target",
+                "button, [role=button], [role=menu], a[href], input, select, .life-target",
             ),
         ].filter((e) => {
             const box = e.getBoundingClientRect();
@@ -591,6 +591,8 @@ export async function crowdedControls(page) {
                 );
                 return false;
             }
+            // The entire panel must fit, including when its middle is off screen.
+            if (e.matches("[role=menu]")) return true;
             const hit = document.elementFromPoint(
                 box.left + box.width / 2,
                 box.top + box.height / 2,

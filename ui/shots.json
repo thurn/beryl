@@ -117,7 +117,32 @@
       "name": "gallery",
       "route": "/#/gallery",
       "width": 1536,
-      "height": 1272
+      "height": 1400
+    },
+    {
+      "name": "gallery-menu-permanent",
+      "route": "/?menu=permanent#/gallery",
+      "width": 1536,
+      "height": 1024,
+      "expect": "[role=menuitem]:has-text('Tap')",
+      "keep": "Shows a permanent's context menu with a click hint and grouped destinations."
+    },
+    {
+      "name": "gallery-menu-library",
+      "route": "/?menu=library#/gallery",
+      "width": 1536,
+      "height": 1024,
+      "expect": "[role=menuitemcheckbox][aria-checked=true]",
+      "keep": "Shows the library's Assists group and a checked command."
+    },
+    {
+      "name": "gallery-menu-corner",
+      "route": "/?menu=corner#/gallery",
+      "width": 1024,
+      "height": 600,
+      "hover": "[role=menuitem]:has-text('Bottom of library')",
+      "expect": "[role=menuitem]:has-text('Draw bottom card')",
+      "keep": "Shows the library menu and its submenu at the smallest desktop window."
     },
     {
       "name": "game-first-target",

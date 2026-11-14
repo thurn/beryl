@@ -4,7 +4,7 @@
 .gallery {
   position: relative;
   width: 1536px;
-  height: 1272px;
+  height: 1400px;
   margin: 0 auto;
   overflow: hidden;
   background:
@@ -137,6 +137,16 @@
 .gallery-ask .dock {
   position: static;
   max-width: 100%;
+}
+.panel-08 {
+  left: 16px;
+  right: 17px;
+  top: 1271px;
+  height: 112px;
+}
+.gallery-menus {
+  display: flex;
+  justify-content: space-around;
 }
 /* The title, its number in gold, over an engraved rule that fades out at both ends. */
 .panel-title {

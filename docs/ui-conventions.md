@@ -263,6 +263,10 @@ restore the old behavior.
   step down and a step up. A sign changes the current value where one exists.
   The button says what it will do, such as Draw 3. Return confirms and Escape
   cancels.
+- **Context menu.** The manual table's context menu names the card or pile and
+  whose it is. It lists commands as plain labeled rows with key hints, check
+  marks for active switches and at most one submenu level. A command that needs
+  a number opens a prompt when chosen.
 
 ## Not seen in Arena
 

@@ -17,6 +17,7 @@ import {
 } from "../components/Player";
 import { StackItem } from "../components/Stack";
 import { AskPrompt } from "../table/AskPrompt";
+import { Menu, type MenuProps } from "../table/Menu";
 import { costless, SAMPLE } from "./samples";
 import { ScryOverlay } from "./Scry";
 
@@ -411,6 +412,129 @@ function TablePrompts() {
   );
 }
 
+type MenuExample = "permanent" | "library" | "corner";
+
+const permanentMenu: Pick<MenuProps, "header" | "groups"> = {
+  header: { title: SAMPLE.beast.name, whose: "Token creature · yours" },
+  groups: [
+    { rows: [{ id: "tap", label: "Tap", click: true }] },
+    {
+      heading: "Move to",
+      rows: [
+        { id: "graveyard", label: "Graveyard", key: "⌘⌫" },
+        { id: "exile", label: "Exile" },
+        { id: "hand", label: "Hand" },
+        { id: "top", label: "Top of library" },
+        { id: "bottom", label: "Bottom of library", key: "⌘B" },
+      ],
+    },
+    {
+      rows: [
+        { id: "counter", label: "Add counter…" },
+        { id: "stats", label: "Set power and toughness…", key: "⌘P" },
+        { id: "actions", label: "Every action…", key: "⌘K" },
+      ],
+    },
+  ],
+};
+
+const libraryMenu: Pick<MenuProps, "header" | "groups"> = {
+  header: { title: "Library", whose: "53 cards · yours" },
+  groups: [
+    {
+      rows: [
+        { id: "draw", label: "Draw", click: true },
+        { id: "draw-cards", label: "Draw cards…", key: "⌘E" },
+        { id: "look-top", label: "Look at top cards…", key: "⌘W" },
+        { id: "search", label: "Search", key: "F3" },
+        { id: "shuffle", label: "Shuffle", key: "⌘S" },
+      ],
+    },
+    {
+      heading: "Assists",
+      rows: [
+        { id: "scry", label: "Scry…" },
+        { id: "surveil", label: "Surveil…" },
+      ],
+    },
+    {
+      rows: [
+        {
+          id: "keep-top",
+          label: "Keep top card revealed",
+          key: "⌘N",
+          checked: true,
+        },
+        {
+          id: "bottom",
+          label: "Bottom of library",
+          submenu: [
+            { id: "draw-bottom", label: "Draw bottom card" },
+            { id: "look-bottom", label: "Look at bottom cards…", key: "⇧⌘W" },
+            { id: "mill-bottom", label: "Move bottom card to graveyard" },
+          ],
+        },
+        { id: "actions", label: "Every action…", key: "⌘K" },
+      ],
+    },
+  ],
+};
+
+function menuExample(example: MenuExample, x: number, y: number) {
+  return {
+    ...(example === "permanent" ? permanentMenu : libraryMenu),
+    at:
+      example === "corner"
+        ? {
+            x: document.documentElement.clientWidth - 1,
+            y: window.innerHeight - 1,
+          }
+        : { x, y },
+  };
+}
+
+function TableMenus() {
+  const [example, setExample] = useState(() => {
+    const preset = new URLSearchParams(window.location.search).get("menu");
+    return preset === "permanent" || preset === "library" || preset === "corner"
+      ? menuExample(preset, innerWidth / 2, innerHeight / 3)
+      : undefined;
+  });
+  return (
+    <Panel n="08" title="Context menus">
+      <div className="gallery-menus">
+        {(
+          [
+            ["permanent", "Permanent"],
+            ["library", "Library"],
+            ["corner", "Bottom-right corner"],
+          ] as const
+        ).map(([kind, label]) => (
+          <Button
+            key={kind}
+            variant="secondary"
+            onClick={(event) => {
+              const { left, bottom } =
+                event.currentTarget.getBoundingClientRect();
+              setExample(menuExample(kind, left, bottom));
+            }}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+      {example && (
+        <Menu
+          {...example}
+          presentation="menu"
+          onChoose={() => {}}
+          onClose={() => setExample(undefined)}
+        />
+      )}
+    </Panel>
+  );
+}
+
 export function Gallery() {
   return (
     <main className="gallery">
@@ -430,6 +554,7 @@ export function Gallery() {
       <CombatAndStack />
       <ScryPanel />
       <TablePrompts />
+      <TableMenus />
     </main>
   );
 }
