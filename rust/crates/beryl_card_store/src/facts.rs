@@ -22,8 +22,8 @@ fn type_line(record: &Record) -> &str {
 /// before its card types.”
 ///
 /// [CR 205.4a]: https://yawgatog.com/resources/magic-rules/#R2054a
-fn types(record: &Record) -> impl Iterator<Item = &str> {
-    type_line(record)
+fn types(type_line: &str) -> impl Iterator<Item = &str> {
+    type_line
         .split('—')
         .next()
         .unwrap_or_default()
@@ -31,23 +31,31 @@ fn types(record: &Record) -> impl Iterator<Item = &str> {
 }
 
 pub fn is_land(record: &Record) -> bool {
-    types(record).any(|word| word == "Land")
+    is_land_type_line(type_line(record))
+}
+
+pub fn is_land_type_line(type_line: &str) -> bool {
+    types(type_line).any(|word| word == "Land")
 }
 
 pub fn is_creature(record: &Record) -> bool {
-    types(record).any(|word| word == "Creature")
+    types(type_line(record)).any(|word| word == "Creature")
 }
 
 pub fn is_planeswalker(record: &Record) -> bool {
-    types(record).any(|word| word == "Planeswalker")
+    types(type_line(record)).any(|word| word == "Planeswalker")
+}
+
+pub fn is_permanent(record: &Record) -> bool {
+    is_permanent_type_line(type_line(record))
 }
 
 /// [CR 110.4] says “There are six permanent types: artifact, battle, creature,
 /// enchantment, land, and planeswalker.”
 ///
 /// [CR 110.4]: https://yawgatog.com/resources/magic-rules/#R1104
-pub fn is_permanent(record: &Record) -> bool {
-    types(record).any(|word| {
+pub fn is_permanent_type_line(type_line: &str) -> bool {
+    types(type_line).any(|word| {
         matches!(
             word,
             "Artifact" | "Battle" | "Creature" | "Enchantment" | "Land" | "Planeswalker"
@@ -56,7 +64,7 @@ pub fn is_permanent(record: &Record) -> bool {
 }
 
 pub fn is_legendary(record: &Record) -> bool {
-    types(record).any(|word| word == "Legendary")
+    types(type_line(record)).any(|word| word == "Legendary")
 }
 
 pub fn is_attachment(record: &Record) -> bool {

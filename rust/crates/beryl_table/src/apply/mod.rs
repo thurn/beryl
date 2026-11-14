@@ -46,7 +46,7 @@ pub fn apply(
 ) -> Result<Entry, Refusal> {
     permissions::check(table, by, action)?;
     let n = table.entry_number.checked_add(1).ok_or(Refusal::Invalid)?;
-    let changes = changes_for(table, action)?;
+    let changes = changes_for(table, by, action)?;
     perform(table, &changes);
     table.entry_number = n;
     Ok(Entry {
@@ -67,7 +67,7 @@ fn perform(table: &mut Table, changes: &[Change]) {
     }
 }
 
-fn changes_for(table: &Table, action: &Action) -> Changes {
+fn changes_for(table: &Table, by: Seat, action: &Action) -> Changes {
     match action {
         Action::Move {
             selection,
@@ -77,22 +77,37 @@ fn changes_for(table: &Table, action: &Action) -> Changes {
             tapped,
         } => cards::move_cards(table, selection, *to, *position, *face, *tapped),
         Action::Tap { selection, tapped } => cards::tap(table, selection, *tapped),
-        Action::Reorder { .. } => cards::reorder(action),
-        Action::Pin { .. } => cards::pin(action),
-        Action::Give { .. } => cards::give(action),
-        Action::Face { .. } => cards::face(action),
-        Action::Flag { .. } => cards::flag(action),
-        Action::Peek { .. } => cards::peek(action),
-        Action::Counter { .. } => cards::counter(action),
-        Action::Stats { .. } => cards::stats(action),
-        Action::Damage { .. } => cards::damage(action),
-        Action::Note { .. } => cards::note(action),
-        Action::Attach { .. } => cards::attach(action),
-        Action::Unattach { .. } => cards::unattach(action),
-        Action::Clone { .. } => cards::clone(action),
-        Action::Token { .. } => cards::token(action),
-        Action::Marker { .. } => cards::marker(action),
-        Action::Remove { .. } => cards::remove(action),
+        Action::Reorder {
+            selection,
+            position,
+        } => cards::reorder(table, selection, *position),
+        Action::Pin { selection, row } => cards::pin(table, selection, *row),
+        Action::Give { selection, to } => cards::give(table, selection, *to),
+        Action::Face { selection, face } => cards::face(table, selection, *face),
+        Action::Flag {
+            selection,
+            doesnt_untap,
+        } => cards::flag(table, selection, *doesnt_untap),
+        Action::Peek { selection } => cards::peek(table, by, selection),
+        Action::Counter {
+            selection,
+            name,
+            adjustment,
+        } => cards::counter(table, selection, name, *adjustment),
+        Action::Stats { selection, stats } => cards::stats(table, selection, *stats),
+        Action::Damage { selection, damage } => cards::damage(table, selection, *damage),
+        Action::Note { selection, note } => cards::note(table, selection, note.as_deref()),
+        Action::Attach { selection, host } => cards::attach(table, selection, *host),
+        Action::Unattach { selection } => cards::unattach(table, selection),
+        Action::Clone { selection } => cards::clone(table, by, selection),
+        Action::Token {
+            card,
+            count,
+            attached_to,
+            note,
+        } => cards::token(table, by, card, *count, *attached_to, note.as_deref()),
+        Action::Marker { selection, text } => cards::marker(table, selection, text),
+        Action::Remove { selection } => cards::remove(table, selection),
         Action::Draw { .. } => library::draw(action),
         Action::Mulligan { .. } => library::mulligan(action),
         Action::Shuffle { .. } => library::shuffle(action),
