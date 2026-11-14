@@ -659,7 +659,8 @@
   background: rgb(15 26 32 / 85%);
   box-shadow: 0 1px 6px #000;
 }
-/* A mark on a player is drawn about the face of their life total, as an effect on them is. */
+/* A mark on a player is drawn about the face of their life total, as an effect on them is,
+   in a light of its own (screens/styles/table.css). */
 [data-life] > .stage-mark {
   --frame: 7em;
   inset: auto;

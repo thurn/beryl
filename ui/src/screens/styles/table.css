@@ -133,6 +133,25 @@
   cursor: pointer;
   pointer-events: auto;
 }
+/* The mark on a player (stage/stage.css `[data-life] > .stage-mark`). Arena lights a player
+   who may be picked, or is picked, by tinting their life total's badge, with no light beyond
+   it. So the outline is drawn inside the face: a thin rim on its edge and light coming in from
+   it, leaving the number clear, with a faint glow outside that stays within the orb's art. A
+   card's outline, with its halo sized for a whole card, once spread past the orb onto the
+   stops and the cards beside it. */
+[data-life]
+  > :is(
+    .stage-mark-eligible,
+    .stage-mark-selected,
+    .stage-mark-friendly-target,
+    .stage-mark-hostile-target
+  ) {
+  box-shadow:
+    0 0 0 calc(var(--frame) * 0.016) rgb(var(--tone)),
+    0 0 calc(var(--frame) * 0.03) rgb(var(--tone) / 60%),
+    inset 0 0 calc(var(--frame) * 0.14) calc(var(--frame) * 0.04)
+      rgb(var(--tone) / 70%);
+}
 /* Mockup pixels on the 1600-wide stage. */
 .table .life-orb {
   --orb: calc(1px / 1.045);

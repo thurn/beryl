@@ -591,6 +591,44 @@ export async function crowdedControls(page) {
             return hit !== null && (e.contains(hit) || hit.contains(e));
         });
         const slack = 1;
+        // The light of a mark on a player (stage.css `[data-life] > .stage-mark`) stays within
+        // the art of their life orb. A box shadow has no box of its own, so no overlap test
+        // above sees it: a halo as wide as a card's once spread past the orb onto the step
+        // stops and the cards beside it. The reach of an outer shadow is its offset, blur and
+        // spread.
+        for (const mark of document.querySelectorAll(
+            "[data-life] > .stage-mark",
+        )) {
+            const orb = mark.parentElement
+                ?.querySelector(".life-orb")
+                ?.getBoundingClientRect();
+            const style = getComputedStyle(mark);
+            if (!orb || Number(style.opacity) <= 0) continue;
+            let reach = 0;
+            for (const shadow of style.boxShadow.split(/,(?![^(]*\))/)) {
+                if (/\binset\b/.test(shadow)) continue;
+                const [x = 0, y = 0, blur = 0, spread = 0] = (
+                    shadow.replace(/rgba?\([^)]*\)/, "").match(/-?[\d.]+px/g) ??
+                    []
+                ).map(parseFloat);
+                reach = Math.max(
+                    reach,
+                    Math.max(Math.abs(x), Math.abs(y)) + blur + spread,
+                );
+            }
+            const box = mark.getBoundingClientRect();
+            const past = Math.max(
+                orb.left - (box.left - reach),
+                orb.top - (box.top - reach),
+                box.right + reach - orb.right,
+                box.bottom + reach - orb.bottom,
+            );
+            if (past > slack) {
+                faults.push(
+                    `the light of ${mark.className} on ${mark.parentElement?.dataset.life} reaches ${Math.round(past)} px past the life orb`,
+                );
+            }
+        }
         const boxes = controls.map((e) => e.getBoundingClientRect());
         controls.forEach((e, i) => {
             const b = boxes[i];

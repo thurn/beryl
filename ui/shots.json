@@ -750,6 +750,13 @@
       "height": 900
     },
     {
+      "name": "phone-game-target-player",
+      "route": "/?phone&fixture=target-player#/game",
+      "width": 393,
+      "height": 759,
+      "expect": ".phone-orb > .life-target"
+    },
+    {
       "name": "game-choice-scry",
       "route": "/?fixture=choice-scry#/game",
       "width": 1600,
