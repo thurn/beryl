@@ -209,8 +209,9 @@ Use the cheapest test that covers your change. Agents never open a window;
 4. The phone apps: `just ios-smoke` and `just android-smoke` load the UI in a
    headless simulator or emulator and require a PNG window snapshot
    (`rust/AGENTS.md`). `just mobile-bugs` pulls their saved bug reports into the
-   Mac's bugs folder; `--device` also pulls from a paired iPhone. Agents never
-   install onto a real phone: `just ios-device` is only for the user.
+   Mac's bugs folder; `--device` also pulls from a paired iPhone. Agents install
+   onto the user's iPhone only when the user asks, with
+   `just ios-device --user-asked`.
 
 Benchmarks follow `docs/benchmarking.md`. Tournaments (`just tournament`,
 `just play` and `just review --agent`) use the whole machine for minutes to

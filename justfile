@@ -61,7 +61,7 @@ ios *args:
 ios-smoke *args:
     {{ by }} ios-smoke "$@"
 
-# Build and sign the release iOS app and install it on the paired iPhone (--no-install)
+# Build and sign the release iOS app and install it on the paired iPhone (--no-install, --user-asked)
 [group('app')]
 ios-device *args:
     {{ by }} ios-device "$@"

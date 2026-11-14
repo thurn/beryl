@@ -88,9 +88,10 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
 - `just ios-smoke` builds the iOS app and launches it in a headless iOS
   Simulator until the UI loads. `just ios` launches it in a simulator, which you
   can drive with the iOS Simulator tool.
-- Agents never install onto a real phone: `just ios-device` (which signs the app
-  and installs it on the paired iPhone) is only for the user, and with
-  `--no-install` it only builds.
+- `just ios-device` signs the app and installs it on the paired iPhone, and with
+  `--no-install` it only builds. Agents install to the phone only when the user
+  asks for it in chat, and then pass `--user-asked`; without it the command
+  refuses to install for an agent.
 - `just android-smoke` and `just android` do the same in the Android emulator
   (headless for agents; drive it with `adb shell input` or the WebView's
   DevTools over `adb forward`).

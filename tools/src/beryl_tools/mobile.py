@@ -448,10 +448,12 @@ def run_records(journal: str, pid: int) -> list[dict[str, Any]]:
 
 def device(args: argparse.Namespace) -> int:
     install = not (args.no_install or args.no_sign)
-    if install and paths.is_agent():
-        # Agents verify in the simulator only; the user's phone is theirs.
+    if install and paths.is_agent() and not args.user_asked:
+        # Agents verify in the simulator. They install to the user's phone only when the
+        # user has asked for it in chat, and say so with --user-asked.
         print(
-            "ios-device: agents never install to a phone (--no-install, --no-sign)",
+            "ios-device: agents install to the phone only when the user asks"
+            " (--user-asked); otherwise use --no-install or --no-sign",
             file=sys.stderr,
         )
         return 2
@@ -536,5 +538,10 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.add_argument("--no-install", action="store_true", help="build and sign only")
     p.add_argument(
         "--no-sign", action="store_true", help="build only, unsigned (no Xcode login)"
+    )
+    p.add_argument(
+        "--user-asked",
+        action="store_true",
+        help="let an agent install: the user asked in chat for the app on their phone",
     )
     p.set_defaults(func=device)
