@@ -6,7 +6,7 @@
 
 use super::Ctx;
 use super::abilities::{a_types, land_types, other_types, possessive};
-use super::words::{colors, keywords, list, pt_change, types, with_article};
+use super::words::{colors, keywords, list, protection, pt_change, types, with_article};
 use crate::continuous::Modification;
 use crate::effect::{Objects, Players};
 
@@ -145,6 +145,9 @@ impl Ctx {
             }
             Modification::AddKeywords(set) => {
                 format!("{} {}", verb("gains", "gain"), list(&keywords(set), "and"))
+            }
+            Modification::AddProtection(from) => {
+                format!("{} {}", verb("gains", "gain"), protection(from))
             }
             Modification::Grant(ix) => format!("{} {}", verb("gains", "gain"), self.granted(ix)),
             Modification::ModifyPt(power, toughness) => {

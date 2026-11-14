@@ -276,8 +276,8 @@ purposes! {
     /// more than one.
     Act = "act" => Mode,
     /// A color ([CR 105.4](https://yawgatog.com/resources/magic-rules/#R1054)): "If a player
-    /// is asked to choose a color, they must choose one of the five colors." No card asks it
-    /// yet.
+    /// is asked to choose a color, they must choose one of the five colors." Asked as
+    /// "protection from the color of your choice" begins.
     Color = "color" => Catalog,
     /// A creature type ([CR 205.3m](https://yawgatog.com/resources/magic-rules/#R2053m)):
     /// "Creatures and kindreds share their lists of subtypes; these subtypes are called

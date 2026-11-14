@@ -23,7 +23,7 @@ use beryl_kernel::chosen::ChosenValue;
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityIx, AbilityKind, FaceAbility, Replaced, Replacement, Rewrite, Types};
 use crate::decision::{Choice, Decision, DecisionKind, Opt};
-use crate::event::{Entry, LossCause, Reason, ReplacementKind, Sink};
+use crate::event::{Entry, LossCause, Reason, Recipient, ReplacementKind, Sink};
 use crate::filter::{self, Evaluate};
 use crate::fixed::{Fixed, Full};
 use crate::game::Game;
@@ -35,7 +35,7 @@ use crate::profile::Stops;
 use crate::replacement::{self, Instead};
 use crate::state::{AbilityMask, CounterKind, MoveReplacement, ObjectRef, State, Zone, ZoneKey};
 use crate::table::{Capability, GameTable};
-use crate::{actions, chosen, interpret, trigger, zones};
+use crate::{actions, chosen, interpret, protection, trigger, zones};
 
 /// A move proposed for one object of a batch, before the state changes: the proposal the
 /// replacement effects of a move rewrite ([`moving`]). Where in a library it goes and why it
@@ -74,6 +74,48 @@ pub(crate) fn moving<L: Layout>(
         proposal.entry = entering(s, t, sink, proposal.slot, proposal.entry)?;
     }
     Ok(proposal)
+}
+
+/// Damage proposed before it is dealt: the proposal that prevention and replacement effects
+/// of damage rewrite ([`damage`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Damage<L: Layout> {
+    pub source: ObjectRef<L>,
+    pub to: Recipient<L>,
+    pub amount: u8,
+    /// It is combat damage ([CR 510.2]).
+    ///
+    /// [CR 510.2]: https://yawgatog.com/resources/magic-rules/#R5102
+    pub combat: bool,
+    /// It can be prevented: no effect says it can't ([CR 615.12]), "Some effects state that
+    /// damage “can’t be prevented.” If unpreventable damage would be dealt, any applicable
+    /// prevention effects are still applied to it. Those effects won’t prevent any damage,
+    /// but any additional effects they have will take place."
+    ///
+    /// [CR 615.12]: https://yawgatog.com/resources/magic-rules/#R61512
+    pub preventable: bool,
+}
+
+/// Applies the prevention effects of damage to `proposal`. The one there is yet is
+/// protection ([CR 702.16e]): "Any damage that would be dealt by sources that have the stated
+/// quality to a permanent or player with protection is prevented." Prevented damage is never
+/// dealt ([CR 615.6]): "If damage that would be dealt is prevented, it never happens." Gated on
+/// the kind: while no effect gives protection, the proposal is returned as built after one
+/// AND.
+///
+/// [CR 702.16e]: https://yawgatog.com/resources/magic-rules/#R70216e
+/// [CR 615.6]: https://yawgatog.com/resources/magic-rules/#R6156
+#[inline]
+pub(crate) fn damage<L: Layout>(s: &State<L>, t: &GameTable, mut proposal: Damage<L>) -> Damage<L> {
+    if !protection::live(s) || !proposal.preventable {
+        return proposal;
+    }
+    if let Recipient::Permanent(r) = proposal.to
+        && protection::protected_from_cold(s, t, r.slot, proposal.source.slot)
+    {
+        proposal.amount = 0;
+    }
+    proposal
 }
 
 /// A replacement effect that applies to a move, by where it comes from: what [CR 614.5] counts

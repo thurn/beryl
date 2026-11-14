@@ -42,8 +42,8 @@ pub use ability::{Ability, AbilityKind, Behavior, Custom, Says, Timing};
 pub use characteristics::{BasicLandTypes, Colors, Keywords, Subtype, Subtypes, Supertypes, Types};
 pub use check::Malformed;
 pub use continuous::{
-    ChosenKind, Duration, Governed, Layer, LayerSpec, MODIFY_PARTS, Modification, Replaced,
-    Replacement, Rewrite, RuleChange, When,
+    ChosenKind, Duration, Governed, Layer, LayerSpec, MODIFY_PARTS, Modification, Protection,
+    Replaced, Replacement, Rewrite, RuleChange, When,
 };
 pub use cost::{
     CastingKind, CastingKinds, CastingOption, Castings, Chosen, Cost, CostAction, CostPart, Measure,
@@ -74,8 +74,8 @@ pub mod prelude {
         Ability, Amount, BasicLandTypes, CardDef, CastTerms, CastingKind, CastingOption, Castings,
         Colors, Comparison, Condition, Cost, CostAction, CostPart, CounterKind, Duration, Effect,
         Face, FaceIx, Filter, Found, Governed, Keywords, LayerSpec, LibraryOrder, LibraryPosition,
-        ManaColor, ManaCost, ManaSet, Modification, Objects, Place, Players, Prompt, Purpose,
-        Recipients, Replacement, RuleChange, Subtype, Subtypes, Supertypes, Taken, TargetKind,
-        TargetSpec, Trigger, TriggerEvent, TurnStep, Types, When, Zone, card, mana,
+        ManaColor, ManaCost, ManaSet, Modification, Objects, Place, Players, Prompt, Protection,
+        Purpose, Recipients, Replacement, RuleChange, Subtype, Subtypes, Supertypes, Taken,
+        TargetKind, TargetSpec, Trigger, TriggerEvent, TurnStep, Types, When, Zone, card, mana,
     };
 }

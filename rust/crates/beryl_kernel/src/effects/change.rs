@@ -7,7 +7,7 @@
 
 use beryl_card::{
     AbilityIx, Amount, BasicLandTypes, Colors, FaceIx, GrantIx, Keywords, Layer, Modification,
-    Subtype, Types,
+    Protection, Subtype, Types,
 };
 
 use crate::ids::Seat;
@@ -81,6 +81,9 @@ pub enum LayerChange {
     /// a characteristic-defining ability defines, read as the layer applies. Last, for the
     /// same reason as [`LayerChange::SetSubtype`].
     DefinedPt(i8, i8),
+    /// Layer 6: "gains protection from [colors]", the colors settled. Last, for the same
+    /// reason as [`LayerChange::SetSubtype`].
+    AddProtection(Colors),
 }
 
 impl LayerChange {
@@ -112,6 +115,10 @@ impl LayerChange {
             }
             Modification::ModifyPt(power, toughness) => LayerChange::ModifyPt(power, toughness),
             Modification::SwitchPt => LayerChange::SwitchPt,
+            Modification::AddProtection(Protection::Colors(colors)) => {
+                LayerChange::AddProtection(colors)
+            }
+            Modification::AddProtection(Protection::ChosenColor) => return None,
         })
     }
 
@@ -130,6 +137,7 @@ impl LayerChange {
             | LayerChange::SetLandTypes(_) => Layer::Type,
             LayerChange::SetColors(_) | LayerChange::AddColors(_) => Layer::Color,
             LayerChange::AddKeywords(_)
+            | LayerChange::AddProtection(_)
             | LayerChange::Grant(_)
             | LayerChange::LoseAllAbilities
             | LayerChange::LoseAbility(_) => Layer::Ability,
@@ -172,6 +180,7 @@ impl LayerChange {
                 LayerChange::AddTypes(_)
                     | LayerChange::AddSubtype(_)
                     | LayerChange::AddKeywords(_)
+                    | LayerChange::AddProtection(_)
                     | LayerChange::Grant(_)
                     | LayerChange::AddColors(_)
                     | LayerChange::ModifyPt(..)
@@ -206,7 +215,9 @@ impl LayerChange {
                 .union(Characteristics::ADDS_ABILITIES)
                 .union(Characteristics::REMOVES_ABILITIES),
             LayerChange::SetColors(_) | LayerChange::AddColors(_) => Characteristics::COLORS,
-            LayerChange::AddKeywords(_) | LayerChange::Grant(_) => Characteristics::ADDS_ABILITIES,
+            LayerChange::AddKeywords(_) | LayerChange::AddProtection(_) | LayerChange::Grant(_) => {
+                Characteristics::ADDS_ABILITIES
+            }
             LayerChange::LoseAllAbilities | LayerChange::LoseAbility(_) => {
                 Characteristics::REMOVES_ABILITIES
             }

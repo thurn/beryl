@@ -9,7 +9,7 @@
 //! [`crate::Observation::card`] is the other door, for a player's view: nothing when the
 //! viewer does not know the card.
 
-use beryl_card::{AbilityIx, CardDef, Face, FaceIx, Zone};
+use beryl_card::{AbilityIx, CardDef, Colors, Face, FaceIx, Zone};
 
 use crate::bitboard::Bitboard;
 use crate::event::{Listens, Replaces};
@@ -532,6 +532,34 @@ impl<L: Layout> State<L> {
         } else {
             Copiable::of_object(o).power(t)
         }
+    }
+
+    /// The colors of the object in `slot` ([CR 105.2]): "An object can be one or more of the
+    /// five colors, or it can be no color at all." A permanent's are its layer results, and
+    /// elsewhere those of the face it has there.
+    ///
+    /// [CR 105.2]: https://yawgatog.com/resources/magic-rules/#R1052
+    #[inline]
+    pub fn colors(&self, t: &GameTable, slot: L::Slot) -> Colors {
+        let o = self.object(slot);
+        if o.zone == Zone::Battlefield {
+            self.derived(slot).colors
+        } else {
+            Copiable::of_object(o).face(t).colors
+        }
+    }
+
+    /// The colors the permanent in `slot` has protection from ([CR 702.16a]), none for an
+    /// object that is no permanent, and none without a look at the permanent while no effect
+    /// gives protection ([`crate::event::Replaces::PROTECTION`]).
+    ///
+    /// [CR 702.16a]: https://yawgatog.com/resources/magic-rules/#R70216a
+    #[inline]
+    pub fn protection(&self, slot: L::Slot) -> Colors {
+        if !self.replacing.protects() || self.object(slot).zone != Zone::Battlefield {
+            return Colors::NONE;
+        }
+        self.derived(slot).protection
     }
 
     /// [`State::power`] for toughness.

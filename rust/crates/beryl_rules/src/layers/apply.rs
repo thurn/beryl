@@ -353,6 +353,7 @@ fn modify<L: Layout>(
         // CR 613.1f: "Layer 6: Ability-adding effects, keyword counters, ability-removing
         // effects, and effects that say an object can't have an ability are applied."
         LayerChange::AddKeywords(k) => d.keywords = d.keywords.union(k),
+        LayerChange::AddProtection(colors) => d.protection = d.protection.union(colors),
         LayerChange::Grant(grant) => {
             let mut granted = d.granted;
             if let Some(free) = granted.iter_mut().find(|g| g.is_none()) {

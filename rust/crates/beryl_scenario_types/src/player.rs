@@ -2,7 +2,7 @@
 //! `THEM.has(Zone::Hand, card, 1)`. Each builds an [`Action`] the long way would spell out as
 //! an `Action::answer(..)` or an `Action::assert(Assertion::..)` struct literal.
 
-use beryl_card::{CounterKind, DecisionKind, ManaColor, Seat, TurnStep, Zone};
+use beryl_card::{Colors, CounterKind, DecisionKind, ManaColor, Seat, TurnStep, Zone};
 
 use crate::{Action, Assertion, Ending, Pick};
 
@@ -114,6 +114,13 @@ impl Player {
     /// Chooses how many targets.
     pub const fn target_count(self, n: u8) -> Action {
         self.answers(DecisionKind::TargetCount, Pick::Number { n })
+    }
+
+    /// Chooses one color, as "the color of your choice" asks. The engine offers the colors as
+    /// numbers in the order of [`Colors::EACH`], white first.
+    pub const fn chooses_color(self, color: Colors) -> Action {
+        let n = color.0.trailing_zeros() as u8;
+        self.answers(DecisionKind::ChooseObject, Pick::Number { n })
     }
 
     /// Chooses the value of X.

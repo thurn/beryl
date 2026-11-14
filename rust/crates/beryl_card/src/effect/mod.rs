@@ -567,6 +567,7 @@ impl Effect {
                     }
             }
             Effect::ForEachPlayer { effect, .. } => effect.asks(),
+            Effect::Modify { modifications, .. } => Modification::any_asks(modifications),
             Effect::LookAt { .. }
             | Effect::Counter(_)
             | Effect::CounterInto { .. }
@@ -594,7 +595,6 @@ impl Effect {
             | Effect::RemoveCounters { .. }
             | Effect::AddMana { .. }
             | Effect::AddManaOfKind { .. }
-            | Effect::Modify { .. }
             | Effect::ExchangeControl(..)
             | Effect::Attach { .. }
             | Effect::FlipCoin(_)

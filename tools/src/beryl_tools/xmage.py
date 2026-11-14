@@ -67,6 +67,9 @@ FORCED_TARGETS = ("put-back",)
 # waterbend's permanents, which Beryl asks as a payment whose purpose says so.
 CHOICE_KINDS = ("ChooseUpTo", "ChooseObject", "TriggerOrder")
 YES_NO_KINDS = ("YesNo", "CastOffer")
+# The colors by the number Beryl gives each, in the order of CR 105.1 ("white, blue, black,
+# red, and green"), as XMage's color choice names them.
+COLORS = ("White", "Blue", "Black", "Red", "Green")
 
 
 class Exporter:
@@ -659,6 +662,10 @@ class Exporter:
         elif kind == "TriggerOrder" and card and self.cards.first_trigger_text(card):
             text = java_string(cast(str, self.cards.first_trigger_text(card)))
             self.emit(f"setChoice({who}, {text});")
+        elif action.get("purpose", p.purpose) == "color" and what == "Number":
+            # XMage names a chosen color (`ChoiceColor`); Beryl numbers the five in the
+            # order of CR 105.1.
+            self.emit(f"setChoice({who}, {java_string(COLORS[cast(int, pick['n'])])});")
         elif action.get("purpose", p.purpose) == "replace":
             # XMage asks whether to apply an optional replacement effect, as dredge, with a
             # yes or no (`chooseUse`): Beryl's pick of the card is the yes.

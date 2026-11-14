@@ -10,6 +10,7 @@ use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layers;
 use crate::layout::{Layout, PerPlayer, Table};
+use crate::protection;
 use crate::state::{Pending, State, Zone};
 use crate::table::GameTable;
 
@@ -120,15 +121,22 @@ type Legendary<L> = PerPlayer<L, Bitboard<<L as Layout>::Slot>>;
 /// [CR 704.5m](https://yawgatog.com/resources/magic-rules/#R7045m): "If an Aura is attached to
 /// an illegal object or player, or is not attached to an object or player, that Aura is put
 /// into its owner's graveyard." The one implemented Aura, Swift Reconfiguration, makes what it
-/// enchants a Vehicle, which its "enchant creature or Vehicle" allows, so only the second
-/// case arises: what it enchanted left the battlefield (`zone::leave` detaches it).
+/// enchants a Vehicle, which its "enchant creature or Vehicle" allows. So an Aura is attached
+/// to an illegal object only when that object has protection from it ([CR 702.16c]): "A
+/// permanent or player with protection can’t be enchanted by Auras that have the stated
+/// quality. Such Auras attached to the permanent or player with protection will be put into
+/// their owners’ graveyards as a state-based action." Otherwise what it enchanted left the
+/// battlefield (`zone::leave` detaches it).
 ///
 /// With them, in the same pass, the legendary permanents each player controls, for the legend
 /// rule.
+///
+/// [CR 702.16c]: https://yawgatog.com/resources/magic-rules/#R70216c
 fn doomed<L: Layout>(s: &State<L>, t: &GameTable) -> Doomed<L> {
     // A game none of whose cards is an Aura or makes one never asks (the count gate).
     let aura = t.subtypes().has(Subtype::Aura);
     let auras = aura.possible();
+    let protected = auras && protection::live(s);
     let mut graveyard = Bitboard::EMPTY;
     let mut legendary: Legendary<L> = Table::filled(Bitboard::EMPTY);
     for (slot, d) in s.permanents() {
@@ -144,7 +152,12 @@ fn doomed<L: Layout>(s: &State<L>, t: &GameTable) -> Doomed<L> {
                 || (o.damage() > 0
                     && i16::from(o.damage()) >= i16::from(d.toughness)
                     && !d.keywords.contains(Keywords::INDESTRUCTIBLE)));
-        let unattached = auras && o.attached_to().is_none() && aura.of(d.subtypes);
+        let unattached = auras
+            && aura.of(d.subtypes)
+            && match o.attached_to() {
+                None => true,
+                Some(host) => protected && protection::protected_from_cold(s, t, host, slot),
+            };
         if dies || unattached || (types.contains(Types::PLANESWALKER) && o.counters().loyalty == 0)
         {
             graveyard.insert(slot);

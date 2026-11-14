@@ -2,9 +2,12 @@
 //! resolving spell or ability creates: each is an entry of the Effects store
 //! (`beryl_kernel`'s contract, "Stores"), which the layers and the rules read by kind.
 
-use beryl_card::{Amount, MODIFY_PARTS, Modification, Objects, RuleChange};
+use beryl_card::{Amount, ChosenKind, MODIFY_PARTS, Modification, Objects, Protection, RuleChange};
+use beryl_kernel::chosen::ChosenValue;
 
 use crate::bitboard::Bitboard;
+use crate::card::Stop;
+use crate::choices;
 use crate::event::Event;
 use crate::filter;
 use crate::fixed::Full;
@@ -118,7 +121,7 @@ pub(crate) fn instruction<L: Layout>(
     objects: Objects,
     modifications: &[Modification],
     duration: beryl_card::Duration,
-) -> Result<Outcome<L>, Full> {
+) -> Result<Outcome<L>, Stop> {
     // "You" in what it says is the ability's controller as it resolves.
     let you = run.resolution().entry.controller();
     let duration = lasting(duration, you);
@@ -147,6 +150,18 @@ pub(crate) fn instruction<L: Layout>(
                 let number =
                     |amount: &Amount| i8::try_from(scene.amount(*amount)).unwrap_or(i8::MAX);
                 LayerChange::SetBasePt(number(power), number(toughness))
+            }
+            // "The color of your choice" is chosen as the effect begins, by the controller
+            // of what is resolving (CR 608.2d), and the effect gives protection from that
+            // color for as long as it lasts.
+            Modification::AddProtection(Protection::ChosenColor) => {
+                let (game, resolution) = run.resolving();
+                let ChosenValue::Color(color) =
+                    choices::catalog(game, resolution, you, ChosenKind::Color, permanents)?
+                else {
+                    unreachable!("a color is chosen as a color")
+                };
+                LayerChange::AddProtection(color)
             }
             // The card table refuses an effect that sets a power alone to an amount.
             modification => match LayerChange::resolve(modification, you) {

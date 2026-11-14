@@ -6,6 +6,7 @@ use crate::card::{Subtype, Types};
 use crate::game::Game;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
+use crate::protection;
 use crate::state::State;
 use crate::table::GameTable;
 
@@ -21,6 +22,9 @@ use crate::table::GameTable;
 /// attach an object that isn't an Aura, Equipment, or Fortification to another object or
 /// player, the effect does nothing and the first object doesn't move." Only an Equipment is
 /// attached by an instruction: an Aura is attached as it enters.
+///
+/// [CR 702.16d](https://yawgatog.com/resources/magic-rules/#R70216d): "A permanent with
+/// protection can’t be equipped by Equipment that have the stated quality".
 pub(crate) fn may_equip<L: Layout>(game: &Game<'_, L>, equipment: L::Slot, host: L::Slot) -> bool {
     may_equip_in(game.state, game.table, equipment, host)
 }
@@ -38,6 +42,7 @@ pub(crate) fn may_equip_in<L: Layout>(
         && equipment != host
         && !gear.types.contains(Types::CREATURE)
         && creature.types.contains(Types::CREATURE)
+        && !(protection::live(s) && protection::protected_from_cold(s, t, host, equipment))
 }
 
 /// [`Effect::Attach`](beryl_card::Effect::Attach): "Attach [an Equipment] to [a creature]."

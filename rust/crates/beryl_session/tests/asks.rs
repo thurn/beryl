@@ -467,9 +467,9 @@ fn every_prompt_the_scenarios_reach_is_sent_with_its_shape_and_a_whole_title() {
             reached.insert(purpose);
         }
     }
-    // The scenarios reach a prompt of every shape but the two no card asks yet.
+    // The scenarios reach a prompt of every shape but the one no card asks yet.
     for &shape in Shape::ALL {
-        let asked = !matches!(shape, Shape::Catalog | Shape::Divide);
+        let asked = shape != Shape::Divide;
         let seen = (Purpose::ALL.iter())
             .any(|purpose| purpose.shape() == shape && reached.contains(purpose.name()));
         assert!(seen || !asked, "no scenario reaches a prompt of {shape:?}");

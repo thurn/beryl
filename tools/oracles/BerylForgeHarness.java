@@ -956,6 +956,8 @@ public final class BerylForgeHarness {
     /** The AI's controller, with the script's answers where it has them. */
     static final class ScriptedController extends PlayerControllerAi {
         private static final Set<String> YES_NO = Set.of("YesNo");
+        /** The colors by Beryl's number for each, as Forge names them in lower case. */
+        private static final String[] COLORS = {"white", "blue", "black", "red", "green"};
         private static final Set<String> OBJECTS = Set.of("ChooseObject", "ChooseUpTo", "Target", "AttackTarget", "CastOffer");
         private static final Set<String> OPTIONAL_OBJECTS = Set.of("ChooseObject", "ChooseUpTo", "Target", "AttackTarget", "CastOffer", "YesNo");
 
@@ -1110,6 +1112,24 @@ public final class BerylForgeHarness {
                 return true;
             }
             return super.chooseBinary(sa, question, kind, defaultVal);
+        }
+
+        /**
+         * Beryl's answer to a choice of a color (its purpose "color"), a number in the order
+         * white, blue, black, red, green (CR 105.1), as the color of a protection Forge offers
+         * among `choices` by lower-case name.
+         */
+        @Override
+        public String chooseProtectionType(SpellAbility sa, List<String> choices) {
+            JsonObject pick = run.takeFollowingFor(player, "color");
+            if (pick == null) {
+                return super.chooseProtectionType(sa, choices);
+            }
+            String color = COLORS[pick.get("n").getAsInt()];
+            if (!choices.contains(color)) {
+                throw new StepFailed("protection from " + color + " among " + choices);
+            }
+            return color;
         }
 
         @Override

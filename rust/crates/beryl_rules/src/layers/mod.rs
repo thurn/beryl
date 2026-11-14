@@ -258,25 +258,33 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable, trials: &mut u64) -> Re
     };
     let mut granted: Granted<L> = None;
     let mut passes = 1;
-    let (listed, removed, land_types) = loop {
-        let (listed, removed, land_types) = apply_layers(&mut s, t, granted.as_ref(), trials);
+    let (listed, applied) = loop {
+        let (listed, applied) = apply_layers(&mut s, t, granted.as_ref(), trials);
         if passes == PASSES || !t.can(Capability::GrantsLayerEffect) {
-            break (listed, removed, land_types);
+            break (listed, applied);
         }
         match granted_layer_effects(&s, t) {
             Ok(found) if slice::<L>(found.as_ref()) != slice::<L>(granted.as_ref()) => {
                 granted = found;
             }
-            Ok(_) => break (listed, removed, land_types),
-            Err(full) => break (listed.and(Err(full)), removed, land_types),
+            Ok(_) => break (listed, applied),
+            Err(full) => break (listed.and(Err(full)), applied),
         }
         passes += 1;
     };
-    let (listening, replacing) = if removed {
+    let Applied {
+        removed,
+        land_types,
+        protection,
+    } = applied;
+    let (listening, mut replacing) = if removed {
         listening(&s, t, s.rows())
     } else {
         listening_of_all(&s, t)
     };
+    if protection {
+        replacing |= Replaces::PROTECTION;
+    }
     // A permanent that may change a rule for players said so in the mask just read for
     // the replacements: with none on the battlefield, one AND.
     let rules = if replacing.changes_player_rules() {
@@ -299,16 +307,27 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable, trials: &mut u64) -> Re
     listed
 }
 
+/// What kinds of effect one run of the layers applied, which the results stored with the
+/// layer results are read from.
+#[derive(Clone, Copy, Default)]
+struct Applied {
+    /// An effect that removes abilities.
+    removed: bool,
+    /// An effect that changes a land's land types.
+    land_types: bool,
+    /// An effect that gives protection ([`Replaces::PROTECTION`]).
+    protection: bool,
+}
+
 /// One run of the layers over every permanent, from its copiable values to layer 7d, with
 /// the static abilities of `granted` listed with those of the permanents' faces. Returns
-/// [`Full`] if the list had no place for an effect, whether an effect that removes
-/// abilities applied and whether one changed land types.
+/// [`Full`] if the list had no place for an effect, and what kinds of effect applied.
 fn apply_layers<L: Layout>(
     s: &mut Rederive<'_, L>,
     t: &GameTable,
     granted: Option<&<L as Layout>::Queue<GrantedTo<L>, 8>>,
     trials: &mut u64,
-) -> (Result<(), Full>, bool, bool) {
+) -> (Result<(), Full>, Applied) {
     // Made at the first effect that applies: most recomputes have none, and the list is big.
     let mut list: Option<Applying<L>> = None;
     let mut listed = Ok(());
@@ -359,8 +378,7 @@ fn apply_layers<L: Layout>(
         listed = listed.and(list_static(s, &mut list, on, ability, spec));
     }
     listed = listed.and(resolved_effects(s, &mut list));
-    let mut removed = false;
-    let mut land_types = false;
+    let mut applied = Applied::default();
     match &mut list {
         Some(list) => {
             list.as_mut_slice().sort_unstable_by_key(Apply::key);
@@ -372,17 +390,18 @@ fn apply_layers<L: Layout>(
             counters(s);
             let second = apply_in_order(s, t, after, &mut begun, trials);
             listed = listed.and(first).and(second);
-            removed = list.iter().any(|a| a.change.removes_abilities());
-            land_types = list.iter().any(|a| {
-                matches!(
+            for a in list.iter() {
+                applied.removed |= a.change.removes_abilities();
+                applied.land_types |= matches!(
                     a.change,
                     LayerChange::SetLandTypes(_) | LayerChange::AddSubtype(_)
-                )
-            });
+                );
+                applied.protection |= matches!(a.change, LayerChange::AddProtection(_));
+            }
         }
         None => counters(s),
     }
-    (listed, removed, land_types)
+    (listed, applied)
 }
 
 /// Where a static ability being listed is: the battlefield position of its permanent, its

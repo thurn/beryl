@@ -90,7 +90,8 @@ impl std::ops::BitOrAssign for Listens {
 
 /// A kind of event that a static ability can replace ([CR 614.1]): "Some continuous effects
 /// are replacement effects." A card's [`Replaces`] has one bit for each, so there may be up
-/// to 63; the last bit is [`Replaces::PLAYER_RULE_CHANGE`].
+/// to 62; the last two bits are [`Replaces::PROTECTION`] and
+/// [`Replaces::PLAYER_RULE_CHANGE`].
 ///
 /// [CR 614.1]: https://yawgatog.com/resources/magic-rules/#R6141
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -104,8 +105,9 @@ pub enum ReplacementKind {
 }
 
 /// What a card's static abilities do that the layers' pass over the battlefield collects:
-/// the [`ReplacementKind`]s they replace, and one fact that is no replacement,
-/// [`Replaces::PLAYER_RULE_CHANGE`]. It has the same three levels as [`Listens`]: every card
+/// the [`ReplacementKind`]s they replace, one fact that is no replacement,
+/// [`Replaces::PLAYER_RULE_CHANGE`], and, at the state's level only, whether a permanent may
+/// have protection ([`Replaces::PROTECTION`]). It has the same three levels as [`Listens`]: every card
 /// of the game ([`crate::GameTable::replaces_any`]), the permanents on the battlefield now
 /// ([`crate::State::replacing`]) and the face of one card
 /// ([`crate::Copiable::may_replace`]). Kept apart from [`Listens`] so that the gate of a
@@ -120,6 +122,15 @@ impl Replaces {
     /// replacement kinds, so it learns in the same read of each permanent whether any
     /// permanent changes a rule ([`crate::derive::Rederive::finish`]).
     pub const PLAYER_RULE_CHANGE: Replaces = Replaces(1 << 63);
+    /// Not a replacement but a prevention effect: a continuous effect gave a permanent
+    /// protection ([CR 702.16e]): "Any damage that would be dealt by sources that have the
+    /// stated quality to a permanent or player with protection is prevented." Only the state's
+    /// level has it, set by the layers' pass when an effect that gives protection applied, so
+    /// that damage, targets, blocks and attachments ask a permanent's protection only then.
+    /// An effect that removed the protection again leaves it set, which costs those reads.
+    ///
+    /// [CR 702.16e]: https://yawgatog.com/resources/magic-rules/#R70216e
+    pub const PROTECTION: Replaces = Replaces(1 << 62);
 
     /// The mask of one kind of replacement.
     #[inline]
@@ -137,6 +148,12 @@ impl Replaces {
     #[inline]
     pub const fn changes_player_rules(self) -> bool {
         self.0 & Replaces::PLAYER_RULE_CHANGE.0 != 0
+    }
+
+    /// Whether a permanent may have protection ([`Replaces::PROTECTION`]).
+    #[inline]
+    pub const fn protects(self) -> bool {
+        self.0 & Replaces::PROTECTION.0 != 0
     }
 
     #[inline]

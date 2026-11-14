@@ -8,6 +8,7 @@ use crate::filter::{self, Evaluate, Filter};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
+use crate::protection;
 use crate::state::{CastKind, CastStep, Casting, StackEntry, State, Target, Zone};
 use crate::table::GameTable;
 
@@ -65,7 +66,7 @@ pub(super) fn candidates<L: Layout>(
     x: u8,
     source: Option<L::Slot>,
 ) -> TargetSet<L> {
-    let TargetSet { objects, players } = domain(s, spec, you, itself, source);
+    let TargetSet { objects, players } = domain(s, t, spec, you, itself, source);
     TargetSet {
         objects: if objects.is_empty() {
             objects
@@ -77,9 +78,11 @@ pub(super) fn candidates<L: Layout>(
 }
 
 /// What [`candidates`] chooses from: the players a spec can choose, and the objects its filter
-/// is still to pass on.
+/// is still to pass on. A permanent with protection from the spell, or from the ability's
+/// source, is none of them ([`protection::targetable_by`]).
 fn domain<L: Layout>(
     s: &State<L>,
+    t: &GameTable,
     spec: &TargetSpec,
     you: Seat,
     itself: Option<L::Slot>,
@@ -105,7 +108,7 @@ fn domain<L: Layout>(
         within.remove(source);
     }
     TargetSet {
-        objects: within,
+        objects: protection::targetable_by(s, t, within, source.or(itself)),
         players,
     }
 }
@@ -121,7 +124,7 @@ fn enough_candidates<L: Layout>(
     x: u8,
     source: Option<L::Slot>,
 ) -> bool {
-    let TargetSet { objects, players } = domain(s, spec, you, itself, source);
+    let TargetSet { objects, players } = domain(s, t, spec, you, itself, source);
     let Some(need) = usize::from(spec.count).checked_sub(players.count() as usize) else {
         return true;
     };

@@ -327,6 +327,7 @@ impl LayerSpec {
                 Some(condition) => condition.needs_a_resolution(),
                 None => false,
             }
+            || Modification::any_asks(self.modifications)
     }
 }
 
@@ -414,6 +415,49 @@ pub enum Modification {
     ///
     /// [CR 613.4d]: https://yawgatog.com/resources/magic-rules/#R6134d
     SwitchPt,
+    /// Layer 6: "gains protection from [quality]" ([CR 702.16a]): "Protection is a static
+    /// ability, written “Protection from [quality].”"
+    ///
+    /// [CR 702.16a]: https://yawgatog.com/resources/magic-rules/#R70216a
+    AddProtection(Protection),
+}
+
+impl Modification {
+    /// Whether one of `modifications` asks a player to choose as its effect begins, which only
+    /// a resolving spell or ability can ([`Protection::ChosenColor`]).
+    pub const fn any_asks(modifications: &[Modification]) -> bool {
+        let mut i = 0;
+        while i < modifications.len() {
+            if let Modification::AddProtection(Protection::ChosenColor) = modifications[i] {
+                return true;
+            }
+            i += 1;
+        }
+        false
+    }
+}
+
+/// What a permanent has protection from: the quality of [CR 702.16a], "usually a color (as in
+/// “protection from black”) but can be any characteristic value or information." Colors are
+/// the only quality the engine has yet; a card type, a player or everything would each be a
+/// variant here.
+///
+/// [CR 702.16a]: https://yawgatog.com/resources/magic-rules/#R70216a
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Protection {
+    /// From each of these colors, as "protection from red" ([CR 702.16g]): "“Protection from
+    /// [quality A] and from [quality B]” is shorthand for “protection from [quality A]” and
+    /// “protection from [quality B]”".
+    ///
+    /// [CR 702.16g]: https://yawgatog.com/resources/magic-rules/#R70216g
+    Colors(Colors),
+    /// From the color the controller of the resolving spell or ability chooses as the effect
+    /// begins, "protection from the color of your choice" ([CR 105.4]): "If a player is asked
+    /// to choose a color, they must choose one of the five colors." Only a resolving effect
+    /// can say it.
+    ///
+    /// [CR 105.4]: https://yawgatog.com/resources/magic-rules/#R1054
+    ChosenColor,
 }
 
 /// The parts of one resolving continuous effect ([`crate::Effect::Modify`]) the engine begins

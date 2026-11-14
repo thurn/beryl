@@ -450,6 +450,26 @@ Built by by-bajq.3.2:
   proposal (by-bajq.3.9); damage dealt as a combat damage step begins is that
   step's turn-based action, so its choices will pause the same way.
 
+Built by by-bajq.3.9:
+
+- Damage is proposed before it is dealt (`replace::Damage`: source, recipient,
+  amount, combat, and whether it can be prevented), and `replace::damage`
+  applies its prevention. The only prevention yet is protection; shields and
+  doubling (by-bajq.3.10) join the same function.
+- Protection is a layer-6 change (`LayerChange::AddProtection`, from
+  `Modification::AddProtection`) into `Derived::protection`. Colors are the only
+  quality (`beryl_card::Protection`); "the color of your choice" is chosen as
+  the effect begins, through `choices::catalog` with `ChosenKind::Color`, the
+  same question a color chosen as a permanent enters asks.
+- The gate is a bit of the state's replacement mask, `Replaces::PROTECTION`, set
+  by the layers when an effect that gives protection applied:
+  `State::protection` is one AND without it. `beryl_rules/src/protection.rs`
+  reads it for targets (`cast/targets.rs`, as they are chosen and as the spell
+  or ability resolves), Auras (`sba.rs`, CR 704.5m), Equipment
+  (`attach::may_equip_in`, CR 704.5n) and blockers (`combat::can_block`).
+- No printed protection exists yet: a face's keywords have no parameter, so a
+  card with "protection from red" adds it to the face when its first card comes.
+
 ### 4. Characteristics in every zone, and text
 
 - **Reading.** `query.rs` answers colors, types, keywords and "has this ability"

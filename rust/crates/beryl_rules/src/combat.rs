@@ -13,6 +13,7 @@ use crate::event::{self, Event, Sink};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
+use crate::protection;
 use crate::state::{AttackTarget, CombatRole, Pending, State, TurnStep};
 use crate::table::GameTable;
 
@@ -252,7 +253,7 @@ fn declare_attack<L: Layout>(
 
 /// Whether `blocker` may block `attacker`: an attacker attacking the defending player or a
 /// planeswalker they control (one attacking nothing can't be blocked), within its evasion:
-/// flying and its landwalk ([`landwalks`]).
+/// flying, its landwalk ([`landwalks`]) and its protection.
 ///
 /// [CR 509.1a](https://yawgatog.com/resources/magic-rules/#R5091a): "For each of the chosen
 /// creatures, the defending player chooses one creature for it to block that's attacking that
@@ -260,6 +261,9 @@ fn declare_attack<L: Layout>(
 ///
 /// [CR 702.9b](https://yawgatog.com/resources/magic-rules/#R7029b): "A creature with flying can't
 /// be blocked except by creatures with flying and/or reach."
+///
+/// [CR 702.16f](https://yawgatog.com/resources/magic-rules/#R70216f): "Attacking creatures with
+/// protection can’t be blocked by creatures that have the stated quality."
 fn can_block<L: Layout>(s: &State<L>, t: &GameTable, blocker: L::Slot, attacker: L::Slot) -> bool {
     let Some(target) = s.object(attacker).attack_target() else {
         return false;
@@ -275,6 +279,7 @@ fn can_block<L: Layout>(s: &State<L>, t: &GameTable, blocker: L::Slot, attacker:
         || has(s, blocker, Keywords::FLYING)
         || has(s, blocker, Keywords::REACH))
         && !(evasion.intersects(Keywords::ANY_LANDWALK) && landwalks(s, t, evasion, target))
+        && !protection::forbids_block(s, t, attacker, blocker)
 }
 
 /// Whether an attacker with the keywords `walk`, attacking `target`, can't be blocked for its

@@ -10,6 +10,7 @@ use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::life;
+use crate::replace;
 use crate::state::ObjectRef;
 
 /// Deals `amount` damage from `source` to a player or a permanent, combat damage with
@@ -25,6 +26,9 @@ use crate::state::ObjectRef;
 /// [CR 120.3e](https://yawgatog.com/resources/magic-rules/#R1203e): "Damage dealt to a
 /// creature by a source with neither wither nor infect causes that much damage to be marked on
 /// that creature."
+///
+/// The damage is proposed first and its prevention effects applied ([`replace::damage`]);
+/// damage they prevent is not dealt, and no lifelink comes of it.
 #[inline]
 pub fn deal<L: Layout>(
     game: &mut Game<'_, L>,
@@ -33,6 +37,23 @@ pub fn deal<L: Layout>(
     amount: u8,
     combat: bool,
 ) -> Result<(), Full> {
+    if amount == 0 {
+        return Ok(());
+    }
+    let proposal = replace::Damage {
+        source,
+        to,
+        amount,
+        combat,
+        preventable: true,
+    };
+    let replace::Damage {
+        source,
+        to,
+        amount,
+        combat,
+        ..
+    } = replace::damage(game.state(), game.table(), proposal);
     if amount == 0 {
         return Ok(());
     }

@@ -6,8 +6,8 @@ use super::Ctx;
 use super::effects::says_nothing;
 use super::filters::{Kind, zone_name};
 use super::words::{
-    capitalized, colors, counted, keywords, list, mana_text, number, pt_change, sentence, types,
-    with_article,
+    capitalized, colors, counted, keywords, list, mana_text, number, protection, pt_change,
+    sentence, types, with_article,
 };
 use crate::ability::{Ability, AbilityKind, Behavior, Timing};
 use crate::continuous::{
@@ -474,6 +474,7 @@ impl Ctx {
             Modification::SetSubtype(subtype) => format!("{is} {}", with_article(subtype.name())),
             Modification::SetLandTypes(set) => format!("{is} {}", land_types(set, plural)),
             Modification::AddKeywords(set) => format!("{has} {}", list(&keywords(set), "and")),
+            Modification::AddProtection(from) => format!("{has} {}", protection(from)),
             Modification::Grant(ix) => format!("{has} {}", self.granted(ix)),
             Modification::ModifyPt(power, toughness) => {
                 format!("{} {}", verb("gets", "get"), pt_change(power, toughness))
