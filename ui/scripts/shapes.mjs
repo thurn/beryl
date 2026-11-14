@@ -61,7 +61,6 @@ import {
     workers,
 } from "./capture.mjs";
 import { CHECK_SECONDS, HangError, hangGuard } from "./hang.mjs";
-import { HANG_MS } from "./moments.mjs";
 import {
     cardsUp,
     carry as carryTo,
@@ -197,8 +196,11 @@ function asked(fixture) {
 
 /** What the screen should draw of `held`, a prompt and its decision, in `layout`: its title,
  * its buttons where each stands, its marks, what it holds up, how much of its cost is left
- * and the lines of its declaration. */
-function expected(held, layout) {
+ * and the lines of its declaration. `cast` is the card of the hand that was just carried out
+ * of it and dropped, if any: until the next click or the next view, the stage outlines with
+ * the `suggested` mark the permanents its payment taps (the prompt's `previews`), except
+ * those the prompt marks itself. */
+function expected(held, layout, cast) {
     const { decision, prompt } = held;
     const more = {
         up: heldUp(prompt),
@@ -233,9 +235,10 @@ function expected(held, layout) {
         // A cost in what is asked, or in how much of it is left, is drawn as its symbols.
         symbols: `${prompt.title}${more.left}`.match(/\{[^}]+\}/g) ?? [],
         buttons: buttons.sort(byPlace),
-        marks: prompt.marks
-            .map(({ on, mark }) => `${mark} ${subject(on)}`)
-            .sort(),
+        marks: [
+            ...prompt.marks.map(({ on, mark }) => `${mark} ${subject(on)}`),
+            ...previewed(prompt, cast).map((slot) => `suggested ${slot}`),
+        ].sort(),
         ...more,
     };
 }
@@ -266,6 +269,11 @@ const subject = (on) =>
 const byPlace = (a, b) =>
     `${a.where} ${a.label}`.localeCompare(`${b.where} ${b.label}`);
 
+/** How long `holds` waits for the screen to match, in ms. It is well under the hang guard's
+ * `CHECK_SECONDS`, so a screen that never matches fails with the difference printed rather
+ * than as a check that hung. */
+const HOLD_MS = (CHECK_SECONDS * 1000) / 4;
+
 /** Holds the page to draw `want` (`expected`), once it has drawn what it was sent: the
  * screen is React's, which draws a reply a moment after the stage's model has it. */
 async function holds(page, layout, want, what) {
@@ -291,7 +299,7 @@ async function holds(page, layout, want, what) {
                 return JSON.stringify({ ...got, buttons: sorted }) === wanted;
             },
             [drawn.toString(), asked, wanted],
-            { timeout: HANG_MS },
+            { timeout: HOLD_MS },
         );
     } catch {
         // It never did: say how it differs.
@@ -342,6 +350,15 @@ async function touched(page, slot) {
     await page.waitForSelector(".inspect", { state: "detached" });
 }
 
+/** The permanents the stage outlines for the card `cast` dropped out of the hand while
+ * `prompt` is open: those its payment taps, less any `prompt` marks itself. */
+function previewed(prompt, cast) {
+    if (cast === undefined) return [];
+    const marked = new Set(prompt.marks.map(({ on }) => subject(on)));
+    const preview = prompt.previews?.find(({ card }) => card === cast);
+    return (preview?.taps ?? []).filter((slot) => !marked.has(String(slot)));
+}
+
 /** Answers the prompts of `fixture` on a page of its own by the recording's clicks, each made
  * with the pointer, and holds the screen to the session's state before the first and after
  * each. With `carry`, a card of the hand is carried out of it instead of clicked, and a button
@@ -373,6 +390,8 @@ async function answer(context, watch, layout, fixture, carry) {
         ] of clicks.entries()) {
             const purpose = before.prompt.purpose;
             const what = `${purpose}, click ${i} (${JSON.stringify(click)})`;
+            // The card of the hand this click carries out of it and drops, if it does.
+            let cast;
             if (click.kind === "button") {
                 const { label } = before.prompt.buttons.find(
                     (button) =>
@@ -418,6 +437,7 @@ async function answer(context, watch, layout, fixture, carry) {
                         (o) => String(o.slot) === name && o.zone === "hand",
                     );
                 if (inHand && carry) {
+                    cast = Number(name);
                     // Out of the hand, well clear of where the card rests.
                     await page.mouse.move(at.x, at.y);
                     await page.mouse.down();
@@ -443,7 +463,14 @@ async function answer(context, watch, layout, fixture, carry) {
             if (answered) await paying.answered(before);
             await combat.follow(before, answered);
             await page.evaluate(settled, SETTLE);
-            await holds(page, layout, expected(after, layout), `after ${what}`);
+            // A view the click answered into ends the outlines of the card it dropped.
+            const dropped = answered ? undefined : cast;
+            await holds(
+                page,
+                layout,
+                expected(after, layout, dropped),
+                `after ${what}`,
+            );
             await lineLooks(page, after, `after ${what}`);
             if (layout.handClicks)
                 await pointerLines(page, after, `after ${what}`);
