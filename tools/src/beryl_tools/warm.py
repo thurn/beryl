@@ -17,7 +17,9 @@ in a new worktree took two to five times as long as in a built one. So `save` re
 tracked file's content (its git blob) and modification time in the target ([`SOURCES`]), and
 the clone gives each file of the new checkout whose content is the same, and each folder whose
 names are the same, the time recorded for it (`restore_sources`). Cargo then sees the times it
-saw when it last built those files, and rebuilds only the crates whose files differ.
+saw when it last built those files, and rebuilds only the crates whose files differ. Cargo
+also keeps absolute paths to files outside each crate's own folder, which name the checkout
+that built the cache; the clone rewrites them to the new checkout (rehome.py).
 
 A clone takes time in proportion to the number of files, so the cache must not grow with every
 save: see `prune`.
@@ -266,6 +268,7 @@ def ensure_target(checkout: Path, tauri: bool) -> bool:
             return True
         forget_module_caches(target)
         restore_sources(checkout, target)
+        rehome_paths(target, checkout)
         mark_unread(target)
     if tauri and not (target / TAURI).exists():
         for source in sources:
@@ -275,6 +278,15 @@ def ensure_target(checkout: Path, tauri: bool) -> bool:
                 return False
         return True
     return False
+
+
+def rehome_paths(target: Path, checkout: Path) -> None:
+    """Points the cloned `target`'s absolute source paths at `checkout` (rehome.py). Imported
+    here, not at the top: Enact's remove hook runs a copy of this file alone, and never
+    clones."""
+    from .rehome import rehome
+
+    log(f"pointed {rehome(target, checkout)} build records at {checkout}")
 
 
 def mark_unread(target: Path) -> int:
