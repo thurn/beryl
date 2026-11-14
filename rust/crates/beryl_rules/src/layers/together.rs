@@ -12,13 +12,10 @@
 //!
 //! [CR 613.7m]: https://yawgatog.com/resources/magic-rules/#R6137m
 
-use beryl_card::Objects;
-
 use super::apply;
 use crate::card::{AbilityIx, Layer};
 use crate::layout::Layout;
 use crate::state::{Characteristics, LayerChange, State, read_layer};
-use crate::static_ability;
 use crate::table::GameTable;
 
 /// One part of the effect of a static ability, as far as its order among others goes.
@@ -82,14 +79,7 @@ fn parts<'a, L: Layout>(
         .enumerate()
         .filter_map(|(n, ability)| ability.layer().map(|spec| (n, spec)))
         .flat_map(move |(n, spec)| {
-            // A static ability exists while its permanent has not lost it.
-            let mut reads = Characteristics::REMOVES_ABILITIES;
-            if let Objects::All { filter, .. } = spec.affected {
-                reads = reads.union(apply::filter_reads(filter));
-            }
-            if (spec.condition.as_ref()).is_some_and(static_ability::reads_results) {
-                reads = reads.union(Characteristics::FILTERED);
-            }
+            let reads = apply::existence_reads(spec);
             spec.modifications
                 .iter()
                 .enumerate()

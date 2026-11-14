@@ -17,6 +17,18 @@ fixed in the same session. Newest first.
   where it asked to send it, since every move goes through the replacement
   pipeline.
 
+||||||| parent of 14f8da95 (refactor: one test of what a layer effect's existence reads)
+
+- The test of whether the order of permanents entering the battlefield together
+  could change the layer results (CR 613.7m, `layers::order_may_matter`) read
+  what a static ability's filter reads only for a set "each X", not "each other
+  X", so Opalescence's effect read no card types there while the dependency test
+  (CR 613.8) said it read them. No game with the implemented cards showed it,
+  because a dependency orders such effects before timestamps do. Found in
+  review: the two tests had each written out what finding a static ability's
+  existence and set reads. Prevention: one function, `apply::existence_reads`,
+  answers it for both; a fact two tests need is computed in one place.
+
 - A replacement of an opponent's draws ("If an opponent would draw a card, you
   win the game instead") would have made the drawing player win. What happens
   instead of a draw names players such as "you", and `drawing::draw` read them

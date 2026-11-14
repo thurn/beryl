@@ -515,6 +515,26 @@ pub(super) fn filter_reads(filter: Filter) -> Characteristics {
     }
 }
 
+/// The characteristics finding whether a static ability with the continuous effect `spec`
+/// exists, and what it applies to, read of the layer results: whether its permanent has lost
+/// it, which only a removal of abilities changes; what its filter reads, for a set "each
+/// other" or not; and, for an "as long as" that reads the results, what filters read. The
+/// test of what may depend on what ([`super::dependency`]) and of whether the order of
+/// permanents entering together matters ([`super::together`]) both ask it, so the two never
+/// disagree.
+pub(super) fn existence_reads(spec: &beryl_card::LayerSpec) -> Characteristics {
+    let mut reads = Characteristics::REMOVES_ABILITIES;
+    if let Objects::All { filter, .. } | Objects::Other(&Objects::All { filter, .. }) =
+        spec.affected
+    {
+        reads = reads.union(filter_reads(filter));
+    }
+    if (spec.condition.as_ref()).is_some_and(static_ability::reads_results) {
+        reads = reads.union(Characteristics::FILTERED);
+    }
+    reads
+}
+
 /// The characteristics the amounts of the part at `part` of a static ability read as its
 /// layer applies ([`read`]): those of the permanents an amount counts.
 pub(super) fn amount_reads(spec: &beryl_card::LayerSpec, part: u8) -> Characteristics {

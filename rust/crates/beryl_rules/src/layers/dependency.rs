@@ -19,12 +19,11 @@
 
 use beryl_kernel::derive::Rederive;
 
-use super::{Apply, Begun, Target, apply, apply_one, members, position};
+use super::{Apply, Begun, apply, apply_one, members, position};
 use crate::bitboard::Bitboard;
 use crate::fixed::Full;
 use crate::layout::{Layout, Queue, Table};
 use crate::state::{BATTLEFIELD, Characteristics, Derived, LayerChange};
-use crate::static_ability;
 use crate::table::GameTable;
 
 /// The static abilities that began in an earlier layer, with the sets they began on
@@ -248,24 +247,10 @@ fn reads<L: Layout>(s: &Rederive<'_, L>, t: &GameTable, a: &Apply<L>) -> Charact
         LayerChange::Read { part, .. } => apply::amount_reads(spec, part),
         _ => Characteristics::NONE,
     };
+    // A later part applies to the set its first part found ([`Begun`]), whatever its
+    // permanent has lost since and whatever its filter would find now.
     if first {
-        reads = reads.union(Characteristics::REMOVES_ABILITIES);
-        if let Target::Static(_) = a.target {
-            if let beryl_card::Objects::All { filter, .. }
-            | beryl_card::Objects::Other(&beryl_card::Objects::All { filter, .. }) =
-                spec.affected
-            {
-                reads = reads.union(apply::filter_reads(filter));
-            }
-            // An "as long as" that reads the results asks what filters ask.
-            if spec
-                .condition
-                .as_ref()
-                .is_some_and(static_ability::reads_results)
-            {
-                reads = reads.union(Characteristics::FILTERED);
-            }
-        }
+        reads = reads.union(apply::existence_reads(spec));
     }
     reads
 }
