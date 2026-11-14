@@ -578,18 +578,13 @@ fn assert_restored(before: &Table, after: &Table) {
 fn generated_actions_undo_without_losing_knowledge_and_reopen_from_json() {
     let mut generator = Generator::new(2011);
     let mut covered = BTreeSet::new();
-    // The assist switches and library prompts are implemented in the assist
-    // and adapter work. Undo and rewind are applied explicitly below.
+    // The library flow is implemented separately. Undo and rewind are
+    // applied explicitly below.
     let kinds: Vec<_> = CORE
         .iter()
         .chain(ASSIST_AND_LOG)
         .copied()
-        .filter(|kind| {
-            !matches!(
-                kind,
-                Kind::Flow | Kind::SetAssist | Kind::Undo | Kind::Rewind
-            )
-        })
+        .filter(|kind| !matches!(kind, Kind::Flow | Kind::Undo | Kind::Rewind))
         .collect();
     let mut game = Game::new(fixtures());
     for index in 0..1_024 {

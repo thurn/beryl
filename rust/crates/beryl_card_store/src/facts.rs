@@ -39,11 +39,19 @@ pub fn is_land_type_line(type_line: &str) -> bool {
 }
 
 pub fn is_creature(record: &Record) -> bool {
-    types(type_line(record)).any(|word| word == "Creature")
+    is_creature_type_line(type_line(record))
+}
+
+pub fn is_creature_type_line(type_line: &str) -> bool {
+    types(type_line).any(|word| word == "Creature")
 }
 
 pub fn is_planeswalker(record: &Record) -> bool {
-    types(type_line(record)).any(|word| word == "Planeswalker")
+    is_planeswalker_type_line(type_line(record))
+}
+
+pub fn is_planeswalker_type_line(type_line: &str) -> bool {
+    types(type_line).any(|word| word == "Planeswalker")
 }
 
 pub fn is_permanent(record: &Record) -> bool {
@@ -64,7 +72,11 @@ pub fn is_permanent_type_line(type_line: &str) -> bool {
 }
 
 pub fn is_legendary(record: &Record) -> bool {
-    types(type_line(record)).any(|word| word == "Legendary")
+    is_legendary_type_line(type_line(record))
+}
+
+pub fn is_legendary_type_line(type_line: &str) -> bool {
+    types(type_line).any(|word| word == "Legendary")
 }
 
 pub fn is_attachment(record: &Record) -> bool {

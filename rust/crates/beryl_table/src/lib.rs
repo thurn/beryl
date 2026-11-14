@@ -5,6 +5,7 @@
 
 pub mod action;
 pub mod apply;
+pub mod assist;
 pub mod chance;
 pub mod change;
 pub mod deck;

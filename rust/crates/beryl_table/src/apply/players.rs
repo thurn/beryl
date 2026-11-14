@@ -2,6 +2,7 @@ use beryl_card_store::facts;
 
 use crate::action::{Adjustment, SeenObject, Selection, Target};
 use crate::change::{Edit, TableEdit};
+use crate::helpers::{card_record, printed_face};
 use crate::state::{Arrow, ArrowKind, ArrowTarget, Card, Face, Object, Phase, Player, Zone};
 use crate::{Chance, Change, Refusal, Seat, Table};
 
@@ -76,12 +77,12 @@ fn has_type(object: &Object, name: &str, front: fn(&beryl_card_store::Record) ->
         Card::Custom { types, .. } => types,
         Card::Hidden => return false,
         Card::Named(_) => {
-            record = cards::card_record(&object.card);
+            record = card_record(&object.card);
             let Some(record) = &record else { return false };
             if object.face == Face::Front {
                 return front(record);
             }
-            let Some(face) = cards::printed_face(record, object.face) else {
+            let Some(face) = printed_face(record, object.face) else {
                 return false;
             };
             &face.type_line

@@ -5,6 +5,7 @@ use beryl_card_store::{Record, facts};
 
 use crate::action::{Destination, Portion, Position, Selection, SortBy};
 use crate::change::Edit;
+use crate::helpers::card_record;
 use crate::state::{Card, Object, ObjectId, Zone};
 use crate::{Action, Chance, Change, Refusal, Seat, Table};
 
@@ -271,7 +272,7 @@ pub(super) fn sort_hand(table: &Table, seat: Seat, by: SortBy) -> Changes {
     let mut ids = zone_cards(table, zone)?.to_vec();
     match by {
         SortBy::Name => ids.sort_by_cached_key(|id| match &table.objects[id].card {
-            card @ Card::Named(name) => cards::card_record(card)
+            card @ Card::Named(name) => card_record(card)
                 .map_or_else(|| name.to_lowercase(), |record| record.name.to_lowercase()),
             Card::Custom { name, .. } => name.to_lowercase(),
             Card::Hidden => String::new(),
@@ -279,7 +280,7 @@ pub(super) fn sort_hand(table: &Table, seat: Seat, by: SortBy) -> Changes {
         SortBy::Type => ids.sort_by_cached_key(|id| match &table.objects[id].card {
             Card::Custom { types, .. } => types.to_lowercase(),
             Card::Hidden => String::new(),
-            card @ Card::Named(_) => cards::card_record(card)
+            card @ Card::Named(_) => card_record(card)
                 .and_then(|record| {
                     record
                         .faces
@@ -289,7 +290,7 @@ pub(super) fn sort_hand(table: &Table, seat: Seat, by: SortBy) -> Changes {
                 .unwrap_or_default(),
         }),
         SortBy::ManaValue => ids.sort_by_cached_key(|id| {
-            cards::card_record(&table.objects[id].card)
+            card_record(&table.objects[id].card)
                 .as_ref()
                 .map_or(0, hand_mana_value)
         }),

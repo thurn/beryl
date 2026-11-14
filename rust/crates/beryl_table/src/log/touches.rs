@@ -14,6 +14,9 @@ enum Field {
     Active,
     Turn,
     Phase,
+    ResetTurnPlays,
+    TurnPlay,
+    Assists(Seat),
     Deck(Seat),
     Sideboard(Seat),
     Ready(Seat),
@@ -34,6 +37,9 @@ impl From<&TableEdit> for Field {
             TableEdit::SetActive { .. } => Self::Active,
             TableEdit::SetTurn { .. } => Self::Turn,
             TableEdit::SetPhase { .. } => Self::Phase,
+            TableEdit::ResetTurnPlays { .. } => Self::ResetTurnPlays,
+            TableEdit::TurnPlay { .. } => Self::TurnPlay,
+            TableEdit::SetAssists { seat, .. } => Self::Assists(seat),
             TableEdit::SetDeck { seat, .. } => Self::Deck(seat),
             TableEdit::SetSideboard { seat, .. } => Self::Sideboard(seat),
             TableEdit::SetReady { seat, .. } => Self::Ready(seat),
@@ -60,7 +66,15 @@ impl Touches {
             || other.whole_table
             || !self.objects.is_disjoint(&other.objects)
             || !self.positions.is_disjoint(&other.positions)
-            || !self.fields.is_disjoint(&other.fields)
+            || self.fields.iter().any(|field| match field {
+                // Independent plays can be undone in either order. A turn
+                // boundary resets their count and conflicts with all plays.
+                Field::TurnPlay => other.fields.contains(&Field::ResetTurnPlays),
+                Field::ResetTurnPlays => {
+                    other.fields.contains(&Field::TurnPlay) || other.fields.contains(field)
+                }
+                _ => other.fields.contains(field),
+            })
     }
 
     fn positions(&mut self, zone: Zone, start: usize, end: usize) {

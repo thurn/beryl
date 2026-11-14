@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::change::Edit;
+use crate::change::{Edit, TableEdit};
 use crate::log::Touches;
 use crate::{Action, Chance, Change, Seat, Table, permissions};
 
@@ -122,8 +122,36 @@ fn apply_action(
     }
     permissions::check(table, by, action)?;
     let mut changes = changes_for(table, by, action, chance)?;
+    if table.turn_plays.is_some() && counts_as_turn_play(action, table.turn) {
+        changes.push(Change::SetTable(TableEdit::TurnPlay { add: true }));
+    }
     perform_with_top_knowledge(table, action, &mut changes, touches);
     Ok(changes)
+}
+
+/// Opening-hand steps and assist switches can be used before the first play.
+fn counts_as_turn_play(action: &Action, turn: u32) -> bool {
+    use crate::action::{Destination, Position};
+    use crate::state::{Phase, Zone};
+
+    match action {
+        Action::Start { .. }
+        | Action::NextTurn {}
+        | Action::NextGame { .. }
+        | Action::Concede {}
+        | Action::SetAssist { .. }
+        | Action::Phase {
+            phase: Phase::Untap,
+        } => false,
+        Action::Mulligan { .. } if turn == 1 => false,
+        Action::Move {
+            selection,
+            to: Destination::Zone(Zone::Library(seat)),
+            position: Position::Bottom,
+            ..
+        } if turn == 1 && selection.zone == Zone::Hand(*seat) => false,
+        _ => true,
+    }
 }
 
 pub(crate) fn perform_history(
@@ -325,7 +353,7 @@ fn changes_for(table: &Table, by: Seat, action: &Action, chance: &mut Chance) ->
         Action::Start { first } => game::start(table, *first, chance, action),
         Action::NextGame { winner } => game::next_game(table, *winner),
         Action::Concede {} => game::concede(table, by),
-        Action::SetAssist { .. } => game::set_assist(action),
+        Action::SetAssist { assist, on } => Ok(game::set_assist(table, by, *assist, *on)),
         Action::Flow { .. } => library::flow(action),
         Action::Undo { .. } | Action::Rewind { .. } | Action::Batch { .. } => Err(Refusal::INVALID),
     }

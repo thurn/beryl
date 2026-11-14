@@ -1,11 +1,29 @@
 use crate::action::Portion;
 use crate::change::{Edit, ObjectEdit, TableEdit};
-use crate::state::{Card, MatchSeat, Object, Phase, Zone};
+use crate::state::{Assist, Card, MatchSeat, Object, Phase, Zone};
 use crate::{Action, Chance, Change, Refusal, Seat, Table};
 
 use super::{Changes, edit, library, perform, players};
 
-super::unimplemented_actions!(set_assist);
+pub(super) fn set_assist(table: &Table, by: Seat, assist: Assist, on: bool) -> Vec<Change> {
+    let before = &table.assists[usize::from(by.0)];
+    if before.contains(&assist) == on {
+        return Vec::new();
+    }
+    let mut after = before.clone();
+    if on {
+        after.push(assist);
+    } else {
+        after.retain(|&enabled| enabled != assist);
+    }
+    vec![Change::SetTable(TableEdit::SetAssists {
+        seat: by,
+        edit: Edit {
+            before: before.clone(),
+            after,
+        },
+    })]
+}
 
 type Deck = Vec<(String, u16)>;
 
@@ -23,6 +41,12 @@ fn set_turn(table: &Table, active: Seat, turn: u32, changes: &mut Vec<Change>) {
     }));
     changes.extend(edit(table.turn, turn, |edit| {
         Change::SetTable(TableEdit::SetTurn { edit })
+    }));
+    changes.push(Change::SetTable(TableEdit::ResetTurnPlays {
+        edit: Edit {
+            before: table.turn_plays,
+            after: (turn != 0).then_some(0),
+        },
     }));
     changes.extend(edit(table.phase, Phase::Untap, |edit| {
         Change::SetTable(TableEdit::SetPhase { edit })

@@ -238,6 +238,9 @@ pub struct Table {
     pub game_match: Match,
     pub proposals: Vec<Proposal>,
     pub assists: Vec<Vec<Assist>>,
+    /// The number of plays since the turn began, if the turn has been started.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) turn_plays: Option<u64>,
     pub lent_zones: Vec<(Zone, Seat)>,
     pub always_reveal_top: Vec<Seat>,
     pub always_look_at_top: Vec<Seat>,
@@ -271,6 +274,7 @@ impl Table {
             },
             proposals: Vec::new(),
             assists: vec![Vec::new(); count],
+            turn_plays: None,
             lent_zones: Vec::new(),
             always_reveal_top: Vec::new(),
             always_look_at_top: Vec::new(),

@@ -205,6 +205,9 @@ fn redact_table_edit(edit: &mut TableEdit, seat: Seat, names: &HiddenNames) -> b
         | TableEdit::SetActive { .. }
         | TableEdit::SetTurn { .. }
         | TableEdit::SetPhase { .. }
+        | TableEdit::ResetTurnPlays { .. }
+        | TableEdit::TurnPlay { .. }
+        | TableEdit::SetAssists { .. }
         | TableEdit::SetReady { .. }
         | TableEdit::SetWins { .. }
         | TableEdit::SetInGame { .. }

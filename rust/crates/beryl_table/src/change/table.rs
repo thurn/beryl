@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::state::Phase;
+use crate::state::{Assist, Phase};
 use crate::{Seat, Table};
 
 use super::Edit;
@@ -25,6 +25,16 @@ pub enum TableEdit {
     },
     SetPhase {
         edit: Edit<Phase>,
+    },
+    ResetTurnPlays {
+        edit: Edit<Option<u64>>,
+    },
+    TurnPlay {
+        add: bool,
+    },
+    SetAssists {
+        seat: Seat,
+        edit: Edit<Vec<Assist>>,
     },
     SetDeck {
         seat: Seat,
@@ -70,6 +80,18 @@ impl TableEdit {
             Self::SetPhase { edit } => {
                 table.phase = edit.after;
             }
+            Self::ResetTurnPlays { edit } => table.turn_plays = edit.after,
+            Self::TurnPlay { add } => {
+                let plays = table.turn_plays.as_mut().expect("a turn has started");
+                if *add {
+                    *plays += 1;
+                } else {
+                    *plays -= 1;
+                }
+            }
+            Self::SetAssists { seat, edit } => {
+                table.assists[usize::from(seat.0)].clone_from(&edit.after);
+            }
             Self::SetDeck { seat, edit } => {
                 table.game_match.seats[usize::from(seat.0)]
                     .deck
@@ -110,6 +132,14 @@ impl TableEdit {
                 edit: edit.inverse(),
             },
             Self::SetPhase { edit } => Self::SetPhase {
+                edit: edit.inverse(),
+            },
+            Self::ResetTurnPlays { edit } => Self::ResetTurnPlays {
+                edit: edit.inverse(),
+            },
+            Self::TurnPlay { add } => Self::TurnPlay { add: !add },
+            Self::SetAssists { seat, edit } => Self::SetAssists {
+                seat: *seat,
                 edit: edit.inverse(),
             },
             Self::SetDeck { seat, edit } => Self::SetDeck {

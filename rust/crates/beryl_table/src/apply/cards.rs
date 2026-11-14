@@ -1,11 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use beryl_card_store::{Record, STORE, Side, facts};
+use beryl_card_store::{Record, STORE, facts};
 
 use crate::action::{
     Adjustment, ComputedDestination, Destination, Position, SeenObject, Selection,
 };
 use crate::change::{Edit, Location, ObjectEdit};
+use crate::helpers::{card_record, printed_face};
 use crate::state::{AbilityMarker, ArrowTarget, Card, Face, Object, ObjectId, Row, Zone};
 use crate::{Change, Refusal, Seat, Table};
 
@@ -244,23 +245,6 @@ fn destination_zone(
             }
         }
         Destination::Computed(ComputedDestination::Resolve) => Err(Refusal::INVALID),
-    }
-}
-
-pub(super) fn card_record(card: &Card) -> Option<Record> {
-    match card {
-        Card::Named(name) => STORE
-            .card_ignoring_case(name)
-            .or_else(|| STORE.tokens(name).into_iter().next()),
-        Card::Hidden | Card::Custom { .. } => None,
-    }
-}
-
-pub(super) fn printed_face(record: &Record, face: Face) -> Option<&beryl_card_store::Face> {
-    match face {
-        Face::Front => record.faces.first(),
-        Face::Back => record.faces.iter().find(|face| face.side == Side::Back),
-        Face::Down => None,
     }
 }
 
