@@ -81,9 +81,11 @@ export function spanSampler({ stage, clock, origin, layer, faults }) {
         if (!numbered.has(element)) numbered.set(element, ++made);
         return numbered.get(element);
     };
-    /** How a mark's element is drawn, whatever the size of what it is on: its colors, its
-     * border and what it carries. */
+    /** How a mark is drawn, whatever the size of what it is on. */
     const lookOf = (element) => {
+        // Player marks draw their outline on the life orb as an SVG stroke.
+        const rim = element.querySelector(".stage-mark-face-rim");
+        if (rim) return getComputedStyle(rim).stroke;
         const style = getComputedStyle(element);
         const colors = (said) => said.match(/rgba?\([^)]*\)/g) ?? [];
         return JSON.stringify([
