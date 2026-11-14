@@ -645,3 +645,28 @@ def test_a_wait_for_tokens_does_not_count_towards_the_hang_limit(
     # The run being stopped still ends a wait.
     steps.stop()
     assert steps.cut()
+
+
+def test_the_allocations_binaries_come_from_the_workspace_build() -> None:
+    def artifact(name: str, executable: str | None) -> str:
+        return json.dumps(
+            {
+                "reason": "compiler-artifact",
+                "target": {"name": name, "kind": ["test"]},
+                "executable": executable,
+            }
+        )
+
+    messages = "\n".join(
+        [
+            artifact("allocations", "/t/deps/allocations-b"),
+            artifact("beryl_rules", None),
+            artifact("allocations", "/t/deps/allocations-a"),
+            artifact("corpus", "/t/deps/corpus-c"),
+            json.dumps({"reason": "build-finished", "success": True}),
+            "not json",
+        ]
+    )
+    found = rust_tests.executables(messages, "allocations")
+    assert found == ["/t/deps/allocations-a", "/t/deps/allocations-b"]
+    assert rust_tests.executables("", "allocations") == []

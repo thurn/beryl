@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 import xml.etree.ElementTree as ET
 from collections import defaultdict
@@ -142,9 +143,10 @@ def rust_tests_step(
     """The workspace's tests, or `only` those named `<binary> <test>` (`failed_tests`); `fast`
     leaves out verdicts.SLOW_ONLY's, and `slow` verdicts.FAST_ONLY's.
     cargo-nextest runs the test binaries in parallel (cargo test runs them one after another);
-    it cannot list the harness-less `allocations` targets and runs no doctest, so cargo test
-    runs those beside it once everything is built: the doctests are where a `compile_fail`
-    block holds that one index type cannot pass for another. Plain cargo test where
+    it cannot list the harness-less `allocations` targets and runs no doctest, so those run
+    beside it once everything is built: the `allocations` binaries that build made, and cargo
+    test's doctests, which are where a `compile_fail` block holds that one index type cannot
+    pass for another. Plain cargo test where
     cargo-nextest is missing. Each test's result goes to the run log: nextest's from its JUnit
     report (rust/.config/nextest.toml), the `allocations` targets' and the doctests' as one
     check each."""
@@ -153,7 +155,14 @@ def rust_tests_step(
     if shutil.which("cargo-nextest") is None:
         return subprocess.run(cargo, cwd=paths.RUST, check=False).returncode
     started = time.perf_counter()
-    build = subprocess.run([*cargo, "--no-run"], cwd=paths.RUST, check=False)
+    build = subprocess.run(
+        [*cargo, "--no-run", "--message-format=json-render-diagnostics"],
+        cwd=paths.RUST,
+        stdout=subprocess.PIPE,
+        text=True,
+        errors="replace",
+        check=False,
+    )
     # The build's share of the step, which says whether a slow run compiled or tested slowly.
     print(f"rust-tests: built in {time.perf_counter() - started:.0f} s", flush=True)
     if build.returncode != 0:
@@ -183,17 +192,17 @@ def rust_tests_step(
         nextest_filter(only) if only else every,
     ]
     # Beside nextest: what it does not run, with the check and the line a failure is named by.
+    allocations = executables(build.stdout, "allocations")
     beside = {
-        "rust:allocations": ([*cargo, "--test", "allocations"], ALLOCATIONS_FAILED),
+        "rust:allocations": (run_each(allocations), ALLOCATIONS_FAILED),
         "rust:doctests": ([*cargo, "--doc"], DOCTESTS_FAILED),
     }
-    if packages:
-        # Cargo refuses a target that none of the packages it is given has.
-        kinds = targets(workspace_packages(), packages)
-        if "allocations" not in kinds:
-            del beside["rust:allocations"]
-        if "lib" not in kinds:
-            del beside["rust:doctests"]
+    if not allocations:
+        # None of the packages has an `allocations` target.
+        del beside["rust:allocations"]
+    # Cargo refuses `--doc` when none of the packages it is given has a library.
+    if packages and "lib" not in targets(workspace_packages(), packages):
+        del beside["rust:doctests"]
     if slow:
         for check in [c for c in beside if c in verdicts.FAST_ONLY]:
             del beside[check]
@@ -229,6 +238,45 @@ def rust_tests_step(
     except (OSError, ET.ParseError) as e:
         print(f"rust-tests: no per-test results for the run log: {e}")
     return next((r.returncode for r, _ in runs if r.returncode != 0), 0)
+
+
+def executables(messages: str, target: str) -> list[str]:
+    """The test binaries named `target` among the artifacts that `cargo test --no-run
+    --message-format=json` reports in `messages`.
+
+    The step runs these rather than `cargo test --test <target>`: cargo resolves the features of
+    a build of one test target apart from the whole workspace's, since the other packages'
+    dev-dependencies are left out, so the hashes of the card crates' build dependencies differ.
+    After a change to the rules crate, that second build compiled the rules, card and search
+    crates a second time, 60 to 80 CPU seconds that made the fast check go over its budget.
+    """
+    found: list[str] = []
+    for line in messages.splitlines():
+        try:
+            message = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if (
+            not isinstance(message, dict)
+            or message.get("reason") != "compiler-artifact"
+        ):
+            continue
+        executable = message.get("executable")
+        if executable and (message.get("target") or {}).get("name") == target:
+            found.append(str(executable))
+    return sorted(found)
+
+
+# Runs each test binary given to it in turn, and fails if any failed.
+RUN_EACH = (
+    "import subprocess, sys; "
+    "sys.exit(int(any([subprocess.run([b]).returncode != 0 for b in sys.argv[1:]])))"
+)
+
+
+def run_each(binaries: list[str]) -> list[str]:
+    """A command that runs each of `binaries` in turn and fails if any of them failed."""
+    return [sys.executable, "-c", RUN_EACH, *binaries]
 
 
 def targets(packages: list[dict[str, object]], names: list[str]) -> set[str]:
