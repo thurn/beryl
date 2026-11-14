@@ -51,7 +51,11 @@ fn moves_to_every_zone_and_position_in_the_requested_order() {
         Zone::Battlefield,
         Zone::Stack,
     ] {
-        let from = Zone::Library(GUEST);
+        let from = if to == Zone::Library(OWNER) {
+            Zone::Hand(OWNER)
+        } else {
+            Zone::Library(OWNER)
+        };
         for (position, index) in [
             (Position::Top, 0),
             (Position::Nth(1), 1),
@@ -216,6 +220,7 @@ fn hand_entries_refresh_ids_and_hide_cards_and_undo_merges_knowledge() {
     let mut first = card(1, from);
     first.known_to = vec![OWNER];
     let mut table = table_with([first, card(2, from)]);
+    table.lent_zones.push((from, GUEST));
     let entry = apply(
         &mut table,
         GUEST,
@@ -240,6 +245,8 @@ fn libraries_keep_visibility_and_sideboards_add_their_owner() {
     let from = Zone::Battlefield;
     let to = Zone::Library(GUEST);
     let mut first = card(1, from);
+    first.owner = GUEST;
+    first.controller = GUEST;
     first.known_to = vec![OWNER];
     let mut table = table_with([first]);
     let mut chance = Chance::fresh(0);
@@ -253,7 +260,7 @@ fn libraries_keep_visibility_and_sideboards_add_their_owner() {
     assert_eq!(table.objects[&ObjectId(1)].known_to, [OWNER]);
     apply(
         &mut table,
-        OWNER,
+        GUEST,
         &movement(&[1], to, Zone::Sideboard(GUEST), Position::Top),
         &mut chance,
     )
