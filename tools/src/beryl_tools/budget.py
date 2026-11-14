@@ -126,6 +126,9 @@ KEEP: dict[str, str] = {
         "the browser UI plays a step of a game"
     ),
     "rust:clippy": "the whole workspace builds and passes clippy",
+    # The step's own record, which stands for every Rust test at once where cargo-nextest is
+    # missing and the step logs no test of its own (rust_tests.rust_tests_step).
+    "rust:tests": "the workspace's Rust tests, as one record where cargo-nextest is missing",
     "ui:tsc": "the UI type-checks in strict mode",
     "names:*": "the repository rules AGENTS.md names, a few CPU seconds in all",
 }

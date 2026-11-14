@@ -153,6 +153,14 @@ def rust_tests_step(
     scope = [a for p in packages for a in ("-p", p)] if packages else ["--workspace"]
     cargo = ["cargo", "test", "--locked", *scope, "-q"]
     if shutil.which("cargo-nextest") is None:
+        # cargo test reports no test to the run log, so the step logs one `rust:tests` record
+        # for all of them, and a flake or a slow test cannot be told apart from the rest.
+        print(
+            "rust-tests: cargo-nextest is missing, so the run log records no test by name; "
+            "install it with `cargo install cargo-nextest --locked`",
+            file=sys.stderr,
+            flush=True,
+        )
         return subprocess.run(cargo, cwd=paths.RUST, check=False).returncode
     started = time.perf_counter()
     build = subprocess.run(
