@@ -78,10 +78,14 @@ pub fn entry_seen_by(entry: &Entry, table_before: &Table, seat: Seat) -> Entry {
 
     let mut projected = entry.clone();
     redact_action(&mut projected.action, &after, seat, &names);
+    if let Some(action) = &mut projected.undone_action {
+        redact_action(action, &after, seat, &names);
+    }
+    projected.touches.project(&private_ids, &after, seat);
     projected.changes.retain_mut(|change| match change {
         Change::Random { .. } => matches!(entry.action, Action::Roll { .. }),
         Change::Move { id, .. } | Change::ReplaceId { from: id, .. } => !private_ids.contains(id),
-        Change::ResetKnowledge { .. } => false,
+        Change::RestoreTable(_) | Change::ResetKnowledge { .. } => false,
         Change::Learn { id, .. } => knows(&after, *id, seat),
         Change::Create { object, .. } => {
             if private_ids.contains(&object.id) {

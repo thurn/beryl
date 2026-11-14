@@ -256,7 +256,7 @@ fn a_failed_random_action_leaves_the_table_and_chance_untouched() {
             },
             &mut chance
         ),
-        Err(Refusal::Invalid),
+        Err(Refusal::INVALID),
     );
     assert_eq!(table, before);
     assert_eq!(chance, before_chance);

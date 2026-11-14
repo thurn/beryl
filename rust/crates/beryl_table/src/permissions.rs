@@ -27,6 +27,10 @@ pub fn check(table: &Table, by: Seat, action: &Action) -> Result<(), Refusal> {
     Ok(())
 }
 
+pub(crate) fn check_actor(table: &Table, by: Seat) -> Result<(), Refusal> {
+    Reference::Seat(by).validate(table)
+}
+
 enum Reference {
     Seat(Seat),
     OwnSeat(Seat),
@@ -43,18 +47,18 @@ impl Reference {
         match *self {
             Self::Seat(seat) | Self::OwnSeat(seat) => {
                 if table.players.get(usize::from(seat.0)).is_none() {
-                    return Err(Refusal::Invalid);
+                    return Err(Refusal::INVALID);
                 }
             }
             Self::Zone(zone)
             | Self::UseZone(zone)
             | Self::LendZone(zone)
             | Self::MoveInto { zone, .. } => {
-                table.zone(zone).ok_or(Refusal::Invalid)?;
+                table.zone(zone).ok_or(Refusal::INVALID)?;
             }
             Self::Card(seen) | Self::Peek(seen) => {
-                table.zone(seen.zone).ok_or(Refusal::Invalid)?;
-                let (zone, _) = table.position(seen.id).ok_or(Refusal::Invalid)?;
+                table.zone(seen.zone).ok_or(Refusal::INVALID)?;
+                let (zone, _) = table.position(seen.id).ok_or(Refusal::INVALID)?;
                 if zone != seen.zone {
                     return Err(Refusal::Stale);
                 }
@@ -231,7 +235,7 @@ fn action_references(action: &Action, references: &mut Vec<Reference>) {
         | Action::Roll { .. }
         | Action::Concede {}
         | Action::SetAssist { .. }
-        | Action::Undo {}
+        | Action::Undo { .. }
         | Action::Rewind { .. } => {}
     }
 }

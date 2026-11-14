@@ -8,12 +8,17 @@ pub mod apply;
 pub mod chance;
 pub mod change;
 pub mod helpers;
+pub mod log;
 pub mod permissions;
 pub mod redact;
+pub mod save;
 pub mod state;
+
+mod undo;
 
 pub use action::Action;
 pub use apply::{Entry, Refusal, apply};
 pub use chance::Chance;
 pub use change::Change;
+pub use log::Log;
 pub use state::{Seat, Table};

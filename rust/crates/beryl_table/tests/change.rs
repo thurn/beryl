@@ -169,10 +169,10 @@ fn chance_replays_in_order_and_checks_each_requested_range() {
         assert!(expected < upper);
         assert_eq!(replay.below(upper), Ok(expected));
     }
-    assert_eq!(replay.below(1), Err(Refusal::Invalid));
+    assert_eq!(replay.below(1), Err(Refusal::INVALID));
     let mut replay = Chance::replaying(vec![4]);
-    assert_eq!(replay.below(0), Err(Refusal::Invalid));
-    assert_eq!(replay.below(4), Err(Refusal::Invalid));
+    assert_eq!(replay.below(0), Err(Refusal::INVALID));
+    assert_eq!(replay.below(4), Err(Refusal::INVALID));
     assert_eq!(replay.below(5), Ok(4));
 }
 

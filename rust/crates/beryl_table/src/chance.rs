@@ -9,7 +9,11 @@ pub struct Chance {
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Source {
     Fresh(u64),
-    Replaying { recorded: Vec<u32>, next: usize },
+    Replaying {
+        recorded: Vec<u32>,
+        next: usize,
+        fresh: Option<u64>,
+    },
 }
 
 impl Chance {
@@ -21,37 +25,79 @@ impl Chance {
 
     pub fn replaying(recorded: Vec<u32>) -> Self {
         Self {
-            source: Source::Replaying { recorded, next: 0 },
+            source: Source::Replaying {
+                recorded,
+                next: 0,
+                fresh: None,
+            },
         }
+    }
+
+    pub(crate) fn replay_and_advance(&self, recorded: Vec<u32>) -> Self {
+        let Source::Fresh(state) = self.source else {
+            unreachable!("only the host's fresh stream is resumed");
+        };
+        Self {
+            source: Source::Replaying {
+                recorded,
+                next: 0,
+                fresh: Some(state),
+            },
+        }
+    }
+
+    pub(crate) fn update_fresh(&self, chance: &mut Self) -> bool {
+        let Source::Replaying {
+            ref recorded,
+            next,
+            fresh: Some(state),
+        } = self.source
+        else {
+            unreachable!("replay did not track the fresh stream");
+        };
+        if next != recorded.len() {
+            return false;
+        }
+        chance.source = Source::Fresh(state);
+        true
     }
 
     /// Draws a zero-based outcome below `upper`. The caller records it in
     /// `Change::Random` so replay consumes the same outcomes in the same order.
     pub fn below(&mut self, upper: u32) -> Result<u32, Refusal> {
         if upper == 0 {
-            return Err(Refusal::Invalid);
+            return Err(Refusal::INVALID);
         }
         match &mut self.source {
-            Source::Fresh(state) => {
-                let upper = u64::from(upper);
-                // Reject the incomplete interval so each remainder has the same probability.
-                let threshold = upper.wrapping_neg() % upper;
-                loop {
-                    let draw = splitmix64(state);
-                    if draw >= threshold {
-                        return Ok((draw % upper) as u32);
-                    }
-                }
-            }
-            Source::Replaying { recorded, next } => {
+            Source::Fresh(state) => Ok(draw_below(state, upper)),
+            Source::Replaying {
+                recorded,
+                next,
+                fresh,
+            } => {
                 let outcome = recorded
                     .get(*next)
                     .copied()
                     .filter(|&outcome| outcome < upper)
-                    .ok_or(Refusal::Invalid)?;
+                    .ok_or(Refusal::INVALID)?;
+                if let Some(state) = fresh {
+                    draw_below(state, upper);
+                }
                 *next += 1;
                 Ok(outcome)
             }
+        }
+    }
+}
+
+fn draw_below(state: &mut u64, upper: u32) -> u32 {
+    let upper = u64::from(upper);
+    // Reject the incomplete interval so each remainder has equal probability.
+    let threshold = upper.wrapping_neg() % upper;
+    loop {
+        let draw = splitmix64(state);
+        if draw >= threshold {
+            return (draw % upper) as u32;
         }
     }
 }

@@ -55,7 +55,7 @@ fn starting_builds_private_piles_shuffles_and_deals_for_both_seats() {
     let before = table.clone();
     assert_eq!(
         apply(&mut table, HOST, &action, &mut chance),
-        Err(Refusal::Invalid)
+        Err(Refusal::INVALID)
     );
     assert_eq!(table, before);
     assert_eq!(chance, Chance::fresh(42));
@@ -142,7 +142,7 @@ fn sideboarding_swaps_counts_and_rejects_an_overdraw_atomically() {
     };
     assert_eq!(
         apply(&mut table, HOST, &invalid, &mut chance),
-        Err(Refusal::Invalid)
+        Err(Refusal::INVALID)
     );
     assert_eq!(table, before);
     let swapped = act(
@@ -214,7 +214,7 @@ fn ending_a_game_updates_the_score_resets_play_and_keeps_decks() {
     for invalid in live {
         assert_eq!(
             apply(&mut table, HOST, &invalid, &mut Chance::fresh(42)),
-            Err(Refusal::Invalid)
+            Err(Refusal::INVALID)
         );
         assert_eq!(table, before);
     }

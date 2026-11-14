@@ -27,7 +27,7 @@ pub(super) fn move_cards(
     if moves.is_empty()
         && let Destination::Zone(to) = destination
     {
-        insertion_index(position, table.zone(to).ok_or(Refusal::Invalid)?.len())?;
+        insertion_index(position, table.zone(to).ok_or(Refusal::INVALID)?.len())?;
     }
 
     let leaving: BTreeSet<_> = moves
@@ -104,7 +104,7 @@ pub(super) fn move_cards(
         if let Zone::Hand(owner) = to
             && selection.zone != to
         {
-            let fresh = table.fresh_id(next_id).ok_or(Refusal::Invalid)?;
+            let fresh = table.fresh_id(next_id).ok_or(Refusal::INVALID)?;
             next_id += 1;
             changes.push(Change::ResetKnowledge {
                 id,
@@ -141,7 +141,7 @@ fn plan_moves(
     for &id in &selection.objects {
         let Some(card) = table.objects.get(&id) else {
             if destination != Destination::Computed(ComputedDestination::Resolve) {
-                return Err(Refusal::Invalid);
+                return Err(Refusal::INVALID);
             }
             moves.push((id, None));
             continue;
@@ -198,7 +198,7 @@ fn destination_positions(
     zones
         .into_iter()
         .map(|zone| {
-            let target = table.zone(zone).ok_or(Refusal::Invalid)?;
+            let target = table.zone(zone).ok_or(Refusal::INVALID)?;
             let same_zone = source == zone;
             let target_len = target.len() - if same_zone { selected.len() } else { 0 };
             let index = insertion_index(position, target_len)?;
@@ -243,7 +243,7 @@ fn destination_zone(
                 Ok(Zone::Graveyard(card.owner))
             }
         }
-        Destination::Computed(ComputedDestination::Resolve) => Err(Refusal::Invalid),
+        Destination::Computed(ComputedDestination::Resolve) => Err(Refusal::INVALID),
     }
 }
 
@@ -269,7 +269,7 @@ fn insertion_index(position: Position, len: usize) -> Result<usize, Refusal> {
         Position::Top => Ok(0),
         Position::Bottom => Ok(len),
         Position::Nth(index) if index <= len => Ok(index),
-        Position::Nth(_) => Err(Refusal::Invalid),
+        Position::Nth(_) => Err(Refusal::INVALID),
     }
 }
 
@@ -402,15 +402,15 @@ fn selected_ids(table: &Table, selection: &Selection) -> Result<BTreeSet<ObjectI
             },
         )?;
         if !selected.insert(id) {
-            return Err(Refusal::Invalid);
+            return Err(Refusal::INVALID);
         }
     }
-    table.zone(selection.zone).ok_or(Refusal::Invalid)?;
+    table.zone(selection.zone).ok_or(Refusal::INVALID)?;
     Ok(selected)
 }
 
 pub(super) fn validate_seen(table: &Table, seen: SeenObject) -> Result<(), Refusal> {
-    let (zone, _) = table.position(seen.id).ok_or(Refusal::Invalid)?;
+    let (zone, _) = table.position(seen.id).ok_or(Refusal::INVALID)?;
     if zone != seen.zone {
         return Err(Refusal::Stale);
     }
@@ -425,7 +425,7 @@ pub(super) fn selected_cards<'a>(
     selection
         .objects
         .iter()
-        .map(|id| table.objects.get(id).ok_or(Refusal::Invalid))
+        .map(|id| table.objects.get(id).ok_or(Refusal::INVALID))
         .collect()
 }
 
@@ -454,7 +454,7 @@ fn reveal<'a>(table: &'a Table, card: &'a Object) -> impl Iterator<Item = Change
 
 fn battlefield(selection: &Selection) -> Result<(), Refusal> {
     if selection.zone != Zone::Battlefield {
-        return Err(Refusal::Invalid);
+        return Err(Refusal::INVALID);
     }
     Ok(())
 }
@@ -468,7 +468,7 @@ pub(super) fn tap(table: &Table, selection: &Selection, tapped: bool) -> Changes
 
 pub(super) fn reorder(table: &Table, selection: &Selection, position: Position) -> Changes {
     if !matches!(selection.zone, Zone::Battlefield | Zone::Hand(_)) {
-        return Err(Refusal::Invalid);
+        return Err(Refusal::INVALID);
     }
     move_cards(
         table,
@@ -490,7 +490,7 @@ pub(super) fn pin(table: &Table, selection: &Selection, row: Row) -> Changes {
 pub(super) fn give(table: &Table, selection: &Selection, to: Seat) -> Changes {
     battlefield(selection)?;
     if table.players.len() < 2 || usize::from(to.0) >= table.players.len() {
-        return Err(Refusal::Invalid);
+        return Err(Refusal::INVALID);
     }
     set_cards(table, selection, |card| {
         edit(card.controller, to, ObjectEdit::Controller)
@@ -521,7 +521,7 @@ pub(super) fn peek(table: &Table, by: Seat, selection: &Selection) -> Changes {
     let mut changes = Vec::new();
     for card in selected_cards(table, selection)? {
         if card.face != Face::Down {
-            return Err(Refusal::Invalid);
+            return Err(Refusal::INVALID);
         }
         if !card.known_to.contains(&by) {
             changes.push(Change::Learn {
@@ -584,7 +584,7 @@ pub(super) fn stats(table: &Table, selection: &Selection, stats: Option<(i32, i3
 pub(super) fn damage(table: &Table, selection: &Selection, damage: i32) -> Changes {
     battlefield(selection)?;
     if damage < 0 {
-        return Err(Refusal::Invalid);
+        return Err(Refusal::INVALID);
     }
     set_cards(table, selection, |card| {
         edit(card.damage, damage, ObjectEdit::Damage)
@@ -600,7 +600,7 @@ pub(super) fn note(table: &Table, selection: &Selection, note: Option<&str>) -> 
 fn attachment_host(table: &Table, host: SeenObject) -> Result<ObjectId, Refusal> {
     validate_seen(table, host)?;
     if host.zone != Zone::Battlefield {
-        return Err(Refusal::Invalid);
+        return Err(Refusal::INVALID);
     }
     Ok(host.id)
 }
@@ -612,7 +612,7 @@ pub(super) fn attach(table: &Table, selection: &Selection, host: SeenObject) -> 
     let mut visited = BTreeSet::new();
     while let Some(id) = ancestor {
         if selection.objects.contains(&id) || !visited.insert(id) {
-            return Err(Refusal::Invalid);
+            return Err(Refusal::INVALID);
         }
         ancestor = table.objects.get(&id).and_then(|card| card.attached_to);
     }
@@ -671,7 +671,7 @@ pub(super) fn clone(table: &Table, by: Seat, selection: &Selection) -> Changes {
         .into_iter()
         .enumerate()
         .map(|(index, card)| {
-            let id = table.fresh_id(index).ok_or(Refusal::Invalid)?;
+            let id = table.fresh_id(index).ok_or(Refusal::INVALID)?;
             let mut copy = Object::new(id, card.card.clone(), by, Zone::Battlefield);
             copy.face = card.face;
             copy.known_to.clone_from(&card.known_to);
@@ -691,19 +691,19 @@ pub(super) fn token(
 ) -> Changes {
     let attached_to = host.map(|host| attachment_host(table, host)).transpose()?;
     let record = match card {
-        Card::Hidden => return Err(Refusal::Invalid),
+        Card::Hidden => return Err(Refusal::INVALID),
         Card::Named(name) => Some(
             STORE
                 .tokens(name)
                 .into_iter()
                 .next()
-                .ok_or(Refusal::Invalid)?,
+                .ok_or(Refusal::INVALID)?,
         ),
         Card::Custom { .. } => None,
     };
     (0..usize::from(count))
         .map(|index| {
-            let id = table.fresh_id(index).ok_or(Refusal::Invalid)?;
+            let id = table.fresh_id(index).ok_or(Refusal::INVALID)?;
             let mut token = Object::new(id, card.clone(), by, Zone::Battlefield);
             token.attached_to = attached_to;
             token.note = note.map(str::to_owned);
@@ -717,7 +717,7 @@ pub(super) fn marker(table: &Table, selection: &Selection, text: &str) -> Change
         .into_iter()
         .enumerate()
         .map(|(index, card)| {
-            let id = table.fresh_id(index).ok_or(Refusal::Invalid)?;
+            let id = table.fresh_id(index).ok_or(Refusal::INVALID)?;
             let marker = AbilityMarker {
                 source: card.id,
                 text: text.to_owned(),
@@ -751,7 +751,7 @@ pub(super) fn remove(table: &Table, selection: &Selection) -> Changes {
         .iter()
         .any(|id| table.objects.get(id).is_some_and(|card| !card.token))
     {
-        return Err(Refusal::Invalid);
+        return Err(Refusal::INVALID);
     }
     let mut changes = Vec::new();
     remove_arrows(table, &selected, &mut changes);

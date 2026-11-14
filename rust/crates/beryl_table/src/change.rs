@@ -6,7 +6,7 @@ mod table;
 
 pub use table::TableEdit;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Location {
     pub zone: Zone,
     pub index: usize,
@@ -151,6 +151,8 @@ pub enum Change {
     Random {
         outcomes: Vec<u32>,
     },
+    /// A rewind sets the whole host table. It is sent as a redacted view.
+    RestoreTable(Box<Edit<Table>>),
     Nothing,
 }
 
@@ -255,6 +257,13 @@ impl Change {
             Self::AlwaysLookAtTop { seat, index, on } => {
                 toggle(&mut table.always_look_at_top, *seat, *index, *on);
             }
+            Self::RestoreTable(edit) => {
+                let next_id = table.next_id;
+                let entry_number = table.entry_number;
+                table.clone_from(&edit.after);
+                table.next_id = table.next_id.max(next_id);
+                table.entry_number = entry_number;
+            }
             Self::Random { .. } | Self::Nothing => {}
         }
     }
@@ -328,6 +337,7 @@ impl Change {
                 index: *index,
                 on: !on,
             },
+            Self::RestoreTable(edit) => Self::RestoreTable(Box::new(edit.inverse())),
             Self::Learn { .. } | Self::Random { .. } | Self::Nothing => Self::Nothing,
         }
     }

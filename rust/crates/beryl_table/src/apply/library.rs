@@ -13,7 +13,7 @@ use super::{Changes, cards, perform};
 super::unimplemented_actions!(flow);
 
 fn zone_cards(table: &Table, zone: Zone) -> Result<&[ObjectId], Refusal> {
-    table.zone(zone).ok_or(Refusal::Invalid)
+    table.zone(zone).ok_or(Refusal::INVALID)
 }
 
 fn portion_range(len: usize, portion: Portion) -> Range<usize> {
@@ -81,7 +81,7 @@ pub(super) fn mulligan(
 fn sample(ids: &mut [ObjectId], count: usize, chance: &mut Chance) -> Result<Vec<u32>, Refusal> {
     let mut outcomes = Vec::new();
     for index in 0..count.min(ids.len().saturating_sub(1)) {
-        let remaining = u32::try_from(ids.len() - index).map_err(|_| Refusal::Invalid)?;
+        let remaining = u32::try_from(ids.len() - index).map_err(|_| Refusal::INVALID)?;
         let offset = chance.below(remaining)?;
         ids.swap(index, index + offset as usize);
         outcomes.push(offset);
@@ -106,7 +106,7 @@ pub(super) fn shuffle(table: &Table, seat: Seat, portion: Portion, chance: &mut 
     )?);
     for (offset, id) in shuffled.into_iter().enumerate() {
         let card = &table.objects[&id];
-        let fresh = table.fresh_id(offset).ok_or(Refusal::Invalid)?;
+        let fresh = table.fresh_id(offset).ok_or(Refusal::INVALID)?;
         changes.push(Change::ResetKnowledge {
             id,
             edit: Edit {
@@ -162,11 +162,11 @@ pub(super) fn reveal(
         .iter()
         .any(|seat| !table.seats().any(|other| other == *seat))
     {
-        return Err(Refusal::Invalid);
+        return Err(Refusal::INVALID);
     }
     let mut changes = Vec::new();
     let cards = match (objects, random) {
-        (Some(_), Some(_)) => return Err(Refusal::Invalid),
+        (Some(_), Some(_)) => return Err(Refusal::INVALID),
         (Some(ids), None) => cards::selected_cards(
             table,
             &Selection {
@@ -199,10 +199,10 @@ pub(super) fn reveal(
 
 pub(super) fn lend(table: &Table, zone: Zone, to: Seat) -> Changes {
     let (Zone::Library(owner) | Zone::Hand(owner) | Zone::Sideboard(owner)) = zone else {
-        return Err(Refusal::Invalid);
+        return Err(Refusal::INVALID);
     };
     if to == owner || !table.seats().any(|seat| seat == to) {
-        return Err(Refusal::Invalid);
+        return Err(Refusal::INVALID);
     }
     zone_cards(table, zone)?;
     Ok((!table.lent_zones.contains(&(zone, to)))

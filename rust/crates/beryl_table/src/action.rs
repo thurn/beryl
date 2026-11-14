@@ -296,7 +296,11 @@ pub enum Action {
         flow: Flow,
         count: u16,
     },
-    Undo {},
+    Undo {
+        /// The log's undo control can name a batch from either seat.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        entry: Option<u32>,
+    },
     Rewind {
         to: u32,
     },

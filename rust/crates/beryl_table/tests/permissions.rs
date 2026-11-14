@@ -106,7 +106,7 @@ fn life_and_player_counters_are_open_to_either_player() {
             adjustment: Adjustment::Add(1),
         },
     ] {
-        refused(&mut table, MISSING, &action, Refusal::Invalid);
+        refused(&mut table, MISSING, &action, Refusal::INVALID);
         act(&mut table, GUEST, &action);
     }
     assert_eq!(table.players[0].life, 18);
@@ -137,7 +137,7 @@ fn arrows_phase_and_turn_are_open_to_either_player() {
         Action::Phase { phase: Phase::End },
         Action::NextTurn {},
     ] {
-        refused(&mut table, MISSING, &action, Refusal::Invalid);
+        refused(&mut table, MISSING, &action, Refusal::INVALID);
         act(&mut table, GUEST, &action);
     }
     assert_eq!(table.turn, 1);
@@ -283,7 +283,7 @@ fn decks_readiness_and_concession_belong_to_their_seat() {
     }
 
     let concede = Action::Concede {};
-    refused(&mut table, MISSING, &concede, Refusal::Invalid);
+    refused(&mut table, MISSING, &concede, Refusal::INVALID);
     act(
         &mut table,
         GUEST,
@@ -310,10 +310,10 @@ fn decks_readiness_and_concession_belong_to_their_seat() {
 fn either_seat_may_request_a_rewind_or_undo() {
     let table = Table::new(2);
     // Action execution needs a log; the table checker only validates the actor.
-    for action in [Action::Rewind { to: 1 }, Action::Undo {}] {
+    for action in [Action::Rewind { to: 1 }, Action::Undo { entry: None }] {
         assert_eq!(check(&table, OWNER, &action), Ok(()));
         assert_eq!(check(&table, GUEST, &action), Ok(()));
-        assert_eq!(check(&table, MISSING, &action), Err(Refusal::Invalid));
+        assert_eq!(check(&table, MISSING, &action), Err(Refusal::INVALID));
     }
 }
 
@@ -377,7 +377,7 @@ fn nonexistent_references_are_invalid_before_permissions() {
             to: Target::Player(MISSING),
         },
     ] {
-        refused(&mut table, GUEST, &action, Refusal::Invalid);
+        refused(&mut table, GUEST, &action, Refusal::INVALID);
     }
     // None of the refusals consumed an entry number.
     let entry = apply(

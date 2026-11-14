@@ -11,7 +11,7 @@ pub(super) fn player(table: &Table, seat: Seat) -> Result<&Player, Refusal> {
     table
         .players
         .get(usize::from(seat.0))
-        .ok_or(Refusal::Invalid)
+        .ok_or(Refusal::INVALID)
 }
 
 pub(super) fn set_life(seat: Seat, before: i32, after: i32) -> Option<Change> {
@@ -43,7 +43,7 @@ pub(super) fn player_counter(
 
 pub(super) fn roll(count: u16, sides: u32, chance: &mut Chance) -> Changes {
     if !(1..=100).contains(&count) || !(2..=1_000_000).contains(&sides) {
-        return Err(Refusal::Invalid);
+        return Err(Refusal::INVALID);
     }
     let outcomes = (0..count)
         .map(|_| chance.below(sides))
@@ -53,7 +53,7 @@ pub(super) fn roll(count: u16, sides: u32, chance: &mut Chance) -> Changes {
 
 fn target_card(table: &Table, seen: SeenObject) -> Result<&Object, Refusal> {
     cards::validate_seen(table, seen)?;
-    table.objects.get(&seen.id).ok_or(Refusal::Invalid)
+    table.objects.get(&seen.id).ok_or(Refusal::INVALID)
 }
 
 fn target(table: &Table, to: Target) -> Result<ArrowTarget, Refusal> {

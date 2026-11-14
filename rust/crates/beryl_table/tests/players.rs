@@ -110,7 +110,7 @@ fn dice_and_coins_record_replayable_results() {
                 &Action::Roll { count, sides },
                 &mut chance
             ),
-            Err(Refusal::Invalid)
+            Err(Refusal::INVALID)
         );
         assert_eq!(table, before);
         assert_eq!(chance, previous_chance);

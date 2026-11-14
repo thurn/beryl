@@ -438,7 +438,7 @@ impl Generator {
                 flow: Flow::Scry,
                 count: 1,
             },
-            Kind::Undo => Action::Undo {},
+            Kind::Undo => Action::Undo { entry: None },
             Kind::Rewind => Action::Rewind { to: 0 },
             Kind::Batch => Action::Batch {
                 actions: vec![

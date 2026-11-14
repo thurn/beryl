@@ -263,7 +263,7 @@ fn the_generator_has_templates_for_the_assist_and_log_layers() {
             (kind, action),
             (Kind::SetAssist, Action::SetAssist { .. })
                 | (Kind::Flow, Action::Flow { .. })
-                | (Kind::Undo, Action::Undo {})
+                | (Kind::Undo, Action::Undo { entry: None })
                 | (Kind::Rewind, Action::Rewind { .. })
                 | (Kind::Batch, Action::Batch { .. })
         ));

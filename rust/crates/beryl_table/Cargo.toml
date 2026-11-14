@@ -15,6 +15,5 @@ beryl_card_store = { path = "../beryl_card_store" }
 # Derives the action and state wire format in place of handwritten serializers.
 serde = { version = "1.0.229", features = ["derive"] }
 
-[dev-dependencies]
-# Exercises the JSON wire format without handwritten parsing in tests.
+# Writes the append-only JSON table save without a handwritten codec.
 serde_json = "1.0.154"

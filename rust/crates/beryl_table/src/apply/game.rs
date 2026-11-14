@@ -32,7 +32,7 @@ fn set_turn(table: &Table, active: Seat, turn: u32, changes: &mut Vec<Change>) {
 pub(super) fn next_turn(table: &Table) -> Changes {
     players::player(table, table.active)?;
     let next = (usize::from(table.active.0) + 1) % table.players.len();
-    let turn = table.turn.checked_add(1).ok_or(Refusal::Invalid)?;
+    let turn = table.turn.checked_add(1).ok_or(Refusal::INVALID)?;
     let mut changes = Vec::new();
     set_turn(table, Seat(next as u8), turn, &mut changes);
     changes.extend(players::remove_arrows(table, |_| true));
@@ -47,22 +47,22 @@ pub(super) fn next_turn(table: &Table) -> Changes {
 
 fn lobby_seat(table: &Table, seat: Seat) -> Result<&MatchSeat, Refusal> {
     if table.game_match.in_game {
-        return Err(Refusal::Invalid);
+        return Err(Refusal::INVALID);
     }
     table
         .game_match
         .seats
         .get(usize::from(seat.0))
-        .ok_or(Refusal::Invalid)
+        .ok_or(Refusal::INVALID)
 }
 
 fn add_cards(deck: &mut Deck, incoming: &[(String, u16)]) -> Result<(), Refusal> {
     for (name, count) in incoming {
         if name.trim().is_empty() || *count == 0 {
-            return Err(Refusal::Invalid);
+            return Err(Refusal::INVALID);
         }
         if let Some((_, copies)) = deck.iter_mut().find(|(card, _)| card == name) {
-            *copies = copies.checked_add(*count).ok_or(Refusal::Invalid)?;
+            *copies = copies.checked_add(*count).ok_or(Refusal::INVALID)?;
         } else {
             deck.push((name.clone(), *count));
         }
@@ -75,8 +75,8 @@ fn take_cards(deck: &mut Deck, outgoing: &[(String, u16)]) -> Result<(), Refusal
         let (_, copies) = deck
             .iter_mut()
             .find(|(card, _)| card == name)
-            .ok_or(Refusal::Invalid)?;
-        *copies = copies.checked_sub(*count).ok_or(Refusal::Invalid)?;
+            .ok_or(Refusal::INVALID)?;
+        *copies = copies.checked_sub(*count).ok_or(Refusal::INVALID)?;
     }
     Ok(())
 }
@@ -247,7 +247,7 @@ fn create_pile(
         .iter()
         .flat_map(|(name, count)| std::iter::repeat_n(name, usize::from(*count)));
     for (index, name) in copies.enumerate() {
-        let id = table.fresh_id(*offset).ok_or(Refusal::Invalid)?;
+        let id = table.fresh_id(*offset).ok_or(Refusal::INVALID)?;
         *offset += 1;
         let mut object = Object::new(id, Card::Named(name.clone()), owner, zone);
         if zone == Zone::Sideboard(owner) {
@@ -266,7 +266,7 @@ pub(super) fn start(table: &Table, first: Seat, chance: &mut Chance, action: &Ac
         .iter()
         .any(|seat| seat.deck.is_empty() && seat.sideboard.is_empty())
     {
-        return Err(Refusal::Invalid);
+        return Err(Refusal::INVALID);
     }
 
     let mut changes = reset_play(table);
@@ -313,7 +313,7 @@ pub(super) fn start(table: &Table, first: Seat, chance: &mut Chance, action: &Ac
 
 pub(super) fn next_game(table: &Table, winner: Option<Seat>) -> Changes {
     if !table.game_match.in_game {
-        return Err(Refusal::Invalid);
+        return Err(Refusal::INVALID);
     }
     if let Some(winner) = winner {
         players::player(table, winner)?;
@@ -339,7 +339,7 @@ pub(super) fn next_game(table: &Table, winner: Option<Seat>) -> Changes {
                 seat,
                 edit: Edit {
                     before: old.wins,
-                    after: old.wins.checked_add(1).ok_or(Refusal::Invalid)?,
+                    after: old.wins.checked_add(1).ok_or(Refusal::INVALID)?,
                 },
             }));
         }

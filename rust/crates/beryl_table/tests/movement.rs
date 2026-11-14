@@ -298,11 +298,11 @@ fn tapping_sets_every_selected_card_and_invalid_actions_are_atomic() {
         ),
         (
             movement(&[1, 1], zone, Zone::Stack, Position::Top),
-            Refusal::Invalid,
+            Refusal::INVALID,
         ),
         (
             movement(&[1], zone, Zone::Stack, Position::Nth(1)),
-            Refusal::Invalid,
+            Refusal::INVALID,
         ),
     ] {
         assert_eq!(apply(&mut table, OWNER, &action, &mut chance), Err(refusal));

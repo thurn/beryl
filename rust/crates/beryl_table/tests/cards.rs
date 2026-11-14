@@ -121,7 +121,7 @@ fn pins_gives_and_flags_each_selected_permanent() {
     };
     assert_eq!(
         apply(&mut solo, OWNER, &give, &mut Chance::fresh(0)),
-        Err(Refusal::Invalid)
+        Err(Refusal::INVALID)
     );
 }
 
@@ -273,7 +273,7 @@ fn attaches_from_hand_and_battlefield_and_detaches_when_the_host_leaves() {
     let before = table.clone();
     assert_eq!(
         apply(&mut table, OWNER, &cycle, &mut Chance::fresh(0)),
-        Err(Refusal::Invalid)
+        Err(Refusal::INVALID)
     );
     assert_eq!(table, before);
     let stale = Action::Attach {
@@ -429,7 +429,7 @@ fn removing_a_token_cleans_up_attachments_and_arrows_and_refuses_cards() {
     };
     assert_eq!(
         apply(&mut table, OWNER, &remove, &mut Chance::fresh(0)),
-        Err(Refusal::Invalid)
+        Err(Refusal::INVALID)
     );
     assert_eq!(table, before);
 
