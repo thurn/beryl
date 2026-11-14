@@ -96,6 +96,7 @@ from .rust_tests import (
     affected_packages,
     fast_rust_tests_step,
     junit_results,
+    rust_lane,
     nextest_filter,
     slow_rust_tests_step,
 )
@@ -523,46 +524,6 @@ def scale_lane() -> Lane:
     )
 
 
-def rust_lane(
-    fast: bool = False, packages: list[str] | None = None, text_inputs: bool = False
-) -> Lane:
-    """The rust lane; `fast` leaves out the tests in verdicts.SLOW_ONLY, slow CI's (not `fast`)
-    those in verdicts.FAST_ONLY, and `packages` holds clippy and the tests to those packages
-    (`affected_packages`) and the card-text step to a change it can see (`card_text.affected`,
-    or `text_inputs`: its other inputs changed)."""
-    scope = [a for p in packages for a in ("-p", p)] if packages else []
-    named = [f"--packages={','.join(packages)}"] if packages else []
-    lane = (
-        Lane("rust", warm=True)
-        .step("build-paths", [*STEP, "build-paths"])
-        .step("fmt", [*STEP, "rustfmt", "--check"], paths.RUST)
-        .step(
-            "clippy",
-            [
-                "cargo",
-                "clippy",
-                "--locked",
-                *scope,
-                "--all-targets",
-                "--",
-                "-D",
-                "warnings",
-            ],
-            paths.RUST,
-        )
-        .step(
-            "tests",
-            [*STEP, "fast-rust-tests" if fast else "rust-tests", *named],
-            rerun=failed_tests,
-        )
-    )
-    if text_inputs or card_text.affected(packages):
-        # Every card file's rendered rules text against its Oracle text, once the tests have
-        # built the scenario binary, which it finds in the same scope.
-        lane.step("card-text", [*STEP, "card-text", *named])
-    return lane
-
-
 def ui_lane() -> Lane:
     return (
         Lane("ui", warm=True)
@@ -609,7 +570,9 @@ def names_lane(
 
 
 def app_lane() -> Lane:
-    return Lane("app", warm=True).step("smoke", [*BY, "smoke"], rerun=whole)
+    return Lane("app", warm=True).step(
+        "smoke", [*BY, "smoke", "--without-iroh"], rerun=whole
+    )
 
 
 def shots_lane(select: bool = False, affected: str = "") -> Lane:

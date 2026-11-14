@@ -538,6 +538,20 @@ def test_the_fast_check_tests_the_packages_a_change_can_break() -> None:
     assert rust_tests.affected_packages(None, packages) is None
 
 
+def test_routine_lanes_leave_the_iroh_build_to_the_nightly() -> None:
+    nightly = rust_tests.NIGHTLY_PACKAGE
+    for fast in (True, False):
+        whole = checks.rust_lane(fast=fast)
+        clippy = next(step for step in whole.steps if step.name == "clippy")
+        assert clippy.cmd[3:6] == ["--workspace", "--exclude", nightly]
+        assert "clippy" not in {
+            step.name for step in checks.rust_lane(fast=fast, packages=[nightly]).steps
+        }
+        app = checks.rust_lane(fast=fast, packages=[nightly, "beryl_app"])
+        tests = next(step for step in app.steps if step.name == "tests")
+        assert tests.cmd[-1] == "--packages=beryl_app"
+
+
 def test_a_session_runs_rust_tests_as_the_check_does() -> None:
     command = rust_tests.session_command
     # The whole workspace is the check's own step.

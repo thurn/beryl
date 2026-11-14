@@ -48,12 +48,13 @@ def dev(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
-    return tauri("dev")
+    return tauri("dev", "--features", "iroh")
 
 
 def smoke(args: argparse.Namespace) -> int:
     if not args.no_build:
-        if tauri("build", "--debug", "--no-bundle") != 0:
+        features = [] if args.without_iroh else ["--features", "iroh"]
+        if tauri("build", "--debug", "--no-bundle", *features) != 0:
             return checks.CANNOT_RUN
     # The app exits as soon as its UI reports that it loaded. `--seconds` only bounds a hang:
     # the app ends itself with an error then, and the timeout here catches one that cannot.
@@ -76,7 +77,7 @@ def smoke(args: argparse.Namespace) -> int:
 
 def bundle(args: argparse.Namespace) -> int:
     kind, folder = ("nsis", "nsis") if system.WINDOWS else ("app", "macos")
-    code = tauri("build", "--bundles", kind)
+    code = tauri("build", "--bundles", kind, "--features", "iroh")
     if code == 0:
         print(f"bundle: {paths.TAURI_TARGET / 'release' / 'bundle' / folder}")
         if system.WINDOWS:
@@ -98,6 +99,11 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         help="treat the app as hung after this long; a healthy start exits much sooner",
     )
     p.add_argument("--no-build", action="store_true")
+    p.add_argument(
+        "--without-iroh",
+        action="store_true",
+        help="build the CI smoke configuration",
+    )
     p.set_defaults(func=smoke)
     sub.add_parser(
         "bundle", help="the release Beryl.app, or Windows installer"

@@ -170,6 +170,28 @@ def oracle_step(commit: str, out: IO[str]) -> int:
     return code
 
 
+def iroh_step(commit: str, out: IO[str]) -> int:
+    """Build iroh and exercise its frame link over loopback."""
+    from . import runlog  # It imports this module.
+    from .rust_tests import NIGHTLY_PACKAGE
+
+    run = runlog.Run("nightly", commit, place="nightly")
+    began = time.monotonic()
+    with run.step(dict(os.environ)) as (env, results):
+        command = [
+            sys.executable,
+            "-m",
+            "beryl_tools.cli",
+            "test-rust",
+            "--locked",
+            "-p",
+            NIGHTLY_PACKAGE,
+        ]
+        code = coverage.in_tree(commit, system.utility(command), out, env)
+        run.log("iroh", "offline-link", code == 0, time.monotonic() - began, results)
+    return code
+
+
 STEPS: list[Step] = [
     Step("prune", caches.prune_step),
     Step("coverage", coverage_step),
@@ -179,6 +201,7 @@ STEPS: list[Step] = [
     Step("scale", scale_step),
     Step("motion", motion_step),
     Step("oracle", oracle_step),
+    Step("iroh", iroh_step),
 ]
 
 

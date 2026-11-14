@@ -18,9 +18,13 @@ from collections import defaultdict
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from . import paths, runlog, tokens, verdicts, warm
-from .reruns import ALLOCATIONS_FAILED, CANNOT_RUN, DOCTESTS_FAILED
+from . import card_text, paths, runlog, tokens, verdicts, warm
+from .reruns import ALLOCATIONS_FAILED, CANNOT_RUN, DOCTESTS_FAILED, failed_tests
+
+if TYPE_CHECKING:
+    from .checks import Lane
 
 
 def nextest_filter(tests: Iterable[str]) -> str:
@@ -111,6 +115,61 @@ def affected_packages(
     return sorted(found) if found and len(found) < len(dirs) else None
 
 
+# The nightly builds iroh and runs its offline transport checks. A cold build of
+# the dependency can exceed the fast lane's entire budget by itself.
+NIGHTLY_PACKAGE = "beryl_link_iroh"
+
+
+def rust_lane(
+    fast: bool = False, packages: list[str] | None = None, text_inputs: bool = False
+) -> Lane:
+    """The rust lane; `fast` leaves out the tests in verdicts.SLOW_ONLY, slow CI's (not `fast`)
+    those in verdicts.FAST_ONLY, and `packages` holds clippy and the tests to those packages
+    (`affected_packages`) and the card-text step to a change it can see (`card_text.affected`,
+    or `text_inputs`: its other inputs changed)."""
+    from .checks import STEP, Lane
+
+    checked = (
+        None if packages is None else [p for p in packages if p != NIGHTLY_PACKAGE]
+    )
+    scope = (
+        ["--workspace", "--exclude", NIGHTLY_PACKAGE]
+        if checked is None
+        else scope_of(checked)
+    )
+    named = [f"--packages={','.join(checked)}"] if checked else []
+    lane = (
+        Lane("rust", warm=True)
+        .step("build-paths", [*STEP, "build-paths"])
+        .step("fmt", [*STEP, "rustfmt", "--check"], paths.RUST)
+    )
+    if checked == []:
+        return lane
+    lane.step(
+        "clippy",
+        [
+            "cargo",
+            "clippy",
+            "--locked",
+            *scope,
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings",
+        ],
+        paths.RUST,
+    ).step(
+        "tests",
+        [*STEP, "fast-rust-tests" if fast else "rust-tests", *named],
+        rerun=failed_tests,
+    )
+    if text_inputs or card_text.affected(checked):
+        # Every card file's rendered rules text against its Oracle text, once the tests have
+        # built the scenario binary, which it finds in the same scope.
+        lane.step("card-text", [*STEP, "card-text", *named])
+    return lane
+
+
 def fast_rust_tests_step(*args: str) -> int:
     """The fast check's tests step: the tests but those the pruning rule moved to slow CI alone
     (verdicts.SLOW_ONLY), of the packages `--packages=a,b` names (`affected_packages`), else
@@ -150,7 +209,14 @@ def rust_tests_step(
     cargo-nextest is missing. Each test's result goes to the run log: nextest's from its JUnit
     report (rust/.config/nextest.toml), the `allocations` targets' and the doctests' as one
     check each."""
-    scope = [a for p in packages for a in ("-p", p)] if packages else ["--workspace"]
+    routine = fast or slow
+    if routine and packages is not None:
+        packages = [package for package in packages if package != NIGHTLY_PACKAGE]
+        if not packages:
+            return 0
+    scope = scope_of(packages) if packages else ["--workspace"]
+    if routine and packages is None:
+        scope.extend(["--exclude", NIGHTLY_PACKAGE])
     cargo = ["cargo", "test", "--locked", *scope, "-q"]
     if shutil.which("cargo-nextest") is None:
         # cargo test reports no test to the run log, so the step logs one `rust:tests` record
@@ -204,7 +270,10 @@ def rust_tests_step(
     beside: dict[str, tuple[list[str], str]] = {
         "rust:allocations": (run_each(allocations), ALLOCATIONS_FAILED),
     }
-    documented = doctest_packages(workspace_packages(), packages)
+    manifests = workspace_packages()
+    if routine:
+        manifests = [p for p in manifests if p["name"] != NIGHTLY_PACKAGE]
+    documented = doctest_packages(manifests, packages)
     if documented:
         beside["rust:doctests"] = (
             ["cargo", "test", "--locked", *scope_of(documented), "-q", "--doc"],

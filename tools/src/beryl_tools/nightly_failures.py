@@ -70,6 +70,8 @@ def reproduce(lane: str, checks: Iterable[str]) -> str:
         return "just motion --more"
     if lane == "fuzz":
         return "just fuzz"
+    if lane == "iroh":
+        return "just test-rust -p beryl_link_iroh --locked"
     return "just nightly"
 
 

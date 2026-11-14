@@ -126,6 +126,12 @@ Windows leaves `app`, `ui-smoke`, `oracle` and `counts` to the Mac, and its fast
 check skips the browser checks and `motion` (see `WINDOWS_SKIPS` in
 `checks.py`).
 
+The nightly builds `beryl_link_iroh` and tests its transport over loopback. The
+fast and slow Rust lanes exclude that package from clippy and tests, and the
+slow app lane calls `just smoke --without-iroh`. A cold build of iroh can exceed
+the fast budget. `just dev`, `just smoke` and `just bundle` enable the app's
+optional `iroh` feature.
+
 ## The browser sweep
 
 The full browser lanes are not slow CI's. `just sweep` (`sweep.py`) runs them on
