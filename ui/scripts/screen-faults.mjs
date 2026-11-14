@@ -176,13 +176,15 @@ export async function screenFaults(page) {
         }
         // A player's piles lie alike, as the stage has them at rest: the top cards of the
         // library, the graveyard and the exile pile end on one line, each as wide and as
-        // upright as the others, the library's among them.
+        // upright as the others, the library's among them. A card risen out of a pile for
+        // the arrow of a spell targeting it is no pile's top.
         const resting = window.berylStage?.shown.resting ?? new Map();
         for (const side of ["you", "opponent"]) {
             const tops = new Map();
             for (const [name, { object, pose, dress }] of resting) {
                 const piled =
                     dress.look === "pile" &&
+                    !dress.raised &&
                     ["library", "graveyard", "exile"].includes(dress.zone);
                 if (!piled || object?.owner !== side) continue;
                 const top = tops.get(dress.zone);

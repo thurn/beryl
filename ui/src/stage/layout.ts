@@ -50,6 +50,8 @@ export interface Dress {
   /** How far a card of your hand rises under the pointer, where the layout raises it and by
    * less than it would with nothing over it (game/placement.ts `RAISE`). */
   lift?: number;
+  /** Risen out of its pile because the top of the stack targets it (game/placement.ts). */
+  raised?: boolean;
   /** On a spell on the stack, what its card does not say of how it was cast: the X it was
    * announced with and the alternative or additional costs paid for it. */
   cast?: { x: number; paid: PaidCost[] };
@@ -81,6 +83,7 @@ export const sameDress = (a: Dress, b: Dress) =>
   a.stacked === b.stacked &&
   a.count === b.count &&
   a.lift === b.lift &&
+  a.raised === b.raised &&
   JSON.stringify(a.cast) === JSON.stringify(b.cast);
 
 /** A point on the stage. */

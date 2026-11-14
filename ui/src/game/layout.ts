@@ -106,6 +106,7 @@ function pileCards(
       opacity: hidden ? 0 : 1,
       z: raised ? 92 : 80 - Math.min(depth, 79),
       rim: depth > 1 && !raised,
+      raised: raised || undefined,
       stacked: !away && depth < Math.min(remaining - 1, HIDDEN_DEPTH - 1),
       back: !!library && ((!away && o.slot !== library.top) || !o.name),
       librarySide: library ? side : undefined,

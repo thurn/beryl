@@ -60,6 +60,9 @@ export interface Placement {
   z: number;
   /** Under the top card, only the physical rim is painted when the card is at rest. */
   rim?: boolean;
+  /** Under a pile's top, drawn risen out of the pile because the top of the stack targets
+   * it, so its arrow meets its face. */
+  raised?: boolean;
   /** Lies on more of its pile, so it casts no shadow: a shadow from a card higher in a pile
    * would darken the edges of the cards beneath it, and only the deepest card drawn casts the
    * pile's shadow on the felt. */
