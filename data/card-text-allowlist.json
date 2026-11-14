@@ -135,12 +135,5 @@
     "diff": [
       "Urborg, Tomb of Yawgmoth: [-each land is-] {+all lands are+} a Swamp in addition to its other land types ."
     ]
-  },
-  "Dryad Arbor": {
-    "reason": "wording",
-    "note": "The whole text is reminder text for rules the engine applies to any land creature: a land is played, not cast (CR 305.1), a creature is summoning sick (CR 302.6), and a Forest has the intrinsic ability \"{T}: Add {G}\" (CR 305.6), which the layers give it from its land type. The definition, built from the card store, writes no ability, so the renderer says nothing.",
-    "diff": [
-      "Dryad Arbor: [-~ isn't a spell , it's affected by summoning sickness , and it has \" {T} : add {G} . \"-]"
-    ]
   }
 }
