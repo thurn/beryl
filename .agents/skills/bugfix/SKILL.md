@@ -14,7 +14,9 @@ report itself. Workers are Enact executor sessions; each one follows
 `/enact-plan` cannot be invoked as a skill by a model, so read its
 `SKILL.md` (resolve `ENACT` from it as it says) and follow it. The user's
 `/bugfix` invocation is the invocation `/enact-plan` expects: it authorizes the run's sessions, and any parallelism, **light**
-keyword or other instructions given with `/bugfix` pass straight through. Its
+keyword or other instructions given with `/bugfix` pass straight through. A
+`/bugfix` run's parallelism defaults to **3**, not `/enact-plan`'s 1, so its
+pool starts four sessions; a parallelism given with `/bugfix` overrides it. Its
 input is the bug-report beads chosen in
 [Vizier: planning the run](#vizier-planning-the-run), handled as "Several
 beads". Everything `/enact-plan` says about pre-flight, permission mode, the
