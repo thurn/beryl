@@ -13,6 +13,13 @@
       "Blood Artist: whenever [-~ or another-] {+a+} creature dies , target player loses 1 life [-and-] {+.+} you gain 1 life ."
     ]
   },
+  "Cerebral Vortex": {
+    "reason": "wording",
+    "note": "Oracle says \"deals damage to that player equal to the number of cards they've drawn this turn\"; the renderer moves \"to that player\" to the end and says \"that player drew\" for \"they've drawn\". Same recipient and same count, and the draw and the damage are one spell's two instructions.",
+    "diff": [
+      "Cerebral Vortex: target player draws two cards [-, then-] {+.+} ~ deals damage [-to that player-] equal to the number of cards [-they've drawn-] {+that player drew+} this turn {+to that player+} ."
+    ]
+  },
   "Currency Converter": {
     "reason": "wording",
     "note": "The last ability chooses one card exiled with the Converter and puts it into the graveyard only if one was chosen; Oracle says \"put a card exiled with this artifact\", which is the same instruction. \"Otherwise\" after \"if it's a land card\" is \"if it's a nonland card\".",
