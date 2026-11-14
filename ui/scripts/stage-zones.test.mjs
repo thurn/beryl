@@ -7,13 +7,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { apply, tableOf } from "../src/stage/table.ts";
 import { ScriptStage, SNAP } from "../src/stage/stage.ts";
-import {
-    BOWS,
-    CLOSES,
-    halfTurned,
-    TURN,
-    TURNING,
-} from "../src/stage/tracks.ts";
+import { BOWS } from "../src/stage/bows.ts";
+import { CLOSES, halfTurned, TURN, TURNING } from "../src/stage/tracks.ts";
 import { HELD, HELD_TURN } from "../src/stage/drawn.ts";
 import { tippedOf } from "../src/stage/pose.ts";
 import { timingOf } from "../src/stage/timing.ts";

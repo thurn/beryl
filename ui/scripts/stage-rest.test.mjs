@@ -8,7 +8,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { caseOf, effectsOf, timingOf } from "../src/stage/timing.ts";
 import { LIFT, lifts } from "../src/stage/lift.ts";
-import { bowed, bowOf, glide, STRIKE } from "../src/stage/tracks.ts";
+import { bowed, bowOf } from "../src/stage/bows.ts";
+import { glide, STRIKE } from "../src/stage/tracks.ts";
 import { move, object, reach, stage, view } from "./stage-table.mjs";
 
 const card = (slot) => ({ kind: "object", slot });

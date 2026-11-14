@@ -89,7 +89,7 @@ export function bows(start, half, end, seat, what) {
 /** A flight of `seat`'s card half way that goes all but straight: on its way from `start` to
  * `end`, no more than `most` of the line's length off the straight line between them, and,
  * where the line runs across the table, off it toward the middle of the table, away from that
- * player's edge (src/stage/tracks.ts BOWS, `lifts`). */
+ * player's edge (src/stage/bows.ts BOWS, `lifts`). */
 export function sags(start, half, end, seat, what, most) {
     const { along, off, level } = against(start, half, end);
     assert.ok(along > 0 && along < 1, `${what}: half way it is on its way`);

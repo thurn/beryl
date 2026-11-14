@@ -16,8 +16,8 @@ import {
 } from "./layout.ts";
 import { HELD_TURN, heldUp, swept } from "./drawn.ts";
 import type { Pose } from "./pose.ts";
+import { bowOf } from "./bows.ts";
 import {
-  bowOf,
   depths,
   DRAW_TURN,
   drawsToRead,

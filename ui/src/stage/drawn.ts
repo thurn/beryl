@@ -3,8 +3,8 @@
 // from the library right across the table to a place beside its stack and comes down into the
 // right end of the hand (`vPdoSA5H5xU 17:46.2`, `SswBO8aOOgc 20:28.5`, `WQiYBv23buw 29:14.2`).
 import { ALOFT, between, type Pose } from "./pose.ts";
+import { bowed } from "./bows.ts";
 import {
-  bowed,
   DRAW_TURN,
   flatAt,
   type Path,

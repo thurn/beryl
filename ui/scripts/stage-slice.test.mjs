@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Feed } from "../src/stage/feed.ts";
 import { abilityName } from "../src/stage/layout.ts";
-import { BOWS } from "../src/stage/tracks.ts";
+import { BOWS } from "../src/stage/bows.ts";
 import { object, stage, view } from "./stage-table.mjs";
 
 // The slice of by-w8gv.21.14, as the session cuts it (script/build.rs): a creature cast, it
