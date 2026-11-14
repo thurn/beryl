@@ -8,6 +8,7 @@ import {
     check,
     clicked,
     clicksSent,
+    committed,
     fixtures,
     lastDecision,
     load,
@@ -30,6 +31,67 @@ const turnViews = await load("opponent-turn");
 const mainHalt = turnViews.length - 1;
 
 const lookAt = turnViews.findLastIndex((v, i) => i < mainHalt && awaits(v));
+
+// A free table during the other seat's turn, with a life change still to play.
+const freeView = {
+    ...turnViews[mainHalt],
+    status: { kind: "free" },
+    turn: { ...turnViews[mainHalt].turn, active: "opponent", priority: null },
+    events: [],
+    script: { reset: { abilities: [] }, beats: [] },
+};
+const life = freeView.players.you.life - 1;
+const freeAfter = {
+    ...freeView,
+    players: { ...freeView.players, you: { ...freeView.players.you, life } },
+    script: {
+        beats: [
+            [
+                {
+                    act: {
+                        verb: "count",
+                        tally: { kind: "life", player: "you", life },
+                    },
+                },
+            ],
+        ],
+    },
+};
+await writeFixture("free-table-life-change", {
+    messages: [
+        { kind: "response", command: "choose", value: null },
+        ...[freeView, freeAfter].map((view) => ({
+            kind: "event",
+            event: "game-update",
+            payload: { session: 1, view },
+        })),
+    ],
+});
+
+// The generic audits see the settled board. The indicator used to show only while the
+// life change was still playing.
+await check(
+    "a free table shows no opponent thinking indicator while a life change plays",
+    async (page) => {
+        await page.evaluate(async () => {
+            window.berylStage.clock.hold();
+            await window.berylFixture.invoke("choose", { request: {} });
+        });
+        await committed(page);
+        assert.ok(await page.evaluate(() => window.berylBehind));
+        assert.equal(
+            await page
+                .getByRole("status", { name: "Opponent thinking" })
+                .count(),
+            0,
+        );
+    },
+    {
+        fixture: "free-table-life-change",
+        at: 1,
+        ready: '[data-life="you"] .life-orb-total',
+    },
+);
 
 // A pass that the game answers with several views before the human's next priority, at which
 // they may play a land that was in their hand all along.

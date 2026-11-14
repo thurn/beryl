@@ -9,7 +9,7 @@ import type { LogEntry } from "./log";
 export function opponentActing(view: PlayerView, waiting: boolean): boolean {
   return (
     view.status.kind === "thinking" ||
-    (waiting && view.turn.active === "opponent")
+    (view.status.kind !== "free" && waiting && view.turn.active === "opponent")
   );
 }
 
