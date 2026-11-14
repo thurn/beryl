@@ -3,6 +3,7 @@
 // test makes the calls the page's surface makes (dom.ts), in stage pixels.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { ALOFT } from "../src/stage/pose.ts";
 import { heldPose } from "../src/stage/pointer.ts";
 import { move, object, stage, view } from "./stage-table.mjs";
 
@@ -135,6 +136,27 @@ test("a card let go over itself is not hovered until it is home", () => {
     assert.equal(made.pointer.hovered, undefined);
     made.pointer.over(3);
     assert.deepEqual(told.at(-1), ["hover", 3], "home, it is hovered");
+});
+
+test("a card flying into the hand is not hovered until it lands", () => {
+    // A card you draw is in your hand while it flies there. Hovered on its way, it would
+    // rise out of the fan as it will rest there, turned back from the fan's lean, while it
+    // flies upright beside the stack: it jumped to a tilt the other way.
+    const { made, told } = listening({ timings: { fly: LINEAR } });
+    made.play(view([2], [3, 1]), {
+        beats: [[{ act: { ...move(1).act, object: object(1, "hand") } }]],
+    });
+    made.clock.advance(100);
+    assert.ok(made.pose(1).depth >= ALOFT, "it flies");
+    made.pointer.over(1);
+    assert.equal(made.pointer.hovered, undefined, "on its way");
+    assert.equal(told.length, 0);
+    let asked = 0;
+    made.subscribe(() => (asked += 1));
+    made.clock.advance(100);
+    assert.ok(asked > 0, "those who draw the stage are told it landed");
+    made.pointer.over(1);
+    assert.deepEqual(told.at(-1), ["hover", 1], "in the hand, it is hovered");
 });
 
 test("a card let go with nothing to travel may be hovered at once", () => {

@@ -14,7 +14,7 @@
 // `ScriptStage.pose` returns it and a step that moves the card starts from where it is held.
 import type { Side } from "../generated/protocol";
 import type { Name, Point } from "./layout.ts";
-import type { Pose } from "./pose.ts";
+import { ALOFT, type Pose } from "./pose.ts";
 
 /** What a held card was let go over: another node, or a player's life total. */
 export type Under = { name: Name } | { player: Side };
@@ -98,9 +98,11 @@ export class Pointer {
   #over: Name | undefined;
   #press: { name: Name; start: Point; at: Point; moved: boolean } | undefined;
   #held: Held | undefined;
-  /** A card let go that has yet to come to rest: hovering it would raise it out of the fan
-   * as it rests there while it is still elsewhere (StageBoard.tsx), so it is not told to be
-   * hovered until it arrives. */
+  /** A card on its way that has yet to come to rest: one let go, or one the pointer came
+   * onto as it flew, such as a card you draw, which is in your hand while it flies there.
+   * Hovering it would raise it out of the fan as it rests there while it is still elsewhere
+   * (StageBoard.tsx), turning it upright from the fan's lean although it flies upright, so
+   * it is not told to be hovered until it arrives. */
   #settling: Name | undefined;
   /** What `hover` was last told. */
   #told: Name | undefined;
@@ -137,6 +139,10 @@ export class Pointer {
   over(name: Name | undefined) {
     if (name === this.#over) return;
     this.#over = name;
+    // Drawn over everything at rest, it is flying (pose.ts `ALOFT`).
+    const depth =
+      name === undefined ? 0 : (this.#holding.pose(name)?.depth ?? 0);
+    if (this.#settling === undefined && depth >= ALOFT) this.#settling = name;
     this.#tell();
   }
 
@@ -149,9 +155,10 @@ export class Pointer {
     return true;
   }
 
-  /** The card `name`, let go, is at rest: the pointer may hover it now. It moved from under
-   * the still pointer, which sends no event, so the pointer is not taken to be on it any
-   * more: whoever draws the stage says afresh what the pointer is on (dom.ts `repoint`). */
+  /** The card `name`, let go or flown, is at rest: the pointer may hover it now. It moved
+   * from under the still pointer, which sends no event, so the pointer is not taken to be on
+   * it any more: whoever draws the stage says afresh what the pointer is on (dom.ts
+   * `repoint`). */
   arrived(name: Name) {
     if (this.#settling !== name) return;
     this.#settling = undefined;

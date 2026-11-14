@@ -726,7 +726,8 @@ export class ScriptStage {
       entry.moved = false;
       if (entry.track && now >= entry.track.to) entry.track = undefined;
     }
-    // A card let go came to rest: those who draw from `shown` say what the pointer is on now.
+    // A card let go, or flown under the pointer, came to rest: those who draw from `shown`
+    // say what the pointer is on now.
     if (this.pointer.settle((name) => !!this.#entries.get(name)?.track))
       this.#stale = true;
     this.#over.write(this.#surface, now, this.#prompt, this.#entries);
