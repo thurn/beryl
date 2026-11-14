@@ -3,7 +3,7 @@ use crate::change::{Edit, ObjectEdit, TableEdit};
 use crate::state::{Assist, Card, MatchSeat, Object, Phase, Zone};
 use crate::{Action, Chance, Change, Refusal, Seat, Table};
 
-use super::{Changes, edit, library, perform, players};
+use super::{AppliedChanges, Changes, Presentation, edit, library, perform, players};
 
 pub(super) fn set_assist(table: &Table, by: Seat, assist: Assist, on: bool) -> Vec<Change> {
     let before = &table.assists[usize::from(by.0)];
@@ -27,12 +27,11 @@ pub(super) fn set_assist(table: &Table, by: Seat, assist: Assist, on: bool) -> V
 
 type Deck = Vec<(String, u16)>;
 
-pub(super) fn phase(table: &Table, phase: Phase) -> Vec<Change> {
-    edit(table.phase, phase, |edit| {
+pub(super) fn plan_phase(table: &Table, phase: Phase) -> AppliedChanges {
+    let changes = edit(table.phase, phase, |edit| {
         Change::SetTable(TableEdit::SetPhase { edit })
-    })
-    .into_iter()
-    .collect()
+    });
+    AppliedChanges::presented(changes.into_iter().collect(), Presentation::Phase(phase))
 }
 
 fn set_turn(table: &Table, active: Seat, turn: u32, changes: &mut Vec<Change>) {

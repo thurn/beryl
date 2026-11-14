@@ -4,14 +4,73 @@ use std::ops::Range;
 use beryl_card_store::{Record, facts};
 
 use crate::action::{Destination, Portion, Position, Selection, SortBy};
-use crate::change::Edit;
+use crate::change::{Edit, TableEdit};
 use crate::helpers::card_record;
-use crate::state::{Card, Object, ObjectId, Zone};
+use crate::state::{Card, Handling, Object, ObjectId, Zone};
 use crate::{Action, Chance, Change, Refusal, Seat, Table};
 
 use super::{AppliedChanges, Changes, Presentation, cards, perform};
 
 super::unimplemented_actions!(flow);
+
+/// Closing a viewer doesn't revoke permission to use a lent pile or forget
+/// cards the player has seen. A changed pile drops its lift before its cards
+/// move, so a newly arrived card cannot inherit a place in the lifted group.
+pub(super) fn settle_handling(
+    table: &Table,
+    by: Seat,
+    action: &Action,
+    applied: &mut AppliedChanges,
+) {
+    let before = table.handling;
+    let open = |zone, portion| Some(Handling { by, zone, portion });
+    let after = match *action {
+        Action::Look { seat, portion } => {
+            let zone = Zone::Library(seat);
+            let len = table.zone(zone).expect("validated library").len();
+            if portion_range(len, portion).is_empty() {
+                None
+            } else {
+                open(zone, portion)
+            }
+        }
+        Action::Lend { zone, .. } if table.zone(zone).is_some_and(|ids| !ids.is_empty()) => {
+            open(zone, Portion::All)
+        }
+        Action::CloseLook {} if before.is_some_and(|handling| handling.by == by) => None,
+        Action::NextTurn {} | Action::Start { .. } | Action::NextGame { .. } => None,
+        _ => {
+            if let Some(handling) = before
+                && let Some(index) = applied.changes.iter().position(|change| match change {
+                    Change::Move { from, to, .. } => {
+                        from.zone == handling.zone || to.zone == handling.zone
+                    }
+                    Change::Create { object, .. } | Change::Remove { object, .. } => {
+                        object.zone == handling.zone
+                    }
+                    Change::ReplaceId { from, .. } => table
+                        .objects
+                        .get(from)
+                        .is_some_and(|object| object.zone == handling.zone),
+                    _ => false,
+                })
+            {
+                applied.close_handling_before(index, handling_change(before, None));
+            }
+            return;
+        }
+    };
+    if before != after {
+        applied.changes.push(handling_change(before, after));
+        applied.extend_last_member(1);
+    }
+}
+
+fn handling_change(before: Option<Handling>, after: Option<Handling>) -> Change {
+    Change::SetTable(TableEdit::SetHandling {
+        edit: Edit { before, after },
+    })
+}
 
 fn zone_cards(table: &Table, zone: Zone) -> Result<&[ObjectId], Refusal> {
     table.zone(zone).ok_or(Refusal::INVALID)

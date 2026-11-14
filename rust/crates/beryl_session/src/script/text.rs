@@ -459,6 +459,15 @@ impl Display for Handled {
                 Ok(())
             }
             CardHandling::Hand { side } => write!(f, "{} hand", wire(side)),
+            CardHandling::Pile {
+                side,
+                pile,
+                count,
+                bottom,
+            } => {
+                let end = if bottom { "bottom" } else { "top" };
+                write!(f, "{} {} {end} {count}", wire(side), wire(pile))
+            }
         }
     }
 }

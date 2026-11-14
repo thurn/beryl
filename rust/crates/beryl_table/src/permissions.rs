@@ -193,10 +193,10 @@ fn action_references(action: &Action, references: &mut Vec<Reference>) {
             references.extend(from.map(Reference::Card));
             references.extend(to.map(target_reference));
         }
-        Action::Draw { seat, .. } | Action::Mulligan { seat, .. } => {
-            references.push(Reference::UseZone(Zone::Library(*seat)));
-            references.push(Reference::UseZone(Zone::Hand(*seat)));
-        }
+        Action::Draw { seat, .. } | Action::Mulligan { seat, .. } => references.extend([
+            Reference::UseZone(Zone::Library(*seat)),
+            Reference::UseZone(Zone::Hand(*seat)),
+        ]),
         Action::Shuffle { seat, .. } | Action::Look { seat, .. } | Action::Flow { seat, .. } => {
             references.push(Reference::UseZone(Zone::Library(*seat)));
         }
@@ -225,10 +225,9 @@ fn action_references(action: &Action, references: &mut Vec<Reference>) {
         | Action::LoadDeck { seat, .. }
         | Action::Sideboard { seat, .. }
         | Action::Ready { seat, .. } => references.push(Reference::OwnSeat(*seat)),
-        Action::Life { seat, .. } | Action::PlayerCounter { seat, .. } => {
-            references.push(Reference::Seat(*seat));
-        }
-        Action::Start { first } => references.push(Reference::Seat(*first)),
+        Action::Life { seat, .. }
+        | Action::PlayerCounter { seat, .. }
+        | Action::Start { first: seat } => references.push(Reference::Seat(*seat)),
         Action::NextGame { winner } => references.extend(winner.map(Reference::Seat)),
         Action::Batch { actions } => {
             for action in actions {
@@ -237,7 +236,8 @@ fn action_references(action: &Action, references: &mut Vec<Reference>) {
         }
         // Concession, assists and the undo key refer to the acting seat.
         // Which log entries may be undone depends on the log, not the table.
-        Action::Phase { .. }
+        Action::CloseLook {}
+        | Action::Phase { .. }
         | Action::NextTurn {}
         | Action::Roll { .. }
         | Action::Concede {}

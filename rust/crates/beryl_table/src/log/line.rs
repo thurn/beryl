@@ -388,6 +388,7 @@ fn game(action: &Action, summary: &Summary, names: &Cards<'_>) -> String {
         Action::Concede {} => "Conceded".into(),
         Action::SetAssist { on: true, .. } => "Enabled an assist".into(),
         Action::SetAssist { on: false, .. } => "Disabled an assist".into(),
+        Action::CloseLook {} => "Closed the pile viewer".into(),
         Action::Flow { .. } => "Opened a library flow".into(),
         Action::Undo { .. } => "Undid an action".into(),
         Action::Rewind { to } => format!("Rewound to entry {to}"),

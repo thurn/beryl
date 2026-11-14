@@ -206,22 +206,36 @@ function rest(table: Table, viewport: Viewport, left?: ReadonlySet<Name>) {
   // top while they are up.
   const handling = view.handling;
   const lifted = new Set<number>();
-  if (handling?.zone === "library") {
-    const spot = pileSpot(bands, handling.side, "library");
+  const zoneHeld = handling?.zone === "pile" ? handling.pile : handling?.zone;
+  if (
+    handling &&
+    zoneHeld &&
+    (handling.zone === "pile" || zoneHeld === "library")
+  ) {
+    const spot = pileSpot(bands, handling.side, pileOf(zoneHeld));
     const toward = handling.side === "you" ? -1 : 1;
-    (handled ?? []).forEach((slot, i) => {
+    const slots = handled ?? [];
+    // Whole-pile looks pack the backs into the available width.
+    const step =
+      handling.zone === "pile" && slots.length > 1
+        ? Math.min(
+            LIFTED.step,
+            (viewport.width - spot.x - PILE.width - SIDE) / (slots.length - 1),
+          )
+        : LIFTED.step;
+    slots.forEach((slot, i) => {
       const object = objects.get(slot);
-      if (object?.zone !== "library") return;
+      if (object?.zone !== zoneHeld) return;
       lifted.add(slot);
       const place = {
         ...spot,
-        x: spot.x + i * LIFTED.step,
+        x: spot.x + i * step,
         y: spot.y + toward * (PILE.height + LIFTED.gap),
       };
       out.set(slot, {
         object,
         pose: upright(place, DEPTH.backs + i, "back"),
-        dress: dressed("library", "handling", PILE.width, true),
+        dress: dressed(zoneHeld, "handling", PILE.width, true),
       });
     });
   }

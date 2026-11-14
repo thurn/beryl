@@ -6,11 +6,12 @@ mod slots;
 pub use slots::Slots;
 
 use beryl_session::protocol::{
-    AssistsView, LogLine, ManualOrders, ManualPiles, NamedCounter, ObjectId as Slot, PlayerState,
-    PlayerView, Side, StackItem, Step, TableActionRefs, TableArrow, TablePhase, TableView,
-    ZoneName, ZoneRef,
+    AssistsView, CardHandling, LogLine, ManualOrders, ManualPiles, NamedCounter, ObjectId as Slot,
+    PlayerState, PlayerView, Side, StackItem, Step, TableActionRefs, TableArrow, TablePhase,
+    TableView, ZoneName, ZoneRef,
 };
-use beryl_session::script::{Arrow, Subject};
+use beryl_session::script::{Arrow, Subject, Turn};
+use beryl_table::action::Portion;
 use beryl_table::assist;
 use beryl_table::log::UndoControl;
 use beryl_table::state::{ArrowKind, ArrowTarget, Assist, ObjectId, Phase, Zone};
@@ -57,12 +58,12 @@ pub fn view(
         }
     }
 
-    let (phase, step) = phase(projected.phase);
-    view.turn.step = step;
-    view.turn.active = viewer.side(projected.active);
-    view.turn.number = u16::try_from(projected.turn).unwrap_or(u16::MAX);
-    let rounds = projected.turn.div_ceil(projected.players.len() as u32);
-    view.turn.own_number = u16::try_from(rounds).unwrap_or(u16::MAX);
+    let (phase, turn) = turn(&projected, viewer);
+    view.turn.step = turn.step;
+    view.turn.active = turn.active;
+    view.turn.number = turn.number;
+    view.turn.own_number = turn.own_number;
+    view.handling = handling(&projected, viewer);
     view.table = Some(TableView {
         log: history(log, table, seat),
         proposals: Vec::new(),
@@ -182,7 +183,39 @@ fn acting(table: &Table, viewer: Viewer) -> Vec<ZoneRef> {
     zones
 }
 
-fn phase(phase: Phase) -> (TablePhase, Step) {
+pub(super) fn handling(table: &Table, viewer: Viewer) -> Option<CardHandling> {
+    let handling = table.handling?;
+    let (pile, owner) = zone(handling.zone);
+    let len = table.zone(handling.zone)?.len();
+    let count = match handling.portion {
+        Portion::All => len,
+        Portion::Top(n) | Portion::Bottom(n) => len.min(usize::from(n)),
+    };
+    (count != 0).then(|| CardHandling::Pile {
+        side: viewer.side(owner.expect("a handled pile has an owner")),
+        pile,
+        count: u32::try_from(count).expect("a pile contains at most one card per object id"),
+        // An observer sees the count as a packet of backs. Only the player
+        // looking needs its positions in the library.
+        bottom: handling.by == viewer.0 && matches!(handling.portion, Portion::Bottom(_)),
+    })
+}
+
+pub(super) fn turn(table: &Table, viewer: Viewer) -> (TablePhase, Turn) {
+    let (phase, step) = phase(table.phase);
+    let rounds = table.turn.div_ceil(table.players.len() as u32);
+    (
+        phase,
+        Turn {
+            number: u16::try_from(table.turn).unwrap_or(u16::MAX),
+            own_number: u16::try_from(rounds).unwrap_or(u16::MAX),
+            active: viewer.side(table.active),
+            step,
+        },
+    )
+}
+
+pub(super) fn phase(phase: Phase) -> (TablePhase, Step) {
     match phase {
         Phase::Untap => (TablePhase::Untap, Step::Untap),
         Phase::Upkeep => (TablePhase::Upkeep, Step::Upkeep),
@@ -229,7 +262,7 @@ fn history(log: &Log, table: &Table, seat: Seat) -> Vec<LogLine> {
         .collect()
 }
 
-fn arrows(table: &Table, slots: &Slots, viewer: Viewer) -> Vec<TableArrow> {
+pub(super) fn arrows(table: &Table, slots: &Slots, viewer: Viewer) -> Vec<TableArrow> {
     table
         .arrows
         .iter()

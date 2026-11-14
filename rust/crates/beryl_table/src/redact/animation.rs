@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use crate::apply::Presentation;
 use crate::change::Location;
-use crate::state::{Card, Face, ObjectId, Zone};
+use crate::state::{Card, Face, ObjectId, Phase, Zone};
 use crate::{Change, Entry, Seat, Table};
 
 use super::{HiddenNames, forgotten_ids, project_change, redact_projected_card, visit_members};
@@ -54,7 +54,10 @@ pub enum AnimationEvent {
     },
     /// The library order to install after the shuffle. The shuffled cards
     /// have fresh ids and the event carries no mapping from the old order.
-    Shuffle { library: Zone, order: Vec<ObjectId> },
+    Shuffle {
+        library: Zone,
+        order: Vec<ObjectId>,
+    },
     /// The acting seat sees the selected cards. Other seats get the count.
     Look {
         library: Zone,
@@ -62,11 +65,15 @@ pub enum AnimationEvent {
         cards: Vec<ShownCard>,
     },
     /// Only the seats named as recipients get this event.
-    Reveal { zone: Zone, cards: Vec<ShownCard> },
+    Reveal {
+        zone: Zone,
+        cards: Vec<ShownCard>,
+    },
     /// The viewer learned an identity. A later batch member can hide it again.
     Learn(ShownCard),
     /// The adapter takes a fresh view of the table.
     Reset,
+    Phase(Phase),
     /// Redacted edits, creations, removals and public rolls.
     Change(Change),
 }
@@ -173,6 +180,7 @@ fn member_events(
             .collect()
     };
     match presentation {
+        Some(Presentation::Phase(phase)) => events.push(AnimationEvent::Phase(*phase)),
         Some(Presentation::Look { library, ids }) => events.push(AnimationEvent::Look {
             library: *library,
             count: ids.len(),

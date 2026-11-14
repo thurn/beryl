@@ -135,6 +135,13 @@ pub enum CardHandling {
     Hand {
         side: Side,
     },
+    /// A manual table lifts a counted packet from a hidden pile.
+    Pile {
+        side: Side,
+        pile: ZoneName,
+        count: u32,
+        bottom: bool,
+    },
 }
 
 /// Face up or face down

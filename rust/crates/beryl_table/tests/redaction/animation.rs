@@ -112,13 +112,15 @@ fn animation_projects_nested_batch_members_using_their_own_visibility() {
                 vec![]
             },
         };
+        let handling = AnimationEvent::Change(look_starts());
         let first_look = if viewer == HOST {
             vec![
                 AnimationEvent::Learn(card(looked, "Looked Name")),
+                handling,
                 look.clone(),
             ]
         } else {
-            vec![look.clone()]
+            vec![handling, look.clone()]
         };
         assert_eq!(
             members,

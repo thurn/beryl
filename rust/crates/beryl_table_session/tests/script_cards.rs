@@ -1,15 +1,13 @@
-use beryl_session::protocol::{PlayerView, ZoneName};
-use beryl_session::script::{Act, Fact, Script, Table as Stage, Verb, replay};
+use beryl_session::protocol::ZoneName;
+use beryl_session::script::{Act, Fact, Verb};
 use beryl_table::action::{Adjustment, Destination, Position, SeenObject, Selection, SortBy};
-use beryl_table::state::{Card, Face, Object, ObjectId, Row, Zone};
+use beryl_table::state::{Card, Face, ObjectId, Row, Zone};
 use beryl_table::testing::{Generator, Kind};
-use beryl_table::{Action, Chance, Change, Log, Seat, Table};
-use beryl_table_session::script::script;
-use beryl_table_session::view::{Slots, view};
+use beryl_table::{Action, Table};
 
-const HOST: Seat = Seat(0);
-const GUEST: Seat = Seat(1);
-const FIELD: Zone = Zone::Battlefield;
+mod script_common;
+use script_common::{FIELD, GUEST, Game, HOST, add, card, select};
+
 const HAND: Zone = Zone::Hand(HOST);
 
 const KINDS: &[Kind] = &[
@@ -36,101 +34,18 @@ const KINDS: &[Kind] = &[
     Kind::Remove,
     Kind::Flag,
     Kind::Note,
+    Kind::Look,
+    Kind::Lend,
+    Kind::Reveal,
+    Kind::AlwaysLookAtTop,
+    Kind::AlwaysRevealTop,
+    Kind::Arrow,
+    Kind::ClearArrows,
+    Kind::Roll,
+    Kind::Phase,
+    Kind::NextTurn,
+    Kind::Shuffle,
 ];
-
-struct Game {
-    table: Table,
-    log: Log,
-    chance: Chance,
-    views: [(PlayerView, Slots); 2],
-}
-
-impl Game {
-    fn new(table: Table) -> Self {
-        let log = Log::new(&table);
-        let views = [HOST, GUEST].map(|seat| {
-            let mut slots = Slots::default();
-            let (initial, _) = view(&table, &log, seat, &mut slots).unwrap();
-            (initial, slots)
-        });
-        Self {
-            table,
-            log,
-            chance: Chance::fresh(777),
-            views,
-        }
-    }
-
-    fn apply(&mut self, by: Seat, action: &Action) -> [Script; 2] {
-        self.try_apply(by, action)
-            .unwrap_or_else(|error| panic!("{action:?}: {error:?}"))
-    }
-
-    fn try_apply(
-        &mut self,
-        by: Seat,
-        action: &Action,
-    ) -> Result<[Script; 2], beryl_table::Refusal> {
-        let host_before = self.table.clone();
-        self.log
-            .apply(&mut self.table, by, action, &mut self.chance)?;
-        let entry = self.log.entries().last().unwrap();
-        Ok([HOST, GUEST].map(|seat| {
-            let (before, previous) = &mut self.views[usize::from(seat.0)];
-            let mut slots = previous.clone();
-            let (after, _) = view(&self.table, &self.log, seat, &mut slots).unwrap();
-            let script = script(before, entry, &host_before, &after, seat, previous, &slots);
-            assert_eq!(script.reset, None, "{action:?}");
-            assert_eq!(
-                replay::failure(&Stage::of(before), &script, &after),
-                None,
-                "{action:?}"
-            );
-            *before = after;
-            *previous = slots;
-            script
-        }))
-    }
-
-    fn verbs(&mut self, by: Seat, action: &Action, verb: Verb) {
-        for script in self.apply(by, action) {
-            assert!(
-                script
-                    .beats
-                    .iter()
-                    .flatten()
-                    .any(|step| step.act.verb() == verb),
-                "{action:?}:\n{script}"
-            );
-        }
-    }
-}
-
-fn select(zone: Zone, ids: &[u32]) -> Selection {
-    Selection {
-        zone,
-        objects: ids.iter().copied().map(ObjectId).collect(),
-    }
-}
-
-fn card(name: &str) -> Card {
-    Card::Custom {
-        name: name.into(),
-        types: "Creature".into(),
-        colors: Vec::new(),
-        stats: Some((2, 2)),
-    }
-}
-
-fn add(table: &mut Table, id: u32, name: &str, zone: Zone, known_to: &[Seat]) {
-    let mut object = Object::new(ObjectId(id), card(name), HOST, zone);
-    object.known_to = known_to.to_vec();
-    Change::Create {
-        object,
-        index: table.zone(zone).unwrap().len(),
-    }
-    .perform(table);
-}
 
 fn movement(selection: Selection, to: Zone, position: Position) -> Action {
     Action::Move {

@@ -43,7 +43,8 @@ function handlingPlacements(
   if (!handling || cards.length === 0) return [];
   const side = handling.side;
   const opening = view.turn.number === 0;
-  const library = handling.zone === "library";
+  const pileZone = handling.zone === "pile" ? handling.pile : handling.zone;
+  const library = pileZone === "library";
   const columns = Math.min(library ? 5 : 7, cards.length);
   const packet = Math.ceil(cards.length / columns);
   const pile = library ? pileLook(side, PILES[side].library) : undefined;
@@ -69,7 +70,10 @@ function handlingPlacements(
       opacity: 1,
       z: SHOWCASE_Z + column * packet + packet - depth,
       rim: depth > 0,
-      back: card.zone === "library" || card.owner === "opponent",
+      back:
+        handling.zone === "pile" ||
+        card.zone === "library" ||
+        card.owner === "opponent",
     };
   });
 }
@@ -205,16 +209,18 @@ export function layout(
       .at(-1)
       ?.targets.flatMap((t) => (t.kind === "player" ? [] : [t.slot])) ?? [],
   );
-  for (const { side, zone, cards } of piles) {
-    out.push(...pileCards(side, zone, cards, borrowed, aimed));
-  }
+  const scope = view.handling;
+  const zoneHeld = scope?.zone === "pile" ? scope.pile : scope?.zone;
   const handled = handling.flatMap((slot) => {
     const object = bySlot.get(slot);
-    return object && object.zone === view.handling?.zone && !borrowed.has(slot)
+    return object && object.zone === zoneHeld && !borrowed.has(slot)
       ? [object]
       : [];
   });
   const lifted = new Set([...borrowed, ...handled.map((o) => o.slot)]);
+  for (const { side, zone, cards } of piles) {
+    out.push(...pileCards(side, zone, cards, lifted, aimed));
+  }
   for (const side of ["opponent", "you"] as const) {
     const cards = view.players[side].library.flatMap((slot) => {
       const object = bySlot.get(slot);

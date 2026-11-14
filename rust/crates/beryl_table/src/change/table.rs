@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::state::{Assist, Phase};
+use crate::state::{Assist, Handling, Phase};
 use crate::{Seat, Table};
 
 use super::Edit;
@@ -28,6 +28,9 @@ pub enum TableEdit {
     },
     ResetTurnPlays {
         edit: Edit<Option<u64>>,
+    },
+    SetHandling {
+        edit: Edit<Option<Handling>>,
     },
     TurnPlay {
         add: bool,
@@ -80,6 +83,7 @@ impl TableEdit {
             Self::SetPhase { edit } => {
                 table.phase = edit.after;
             }
+            Self::SetHandling { edit } => table.handling = edit.after,
             Self::ResetTurnPlays { edit } => table.turn_plays = edit.after,
             Self::TurnPlay { add } => {
                 let plays = table.turn_plays.as_mut().expect("a turn has started");
@@ -135,6 +139,9 @@ impl TableEdit {
                 edit: edit.inverse(),
             },
             Self::ResetTurnPlays { edit } => Self::ResetTurnPlays {
+                edit: edit.inverse(),
+            },
+            Self::SetHandling { edit } => Self::SetHandling {
                 edit: edit.inverse(),
             },
             Self::TurnPlay { add } => Self::TurnPlay { add: !add },

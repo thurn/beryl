@@ -268,6 +268,15 @@ pub struct SeatZones {
     pub sideboard: Vec<ObjectId>,
 }
 
+/// A pile currently lifted on the stage. The scope is positional so its
+/// projection can show the number of cards without exposing their identities.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Handling {
+    pub by: Seat,
+    pub zone: Zone,
+    pub portion: crate::action::Portion,
+}
+
 /// Zone vectors hold object ids in top-to-bottom order. On the stack an id can
 /// refer to a card in `objects` or to a marker in `markers`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -289,6 +298,8 @@ pub struct Table {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) turn_plays: Option<u64>,
     pub lent_zones: Vec<(Zone, Seat)>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub handling: Option<Handling>,
     pub always_reveal_top: Vec<Seat>,
     pub always_look_at_top: Vec<Seat>,
     /// Monotonic across undo so a view never confuses two cards with the same id.
@@ -323,6 +334,7 @@ impl Table {
             assists: vec![Vec::new(); count],
             turn_plays: None,
             lent_zones: Vec::new(),
+            handling: None,
             always_reveal_top: Vec::new(),
             always_look_at_top: Vec::new(),
             next_id: 1,

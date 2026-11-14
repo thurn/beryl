@@ -323,6 +323,7 @@ selection is one action and one log line.
 | `draw`, `mulligan`                        | Draws n cards; shuffles a hand into its library and draws n.                                                                                                  |
 | `shuffle`                                 | Shuffles a whole library, or its top or bottom n cards.                                                                                                       |
 | `look`                                    | Shows the acting seat the top or bottom n cards of a library, or all of it.                                                                                   |
+| `close_look`                              | Closes the acting seat’s pile viewer and lowers the cards it lifted.                                                                                          |
 | `reveal`                                  | Shows chosen cards, a whole zone, or n random cards of it, to named seats.                                                                                    |
 | `lend`                                    | Lets another seat act on this hidden zone until it is next shuffled.                                                                                          |
 | `always_reveal_top`, `always_look_at_top` | Keeps a library's top card revealed to all, or known to its owner.                                                                                            |
@@ -479,7 +480,7 @@ Every action maps to verbs as follows.
 | `marker`                                                          | `emerge`: an ability lifts out of its source onto the stack.        |
 | `remove`                                                          | `vanish`.                                                           |
 | `reveal`                                                          | `showcase`: the card is held up for the seats it is shown to.       |
-| `look`, `lend`                                                    | `lift`: cards are lifted off their pile.                            |
+| `look`, `lend`, `close_look`                                      | `lift`: cards are lifted off their pile or lowered again.           |
 | `arrow`, `clear_arrows`                                           | `point`: an arrow begins or ends.                                   |
 | `roll`, `phase`, `next_turn`, `shuffle`                           | `announce`: a banner. A shuffle also plays `set` for the new order. |
 | `flag`, `note`, `always_reveal_top`, `always_look_at_top`         | `set`: the table changes with nothing moving.                       |

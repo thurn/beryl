@@ -196,12 +196,22 @@ function arrived(
   return next;
 }
 
-/** The cards a look that begins at `view` handles: the top `count` of a library, top first,
- * or your hand, which the opponent looks at; of their own hand, none shows. */
+/** The cards a look that begins at `view` handles, in the order they leave their pile. */
 function handledAt(
   view: PlayerView,
   handling: NonNullable<PlayerView["handling"]>,
 ): number[] {
+  if (handling.zone === "pile") {
+    const cards =
+      handling.pile === "library"
+        ? [...view.players[handling.side].library].reverse()
+        : handling.pile === "hand" || handling.pile === "sideboard"
+          ? zoneCards(view, handling.side, handling.pile).map((o) => o.slot)
+          : [];
+    return handling.bottom
+      ? cards.slice(-handling.count)
+      : cards.slice(0, handling.count);
+  }
   if (handling.zone === "library") {
     const library = view.players[handling.side].library;
     return handling.count ? library.slice(-handling.count).reverse() : [];
@@ -247,7 +257,12 @@ export function tableOf(
   const table = { view: shown, abilities };
   const held = (of: PlayerView) =>
     new Set(of.objects.filter((o) => o.zone === "hand").map((o) => o.slot));
-  if (view.table || !before?.order?.size) return table;
+  if (view.table) {
+    return view.handling
+      ? { ...table, handled: handledAt(view, view.handling) }
+      : table;
+  }
+  if (!before?.order?.size) return table;
   const [was, is] = [held(before.view), held(view)];
   const order = new Map(
     [...before.order].filter(([slot]) => was.has(slot) && is.has(slot)),

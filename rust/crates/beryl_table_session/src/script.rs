@@ -1,9 +1,12 @@
 //! Turns the host's ordered, per-seat animation projection into stage steps.
 
 mod member;
+mod spans;
 
 use beryl_session::protocol::PlayerView;
-use beryl_session::script::{Act, Reset, Script, Step, Subject, Table as Stage, replay};
+use beryl_session::script::{
+    Act, Open, Reset, Script, Span, Step, Subject, Table as Stage, replay,
+};
 use beryl_table::redact::visit_animation;
 use beryl_table::{Entry, Seat, Table};
 
@@ -24,8 +27,10 @@ pub fn script(
     let viewer = Viewer(seat);
     let start = Stage::of(before);
     let end = Stage::of(after);
+    let open = spans::of_view(before);
     let mut builder = Builder {
         stage: start.clone(),
+        spans: open.clone(),
         beats: Vec::new(),
         cause: Some(Subject::Player {
             player: viewer.side(entry.by),
@@ -53,6 +58,19 @@ pub fn script(
         let failure = builder
             .error
             .or_else(|| replay::failure(&start, &script, after));
+        #[cfg(debug_assertions)]
+        let failure = failure.or_else(|| {
+            let spans = beryl_session::script::carried(start, &open, &script).and_then(|carried| {
+                let wanted = spans::of_view(after);
+                if carried.len() == wanted.len() && wanted.iter().all(|span| carried.contains(span))
+                {
+                    Ok(())
+                } else {
+                    Err("script carried different spans than the view".into())
+                }
+            });
+            spans.err()
+        });
         if let Some(failure) = failure {
             debug_assert!(
                 false,
@@ -63,16 +81,28 @@ pub fn script(
             return script;
         }
     }
+    let mut begins = Vec::new();
+    for span in spans::of_view(after) {
+        begins.push(Step {
+            act: span.act(Span::Begin),
+            cause: None,
+        });
+    }
     Script {
         reset: Some(Reset {
             abilities: end.stack.iter().filter_map(|item| item.id).collect(),
         }),
-        beats: Vec::new(),
+        beats: if begins.is_empty() {
+            Vec::new()
+        } else {
+            vec![begins]
+        },
     }
 }
 
 struct Builder {
     stage: Stage,
+    spans: Vec<Open>,
     beats: Vec<Vec<Step>>,
     cause: Option<Subject>,
     error: Option<String>,

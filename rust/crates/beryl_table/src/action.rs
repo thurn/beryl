@@ -231,6 +231,7 @@ pub enum Action<Id = ObjectId> {
         seat: Seat,
         portion: Portion,
     },
+    CloseLook {},
     Reveal {
         #[serde(rename = "in")]
         zone: Zone,

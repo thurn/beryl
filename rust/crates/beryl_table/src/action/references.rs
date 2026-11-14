@@ -114,6 +114,7 @@ impl<Id> Action<Id> {
             Self::Mulligan { seat, count } => Action::Mulligan { seat, count },
             Self::Shuffle { seat, portion } => Action::Shuffle { seat, portion },
             Self::Look { seat, portion } => Action::Look { seat, portion },
+            Self::CloseLook {} => Action::CloseLook {},
             Self::Reveal {
                 zone,
                 objects,

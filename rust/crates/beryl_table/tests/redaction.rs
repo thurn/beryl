@@ -1,10 +1,11 @@
 use std::collections::BTreeSet;
 
 use beryl_table::action::{Adjustment, Destination, Portion, Position, Selection};
+use beryl_table::change::{Edit, TableEdit};
 use beryl_table::log::line;
 use beryl_table::redact::{AnimationEvent, ShownCard, animation_seen_by, entry_seen_by, seen_by};
 use beryl_table::state::{
-    Assist, Card, Face, Line, LineVisibility, Object, ObjectId, Proposal, Zone,
+    Assist, Card, Face, Handling, Line, LineVisibility, Object, ObjectId, Proposal, Zone,
 };
 use beryl_table::{Action, Chance, Change, Seat, Table, apply};
 
@@ -152,12 +153,26 @@ fn a_look_projects_the_new_knowledge_only_for_the_seat_that_learned_it() {
     )
     .unwrap();
 
+    let handling = look_starts();
     assert_eq!(
         entry_seen_by(&entry, &before, HOST).changes,
-        vec![Change::Learn { id, seat: HOST }]
+        [Change::Learn { id, seat: HOST }, handling.clone()]
     );
-    assert!(entry_seen_by(&entry, &before, GUEST).changes.is_empty());
+    assert_eq!(entry_seen_by(&entry, &before, GUEST).changes, [handling]);
     assert_eq!(seen_by(&table, GUEST).objects[&id].card, Card::Hidden);
+}
+
+fn look_starts() -> Change {
+    Change::SetTable(TableEdit::SetHandling {
+        edit: Edit {
+            before: None,
+            after: Some(Handling {
+                by: HOST,
+                zone: LIBRARY,
+                portion: Portion::Top(1),
+            }),
+        },
+    })
 }
 
 #[test]

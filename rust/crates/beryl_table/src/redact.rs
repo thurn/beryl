@@ -325,6 +325,7 @@ fn redact_table_edit(edit: &TableEdit, seat: Seat) -> bool {
         | TableEdit::SetActive { .. }
         | TableEdit::SetTurn { .. }
         | TableEdit::SetPhase { .. }
+        | TableEdit::SetHandling { .. }
         | TableEdit::ResetTurnPlays { .. }
         | TableEdit::TurnPlay { .. }
         | TableEdit::SetAssists { .. }
@@ -413,6 +414,7 @@ fn redact_action(
         | Action::Mulligan { .. }
         | Action::Shuffle { .. }
         | Action::Look { .. }
+        | Action::CloseLook {}
         | Action::Reveal { .. }
         | Action::Lend { .. }
         | Action::AlwaysRevealTop { .. }

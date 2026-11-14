@@ -3,14 +3,14 @@ use std::collections::BTreeSet;
 use beryl_session::protocol::{
     Counter, ObjectId as Slot, ObjectView, Side, StackItem, Why, ZoneName, ZoneRef,
 };
-use beryl_session::script::{Act, Fact, Step, Subject, Tally};
+use beryl_session::script::{Act, Fact, Notice, Step, Subject, Tally};
 use beryl_table::change::{ObjectEdit, TableEdit};
 use beryl_table::redact::AnimationEvent;
 use beryl_table::state::{ObjectId, Zone};
 use beryl_table::{Action, Change, Entry, Table};
 
-use super::Builder;
-use crate::view::{Slots, Viewer, cards, piles, zone};
+use super::{Builder, spans};
+use crate::view::{Slots, Viewer, arrows, cards, handling, phase, piles, turn, zone};
 
 impl Builder {
     pub(super) fn member(
@@ -47,10 +47,24 @@ impl Builder {
             previous: &previous,
             action: &entry.action,
             returning_hand: matches!(entry.action, Action::Mulligan { .. })
-                && events.iter().any(|event| matches!(event, AnimationEvent::Move { from, .. } if matches!(from.zone, Zone::Hand(_)))) ,
+                && events.iter().any(|event| {
+                    matches!(event, AnimationEvent::Move { from, .. } if matches!(from.zone, Zone::Hand(_)))
+                }),
         };
+        let beat = self.member_steps(&member, events);
+        let wanted = spans::wanted(handling(table, viewer), &arrows(table, slots, viewer));
+        let new_look = events
+            .iter()
+            .any(|event| matches!(event, AnimationEvent::Look { .. }));
+        self.end_spans(&wanted, &beat, new_look);
+        self.finish(beat);
+        self.begin_spans(&wanted);
+        false
+    }
+
+    fn member_steps(&mut self, member: &Member<'_>, events: &[AnimationEvent]) -> Vec<Step> {
         let mut beat = Vec::new();
-        self.anonymous_moves(&mut beat, &member, events);
+        self.anonymous_moves(&mut beat, member, events);
         let arrivals: BTreeSet<_> = events
             .iter()
             .filter_map(|event| match event {
@@ -72,7 +86,7 @@ impl Builder {
                     } else {
                         Some(to.index)
                     };
-                    self.fly_to(&mut beat, &member, *id, from.zone, at, None);
+                    self.fly_to(&mut beat, member, *id, from.zone, at, None);
                 }
                 AnimationEvent::HandMove {
                     from,
@@ -80,26 +94,58 @@ impl Builder {
                     owner_transfer: Some((_, id)),
                     ..
                 } => {
-                    let at = self.insertion(&member, *id, *to);
-                    self.fly_to(&mut beat, &member, *id, *from, at, None);
+                    let at = self.insertion(member, *id, *to);
+                    self.fly_to(&mut beat, member, *id, *from, at, None);
                 }
                 AnimationEvent::Shuffle { library, order } => {
-                    self.shuffled_library(&mut beat, &member, *library, order);
+                    self.shuffled_library(&mut beat, member, *library, order);
+                    if !matches!(member.action, Action::Mulligan { .. }) {
+                        self.emit(
+                            &mut beat,
+                            Act::Announce {
+                                notice: Notice::Shuffle,
+                            },
+                        );
+                    }
+                }
+                AnimationEvent::Reveal { cards, .. } => {
+                    for card in cards {
+                        if let Some(object) = member.object(card.id) {
+                            self.emit(&mut beat, Act::Showcase { object });
+                        }
+                    }
+                }
+                AnimationEvent::Phase(value) => {
+                    self.emit(
+                        &mut beat,
+                        Act::Announce {
+                            notice: Notice::Phase {
+                                phase: phase(*value).0,
+                            },
+                        },
+                    );
                 }
                 AnimationEvent::Learn(card) if !arrivals.contains(&card.id) => {
                     if let Some(object) = member.object(card.id)
                         && self.stage.objects.get(&object.slot) != Some(&object)
                     {
-                        self.emit(&mut beat, Act::Flip { object });
+                        let visual = if matches!(member.action, Action::Peek { .. }) {
+                            Act::Flip { object }
+                        } else {
+                            Act::Set {
+                                fact: Fact::Object { object },
+                            }
+                        };
+                        self.emit(&mut beat, visual);
                     }
                 }
                 AnimationEvent::Change(change) => {
-                    self.change(&mut beat, &member, change, &arrivals);
+                    self.change(&mut beat, member, change, &arrivals);
                 }
                 _ => {}
             }
         }
-        if let Action::Peek { selection } = &entry.action {
+        if let Action::Peek { selection } = member.action {
             for &id in &selection.objects {
                 if let Some(object) = member.object(id)
                     && !beat.iter().any(|step| {
@@ -112,9 +158,10 @@ impl Builder {
         }
         // A face edit can expose a card and change derived characteristics;
         // a changed slot can also leave a marker's source unavailable.
-        self.settle_records(&mut beat, &member);
-        self.finish(beat);
-        false
+        self.settle_records(&mut beat, member);
+        self.set_turn(&mut beat, member, events);
+        self.set_library_top(&mut beat, member, events);
+        beat
     }
 
     fn shuffled_library(
@@ -339,6 +386,12 @@ impl Builder {
                 object: None,
                 at: None,
             },
+            Change::Roll { sides, outcomes } => Act::Announce {
+                notice: Notice::Roll {
+                    sides: *sides,
+                    outcomes: outcomes.clone(),
+                },
+            },
             Change::SetTable(TableEdit::SetLife { seat, edit }) => Act::Count {
                 tally: Tally::Life {
                     player: member.viewer.side(*seat),
@@ -377,6 +430,67 @@ impl Builder {
             _ => return,
         };
         self.emit(beat, act);
+    }
+
+    fn set_turn(&mut self, beat: &mut Vec<Step>, member: &Member<'_>, events: &[AnimationEvent]) {
+        let (_, next) = turn(member.table, member.viewer);
+        if next != self.stage.turn {
+            self.emit(
+                beat,
+                Act::Set {
+                    fact: Fact::Turn {
+                        number: next.number,
+                        own_number: next.own_number,
+                        active: next.active,
+                        step: next.step,
+                    },
+                },
+            );
+        }
+        if events.iter().any(|event| {
+            matches!(
+                event,
+                AnimationEvent::Change(Change::SetTable(TableEdit::SetTurn { .. }))
+            )
+        }) {
+            let name = format!("Seat {}", u16::from(member.table.active.0) + 1);
+            self.emit(
+                beat,
+                Act::Announce {
+                    notice: Notice::TableTurn { name },
+                },
+            );
+        }
+    }
+
+    fn set_library_top(
+        &mut self,
+        beat: &mut Vec<Step>,
+        member: &Member<'_>,
+        events: &[AnimationEvent],
+    ) {
+        for event in events {
+            if let AnimationEvent::Change(
+                Change::AlwaysRevealTop { seat, .. } | Change::AlwaysLookAtTop { seat, .. },
+            ) = event
+            {
+                let player = member.viewer.side(*seat);
+                let order = &self.stage.piles(player).library;
+                let fact = order
+                    .last()
+                    .and_then(|slot| self.stage.objects.get(slot))
+                    .map_or_else(
+                        || Fact::Library {
+                            player,
+                            order: Vec::new(),
+                        },
+                        |object| Fact::Object {
+                            object: object.clone(),
+                        },
+                    );
+                self.emit(beat, Act::Set { fact });
+            }
+        }
     }
 
     fn settle_records(&mut self, beat: &mut Vec<Step>, member: &Member<'_>) {

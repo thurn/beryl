@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::change::{Edit, TableEdit};
 use crate::log::Touches;
-use crate::state::{ObjectId, Zone};
+use crate::state::{ObjectId, Phase, Zone};
 use crate::{Action, Chance, Change, Seat, Table, permissions};
 
 mod cards;
@@ -67,6 +67,7 @@ pub(crate) enum Presentation {
     Shuffle {
         library: Zone,
     },
+    Phase(Phase),
     Reset,
 }
 
@@ -112,6 +113,22 @@ impl AppliedChanges {
         let mut applied = Self::default();
         applied.record(changes, Some(presentation));
         applied
+    }
+
+    fn close_handling_before(&mut self, index: usize, change: Change) {
+        let mut start = 0;
+        for member in &mut self.members {
+            let end = start + member.len;
+            if index < end {
+                member.len += 1;
+                // Keep dependent edits in the member adjacent, including a
+                // shuffle's knowledge reset and the id replacement it needs.
+                self.changes.insert(start, change);
+                return;
+            }
+            start = end;
+        }
+        unreachable!("every planned change belongs to a member");
     }
 
     fn extend_last_member(&mut self, len: usize) {
@@ -217,6 +234,7 @@ fn apply_action(
     }
     permissions::check(table, by, action)?;
     let mut applied = plan_action(table, by, action, chance)?;
+    library::settle_handling(table, by, action, &mut applied);
     let len = applied.changes.len();
     if table.turn_plays.is_some() && counts_as_turn_play(action, table.turn) {
         applied
@@ -231,14 +249,13 @@ fn apply_action(
 /// Opening-hand steps and assist switches can be used before the first play.
 fn counts_as_turn_play(action: &Action, turn: u32) -> bool {
     use crate::action::{Destination, Position};
-    use crate::state::{Phase, Zone};
-
     match action {
         Action::Start { .. }
         | Action::NextTurn {}
         | Action::NextGame { .. }
         | Action::Concede {}
         | Action::SetAssist { .. }
+        | Action::CloseLook {}
         | Action::Phase {
             phase: Phase::Untap,
         } => false,
@@ -448,7 +465,7 @@ fn plan_action(
             name,
             adjustment,
         } => players::player_counter(table, *seat, name, *adjustment),
-        Action::Phase { phase } => Ok(game::phase(table, *phase)),
+        Action::Phase { phase } => return Ok(game::plan_phase(table, *phase)),
         Action::NextTurn {} => game::next_turn(table),
         Action::Roll { count, sides } => players::roll(*count, *sides, chance),
         Action::Arrow { selection, to } => players::arrow(table, by, selection, *to),
@@ -473,6 +490,7 @@ fn plan_action(
             ));
         }
         Action::Concede {} => game::concede(table, by),
+        Action::CloseLook {} => Ok(Vec::new()),
         Action::SetAssist { assist, on } => Ok(game::set_assist(table, by, *assist, *on)),
         Action::Flow { .. } => library::flow(action),
         Action::Undo { .. } | Action::Rewind { .. } | Action::Batch { .. } => Err(Refusal::INVALID),

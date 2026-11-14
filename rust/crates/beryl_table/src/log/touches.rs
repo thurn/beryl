@@ -27,6 +27,7 @@ enum Field {
     Lends,
     RevealTop,
     LookAtTop,
+    Handling,
 }
 
 impl From<&TableEdit> for Field {
@@ -37,6 +38,7 @@ impl From<&TableEdit> for Field {
             TableEdit::SetActive { .. } => Self::Active,
             TableEdit::SetTurn { .. } => Self::Turn,
             TableEdit::SetPhase { .. } => Self::Phase,
+            TableEdit::SetHandling { .. } => Self::Handling,
             TableEdit::ResetTurnPlays { .. } => Self::ResetTurnPlays,
             TableEdit::TurnPlay { .. } => Self::TurnPlay,
             TableEdit::SetAssists { seat, .. } => Self::Assists(seat),

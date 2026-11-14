@@ -73,6 +73,8 @@ test("manual notices play on the stage and read as banners without a card source
         [{ kind: "roll", sides: 6, outcomes: [3] }, "Rolled 4 (d6)"],
         [{ kind: "roll", sides: 2, outcomes: [0] }, "Heads"],
         [{ kind: "shuffle" }, "Shuffled"],
+        [{ kind: "phase", phase: "firstMain" }, "First main"],
+        [{ kind: "tableTurn", name: "Seat 2" }, "Seat 2's turn"],
         [{ kind: "rewind", to: 41 }, "Rewound to 41"],
     ]) {
         const { stage: made, surface } = stage((act, found) =>
@@ -312,4 +314,60 @@ test("an anonymous draw flies from its pile with a fresh slot", () => {
     assert.equal(pose.face, "back");
     assert.ok(pose.x > 0 && pose.x < 3000);
     assert.equal(made.pose(old.slot), null);
+});
+
+test("a manual look keeps a counted packet lifted through unrelated updates", () => {
+    const library = [1, 2, 3, 4];
+    const empty = { hand: [], exile: [], sideboard: [] };
+    const before = view([], [], {
+        status: { kind: "free" },
+        table: { orders: { you: empty, opponent: empty } },
+    });
+    before.players.you.library = library;
+    before.objects = library.map((slot) => object(slot, "library"));
+    const handling = {
+        zone: "pile",
+        pile: "library",
+        side: "you",
+        count: 2,
+        bottom: true,
+    };
+    const opened = { ...before, handling };
+    const lift = { verb: "lift", span: "begin", handling };
+    const close = { ...lift, span: "end" };
+    const layout = {
+        ...row,
+        rest(table) {
+            const poses = row.rest(table);
+            for (const slot of table.handled ?? []) {
+                const pose = poses.get(slot).pose;
+                pose.y += 250;
+            }
+            return poses;
+        },
+    };
+    const { stage: made } = stage(
+        { lift: { duration: 200 } },
+        undefined,
+        layout,
+    );
+    made.play(before);
+    const y = made.pose(1).y;
+    made.play(opened, { beats: [[{ act: lift }]] });
+    made.clock.advance(100);
+    assert.ok(made.pose(1).y > y && made.pose(1).y < y + 250);
+    made.settle();
+    assert.equal(made.pose(1).y, y + 250);
+    assert.equal(made.pose(2).y, y + 250);
+    assert.equal(made.pose(3).y, y);
+
+    made.play(opened, { beats: [] });
+    made.settle();
+    assert.equal(made.pose(1).y, y + 250);
+    made.play(before, { beats: [[{ act: close }]] });
+    made.settle();
+    assert.equal(made.pose(1).y, y);
+
+    made.play(opened);
+    assert.equal(made.pose(1).y, y + 250);
 });
