@@ -405,7 +405,7 @@ for (const count of [1, 10, 11]) {
                 .evaluateAll((cards) =>
                     cards.map((card) => ({
                         slot: Number(card.dataset.slot),
-                        top: card.getBoundingClientRect().top,
+                        left: card.getBoundingClientRect().left,
                         z: Number(getComputedStyle(card).zIndex),
                     })),
                 );
@@ -415,10 +415,11 @@ for (const count of [1, 10, 11]) {
                 ordered.every(
                     (layer, i) =>
                         i === 0 ||
-                        (layer.top < ordered[i - 1].top &&
+                        (layer.left > ordered[i - 1].left &&
                             layer.z < ordered[i - 1].z),
                 ),
-                "deeper cards fan behind the top card in distinct layers",
+                // Your piles spread to the right beneath their top card (`pileOffset`).
+                "deeper cards fan right of the top card in distinct layers",
             );
             await button.click();
             const dialog = page.getByRole("dialog", { name: "Your graveyard" });
