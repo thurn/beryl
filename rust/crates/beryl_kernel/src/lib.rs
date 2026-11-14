@@ -669,6 +669,7 @@ pub mod bitboard;
 pub mod board;
 pub mod cause;
 pub mod chance;
+pub mod chosen;
 pub mod counters;
 pub mod decision;
 pub mod derive;

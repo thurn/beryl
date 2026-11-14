@@ -288,6 +288,12 @@ pub struct ObjectView {
     /// find it among the cards "exiled with" it
     /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)).
     pub exiled_with: Option<ObjectId>,
+    /// On the battlefield: the value it chose as it entered, by name ("Red", "Goblin",
+    /// "Counterspell", "Another card")
+    /// ([CR 614.12a](https://yawgatog.com/resources/magic-rules/#R61412a)).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub chosen: Option<String>,
     pub combat: Option<Combat>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

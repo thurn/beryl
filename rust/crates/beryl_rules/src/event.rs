@@ -83,6 +83,18 @@ pub(crate) fn arrive<L: Layout>(
     Ok(())
 }
 
+/// Has each permanent that chose a value as it entered remember it ([`Memo::Chosen`]), once
+/// the batch has moved and before the layers or any trigger look at it, and empties the list
+/// for the next batch.
+#[cold]
+#[inline(never)]
+fn remember_chosen<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>) -> Result<(), Full> {
+    for (slot, value) in sink.chosen.drain(..) {
+        s.remember(slot, Memo::Chosen(value))?;
+    }
+    Ok(())
+}
+
 /// Executes the remaining steps of the pipeline for an event its primitive has executed:
 /// a layer refresh so nothing reads `derived` dirty, trigger matching (§8.2, step 5), and
 /// the sink.
@@ -189,7 +201,7 @@ pub(crate) fn move_batch_to<L: Layout>(
             entry,
             cast: reason == Reason::Resolve,
         };
-        let m = replace::moving(s, t, proposal)?;
+        let m = replace::moving(s, t, sink, proposal)?;
         moves.push((m.slot, m.from, m.to, m.entry))?;
         if o.zone() == Zone::Battlefield {
             returning |= s.exiled_until(slot);
@@ -233,6 +245,9 @@ pub(crate) fn move_batch_to<L: Layout>(
         sink.push_joined(changed(s.object_ref(slot), from, dest), || {
             !std::ptr::eq(each, first)
         });
+    }
+    if !sink.chosen.is_empty() {
+        remember_chosen(s, sink)?;
     }
     layers::refresh(s, t, sink)?;
     if arrived.len() > 1 {

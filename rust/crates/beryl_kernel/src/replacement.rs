@@ -79,7 +79,8 @@ pub(crate) fn check(def: &CardDef) -> Result<Replaces, Unreplaced> {
                 Replaced::ThisEnters,
                 Rewrite::EntersTapped
                 | Rewrite::EntersTappedUnlessFewLands(_)
-                | Rewrite::EntersTappedUnlessPayLife(_),
+                | Rewrite::EntersTappedUnlessPayLife(_)
+                | Rewrite::Choose(_),
             ) => {}
             (Replaced::Draw(players), Rewrite::Instead) => {
                 if !reads(&players) {

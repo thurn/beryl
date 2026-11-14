@@ -11,7 +11,7 @@ use beryl_engine::{
 use super::ObjectId;
 use super::{
     Candidate, CandidateView, DecisionId, DecisionView, Kind, PassTo, RefusalView, Refused,
-    StackItem, StopsSetting, candidate, name, stack_item,
+    StackItem, StopsSetting, candidate, catalog_label, name, stack_item,
 };
 use crate::prompt::{halt_prompt, prompt_view};
 
@@ -37,7 +37,15 @@ pub(super) fn decision_view<L: Layout>(
                 targets: Vec::new(),
             })
             .collect(),
-        Candidates::Options(opts) => opts.iter().map(|&o| candidate(t, obs, o)).collect(),
+        Candidates::Options(opts) => (opts.iter())
+            .map(|&o| {
+                let mut view = candidate(t, obs, o);
+                if let Some(label) = catalog_label(t, d, o) {
+                    view.label = label;
+                }
+                view
+            })
+            .collect(),
     };
     let item = resolving.map(|e| stack_item(t, obs, e));
     // What asks, by name: the ability resolving, or the spell.

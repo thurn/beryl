@@ -11,7 +11,7 @@ use super::words::{
 };
 use crate::ability::{Ability, AbilityKind, Behavior, Timing};
 use crate::continuous::{
-    Governed, LayerSpec, Modification, Replaced, Replacement, Rewrite, RuleChange, When,
+    ChosenKind, Governed, LayerSpec, Modification, Replaced, Replacement, Rewrite, RuleChange, When,
 };
 use crate::cost::{CastingKind, Chosen, Cost, CostAction, CostPart, Measure};
 use crate::effect::{Amount, Condition, Effect, Objects, Players};
@@ -597,6 +597,14 @@ impl Ctx {
                 format!("as {this} enters, you may pay {n} life"),
                 "if you don't, it enters tapped".to_owned(),
             ],
+            (_, Rewrite::Choose(kind)) => vec![format!(
+                "as {this} enters, choose {}",
+                match kind {
+                    ChosenKind::Color => "a color",
+                    ChosenKind::CreatureType => "a creature type",
+                    ChosenKind::CardName => "a card name",
+                }
+            )],
             (Replaced::PutInto(&objects, zone), Rewrite::ToZone(instead)) => {
                 let what = if objects == Filter::Any {
                     "a card or token".to_owned()

@@ -12,11 +12,13 @@
 //! the value of X (by-w8gv.7.6); and what exiled a card, a memo of the exiled card naming
 //! the slot of what exiled it (by-w8gv.7.7). Such a memo ends with the card as every memo
 //! does, and one of the two also as a new object arrives in the slot it names
-//! ([`Memo::ExiledWith`]).
+//! ([`Memo::ExiledWith`]); and the value a permanent chose as it entered
+//! ([`Memo::Chosen`]).
 
 use beryl_card::{CastingKind, CastingKinds};
 
 use crate::bitboard::Bitboard;
+use crate::chosen::ChosenValue;
 use crate::fit::{Misfit, room};
 use crate::fixed::Full;
 use crate::ids::SlotId;
@@ -65,6 +67,15 @@ pub enum Memo<L: Layout = Small> {
     /// ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)): "Some one-shot
     /// effects cause an object to change zones 'until' a specified event occurs."
     ExiledUntil(L::Slot),
+    /// The value the permanent chose as it entered: a color, a creature type or a card name
+    /// ([CR 614.12a](https://yawgatog.com/resources/magic-rules/#R61412a)): "If a replacement
+    /// effect that modifies how a permanent enters the battlefield requires a choice, that
+    /// choice is made before the permanent enters the battlefield." Not a copiable value
+    /// ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)): "Other effects
+    /// (including type-changing and text-changing effects), status, counters, and stickers
+    /// are not copied." A copy of the permanent makes its own choice as it enters, and a
+    /// permanent that becomes a copy keeps this one.
+    Chosen(ChosenValue<L>),
 }
 
 impl<L: Layout> Memo<L> {
@@ -76,6 +87,7 @@ impl<L: Layout> Memo<L> {
             Memo::X(_) => Kinds::X,
             Memo::ExiledWith(_) => Kinds::EXILED_WITH,
             Memo::ExiledUntil(_) => Kinds::EXILED_UNTIL,
+            Memo::Chosen(_) => Kinds::CHOSEN,
         }
     }
 
@@ -84,7 +96,7 @@ impl<L: Layout> Memo<L> {
     #[inline]
     fn zone(self) -> Zone {
         match self {
-            Memo::Paid(_) | Memo::X(_) => Zone::Battlefield,
+            Memo::Paid(_) | Memo::X(_) | Memo::Chosen(_) => Zone::Battlefield,
             Memo::ExiledWith(_) | Memo::ExiledUntil(_) => Zone::Exile,
         }
     }
@@ -103,7 +115,7 @@ impl<L: Layout> Memo<L> {
     #[inline]
     fn names(self) -> Option<L::Slot> {
         match self {
-            Memo::Paid(_) | Memo::X(_) => None,
+            Memo::Paid(_) | Memo::X(_) | Memo::Chosen(_) => None,
             Memo::ExiledWith(by) | Memo::ExiledUntil(by) => Some(by),
         }
     }
@@ -115,6 +127,7 @@ impl<L: Layout> Memo<L> {
         match self {
             Memo::X(x) => x > 0,
             Memo::Paid(paid) => !paid.is_empty(),
+            Memo::Chosen(value) => value.holds(),
             // What exiled it left a card or a token in its slot.
             Memo::ExiledWith(by) => zone(by) != Zone::Nowhere,
             // An object exiled "until" its exiler leaves returns as it leaves (CR 610.3).
@@ -129,6 +142,7 @@ impl<L: Layout> Memo<L> {
             Memo::X(x) => Memo::X(x),
             Memo::ExiledWith(by) => Memo::ExiledWith(slot(by)),
             Memo::ExiledUntil(by) => Memo::ExiledUntil(slot(by)),
+            Memo::Chosen(value) => Memo::Chosen(value.relayout()),
         }
     }
 
@@ -141,7 +155,8 @@ impl<L: Layout> Memo<L> {
 
 /// The kinds of memo among a store's entries: its index by kind, so that a reader of a kind
 /// with nothing live stops at one AND. One bit for the value of X, one for each kind of
-/// cost the vocabulary's list has, and one for each way a card remembers what exiled it.
+/// cost the vocabulary's list has, one for each way a card remembers what exiled it, and one
+/// for a chosen value.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct Kinds(u16);
 
@@ -149,6 +164,7 @@ impl Kinds {
     const X: u16 = 1 << 0;
     const EXILED_WITH: u16 = 1 << 9;
     const EXILED_UNTIL: u16 = 1 << 10;
+    const CHOSEN: u16 = 1 << 11;
     /// The kinds whose memo names a slot ([`Memo::names`]).
     const NAMING: u16 = Kinds::EXILED_WITH | Kinds::EXILED_UNTIL;
 
@@ -381,6 +397,15 @@ impl<L: Layout> MemosOf<'_, L> {
             _ => None,
         })
     }
+
+    /// The value the permanent chose as it entered (CR 614.12a).
+    #[inline]
+    pub fn chosen(&self) -> Option<ChosenValue<L>> {
+        self.iter().find_map(|memo| match memo {
+            Memo::Chosen(value) => Some(value),
+            _ => None,
+        })
+    }
 }
 
 impl<L: Layout> PartialEq for MemosOf<'_, L> {
@@ -393,8 +418,8 @@ impl<L: Layout> PartialEq for MemosOf<'_, L> {
 impl<L: Layout> Eq for MemosOf<'_, L> {}
 
 impl<L: Layout> State<L> {
-    /// Has the object in `slot` remember `memo`: a permanent, of the spell it was, as it
-    /// enters; a card in exile, what exiled it. It remembers until it leaves its zone
+    /// Has the object in `slot` remember `memo`: a permanent, of the spell it was and what it
+    /// chose, as it enters; a card in exile, what exiled it. It remembers until it leaves its zone
     /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), and one thing of
     /// each variant of [`Memo`]. The layer results are stale from here if the layers read
     /// the memo. No event: it is part of how the object came to be where it is.
@@ -436,6 +461,20 @@ impl<L: Layout> State<L> {
                 _ => None,
             })
             .unwrap_or(0)
+    }
+
+    /// The value the permanent in `slot` chose as it entered
+    /// ([CR 614.12a](https://yawgatog.com/resources/magic-rules/#R61412a)), if it chose one.
+    /// With no permanent in the game that chose one, one AND.
+    #[inline]
+    pub fn chosen(&self, slot: L::Slot) -> Option<ChosenValue<L>> {
+        self.memos
+            .of(Kinds::CHOSEN)
+            .iter()
+            .find_map(|e| match e.memo {
+                Memo::Chosen(value) if e.slot == slot => Some(value),
+                _ => None,
+            })
     }
 
     /// The cards exiled with the object in `source` by an ability linked to another of its

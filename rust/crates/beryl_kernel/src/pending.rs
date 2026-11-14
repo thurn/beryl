@@ -211,6 +211,16 @@ pub enum Pending<L: Layout = Small> {
     ///
     /// [CR 613.7m]: https://yawgatog.com/resources/magic-rules/#R6137m
     OrderEntered { group: Bitboard<L::Slot> },
+    /// A land being played asks its controller for the value of `kind` it chooses as it
+    /// enters ([`beryl_card::Rewrite::Choose`]): playing a land is a special action, so
+    /// nothing can pause in the middle of it to ask. `pay_life` is the answer to
+    /// [`Pending::EnterPayingLife`], asked first where the land asks both. Last among the variants, so the
+    /// others keep the discriminants a state's hash reads.
+    EnterChoosing {
+        slot: L::Slot,
+        kind: beryl_card::ChosenKind,
+        pay_life: bool,
+    },
 }
 
 impl Copy for Pending<Small> {}

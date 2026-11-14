@@ -5,7 +5,8 @@
 //! candidate that does the same ([`Chosen::find`]); the index it had is kept as a hint, which
 //! only breaks ties between candidates that do the same and shows drift.
 
-use beryl_engine::card::{AbilityKind, CastingOption, ManaColor, ObjectAbility, Types};
+use beryl_engine::card::{AbilityKind, CastingOption, ChosenKind, ManaColor, ObjectAbility, Types};
+use beryl_engine::chosen::ChosenValue;
 use beryl_engine::{Choice, Decision, GameTable, Layout, Opt, State, TurnStep, Zone};
 use serde::{Deserialize, Serialize};
 
@@ -366,6 +367,13 @@ pub enum Act {
     Number {
         n: u8,
     },
+    /// A value of a catalog, by its name: "Red", "Goblin", "Counterspell", or "Another
+    /// creature type" or "Another card" for a value no card of the game has. A game numbers its
+    /// creature types and cards by its decklists, so the number a decision offers changes with
+    /// them and the name does not.
+    Chosen {
+        value: String,
+    },
     /// A payment plan, by its place among the plans: what tells plans apart is their
     /// consequences, which only the engine computes.
     Plan {
@@ -515,7 +523,14 @@ impl Act {
             Opt::Pool(color) => Act::Pool {
                 color: color.into(),
             },
-            Opt::Number(n) => Act::Number { n },
+            Opt::Number(n) => match ChosenKind::of_purpose(d.prompt.purpose)
+                .and_then(|kind| ChosenValue::<L>::of_number(kind, n))
+            {
+                Some(value) => Act::Chosen {
+                    value: value.name(t),
+                },
+                None => Act::Number { n },
+            },
             Opt::Plan(i) => Act::Plan {
                 i: u16::try_from(Into::<usize>::into(i)).expect("a plan's index fits"),
             },

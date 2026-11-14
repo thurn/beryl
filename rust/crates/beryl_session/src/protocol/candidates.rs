@@ -1,9 +1,10 @@
 //! Building each candidate answer of a decision, with its label.
 
 use beryl_engine::card::{
-    AbilityKind, CastingIx, CastingOption, Castings, Colors, Cost, CostAction, CostPart,
-    FaceAbility, FaceIx, ManaColor, ManaCost, Measure, ObjectAbility, Types,
+    AbilityKind, CastingIx, CastingOption, Castings, ChosenKind, Colors, Cost, CostAction,
+    CostPart, FaceAbility, FaceIx, ManaColor, ManaCost, Measure, ObjectAbility, Types,
 };
+use beryl_engine::chosen::ChosenValue;
 use beryl_engine::filter::Filter;
 use beryl_engine::layout::Queue;
 use beryl_engine::two_player::TwoPlayerSeat as _;
@@ -25,8 +26,23 @@ pub(crate) fn candidate_labels<L: Layout>(
         Candidates::Objects(_) => (d.candidates.objects())
             .map(|slot| name(t, obs, slot).unwrap_or("a hidden card").to_owned())
             .collect(),
-        Candidates::Options(opts) => opts.iter().map(|&o| candidate(t, obs, o).label).collect(),
+        Candidates::Options(opts) => (opts.iter())
+            .map(|&o| catalog_label(t, d, o).unwrap_or_else(|| candidate(t, obs, o).label))
+            .collect(),
     }
+}
+
+/// What candidate `o` of `d` is called where `d` asks for a value of a catalog: the value's
+/// name ("Red", "Goblin", "Counterspell", "Another card") in place of its number.
+pub(crate) fn catalog_label<L: Layout>(
+    t: &GameTable,
+    d: &Decision<L>,
+    o: Opt<L>,
+) -> Option<String> {
+    let (Some(kind), Opt::Number(n)) = (ChosenKind::of_purpose(d.prompt.purpose), o) else {
+        return None;
+    };
+    ChosenValue::<L>::of_number(kind, n).map(|value| value.name(t))
 }
 
 pub(super) fn candidate<L: Layout>(

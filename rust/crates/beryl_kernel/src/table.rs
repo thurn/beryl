@@ -151,11 +151,15 @@ pub struct GameTable {
     /// ([`beryl_card::Ability::needs`]), so that no other game pays to check.
     needy: bool,
     /// A bit per [`Capability`] a card of the game has.
-    capabilities: u8,
+    capabilities: u16,
     /// The rule changes the cards of the game name, numbered.
     rule_changes: RuleChanges,
     /// The subtypes the cards of the game name, numbered.
     subtypes: SubtypeNumbers,
+    /// The game index of each name a player may choose that the game has a card of: the
+    /// first index with each name among the cards that are not tokens or emblems
+    /// ([`GameTable::names`]).
+    names: Vec<usize>,
     /// Per game index, the printed subtypes of its first two faces by those numbers.
     face_subtypes: Vec<[GameSubtypes; 2]>,
 }
@@ -230,6 +234,24 @@ fn gather(
     }
     defs.push(&FACE_DOWN_COPY);
     Ok((defs, indices))
+}
+
+/// The game index of each distinct name among `defs` that a card has ([`GameTable::names`]):
+/// not a token's or an emblem's, which some card of `defs` lists among what it creates, and
+/// not [`FACE_DOWN_COPY`]'s, which is no card's.
+fn card_names(defs: &[&'static CardDef]) -> Vec<usize> {
+    let made = |def: &CardDef| {
+        defs.iter()
+            .any(|d| d.tokens.iter().any(|&token| std::ptr::eq(token, def)))
+    };
+    let mut names: Vec<usize> = Vec::new();
+    for (i, &def) in defs.iter().enumerate() {
+        let card = !std::ptr::eq(def, &raw const FACE_DOWN_COPY) && !made(def);
+        if card && !names.iter().any(|&n| defs[n].name == def.name) {
+            names.push(i);
+        }
+    }
+    names
 }
 
 /// Whether every token and emblem `def`'s effects create is one of `defs`, the cards of a
@@ -330,6 +352,7 @@ impl GameTable {
         let subtypes =
             SubtypeNumbers::new(&defs).map_err(|count| TableError::Subtypes { count })?;
         let face_subtypes = subtypes.of_cards(&defs);
+        let names = card_names(&defs);
         let capabilities = defs
             .iter()
             .flat_map(|d| d.faces)
@@ -359,6 +382,7 @@ impl GameTable {
             rule_changes,
             subtypes,
             face_subtypes,
+            names,
         })
     }
 
@@ -367,6 +391,17 @@ impl GameTable {
     #[inline]
     pub fn subtypes(&self) -> &SubtypeNumbers {
         &self.subtypes
+    }
+
+    /// The game index of each card name of the game a player may choose, in game order
+    /// ([CR 201.4](https://yawgatog.com/resources/magic-rules/#R2014)): "the player must
+    /// choose the name of a card in the Oracle card reference". A token's name is among them
+    /// only where a card has it: tokens and emblems are not cards in that reference. Every
+    /// other name has the same consequences in this game, as no card of it has that name, so
+    /// one choice ("another card") stands for them all.
+    #[inline]
+    pub fn names(&self) -> &[usize] {
+        &self.names
     }
 
     /// The printed subtypes of the face `face` of the card at `card` by the game's numbers: found
@@ -507,6 +542,12 @@ impl GameTable {
     #[inline]
     pub fn can(&self, capability: Capability) -> bool {
         self.capabilities & capability.bit() != 0
+    }
+
+    /// Whether a card of the game has `one` or `other`, in one AND.
+    #[inline]
+    pub fn can_either(&self, one: Capability, other: Capability) -> bool {
+        self.capabilities & (one.bit() | other.bit()) != 0
     }
 
     #[inline]

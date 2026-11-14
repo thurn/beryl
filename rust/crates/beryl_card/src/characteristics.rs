@@ -84,6 +84,23 @@ bitset! {
     }
 }
 
+impl Colors {
+    /// Each of the five colors alone, in the rules' order
+    /// ([CR 105.1](https://yawgatog.com/resources/magic-rules/#R1051)): "There are five colors
+    /// in the Magic game: white, blue, black, red, and green." The one list a choice of a color
+    /// offers, by place: a prompt's candidate `n` is `EACH[n]`.
+    pub const EACH: [Colors; 5] = [
+        Colors::WHITE,
+        Colors::BLUE,
+        Colors::BLACK,
+        Colors::RED,
+        Colors::GREEN,
+    ];
+
+    /// Each color's name, as `EACH` lists them.
+    pub const NAMES: [&str; 5] = ["White", "Blue", "Black", "Red", "Green"];
+}
+
 bitset! {
     /// Keyword abilities, one bit each. The cards that need them add them.
     Keywords(u64) {

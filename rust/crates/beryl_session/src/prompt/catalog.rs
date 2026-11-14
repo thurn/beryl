@@ -1,19 +1,14 @@
 //! The catalog shape: one entry of a list, chosen and then confirmed.
 //!
-//! No card asks one yet. A decision of the shape offers a number for each entry
-//! (`Opt::Number`, the entry's place in its catalog), and the prompt lists the entries in
-//! the decision's order under their names, where the session knows the catalog's.
+//! A decision of the shape offers a number for each entry (`Opt::Number`, the entry's number
+//! in its catalog), and the prompt lists the entries in the decision's order under the names
+//! its candidates are labeled with ("Red", "Goblin", "Another card").
 
 use beryl_engine::card::Purpose;
 
 use super::held::{Clicked, Run, Step, button};
 use super::{ButtonId, Click, PromptView, ShapeBody};
 use crate::protocol::{Candidate, DecisionView};
-
-/// The colors by number, as the rules list them
-/// ([CR 105.1](https://yawgatog.com/resources/magic-rules/#R1051): "There are five colors in
-/// the Magic game: white, blue, black, red, and green").
-const COLORS: [&str; 5] = ["White", "Blue", "Black", "Red", "Green"];
 
 /// The state of a prompt of the catalog shape.
 #[derive(Clone, Debug)]
@@ -30,20 +25,12 @@ pub(crate) struct Catalog {
 impl Catalog {
     /// The state the catalog prompt for `purpose` of `decision` opens in: nothing chosen.
     pub(crate) fn open(purpose: Purpose, decision: &DecisionView) -> Option<Catalog> {
-        let names: &[&str] = match purpose {
-            Purpose::Color => &COLORS,
-            // A catalog the session has no names for yet lists its entries by number: its
-            // names come with the first card that asks it.
-            _ => &[],
-        };
         let entries: Vec<(String, u16)> = (decision.candidates.iter().enumerate())
             .filter_map(|(i, candidate)| {
-                let Candidate::Number { n } = candidate.option else {
+                let Candidate::Number { .. } = candidate.option else {
                     return None;
                 };
-                let name = names.get(usize::from(n)).copied();
-                let name = name.unwrap_or(&candidate.label).to_owned();
-                Some((name, u16::try_from(i).ok()?))
+                Some((candidate.label.clone(), u16::try_from(i).ok()?))
             })
             .collect();
         (!entries.is_empty()).then(|| Catalog {

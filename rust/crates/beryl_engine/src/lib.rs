@@ -13,8 +13,8 @@
 
 // The game state and everything that writes it are the kernel's.
 pub use beryl_kernel::{
-    bitboard, chance, decision, filter, fixed, ids, observation, query, relayout, rng, state,
-    table, two_player,
+    bitboard, chance, chosen, decision, filter, fixed, ids, observation, query, relayout, rng,
+    state, table, two_player, zone,
 };
 // The rules' modules, among them `layout` and `profile`: the kernel's layouts and restriction
 // profiles, with the rules' stops beside the profiles. A card file with a Rust body takes the

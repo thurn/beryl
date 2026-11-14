@@ -6,6 +6,7 @@ use crate::effect::{Amount, Condition, Objects, Players};
 use crate::filter::Filter;
 use crate::ids::Zone;
 use crate::index::{AbilityIx, GrantIx};
+use crate::prompt::Purpose;
 
 /// A change to a rule of the game rather than to an object's characteristics
 /// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311)): "Some continuous
@@ -132,6 +133,15 @@ impl Replacement {
         Replacement::this_enters(Rewrite::EntersTappedUnlessPayLife(n))
     }
 
+    /// "As this enters, choose a color" (or a creature type, or a card name)
+    /// ([CR 614.12a](https://yawgatog.com/resources/magic-rules/#R61412a)): "If a replacement
+    /// effect that modifies how a permanent enters the battlefield requires a choice, that
+    /// choice is made before the permanent enters the battlefield." The permanent remembers
+    /// the value for as long as it stays.
+    pub const fn choose_as_enters(kind: ChosenKind) -> Replacement {
+        Replacement::this_enters(Rewrite::Choose(kind))
+    }
+
     /// "If [players] would draw a card, [the ability's body] instead."
     pub const fn draws(players: Players) -> Replacement {
         Replacement {
@@ -232,6 +242,47 @@ pub enum Rewrite {
     /// hand. It works only from its owner's graveyard and is optional, so it is a choice even
     /// when it is the only replacement of the draw.
     Dredge(u8),
+    /// Its controller chooses a value of this kind as it enters, which the permanent
+    /// remembers ([`Replacement::choose_as_enters`]).
+    Choose(ChosenKind),
+}
+
+/// The kind of value a permanent chooses as it enters ([`Rewrite::Choose`]): one entry of a
+/// catalog, asked in the catalog prompt shape.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ChosenKind {
+    /// One of the five colors ([CR 105.4](https://yawgatog.com/resources/magic-rules/#R1054)):
+    /// "If a player is asked to choose a color, they must choose one of the five colors."
+    Color,
+    /// A creature type ([CR 205.3e](https://yawgatog.com/resources/magic-rules/#R2053e)): "If
+    /// an effect instructs a player to choose a subtype, that player must choose one, and
+    /// only one, existing subtype".
+    CreatureType,
+    /// A card name ([CR 201.4](https://yawgatog.com/resources/magic-rules/#R2014)): "If an
+    /// effect instructs a player to choose a card name, the player must choose the name of a
+    /// card in the Oracle card reference."
+    CardName,
+}
+
+impl ChosenKind {
+    /// The purpose the choice is asked with.
+    pub const fn purpose(self) -> Purpose {
+        match self {
+            ChosenKind::Color => Purpose::Color,
+            ChosenKind::CreatureType => Purpose::CreatureType,
+            ChosenKind::CardName => Purpose::CardName,
+        }
+    }
+
+    /// The kind a question with `purpose` asks for, if it asks for a chosen value.
+    pub const fn of_purpose(purpose: Purpose) -> Option<ChosenKind> {
+        match purpose {
+            Purpose::Color => Some(ChosenKind::Color),
+            Purpose::CreatureType => Some(ChosenKind::CreatureType),
+            Purpose::CardName => Some(ChosenKind::CardName),
+            _ => None,
+        }
+    }
 }
 
 /// A static ability's continuous effect: what it affects, when, and how

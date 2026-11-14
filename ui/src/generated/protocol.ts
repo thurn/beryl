@@ -317,7 +317,13 @@ exiledBy: ObjectId | null,
  * find it among the cards "exiled with" it
  * ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)).
  */
-exiledWith: ObjectId | null, combat: Combat | null, note?: string, pinned?: RowName, 
+exiledWith: ObjectId | null, 
+/**
+ * On the battlefield: the value it chose as it entered, by name ("Red", "Goblin",
+ * "Counterspell", "Another card")
+ * ([CR 614.12a](https://yawgatog.com/resources/magic-rules/#R61412a)).
+ */
+chosen?: string, combat: Combat | null, note?: string, pinned?: RowName, 
 /**
  * Which face the manual table is showing. The engine uses `name` and `facing`.
  */

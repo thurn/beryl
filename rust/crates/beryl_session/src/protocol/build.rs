@@ -363,6 +363,7 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         attached_to: some(o.attached_to()),
         exiled_by: some(obs.memos(slot).exiled_until()),
         exiled_with: some(obs.memos(slot).exiled_with()),
+        chosen: obs.memos(slot).chosen().map(|value| value.name(t)),
         combat: match *o.combat() {
             CombatRole::Attacking {
                 target, blocked, ..

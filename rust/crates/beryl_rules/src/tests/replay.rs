@@ -2,7 +2,8 @@
 //! and the same game replayed through `Replay` reach the same state at every decision.
 //!
 //! A replacement effect's choice is answered the same two ways, in a resolution and in the
-//! draw step, where the end of the step pauses ([`Pending::StepActions`]).
+//! draw step, where the end of the step pauses ([`Pending::StepActions`]); so is a value a
+//! permanent chooses as it enters.
 
 use beryl_card::{CardDef, Face, ManaCost, Replacement, Types};
 
@@ -227,5 +228,28 @@ fn replacement_choices_replay_to_the_same_state_in_a_step_and_a_resolution() {
     assert!(
         paused.step_actions >= 3 && paused.resolving >= 3,
         "{paused:?}: the test exercises too little"
+    );
+}
+
+/// A value chosen as a permanent enters, answered inline as a rollout would and replayed
+/// through `Replay`, reaches the same state: a color and a name chosen as a spell resolves,
+/// and a creature type as a land is played, which is a decision of its own both ways.
+#[test]
+fn values_chosen_as_permanents_enter_replay_to_the_same_state() {
+    let decks = (&super::chosen::CARDS, super::chosen::DECK);
+    let mut paused = 0;
+    for seed in 0..3 {
+        for profile in [Profile::EXACT, Profile::SMART] {
+            let (logged, outcome) = inline_game(decks, seed, profile);
+            assert!(
+                !matches!(outcome, Outcome::Stalled(_)),
+                "seed {seed}: {outcome:?}"
+            );
+            paused += replay(decks, seed, profile, &logged, outcome).resolving;
+        }
+    }
+    assert!(
+        paused >= 6,
+        "only {paused} paused: the test exercises too little"
     );
 }

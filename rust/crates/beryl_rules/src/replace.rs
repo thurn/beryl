@@ -16,8 +16,9 @@
 //! [CR 614.1]: https://yawgatog.com/resources/magic-rules/#R6141
 //! [CR 614.6]: https://yawgatog.com/resources/magic-rules/#R6146
 
-use beryl_card::Prompt;
 use beryl_card::prompt::Purpose;
+use beryl_card::{ChosenKind, Prompt};
+use beryl_kernel::chosen::ChosenValue;
 
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityIx, AbilityKind, FaceAbility, Replaced, Replacement, Rewrite, Types};
@@ -34,7 +35,7 @@ use crate::profile::Stops;
 use crate::replacement::{self, Instead};
 use crate::state::{AbilityMask, CounterKind, MoveReplacement, ObjectRef, State, Zone, ZoneKey};
 use crate::table::{Capability, GameTable};
-use crate::{actions, interpret, trigger, zones};
+use crate::{actions, chosen, interpret, trigger, zones};
 
 /// A move proposed for one object of a batch, before the state changes: the proposal the
 /// replacement effects of a move rewrite ([`moving`]). Where in a library it goes and why it
@@ -58,16 +59,19 @@ pub(crate) struct Move<L: Layout> {
 }
 
 /// Applies the replacement effects of a move to `proposal`: where the object goes
-/// ([`destination`]), then, for a permanent that enters, how it enters ([`entering`]).
+/// ([`destination`]), then, for a permanent that enters, how it enters ([`entering`]). A
+/// value the permanent chooses as it enters is asked through `sink`'s record of answers, and
+/// kept in `sink` until the permanent has entered ([`Sink::chosen`]).
 #[inline]
 pub(crate) fn moving<L: Layout>(
     s: &State<L>,
     t: &GameTable,
+    sink: &mut Sink<L>,
     mut proposal: Move<L>,
 ) -> Result<Move<L>, Full> {
     proposal.to = destination(s, t, &proposal)?;
     if proposal.to == Zone::Battlefield {
-        proposal.entry = entering(s, t, proposal.slot, proposal.entry)?;
+        proposal.entry = entering(s, t, sink, proposal.slot, proposal.entry)?;
     }
     Ok(proposal)
 }
@@ -357,14 +361,19 @@ pub(crate) fn draw<L: Layout>(
 /// One it would not have there does not apply ([`layers::lost_entering`]): under an effect
 /// that makes nonbasic lands Mountains, a land that would enter tapped unless its controller
 /// paid life enters untapped, and no life is paid. Each changes only how it enters and none
-/// conflicts with another, so each applies in turn. Then the planeswalker's intrinsic one
+/// conflicts with another, so each applies in turn. A choice one requires is made here, before
+/// the permanent enters ([CR 614.12a]): "If a replacement effect that modifies how a permanent
+/// enters the battlefield requires a choice, that choice is made before the permanent enters
+/// the battlefield." Then the planeswalker's intrinsic one
 /// ([CR 306.5b]): "A planeswalker has the intrinsic ability 'This permanent enters with a
 /// number of loyalty counters on it equal to its printed loyalty number.'"
 ///
 /// [CR 306.5b]: https://yawgatog.com/resources/magic-rules/#R3065b
+/// [CR 614.12a]: https://yawgatog.com/resources/magic-rules/#R61412a
 fn entering<L: Layout>(
     s: &State<L>,
     t: &GameTable,
+    sink: &mut Sink<L>,
     slot: L::Slot,
     mut entry: Entry<L>,
 ) -> Result<Entry<L>, Full> {
@@ -409,6 +418,10 @@ fn entering<L: Layout>(
                 if !entry.pay_life {
                     entry.tapped = true;
                 }
+            }
+            Rewrite::Choose(kind) => {
+                let value = choose_value(s, t, sink, slot, controller, kind)?;
+                sink.chosen.push((slot, value));
             }
             // The card table holds no other rewrite of entering.
             Rewrite::None | Rewrite::ToZone(_) | Rewrite::Instead | Rewrite::Dredge(_) => continue,
@@ -496,7 +509,7 @@ pub(crate) fn exiled_instead<L: Layout>(s: &State<L>, object: ObjectRef<L>, to: 
 /// may apply during the next resolution or step. The engine runs each resolution and step that
 /// may meet such a choice on a copy of the state, so the choice can pause it
 /// ([`crate::asking`]). A run that does not run on the copy cannot pause, and takes the first
-/// candidate of any choice it meets ([`choose`]), which declines an optional replacement.
+/// candidate of any choice it meets ([`answer`]), which declines an optional replacement.
 ///
 /// The one optional replacement is dredge, so this holds in every game with a card that has
 /// dredge, wherever that card is. Dredge works from the graveyard as the draw happens
@@ -511,6 +524,15 @@ pub(crate) fn exiled_instead<L: Layout>(s: &State<L>, object: ObjectRef<L>, to: 
 #[inline]
 pub(crate) fn may_ask(t: &GameTable) -> bool {
     t.can(Capability::Dredge)
+}
+
+/// Whether a resolution may meet a choice it did not declare it asks: a replacement effect's
+/// ([`may_ask`]), or a value a permanent chooses as it enters, which any resolution may put
+/// onto the battlefield in a game with a card that chooses one
+/// ([`Capability::ChoosesAsEnters`]). A game with neither pays the one AND [`may_ask`] does.
+#[inline]
+pub(crate) fn resolution_may_ask(t: &GameTable) -> bool {
+    t.can_either(Capability::Dredge, Capability::ChoosesAsEnters)
 }
 
 /// N of the card in `slot`'s dredge, with its ability, if it has dredge.
@@ -572,7 +594,7 @@ pub(crate) fn dredge<L: Layout>(game: &mut Game<'_, L>, player: Seat) -> Result<
         options,
         Prompt::new(Purpose::Replace),
     );
-    let Some(Opt::Object(card)) = d.candidates.option(choose(game, &d)?) else {
+    let Some(Opt::Object(card)) = d.candidates.option(answer(game.state, game.sink, &d)?) else {
         return Ok(false);
     };
     let (ability, n) = dredge_of(game.state, game.table, card).expect("a dredge card");
@@ -585,17 +607,63 @@ pub(crate) fn dredge<L: Layout>(game: &mut Game<'_, L>, player: Seat) -> Result<
     done.map(|()| true)
 }
 
-/// The answer to a replacement effect's choice `d` (CR 616.1). One answer is taken silently,
-/// except under [`Stops::Forced`]. Otherwise the run's record answers it, or the run stops at
-/// it ([`crate::asking`]), returning [`Full`] for whoever opened the run to tell apart. A run
-/// that cannot stop, which a choice no state could foresee meets, takes the first candidate:
-/// declining, for an optional replacement.
-fn choose<L: Layout>(game: &mut Game<'_, L>, d: &Decision<L>) -> Result<Choice, Full> {
+/// The value of `kind` that the permanent in `slot` chooses as it enters under `player`'s
+/// control ([`Rewrite::Choose`]), asked through the record of answers ([`answer`]).
+fn choose_value<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
+    player: Seat,
+    kind: ChosenKind,
+) -> Result<ChosenValue<L>, Full> {
+    let d = chosen::decision(t, player, kind, Bitboard::single(slot))?;
+    let c = answer(s, sink, &d)?;
+    Ok(chosen::value(kind, d.candidates.option(c)))
+}
+
+/// The kind of value the face `face` chooses as it enters, if it chooses one
+/// ([`Rewrite::Choose`]), with the index of its ability.
+fn chooses(face: &crate::card::Face) -> Option<(AbilityIx, ChosenKind)> {
+    (0u8..)
+        .zip(face.abilities)
+        .find_map(|(n, a)| match a.replacement()?.rewrite {
+            Rewrite::Choose(kind) => Some((AbilityIx::new(n), kind)),
+            _ => None,
+        })
+}
+
+/// The kind of value the object in `slot` chooses as it enters as `entry` says, if any: none
+/// when it would not have that ability on the battlefield ([`layers::lost_entering`],
+/// CR 614.12).
+///
+/// [`Full`] if finding what it would have ran out of room.
+pub(crate) fn chosen_to_enter<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    entry: Entry<L>,
+) -> Result<Option<ChosenKind>, Full> {
+    let face = s.copiable(slot).turned(entry.face).face(t);
+    let Some((ability, kind)) = chooses(face) else {
+        return Ok(None);
+    };
+    let lost = layers::lost_entering(s, t, slot, entry, face)?;
+    Ok((!lost.contains(ability)).then_some(kind))
+}
+
+/// The answer to a choice `d` asked below code that has no resolution to ask through: a
+/// replacement effect's choice (CR 616.1), or a value a permanent chooses as it enters. One
+/// answer is taken silently, except under [`Stops::Forced`]. Otherwise the run's record
+/// answers it, or the run stops at it ([`crate::asking`]), returning [`Full`] for whoever
+/// opened the run to tell apart. A run that cannot stop, which a choice no state could
+/// foresee meets, takes the first candidate: declining, for an optional replacement.
+fn answer<L: Layout>(s: &State<L>, sink: &mut Sink<L>, d: &Decision<L>) -> Result<Choice, Full> {
     debug_assert!(!d.is_empty(), "a choice with no candidate");
-    if d.len() == 1 && game.state.profile().stops != Stops::Forced {
+    if d.len() == 1 && s.profile().stops != Stops::Forced {
         return Ok(Choice(0));
     }
-    let asking = &mut game.sink.asking;
+    let asking = &mut sink.asking;
     if let Some(c) = asking.recorded() {
         return Ok(c);
     }

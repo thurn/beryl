@@ -493,7 +493,18 @@ fn perform_machine<L: Layout>(
             s.settle_question();
             let pay = d.candidates.option(c) == Some(Opt::Yes);
             act(s, &mut x.events, d.player, None);
-            let done = enter_from_hand(s, t, &mut x.events, slot, pay);
+            let done = enter_or_choose(s, t, &mut x.events, slot, pay);
+            x.events.leave();
+            done
+        }
+        Pending::EnterChoosing { slot, pay_life, .. } => {
+            s.settle_question();
+            act(s, &mut x.events, d.player, None);
+            // The land's entering asks the same question again, of the same candidates, and
+            // the answer is recorded for it.
+            let done = x.events.asking.begin(&[index::<L>(c.0.into())], false);
+            let done = done.and_then(|()| enter_from_hand(s, t, &mut x.events, slot, pay_life));
+            x.events.asking.end();
             x.events.leave();
             done
         }
@@ -687,7 +698,8 @@ fn pass<L: Layout>(
 }
 
 /// Plays a land: a special action that puts it onto the battlefield. A land that enters
-/// tapped unless its controller pays life asks them first.
+/// tapped unless its controller pays life asks them first, and one that chooses a value as it
+/// enters asks them for it.
 ///
 /// [CR 305.1](https://yawgatog.com/resources/magic-rules/#R3051): "Playing a land is a
 /// special action; it doesn't use the stack (see rule 116). Rather, the player simply puts the
@@ -718,7 +730,33 @@ fn play_land<L: Layout>(
             s.ask(Pending::EnterPayingLife { slot, life });
             Ok(())
         }
-        _ => enter_from_hand(s, t, sink, slot, false),
+        _ => enter_or_choose(s, t, sink, slot, false),
+    }
+}
+
+/// Puts the land being played onto the battlefield, or first asks for the value it chooses as
+/// it enters ([`Pending::EnterChoosing`]).
+fn enter_or_choose<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
+    pay_life: bool,
+) -> Result<(), Full> {
+    let entry = Entry {
+        face: land_face(s, t, slot).expect("a land face"),
+        ..Entry::default()
+    };
+    match crate::replace::chosen_to_enter(s, t, slot, entry)? {
+        Some(kind) => {
+            s.ask(Pending::EnterChoosing {
+                slot,
+                kind,
+                pay_life,
+            });
+            Ok(())
+        }
+        None => enter_from_hand(s, t, sink, slot, pay_life),
     }
 }
 

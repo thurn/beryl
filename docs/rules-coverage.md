@@ -525,7 +525,10 @@ Built by by-bajq.3.2:
   type. It is chosen as the permanent enters, through the replacement pipeline,
   in the `Catalog` prompt shape. The candidates for a name are the names in the
   game's table and "another card": every name outside both decklists has the
-  same consequences (D6).
+  same consequences (D6). A filter is evaluated for a player and X, never for
+  the permanent with the ability, so no filter reads the memo: each reader (the
+  maker of a rule change, the source of a layer effect) has the permanent and
+  asks `State::chosen` for its value.
 - **A class of permission.** An effect that lets a player cast every card a
   filter accepts from a zone is a rule change with casting terms. A keyword that
   does so by granting an ability to cards in a graveyard is read through group

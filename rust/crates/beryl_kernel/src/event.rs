@@ -10,6 +10,7 @@ use crate::asking::Asking;
 use crate::bitboard::Bitboard;
 use crate::cause::{Cause, Scopes, StackIx, Tag};
 use crate::chance::Chance;
+use crate::chosen::ChosenValue;
 use crate::ids::Seat;
 use crate::layout::{Layout, Small};
 use crate::object::ObjectRef;
@@ -370,6 +371,11 @@ pub struct Sink<L: Layout = Small> {
     /// The answers of a run that may pause at a question from any depth of the rules
     /// ([`crate::asking`]).
     pub asking: Asking<L>,
+    /// The values the permanents of the batch of moves under way chose as they enter
+    /// ([`crate::Memo::Chosen`]), from their choice, made before any of them moves, until
+    /// they have entered. Here rather than beside each move, which every zone move would pay
+    /// to carry; empty, and never allocated, in a game with no card that chooses.
+    pub chosen: Vec<(L::Slot, ChosenValue<L>)>,
 }
 
 /// The scopes a sink had open, which [`Sink::save_scopes`] took.
@@ -475,6 +481,7 @@ impl<L: Layout> Sink<L> {
             revealed: crate::relayout::bits(self.revealed),
             // Between the engine's calls no run is under way.
             asking: Asking::default(),
+            chosen: Vec::new(),
         }
     }
 

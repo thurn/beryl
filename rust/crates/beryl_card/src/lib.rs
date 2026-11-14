@@ -42,8 +42,8 @@ pub use ability::{Ability, AbilityKind, Behavior, Custom, Says, Timing};
 pub use characteristics::{BasicLandTypes, Colors, Keywords, Subtype, Subtypes, Supertypes, Types};
 pub use check::Malformed;
 pub use continuous::{
-    Duration, Governed, Layer, LayerSpec, MODIFY_PARTS, Modification, Replaced, Replacement,
-    Rewrite, RuleChange, When,
+    ChosenKind, Duration, Governed, Layer, LayerSpec, MODIFY_PARTS, Modification, Replaced,
+    Replacement, Rewrite, RuleChange, When,
 };
 pub use cost::{
     CastingKind, CastingKinds, CastingOption, Castings, Chosen, Cost, CostAction, CostPart, Measure,

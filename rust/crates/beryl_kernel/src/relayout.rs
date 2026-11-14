@@ -325,6 +325,15 @@ impl<L: Layout> Relayout for Pending<L> {
                 slot: slot(s),
                 life,
             },
+            &Pending::EnterChoosing {
+                slot: s,
+                kind,
+                pay_life,
+            } => Pending::EnterChoosing {
+                slot: slot(s),
+                kind,
+                pay_life,
+            },
             &Pending::DeclareAttackers { attacker } => Pending::DeclareAttackers {
                 attacker: attacker.map(slot),
             },

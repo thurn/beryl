@@ -17,10 +17,10 @@
 //! An effect that lets a player choose a creature type
 //! ([CR 205.3e](https://yawgatog.com/resources/magic-rules/#R2053e): "If an effect instructs
 //! a player to choose a subtype, that player must choose one, and only one, existing
-//! subtype") can choose one no card of the game names. None of the pool's cards with a file
-//! has one. Such a card keeps the chosen `Subtype` in its own store and the table numbers a
-//! subtype for each such choice its cards can make, which the choice is bound to as it is
-//! made: the set stays 128 bits.
+//! subtype") can choose one no card of the game names. Every such type has the same
+//! consequences in the game, since nothing of it reads one, so the choice is among the
+//! creature types the game numbers and one more for all the rest
+//! ([`SubtypeNumbers::creature_types`]): the set stays 128 bits.
 
 use beryl_card::{CardDef, Subtype, Subtypes, Types};
 
@@ -107,6 +107,22 @@ impl SubtypeNumbers {
     fn number(&self, subtype: Subtype) -> Option<usize> {
         let n = self.numbers[subtype as usize];
         (n != UNNUMBERED).then_some(usize::from(n))
+    }
+
+    /// The subtype numbered `n`, if the game numbers one so.
+    #[inline]
+    pub fn subtype(&self, n: u8) -> Option<Subtype> {
+        self.subtypes.get(usize::from(n)).copied()
+    }
+
+    /// The creature types the game numbers, each with its number, in number order
+    /// ([CR 205.3m](https://yawgatog.com/resources/magic-rules/#R2053m)): "Creatures and
+    /// kindreds share their lists of subtypes; these subtypes are called creature types."
+    pub fn creature_types(&self) -> impl Iterator<Item = (u8, Subtype)> + '_ {
+        (0u8..)
+            .zip(&self.subtypes)
+            .filter(|(_, subtype)| subtype.card_type().intersects(CREATURE_TYPES))
+            .map(|(n, &subtype)| (n, subtype))
     }
 
     /// The printed subtypes of the first two faces of each of `defs`, by these numbers.

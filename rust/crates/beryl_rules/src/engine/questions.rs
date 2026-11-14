@@ -10,7 +10,7 @@ use crate::layout::{Layout, Queue};
 use crate::observation::Observation;
 use crate::state::{Pending, State};
 use crate::table::GameTable;
-use crate::{cast, combat, entered, face_down, mana, sba, start, trigger, turn};
+use crate::{cast, chosen, combat, entered, face_down, mana, sba, start, trigger, turn};
 
 use super::collapse;
 
@@ -83,6 +83,10 @@ pub(crate) fn decision<L: Layout>(
             Prompt::new(Purpose::PayLife).count(life),
         )?
         .about(Bitboard::single(slot))),
+        // The question is about the land entering.
+        Pending::EnterChoosing { slot, kind, .. } => {
+            chosen::decision(t, s.object(slot).owner(), kind, Bitboard::single(slot))
+        }
         Pending::DeclareAttackers { attacker } => combat::attack_decision(s, attacker),
         Pending::DeclareBlockers { blocker } => combat::block_decision(s, t, blocker),
         Pending::CombatDamage { done, lethal } => combat::division_decision(s, done, lethal),

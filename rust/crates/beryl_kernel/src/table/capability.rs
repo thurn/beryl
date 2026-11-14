@@ -47,11 +47,15 @@ pub enum Capability {
     /// A card has dredge ([`beryl_card::Replacement::dredge`]), a replacement of draws that
     /// works from a graveyard, so a draw looks there for one.
     Dredge,
+    /// A card chooses a value as it enters ([`beryl_card::Replacement::choose_as_enters`]), a
+    /// choice that may come up wherever a permanent enters, so every resolution runs where it
+    /// can pause for it (`beryl_rules`' `resolve`).
+    ChoosesAsEnters,
 }
 
 impl Capability {
     /// The capabilities a face gives a game that can contain it.
-    pub(super) fn of(face: &Face) -> u8 {
+    pub(super) fn of(face: &Face) -> u16 {
         let mut found = 0;
         if Inputs::of(face) != Inputs::NONE {
             found |= Capability::LayerInputs.bit();
@@ -67,6 +71,13 @@ impl Capability {
             }) = a.replacement()
             {
                 found |= Capability::Dredge.bit();
+            }
+            if let Some(&Replacement {
+                rewrite: Rewrite::Choose(_),
+                ..
+            }) = a.replacement()
+            {
+                found |= Capability::ChoosesAsEnters.bit();
             }
             if a.cost().is_loyalty() {
                 found |= Capability::LoyaltyActivated.bit();
@@ -91,7 +102,7 @@ impl Capability {
     }
 
     #[inline]
-    pub(super) const fn bit(self) -> u8 {
-        1 << (self as u8)
+    pub(super) const fn bit(self) -> u16 {
+        1 << (self as u16)
     }
 }

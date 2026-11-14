@@ -14,6 +14,7 @@ mod cancel;
 mod candidates;
 mod chance;
 mod checkpoints;
+mod chosen_values;
 mod clicks;
 mod corpus;
 mod cost_replay;

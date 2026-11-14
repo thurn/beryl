@@ -20,9 +20,10 @@
 //! | [`Shape::Split`] | [`pick`], [`pick_or_end`] | A card for the destination the prompt's part names; the second way where the first destination's picks offer an end. |
 //! | [`Shape::Pay`] | [`pay`] | One step of a payment, or the whole of one the engine worked out. |
 //! | [`Shape::Declare`] | [`aim`] | What objects already chosen are aimed at. |
+//! | [`Shape::Catalog`] | [`catalog`] | A color, a creature type or a card name. |
 //!
-//! No resolution asks in the other shapes yet (an order, a number, a mode, a catalog entry, a
-//! division): the first that does adds its function here. The cast a resolution offers is a
+//! No resolution asks in the other shapes yet (an order, a number, a mode, a division): the
+//! first that does adds its function here. The cast a resolution offers is a
 //! mode, but the engine asks it once the resolution has ended ([`crate::casting::offer`]).
 //!
 //! In debug builds each function checks that the prompt it is given is one its question can
@@ -66,7 +67,8 @@
 //! every save and every rollout, which replay the answers by their place. A change to any of
 //! the three is a change of the save format.
 
-use beryl_card::{Effect, Objects, Place, Zone};
+use beryl_card::{ChosenKind, Effect, Objects, Place, Zone};
+use beryl_kernel::chosen::ChosenValue;
 
 use crate::bitboard::Bitboard;
 use crate::card::{Flow, Part, Players, Prompt, Purpose, Shape, Stop};
@@ -100,6 +102,21 @@ fn option<L: Layout>(
     };
     let c = resolution.answer(game, &d)?;
     Ok(d.candidates.option(c).expect("an answer among the options"))
+}
+
+/// Asks `player` for a value of `kind`: a color, a creature type or a card name, one entry of
+/// the catalog [`crate::chosen`] numbers, about the objects `about`. The whole of a
+/// [`Shape::Catalog`].
+pub fn catalog<L: Layout>(
+    game: &mut Game<'_, L>,
+    resolution: &mut Resolution<'_, L>,
+    player: Seat,
+    kind: ChosenKind,
+    about: Bitboard<L::Slot>,
+) -> Result<ChosenValue<L>, Stop> {
+    let d = crate::chosen::decision(game.table, player, kind, about)?;
+    let c = resolution.answer(game, &d)?;
+    Ok(crate::chosen::value(kind, d.candidates.option(c)))
 }
 
 /// Asks `player` yes or no, as `prompt` says, about the objects `about`: the cards the

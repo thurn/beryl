@@ -32,7 +32,10 @@ use crate::{interpret, replace};
 /// Resolves the top of the stack, or continues a paused resolution with its record.
 ///
 /// While a replacement effect's choice can come up ([`replace::may_ask`]), as a dredge for a
-/// card the body draws, every body runs on the copy, since any may meet it. An inline source
+/// card the body draws, every body runs on the copy, since any may meet it. So does every
+/// resolution of a game with a card that chooses a value as it enters
+/// ([`replace::resolution_may_ask`]): a permanent spell, or a body that puts a permanent onto
+/// the battlefield, may meet that choice. An inline source
 /// then answers each question as the run stops at it, and the body runs again with the
 /// answer recorded: the record holds a replacement's choice and the body's own questions in
 /// the order they came, so each run asks them alike.
@@ -48,7 +51,7 @@ pub(crate) fn resolve<L: Layout>(
         Pending::Resolving(r) => r.record.clone(),
         _ => Default::default(),
     };
-    let may_ask = replace::may_ask(t);
+    let may_ask = replace::resolution_may_ask(t);
     // The source is asked first: whether an ability written as data asks is read from its
     // effect, which a rollout's inline source never needs.
     if !may_ask && (a.inline() || !ability.is_some_and(Ability::asks)) {
@@ -316,6 +319,8 @@ fn run_answered<L: Layout>(
     match ran {
         Err(Full) if stopped.is_some() => {
             sink.restore_scopes(scopes);
+            // Values chosen for permanents of a batch that stopped before they moved.
+            sink.chosen.clear();
             Ok(stopped)
         }
         ran => ran,
