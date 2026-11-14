@@ -5,7 +5,7 @@
 use beryl_cards::CARDS;
 use beryl_cards::names::{
     COUNTERSPELL, ISLAND, MANA_CRYPT, PLAINS, SNAPCASTER_MAGE, THE_WANDERING_EMPEROR,
-    THUNDERTRAP_TRAINER,
+    THIRST_FOR_DISCOVERY, THUNDERTRAP_TRAINER,
 };
 use beryl_engine::TurnStep;
 use beryl_scenario::{P0, P1, Permanent, Scenario};
@@ -317,38 +317,45 @@ fn a_cleared_main_phase_stop_passes_it_by() {
 }
 
 /// The opponent's turn, with two Mana Crypts to cast one after the other, each of which the
-/// human could counter.
+/// human could counter, and an instant the human could cast at any time, as in the report
+/// where the human held Thirst for Discovery.
 const TWO_SPELLS_IN_TURN: Scenario = Scenario::new("two-spells-in-turn")
     .at(2, P1, TurnStep::PrecombatMain)
-    .permanents(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
-    .hand(P0, &[COUNTERSPELL])
+    .permanents(
+        P0,
+        &[
+            Permanent::new(ISLAND),
+            Permanent::new(ISLAND),
+            Permanent::new(ISLAND),
+        ],
+    )
+    .hand(P0, &[COUNTERSPELL, THIRST_FOR_DISCOVERY])
     .library(P0, LANDS)
     .hand(P1, &[MANA_CRYPT, MANA_CRYPT])
     .library(P1, LANDS);
 
-/// Passing on to the next stop ends where the opponent puts a spell on the stack: the human
-/// gets priority over it, with the pass button resolving it (UI Conventions, "Passing to the
-/// end step"), and passing it is a pass of its own.
+/// Passing on to the next stop goes on through the spells the opponent casts meanwhile, even
+/// one the human could counter, to the end step its button names (UI Conventions, "Passing to
+/// the end step"). A player who reported it found the button stopping at the opponent's next
+/// spell, so that it did no more than the "Resolve" button beside it.
 #[test]
-fn passing_on_stops_for_a_spell_the_opponent_casts() {
+fn passing_on_goes_through_the_opponents_spells_to_the_end_step() {
     let mut play = Play::against(&TWO_SPELLS_IN_TURN, Some(Box::new(Casts)));
     let crypts = |play: &Play, zone| play.named(MANA_CRYPT, zone, Side::Opponent).len();
     // The first Mana Crypt is on the stack: the human passes on, past its resolution.
     let first = play.decision();
     assert_eq!(crypts(&play, ZoneName::Stack), 1);
     assert_eq!(first.pass_to, Some(PassTo::Resolve));
-    assert!(first.pass_on.is_some(), "no pass on: {first:?}");
+    assert_eq!(first.pass_on, Some(PassTo::Step { step: Step::End }));
     let pass = play.game.open().unwrap().pass_on(first.id).unwrap();
     play.game.pass_on(pass);
     play.view = to_human(&mut play.game);
-    // The second is cast once the first resolved, and stops them.
-    let second = play.decision();
-    assert_eq!(second.kind, Kind::Priority);
-    assert_eq!(second.pass_to, Some(PassTo::Resolve));
-    assert_eq!(play.view.turn.step, Step::PrecombatMain);
-    assert_eq!(crypts(&play, ZoneName::Battlefield), 1);
-    assert_eq!(crypts(&play, ZoneName::Stack), 1);
-    // The pass on is over: this pass resolves the spell and no more.
-    play.choose(|c| *c == Candidate::Pass);
+    // The second is cast once the first resolved, and resolves too: the human, still holding
+    // Counterspell and Thirst for Discovery, next gets priority at the opponent's end step.
+    let next = play.decision();
+    assert_eq!(next.kind, Kind::Priority);
+    assert_eq!(play.view.turn.step, Step::End);
     assert_eq!(crypts(&play, ZoneName::Battlefield), 2);
+    assert_eq!(crypts(&play, ZoneName::Stack), 0);
+    assert_eq!(play.named(COUNTERSPELL, ZoneName::Hand, Side::You).len(), 1);
 }

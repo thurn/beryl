@@ -50,11 +50,12 @@ impl Game {
     }
 
     /// Whether the session passes the human's priority for them as they pass on to their next
-    /// stop ([`Game::pass_on`]): short of it, until an opponent puts a spell or ability on the
-    /// stack ([`Game::opposed`]). The human's own spells and triggers, and the opponent's
-    /// attack, keep it going.
+    /// stop ([`Game::pass_on`]): whenever it is short of that stop, through the opponent's
+    /// spells, abilities and attacks as well as the human's own (UI Conventions, "Passing to
+    /// the end step"). The human asked for the end step, and a pass button that stopped at
+    /// each opponent spell would do no more than "Resolve" beside it.
     pub(super) fn passes_for(&self, passing: PassingOn) -> bool {
         let turn = self.board.turn();
-        (turn.number(), turn.step()) < passing.until && !self.opposed()
+        (turn.number(), turn.step()) < passing.until
     }
 }

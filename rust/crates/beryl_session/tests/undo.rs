@@ -17,9 +17,7 @@ use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_search::{Agent, AgentDecision, Budget};
 use beryl_session::prompt::ShapeBody;
 use beryl_session::protocol::ObjectId;
-use beryl_session::protocol::{
-    Candidate, DecisionView, Kind, PassTo, Side, StackItem, Step, ZoneName,
-};
+use beryl_session::protocol::{Candidate, DecisionView, Kind, PassTo, Side, Step, ZoneName};
 use beryl_session::replay::{Entry, ReplayFile};
 use beryl_session::{
     CandidateIndex, Game, PlayerView, Prepared, SessionError, SessionId, StartGame, Status,
@@ -328,22 +326,13 @@ fn passing_on_goes_past_the_stops_in_its_step() {
                 "the log records the pass on"
             );
             passed += 1;
-            // It stops at a later step, or sooner only for a decision other than priority or
-            // for a spell or ability the opponent put on the stack meanwhile.
+            // It stops at a later step, or sooner only for a decision other than priority.
             if let Some(next) = deciding(&view)
                 && next.kind == Kind::Priority
                 && !next.halt
             {
-                let (turn, step) = at(&view);
-                let theirs = |item: &StackItem| match item {
-                    StackItem::Spell { slot, .. } => (view.objects.iter())
-                        .any(|o| o.slot == *slot && o.controller == Side::Opponent),
-                    StackItem::Ability { controller, .. } => *controller == Side::Opponent,
-                };
-                let opposed =
-                    (view.stack.iter()).any(|item| theirs(item) && !resumed.stack.contains(item));
                 assert!(
-                    (turn, step) != from || matches!(to, PassTo::NextTurn) || opposed,
+                    at(&view) != from || matches!(to, PassTo::NextTurn),
                     "seed {seed}: stopped again in the step it passed on from"
                 );
             }

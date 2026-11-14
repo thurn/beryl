@@ -148,11 +148,13 @@ restore the old behavior.
 - **A line from an ability to its source.** It is always shown while the ability
   is on the stack, thin and faint as Arena draws it, and hidden during a prompt.
   A heavy arrow is not that line (by-wkr, by-afh, by-110h).
-- **Passing to the end step.** "End Turn" passes until the end step, but stops
-  when the opponent puts a spell or ability on the stack: the button reads
-  "Resolve", then "Pass" once it resolves (by-sqo). The button reads "End Turn"
-  over "To End", and goes blank while it passes (SswBO8aOOgc 21:00, WQiYBv23buw
-  37:52, jD7VqaT8VC8 45:29).
+- **Passing to the end step.** "End Turn" passes until the end step, or the
+  player's next stop where the end step is not one, through every spell and
+  ability the opponent puts on the stack meanwhile. It stops sooner only for a
+  decision other than priority, such as declaring blockers; "Resolve" beside it
+  is the way to stop at the opponent's next spell (by-sqo, by-xuku). The button
+  reads "End Turn" over "To End", and goes blank while it passes (SswBO8aOOgc
+  21:00, WQiYBv23buw 37:52, jD7VqaT8VC8 45:29).
 - **Targeting a spell.** With one spell on the stack, a spell that targets a
   spell takes it with no prompt and no Confirm. With more, a "Choose One"
   browser of the stack, "Target a spell.", opens with nothing preselected,

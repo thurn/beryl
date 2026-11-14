@@ -515,9 +515,10 @@
     {
       "kind": "settled",
       "name": "Passing to the end step",
-      "rule": "\"End Turn\" passes until the end step, but stops when the opponent puts a spell or ability on the stack: the button reads \"Resolve\", then \"Pass\" once it resolves.",
+      "rule": "\"End Turn\" passes until the end step, or the player's next stop where the end step is not one, through every spell and ability the opponent puts on the stack meanwhile. It stops sooner only for a decision other than priority, such as declaring blockers; \"Resolve\" beside it is the way to stop at the opponent's next spell.",
       "reports": [
-        "by-sqo"
+        "by-sqo",
+        "by-xuku"
       ],
       "arena": {
         "does": "The button reads \"End Turn\" over \"To End\", and goes blank while it passes.",
