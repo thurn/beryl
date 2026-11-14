@@ -382,3 +382,41 @@ def test_only_a_detached_ci_named_worktree_is_slow_cis() -> None:
     assert not warm.is_slow_ci(Path(".worktrees/ci-2dd60bd5a1b2"), "enact/x")
     assert not warm.is_slow_ci(Path(".worktrees/ci-cache-writer"), "")
     assert not warm.is_slow_ci(Path(".worktrees/slot-1"), "")
+    assert warm.is_slow_ci(Path(".worktrees/ci-runner"), "")
+
+
+def test_slow_cis_reused_tree_saves_a_copy_without_incremental_caches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BERYL_CACHE", str(tmp_path / "cache"))
+    write(tmp_path / "cache" / "target" / "debug" / "deps" / "libold.rlib", "old")
+    tree = checkout(tmp_path / ".worktrees" / warm.SLOW_TREE, "lock-v1")
+    write(tree / "rust" / "lib.rs", "source")
+    git(tree, "init", "-q")
+    git(tree, "add", "-A")
+    git(tree, "commit", "-qm", "first")
+    target = tree / "rust" / "target"
+    write(target / "debug" / "deps" / f"libberyl-{'b' * 16}.rlib", "beryl")
+    session = target / "debug" / "incremental" / f"beryl-{'c' * 13}" / "s-a-b"
+    write(session / "query-cache.bin", "bound to this path")
+
+    caches.save_kept(tree)
+
+    # The tree keeps its whole build for the next run.
+    assert (session / "query-cache.bin").exists()
+    cached = tmp_path / "cache" / "target"
+    assert (cached / "debug" / "deps" / f"libberyl-{'b' * 16}.rlib").exists()
+    assert not (cached / "debug" / "deps" / "libold.rlib").exists()
+    assert not (cached / "debug" / "incremental").exists()
+    assert (cached / warm.CI_STAMP).exists() and (cached / warm.SOURCES).exists()
+    assert [p.name for p in (tmp_path / "cache").iterdir() if "kept" in p.name] == []
+
+
+def test_another_tree_saves_nothing_at_the_end_of_slow_ci(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BERYL_CACHE", str(tmp_path / "cache"))
+    tree = checkout(tmp_path / ".worktrees" / "ci-0123456789ab", "lock-v1")
+    write(tree / "rust" / "target" / "debug" / "deps" / "libberyl.rlib", "beryl")
+    caches.save_kept(tree)
+    assert not (tmp_path / "cache" / "target").exists()

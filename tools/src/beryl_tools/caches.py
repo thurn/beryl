@@ -341,3 +341,53 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         help="prune harder below this much free space (default %(default).0f)",
     )
     p.set_defaults(func=prune_command)
+
+
+# The least seconds between two copies of slow CI's reused tree into the cache (`save_kept`):
+# none on a Mac, where an APFS clone takes seconds, and six hours on Windows, where robocopy
+# copies every byte.
+KEPT_SAVE_EVERY: float = 6 * 3600.0 if warm.WINDOWS else 0.0
+
+
+def save_kept(checkout: Path) -> None:
+    """In slow CI's reused tree ([`warm.SLOW_TREE`]), replaces the cache's `rust/target` with a copy
+    of the tree's own, less its incremental caches, which stay in the tree for the next run.
+
+    rustc keys each incremental cache to the absolute path of the checkout that built it and
+    discards it anywhere else. On 2026-11-14, after a one-function change to beryl_kernel, the
+    test build took 18 CPU-seconds in the tree that built it and 544 in a copy of that tree at
+    another path. The cache's incremental caches were 8 of its 16 GB and 21,249 of its 45,780
+    files, cloned into every new worktree, where rustc threw them away.
+    """
+    if checkout.name != warm.SLOW_TREE:
+        return
+    target = checkout / "rust" / "target"
+    cached = warm.cache_root() / "target"
+    if not target.is_dir():
+        return
+    with suppress(OSError):
+        if time.time() - (cached / warm.CI_STAMP).stat().st_mtime < KEPT_SAVE_EVERY:
+            return
+    copy = warm.cache_root() / f".target-kept-{os.getpid()}"
+    try:
+        with warm.locked():
+            warm.prune(target)
+            warm.record_sources(checkout, target)
+            (target / warm.CI_STAMP).write_text("")
+            shutil.rmtree(copy, ignore_errors=True)
+            if not warm.clone_into(target, copy):
+                warm.log(f"could not copy {target}")
+                return
+            for incremental in incremental_folders(copy):
+                shutil.rmtree(incremental, ignore_errors=True)
+            if warm.replace(copy, cached):
+                warm.log(f"saved a copy of {target} without its incremental caches")
+    except OSError as error:
+        warm.log(f"could not save a copy of {target}: {error}")
+    finally:
+        shutil.rmtree(copy, ignore_errors=True)
+
+
+def incremental_folders(target: Path) -> list[Path]:
+    """The incremental-cache folders of each build profile in `target`, the Tauri CLI's too."""
+    return [*target.glob("*/incremental"), *target.glob(f"{warm.TAURI}/*/incremental")]

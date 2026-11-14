@@ -15,6 +15,11 @@ slow_timeout = 3600
 # (tools/src/beryl_tools/tokens.py), capped at half the cores. Runs take about 330 s, so this
 # keeps the runner idle for about half of the time and `master` still advances within minutes.
 slow_min_gap = 300
+# Every slow-CI run reuses one worktree, `.worktrees/ci-runner`, keeping its rust/target: rustc
+# discards incremental caches built at any other path, and a new tree per run rebuilt every
+# changed crate from scratch (a one-function beryl_kernel change: 544 CPU-seconds of test build
+# against 18). `by ci` copies its target into the cache for new worktrees (`caches.save_kept`).
+slow_tree = "ci-runner"
 
 [worktree]
 root = ".worktrees"   # inside the checkout; gitignored

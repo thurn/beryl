@@ -76,8 +76,10 @@ UNIT_NAME: re.Pattern[str] = re.compile(r"^(?:lib)?(.+-[0-9a-f]{16})(?:\..+)?$")
 # folders (`record_sources`): JSON, `files` from each path to its git blob id and modification
 # time in nanoseconds, `folders` from each path to a digest of its names and its time.
 SOURCES = ".beryl-sources.json"
-# The name Enact gives a slow-CI worktree (`saves_target`).
-CI_WORKTREE: re.Pattern[str] = re.compile(r"ci-[0-9a-f]{12}")
+# Slow CI's worktrees (`saves_target`): the one every run reuses (`slow_tree` in .enact.toml,
+# never removed, so `caches.save_kept` saves it), else Enact's new `ci-<tip>` one per run.
+SLOW_TREE = "ci-runner"
+CI_WORKTREE: re.Pattern[str] = re.compile(rf"ci-[0-9a-f]{{12}}|{SLOW_TREE}")
 # The file a slow-CI worktree's saved target holds, written as it is saved (`saves_target`).
 CI_STAMP = ".beryl-slow-ci"
 
@@ -186,9 +188,8 @@ def main_checkout(checkout: Path) -> Path | None:
 
 
 def robocopy(source: Path, dest: Path, leave_out: str | None) -> list[str]:
-    """Windows has no `cp -c`: robocopy copies on many threads, which makes a copy of
-    rust/target take a minute rather than many. Its exit codes under 8 mean success, which a
-    wrapper turns into 0."""
+    """Windows has no `cp -c`: robocopy copies rust/target on many threads, in a minute rather
+    than many. A wrapper turns its exit codes under 8, which mean success, into 0."""
     exclude = ["/XD", str(source / leave_out)] if leave_out else []
     script = (
         "import subprocess, sys; sys.exit(subprocess.run(sys.argv[1:]).returncode >= 8)"

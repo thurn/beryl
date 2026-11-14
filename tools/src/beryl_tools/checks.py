@@ -436,6 +436,9 @@ def run_all(
         # After `settle`, so this run's records are in the log the detector reads.
         for line in slow_budget():
             print(line)
+        # Slow CI's reused tree keeps its build for the next run; a copy goes to the cache
+        # that new worktrees clone from (`caches.save_kept`).
+        caches.save_kept(paths.REPO)
     # The run's time for its budget is its longest lane's, waits for tokens left out
     # (`lane_steps`): lanes run at once, and a wait is time the machine spent on other work.
     elapsed = max((o.seconds for o in outcomes), default=0.0)
