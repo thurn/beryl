@@ -181,10 +181,10 @@ the client they describe, and later sections refer to them by number.
   counted, kept free of allocation and gated.
 
 - **C13. GPU performance is held by counts alone.** The checks count the
-  fragments a frame shades and the cycles each shader costs. No 2015-class phone
-  is bought or attached to confirm them. A counted number is a stand-in for
-  device performance: where the two are found to disagree, the device is right,
-  and no design choice is made to suit a count at the device's expense.
+  fragments a frame shades and the work each shader does for one. No 2015-class
+  phone is bought or attached to confirm them. A counted number is a stand-in
+  for device performance: where the two are found to disagree, the device is
+  right, and no design choice is made to suit a count at the device's expense.
 
 - **C14. Interface tests are fast enough to run all of them before every push.**
   A test costs about a millisecond, because it checks the moments at which
@@ -202,9 +202,13 @@ the engine, the rules, the AI or the session changes for it.
   (`choose`, `click`, `cancel`, `undo`, `pass_on`, `concede`, `set_stops`). It
   links `beryl_session` directly, so the values cross a channel as Rust types
   with no serialization.
-- **Scripts and verbs.** The client plays scripts and infers nothing, as the web
-  interface does. A script's steps name verbs from the closed list, and the
-  client has one implementation of each.
+- **Scripts and verbs.** The client never works out what happened: the script
+  says it. A script's steps name verbs from the closed list, and the client has
+  one implementation of each. A client does work out when each step plays (which
+  timing case applies, and which steps wait for which), from rules the web
+  interface holds in `ui/src/stage/timing.ts` and `beat.ts`. Beryl 3D ports
+  those rules, and a check holds the two clients' timings equal (see
+  [Timing a script](#timing-a-script)).
 - **Prompt state.** A prompt's state lives in the session. Each click is a
   command, and the reply says which marks to draw and which buttons are enabled.
 - **Arena as the reference** for flow, order, timing, table layout and wording,
@@ -229,7 +233,7 @@ works out what happened by comparing two views: the step says it.
 
 ## Components
 
-Beryl 3D is five crates and two native programs for phones. Each crate has one
+Beryl 3D is six crates and two native programs for phones. Each crate has one
 job, and each depends only on crates below it in this list.
 
 - **`beryl_3d`**, the app. It connects the session, the client core, the
@@ -244,6 +248,13 @@ job, and each depends only on crates below it in this list.
 - **`beryl_assets`**, everything prepared off the drawing thread: downloading
   and decoding card images, composing card faces, compressing textures and
   rasterizing glyphs.
+- **`beryl_stage`**, the tools that play recordings with no window and no GPU:
+  the file of recordings, the interface test runner, and the text half of the
+  command-line tool (see [The agent interface](#the-agent-interface)). It
+  depends on the client core and on the code that records fixtures, and on no
+  GPU crate, so it rebuilds quickly after an edit to the client core. The
+  commands that draw pictures are a second program in `beryl_3d`, which has the
+  renderer.
 - **`beryl_scene`**, which this document calls **the client core**. It holds the
   3D table, the element tree, animation, layout, hit testing and the interface
   checks. It depends on `taffy`, `parley` and the protocol types of
@@ -293,31 +304,109 @@ A resolved element carries what a check or a locator needs:
 ```rust
 pub struct Resolved {
     pub id: ElementId,
-    pub role: Role,            // Card, Button, Text, Region, Player, ...
+    pub parent: u32,           // index of its parent in the array; u32::MAX
+                               // at the root. Parents come before children.
+    pub role: Role,
     pub name: NameRef,         // "Counterspell", "Auto Pay"
+    pub place: Place,          // a card's zone and row; Place::Layer for an
+                               // element of the flat layer
     pub corners: [Vec2; 4],    // on screen, in logical points
     pub depth: f32,            // nearer the camera is smaller
     pub opacity: f32,
     pub clip: Option<Rect>,
     pub interactive: bool,
-    pub state: StateBits,      // tapped, moving, selected, disabled, ...
+    pub state: StateBits,
+}
+
+/// Closed. A new role is added here with the word the tree printout uses.
+pub enum Role {
+    Card, Ability, Pile, Player, Region, Button, Text, Icon, Field, Toggle,
+    List, MenuItem,
+}
+
+/// One bit each, in this order from bit 0.
+pub struct StateBits(pub u16);
+// TAPPED, FACE_DOWN, MOVING, HOVERED, HELD, ELIGIBLE, SELECTED, TARGET,
+// DISABLED, FOCUSED
+```
+
+The frame itself, and what `Client` says about when it next needs one:
+
+```rust
+pub struct Frame {
+    pub resolved: Vec<Resolved>,  // capacity set at startup, cleared each frame
+    pub draws: Vec<Draw>,         // in drawing order
+    pub opaque: u32,              // draws[..opaque] are the opaque records
+    pub clips: [Rect; 16],        // physical pixels; entry 0 is not used
+    pub shake: Vec2,              // physical pixels, see Effects
+    pub sounds: Vec<SoundId>,     // the sounds that begin in this frame
+    pub load: Load,               // draw calls, instances, upload bytes, and
+                                  // the opaque and blended screen areas
+    pub work: Work,               // elements visited, segments evaluated,
+                                  // layout nodes computed, records written
+}
+
+pub enum Wake { Now, At(u64), Never }
+
+impl Client {
+    /// When the next frame is needed, as of the last call to `frame`.
+    pub fn wake(&self) -> Wake;
+    /// The next thing the client asks of the platform, if any.
+    pub fn next_request(&mut self) -> Option<Request>;
 }
 ```
 
-A draw record is 64 bytes, so 1,000 of them are 64,000 bytes written in order:
+A draw record is 80 bytes, so 1,000 of them are 80,000 bytes written in order:
 
 ```rust
 #[repr(C)]
 pub struct Draw {
     pub model: [f32; 12],   // a 3 by 4 transform, world space     (48 bytes)
-    pub uv: [u16; 4],       // rectangle in the texture layer, or   (8 bytes)
-                            // a card's back layer (see below)
+    pub uv: [u16; 4],       // by material, see the table below     (8 bytes)
     pub layer: u16,         // which layer of the texture array     (2 bytes)
     pub material: u8,       // index into the closed material list  (1 byte)
-    pub flags: u8,          // which texture array and which mesh   (1 byte)
-    pub tint: [u8; 4],      // color and opacity                    (4 bytes)
+    pub flags: u8,          // texture array, mesh and clip         (1 byte)
+    pub tint: [u8; 4],      // color and opacity, not premultiplied (4 bytes)
+    pub params: [f32; 4],   // by material, see the table below    (16 bytes)
 }
 ```
+
+The prototype's record was 64 bytes and had no field to spare: a card's back
+layer had to go in its unused `uv`. The flat layer and the effects need more per
+shape (a panel's size and corner radius, how far a dissolve has gone), so the
+record has four more numbers, `params`.
+
+The bits of `flags`:
+
+| Bits   | Meaning                                                                                                                                                                                             |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0 to 1 | The texture array: 0 the small card faces, 1 the full-size card faces, 2 the atlas.                                                                                                                 |
+| 2 to 3 | The mesh: 0 the card (a rounded rectangle), 1 the card's edge strip, 2 the unit quad.                                                                                                               |
+| 4 to 7 | The clip: 0 for none, or 1 to 15 for an entry of the frame's `clips` array, a rectangle in physical pixels that the renderer sets as the scissor. A frame that needs more than 15 clips is a fault. |
+
+What `uv`, `layer` and `params` hold for each material. A field not named is
+zero. The numbers in the first column are the values of `material`:
+
+| Material         | `uv`                             | `layer`    | `params`                                                          |
+| ---------------- | -------------------------------- | ---------- | ----------------------------------------------------------------- |
+| 0 table          | unused                           | unused     | unused                                                            |
+| 1 card           | `uv[0]` is the back's layer      | the face   | `[dissolve, whiten, 0, 0]`, each from 0 to 1                      |
+| 2 contact shadow | unused                           | unused     | `[blur in millimetres, 0, 0, 0]`                                  |
+| 3 glow           | the sprite's rectangle in texels | atlas page | `[progress from 0 to 1, 0, 0, 0]`                                 |
+| 4 streak         | the sprite's rectangle in texels | atlas page | `[head from 0 to 1, tail length from 0 to 1, 0, 0]`               |
+| 5 panel          | the border's color, as RGBA      | unused     | `[width, height, corner radius, border width]`, in logical points |
+| 6 glyph          | the glyph's rectangle in texels  | atlas page | unused                                                            |
+| 7 icon           | the icon's rectangle in texels   | atlas page | unused                                                            |
+| 8 particle       | the sprite's rectangle in texels | atlas page | `[age from 0 to 1, seed, 0, 0]`                                   |
+
+- **A rectangle in texels** is `[x, y, width, height]` within one atlas page.
+- **`dissolve`** is how far a card has broken up (the `dissolve` effect), and
+  **`whiten`** how far its face is replaced by white light (`settle`, `blanch`
+  and `cover`). A card with either above zero, or with a `tint` opacity under
+  255, is drawn with the blended records.
+- **A new material or a new meaning for a field** is added to this table in the
+  same change as the code. No material may read a field this table does not give
+  it.
 
 The rules for building a frame:
 
@@ -459,6 +548,44 @@ code usually goes wrong.
   object's pose at the current time is unchanged, so the card does not jump and
   arrives at the right place.
 
+### Motion the pointer drives
+
+Three motions follow the pointer and not a script. Their values are in
+`data/ui-conventions.json`, in a `pointer` entry that the web interface does not
+read. They start as copies of the constants in the web interface's
+`ui/src/stage/raised.ts` and `heft.ts`.
+
+- **Where the pointer is, is state. When it moved is not.** `handle` stores the
+  pointer's latest position and phase. `frame` finds what the pointer is over
+  with a hit test on the frame it is building, because a card can move under a
+  pointer that is still.
+- **A hand card rises under the pointer.** When the card under the pointer
+  changes, the card it left gets a segment back down to its place in the hand
+  (160 milliseconds) and the card it entered gets a segment up (100
+  milliseconds). Both ease out, and both start at that frame's `now` from the
+  pose the card has then. These are ordinary segments.
+- **A held card follows the pointer exactly.** A card is held from a press on it
+  until the release, if the session says it may be picked up. Its position is
+  the point under the pointer on a plane above the table, at the held height in
+  the data. That is a function of the stored pointer position alone.
+- **A held card leans by a spring, advanced in fixed steps.** The card tips
+  toward the way it is being moved and settles flat when it stops. This is the
+  one piece of animation state that is integrated instead of computed from a
+  time: a damped spring driven by the pointer's speed. `frame` advances it in
+  steps of 1/240 second from the previous frame's `now` to this one's. The
+  pointer's speed is the distance it moved between the two frames divided by the
+  time between them, and a gap longer than 1/20 second counts as 1/20. The lean
+  depends only on the sequence of inputs and frame times, so a test that passes
+  the same sequence gets the same lean, and the feel is the same at 60 and at
+  120 frames a second.
+- **Letting go.** On release the client sends the session what the gesture
+  means, as the web interface does in `ui/src/stage/pointer.ts` and `prompt.ts`
+  (a `Click::Drop`, or a click on the card). The card gets a segment from its
+  held pose to its resting place. If the session's reply moves the card, that
+  script's flight starts from the held pose instead.
+- **The checks treat a held card as moving.** Its resolved element has the
+  `HELD` state bit, and the checks on cards at rest skip it.
+
 Floating-point results are not required to match bit for bit between a Mac, a
 Windows PC and the Linux virtual machine. Counts are taken on one machine, the
 Linux virtual machine. The interface checks compare positions with a tolerance
@@ -494,6 +621,27 @@ pub enum Request {
     Share { path: PathBuf },
     Haptic(Haptic),
     OpenUrl(String),
+}
+```
+
+A pointer or key event carries no time (see [Determinism](#determinism)):
+
+```rust
+pub struct Pointer {
+    pub id: u8,                // 0 for the mouse, then one for each finger
+    pub kind: PointerKind,     // Mouse, Touch, Pen
+    pub phase: PointerPhase,   // Down, Move, Up, Cancel, Leave, Wheel
+    pub position: Vec2,        // logical points from the window's top left
+    pub button: Button,        // Primary, Secondary, Middle, None
+    pub wheel: Vec2,           // logical points scrolled, for Wheel
+    pub modifiers: Modifiers,  // shift, control, alt, command
+}
+
+pub struct Key {
+    pub code: KeyCode,         // closed: the keys Beryl binds, and Back for
+                               // Android's back button
+    pub phase: KeyPhase,       // Down, Repeat, Up
+    pub modifiers: Modifiers,
 }
 ```
 
@@ -575,7 +723,9 @@ camera, how game objects are placed in it and how verbs move them.
 - **One camera per layout, with a fixed orientation.** The desktop layout and
   the phone layout each have one perspective camera, defined by its pitch, its
   vertical field of view and the point on the table it looks at. It never turns,
-  and it never moves while the window keeps its shape.
+  and it never moves while the window keeps its shape. The one exception is the
+  `shake` effect, which slides the picture of the table a few pixels for a sixth
+  of a second (see [Effects](#effects)).
 - **The camera is fitted to Arena.** Its pitch and field of view are solved from
   the corners of cards measured in Arena's recordings, so the table's
   foreshortening matches the reference. The fitted values are data.
@@ -655,6 +805,51 @@ distances in millimetres:
   "space": { "arc": 55 }
 }
 ```
+
+### Timing a script
+
+A script says what happens and in what order. It does not say when each step
+starts or how long it lasts. The client works that out when the script starts,
+for the whole script at once, into a **timeline**: one entry per step, with its
+start and end in milliseconds from the script's start.
+
+```rust
+pub struct Timed {
+    pub beat: u16,             // which beat of the script
+    pub step: u16,             // which step of that beat
+    pub verb: Verb,
+    pub case: Option<CaseId>,  // the verb's case in data/ui-conventions.json
+    pub start: u32,            // milliseconds from the script's start
+    pub end: u32,
+    pub effects: EffectSet,    // the effects the step begins, and when
+}
+
+/// Pure: the same script, table and data give the same timeline.
+pub fn timeline(script: &Script, before: &Table, data: &Conventions,
+                out: &mut Vec<Timed>);
+```
+
+- **The case** of a step is chosen from the step's act and from the table as it
+  was before the step. A `fly` from the viewer's hand to the stack is "own spell
+  cast". A `count` of a life total that fell is "life loss". A case's values
+  replace its verb's wherever the case gives one.
+- **A step starts** at its turn in the beat plus its delay. Steps of one kind in
+  one beat take their turns a stagger apart. Some steps wait for another to end:
+  a permanent that taps and leaves in one beat leaves after it has turned, and
+  an arrow waits for the spell it leaves to land.
+- **A beat ends** when its last motion ends, and the next beat starts then.
+- **The rules are the web interface's.** They are in `ui/src/stage/timing.ts`
+  (`caseOf`, the waits and `effectsOf`), `beat.ts` (laying a beat out in time)
+  and `tracks.ts`. `beryl_scene`'s `timing` module is a port of them, function
+  for function where it can be, and each ported function's comment names the
+  function it ports.
+- **A check holds the two equal.** Both clients can print a script's timeline,
+  and a check compares them for every recording (see
+  [Timeline parity](#timeline-parity)). A change to the timing rules in one
+  client fails that check until the other client is changed to match.
+- **Segments are made from the timeline.** Each entry becomes segments, at
+  absolute times, on the scene objects its step concerns. Nothing about timing
+  is decided later, so any moment of a script can be drawn directly.
 
 ## The flat layer
 
@@ -783,8 +978,17 @@ as many pixels opaque as it can.
   opacity, so ordinary and additive shapes share one blend setting.
 - **Two pipelines and three meshes.** One opaque pipeline and one blended, each
   a single shader that picks its branch from the record's `material`. The card
-  mesh, its edge strip and a unit quad are the only meshes. The 64-byte records
+  mesh, its edge strip and a unit quad are the only meshes. The 80-byte records
   are uploaded as the instance buffer unchanged.
+- **The edge strip is widened in the vertex shader.** Each vertex of the strip
+  carries the outward direction of the card's outline at that point. The vertex
+  shader projects the inner ring as the card's outline and moves the outer ring
+  one physical pixel outward on screen, using the target's size in pixels, which
+  is a uniform. The strip is then one pixel wide at any distance and any tilt.
+- **Clips are scissor rectangles.** A run of records that share a clip (bits 4
+  to 7 of `flags`) is drawn with the scissor set to that entry of the frame's
+  `clips`. A clip therefore ends a draw call, and a scrolling list adds two
+  calls to a frame.
 - **The face is sampled before the branch.** WGSL allows `textureSample` only in
   uniform control flow, and a record's material varies from one instance to the
   next, so the shader samples the face array before it branches on the material
@@ -825,7 +1029,7 @@ are pixels actually shaded, counted as the
 draw_calls = 16          # per frame
 fragments = 1.75         # pixels shaded, in screens
 blended_area = 0.75      # screen area of blended records, in screens
-upload_bytes = 262_144   # instance data per frame, room for 4,096 records
+upload_bytes = 327_680   # instance data per frame, room for 4,096 records
 ```
 
 The fragment limit is the floor's fill rate turned into a budget. A 2015
@@ -845,6 +1049,50 @@ old devices:
 - **Backends.** Metal on Apple platforms. Vulkan on Android where the device has
   it, and OpenGL ES 3.0 where it does not. DirectX 12 on Windows, with OpenGL
   3.3 for PCs that lack it.
+
+### Effects
+
+An **effect** is light, or a change of surface, on one card or one life total. A
+step begins it as the step starts, as it ends or as its blow lands. There are
+14, listed in `data/ui-conventions.json` with their durations, and each verb's
+entry there says which effects its steps begin. Both tiers show every effect.
+The Baseline tier draws each one with the records below, and the Enhanced tier
+adds to some of them.
+
+| Effect     | Baseline tier                                                                                               | Enhanced tier adds |
+| ---------- | ----------------------------------------------------------------------------------------------------------- | ------------------ |
+| `glow`     | A `glow` record under the card: a soft disc that spreads and fades.                                         | Bloom              |
+| `settle`   | The card's `whiten` rises to 1 and falls back, under a burst with rays one and a half cards wide.           | Bloom              |
+| `dissolve` | The card darkens through its tint, then its `dissolve` runs from 0 to 1 and it breaks up from the top down. | Ash particles      |
+| `dim`      | The card's tint darkens and its opacity falls to 0.                                                         | Nothing            |
+| `blanch`   | The card's `whiten` rises to 1, then its opacity falls to 0.                                                | Vortex particles   |
+| `cover`    | The card's `whiten` rises to 1, its face layer changes while it is white, and `whiten` falls to 0.          | Nothing            |
+| `impact`   | A burst over what was struck.                                                                               | Bloom              |
+| `shake`    | The picture of the table slides side to side and a little up and down, twice, the second swing smaller.     | Nothing            |
+| `trail`    | A `streak` record behind the dashing card, along its path.                                                  | Bloom              |
+| `flash`    | A burst with rays over the spell.                                                                           | Bloom              |
+| `beam`     | A cone of light from the side of the ability toward the middle of the table.                                | Bloom              |
+| `pulse`    | A ring round the card's frame.                                                                              | Nothing            |
+| `loss`     | The life total's text is tinted red, and a flat-layer text element showing the amount sinks away and fades. | Nothing            |
+| `gain`     | The life total's text is tinted green, and a flat-layer text element showing the amount rises and fades.    | Nothing            |
+
+- **The shapes of light** (a soft disc, a burst with rays, a ring, a cone, a
+  comet) are sprites that `beryl_assets` draws once at startup into the atlas.
+  No image file holds them.
+- **The broken edge of a dissolve** is computed in the shader from the card's
+  texture coordinates, with no second texture. A dissolving card is among the
+  blended records, so no pixel is discarded in the opaque pass.
+- **`shake` moves the picture, not the table.** The client core writes an offset
+  in physical pixels into the frame's `shake`. The renderer adds it to the
+  screen position of every record drawn with the depth test (the table and what
+  is on it) and to nothing in the flat layer. Resolved elements are reported
+  without the offset and hit tests ignore it, so no check and no click is
+  affected.
+- **An effect looks as the web interface's does.** Its shape, colors and timing
+  are those of `ui/src/stage/effects.ts`, `flare.ts`, `glow.ts` and
+  `effects.css`, with its colors in the design tokens file.
+- **An effect never changes where anything is**, so the rule below, that the
+  tiers share every position, holds for effects too.
 
 ### The Enhanced tier
 
@@ -1069,8 +1317,16 @@ just stage stress-255 --check
 - **`--film`** writes a strip of frames across a time range, to judge motion.
 - **`--check`** runs every interface check over the whole fixture and prints the
   faults.
+- **`--timeline`** prints each script's timeline, one line per step (see
+  [Timeline parity](#timeline-parity)).
+- **`--all`** runs every interface test (see [Test speed](#test-speed)).
 - **`--size`, `--layout`, `--seat`, `--scale` and `--tier`** choose the window,
   the viewer and the look.
+
+`just stage` is two programs behind one command. `--tree`, `--check`,
+`--timeline` and `--all` are `beryl_stage`'s program, which contains no GPU
+code. `--png` and `--film` are a second program, in `beryl_3d`, which has the
+renderer. `just stage` runs whichever the options need.
 
 `stress-255` in the last example is a stress board: a hand-built position at the
 engine's capacity, defined in the [Performance gates](#performance-gates)
@@ -1130,6 +1386,11 @@ page.locator(Role::Card, "Island").nth(1).hover();
   **tick** is one step of a test's clock, a sixtieth of a second unless the test
   says otherwise.
 - **`check()`** runs every interface check on the current frame.
+- **Where it lives.** `Page` is in `beryl_scene`, behind a Cargo feature named
+  `driver` that the app does not enable. `Page::new` takes a recording, so
+  `beryl_scene` never runs the engine. `Page::fixture` and `Page::spec` are in
+  `beryl_stage`, which finds a recording by name in the file of recordings (see
+  [Recordings](#recordings)).
 
 ### Driving the running app
 
@@ -1181,6 +1442,21 @@ screen, so they cover every card spec that is ever generated.
   its placement function puts it.
 - **Verb values.** Each verb's measured duration, delay and stagger equal its
   data entry.
+- **Every step shown.** Each step of each script is played, and what it concerns
+  is on screen while it plays: inside the window, at least half uncovered and
+  not transparent. A step whose verb gives its subject time to travel moves it
+  at least 4 logical points over at least 150 milliseconds; a subject that jumps
+  instead is a fault.
+- **Not crowded.** No more than 3 different moves begin at once in one beat.
+  Taps and the steps of a turn do not count.
+- **No blank card.** Every card drawn face up, whose name the viewer knows, has
+  a face layer of its own.
+- **Lines hold.** An arrow or line whose two ends are at rest does not change
+  shape.
+
+The last four are the web interface's stage audits (`ui/scripts/stage-audit.mjs`
+and `audit.mjs`), with the same thresholds. The thresholds are in
+`data/frame-gate.json`, under `audit`.
 
 What the checks run over:
 
@@ -1223,7 +1499,7 @@ that match.
 
 How many there are, with the 47 cards the engine knows today:
 
-- About 1,400 card spec moments and 134 recorded games.
+- About 1,400 card spec moments and about 140 recorded games.
 - Two seats and seven window sizes each.
 - About 21,500 tests in all.
 
@@ -1282,8 +1558,9 @@ A recording is the stream of session updates for one fixture or card spec
 moment. Making one means playing the engine and the session, which costs more
 than the test that reads it.
 
-- **Recordings are packed into one file**, built by the same program that checks
-  the session's scripts today, as a by-product of that check.
+- **Recordings are packed into one file** by `beryl_stage`, which calls the code
+  that records fixtures and card spec moments today (`beryl_cli`'s `fixture` and
+  `specs` modules, made a library for it). The file is under `$BERYL_CACHE`.
 - **The file is cached** under a hash of everything a recording depends on: the
   engine, rules, session and card sources, the fixture definitions and the verb
   data.
@@ -1343,11 +1620,17 @@ On the GPU, time cannot be counted, but work can:
   machine on a software Vulkan driver and reads the driver's own count of
   fragment shader runs (a pipeline statistics query). The count is exact and the
   same on every run, and it leaves out pixels the depth buffer rejected.
-- **Cost per fragment, per material.** Arm's offline shader compiler reads each
-  compiled shader and prints the cycles one fragment costs on a given Mali GPU,
-  without running anything. Each material's cycle count has a limit.
-- **Fragments times cycles**, summed over materials, is the frame's estimated
-  GPU cost. It is the nearest equivalent of an instruction count.
+- **Cost per fragment, per material.** Each material's shading is a WGSL
+  function of its own, named `shade_` and the material. A test parses the
+  shaders with `naga`, the shader compiler `wgpu` uses, and counts each such
+  function's texture samples and its expressions. Each count has a limit, and no
+  Baseline material may take more than one texture sample per fragment.
+- **Fragments times expressions**, summed over materials, is the frame's
+  estimated GPU cost. It is the nearest equivalent of an instruction count.
+- **Arm's offline shader compiler is not used.** It would give the cycles a
+  fragment costs on a real Mali GPU. It is not installed on the development
+  machine, and its installer needs a person to accept a licence, so no check
+  depends on it.
 - **Draw calls, instances, upload bytes and blended area**, which the client
   core computes as it builds the draw list. These need no renderer, so they are
   checked on every tick.
@@ -1365,7 +1648,9 @@ millisecond frame vanishes in an average over 5,000.
 
 The gated fixtures are of two kinds.
 
-- **Recorded games**, the same recordings the interface checks play.
+- **Recorded games**, the same recordings the interface checks play. At least
+  one of them opens prompts (`pay-default`), so that the worst frame includes
+  one in which `handle` builds a screen and lays out its text.
 - **Stress boards**: positions built by hand at the engine's capacity, where a
   frame is most expensive. The engine keeps a game in a compact form that holds
   255 objects, and moves a game that outgrows it to a larger form that holds
@@ -1471,9 +1756,10 @@ These were taken 2026-11-14 on the development machine, an Apple M5 Max, at a
 load average of 5 to 8 from other jobs, by the prototype in
 `rust/prototypes/beryl3d` (`just proto3d --stats <board>`). The prototype is not
 Beryl 3D: it is a throwaway program that keeps the doc's central split (a core
-with no GPU, clock or thread that writes 64-byte draw records, and a `wgpu`
-renderer that draws them) and leaves out text, prompts and the flat layer. Its
-numbers are replaced by the real client's when it exists.
+with no GPU, clock or thread that writes draw records (64 bytes each in the
+prototype, 80 in the design since), and a `wgpu` renderer that draws them) and
+leaves out text, prompts and the flat layer. Its numbers are replaced by the
+real client's when it exists.
 
 Each number is the median of five runs, with the worst of the five beside it.
 The frames are 1920 by 1080, drawn into a texture.
@@ -1613,6 +1899,41 @@ What they do not share is placement. The web interface draws the table on a 1600
 by 900 surface and imitates perspective by shrinking and tilting each card.
 Beryl 3D's table is a real scene. Each is fitted to Arena separately.
 
+### Timeline parity
+
+The two clients place things differently on purpose, so their pictures cannot be
+compared. What they must agree on is what plays and when. The **timeline
+parity** check holds that, from the day Beryl 3D plays its first verb.
+
+Both clients print a recording's timelines in one format: one line of JSON for
+each step of each script, as one seat sees it.
+
+```json
+{"view":12,"beat":0,"step":1,"verb":"fly","case":"own spell cast","start":0,"end":370,"effects":["settle@end"]}
+```
+
+- **The web interface's side** is a script, `ui/scripts/timeline.mjs`. It plays
+  a recording through the stage's model in Node, with no browser and no drawing
+  surface, and records each step as the stage begins and ends it
+  (`ScriptStage.follow`). It adds a script and changes no code of the stage.
+- **Beryl 3D's side** is `just stage <fixture> --timeline`, printed from the
+  `timeline` function of [Timing a script](#timing-a-script).
+- **The check**, `just timeline-parity`, compares the two for every fixture and
+  card spec moment, from both seats. Two timelines agree when they hold the same
+  steps with the same verb, case and effects, and every start and end is within
+  1 millisecond.
+- **Recordings that do not agree yet are listed** in
+  `data/timeline-parity.json`, each with the number of its steps that differ.
+  Like every allowlist under `data/`, its counts may only go down.
+- **It runs in the fast check** when the web stage's timing code, `beryl_scene`
+  or the verb data changes. A change to one client that breaks a recording that
+  agreed must make the same change in the other client. This is how decision
+  C1's "each is also made in Beryl 3D" is enforced for timing, the part of the
+  web interface that changes most often.
+
+What the check does not cover is fixed by hand, and found by the parity list: a
+screen's layout, a prompt's wording, and how an effect looks.
+
 ### The parity list
 
 The **parity list** is a generated report of everything the web interface can
@@ -1620,19 +1941,30 @@ show, with each item's state in Beryl 3D. A command prints it, and a check keeps
 it current. An example of its output, with invented numbers:
 
 ```text
-fixtures      118 / 134 play with no fault
+fixtures      118 / 140 play with no fault
 card specs    1,388 / 1,402 moments play with no fault, both seats
+timelines     2,930 / 3,084 recordings agree with the web interface's
 verbs         16 / 16
+effects       14 / 14
 marks         6 / 6
-prompt shapes 10 / 10
+prompt shapes 12 / 12
 screens       9 / 11   missing: testing screen, manual table lobby
-conventions   74 / 74 entries confirmed
+conventions   77 / 77 entries confirmed
+tools         6 / 8    missing: motion-review, arena-pixel-match
 launch tests  macOS pass, Windows pass, iOS pass, Android pass
 ```
 
-- **A fixture, spec moment, verb, mark or prompt shape is done** when Beryl 3D
-  plays it from both seats, in both layouts, across the window matrix, with
-  every interface check passing.
+- **A fixture, spec moment, verb, effect, mark or prompt shape is done** when
+  Beryl 3D plays it from both seats, in both layouts, across the window matrix,
+  with every interface check passing and its timelines agreeing with the web
+  interface's.
+- **A tool is done** when a job that a skill or a `just` command does for the
+  web interface can be done for Beryl 3D. The jobs are listed by hand in the
+  same data file as the screens: showing a card's moments (the `specs` skill),
+  reviewing the interface as a player (`ui-review`), filming a verb beside
+  Arena's (`just motion --film`, `motion-review`, `arena-pixel-match`), working
+  a bug report (`bugfix`), and measuring frames in the running app
+  (`just ui-perf`).
 - **A UI Conventions entry is done** when its data records that Beryl 3D follows
   it, with the fixture that shows it.
 - **A launch test** starts the app on one platform with no window shown and
