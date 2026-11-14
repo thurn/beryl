@@ -1,6 +1,6 @@
 // The component library on one page, laid out as docs/ui_mockups/ui_system.png. `just ui-shots`
 // captures it; it is also the place to look at a component while changing it.
-import { type CSSProperties, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { Card, Crest } from "../components/Card";
 import {
   Button,
@@ -16,6 +16,7 @@ import {
   PlayerBadge,
 } from "../components/Player";
 import { StackItem } from "../components/Stack";
+import { AskPrompt } from "../table/AskPrompt";
 import { costless, SAMPLE } from "./samples";
 import { ScryOverlay } from "./Scry";
 
@@ -338,6 +339,78 @@ function ScryPanel() {
   );
 }
 
+function AskExample({
+  name,
+  children,
+}: {
+  name: string;
+  children: (close: () => void, autoFocus: boolean) => ReactNode;
+}) {
+  const [state, setState] = useState<"preview" | "closed" | "open">("preview");
+  return (
+    <div className="gallery-ask">
+      {state !== "closed" ? (
+        children(() => setState("closed"), state === "open")
+      ) : (
+        <Button variant="secondary" onClick={() => setState("open")}>
+          {name}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function TablePrompts() {
+  return (
+    <Panel n="07" title="Manual table prompts">
+      <div className="gallery-asks">
+        <AskExample name="Draw cards">
+          {(close, autoFocus) => (
+            <AskPrompt
+              kind="number"
+              fieldLabel="Cards to draw"
+              start={1}
+              min={1}
+              max={60}
+              label={(value) => `Draw ${value}`}
+              autoFocus={autoFocus}
+              onConfirm={close}
+              onCancel={close}
+            />
+          )}
+        </AskExample>
+        <AskExample name="Set note">
+          {(close, autoFocus) => (
+            <AskPrompt
+              kind="text"
+              fieldLabel="Note"
+              start="Doesn't untap"
+              label={() => "Set note"}
+              autoFocus={autoFocus}
+              onConfirm={close}
+              onCancel={close}
+            />
+          )}
+        </AskExample>
+        <AskExample name="Set power and toughness…">
+          {(close, autoFocus) => (
+            <AskPrompt
+              kind="stats"
+              start={{ power: 3, toughness: 3 }}
+              min={-99}
+              max={99}
+              label={({ power, toughness }) => `Set ${power}/${toughness}`}
+              autoFocus={autoFocus}
+              onConfirm={close}
+              onCancel={close}
+            />
+          )}
+        </AskExample>
+      </div>
+    </Panel>
+  );
+}
+
 export function Gallery() {
   return (
     <main className="gallery">
@@ -356,6 +429,7 @@ export function Gallery() {
       <CardsAndStates />
       <CombatAndStack />
       <ScryPanel />
+      <TablePrompts />
     </main>
   );
 }

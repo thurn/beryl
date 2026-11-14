@@ -1,0 +1,16 @@
+.table-ask-form {
+  display: grid;
+  gap: var(--button-gap);
+}
+
+.prompt-value.table-ask-input {
+  box-sizing: border-box;
+  width: 0;
+  min-height: 40px;
+  flex: 1;
+  padding: 0 8px;
+  border: 1px solid var(--gold);
+  border-radius: 4px;
+  background: var(--surface);
+  text-align: center;
+}
