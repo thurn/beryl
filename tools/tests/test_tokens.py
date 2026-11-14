@@ -17,6 +17,7 @@ def outside_lease(monkeypatch: pytest.MonkeyPatch) -> None:
     """The tests may themselves run under a check step's lease."""
     monkeypatch.delenv(tokens.LEASE_ENV, raising=False)
     monkeypatch.delenv(tokens.POOL_ENV, raising=False)
+    monkeypatch.delenv(tokens.CLASS_ENV, raising=False)
 
 
 def never() -> bool:
@@ -122,6 +123,43 @@ def test_lease_environment_sets_every_thread_count() -> None:
     assert env["NEXTEST_TEST_THREADS"] == "5"
     assert env[tokens.LEASE_ENV] == "5"
     assert tokens.Lease(0, []).env() == {}
+
+
+def test_a_lease_passes_its_class_to_commands_inside_it(tmp_path: Path) -> None:
+    lease = Pool(tmp_path, 8).acquire("push", 3, never)
+    assert lease is not None
+    assert lease.env()[tokens.CLASS_ENV] == "push"
+    assert tokens.CLASS_ENV not in tokens.Lease(3, []).env()
+
+
+def test_a_lease_tops_up_with_what_has_freed(tmp_path: Path) -> None:
+    pool = Pool(tmp_path, 12)
+    small = pool.acquire("push", 4, never)
+    others = pool.acquire("push", 8, never)
+    assert small is not None and others is not None
+    # While the other lanes run, there is nothing to take.
+    assert pool.top_up("push", small.size, 8).size == 0
+    others.release()
+    # Once they finish, the lease grows to what it asked for, and no further.
+    extra = pool.top_up("push", small.size, 8)
+    assert extra.size == 4
+    assert len(pool.holders()) == 8
+    extra.release()
+    small.release()
+    assert not pool.holders()
+
+
+def test_a_top_up_yields_to_a_waiting_higher_class(tmp_path: Path) -> None:
+    pool = Pool(tmp_path, 8)
+    (tmp_path / f"wait-{os.getpid()}-1-push").write_text(f"{os.getpid()} push")
+    assert pool.top_up("agent", 2, 6).size == 0
+
+
+def test_top_up_outside_a_lease_takes_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert tokens.top_up(8).size == 0
+    monkeypatch.setenv(tokens.LEASE_ENV, "3")
+    # Without a class, as from a lease taken before leases recorded one.
+    assert tokens.top_up(8).size == 0
 
 
 def test_light_steps_take_no_tokens() -> None:

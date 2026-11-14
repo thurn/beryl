@@ -34,6 +34,12 @@ leases instead, and passes their size to cargo (`CARGO_BUILD_JOBS`), nextest
 (`NEXTEST_TEST_THREADS`), the test harness (`RUST_TEST_THREADS`) and Beryl's own search commands
 (`BERYL_CPU_TOKENS`).
 
+A lease is fixed when its step starts, so a step that starts while other heavy lanes run gets a
+small share and keeps it after they finish. On 2026-11-14 the fast check's Rust tests step started
+beside the two browser lanes, took 6 of 18 tokens, and ran nextest 6 tests wide for 44 s after
+those lanes ended about 20 s in, with 12 cores idle. A command inside a lease can take the tokens
+free at a later point without waiting (`top_up`), as the tests step does once its build is done.
+
 Browser pages keep their own slots (ui/scripts/slots.mjs). The step that opens them, such as
 `ui-test`, holds tokens for the build and the Node side, and a page holds a slot for a few
 seconds at a time from Node, which would need the same protocol written again there.
@@ -60,6 +66,10 @@ CLASSES: tuple[str, ...] = ("push", "agent", "ci")
 # such as `by test-rust` under a check step, runs inside that lease instead of waiting for
 # tokens its parent holds.
 LEASE_ENV = "BERYL_CPU_TOKENS"
+
+# Set beside `LEASE_ENV` to the lease's class, so that a command inside it can take more tokens
+# of the same class (`top_up`).
+CLASS_ENV = "BERYL_CPU_CLASS"
 
 # `0` turns the pool off: every lease is granted at once, with every core.
 POOL_ENV = "BERYL_CPU_POOL"
@@ -142,13 +152,17 @@ class Lease:
     files: list[Path]
     waited: float = 0.0
     inherited: bool = False
+    # The class it was taken for: empty for an inherited lease or one granted with the pool off.
+    klass: str = ""
 
     def env(self) -> dict[str, str]:
         """Environment variables that hold a command and its children to the lease."""
         if not self.size:
             return {}
         n = str(self.size)
+        klass = {CLASS_ENV: self.klass} if self.klass else {}
         return {
+            **klass,
             LEASE_ENV: n,
             "CARGO_BUILD_JOBS": n,
             "NEXTEST_TEST_THREADS": n,
@@ -255,7 +269,9 @@ class Pool:
                 with _THREADS, system.file_lock(self.root / "lock"):
                     files = self.grant(klass, want, me)
                     if files:
-                        return Lease(len(files), files, time.monotonic() - started)
+                        return Lease(
+                            len(files), files, time.monotonic() - started, klass=klass
+                        )
                     if not me.exists():
                         me.write_text(f"{os.getpid()} {klass}")
                 if give_up():
@@ -263,6 +279,31 @@ class Pool:
                 time.sleep(0.2 + random.random() * 0.2)
         finally:
             me.unlink(missing_ok=True)
+
+    def top_up(self, klass: str, held: int, want: int) -> Lease:
+        """The tokens of `klass` free now, without waiting, that bring a lease of `held` up to
+        `want` in all: an empty lease when none is. The same rules as a waiting lease's apply
+        (`grant`): a waiting higher class takes everything, and waiters of the same class
+        share."""
+        extra = min(want, self.size) - held
+        if extra < 1:
+            return Lease(0, [])
+        # A waiter's file this call never writes, so `grant` counts no waiter as its own.
+        me = self.root / f"wait-{os.getpid()}-{threading.get_ident()}-{klass}"
+        with _THREADS, system.file_lock(self.root / "lock"):
+            files = self.grant(klass, extra, me)
+        return Lease(len(files), files, klass=klass)
+
+
+def top_up(want: int) -> Lease:
+    """Inside a lease another process holds (`LEASE_ENV` and `CLASS_ENV`), the tokens free now
+    that bring it up to `want` in all (`Pool.top_up`); an empty lease outside one or with the
+    pool off. The caller releases them when the work that uses them ends."""
+    held = os.environ.get(LEASE_ENV, "")
+    klass = os.environ.get(CLASS_ENV, "")
+    if not held.isdigit() or klass not in CLASSES or os.environ.get(POOL_ENV) == "0":
+        return Lease(0, [])
+    return Pool().top_up(klass, int(held), want)
 
 
 def acquire(

@@ -177,7 +177,7 @@ def rust_tests_step(
     )
     if left_out:
         every += f" & not ({left_out})"
-    nextest = [
+    nextest: list[str] = [
         "cargo",
         "nextest",
         "run",
@@ -212,11 +212,22 @@ def rust_tests_step(
     junit = nextest_junit()
     junit.unlink(missing_ok=True)
 
+    # The step's lease was sized when it started, often beside the browser lanes, which finish
+    # first: nextest runs as wide as the tokens free once the build is done allow (tokens.py,
+    # `top_up`). The other jobs only build and run a few binaries, so keep the step's lease.
+    extra = tokens.top_up(tokens.largest(tokens.pool_size()))
+    wide: dict[str, str] | None = None
+    if extra.size:
+        threads = int(os.environ[tokens.LEASE_ENV]) + extra.size
+        print(f"rust-tests: nextest runs {threads} wide", flush=True)
+        wide = {**os.environ, "NEXTEST_TEST_THREADS": str(threads)}
+
     def run(cmd: list[str]) -> tuple[subprocess.CompletedProcess[str], float]:
         started = time.perf_counter()
         done = subprocess.run(
             cmd,
             cwd=paths.RUST,
+            env=wide if cmd is nextest else None,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -225,7 +236,7 @@ def rust_tests_step(
         )
         return done, time.perf_counter() - started
 
-    with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+    with extra, ThreadPoolExecutor(max_workers=len(jobs)) as pool:
         runs = list(pool.map(run, jobs))
     for cmd, (r, seconds) in zip(jobs, runs):
         print(r.stdout.rstrip(), flush=True)
