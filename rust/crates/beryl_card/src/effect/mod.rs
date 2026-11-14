@@ -397,28 +397,18 @@ pub enum Effect {
     /// ([CR 611.2c](https://yawgatog.com/resources/magic-rules/#R6112c)): "the set of objects
     /// it affects is determined when that continuous effect begins. After that point, the set
     /// won't change."
-    ///
-    /// The modifications are the parts of one effect, in the order the card says them, which
-    /// begin together with one timestamp and may apply in different layers ([CR 613.6]): "If
-    /// an effect should be applied in different layers and/or sublayers, the parts of the
-    /// effect each apply in their appropriate ones." "Loses all abilities and becomes a green
-    /// Elk creature with base power and toughness 3/3" is one effect with parts in layers 4,
-    /// 5, 6 and 7b.
-    ///
-    /// [CR 613.6]: https://yawgatog.com/resources/magic-rules/#R6136
+    /// Its modifications are the parts of one effect, which begin together with one timestamp
+    /// and each apply in their own layer
+    /// ([CR 613.6](https://yawgatog.com/resources/magic-rules/#R6136)): "If an effect should
+    /// be applied in different layers and/or sublayers, the parts of the effect each apply in
+    /// their appropriate ones."
     Modify {
         objects: Objects,
         modifications: &'static [Modification],
         duration: Duration,
     },
-    /// "Exchange control of [first] and [second]": each of the two permanents gets the
-    /// other's controller, together, for the rest of the game
-    /// ([CR 701.12b](https://yawgatog.com/resources/magic-rules/#R70112b)): "When control of
-    /// two permanents is exchanged, if those permanents are controlled by different players,
-    /// each of those players simultaneously gains control of the permanent that was controlled
-    /// by the other player. If, on the other hand, those permanents are controlled by the same
-    /// player, the exchange effect does nothing." Each side names one permanent, and when
-    /// either is gone nothing is exchanged
+    /// "Exchange control of [first] and [second]": each permanent gets the other's controller,
+    /// together, for the rest of the game, unless one side names no permanent
     /// ([CR 701.12a](https://yawgatog.com/resources/magic-rules/#R70112a)): "if the entire
     /// exchange can't be completed, no part of the exchange occurs."
     ExchangeControl(Objects, Objects),

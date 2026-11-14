@@ -124,15 +124,13 @@ const ATTACH_TO_TARGET: Effect = Effect::Attach {
     to: Objects::Target(SpecIx::new(0)),
 };
 
-/// Crew's effect (CR 702.122a): "This permanent becomes an artifact creature until end of
-/// turn."
+/// Crew's effect (CR 702.122a): "This permanent becomes an artifact creature until end of turn."
 const BECOME_ARTIFACT_CREATURE: Effect = Effect::Modify {
     objects: Objects::This,
-    modifications: &[Modification::AddTypes(
-        Types::ARTIFACT.union(Types::CREATURE),
-    )],
+    modifications: &[Modification::AddTypes(ARTIFACT_CREATURE)],
     duration: Duration::EndOfTurn,
 };
+const ARTIFACT_CREATURE: Types = Types::ARTIFACT.union(Types::CREATURE);
 
 /// "At the beginning of your end step", for [`Ability::impending_countdown`].
 const YOUR_END_STEP: Trigger = Trigger::step(TurnStep::End, Players::You);

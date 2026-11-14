@@ -9,7 +9,7 @@
 //! card's own file.
 
 use crate::ability::{Ability, AbilityKind, Behavior};
-use crate::continuous::{Duration, LayerSpec, Modification};
+use crate::continuous::{Duration, LayerSpec, MODIFY_PARTS, Modification};
 use crate::cost::{Chosen, Cost, CostAction, CostPart, Measure};
 use crate::definition::{CardDef, Face};
 use crate::effect::{Amount, Condition, CopyException, Effect, Objects, Operands, Players};
@@ -18,11 +18,6 @@ use crate::ids::Zone;
 use crate::index::SpecIx;
 use crate::prompt::Shape;
 use crate::target::TargetKind;
-
-/// The parts of one resolving continuous effect ([`Effect::Modify`]) the engine begins at
-/// once: as many as a card says ("loses all abilities and becomes a green Elk creature with
-/// base power and toughness 3/3" is five) with room to spare.
-pub const MODIFY_PARTS: usize = 8;
 
 /// What is wrong with a definition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -45,8 +40,7 @@ pub enum Malformed {
     Lost,
     /// A continuous effect that does nothing: no modification.
     NoModification,
-    /// A resolving continuous effect of more parts than [`MODIFY_PARTS`], what the engine
-    /// begins at once.
+    /// A resolving continuous effect of more parts than [`MODIFY_PARTS`].
     Parts,
     /// [`CopyException::PowerToughness`] other than 1/1, which is all the engine's copy
     /// makes.
@@ -604,12 +598,10 @@ impl Scope<'_> {
 
     /// The parts of a resolving effect: at least one, each checked.
     const fn resolved_modifications(self, modifications: &[Modification]) -> Checked {
-        let mut checked = if modifications.is_empty() {
-            Err(Malformed::NoModification)
-        } else if modifications.len() > MODIFY_PARTS {
-            Err(Malformed::Parts)
-        } else {
-            Ok(())
+        let mut checked = match modifications.len() {
+            0 => Err(Malformed::NoModification),
+            n if n > MODIFY_PARTS => Err(Malformed::Parts),
+            _ => Ok(()),
         };
         let mut i = 0;
         while i < modifications.len() {

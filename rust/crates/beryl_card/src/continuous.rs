@@ -234,6 +234,11 @@ pub enum Modification {
     SwitchPt,
 }
 
+/// The parts of one resolving continuous effect ([`crate::Effect::Modify`]) the engine begins
+/// at once: as many as a card says ("loses all abilities and becomes a green Elk creature with
+/// base power and toughness 3/3" is five) with room to spare.
+pub const MODIFY_PARTS: usize = 8;
+
 /// The layers and sublayers continuous effects apply in, in order
 /// ([CR 613.1](https://yawgatog.com/resources/magic-rules/#R6131),
 /// [CR 613.4](https://yawgatog.com/resources/magic-rules/#R6134)). Layer 1, copy effects, is
