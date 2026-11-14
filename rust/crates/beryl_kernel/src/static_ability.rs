@@ -44,6 +44,9 @@ impl Inputs {
     /// The cards in graveyards, which an amount counts
     /// ([`Amount::CardTypesAmong`]).
     pub const GRAVEYARDS: Inputs = Inputs(2);
+    /// Whether a permanent is tapped, which a filter or an "as long as" asks
+    /// ([`Filter::Tapped`]): "untapped creatures you control get +0/+2".
+    pub const TAPPED: Inputs = Inputs(4);
 
     /// Both sets' inputs.
     #[inline]
@@ -80,8 +83,51 @@ impl Inputs {
             if graveyards {
                 inputs = inputs.union(Inputs::GRAVEYARDS);
             }
+            let affected_reads_tapped = matches!(
+                spec.affected,
+                Objects::All { filter, .. } if mentions_tapped(filter)
+            ) || matches!(
+                spec.affected,
+                Objects::Other(&Objects::All { filter, .. }) if mentions_tapped(filter)
+            );
+            if affected_reads_tapped || spec.condition.as_ref().is_some_and(condition_reads_tapped)
+            {
+                inputs = inputs.union(Inputs::TAPPED);
+            }
         }
         inputs
+    }
+}
+
+/// Whether `filter` asks if a permanent is tapped.
+fn mentions_tapped(filter: Filter) -> bool {
+    match filter {
+        Filter::Tapped => true,
+        Filter::Not(filter) => mentions_tapped(*filter),
+        Filter::All(filters) | Filter::AnyOf(filters) => {
+            filters.iter().any(|&filter| mentions_tapped(filter))
+        }
+        _ => false,
+    }
+}
+
+/// Whether `condition` asks if a permanent is tapped, of the permanent with the ability or
+/// of the permanents it counts.
+fn condition_reads_tapped(condition: &Condition) -> bool {
+    let counts_tapped = |amount: &Amount| matches!(counted(amount), Some(Counted::Permanents(f)) if mentions_tapped(f));
+    match condition {
+        Condition::Is(_, filter) => mentions_tapped(*filter),
+        Condition::Compare(left, _, right) => counts_tapped(left) || counts_tapped(right),
+        Condition::Not(condition) => condition_reads_tapped(condition),
+        Condition::All(conditions) | Condition::Any(conditions) => {
+            conditions.iter().any(condition_reads_tapped)
+        }
+        Condition::Paid(_)
+        | Condition::Did
+        | Condition::WonFlip
+        | Condition::EnteredThisTurn(_)
+        | Condition::DrewInDrawStep(_)
+        | Condition::Token(_) => false,
     }
 }
 

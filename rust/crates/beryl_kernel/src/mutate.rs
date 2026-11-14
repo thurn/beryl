@@ -16,6 +16,7 @@ use crate::layout::{Layout, Queue, Table};
 use crate::object::{AttackTarget, CombatRole, Flag, ObjectFlags, ObjectRef, SlotSet};
 use crate::query::Copiable;
 use crate::state::State;
+use crate::static_ability::Inputs;
 use crate::table::GameTable;
 
 /// How a permanent enters the battlefield, as the rules decided once its replacement effects
@@ -48,12 +49,18 @@ impl<L: Layout> State<L> {
     /// Taps or untaps a permanent ([CR 701.26a]): "To tap a permanent, turn it sideways from an
     /// upright position."
     ///
+    /// The layer results are stale from here while a static ability on the battlefield asks
+    /// whether a permanent is tapped ([`Inputs::TAPPED`]).
+    ///
     /// [CR 701.26a]: https://yawgatog.com/resources/magic-rules/#R70126a
     #[inline]
     #[must_use]
     pub fn set_tapped(&mut self, object: ObjectRef<L>, tapped: bool) -> Event<L> {
         debug_assert!(self.is_current(object));
         self.object_mut(object.slot).flags.set(Flag::Tapped, tapped);
+        if self.layer_inputs.contains(Inputs::TAPPED) {
+            self.flags.derived_dirty = true;
+        }
         if tapped {
             Event::Tap { object }
         } else {

@@ -441,3 +441,18 @@ fixed in the same session. Newest first.
   where the effect applies, never cached at the layer's head; each effect's
   declared reads and writes (`LayerChange::writes`, `dependency::reads`) say
   which facts those are.
+
+- A static ability that reads whether a permanent is tapped went stale when the
+  permanent tapped. Builder's Blessing ("untapped creatures you control get
+  +0/+2") kept its bonus on a creature that had tapped to attack, because
+  `State::set_tapped` never marked the layer results stale, and the layers read
+  `Filter::Tapped`. The test of the filter marked the results stale by hand
+  (`forget_derived`), so it passed. Found by the card's scenario, which the
+  layer reference check failed ("layer results differ from a fresh recompute").
+  Fixed in the change that added the card: `Inputs::TAPPED` says that a
+  permanent on the battlefield asks, and `set_tapped` marks the results stale
+  only then. Prevention: every field a filter or condition can read has an
+  `Inputs` bit and a mutator that checks it, and a test of such a read changes
+  the field through the mutator the rules use, never an arranger that marks the
+  results stale itself.
+

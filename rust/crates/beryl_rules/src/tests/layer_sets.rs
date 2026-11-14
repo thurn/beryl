@@ -235,8 +235,9 @@ fn a_filter_reads_whether_a_permanent_is_tapped_and_its_mana_value() {
     enters(&t, &mut s, Seat::P0, "Test Wall");
     assert_eq!(pt(&s, bear), (2, 5));
     assert_eq!(pt(&s, theirs), (2, 5));
-    s.board().set_tapped(bear, true);
-    s.forget_derived();
+    let on = s.object_ref(bear);
+    let _ = s.set_tapped(on, true);
+    assert!(s.is_derived_stale());
     refresh(&t, &mut s);
     assert_eq!(pt(&s, bear), (2, 2));
     assert_eq!(pt(&s, theirs), (2, 5));
