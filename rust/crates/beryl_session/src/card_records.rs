@@ -140,6 +140,17 @@ fn records_in(store: &Store, names: &[String]) -> CardRecords {
     out
 }
 
+/// The same printing the card records endpoint uses for the supplied name.
+pub fn record(name: &str, is_token: bool) -> Option<Record> {
+    if is_token {
+        token(&STORE, name).or_else(|| STORE.card_ignoring_case(name))
+    } else {
+        STORE
+            .card_ignoring_case(name)
+            .or_else(|| token(&STORE, name))
+    }
+}
+
 /// The store's printing of the token or emblem named `name`. Different tokens share a name (one
 /// card's Insect is a white 2/1, another's a green 3/3), and each card's record links the one
 /// it makes: so this is the one linked by the first card the engine implements that makes a

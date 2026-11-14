@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use serde::{Deserialize, Serialize};
 
 use crate::action::{
@@ -103,6 +105,8 @@ pub fn line(entry: &Entry, table: &Table, for_seat: Seat) -> String {
         before: table,
         after: table,
         viewer: for_seat,
+        recorded_names: None,
+        anonymous: false,
     };
     let text = if let Some(action) = &entry.undone_action {
         let description = describe(action, &entry.summary, &cards);
@@ -121,22 +125,66 @@ fn finish(mut text: String, seen: bool) -> String {
     text
 }
 
+/// Captured wording, with an alternate for when a card named here is hidden
+/// in a later view.
+#[derive(Clone, Debug)]
+pub(super) struct RecordedLine {
+    pub(super) text: String,
+    pub(super) anonymous: String,
+    pub(super) names: Vec<String>,
+}
+
+impl RecordedLine {
+    pub(super) fn undo(&self, seen: bool) -> Self {
+        let undo_line = |text: &str| {
+            let description = text
+                .strip_suffix('.')
+                .expect("recorded line ends with a period");
+            finish(format!("Undid: {description}"), seen)
+        };
+        Self {
+            text: undo_line(&self.text),
+            anonymous: undo_line(&self.anonymous),
+            names: self.names.clone(),
+        }
+    }
+}
+
 /// Capture wording against the tables on either side of the action. An
 /// action can remove a public object or replace its id before it is logged.
-pub(super) fn recorded_line(entry: &Entry, before: &Table, after: &Table, viewer: Seat) -> String {
+pub(super) fn recorded_line(
+    entry: &Entry,
+    before: &Table,
+    after: &Table,
+    viewer: Seat,
+) -> RecordedLine {
+    let names = RefCell::new(Vec::new());
     let cards = Cards {
         before,
         after,
         viewer,
+        recorded_names: Some(&names),
+        anonymous: false,
     };
-    finish(describe(&entry.action, &entry.summary, &cards), entry.seen)
-}
-
-pub(super) fn undo_line(text: &str, seen: bool) -> String {
-    let description = text
-        .strip_suffix('.')
-        .expect("recorded line ends with a period");
-    finish(format!("Undid: {description}"), seen)
+    let text = finish(describe(&entry.action, &entry.summary, &cards), entry.seen);
+    let names = names.into_inner();
+    let anonymous = if names.is_empty() {
+        text.clone()
+    } else {
+        let cards = Cards {
+            before,
+            after,
+            viewer,
+            recorded_names: None,
+            anonymous: true,
+        };
+        finish(describe(&entry.action, &entry.summary, &cards), entry.seen)
+    };
+    RecordedLine {
+        text,
+        anonymous,
+        names,
+    }
 }
 
 fn describe(action: &Action, summary: &Summary, names: &Cards<'_>) -> String {
@@ -187,17 +235,7 @@ fn describe(action: &Action, summary: &Summary, names: &Cards<'_>) -> String {
             name,
             adjustment,
         } => {
-            let name = if crate::redact::private_counter_name(
-                selection,
-                name,
-                names.before,
-                names.after,
-                viewer,
-            ) {
-                ""
-            } else {
-                name
-            };
+            let name = names.counter_label(selection, name);
             format!(
                 "{} on {}",
                 counter_change(name, *adjustment),
@@ -407,6 +445,8 @@ struct Cards<'a> {
     before: &'a Table,
     after: &'a Table,
     viewer: Seat,
+    recorded_names: Option<&'a RefCell<Vec<String>>>,
+    anonymous: bool,
 }
 
 impl Cards<'_> {
@@ -418,15 +458,55 @@ impl Cards<'_> {
         }
     }
 
+    fn counter_label<'label>(&self, selection: &Selection, label: &'label str) -> &'label str {
+        if crate::redact::private_counter_name(
+            selection,
+            label,
+            self.before,
+            self.after,
+            self.viewer,
+        ) {
+            return "";
+        }
+        for id in &selection.objects {
+            let Some(object) = self
+                .after
+                .objects
+                .get(id)
+                .or_else(|| self.before.objects.get(id))
+            else {
+                continue;
+            };
+            if let Card::Named(name) | Card::Custom { name, .. } = &object.card
+                && !name.is_empty()
+                && label.to_lowercase().contains(&name.to_lowercase())
+            {
+                if self.anonymous {
+                    return "";
+                }
+                self.record_name(name);
+            }
+        }
+        label
+    }
+
+    fn record_name(&self, name: &str) {
+        if let Some(names) = self.recorded_names {
+            names.borrow_mut().push(name.to_owned());
+        }
+    }
+
     fn object(&self, id: ObjectId) -> &str {
-        if let Some(object) = self
-            .after
-            .objects
-            .get(&id)
-            .or_else(|| self.before.objects.get(&id))
+        if !self.anonymous
+            && let Some(object) = self
+                .after
+                .objects
+                .get(&id)
+                .or_else(|| self.before.objects.get(&id))
             && object.known_to.contains(&self.viewer)
             && let Card::Named(name) | Card::Custom { name, .. } = &object.card
         {
+            self.record_name(name);
             return name;
         }
         if self.after.markers.contains_key(&id) || self.before.markers.contains_key(&id) {

@@ -11,12 +11,16 @@ use beryl_table::{Action, Chance, Change, Entry, Log, Refusal, Seat, Table};
 
 #[path = "history/animation.rs"]
 mod animation;
-mod common;
 #[path = "history/markers.rs"]
 mod markers;
 #[path = "history/projection.rs"]
 mod projection;
-use common::random::{ASSIST_AND_LOG, CORE, Generator, Kind};
+#[cfg(not(feature = "testing"))]
+#[path = "../src/testing.rs"]
+mod testing;
+#[cfg(feature = "testing")]
+use beryl_table::testing;
+use testing::{ASSIST_AND_LOG, CORE, Generator, Kind};
 
 const HOST: Seat = Seat(0);
 const GUEST: Seat = Seat(1);

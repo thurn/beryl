@@ -210,6 +210,15 @@ fn moving_to_a_private_hand_preserves_the_earlier_public_line() {
         .n;
     assert!(!game.table.objects.contains_key(&ObjectId(1)));
     assert_eq!(row(&game, GUEST, tapped).text, "Tapped Underground Sea.");
+    let published = |viewer| {
+        game.log
+            .visible_history(&game.table, viewer)
+            .find(|row| row.n == tapped)
+            .unwrap()
+            .text
+    };
+    assert_eq!(published(HOST), "Tapped Underground Sea.");
+    assert_eq!(published(GUEST), "Tapped a card.");
     assert_eq!(
         row(&game, GUEST, moved).text,
         "Put a card from the battlefield into Seat 1's hand."

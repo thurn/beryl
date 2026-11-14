@@ -10,8 +10,12 @@ use beryl_table::{Action, Chance, Change, Seat, Table, apply};
 
 #[path = "redaction/animation.rs"]
 mod animation;
-mod common;
-use common::random::{ASSIST_AND_LOG, CORE, Generator, Kind};
+#[cfg(not(feature = "testing"))]
+#[path = "../src/testing.rs"]
+mod testing;
+#[cfg(feature = "testing")]
+use beryl_table::testing;
+use testing::{ASSIST_AND_LOG, CORE, Generator, Kind};
 
 const HOST: Seat = Seat(0);
 const GUEST: Seat = Seat(1);

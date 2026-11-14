@@ -11,6 +11,7 @@ workspace = true
 
 [features]
 ts = ["dep:ts-rs"]
+testing = []
 
 [dependencies]
 # Supplies printed card facts from the shared store for host-side actions.

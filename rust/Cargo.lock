@@ -474,6 +474,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "beryl_table_session"
+version = "0.1.0"
+dependencies = [
+ "beryl_card_store",
+ "beryl_link",
+ "beryl_session",
+ "beryl_table",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "bincode-next"
 version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

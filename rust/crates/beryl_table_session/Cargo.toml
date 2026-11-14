@@ -1,0 +1,27 @@
+[package]
+name = "beryl_table_session"
+version = "0.1.0"
+description = "Adapts a manual table to player views and game sessions"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+# Supplies printed characteristics without asking the engine to interpret a card.
+beryl_card_store = { path = "../beryl_card_store" }
+# Transports manual table updates and actions between seats.
+beryl_link = { path = "../beryl_link" }
+# Supplies the view protocol shared with engine games.
+beryl_session = { path = "../beryl_session" }
+# Supplies host-side state, action permissions and per-seat redaction.
+beryl_table = { path = "../beryl_table" }
+# Encodes session messages using the same format as the game protocol.
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+
+[dev-dependencies]
+# Reuses the table's deterministic action generator to exercise both viewer projections.
+beryl_table = { path = "../beryl_table", features = ["testing"] }

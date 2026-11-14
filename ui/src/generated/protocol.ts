@@ -700,7 +700,9 @@ acting: Array<ZoneRef>,
 /**
  * References for actionable objects and stack markers shown in this view.
  */
-objectActions: Array<TableObjectAction>, prompt?: TablePrompt, };
+objectActions: Array<TableObjectAction>, prompt?: TablePrompt, arrows?: Array<TableArrow>, };
+
+export type TableArrow = { arrow: Arrow, from: Subject, to: Subject, };
 
 export type TableObjectRef = { view: string, handle: number, };
 

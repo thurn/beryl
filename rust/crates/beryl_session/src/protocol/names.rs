@@ -123,6 +123,13 @@ macro_rules! counters {
 
 counter_kinds!(counters);
 
+impl Counter {
+    /// The protocol kind for a counter with this printed name.
+    pub fn named(name: &str) -> Option<Self> {
+        CounterKind::named(name).map(Self::from)
+    }
+}
+
 mirror! {
     /// Why the engine gave up on a game ([`StallReason`]).
     Stall from StallReason { DecisionsPerTurn, Turns, StateBasedIterations, Capacity }

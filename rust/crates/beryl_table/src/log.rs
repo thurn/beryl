@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::apply::{AppliedChanges, Presentation, commit, next_entry, perform, perform_history};
 use crate::change::Edit;
-use crate::state::ObjectId;
+use crate::state::{Card, ObjectId};
 use crate::{Action, Chance, Change, Entry, Refusal, Seat, Table, apply, permissions, undo};
 
 mod line;
@@ -38,12 +38,19 @@ pub struct HistoryLine<'a> {
 pub struct Log {
     entries: Vec<Entry>,
     /// Per-entry wording in seat order, captured when the action happened.
-    lines: Vec<Vec<String>>,
+    lines: Vec<Vec<line::RecordedLine>>,
     snapshots: BTreeMap<u32, Table>,
     /// Strike status changes only when a rewind is applied or undone.
     strikes: BTreeMap<u32, BTreeSet<u32>>,
     /// Shuffling and entering a hand assign a fresh id to the same card.
     prior_ids: BTreeMap<ObjectId, ObjectId>,
+}
+
+fn card_name(card: &Card) -> Option<&str> {
+    match card {
+        Card::Named(name) | Card::Custom { name, .. } => Some(name),
+        Card::Hidden => None,
+    }
 }
 
 impl Log {
@@ -70,6 +77,39 @@ impl Log {
     /// undo state. Row-level undo is offered for live batches. Draws use the
     /// separate [`Self::last_draw`] shortcut.
     pub fn history(&self, table: &Table, viewer: Seat) -> impl Iterator<Item = HistoryLine<'_>> {
+        self.history_with_hidden_names(table, viewer, BTreeSet::new())
+    }
+
+    /// Projects history for a full view that also shows the current hidden
+    /// objects. Card names that only identify hidden copies become anonymous.
+    pub fn visible_history(
+        &self,
+        table: &Table,
+        viewer: Seat,
+    ) -> impl Iterator<Item = HistoryLine<'_>> {
+        let visible: BTreeSet<_> = table
+            .objects
+            .values()
+            .filter(|object| object.known_to.contains(&viewer))
+            .filter_map(|object| card_name(&object.card))
+            .collect();
+        let hidden: BTreeSet<_> = table
+            .objects
+            .values()
+            .filter(|object| !object.known_to.contains(&viewer))
+            .filter_map(|object| card_name(&object.card))
+            .filter(|name| !visible.contains(name))
+            .map(str::to_owned)
+            .collect();
+        self.history_with_hidden_names(table, viewer, hidden)
+    }
+
+    fn history_with_hidden_names(
+        &self,
+        table: &Table,
+        viewer: Seat,
+        hidden: BTreeSet<String>,
+    ) -> impl Iterator<Item = HistoryLine<'_>> {
         let targets = self
             .undo_ready(table, viewer)
             .ok()
@@ -79,10 +119,16 @@ impl Log {
             .iter()
             .zip(&self.lines)
             .filter_map(move |(entry, lines)| {
+                let line = lines.get(usize::from(viewer.0))?;
+                let text = if line.names.iter().any(|name| hidden.contains(name)) {
+                    &line.anonymous
+                } else {
+                    &line.text
+                };
                 Some(HistoryLine {
                     n: entry.n,
                     by: entry.by,
-                    text: lines.get(usize::from(viewer.0))?,
+                    text,
                     struck: strikes.is_some_and(|strikes| strikes.contains(&entry.n)),
                     undo: targets
                         .as_ref()
@@ -234,7 +280,7 @@ impl Log {
             let index = self.index(target).expect("recorded undo target");
             self.lines[index]
                 .iter()
-                .map(|text| line::undo_line(text, entry.seen))
+                .map(|line| line.undo(entry.seen))
                 .collect()
         } else {
             table

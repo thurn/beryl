@@ -15,6 +15,12 @@ pub mod permissions;
 pub mod redact;
 pub mod save;
 pub mod state;
+#[cfg(feature = "testing")]
+pub mod testing;
+
+// The shared generator also compiles as a module of the integration tests.
+#[cfg(feature = "testing")]
+extern crate self as beryl_table;
 
 mod undo;
 

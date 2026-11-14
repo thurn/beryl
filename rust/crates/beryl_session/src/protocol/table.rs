@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::{ObjectId, Side, TargetRef, ZoneName};
-use crate::script::Subject;
+use crate::script::{Arrow, Subject};
 
 mod actions;
 
@@ -199,6 +199,14 @@ pub struct ManualOrders {
     pub opponent: ManualPiles,
 }
 
+/// A manual arrow between subjects in the viewer's current layout.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct TableArrow {
+    pub arrow: Arrow,
+    pub from: Subject,
+    pub to: Subject,
+}
+
 /// What the viewer can see or use on a manual table in addition to the shared game view.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -217,4 +225,7 @@ pub struct TableView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub prompt: Option<TablePrompt>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(optional, as = "Option<_>")]
+    pub arrows: Vec<TableArrow>,
 }

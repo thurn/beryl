@@ -32,7 +32,7 @@ pub(crate) fn card_record(card: &Card) -> Option<Record> {
     }
 }
 
-pub(crate) fn printed_face(record: &Record, face: Face) -> Option<&beryl_card_store::Face> {
+pub fn printed_face(record: &Record, face: Face) -> Option<&beryl_card_store::Face> {
     match face {
         Face::Front => record.faces.first(),
         Face::Back => record.faces.iter().find(|face| face.side == Side::Back),
@@ -40,7 +40,7 @@ pub(crate) fn printed_face(record: &Record, face: Face) -> Option<&beryl_card_st
     }
 }
 
-pub(crate) fn counter(card: &Object, name: &str) -> i32 {
+pub fn counter(card: &Object, name: &str) -> i32 {
     card.counters
         .iter()
         .find_map(|(kind, count)| (kind == name).then_some(*count))
