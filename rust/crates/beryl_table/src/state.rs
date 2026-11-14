@@ -182,6 +182,9 @@ pub struct Match {
     pub starting_life: i32,
     pub starting_hand_size: u16,
     pub in_game: bool,
+    /// The latest game's result, used to offer the losing seat the next choice.
+    #[serde(default)]
+    pub last_winner: Option<Seat>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -263,6 +266,7 @@ impl Table {
                 starting_life,
                 starting_hand_size: 7,
                 in_game: false,
+                last_winner: None,
             },
             proposals: Vec::new(),
             assists: vec![Vec::new(); count],

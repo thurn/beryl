@@ -7,6 +7,7 @@ pub mod action;
 pub mod apply;
 pub mod chance;
 pub mod change;
+pub mod helpers;
 pub mod permissions;
 pub mod state;
 

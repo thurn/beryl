@@ -2,6 +2,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::state::{AbilityMarker, Arrow, Face, Object, ObjectId, Row, Seat, Table, Zone};
 
+mod table;
+
+pub use table::TableEdit;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Location {
     pub zone: Zone,
@@ -127,6 +131,7 @@ pub enum Change {
         arrow: Arrow,
         index: usize,
     },
+    SetTable(TableEdit),
     Lend {
         zone: Zone,
         to: Seat,
@@ -235,6 +240,7 @@ impl Change {
             }
             Self::InsertArrow { arrow, index } => table.arrows.insert(*index, arrow.clone()),
             Self::RemoveArrow { arrow, index } => assert_eq!(table.arrows.remove(*index), *arrow),
+            Self::SetTable(edit) => edit.perform(table),
             Self::Lend {
                 zone,
                 to,
@@ -300,6 +306,7 @@ impl Change {
                 arrow: arrow.clone(),
                 index: *index,
             },
+            Self::SetTable(edit) => Self::SetTable(edit.inverse()),
             Self::Lend {
                 zone,
                 to,

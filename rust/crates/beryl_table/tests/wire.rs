@@ -112,3 +112,24 @@ fn applies_a_move_decoded_from_json() {
             .all(|object| object.known_to == [Seat(0), Seat(1)])
     );
 }
+
+#[test]
+fn applies_lobby_and_roll_actions_decoded_from_json() {
+    use beryl_table::state::Zone;
+    use beryl_table::{Chance, Change, Seat, Table, apply};
+
+    let seat = Seat(0);
+    let mut table = Table::new(1);
+    let mut chance = Chance::replaying(vec![0, 5]);
+    for json in [
+        r#"{"load_deck":{"seat":0,"main":[["Island",2]],"side":[]}}"#,
+        r#"{"start":{"first":0}}"#,
+    ] {
+        let action = serde_json::from_str(json).unwrap();
+        apply(&mut table, seat, &action, &mut chance).unwrap();
+    }
+    assert_eq!(table.zone(Zone::Hand(seat)).unwrap().len(), 2);
+    let action = serde_json::from_str(r#"{"roll":{"count":1,"sides":6}}"#).unwrap();
+    let entry = apply(&mut table, seat, &action, &mut chance).unwrap();
+    assert_eq!(entry.changes, [Change::Random { outcomes: vec![5] }]);
+}

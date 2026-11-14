@@ -9,7 +9,7 @@ use crate::change::{Edit, Location, ObjectEdit};
 use crate::state::{AbilityMarker, ArrowTarget, Card, Face, Object, ObjectId, Row, Zone};
 use crate::{Change, Refusal, Seat, Table};
 
-use super::Changes;
+use super::{Changes, edit, players};
 
 pub(super) fn move_cards(
     table: &Table,
@@ -97,7 +97,7 @@ pub(super) fn move_cards(
         update_card(table, card, to, face, tapped, &mut changes);
         if let Some((name, count)) = counters {
             changes.extend(
-                counter_edit(card, name, Adjustment::Set(i32::from(count)))
+                object_counter(card, name, Adjustment::Set(i32::from(count)))
                     .map(|edit| Change::SetObject { id, edit }),
             );
         }
@@ -255,7 +255,7 @@ pub(super) fn card_record(card: &Card) -> Option<Record> {
     }
 }
 
-fn printed_face(record: &Record, face: Face) -> Option<&beryl_card_store::Face> {
+pub(super) fn printed_face(record: &Record, face: Face) -> Option<&beryl_card_store::Face> {
     match face {
         Face::Front => record.faces.first(),
         Face::Back => record.faces.iter().find(|face| face.side == Side::Back),
@@ -284,15 +284,10 @@ pub(super) fn remove_arrows(
     selected: &BTreeSet<ObjectId>,
     changes: &mut Vec<Change>,
 ) {
-    for (index, arrow) in table.arrows.iter().enumerate().rev() {
-        let target_moved = matches!(arrow.to, ArrowTarget::Object(id) if selected.contains(&id));
-        if selected.contains(&arrow.from) || target_moved {
-            changes.push(Change::RemoveArrow {
-                arrow: arrow.clone(),
-                index,
-            });
-        }
-    }
+    changes.extend(players::remove_arrows(table, |arrow| {
+        selected.contains(&arrow.from)
+            || matches!(arrow.to, ArrowTarget::Object(id) if selected.contains(&id))
+    }));
 }
 
 fn detach_cards(table: &Table, selected: &BTreeSet<ObjectId>, changes: &mut Vec<Change>) {
@@ -413,7 +408,7 @@ fn selected_ids(table: &Table, selection: &Selection) -> Result<BTreeSet<ObjectI
     Ok(selected)
 }
 
-fn validate_seen(table: &Table, seen: SeenObject) -> Result<(), Refusal> {
+pub(super) fn validate_seen(table: &Table, seen: SeenObject) -> Result<(), Refusal> {
     let (zone, _) = table.position(seen.id).ok_or(Refusal::Invalid)?;
     if zone != seen.zone {
         return Err(Refusal::Stale);
@@ -449,14 +444,6 @@ fn set_cards(
         .collect())
 }
 
-fn set<T: PartialEq>(
-    before: T,
-    after: T,
-    field: impl FnOnce(Edit<T>) -> ObjectEdit,
-) -> Option<ObjectEdit> {
-    (before != after).then(|| field(Edit { before, after }))
-}
-
 fn reveal<'a>(table: &'a Table, card: &'a Object) -> impl Iterator<Item = Change> + 'a {
     table
         .seats()
@@ -474,7 +461,7 @@ fn battlefield(selection: &Selection) -> Result<(), Refusal> {
 pub(super) fn tap(table: &Table, selection: &Selection, tapped: bool) -> Changes {
     battlefield(selection)?;
     set_cards(table, selection, |card| {
-        set(card.tapped, tapped, ObjectEdit::Tapped)
+        edit(card.tapped, tapped, ObjectEdit::Tapped)
     })
 }
 
@@ -494,7 +481,9 @@ pub(super) fn reorder(table: &Table, selection: &Selection, position: Position) 
 
 pub(super) fn pin(table: &Table, selection: &Selection, row: Row) -> Changes {
     battlefield(selection)?;
-    set_cards(table, selection, |card| set(card.row, row, ObjectEdit::Row))
+    set_cards(table, selection, |card| {
+        edit(card.row, row, ObjectEdit::Row)
+    })
 }
 
 pub(super) fn give(table: &Table, selection: &Selection, to: Seat) -> Changes {
@@ -503,14 +492,14 @@ pub(super) fn give(table: &Table, selection: &Selection, to: Seat) -> Changes {
         return Err(Refusal::Invalid);
     }
     set_cards(table, selection, |card| {
-        set(card.controller, to, ObjectEdit::Controller)
+        edit(card.controller, to, ObjectEdit::Controller)
     })
 }
 
 pub(super) fn face(table: &Table, selection: &Selection, face: Face) -> Changes {
     let mut changes = Vec::new();
     for card in selected_cards(table, selection)? {
-        if let Some(edit) = set(card.face, face, ObjectEdit::Face) {
+        if let Some(edit) = edit(card.face, face, ObjectEdit::Face) {
             changes.push(Change::SetObject { id: card.id, edit });
         }
         if card.zone.is_public() && face != Face::Down {
@@ -523,7 +512,7 @@ pub(super) fn face(table: &Table, selection: &Selection, face: Face) -> Changes 
 pub(super) fn flag(table: &Table, selection: &Selection, doesnt_untap: bool) -> Changes {
     battlefield(selection)?;
     set_cards(table, selection, |card| {
-        set(card.doesnt_untap, doesnt_untap, ObjectEdit::DoesntUntap)
+        edit(card.doesnt_untap, doesnt_untap, ObjectEdit::DoesntUntap)
     })
 }
 
@@ -543,24 +532,34 @@ pub(super) fn peek(table: &Table, by: Seat, selection: &Selection) -> Changes {
     Ok(changes)
 }
 
-fn counter_edit(card: &Object, name: &str, adjustment: Adjustment) -> Option<ObjectEdit> {
-    let mut after = card.counters.clone();
-    let index = after.iter().position(|(existing, _)| existing == name);
-    let current = index.map_or(0, |index| after[index].1);
-    let count = match adjustment {
-        Adjustment::Add(delta) => current.saturating_add(delta),
-        Adjustment::Set(count) => count,
+pub(super) fn counter_edit(
+    counters: &[(String, i32)],
+    name: &str,
+    adjustment: Adjustment,
+    maximum: i32,
+) -> Option<Edit<Vec<(String, i32)>>> {
+    let index = counters.iter().position(|(existing, _)| existing == name);
+    let current = index.map_or(0, |index| counters[index].1);
+    let count = adjustment.apply(current).clamp(0, maximum);
+    if current == count && (count != 0 || index.is_none()) {
+        return None;
     }
-    .clamp(0, 999);
-    match (index, count) {
-        (Some(index), 0) => {
+    let mut after = counters.to_vec();
+    match index {
+        Some(index) if count == 0 => {
             after.remove(index);
         }
-        (Some(index), count) => after[index].1 = count,
-        (None, 0) => return None,
-        (None, count) => after.push((name.to_owned(), count)),
+        Some(index) => after[index].1 = count,
+        None => after.push((name.to_owned(), count)),
     }
-    set(card.counters.clone(), after, ObjectEdit::Counters)
+    Some(Edit {
+        before: counters.to_vec(),
+        after,
+    })
+}
+
+fn object_counter(card: &Object, name: &str, adjustment: Adjustment) -> Option<ObjectEdit> {
+    counter_edit(&card.counters, name, adjustment, 999).map(ObjectEdit::Counters)
 }
 
 pub(super) fn counter(
@@ -570,14 +569,14 @@ pub(super) fn counter(
     adjustment: Adjustment,
 ) -> Changes {
     set_cards(table, selection, |card| {
-        counter_edit(card, name, adjustment)
+        object_counter(card, name, adjustment)
     })
 }
 
 pub(super) fn stats(table: &Table, selection: &Selection, stats: Option<(i32, i32)>) -> Changes {
     battlefield(selection)?;
     set_cards(table, selection, |card| {
-        set(card.stats, stats, ObjectEdit::Stats)
+        edit(card.stats, stats, ObjectEdit::Stats)
     })
 }
 
@@ -587,13 +586,13 @@ pub(super) fn damage(table: &Table, selection: &Selection, damage: i32) -> Chang
         return Err(Refusal::Invalid);
     }
     set_cards(table, selection, |card| {
-        set(card.damage, damage, ObjectEdit::Damage)
+        edit(card.damage, damage, ObjectEdit::Damage)
     })
 }
 
 pub(super) fn note(table: &Table, selection: &Selection, note: Option<&str>) -> Changes {
     set_cards(table, selection, |card| {
-        set(card.note.clone(), note.map(str::to_owned), ObjectEdit::Note)
+        edit(card.note.clone(), note.map(str::to_owned), ObjectEdit::Note)
     })
 }
 
@@ -631,7 +630,7 @@ pub(super) fn attach(table: &Table, selection: &Selection, host: SeenObject) -> 
     changes.extend(cards.into_iter().filter_map(|card| {
         Some(Change::SetObject {
             id: card.id,
-            edit: set(card.attached_to, Some(host), ObjectEdit::AttachedTo)?,
+            edit: edit(card.attached_to, Some(host), ObjectEdit::AttachedTo)?,
         })
     }));
     Ok(changes)
@@ -640,7 +639,7 @@ pub(super) fn attach(table: &Table, selection: &Selection, host: SeenObject) -> 
 pub(super) fn unattach(table: &Table, selection: &Selection) -> Changes {
     battlefield(selection)?;
     set_cards(table, selection, |card| {
-        set(card.attached_to, None, ObjectEdit::AttachedTo)
+        edit(card.attached_to, None, ObjectEdit::AttachedTo)
     })
 }
 

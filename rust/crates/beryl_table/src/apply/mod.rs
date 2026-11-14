@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::change::Edit;
 use crate::{Action, Chance, Change, Seat, Table, permissions};
 
 mod cards;
@@ -25,6 +26,10 @@ pub struct Entry {
 }
 
 type Changes = Result<Vec<Change>, Refusal>;
+
+fn edit<T: PartialEq, C>(before: T, after: T, change: impl FnOnce(Edit<T>) -> C) -> Option<C> {
+    (before != after).then(|| change(Edit { before, after }))
+}
 
 /// The reserved actions still have a dispatch target so they can be
 /// implemented independently in the module that owns their state.
@@ -181,19 +186,27 @@ fn changes_for(table: &Table, by: Seat, action: &Action, chance: &mut Chance) ->
         Action::AlwaysRevealTop { seat, on } => library::always_reveal_top(table, *seat, *on),
         Action::AlwaysLookAtTop { seat, on } => library::always_look_at_top(table, *seat, *on),
         Action::SortHand { seat, by } => library::sort_hand(table, *seat, *by),
-        Action::Life { .. } => players::life(action),
-        Action::PlayerCounter { .. } => players::player_counter(action),
-        Action::Phase { .. } => game::phase(action),
-        Action::NextTurn { .. } => game::next_turn(action),
-        Action::Roll { .. } => players::roll(action),
-        Action::Arrow { .. } => players::arrow(action),
-        Action::ClearArrows { .. } => players::clear_arrows(action),
-        Action::LoadDeck { .. } => game::load_deck(action),
-        Action::Sideboard { .. } => game::sideboard(action),
-        Action::Ready { .. } => game::ready(action),
-        Action::Start { .. } => game::start(action),
-        Action::NextGame { .. } => game::next_game(action),
-        Action::Concede { .. } => game::concede(action),
+        Action::Life { seat, adjustment } => players::life(table, *seat, *adjustment),
+        Action::PlayerCounter {
+            seat,
+            name,
+            adjustment,
+        } => players::player_counter(table, *seat, name, *adjustment),
+        Action::Phase { phase } => Ok(game::phase(table, *phase)),
+        Action::NextTurn {} => game::next_turn(table),
+        Action::Roll { count, sides } => players::roll(*count, *sides, chance),
+        Action::Arrow { selection, to } => players::arrow(table, by, selection, *to),
+        Action::ClearArrows { from, to } => players::clear_arrows(table, by, *from, *to),
+        Action::LoadDeck { seat, main, side } => game::load_deck(table, *seat, main, side),
+        Action::Sideboard {
+            seat,
+            into_main,
+            into_side,
+        } => game::sideboard(table, *seat, into_main, into_side),
+        Action::Ready { seat, ready } => game::ready(table, *seat, *ready),
+        Action::Start { first } => game::start(table, *first, chance, action),
+        Action::NextGame { winner } => game::next_game(table, *winner),
+        Action::Concede {} => game::concede(table, by),
         Action::SetAssist { .. } => game::set_assist(action),
         Action::Flow { .. } => library::flow(action),
         Action::Undo { .. } | Action::Rewind { .. } | Action::Batch { .. } => Err(Refusal::Invalid),

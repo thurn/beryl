@@ -62,6 +62,15 @@ pub enum Adjustment {
     Set(i32),
 }
 
+impl Adjustment {
+    pub(crate) fn apply(self, current: i32) -> i32 {
+        match self {
+            Self::Add(delta) => current.saturating_add(delta),
+            Self::Set(value) => value,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Portion {
