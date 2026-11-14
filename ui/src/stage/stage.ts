@@ -46,6 +46,7 @@ import type { PlayerView } from "../generated/protocol";
 import { laid, under } from "./beat.ts";
 import type { Edge, Playback, Playing, Run } from "./beat.ts";
 import { Clock, type Frames, type StageClock } from "./clock.ts";
+import { StageIdle } from "./idle.ts";
 import { awaited, backed, entering, showingOn, stillShown } from "./enter.ts";
 import type { Effect, On } from "./effects.ts";
 import { sameDress, sameFace } from "./layout.ts";
@@ -124,7 +125,7 @@ export class ScriptStage {
   #playback: Playback | undefined;
   /** When the next beat begins: the end of the last one. */
   #at = 0;
-  #watching: (() => void)[] = [];
+  readonly #idle: StageIdle;
   readonly #listeners = new Set<() => void>();
   readonly #following = new Set<(edge: Edge) => void>();
   /** Stage time is passing over what plays (`skip`): no step's edge is told. */
@@ -153,6 +154,7 @@ export class ScriptStage {
     this.timings = options.timings;
     this.effects = options.effects ?? (() => []);
     this.clock = new Clock((_, to) => this.#tick(to), options.frames);
+    this.#idle = new StageIdle(this.clock);
     this.clock.release();
     this.pointer = new Pointer({
       pose: (name) => this.pose(name),
@@ -207,6 +209,7 @@ export class ScriptStage {
    * over from the view at once: whatever was playing or waiting is dropped, and nothing
    * moves. */
   play(view: PlayerView, script?: Script) {
+    this.#idle.playing();
     if (script && !script.reset && this.#table) {
       if (!this.#busy) this.#at = this.clock.now;
       this.#queue.push({ view, script });
@@ -232,13 +235,12 @@ export class ScriptStage {
     this.#view = view;
     this.#lay(this.clock.now);
     this.#write(this.clock.now);
-    this.#release();
+    this.#idle.settled(this.#view?.status.kind);
   }
 
   /** Resolves when everything given to `play` has played out. Settled inside the tick. */
   idle(): Promise<void> {
-    if (!this.#busy) return Promise.resolve();
-    return new Promise((resolve) => this.#watching.push(resolve));
+    return this.#idle.wait(this.#busy);
   }
 
   /** Holds the clock, then advances it to the end of everything given to `play`; returns the
@@ -455,7 +457,7 @@ export class ScriptStage {
     }
     this.#pass(to);
     this.#write(to);
-    if (!this.#busy) this.#release();
+    if (!this.#busy) this.#idle.settled(this.#view?.status.kind);
   }
 
   /** Ends, each at its own time, the announcements passing over the table that are over by
@@ -790,11 +792,5 @@ export class ScriptStage {
   #draw(name: Name, entry: Entry, now = this.clock.now) {
     const pose = this.#poseOf(name, entry, now);
     this.#surface?.draw(name, pose, entry.resting.dress.frame);
-  }
-
-  #release() {
-    const watching = this.#watching;
-    this.#watching = [];
-    for (const resolve of watching) resolve();
   }
 }

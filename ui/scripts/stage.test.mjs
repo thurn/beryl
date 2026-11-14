@@ -67,6 +67,50 @@ test("released, the clock sums the time between frames; held, it ignores them", 
     assert.equal(clock.now, 43);
 });
 
+test("a settled result stops live frames until another view arrives", () => {
+    const pending = new Map();
+    let handle = 0;
+    const frames = {
+        request: (frame) => (pending.set(++handle, frame), handle),
+        cancel: (h) => pending.delete(h),
+    };
+    const frame = (timestamp) => {
+        const due = [...pending.values()];
+        pending.clear();
+        for (const run of due) run(timestamp);
+    };
+    const made = new ScriptStage({
+        layout: row,
+        timings: () => ({ ...SNAP, duration: 100 }),
+        frames,
+    });
+    made.play(view([1, 2]));
+    made.play(
+        view([2, 1], [], {
+            status: { kind: "over", outcome: { kind: "draw" } },
+        }),
+        { beats: [[move(1, 1)]] },
+    );
+    frame(1000);
+    frame(1050);
+    assert.equal(pending.size, 1, "the end script still receives frames");
+    frame(1150);
+    assert.equal(made.shown.view.status.kind, "over");
+    assert.equal(pending.size, 0, "the finished result cancels its next frame");
+    const ended = made.clock.now;
+    frame(5000);
+    assert.equal(made.clock.now, ended);
+
+    made.play(view([1, 2]));
+    assert.equal(pending.size, 1, "another game restarts live frames");
+    frame(6000);
+    frame(6016);
+    assert.equal(made.clock.now, ended + 16);
+    made.play(view([1, 2], [], { status: { kind: "stopped" } }));
+    assert.equal(pending.size, 0, "a stopped game also stops frames");
+    made.close();
+});
+
 test("a view with no script is drawn at rest at once, one node an object", () => {
     const { stage: made, surface } = stage();
     made.play(view([1, 2], [3]));
