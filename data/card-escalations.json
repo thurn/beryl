@@ -3,5 +3,10 @@
     "mechanic": "a delayed ability that carries an object (the exiled card) and an effect returning a card from exile to the battlefield under its owner's control",
     "rule": "CR 603.7c",
     "text": "When this creature enters, exile another target permanent. Return that card to the battlefield under its owner's control at the beginning of the next end step."
+  },
+  "Lightning Bolt": {
+    "mechanic": "any target: one target that is a creature, player, planeswalker or battle (TargetKind is either Permanent or Player, and Recipients has no form taking a target of either kind); also no implemented land makes {R}",
+    "rule": "CR 115.4",
+    "text": "Lightning Bolt deals 3 damage to any target."
   }
 }
