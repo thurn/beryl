@@ -363,16 +363,17 @@ export function Controls({
       ? undefined
       : (resting.get(host)?.object?.name ?? undefined);
   const keeps = keptClear(asked, resting);
-  // The card the pointer is on, where it is shown alone: not one under the top of a pile, nor
-  // one of your hand, which rises large enough to read in place (UI Conventions, "Hover
-  // inspection"), unless a click on it was refused, whose reason the inspector gives.
+  // The inspector reads a pointed-at card shown on its own. A hand card rises to be
+  // read in the fan. Its inspector opens when it faces down or its click was refused.
   const pointed = hovered === undefined ? undefined : resting.get(hovered);
   const inspected =
     pointed?.object &&
     pointed.dress.look !== "hidden" &&
     pointed.dress.look !== "pile" &&
     pointed.dress.look !== "handling" &&
-    (pointed.dress.look !== "hand" || refused?.slot === pointed.object.slot)
+    (pointed.dress.look !== "hand" ||
+      pointed.object.face === "down" ||
+      refused?.slot === pointed.object.slot)
       ? pointed
       : undefined;
   return (

@@ -598,7 +598,11 @@ await check(
         const unknown = objects.find(
             (o) => o.face === "down" && o.name === null,
         );
-        const known = objects.find((o) => o.face === "down" && o.name);
+        const knownDown = (zone) =>
+            objects.find((o) => o.face === "down" && o.name && o.zone === zone);
+        const known = knownDown("battlefield");
+        const hand = knownDown("hand");
+        const buried = knownDown("graveyard");
         const sideboard = objects.find((o) => o.zone === "sideboard");
 
         const pinnedBox = await node(pinnedLand).boundingBox();
@@ -638,7 +642,7 @@ await check(
             "3 Poison counters",
         );
 
-        for (const object of [known, unknown]) {
+        for (const object of [known, unknown, hand]) {
             await node(object).locator(".card-face-down").waitFor();
             assert.equal(await node(object).locator(".card-name").count(), 0);
         }
@@ -648,6 +652,16 @@ await check(
         await page.getByLabel(`${known.name}, inspected`).waitFor();
         await node(unknown).hover();
         assert.equal(await page.locator(".inspect").count(), 0);
+
+        await node(hand).hover();
+        await page.getByLabel(`${hand.name}, inspected`).waitFor();
+        await page
+            .getByRole("button", { name: "Your graveyard, 1 card" })
+            .click();
+        const listed = page.locator(`[data-viewer-slot="${buried.slot}"]`);
+        await listed.locator(".card-back").waitFor();
+        await listed.hover();
+        await page.getByLabel(`${buried.name}, inspected`).waitFor();
     },
     { fixture: "table-drawn", at: manualViews.length, ready: ".stack-ability" },
 );

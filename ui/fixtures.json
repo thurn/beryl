@@ -270,6 +270,27 @@
               "in": "battlefield",
               "tapped": true
             }
+          },
+          {
+            "face": {
+              "objects": [49],
+              "in": {
+                "hand": 0
+              },
+              "face": "down"
+            }
+          },
+          {
+            "move": {
+              "objects": [57],
+              "in": {
+                "hand": 0
+              },
+              "to": {
+                "graveyard": 0
+              },
+              "face": "down"
+            }
           }
         ]
       }

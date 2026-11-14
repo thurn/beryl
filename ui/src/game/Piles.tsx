@@ -271,7 +271,7 @@ function ViewerCard({
       data-card={object.name ?? undefined}
       {...hover}
     >
-      {object.name ? (
+      {object.name && object.face !== "down" ? (
         <Card card={face} width={VIEWER_CARD} />
       ) : (
         <CardBack width={VIEWER_CARD} />
