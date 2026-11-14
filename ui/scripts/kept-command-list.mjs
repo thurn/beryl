@@ -45,6 +45,65 @@ await check(
     {
         hash: "#/gallery",
         ready: ".gallery",
-        viewport: { width: 1536, height: 1024 },
+        viewport: { width: 1024, height: 600 },
+    },
+);
+
+// The gallery audits cannot tell where focus goes when an overlay closes.
+await check(
+    "manual table overlays return keyboard focus after closing",
+    async (page) => {
+        const corner = page.getByRole("button", {
+            name: "Bottom-right corner",
+        });
+        await corner.focus();
+        await page.keyboard.press("Enter");
+        await page
+            .getByRole("menuitem", { name: "Draw", exact: true })
+            .waitFor();
+        await page.keyboard.press("Escape");
+        assert.equal(
+            await corner.evaluate((el) => el === document.activeElement),
+            true,
+        );
+
+        const field = page.getByRole("textbox", { name: "Cards to draw" });
+        await page
+            .getByRole("button", { name: "Cancel", exact: true })
+            .first()
+            .click();
+        const open = page.getByRole("button", {
+            name: "Draw cards",
+            exact: true,
+        });
+        await open.focus();
+        await page.keyboard.press("Enter");
+        assert.equal(
+            await field.evaluate((el) => el === document.activeElement),
+            true,
+        );
+        await page.keyboard.press("Escape");
+        await field.waitFor({ state: "hidden" });
+        assert.equal(
+            await open.evaluate((el) => el === document.activeElement),
+            true,
+        );
+
+        await page.keyboard.press("Enter");
+        await page.keyboard.type("3");
+        await page
+            .getByRole("button", { name: "Draw 3", exact: true })
+            .waitFor();
+        await page.keyboard.press("Enter");
+        await field.waitFor({ state: "hidden" });
+        assert.equal(
+            await open.evaluate((el) => el === document.activeElement),
+            true,
+        );
+    },
+    {
+        hash: "#/gallery",
+        ready: ".gallery",
+        viewport: { width: 1024, height: 600 },
     },
 );

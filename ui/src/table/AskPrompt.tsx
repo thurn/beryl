@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Button, Dock } from "../components/Controls";
 import { clamp, parse, parseStats, type Stats } from "./ask";
 import "./ask.css";
@@ -98,15 +98,24 @@ function AskEntry<T>({
     text: string;
     value: T | undefined;
   }>(() => ({ text: format(start), value: start }));
-  const focus = useCallback(
-    (input: HTMLInputElement | null) => {
-      if (input && autoFocus) {
-        input.focus({ preventScroll: true });
-        input.select();
+  const form = useRef<HTMLFormElement>(null);
+  const field = useRef<HTMLInputElement>(null);
+  useLayoutEffect(() => {
+    if (!autoFocus) return;
+    const previous = document.activeElement;
+    const prompt = form.current;
+    field.current?.focus({ preventScroll: true });
+    field.current?.select();
+    return () => {
+      const active = document.activeElement;
+      if (
+        previous instanceof HTMLElement &&
+        (active === document.body || prompt?.contains(active))
+      ) {
+        previous.focus({ preventScroll: true });
       }
-    },
-    [autoFocus],
-  );
+    };
+  }, [autoFocus]);
   const stepButton = (by: number, sign: string, name: string) => {
     const from = value ?? start;
     const to = step?.(from, by);
@@ -129,16 +138,15 @@ function AskEntry<T>({
   return (
     <Dock>
       <form
+        ref={form}
         className="table-ask-form"
         onPointerDown={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
+          event.stopPropagation();
           if (event.nativeEvent.isComposing) return;
           if (event.key === "Escape") {
             event.preventDefault();
-            event.stopPropagation();
             onCancel();
-          } else if (event.key === "Enter") {
-            event.stopPropagation();
           }
         }}
         onSubmit={(event) => {
@@ -156,7 +164,7 @@ function AskEntry<T>({
             aria-label={fieldLabel}
             aria-invalid={value === undefined || undefined}
             autoComplete="off"
-            ref={focus}
+            ref={field}
             value={text}
             onChange={(event) => {
               const text = event.target.value;

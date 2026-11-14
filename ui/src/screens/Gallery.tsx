@@ -351,13 +351,13 @@ function AskExample({
   const [state, setState] = useState<"preview" | "closed" | "open">("preview");
   return (
     <div className="gallery-ask">
-      {state !== "closed" ? (
-        children(() => setState("closed"), state === "open")
-      ) : (
+      {state !== "preview" && (
         <Button variant="secondary" onClick={() => setState("open")}>
           {name}
         </Button>
       )}
+      {state !== "closed" &&
+        children(() => setState("closed"), state === "open")}
     </div>
   );
 }

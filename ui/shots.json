@@ -147,8 +147,8 @@
     {
       "name": "gallery-commands-all",
       "route": "/?commands=#/gallery",
-      "width": 1536,
-      "height": 1024,
+      "width": 1024,
+      "height": 600,
       "expect": "[role=option]:has-text('Draw cards')",
       "keep": "Shows the unfiltered command list and its shortcut hints."
     },

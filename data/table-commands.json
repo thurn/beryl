@@ -2178,9 +2178,9 @@
     "label": "Add counter…",
     "applies_to": "player",
     "scope": "table",
-    "asks": "text",
+    "asks": "text_and_number",
     "action": {
-      "player_counter": { "seat": "$seat", "name": "$text", "add": 1 }
+      "player_counter": { "seat": "$seat", "name": "$text", "add": "$number" }
     },
     "menu": { "group": "Player counters", "order": 10 },
     "group": "Player counters"

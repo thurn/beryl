@@ -58,12 +58,13 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   the UI supplies, such as whether the card is two-faced. An `action` is a
   `beryl_table::Action` template, and a `client` names a UI operation. The
   dispatcher fills placeholders from the command, current target and prompt
-  answers. In particular, `$in` is the zone where the selected objects were
-  seen, `$owner` is their owner's seat and `$seat` is the affected seat.
-  `$objects` follows the command: a card action uses the selection, a whole-pile
-  action uses the pile, and a library action uses the requested part. `Primary`
-  is the unlabeled group before "Move to". The Rust test in
-  `beryl_table/tests/commands.rs` checks the shape of each action.
+  answers. `text_and_number` asks for a name, then an amount. `$in` is the zone
+  where the selected objects were seen, `$owner` is their owner's seat and
+  `$seat` is the affected seat. `$objects` follows the command: a card action
+  uses the selection, a whole-pile action uses the pile, and a library action
+  uses the requested part. `Primary` is the unlabeled group before "Move to".
+  The Rust test in `beryl_table/tests/commands.rs` checks the shape of each
+  action.
 - `ui-conventions.json`: the UI design rules, which `just conventions` turns
   into `docs/ui-conventions.md`. Edit the JSON, never the generated page.
 

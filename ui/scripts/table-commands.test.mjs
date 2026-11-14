@@ -189,3 +189,14 @@ test("target, scope, enabled assists, and conditions filter commands", () => {
         undefined,
     );
 });
+
+test("adding a named player counter asks for its name and amount", () => {
+    const command = commandsFor("player", { scope: "table" }).find(
+        ({ id }) => id === "player.add_counter",
+    );
+    assert.ok(command?.menu);
+    assert.equal(command.asks, "text_and_number");
+    assert.deepEqual(command.action, {
+        player_counter: { seat: "$seat", name: "$text", add: "$number" },
+    });
+});

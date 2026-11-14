@@ -37,7 +37,14 @@ export type Command = {
   label: string;
   applies_to: AppliesTo;
   scope: Scope;
-  asks: "none" | "number" | "text" | "stats" | "target" | "token";
+  asks:
+    | "none"
+    | "number"
+    | "text"
+    | "text_and_number"
+    | "stats"
+    | "target"
+    | "token";
   key?: CommandKey;
   key_aliases?: readonly CommandKey[];
   menu?: MenuPlacement;

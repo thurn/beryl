@@ -77,7 +77,28 @@ await check(
             1,
             "an arrow follows the cursor before the pick",
         );
-        await page.click(`[data-slot="${ownTarget}"]`);
+        const target = page.locator(`[data-slot="${ownTarget}"]`);
+        const contextMenuAllowed = await target.evaluate((el) => {
+            return el.dispatchEvent(
+                new MouseEvent("contextmenu", {
+                    bubbles: true,
+                    cancelable: true,
+                    button: 2,
+                }),
+            );
+        });
+        assert.equal(
+            contextMenuAllowed,
+            true,
+            "engine prompts allow the browser context menu",
+        );
+        await target.click({ button: "right" });
+        assert.equal(
+            await page.locator("[data-aimed]").count(),
+            1,
+            "right click leaves the prompt waiting",
+        );
+        await target.click();
         await clicked(page, 1);
         await page.clock.runFor(500);
         for (const [x, y] of away) {
