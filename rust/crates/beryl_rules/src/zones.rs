@@ -1,7 +1,7 @@
 //! Zones ([CR 400](https://yawgatog.com/resources/magic-rules/#R400)): moving an object from
 //! one to another, and looking at the cards of a hidden one.
 
-use beryl_card::{Objects, Players};
+use beryl_card::{Objects, Players, Types};
 
 use crate::bitboard::Bitboard;
 use crate::card::FaceIx;
@@ -98,6 +98,34 @@ pub fn put_onto_battlefield<L: Layout>(
         Reason::Effect,
         entry,
     )
+}
+
+/// [`Effect::ReturnToBattlefield`](beryl_card::Effect::ReturnToBattlefield): "Return
+/// [cards] to the battlefield under their owners' control", from whatever zone each is in,
+/// all at once, untapped and as new objects
+/// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)). The outcome is the
+/// permanents they are.
+///
+/// An instant or sorcery card stays where it is
+/// ([CR 400.4a](https://yawgatog.com/resources/magic-rules/#R4004a)): "If an instant or
+/// sorcery card would enter the battlefield, it remains in its previous zone." A token that
+/// left the battlefield has ceased to exist
+/// ([CR 111.7](https://yawgatog.com/resources/magic-rules/#R1117)), so nothing names it.
+pub(crate) fn return_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    cards: Objects,
+) -> Result<Outcome<L>, Full> {
+    let cards = run.elsewhere_than(cards, Zone::Battlefield);
+    let game = run.game();
+    let cards = cards.filter(|slot| {
+        let (def, face) = game.state.copiable(slot).record(game.table);
+        let types = game.table.def(def).face(face).types;
+        !types.intersects(Types::INSTANT.union(Types::SORCERY))
+    });
+    let (to, reason) = (Zone::Battlefield, Reason::Effect);
+    let entry = Entry::default();
+    event::move_batch(game.state, game.table, game.sink, cards, to, reason, entry)?;
+    Ok(run.now_in(cards, Zone::Battlefield))
 }
 
 /// Puts cards onto the battlefield tapped, each under its owner's control, simultaneously:

@@ -133,6 +133,11 @@ impl Ctx {
                 let to = owners(self.is_plural(objects), "graveyard");
                 vec![self.acts(("put", "puts"), objects, &format!(" into {to}"))]
             }
+            Effect::ReturnToBattlefield(objects) => {
+                let control = owners(self.is_plural(objects), "control");
+                let rest = format!(" to the battlefield under {control}");
+                vec![self.acts(("return", "returns"), objects, &rest)]
+            }
             Effect::ReturnTransformed(objects) => {
                 let control = owners(self.is_plural(objects), "control");
                 let rest = format!(" to the battlefield transformed under {control}");
@@ -634,7 +639,17 @@ impl Ctx {
             self.group,
         );
         self.begin(ability.targets(), ability.trigger());
-        let clauses = self.triggered(ability);
+        let clauses = match (ability.trigger(), ability.body()) {
+            (Some(trigger), Behavior::Data(effect)) if names_carried(effect) => {
+                let mut clauses = self.body(ability.body());
+                let lead = self.trigger_text(trigger);
+                if let Some(last) = clauses.last_mut() {
+                    *last = format!("{last} {}", super::words::uncapitalized(&lead));
+                }
+                clauses
+            }
+            _ => self.triggered(ability),
+        };
         (
             self.targets,
             self.mentioned,
@@ -644,6 +659,13 @@ impl Ctx {
         ) = saved;
         clauses
     }
+}
+
+/// Whether a delayed ability's one instruction acts on the object it carries, which Oracle
+/// text says before the trigger: "Return that card to the battlefield under its owner's
+/// control at the beginning of the next end step."
+fn names_carried(effect: &Effect) -> bool {
+    effect.operands().objects == Some(&Objects::Carried)
 }
 
 /// The text of an emblem's abilities, as the quoted text of "an emblem with "..."".

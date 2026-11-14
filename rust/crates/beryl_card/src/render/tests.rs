@@ -10,9 +10,9 @@ use crate::continuous::{Governed, RuleChange, When};
 use crate::cost::{Cost, CostPart};
 use crate::definition::{CardDef, Face, card};
 use crate::effect::build::{
-    counter, deal_damage_to, deal_damage_to_any_target, destroy, dig, discard, draw,
-    exile_until_this_leaves, flip_coin, if_then, if_you_lose_the_flip, may_cast_free, put_back,
-    sequence, target, this, those, you,
+    carried_object, counter, deal_damage_to, deal_damage_to_any_target, delay_with, destroy, dig,
+    discard, draw, exile, exile_until_this_leaves, flip_coin, if_then, if_you_lose_the_flip,
+    may_cast_free, put_back, return_to_battlefield, sequence, target, this, those, you,
 };
 use crate::effect::{Amount, Comparison, Condition, Effect, LibraryOrder, Players, Taken};
 use crate::filter::Filter;
@@ -207,5 +207,27 @@ fn any_target_is_said_without_the_word_target() {
     assert_eq!(
         render(&LIGHTNING_BOLT),
         "Lightning Bolt deals 3 damage to any target."
+    );
+}
+
+/// A delayed ability that acts on the object it carries says its trigger last: Flickerwisp's
+/// "When this creature enters, exile another target permanent. Return that card to the
+/// battlefield under its owner's control at the beginning of the next end step."
+#[test]
+fn a_delayed_ability_on_a_carried_object_says_its_trigger_last() {
+    static FLICKERWISP: CardDef = one_face(
+        "Flickerwisp",
+        &[Face::EMPTY.types(Types::CREATURE).abilities(&[
+            Ability::triggered(&Trigger::ENTERS)
+                .targeting(&[TargetSpec::permanent(Filter::Any).other()])
+                .effect(&sequence(&[exile(target()), delay_with(1, those())])),
+            Ability::triggered(&Trigger::step(TurnStep::End, Players::EachPlayer).next())
+                .effect(&return_to_battlefield(carried_object())),
+        ])],
+    );
+    assert_eq!(
+        render(&FLICKERWISP),
+        "When this creature enters, exile another target permanent. Return that card to the \
+         battlefield under its owner's control at the beginning of the next end step."
     );
 }

@@ -94,6 +94,7 @@ impl Ctx {
                 format!("{} from {}", self.triggered_on(), owners_zone(zone))
             }
             Objects::ExiledWithThis => format!("the cards exiled with {}", self.this),
+            Objects::Carried => "that card".to_owned(),
             Objects::All { zone, filter } => {
                 let kind = Kind::of_zone(zone);
                 let noun = self.noun(filter, kind);
@@ -162,6 +163,7 @@ impl Ctx {
             | Objects::Those
             | Objects::TriggeredOn
             | Objects::TriggeredOnIn(_)
+            | Objects::Carried
             | Objects::Paid(_) => self.objects(objects),
         }
     }
@@ -218,6 +220,7 @@ impl Ctx {
             | Objects::AttachedTo
             | Objects::TriggeredOn
             | Objects::TriggeredOnIn(_)
+            | Objects::Carried
             | Objects::Paid(_) => false,
         }
     }

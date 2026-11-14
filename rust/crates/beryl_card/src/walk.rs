@@ -246,6 +246,7 @@ impl Objects {
             | Objects::Paid(_)
             | Objects::TriggeredOn
             | Objects::TriggeredOnIn(_)
+            | Objects::Carried
             | Objects::ExiledWithThis => {}
             Objects::All { filter, .. } => filter.walk(visit),
             Objects::InZoneOf {

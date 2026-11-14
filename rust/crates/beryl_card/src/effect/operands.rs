@@ -141,6 +141,7 @@ impl Effect {
             | Effect::Sacrifice(objects)
             | Effect::ReturnToHand(objects)
             | Effect::PutIntoGraveyard(objects)
+            | Effect::ReturnToBattlefield(objects)
             | Effect::ReturnTransformed(objects)
             | Effect::GainFlashback(objects)
             | Effect::PutIntoLibrary { objects, .. }
@@ -244,7 +245,12 @@ impl Effect {
             | Effect::RemoveCounters { objects, count, .. } => {
                 Operands::of_objects(objects).amount(count)
             }
-            Effect::Delay { carrying, .. } => Operands::NONE.amount(carrying),
+            Effect::Delay {
+                carrying, object, ..
+            } => match object {
+                Some(object) => Operands::of_objects(object).amount(carrying),
+                None => Operands::NONE.amount(carrying),
+            },
         }
     }
 }

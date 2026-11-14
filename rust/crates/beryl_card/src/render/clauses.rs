@@ -221,6 +221,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::Sacrifice(_)
         | Effect::ReturnToHand(_)
         | Effect::PutIntoGraveyard(_)
+        | Effect::ReturnToBattlefield(_)
         | Effect::ReturnTransformed(_)
         | Effect::PutIntoLibrary { .. }
         | Effect::Explore(_)

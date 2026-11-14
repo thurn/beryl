@@ -192,6 +192,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::PutIntoGraveyard(objects) => {
                 zones::put_into_graveyard_instruction(self, objects)?
             }
+            Effect::ReturnToBattlefield(cards) => zones::return_instruction(self, cards)?,
             Effect::ReturnTransformed(cards) => transform::return_instruction(self, cards)?,
             Effect::PutIntoLibrary { objects, position } => {
                 library::put_instruction(self, objects, position)?
@@ -285,9 +286,11 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 count,
                 permanents,
             } => tap::untap_up_to_instruction(self, player, count, permanents)?,
-            Effect::Delay { ability, carrying } => {
-                delayed_triggers::instruction(self, ability, carrying)?
-            }
+            Effect::Delay {
+                ability,
+                carrying,
+                object,
+            } => delayed_triggers::instruction(self, ability, carrying, object)?,
             Effect::GetEmblem { player, emblem } => emblems::instruction(self, player, emblem)?,
             Effect::WinGame(players) => ending::win_instruction(self, players),
             Effect::LoseGame(players) => ending::lose_instruction(self, players),
@@ -453,6 +456,7 @@ fn at_once(effect: &Effect) -> bool {
             | Effect::Sacrifice(_)
             | Effect::ReturnToHand(_)
             | Effect::PutIntoGraveyard(_)
+            | Effect::ReturnToBattlefield(_)
             | Effect::PutIntoLibrary { .. }
             | Effect::ShuffleInto { .. }
             | Effect::Discard { .. }

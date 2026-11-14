@@ -487,6 +487,7 @@ fn local(effect: &'static Effect) -> Neighbours<Effect> {
         Effect::Sacrifice(o) => objects_of(o, Effect::Sacrifice, &mut add),
         Effect::ReturnToHand(o) => objects_of(o, Effect::ReturnToHand, &mut add),
         Effect::PutIntoGraveyard(o) => objects_of(o, Effect::PutIntoGraveyard, &mut add),
+        Effect::ReturnToBattlefield(o) => objects_of(o, Effect::ReturnToBattlefield, &mut add),
         Effect::GainFlashback(o) => objects_of(o, Effect::GainFlashback, &mut add),
         Effect::PutIntoLibrary {
             objects: which,
@@ -852,9 +853,31 @@ fn local(effect: &'static Effect) -> Neighbours<Effect> {
                 );
             }
         }
-        Effect::Delay { ability, carrying } => {
+        Effect::Delay {
+            ability,
+            carrying,
+            object,
+        } => {
             for (name, carrying) in amounts(carrying) {
-                add(name, Effect::Delay { ability, carrying });
+                add(
+                    name,
+                    Effect::Delay {
+                        ability,
+                        carrying,
+                        object,
+                    },
+                );
+            }
+            for (name, which) in object.map(objects).unwrap_or_default() {
+                let object = Some(which);
+                add(
+                    name,
+                    Effect::Delay {
+                        ability,
+                        carrying,
+                        object,
+                    },
+                );
             }
         }
         Effect::WinGame(player) => {

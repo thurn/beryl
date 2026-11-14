@@ -159,6 +159,7 @@ impl<L: Layout> Scene<'_, L> {
             | Objects::Those
             | Objects::TriggeredOn
             | Objects::TriggeredOnIn(_)
+            | Objects::Carried
             | Objects::ExiledWithThis
             | Objects::All { .. }
             | Objects::InZoneOf { .. }
@@ -206,6 +207,13 @@ impl<L: Layout> Scene<'_, L> {
                 .map_or(Bitboard::EMPTY, Bitboard::single),
             Objects::Those => self.registers.outcome.objects,
             Objects::TriggeredOn => (self.subject.info.object)
+                .filter(|&object| s.is_current(object))
+                .map_or(Bitboard::EMPTY, |object| Bitboard::single(object.slot)),
+            // CR 603.7c: "if that object is no longer in the zone it's expected to be in at
+            // the time the delayed triggered ability resolves, the ability won't affect it."
+            // A delayed ability carries its object in the place a trigger keeps what its
+            // event was about, and one that has changed zones is no longer current.
+            Objects::Carried => (self.subject.info.object)
                 .filter(|&object| s.is_current(object))
                 .map_or(Bitboard::EMPTY, |object| Bitboard::single(object.slot)),
             Objects::TriggeredOnIn(zone) => (self.subject.info.object)

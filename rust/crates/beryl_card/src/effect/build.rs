@@ -156,6 +156,11 @@ pub const fn that_many() -> Amount {
     Amount::ThatMany
 }
 
+/// "That card", the object a delayed triggered ability carries: [`Objects::Carried`].
+pub const fn carried_object() -> Objects {
+    Objects::Carried
+}
+
 /// The number a delayed triggered ability carries: [`Amount::Carried`].
 pub const fn carried() -> Amount {
     Amount::Carried
@@ -331,6 +336,12 @@ pub const fn return_to_hand(objects: Objects) -> Effect {
 /// [`Effect::PutIntoGraveyard`]: "put [objects] into their owners' graveyards".
 pub const fn put_into_graveyard(objects: Objects) -> Effect {
     Effect::PutIntoGraveyard(objects)
+}
+
+/// [`Effect::ReturnToBattlefield`]: "return [cards] to the battlefield under their owners'
+/// control".
+pub const fn return_to_battlefield(cards: Objects) -> Effect {
+    Effect::ReturnToBattlefield(cards)
 }
 
 /// [`Effect::ReturnTransformed`]: "return [cards] to the battlefield transformed under their
@@ -545,6 +556,17 @@ pub const fn delay_carrying(ability: u8, carrying: Amount) -> Effect {
     Effect::Delay {
         ability: AbilityIx::new(ability),
         carrying,
+        object: None,
+    }
+}
+
+/// [`Effect::Delay`] carrying an object: "[when], [effect]", the delayed triggered ability
+/// that is the `ability`th of its face, which reads `object` as [`carried_object`].
+pub const fn delay_with(ability: u8, object: Objects) -> Effect {
+    Effect::Delay {
+        ability: AbilityIx::new(ability),
+        carrying: Amount::Fixed(0),
+        object: Some(object),
     }
 }
 
@@ -607,6 +629,7 @@ pub const fn delay(ability: u8) -> Effect {
     Effect::Delay {
         ability: AbilityIx::new(ability),
         carrying: Amount::Fixed(0),
+        object: None,
     }
 }
 

@@ -1,10 +1,10 @@
 use super::*;
 use crate::cost::CastingKind;
 use crate::effect::build::{
-    add_mana, counter_and_exile, deal_damage_to, deal_damage_to_any_target, delay, destroy,
-    discard, draw, explore, fateseal, for_each_player, get_emblem, if_then, may_cast_free,
-    put_back, search, shuffle_into, target, target_player, that_player, unless, unless_pays,
-    untap_up_to, you,
+    add_mana, carried_object, counter_and_exile, deal_damage_to, deal_damage_to_any_target, delay,
+    delay_with, destroy, discard, draw, exile, explore, fateseal, for_each_player, get_emblem,
+    if_then, may_cast_free, put_back, return_to_battlefield, search, sequence, shuffle_into,
+    target, target_player, that_player, those, unless, unless_pays, untap_up_to, you,
 };
 use crate::effect::{Found, LibraryOrder, Taken};
 use crate::ids::TurnStep;
@@ -156,6 +156,28 @@ fn a_delay_of_no_delayed_trigger_of_the_face_is_refused() {
 }
 
 #[test]
+fn a_delay_carries_one_object_into_a_delayed_ability_only() {
+    const RETURN_IT: Ability =
+        Ability::triggered(&Trigger::step(TurnStep::End, Players::EachPlayer).next())
+            .effect(&return_to_battlefield(carried_object()));
+    const FLICKER: &[Ability] = &[
+        Ability::spell()
+            .targeting(&[A_CREATURE])
+            .effect(&sequence(&[exile(target()), delay_with(1, those())])),
+        RETURN_IT,
+    ];
+    const A_SET: &[Ability] = &[
+        Ability::spell().effect(&delay_with(1, Objects::ExiledWithThis)),
+        RETURN_IT,
+    ];
+    const NOT_DELAYED: &[Ability] =
+        &[Ability::triggered(&Trigger::ENTERS).effect(&return_to_battlefield(carried_object()))];
+    assert_eq!(checked(FLICKER), Ok(()));
+    assert_eq!(checked(A_SET), Err(Malformed::Delayed));
+    assert_eq!(checked(NOT_DELAYED), Err(Malformed::Carried));
+}
+
+#[test]
 fn a_cost_the_engine_cannot_take_as_an_effect_resolves_is_refused() {
     const SACRIFICE: &[Ability] = &[Ability::spell().effect(&unless(
         &draw(you(), 1),
@@ -211,6 +233,7 @@ fn the_operands_of_every_entry_are_checked() {
         Ability::spell().effect(&Effect::Delay {
             ability: crate::index::AbilityIx::new(1),
             carrying: Amount::ManaValue(target()),
+            object: None,
         }),
         Ability::triggered(&Trigger::main_phase(you()).next()).effect(&draw(you(), 1)),
     ];

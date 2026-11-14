@@ -197,6 +197,13 @@ pub enum Effect {
     /// no keyword action: a card put there from exile was not destroyed, sacrificed, milled
     /// or discarded.
     PutIntoGraveyard(Objects),
+    /// "Return [cards] to the battlefield under their owners' control", from whatever zone
+    /// each is in
+    /// ([CR 110.2a](https://yawgatog.com/resources/magic-rules/#R1102a)): "If an effect
+    /// instructs a player to put an object onto the battlefield, that object enters the
+    /// battlefield under that player's control unless the effect states otherwise." Each
+    /// enters untapped as a new object (CR 400.7).
+    ReturnToBattlefield(Objects),
     /// "Return [cards] to the battlefield transformed under their owners' control"
     /// ([CR 712.11a](https://yawgatog.com/resources/magic-rules/#R71211a)): "If a spell or
     /// ability puts a double-faced card onto the battlefield 'transformed' or 'converted,' it
@@ -473,10 +480,12 @@ pub enum Effect {
     /// instruction is reached
     /// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)), which the delayed
     /// ability reads when it resolves, as "add an amount of {C} equal to that spell's mana
-    /// value".
+    /// value". `object`, settled the same way, is the one object the delayed ability names
+    /// as [`Objects::Carried`]: the first of what the expression names, as it is then.
     Delay {
         ability: AbilityIx,
         carrying: Amount,
+        object: Option<Objects>,
     },
     /// "[Player] gets an emblem with [abilities]"
     /// ([CR 114.2](https://yawgatog.com/resources/magic-rules/#R1142)): "This means that
@@ -559,6 +568,7 @@ impl Effect {
             | Effect::Sacrifice(_)
             | Effect::ReturnToHand(_)
             | Effect::PutIntoGraveyard(_)
+            | Effect::ReturnToBattlefield(_)
             | Effect::ReturnTransformed(_)
             | Effect::PutIntoLibrary { .. }
             | Effect::GainFlashback(_)
@@ -673,6 +683,7 @@ impl Effect {
             | Effect::LookAt { .. }
             | Effect::ManifestDread(_)
             | Effect::CreateAttackingTokens { .. }
+            | Effect::ReturnToBattlefield(_)
             | Effect::ReturnTransformed(_)
             | Effect::GainFlashback(_)
             | Effect::PermitCast { .. }

@@ -144,6 +144,7 @@ pub(super) fn static_members<L: Layout>(
         | Objects::Those
         | Objects::TriggeredOn
         | Objects::TriggeredOnIn(_)
+        | Objects::Carried
         | Objects::ExiledWithThis
         | Objects::InZoneOf { .. }
         | Objects::CardsIn { .. }

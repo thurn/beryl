@@ -51,10 +51,12 @@ pub enum Malformed {
     /// puts a countered spell instead of its owner's graveyard.
     Countered,
     /// [`Effect::Delay`] of an ability its face does not have, or of one that is not a
-    /// delayed triggered ability ([`crate::Trigger::next`]): nothing would wait for it.
+    /// delayed triggered ability ([`crate::Trigger::next`]): nothing would wait for it. Or
+    /// one carrying a set named by what is in it ([`Objects::All`] and the like), where it
+    /// carries one object.
     Delayed,
-    /// [`Amount::Carried`] in an ability that is not a delayed triggered ability: no effect
-    /// made it, so it carries nothing.
+    /// [`Amount::Carried`] or [`Objects::Carried`] in an ability that is not a delayed
+    /// triggered ability: no effect made it, so it carries nothing.
     Carried,
     /// [`Objects::TriggeredOn`] in an ability that is not triggered: no event was about
     /// anything.
@@ -119,10 +121,10 @@ impl Malformed {
                 "an expression asks what an object was after its effect moved it, which is not kept"
             }
             Malformed::Delayed => {
-                "an effect delays an ability that is not a delayed trigger of its face"
+                "an effect delays an ability that is not a delayed trigger of its face, or carries a set"
             }
             Malformed::Carried => {
-                "an amount is what a delayed trigger carries, and its ability is not one"
+                "an expression is what a delayed trigger carries, and its ability is not one"
             }
             Malformed::TriggeredOn => {
                 "an effect names what its trigger event was about, and its ability has none"
@@ -288,6 +290,7 @@ const fn moved_by(effect: &Effect) -> Option<&Objects> {
         | Effect::Sacrifice(objects)
         | Effect::ReturnToHand(objects)
         | Effect::PutIntoGraveyard(objects)
+        | Effect::ReturnToBattlefield(objects)
         | Effect::ReturnTransformed(objects)
         | Effect::PutIntoLibrary { objects, .. }
         | Effect::ShuffleInto { cards: objects, .. } => Some(objects),
@@ -296,8 +299,8 @@ const fn moved_by(effect: &Effect) -> Option<&Objects> {
 }
 
 /// The objects named one at a time that the instructions before the one being read may have
-/// moved: a target by its place, the ability's source, what that is attached to and what the
-/// ability triggered on. A set named by what is in it ([`Objects::All`] and the like) is
+/// moved: a target by its place, the ability's source, what that is attached to, what the
+/// ability triggered on and what a delayed ability carries. A set named by what is in it ([`Objects::All`] and the like) is
 /// read anew each time, and [`Objects::Those`] follows what moved.
 #[derive(Clone, Copy)]
 struct Moved(u32);
@@ -307,14 +310,16 @@ impl Moved {
     const THIS: u32 = 1 << 31;
     const ATTACHED_TO: u32 = 1 << 30;
     const TRIGGERED_ON: u32 = 1 << 29;
+    const CARRIED: u32 = 1 << 28;
 
     /// The bit of `objects`, if it is such a name. A target past the bits is not followed.
     const fn bit(objects: &Objects) -> u32 {
         match objects {
-            Objects::Target(target) if target.index() < 29 => 1 << target.index(),
+            Objects::Target(target) if target.index() < 28 => 1 << target.index(),
             Objects::This => Moved::THIS,
             Objects::AttachedTo => Moved::ATTACHED_TO,
             Objects::TriggeredOn | Objects::TriggeredOnIn(_) => Moved::TRIGGERED_ON,
+            Objects::Carried => Moved::CARRIED,
             _ => 0,
         }
     }
@@ -506,13 +511,24 @@ impl Scope<'_> {
                 Amount::Fixed(1) => Ok(()),
                 _ => Err(Malformed::Fateseal),
             },
-            Effect::Delay { ability, .. } => {
+            Effect::Delay {
+                ability, object, ..
+            } => {
                 let abilities = self.face.abilities;
                 let delayed = ability.index() < abilities.len()
                     && match abilities[ability.index()].trigger() {
                         Some(trigger) => trigger.delayed,
                         None => false,
-                    };
+                    }
+                    && !matches!(
+                        object,
+                        Some(
+                            Objects::All { .. }
+                                | Objects::InZoneOf { .. }
+                                | Objects::CardsIn { .. }
+                                | Objects::ExiledWithThis
+                        )
+                    );
                 if delayed {
                     Ok(())
                 } else {
@@ -630,6 +646,10 @@ impl Scope<'_> {
             Objects::TriggeredOn | Objects::TriggeredOnIn(_) => match self.ability.trigger() {
                 Some(_) => Ok(()),
                 None => Err(Malformed::TriggeredOn),
+            },
+            Objects::Carried => match self.ability.trigger() {
+                Some(trigger) if trigger.delayed => Ok(()),
+                _ => Err(Malformed::Carried),
             },
             Objects::Target(target) => match self.target(*target) {
                 None | Some(TargetKind::Player) => Err(Malformed::Target),

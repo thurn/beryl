@@ -53,6 +53,14 @@ pub enum Objects {
     /// instruction to exile them in the first ability." Known whether or not this is still
     /// where it was.
     ExiledWithThis,
+    /// The object a delayed triggered ability carries from the effect that created it
+    /// ([`crate::Effect::Delay`]): "that card" in "return that card to the battlefield at the
+    /// beginning of the next end step". It is the object as it was when the delayed ability
+    /// was created, and once it has changed zones it is nothing
+    /// ([CR 603.7c](https://yawgatog.com/resources/magic-rules/#R6037c)): "if that object is
+    /// no longer in the zone it's expected to be in at the time the delayed triggered ability
+    /// resolves, the ability won't affect it."
+    Carried,
     /// Every object in a zone that passes a filter, read for the ability's controller: "all
     /// creatures", "each artifact you control", "the cards in your graveyard". An effect
     /// means permanents unless it says otherwise
@@ -187,7 +195,8 @@ impl Objects {
             | Objects::Those
             | Objects::Paid(_)
             | Objects::TriggeredOn
-            | Objects::TriggeredOnIn(_) => true,
+            | Objects::TriggeredOnIn(_)
+            | Objects::Carried => true,
             Objects::All { filter, .. } => filter.needs_a_resolution(),
             Objects::InZoneOf {
                 players, filter, ..
