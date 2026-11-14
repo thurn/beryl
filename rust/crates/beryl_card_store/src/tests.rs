@@ -95,6 +95,10 @@ fn the_committed_store_answers_by_card_face_and_token_name() {
     let jace = STORE.card("Jace, Vryn's Prodigy").unwrap();
     assert_eq!(jace.name, "Jace, Vryn's Prodigy // Jace, Telepath Unbound");
     assert_eq!(STORE.card("Jace, Telepath Unbound"), Some(jace.clone()));
+    assert_eq!(
+        STORE.card_ignoring_case("jace, telepath unbound"),
+        Some(jace.clone())
+    );
     assert_eq!(jace.faces[1].side, Side::Back);
     assert_eq!(jace.faces[1].loyalty.as_deref(), Some("5"));
     // The first printing places the card's file; a token has none.
@@ -114,5 +118,95 @@ fn the_committed_store_answers_by_card_face_and_token_name() {
     assert_ne!(trainer.scryfall_id, offspring[0].scryfall_id);
     assert!(offspring[0].first_set.is_none());
     assert!(STORE.tokens("Treasure Token").len() > 1);
+    assert_eq!(
+        STORE.search_tokens("treasure token", 1),
+        STORE.tokens("Treasure Token")[..1]
+    );
     assert!(STORE.card("Nonexistent Card").is_none());
+}
+
+#[test]
+fn card_search_returns_prefixes_before_substrings_in_name_order() {
+    let bytes = store(vec![
+        format!("card:Ash Bolt\t{}", record("Ash Bolt", "ash")),
+        format!("card:bolt Apprentice\t{}", record("bolt Apprentice", "app")),
+        format!("card:Bolt Dragon\t{}", record("Bolt Dragon", "dragon")),
+        format!("card:Élan Bolt\t{}", record("Élan Bolt", "elan")),
+        "card:Unrelated\tinvalid JSON".to_owned(),
+        format!("token:Bolt Token\t{}", record("Bolt Token", "token")),
+    ]);
+    let store = Store::new(&bytes);
+    let names = |query, limit| {
+        store
+            .search(query, limit)
+            .into_iter()
+            .map(|record| record.name)
+            .collect::<Vec<_>>()
+    };
+
+    assert_eq!(
+        names("bOLt", 10),
+        ["bolt Apprentice", "Bolt Dragon", "Ash Bolt", "Élan Bolt"]
+    );
+    assert_eq!(
+        names("BOLT", 3),
+        ["bolt Apprentice", "Bolt Dragon", "Ash Bolt"]
+    );
+    assert_eq!(names("élAN", 1), ["Élan Bolt"]);
+    assert!(names("Bolt", 0).is_empty());
+    assert!(names("", 20).is_empty());
+    assert!(names("missing", 20).is_empty());
+}
+
+#[test]
+fn token_search_keeps_distinct_printings_and_skips_aliases() {
+    let bytes = store(vec![
+        format!("card:Gem\t{}", record("Gem", "card")),
+        format!("token:A Gem\t{}", record("A Gem", "substring")),
+        format!("token:Gem\t{}", record("Gem", "token-1")),
+        format!("token:Gem\t{}", record("Gem", "token-2")),
+        r#"token:Gem Alias	{"alias":"Gem","scryfall_id":"token-1"}"#.to_owned(),
+    ]);
+    let store = Store::new(&bytes);
+    let ids = |query, limit| {
+        store
+            .search_tokens(query, limit)
+            .into_iter()
+            .map(|record| record.scryfall_id)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(ids("gEM", 4), ["token-1", "token-2", "substring"]);
+    assert_eq!(ids("gem", 1), ["token-1"]);
+}
+
+#[test]
+fn exact_case_insensitive_lookup_resolves_card_face_aliases() {
+    let bytes = store(vec![
+        format!("card:Élan // Bolt\t{}", record("Élan // Bolt", "card")),
+        r#"card:Élan	{"alias":"Élan // Bolt","scryfall_id":"card"}"#.to_owned(),
+        format!("token:Élan\t{}", record("Élan", "token")),
+    ]);
+    let store = Store::new(&bytes);
+    let card = store.card("Élan // Bolt").unwrap();
+    assert_eq!(store.card_ignoring_case("éLAN"), Some(card.clone()));
+    assert_eq!(store.card_ignoring_case("éLAN // bOLT"), Some(card.clone()));
+    assert!(store.card_ignoring_case("él").is_none());
+    assert_eq!(store.search("élan", 2), [card]);
+}
+
+#[test]
+#[ignore = "wall-clock measurement for a local debug build"]
+fn indexed_search_takes_under_five_milliseconds() {
+    use std::time::{Duration, Instant};
+
+    for query in ["a", "zz"] {
+        // Warm the lazy index before timing repeated searches.
+        assert_eq!(STORE.search(query, 20).len(), 20);
+        let start = Instant::now();
+        let found = STORE.search(query, 20);
+        let elapsed = start.elapsed();
+        eprintln!("search({query:?}, 20): {elapsed:?}");
+        assert_eq!(found.len(), 20);
+        assert!(elapsed < Duration::from_millis(5), "{query}: {elapsed:?}");
+    }
 }

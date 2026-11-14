@@ -7,17 +7,30 @@
 //! [`STORE`] embeds the file in the binary, so the desktop app, the phone apps, `beryl_cli`'s
 //! servers and the tests all read it alike, with nothing bundled as a resource and nothing read
 //! or parsed at startup. A lookup binary-searches the bytes: it probes about log2 of the
-//! store's size in lines and parses only the records it returns.
+//! store's size in lines and parses only the records it returns. Name search uses a separate
+//! lowercase index, built on first use.
+
+use std::sync::LazyLock;
 
 use serde::Deserialize;
 
+mod search;
+use search::NameIndex;
+
+const STORE_BYTES: &[u8] = include_bytes!("../../../../data/card-store.tsv");
+static STORE_NAMES: LazyLock<NameIndex<'static>> = LazyLock::new(|| NameIndex::new(STORE_BYTES));
+
 /// The committed card store.
-pub static STORE: Store<'static> = Store::new(include_bytes!("../../../../data/card-store.tsv"));
+pub static STORE: Store<'static> = Store {
+    bytes: STORE_BYTES,
+    names: Some(&STORE_NAMES),
+};
 
 /// A card store's bytes.
 #[derive(Clone, Copy, Debug)]
 pub struct Store<'a> {
     bytes: &'a [u8],
+    names: Option<&'a LazyLock<NameIndex<'a>>>,
 }
 
 /// A card, token or emblem: the printing shown and its faces' characteristics.
@@ -114,7 +127,7 @@ impl Kind {
 impl<'a> Store<'a> {
     /// A store over `bytes`, which are read only when looked up.
     pub const fn new(bytes: &'a [u8]) -> Store<'a> {
-        Store { bytes }
+        Store { bytes, names: None }
     }
 
     /// The card named `name`, or with a face of that name.
