@@ -63,6 +63,12 @@ const UNREACHED: &[(&str, &str)] = &[
         "as offspring's trigger",
     ),
     (
+        "Fiend Hunter: ability 1 (Triggered)",
+        "it returns the cards exiled with the Hunter, and a generated scenario casts the card and \
+         never has it leave the battlefield; the card's hand-written scenarios destroy and bounce \
+         it",
+    ),
+    (
         "Leonin Scimitar: ability 1 (Activated)",
         "equip targets a creature its controller controls, and a generated position gives the \
          Equipment's controller none; the card's hand-written scenario equips one",

@@ -171,5 +171,12 @@
     "diff": [
       "Notion Thief: if an opponent would draw a card except the first one they draw in each of their draw steps , [-instead that player skips that draw and-] you draw a card {+instead+} ."
     ]
+  },
+  "Fiend Hunter": {
+    "reason": "wording",
+    "note": "Oracle says \"return the exiled card ... under its owner's control\"; the renderer says \"the cards exiled with this creature ... under their owners' control\". Both mean the cards the enters ability exiled, linked to this Fiend Hunter, each returned under its own owner's control.",
+    "diff": [
+      "Fiend Hunter: when ~ leaves the battlefield , return the {+cards+} exiled [-card-] {+with ~+} to the battlefield under [-its owner's-] {+their owners'+} control ."
+    ]
   }
 }

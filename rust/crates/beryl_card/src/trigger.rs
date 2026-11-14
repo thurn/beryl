@@ -145,6 +145,8 @@ impl Trigger {
     pub const ENTERS: Trigger = Trigger::of(TriggerEvent::Enters, Subject::This);
     /// "When this dies."
     pub const DIES: Trigger = Trigger::of(TriggerEvent::Dies, Subject::This);
+    /// "When this leaves the battlefield."
+    pub const LEAVES: Trigger = Trigger::of(TriggerEvent::Leaves, Subject::This);
     /// "Whenever this attacks."
     pub const ATTACKS: Trigger = Trigger::of(TriggerEvent::Attacks, Subject::This);
     /// "Whenever this deals combat damage to a player."
