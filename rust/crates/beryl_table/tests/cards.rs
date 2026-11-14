@@ -512,6 +512,16 @@ fn play_and_resolve_use_printed_facts_and_preserve_selection_order() {
 }
 
 #[test]
+fn play_recognizes_a_land_imported_with_different_capitalization() {
+    let deck = beryl_table::deck::parse_text("1 temple of epiphany");
+    let mut table = table_with([card(1, &deck.main[0].0, HAND)]);
+    let play = Destination::Computed(ComputedDestination::Play);
+    act(&mut table, OWNER, &movement(&[1], HAND, play));
+    assert_eq!(table.battlefield, [ObjectId(1)]);
+    assert!(object(&table, 1).tapped);
+}
+
+#[test]
 fn play_respects_the_chosen_back_face_and_a_face_down_play_reveals_nothing() {
     let mut table = table_with([
         card(1, "Bala Ged Recovery", HAND),

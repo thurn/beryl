@@ -250,7 +250,7 @@ fn destination_zone(
 pub(super) fn card_record(card: &Card) -> Option<Record> {
     match card {
         Card::Named(name) => STORE
-            .card(name)
+            .card_ignoring_case(name)
             .or_else(|| STORE.tokens(name).into_iter().next()),
         Card::Hidden | Card::Custom { .. } => None,
     }
