@@ -44,7 +44,6 @@ import type {
   ClickReply,
   DecisionId,
   DecisionView,
-  ObjectView,
   PlayerView,
   PlaceName,
   PromptButton,
@@ -55,7 +54,13 @@ import { isRevealed, type Name, type Point } from "./layout.ts";
 import type { Drop, PointerEvents } from "./pointer.ts";
 import { keyOf, namedBy, type SpanAct } from "./spans.ts";
 import type { ScriptStage } from "./stage.ts";
-import type { Hold, Script, Step, Tray } from "./table.ts";
+import {
+  tradedTray,
+  type Hold,
+  type Script,
+  type Step,
+  type Tray,
+} from "./table.ts";
 import { subjectOf as aboutOf } from "./tracks.ts";
 import type { Landing } from "./tray.ts";
 
@@ -184,7 +189,8 @@ const sameTray = (a: Tray | undefined, b: Tray | undefined) =>
   JSON.stringify(a) === JSON.stringify(b);
 
 /** `script` with the cards of `tray` let go as its first steps about any of them begin, or
- * with none about them, as its first steps do. */
+ * with none about them, as its first steps do. Those a step moves stay where they are held
+ * until it does (`Hold.keeps`). */
 function lowered(script: Script, tray: Tray): Script {
   const held = new Set<Name>(tray.piles.flatMap((pile) => pile.cards));
   const about = script.beats.findIndex((beat) =>
@@ -194,8 +200,29 @@ function lowered(script: Script, tray: Tray): Script {
     }),
   );
   const at = Math.max(0, about);
+  // A card the script moves waits where it is held for its own step, which may begin later
+  // in the beat or in a later one. Without this, the second of two cards put from the hand
+  // onto the library, whose flight begins after the first's, went home to the hand and then
+  // flew from there.
+  const keeps = [
+    ...new Set(
+      script.beats
+        .slice(at)
+        .flat()
+        .map(({ act }) => aboutOf(act))
+        .filter(
+          (slot): slot is number => typeof slot === "number" && held.has(slot),
+        ),
+    ),
+  ];
   const end: Step = {
-    act: { verb: "lift", span: "end", tray, ...settled(script, at, held) },
+    act: {
+      verb: "lift",
+      span: "end",
+      tray,
+      ...settled(script, at, held),
+      ...(keeps.length > 0 && { keeps }),
+    },
   };
   const beats = script.beats.length > 0 ? [...script.beats] : [[]];
   beats[at] = [end, ...beats[at]!];
@@ -242,32 +269,50 @@ function paid(script: Script, paying: readonly SpanAct[]): Script {
   return { ...script, beats };
 }
 
-/** The card the engine took in place of the card in a hand in slot `handled`, which the
- * player clicked or dragged: the first card `script` moves out of a hand, if that is another
- * card whose record on `table` is the same as the handled one's but for its slot. The engine
- * offers one candidate for interchangeable cards (architecture §7.2) and the session takes a
- * click on any of them for that candidate, so of two Plains in hand the engine plays the one
- * it offered, whichever the player handled. The stage then trades the two cards' places
+/** The cards the engine took in place of the cards in a hand in the slots `handled`, which
+ * the player sent out of it: a card clicked or dragged, or the cards a split puts from the
+ * hand onto the library. Each pair is a card `script` moves out of a hand that the player did
+ * not send, and a card the player sent that the script leaves there, whose records on
+ * `table` are the same but for their slots. The engine offers one candidate for
+ * interchangeable cards (architecture §7.2) and the session takes a click on any of them for
+ * that candidate, so of two Plains in hand the engine plays or puts back the one it offered,
+ * whichever the player handled. The stage then trades each pair's places
  * (`ScriptStage.trade`) before the script plays, so that the card the player handled is the
- * one that goes and its twin stays where it was. */
-export function twinOf(
+ * one that goes and its twin stays where it was. Without that, a Plains put from the hand
+ * onto the library in a put-back's tray went home to the hand while its twin flew from the
+ * hand to the library. */
+export function twinsOf(
   table: PlayerView | undefined,
   script: Script,
-  handled: number,
-): number | undefined {
+  handled: readonly number[],
+): [twin: number, handled: number][] {
+  if (script.reset) return [];
   const record = (slot: number) => table?.objects.find((o) => o.slot === slot);
-  const was = record(handled);
-  if (script.reset || was?.zone !== "hand") return undefined;
+  const inHand = (slot: number) => record(slot)?.zone === "hand";
   const moved = script.beats
     .flat()
-    .find(({ act }) => act.verb === "fly" && act.from === "hand");
-  if (moved?.act.verb !== "fly") return undefined;
-  const slot = moved.act.object.slot;
-  const twin = record(slot);
-  const alike = (o: ObjectView) => JSON.stringify({ ...o, slot: 0 });
-  return slot !== handled && twin?.zone === "hand" && alike(twin) === alike(was)
-    ? slot
-    : undefined;
+    .flatMap(({ act }) =>
+      act.verb === "fly" && act.from === "hand" ? [act.object.slot] : [],
+    );
+  const twins = moved.filter((slot) => !handled.includes(slot) && inHand(slot));
+  const left = handled.filter((slot) => !moved.includes(slot) && inHand(slot));
+  const alike = (slot: number) => JSON.stringify({ ...record(slot), slot: 0 });
+  const pairs: [number, number][] = [];
+  for (const slot of left) {
+    const twin = twins.find(
+      (t) => alike(t) === alike(slot) && !pairs.some(([p]) => p === t),
+    );
+    if (twin !== undefined) pairs.push([twin, slot]);
+  }
+  return pairs;
+}
+
+/** The cards a split prompt sends to another place, such as cards put from the hand onto
+ * the library: those of each pile with a place. A pile with none stays where it lies. */
+function sentAway(prompt: PromptView | undefined): number[] {
+  const body = prompt?.body;
+  if (body?.shape !== "split") return [];
+  return body.piles.flatMap((pile) => (pile.place === null ? [] : pile.cards));
 }
 
 /** What a click on the node `name` is on. */
@@ -313,6 +358,9 @@ export class Prompts {
   #cast: Name | undefined;
   /** The card in a hand the last click or drop sent was on, until the next view plays. */
   #handled: number | undefined;
+  /** The cards the click last sent would send from where they lie if it answers the prompt
+   * (`sentAway`), until its reply says it did not or the next view plays. */
+  #away: number[] = [];
   #shut = false;
   readonly #listeners = new Set<() => void>();
   readonly #pointing = new Set<PointerEvents>();
@@ -367,14 +415,20 @@ export class Prompts {
     let script = sent;
     // A script of marks alone is not waited out: the game's own steps begin now.
     if (this.#marking) this.#stage.skip();
-    // The card the player handled goes in place of its twin, before anything plays.
-    const handled = this.#handled;
+    // Each card the player handled goes in place of its twin, before anything plays.
+    const handled = [
+      ...(this.#handled === undefined ? [] : [this.#handled]),
+      ...this.#away,
+    ];
     this.#handled = undefined;
-    const twin =
-      handled === undefined || !script
-        ? undefined
-        : twinOf(this.#stage.shown.table, script, handled);
-    if (twin !== undefined) this.#stage.trade(twin, handled!);
+    this.#away = [];
+    const twins = script
+      ? twinsOf(this.#stage.shown.table, script, handled)
+      : [];
+    for (const [twin, was] of twins) {
+      this.#stage.trade(twin, was);
+      if (this.#up) this.#up = tradedTray(this.#up, twin, was);
+    }
     const before = this.#stage.shown.view;
     const next = view.status.kind === "deciding" && view.status.decision;
     const again = next && sameDecision(next.id, this.#asked.decision?.id);
@@ -573,6 +627,9 @@ export class Prompts {
     if (!decision || !prompt || sending) return false;
     this.#cast = undefined;
     this.#set({ decision, prompt, sending: true, answered: false });
+    // Noted before the send, as `#handled` is: the views the answer plays on to may arrive
+    // before the reply does.
+    this.#away = sentAway(prompt);
     const open = () => sameDecision(decision.id, this.#asked.decision?.id);
     this.#send(decision.id, prompt.revision, click).then(
       (reply) => {
@@ -585,12 +642,14 @@ export class Prompts {
           this.#set({ sending: false, answered: true });
           return;
         }
+        this.#away = [];
         if (reply.prompt.revision === prompt.revision) unused?.();
         else this.heard();
         this.#set({ ...IDLE, decision, prompt: reply.prompt });
         this.#mark();
       },
       (error: unknown) => {
+        this.#away = [];
         if (open()) this.#set({ ...IDLE, decision, prompt, error });
       },
     );

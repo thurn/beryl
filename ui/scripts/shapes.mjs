@@ -66,6 +66,8 @@ import {
     carry as carryTo,
     heldUp,
     onTable,
+    putBackFlight,
+    putsBack,
     reach,
     scryFlight,
     topOfPile,
@@ -459,6 +461,9 @@ async function answer(context, watch, layout, fixture, carry) {
             );
             if (purpose === "scry" && answered) {
                 await scryFlight(page, before, after, TICK);
+            }
+            if (putsBack(before.prompt) && answered) {
+                await putBackFlight(page, before, after, TICK);
             }
             if (answered) await paying.answered(before);
             await combat.follow(before, answered);

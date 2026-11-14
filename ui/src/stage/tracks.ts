@@ -544,8 +544,27 @@ export const piled = ({ step: { act } }: Pick<Run, "step">) =>
 
 /** What a step's act moves, if that is something on the table: the creature that strikes,
  * or else what the act is about. */
-export const moverOf = (act: Act): Name | undefined =>
-  act.verb === "strike" ? act.source : subjectOf(act);
+export const moverOf = (act: Act | undefined): Name | undefined =>
+  act && (act.verb === "strike" ? act.source : subjectOf(act));
+
+/** Puts each card a tray's end `act` keeps (`Hold.keeps`) on a track that holds it where
+ * `poseOf` has it at stage time `at`: until a step about it moves it, or else until the script
+ * is over, when it goes home as a card let go where its drop was taken does. */
+export function keep<E extends { track?: Track }>(
+  act: Act,
+  at: number,
+  entries: ReadonlyMap<Name, E>,
+  poseOf: (name: Name, entry: E) => Pose,
+) {
+  if (act.verb !== "lift" || !("tray" in act) || act.span !== "end") return;
+  for (const name of act.keeps ?? []) {
+    const entry = entries.get(name);
+    if (!entry) continue;
+    const pose = poseOf(name, entry);
+    const forever = { from: at, to: Infinity };
+    entry.track = { ...forever, pose: () => pose, stays: true, waits: true };
+  }
+}
 
 /** What the effects of a step's act are on (effects.ts): what the act is about, or what its
  * number is on, a permanent or a player's life total. */
@@ -677,6 +696,9 @@ export interface Track {
    * drop did has played: a step that moves it starts from there, and otherwise it glides home
    * when the script is over. */
   stays?: boolean;
+  /** Kept where a tray let it go for a later step of the script that moves it
+   * (`Hold.keeps`): nothing else moves it until then. */
+  waits?: boolean;
 }
 
 /** The way home from `from`, begun at stage time `at`, of a card let go, played as `release`

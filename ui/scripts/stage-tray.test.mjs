@@ -277,6 +277,87 @@ test("a card the answer puts on the bottom of the library goes there as it is le
     assert.equal(made.shown.busy, false);
 });
 
+test("cards put back fly from the library's pile, though the engine moves a twin", async () => {
+    // Jace, the Mind Sculptor's 0 puts two cards back: the player puts the Plains 4 and the
+    // card 3 on the library and keeps the Plains 5. The engine offers one candidate for
+    // interchangeable cards, so the session answers with it and the game moves 5 in place of
+    // 4, a beat after 3. Played as it came, 4 went home to the hand and 5 flew from the
+    // hand's pile, and 3 went home to the hand before its own flight: each card put back
+    // seemed to go to the hand and then to the library.
+    const { made, prompts, reply, at } = prompted();
+    const plains = (slot, zone) => object(slot, zone, { name: "Plains" });
+    const putBack = {
+        ...split([4, 3], [5]),
+        purpose: "arrange",
+        title: "Put two cards on top.",
+        body: {
+            shape: "split",
+            piles: [
+                { place: "onTop", label: "Top", cards: [4, 3], exactly: 2 },
+                { place: null, label: "Hand", cards: [5], exactly: null },
+            ],
+        },
+    };
+    const players = (library) => ({
+        you: { life: 20, library, graveyard: [] },
+        opponent: { life: 20, library: [], graveyard: [] },
+    });
+    prompts.play(
+        table(putBack, {
+            objects: [
+                object(1),
+                object(3, "hand"),
+                plains(4, "hand"),
+                plains(5, "hand"),
+                object(10, "library"),
+            ],
+            players: players([10]),
+        }),
+    );
+    made.clock.advance(300);
+    assert.deepEqual(
+        [at(4), at(3), at(5)],
+        [
+            [0, -1000],
+            [200, -1000],
+            [1000, -1000],
+        ],
+    );
+    prompts.press({ kind: "confirm" });
+    await reply({ kind: "answered" });
+    const [three, five] = [object(3, "library"), plains(5, "library")];
+    const after = table(undefined, {
+        objects: [
+            object(1),
+            plains(4, "hand"),
+            object(10, "library"),
+            three,
+            five,
+        ],
+        players: players([10, 5, 3]),
+    });
+    const fly = (object) => [
+        { act: { verb: "fly", from: "hand", why: "effect", object } },
+    ];
+    prompts.play(after, { beats: [fly(three), fly(five)] });
+    made.clock.advance(0);
+    // 3 flies from where it was put; 5, in 4's place on the library's pile, waits there for
+    // its own flight; and 4, in 5's place, goes home to the hand in the lift's 300 ms.
+    assert.deepEqual(at(3), [200, -1000]);
+    assert.deepEqual(at(5), [0, -1000]);
+    assert.deepEqual(at(4), [1000, -1000]);
+    made.clock.advance(300);
+    // 5 is still in the hand to the table, so 4 lies after it, its turn there 5's.
+    assert.deepEqual(at(5), [0, -1000]);
+    assert.deepEqual(at(4), [400, 500]);
+    made.clock.advance(100);
+    assert.deepEqual(at(3), [3000, 500]);
+    made.clock.advance(400);
+    assert.deepEqual(at(5), [3000, 500]);
+    assert.deepEqual(at(4), [0, 500]);
+    assert.equal(made.shown.busy, false);
+});
+
 test("a card carried between piles is dropped where the layout says it landed", async () => {
     const { made, prompts, sent, reply, at } = prompted();
     made.release = { duration: 100, delay: 0, stagger: 0, ease: (p) => p };

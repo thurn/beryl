@@ -329,3 +329,47 @@ export async function scryFlight(page, before, ends, tick) {
         assert.ok(library.indexOf(slot) < bottom.length, `${slot} is beneath`);
     }
 }
+
+/** Whether `prompt`'s split puts cards from the hand onto the library: its first pile goes
+ * on top, and its second, the hand, stays where it lies. */
+export const putsBack = ({ body }) =>
+    body.shape === "split" &&
+    body.piles[0].place === "onTop" &&
+    body.piles[1].place === null;
+
+/** The flight of cards put back from the hand onto the library: each card the view
+ * `ends` moves from the hand to the library goes straight there from the tray, never closer
+ * to the hand on its way. When their flights began one after the other, the later card went
+ * home to the hand as the tray let it go and flew from there; and the engine, which offers
+ * one candidate for identical cards, may move a twin of the card the player put back, which
+ * flew from the hand while the one put back went home. Either way the card seemed to go to
+ * the hand and then to the library. `before` is the prompt as its Done was pressed and
+ * `page` has just sent that press. */
+export async function putBackFlight(page, before, ends, tick) {
+    const library = ends.view.players.you.library;
+    const fromHand = new Set(
+        before.view.objects
+            .filter((o) => o.zone === "hand" && o.owner === "you")
+            .map((o) => o.slot),
+    );
+    const cards = library.filter((slot) => fromHand.has(slot));
+    assert.ok(cards.length > 0, "the answer puts cards back on the library");
+    const seen = await page.evaluate(flown, { tick, cards });
+    const last = seen.at(-1);
+    for (const [i, slot] of cards.entries()) {
+        const end = last.cards[i].pose;
+        const away = (pose) => Math.hypot(pose.x - end.x, pose.y - end.y);
+        let nearest = away(seen[0].cards[i].pose);
+        for (const sample of seen) {
+            const { pose, nodes } = sample.cards[i];
+            const what = `card ${slot} put back, at ${sample.at} ms`;
+            assert.equal(nodes, 1, `${what}: one node`);
+            // A flight's bow may lift it a little off the straight line.
+            assert.ok(
+                away(pose) <= nearest + 24,
+                `${what}: ${Math.round(away(pose))} from the library, having been ${Math.round(nearest)}`,
+            );
+            nearest = Math.min(nearest, away(pose));
+        }
+    }
+}

@@ -63,6 +63,9 @@ export interface Hold {
   /** On an end: each library in the order the script goes on to set it (`set library`), so
    * that a card the tray lets go into a library goes straight to its place there. */
   libraries?: Partial<Record<Side, readonly number[]>>;
+  /** On an end: the cards that a step of the script moves, from this beat on, which stay
+   * where the tray held them until their own step moves them, rather than going home first. */
+  keeps?: readonly number[];
 }
 
 /** What a step does: an act the session sent, or the stage's own. */
@@ -126,7 +129,19 @@ export function traded(table: Table, a: number, b: number): Table {
   if (at === undefined || bt === undefined) return table;
   order.set(a, bt);
   order.set(b, at);
-  return { ...table, order };
+  // A card a prompt holds up rests in its tray's pile: each takes the other's place there.
+  const tray = table.tray && tradedTray(table.tray, a, b);
+  return { ...table, order, ...(tray && { tray }) };
+}
+
+/** `tray` with the cards in slots `a` and `b` trading places in its piles and its order. */
+export function tradedTray(tray: Tray, a: number, b: number): Tray {
+  const swap = (slot: number) => (slot === a ? b : slot === b ? a : slot);
+  return {
+    ...tray,
+    piles: tray.piles.map((pile) => ({ ...pile, cards: pile.cards.map(swap) })),
+    ...(tray.order && { order: tray.order.map(swap) }),
+  };
 }
 
 /** `order` once the card in `slot` has gone from `from` to `to`: last of those in a hand,

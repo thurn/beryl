@@ -68,6 +68,7 @@ import {
   dissolve,
   halfTurned,
   home,
+  keep,
   moverOf,
   paying,
   subjectOf,
@@ -515,6 +516,9 @@ export class ScriptStage {
       resting: moved.covered ?? moved.resting,
       pose: this.#poseOf(mover!, moved, at),
     };
+    keep(run.step.act, at, this.#entries, (name, entry) =>
+      this.#poseOf(name, entry, at),
+    );
     this.#set(apply(this.#table!, run.step.act, run.step.cause));
     this.#over.play(run.step.act, run.from, run.to, run.ease);
     // A step about what an earlier one is still taking from sight finds it gone already.
@@ -653,8 +657,10 @@ export class ScriptStage {
       const dress = sameDress(before.dress, resting.dress);
       const still = samePose(before.pose, resting.pose);
       if (still && face && dress) continue;
-      // What is on its own step's track goes on along it, to wherever it now rests.
-      const flying = entry.track?.own && at < entry.track.to;
+      // What is on its own step's track goes on along it, as what a tray kept waits for one.
+      const flying =
+        (entry.track?.own && at < entry.track.to) ||
+        (entry.track?.waits && moverOf(run?.step.act) !== name);
       const moves = !still && !flying && run !== undefined && carries(run, at);
       const start = moves ? this.#poseOf(name, entry, at) : undefined;
       const showing = stillShown(entry.covered, entry.track, at);
