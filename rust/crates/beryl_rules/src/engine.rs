@@ -17,6 +17,7 @@ use crate::table::GameTable;
 use crate::{cast, combat, entered, face_down, layers, mana, resolve, sba, start, trigger, turn};
 
 mod collapse;
+mod paused_step;
 mod questions;
 
 pub use collapse::interchangeable;
@@ -26,15 +27,15 @@ pub use questions::refusal;
 use questions::{land_face, only_idle};
 
 /// The position a player sees the open decision in. That is the state itself, except while
-/// a resolution is paused (§7.3): the committed state is then the one before the resolution
-/// began, so the paused body is replayed into scratch up to its question.
+/// a resolution or a step's turn-based actions are paused (§7.3): the committed state is then
+/// the one before they began, so they are replayed into scratch up to their question.
 pub fn view<'a, L: Layout>(s: &'a State<L>, t: &GameTable, x: &'a mut Scratch<L>) -> &'a State<L> {
-    if matches!(s.pending(), Pending::Resolving(_))
-        && let Ok(paused) = resolve::replay_to_question(s, t, x, None)
-    {
-        return paused;
-    }
-    s
+    let paused = match s.pending() {
+        Pending::Resolving(_) => resolve::replay_to_question(s, t, x, None),
+        Pending::StepActions(_) => paused_step::replay_to_question(s, t, x, None),
+        _ => return s,
+    };
+    paused.unwrap_or(s)
 }
 
 /// `player` concedes, ending the game, unless it is over already
@@ -61,8 +62,14 @@ pub fn concede<L: Layout>(s: &mut State<L>, x: &mut Scratch<L>, player: Seat) {
 /// with its tag, as the sink keeps it.
 pub fn paused_events<L: Layout>(s: &State<L>, t: &GameTable, x: &mut Scratch<L>) -> Vec<Tagged<L>> {
     let mut seen = Vec::new();
-    if matches!(s.pending(), Pending::Resolving(_)) {
-        let _ = resolve::replay_to_question(s, t, x, Some(&mut seen));
+    match s.pending() {
+        Pending::Resolving(_) => {
+            let _ = resolve::replay_to_question(s, t, x, Some(&mut seen));
+        }
+        Pending::StepActions(_) => {
+            let _ = paused_step::replay_to_question(s, t, x, Some(&mut seen));
+        }
+        _ => {}
     }
     seen
 }
@@ -452,6 +459,9 @@ fn perform_machine<L: Layout>(
         Pending::Resolving(_) => s
             .record_answer(index::<L>(usize::from(c.0)))
             .and_then(|()| resolve::resolve(s, t, x, a)),
+        Pending::StepActions(_) => s
+            .record_answer(index::<L>(usize::from(c.0)))
+            .and_then(|()| paused_step::step_actions(s, t, x, a)),
         Pending::Casting(casting) => {
             let (option, object) = (d.candidates.option(c), d.candidates.object(c));
             act(s, &mut x.events, d.player, option);
@@ -512,7 +522,9 @@ fn perform_machine<L: Layout>(
     })
 }
 
-/// Takes a priority action: passing, or an action of the player's own ([`act`]).
+/// Takes a priority action: passing, or an action of the player's own ([`act`]). Inlined into
+/// both callers, as the engine loop's silent passes take it on every step of a rollout.
+#[inline(always)]
 fn perform_priority<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -657,7 +669,11 @@ fn pass<L: Layout>(
         return Ok(());
     }
     if s.stack().is_empty() {
-        turn::end_step(s, t, &mut x.events)
+        if crate::replace::may_ask(s, t) {
+            paused_step::end_step(s, t, x, a)
+        } else {
+            turn::end_step(s, t, &mut x.events)
+        }
     } else {
         // The passes are spent: a resolution that pauses for a question waits over this
         // state, and priority starts afresh once it resolves.

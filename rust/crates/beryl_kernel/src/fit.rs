@@ -178,7 +178,9 @@ impl<L: Layout> State<L> {
             )?;
         }
         match &self.pending {
-            Pending::Resolving(paused) => Self::fits_paused::<M>(paused),
+            Pending::Resolving(paused) | Pending::StepActions(paused) => {
+                Self::fits_paused::<M>(paused)
+            }
             _ => Ok(()),
         }
     }

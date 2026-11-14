@@ -16,6 +16,12 @@ const CUSTOM: &[&str] = &[];
 /// a generated scenario exercises fails too, so the list stays current.
 const UNREACHED: &[(&str, &str)] = &[
     (
+        "Life from the Loam: ability 1 (Replacement)",
+        "dredge works from a graveyard, and a generated scenario casts the card from a hand and \
+         draws nothing after; the card's hand-written scenarios dredge in the draw step and \
+         during a spell",
+    ),
+    (
         "Rest in Peace: ability 1 (Replacement)",
         "casting it puts nothing into a graveyard: it becomes a permanent, and its enters \
          trigger exiles; the card's hand-written scenarios destroy and discard under it",

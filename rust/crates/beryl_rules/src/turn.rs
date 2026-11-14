@@ -63,6 +63,21 @@ pub(crate) fn begin_step<L: Layout>(
 ) -> Result<(), Full> {
     let began = s.begin_step(step);
     event::settle(s, t, sink, began)?;
+    step_actions(s, t, sink)
+}
+
+/// The turn-based actions of the step that has just begun, as the draw step's draw
+/// ([CR 703.4d]): "Immediately after
+/// the draw step begins, the active player draws a card."
+///
+/// [CR 703.4d]: https://yawgatog.com/resources/magic-rules/#R7034d
+#[inline]
+pub(crate) fn step_actions<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+) -> Result<(), Full> {
+    let step = s.turn().step();
     let active = s.turn().active();
     match step {
         TurnStep::Untap => {
@@ -127,6 +142,28 @@ pub(crate) fn end_step<L: Layout>(
     t: &GameTable,
     sink: &mut Sink<L>,
 ) -> Result<(), Full> {
+    let next = next_step(s, t, sink)?;
+    begin_step(s, t, sink, next)
+}
+
+/// [`end_step`] up to the turn-based actions of the step it begins ([`step_actions`]).
+pub(crate) fn end_step_before_actions<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+) -> Result<(), Full> {
+    let next = next_step(s, t, sink)?;
+    let began = s.begin_step(next);
+    event::settle(s, t, sink, began)
+}
+
+/// Ends the current step, returning the step that begins next.
+#[inline]
+fn next_step<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+) -> Result<TurnStep, Full> {
     s.empty_mana_pools();
     let next = match s.turn().step() {
         TurnStep::Untap => TurnStep::Upkeep,
@@ -158,7 +195,7 @@ pub(crate) fn end_step<L: Layout>(
         // received priority, "another cleanup step begins."
         TurnStep::End | TurnStep::Cleanup => TurnStep::Cleanup,
     };
-    begin_step(s, t, sink, next)
+    Ok(next)
 }
 
 /// The cleanup step's first turn-based action

@@ -90,7 +90,7 @@ pub(crate) fn decision<L: Layout>(
         Pending::TurningFaceUp { slot, remaining } => {
             face_down::decision(s, t, sink, slot, remaining)
         }
-        Pending::Resolving(ref r) => Ok(r.question.clone()),
+        Pending::Resolving(ref r) | Pending::StepActions(ref r) => Ok(r.question.clone()),
         Pending::CastOffer {
             object,
             player,

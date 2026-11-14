@@ -304,6 +304,11 @@ recordings do not show them.
   attacks, and its line stays drawn throughout (by-l26, by-y3sp).
 - **A token that leaves.** It dissolves in place like any permanent. No token
   leaving the battlefield is seen (by-1ug).
+- **Choosing a replacement effect.** When a draw could be replaced by dredge,
+  the player picks the card to dredge, or declines and draws, with the pick
+  prompt Beryl uses for choosing up to a number of cards. The title reads Choose
+  an effect to apply, and its Decline button lets the draw happen. No card on
+  Arena has dredge (by-bajq.3.2).
 - **Permanents entering together.** When permanents a player controls enter the
   battlefield at the same time and the order of their timestamps could change
   what their abilities do, the player picks them one at a time, earliest first,

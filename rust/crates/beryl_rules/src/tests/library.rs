@@ -41,8 +41,10 @@ fn resolving<T>(
         face: FaceIx::default(),
         costs: Castings::NONE,
     });
-    let mut resolution = Resolution::new(entry, &ASKS, TargetPlaces::NONE, None, answers);
+    let mut resolution = Resolution::new(entry, &ASKS, TargetPlaces::NONE, None);
+    x.events.asking.begin(answers, false).unwrap();
     let result = act(&mut Game::new(s, t, &mut x.events), &mut resolution);
+    x.events.asking.end();
     crate::layers::refresh(s, t, &mut x.events).unwrap();
     (result, resolution.question.take())
 }

@@ -17,13 +17,16 @@ use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::replacement::{self, Instead};
 use crate::state::{Count, TurnStep, Zone, ZoneKey};
+use crate::table::Capability;
 use crate::{ending, replace};
 
 /// A player draws cards, one at a time ([CR 121.2]): "If a player is instructed to draw multiple
 /// cards, that player performs that many individual card draws." The event counts the cards
 /// actually drawn, if any.
 ///
-/// Each draw is offered first to a replacement effect of a permanent ([`Replaced::Draw`],
+/// Each draw is offered first to the dredge abilities of cards in the player's graveyard
+/// ([`replace::dredge`]), which the player may choose one of, then to a replacement effect of a
+/// permanent ([`Replaced::Draw`],
 /// [`replace::draw`]), an empty library or not ([CR 614.11]): "Some effects replace card draws.
 /// These effects are applied even if no cards could be drawn because there are no cards in the
 /// affected player's library." What happens instead follows the cards drawn before it. Where it
@@ -45,15 +48,29 @@ pub fn draw<L: Layout>(game: &mut Game<'_, L>, player: Seat, cards: u8) -> Resul
         .replacing()
         .unwrap_or(game.table.replaces_any())
         .replaces(ReplacementKind::Draw);
+    let dredge = game.table.can(Capability::Dredge);
     let turn = game.state.turn();
     let in_draw_step = turn.step() == TurnStep::Draw && turn.active() == player;
     let mut left = cards;
     loop {
-        let s = &mut *game.state;
         let mut drawn = 0;
         let mut replaced = None;
+        let mut dredged = false;
         while left > 0 {
             left -= 1;
+            // A dredge mills and moves cards, events of their own after the cards drawn
+            // before it, so the draws so far are settled first.
+            if dredge && !replace::dredges(game.state, game.table, player).is_empty() {
+                if drawn > 0 {
+                    let cards = std::mem::take(&mut drawn);
+                    game.settle(Event::Draw { player, cards })?;
+                }
+                if replace::dredge(game, player)? {
+                    dredged = true;
+                    break;
+                }
+            }
+            let s = &mut *game.state;
             if replaceable {
                 replaced = replace::draw(s, game.table, player);
                 if replaced.is_some() {
@@ -73,6 +90,9 @@ pub fn draw<L: Layout>(game: &mut Game<'_, L>, player: Seat, cards: u8) -> Resul
         if drawn > 0 {
             let cards = drawn;
             game.settle(Event::Draw { player, cards })?;
+        }
+        if dredged {
+            continue;
         }
         let Some((instead, cause, controller)) = replaced else {
             return Ok(());

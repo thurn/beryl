@@ -337,9 +337,17 @@ impl Ctx {
     }
 
     /// The whole of an ability that a keyword names, as its keyword: "Crew 5", "Cycling
-    /// {3}" ([CR 702.122a](https://yawgatog.com/resources/magic-rules/#R702122a),
-    /// [CR 702.29a](https://yawgatog.com/resources/magic-rules/#R70229a)).
+    /// {3}", "Dredge 3" ([CR 702.122a](https://yawgatog.com/resources/magic-rules/#R702122a),
+    /// [CR 702.29a](https://yawgatog.com/resources/magic-rules/#R70229a),
+    /// [CR 702.52a](https://yawgatog.com/resources/magic-rules/#R70252a)).
     pub(super) fn keyword_line(ability: &Ability) -> Option<String> {
+        if let Some(&Replacement {
+            rewrite: Rewrite::Dredge(n),
+            ..
+        }) = ability.replacement()
+        {
+            return Some(format!("Dredge {n}"));
+        }
         if ability.kind() != AbilityKind::Activated {
             return None;
         }

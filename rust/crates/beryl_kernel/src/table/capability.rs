@@ -1,6 +1,6 @@
 //! [`Capability`]: what a game's cards may make the stores keep.
 
-use beryl_card::{Amount, Condition, Face, Node};
+use beryl_card::{Amount, Condition, Face, Node, Replacement, Rewrite};
 
 use crate::static_ability::Inputs;
 
@@ -44,6 +44,9 @@ pub enum Capability {
     /// A card's static ability reads as the layers apply something no layer writes
     /// ([`Inputs`]), so the recompute finds what the permanents on the battlefield read.
     LayerInputs,
+    /// A card has dredge ([`beryl_card::Replacement::dredge`]), a replacement of draws that
+    /// works from a graveyard, so a draw looks there for one.
+    Dredge,
 }
 
 impl Capability {
@@ -58,6 +61,13 @@ impl Capability {
             found |= Capability::GrantsLayerEffect.bit();
         }
         for a in face.abilities.iter().chain(face.grants) {
+            if let Some(&Replacement {
+                rewrite: Rewrite::Dredge(_),
+                ..
+            }) = a.replacement()
+            {
+                found |= Capability::Dredge.bit();
+            }
             if a.cost().is_loyalty() {
                 found |= Capability::LoyaltyActivated.bit();
             }

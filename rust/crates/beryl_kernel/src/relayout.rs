@@ -355,6 +355,7 @@ impl<L: Layout> Relayout for Pending<L> {
                 substituted: c.substituted,
             }),
             Pending::Resolving(r) => Pending::Resolving(r.relayout()),
+            Pending::StepActions(r) => Pending::StepActions(r.relayout()),
             &Pending::CastOffer {
                 object,
                 player,

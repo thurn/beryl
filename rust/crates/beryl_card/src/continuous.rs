@@ -140,6 +140,19 @@ impl Replacement {
         }
     }
 
+    /// Dredge N ([CR 702.52a]): "Dredge is a static ability that functions only while the
+    /// card with dredge is in a player's graveyard. 'Dredge N' means 'As long as you have at
+    /// least N cards in your library, if you would draw a card, you may instead mill N cards
+    /// and return this card from your graveyard to your hand.'"
+    ///
+    /// [CR 702.52a]: https://yawgatog.com/resources/magic-rules/#R70252a
+    pub const fn dredge(n: u8) -> Replacement {
+        Replacement {
+            replaces: Replaced::Draw(Players::You),
+            rewrite: Rewrite::Dredge(n),
+        }
+    }
+
     /// "If [objects] would be put into [zone] from anywhere, put it into [instead] instead":
     /// "If a card or token would be put into a graveyard from anywhere, exile it instead."
     pub const fn put_into(objects: &'static Filter, zone: Zone, instead: Zone) -> Replacement {
@@ -214,6 +227,11 @@ pub enum Rewrite {
     EntersTappedUnlessPayLife(u8),
     /// The ability's [`body`](crate::Ability::body) happens instead.
     Instead,
+    /// Dredge N ([`Replacement::dredge`]): its owner may mill N cards instead of drawing, if
+    /// their library has at least N, and the card returns from their graveyard to their
+    /// hand. It works only from its owner's graveyard and is optional, so it is a choice even
+    /// when it is the only replacement of the draw.
+    Dredge(u8),
 }
 
 /// A static ability's continuous effect: what it affects, when, and how

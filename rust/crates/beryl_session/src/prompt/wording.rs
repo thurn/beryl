@@ -237,6 +237,12 @@ pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
         ),
         // Not seen in Arena, which orders permanents that enter together itself.
         Purpose::EnterOrder => picks("Choose which enters first."),
+        // Not seen in Arena, which has no card with dredge. Declining lets the event happen
+        // as it would have, a draw.
+        Purpose::Replace => Wording {
+            decline: DECLINE,
+            ..picks("Choose an effect to apply.")
+        },
         // Taking none is asked first (Part::Whether) and folded into the look, whose Decline
         // then stands beside Submit (`IHPV6yRaFlk 28:19.5`, `qF4GF-vfc8Y 30:13.0`).
         Purpose::Look => Wording {

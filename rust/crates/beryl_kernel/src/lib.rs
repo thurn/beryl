@@ -664,6 +664,7 @@
 //! [CR 613.11]: https://yawgatog.com/resources/magic-rules/#R61311
 //! [CR 101.2]: https://yawgatog.com/resources/magic-rules/#R1012
 
+pub mod asking;
 pub mod bitboard;
 pub mod board;
 pub mod cause;

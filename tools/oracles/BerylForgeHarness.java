@@ -1125,8 +1125,45 @@ public final class BerylForgeHarness {
             return yes(YES_NO, "optional trigger " + wrapper, true);
         }
 
+        /**
+         * Beryl's answer to a replacement effect's choice among optional ones (its purpose
+         * "replace"), while Forge applies it: the card whose effect applies, or "" for none.
+         * Forge picks one effect ([`chooseSingleReplacementEffect`]) and then asks whether to
+         * apply it ([`confirmReplacementEffect`]), and after a no picks among the rest again,
+         * so declining is a no to each of the `declining` effects it offers.
+         */
+        private String replacing;
+        private int declining;
+
+        @Override
+        public ReplacementEffect chooseSingleReplacementEffect(List<ReplacementEffect> possibleReplacers) {
+            if (replacing == null && possibleReplacers.stream().anyMatch(re -> re.hasParam("Optional"))) {
+                JsonObject pick = run.take(player, Set.of("ChooseUpTo"), "replacement among " + possibleReplacers);
+                if (pick != null) {
+                    replacing = pick.has("card") ? pick.get("card").getAsString() : "";
+                }
+            }
+            if (replacing != null && replacing.isEmpty()) {
+                declining = possibleReplacers.size();
+            } else if (replacing != null) {
+                for (ReplacementEffect re : possibleReplacers) {
+                    if (Run.named(re.getHostCard(), replacing)) {
+                        return re;
+                    }
+                }
+            }
+            return super.chooseSingleReplacementEffect(possibleReplacers);
+        }
+
         @Override
         public boolean confirmReplacementEffect(ReplacementEffect re, SpellAbility effectSA, GameEntity affected, String question) {
+            if (replacing != null) {
+                boolean apply = !replacing.isEmpty() && Run.named(re.getHostCard(), replacing);
+                if (apply || --declining <= 0) {
+                    replacing = null;
+                }
+                return apply;
+            }
             return yes(YES_NO, "replacement " + question, super.confirmReplacementEffect(re, effectSA, affected, question));
         }
 

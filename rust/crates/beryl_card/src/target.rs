@@ -72,6 +72,14 @@ impl TargetSpec {
         }
     }
 
+    /// "Up to [count] target": zero to `count` targets may be chosen.
+    pub const fn up_to(count: u8, kind: TargetKind, filter: Filter) -> TargetSpec {
+        TargetSpec {
+            count,
+            ..TargetSpec::up_to_one(kind, filter)
+        }
+    }
+
     /// "Target spell".
     pub const fn spell() -> TargetSpec {
         TargetSpec::one(TargetKind::Spell, Filter::Any)

@@ -90,6 +90,12 @@
 //! `discarded-push` check). The engine turns `Full` into the stall in one place, where the
 //! resolution ends (`interpret::finish`).
 //!
+//! A replacement effect's choice (`replace`) can come up in code that is no resolution's and
+//! returns `Result<T, Full>`, as the draw step's draw does. It stops the run as a `Full`
+//! too, keeping its question in the sink (`beryl_kernel::asking`); the code that opened the
+//! run, a resolution or the end of a step, tells the stop from a capacity running out by
+//! that question. Only a run on a copy of the state can stop so, and it discards the copy.
+//!
 //! ## Modules
 //!
 //! A library module is named for the rule it implements, so a rule number or the words on a

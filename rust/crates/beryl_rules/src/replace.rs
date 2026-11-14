@@ -16,19 +16,25 @@
 //! [CR 614.1]: https://yawgatog.com/resources/magic-rules/#R6141
 //! [CR 614.6]: https://yawgatog.com/resources/magic-rules/#R6146
 
+use beryl_card::Prompt;
+use beryl_card::prompt::Purpose;
+
+use crate::bitboard::Bitboard;
 use crate::card::{AbilityIx, AbilityKind, FaceAbility, Replaced, Replacement, Rewrite, Types};
-use crate::event::{Entry, LossCause, ReplacementKind, Sink};
+use crate::decision::{Choice, Decision, DecisionKind, Opt};
+use crate::event::{Entry, LossCause, Reason, ReplacementKind, Sink};
 use crate::filter::{self, Evaluate};
 use crate::fixed::{Fixed, Full};
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::layers;
-use crate::layout::Layout;
+use crate::layout::{Layout, Queue};
 use crate::life;
+use crate::profile::Stops;
 use crate::replacement::{self, Instead};
-use crate::state::{AbilityMask, CounterKind, MoveReplacement, ObjectRef, State, Zone};
-use crate::table::GameTable;
-use crate::{interpret, trigger};
+use crate::state::{AbilityMask, CounterKind, MoveReplacement, ObjectRef, State, Zone, ZoneKey};
+use crate::table::{Capability, GameTable};
+use crate::{actions, interpret, trigger, zones};
 
 /// A move proposed for one object of a batch, before the state changes: the proposal the
 /// replacement effects of a move rewrite ([`moving`]). Where in a library it goes and why it
@@ -405,7 +411,7 @@ fn entering<L: Layout>(
                 }
             }
             // The card table holds no other rewrite of entering.
-            Rewrite::None | Rewrite::ToZone(_) | Rewrite::Instead => continue,
+            Rewrite::None | Rewrite::ToZone(_) | Rewrite::Instead | Rewrite::Dredge(_) => continue,
         }
         crate::coverage::hit(ability);
     }
@@ -484,4 +490,119 @@ pub(crate) fn life_to_enter<L: Layout>(
 pub(crate) fn exiled_instead<L: Layout>(s: &State<L>, object: ObjectRef<L>, to: Zone) -> bool {
     s.move_replacements(object)
         .any(|r| effect_destination(r, to).is_some())
+}
+
+/// Whether a replacement effect's choice can come up now ([CR 616.1]): an optional replacement
+/// is live. The engine runs each step that may meet such a choice on a copy of the state, so
+/// the choice can pause it ([`crate::asking`]); with none live, nothing more runs than before.
+///
+/// The one optional replacement is dredge, live while some player has a card with dredge N
+/// in their graveyard and at least N cards in their library ([`dredges`]). A game whose cards
+/// have no dredge pays one AND. Two replacements of a move that would put an object into
+/// different zones would be a choice too, but no card yet puts one anywhere but exile, so
+/// [`destination`] has nothing to choose between.
+///
+/// [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
+#[inline]
+pub(crate) fn may_ask<L: Layout>(s: &State<L>, t: &GameTable) -> bool {
+    t.can(Capability::Dredge) && dredge_live(s, t)
+}
+
+/// [`may_ask`] once a card of the game has dredge.
+#[cold]
+#[inline(never)]
+fn dredge_live<L: Layout>(s: &State<L>, t: &GameTable) -> bool {
+    s.players().any(|player| !dredges(s, t, player).is_empty())
+}
+
+/// N of the card in `slot`'s dredge, with its ability, if it has dredge.
+fn dredge_of<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+) -> Option<(&'static crate::card::Ability, u8)> {
+    s.copiable(slot)
+        .face(t)
+        .abilities
+        .iter()
+        .find_map(|a| match a.replacement() {
+            Some(&Replacement {
+                rewrite: Rewrite::Dredge(n),
+                ..
+            }) => Some((a, n)),
+            _ => None,
+        })
+}
+
+/// The cards in `player`'s graveyard whose dredge could replace their next draw
+/// ([CR 702.52a]): "As long as you have at least N cards in your library, if you would draw a
+/// card, you may instead mill N cards and return this card from your graveyard to your hand."
+/// Dredge works only there, and only for the card's owner, whose graveyard it is.
+///
+/// [CR 702.52a]: https://yawgatog.com/resources/magic-rules/#R70252a
+pub(crate) fn dredges<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboard<L::Slot> {
+    let library = s.library(player).len();
+    s.in_candidate_order(s.zone(ZoneKey::Of(player, Zone::Graveyard)))
+        .filter(|&slot| dredge_of(s, t, slot).is_some_and(|(_, n)| library >= usize::from(n)))
+        .collect()
+}
+
+/// Offers `player` the dredge abilities that could replace their next draw, if any
+/// ([`dredges`]), and carries out the one they choose: they mill N cards, then return the
+/// card from their graveyard to their hand ([CR 702.52a]). Returns whether the draw was
+/// replaced. One draw is replaced by at most one dredge (CR 616.1f: once one has applied there
+/// is no draw left to replace).
+///
+/// The choice is among the dredge cards and the draw itself ([`Purpose::Replace`]). A
+/// replacement of draws by a permanent is not optional, so declining every dredge leaves it to
+/// apply ([`draw`]), which is what applying it first would do.
+///
+/// [CR 702.52a]: https://yawgatog.com/resources/magic-rules/#R70252a
+pub(crate) fn dredge<L: Layout>(game: &mut Game<'_, L>, player: Seat) -> Result<bool, Full> {
+    let cards = dredges(game.state, game.table, player);
+    if cards.is_empty() {
+        return Ok(false);
+    }
+    let mut options = <L::Queue<Opt<L>, 64>>::default();
+    options.push(Opt::Done)?;
+    for slot in game.state.in_candidate_order(cards) {
+        options.push(Opt::Object(slot))?;
+    }
+    let d = Decision::options(
+        player,
+        DecisionKind::ChooseUpTo,
+        options,
+        Prompt::new(Purpose::Replace),
+    );
+    let Some(Opt::Object(card)) = d.candidates.option(choose(game, &d)?) else {
+        return Ok(false);
+    };
+    let (ability, n) = dredge_of(game.state, game.table, card).expect("a dredge card");
+    crate::coverage::hit(ability);
+    let s = &*game.state;
+    game.sink.enter_source(|| s.object_ref(card));
+    let done = actions::mill::mill(game, player, n)
+        .and_then(|_| zones::move_all(game, Bitboard::single(card), Zone::Hand, Reason::Effect));
+    game.sink.leave();
+    done.map(|()| true)
+}
+
+/// The answer to a replacement effect's choice `d` (CR 616.1). One answer is taken silently,
+/// except under [`Stops::Forced`]. Otherwise the run's record answers it, or the run stops at
+/// it ([`crate::asking`]), returning [`Full`] for whoever opened the run to tell apart. A run
+/// that cannot stop, which a choice no state could foresee meets, takes the first candidate:
+/// declining, for an optional replacement.
+fn choose<L: Layout>(game: &mut Game<'_, L>, d: &Decision<L>) -> Result<Choice, Full> {
+    debug_assert!(!d.is_empty(), "a choice with no candidate");
+    if d.len() == 1 && game.state.profile().stops != Stops::Forced {
+        return Ok(Choice(0));
+    }
+    let asking = &mut game.sink.asking;
+    if let Some(c) = asking.next() {
+        return Ok(c);
+    }
+    if asking.is_open() {
+        return Err(asking.stop(d.clone()));
+    }
+    Ok(Choice(0))
 }

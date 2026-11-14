@@ -922,6 +922,14 @@
     },
     {
       "kind": "not-seen",
+      "name": "Choosing a replacement effect",
+      "rule": "When a draw could be replaced by dredge, the player picks the card to dredge, or declines and draws, with the pick prompt Beryl uses for choosing up to a number of cards. The title reads Choose an effect to apply, and its Decline button lets the draw happen. No card on Arena has dredge.",
+      "reports": [
+        "by-bajq.3.2"
+      ]
+    },
+    {
+      "kind": "not-seen",
       "name": "Permanents entering together",
       "rule": "When permanents a player controls enter the battlefield at the same time and the order of their timestamps could change what their abilities do, the player picks them one at a time, earliest first, in the ordinary pick prompt: \"Choose which enters first.\" Arena orders them without asking, as far as the recordings show."
     },

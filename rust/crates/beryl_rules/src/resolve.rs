@@ -15,20 +15,27 @@ use crate::bitboard::Bitboard;
 use crate::card::{Ability, AbilityKind, CastingOption};
 use crate::cast::{self, entry_ability};
 use crate::chance;
-use crate::decision::{Answers, Decision};
+use crate::decision::{Answers, Choice, Decision, Outcome, StallReason};
 use crate::event::{self, Entry, Event, Reason, Sink, Tagged};
 use crate::fixed::Full;
 use crate::game::Game;
-use crate::interpret;
-use crate::layout::{Layout, Queue};
+use crate::layout::{Layout, Queue, index};
+use crate::observation::Observation;
 use crate::resolution::Resolution;
 use crate::scratch::Scratch;
 use crate::state::{
     CounterKind, Pending, PendingTrigger, StackEntry, StackItem, State, TargetPlaces, Zone, placed,
 };
 use crate::table::GameTable;
+use crate::{interpret, replace};
 
 /// Resolves the top of the stack, or continues a paused resolution with its record.
+///
+/// While a replacement effect's choice can come up ([`replace::may_ask`]), as a dredge for a
+/// card the body draws, every body runs on the copy, since any may meet it. An inline source
+/// then answers each question as the run stops at it, and the body runs again with the
+/// answer recorded: the record holds a replacement's choice and the body's own questions in
+/// the order they came, so each run asks them alike.
 pub(crate) fn resolve<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -41,9 +48,10 @@ pub(crate) fn resolve<L: Layout>(
         Pending::Resolving(r) => r.record.clone(),
         _ => Default::default(),
     };
+    let may_ask = replace::may_ask(s, t);
     // The source is asked first: whether an ability written as data asks is read from its
     // effect, which a rollout's inline source never needs.
-    if a.inline() || !ability.is_some_and(Ability::asks) {
+    if !may_ask && (a.inline() || !ability.is_some_and(Ability::asks)) {
         // An inline source runs the body once on the committed state. A resolution that
         // paused under another source, as search's tree nodes do before a rollout takes over,
         // replays its record first, from what was known as it began.
@@ -53,7 +61,10 @@ pub(crate) fn resolve<L: Layout>(
             t,
             &mut x.events,
             Some(a),
-            record.as_slice(),
+            Run {
+                record: record.as_slice(),
+                open: false,
+            },
             &entry,
             ability,
         );
@@ -65,27 +76,81 @@ pub(crate) fn resolve<L: Layout>(
         );
         return Ok(());
     }
-    let (spare, sink) = x.copy_to_spare(s);
-    rewind(spare, sink);
-    // Events of a run that ends paused are discarded with the copy (§7.3).
-    let mark = sink.len();
-    let paused = run(spare, t, sink, Some(a), record.as_slice(), &entry, ability);
-    unwind(sink);
-    match paused? {
-        None => {
+    resolve_on_copy(s, t, x, a, &entry, ability, record)
+}
+
+/// [`resolve`] on the scratch copy: for a body that may ask while its source pauses, and for
+/// every body while a replacement effect's choice can come up.
+#[inline(never)]
+fn resolve_on_copy<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    x: &mut Scratch<L>,
+    a: &mut dyn Answers<L>,
+    entry: &StackEntry<L>,
+    ability: Option<&'static Ability>,
+    mut record: L::Queue<L::Index, 32>,
+) -> Result<(), Full> {
+    let inline = a.inline();
+    loop {
+        let (spare, sink) = x.copy_to_spare(s);
+        rewind(spare, sink);
+        // Events of a run that ends paused are discarded with the copy (§7.3).
+        let mark = sink.len();
+        let answers = (!inline).then_some(&mut *a as &mut dyn Answers<L>);
+        let open = Run {
+            record: record.as_slice(),
+            open: true,
+        };
+        let paused = run(spare, t, sink, answers, open, entry, ability);
+        unwind(sink);
+        let Some(question) = paused? else {
             s.clone_from(spare);
             x.counts.copied();
+            return Ok(());
+        };
+        sink.truncate(mark);
+        if inline {
+            match answer_inline(s, spare, a, &question) {
+                Some(c) => record.push(c)?,
+                None => return Ok(()),
+            }
+            continue;
         }
-        Some(question) => {
-            sink.truncate(mark);
-            keep_what_was_seen(s, spare, chance::replaying(sink));
-            // While the question is open no one holds priority; the finished resolution gives
-            // it to the active player (CR 117.3b).
-            s.reset_passes();
-            s.pause_resolution(record, question);
-        }
+        keep_what_was_seen(s, spare, chance::replaying(sink));
+        // While the question is open no one holds priority; the finished resolution gives
+        // it to the active player (CR 117.3b).
+        s.reset_passes();
+        s.pause_resolution(record, question);
+        return Ok(());
     }
-    Ok(())
+}
+
+/// An inline source's answer to `question`, which a run on the copy `paused` stopped at, as
+/// the index to record, counted toward the committed state `s`'s budget as a decision `next`
+/// returned would be. `None` once the budget is spent: the game is then over, stalled.
+pub(crate) fn answer_inline<L: Layout>(
+    s: &mut State<L>,
+    paused: &State<L>,
+    a: &mut dyn Answers<L>,
+    question: &Decision<L>,
+) -> Option<L::Index> {
+    if s.budgets().decisions >= s.profile().limits.decisions_per_turn {
+        s.end_game(Outcome::Stalled(StallReason::DecisionsPerTurn));
+        return None;
+    }
+    s.count_decision();
+    let c = a.answer(Observation::new(paused, question.player), question);
+    debug_assert!(c.is_some(), "an inline answer source declined to answer");
+    Some(index::<L>(usize::from(c.unwrap_or(Choice(0)).0)))
+}
+
+/// The answers a [`run`] starts from, and whether a question past them stops it
+/// ([`crate::asking`]).
+#[derive(Clone, Copy)]
+struct Run<'a, L: Layout> {
+    record: &'a [L::Index],
+    open: bool,
 }
 
 /// Readies `s`, the committed state or a copy of it, to run a body from its start: with no
@@ -124,7 +189,7 @@ fn unwind<L: Layout>(sink: &mut Sink<L>) {
 /// random dealt since, the committed state takes those identities, still unknown to every
 /// player there, so the cards seen are the cards it holds and the run replays to the same
 /// question.
-fn keep_what_was_seen<L: Layout>(s: &mut State<L>, run: &State<L>, settled: bool) {
+pub(crate) fn keep_what_was_seen<L: Layout>(s: &mut State<L>, run: &State<L>, settled: bool) {
     let random = run.rng() != s.rng();
     if settled && !random {
         chance::adopt_unknown(s, run);
@@ -149,7 +214,11 @@ pub(crate) fn replay_to_question<'a, L: Layout>(
     let (spare, sink) = x.copy_to_spare(s);
     rewind(spare, sink);
     let mark = sink.len();
-    let paused = run(spare, t, sink, None, r.record.as_slice(), &entry, ability);
+    let open = Run {
+        record: r.record.as_slice(),
+        open: true,
+    };
+    let paused = run(spare, t, sink, None, open, &entry, ability);
     unwind(sink);
     paused?;
     match seen {
@@ -198,24 +267,70 @@ fn condition_fails<L: Layout>(
     !interpret::intervening_if(s, t, &PendingTrigger { of, info }, ability)
 }
 
-/// Resolves `entry`, the top of `s`'s stack, answering from `record` and then `answers`.
-/// Returns the question it paused at, if it did.
+/// Resolves `entry`, the top of `s`'s stack, answering from `answered`'s record and then
+/// `answers`. Returns the question it paused at, if it did: one its body asked, or a
+/// replacement effect's choice somewhere below it, which stops the run from any depth
+/// ([`crate::asking`]).
 ///
 /// Everything it does is the resolving spell's or ability's doing, down to its leaving the
 /// stack ([`Cause::Effect`](crate::event::Cause::Effect)). It opens the sink's scope as it
 /// takes the entry off the stack and returns with it open, however it ends: the caller
 /// closes it ([`unwind`]), so that the question comes back through no frame of its own.
+///
+/// A run with no answers recorded that cannot stop, as nearly every resolution of a game is,
+/// leaves the sink's record as it is between runs, closed and empty.
 fn run<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    mut answers: Option<&mut dyn Answers<L>>,
-    record: &[L::Index],
+    answers: Option<&mut dyn Answers<L>>,
+    answered: Run<'_, L>,
     entry: &StackEntry<L>,
     ability: Option<&'static Ability>,
 ) -> Result<Option<Decision<L>>, Full> {
+    if answered.open || !answered.record.is_empty() {
+        return run_answered(s, t, sink, answers, answered, entry, ability);
+    }
     s.take_top_of_stack();
     sink.enter_resolution(|| s.stack().len());
+    body(s, t, sink, answers, entry, ability)
+}
+
+/// [`run`] with a record to answer from or a question to stop at.
+#[inline(never)]
+fn run_answered<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    answers: Option<&mut dyn Answers<L>>,
+    answered: Run<'_, L>,
+    entry: &StackEntry<L>,
+    ability: Option<&'static Ability>,
+) -> Result<Option<Decision<L>>, Full> {
+    sink.asking.begin(answered.record, answered.open)?;
+    s.take_top_of_stack();
+    sink.enter_resolution(|| s.stack().len());
+    let scopes = sink.save_scopes();
+    let ran = body(s, t, sink, answers, entry, ability);
+    let stopped = sink.asking.end();
+    match ran {
+        Err(Full) if stopped.is_some() => {
+            sink.restore_scopes(scopes);
+            Ok(stopped)
+        }
+        ran => ran,
+    }
+}
+
+/// The body of [`run`], once the entry is off the stack.
+fn body<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    mut answers: Option<&mut dyn Answers<L>>,
+    entry: &StackEntry<L>,
+    ability: Option<&'static Ability>,
+) -> Result<Option<Decision<L>>, Full> {
     let face = t.def(entry.card()).face(entry.face());
     // CR 608.2b: "If all its targets, for every instance of the word "target," are now
     // illegal, the spell or ability doesn't resolve." One that chose no targets is not
@@ -241,7 +356,7 @@ fn run<L: Layout>(
         // An instant or sorcery without a spell ability does nothing.
         if let Some(ability) = ability {
             let answers = answers.as_mut().map(|a| &mut **a as &mut dyn Answers<L>);
-            let mut resolution = Resolution::new(entry.clone(), ability, legal, answers, record);
+            let mut resolution = Resolution::new(entry.clone(), ability, legal, answers);
             let mut game = Game::new(s, t, sink);
             crate::coverage::hit(ability);
             let flow = interpret::resolve(&mut game, &mut resolution);

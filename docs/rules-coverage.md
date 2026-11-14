@@ -421,6 +421,35 @@ Built so far (by-bajq.3.1):
   before each. Damage gets its proposal with prevention (by-bajq.3.9), the first
   replacement of damage.
 
+Built by by-bajq.3.2:
+
+- The choice of CR 616.1 is a decision of purpose `Replace`, asked as
+  `ChooseUpTo`: one candidate for each card whose effect could apply, and `Done`
+  for none of the optional ones. Dredge (`Rewrite::Dredge`) is the first
+  optional replacement and the first that works from a graveyard; the card table
+  says whether any card of a game has it (`Capability::Dredge`), and a draw then
+  looks in the drawing player's graveyard before each single draw.
+- The flag is `replace::may_ask`, found when a step ends or a resolution begins
+  rather than kept in the state: a dredge card in a graveyard with enough cards
+  in its owner's library. A game without dredge pays one AND. A dredge card that
+  reaches a graveyard in the same run that would offer it is not offered there
+  (the run cannot pause, so the optional replacement is declined); no card of
+  the pool makes that happen yet.
+- The answers of a run that may pause are in the sink (`beryl_kernel::asking`),
+  so a choice can stop the run from any depth: the code that asked returns
+  `Full`, and whoever opened the run tells a stop from a capacity running out. A
+  resolution's own questions and a replacement's choice below it share one
+  record. A step's turn-based actions are the other place a run opens: the step
+  begins on the state itself, so players see it begin, and the actions' pause is
+  `Pending::StepActions`; they run again from the start with the record. An
+  inline source answers each question as the run stops and the run starts again,
+  so rollouts with a live choice also run on the copy.
+- Two replacements of a move into different zones are still not a choice: no
+  card yet puts an object anywhere but exile, so `replace::destination` keeps
+  its `debug_assert`. Combat damage meets no replacement until damage has its
+  proposal (by-bajq.3.9); damage dealt as a combat damage step begins is that
+  step's turn-based action, so its choices will pause the same way.
+
 ### 4. Characteristics in every zone, and text
 
 - **Reading.** `query.rs` answers colors, types, keywords and "has this ability"

@@ -29,12 +29,10 @@ pub struct Resolution<'a, L: Layout = Small> {
     /// ability specifies targets, it checks whether the targets are still legal."
     pub(crate) legal: TargetPlaces,
     /// Where questions go: an inline source answers them, anything else pauses the
-    /// resolution.
+    /// resolution. The answers given so far, which a run takes first, are the sink's
+    /// ([`crate::asking`]): a replacement effect's choice below a body is answered from the
+    /// same record, in the order the questions come.
     answers: Option<&'a mut dyn Answers<L>>,
-    /// The answers given so far to this resolution's questions, and how many this run of it
-    /// has used.
-    record: &'a [L::Index],
-    used: usize,
     /// The question that paused this run.
     pub(crate) question: Option<Decision<L>>,
     /// For a mana ability that can produce more than one kind of mana, the kind its
@@ -45,22 +43,19 @@ pub struct Resolution<'a, L: Layout = Small> {
 }
 
 impl<'a, L: Layout> Resolution<'a, L> {
-    /// The resolution of `entry`, whose ability is `ability`, answering from `record` and
-    /// then `answers`.
+    /// The resolution of `entry`, whose ability is `ability`, answering from the sink's
+    /// record and then `answers`.
     pub(crate) fn new(
         entry: StackEntry<L>,
         ability: &'static Ability,
         legal: TargetPlaces,
         answers: Option<&'a mut dyn Answers<L>>,
-        record: &'a [L::Index],
     ) -> Self {
         Resolution {
             entry,
             ability,
             legal,
             answers,
-            record,
-            used: 0,
             question: None,
             mana: ManaColor::Colorless,
             offer: None,
@@ -75,7 +70,7 @@ impl<'a, L: Layout> Resolution<'a, L> {
             of: trigger.of,
             info: trigger.info,
         });
-        Resolution::new(entry, ability, TargetPlaces::NONE, None, &[])
+        Resolution::new(entry, ability, TargetPlaces::NONE, None)
     }
 
     /// The spell's card or the ability's source.
@@ -151,9 +146,8 @@ impl<'a, L: Layout> Resolution<'a, L> {
         if d.len() == 1 && game.state.profile().stops != Stops::Forced {
             return Ok(Choice(0));
         }
-        if let Some(&c) = self.record.get(self.used) {
-            self.used += 1;
-            return Ok(Choice(c.into()));
+        if let Some(c) = game.sink.asking.next() {
+            return Ok(c);
         }
         if let Some(answers) = self.answers.as_deref_mut()
             && answers.inline()

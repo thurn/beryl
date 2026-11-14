@@ -116,6 +116,9 @@ class Exporter:
         # Whether an earlier payment was left to XMage (`pay`), which may have tapped any
         # untapped source, so a later payment cannot tap one by name.
         self.payment_left_to_xmage = False
+        # How many targets of an "up to N" spec are still to come when fewer than N were
+        # announced: XMage asks for more until told to stop.
+        self.targets_short: int | None = None
         # The resolving object and kind of the last answer, for XMage's untap shortcut.
         self.last_answer: tuple[str | None, str] = (None, "")
         # After a yes to a `Cards.may_choose` ability's question: the command for the card chosen.
@@ -135,12 +138,25 @@ class Exporter:
     def player(self, seat: object) -> str:
         return "playerA" if seat == self.active else "playerB"
 
+    def most_targets(self, card: str) -> int:
+        """The most targets the first targeted ability of `card` may choose."""
+        for ability in self.cards.abilities(card):
+            targets = cast(list[Json], ability.get("targets", []))
+            if targets:
+                return cast(int, targets[0]["count"])
+        return 0
+
     def turn(self, turn: int) -> int:
         return turn - self.first_turn + 1
 
     def at(self, p: Position) -> str:
         """`turn, PhaseStep.STEP` for a position."""
-        return f"{self.turn(p.turn)}, PhaseStep.{STEPS[p.step]}"
+        turn = self.turn(p.turn)
+        # XMage plays a scenario from its turn 1, whose starting player skips the draw step
+        # (CR 103.8a), where Beryl's setup may start in a later turn whose draw step happens.
+        if turn == 1 and self.first_turn > 1 and STEPS[p.step] == "DRAW":
+            raise Unsupported("the draw step of XMage's first turn, which it skips")
+        return f"{turn}, PhaseStep.{STEPS[p.step]}"
 
     def emit(self, line: str) -> None:
         self.lines.append(line)
@@ -637,11 +653,20 @@ class Exporter:
                 self.emit(f"resolveTop({self.at(p)}, {who});")
         elif kind == "Target" and card is not None:
             self.emit(f"addTarget({who}, {java_string(self.object_name(card, p))});")
+            # XMage asks for "up to N" targets until N are chosen or it is told to stop.
+            if self.targets_short is not None:
+                self.targets_short -= 1
+                if self.targets_short == 0:
+                    self.targets_short = None
+                    self.emit(f"addTarget({who}, TestPlayer.TARGET_SKIP);")
         elif kind == "Target" and what == "Player":
             self.emit(f"addTarget({who}, {self.player(pick['player'])});")
         elif kind == "TargetCount" and what == "Number":
-            if pick["n"] == 0:
+            n = cast(int, pick["n"])
+            if n == 0:
                 self.emit(f"addTarget({who}, TestPlayer.TARGET_SKIP);")
+            elif source is not None and n < self.most_targets(source):
+                self.targets_short = n
         elif kind == "Attacker" and card is not None:
             self.attack(who, card, p)
         elif kind in ("Attacker", "Blocker") and what == "Done":
@@ -670,6 +695,10 @@ class Exporter:
         elif kind == "TriggerOrder" and card and self.cards.first_trigger_text(card):
             text = java_string(cast(str, self.cards.first_trigger_text(card)))
             self.emit(f"setChoice({who}, {text});")
+        elif action.get("purpose", p.purpose) == "replace":
+            # XMage asks whether to apply an optional replacement effect, as dredge, with a
+            # yes or no (`chooseUse`): Beryl's pick of the card is the yes.
+            self.emit(f"setChoice({who}, {'false' if card is None else 'true'});")
         elif (kind in CHOICE_KINDS or bending) and card is not None:
             name = java_string(self.object_name(card, p))
             self.emit(f"{self.choice_command(source, kind)}({who}, {name});")

@@ -130,9 +130,10 @@ impl<L: Layout> Casting<L> {
     }
 }
 
-/// A paused resolution (architecture §7.3): the answers its body has been given so far, and
-/// the question it stopped at. The committed state is still the state before the resolution
-/// began, except that it keeps known what the runs of the body showed.
+/// A paused resolution (architecture §7.3), or a step's paused turn-based actions
+/// ([`Pending::StepActions`]): the answers it has been given so far, and the question it
+/// stopped at. The committed state is still the state before the resolution or the actions
+/// began, except that it keeps known what the runs showed.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Resolving<L: Layout = Small> {
     pub record: L::Queue<L::Index, 32>,
@@ -184,6 +185,13 @@ pub enum Pending<L: Layout = Small> {
     Casting(Casting<L>),
     /// A body paused for an answer.
     Resolving(Resolving<L>),
+    /// The turn-based actions of the step that has just begun, paused at a replacement
+    /// effect's choice they asked ([CR 616.1]): a dredge offered for the draw step's draw.
+    /// They run again from the start with the answers recorded so far, as a paused
+    /// resolution runs its body again.
+    ///
+    /// [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
+    StepActions(Resolving<L>),
     /// A resolving spell or ability lets `player` cast this card now (CR 608.2g).
     CastOffer {
         object: ObjectRef<L>,
@@ -214,7 +222,10 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn ask(&mut self, question: Pending<L>) {
         debug_assert!(
-            !matches!(question, Pending::None | Pending::Resolving(_)),
+            !matches!(
+                question,
+                Pending::None | Pending::Resolving(_) | Pending::StepActions(_)
+            ),
             "a question to open"
         );
         self.pending = question;
@@ -242,8 +253,25 @@ impl<L: Layout> State<L> {
         });
     }
 
-    /// Settles the open question so that a resolution's body runs from its start. If the
-    /// resolution was paused, each player knows again what they knew as it began, which
+    /// Pauses the turn-based actions of the step at `question`, a replacement effect's
+    /// choice, with the answers given so far ([`Pending::StepActions`]). What each player
+    /// knew as the actions began is kept from its first pause, as
+    /// [`State::pause_resolution`] keeps it.
+    #[inline]
+    pub fn pause_step_actions(&mut self, record: L::Queue<L::Index, 32>, question: Decision<L>) {
+        let knowledge = match &self.pending {
+            Pending::StepActions(r) => r.knowledge.clone(),
+            _ => self.knowledge.clone(),
+        };
+        self.pending = Pending::StepActions(Resolving {
+            record,
+            question,
+            knowledge,
+        });
+    }
+
+    /// Settles the open question so that a resolution's body, or a step's turn-based
+    /// actions, run from their start. If it was paused, each player knows again what they knew as it began, which
     /// [`State::pause_resolution`] kept: a run asks its questions with the candidates the
     /// first run asked them with (architecture §7.3). Returns the cards some player knew
     /// beyond that, which the earlier runs revealed and chance must not count as revealed
@@ -251,7 +279,7 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn resume_resolution(&mut self) -> Bitboard<L::Slot> {
         let revealed = match &self.pending {
-            Pending::Resolving(r) => {
+            Pending::Resolving(r) | Pending::StepActions(r) => {
                 let knowledge = r.knowledge.clone();
                 self.restore_knowledge(knowledge)
             }
@@ -261,15 +289,16 @@ impl<L: Layout> State<L> {
         revealed
     }
 
-    /// Records the answer to a paused resolution's question, for its body to run again with.
+    /// Records the answer to a paused resolution's or step's question, for it to run again
+    /// with.
     ///
     /// # Panics
     ///
-    /// If no resolution is paused.
+    /// If neither is paused.
     #[inline]
     pub fn record_answer(&mut self, answer: L::Index) -> Result<(), Full> {
-        let Pending::Resolving(r) = &mut self.pending else {
-            unreachable!("a paused resolution");
+        let (Pending::Resolving(r) | Pending::StepActions(r)) = &mut self.pending else {
+            unreachable!("a paused resolution or step");
         };
         r.record.push(answer)
     }

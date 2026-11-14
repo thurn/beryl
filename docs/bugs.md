@@ -6,6 +6,18 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- A dredge offered for the draw step's draw was first asked over the upkeep: the
+  end of the upkeep and the whole draw step ran on a copy, and a pause discarded
+  the copy, so the committed state was still in the upkeep while the question,
+  replayed for the viewer, showed the draw step. The app would have shown a
+  decision in a step that had never been shown to begin. A session test that
+  plays fuzz decks found it before it landed. Fixed by beginning the step on the
+  state itself and running only its turn-based actions on the copy
+  (`Pending::StepActions`). Prevention: a run that can pause starts at the
+  latest point that is the same for every answer, so the committed state shows
+  everything the question is asked after; the session tests' check that each
+  step is seen as it begins holds any new pause to that.
+
 - A card manifested while a "nontoken creatures that weren't cast are exiled
   instead" replacement applied went to exile, but the opponent was made to
   forget it, so a card in a public zone was hidden from them and the engine's

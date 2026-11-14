@@ -14,6 +14,7 @@ use crate::effect::{
     Amount, CopyException, Effect, Found, LibraryOrder, LibraryPosition, Objects, Players,
     Recipients, Regeneration, Taken,
 };
+use crate::filter::Filter;
 use crate::ids::Zone;
 
 impl Ctx {
@@ -130,6 +131,12 @@ impl Ctx {
                 vec![self.acts(("sacrifice", "sacrifices"), objects, "")]
             }
             Effect::ReturnToHand(objects) => {
+                // "Return target land card from your graveyard to your hand": the cards a
+                // target in its controller's own graveyard names are theirs.
+                if self.own_graveyard_target(objects) {
+                    let clause = self.acts(("return", "returns"), objects, " to your hand");
+                    return vec![clause.replacen(" in your graveyard", " from your graveyard", 1)];
+                }
                 let to = owners(self.is_plural(objects), "hand");
                 vec![self.acts(("return", "returns"), objects, &format!(" to {to}"))]
             }
@@ -683,6 +690,23 @@ fn emblem_text(emblem: &'static CardDef) -> String {
         .map(|ability| ctx.paragraph(ability))
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+impl Ctx {
+    /// Whether `objects` is a target that must be a card in its chooser's own graveyard.
+    fn own_graveyard_target(&self, objects: Objects) -> bool {
+        let Objects::Target(spec) = objects else {
+            return false;
+        };
+        let yours = |filter: &Filter| matches!(filter, Filter::Whose(Players::You));
+        self.targets.get(spec.index()).is_some_and(|t| {
+            t.kind == crate::TargetKind::GraveyardCard
+                && match &t.filter {
+                    Filter::All(all) => all.iter().any(yours),
+                    filter => yours(filter),
+                }
+        })
+    }
 }
 
 /// "Its owner's hand", or "their owners' hands" for several (CR 400.3).

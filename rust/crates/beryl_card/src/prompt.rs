@@ -323,6 +323,15 @@ purposes! {
     /// by the active player ... have an earlier relative timestamp in the order of that
     /// player's choice". Asked only where the order could change the layer results.
     EnterOrder = "enter-order" => Pick,
+    /// The replacement effect to apply to an event, among several, or none of those that are
+    /// optional ([CR 616.1]): "the affected object's controller (or its owner if it has no
+    /// controller) or the affected player chooses one to apply". The candidates are the
+    /// cards whose effects they are, as a dredge card for a draw
+    /// ([CR 702.52a](https://yawgatog.com/resources/magic-rules/#R70252a)); declining is
+    /// the event as it would happen otherwise.
+    ///
+    /// [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
+    Replace = "replace" => Pick,
 }
 
 /// Which part of its prompt's shape one pick answers. Before this said so, the kind of the

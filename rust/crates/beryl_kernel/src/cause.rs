@@ -153,7 +153,7 @@ impl<L: Layout> Tag<L> {
 /// The causes of what the rules are doing now, the innermost last, and none while the game
 /// acts by itself. They nest: a mana ability activated to pay a cost an effect asks for sits
 /// inside that payment, inside the resolution (CR 608.2g).
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct Scopes<L: Layout> {
     open: Vec<Cause<L>>,
     /// The place of the spell or ability that is resolving, which the state has taken off

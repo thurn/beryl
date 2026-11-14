@@ -6,6 +6,7 @@
 
 use beryl_card::{Castings, CounterKind, FaceAbility, FaceIx, ManaColor, TurnStep, Zone};
 
+use crate::asking::Asking;
 use crate::bitboard::Bitboard;
 use crate::cause::{Cause, Scopes, StackIx, Tag};
 use crate::chance::Chance;
@@ -366,7 +367,14 @@ pub struct Sink<L: Layout = Small> {
     /// knew as the resolution began. The run starts from that knowledge, so it reveals them
     /// again; chance counts each as revealed already, once ([`crate::chance`]).
     pub revealed: Bitboard<L::Slot>,
+    /// The answers of a run that may pause at a question from any depth of the rules
+    /// ([`crate::asking`]).
+    pub asking: Asking<L>,
 }
+
+/// The scopes a sink had open, which [`Sink::save_scopes`] took.
+#[derive(Debug)]
+pub struct SavedScopes<L: Layout>(Option<Scopes<L>>);
 
 /// Counts of the engine's work below `next` and `apply`, moved into the scratch's
 /// `Counts` when they return.
@@ -465,6 +473,8 @@ impl<L: Layout> Sink<L> {
             work: self.work,
             chance: self.chance.clone(),
             revealed: crate::relayout::bits(self.revealed),
+            // Between the engine's calls no run is under way.
+            asking: Asking::default(),
         }
     }
 
@@ -590,6 +600,20 @@ impl<L: Layout> Sink<L> {
     /// Whether no scope or group is open, as between the engine's calls.
     pub fn is_idle(&self) -> bool {
         self.scopes.is_empty()
+    }
+
+    /// The scopes and groups open now, for a run that may stop at a question from any depth
+    /// ([`crate::asking`]) to come back to with [`Sink::restore_scopes`]: a stopped run
+    /// leaves open the scopes it entered on its way down. A sink that is off has none.
+    pub fn save_scopes(&self) -> SavedScopes<L> {
+        SavedScopes(self.on.then(|| self.scopes.clone()))
+    }
+
+    /// Closes every scope and group opened since `saved` was taken.
+    pub fn restore_scopes(&mut self, saved: SavedScopes<L>) {
+        if let SavedScopes(Some(scopes)) = saved {
+            self.scopes = scopes;
+        }
     }
 
     /// Notes that the entry now on top of the stack, which `entry` gives, arrived there.

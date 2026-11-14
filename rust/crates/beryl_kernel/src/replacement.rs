@@ -95,6 +95,10 @@ pub(crate) fn check(def: &CardDef) -> Result<Replaces, Unreplaced> {
             (Replaced::Enters { .. }, Rewrite::ToZone(instead)) if instead != Zone::Battlefield => {
                 mask = mask | ReplacementKind::Move;
             }
+            // Dredge works from a graveyard, not the battlefield, so it adds no kind to the
+            // mask the layers fold over permanents: the game's table says whether any card has
+            // it ([`crate::table::Capability::Dredge`]).
+            (Replaced::Draw(Players::You), Rewrite::Dredge(n)) if n > 0 => {}
             _ => return Err(Unreplaced::Rewrite),
         }
     }

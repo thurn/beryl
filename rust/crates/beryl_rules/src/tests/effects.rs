@@ -84,11 +84,14 @@ fn run(
         entry.targets.push(target).unwrap();
     }
     let legal = crate::resolve::legal_targets(s, t, &entry, ability);
-    let mut resolution = Resolution::new(entry, ability, legal, None, answers);
+    let mut resolution = Resolution::new(entry, ability, legal, None);
+    x.events.asking.begin(answers, false).unwrap();
     let mut game = Game::new(s, t, &mut x.events);
     let flow = crate::interpret::resolve(&mut game, &mut resolution);
     let question = resolution.question.take();
-    (question, crate::interpret::finish(&mut game, flow))
+    let finished = crate::interpret::finish(&mut game, flow);
+    x.events.asking.end();
+    (question, finished)
 }
 
 /// A game with a land of `p`'s on the battlefield to be the source of abilities.
