@@ -20,6 +20,13 @@ impl Ctx {
     /// What a resolving spell's continuous effect does, its parts in one sentence with its
     /// subject once ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a)).
     pub(super) fn modify(&mut self, objects: Objects, modifications: &[Modification]) -> String {
+        // "Gain control of target artifact" names its objects once, after the player: naming
+        // them first as a subject would make the clause say "it".
+        if let [Modification::Control] = modifications {
+            return self.clause(Players::You, ("gain", "gains"), |c| {
+                format!("control of {}", c.objects(objects))
+            });
+        }
         let plural = self.is_plural(objects);
         let who = self.objects(objects);
         let becoming = becomes_one_thing(modifications);
