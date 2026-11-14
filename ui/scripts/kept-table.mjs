@@ -5,7 +5,6 @@ import {
     ANSWERED,
     FIXTURE,
     ON,
-    card,
     cardRecords,
     center,
     check,
@@ -13,19 +12,25 @@ import {
     committed,
     drawn,
     load,
-    name,
     overlap,
     replied,
     slotOf,
     tokenField,
     tokenRun,
+    views,
 } from "./kept-harness.mjs";
 
-// Why no audit: which card the pointer's inspector shows, and its artist's line.
+// Why no audit: which card the pointer's inspector shows, and its artist's line. A permanent's:
+// a hand card is read where it rises, with no inspector.
 await check("hovering a card shows it whole, with its artist", async (page) => {
     await page.clock.runFor(2000);
-    await page.hover(card);
-    const { artist } = (await cardRecords(FIXTURE)).cards[name];
+    const permanent = views
+        .at(-2)
+        .objects.find(
+            (o) => o.zone === "battlefield" && !o.types.includes("land"),
+        );
+    await page.hover(`[data-slot="${permanent.slot}"]`);
+    const { artist } = (await cardRecords(FIXTURE)).cards[permanent.name];
     await page
         .locator(".inspect")
         .getByText(`Illustrated by ${artist}`)

@@ -273,10 +273,10 @@ function boxOf(resting: Resting): Box {
   };
 }
 
-/** What the inspector keeps clear of while `asked` is open: every permanent the prompt
- * marks, which the player may be about to pick, and the cards it holds up. None at a
- * priority, whose marks say only what may be used. */
-function keptClear(
+/** What the inspector, and a raised hand card, keep clear of while `asked` is open: every
+ * permanent the prompt marks, which the player may be about to pick, and the cards it holds
+ * up. None at a priority, whose marks say only what may be used. */
+export function keptClear(
   { prompt }: Asked,
   resting: ReadonlyMap<Name, Resting>,
 ): Box[] {
@@ -369,13 +369,16 @@ export function Controls({
       ? undefined
       : (resting.get(host)?.object?.name ?? undefined);
   const keeps = keptClear(asked, resting);
-  // The card the pointer is on, where it is shown alone: not one under the top of a pile.
+  // The card the pointer is on, where it is shown alone: not one under the top of a pile, nor
+  // one of your hand, which rises large enough to read in place (UI Conventions, "Hover
+  // inspection"), unless a click on it was refused, whose reason the inspector gives.
   const pointed = hovered === undefined ? undefined : resting.get(hovered);
   const inspected =
     pointed?.object &&
     pointed.dress.look !== "hidden" &&
     pointed.dress.look !== "pile" &&
-    pointed.dress.look !== "handling"
+    pointed.dress.look !== "handling" &&
+    (pointed.dress.look !== "hand" || refused?.slot === pointed.object.slot)
       ? pointed
       : undefined;
   return (

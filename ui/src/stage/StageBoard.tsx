@@ -19,12 +19,13 @@ import {
   useSyncExternalStore,
 } from "react";
 import { Corner, UndoButton } from "../game/Corner";
-import { RAISE } from "../game/placement";
+import { RAISE, raisedPose } from "../game/raise";
+import { STAGE } from "../game/perspective";
 import { useStageWidth } from "../game/Stage";
 import { linked } from "../game/zoneViews";
 import { Aim } from "./Aim.tsx";
 import { Entries, Shares, Ways } from "./Choose.tsx";
-import { Controls, Hud, useHovered } from "./Chrome.tsx";
+import { Controls, Hud, keptClear, useHovered } from "./Chrome.tsx";
 import type {
   ObjectView,
   PlayerView,
@@ -126,9 +127,22 @@ export function StageBoard({
   useLayoutEffect(() => {
     const lies = hovered === undefined ? undefined : resting.get(hovered);
     if (!surface || !lies || lies.dress.look !== "hand" || dimmed) return;
-    surface.raise(hovered, lies.pose.rotation, lies.dress.lift ?? RAISE.lift);
+    const raised = raisedPose(
+      lies.pose,
+      STAGE.height,
+      keptClear(asked, resting),
+    );
+    // In the node's own pixels, which its pose scales.
+    const scale = lies.pose.width / lies.dress.frame;
+    surface.raise(
+      hovered,
+      lies.pose.rotation,
+      (lies.dress.lift ?? RAISE.lift) / scale,
+      raised.rise / scale,
+      raised.scale,
+    );
     return () => surface.raise();
-  }, [surface, hovered, resting, dimmed]);
+  }, [surface, hovered, resting, dimmed, asked]);
   // What is attached to the permanent the pointer is on, and what that is attached to, wear
   // a ring.
   const links = useMemo(

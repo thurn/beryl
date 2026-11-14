@@ -110,19 +110,20 @@ export class DomSurface implements Surface {
   }
 
   /** Draws the card of the node `name` raised out of the fan it lies in, and no other node's:
-   * turned back upright from the `turn` degrees its pose leans it, `lift` straight up the
-   * screen and a little larger, about the middle of its top edge (stage.css). With no name,
+   * turned back upright from the `turn` degrees its pose leans it, `rise` straight up the
+   * screen and `scale` times as large, about the middle of its top edge (stage.css).
+   * The pointer keeps it while it is within `reach` above the card's top edge. With no name,
    * none is raised. The node itself stays where the stage has it, at its depth in the fan, so
    * nothing else moves, the pointer that found the card keeps it and finds its neighbors in
    * their strips; a copy draws it over the hand (raised.ts), easing up out of the fan and
    * back down into it. It is the one look of a node that follows the pointer and not the
    * clock, as a held card's pose does (pointer.ts). */
-  raise(name?: Name, turn = 0, lift = 0) {
+  raise(name?: Name, turn = 0, reach = 0, rise = 0, scale = 1) {
     for (const [other, node] of this.#nodes) {
       if (other === name) continue;
       if (!("raised" in node.dataset)) continue;
       delete node.dataset.raised;
-      for (const of of ["x", "y", "turn", "lift"]) {
+      for (const of of ["x", "y", "turn", "lift", "scale"]) {
         node.style.removeProperty(`--raise-${of}`);
       }
     }
@@ -135,10 +136,11 @@ export class DomSurface implements Surface {
     // Straight up the screen, in the turned node's own axes.
     const leaned = (turn * Math.PI) / 180;
     node.dataset.raised = "";
-    node.style.setProperty("--raise-x", `${-lift * Math.sin(leaned)}px`);
-    node.style.setProperty("--raise-y", `${-lift * Math.cos(leaned)}px`);
+    node.style.setProperty("--raise-x", `${-rise * Math.sin(leaned)}px`);
+    node.style.setProperty("--raise-y", `${-rise * Math.cos(leaned)}px`);
     node.style.setProperty("--raise-turn", `${-turn}deg`);
-    node.style.setProperty("--raise-lift", `${lift}px`);
+    node.style.setProperty("--raise-scale", String(scale));
+    node.style.setProperty("--raise-lift", `${reach}px`);
     this.#raised.show(node);
   }
 

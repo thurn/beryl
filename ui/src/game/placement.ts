@@ -25,11 +25,7 @@ export const HAND = {
   bias: 0.6,
 };
 
-/** How the hand card the pointer is over rises out of the fan: straightened, lifted and a
- * little enlarged about its top center. The card's node
- * stays where the fan puts it (stage/raised.ts), so hovering moves nothing else and the pointer keeps the card.
- * A card rises less where it would reach over your lands (`Placement.lift`). */
-export const RAISE = { lift: 70, scale: 1.06 };
+export { RAISE } from "./raise";
 
 /** How a placed card is drawn. */
 export type Look =

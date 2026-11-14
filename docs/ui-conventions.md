@@ -175,16 +175,22 @@ restore the old behavior.
   over 0.5 to 1 s; it does not fly or flip toward their hand (by-e0l). Seen for
   Remand on the opponent's spells (3sEoP_s4DQE 45:32.0, 3sEoP_s4DQE 56:19.5,
   TbrYIs2juCw 36:04.5).
-- **Hover inspection.** A hovered card in hand rises and grows in place to about
-  twice its size, easing up in a tenth of a second and back down into the fan in
-  about a sixth when the pointer leaves. A hovered permanent gets a separate
-  copy about three times its size, away from the cursor, with its keywords
-  explained. A card on the stack gets none (by-jxo1). Sizes estimated from
-  stills. The hand card's rise (70 to 130 ms) and drop (130 to 200 ms) were
-  filmed at 30 frames a second; each covers about half its way in the first
-  frame and slows as it arrives (jD7VqaT8VC8 45:26.77, SswBO8aOOgc 21:02.75,
-  IEXcjBn3BXk 18:06.62, jD7VqaT8VC8 45:27.5, SswBO8aOOgc 21:02.0, pE4XSNi-nZc
-  34:21.0, jD7VqaT8VC8 17:34.0).
+- **Hover inspection.** A hovered card in hand rises upright and grows in place,
+  with no inspector beside it: about 0.3 of the table's height wide, its foot on
+  the bottom edge, less where it would cover a card a prompt asks you to pick.
+  It may cover your own life orb. It eases up in a tenth of a second and back
+  down into the fan in about a sixth when the pointer leaves. A hovered
+  permanent gets a separate copy about three times its size, away from the
+  cursor, with its keywords explained. A card on the stack gets none (by-jxo1,
+  by-q2hn). The raised hand card is 0.29 to 0.31 of the table's height wide (1.8
+  times a card at rest in its hand), its top 0.58 of the way down, its foot just
+  inside the bottom edge, over the avatar where it lies there, and no preview
+  shows beside it; the permanent's copy is estimated from stills. The hand
+  card's rise (70 to 130 ms) and drop (130 to 200 ms) were filmed at 30 frames a
+  second; each covers about half its way in the first frame and slows as it
+  arrives (jD7VqaT8VC8 45:26.77, SswBO8aOOgc 21:02.75, IEXcjBn3BXk 18:06.62,
+  jD7VqaT8VC8 45:27.5, SswBO8aOOgc 21:02.0, pE4XSNi-nZc 34:21.0, jD7VqaT8VC8
+  17:34.0).
 - **The hand's fan.** Your hand's cards lie along one circle over the near edge,
   about 14 card widths across, on the desktop and the phone. A card's turn and
   how far it sinks follow its distance from the fan's middle, so a crowded hand

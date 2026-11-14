@@ -682,12 +682,13 @@
     {
       "kind": "settled",
       "name": "Hover inspection",
-      "rule": "A hovered card in hand rises and grows in place to about twice its size, easing up in a tenth of a second and back down into the fan in about a sixth when the pointer leaves. A hovered permanent gets a separate copy about three times its size, away from the cursor, with its keywords explained. A card on the stack gets none.",
+      "rule": "A hovered card in hand rises upright and grows in place, with no inspector beside it: about 0.3 of the table's height wide, its foot on the bottom edge, less where it would cover a card a prompt asks you to pick. It may cover your own life orb. It eases up in a tenth of a second and back down into the fan in about a sixth when the pointer leaves. A hovered permanent gets a separate copy about three times its size, away from the cursor, with its keywords explained. A card on the stack gets none.",
       "reports": [
-        "by-jxo1"
+        "by-jxo1",
+        "by-q2hn"
       ],
       "arena": {
-        "does": "Sizes estimated from stills. The hand card's rise (70 to 130 ms) and drop (130 to 200 ms) were filmed at 30 frames a second; each covers about half its way in the first frame and slows as it arrives.",
+        "does": "The raised hand card is 0.29 to 0.31 of the table's height wide (1.8 times a card at rest in its hand), its top 0.58 of the way down, its foot just inside the bottom edge, over the avatar where it lies there, and no preview shows beside it; the permanent's copy is estimated from stills. The hand card's rise (70 to 130 ms) and drop (130 to 200 ms) were filmed at 30 frames a second; each covers about half its way in the first frame and slows as it arrives.",
         "evidence": [
           {
             "recording": "jD7VqaT8VC8",

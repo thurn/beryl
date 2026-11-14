@@ -96,6 +96,21 @@ for (const [title, hand] of [
                     still[slot].box[1] - top > 40,
                     `the hovered hand card, slot ${slot}, rises ${still[slot].box[1] - top} px`,
                 );
+                // Raised whole, larger than in the fan, its foot on the window's bottom edge.
+                const raised = await page
+                    .locator(".stage-raised-copy > *")
+                    .first()
+                    .boundingBox();
+                const { height } = page.viewportSize();
+                assert.ok(
+                    raised.y + raised.height <= height &&
+                        raised.y + raised.height > height - 20,
+                    `the raised card's foot is at ${raised.y + raised.height}`,
+                );
+                assert.ok(
+                    raised.width > 1.3 * box.width,
+                    `the raised card is ${raised.width} wide, ${box.width} in the fan`,
+                );
             } else {
                 assert.equal(top, still[slot].box[1], "a field card stays");
             }
@@ -118,7 +133,14 @@ for (const [title, hand] of [
                 slot,
                 "the pointer is still over the hovered card",
             );
-            assert.ok(await page.$(".inspect"), "the card is inspected");
+            // A hand card is read where it rises; any other is shown whole beside the table.
+            assert.equal(
+                !!(await page.$(".inspect")),
+                !hand,
+                hand
+                    ? "no inspector beside a raised hand card"
+                    : "the card is inspected",
+            );
         },
     );
 }
@@ -403,12 +425,9 @@ await check(
         const counterspell = `[data-slot="${refusedCard.slot}"]`;
         const inspect = page.locator(".inspect");
         await page.hover(counterspell);
-        await page.getByLabel("Counterspell, inspected").waitFor();
-        assert.equal(
-            await inspect.locator(".inspect-refusal").count(),
-            0,
-            "hovering alone says nothing",
-        );
+        await page.clock.runFor(300);
+        // A hand card rises to be read in place, with no inspector beside it.
+        assert.equal(await inspect.count(), 0, "hovering alone says nothing");
         await page.click(counterspell);
         assert.equal(
             await inspect.locator(".inspect-refusal").innerText(),
@@ -418,9 +437,9 @@ await check(
         await page.hover(".turn-action");
         await page.clock.runFor(500);
         await page.hover(counterspell);
-        await page.getByLabel("Counterspell, inspected").waitFor();
+        await page.clock.runFor(300);
         assert.equal(
-            await inspect.locator(".inspect-refusal").count(),
+            await inspect.count(),
             0,
             "the reason goes once the pointer leaves",
         );
@@ -613,11 +632,21 @@ for (const fixture of ["greedy-turn-9", "attached-across", "crew"]) {
                 if (!point) continue;
                 await page.mouse.move(point.x, point.y);
                 await page.clock.runFor(400);
-                const shown = await inspectorOf(page, name);
+                // A hand card is read where it rises; any other in the inspector.
+                const hand = await page
+                    .locator(cards)
+                    .nth(i)
+                    .evaluate((e) => e.classList.contains("card-el-hand"));
+                const shown = hand
+                    ? await page
+                          .locator(".stage-raised-copy > *")
+                          .first()
+                          .boundingBox()
+                    : await inspectorOf(page, name);
                 for (const t of targets) {
                     assert.ok(
                         !overlap(shown, t),
-                        `${name}'s inspector covers the target ${t.what}`,
+                        `${name}, ${hand ? "raised" : "inspected"}, covers the target ${t.what}`,
                     );
                 }
             }

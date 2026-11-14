@@ -217,19 +217,31 @@ await check(
                     `hovering ${name} moved slot ${other} by ${moved}`,
                 );
             }
+            // A hand card is read where it rises, with no inspector; any other is inspected.
+            const raised = hand.some((h) => h.slot === slot);
             const inspect = page.locator(
                 `.inspect[aria-label="${name}, inspected"]`,
             );
             assert.equal(
                 await inspect.count(),
-                1,
-                `the pointer at ${name}'s middle inspects it`,
+                raised ? 0 : 1,
+                raised
+                    ? `${name} raised has no inspector beside it`
+                    : `the pointer at ${name}'s middle inspects it`,
             );
-            const shown = await inspect.boundingBox();
+            const shown = raised
+                ? await page
+                      .locator(".stage-raised-copy > *")
+                      .last()
+                      .boundingBox()
+                : await inspect.boundingBox();
             for (const f of forbidden) {
+                // A raised hand card stands over your own life orb, as Arena's covers your
+                // avatar (SswBO8aOOgc 21:02.65).
+                if (raised && f.what === "you") continue;
                 assert.ok(
                     !overlap(shown, f),
-                    `${name}'s inspector covers ${f.what}`,
+                    `${name}, ${raised ? "raised" : "inspected"}, covers ${f.what}`,
                 );
             }
         }
