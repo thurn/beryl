@@ -9,7 +9,12 @@ import type { ObjectView } from "../generated/protocol";
 import { CARD_ASPECT, CardBack } from "../components/Card";
 import { StackItem, StackMarks } from "../components/Stack";
 import { Look, type CardState } from "../game/Look";
-import { abilityText, BLANK, useAbilityFace } from "../game/faces";
+import {
+  abilityText,
+  BLANK,
+  useAbilityFace,
+  useMarkerFace,
+} from "../game/faces";
 import type { DomSurface } from "./dom.ts";
 import type { Dress, StackAbility } from "./layout.ts";
 import type { ScriptStage } from "./stage.ts";
@@ -81,6 +86,28 @@ const AbilityFace = memo(function AbilityFace({
   );
 });
 
+/** A manual stack item uses the source and text captured when it was placed. */
+export const MarkerFace = memo(function MarkerFace({
+  ability,
+  dress,
+}: {
+  ability: StackAbility;
+  dress: Dress;
+}) {
+  const face = useMarkerFace(ability.name, ability.manual?.face ?? null);
+  return (
+    <>
+      <StackItem
+        source={face}
+        text={ability.text ?? ""}
+        width={dress.frame}
+        showArt
+      />
+      <StackMarks controller={ability.controller} x={0} />
+    </>
+  );
+});
+
 /** How a layout's nodes are drawn: a card's face from its record and its dress, and an
  * ability's from its stack item and its source's record. Each is memoised, so that motion
  * draws none again. */
@@ -94,7 +121,15 @@ export interface Skin {
 }
 
 /** The desktop's faces: full cards and stack items. */
-export const DESKTOP: Skin = { Card: Face, Ability: AbilityFace };
+export const DESKTOP: Skin = {
+  Card: Face,
+  Ability: (props) =>
+    props.ability.manual ? (
+      <MarkerFace {...props} />
+    ) : (
+      <AbilityFace {...props} />
+    ),
+};
 
 /** Every node's face. A record's change shows at once: what moves is a step's track. */
 export function Faces({

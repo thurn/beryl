@@ -1,8 +1,8 @@
 //! Constructors for views that have no rules engine behind them.
 
 use super::{
-    Declaration, FaceName, Facing, ManaPool, ObjectId, ObjectView, PlayerState, PlayerView,
-    Players, Side, StackItem, Status, Step, StepSet, StopsSetting, TurnView, ZoneName,
+    Declaration, FaceName, Facing, ManaPool, ManualAbility, ObjectId, ObjectView, PlayerState,
+    PlayerView, Players, Side, StackItem, Status, Step, StepSet, StopsSetting, TurnView, ZoneName,
 };
 
 impl PlayerView {
@@ -101,7 +101,22 @@ impl ObjectView {
     }
 }
 
+/// What the viewer knows of a manual marker's source when it was placed.
+pub struct MarkerPreview {
+    pub name: String,
+    pub face: FaceName,
+    pub text: String,
+}
+
 impl StackItem {
+    /// The stable number assigned by a manual table, if this is one of its markers.
+    pub fn marker_id(&self) -> Option<u32> {
+        match self {
+            Self::Ability { manual, .. } => manual.map(|marker| marker.id),
+            Self::Spell { .. } => None,
+        }
+    }
+
     /// A spell on the stack with no rules-engine casting choices.
     pub fn spell(slot: ObjectId) -> Self {
         Self::Spell {
@@ -112,23 +127,29 @@ impl StackItem {
         }
     }
 
-    /// A manual ability marker, with its display text and source if the viewer knows them.
+    /// A manual marker. The adapter supplies an origin while the source is on the
+    /// table and a captured name, face, and text only when the viewer knows them.
     pub fn ability(
+        id: u32,
         source: Option<ObjectId>,
-        name: impl Into<String>,
-        text: Option<String>,
+        preview: Option<MarkerPreview>,
         controller: Side,
     ) -> Self {
+        let (name, face, text) = match preview {
+            Some(MarkerPreview { name, face, text }) => (name, Some(face), text),
+            None => (String::new(), None, String::new()),
+        };
         Self::Ability {
-            source,
+            source: source.filter(|_| face.is_some()),
             ability: 0,
             granted: false,
-            name: name.into(),
+            name,
             triggered: false,
             taps_to_pay: None,
             nth: 0,
-            text,
+            text: Some(text),
             controller,
+            manual: Some(ManualAbility { id, face }),
             targets: Vec::new(),
             x: 0,
         }

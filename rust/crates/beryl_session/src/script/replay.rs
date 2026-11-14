@@ -28,7 +28,13 @@ pub(super) fn number(table: &mut Table, reset: &Reset) -> Result<(), String> {
     let mut ids = reset.abilities.iter();
     for entry in &mut table.stack {
         if matches!(entry.item, StackItem::Ability { .. }) {
-            entry.id = Some(*ids.next().ok_or("a reset numbers too few abilities")?);
+            let id = *ids.next().ok_or("a reset numbers too few abilities")?;
+            if let Some(marker) = entry.item.marker_id()
+                && marker != id
+            {
+                return Err(format!("a reset numbers marker a{marker} as a{id}"));
+            }
+            entry.id = Some(id);
         }
     }
     match ids.next() {

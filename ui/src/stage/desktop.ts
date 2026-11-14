@@ -176,6 +176,7 @@ export function origin(
   item: StackAbility,
 ): number | undefined {
   if (item.source !== null) return item.source;
+  if (item.manual) return undefined;
   const index = view.players[item.controller].emblems.indexOf(item.name);
   return index < 0 ? undefined : emblemSlot(item.controller, index);
 }

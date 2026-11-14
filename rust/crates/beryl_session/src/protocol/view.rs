@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::{
-    CardType, Counter, DecisionView, Declaration, FaceName, GameEvent, Keyword, NamedCounter,
-    OutcomeView, RowName, Step, StopsSetting, TableView, ZoneName,
+    CardType, Counter, DecisionView, Declaration, FaceName, GameEvent, Keyword, ManualAbility,
+    NamedCounter, OutcomeView, RowName, Step, StopsSetting, TableView, ZoneName,
 };
 
 /// An object on the wire: its public slot, the number a [`Subject::Object`](crate::script::Subject) and an
@@ -373,6 +373,10 @@ pub enum StackItem {
         #[ts(optional)]
         text: Option<String>,
         controller: Side,
+        /// Present only on manual table markers.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        manual: Option<ManualAbility>,
         targets: Vec<TargetRef>,
         /// The announced value of X.
         x: u8,

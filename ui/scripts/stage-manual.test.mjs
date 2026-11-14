@@ -225,3 +225,47 @@ test("a manual hand fly moves the existing card toward its new place during the 
     assert.equal(made.pose(3).x, 0);
     assert.deepEqual(surface.log, ["make 1", "make 2", "make 3"]);
 });
+
+test("resetting with identical manual markers keeps their stage names", () => {
+    const first = 65_537;
+    const second = 65_538;
+    const marker = (id) => ({
+        kind: "ability",
+        source: null,
+        name: "Borrowed Token",
+        text: "Ability",
+        controller: "opponent",
+        manual: { id, face: "back" },
+        targets: [],
+    });
+    const before = view([], [], {
+        status: { kind: "free" },
+        stack: [marker(first), marker(second)],
+    });
+    const { stage: made, surface } = stage({ vanish: { duration: 200 } });
+    made.play(before, { reset: { abilities: [first, second] }, beats: [] });
+    made.play(before);
+    const firstMarker = made.shown.resting.get(`a${first}`);
+    assert.equal(firstMarker.source, undefined);
+    assert.equal(firstMarker.ability.controller, "opponent");
+    assert.equal(firstMarker.ability.manual.face, "back");
+    assert.ok(made.shown.resting.has(`a${second}`));
+
+    const act = {
+        verb: "vanish",
+        from: "stack",
+        why: "resolve",
+        subject: { kind: "ability", id: second },
+    };
+    const after = { ...before, stack: [marker(first)] };
+    made.play(after, { beats: [[{ act }]] });
+    made.settle();
+    assert.deepEqual(made.shown.table.stack, [marker(first)]);
+    assert.ok(made.shown.resting.has(`a${first}`));
+    assert.equal(made.pose(`a${second}`), null);
+    assert.deepEqual(surface.log, [
+        `make a${first}`,
+        `make a${second}`,
+        `remove a${second}`,
+    ]);
+});

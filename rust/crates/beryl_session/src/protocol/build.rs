@@ -503,6 +503,7 @@ pub(super) fn stack_item_cast<L: Layout>(
                 nth,
                 text: super::rules_text::unprinted(t, e.card(), e.face(), ability),
                 controller: side(obs, e.controller()),
+                manual: None,
                 targets,
                 x: e.x,
             }

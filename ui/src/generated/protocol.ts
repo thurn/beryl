@@ -358,7 +358,11 @@ nth: number,
  * paragraphs of its kind, as a token's or an emblem's with no text in the card store
  * is. None where the UI finds the `nth` paragraph.
  */
-text?: string, controller: Side, targets: Array<TargetRef>, 
+text?: string, controller: Side, 
+/**
+ * Present only on manual table markers.
+ */
+manual?: ManualAbility, targets: Array<TargetRef>, 
 /**
  * The announced value of X.
  */
@@ -657,6 +661,16 @@ export type Mark = "eligible" | "selected" | "suggested" | "paying" | "friendly-
 export type Arrow = "friendly-target" | "hostile-target" | "source" | "attack" | "block";
 
 export type FaceName = "front" | "back" | "down";
+
+export type ManualAbility = { 
+/**
+ * The number used by the marker's ability subject in animation scripts.
+ */
+id: number, 
+/**
+ * None when the viewer does not know the source.
+ */
+face: FaceName | null, };
 
 export type RowName = "creatures" | "others" | "lands";
 

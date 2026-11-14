@@ -13,7 +13,7 @@ import {
 } from "../components/Card";
 import { faceDownFace, marksOf, SCAN, useFace } from "../game/faces";
 import { useCardArt } from "../cards";
-import type { Skin } from "../stage/Faces.tsx";
+import { MarkerFace, type Skin } from "../stage/Faces.tsx";
 
 /** The em of the badges on a card `width` wide (phone.css `--badge`): a loyalty or a face-down
  * card's P/T numeral stays at least 12px however small the scan. */
@@ -124,6 +124,10 @@ export const PHONE: Skin = {
     );
   }),
   Ability: memo(function PhoneAbilityFace({ ability, dress }) {
-    return <AbilityScan name={ability.name} width={dress.frame} />;
+    return ability.manual ? (
+      <MarkerFace ability={ability} dress={dress} />
+    ) : (
+      <AbilityScan name={ability.name} width={dress.frame} />
+    );
   }),
 };

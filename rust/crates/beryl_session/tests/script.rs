@@ -70,6 +70,7 @@ fn trigger(source: Option<u16>, name: &str, targets: Vec<TargetRef>) -> StackIte
         nth: 0,
         text: None,
         controller: Side::Opponent,
+        manual: None,
         targets,
         x: 0,
     }

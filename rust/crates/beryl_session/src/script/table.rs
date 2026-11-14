@@ -84,7 +84,7 @@ impl Entry {
 }
 
 impl Table {
-    /// The table of `view`, its abilities not yet numbered. The stack is the view's with two
+    /// The table of `view`, with numbers for its manual markers. The stack is the view's with two
     /// differences, so that a spell is on the stack exactly while its card is, for both seats.
     /// On top is the spell or ability whose resolution asks the viewer, which a view leaves
     /// out of its list ([`crate::protocol::DecisionView::resolving`]) and keeps there while
@@ -97,7 +97,8 @@ impl Table {
 
     /// [`Table::of`], its abilities numbered as `names` says: the name of each entry of the
     /// view's stack, bottom first, and then of the spell or ability whose resolution asks the
-    /// viewer ([`super::Heard::stack`]). An ability `names` has no number for stays unnumbered.
+    /// viewer ([`super::Heard::stack`]). Manual markers carry their number in the view.
+    /// An engine ability `names` has no number for stays unnumbered.
     pub fn named(view: &PlayerView, names: &[Subject]) -> Table {
         let objects: BTreeMap<ObjectId, ObjectView> =
             view.objects.iter().map(|o| (o.slot, o.clone())).collect();
@@ -118,10 +119,10 @@ impl Table {
             })
             .map(|(at, item)| Entry {
                 item: item.clone(),
-                id: match (item, names.get(at)) {
+                id: item.marker_id().or_else(|| match (item, names.get(at)) {
                     (StackItem::Ability { .. }, Some(&Subject::Ability { id })) => Some(id),
                     _ => None,
-                },
+                }),
             })
             .collect();
         let manual = view.table.as_ref().map(|table| &table.orders);
@@ -143,8 +144,8 @@ impl Table {
         }
     }
 
-    /// Whether two tables show the same game: their abilities' numbers aside, which a view
-    /// does not have.
+    /// Whether two tables show the same game. Engine ability numbers are local to their
+    /// scripts. Manual marker numbers are part of their stack items.
     pub fn shows(&self, other: &Table) -> bool {
         self.objects == other.objects
             && self.battlefield == other.battlefield
@@ -225,6 +226,11 @@ impl Table {
                 (subject, _) => Err(format!("{subject} cannot vanish so")),
             },
             Act::Emerge { id, item } => {
+                if let Some(marker) = item.marker_id()
+                    && marker != *id
+                {
+                    return Err(format!("emerge names marker a{marker} as a{id}"));
+                }
                 self.stack.push(Entry {
                     item: item.clone(),
                     id: Some(*id),

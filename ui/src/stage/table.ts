@@ -105,8 +105,8 @@ export function resetSteps(script?: Script) {
 }
 
 /** A view whose table the steps so far have changed, and the numbers its scripts gave the
- * abilities on its stack, bottom first: a view's stack does not name them. The rest of the
- * view is the chrome of the last view taken whole. */
+ * abilities on its stack, bottom first. Manual markers carry their numbers in the view.
+ * The rest of the view is the chrome of the last view taken whole. */
 export interface Table {
   view: PlayerView;
   abilities: readonly number[];
@@ -238,7 +238,13 @@ export function tableOf(
   reset?: Reset,
   before?: Table,
 ): Table {
-  const table = { view: tabled(view), abilities: reset?.abilities ?? [] };
+  const shown = tabled(view);
+  const abilities =
+    reset?.abilities ??
+    shown.stack.flatMap((item) =>
+      item.kind === "ability" && item.manual ? [item.manual.id] : [],
+    );
+  const table = { view: shown, abilities };
   const held = (of: PlayerView) =>
     new Set(of.objects.filter((o) => o.zone === "hand").map((o) => o.slot));
   if (view.table || !before?.order?.size) return table;

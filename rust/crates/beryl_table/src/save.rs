@@ -144,11 +144,16 @@ fn read_save(mut reader: impl BufRead) -> Result<((Table, Log, Chance), u64), Sa
     }
     let header: Header<Table> = serde_json::from_slice(&line)?;
     let mut table = header.initial;
-    // A format-1 header written before markers captured their source may still
-    // have its source object. Entries below rebuild snapshots during replay.
+    // Older headers can only recover the controller and preview from the source
+    // they saved. If it is gone, use the saved active seat for the controller.
+    // The entries below still capture both values at creation during replay.
     for marker in table.markers.values_mut() {
+        let source = table.objects.get(&marker.source);
+        if marker.controller.is_none() {
+            marker.controller = Some(source.map_or(table.active, |object| object.controller));
+        }
         if marker.display_source.is_none() {
-            marker.display_source = table.objects.get(&marker.source).map(MarkerSource::capture);
+            marker.display_source = source.map(MarkerSource::capture);
         }
     }
     let mut log = Log::new(&table);

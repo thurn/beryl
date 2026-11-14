@@ -1,7 +1,7 @@
 use beryl_session::protocol::{
-    AssistsView, Counter, CounterView, ManaPool, ManualOrders, ManualPiles, NamedCounter, ObjectId,
-    ObjectView, PlayerState, PlayerView, PowerToughness, Side, TablePhase, TableView, Why,
-    ZoneName,
+    AssistsView, Counter, CounterView, FaceName, ManaPool, ManualOrders, ManualPiles,
+    MarkerPreview, NamedCounter, ObjectId, ObjectView, PlayerState, PlayerView, PowerToughness,
+    Side, StackItem, TablePhase, TableView, Why, ZoneName,
 };
 use beryl_session::script::{
     Act, Notice, Reset, Script, Step, Subject, Table, Tally, failure, replay,
@@ -262,4 +262,72 @@ fn manual_order_replays_without_renumbering_slots() {
     script.beats.remove(0);
     let mismatch = failure(&start, &script, &decoded).unwrap();
     assert!(mismatch.contains("table.you.manual.hand"), "{mismatch}");
+}
+
+#[test]
+fn manual_marker_replay_removes_only_the_named_marker_after_reset() {
+    // The manual id is wider than the engine's object slot and survives a wire round trip.
+    let (first, second) = (65_537, 65_538);
+    let marker = |id| {
+        StackItem::ability(
+            id,
+            None,
+            Some(MarkerPreview {
+                name: "Borrowed Token".into(),
+                face: FaceName::Back,
+                text: "Ability".into(),
+            }),
+            Side::Opponent,
+        )
+    };
+    let mut view = PlayerView::neutral(PlayerState::neutral(20), PlayerState::neutral(20));
+    view.stack = vec![marker(first), marker(second)];
+    let wire = serde_json::to_value(&view).unwrap();
+    assert_eq!(wire["stack"][1]["controller"], "opponent");
+    assert_eq!(wire["stack"][1]["source"], serde_json::Value::Null);
+    assert_eq!(wire["stack"][1]["manual"]["face"], "back");
+    assert_eq!(wire["stack"][1]["text"], "Ability");
+
+    let before = Table::of(&round_trip(&view));
+    let mut reset = Script {
+        reset: Some(Reset {
+            abilities: vec![first, second],
+        }),
+        beats: vec![],
+    };
+    assert_eq!(failure(&before, &reset, &view), None);
+    reset.reset.as_mut().unwrap().abilities.swap(0, 1);
+    assert!(
+        failure(&before, &reset, &view)
+            .unwrap()
+            .contains("numbers marker")
+    );
+
+    let vanish = |id| Script {
+        reset: None,
+        beats: vec![vec![Step {
+            act: Act::Vanish {
+                subject: Subject::Ability { id },
+                from: ZoneName::Stack,
+                why: Why::Resolve,
+                object: None,
+                at: None,
+            },
+            cause: None,
+        }]],
+    };
+    view.stack.pop();
+    assert_eq!(failure(&before, &vanish(second), &view), None);
+    assert!(failure(&before, &vanish(first), &view).is_some());
+    let after = replay(before, &vanish(second)).unwrap();
+    assert_eq!(after.stack[0].subject(), Subject::Ability { id: first });
+
+    let hidden = StackItem::ability(first, Some(ObjectId(1)), None, Side::Opponent);
+    let wire = serde_json::to_value(&hidden).unwrap();
+    assert_eq!(wire["manual"]["id"], first);
+    assert_eq!(wire["manual"]["face"], serde_json::Value::Null);
+    assert_eq!(wire["source"], serde_json::Value::Null);
+    assert_eq!(wire["name"], "");
+    assert_eq!(wire["text"], "");
+    assert_eq!(wire["controller"], "opponent");
 }

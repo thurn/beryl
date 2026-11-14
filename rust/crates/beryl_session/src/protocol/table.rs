@@ -34,6 +34,15 @@ impl FaceName {
     }
 }
 
+/// A manual marker's stable stack identity and its source face as seen when it was placed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ManualAbility {
+    /// The number used by the marker's ability subject in animation scripts.
+    pub id: u32,
+    /// None when the viewer does not know the source.
+    pub face: Option<FaceName>,
+}
+
 /// A counter with a player-supplied name.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]

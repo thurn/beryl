@@ -12,6 +12,7 @@ import { isNamelessToken } from "../cardRecords";
 import {
   tokenFace,
   useCardArt,
+  useCardBack,
   useNamelessTokenArt,
   type CardArt,
   type CardFace,
@@ -19,6 +20,7 @@ import {
 import type {
   AbilityRef,
   CounterView,
+  FaceName,
   Keyword,
   ObjectView,
 } from "../generated/protocol";
@@ -185,6 +187,19 @@ export function useAbilityFace(
 ): FrameFace {
   const art = useCardArt(name, undefined, SCAN);
   return art ? frameFace(source ?? blank, art) : unknownFace(name);
+}
+
+/** A manual marker's preview uses the captured face even if its source changes or leaves. */
+export function useMarkerFace(name: string, face: FaceName | null): FrameFace {
+  const index = face === "back" ? 1 : 0;
+  const art = useCardArt(
+    face === "down" || face === null ? "" : name,
+    index,
+    SCAN,
+  );
+  const back = useCardBack();
+  if (face === "down") return { ...unknownFace(name), scan: back };
+  return art ? frameFace(BLANK, art) : unknownFace(name);
 }
 
 /** The paragraph of a card's rules text that says one of its abilities: the `nth` triggered

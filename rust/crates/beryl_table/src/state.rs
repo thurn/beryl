@@ -113,6 +113,9 @@ impl Object {
 pub struct AbilityMarker {
     /// The original object id, used as an animation origin while it exists.
     pub source: ObjectId,
+    /// The source's controller when the marker was placed. Older save headers omit it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub controller: Option<Seat>,
     pub text: String,
     /// The source as it appeared when the ability went on the stack.
     #[serde(default, skip_serializing_if = "Option::is_none")]

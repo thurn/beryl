@@ -709,6 +709,7 @@ pub(super) fn marker(table: &Table, selection: &Selection, text: &str) -> Change
             let id = table.fresh_id(index).ok_or(Refusal::INVALID)?;
             let marker = AbilityMarker {
                 source: card.id,
+                controller: Some(card.controller),
                 text: text.to_owned(),
                 display_source: Some(MarkerSource::capture(card)),
             };

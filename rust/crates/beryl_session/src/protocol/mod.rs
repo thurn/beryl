@@ -23,6 +23,7 @@ pub(crate) use decide::*;
 pub use decision::*;
 pub use event::*;
 pub use names::*;
+pub use neutral::MarkerPreview;
 pub use outcome::*;
 pub use stops::*;
 pub use table::*;
