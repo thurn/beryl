@@ -160,7 +160,7 @@ impl Platform {
     }
 }
 
-/// What the app is.
+/// What the app is, including its wire fingerprint for multiplayer compatibility.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AppInfo {
@@ -170,6 +170,7 @@ pub struct AppInfo {
     pub platform: Platform,
     /// Running in the iOS Simulator or Android Emulator.
     pub simulator: bool,
+    pub wire: String,
 }
 
 /// A recorded stream of the app's messages, which the UI's fixture transport replays.

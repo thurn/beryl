@@ -27,6 +27,7 @@ pub mod script;
 mod session;
 mod sessions;
 pub mod typescript;
+mod wire_fingerprint;
 
 use std::fmt;
 use std::path::Path;
@@ -43,6 +44,20 @@ pub use protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, St
 pub use replay::ReplayFile;
 pub use session::THREAD as SESSION_THREAD;
 pub use sessions::{Sessions, StartRequest};
+
+/// A 64-bit FNV-1a hash of the generated TypeScript protocol, in lowercase hexadecimal.
+pub const WIRE_HASH: &str = env!("BERYL_WIRE_HASH");
+
+/// The wire fingerprint extended with additional definitions in order.
+pub fn wire_hash(extra: &[&str]) -> String {
+    let mut hash = u64::from_str_radix(WIRE_HASH, 16).expect("build.rs emits a hex hash");
+    for definition in extra {
+        // Prefix each definition with its length so the hash input preserves the boundaries.
+        hash = wire_fingerprint::extend(hash, &(definition.len() as u64).to_le_bytes());
+        hash = wire_fingerprint::extend(hash, definition.as_bytes());
+    }
+    format!("{hash:016x}")
+}
 
 /// How to start a game.
 #[derive(Clone, Debug, PartialEq, Eq)]

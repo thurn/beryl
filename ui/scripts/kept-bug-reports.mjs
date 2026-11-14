@@ -53,6 +53,7 @@ await check(
                         smoke: false,
                         platform: "linux",
                         simulator: false,
+                        wire: "",
                     },
                     list_agents: [],
                     report_bug: { id: "test" },

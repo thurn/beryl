@@ -71,6 +71,7 @@ async fn app_info(app: tauri::AppHandle) -> AppInfo {
             .await
             .device
             .is_some_and(|device| device.simulator),
+        wire: beryl_session::wire_hash(&[]),
     }
 }
 

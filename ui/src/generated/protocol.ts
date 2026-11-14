@@ -9,7 +9,7 @@ smoke: boolean, platform: Platform,
 /**
  * Running in the iOS Simulator or Android Emulator.
  */
-simulator: boolean, };
+simulator: boolean, wire: string, };
 
 export type Platform = "macos" | "windows" | "linux" | "ios" | "android";
 

@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use beryl_engine::card::Purpose;
 use beryl_session::prompt::{PartName, PromptView, ShapeBody, Words};
 use beryl_session::typescript::{PATH, typescript};
+use beryl_session::{WIRE_HASH, wire_hash};
 
 /// The checked-in file's path. It is read at run time: a test binary from the shared target
 /// directory may have been built in a worktree that no longer exists.
@@ -28,6 +29,19 @@ fn the_generated_typescript_is_current() {
         actual == expected,
         "{PATH} is stale: run `BERYL_UPDATE_TS=1 just test-rust -p beryl_session --test session typescript`"
     );
+}
+
+#[test]
+fn the_wire_hash_covers_additional_definitions() {
+    assert_eq!(WIRE_HASH.len(), 16);
+    assert!(WIRE_HASH.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    assert_eq!(wire_hash(&[]), WIRE_HASH);
+    assert_ne!(wire_hash(&["action"]), WIRE_HASH);
+    assert_ne!(
+        wire_hash(&["action", "lobby"]),
+        wire_hash(&["action", "log"])
+    );
+    assert_ne!(wire_hash(&["act", "ion"]), wire_hash(&["action"]));
 }
 
 /// A prompt's purpose goes on the wire as one of the string literals of the checked-in

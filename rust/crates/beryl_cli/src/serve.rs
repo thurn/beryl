@@ -187,6 +187,7 @@ pub(crate) fn invoke(sessions: &Sessions, command: &str, args: Value) -> Value {
             smoke: false,
             platform: Platform::current(),
             simulator: false,
+            wire: beryl_session::wire_hash(&[]),
         })),
         ipc::UI_READY => answer::<_, ()>(Ok(())),
         ipc::LIST_AGENTS => answer::<_, ()>(Ok(agents())),

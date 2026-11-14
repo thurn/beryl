@@ -418,6 +418,7 @@ const browserFixture: Fixture = {
         smoke: false,
         platform: "linux",
         simulator: false,
+        wire: "",
       },
     },
     { kind: "response", command: "ui_ready", value: null },
