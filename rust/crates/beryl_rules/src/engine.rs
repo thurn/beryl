@@ -689,7 +689,11 @@ fn play_land<L: Layout>(
     s.count_land_played(player);
     s.give_priority(player);
     let face = land_face(s, t, slot).expect("a land face");
-    match event::life_to_enter(t, s.copiable(slot).turned(face)) {
+    let entry = Entry {
+        face,
+        ..Entry::default()
+    };
+    match event::life_to_enter(s, t, slot, entry)? {
         Some(life) if s.player(player).life() >= i16::from(life) => {
             s.ask(Pending::EnterPayingLife { slot, life });
             Ok(())

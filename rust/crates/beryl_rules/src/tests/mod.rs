@@ -9,6 +9,7 @@ mod casting;
 mod combat;
 mod delayed;
 mod effects;
+mod entering;
 mod entering_together;
 mod events;
 mod game;

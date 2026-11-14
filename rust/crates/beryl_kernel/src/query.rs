@@ -367,6 +367,19 @@ impl<L: Layout> State<L> {
         !self.flags.abilities_lost || self.keeps(slot, ability)
     }
 
+    /// Whether some continuous effect in force removes abilities, whether or not it removes
+    /// any from a permanent now: the flag the layers store for [`State::has_ability`]. A
+    /// reader that asks what an object would have on entering the battlefield
+    /// ([CR 614.12]) need look no further when it is false: "check the characteristics of
+    /// the permanent as it would exist on the battlefield, taking into account ...
+    /// continuous effects that already exist and would apply to the permanent."
+    ///
+    /// [CR 614.12]: https://yawgatog.com/resources/magic-rules/#R61412
+    #[inline]
+    pub fn abilities_may_be_lost(&self) -> bool {
+        self.flags.abilities_lost
+    }
+
     /// Whether the object in `slot` has every ability of its face up: [`State::has_ability`]
     /// asked of all of them at once, for a reader whose card table's facts stand for the
     /// whole face, as the mana solver's do.

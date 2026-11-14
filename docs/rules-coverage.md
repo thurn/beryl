@@ -302,11 +302,19 @@ then counters (7c), then the rules static abilities change (CR 613.11)
   613.7m), which is still the order they move in; a decision is needed only when
   two of them have effects in one layer that the dependency search's prefilter
   says could interact.
-- **As it would exist** (CR 614.12). `layers::as_it_would_exist` runs the
-  recompute with one entering object added as a row of scratch memory. The
-  replacement pipeline calls it only for an object that has, or meets, a
-  replacement of its entering. Under Blood Moon a land that would ask for life
-  as it enters is a Mountain with no such ability, and enters untapped.
+- **As it would exist** (CR 614.12). `layers::entering::as_it_would_exist`
+  copies the state, moves the entering object onto the battlefield in the copy
+  as its entry says, and runs the recompute there, so every effect finds the
+  object as it finds any permanent and the real state is never changed. The
+  replacement pipeline (`event::enter_replacements`, `event::life_to_enter`)
+  asks for it only for an object whose face has a replacement of its entering,
+  and only when an effect in force removes abilities or the face has a static
+  ability of its own (`layers::entering::lost_entering`), so other games pay one
+  flag test. Under Blood Moon a land that would ask for life as it enters is a
+  Mountain with no such ability, and enters untapped. A recompute over the
+  battlefield's rows plus one scratch row was the first design; it would have
+  needed every filter and layer read to know about a row that is not a
+  permanent, and the copy costs nothing in a game that never asks.
 - **What makes the cache stale.** `layers::counters_matter` is one case of a
   general fact: a characteristic-defining ability reads something no layer
   writes, as Tarmogoyf reads the graveyards. Each card's abilities declare such

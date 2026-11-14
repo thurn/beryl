@@ -40,5 +40,19 @@
     "scenario": "Blood Artist dying with two others triggers three times",
     "cr": "CR 603.3b (https://yawgatog.com/resources/magic-rules/#R6033b): \"If multiple abilities have triggered since the last time a player received priority, the abilities are placed on the stack in a two-part process. First, each player, in APNAP order, puts each triggered ability they control with a trigger condition that isn't another ability triggering on the stack in any order they choose. (See rule 101.4.) Second, each player, in APNAP order, puts all remaining triggered abilities they control on the stack in any order they choose. Then the game once again checks for and performs state-based actions until none are performed, then abilities that triggered during this process go on the stack. This process repeats until no new state-based actions are performed and no abilities trigger. Then the appropriate player gets priority.\"",
     "reason": "Forge's harness asks for the order of all three simultaneous triggers in one decision, where Beryl and XMage ask for one trigger at a time, so the second scripted order answer is never consumed"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Blood Moon",
+    "scenario": "a land that asks for life as it enters enters untapped",
+    "cr": "CR 614.12 (https://yawgatog.com/resources/magic-rules/#R61412): \"Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c-d.) Such effects may come from the permanent itself if they affect only that permanent (as opposed to a general subset of permanents that includes it). They may also come from other sources. To determine which replacement effects apply and how they apply, check the characteristics of the permanent as it would exist on the battlefield, taking into account replacement effects that have already modified how it enters the battlefield (see rule 616.1), continuous effects from the permanent's own static abilities that would apply to it once it's on the battlefield, and continuous effects that already exist and would apply to the permanent.\"",
+    "reason": "XMage applies a nonbasic land's printed entering replacement under Blood Moon; CR 614.12 checks the land as it would exist on the battlefield, a Mountain with no such ability (Blood Moon ruling 2020-08-07). Forge agrees with Beryl."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Blood Moon",
+    "scenario": "a land that enters tapped unless few lands enters untapped",
+    "cr": "CR 614.12 (https://yawgatog.com/resources/magic-rules/#R61412): \"Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c-d.) Such effects may come from the permanent itself if they affect only that permanent (as opposed to a general subset of permanents that includes it). They may also come from other sources. To determine which replacement effects apply and how they apply, check the characteristics of the permanent as it would exist on the battlefield, taking into account replacement effects that have already modified how it enters the battlefield (see rule 616.1), continuous effects from the permanent's own static abilities that would apply to it once it's on the battlefield, and continuous effects that already exist and would apply to the permanent.\"",
+    "reason": "XMage applies a nonbasic land's printed entering replacement under Blood Moon; CR 614.12 checks the land as it would exist on the battlefield, a Mountain with no such ability (Blood Moon ruling 2020-08-07). Forge agrees with Beryl."
   }
 ]

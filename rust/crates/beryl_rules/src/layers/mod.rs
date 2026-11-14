@@ -3,8 +3,10 @@
 
 mod apply;
 mod dependency;
+pub(crate) mod entering;
 mod together;
 
+pub(crate) use entering::lost_entering;
 pub(crate) use together::order_may_matter;
 
 use beryl_kernel::derive::Rederive;

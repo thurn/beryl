@@ -119,5 +119,26 @@ pub mod scenarios {
                 ME.controls(BLOOD_MOON, 1),
                 ME.deciding(DecisionKind::Priority, 1),
             ]),
+        // CR 614.12: an entering replacement looks at the land "as it would exist on the
+        // battlefield". Soporific Springs would be a Mountain with no ability of its text, so
+        // it asks for no life and enters untapped.
+        Scenario::new("a land that asks for life as it enters enters untapped")
+            .battlefield(P0, &[BLOOD_MOON])
+            .hand(P0, &[Card::SinkIntoStupor])
+            .actions(&[
+                ME.plays(Card::SinkIntoStupor),
+                ME.life(20),
+                ME.tapped("Soporific Springs", 0),
+            ]),
+        // Seachrome Coast would enter tapped with three other lands, but as a Mountain it has
+        // no such ability.
+        Scenario::new("a land that enters tapped unless few lands enters untapped")
+            .interaction(&[Card::SeachromeCoast])
+            .battlefield(P0, &[BLOOD_MOON, Card::Plains, Card::Plains, Card::Plains])
+            .hand(P0, &[Card::SeachromeCoast])
+            .actions(&[
+                ME.plays(Card::SeachromeCoast),
+                ME.tapped(Card::SeachromeCoast, 0),
+            ]),
     ];
 }

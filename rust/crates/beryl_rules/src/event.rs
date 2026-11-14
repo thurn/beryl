@@ -24,8 +24,9 @@ use crate::ids::Seat;
 use crate::layers;
 use crate::layout::{Layout, Queue, Small};
 use crate::life;
-use crate::query::Copiable;
-use crate::state::{CounterKind, Memo, MoveReplacement, ObjectRef, State, Tracker, Zone};
+use crate::state::{
+    AbilityMask, CounterKind, Memo, MoveReplacement, ObjectRef, State, Tracker, Zone,
+};
 use crate::table::GameTable;
 use crate::trigger;
 use crate::zone::Place;
@@ -58,7 +59,7 @@ pub(crate) struct Entry<L: Layout = Small> {
 /// Gives the permanent that just entered in `slot` what it enters with, has it remember
 /// what its spell was cast with, and notes that it entered this turn, in a game with a card
 /// that reads that.
-fn arrive<L: Layout>(
+pub(crate) fn arrive<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     slot: L::Slot,
@@ -180,7 +181,7 @@ pub(crate) fn move_batch_to<L: Layout>(
         }
         let dest = destination(s, slot, to);
         let entry = if dest == Zone::Battlefield {
-            enter_replacements(s, t, slot, entry)
+            enter_replacements(s, t, slot, entry)?
         } else {
             entry
         };
@@ -282,8 +283,10 @@ fn destination<L: Layout>(s: &State<L>, slot: L::Slot, to: Zone) -> Zone {
 
 /// Applies the permanent's own replacement effects that modify how it enters (CR 614.12):
 /// they "check the characteristics of the permanent as it would exist on the battlefield".
-/// They are self-replacement effects of a kind that never conflict, so each applies in
-/// turn. Then the planeswalker's intrinsic one
+/// One it would not have there does not apply ([`layers::lost_entering`]): under an effect
+/// that makes nonbasic lands Mountains, a land that would enter tapped unless its controller
+/// paid life enters untapped, and no life is paid. They are self-replacement effects of a
+/// kind that never conflict, so each applies in turn. Then the planeswalker's intrinsic one
 /// ([CR 306.5b](https://yawgatog.com/resources/magic-rules/#R3065b)): "A planeswalker has the
 /// intrinsic ability 'This permanent enters with a number of loyalty counters on it equal to
 /// its printed loyalty number.'"
@@ -292,18 +295,28 @@ fn enter_replacements<L: Layout>(
     t: &GameTable,
     slot: L::Slot,
     mut entry: Entry<L>,
-) -> Entry<L> {
+) -> Result<Entry<L>, Full> {
     let o = s.object(slot);
     let face = s.copiable(slot).turned(entry.face).face(t);
     let controller = entry.controller.unwrap_or(o.owner());
+    // Found at the first replacement of entering: most permanents have none.
+    let mut lost = None;
+    let mut pays_life = false;
     for (n, ability) in face.abilities.iter().enumerate() {
         if ability.kind() != AbilityKind::Replacement
-            || !s.has_ability(slot, AbilityIx::new(n as u8))
+            // Not about entering: the draw machinery reads it.
+            || matches!(ability.replacement(), Replacement::None | Replacement::WouldDraw)
         {
             continue;
         }
+        let lost = match lost {
+            Some(lost) => lost,
+            None => *lost.insert(layers::lost_entering(s, t, slot, entry, face)?),
+        };
+        if lost.contains(AbilityIx::new(n as u8)) {
+            continue;
+        }
         match ability.replacement() {
-            // Not about entering: the draw machinery reads it.
             Replacement::None | Replacement::WouldDraw => continue,
             Replacement::EntersTapped => entry.tapped = true,
             Replacement::EntersTappedUnlessFewLands(n) => {
@@ -321,6 +334,7 @@ fn enter_replacements<L: Layout>(
                 }
             }
             Replacement::EntersTappedUnlessPayLife(_) => {
+                pays_life = entry.pay_life;
                 if !entry.pay_life {
                     entry.tapped = true;
                 }
@@ -328,10 +342,12 @@ fn enter_replacements<L: Layout>(
         }
         crate::coverage::hit(ability);
     }
+    // Life is paid only to an ability that applied.
+    entry.pay_life = pays_life;
     if let Some(loyalty) = face.loyalty {
         entry.counters = Some((CounterKind::Loyalty, loyalty));
     }
-    entry
+    Ok(entry)
 }
 
 /// Pays the life an "unless you pay N life" entering replacement asks for
@@ -365,16 +381,31 @@ fn pay_life_to_enter<L: Layout>(
     Ok(())
 }
 
-/// The life an entering replacement of the face asks for, if any.
-pub(crate) fn life_to_enter<L: Layout>(t: &GameTable, entering: Copiable<L>) -> Option<u8> {
-    entering
-        .face(t)
-        .abilities
-        .iter()
-        .find_map(|a| match a.replacement() {
-            Replacement::EntersTappedUnlessPayLife(n) => Some(n),
-            _ => None,
-        })
+/// The life an entering replacement of the object in `slot` asks for as it enters as
+/// `entry` says, if any: none when the object would not have that ability on the
+/// battlefield ([`layers::lost_entering`], CR 614.12).
+///
+/// [`Full`] if finding what it would have ran out of room.
+pub(crate) fn life_to_enter<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    entry: Entry<L>,
+) -> Result<Option<u8>, Full> {
+    let face = s.copiable(slot).turned(entry.face).face(t);
+    let Some((n, life)) =
+        face.abilities
+            .iter()
+            .enumerate()
+            .find_map(|(n, a)| match a.replacement() {
+                Replacement::EntersTappedUnlessPayLife(life) => Some((n, life)),
+                _ => None,
+            })
+    else {
+        return Ok(None);
+    };
+    let lost = layers::lost_entering(s, t, slot, entry, face)?;
+    Ok((!lost.contains(AbilityIx::new(n as u8))).then_some(life))
 }
 
 /// Taps or untaps a permanent.
