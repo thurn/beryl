@@ -220,11 +220,17 @@ function loop(from: Reach, to: Reach): [Point, Point, Point] {
  * the table's height. It sags no lower than its ends need, though: a curve that hung to 0.9
  * of the table between a source and a stack card close together across it was a tall loop
  * down through the buttons and back, and one from a planeswalker on the far row just left of
- * the stack card swung down to the bottom of the screen. So its lowest point lies below the lower
- * of its two ends by `SAG_DEEP` of how far apart they are across (half a card at least), and
- * no lower than `sag`. A
- * source that lies under the stack card, below its bottom edge, has a short curve from the
- * bottom of the stack card down into the top of the source instead. */
+ * the stack card swung down to the bottom of the screen. So its lowest point lies below the
+ * lower of its two ends by `SAG_DEEP` of how far apart they are across (half a card at
+ * least), and no lower than `sag`.
+ *
+ * Arena's stack stands beside the battlefield, so its line never passes over the stack card;
+ * Beryl's stack card stands over the right end of both rows, so a source can lie right above
+ * or right below it. A source that lies under the stack card, below its bottom edge, has a
+ * short curve from the bottom of the stack card down into the top of the source. A source
+ * above the stack card whose hanging curve would cross the stack card (a planeswalker on the
+ * opponent's row over it, whose line fell from its bottom straight down across the ability's
+ * text) has a short curve from the top of the stack card up into the bottom of the source. */
 function hung(from: Reach, source: Reach, sag: number): [Point, Point, Point] {
   const edge = (end: Reach, down: 1 | -1) => ({
     x: end.middle.x,
@@ -232,12 +238,24 @@ function hung(from: Reach, source: Reach, sag: number): [Point, Point, Point] {
   });
   const a = edge(from, 1);
   const top = edge(source, -1);
-  const across = Math.abs(a.x - top.x);
-  if (top.y >= a.y && across <= from.half.x + source.half.x) {
-    const bow = SAG_BOW * (top.y - a.y);
-    return [a, { x: (a.x + top.x) / 2 + bow, y: (a.y + top.y) / 2 }, top];
-  }
   const b = edge(source, 1);
+  const across = Math.abs(a.x - top.x);
+  // A short curve that bows `side` of the way between its ends.
+  const short = (
+    start: Point,
+    end: Point,
+    side: number,
+  ): [Point, Point, Point] => [
+    start,
+    {
+      x: (start.x + end.x) / 2 + side * SAG_BOW * Math.abs(end.y - start.y),
+      y: (start.y + end.y) / 2,
+    },
+    end,
+  ];
+  if (top.y >= a.y && across <= from.half.x + source.half.x) {
+    return short(a, top, 1);
+  }
   const deepest = Math.min(
     sag,
     Math.max(a.y, b.y) + Math.max(source.half.y / 2, SAG_DEEP * across),
@@ -245,17 +263,43 @@ function hung(from: Reach, source: Reach, sag: number): [Point, Point, Point] {
   // A curve from `a` round `c` to `b` is lowest at (a.y b.y - c.y²) / (a.y + b.y - 2 c.y),
   // which is `deepest` where `c` lies this low.
   const low = deepest + Math.sqrt((deepest - a.y) * (deepest - b.y));
-  return [a, { x: b.x + SAG_ALONG * (a.x - b.x), y: low }, b];
+  const hanging: [Point, Point, Point] = [
+    a,
+    { x: b.x + SAG_ALONG * (a.x - b.x), y: low },
+    b,
+  ];
+  const crown = edge(from, -1);
+  return b.y <= crown.y && crosses(hanging, from)
+    ? short(crown, b, b.x < crown.x ? -1 : 1)
+    : hanging;
 }
 /** How much lower than its lower end the line to a source sags for each pixel its ends lie
  * apart across the table: both of Arena's whole ones, from sources 628 and 787 stage pixels
  * across from the stack card, sag about 0.32 of that below the stack card's bottom, to 0.9
  * of the table's height. */
 const SAG_DEEP = 0.32;
-/** How far to one side the short line into a source that lies under the stack card bows,
- * as a share of how far it falls. */
+/** How far to one side the short line into a source that lies right under or above the
+ * stack card bows, as a share of how far it falls or rises: to the right going down, and
+ * toward the source going up. */
 const SAG_BOW = 0.25;
 const SAG_ALONG = 0.225;
+
+/** Whether the curve from `a` round `c` to `b` passes over the card `end` anywhere between
+ * its own two ends, sampled at `CROSS_STEPS` points along it. */
+function crosses([a, c, b]: [Point, Point, Point], end: Reach): boolean {
+  for (let i = 1; i < CROSS_STEPS; i++) {
+    const t = i / CROSS_STEPS;
+    const p = mix(mix(a, c, t), mix(c, b, t), t);
+    if (
+      Math.abs(p.x - end.middle.x) < end.half.x &&
+      Math.abs(p.y - end.middle.y) < end.half.y
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+const CROSS_STEPS = 64;
 
 /** The first `t` of the curve from `a` round `c` to `b`. */
 const part = (

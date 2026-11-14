@@ -212,6 +212,52 @@ test("the line to a source right under the stack card is a short curve into the 
     );
 });
 
+/** Whether the path `d`, a curve from its first point round its second to its third,
+ * passes over the card `end` anywhere between its own ends. */
+const crossesCard = (d, end) => {
+    const [ax, ay, cx, cy, bx, by] = numbers(d);
+    for (let t = 0.01; t < 0.99; t += 0.01) {
+        const x = (1 - t) ** 2 * ax + 2 * t * (1 - t) * cx + t ** 2 * bx;
+        const y = (1 - t) ** 2 * ay + 2 * t * (1 - t) * cy + t ** 2 * by;
+        if (
+            Math.abs(x - end.middle.x) < end.half.x &&
+            Math.abs(y - end.middle.y) < end.half.y
+        ) {
+            return true;
+        }
+    }
+    return false;
+};
+
+test("the line to a source on the far row above the stack card never crosses the stack card", () => {
+    // The opponent's planeswalker on their row right above the stack card, as in a player's
+    // report: its line fell from the planeswalker's bottom straight down across the ability's
+    // text and came back up into its bottom. It goes up from the top of the stack card into
+    // the bottom of the source instead.
+    const ability = card(1400, 300);
+    const source = card(1360, 40, 1);
+    const shape = shapeOf("source", ability, source, 1, 810);
+    assert.deepEqual(
+        shape.from,
+        { x: 1450, y: 300 },
+        "out of the ability's top",
+    );
+    assert.deepEqual(shape.to, { x: 1410, y: 180 }, "into the source's bottom");
+    assert.ok(!crossesCard(shape.d, ability), `off the card: ${shape.d}`);
+    // Nor does one from a source above and a little to the side of the stack card, whose
+    // hanging curve would cut across the stack card's corner, nor one from either side at any
+    // height on the far row.
+    for (let x = 1000; x <= 1800; x += 10) {
+        for (const y of [0, 40, 100]) {
+            const beside = shapeOf("source", ability, card(x, y, 1), 1, 810);
+            assert.ok(
+                !crossesCard(beside.d, ability),
+                `from a source at ${x}, ${y}: ${beside.d}`,
+            );
+        }
+    }
+});
+
 const point = (span, arrow, from, to) => ({
     act: { verb: "point", span, arrow, from, to },
 });

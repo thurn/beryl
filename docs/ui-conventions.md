@@ -660,7 +660,10 @@ stage to; Arena's measured instances are kept beside them as reference in
   between ends far apart across it, and only a little below the lower end
   between ends close together across it, about a third as far below it as they
   lie apart (by-olby); to a source that lies right under its ability it goes
-  down from the bottom of the ability into the top of the source; a phone's arcs
+  down from the bottom of the ability into the top of the source, and to one
+  above it whose hanging line would cross the ability (a planeswalker on the
+  opponent's row over the stack) it goes up from the top of the ability into the
+  bottom of the source, never over the ability's face (by-52mf); a phone's arcs
   across between them. A line of combat is a straight beam that narrows to a
   dart, from the middle of its creature to the middle of what it points at, over
   both. Each is one line for as long as it lasts, drawn every moment from where
