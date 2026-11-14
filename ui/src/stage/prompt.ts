@@ -51,7 +51,7 @@ import type {
   Purpose,
 } from "../generated/protocol";
 import { isRevealed, type Name, type Point } from "./layout.ts";
-import type { Drop, PointerEvents } from "./pointer.ts";
+import type { Drop, PointerEvents, PointerKeys } from "./pointer.ts";
 import { keyOf, namedBy, type SpanAct } from "./spans.ts";
 import type { ScriptStage } from "./stage.ts";
 import {
@@ -377,7 +377,7 @@ export class Prompts {
         this.#lifted(name);
         this.#tell((to) => to.lift?.(name));
       },
-      click: (name, at) => this.#clicked(name, at),
+      click: (name, at, keys) => this.#clicked(name, at, keys),
       drop: (drop) => this.#dropped(drop),
     });
   }
@@ -579,8 +579,8 @@ export class Prompts {
     else queueMicrotask(() => this.#carried || this.#mark());
   }
 
-  #clicked(name: Name, at: Point) {
-    const elsewhere = () => this.#tell((to) => to.click?.(name, at));
+  #clicked(name: Name, at: Point, keys: PointerKeys) {
+    const elsewhere = () => this.#tell((to) => to.click?.(name, at, keys));
     // A face in the Revealed Cards pile is no prompt's: a click on it opens the pile.
     if (isRevealed(name)) return elsewhere();
     // A card held up is the prompt's to click, wherever it came from.

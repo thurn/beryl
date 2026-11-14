@@ -19,7 +19,7 @@
 // chrome's banners are drawn in. The elements carry the names (`card-el` and its looks,
 // `stack-ability`) which the skin's styles and the screen
 // audits (ui/scripts/capture.mjs) go by.
-import type { Arrow, Mark } from "../generated/protocol";
+import type { Arrow, Mark, Side } from "../generated/protocol";
 import type { Drawn, On } from "./effects.ts";
 import { Glow } from "./glow.ts";
 import { drawn, Heft } from "./heft.ts";
@@ -177,11 +177,12 @@ export class DomSurface implements Surface {
     if (heftOther) this.#hefts.set(a, { ...heftOther, node: one });
   }
 
-  /** Tells `pointer` what the browser's pointer does on the nodes, by their names and in stage
-   * pixels, until the returned function is called: the one place the page's pointer events
-   * become the stage's (pointer.ts). A touch has no hover: it presses, and is let go. */
+  /** Translates browser events on the board into stage coordinates and node names. */
   point(pointer: Pointer) {
     const layer = this.#layer;
+    // The card layer lets clicks through, so the board receives presses on bare felt or life.
+    const board = layer.parentElement!;
+    const document = layer.ownerDocument;
     this.#holder = pointer;
     const nodeOf = (target: EventTarget | null) => {
       const node =
@@ -203,26 +204,55 @@ export class DomSurface implements Surface {
         y: (e.clientY - box.top) / scale,
       };
     };
+    const playerOf = (
+      target: EventTarget | null,
+    ): { player: Side } | undefined => {
+      const life =
+        target instanceof Element
+          ? target.closest<HTMLElement>("[data-life]")?.dataset.life
+          : undefined;
+      if (life === "you" || life === "opponent") return { player: life };
+      return undefined;
+    };
     const under = (
       e: PointerEvent,
-      held: Element | undefined,
+      excluded: Element | undefined,
     ): Under | undefined => {
       for (const hit of document.elementsFromPoint(e.clientX, e.clientY)) {
-        if (held?.contains(hit)) continue;
-        const said = nodeOf(hit)?.dataset.stage;
-        if (said !== undefined) return { name: named(said) };
-        const life = hit.closest<HTMLElement>("[data-life]")?.dataset.life;
-        if (life === "you" || life === "opponent") return { player: life };
+        if (excluded?.contains(hit)) continue;
+        const name = nameOf(hit);
+        if (name !== undefined) return { name };
+        const player = playerOf(hit);
+        if (player) return player;
       }
       return undefined;
     };
-    const on = (
-      kind: `pointer${"over" | "out" | "down" | "move" | "up" | "cancel"}`,
-      heard: (e: PointerEvent) => void,
+    const on = <K extends keyof HTMLElementEventMap>(
+      surface: HTMLElement,
+      kind: K,
+      heard: (e: HTMLElementEventMap[K]) => void,
     ) => {
-      layer.addEventListener(kind, heard);
-      return () => layer.removeEventListener(kind, heard);
+      surface.addEventListener(kind, heard);
+      return () => surface.removeEventListener(kind, heard);
     };
+    const onTable = (target: EventTarget | null) =>
+      target === board ||
+      target === layer ||
+      nodeOf(target) !== undefined ||
+      playerOf(target) !== undefined;
+    const mac = /Mac/.test(navigator.platform);
+    let active:
+      { id: number; capture: HTMLElement; button: number } | undefined;
+    const finish = (e: PointerEvent) => {
+      if (active?.id !== e.pointerId) return false;
+      active = undefined;
+      return true;
+    };
+    const cancel = (e: PointerEvent) => {
+      if (finish(e)) pointer.cancel();
+    };
+    // Removing a capture node can send lostpointercapture to the document.
+    document.addEventListener("lostpointercapture", cancel);
     // A finger is nowhere once it is lifted: only a pointer that hovers is followed.
     const where = (e: PointerEvent) => {
       if (e.pointerType !== "touch")
@@ -236,29 +266,63 @@ export class DomSurface implements Surface {
     };
     const stops = [
       () => window.removeEventListener("pointermove", where),
-      on("pointerover", (e) => {
+      () => document.removeEventListener("lostpointercapture", cancel),
+      on(layer, "pointerover", (e) => {
         if (e.pointerType !== "touch") pointer.over(nameOf(e.target));
       }),
-      on("pointerout", (e) => {
+      on(layer, "pointerout", (e) => {
         if (e.pointerType !== "touch") pointer.over(nameOf(e.relatedTarget));
       }),
-      on("pointerdown", (e) => {
+      on(board, "pointerdown", (e) => {
+        if (active || (e.button !== 0 && e.button !== 2) || !onTable(e.target))
+          return;
         const node = nodeOf(e.target);
-        if (!node || e.button !== 0) return;
-        // The press keeps its node however far the pointer goes.
-        node.setPointerCapture(e.pointerId);
-        pointer.press(named(node.dataset.stage!), at(e));
+        const target = nameOf(node ?? null) ?? playerOf(e.target);
+        const kind =
+          e.button === 2
+            ? "secondary"
+            : e.pointerType === "touch"
+              ? "touch"
+              : "primary";
+        if (!pointer.press(target, at(e), kind)) return;
+        // A card keeps capture as it did before. Bare felt captures on the board itself.
+        const capture = node ?? board;
+        capture.setPointerCapture(e.pointerId);
+        active = { id: e.pointerId, capture, button: e.button };
       }),
-      on("pointermove", (e) => pointer.move(at(e))),
-      on("pointerup", (e) =>
-        pointer.release(at(e), under(e, nodeOf(e.target))),
-      ),
-      on("pointercancel", () => pointer.cancel()),
+      on(board, "pointermove", (e) => {
+        if (active?.id !== e.pointerId) return;
+        pointer.move(at(e), () => {
+          const held = pointer.held;
+          return under(e, held && this.#nodes.get(held.name));
+        });
+      }),
+      on(board, "pointerup", (e) => {
+        const held = pointer.held;
+        const excluded = held
+          ? this.#nodes.get(held.name)
+          : active?.button === 0
+            ? nodeOf(active.capture)
+            : undefined;
+        if (!finish(e)) return;
+        pointer.release(at(e), under(e, excluded), {
+          meta: mac ? e.metaKey : e.ctrlKey,
+          shift: e.shiftKey,
+          alt: e.altKey,
+        });
+      }),
+      on(board, "pointercancel", cancel),
+      on(board, "contextmenu", (e) => {
+        if (pointer.handlesContextMenu && onTable(e.target)) e.preventDefault();
+      }),
     ];
     return () => {
       this.#repoint = undefined;
       if (this.#holder === pointer) this.#holder = undefined;
       for (const stop of stops) stop();
+      if (active?.capture.hasPointerCapture(active.id))
+        active.capture.releasePointerCapture(active.id);
+      active = undefined;
     };
   }
 

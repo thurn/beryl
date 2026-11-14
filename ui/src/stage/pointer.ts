@@ -1,7 +1,6 @@
 // The pointer on the stage: the one way the stage tells what draws around it (React: the
-// inspector here, the prompt shapes after it) what the player's pointer did to its nodes. Three
-// things are told (`PointerEvents`): the pointer coming onto a node and leaving it, a click on
-// one, and a card picked up and let go over another node or a player.
+// inspector and prompts) what the player's pointer did on the table. The listener may
+// also handle secondary presses, arrow drags and rectangle selection.
 //
 // The surface turns the browser's events into the calls below, in stage pixels and by the
 // names the stage gives its nodes (dom.ts); nothing here reads the page, so a test makes the
@@ -16,8 +15,29 @@ import type { Side } from "../generated/protocol";
 import type { Name, Point } from "./layout.ts";
 import { ALOFT, type Pose } from "./pose.ts";
 
-/** What a held card was let go over: another node, or a player's life total. */
+/** A node or a player's life total under the pointer. */
 export type Under = { name: Name } | { player: Side };
+type Target = Name | Under | undefined;
+type PressKind = "primary" | "secondary" | "touch";
+
+export interface PointerKeys {
+  /** Command on macOS, Control elsewhere. */
+  meta: boolean;
+  shift: boolean;
+  alt: boolean;
+}
+
+interface Press {
+  name: Name | undefined;
+  player: { player: Side } | undefined;
+  kind: PressKind;
+  start: Point;
+  at: Point;
+  moved: boolean;
+  touchReady: boolean;
+  touchTimer?: ReturnType<typeof setTimeout>;
+  secondaryTimer?: ReturnType<typeof setTimeout>;
+}
 
 /** A held card let go. */
 export interface Drop {
@@ -28,6 +48,7 @@ export interface Drop {
   /** The card's pose as it was let go. */
   pose: Pose;
   onto?: Under;
+  keys: PointerKeys;
 }
 
 /** What the stage tells of the pointer. Each is told at most one listener's answer: what the
@@ -38,7 +59,15 @@ export interface PointerEvents {
    * it comes to rest (`Pointer.arrived`). */
   hover?(name: Name | undefined): void;
   /** A press let go where it began, on `name`. */
-  click?(name: Name, at: Point): void;
+  click?(name: Name, at: Point, keys: PointerKeys): void;
+  /** A right click or a stationary long press, on the original target. */
+  secondary?(target: Target, at: Point): void;
+  /** A right drag from a node, with `done` on release. */
+  aim?(from: Name, at: Point, over: Under | undefined, done: boolean): void;
+  /** A primary drag from empty table, with `done` on release. */
+  sweep?(from: Point, to: Point, done: boolean): void;
+  /** The drop target and pointer position while a card is held. */
+  over?(target: Under | undefined, at: Point): void;
   /** A card was picked up, or with none the held one was let go or dropped. */
   lift?(name: Name | undefined): void;
   /** A held card was let go. Returns whether the drop was taken: a taken card stays where it
@@ -69,6 +98,10 @@ export interface Holding {
 /** How far a press travels before it picks its card up, in stage pixels. */
 export const DRAG_THRESHOLD = 6;
 
+const TOUCH_DRAG_DELAY = 150;
+const LONG_PRESS_DELAY = 500;
+const NO_KEYS: PointerKeys = { meta: false, shift: false, alt: false };
+
 /** How far over everything, what flies included, a held card is drawn. */
 const HELD_DEPTH = 1000;
 
@@ -96,7 +129,7 @@ export class Pointer {
   readonly #holding: Holding;
   #listener: PointerEvents = {};
   #over: Name | undefined;
-  #press: { name: Name; start: Point; at: Point; moved: boolean } | undefined;
+  #press: Press | undefined;
   #held: Held | undefined;
   /** A card on its way that has yet to come to rest: one let go, or one the pointer came
    * onto as it flew, such as a card you draw, which is in your hand while it flies there.
@@ -114,10 +147,17 @@ export class Pointer {
   /** Tells `listener` what the pointer does from now on, in place of whoever listened; returns
    * how to stop. */
   listen(listener: PointerEvents) {
+    this.cancel();
     this.#listener = listener;
     return () => {
-      if (this.#listener === listener) this.#listener = {};
+      if (this.#listener !== listener) return;
+      this.cancel();
+      this.#listener = {};
     };
+  }
+
+  get handlesContextMenu(): boolean {
+    return !!(this.#listener.secondary || this.#listener.aim);
   }
 
   /** The card the pointer holds, if it holds one. */
@@ -183,53 +223,142 @@ export class Pointer {
     const other = (name: Name) => (name === a ? b : name === b ? a : name);
     if (this.#over !== undefined) this.#over = other(this.#over);
     if (this.#settling !== undefined) this.#settling = other(this.#settling);
-    if (this.#press) this.#press.name = other(this.#press.name);
+    if (this.#press?.name !== undefined)
+      this.#press.name = other(this.#press.name);
     if (this.#held)
       this.#held = { ...this.#held, name: other(this.#held.name) };
     this.#tell();
   }
 
-  /** A press began on `name`, at `at`. */
-  press(name: Name, at: Point) {
+  /** Begins a press on a card, a player, or empty table. Returns whether it was accepted. */
+  press(target: Target, at: Point, kind: PressKind = "primary"): boolean {
+    const name =
+      typeof target === "object"
+        ? "name" in target
+          ? target.name
+          : undefined
+        : target;
+    const player =
+      typeof target === "object" && "player" in target ? target : undefined;
+    if (kind === "secondary") {
+      if (
+        !this.#listener.secondary &&
+        !(name !== undefined && this.#listener.aim)
+      )
+        return false;
+    } else if (name === undefined) {
+      if (
+        kind === "touch"
+          ? !this.#listener.secondary
+          : player || !this.#listener.sweep
+      )
+        return false;
+    }
+
     this.cancel();
-    this.#press = { name, start: at, at, moved: false };
+    // Engine prompts keep their immediate touch drags. Clients that listen for the new
+    // gestures let a finger move the hand before a card can be picked up.
+    const delayed =
+      kind === "touch" &&
+      (this.handlesContextMenu || this.#listener.over || this.#listener.sweep);
+    const press: Press = {
+      name,
+      player,
+      kind,
+      start: at,
+      at,
+      moved: false,
+      touchReady: !delayed,
+    };
+    this.#press = press;
+    if (delayed && name !== undefined)
+      press.touchTimer = setTimeout(
+        () => (press.touchReady = true),
+        TOUCH_DRAG_DELAY,
+      );
+    if (kind === "touch" && this.#listener.secondary) {
+      press.secondaryTimer = setTimeout(() => {
+        this.#endPress();
+        this.#listener.secondary?.(press.name ?? press.player, press.at);
+      }, LONG_PRESS_DELAY);
+    }
+    return true;
   }
 
-  /** The pointer moved to `at` with its press down: past the threshold, it picks up a card
-   * that may be picked up, which then follows it. */
-  move(at: Point) {
+  /** Moves with the press down. `under` reads the drop target only if a listener needs it. */
+  move(at: Point, under?: () => Under | undefined) {
     const press = this.#press;
     if (!press) return;
     press.at = at;
-    const { name, start } = press;
+    this.#travel(press, at);
+    const { name, start, kind, moved } = press;
+    if (kind === "secondary") {
+      if (moved && name !== undefined)
+        this.#listener.aim?.(name, at, under?.(), false);
+    } else if (kind === "primary" && name === undefined) {
+      if (moved) this.#listener.sweep?.(start, at, false);
+    } else if (name !== undefined && this.#carry(press, name)) {
+      this.#listener.over?.(under?.(), at);
+    }
+  }
+
+  #travel(press: Press, at: Point) {
+    const { start } = press;
+    if (
+      press.moved ||
+      Math.hypot(at.x - start.x, at.y - start.y) < DRAG_THRESHOLD
+    )
+      return;
+    press.moved = true;
+    // A finger that crosses the threshold before the hold ends can finish scrolling.
+    clearTimeout(press.touchTimer);
+    clearTimeout(press.secondaryTimer);
+  }
+
+  #carry(press: Press, name: Name): boolean {
+    const { start, at } = press;
     if (this.#held) {
       this.#held = { name, start, at };
       this.#holding.moved(name);
-      return;
+      return true;
     }
-    if (Math.hypot(at.x - start.x, at.y - start.y) < DRAG_THRESHOLD) return;
-    press.moved = true;
-    if (!this.holdable(name) || !this.#holding.pose(name)) return;
-    // The card is in hand, not under the pointer: it is hovered no longer.
+    if (
+      !press.touchReady ||
+      Math.hypot(at.x - start.x, at.y - start.y) < DRAG_THRESHOLD
+    )
+      return false;
+    if (!this.holdable(name) || !this.#holding.pose(name)) return false;
     this.#held = { name, start, at };
     this.#settling = undefined;
     this.#tell();
     this.#holding.lifted(name);
     this.#listener.lift?.(name);
+    return true;
   }
 
-  /** The press was let go at `at`, over `onto`: a click where it began, or the held card's
-   * drop. A press that wandered without picking anything up is neither. */
-  release(at: Point, onto?: Under) {
-    const press = this.#press;
-    // A WebView may deliver the release at a new point without an intervening move (for
-    // example, a simulator's injected touch). Treat that final distance as movement too.
-    if (press && (press.at.x !== at.x || press.at.y !== at.y)) this.move(at);
-    this.#press = undefined;
+  /** A WebView can send a release at a new position without an intervening move. That
+   * distance counts toward the drag threshold too. */
+  release(at: Point, onto?: Under, keys: PointerKeys = NO_KEYS) {
+    const press = this.#endPress();
     if (!press) return;
+    this.#travel(press, at);
+    const { name, player, kind, start, moved } = press;
+    if (kind === "secondary") {
+      if (!moved) this.#listener.secondary?.(name ?? player, at);
+      else if (name !== undefined) this.#listener.aim?.(name, at, onto, true);
+      return;
+    }
+    if (name === undefined) {
+      if (kind === "primary" && moved) this.#listener.sweep?.(start, at, true);
+      return;
+    }
+    if (press.at.x !== at.x || press.at.y !== at.y) {
+      press.at = at;
+      this.#carry(press, name);
+    }
     const held = this.#held;
     if (!held) {
-      if (!press.moved) this.#listener.click?.(press.name, at);
+      if (!moved) this.#listener.click?.(name, at, keys);
       return;
     }
     this.#held = { ...held, at };
@@ -240,12 +369,23 @@ export class Pointer {
       pose !== undefined &&
       this.#listener.drop?.({
         name: held.name,
-        start: held.start,
+        start,
         at,
         pose,
         onto,
+        keys,
       }) === true;
     this.#letGo(held.name, pose, taken);
+  }
+
+  #endPress(): Press | undefined {
+    const press = this.#press;
+    if (press) {
+      clearTimeout(press.touchTimer);
+      clearTimeout(press.secondaryTimer);
+      this.#press = undefined;
+    }
+    return press;
   }
 
   /** The held card `name` was let go where `pose` has it. Taken or not, it is on its way
@@ -261,8 +401,8 @@ export class Pointer {
   /** The press ended with no release (the browser took the pointer, the node went): a held
    * card goes back to where it rests, and nothing is clicked or dropped. */
   cancel() {
+    this.#endPress();
     const held = this.#held;
-    this.#press = undefined;
     if (!held) return;
     const pose = this.#holding.pose(held.name) ?? undefined;
     this.#held = undefined;

@@ -109,6 +109,7 @@ test("a held card's pose is the pointer's, and the stage's model returns it", ()
                 at: { x: 430, y: 60 },
                 pose: { ...held, x: 400, y: 20 },
                 onto: { name: 1 },
+                keys: { meta: false, shift: false, alt: false },
             },
         ],
         ["hover", 1],
@@ -302,6 +303,203 @@ test("a held card that leaves the table is let go untold of a drop", () => {
     ]);
     made.pointer.release({ x: 300, y: 300 });
     assert.equal(told.length, 4);
+});
+
+test("clicks and drops carry the modifiers held at release", () => {
+    const { made } = listening();
+    const pointer = made.pointer;
+    const seen = [];
+    pointer.listen({
+        click: (name, at, keys) => seen.push([name, at, keys]),
+        drop: ({ keys }) => {
+            seen.push(keys);
+        },
+    });
+    const from = { x: 30, y: 540 };
+    const to = { x: 230, y: 340 };
+    const keys = { meta: true, shift: false, alt: true };
+    pointer.press(3, from);
+    pointer.release(from, undefined, keys);
+    pointer.press(3, from);
+    pointer.move(to);
+    pointer.release(to, undefined, { ...keys, shift: true });
+    assert.deepEqual(seen, [[3, from, keys], { ...keys, shift: true }]);
+});
+
+test("a right click reports the original card, player or empty table", () => {
+    const { made } = listening();
+    const pointer = made.pointer;
+    const seen = [];
+    const stop = pointer.listen({
+        click: () => assert.fail("a right press cannot click"),
+        lift: () => assert.fail("a right press cannot pick up a card"),
+        secondary: (...event) => seen.push(event),
+    });
+    assert.equal(pointer.handlesContextMenu, true);
+    const at = { x: 30, y: 540 };
+    const player = { player: "opponent" };
+    for (const target of [3, player, undefined]) {
+        assert.equal(pointer.press(target, at, "secondary"), true);
+        pointer.release(at, { name: 1 });
+    }
+    assert.deepEqual(seen, [
+        [3, at],
+        [player, at],
+        [undefined, at],
+    ]);
+    stop();
+    assert.equal(pointer.handlesContextMenu, false);
+    assert.equal(pointer.press(3, at, "secondary"), false);
+});
+
+test("right drags aim from a node once they cross the threshold", () => {
+    const { made } = listening();
+    const pointer = made.pointer;
+    const seen = [];
+    pointer.listen({
+        click: () => assert.fail("a right drag cannot click"),
+        lift: () => assert.fail("a right drag cannot pick up a card"),
+        secondary: () => assert.fail("a right drag cannot open a menu"),
+        aim: (...event) => seen.push(event),
+    });
+    const from = { x: 30, y: 540 };
+    const to = { x: 430, y: 60 };
+    const player = { player: "opponent" };
+    pointer.press(3, from, "secondary");
+    pointer.move({ x: 33, y: 540 });
+    pointer.move(to, () => ({ name: 1 }));
+    pointer.move(from);
+    pointer.release(to, player);
+    assert.deepEqual(seen, [
+        [3, to, { name: 1 }, false],
+        [3, from, undefined, false],
+        [3, to, player, true],
+    ]);
+});
+
+test("a rectangle drag starts on empty table and stays active on the way back", () => {
+    const { made } = listening();
+    const pointer = made.pointer;
+    const seen = [];
+    pointer.listen({ sweep: (...event) => seen.push(event) });
+    const from = { x: 20, y: 350 };
+    const to = { x: 530, y: 120 };
+    assert.equal(pointer.press({ player: "opponent" }, from), false);
+    pointer.press(undefined, from);
+    pointer.release(from);
+    pointer.press(undefined, from);
+    pointer.move({ x: 23, y: 350 });
+    pointer.move(to);
+    pointer.move(from);
+    pointer.release(from);
+    assert.deepEqual(seen, [
+        [from, to, false],
+        [from, from, false],
+        [from, from, true],
+    ]);
+});
+
+test("a held card reports the node or player under it while hover stays silent", () => {
+    const { made } = listening();
+    const pointer = made.pointer;
+    const seen = [];
+    pointer.listen({
+        hover: (name) => seen.push(["hover", name]),
+        over: (target, at) => seen.push(["over", target, at]),
+    });
+    const first = { x: 430, y: 60 };
+    const second = { x: 280, y: 120 };
+    pointer.over(3);
+    pointer.press(3, { x: 30, y: 540 });
+    pointer.move(first, () => ({ name: 1 }));
+    pointer.over(1);
+    pointer.move(second, () => ({ player: "opponent" }));
+    pointer.move(first);
+    assert.deepEqual(seen, [
+        ["hover", 3],
+        ["hover", undefined],
+        ["over", { name: 1 }, first],
+        ["over", { player: "opponent" }, second],
+        ["over", undefined, first],
+    ]);
+    pointer.cancel();
+});
+
+test("a touch can drag after 150 ms, but movement before then leaves the hand alone", (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const { made } = listening();
+    const pointer = made.pointer;
+    const seen = [];
+    pointer.listen({
+        lift: (name) => seen.push(["lift", name]),
+        click: () => assert.fail("a drag cannot click"),
+        secondary: () => assert.fail("a moving finger cannot open a menu"),
+    });
+    const from = { x: 30, y: 540 };
+    const to = { x: 230, y: 340 };
+    pointer.press(3, from, "touch");
+    t.mock.timers.tick(149);
+    pointer.move(to);
+    t.mock.timers.tick(500);
+    pointer.move(to);
+    pointer.release(to);
+    assert.deepEqual(seen, []);
+
+    pointer.press(3, from, "touch");
+    t.mock.timers.tick(150);
+    assert.equal(
+        pointer.held,
+        undefined,
+        "a still finger has not started a drag",
+    );
+    pointer.move(to);
+    t.mock.timers.tick(350);
+    pointer.release(to);
+    assert.deepEqual(seen, [
+        ["lift", 3],
+        ["lift", undefined],
+    ]);
+});
+
+test("a stationary touch opens its menu after 500 ms and consumes the tap", (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const { made } = listening();
+    const pointer = made.pointer;
+    const seen = [];
+    pointer.listen({
+        click: (name) => seen.push(["click", name]),
+        lift: () => assert.fail("a stationary finger cannot pick up a card"),
+        secondary: (target, at) => seen.push(["secondary", target, at]),
+    });
+    const from = { x: 30, y: 540 };
+    const nearby = { x: 33, y: 540 };
+    pointer.press(3, from, "touch");
+    t.mock.timers.tick(499);
+    pointer.release(from);
+    pointer.press(undefined, from, "touch");
+    pointer.cancel();
+    t.mock.timers.tick(500);
+    assert.deepEqual(seen, [["click", 3]]);
+
+    pointer.press(3, from, "touch");
+    pointer.move(nearby);
+    t.mock.timers.tick(499);
+    assert.equal(seen.length, 1);
+    t.mock.timers.tick(1);
+    pointer.release(nearby);
+    assert.deepEqual(seen, [
+        ["click", 3],
+        ["secondary", 3, nearby],
+    ]);
+});
+
+test("an engine prompt can still pick up a card on an immediate touch drag", () => {
+    const { made, told } = listening();
+    const pointer = made.pointer;
+    pointer.press(3, { x: 30, y: 540 }, "touch");
+    pointer.move({ x: 230, y: 340 });
+    assert.deepEqual(told, [["lift", 3]]);
+    pointer.cancel();
 });
 
 test("an announcement is shown for as long as its step plays", () => {
