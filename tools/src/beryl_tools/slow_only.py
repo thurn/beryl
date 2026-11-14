@@ -22,16 +22,7 @@ class SlowOnly:
     runs: int
 
 
-SLOW_ONLY: tuple[SlowOnly, ...] = (
-    # The session fuzz's handful of games (beryl_session's fuzz.rs): slow CI
-    # and the nightly's `just fuzz` play them, never the fast check.
-    SlowOnly(
-        "rust:beryl_session::fuzz::session_games_keep_the_script_checks",
-        "2026-11-11",
-        2.5,
-        0,
-    ),
-)
+SLOW_ONLY: tuple[SlowOnly, ...] = ()
 
 
 # The checks slow CI leaves to the fast check alone, as the run log names them:
@@ -104,6 +95,35 @@ FAST_ONLY: tuple[str, ...] = (
     "rust:beryl_session::session::undo::undo_keeps_the_latest_points",
     "rust:beryl_search::greedy::greedy_beats_random",
     "rust:beryl_search::long::the_hidden_searches_decide_the_same_on_a_redeterminized_state",
+    "rust:beryl_bench::family::tests::families_pair_their_steps",
+    "rust:beryl_session::session::smart_stops::a_humans_own_spell_resolves_without_their_priority_under_smart_stops_only",
+    "rust:beryl_session::session::checkpoints::every_board_rebuilds_as_it_was",
+    "rust:beryl_session::session::cancel::a_cast_taken_back_at_its_target_returns_to_priority_as_it_was",
+    "rust:beryl_session::session::cancel::a_cast_taken_back_flies_its_card_to_the_hand_again",
+    "rust:beryl_session::session::full_control::full_control_gives_priority_over_every_opponent_spell_in_either_turn",
+    "rust:beryl_session::session::checkpoints::each_turn_s_board_is_recorded_and_replays",
+    "rust:beryl_session::session::chance::a_version_2_save_upgrades_to_version_3_from_its_seed",
+    "rust:beryl_session::session::checkpoints::an_impossible_answer_resumes_at_its_turn_s_beginning",
+    "rust:beryl_search::long::neither_search_thinks_about_the_order_of_cards_for_the_library_bottom",
+    "rust:beryl_session::session::smart_stops::games_against_responses_keep_the_smart_stops_and_replay",
+    "rust:beryl_cli::bin/beryl_cli::specs::playground::history_tests::alternate_casts_cycling_and_tax_payment_remain_choices",
+    "rust:beryl_search::games::agents_decide_the_same_on_a_redeterminized_state",
+    "rust:beryl_session::session::chance::a_save_records_each_card_as_it_is_first_seen_and_the_flip_winner",
+    "rust:beryl_search::long::turn::tests::turn_choice_is_independent_of_hidden_cards",
+    "rust:beryl_session::session::checkpoints::a_board_the_replay_does_not_reach_is_rebuilt_from_the_record",
+    "rust:beryl_search::games::a_seed_and_its_choices_reproduce_every_state_hash",
+    "rust:beryl_cli::bin/beryl_cli::why::tests::compares_oust_and_pass",
+    "rust:beryl_session::session::checkpoints::a_lingering_effect_refuses_a_rebuild",
+    "rust:beryl_cli::bin/beryl_cli::why::tests::identical_choices_have_identical_rollouts",
+    "rust:beryl_session::session::chance::a_recorded_reveal_that_never_happens_stops_the_replay",
+    "rust:beryl_search::long::a_seed_and_settings_reproduce_a_move_on_any_thread_count",
+    "rust:beryl_session::session::chance::a_version_4_save_replays_without_owners_or_cards_shown",
+    "rust:beryl_search::games::a_widened_game_plays_on_as_the_small_one",
+    "rust:beryl_session::session::chance::a_recorded_card_no_unseen_card_can_be_stops_the_replay",
+    "rust:beryl_session::session::corpus::every_frozen_save_plays_the_same_under_each_perturbation",
+    "rust:beryl_cli::bin/beryl_cli::specs::playground::history_tests::subtlety_keeps_opponents_bottom_choice_and_viewers_prompt",
+    "rust:beryl_search::games::a_sixty_card_game_round_trips_between_the_layouts",
+    "rust:beryl_search::mcts::the_exact_stop_chooses_as_the_full_budget",
     "python:tests/test_checks.py::test_a_hung_step_is_killed_at_its_hang_limit_with_its_descendants",
     "python:tests/test_bisect.py::test_a_probe_that_hangs_dies_at_the_search_limit_and_keeps_its_range",
     "python:tests/test_checks.py::test_a_loaded_machine_stretches_the_hang_limit_and_the_budget",

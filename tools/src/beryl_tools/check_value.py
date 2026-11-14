@@ -20,7 +20,8 @@ was broken as a whole (a build error, a crashed server), and its failures group 
 Slow CI runs only the lanes, and of the rust lane only the packages, a change can affect, so
 most runs leave checks out, and a run's own total says little about what slow CI costs. The
 cost of a full run ([`full_run`]) is instead the sum of each check's median CPU seconds, over
-the checks slow CI still runs. [`cuts`] gives the budget detector (budget.py) the lowest-value
+the checks slow CI still runs; a lane in [`SAMPLED`] counts what one run of it costs instead.
+[`cuts`] gives the budget detector (budget.py) the lowest-value
 groups whose removal brings a full run under a budget.
 """
 
@@ -40,6 +41,11 @@ DAYS = 30
 RUNS = 10
 GROUP_FAILURES = 2
 MASS = 20
+# The lanes that play a sample which changes with each commit: the oracle lane plays the cards
+# that changed and three more chosen by the commit (oracle_selection.py). A full run plays one
+# sample, not every card the last runs sampled, so it costs what one run of the lane costs
+# (`sampled_cost`).
+SAMPLED = ("oracle",)
 
 # A slow-CI run, as the run log can tell one apart: the host and the commit it tested.
 RunKey = tuple[str, str]
@@ -257,11 +263,9 @@ def order(g: Group) -> tuple[float, float, str]:
     return g.value(), -g.cpu, g.checks[0]
 
 
-def alive(scores: Scores, last: int | None = None) -> set[str]:
-    """The checks that ran in one of their lane's `last` runs (of all, when not given), in a
-    lane slow CI still has (`slow_ci.LANES`): those slow CI still runs. A check deleted since is
-    in older runs only, and a lane moved out (to the browser sweep, say) is in none of them.
-    """
+def lane_runs(scores: Scores, last: int | None = None) -> dict[str, list[RunKey]]:
+    """Each lane slow CI still has (`slow_ci.LANES`) with its `last` runs (all, when not given),
+    oldest first: the runs in which a check of the lane ran."""
     from . import (
         slow_ci,
     )  # It imports checks, which imports this module by way of budget.
@@ -271,26 +275,63 @@ def alive(scores: Scores, last: int | None = None) -> set[str]:
     for k, run in scores.runs.items():
         for lane in {scores.lanes.get(check, "") for check in run} & lanes:
             by_lane.setdefault(lane, []).append((scores.started.get(k, ""), k))
+    return {
+        lane: [k for _, k in sorted(runs)[-last if last else 0 :]]
+        for lane, runs in by_lane.items()
+    }
+
+
+def alive(scores: Scores, last: int | None = None) -> set[str]:
+    """The checks that ran in one of their lane's `last` runs (of all, when not given), in a
+    lane slow CI still has (`slow_ci.LANES`): those slow CI still runs. A check deleted since is
+    in older runs only, and a lane moved out (to the browser sweep, say) is in none of them.
+    """
     found: set[str] = set()
-    for lane, runs in by_lane.items():
-        for _, k in sorted(runs)[-last if last else 0 :]:
+    for lane, runs in lane_runs(scores, last).items():
+        for k in runs:
             found.update(c for c in scores.runs[k] if scores.lanes.get(c, "") == lane)
     return found
 
 
+def sampled_cost(scores: Scores, last: int | None = None) -> float:
+    """What the lanes in [`SAMPLED`] cost a run: the median of each one's CPU seconds over its
+    `last` runs, summed."""
+    total = 0.0
+    for lane, runs in lane_runs(scores, last).items():
+        if lane not in SAMPLED:
+            continue
+        spent = [
+            sum(v for c, v in scores.runs[k].items() if scores.lanes.get(c) == lane)
+            for k in runs
+        ]
+        total += statistics.median(spent) if spent else 0.0
+    return total
+
+
 def full_run(scores: Scores, cut: set[str], last: int | None = None) -> float:
     """The CPU seconds of a slow-CI run of every lane, without the checks in `cut`: the sum of
-    each check's cost (`Scores.cost`), over the checks still run (`alive`)."""
-    return sum((scores.cost.get(c, 0.0) for c in alive(scores, last) - cut), 0.0)
+    each check's cost (`Scores.cost`), over the checks still run (`alive`) outside the lanes in
+    [`SAMPLED`], plus what one run of those lanes costs (`sampled_cost`)."""
+    fixed = sum(
+        (
+            scores.cost.get(c, 0.0)
+            for c in alive(scores, last) - cut
+            if scores.lanes.get(c, "") not in SAMPLED
+        ),
+        0.0,
+    )
+    return fixed + sampled_cost(scores, last)
 
 
 def cuts(scores: Scores, budget: float, last: int | None = None) -> list[Group]:
     """The lowest-value groups whose removal brings a full slow-CI run (`full_run`, of the
     checks in each lane's `last` runs when given) to `budget` CPU seconds or under; none when
     it is under already. A group that has caught a bug may be among them: whoever acts on the
-    list moves such a group to the nightly instead of deleting it."""
-    running = alive(scores, last)
-    whole = sum((scores.cost.get(c, 0.0) for c in running), 0.0)
+    list moves such a group to the nightly instead of deleting it. No check of a lane in
+    [`SAMPLED`] is named: the next commit's sample plays other cards, so cutting one saves
+    nothing."""
+    running = {c for c in alive(scores, last) if scores.lanes.get(c, "") not in SAMPLED}
+    whole = full_run(scores, set(), last)
     chosen: list[Group] = []
     for g in scores.groups:
         if whole <= budget:

@@ -132,6 +132,19 @@ def test_cuts_take_the_lowest_value_until_a_full_run_fits() -> None:
     ]
 
 
+def test_a_sampled_lane_costs_one_run_and_none_of_its_cards_is_cut() -> None:
+    # Each commit samples another card, at 10 CPU seconds a run: a full run plays one sample,
+    # not the three cards the runs sampled between them.
+    records = [record("rust:a", c, cpu=5.0) for c in ("a", "b", "c")]
+    records += [
+        record(f"oracle:{card}/x/xmage", c, cpu=10.0)
+        for c, card in (("a", "One"), ("b", "Two"), ("c", "Three"))
+    ]
+    scores = check_value.score(records, {}, SINCE)
+    assert check_value.full_run(scores, set()) == 15.0
+    assert [g.checks for g in check_value.cuts(scores, 12.0)] == [("rust:a",)]
+
+
 def test_bisections_and_the_fast_check_are_left_out() -> None:
     records = [
         record("rust:t", "a"),

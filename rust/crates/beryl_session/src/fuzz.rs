@@ -217,9 +217,10 @@ fn report(game: &Fuzz, why: &str) -> String {
 }
 
 /// Every script of every update of every fuzz game, for both seats, replays to its view and
-/// keeps the rule invariants. Slow CI alone runs it (`verdicts.SLOW_ONLY`); `just fuzz` runs it
-/// at length, and the nightly with it.
+/// keeps the rule invariants. Only the nightly's `just fuzz` runs it, at length: in 30 days of
+/// slow CI it caught nothing, for about 4.5 CPU seconds a run.
 #[test]
+#[ignore = "a handful of session games, about 4.5 CPU seconds: `just fuzz` plays them"]
 fn session_games_keep_the_script_checks() {
     if let Some((game, why)) = shrink(games(3), MOST_CHOICES) {
         panic!("{}", report(&game, &why));
