@@ -21,7 +21,8 @@ full disk while its bisection tree held 50.8 GB of rust/target, 18.5 GB of it in
 A tree whose bisection holds its lock is left alone, and its checkout is never touched.
 
 Then, whatever the disk, the shared target is held to its budget, the builds unused longest
-going first (warm.py, `prune`): Enact's remove hook does so for each worktree it saves.
+going first (warm.py, `prune`): Enact's remove hook does so for each slow-CI worktree,
+the only ones whose target it saves.
 """
 
 from __future__ import annotations

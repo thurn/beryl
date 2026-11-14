@@ -18,8 +18,9 @@ slow_min_gap = 300
 
 [worktree]
 root = ".worktrees"   # inside the checkout; gitignored
-# Before Enact deletes a worktree, move its rust/target and ui/node_modules into the cache,
-# where the next worktree's first command clones them from (tools/src/beryl_tools/warm.py).
+# Before Enact deletes a worktree, move its ui/node_modules into the cache, and its rust/target
+# too if it is one of slow CI's worktrees, the only ones that save it. The next worktree's
+# first command clones them from there (tools/src/beryl_tools/warm.py).
 remove = 'f="$ENACT_WORKTREE_PATH/tools/src/beryl_tools/warm.py"; [ -f "$f" ] || f="$ENACT_REPO/tools/src/beryl_tools/warm.py"; python3 "$f" remove'
 
 [push]

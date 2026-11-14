@@ -237,7 +237,7 @@ def test_the_remove_hook_removes_a_worktree_it_could_not_save(
     tree = checkout(tmp_path / "tree", "lock-v1")
     write(tree / "rust" / "target" / "debug" / "beryl", "binary")
 
-    def full_disk(checkout: Path) -> None:
+    def full_disk(checkout: Path, target_too: bool = True) -> None:
         raise OSError(28, "No space left on device")
 
     monkeypatch.setattr(warm, "save", full_disk)
@@ -326,3 +326,47 @@ def test_a_clone_lets_the_next_build_mark_the_units_it_reads(
     stat = (second / fingerprint).stat()
     assert stat.st_mtime == pytest.approx(built)
     assert stat.st_atime < stat.st_mtime
+
+
+def removed_by_enact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str, branch: str
+) -> Path:
+    """Runs the remove hook on a worktree named `name` on `branch` whose target holds a build
+    of one crate, over a cache that holds a build of another, and returns the cached target.
+    """
+    monkeypatch.setenv("BERYL_CACHE", str(tmp_path / "cache"))
+    cached = tmp_path / "cache" / "target" / "debug" / "deps"
+    write(cached / f"libtokio-{'a' * 16}.rlib", "tokio")
+    tree = checkout(tmp_path / ".worktrees" / name, "lock-v1")
+    write(
+        tree / "rust" / "target" / "debug" / "deps" / f"libberyl-{'b' * 16}.rlib",
+        "beryl",
+    )
+    monkeypatch.setenv("ENACT_WORKTREE_PATH", str(tree))
+    monkeypatch.setenv("ENACT_REPO", str(tmp_path / "repo"))
+    monkeypatch.setenv("ENACT_BRANCH", branch)
+    assert warm.remove_hook() == 0
+    assert not tree.exists()
+    return tmp_path / "cache" / "target" / "debug" / "deps"
+
+
+def test_removing_an_agents_worktree_leaves_the_cached_target_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    deps = removed_by_enact(tmp_path, monkeypatch, "fix-mulligan", "enact/fix-mulligan")
+    assert (deps / f"libtokio-{'a' * 16}.rlib").exists()
+    assert not (deps / f"libberyl-{'b' * 16}.rlib").exists()
+
+
+def test_removing_a_slow_ci_worktree_saves_its_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    deps = removed_by_enact(tmp_path, monkeypatch, "ci-0123456789ab", "")
+    assert (deps / f"libberyl-{'b' * 16}.rlib").exists()
+
+
+def test_only_a_detached_ci_named_worktree_saves_its_target() -> None:
+    assert warm.saves_target(Path(".worktrees/ci-2dd60bd5a1b2"), "")
+    assert not warm.saves_target(Path(".worktrees/ci-2dd60bd5a1b2"), "enact/x")
+    assert not warm.saves_target(Path(".worktrees/ci-cache-writer"), "")
+    assert not warm.saves_target(Path(".worktrees/slot-1"), "")

@@ -10,6 +10,16 @@ gets its own, seeded from the per-machine cache:
 - `save` prunes what builds no longer use from `rust/target`, then moves both into the cache by
   rename, which is instant.
 
+Only slow CI's worktrees save `rust/target` (`saves_target`); every other worktree's removal
+deletes it. A save replaces the whole cache, so when any worktree saved, the last one removed
+decided what every later worktree started from. One that had built part of the workspace, or
+started with no cache, left the cache without most third-party crates: on 2026-11-14 it held
+584 of a full build's 1,526 fingerprints, and the first test build in a fresh worktree took
+148 s and 1,158 CPU-seconds instead of 13 s, rebuilding tauri, reqwest, iroh and tokio. Slow CI
+builds the whole workspace, its tests and the app at the tip of staging, starting from the
+cache, so its target always holds at least what the cache held, brought up to date.
+`ui/node_modules` is still saved from every worktree: its cache is keyed by package-lock.json.
+
 Cargo decides that a workspace crate is up to date by modification times: a crate is rebuilt
 when any file or folder it read is newer than its last build. A new worktree's checkout writes
 every file afresh, so without help each clone rebuilt every workspace crate, and the fast check
@@ -66,6 +76,8 @@ UNIT_NAME: re.Pattern[str] = re.compile(r"^(?:lib)?(.+-[0-9a-f]{16})(?:\..+)?$")
 # folders (`record_sources`): JSON, `files` from each path to its git blob id and modification
 # time in nanoseconds, `folders` from each path to a digest of its names and its time.
 SOURCES = ".beryl-sources.json"
+# The name Enact gives a slow-CI worktree (`saves_target`).
+CI_WORKTREE: re.Pattern[str] = re.compile(r"ci-[0-9a-f]{12}")
 
 
 WINDOWS: bool = sys.platform == "win32"
@@ -670,12 +682,21 @@ def prune(target: Path) -> None:
     )
 
 
-def save(checkout: Path) -> None:
-    """Moves the checkout's caches into the per-machine cache."""
+def saves_target(worktree: Path, branch: str) -> bool:
+    """Whether Enact's removal of `worktree` (checked out on `branch`, empty when detached)
+    saves its `rust/target` into the cache: only slow CI's worktrees do. Enact names each one
+    `ci-<first 12 hex digits of the tip>` and checks it out detached (`ci_run_once` in
+    enact.py), on this Mac and on Windows alike."""
+    return not branch and CI_WORKTREE.fullmatch(worktree.name) is not None
+
+
+def save(checkout: Path, target_too: bool = True) -> None:
+    """Moves the checkout's caches into the per-machine cache: `ui/node_modules`, and
+    `rust/target` only if `target_too`."""
     with locked():
         target = checkout / "rust" / "target"
         cached = cache_root() / "target"
-        if target.is_dir():
+        if target_too and target.is_dir():
             if not (target / TAURI).exists() and (cached / TAURI).is_dir():
                 # This checkout never ran the Tauri CLI: keep the cache's build of it. A
                 # failed rename means another volume, where `replace` fails too.
@@ -709,7 +730,7 @@ def remove_hook() -> int:
         # A full disk fails the save (even the lock file): remove the worktree all the same,
         # or its copy of rust/target stays behind and keeps the disk full.
         try:
-            save(path)
+            save(path, target_too=saves_target(path, branch))
         except OSError as error:
             log(f"could not save {path}'s caches: {error}")
 
