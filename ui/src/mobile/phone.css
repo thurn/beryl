@@ -16,11 +16,22 @@ body.phone {
   user-select: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* One tabletop for the whole screen, status bar included (index.html sets viewport-fit=cover).
+   When the board painted its own copy below the top safe area, its gradient started over at
+   the safe area's edge, and the strip under the iOS status bar showed as a separate band. */
+body.phone::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
   background: var(--tabletop);
 }
 
 /* Below the top safe area; the bottom one is its padding, which the hand runs under. Every
-   band and card is placed absolutely by mobile/layout.ts. */
+   band and card is placed absolutely by mobile/layout.ts. The tabletop behind it is
+   `body.phone::before`. */
 .phone-board {
   position: fixed;
   top: env(safe-area-inset-top, 0px);
@@ -31,7 +42,6 @@ body.phone {
   margin-inline: auto;
   padding-bottom: var(--phone-safe-bottom);
   overflow: clip;
-  background: var(--tabletop);
 }
 
 .phone-strip,
