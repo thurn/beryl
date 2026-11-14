@@ -135,11 +135,15 @@ this document.
 
 ### 1. Events and listeners
 
-- **Kinds.** What something listens to is `Listens`, a typed set over a `u16`:
-  the nine events of `EventKind` and two bits that are not events
-  (`RULE_CHANGE`, `DRAW_REPLACEMENT`). It becomes a typed set of 64 kinds for
-  triggers and a second for replacements, so a replacement's gate is its own
-  AND.
+- **Kinds.** What a card's triggered abilities listen to is `Listens`, a typed
+  set of up to 64 `EventKind`s. What its static abilities replace is a second
+  64-bit set, `Replaces`, of `ReplacementKind`s, so a replacement's gate is its
+  own AND. Each has the same three levels: the game's cards
+  (`GameTable::listens_any`, `replaces_any`), the battlefield now
+  (`State::listening`, `replacing`) and one card's face (`Copiable::may_listen`,
+  `may_replace`). Whether a static ability changes a rule for players is no
+  replacement, but the layers' pass collects it with them as the last bit of
+  `Replaces`, `PLAYER_RULE_CHANGE`.
 - **Abilities outside the battlefield** (CR 113.6). An ability says where it
   works, defaulting from its kind. `GameTable` records, for each card, the zones
   other than the battlefield in which some ability of it works. The state keeps

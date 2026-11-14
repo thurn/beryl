@@ -7,7 +7,7 @@ use beryl_card::Amount;
 
 use crate::card::{AbilityIx, AbilityKind, Colors, Modification, Objects};
 use crate::decision::{Outcome, StallReason};
-use crate::event::{Listens, Sink};
+use crate::event::{Listens, Replaces, Sink};
 use crate::filter::{self, Filter};
 use crate::fixed::Full;
 use crate::ids::{CardId, Seat};
@@ -119,16 +119,21 @@ pub(crate) fn over_or_refreshed<L: Layout>(
     s.outcome()
 }
 
-/// The kinds of event the permanents on the battlefield have triggered abilities for. A face-down
-/// permanent has none, whichever card it is ([CR 708.2a]): it has "no text, no name, no subtypes,
-/// and no mana cost". So it counts for nothing ([`crate::query::Copiable::may_listen`]), and
-/// masking or determinizing its hidden identity leaves this unchanged.
+/// The kinds of event the permanents on the battlefield have triggered abilities for, and the
+/// kinds their static abilities replace (with whether one changes a rule for players), in one
+/// pass. A face-down permanent has none of either, whichever card it is ([CR 708.2a]): it has "no
+/// text, no name, no subtypes, and no mana cost". So it counts for nothing
+/// ([`crate::query::Copiable::may_listen`]), and masking or determinizing its hidden identity
+/// leaves both unchanged.
 ///
 /// [CR 708.2a]: https://yawgatog.com/resources/magic-rules/#R7082a
-pub(crate) fn listening<L: Layout>(s: &State<L>, t: &GameTable) -> Listens {
+pub(crate) fn listening<L: Layout>(s: &State<L>, t: &GameTable) -> (Listens, Replaces) {
     s.battlefield()
         .iter()
-        .fold(Listens::NONE, |k, &slot| k | s.copiable(slot).may_listen(t))
+        .fold((Listens::NONE, Replaces::NONE), |(l, r), &slot| {
+            let what = s.copiable(slot);
+            (l | what.may_listen(t), r | what.may_replace(t))
+        })
 }
 
 /// Whether a change in the number of `kind` counters on the object in `slot` can change its derived
@@ -180,7 +185,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
     let Some(mut s) = s.rederive() else {
         return Ok(());
     };
-    let listening = listening(&s, t);
+    let (listening, replacing) = listening(&s, t);
 
     // Made at the first effect that applies: most recomputes have none, and the list is big.
     let mut list: Option<Applying<L>> = None;
@@ -284,13 +289,13 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
         d.toughness = d.toughness.saturating_add(delta);
     }
     // A permanent that may change a rule for players said so in the mask just read for
-    // the listeners: with none on the battlefield, one AND.
-    let rules = if listening.contains(Listens::RULE_CHANGE) {
+    // the replacements: with none on the battlefield, one AND.
+    let rules = if replacing.changes_player_rules() {
         player_rules(&mut s, t)
     } else {
         [Rules::NONE; _]
     };
-    s.finish(listening, rules);
+    s.finish(listening, replacing, rules);
     listed
 }
 

@@ -12,7 +12,7 @@
 use beryl_card::{CardDef, Face, FaceIx, Zone};
 
 use crate::bitboard::Bitboard;
-use crate::event::Listens;
+use crate::event::{Listens, Replaces};
 use crate::ids::{CardId, CardIx, Seat};
 use crate::layout::{Layout, Small};
 use crate::object::CombatRole;
@@ -154,7 +154,7 @@ impl<L: Layout> Copiable<L> {
     /// The rule changes the static abilities of the face that is up make for players
     /// ([`GameTable::player_rules`]). For a card no face of which makes one, a load and an
     /// AND. The layers ask it only of a battlefield with such a card on it
-    /// ([`crate::event::Listens::RULE_CHANGE`]).
+    /// ([`crate::event::Replaces::PLAYER_RULE_CHANGE`]).
     #[inline]
     pub fn player_rules(self, t: &GameTable) -> Rules {
         let of_players = t.player_rules();
@@ -175,6 +175,20 @@ impl<L: Layout> Copiable<L> {
             Listens::NONE
         } else {
             t.listens(self.card)
+        }
+    }
+
+    /// The kinds of event the static abilities of any face of the definition replace, and
+    /// whether one changes a rule for players: like [`Copiable::may_listen`], a mask to skip
+    /// an object by. A face-down permanent has no abilities ([CR 708.2a]), so none.
+    ///
+    /// [CR 708.2a]: https://yawgatog.com/resources/magic-rules/#R7082a
+    #[inline]
+    pub fn may_replace(self, t: &GameTable) -> Replaces {
+        if self.face == FaceIx::DOWN {
+            Replaces::NONE
+        } else {
+            t.replaces(self.card)
         }
     }
 

@@ -8,7 +8,7 @@ use crate::bitboard::Bitboard;
 #[cfg(doc)]
 use crate::card::Replacement;
 use crate::card::{Ability, AbilityIx, FaceAbility};
-use crate::event::{Event, Listens, LossCause};
+use crate::event::{Event, LossCause, ReplacementKind};
 use crate::filter;
 use crate::fixed::Full;
 use crate::game::Game;
@@ -34,10 +34,11 @@ use crate::{ending, trigger};
 /// [CR 121.2]: https://yawgatog.com/resources/magic-rules/#R1212
 /// [CR 614.11]: https://yawgatog.com/resources/magic-rules/#R61411
 pub fn draw<L: Layout>(game: &mut Game<'_, L>, player: Seat, cards: u8) -> Result<(), Full> {
-    let listening = game.state.listening();
-    let replaceable = listening
-        .unwrap_or(game.table.listens_any())
-        .contains(Listens::DRAW_REPLACEMENT);
+    let replaceable = game
+        .state
+        .replacing()
+        .unwrap_or(game.table.replaces_any())
+        .replaces(ReplacementKind::Draw);
     let mut left = cards;
     loop {
         let s = &mut *game.state;
@@ -90,8 +91,8 @@ fn replacement<L: Layout>(
         .iter()
         .filter(|&&slot| {
             s.copiable(slot)
-                .may_listen(t)
-                .contains(Listens::DRAW_REPLACEMENT)
+                .may_replace(t)
+                .replaces(ReplacementKind::Draw)
                 && s.controller(slot) == player
         })
         .find_map(|&slot| {

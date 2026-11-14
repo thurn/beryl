@@ -14,7 +14,7 @@ use beryl_card::{
     When,
 };
 
-use crate::event::Listens;
+use crate::event::Replaces;
 
 /// Why the rules cannot check a rule change: the part of it no code reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -315,10 +315,10 @@ impl RuleChanges {
 }
 
 /// Numbers the rule changes the abilities of a card's faces name, or of the abilities they
-/// grant, and gives [`Listens::RULE_CHANGE`] if a static ability of it makes one for players:
-/// the bit of its listener mask no event has. Or the first of them the rules cannot check.
-pub(crate) fn number(def: &CardDef, rules: &mut RuleChanges) -> Result<Listens, Unchecked> {
-    let mut mask = Listens::NONE;
+/// grant, and gives [`Replaces::PLAYER_RULE_CHANGE`] if a static ability of it makes one for
+/// players. Or the first of them the rules cannot check.
+pub(crate) fn number(def: &CardDef, rules: &mut RuleChanges) -> Result<Replaces, Unchecked> {
+    let mut mask = Replaces::NONE;
     for face in def.faces {
         for ability in face.abilities.iter().chain(face.grants) {
             mask |= named_by(ability, rules)?;
@@ -328,24 +328,24 @@ pub(crate) fn number(def: &CardDef, rules: &mut RuleChanges) -> Result<Listens, 
 }
 
 /// Numbers the rule change `ability` names, if it names one, and gives
-/// [`Listens::RULE_CHANGE`] if it is a static ability's for players.
-fn named_by(ability: &Ability, rules: &mut RuleChanges) -> Result<Listens, Unchecked> {
+/// [`Replaces::PLAYER_RULE_CHANGE`] if it is a static ability's for players.
+fn named_by(ability: &Ability, rules: &mut RuleChanges) -> Result<Replaces, Unchecked> {
     let Some(rule) = ability.rule() else {
-        return Ok(Listens::NONE);
+        return Ok(Replaces::NONE);
     };
     let first = rules.id(rule).is_none();
     let id = rules.number(rule)?;
     let of_players = RuleKind::of(rule)?.of_players();
     match (ability.kind() == AbilityKind::Static, of_players) {
         (true, true) if ability.condition().is_some() => Err(Unchecked::Condition),
-        (true, true) => Ok(Listens::RULE_CHANGE),
+        (true, true) => Ok(Replaces::PLAYER_RULE_CHANGE),
         // Asked of the permanent, with its condition, as the rule is applied.
         (true, false) => {
             rules.keep_condition(id, ability.condition(), first)?;
-            Ok(Listens::NONE)
+            Ok(Replaces::NONE)
         }
         // Started by the ability's effect, on the players it names as it resolves.
-        (false, true) => Ok(Listens::NONE),
+        (false, true) => Ok(Replaces::NONE),
         (false, false) => Err(Unchecked::Rule),
     }
 }

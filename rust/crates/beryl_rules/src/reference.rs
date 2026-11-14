@@ -88,6 +88,11 @@ fn check_layers<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Violation>
         "the trigger listeners differ from a fresh recompute",
         None,
     )?;
+    check(
+        fresh.replacing() == s.replacing(),
+        "the replacement kinds differ from a fresh recompute",
+        None,
+    )?;
     // The players in any order: each is checked alone.
     for player in s.players_in_seat_order(s.players()) {
         check(

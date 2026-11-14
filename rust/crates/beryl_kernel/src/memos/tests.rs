@@ -52,7 +52,11 @@ fn derive<L: Layout>(t: &GameTable, s: &mut State<L>) {
             ..Derived::default()
         };
     }
-    cache.finish(crate::event::Listens::NONE, Default::default());
+    cache.finish(
+        crate::event::Listens::NONE,
+        crate::event::Replaces::NONE,
+        Default::default(),
+    );
 }
 
 #[test]

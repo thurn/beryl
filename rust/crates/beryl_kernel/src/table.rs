@@ -6,7 +6,7 @@ use beryl_card::{
     FACE_DOWN, FACE_DOWN_COPY, Face, FaceIx, RuleChange,
 };
 
-use crate::event::{EventKind, Listens};
+use crate::event::{EventKind, Listens, Replaces};
 use crate::ids::{CardId, CardIx, LargeCardIx, Seat};
 use crate::layout::{Layout, PerLayout, PerSeat};
 use crate::listener::{self, Listener, Unmatched};
@@ -95,12 +95,15 @@ pub struct GameTable {
     defs: Vec<&'static CardDef>,
     /// Each deck as game indices, in decklist order.
     decks: PerSeat<Vec<usize>>,
-    /// Per game index, the event kinds its triggered abilities listen to, and the marks no
-    /// event has: [`Listens::RULE_CHANGE`] if a static ability of it changes a rule for
-    /// players, [`Listens::DRAW_REPLACEMENT`] if one replaces its controller's draws.
+    /// Per game index, the event kinds its triggered abilities listen to.
     listens: Vec<Listens>,
     /// Every kind any card of the game listens to.
     listens_any: Listens,
+    /// Per game index, the kinds of event its static abilities replace, and
+    /// [`Replaces::PLAYER_RULE_CHANGE`] if one of them changes a rule for players.
+    replaces: Vec<Replaces>,
+    /// Every kind any card of the game replaces, and whether any changes a rule for players.
+    replaces_any: Replaces,
     /// Every triggered ability of the game's cards under the kind of event it listens to:
     /// each card's in turn, in the order its faces list them.
     listeners: Vec<Listener>,
@@ -140,8 +143,8 @@ pub struct GameTable {
 /// are live ([`crate::effects`]), which a table could only bound, since a Rust body is
 /// opaque to it. These are what no live entry can say: whether to keep a count nothing has
 /// yet read. Whether a static ability changes a rule for players is no capability of the
-/// game either: it is a bit of each card's listener mask ([`Listens::RULE_CHANGE`]), which says
-/// it of the permanents on the battlefield now.
+/// game either: it is a bit of each card's replacement mask ([`Replaces::PLAYER_RULE_CHANGE`]),
+/// which says it of the permanents on the battlefield now.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Capability {
     /// A card reads whether a permanent entered the battlefield this turn, so that is
@@ -179,10 +182,9 @@ impl Capability {
     }
 }
 
-/// The marks of a card's listener mask that are no event ([`Listens::DRAW_REPLACEMENT`],
-/// [`Listens::RULE_CHANGE`]), with the rule changes its abilities name numbered in
-/// `rule_changes`; or the first of its abilities the engine has no code for.
-fn unlistened(def: &CardDef, rule_changes: &mut RuleChanges) -> Result<Listens, TableError> {
+/// A card's replacement mask ([`Replaces`]), with the rule changes its abilities name numbered
+/// in `rule_changes`; or the first of its abilities the engine has no code for.
+fn replaced(def: &CardDef, rule_changes: &mut RuleChanges) -> Result<Replaces, TableError> {
     let replaces = replacement::check(def).map_err(|unreplaced| TableError::Replacement {
         card: def.name,
         unreplaced,
@@ -193,6 +195,41 @@ fn unlistened(def: &CardDef, rule_changes: &mut RuleChanges) -> Result<Listens, 
             unchecked,
         })?;
     Ok(replaces | changes)
+}
+
+/// The cards a game can contain, each once, and each deck as indices into them: the decks'
+/// cards in decklist order, then the tokens they make, then [`FACE_DOWN_COPY`] last.
+fn gather(
+    cards: &'static CardTable,
+    decks: PerSeat<&Decklist>,
+) -> Result<(Vec<&'static CardDef>, PerSeat<Vec<usize>>), TableError> {
+    let mut defs: Vec<&'static CardDef> = Vec::new();
+    let mut indices: PerSeat<Vec<usize>> = Default::default();
+    for (player, list) in Seat::BOTH.into_iter().zip(decks) {
+        for &(count, name) in list {
+            let def = cards.get(name).ok_or(TableError::UnknownCard(name))?;
+            let index = if let Some(i) = defs.iter().position(|d| std::ptr::eq(*d, def)) {
+                i
+            } else {
+                defs.push(def);
+                defs.len() - 1
+            };
+            for _ in 0..count {
+                indices[player.index()].push(index);
+            }
+        }
+    }
+    let mut i = 0;
+    while i < defs.len() {
+        for &token in defs[i].tokens {
+            if !defs.iter().any(|d| std::ptr::eq(*d, token)) {
+                defs.push(token);
+            }
+        }
+        i += 1;
+    }
+    defs.push(&FACE_DOWN_COPY);
+    Ok((defs, indices))
 }
 
 /// Whether an ability asks whether a permanent entered this turn
@@ -233,32 +270,7 @@ impl GameTable {
     /// Decks of any size and any number of distinct cards make a table: whether a game
     /// between them fits a layout is asked where its state is made ([`crate::State::deal`]).
     pub fn new(cards: &'static CardTable, decks: PerSeat<&Decklist>) -> Result<Self, TableError> {
-        let mut defs: Vec<&'static CardDef> = Vec::new();
-        let mut indices: PerSeat<Vec<usize>> = Default::default();
-        for (player, list) in Seat::BOTH.into_iter().zip(decks) {
-            for &(count, name) in list {
-                let def = cards.get(name).ok_or(TableError::UnknownCard(name))?;
-                let index = if let Some(i) = defs.iter().position(|d| std::ptr::eq(*d, def)) {
-                    i
-                } else {
-                    defs.push(def);
-                    defs.len() - 1
-                };
-                for _ in 0..count {
-                    indices[player.index()].push(index);
-                }
-            }
-        }
-        let mut i = 0;
-        while i < defs.len() {
-            for &token in defs[i].tokens {
-                if !defs.iter().any(|d| std::ptr::eq(*d, token)) {
-                    defs.push(token);
-                }
-            }
-            i += 1;
-        }
-        defs.push(&FACE_DOWN_COPY);
+        let (defs, indices) = gather(cards, decks)?;
         let last = defs.len() - 1;
         let face_down_copy = (
             CardIx::try_from_index(last).unwrap_or_default(),
@@ -274,6 +286,7 @@ impl GameTable {
         let mut listeners = Vec::new();
         let mut listeners_from = Vec::with_capacity(defs.len() + 1);
         let mut listens = Vec::with_capacity(defs.len());
+        let mut replaces = Vec::with_capacity(defs.len());
         let mut rule_changes = RuleChanges::default();
         for def in &defs {
             let of = listener::of(def).map_err(|unmatched| TableError::Trigger {
@@ -287,13 +300,14 @@ impl GameTable {
             if !crate::filter::reads_players_of(def) {
                 return Err(TableError::Players { card: def.name });
             }
-            let unlistened = unlistened(def, &mut rule_changes)?;
-            listens.push(of.iter().fold(unlistened, |mask, l| mask | l.kind));
+            replaces.push(replaced(def, &mut rule_changes)?);
+            listens.push(of.iter().fold(Listens::NONE, |mask, l| mask | l.kind));
             listeners_from.push(u32::try_from(listeners.len()).expect("fewer listeners"));
             listeners.extend(of);
         }
         listeners_from.push(u32::try_from(listeners.len()).expect("fewer listeners"));
         let listens_any = listens.iter().fold(Listens::NONE, |a, &b| a | b);
+        let replaces_any = replaces.iter().fold(Replaces::NONE, |a, &b| a | b);
         let needy = defs.iter().any(|d| {
             d.faces
                 .iter()
@@ -321,6 +335,8 @@ impl GameTable {
             decks: indices,
             listens,
             listens_any,
+            replaces,
+            replaces_any,
             listeners,
             listeners_from,
             faces,
@@ -391,6 +407,13 @@ impl GameTable {
     #[inline]
     pub(crate) fn listens(&self, card: impl CardId) -> Listens {
         self.listens[card.index()]
+    }
+
+    /// The kinds of event the static abilities of the card at `card` replace. The crate's own:
+    /// others ask [`crate::Copiable::may_replace`], which is nothing for a face-down permanent.
+    #[inline]
+    pub(crate) fn replaces(&self, card: impl CardId) -> Replaces {
+        self.replaces[card.index()]
     }
 
     /// The triggered abilities of the face `face` of the card at `card` that listen to events of
@@ -487,6 +510,13 @@ impl GameTable {
     #[inline]
     pub fn listens_any(&self) -> Listens {
         self.listens_any
+    }
+
+    /// The kinds of event any card of this game replaces, and whether any changes a rule for
+    /// players.
+    #[inline]
+    pub fn replaces_any(&self) -> Replaces {
+        self.replaces_any
     }
 
     /// Whether a card of the game has an activated ability that may do nothing.

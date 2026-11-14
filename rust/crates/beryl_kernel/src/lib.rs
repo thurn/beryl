@@ -50,7 +50,7 @@
 //! | put a spell on the stack, make a token, have a permanent enter | [`State::become_spell`], [`State::make_token`], [`State::arrive`] with a [`mutate::Arrival`], [`State::remember`] | what a permanent enters with (tapped, attacking, its face, controller, counters and what it is attached to) is set as one change, before anything reads it |
 //! | declare and end combat | [`State::declare_attacker`], [`State::choose_attacked`], [`State::forget_attacked`], [`State::declare_blocker`], [`State::block`], [`State::mark_struck_first`], [`State::remove_from_combat`], [`State::end_combat`] | the combat flags and the combat reference change together; nothing stays related to a permanent removed from combat |
 //! | show or hide a card | [`State::reveal`], [`State::look`], [`State::forget`], and for a paused resolution [`State::keep_seen`] | each player's knowledge; the identity is settled first |
-//! | store the layers' results | [`State::rederive`], which lends the cache to the one function that fills it ([`derive::Rederive`]) | the derived table by battlefield index, the listening mask, what each face-down permanent's controller sees, `derived_dirty` cleared |
+//! | store the layers' results | [`State::rederive`], which lends the cache to the one function that fills it ([`derive::Rederive`]) | the derived table by battlefield index, the listening and replacing masks, what each face-down permanent's controller sees, `derived_dirty` cleared |
 //! | change a player | [`State::gain_life`], [`State::lose_life`], [`State::damage_player`], [`State::add_mana`], [`State::spend_mana`], [`State::empty_mana_pools`], [`State::count_land_played`], [`State::declare_mulligan`], [`State::keep_hand`], [`State::count_bottomed`], [`State::count_mulligan`], [`State::add_emblem`] | a pool spends only mana it holds; a hand is kept with what it owes the bottom of the library; a mulligan taken is one to declare again |
 //! | move the turn, count toward a budget, end the game | [`State::set_starting_player`], [`State::begin_turn`], [`State::begin_step`], [`State::give_priority`], [`State::pass_priority`], [`State::reset_passes`], [`State::declare_attack`], [`State::set_cleanup_check`], [`State::count_decision`], [`State::count_state_based_check`], [`State::reset_state_based_checks`], [`State::end_game`] | passes reset with priority; the lands played and the decisions offered begin again with the turn; that attackers were declared ends with the combat ([`State::end_combat`]) |
 //! | use the stack | [`State::put_on_stack`], [`State::take_top_of_stack`], [`State::take_off_stack`], which returns the entry, [`State::announce_x`], [`State::announce_target`] | a spell's entry goes on once its card is in the stack zone and comes off before the card leaves, so the zone move keeps the stack's set of objects and these keep its order |
@@ -207,7 +207,9 @@
 //! each of the players' four sets of rule changes is a word, where it was a byte. It is
 //! 20,088 since [`state::StackEntry`] holds a [`state::StackItem`], a spell, an activated
 //! ability or a triggered ability with only the fields of its kind: each of the 64 entries
-//! is 56 bytes, two fewer.
+//! is 56 bytes, two fewer. It is 20,104 since what the permanents listen to is a 64-bit
+//! [`event::Listens`], where it was 16 bits, beside a 64-bit [`event::Replaces`] of what
+//! their static abilities replace: 16 more.
 //! The limit is 20,480. Each bead may change the size at its
 //! own push by at most its allotment, whatever landed before it, and reports the size as it
 //! reports the count:
@@ -343,7 +345,7 @@
 //! | [`State::signature`] | one bit test of the keyed slots, and one of the two bits as two objects are compared (`store::Stored`) | out of line, the two objects' memos, their rows of counters and the effects on them compared: a permanent's layer results show what its effects make of it now, not for how long |
 //! | "is a rule change of this kind in force" ([`State::rules_for`], [`GameTable::rules_of`]) | for a player, their two sets of rules joined and one AND with the table's set of the kind, which is the whole answer; for a permanent, one AND of the table's rules of its card and one of the store's kinds | for a permanent, a second AND of the rules of the face that is up, or one pass over the store's entries |
 //! | an event's match against triggered abilities (the rules' `trigger::match_event`) | one AND of the kinds any card of the game listens to ([`GameTable::listens_any`]) | one AND of the battlefield's listener mask; then, for each permanent whose card listens to the kind, the listeners of that kind on the face that is up ([`GameTable::listeners`]), and no other ability of it |
-//! | the layers' search for the rules static abilities change for players | one AND of the listener mask the pass has just folded from the permanents ([`event::Listens::RULE_CHANGE`]): no read of its own | a second pass over the permanents, out of line, in a recompute with such a permanent on the battlefield |
+//! | the layers' search for the rules static abilities change for players | one AND of the replacement mask the pass has just folded from the permanents ([`event::Replaces::PLAYER_RULE_CHANGE`]): no read of its own | a second pass over the permanents, out of line, in a recompute with such a permanent on the battlefield |
 //! | a tracker ([`State::track`], [`State::tracked`]) | one AND of the table's capabilities where the rules would write it; a read finds an empty set | a bit set or tested |
 //! | a count of counters ([`State::counters_of`]) | of a kind the object keeps in a field, one read; of any other, one bit test of the keyed slots | one pass over the table's rows, at most 32 of 3 bytes |
 //!
@@ -420,11 +422,11 @@
 //!   [`State::rule_applies`] answers for one numbered rule change, for tools and tests.
 //! - A static ability's change for players is kept current with the layers, never found
 //!   by walking the battlefield as the rules ask. A card with such an ability has
-//!   [`event::Listens::RULE_CHANGE`] in its listener mask, which the layers' pass already
-//!   reads of every permanent for what listens. With the bit in what it folded, the pass
+//!   [`event::Replaces::PLAYER_RULE_CHANGE`] in its replacement mask, which the layers'
+//!   pass already reads of every permanent for what replaces. With the bit in what it folded, the pass
 //!   adds each such permanent's rules to the set of each player they apply to, control
 //!   being settled, and stores the sets as it finishes ([`derive::Rederive::finish`], with
-//!   `listening`); without it, it stores empty sets and has read nothing more. The sets
+//!   `replacing`); without it, it stores empty sets and has read nothing more. The sets
 //!   are current while the layer results are, and a read while they are stale panics in
 //!   debug builds, as a read of a layer result does. The contract first gave this a
 //!   [`table::Capability`], which says what a game's cards could do; the mask says what

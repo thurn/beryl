@@ -10,7 +10,7 @@
 
 use beryl_card::{Ability, AbilityKind, Behavior, CardDef, Effect, Players, Replacement};
 
-use crate::event::Listens;
+use crate::event::{ReplacementKind, Replaces};
 
 /// Why the engine cannot apply a replacement effect: the part of it no code reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,15 +52,14 @@ pub fn replaces_draws(ability: &Ability) -> bool {
     ability.kind() == AbilityKind::Replacement && ability.replacement() == Replacement::WouldDraw
 }
 
-/// The bit of a card's listener mask that says a static ability of it replaces its
-/// controller's draws ([`Listens::DRAW_REPLACEMENT`]), if one does, or the first replacement
-/// of its faces the engine cannot apply.
-pub(crate) fn check(def: &CardDef) -> Result<Listens, Unreplaced> {
-    let mut mask = Listens::NONE;
+/// The kinds of event the static abilities of a card's faces replace ([`Replaces`]), or the
+/// first replacement of its faces the engine cannot apply.
+pub(crate) fn check(def: &CardDef) -> Result<Replaces, Unreplaced> {
+    let mut mask = Replaces::NONE;
     for ability in def.faces.iter().flat_map(|face| face.abilities) {
         if replaces_draws(ability) {
             instead_of_drawing(ability)?;
-            mask |= Listens::DRAW_REPLACEMENT;
+            mask |= Replaces::kind(ReplacementKind::Draw);
         }
     }
     Ok(mask)

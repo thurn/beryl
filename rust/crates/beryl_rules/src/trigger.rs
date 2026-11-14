@@ -63,7 +63,7 @@ pub(crate) fn match_event<L: Layout>(
         let listening = s.listening().map_or(t.listens_any(), |listening| {
             debug_assert_eq!(
                 listening,
-                layers::listening(s, t),
+                layers::listening(s, t).0,
                 "the battlefield's listeners, as the layer results found them"
             );
             listening

@@ -6,7 +6,7 @@ use beryl_card::{
 };
 
 use super::*;
-use crate::event::{EventKind, Listens};
+use crate::event::{EventKind, Listens, Replaces};
 use crate::rule_changes::fixtures::{LIMIT, WALKER};
 
 static ALPHA: CardDef = CardDef {
@@ -43,9 +43,11 @@ fn a_game_has_the_capabilities_of_its_cards_and_no_others() {
 fn a_card_that_changes_a_rule_for_players_says_so_in_its_mask() {
     let t = GameTable::new(&WALKERS, [&[(4, "Alpha")], &[(1, "Walker")]]).unwrap();
     let (alpha, walker) = (CardIx::from_index(0), CardIx::from_index(1));
-    assert!(!t.listens(alpha).contains(Listens::RULE_CHANGE));
-    assert_eq!(t.listens(walker), Listens::RULE_CHANGE);
-    assert_eq!(t.listens_any(), Listens::RULE_CHANGE);
+    assert!(!t.replaces(alpha).changes_player_rules());
+    assert_eq!(t.replaces(walker), Replaces::PLAYER_RULE_CHANGE);
+    assert_eq!(t.replaces_any(), Replaces::PLAYER_RULE_CHANGE);
+    // A rule change is no event a trigger listens to.
+    assert!(t.listens_any().is_empty());
     // Its rule about itself is none of the players' rules.
     let limit = t.rule_id(&LIMIT).unwrap();
     assert_eq!(

@@ -28,7 +28,7 @@ use beryl_card::FaceIx;
 
 use crate::bitboard::Bitboard;
 use crate::decision::Outcome;
-use crate::event::Listens;
+use crate::event::{Listens, Replaces};
 use crate::fixed::Full;
 use crate::ids::{Seat, Slot, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
@@ -133,6 +133,10 @@ pub struct State<L: Layout = Small> {
     /// ([`crate::table::GameTable::listens`] of each), found with the layer results and
     /// current while they are.
     pub(crate) listening: Listens,
+    /// The kinds of event the static abilities of the permanents on the battlefield replace,
+    /// and whether one changes a rule for players ([`crate::table::GameTable::replaces`] of
+    /// each), found with the layer results and current while they are.
+    pub(crate) replacing: Replaces,
     pub(crate) outcome: Option<Outcome>,
     pub(crate) profile: Profile,
     pub(crate) flags: Flags,
@@ -192,6 +196,7 @@ impl<L: Layout> std::hash::Hash for State<L> {
             players,
             budgets,
             listening,
+            replacing,
             outcome,
             profile,
             flags,
@@ -216,6 +221,7 @@ impl<L: Layout> std::hash::Hash for State<L> {
         battlefield.hash(h);
         derived.hash(h);
         listening.hash(h);
+        replacing.hash(h);
         static_rules.hash(h);
         zones.hash(h);
         players.hash(h);
@@ -385,6 +391,14 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn listening(&self) -> Option<Listens> {
         (!self.flags.derived_dirty).then_some(self.listening)
+    }
+
+    /// The kinds of event the static abilities of the permanents on the battlefield replace,
+    /// and whether one changes a rule for players, as the layers last stored them, or nothing
+    /// while the layer results are stale.
+    #[inline]
+    pub fn replacing(&self) -> Option<Replaces> {
+        (!self.flags.derived_dirty).then_some(self.replacing)
     }
 
     /// A permanent's characteristics after continuous effects (architecture §9). Reads never

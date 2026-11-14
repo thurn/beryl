@@ -3,7 +3,7 @@
 use beryl_card::{TurnStep, Zone};
 
 use crate::bitboard::Bitboard;
-use crate::event::Listens;
+use crate::event::{Listens, Replaces};
 use crate::fit::Misfit;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
@@ -107,6 +107,7 @@ impl<L: Layout> State<L> {
             battlefield: Default::default(),
             derived: Table::filled(Derived::default()),
             listening: Listens::NONE,
+            replacing: Replaces::NONE,
             static_rules: Table::filled(Rules::NONE),
             zones: Zones {
                 members: Table::filled([Bitboard::EMPTY; Zone::OWNED]),

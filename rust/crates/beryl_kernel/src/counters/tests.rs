@@ -50,7 +50,11 @@ fn derive<L: Layout>(t: &GameTable, s: &mut State<L>) {
             ..Derived::default()
         };
     }
-    cache.finish(crate::event::Listens::NONE, Default::default());
+    cache.finish(
+        crate::event::Listens::NONE,
+        crate::event::Replaces::NONE,
+        Default::default(),
+    );
 }
 
 /// The first two kinds of the vocabulary's list that no object keeps in a field.

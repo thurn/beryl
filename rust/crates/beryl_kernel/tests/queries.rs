@@ -144,7 +144,11 @@ fn derive(t: &GameTable, s: &mut State, boost: i8) {
             ..Derived::default()
         };
     }
-    cache.finish(beryl_kernel::event::Listens::NONE, Default::default());
+    cache.finish(
+        beryl_kernel::event::Listens::NONE,
+        beryl_kernel::event::Replaces::NONE,
+        Default::default(),
+    );
 }
 
 #[test]

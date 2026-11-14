@@ -9,7 +9,8 @@
 
 pub use beryl_kernel::cause::{Cause, StackIx, Tag};
 pub use beryl_kernel::event::{
-    Event, EventKind, Listens, LossCause, Reason, Recipient, Sink, Tagged, Work,
+    Event, EventKind, Listens, LossCause, Reason, Recipient, ReplacementKind, Replaces, Sink,
+    Tagged, Work,
 };
 
 pub use crate::tokens::TokenEntry;
