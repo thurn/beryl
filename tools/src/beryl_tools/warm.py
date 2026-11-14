@@ -10,8 +10,8 @@ gets its own, seeded from the per-machine cache:
 - `save` prunes what builds no longer use from `rust/target`, then moves both into the cache by
   rename, which is instant.
 
-Only slow CI's worktrees save `rust/target` (`saves_target`); every other worktree's removal
-deletes it. A save replaces the whole cache, so when any worktree saved, the last one removed
+Only slow CI's worktrees save `rust/target` (`saves_target`), on a machine where slow CI has
+saved it within a day; every other worktree's removal deletes it. A save replaces the whole cache, so when any worktree saved, the last one removed
 decided what every later worktree started from. One that had built part of the workspace, or
 started with no cache, left the cache without most third-party crates: on 2026-11-14 it held
 584 of a full build's 1,526 fingerprints, and the first test build in a fresh worktree took
@@ -78,6 +78,8 @@ UNIT_NAME: re.Pattern[str] = re.compile(r"^(?:lib)?(.+-[0-9a-f]{16})(?:\..+)?$")
 SOURCES = ".beryl-sources.json"
 # The name Enact gives a slow-CI worktree (`saves_target`).
 CI_WORKTREE: re.Pattern[str] = re.compile(r"ci-[0-9a-f]{12}")
+# The file a slow-CI worktree's saved target holds, written as it is saved (`saves_target`).
+CI_STAMP = ".beryl-slow-ci"
 
 
 WINDOWS: bool = sys.platform == "win32"
@@ -682,12 +684,24 @@ def prune(target: Path) -> None:
     )
 
 
-def saves_target(worktree: Path, branch: str) -> bool:
-    """Whether Enact's removal of `worktree` (checked out on `branch`, empty when detached)
-    saves its `rust/target` into the cache: only slow CI's worktrees do. Enact names each one
-    `ci-<first 12 hex digits of the tip>` and checks it out detached (`ci_run_once` in
-    enact.py), on this Mac and on Windows alike."""
+def is_slow_ci(worktree: Path, branch: str) -> bool:
+    """Whether `worktree`, checked out on `branch` (empty when detached), is one of slow CI's.
+    Enact names each one `ci-<first 12 hex digits of the tip>` and checks it out detached
+    (`ci_run_once` in enact.py), on this Mac and on Windows alike."""
     return not branch and CI_WORKTREE.fullmatch(worktree.name) is not None
+
+
+def saves_target(worktree: Path, branch: str) -> bool:
+    """Whether Enact's removal of `worktree` (checked out on `branch`) saves its `rust/target`
+    into the cache: always for slow CI's worktrees, and for others only where slow CI has not
+    saved the cache within a day ([`CI_STAMP`]), such as a second Mac that runs no slow CI.
+    """
+    if is_slow_ci(worktree, branch):
+        return True
+    with suppress(OSError):
+        saved = (cache_root() / "target" / CI_STAMP).stat().st_mtime
+        return time.time() - saved > DAY
+    return True
 
 
 def save(checkout: Path, target_too: bool = True) -> None:
@@ -730,7 +744,17 @@ def remove_hook() -> int:
         # A full disk fails the save (even the lock file): remove the worktree all the same,
         # or its copy of rust/target stays behind and keeps the disk full.
         try:
-            save(path, target_too=saves_target(path, branch))
+            target_too = saves_target(path, branch)
+            target = path / "rust" / "target"
+            if target_too and target.is_dir():
+                # The stamp travels with the target into the cache, and with each clone of it
+                # into a worktree: only slow CI's copy may carry it.
+                stamp = target / CI_STAMP
+                if is_slow_ci(path, branch):
+                    stamp.write_text("")
+                else:
+                    stamp.unlink(missing_ok=True)
+            save(path, target_too=target_too)
         except OSError as error:
             log(f"could not save {path}'s caches: {error}")
 

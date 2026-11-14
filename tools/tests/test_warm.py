@@ -329,7 +329,11 @@ def test_a_clone_lets_the_next_build_mark_the_units_it_reads(
 
 
 def removed_by_enact(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str, branch: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+    branch: str,
+    crate: str = "beryl",
 ) -> Path:
     """Runs the remove hook on a worktree named `name` on `branch` whose target holds a build
     of one crate, over a cache that holds a build of another, and returns the cached target.
@@ -350,23 +354,31 @@ def removed_by_enact(
     return tmp_path / "cache" / "target" / "debug" / "deps"
 
 
-def test_removing_an_agents_worktree_leaves_the_cached_target_alone(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    deps = removed_by_enact(tmp_path, monkeypatch, "fix-mulligan", "enact/fix-mulligan")
-    assert (deps / f"libtokio-{'a' * 16}.rlib").exists()
-    assert not (deps / f"libberyl-{'b' * 16}.rlib").exists()
-
-
-def test_removing_a_slow_ci_worktree_saves_its_target(
+def test_after_a_slow_ci_save_an_agents_worktree_leaves_the_cache_alone(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     deps = removed_by_enact(tmp_path, monkeypatch, "ci-0123456789ab", "")
     assert (deps / f"libberyl-{'b' * 16}.rlib").exists()
+    assert (deps.parent.parent / warm.CI_STAMP).exists()
+    shutil.rmtree(tmp_path / ".worktrees")
+    deps = removed_by_enact(
+        tmp_path, monkeypatch, "fix-mulligan", "enact/fix-mulligan", crate="rules"
+    )
+    assert (deps / f"libberyl-{'b' * 16}.rlib").exists()
+    assert not (deps / f"librules-{'b' * 16}.rlib").exists()
 
 
-def test_only_a_detached_ci_named_worktree_saves_its_target() -> None:
-    assert warm.saves_target(Path(".worktrees/ci-2dd60bd5a1b2"), "")
-    assert not warm.saves_target(Path(".worktrees/ci-2dd60bd5a1b2"), "enact/x")
-    assert not warm.saves_target(Path(".worktrees/ci-cache-writer"), "")
-    assert not warm.saves_target(Path(".worktrees/slot-1"), "")
+def test_without_a_recent_slow_ci_save_any_worktree_saves_its_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A machine that runs no slow CI, such as a second Mac.
+    deps = removed_by_enact(tmp_path, monkeypatch, "fix-mulligan", "enact/fix-mulligan")
+    assert (deps / f"libberyl-{'b' * 16}.rlib").exists()
+    assert not (deps.parent.parent / warm.CI_STAMP).exists()
+
+
+def test_only_a_detached_ci_named_worktree_is_slow_cis() -> None:
+    assert warm.is_slow_ci(Path(".worktrees/ci-2dd60bd5a1b2"), "")
+    assert not warm.is_slow_ci(Path(".worktrees/ci-2dd60bd5a1b2"), "enact/x")
+    assert not warm.is_slow_ci(Path(".worktrees/ci-cache-writer"), "")
+    assert not warm.is_slow_ci(Path(".worktrees/slot-1"), "")
