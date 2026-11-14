@@ -145,7 +145,17 @@ impl Replacement {
     /// "If [players] would draw a card, [the ability's body] instead."
     pub const fn draws(players: Players) -> Replacement {
         Replacement {
-            replaces: Replaced::Draw(players),
+            replaces: Replaced::Draw(players, Draws::Each),
+            rewrite: Rewrite::Instead,
+        }
+    }
+
+    /// "If [players] would draw a card except the first one they draw in each of their draw
+    /// steps, [the ability's body] instead." In the body, "that player" is the player who
+    /// would draw.
+    pub const fn draws_except_first_in_draw_step(players: Players) -> Replacement {
+        Replacement {
+            replaces: Replaced::Draw(players, Draws::ExceptFirstInDrawStep),
             rewrite: Rewrite::Instead,
         }
     }
@@ -158,7 +168,7 @@ impl Replacement {
     /// [CR 702.52a]: https://yawgatog.com/resources/magic-rules/#R70252a
     pub const fn dredge(n: u8) -> Replacement {
         Replacement {
-            replaces: Replaced::Draw(Players::You),
+            replaces: Replaced::Draw(Players::You, Draws::Each),
             rewrite: Rewrite::Dredge(n),
         }
     }
@@ -203,8 +213,9 @@ pub enum Replaced {
     /// word 'instead' are replacement effects." It applies even to a draw from an empty
     /// library ([CR 121.6a](https://yawgatog.com/resources/magic-rules/#R1216a)): "An effect
     /// that replaces a card draw is applied even if no cards could be drawn because there are
-    /// no cards in the affected player's library."
-    Draw(Players),
+    /// no cards in the affected player's library." Which of their draws it replaces is
+    /// [`Draws`].
+    Draw(Players, Draws),
     /// An object the filter accepts, read for the permanent's controller, being put into a
     /// zone from any zone.
     PutInto(&'static Filter, Zone),
@@ -219,6 +230,18 @@ pub enum Replaced {
         objects: &'static Filter,
         not_cast: bool,
     },
+}
+
+/// Which of a player's draws a replacement of draws ([`Replaced::Draw`]) replaces.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Draws {
+    /// Every card they would draw.
+    Each,
+    /// Every card but the first one they draw in each of their draw steps
+    /// ([CR 504.1](https://yawgatog.com/resources/magic-rules/#R5041)): "First, the active
+    /// player draws a card." A draw that was replaced was never made, so the first card they
+    /// do draw in their draw step is that first one.
+    ExceptFirstInDrawStep,
 }
 
 /// What a replacement effect has happen instead of the event it replaces.

@@ -1157,6 +1157,19 @@ public final class BerylForgeHarness {
 
         @Override
         public ReplacementEffect chooseSingleReplacementEffect(List<ReplacementEffect> possibleReplacers) {
+            // Which of several mandatory effects applies first, as Chains of Mephistopheles or
+            // Notion Thief: Beryl asks it as a pick of one card, with no way to decline.
+            if (replacing == null && possibleReplacers.size() > 1
+                    && possibleReplacers.stream().noneMatch(re -> re.hasParam("Optional"))) {
+                JsonObject pick = run.take(player, Set.of("ChooseObject"), "replacement among " + possibleReplacers);
+                if (pick != null && pick.has("card")) {
+                    for (ReplacementEffect re : possibleReplacers) {
+                        if (Run.named(re.getHostCard(), pick.get("card").getAsString())) {
+                            return re;
+                        }
+                    }
+                }
+            }
             if (replacing == null && possibleReplacers.stream().anyMatch(re -> re.hasParam("Optional"))) {
                 JsonObject pick = run.take(player, Set.of("ChooseUpTo"), "replacement among " + possibleReplacers);
                 if (pick != null) {
@@ -1164,6 +1177,14 @@ public final class BerylForgeHarness {
                 }
             }
             if (replacing != null && replacing.isEmpty()) {
+                // A no to the optional effects leaves a mandatory one, if any, to apply first:
+                // Beryl offers the optional ones again for whatever replaces the event.
+                for (ReplacementEffect re : possibleReplacers) {
+                    if (!re.hasParam("Optional")) {
+                        replacing = null;
+                        return re;
+                    }
+                }
                 declining = possibleReplacers.size();
             } else if (replacing != null) {
                 for (ReplacementEffect re : possibleReplacers) {

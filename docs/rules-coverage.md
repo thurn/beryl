@@ -470,6 +470,30 @@ Built by by-bajq.3.9:
 - No printed protection exists yet: a face's keywords have no parameter, so a
   card with "protection from red" adds it to the face when its first card comes.
 
+Built by by-bajq.3.4 (Chains of Mephistopheles, Notion Thief):
+
+- "Except the first one they draw in each of their draw steps" is part of what a
+  replacement of draws replaces, not a condition: `Replaced::Draw` carries
+  `Draws::Each` or `Draws::ExceptFirstInDrawStep`, which `replace::draw` reads
+  from the `DrewInDrawStep` count. A condition could not say it, since the
+  ability's condition is read for its controller and knows no drawing player.
+- `Rewrite::Instead` of a draw may be any data body (`Instead::Instructions`),
+  carried out as a resolution would, with "that player" the drawing player.
+  `beryl_card`'s check allows `Players::ThatPlayer` in such a body. A card with
+  one adds `ReplacementKind::DrawInstructions`, which `replace::may_ask` reads:
+  its instructions may ask (a discard), so a step runs on the copy while one is
+  on the battlefield.
+- CR 614.5 is the sink's `applied` list: the replacements that have applied to
+  the draw being made or to a draw that replaced it. A draw made by their
+  instructions skips them and is offered to the others, so two Chains each apply
+  once, and with a Notion Thief each the player who would draw draws.
+- Where the replacements of a draw do not all do the same (same ability, same
+  controller), the drawing player chooses which applies first: a `ChooseObject`
+  of purpose `Replace`. Dredge is still offered before them; declining it is
+  applying the others first.
+- Two Chains of different players are still two candidates: the check for "the
+  same" does not know that Chains' body never reads "you".
+
 ### 4. Characteristics in every zone, and text
 
 - **Reading.** `query.rs` answers colors, types, keywords and "has this ability"

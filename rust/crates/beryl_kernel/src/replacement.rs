@@ -6,12 +6,12 @@
 //! ([`crate::table::TableError::Replacement`]). The rules then read what was accepted, with no
 //! case for what was refused.
 //!
-//! A replacement of a draw says what happens instead as an [`Effect`], which says more than
-//! the engine does in place of a draw: [`instead_of_drawing`] gives what the rules do or
-//! refuses the ability.
+//! A replacement of a draw says what happens instead as an [`Effect`]: a player winning or
+//! losing the game, which the rules do directly, or instructions the rules carry out as a
+//! resolution would ([`instead_of_drawing`]).
 
 use beryl_card::{
-    Ability, Behavior, CardDef, Effect, Players, Replaced, Replacement, Rewrite, Zone,
+    Ability, Behavior, CardDef, Draws, Effect, Players, Replaced, Replacement, Rewrite, Zone,
 };
 
 use crate::event::{ReplacementKind, Replaces};
@@ -22,7 +22,7 @@ use crate::filter::reads;
 pub enum Unreplaced {
     /// The rules have no code for this rewrite of this event.
     Rewrite,
-    /// A draw is replaced by something other than a player winning or losing the game.
+    /// A draw is replaced by a Rust body, which the rules cannot run in place of a draw.
     Instead,
     /// Players are read for other than "you", "each opponent" and "each player": a static
     /// ability has no targets, and nothing before it to name one.
@@ -36,6 +36,9 @@ pub enum Instead {
     Win(Players),
     /// These players lose the game.
     Lose(Players),
+    /// The ability's body is carried out, as a resolution carries out instructions, with
+    /// "that player" the player who would have drawn: "that player discards a card instead".
+    Instructions,
 }
 
 /// What `ability`, a replacement of draws ([`Replaced::Draw`]), has happen instead of a draw,
@@ -45,7 +48,8 @@ pub fn instead_of_drawing(ability: &Ability) -> Result<Instead, Unreplaced> {
     let (instead, players) = match ability.body() {
         Behavior::Data(&Effect::WinGame(players)) => (Instead::Win(players), players),
         Behavior::Data(&Effect::LoseGame(players)) => (Instead::Lose(players), players),
-        _ => return Err(Unreplaced::Instead),
+        Behavior::Data(_) => return Ok(Instead::Instructions),
+        Behavior::Custom(_) => return Err(Unreplaced::Instead),
     };
     match players {
         Players::You | Players::EachOpponent | Players::EachPlayer => Ok(instead),
@@ -59,7 +63,7 @@ pub fn replaces_draws(ability: &Ability) -> bool {
     matches!(
         ability.replacement(),
         Some(Replacement {
-            replaces: Replaced::Draw(_),
+            replaces: Replaced::Draw(..),
             ..
         })
     )
@@ -82,12 +86,14 @@ pub(crate) fn check(def: &CardDef) -> Result<Replaces, Unreplaced> {
                 | Rewrite::EntersTappedUnlessPayLife(_)
                 | Rewrite::Choose(_),
             ) => {}
-            (Replaced::Draw(players), Rewrite::Instead) => {
+            (Replaced::Draw(players, _), Rewrite::Instead) => {
                 if !reads(&players) {
                     return Err(Unreplaced::Players);
                 }
-                instead_of_drawing(ability)?;
                 mask = mask | ReplacementKind::Draw;
+                if let Instead::Instructions = instead_of_drawing(ability)? {
+                    mask = mask | ReplacementKind::DrawInstructions;
+                }
             }
             (Replaced::PutInto(_, zone), Rewrite::ToZone(instead)) if zone != instead => {
                 mask = mask | ReplacementKind::Move;
@@ -99,7 +105,7 @@ pub(crate) fn check(def: &CardDef) -> Result<Replaces, Unreplaced> {
             // Dredge works from a graveyard, not the battlefield, so it adds no kind to the
             // mask the layers fold over permanents: the game's table says whether any card has
             // it ([`crate::table::Capability::Dredge`]).
-            (Replaced::Draw(Players::You), Rewrite::Dredge(n)) if n > 0 => {}
+            (Replaced::Draw(Players::You, Draws::Each), Rewrite::Dredge(n)) if n > 0 => {}
             _ => return Err(Unreplaced::Rewrite),
         }
     }

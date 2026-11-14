@@ -99,6 +99,10 @@ impl std::ops::BitOrAssign for Listens {
 pub enum ReplacementKind {
     /// Draws (`beryl_card`'s `Replaced::Draw`).
     Draw,
+    /// Draws replaced by instructions the rules carry out (`beryl_rules`' `Instead::Instructions`),
+    /// which may ask a player a question in the middle of a step. Each such card also has
+    /// [`ReplacementKind::Draw`].
+    DrawInstructions,
     /// An object being put into a zone (`beryl_card`'s `Replaced::PutInto`), or entering the
     /// battlefield (`Replaced::Enters`).
     Move,

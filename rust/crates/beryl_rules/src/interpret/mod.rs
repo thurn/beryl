@@ -56,6 +56,24 @@ fn data<'a, L: Layout>(
     Run::new(game, resolution).carry_out(effect)
 }
 
+/// Carries out the instructions of a replacement of draws in place of `player`'s draw, as a
+/// resolution carries out instructions, with `player` as "that player"
+/// ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)): "Effects that use the
+/// word 'instead' are replacement effects." The card table holds only such replacements whose
+/// body is data (`crate::replacement::instead_of_drawing`).
+pub(crate) fn instead_of_drawing<'a, L: Layout>(
+    game: &mut Game<'a, L>,
+    resolution: &mut Resolution<'a, L>,
+    player: Seat,
+) -> Flow {
+    let Behavior::Data(effect) = resolution.ability.body() else {
+        return Ok(());
+    };
+    Run::new(game, resolution)
+        .for_player(player)
+        .carry_out(effect)
+}
+
 /// Ends a resolution that came to `flow`, with a layer refresh for what follows. Returns
 /// whether it paused at a question, or [`Full`] if a capacity ran out: the one place a
 /// resolution's `Full` becomes the engine's (the crate's contract, "How a resolution stops").

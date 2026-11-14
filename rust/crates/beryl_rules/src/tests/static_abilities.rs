@@ -182,8 +182,8 @@ static GIFT: CardDef = CardDef {
     tokens: &[],
 };
 
-/// "If you would draw a card, draw two cards instead": the engine replaces a draw only by
-/// ending the game.
+/// "If you would draw a card, draw two cards instead": instructions, whose draws it does not
+/// replace again (CR 614.5).
 static WINDFALL: CardDef = CardDef {
     name: "Test Windfall",
     faces: &[face(&[Ability::replacing(&Replacement::draws(
@@ -248,14 +248,29 @@ fn a_draw_is_replaced_by_what_any_replacement_says_instead() {
     }
 }
 
+/// [CR 614.5](https://yawgatog.com/resources/magic-rules/#R6145): "A replacement effect
+/// doesn't invoke itself repeatedly; it gets only one opportunity to affect an event or any
+/// modified events that may replace that event." Each of the controller's draws is replaced by
+/// two, which it does not replace again: two draws become four cards. The opponent's are their
+/// own.
+#[test]
+fn a_draw_replaced_by_draws_is_not_replaced_again() {
+    let (t, mut s, _) = with_permanent("Test Windfall");
+    let mut x = Scratch::new();
+    let before = hand(&s, Seat::P0);
+    drawing::draw(&mut Game::new(&mut s, &t, &mut x.events), Seat::P0, 2).unwrap();
+    assert_eq!(hand(&s, Seat::P0), before + 4);
+    assert!(x.events.applied.is_empty(), "no draw is being made");
+    let before = hand(&s, Seat::P1);
+    drawing::draw(&mut Game::new(&mut s, &t, &mut x.events), Seat::P1, 1).unwrap();
+    assert_eq!(hand(&s, Seat::P1), before + 1);
+}
+
 /// The card table refuses a draw replacement the engine has no code to do, so none runs as
 /// a draw that silently happens anyway.
 #[test]
 fn a_table_refuses_a_draw_replacement_the_engine_cannot_do() {
-    for (card, unreplaced) in [
-        ("Test Windfall", Unreplaced::Instead),
-        ("Test Favor", Unreplaced::Players),
-    ] {
+    for (card, unreplaced) in [("Test Favor", Unreplaced::Players)] {
         let table = GameTable::new(&DRAW_CARDS, [&[(1, card)], &[(1, "Test Land")]]);
         assert_eq!(
             table.err(),

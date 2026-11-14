@@ -42,7 +42,7 @@ pub use ability::{Ability, AbilityKind, Behavior, Custom, Says, Timing};
 pub use characteristics::{BasicLandTypes, Colors, Keywords, Subtype, Subtypes, Supertypes, Types};
 pub use check::Malformed;
 pub use continuous::{
-    ChosenKind, Duration, Governed, Layer, LayerSpec, MODIFY_PARTS, Modification, Protection,
+    ChosenKind, Draws, Duration, Governed, Layer, LayerSpec, MODIFY_PARTS, Modification, Protection,
     Replaced, Replacement, Rewrite, RuleChange, When,
 };
 pub use cost::{

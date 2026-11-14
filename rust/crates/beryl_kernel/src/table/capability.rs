@@ -1,6 +1,6 @@
 //! [`Capability`]: what a game's cards may make the stores keep.
 
-use beryl_card::{Amount, Condition, Face, Node, Replacement, Rewrite};
+use beryl_card::{Amount, Condition, Draws, Face, Node, Replaced, Replacement, Rewrite};
 
 use crate::static_ability::Inputs;
 
@@ -34,7 +34,8 @@ pub enum Capability {
     /// is counted for each player.
     CardsDrawn,
     /// A card asks whether a player has drawn the first card of their draw step this turn
-    /// ([`Condition::DrewInDrawStep`]), so the cards each player draws in their own draw
+    /// ([`Condition::DrewInDrawStep`]), or replaces every draw but that one
+    /// ([`Draws::ExceptFirstInDrawStep`]), so the cards each player draws in their own draw
     /// step are counted.
     DrewInDrawStep,
     /// A card grants another permanent a static ability with a continuous effect, so the
@@ -65,12 +66,16 @@ impl Capability {
             found |= Capability::GrantsLayerEffect.bit();
         }
         for a in face.abilities.iter().chain(face.grants) {
-            if let Some(&Replacement {
-                rewrite: Rewrite::Dredge(_),
-                ..
-            }) = a.replacement()
-            {
-                found |= Capability::Dredge.bit();
+            match a.replacement() {
+                Some(&Replacement {
+                    rewrite: Rewrite::Dredge(_),
+                    ..
+                }) => found |= Capability::Dredge.bit(),
+                Some(&Replacement {
+                    replaces: Replaced::Draw(_, Draws::ExceptFirstInDrawStep),
+                    ..
+                }) => found |= Capability::DrewInDrawStep.bit(),
+                _ => {}
             }
             if let Some(&Replacement {
                 rewrite: Rewrite::Choose(_),

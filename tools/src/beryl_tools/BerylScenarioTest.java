@@ -156,6 +156,42 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
                     () -> super.choose(outcome, cards, target, source, game));
         }
 
+        /**
+         * Which of several replacement effects applies first (CR 616.1). Beryl names the card
+         * whose effect it chose, which the queue answers as XMage does. It asks nothing where
+         * XMage still may: among effects of identically named sources, which do the same, and
+         * between an optional effect that works from a graveyard (dredge) and the others, where
+         * it asks only the yes or no to the optional effect, which XMage asks again after this
+         * (`chooseUse`). A yes applies that effect; a no applies one of the others first, and
+         * is used up here.
+         */
+        @Override
+        public int chooseReplacementEffect(Map<String, String> effectsMap, Map<String, MageObject> objectsMap, Game game) {
+            List<String> choices = getChoices();
+            String next = choices.isEmpty() ? null : choices.get(0);
+            boolean named = next != null && effectsMap.values().stream().anyMatch(text -> text.startsWith(next));
+            if (effectsMap.size() > 1 && !named) {
+                List<String> keys = new ArrayList<>(effectsMap.keySet());
+                long sources = keys.stream().map(key -> objectsMap.get(key).getName()).distinct().count();
+                if (sources == 1) {
+                    return 0;
+                }
+                if ("Yes".equals(next) || "No".equals(next)) {
+                    for (int i = 0; i < keys.size(); i++) {
+                        MageObject source = objectsMap.get(keys.get(i));
+                        boolean graveyard = game.getState().getZone(source.getId()) == Zone.GRAVEYARD;
+                        if (graveyard == "Yes".equals(next)) {
+                            if (!graveyard) {
+                                choices.remove(0);
+                            }
+                            return i;
+                        }
+                    }
+                }
+            }
+            return super.chooseReplacementEffect(effectsMap, objectsMap, game);
+        }
+
         @Override
         public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText,
                 String falseText, Ability source, Game game) {

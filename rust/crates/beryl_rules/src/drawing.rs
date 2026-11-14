@@ -5,18 +5,24 @@
 use beryl_card::{Amount, Players};
 
 use crate::bitboard::Bitboard;
-use crate::card::Ability;
 #[cfg(doc)]
 use crate::card::Replaced;
+use crate::card::{Ability, Stop};
+use crate::decision::{Answers, Choice, Decision};
+#[cfg(doc)]
+use crate::event::Sink;
 use crate::event::{Event, ReplacementKind};
 use crate::filter;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
-use crate::interpret::{Outcome, Run};
-use crate::layout::Layout;
+use crate::interpret::{self, Outcome, Run};
+use crate::layout::{Layout, Queue};
+use crate::observation::Observation;
+use crate::replace::DrawReplacement;
 use crate::replacement::{self, Instead};
-use crate::state::{Count, TurnStep, Zone, ZoneKey};
+use crate::resolution::Resolution;
+use crate::state::{AbilityRef, Count, PendingTrigger, TriggerInfo, TurnStep, Zone, ZoneKey};
 use crate::table::Capability;
 use crate::{ending, replace};
 
@@ -25,13 +31,12 @@ use crate::{ending, replace};
 /// actually drawn, if any.
 ///
 /// Each draw is offered first to the dredge abilities of cards in the player's graveyard
-/// ([`replace::dredge`]), which the player may choose one of, then to a replacement effect of a
-/// permanent ([`Replaced::Draw`],
-/// [`replace::draw`]), an empty library or not ([CR 614.11]): "Some effects replace card draws.
-/// These effects are applied even if no cards could be drawn because there are no cards in the
-/// affected player's library." What happens instead follows the cards drawn before it. Where it
-/// ends the game, the draws left are never made. With no such permanent on the battlefield a draw
-/// reads no ability.
+/// ([`replace::dredge`]), which the player may choose one of, then to the replacement effects of
+/// permanents ([`Replaced::Draw`], [`replace::draw`]), an empty library or not ([CR 614.11]):
+/// "Some effects replace card draws. These effects are applied even if no cards could be drawn
+/// because there are no cards in the affected player's library." What happens instead follows
+/// the cards drawn before it ([`instead`]). Where it ends the game, the draws left are never
+/// made. With no such permanent on the battlefield a draw reads no ability.
 ///
 /// Each card drawn is counted for the player this turn, and in their own draw step as drawn
 /// in it ([CR 504.1]): "First, the active player draws a card." A replaced draw never happened
@@ -70,13 +75,13 @@ pub fn draw<L: Layout>(game: &mut Game<'_, L>, player: Seat, cards: u8) -> Resul
                     break;
                 }
             }
-            let s = &mut *game.state;
             if replaceable {
-                replaced = replace::draw(s, game.table, player);
+                replaced = replace::draw(game, player)?;
                 if replaced.is_some() {
                     break;
                 }
             }
+            let s = &mut *game.state;
             if let Some(&slot) = s.library(player).last() {
                 drawn += 1;
                 game.sink.note(Event::DrawCard { slot });
@@ -94,20 +99,114 @@ pub fn draw<L: Layout>(game: &mut Game<'_, L>, player: Seat, cards: u8) -> Resul
         if dredged {
             continue;
         }
-        let Some((instead, cause, controller)) = replaced else {
+        let Some(replacement) = replaced else {
             return Ok(());
         };
-        // "You" and "each opponent" in it are read for the permanent's controller
-        // (CR 109.5).
-        let s = &*game.state;
-        let named = |players| (s.players()).filter(|who| filter::is_for(&players, who, controller));
-        match instead {
-            Instead::Win(players) => ending::win_for(game, named(players), cause),
-            Instead::Lose(players) => ending::lose_for(game, named(players), cause),
-        }
+        instead(game, player, replacement)?;
         if game.state.outcome().is_some() {
             return Ok(());
         }
+    }
+}
+
+/// Does what `replacement` has happen instead of `player`'s draw. "You" and "each opponent" in
+/// it are read for the permanent's controller (CR 109.5).
+///
+/// A replacement whose body is instructions carries them out as a resolution would
+/// ([`interpret::instead_of_drawing`]), with the drawing player as "that player". A draw they
+/// make is a modified event, to which this replacement does not apply again, while the others
+/// still may ([CR 614.5]): "A replacement effect doesn't invoke itself repeatedly; it gets only
+/// one opportunity to affect an event or any modified events that may replace that event." So
+/// it is recorded as applied ([`Sink::applied`]) while they run. A question they ask, such as
+/// which card to discard, stops a run that may pause and is answered when it runs again
+/// ([`crate::asking`]). A run that cannot pause, which a replacement no step could foresee
+/// meets, takes each question's first answer.
+///
+/// [CR 614.5]: https://yawgatog.com/resources/magic-rules/#R6145
+fn instead<L: Layout>(
+    game: &mut Game<'_, L>,
+    player: Seat,
+    replacement: DrawReplacement<L>,
+) -> Result<(), Full> {
+    let s = &*game.state;
+    let named = |players| {
+        let controller = replacement.controller;
+        (s.players()).filter(move |who| filter::is_for(&players, who, controller))
+    };
+    // The card table holds only draw replacements the engine can do.
+    match replacement::instead_of_drawing(replacement.ability) {
+        Ok(Instead::Win(players)) => {
+            let cause = replacement.cause(s, game.table);
+            ending::win_for(game, named(players), cause);
+        }
+        Ok(Instead::Lose(players)) => {
+            let cause = replacement.cause(s, game.table);
+            ending::lose_for(game, named(players), cause);
+        }
+        Ok(Instead::Instructions) => {
+            game.sink.applied.push(replacement.applied(s))?;
+            let done = instructions(game, player, replacement);
+            game.sink.applied.pop();
+            done?;
+        }
+        Err(_) => {}
+    }
+    Ok(())
+}
+
+/// Carries out the instructions of `replacement` in place of `player`'s draw ([`instead`]).
+fn instructions<L: Layout>(
+    game: &mut Game<'_, L>,
+    player: Seat,
+    replacement: DrawReplacement<L>,
+) -> Result<(), Full> {
+    let s = &*game.state;
+    let source = s.object_ref(replacement.permanent);
+    let (card, face) = s.copiable(replacement.permanent).record(game.table);
+    let of = PendingTrigger {
+        of: AbilityRef {
+            source: Some(source),
+            card,
+            face,
+            ability: replacement.index,
+            controller: replacement.controller,
+        },
+        info: TriggerInfo::default(),
+    };
+    let answers: Option<&mut dyn Answers<L>> = if game.sink.asking.is_open() {
+        None
+    } else {
+        // A resolution borrows its answer source for as long as the game: `FirstAnswer` has no
+        // size, so leaking one allocates nothing.
+        Some(Box::leak(Box::new(FirstAnswer)))
+    };
+    let mut resolution = Resolution::of_trigger(&of, replacement.ability).answered_by(answers);
+    game.sink.enter_source(|| source);
+    let flow = interpret::instead_of_drawing(game, &mut resolution, player);
+    game.sink.leave();
+    match flow {
+        Ok(()) => Ok(()),
+        Err(Stop::Full) => Err(Full),
+        // A question the record could not answer stops the run, to be asked; with no question
+        // the game is over.
+        Err(Stop::Pause) => match resolution.question.take() {
+            Some(question) => Err(game.sink.asking.stop(question)),
+            None => Ok(()),
+        },
+    }
+}
+
+/// The answer source of instructions run where nothing can pause ([`instructions`]): each
+/// question's first answer.
+struct FirstAnswer;
+
+impl<L: Layout> Answers<L> for FirstAnswer {
+    fn inline(&self) -> bool {
+        true
+    }
+
+    fn answer(&mut self, _: Observation<'_, L>, _: &Decision<L>) -> Option<Choice> {
+        Some(Choice(0))
     }
 }
 

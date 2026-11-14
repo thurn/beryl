@@ -27,6 +27,16 @@ const UNREACHED: &[(&str, &str)] = &[
          trigger exiles; the card's hand-written scenarios destroy and discard under it",
     ),
     (
+        "Chains of Mephistopheles: ability 0 (Replacement)",
+        "a generated scenario casts the card and no player draws after it resolves; the card's \
+         hand-written scenarios draw under it in and out of the draw step",
+    ),
+    (
+        "Notion Thief: ability 0 (Replacement)",
+        "a generated scenario casts the card and no opponent draws after it resolves; the \
+         card's hand-written scenarios have the opponent loot under it",
+    ),
+    (
         "Containment Priest: ability 0 (Replacement)",
         "a generated scenario puts onto the battlefield only spells it casts, which were cast; \
          the card's hand-written scenarios return creatures with Flickerwisp under it",

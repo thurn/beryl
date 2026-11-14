@@ -65,6 +65,13 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         }
     }
 
+    /// The same run with `player` as "that player": the player a replacement of draws runs
+    /// its instructions for, who would have drawn.
+    pub(crate) fn for_player(mut self, player: Seat) -> Self {
+        self.registers.that_player = Some(player);
+        self
+    }
+
     /// The game the ability resolves in, to change.
     pub(crate) fn game(&mut self) -> &mut Game<'a, L> {
         &mut *self.game

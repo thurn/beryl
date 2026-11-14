@@ -9,7 +9,7 @@
 //! card's own file.
 
 use crate::ability::{Ability, AbilityKind, Behavior};
-use crate::continuous::{Duration, LayerSpec, MODIFY_PARTS, Modification};
+use crate::continuous::{Duration, LayerSpec, MODIFY_PARTS, Modification, Replaced, Replacement};
 use crate::cost::{Chosen, Cost, CostAction, CostPart, Measure};
 use crate::definition::{CardDef, Face};
 use crate::effect::{Amount, Condition, CopyException, Effect, Objects, Operands, Players};
@@ -26,8 +26,8 @@ pub enum Malformed {
     /// of the other kind: an object where the ability targets a player, or a player where it
     /// targets an object ([CR 115.1](https://yawgatog.com/resources/magic-rules/#R1151)).
     Target,
-    /// [`Players::ThatPlayer`] outside an [`Effect::ForEachPlayer`]: there is no player the
-    /// instruction is being done for.
+    /// [`Players::ThatPlayer`] outside an [`Effect::ForEachPlayer`] and the body of a
+    /// replacement of draws: there is no player the instruction is being done for.
     ThatPlayer,
     /// [`Condition::Paid`] of a kind of cost its face has no [`crate::CastingOption`] for:
     /// it could never have been paid.
@@ -104,7 +104,9 @@ impl Malformed {
             Malformed::Target => {
                 "an effect names a target its ability does not have, or one of the other kind"
             }
-            Malformed::ThatPlayer => "\"that player\" is said outside a for-each-player effect",
+            Malformed::ThatPlayer => {
+                "\"that player\" is said outside a for-each-player effect or a replacement of draws"
+            }
             Malformed::Paid => "a condition asks about a cost its face cannot be cast with",
             Malformed::Grant => "a modification grants an ability its face does not list",
             Malformed::Lost => {
@@ -177,10 +179,18 @@ impl CardDef {
 const fn check_abilities(face: &Face, abilities: &[Ability]) -> Checked {
     let mut i = 0;
     while i < abilities.len() {
+        let ability = &abilities[i];
         let scope = Scope {
             face,
-            ability: &abilities[i],
-            for_a_player: false,
+            ability,
+            // "That player" in a replacement of draws is the player who would draw.
+            for_a_player: matches!(
+                ability.replacement(),
+                Some(Replacement {
+                    replaces: Replaced::Draw(..),
+                    ..
+                })
+            ),
             moved: Moved::NONE,
         };
         if let Err(malformed) = scope.ability() {
@@ -361,8 +371,13 @@ struct Scope<'a> {
 
 impl Scope<'_> {
     const fn ability(self) -> Checked {
+        // A condition is read before anyone would draw, so "that player" is no one there.
+        let before = Scope {
+            for_a_player: false,
+            ..self
+        };
         let condition = match self.ability.condition() {
-            Some(condition) => self.condition(condition),
+            Some(condition) => before.condition(condition),
             None => Ok(()),
         };
         let layer = match self.ability.layer() {

@@ -11,7 +11,7 @@ use super::words::{
 };
 use crate::ability::{Ability, AbilityKind, Behavior, Timing};
 use crate::continuous::{
-    ChosenKind, Governed, LayerSpec, Modification, Replaced, Replacement, Rewrite, RuleChange, When,
+    ChosenKind, Draws, Governed, LayerSpec, Modification, Replaced, Replacement, Rewrite, RuleChange, When,
 };
 use crate::cost::{CastingKind, Chosen, Cost, CostAction, CostPart, Measure};
 use crate::effect::{Amount, Condition, Effect, Objects, Players};
@@ -638,20 +638,33 @@ impl Ctx {
                 };
                 vec![format!("if {what} would enter{cast}, {instead}")]
             }
-            (Replaced::Draw(players), Rewrite::Instead) => {
+            (Replaced::Draw(players, draws), Rewrite::Instead) => {
+                let except = match draws {
+                    Draws::Each => "",
+                    Draws::ExceptFirstInDrawStep => {
+                        " except the first one they draw in each of their draw steps"
+                    }
+                };
                 let condition = ability
                     .condition()
                     .map(|&c| format!(" while {}", self.condition(c)))
                     .unwrap_or_default();
-                let who = self.player(players);
+                // One player at a time would draw: "a player", "an opponent".
+                let who = match players {
+                    Players::EachPlayer => "a player".to_owned(),
+                    Players::EachOpponent => "an opponent".to_owned(),
+                    players => self.player(players),
+                };
                 let mut instead = self.body(ability.body());
                 if let Some(first) = instead.first_mut() {
-                    let you = if first.starts_with("you ") {
+                    let you = if first.starts_with("you ") || first.starts_with("that player ") {
                         ""
                     } else {
                         "you "
                     };
-                    *first = format!("if {who} would draw a card{condition}, {you}{first} instead");
+                    *first = format!(
+                        "if {who} would draw a card{except}{condition}, {you}{first} instead"
+                    );
                 }
                 return instead;
             }

@@ -73,6 +73,12 @@ impl<'a, L: Layout> Resolution<'a, L> {
         Resolution::new(entry, ability, TargetPlaces::NONE, None)
     }
 
+    /// The same resolution with `answers` as its answer source.
+    pub(crate) fn answered_by(mut self, answers: Option<&'a mut dyn Answers<L>>) -> Self {
+        self.answers = answers;
+        self
+    }
+
     /// The spell's card or the ability's source.
     ///
     /// # Panics
