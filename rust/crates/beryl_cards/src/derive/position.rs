@@ -19,7 +19,7 @@ pub(super) const TURN: u16 = 3;
 /// The last turn a run plays into: the opponent's, where its "each opponent's" steps are.
 pub(super) const LAST_TURN: u16 = TURN + 1;
 
-/// Player 0's lands: three each of Plains and Island and two Swamps, enough to cast any card
+/// Player 0's lands: three each of Plains and Island and two each of Swamp and Mountain, enough to cast any card
 /// of the pool and pay an "unless" or an offspring beside it.
 const LANDS: &[&str] = &[
     names::PLAINS,
@@ -30,6 +30,8 @@ const LANDS: &[&str] = &[
     names::ISLAND,
     names::SWAMP,
     names::SWAMP,
+    names::MOUNTAIN,
+    names::MOUNTAIN,
 ];
 
 /// Player 0's other cards in hand: a land to discard, a sorcery to cast, which a "whenever
