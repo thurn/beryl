@@ -121,5 +121,26 @@
       "Dress Down: {+all+} creatures lose all abilities .",
       "Dress Down: at the beginning of [-the-] {+each+} end step , sacrifice ~ ."
     ]
+  },
+  "Blood Moon": {
+    "reason": "wording",
+    "note": "\"Nonbasic lands are Mountains\" and \"all nonbasic lands are Mountains\" say the same set: every nonbasic land on the battlefield. The renderer names a static ability's set over all permanents with \"all\".",
+    "diff": [
+      "Blood Moon: {+all+} nonbasic lands are Mountains ."
+    ]
+  },
+  "Urborg, Tomb of Yawgmoth": {
+    "reason": "wording",
+    "note": "\"Each land is a Swamp\" and \"all lands are a Swamp\" say the same thing of every land on the battlefield; the renderer names a static ability's set over all permanents with \"all\" and a plural verb.",
+    "diff": [
+      "Urborg, Tomb of Yawgmoth: [-each land is-] {+all lands are+} a Swamp in addition to its other land types ."
+    ]
+  },
+  "Dryad Arbor": {
+    "reason": "wording",
+    "note": "The whole text is reminder text for rules the engine applies to any land creature: a land is played, not cast (CR 305.1), a creature is summoning sick (CR 302.6), and a Forest has the intrinsic ability \"{T}: Add {G}\" (CR 305.6), which the layers give it from its land type. The definition, built from the card store, writes no ability, so the renderer says nothing.",
+    "diff": [
+      "Dryad Arbor: [-~ isn't a spell , it's affected by summoning sickness , and it has \" {T} : add {G} . \"-]"
+    ]
   }
 }
