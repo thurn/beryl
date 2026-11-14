@@ -358,6 +358,62 @@ test("cards put back fly from the library's pile, though the engine moves a twin
     assert.equal(made.shown.busy, false);
 });
 
+test("a put-back's hand pile keeps the hand's order as its cards rise", async () => {
+    // Jace, the Mind Sculptor's 0 draws the cards 5 and then 4 into a hand that holds 3, so
+    // the hand is fanned 3, 5, 4. The session lists the tray's Hand pile in slot order, 3, 4,
+    // 5: laid out as listed, 4 and 5 traded places as the hand rose into the tray.
+    const { made, prompts, at } = prompted();
+    const players = (library) => ({
+        you: { life: 20, library, graveyard: [] },
+        opponent: { life: 20, library: [], graveyard: [] },
+    });
+    prompts.play(
+        table(undefined, {
+            objects: [
+                object(1),
+                object(3, "hand"),
+                object(4, "library"),
+                object(5, "library"),
+            ],
+            players: players([4, 5]),
+        }),
+    );
+    made.clock.advance(0);
+    const [four, five] = [object(4, "hand"), object(5, "hand")];
+    const draw = (object) => [
+        { act: { verb: "fly", from: "library", why: "draw", object } },
+    ];
+    const putBack = {
+        ...split([], [3, 4, 5]),
+        purpose: "put-back",
+        title: "Put two cards on top.",
+        body: {
+            shape: "split",
+            piles: [
+                { place: "onTop", label: "Top", cards: [], exactly: 2 },
+                { place: null, label: "Hand", cards: [3, 4, 5], exactly: null },
+            ],
+        },
+    };
+    prompts.play(
+        table(putBack, {
+            objects: [object(1), object(3, "hand"), four, five],
+            players: players([]),
+        }),
+        { beats: [draw(five), draw(four)] },
+    );
+    made.clock.advance(800);
+    made.clock.advance(300);
+    assert.deepEqual(
+        [at(3), at(5), at(4)],
+        [
+            [1000, -1000],
+            [1200, -1000],
+            [1400, -1000],
+        ],
+    );
+});
+
 test("a card carried between piles is dropped where the layout says it landed", async () => {
     const { made, prompts, sent, reply, at } = prompted();
     made.release = { duration: 100, delay: 0, stagger: 0, ease: (p) => p };

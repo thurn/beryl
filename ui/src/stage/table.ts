@@ -144,6 +144,25 @@ export function tradedTray(tray: Tray, a: number, b: number): Tray {
   };
 }
 
+/** `tray` with the hand's pile of a put-back in the order the table fans the hand
+ * (`arranged`). The session lists that pile in slot order, which is not the hand's order once
+ * cards have been drawn into it, so the cards would trade places as they rise into the tray.
+ * A card the player moves back from the library's pile takes its old place in the hand. */
+function inHandOrder(table: Table, tray: Tray): Tray {
+  const hand = tray.piles[1];
+  if (!tray.putBack || !hand) return tray;
+  const place = new Map<number, number>();
+  for (const o of arranged(table).objects) {
+    if (o.zone === "hand") place.set(o.slot, place.size);
+  }
+  const at = (slot: number) => place.get(slot) ?? place.size;
+  const cards = [...hand.cards].sort((a, b) => at(a) - at(b));
+  return {
+    ...tray,
+    piles: [tray.piles[0]!, { ...hand, cards }, ...tray.piles.slice(2)],
+  };
+}
+
 /** `order` once the card in `slot` has gone from `from` to `to`: last of those in a hand,
  * or of none. */
 function arrived(
@@ -483,7 +502,8 @@ export function apply(table: Table, act: Act, cause?: Subject): Table {
     case "lift": {
       if ("tray" in act) {
         const { tray: _, ...lowered } = table;
-        if (act.span === "begin") return { ...table, tray: act.tray };
+        if (act.span === "begin")
+          return { ...table, tray: inHandOrder(table, act.tray) };
         let out: Table = lowered;
         for (const [side, order] of Object.entries(act.libraries ?? {}))
           out = reordered(out, side as Side, order);
