@@ -308,6 +308,8 @@ processes are attributed.
   across all runs (`ui/scripts/slots.mjs`). Runs that aren't checks share a
   third of those slots. Headless WebKit runs at a higher priority than any
   build, so run only the checks your change needs (`just ui-test <title>`,
-  `just specs <card>`) rather than a full sweep.
+  `just specs --shots <card>`) rather than a full sweep. Bare
+  `just specs <card>` serves the spec pages until interrupted; it is not a
+  check.
 - A new worktree copies the cached `rust/target` and `ui/node_modules` in
   seconds (copy-on-write), and removing the worktree saves them back.

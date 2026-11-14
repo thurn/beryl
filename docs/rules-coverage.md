@@ -517,7 +517,7 @@ are built with their first card.
 | Absent cost         | The WU mirror's rollouts cost what they did (R2)                                                          | `just bench-count`, `just count-gate` |
 | Present cost        | Each step of a rollout with a family in play costs within 1.25 times the same step without it (R3)        | `just count-gate --family <name>`     |
 | Saves               | The frozen saves replay, and `rollouts_never_change` holds                                                | `just test-rust`                      |
-| Playable            | Each keystone's spec moments pass the generic UI checks from both seats                                   | `just specs <card>`                   |
+| Playable            | Each keystone's spec moments pass the generic UI checks from both seats                                   | `just specs --shots <card>`           |
 
 The classic interactions held as scenarios: Blood Moon with Urborg; Humility
 with Opalescence in both orders; Oko's Elk wearing Equipment; Dress Down against

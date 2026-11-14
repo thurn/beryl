@@ -243,8 +243,9 @@ target sizes (`ui/scripts/capture.mjs`).
   staging every 3 hours, filing a bead for what fails without blocking `master`.
 - Headless browser checks run at a higher priority than any build and share a
   limited number of page slots across all sessions. Run only the checks your
-  change needs (`just ui-test <title>`, `just specs <card>`) rather than a full
-  sweep.
+  change needs (`just ui-test <title>`, `just specs --shots <card>`) rather than
+  a full sweep. Bare `just specs <card>` is not a check: it serves the spec
+  pages until interrupted, so a background wait on it never ends.
 
 ## UI
 

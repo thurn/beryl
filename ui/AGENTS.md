@@ -67,5 +67,6 @@ says how Beryl follows MTG Arena.
 The machine runs at most half its core count's worth of browser pages at once,
 across all runs (`scripts/slots.mjs`). Runs that aren't checks share a third of
 those slots. Headless WebKit runs at a higher priority than any build, so run
-only the checks your change needs (`just ui-test <title>`, `just specs <card>`)
-rather than a full sweep.
+only the checks your change needs (`just ui-test <title>`,
+`just specs --shots <card>`) rather than a full sweep. Bare `just specs <card>`
+serves the spec pages until interrupted; it is not a check.
