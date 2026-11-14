@@ -14,6 +14,8 @@ use std::sync::LazyLock;
 
 use serde::Deserialize;
 
+pub mod facts;
+
 mod search;
 use search::NameIndex;
 
