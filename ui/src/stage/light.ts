@@ -113,7 +113,7 @@ export interface Lit {
 export const layerOf = (_arrow: Arrow): keyof Lit => "over";
 
 /** A line the stage holds, as the light is drawn from it: the whole way it runs (lines.ts
- * `wayOf`), how its ends lie, how far it is drawn in and how far drained, and the stage time
+ * `wayOf`), how its ends lie, how far it is drawn in, and the stage time
  * from which it has been whole. */
 export interface LitLine {
   key: string;
@@ -122,7 +122,6 @@ export interface LitLine {
   from: Reach;
   to: Reach;
   shown: number;
-  left: number;
   whole: number;
 }
 
@@ -303,7 +302,7 @@ const flash = (
 
 /** The light of one line at stage time `now`. */
 function lineLight(scene: Scene, line: LitLine, now: number) {
-  const { arrow, way, from, to, shown, left, whole } = line;
+  const { arrow, way, from, to, shown, whole } = line;
   const seed = seedOf(line.key);
   const k = Math.min(sized(from), sized(to));
   // How fresh its landing is: 1 as it lands, gone in a few tenths of a second.
@@ -315,7 +314,7 @@ function lineLight(scene: Scene, line: LitLine, now: number) {
     // hangs lowest, with a white core, and fades out short of the stack card.
     scene.ribbons.push({
       curve: back,
-      from: left,
+      from: 0,
       to: shown,
       cut: "swell",
       wide: 2.8 * k,
@@ -335,12 +334,12 @@ function lineLight(scene: Scene, line: LitLine, now: number) {
     ];
     scene.ribbons.push({
       curve,
-      from: left,
+      from: 0,
       to: shown,
       cut: "beam",
       wide: (arrow === "attack" ? 0.55 : 1) * k,
       tone,
-      gain: (arrow === "attack" ? 0.75 : 1) + 0.9 * hit + 0.4 * left,
+      gain: (arrow === "attack" ? 0.75 : 1) + 0.9 * hit,
       seed,
     });
     scene.glints.push(flash(tip, 34 * k, tone, hit * 1.1, (now - whole) / 260));
@@ -351,27 +350,21 @@ function lineLight(scene: Scene, line: LitLine, now: number) {
   const wide = 7.2 * k;
   scene.ribbons.push({
     curve: way,
-    from: left,
+    from: 0,
     to: shown,
     cut: "arrow",
     wide: wide * (1 + 0.25 * hit),
     tone,
-    gain: 1.05 + 0.95 * hit + 0.5 * left,
+    gain: 1.05 + 0.95 * hit,
     seed,
   });
-  if (now < whole || left >= 1) return;
+  if (now < whole) return;
   const tip = way[2];
-  motes(scene.dots, way, now, tone, wide, 1 - left, seed);
+  motes(scene.dots, way, now, tone, wide, 1, seed);
   scene.glints.push(
     flash(tip, 50 * k, tone, hit * 0.9, (now - whole) / 300),
     // Where it rests on its target stays lit, and flickers.
-    flash(
-      tip,
-      22 * k,
-      tone,
-      (0.42 + 0.1 * Math.sin(now * 0.0053)) * (1 - left),
-      1,
-    ),
+    flash(tip, 22 * k, tone, 0.42 + 0.1 * Math.sin(now * 0.0053), 1),
   );
   burst(scene.dots, tip, now - whole, tone, 16, seed * 97, k);
 }

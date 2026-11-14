@@ -1,6 +1,6 @@
 // The stage's light, with no browser (`npm test`): what is lit at a stage time is a function
-// of that time and of where the two ends of a line lie (light.ts), an arrow drains over the
-// step that ends it and what follows waits for that (spans.ts, beat.ts), and a creature's
+// of that time and of where the two ends of a line lie (light.ts), an arrow is cut whole as
+// the step that ends it ends and what follows waits for that (spans.ts, beat.ts), and a creature's
 // mark of combat begins as the stage first draws it fighting (overlay.ts). How it is painted
 // is glow.ts's, which the browser checks see.
 import assert from "node:assert/strict";
@@ -39,7 +39,6 @@ const line = (arrow, from, to, more = {}) => ({
     from,
     to,
     shown: 1,
-    left: 0,
     whole: 1000,
     ...more,
 });
@@ -96,15 +95,6 @@ test("a line shown from the start, with no time it became whole, is lit and thro
     ];
     assert.ok(numbers.every(Number.isFinite), "every number is one");
     assert.equal(scene.ribbons[0].gain, 1.05);
-});
-
-test("an arrow that drains is drawn from where it has drained to", () => {
-    const [spell, target] = [card(1000, 300), card(0, 0, 1)];
-    const draining = line("hostile-target", spell, target, { left: 0.6 });
-    const [ribbon] = lightOf(5000, [draining], []).ribbons;
-    assert.deepEqual([ribbon.from, ribbon.to], [0.6, 1]);
-    const gone = line("hostile-target", spell, target, { left: 1 });
-    assert.deepEqual(lightOf(5000, [gone], []).dots, []);
 });
 
 test("the line to a source is a pale swell that grows out of the source", () => {
@@ -290,7 +280,7 @@ test("each cut of ribbon comes to a point where it ends", () => {
 });
 
 /** As timing.ts has them: a line's end takes 50 ms, with the step before it, and leads. */
-const drains = (act) =>
+const cuts = (act) =>
     act.verb === "point"
         ? {
               with: true,
@@ -299,25 +289,32 @@ const drains = (act) =>
           }
         : { duration: act.verb === "fly" ? 200 : 0 };
 
-test("a line drains over the step that ends it, and what follows waits until it has", () => {
-    const { stage: made } = stage(drains);
+test("a line is cut whole as the step that ends it ends, and what follows waits for that", () => {
+    // Arena cuts a target arrow or a line of combat in a frame (data/arena-motion.json,
+    // point). One that drained away from its tail over its end step showed a stub of arrow on
+    // its target for a few frames, which a player took for a leftover piece of it.
+    const scenes = [];
+    const surface = { ...recorder(), light: (scene) => scenes.push(scene) };
+    const { stage: made } = stage(cuts);
+    made.mount(surface);
     const block = (span) => point(span, "block", slot(2), slot(1));
     made.play(view([1, 2]), {
         reset: { abilities: [] },
         beats: [[block("begin")]],
     });
     assert.deepEqual(
-        made.lines().map(({ left, whole }) => [left, whole]),
-        [[0, -Infinity]],
+        made.lines().map(({ shown, whole }) => [shown, whole]),
+        [[1, -Infinity]],
     );
     const told = [];
     made.follow(({ edge, at, step }) => told.push([edge, at, step.act.verb]));
     made.play(view([2, 1]), { beats: [[block("end"), move(2, 0)]] });
     made.clock.advance(25);
-    assert.equal(
-        made.lines()[0].left,
-        0.25,
-        "a quarter gone half way: it quickens",
+    const ribbons = scenes.at(-1).over.ribbons;
+    assert.deepEqual(
+        ribbons.map(({ from, to }) => [from, to]),
+        [[0, 1]],
+        "drawn whole half way through its end",
     );
     made.clock.advance(24);
     assert.equal(made.lines().length, 1);

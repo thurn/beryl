@@ -131,31 +131,78 @@ test("the line to a source grows out of the source, once the ability is clear of
     assert.equal(shapeOf("source", card(10, 10), source, 1), null);
 });
 
-test("on the desktop the line to a source hangs low between them, as Arena's does", () => {
+/** The lowest point of the middle of the curve the path `d` makes: a quarter of each end and
+ * half of the point it goes round. */
+const middleOf = (d) => {
+    const [ax, ay, cx, cy, bx, by] = numbers(d);
+    return {
+        x: 0.25 * ax + 0.5 * cx + 0.25 * bx,
+        y: 0.25 * ay + 0.5 * cy + 0.25 * by,
+    };
+};
+
+test("on the desktop the line to a source far across the table hangs low between them, as Arena's does", () => {
     // Arena's leaves the bottom of the source, sags far below both and comes up into the
-    // bottom of the stack card (`0VsYGs88NXA 19:39.85`, `2VW6ZzmS8U4 32:16.0`): a stage 900
-    // high whose layout sags it to 810, 0.9 of its height.
-    const ability = card(1400, 200);
-    const source = card(600, 100, 1);
+    // bottom of the stack card (`0VsYGs88NXA 19:39.85`, `2VW6ZzmS8U4 32:16.0`): on a stage
+    // 900 high, from a source 800 across the table from the stack card, to 810, 0.9 of its
+    // height, which the layout gives as the lowest it may go.
+    const ability = card(1400, 470);
+    const source = card(600, 330, 1);
     const shape = shapeOf("source", ability, source, 1, 810);
     assert.deepEqual(
         shape.from,
-        { x: 1450, y: 340 },
+        { x: 1450, y: 610 },
         "into the ability's bottom",
     );
     assert.deepEqual(
         shape.to,
-        { x: 650, y: 240 },
+        { x: 650, y: 470 },
         "out of the source's bottom",
     );
-    // Drawn from the source: out of it, round the low point, into the ability.
-    const [, round] = numbers(shape.d).slice(2);
-    assert.equal(round, 1330, "round a point far below both");
-    // Its lowest point lies below both ends, toward the bottom of the table.
-    const [ax, ay, cx, cy, bx, by] = numbers(shape.d);
-    const lowest = 0.25 * ay + 0.5 * cy + 0.25 * by;
-    assert.equal(lowest, 810, "its middle sags to 0.9 of the stage's height");
-    assert.ok(cx > Math.min(ax, bx) && cx < Math.max(ax, bx), "between them");
+    const middle = middleOf(shape.d);
+    assert.equal(middle.y, 810, "its middle sags to 0.9 of the stage's height");
+    assert.ok(middle.x > 650 && middle.x < 1450, "between them");
+});
+
+test("the line to a source near the stack card across the table sags only a little below them", () => {
+    // A source on the far row just left of the stack card: a curve that hung to 0.9 of the
+    // table between the two swung down to the bottom of the screen and back. Its middle lies
+    // below the stack card by about a card's height, well above the 810 it may sag to.
+    const ability = card(1400, 300);
+    const source = card(1250, 20, 1);
+    const shape = shapeOf("source", ability, source, 1, 810);
+    assert.deepEqual(
+        shape.from,
+        { x: 1450, y: 440 },
+        "into the ability's bottom",
+    );
+    assert.deepEqual(
+        shape.to,
+        { x: 1300, y: 160 },
+        "out of the source's bottom",
+    );
+    const { y } = middleOf(shape.d);
+    assert.ok(y > 440 && y < 600, `just below the stack card: ${y}`);
+});
+
+test("the line to a source right under the stack card is a short curve into the source's top", () => {
+    // The player's own permanent on their row below the stack card: a curve that hung to 0.9
+    // of the table was a tall loop through the buttons below, two lines almost side by side.
+    // It goes straight down from the stack card into the top of the source instead.
+    const ability = card(1400, 300);
+    const source = card(1420, 470);
+    const shape = shapeOf("source", ability, source, 1, 810);
+    assert.deepEqual(
+        shape.from,
+        { x: 1450, y: 440 },
+        "out of the ability's bottom",
+    );
+    assert.deepEqual(shape.to, { x: 1470, y: 470 }, "into the source's top");
+    const [, ay, , cy, , by] = numbers(shape.d);
+    assert.ok(
+        Math.max(ay, cy, by) <= 470,
+        `no lower than the source's top: ${shape.d}`,
+    );
 });
 
 const point = (span, arrow, from, to) => ({

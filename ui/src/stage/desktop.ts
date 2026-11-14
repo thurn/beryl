@@ -352,9 +352,9 @@ export const desktopWith = (around: Around): StageLayout => ({
   sag: STAGE.height * SAG,
 });
 
-/** How far down the stage the line from an ability to its source sags, at its lowest, in
- * the stage's heights (lines.ts `hung`): Arena's sags to about 0.9 of the table's height
- * wherever its ends lie (`0VsYGs88NXA 19:39.85`, `2VW6ZzmS8U4 32:16.0`). */
+/** The lowest the line from an ability to its source sags, in the stage's heights (lines.ts
+ * `hung`): Arena's sags to about 0.9 of the table's height between ends far apart across it
+ * (`0VsYGs88NXA 19:39.85`, `2VW6ZzmS8U4 32:16.0`), and less between ends close together. */
 const SAG = 0.9;
 
 /** The desktop's table with nothing over it. */

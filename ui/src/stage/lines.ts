@@ -212,23 +212,45 @@ function loop(from: Reach, to: Reach): [Point, Point, Point] {
   return [a, { x: clear + side * out, y: (a.y + b.y) / 2 }, b];
 }
 
-/** The line from an ability `from` to its `source` where it sags to the stage height `sag`,
- * below both: out of the bottom edge of each, round a point `SAG_ALONG` of the way across from
- * the source to the ability and as low as puts the middle of the curve at that height.
- * Arena's leaves the bottom of its source going down, sags to about 0.9 of the table's height
- * wherever its ends lie, and comes up into the bottom of the stack card, from either seat
- * (`0VsYGs88NXA 19:39.85`, `2VW6ZzmS8U4 32:16.0`, `5UHzpVvUkfI 19:48.89`): a curve fitted to
- * the two whole ones, within 0.03 of the table's height of either. */
+/** The line from an ability `from` to its `source`, sagging at most to the stage height
+ * `sag`. Arena's leaves the bottom of its source going down, hangs low over the table and
+ * comes up into the bottom of the stack card, from either seat (`0VsYGs88NXA 19:39.85`,
+ * `2VW6ZzmS8U4 32:16.0`, `5UHzpVvUkfI 19:48.89`): with its ends far apart across the table it
+ * sags to about 0.9 of the table's height, a curve fitted to those whole ones within 0.03 of
+ * the table's height. It sags no lower than its ends need, though: a curve that hung to 0.9
+ * of the table between a source and a stack card close together across it was a tall loop
+ * down through the buttons and back. So its middle lies below the lower of its two ends by a
+ * clearance and by `SAG_DEEP` of how far apart they are across, and no lower than `sag`. A
+ * source that lies under the stack card, below its bottom edge, has a short curve from the
+ * bottom of the stack card down into the top of the source instead. */
 function hung(from: Reach, source: Reach, sag: number): [Point, Point, Point] {
-  const bottom = (end: Reach) => ({
+  const edge = (end: Reach, down: 1 | -1) => ({
     x: end.middle.x,
-    y: end.middle.y + end.half.y,
+    y: end.middle.y + down * end.half.y,
   });
-  const [a, b] = [bottom(from), bottom(source)];
+  const a = edge(from, 1);
+  const top = edge(source, -1);
+  const across = Math.abs(a.x - top.x);
+  if (top.y >= a.y && across <= from.half.x + source.half.x) {
+    const bow = SAG_BOW * (top.y - a.y);
+    return [a, { x: (a.x + top.x) / 2 + bow, y: (a.y + top.y) / 2 }, top];
+  }
+  const b = edge(source, 1);
+  const deepest = Math.min(
+    sag,
+    Math.max(a.y, b.y) + source.half.y + SAG_DEEP * across,
+  );
   // The middle of a curve round `c` is a quarter of each end and half of `c`.
-  const low = 2 * sag - (a.y + b.y) / 2;
+  const low = 2 * deepest - (a.y + b.y) / 2;
   return [a, { x: b.x + SAG_ALONG * (a.x - b.x), y: low }, b];
 }
+/** How much lower than its lower end the line to a source sags for each pixel its ends lie
+ * apart across the table. Arena's, from a source half a table away, reaches 0.9 of the
+ * table's height. */
+const SAG_DEEP = 0.3;
+/** How far to one side the short line into a source that lies under the stack card bows,
+ * as a share of how far it falls. */
+const SAG_BOW = 0.25;
 const SAG_ALONG = 0.225;
 
 /** The first `t` of the curve from `a` round `c` to `b`. */

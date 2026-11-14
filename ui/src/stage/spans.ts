@@ -9,8 +9,10 @@
 // follows an end that moves exactly, and the script's rule invariants (script/check.rs) see
 // that none is left on a card that moves. Like an effect, how far a span has come in at a
 // stage time is a function of that time alone. It comes in over its beginning step (a line
-// is drawn out, a mark's light comes up) and goes over the step that ends it: one of no time
-// is a cut, as Arena cuts its own, and over one that takes time a line drains away (`left`).
+// is drawn out, a mark's light comes up) and is cut whole as the step that ends it ends, as
+// Arena cuts its own (data/arena-motion.json, point). A line that drained away from its tail
+// instead left a stub of arrow on its target for a few frames, which players took for a
+// leftover piece of the arrow.
 import type { Arrow, Mark } from "../generated/protocol";
 import type { Act } from "./table.ts";
 import type { On } from "./effects.ts";
@@ -40,8 +42,6 @@ export interface Line {
   from: On;
   to: On;
   shown: number;
-  /** How far it has drained away over the step that ends it, from 0 to 1. */
-  left: number;
   /** The stage time from which it has been drawn whole. */
   whole: number;
   hidden: boolean;
@@ -72,8 +72,6 @@ interface Open {
   ease: Timing["ease"];
   /** The stage time it is over, once the step that ends it has begun: that step's end. */
   until?: number;
-  /** The stage time the step that ends it began. */
-  leaving?: number;
 }
 
 /** What names the span `act` begins or ends among a stage's spans. */
@@ -89,11 +87,6 @@ const touches = ({ act }: Open, on: On) =>
 
 const shownAt = ({ from, to, ease }: Open, now: number) =>
   now >= to ? 1 : now < from ? 0 : ease((now - from) / (to - from));
-
-const leftAt = ({ leaving, until }: Open, now: number) =>
-  leaving === undefined || until === undefined || until <= leaving
-    ? 0
-    : Math.min(1, Math.max(0, (now - leaving) / (until - leaving))) ** 2;
 
 /** The spans open on a stage, in the order they began. */
 export class Spans {
@@ -111,14 +104,13 @@ export class Spans {
     const key = keyOf(act);
     const at = this.#open.findIndex((open) => open.key === key);
     if (act.span === "end") {
-      if (at >= 0) Object.assign(this.#open[at]!, { until: to, leaving: from });
+      if (at >= 0) this.#open[at]!.until = to;
       this.#close(from);
     } else if (at < 0) {
       this.#open.push({ act, key, from, to, ease });
     } else {
       // One already open is the same span: it is not drawn afresh, and no longer ends.
       delete this.#open[at]!.until;
-      delete this.#open[at]!.leaving;
     }
     if (act.verb === "mark" && act.mark === "paying") {
       this.#stirred.add(namedBy(act.on));
@@ -168,7 +160,6 @@ export class Spans {
         from: namedBy(open.act.from),
         to: namedBy(open.act.to),
         shown: shownAt(open, now),
-        left: leftAt(open, now),
         whole: open.to,
       };
       const hid = hidden(line.arrow);
