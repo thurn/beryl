@@ -598,7 +598,7 @@ fn choose<L: Layout>(game: &mut Game<'_, L>, d: &Decision<L>) -> Result<Choice, 
         return Ok(Choice(0));
     }
     let asking = &mut game.sink.asking;
-    if let Some(c) = asking.next() {
+    if let Some(c) = asking.recorded() {
         return Ok(c);
     }
     if asking.is_open() {

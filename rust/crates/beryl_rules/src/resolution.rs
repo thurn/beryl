@@ -146,7 +146,7 @@ impl<'a, L: Layout> Resolution<'a, L> {
         if d.len() == 1 && game.state.profile().stops != Stops::Forced {
             return Ok(Choice(0));
         }
-        if let Some(c) = game.sink.asking.next() {
+        if let Some(c) = game.sink.asking.recorded() {
             return Ok(c);
         }
         if let Some(answers) = self.answers.as_deref_mut()

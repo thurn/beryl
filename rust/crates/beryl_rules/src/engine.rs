@@ -524,6 +524,10 @@ fn perform_machine<L: Layout>(
 
 /// Takes a priority action: passing, or an action of the player's own ([`act`]). Inlined into
 /// both callers, as the engine loop's silent passes take it on every step of a rollout.
+#[expect(
+    clippy::inline_always,
+    reason = "left to itself the compiler calls it out of line, which costs rollouts 0.2%"
+)]
 #[inline(always)]
 fn perform_priority<L: Layout>(
     s: &mut State<L>,

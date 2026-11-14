@@ -57,7 +57,7 @@ impl<L: Layout> Asking<L> {
 
     /// The next recorded answer, if the record has one left.
     #[inline]
-    pub fn next(&mut self) -> Option<Choice> {
+    pub fn recorded(&mut self) -> Option<Choice> {
         let &answer = self.record.as_slice().get(self.used)?;
         self.used += 1;
         Some(Choice(answer.into()))
