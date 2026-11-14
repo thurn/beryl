@@ -220,6 +220,31 @@
     },
     {
       "kind": "settled",
+      "name": "Cards put on the bottom after a mulligan",
+      "rule": "A card clicked in the hand glides down into its slot under the hand in a quarter of a second, slowing as it arrives, and the cards left in the hand close up in about a sixth of a second. A card clicked in its slot glides back up to its place in the hand the same way. Nothing jumps from one place to the other.",
+      "reports": [
+        "by-uo1r"
+      ],
+      "arena": {
+        "does": "Arena's card is dragged to a Library box at the left of the hand, then settles into the library in about 0.2 s, slowing as it arrives, and slips behind its top card; the hand closes up as the card leaves it. Beryl keeps its slots under the hand, where a card clicked again comes back.",
+        "evidence": [
+          {
+            "recording": "2VW6ZzmS8U4",
+            "time": "8:05.4"
+          },
+          {
+            "recording": "AhTcvQ-lQQQ",
+            "time": "14:16.3"
+          },
+          {
+            "recording": "6aai5sMxV1o",
+            "time": "11:38.5"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
       "name": "Permanents that leave",
       "rule": "A permanent that is not a token dissolves where it is: destroyed, it breaks into ash at its slot; exiled, it becomes a vortex there. Nothing flies to the pile. What it leaves room for closes up only once it has gone.",
       "reports": [

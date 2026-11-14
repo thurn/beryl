@@ -19,4 +19,5 @@ await import("./kept-pile-look.mjs");
 await import("./kept-pointer.mjs");
 await import("./kept-aim.mjs");
 await import("./kept-play.mjs");
+await import("./kept-opening.mjs");
 await finish();

@@ -16,6 +16,7 @@ import { useFace } from "../game/faces";
 import { useViewport } from "../mobile/chrome";
 import { usePhone } from "../mobile/phone";
 import { Inspected } from "../stage/PhoneChrome";
+import { useGlide } from "./glide";
 
 /** The starting hand size (CR 103.5). */
 const STARTING_HAND = 7;
@@ -79,9 +80,12 @@ export function Opening({
   const slots = Math.max(toBottom, bottom.length);
   // The cards are small to fit seven: hovering one shows it whole.
   const [inspector, inspect] = useHoverInspect();
+  // A card picked goes down into its slot, and back up when picked again.
+  const glide = useGlide();
   // A card clicked moves out from under the pointer, which never leaves it: its inspector goes.
   const toggle = (o: ObjectView) => {
     inspect(o).onPointerLeave();
+    glide.before();
     setBottom((picked) =>
       picked.some((b) => b.slot === o.slot)
         ? picked.filter((b) => b.slot !== o.slot)
@@ -221,6 +225,7 @@ export function Opening({
                   <OpeningCard
                     object={o}
                     width={cardWidth}
+                    glide={glide.track(o.slot)}
                     hover={phone ? undefined : inspect(o)}
                     highlight={picking && bottom.length < toBottom}
                     onPick={
@@ -245,6 +250,7 @@ export function Opening({
                   object={o}
                   hover={phone ? undefined : inspect(o)}
                   width={slotWidth}
+                  glide={glide.track(o.slot)}
                   highlight={picking}
                   onPick={picking ? () => toggle(o) : undefined}
                 />
@@ -338,16 +344,20 @@ function OpeningCard({
   highlight,
   onPick,
   hover,
+  glide,
 }: {
   object: ObjectView;
   width: number;
   highlight: boolean;
   onPick?(): void;
   hover?: HoverHandlers;
+  /** The ref that lets the card glide when it changes place. */
+  glide?(el: HTMLElement | null): void;
 }) {
   const face = useFace(object);
   return (
     <button
+      ref={glide}
       type="button"
       className="opening-card"
       disabled={!onPick}

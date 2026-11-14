@@ -95,7 +95,7 @@ HARNESS: dict[str, tuple[str, ...]] = {
 KEPT_SCRIPT = "ui/scripts/kept.mjs"
 KEPT_PARTS: tuple[str, ...] = tuple(
     f"ui/scripts/kept-{part}.mjs"
-    for part in ("screens", "table", "crowded", "piles", "pointer", "play")
+    for part in ("screens", "table", "crowded", "piles", "pointer", "play", "opening")
 )
 CHECK_SOURCES: tuple[str, ...] = (
     KEPT_SCRIPT,

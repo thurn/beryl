@@ -63,6 +63,16 @@ restore the old behavior.
   (by-kgc, by-81h). Arena's appears whole with a short glow, about 0.1 s after
   its ability leaves the stack; a batch appears as one group (UrGalw_f35w
   17:38.4, WQiYBv23buw 23:57.0, iRr-GeSF0lI 21:58.3).
+- **Cards put on the bottom after a mulligan.** A card clicked in the hand
+  glides down into its slot under the hand in a quarter of a second, slowing as
+  it arrives, and the cards left in the hand close up in about a sixth of a
+  second. A card clicked in its slot glides back up to its place in the hand the
+  same way. Nothing jumps from one place to the other (by-uo1r). Arena's card is
+  dragged to a Library box at the left of the hand, then settles into the
+  library in about 0.2 s, slowing as it arrives, and slips behind its top card;
+  the hand closes up as the card leaves it. Beryl keeps its slots under the
+  hand, where a card clicked again comes back (2VW6ZzmS8U4 8:05.4, AhTcvQ-lQQQ
+  14:16.3, 6aai5sMxV1o 11:38.5).
 - **Permanents that leave.** A permanent that is not a token dissolves where it
   is: destroyed, it breaks into ash at its slot; exiled, it becomes a vortex
   there. Nothing flies to the pile. What it leaves room for closes up only once
