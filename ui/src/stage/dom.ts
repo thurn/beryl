@@ -34,6 +34,12 @@ import type { Pointer, Under } from "./pointer.ts";
 import { tippedOf, transformOf, turnOf, type Pose } from "./pose.ts";
 import type { Surface } from "./stage.ts";
 
+/** How much deeper a hand card's element over the hand (`over`) is drawn than its node: over
+ * every card of the hand (game/handLayout.ts, 200 and up, a card's depth one more than the
+ * card's before it) and under the copy of the one raised under the pointer (stage.css
+ * `.stage-raised-copy`, 300), each cost over the cost of the card before it. */
+const OVER_HAND = 50;
+
 /** The name a node's `data-stage` says. */
 const named = (said: string): Name =>
   /^-?\d/.test(said) ? Number(said) : (said as Name);
@@ -41,6 +47,8 @@ const named = (said: string): Name =>
 export class DomSurface implements Surface {
   readonly #layer: HTMLElement;
   readonly #nodes = new Map<Name, HTMLElement>();
+  /** Each hand card's element over the whole hand (`over`), made when its face asks for it. */
+  readonly #overs = new Map<Name, HTMLElement>();
   /** The drawings the lines are paths of, each made with its first: every line is in the
    * one over everything at rest; the one under the cards is left unused by lines. */
   readonly #drawings: { over?: SVGSVGElement; under?: SVGSVGElement } = {};
@@ -66,12 +74,55 @@ export class DomSurface implements Surface {
 
   constructor(layer: HTMLElement) {
     this.#layer = layer;
-    this.#raised = new RaisedCopy(layer);
+    this.#raised = new RaisedCopy(layer, (node) => {
+      const said = node.dataset.stage;
+      return said === undefined ? undefined : this.#overs.get(named(said));
+    });
   }
 
   /** The node of what the stage names `name`, which its face is drawn into. */
   node(name: Name): HTMLElement | undefined {
     return this.#nodes.get(name);
+  }
+
+  /** An element of the node `name`'s own, posed as the node is but drawn over every card of
+   * the hand, for what a hand card draws outside its frame: its cost above its top right
+   * corner (game/Look.tsx), which Arena draws in front of the next card of the fan. Inside
+   * the node, the next card, a node of its own at a greater depth, would cover it. */
+  over(name: Name): HTMLElement | undefined {
+    const node = this.#nodes.get(name);
+    if (!node) return undefined;
+    let over = this.#overs.get(name);
+    if (!over) {
+      over = document.createElement("div");
+      over.className = "stage-over";
+      this.#overs.set(name, over);
+      this.#layer.append(over);
+      this.#mirror(name);
+    }
+    return over;
+  }
+
+  /** Poses the node `name`'s element over the hand as the node is posed: where it is, how
+   * clear and raised or not, but `OVER_HAND` deeper. */
+  #mirror(name: Name) {
+    const over = this.#overs.get(name);
+    const node = this.#nodes.get(name);
+    if (!over || !node) return;
+    const { style } = node;
+    const z = String((Number(style.zIndex) || 0) + OVER_HAND);
+    const frame = style.getPropertyValue("--frame");
+    // Written only where it changed: the stage draws every node each tick it moves.
+    const to = over.style;
+    if (to.transform !== style.transform) to.transform = style.transform;
+    if (to.opacity !== style.opacity) to.opacity = style.opacity;
+    if (to.zIndex !== z) to.zIndex = z;
+    if (to.getPropertyValue("--frame") !== frame)
+      to.setProperty("--frame", frame);
+    const raised = "raised" in node.dataset;
+    if (over.hasAttribute("data-raised") !== raised) {
+      over.toggleAttribute("data-raised", raised);
+    }
   }
 
   make(name: Name) {
@@ -86,6 +137,8 @@ export class DomSurface implements Surface {
   remove(name: Name) {
     this.#nodes.get(name)?.remove();
     this.#nodes.delete(name);
+    this.#overs.get(name)?.remove();
+    this.#overs.delete(name);
   }
 
   dress(name: Name, { object, dress }: Resting) {
@@ -94,6 +147,7 @@ export class DomSurface implements Surface {
     node.dataset.zone = dress.zone;
     // What an effect on it is sized by (effects.css).
     node.style.setProperty("--frame", `${dress.frame}px`);
+    this.#mirror(name);
     if (!object) {
       node.className = "hud stack-ability stage-node";
       return;
@@ -129,6 +183,7 @@ export class DomSurface implements Surface {
       for (const of of ["x", "y", "turn", "lift", "scale"]) {
         node.style.removeProperty(`--raise-${of}`);
       }
+      this.#mirror(other);
     }
     const node = name === undefined ? undefined : this.#nodes.get(name);
     if (!node) {
@@ -144,6 +199,7 @@ export class DomSurface implements Surface {
     node.style.setProperty("--raise-turn", `${-turn}deg`);
     node.style.setProperty("--raise-scale", String(scale));
     node.style.setProperty("--raise-lift", `${reach}px`);
+    if (name !== undefined) this.#mirror(name);
     this.#raised.show(node);
   }
 
@@ -170,6 +226,8 @@ export class DomSurface implements Surface {
     const [was, wasOther] = [kept(one), kept(other)];
     put(one, wasOther);
     put(other, was);
+    this.#mirror(a);
+    this.#mirror(b);
     this.#raised.trade(one, other);
     const [heft, heftOther] = [this.#hefts.get(a), this.#hefts.get(b)];
     this.#hefts.delete(a);
@@ -552,6 +610,7 @@ export class DomSurface implements Surface {
     style.setProperty("--tipped", tipped);
     node.toggleAttribute("data-turning-over", tipped !== "");
     this.#weigh(name, node, pose, frame);
+    this.#mirror(name);
   }
 
   /** Gives the card of node `name` its heft (heft.ts) as the pointer picks it up, and keeps
@@ -632,6 +691,8 @@ export class DomSurface implements Surface {
     const placed = transformOf(pose, frame);
     const look = drawn(heft.look, grip, frame, pose.width / frame);
     node.style.transform = `${placed} ${look.card}`;
+    const said = node.dataset.stage;
+    if (said !== undefined) this.#mirror(named(said));
     shadow.style.transform = `${placed} ${look.shadow}`;
     shadow.style.opacity = String(look.opacity * pose.opacity);
     shadow.style.zIndex = String(Math.round(pose.depth) - 1);
@@ -643,6 +704,7 @@ export class DomSurface implements Surface {
     shadow.remove();
     if (this.#nodes.get(name) === node) {
       node.style.transform = transformOf(pose, frame);
+      this.#mirror(name);
     }
   }
 }

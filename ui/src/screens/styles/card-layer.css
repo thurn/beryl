@@ -149,6 +149,33 @@
 .hand-card .card-name-bar > .mana-cost {
   display: none;
 }
+/* The card's element over the whole hand (stage/dom.ts `over`), posed as the card is: as large
+   as the card, so the cost stands where it would inside the card's own node. */
+.stage-over {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+  transition: none !important;
+  animation: none !important;
+}
+.stage-over[data-raised],
+.stage-over[data-copied] {
+  visibility: hidden;
+}
+.hand-over {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--frame);
+  height: calc(var(--frame) * 88 / 63);
+  pointer-events: none;
+}
+.hand-card > .hand-over {
+  width: 100%;
+  height: 100%;
+}
 .hand-cost {
   position: absolute;
   right: 0.5em;

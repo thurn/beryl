@@ -1,5 +1,6 @@
 // A card as the table's skin draws it at a placement: its frame, its marks and how it was
 // cast. The stage draws each object's node with it (stage/Faces.tsx).
+import { createPortal } from "react-dom";
 import { Card, CardBack, typeUnit } from "../components/Card";
 import { ManaCost } from "../components/Mana";
 import { StackMarks } from "../components/Stack";
@@ -22,10 +23,14 @@ export function Look({
   object,
   place,
   state,
+  over,
 }: {
   object: ObjectView;
   place: Pick<Placement, "look" | "width" | "count">;
   state: CardState;
+  /** On the stage, the element drawn over every card of the hand at this card's place
+   * (stage/dom.ts `over`), which a hand card's cost is drawn in. */
+  over?: HTMLElement;
 }) {
   const card = useFace(object);
   const under = place.look === "beneath" || place.look === "attached";
@@ -83,22 +88,25 @@ export function Look({
       </div>
     );
   }
-  return field ? (
-    <div className="on-table">{card_}</div>
-  ) : place.look === "hand" ? (
+  if (place.look !== "hand") {
+    return field ? <div className="on-table">{card_}</div> : card_;
+  }
+  // The cost stands above the card's top right corner rather than in its name bar, where the
+  // next card of a crowded hand would cover it, as Arena floats each hand card's cost above
+  // the fan (_IBqPx0gcag 12:00, uzg_P976qhc 17:20). Arena draws it in front of the next card,
+  // whose frame, tilted in the fan, reaches up over this card's corner: on the stage it is
+  // drawn in the element over the whole hand.
+  const cost = card.manaCost && (
+    <div className="hand-over">
+      <span className="hand-cost" style={{ fontSize: typeUnit(place.width) }}>
+        <ManaCost cost={card.manaCost} />
+      </span>
+    </div>
+  );
+  return (
     <div className="hand-card">
       {card_}
-      {/* The cost stands above the card's top right corner rather than in its name bar, where
-          the next card of a crowded hand would cover it, as Arena floats each hand card's cost
-          above the fan (_IBqPx0gcag 12:00, uzg_P976qhc 17:20). Above the frame, it is clear
-          of the next card, which covers only the frame's right part. */}
-      {card.manaCost && (
-        <span className="hand-cost" style={{ fontSize: typeUnit(place.width) }}>
-          <ManaCost cost={card.manaCost} />
-        </span>
-      )}
+      {cost && (over ? createPortal(cost, over) : cost)}
     </div>
-  ) : (
-    card_
   );
 }

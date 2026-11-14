@@ -52,12 +52,18 @@ interface Copy {
  * heard), and the copies of nodes raised before it while they drop back into the fan. */
 export class RaisedCopy {
   readonly #layer: HTMLElement;
+  /** The element over the hand of a node (dom.ts `over`), whose cost the copy draws too. */
+  readonly #overOf: (node: HTMLElement) => HTMLElement | undefined;
   #raised: Copy | undefined;
   readonly #dropping: Copy[] = [];
   #frame = 0;
 
-  constructor(layer: HTMLElement) {
+  constructor(
+    layer: HTMLElement,
+    overOf: (node: HTMLElement) => HTMLElement | undefined = () => undefined,
+  ) {
     this.#layer = layer;
+    this.#overOf = overOf;
   }
 
   /** Draws `node` raised over the hand, or none with no node. The copy of the node raised
@@ -71,7 +77,7 @@ export class RaisedCopy {
       raised.watch?.disconnect();
       raised.watch = undefined;
       if (atOnce) {
-        raised.element.remove();
+        this.#gone(raised);
       } else {
         raised.easing = { from: this.#at(raised, now), to: 0, since: now };
         raised.transform = raised.node.style.transform;
@@ -107,6 +113,12 @@ export class RaisedCopy {
       copy.watch?.disconnect();
       this.#watch(copy);
       this.#posed(copy);
+    }
+    for (const node of [a, b]) {
+      const copied = [this.#raised, ...this.#dropping].some(
+        (copy) => copy?.node === node,
+      );
+      this.#overOf(node)?.toggleAttribute("data-copied", copied);
     }
   }
 
@@ -168,7 +180,7 @@ export class RaisedCopy {
         !node.isConnected ||
         node.style.transform !== copy.transform
       ) {
-        copy.element.remove();
+        this.#gone(copy);
         this.#dropping.splice(i, 1);
         continue;
       }
@@ -194,9 +206,21 @@ export class RaisedCopy {
     if (node.dataset.zone) element.dataset.zone = node.dataset.zone;
   }
 
+  /** Takes `copy` off the page, and shows its node's cost in the fan again. */
+  #gone({ node, element }: Copy) {
+    element.remove();
+    this.#overOf(node)?.removeAttribute("data-copied");
+  }
+
   #face({ node, element }: Copy) {
+    const over = this.#overOf(node);
+    // While the copy, with the cost it drew, is over the hand or dropping back into it, the
+    // cost in the fan is hidden, so that only one shows.
+    over?.setAttribute("data-copied", "");
     element.replaceChildren(
-      ...[...node.children].map((child) => child.cloneNode(true)),
+      ...[...node.children, ...(over?.children ?? [])].map((child) =>
+        child.cloneNode(true),
+      ),
     );
   }
 }

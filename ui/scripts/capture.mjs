@@ -346,10 +346,13 @@ export function cutText(page) {
                 shown = parseFloat(getComputedStyle(a).opacity) > 0;
             }
             if (!shown) continue;
-            const text = nodes
-                .map((n) => n.textContent.trim())
-                .join(" ")
-                .slice(0, 80);
+            // A symbol's glyph is a private character: its label names it.
+            const text =
+                el.getAttribute("aria-label") ??
+                nodes
+                    .map((n) => n.textContent.trim())
+                    .join(" ")
+                    .slice(0, 80);
             if (
                 style.display !== "inline" &&
                 el.scrollWidth > el.clientWidth + 1
@@ -402,7 +405,7 @@ export function cutText(page) {
             // parts, and every cost must still show, as Arena's do above its fan.
             if (
                 el.closest(".card-el, .stack-item, .inspect") &&
-                !el.closest(".card-el-hand .mana-cost")
+                !el.closest(".hand-cost")
             )
                 continue;
             // Whether `text`, which lets the pointer through, is what shows at a point a card
@@ -435,14 +438,38 @@ export function cutText(page) {
                     bottom: Math.min(view.bottom, b.bottom),
                 };
             }
-            covered: for (const r of range.getClientRects()) {
-                const y = (r.top + r.bottom) / 2;
-                if (y < view.top || y > view.bottom) continue;
-                for (const x of [
-                    r.left + 2,
-                    (r.left + r.right) / 2,
-                    r.right - 2,
-                ]) {
+            // A line is sampled at its ends and middle, halfway up. A mana symbol of a hand
+            // card's cost is a disc far taller than its glyph, and a neighboring card tilted
+            // in the fan reaches a disc's lower corner first, so the disc is sampled on a
+            // grid over its box, inset a fifth so each point lies inside the disc.
+            const points = [];
+            const disc = el.matches(".hand-cost .mana-symbol")
+                ? el.getBoundingClientRect()
+                : undefined;
+            if (disc) {
+                for (const fy of [0.2, 0.5, 0.8]) {
+                    for (const fx of [0.2, 0.5, 0.8]) {
+                        points.push([
+                            disc.left + fx * disc.width,
+                            disc.top + fy * disc.height,
+                        ]);
+                    }
+                }
+            } else {
+                for (const r of range.getClientRects()) {
+                    const y = (r.top + r.bottom) / 2;
+                    for (const x of [
+                        r.left + 2,
+                        (r.left + r.right) / 2,
+                        r.right - 2,
+                    ]) {
+                        points.push([x, y]);
+                    }
+                }
+            }
+            covered: {
+                for (const [x, y] of points) {
+                    if (y < view.top || y > view.bottom) continue;
                     if (x < view.left || x > view.right) continue;
                     // A hit outside the element's own box is an unseen pseudo-element's.
                     const hit = document.elementFromPoint(x, y);

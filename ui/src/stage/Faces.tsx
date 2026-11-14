@@ -31,10 +31,12 @@ const Face = memo(function Face({
   object,
   dress,
   linked,
+  over,
 }: {
   object: ObjectView;
   dress: Dress;
   linked?: boolean;
+  over?: HTMLElement;
 }) {
   // Under the top of a pile nothing of a card shows, or only its paper edge.
   if (dress.look === "hidden") return null;
@@ -53,6 +55,7 @@ const Face = memo(function Face({
       object={object}
       place={{ look: dress.look, width: dress.frame, count: dress.count }}
       state={linked ? LINKED : (dress.cast ?? UNMARKED)}
+      over={over}
     />
   );
 });
@@ -112,17 +115,27 @@ export const MarkerFace = memo(function MarkerFace({
  * ability's from its stack item and its source's record. Each is memoised, so that motion
  * draws none again. */
 export interface Skin {
-  Card: ComponentType<{ object: ObjectView; dress: Dress; linked?: boolean }>;
+  Card: ComponentType<{
+    object: ObjectView;
+    dress: Dress;
+    linked?: boolean;
+    /** The element over the whole hand at the card's place (dom.ts `over`), for a card of
+     * the hand. */
+    over?: HTMLElement;
+  }>;
   Ability: ComponentType<{
     ability: StackAbility;
     source: ObjectView | undefined;
     dress: Dress;
   }>;
+  /** Whether its hand cards draw a cost over the whole hand (`Card`'s `over`). */
+  over?: boolean;
 }
 
 /** The desktop's faces: full cards and stack items. */
 export const DESKTOP: Skin = {
   Card: Face,
+  over: true,
   Ability: (props) =>
     props.ability.manual ? (
       <MarkerFace {...props} />
@@ -155,6 +168,11 @@ export function Faces({
             object={object}
             dress={dress}
             linked={linked?.includes(object.slot)}
+            over={
+              skin.over && dress.look === "hand"
+                ? surface.over(name)
+                : undefined
+            }
           />
         ) : (
           <skin.Ability ability={ability} source={source} dress={dress} />
