@@ -30,6 +30,7 @@ import forge.game.combat.Combat;
 import forge.game.combat.CombatUtil;
 import forge.game.cost.Cost;
 import forge.game.cost.CostPartWithList;
+import forge.game.keyword.Keyword;
 import forge.game.phase.PhaseHandler;
 import forge.game.phase.PhaseType;
 import forge.game.player.DelayedReveal;
@@ -56,6 +57,7 @@ import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -956,6 +958,7 @@ public final class BerylForgeHarness {
     /** The AI's controller, with the script's answers where it has them. */
     static final class ScriptedController extends PlayerControllerAi {
         private static final Set<String> YES_NO = Set.of("YesNo");
+        private static final Set<String> DAMAGE_DIVISION = Set.of("DamageDivision");
         /** The colors by Beryl's number for each, as Forge names them in lower case. */
         private static final String[] COLORS = {"white", "blue", "black", "red", "green"};
         private static final Set<String> OBJECTS = Set.of("ChooseObject", "ChooseUpTo", "Target", "AttackTarget", "CastOffer");
@@ -1440,6 +1443,53 @@ public final class BerylForgeHarness {
                 combat.addBlocker(attacker, blocker);
                 pick = run.takeFollowing(player, Set.of("Blocker"));
             }
+        }
+
+        @Override
+        public Map<Card, Integer> assignCombatDamage(Card attacker, CardCollectionView blockers,
+                CardCollectionView remaining, int damage, GameEntity defender, boolean overrideOrder) {
+            if (blockers.size() < 2 || run.mode == Run.Mode.ADVANCE || getGame().getCombat() == null
+                    || !getGame().getCombat().getAttackers().contains(attacker)
+                    || !run.isAnswer(run.peekPastAsserts(), player, DAMAGE_DIVISION)) {
+                return super.assignCombatDamage(attacker, blockers, remaining, damage, defender, overrideOrder);
+            }
+            // Beryl names the blockers that receive lethal damage, then ends the
+            // division with Done. Spend any excess as Beryl does, in battlefield order.
+            JsonObject pick = run.take(player, DAMAGE_DIVISION, "divide combat damage");
+            List<Card> candidates = new ArrayList<>(blockers);
+            Map<Card, Integer> assigned = new LinkedHashMap<>();
+            while (pick != null && pick.get("pick").getAsString().equals("Card")) {
+                Card blocker = (Card) run.resolvePick(pick, candidates);
+                int lethal = Math.max(1, blocker.getNetToughness() - blocker.getDamage());
+                if (lethal > damage) {
+                    throw new StepFailed("cannot assign lethal combat damage to " + blocker);
+                }
+                candidates.remove(blocker);
+                assigned.put(blocker, lethal);
+                damage -= lethal;
+                pick = run.takeFollowing(player, DAMAGE_DIVISION);
+            }
+            if (damage > 0 && candidates.isEmpty() && defender != null && attacker.hasKeyword(Keyword.TRAMPLE)) {
+                assigned.put(null, damage); // Forge's damage entry for the attacked player or planeswalker.
+            } else if (damage > 0 && !assigned.isEmpty()) {
+                Card first = assigned.keySet().stream()
+                        .min(java.util.Comparator.comparingLong(Card::getGameTimestamp)).orElseThrow();
+                assigned.merge(first, damage, Integer::sum);
+            } else if (damage > 0) {
+                candidates.sort(java.util.Comparator.comparingLong(Card::getGameTimestamp));
+                for (Card blocker : candidates) {
+                    int belowLethal = Math.max(0, blocker.getNetToughness() - blocker.getDamage() - 1);
+                    int assignedHere = Math.min(belowLethal, damage);
+                    if (assignedHere > 0) {
+                        assigned.put(blocker, assignedHere);
+                        damage -= assignedHere;
+                    }
+                }
+                if (damage > 0) {
+                    throw new StepFailed("no legal assignment of remaining damage from " + attacker);
+                }
+            }
+            return assigned;
         }
 
         @Override

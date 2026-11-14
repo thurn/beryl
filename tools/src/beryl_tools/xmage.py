@@ -98,9 +98,9 @@ class Exporter:
         self.trace: list[Position] = []
         self.index = 0
         self.taken: set[int] = set()
-        # Whether an earlier payment was left to XMage (`pay`), which may have tapped any
-        # untapped source, so a later payment cannot tap one by name.
-        self.payment_left_to_xmage = False
+        # Players whose earlier payments were left to XMage (`pay`), so their untapped
+        # sources may differ from Beryl's when paying another cost.
+        self.payment_left_to_xmage: set[str] = set()
         # How many targets of an "up to N" spec are still to come when fewer than N were
         # announced: XMage asks for more until told to stop.
         self.targets_short: int | None = None
@@ -448,11 +448,10 @@ class Exporter:
         self.emit(f"activateAbility({self.at(p)}, {who}, {text});")
 
     def pay(self, who: str, p: Position, source: str | None) -> None:
-        """Before a cast or activation at an empty stack, taps the mana sources Beryl's payment
-        tapped, which are among the taps by the next position, less the activated `source`
-        itself, by name and their one mana ability (`Cards.mana_text`). A payment with a source of
-        several kinds of mana is left to XMage. One that sacrifices a source for mana of any
-        color is unsupported: XMage asks the color, which the trace doesn't record."""
+        """Replay the trace's taps by name and mana ability, excluding the activation's own tap.
+        XMage pays when the stack is occupied or a source can produce several kinds of mana.
+        Sacrificing a source for mana of any color needs a choice the trace doesn't record.
+        """
         taps = payment_taps(self.actions, [t.taps for t in self.trace], self.index)
         if taps is None:
             return
@@ -461,26 +460,27 @@ class Exporter:
                 "a payment sacrificing a source for mana of a color XMage asks"
             )
         if p.stack:
-            if self.payment_left_to_xmage and taps:
-                # A spell cast onto a stack is paid by XMage too, from whatever an earlier
-                # payment of XMage's choosing left untapped, which may be too little for it
-                # (two spells needing {U} and {U}{U} from exactly three blue sources).
+            if who in self.payment_left_to_xmage and taps:
                 raise Unsupported(
                     "a payment after one XMage chose the sources of, onto a stack"
                 )
-            # XMage chooses this payment's sources too, so a later payment that taps a source
-            # by name may find it already tapped, depending on which ones XMage chose.
-            self.payment_left_to_xmage = self.payment_left_to_xmage or bool(taps)
+            # XMage chooses these sources, so a later payment may find one already tapped.
+            if taps:
+                self.payment_left_to_xmage.add(who)
             return
         if source in taps:
             taps.remove(source)
+        if not taps:
+            return
         if self.cards.change_land_types() or any(map(self.cards.mana_choice, taps)):
-            self.payment_left_to_xmage = True
+            if who in self.payment_left_to_xmage:
+                raise Unsupported("a payment after one XMage chose the sources of")
+            self.payment_left_to_xmage.add(who)
             return
         for name in taps:
             text = self.cards.mana_text(name)
             if text is not None:
-                if self.payment_left_to_xmage:
+                if who in self.payment_left_to_xmage:
                     # XMage paid an earlier spell with sources of its own choosing, and may
                     # have tapped the one Beryl tapped here, so the command would fail or not
                     # depending on which it chose.

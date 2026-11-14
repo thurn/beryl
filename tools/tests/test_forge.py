@@ -40,9 +40,10 @@ def test_setup_is_a_game_state_with_loyalty_spelled_out() -> None:
     # Transformed, so its loyalty is Jace, Telepath Unbound's printed 5: GameState gives a
     # permanent only the counters it lists.
     assert (
-        state["p0battlefield"] == "Jace, Vryn's Prodigy|Transformed|Counters:LOYALTY=5"
+        state["p0battlefield"]
+        == "Jace, Vryn's Prodigy|NoETBTrigs|Transformed|Counters:LOYALTY=5"
     )
-    assert state["p1battlefield"] == "Jace, Vryn's Prodigy"
+    assert state["p1battlefield"] == "Jace, Vryn's Prodigy|NoETBTrigs"
     # Zones are top first in both formats.
     assert state["p0library"] == "Island;Island"
     assert state["p0hand"] == ""
@@ -238,6 +239,7 @@ def test_a_payment_names_the_mana_sources_beryl_tapped() -> None:
     # The harness taps these for mana before Forge's AI pays, so it cannot spend another
     # source. A source of several colors is tapped for a color the cost needs, one that
     # makes two mana is left to the AI, and an activated card's own tap is its cost.
+    # A land with no printed mana ability can tap to pay after gaining a basic land type.
     tap: Json = {"parts": [{"action": "Tap", "of": "This"}]}
 
     def source(*colors: str, amount: int = 1) -> Json:
@@ -259,6 +261,14 @@ def test_a_payment_names_the_mana_sources_beryl_tapped() -> None:
             "Coast": source("White", "Blue"),
             "Mine": source("Colorless"),
             "Crypt": source("Colorless", amount=2),
+            "Land Type Grant": {
+                "faces": [
+                    {
+                        "name": "Land Type Grant",
+                        "abilities": [{"kind": "Static", "changes_land_types": True}],
+                    }
+                ]
+            },
         }
     )
     activate: Json = {"action": "Activate", "player": 0, "card": "Mine"}
@@ -267,6 +277,10 @@ def test_a_payment_names_the_mana_sources_beryl_tapped() -> None:
     trace: list[Json] = [
         {"taps": []},
         {"taps": []},
-        {"taps": ["Mine", "Swamp", "Coast", "Crypt"]},
+        {"taps": ["Mine", "Swamp", "Coast", "Crypt", "Land Type Grant"]},
     ]
-    assert forge.taps(activate, actions, trace, 0, cards) == ["Swamp", "Coast"]
+    assert forge.taps(activate, actions, trace, 0, cards, {"Land Type Grant"}) == [
+        "Swamp",
+        "Coast",
+        "Land Type Grant",
+    ]

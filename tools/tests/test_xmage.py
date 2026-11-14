@@ -98,6 +98,13 @@ def test_payments_are_left_to_xmage_where_land_types_change() -> None:
     assert export.unsupported is None, export.unsupported
     assert not any(line.startswith("tapSource(") for line in export.body)
 
+    # If player 0 casts a second spell, XMage's first payment may already
+    # have spent the sources that the second needs.
+    entry["actions"][5:] = entry["actions"][1:3]
+    entry["trace"][5:] = entry["trace"][1:3]
+    repeated = xmage.export_one(entry, 1, faces, XMAGE_CARDS)
+    assert repeated.unsupported == "a payment after one XMage chose the sources of"
+
 
 def test_tapped_assertions_are_skipped_after_xmage_chose_a_payments_sources() -> None:
     # Beryl paid Get Lost with Urborg and a Plains where XMage may tap two Plains, so whether

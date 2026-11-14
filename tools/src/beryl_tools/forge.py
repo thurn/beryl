@@ -108,6 +108,7 @@ UNCHECKED_ASSERTS: frozenset[str] = frozenset({"Decision"})
 class Card:
     loyalty: int | None
     oracle: str
+    land: bool
 
 
 def card_faces(store: Path, also: Iterable[str] = ()) -> dict[str, Card]:
@@ -123,6 +124,7 @@ def card_faces(store: Path, also: Iterable[str] = ()) -> dict[str, Card]:
             faces[cast(str, face["name"])] = Card(
                 int(cast(str, loyalty)) if loyalty is not None else None,
                 cast(str, face.get("oracle_text", "")),
+                "Land" in str(face.get("type_line", "")).split("—", 1)[0].split(),
             )
     return faces
 
@@ -168,7 +170,9 @@ def permanent_text(
 ) -> str:
     card = cast(str, permanent["card"])
     face = cast(int, permanent["face"])
-    parts = [card]
+    # These permanents start on the battlefield. Forge's NoETBTrigs setup path
+    # places them there without an origin zone, bypassing entry replacements.
+    parts = [card, "NoETBTrigs"]
     if permanent["tapped"]:
         parts.append("Tapped")
     if face:
@@ -315,10 +319,12 @@ def taps(
     trace: Sequence[JsonObject],
     index: int,
     cards: Cards,
+    lands: set[str],
 ) -> list[str]:
     """The mana sources Beryl tapped to pay for the cast or activation `action`, at
     `actions[index]`, which the harness taps for mana before Forge's AI pays the rest: those
-    that only tap for one mana (`Cards.taps_for_one_mana`), less the activated card itself.
+    that only tap for one mana, less the activated card itself. A land with no printed
+    mana ability can still tap for one mana when it gains a basic land type.
     """
     found = payment_taps(
         actions, [cast(list[str], t.get("taps", [])) for t in trace], index
@@ -327,7 +333,17 @@ def taps(
         return []
     if action["action"] == "Activate" and action["card"] in found:
         found.remove(cast(str, action["card"]))
-    return [name for name in found if cards.taps_for_one_mana(name)]
+    land_types_change = cards.change_land_types()
+    return [
+        name
+        for name in found
+        if cards.taps_for_one_mana(name)
+        or (
+            land_types_change
+            and name in lands
+            and not any(a["kind"] == "Mana" for a in cards.abilities(name))
+        )
+    ]
 
 
 def export(
@@ -336,6 +352,7 @@ def export(
     """The dump's scenarios as harness input, and the unsupported ones with their reasons."""
     faces = card_faces(store, named_cards(entries))
     oracle = {name: face.oracle for name, face in faces.items()}
+    lands = {name for name, face in faces.items() if face.land}
     exported: list[JsonObject] = []
     skipped: list[JsonObject] = []
     for entry in entries:
@@ -348,15 +365,13 @@ def export(
             actions = cast(list[JsonObject], entry["actions"])
             trace = cast(list[JsonObject], entry.get("trace", []))
             for i, action in enumerate(actions):
-                # A target or X Beryl chose silently, the only legal one, before this action:
-                # the harness takes it where Forge offers more, as a "target spell" that may
-                # be a triggered ability in Forge, or would take X as 0, as for a kicker {X}
-                # with one mana to pay it.
+                # Include answers Beryl chose silently. Forge can offer more targets or
+                # choose a different X, and needs the final Done for each damage division.
                 if i < len(trace):
                     steps.extend(
                         cast(JsonObject, step(forced, described, forced.get("purpose")))
                         for forced in cast(list[JsonObject], trace[i].get("forced", []))
-                        if forced["kind"] in ("Target", "X")
+                        if forced["kind"] in ("Target", "X", "DamageDivision")
                     )
                 flashback = (
                     cast(list[str], trace[i].get("flashback", []))
@@ -369,7 +384,7 @@ def export(
                 purpose = trace[i].get("purpose") if i < len(trace) else None
                 converted = step(action, described, purpose)
                 if converted is not None and converted["op"] in ("cast", "activate"):
-                    tapped = taps(action, actions, trace, i, described)
+                    tapped = taps(action, actions, trace, i, described, lands)
                     if tapped:
                         converted["taps"] = tapped
                 if converted is None:

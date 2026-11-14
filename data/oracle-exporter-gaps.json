@@ -22,17 +22,5 @@
     "card": "Teferi, Hero of Dominaria",
     "scenario": "generated 2: activate ability 0 on the battlefield",
     "gap": "a choice Beryl leaves out because no answer changes anything, which the oracle asks anyway: untapping up to two lands when none is tapped"
-  },
-  {
-    "oracle": "xmage",
-    "card": "Generated",
-    "scenario": "Generated 45",
-    "gap": "a payment after one XMage chose the sources of: XMage taps its own sources for Jace, the Mind Sculptor and leaves no white mana for Get Lost"
-  },
-  {
-    "oracle": "forge",
-    "card": "Generated",
-    "scenario": "Generated 82",
-    "gap": "Forge's game state setup puts each permanent onto the battlefield through its zone change, so Containment Priest exiles the opponent's Griselbrand before the scenario starts"
   }
 ]
