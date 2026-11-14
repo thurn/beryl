@@ -6,6 +6,18 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- Jace, Wielder of Mysteries' +1 aimed at its controller milled Life from the
+  Loam, and the draw that followed in the same resolution was not offered dredge
+  3\. `replace::may_ask`, read as a resolution or a step's turn-based actions
+  begin, held only while a dredge card already sat in a graveyard. A run that
+  began with it false ran on the committed state, which cannot pause, so the
+  dredge choice it met later took its first candidate, declining. Fixed by
+  making `may_ask` hold in every game that has a dredge card
+  (`Capability::Dredge`), wherever the card is. Prevention: whether a run can
+  pause is decided from what the run could reach, not from the state as it
+  begins; a cheap test of the start state is only sound when no step of the run
+  can change its answer.
+
 - A dredge offered for the draw step's draw was first asked over the upkeep: the
   end of the upkeep and the whole draw step ran on a copy, and a pause discarded
   the copy, so the committed state was still in the upkeep while the question,

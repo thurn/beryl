@@ -48,7 +48,7 @@ pub(crate) fn resolve<L: Layout>(
         Pending::Resolving(r) => r.record.clone(),
         _ => Default::default(),
     };
-    let may_ask = replace::may_ask(s, t);
+    let may_ask = replace::may_ask(t);
     // The source is asked first: whether an ability written as data asks is read from its
     // effect, which a rollout's inline source never needs.
     if !may_ask && (a.inline() || !ability.is_some_and(Ability::asks)) {

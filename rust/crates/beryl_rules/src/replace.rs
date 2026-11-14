@@ -492,27 +492,25 @@ pub(crate) fn exiled_instead<L: Layout>(s: &State<L>, object: ObjectRef<L>, to: 
         .any(|r| effect_destination(r, to).is_some())
 }
 
-/// Whether a replacement effect's choice can come up now ([CR 616.1]): an optional replacement
-/// is live. The engine runs each step that may meet such a choice on a copy of the state, so
-/// the choice can pause it ([`crate::asking`]); with none live, nothing more runs than before.
+/// Whether a replacement effect's choice can come up ([CR 616.1]): an optional replacement
+/// may apply during the next resolution or step. The engine runs each resolution and step that
+/// may meet such a choice on a copy of the state, so the choice can pause it
+/// ([`crate::asking`]). A run that does not run on the copy cannot pause, and takes the first
+/// candidate of any choice it meets ([`choose`]), which declines an optional replacement.
 ///
-/// The one optional replacement is dredge, live while some player has a card with dredge N
-/// in their graveyard and at least N cards in their library ([`dredges`]). A game whose cards
-/// have no dredge pays one AND. Two replacements of a move that would put an object into
-/// different zones would be a choice too, but no card yet puts one anywhere but exile, so
-/// [`destination`] has nothing to choose between.
+/// The one optional replacement is dredge, so this holds in every game with a card that has
+/// dredge, wherever that card is. Dredge works from the graveyard as the draw happens
+/// ([CR 702.52a]), and the same run can put a dredge card there before it draws, as an
+/// ability that mills two cards and then draws one does. A game whose cards have no dredge pays
+/// one AND. Two replacements of a move that would put an object into different zones would be
+/// a choice too, but no card yet puts one anywhere but exile, so [`destination`] has nothing
+/// to choose between.
 ///
 /// [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
+/// [CR 702.52a]: https://yawgatog.com/resources/magic-rules/#R70252a
 #[inline]
-pub(crate) fn may_ask<L: Layout>(s: &State<L>, t: &GameTable) -> bool {
-    t.can(Capability::Dredge) && dredge_live(s, t)
-}
-
-/// [`may_ask`] once a card of the game has dredge.
-#[cold]
-#[inline(never)]
-fn dredge_live<L: Layout>(s: &State<L>, t: &GameTable) -> bool {
-    s.players().any(|player| !dredges(s, t, player).is_empty())
+pub(crate) fn may_ask(t: &GameTable) -> bool {
+    t.can(Capability::Dredge)
 }
 
 /// N of the card in `slot`'s dredge, with its ability, if it has dredge.

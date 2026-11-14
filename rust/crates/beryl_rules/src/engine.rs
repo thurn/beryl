@@ -673,7 +673,7 @@ fn pass<L: Layout>(
         return Ok(());
     }
     if s.stack().is_empty() {
-        if crate::replace::may_ask(s, t) {
+        if crate::replace::may_ask(t) {
             paused_step::end_step(s, t, x, a)
         } else {
             turn::end_step(s, t, &mut x.events)

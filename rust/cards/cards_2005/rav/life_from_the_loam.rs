@@ -195,5 +195,33 @@ pub mod scenarios {
                 ME.has_cards(Zone::Library, 2),
                 ME.has(Zone::Graveyard, Card::Plains, 2),
             ]),
+        // Dredge works from the graveyard as the draw comes: Jace, Wielder of Mysteries' +1
+        // mills Life from the Loam, and the draw that follows in the same resolution may be
+        // dredged.
+        Scenario::new("dredge a draw after the same ability milled it")
+            .interaction(&[Card::JaceWielderOfMysteries])
+            .battlefield(P0, &[Card::JaceWielderOfMysteries])
+            .library(
+                P0,
+                &[
+                    LOAM,
+                    Card::Plains,
+                    Card::Island,
+                    Card::Island,
+                    Card::Counterspell,
+                    Card::Plains,
+                ],
+            )
+            .library(P1, &[Card::Plains])
+            .actions(&[
+                ME.activates(Card::JaceWielderOfMysteries, 1), // +1
+                ME.targets_player(ME),
+                ME.deciding(DecisionKind::ChooseUpTo, 2),
+                ME.picks_up_to(LOAM),
+                ME.has(Zone::Hand, LOAM, 1),
+                ME.has_cards(Zone::Hand, 1),
+                ME.has_cards(Zone::Graveyard, 4),
+                ME.library_top(&[Card::Plains]),
+            ]),
     ];
 }
