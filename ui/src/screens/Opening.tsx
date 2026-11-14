@@ -143,6 +143,9 @@ export function Opening({
     : undefined;
   const coinSize = viewport && viewport.width < 393 ? 56 : 64;
   const actions = picking ? 1 : buttons.length;
+  // Play or draw, asked before anyone has started: on the desktop, Arena shows the two buttons
+  // side by side in the middle of the screen rather than in the action dock.
+  const choosingStart = !phone && starting === null && buttons.length > 0;
   const cardWidth = viewport
     ? phoneCardWidth(
         viewport.width,
@@ -261,7 +264,20 @@ export function Opening({
           </div>
         )}
       </div>
-      {actions > 0 && (
+      {choosingStart && (
+        <div className="opening-choice">
+          {buttons.map((b, i) => (
+            <Button
+              key={b.index}
+              variant={i === 0 ? "primary" : "secondary"}
+              onClick={() => onPick(b.index)}
+            >
+              {b.label}
+            </Button>
+          ))}
+        </div>
+      )}
+      {actions > 0 && !choosingStart && (
         <Dock>
           <DockButtons className="opening-actions">
             {picking && (

@@ -213,6 +213,13 @@
       "click": ".game-over .button-secondary"
     },
     {
+      "name": "opening-play",
+      "route": "/?fixture=opening-play#/game",
+      "width": 1600,
+      "height": 900,
+      "expect": ".opening-choice .button"
+    },
+    {
       "name": "phone-opening-play",
       "route": "/?phone&fixture=opening-play#/game",
       "width": 393,

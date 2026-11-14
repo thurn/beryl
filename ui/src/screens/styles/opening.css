@@ -62,6 +62,18 @@
   min-height: 52px;
   margin-top: 40px;
 }
+/* Play or draw: the buttons in a row under the title, the first (Play) on the right as in
+ * Arena, the whole row centered on the screen's middle. */
+.opening-choice {
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: center;
+  gap: 40px;
+  margin-top: 40px;
+}
+.opening-choice .button {
+  min-width: var(--button-width);
+}
 .opening-waiting {
   font-size: 34px;
   color: var(--gold);
