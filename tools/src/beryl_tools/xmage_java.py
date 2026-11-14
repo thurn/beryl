@@ -126,6 +126,23 @@ class Export:
     unsupported: str | None = None
 
 
+def trample_amount(faces: Faces, attacker: str, blocker: str) -> int | None:
+    """The damage XMage's question gives `blocker`, the lone creature blocking `attacker`, if
+    `attacker` has trample; None if it has not. XMage asks how a blocked trampler divides its
+    damage even with one blocker, as amounts for its blockers with the rest trampling over.
+    Beryl asks nothing there: the blocker gets lethal damage, its printed toughness, and the
+    rest goes to what the trampler attacks. With two or more blockers Beryl's division is a
+    decision of its own, which the exporter does not translate."""
+    text = re.sub(r"\([^)]*\)", "", faces.oracle.get(attacker, ""))
+    lines = (line.split(",") for line in text.split("\n"))
+    if not any("trample" in (k.strip().lower() for k in line) for line in lines):
+        return None
+    toughness = faces.toughness.get(blocker)
+    if toughness is None:
+        raise Unsupported(f"a trampler blocked by {blocker}, whose toughness varies")
+    return toughness
+
+
 def java_string(text: str) -> str:
     return json.dumps(text, ensure_ascii=False)
 
