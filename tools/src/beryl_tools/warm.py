@@ -476,14 +476,14 @@ def make_room() -> None:
         log(f"could not prune the caches: {error}")
 
 
-def ensure(checkout: Path = REPO, tauri: bool = False) -> bool:
-    """Gives the checkout a `rust/target`, with the Tauri CLI's target directory if `tauri`, and
-    an up-to-date `ui/node_modules`. Whether either was built cold, with nothing to clone.
+def ensure(checkout: Path = REPO, tauri: bool = False, target: bool = True) -> bool:
+    """Gives the checkout an up-to-date `ui/node_modules` and, if `target`, a `rust/target` (with
+    the Tauri CLI's target directory if `tauri`). Whether either was built cold, with none to clone.
     """
-    if not (checkout / "rust" / "target").exists():
+    if target and not (checkout / "rust" / "target").exists():
         make_room()
     with locked():
-        cold_target = ensure_target(checkout, tauri)
+        cold_target = target and ensure_target(checkout, tauri)
         return ensure_node_modules(checkout) or cold_target
 
 
@@ -779,14 +779,16 @@ def remove_hook() -> int:
 def warm_command(args: argparse.Namespace) -> int:
     if args.action == "save":
         save(REPO)
-    else:
-        ensure(REPO)
+    else:  # `node`, for `just ui-typecheck` and `just ui-unit`, leaves out rust/target
+        ensure(REPO, target=args.action == "ensure")
     return 0
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser("warm", help="restore (or save) rust/target and ui/node_modules")
-    p.add_argument("action", nargs="?", choices=["ensure", "save"], default="ensure")
+    p.add_argument(
+        "action", nargs="?", choices=["ensure", "node", "save"], default="ensure"
+    )
     p.set_defaults(func=warm_command)
 
 

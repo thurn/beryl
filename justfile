@@ -86,6 +86,18 @@ mobile-bugs *args:
 ui-shots *args:
     {{ by }} ui-shots "$@"
 
+# Type-check the UI with tsc, first restoring ui/node_modules from the cache
+[group('app')]
+ui-typecheck:
+    {{ by }} warm node
+    cd ui && npm run --silent typecheck
+
+# Run the UI's tests that need no browser (ui/scripts/*.test.mjs), first restoring ui/node_modules
+[group('app')]
+ui-unit:
+    {{ by }} warm node
+    cd ui && npm test --silent
+
 # Play the game screen headless through a recorded fixture: drag, click, hover (title filters)
 [group('app')]
 ui-test *args:

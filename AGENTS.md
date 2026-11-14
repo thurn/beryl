@@ -200,10 +200,12 @@ Use the cheapest test that covers your change. Agents never open a window;
    the XMage and Forge oracles, the citation check, the fuzzer and
    `just card brief <name>` for starting a new card. To write a card, follow the
    `card-writing` skill.
-2. UI: run `cd ui && npm run typecheck`, and `npm test` for the tests that need
-   no browser. `ui/AGENTS.md` lists the browser checks. The fast check plays the
-   ones your change can break; slow CI plays only a smoke test. To reproduce,
-   debug or check a card's behavior in the UI, use the `specs` skill.
+2. UI: run `just ui-typecheck`, and `just ui-unit` for the tests that need no
+   browser. Both first copy `ui/node_modules` into the worktree from the cache,
+   which a new worktree doesn't have. `ui/AGENTS.md` lists the browser checks.
+   The fast check plays the ones your change can break; slow CI plays only a
+   smoke test. To reproduce, debug or check a card's behavior in the UI, use the
+   `specs` skill.
 3. The app: `just smoke` builds the debug app, launches it without a window and
    waits until the UI reports that it has loaded.
 4. The phone apps: `just ios-smoke` and `just android-smoke` load the UI in a

@@ -22,9 +22,10 @@ says how Beryl follows MTG Arena.
 
 ## Testing
 
-- `npm run typecheck` runs tsc. `npm test` runs the tests that need no browser
-  (`scripts/*.test.mjs`, which cover the stage's clock and the order animations
-  play in).
+- `just ui-typecheck` runs tsc. `just ui-unit` runs the tests that need no
+  browser (`scripts/*.test.mjs`, which cover the stage's clock and the order
+  animations play in). Both restore `ui/node_modules` from the cache first; a
+  new worktree has none, so bare `npm run typecheck` or `npm test` fails there.
 - `just ui-shots [names]` takes headless screenshots of the UI states listed in
   `shots.json` and prints their paths.
 - `just ui-test` plays the game screen through a fixture (`scripts/kept.mjs`).
