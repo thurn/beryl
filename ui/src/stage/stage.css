@@ -414,25 +414,11 @@
   background: rgb(15 26 32 / 85%);
   box-shadow: 0 1px 6px #000;
 }
-/* A mark on a player is drawn about the face of their life total, as an effect on them is,
-   in a light of its own (screens/styles/table.css). */
+/* A mark on a player lies over the whole of their life orb's art and is drawn on its face, in
+   the art's own units (face-mark.ts, screens/styles/table.css). */
 [data-life] > .stage-mark {
-  --frame: 7em;
-  inset: auto;
-  left: 50%;
-  top: 46.5%;
   z-index: 0;
-  width: 36%;
-  height: 83%;
-  translate: -50% -50%;
-  border-radius: 50%;
-}
-[data-life] > .stage-mark-suggested {
-  width: 42%;
-  height: 96%;
-}
-.phone-orb > .stage-mark {
-  font-size: 6px;
+  border-radius: 0;
 }
 /* What lies under the cards a prompt holds up (Tray.tsx): a shade over the table, and for a
    split a box a pile under its name. In the stage's own layer, over everything at rest

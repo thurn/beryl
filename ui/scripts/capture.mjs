@@ -654,41 +654,36 @@ export async function crowdedControls(page) {
             }
         }
         const slack = 1;
-        // The light of a mark on a player (stage.css `[data-life] > .stage-mark`) stays within
-        // the art of their life orb. A box shadow has no box of its own, so no overlap test
-        // above sees it: a halo as wide as a card's once spread past the orb onto the step
-        // stops and the cards beside it. The reach of an outer shadow is its offset, blur and
-        // spread.
+        // A mark on a player (stage/face-mark.ts) follows the outline of their life orb's face:
+        // its rim lies just outside the face's bezel all the way round, and its light stays on
+        // the face. A mark drawn as an ellipse about the face once stood 11 units off it above
+        // and below, and on the opponent's flipped orb sat 6 units above its middle; before
+        // that, a card's halo spread past the orb onto the step stops. Measured in the orb
+        // art's units (Player.tsx: 272 wide), a path's box without its stroke.
         for (const mark of document.querySelectorAll(
             "[data-life] > .stage-mark",
         )) {
-            const orb = mark.parentElement
-                ?.querySelector(".life-orb")
-                ?.getBoundingClientRect();
-            const style = getComputedStyle(mark);
-            if (!orb || Number(style.opacity) <= 0) continue;
-            let reach = 0;
-            for (const shadow of style.boxShadow.split(/,(?![^(]*\))/)) {
-                if (/\binset\b/.test(shadow)) continue;
-                const [x = 0, y = 0, blur = 0, spread = 0] = (
-                    shadow.replace(/rgba?\([^)]*\)/, "").match(/-?[\d.]+px/g) ??
-                    []
-                ).map(parseFloat);
-                reach = Math.max(
-                    reach,
-                    Math.max(Math.abs(x), Math.abs(y)) + blur + spread,
-                );
-            }
-            const box = mark.getBoundingClientRect();
-            const past = Math.max(
-                orb.left - (box.left - reach),
-                orb.top - (box.top - reach),
-                box.right + reach - orb.right,
-                box.bottom + reach - orb.bottom,
-            );
-            if (past > slack) {
+            const orb = mark.parentElement?.querySelector(".life-orb");
+            const face = orb?.querySelector(".life-orb-core");
+            if (!orb || !face || Number(getComputedStyle(mark).opacity) <= 0)
+                continue;
+            const unit = orb.getBoundingClientRect().width / 272;
+            const f = face.getBoundingClientRect();
+            const m = (
+                mark.querySelector(".stage-mark-face-rim") ?? mark
+            ).getBoundingClientRect();
+            // From the face's outline to the rim's middle, on each side: half the bezel (5) and
+            // one more unit.
+            const gaps = [
+                f.left - m.left,
+                f.top - m.top,
+                m.right - f.right,
+                m.bottom - f.bottom,
+            ].map((gap) => gap / unit);
+            const off = Math.max(...gaps.map((gap) => Math.abs(gap - 3.5)));
+            if (off > 1) {
                 faults.push(
-                    `the light of ${mark.className} on ${mark.parentElement?.dataset.life} reaches ${Math.round(past)} px past the life orb`,
+                    `${mark.className} on ${mark.parentElement?.dataset.life} stands off its life orb's face by ${gaps.map((gap) => gap.toFixed(1)).join(", ")} units (left, top, right, bottom), not 3.5`,
                 );
             }
         }

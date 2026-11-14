@@ -52,6 +52,15 @@ function rim(offset: number, from: number, to: number) {
   return `M${points.join(" L")}`;
 }
 
+/** The whole outline of the core, moved `offset` units out along its normal: where a mark on the
+ * player draws (stage/face-mark.ts). The core's bezel is a stroke `BEZEL` wide on its outline. */
+export function coreOutline(offset: number) {
+  return `${rim(offset, 0, 360)} Z`;
+}
+
+/** The width of the core's bezel (design/components/life-orbs.css `.life-orb-core`). */
+export const BEZEL = 5;
+
 /** The gold ring under the core, just outside its bezel, toward its player's edge. */
 const RING = rim(5, 37, 143);
 

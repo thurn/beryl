@@ -21,6 +21,7 @@
 // audits (ui/scripts/capture.mjs) go by.
 import type { Arrow, Mark, Side } from "../generated/protocol";
 import type { Drawn, On } from "./effects.ts";
+import { faceMark, LIT } from "./face-mark.ts";
 import { Glow } from "./glow.ts";
 import { drawn, Heft } from "./heft.ts";
 import { inMultiTouch } from "../mobile/report-taps.ts";
@@ -549,6 +550,11 @@ export class DomSurface implements Surface {
     if (!drawn) {
       made.className = `stage-mark stage-mark-${mark}`;
       made.setAttribute("aria-hidden", "true");
+      // On a player, a mark is drawn on the outline of their life orb's face, which no box can
+      // follow. A player is never tapped to pay a cost.
+      if (node.dataset.life !== undefined && LIT.has(mark)) {
+        made.append(faceMark(node));
+      }
       node.append(made);
     }
     // How far it has come to its look, which is drawn from that number alone.
