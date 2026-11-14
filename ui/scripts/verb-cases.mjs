@@ -168,9 +168,12 @@ export const CASES = {
                         `${what}: it has turned over`,
                     );
                 } else {
+                    // Half way it shows less than half its height: it tips over a fifth of
+                    // a second, as Arena's does, and does not flick over in a few frames
+                    // just past half way.
                     assert.ok(
-                        half.flat < 1,
-                        `${what}: it has not begun to turn`,
+                        half.flat < 0.5,
+                        `${what}: half way it still shows ${half.flat} of its height`,
                     );
                 }
                 if (!read) {

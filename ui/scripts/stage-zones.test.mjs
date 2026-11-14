@@ -7,7 +7,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { apply, tableOf } from "../src/stage/table.ts";
 import { ScriptStage, SNAP } from "../src/stage/stage.ts";
-import { CLOSES, halfTurned, TURN, TURNING } from "../src/stage/tracks.ts";
+import {
+    BOWS,
+    CLOSES,
+    halfTurned,
+    TURN,
+    TURNING,
+} from "../src/stage/tracks.ts";
 import { HELD, HELD_TURN } from "../src/stage/drawn.ts";
 import { tippedOf } from "../src/stage/pose.ts";
 import { timingOf } from "../src/stage/timing.ts";
@@ -419,7 +425,7 @@ test("a card that lands the other way up the table turns over, and never spins r
     const middle = () => {
         const pose = made.pose(5);
         const upright = row.middle(made.shown.resting.get(5), pose);
-        const turned = pose.rotation === 180;
+        const turned = Math.abs(pose.rotation - 180) < 90;
         return {
             x: turned ? 2 * pose.x - upright.x : upright.x,
             y: turned ? 2 * pose.y - upright.y : upright.y,
@@ -429,8 +435,13 @@ test("a card that lands the other way up the table turns over, and never spins r
     for (let at = 0; at <= 400; at += 10) {
         made.clock.advance(at - made.clock.now);
         const pose = made.pose(5);
-        // Upside down while its back shows and upright once its face does: nothing between.
-        assert.equal(pose.rotation, pose.face === "back" ? 180 : 0, `at ${at}`);
+        // Upside down while its back shows and upright once its face does, but for the few
+        // degrees it leans in its bow (`BOWS.theirs`): it never spins round between.
+        const off = pose.rotation - (pose.face === "back" ? 180 : 0);
+        assert.ok(
+            Math.abs(off) <= Math.abs(BOWS.theirs.lean),
+            `at ${at}: ${off}`,
+        );
         const now = middle();
         const moved = Math.hypot(now.x - last.x, now.y - last.y);
         assert.ok(moved < 400, `its middle went ${moved} in a tick at ${at}`);

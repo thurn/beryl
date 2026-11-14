@@ -336,7 +336,7 @@
           "peak": null,
           "path": "card back drops out of the opponent's hand at the top centre, swings down and right, turns over in flight, lands at the stack slot on the right",
           "curve": "ease-out",
-          "note": "Sentinel of the Nameless City. Back leaves the hand 16:47.25, edge-on at about 16:47.55, face up by 16:47.62, at rest 16:47.65 (+-33 ms). Turns over a little past halfway. Size not measured; the shadow stays beneath the card."
+          "note": "Sentinel of the Nameless City. Back leaves the hand 16:47.25, begins to tip away 16:47.40, edge-on 16:47.47 as a sliver rising to the right about 10 degrees, face up 16:47.50, flat by 16:47.57, at rest 16:47.65 (+-33 ms; filmed at 30 fps). Turns over a little past halfway, over about 170 ms. Size not measured; the shadow stays beneath the card."
         },
         {
           "case": "opponent spell cast",
@@ -359,7 +359,7 @@
           "peak": null,
           "path": "card back leaves the opponent's hand, arcs down and right to the stack slot, face up on arrival",
           "curve": "ease-out",
-          "note": "Esika's Chariot. Back leaves 17:16.13, edge-on 17:16.33, face up 17:16.37, at rest 17:16.50 (+-33 ms). Mana-payment flashes appear at the top left only after it lands."
+          "note": "Esika's Chariot. Back leaves 17:16.13, begins to tip away 17:16.23, edge-on 17:16.33, face up 17:16.37, flat by 17:16.43, at rest 17:16.50 (+-33 ms). Mana-payment flashes appear at the top left only after it lands."
         },
         {
           "case": "opponent spell cast",

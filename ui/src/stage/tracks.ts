@@ -72,10 +72,13 @@ export type Path = (progress: number, rest: Pose) => Pose;
 export const TURN = 0.55;
 
 /** How long a card that turns over on its way takes to come edge-on, and as long again to
- * lie flat with its face up, as a share of its flight; before and after, it lies flat. An
- * opponent's spell of 400 ms turns over in 88 (the motion review of fly, by-w8gv.21.47: a
- * swap of back for face between two frames is no turn-over). */
-export const TURNING = 0.11;
+ * lie flat with its face up, as a share of its flight; before and after, it lies flat.
+ * Arena's opponent's spell tips away from the eye as it clears their hand, is edge-on 80 to
+ * 100 ms later and lies flat with its face up as long again, about 180 ms in all of a flight
+ * of 370 to 400 (`UrGalw_f35w 16:47.40` to `16:47.57`, `17:16.23` to `17:16.43`). A turn of
+ * 88 ms in all was over in five frames at 60 a second and read as the card flicking end
+ * over end. */
+export const TURNING = 0.22;
 
 /** When a card turns over on its way: how far through its flight it is edge-on, and how
  * long before and after that it turns, as shares of the flight. */
@@ -138,7 +141,10 @@ export interface Bow {
  * table (`IEXcjBn3BXk 20:39.43`, `5UHzpVvUkfI 19:48.57`), where a bow of 0.12 toward its
  * controller's edge put it 2 to 3% of the table's width off Arena's. An opponent's spell bows half as far, and later: their hand lies over the
  * table's far edge, and a full bow carried the card along that edge, half out of sight,
- * before it came down (the third review of fly, there). Arena's own spell bows 0.29 of its
+ * before it came down (the third review of fly, there). It leans the other way from a
+ * thrown spell, its top away from the side it swings out to, so that edge-on it is a sliver
+ * rising toward the stack, 7 to 10 degrees off level, as Arena's is (`UrGalw_f35w
+ * 16:47.47`, `17:16.33`). Arena's own spell bows 0.29 of its
  * line, and its ability's copy and its resolving permanent travel a curve
  * (data/arena-motion.json, fly and emerge). A card drawn that no one reads, the opponent's,
  * leaves the line toward the middle of the table, away from its player's edge. So does the
@@ -149,7 +155,7 @@ export interface Bow {
  * of its height below it). */
 export const BOWS = {
   cast: { share: 0.15 },
-  theirs: { share: 0.08, peak: 0.6 },
+  theirs: { share: 0.08, peak: 0.6, lean: -8 },
   played: { share: 0.3, back: 1, peak: 0.6, lean: 20 },
   lifts: { share: 0.02 },
   drawn: { share: 0.2, peak: 0.42 },
