@@ -54,5 +54,19 @@
     "scenario": "a land that enters tapped unless few lands enters untapped",
     "cr": "CR 614.12 (https://yawgatog.com/resources/magic-rules/#R61412): \"Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c-d.) Such effects may come from the permanent itself if they affect only that permanent (as opposed to a general subset of permanents that includes it). They may also come from other sources. To determine which replacement effects apply and how they apply, check the characteristics of the permanent as it would exist on the battlefield, taking into account replacement effects that have already modified how it enters the battlefield (see rule 616.1), continuous effects from the permanent's own static abilities that would apply to it once it's on the battlefield, and continuous effects that already exist and would apply to the permanent.\"",
     "reason": "XMage applies a nonbasic land's printed entering replacement under Blood Moon; CR 614.12 checks the land as it would exist on the battlefield, a Mountain with no such ability (Blood Moon ruling 2020-08-07). Forge agrees with Beryl."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Opalescence",
+    "scenario": "with Humility later, each is 1/1",
+    "cr": "CR 613.7 (https://yawgatog.com/resources/magic-rules/#R6137): \"Within a layer or sublayer, determining which order effects are applied in is usually done using a timestamp system. An effect with an earlier timestamp is applied before an effect with a later timestamp.\"",
+    "reason": "XMage leaves Glorious Anthem 3/3, applying Opalescence's base power and toughness after Humility's 1/1 though Humility has the later timestamp; the card's 2009-10-01 ruling makes each one 1/1"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Opalescence",
+    "scenario": "between two Opalescences, Humility is 4/4 and the last is 1/1",
+    "cr": "CR 613.6 (https://yawgatog.com/resources/magic-rules/#R6136): \"If an effect should be applied in different layers and/or sublayers, the parts of the effect each apply in their appropriate ones. If an effect starts to apply in one layer and/or sublayer, it will continue to be applied to the same set of objects in each other applicable layer and/or sublayer, even if the ability generating the effect is removed during this process.\"",
+    "reason": "In timestamp order Opalescence, Humility, Opalescence, XMage puts the first Opalescence into the graveyard as a creature with no toughness; the card's 2006-02-01 ruling makes it 4/4, from the later Opalescence's effect that began in layer 4 and keeps applying after Humility removes the ability"
   }
 ]

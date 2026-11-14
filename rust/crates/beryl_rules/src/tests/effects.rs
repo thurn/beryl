@@ -154,6 +154,24 @@ fn that_many_is_what_the_instruction_before_did_to_every_object_at_once() {
     ));
 }
 
+/// "Destroy each other permanent" leaves out the permanent whose ability it is, and takes
+/// every other one, a land of the same card among them.
+#[test]
+fn each_other_permanent_is_every_one_but_the_source() {
+    static OTHERS: Objects = Objects::Other(&Objects::All {
+        zone: Zone::Battlefield,
+        filter: Filter::Any,
+    });
+    static RAZE: Ability = does(&destroy(OTHERS));
+    let (t, mut s, mut x, p, source) = game_with_source();
+    let land = put(&t, &mut s, &mut x, p, "Test Land");
+    let bear = put(&t, &mut s, &mut x, p.opponent(), "Test Bear");
+    assert!(resolve(&t, &mut s, &mut x, source, &RAZE, &[], &[]).is_none());
+    assert_eq!(zone_of(&s, source.slot), Zone::Battlefield);
+    assert_eq!(zone_of(&s, land), Zone::Graveyard);
+    assert_eq!(zone_of(&s, bear), Zone::Graveyard);
+}
+
 #[test]
 fn those_are_the_objects_the_instruction_before_moved_as_they_are_now() {
     static MILL_BACK: Ability = does(&sequence(&[mill(you(), 2), return_to_hand(those())]));

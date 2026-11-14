@@ -127,6 +127,14 @@ impl Ctx {
                 format!("{owner} {}", list(&names, "and"))
             }
             Objects::Paid(action) => paid(action).to_owned(),
+            // "Each other creature": one at a time, so the verb after it is singular.
+            Objects::Other(&Objects::All { zone, filter }) => {
+                let kind = Kind::of_zone(zone);
+                format!("each other {}", self.noun(filter, kind).singular(kind))
+            }
+            Objects::Other(objects) => {
+                format!("{} other than {}", self.objects(*objects), self.this)
+            }
         }
     }
 
@@ -157,7 +165,12 @@ impl Ctx {
                 let names: Vec<String> = zones.iter().map(|&z| zone_name(z).to_owned()).collect();
                 format!("a card in {owner} {}", list(&names, "or"))
             }
-            Objects::This
+            Objects::Other(&Objects::All { zone, filter }) => {
+                let kind = Kind::of_zone(zone);
+                format!("another {}", self.noun(filter, kind).singular(kind))
+            }
+            Objects::Other(_)
+            | Objects::This
             | Objects::Target(_)
             | Objects::AttachedTo
             | Objects::Those
@@ -188,6 +201,10 @@ impl Ctx {
                     zone_name(zone)
                 )
             }
+            Objects::Other(&Objects::All { zone, filter }) => {
+                let kind = Kind::of_zone(zone);
+                format!("other {}", self.noun(filter, kind).plural(kind))
+            }
             other => self.objects(other),
         }
     }
@@ -216,12 +233,14 @@ impl Ctx {
             | Objects::InZoneOf { .. }
             | Objects::CardsIn { .. }
             | Objects::ExiledWithThis => true,
+            // "Each other creature is": one at a time.
             Objects::This
             | Objects::AttachedTo
             | Objects::TriggeredOn
             | Objects::TriggeredOnIn(_)
             | Objects::Carried
-            | Objects::Paid(_) => false,
+            | Objects::Paid(_)
+            | Objects::Other(_) => false,
         }
     }
 

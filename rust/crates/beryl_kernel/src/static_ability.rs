@@ -50,6 +50,9 @@ pub enum Unapplied {
     /// apply: anything but a number, a count of permanents by their characteristics and
     /// controllers, and a multiple of one.
     Amount,
+    /// A static ability a card grants reads an amount as its layer applies: the layers read
+    /// amounts by the ability's place on its permanent's face, and a granted one has none.
+    GrantedAmount,
 }
 
 /// Whether the layers apply a static ability's continuous effect, or why they cannot.
@@ -57,12 +60,30 @@ pub fn applied(spec: &LayerSpec) -> Result<(), Unapplied> {
     if spec.needs_a_resolution() {
         return Err(Unapplied::Resolving);
     }
-    match spec.affected {
-        Objects::This | Objects::AttachedTo => {}
+    if !found_by_the_layers(spec.affected) {
+        return Err(Unapplied::Affected);
+    }
+    match &spec.condition {
+        Some(condition) if !reads(condition) => return Err(Unapplied::Condition),
+        _ => {}
+    }
+    read_amounts(spec)
+}
+
+/// Whether the layers find the permanents a static ability affects
+/// ([`Unapplied::Affected`]): the permanent it is on, the one that permanent is attached to,
+/// the permanents a filter of what the layers read accepts, and those but the permanent with
+/// the ability ([`Objects::Other`]).
+fn found_by_the_layers(affected: Objects) -> bool {
+    match affected {
+        Objects::This | Objects::AttachedTo => true,
         Objects::All {
             zone: Zone::Battlefield,
             filter,
-        } if read_by_the_layers(filter) => {}
+        } => read_by_the_layers(filter),
+        Objects::Other(&objects) => {
+            matches!(objects, Objects::All { .. }) && found_by_the_layers(objects)
+        }
         Objects::Target(_)
         | Objects::Those
         | Objects::TriggeredOn
@@ -72,15 +93,8 @@ pub fn applied(spec: &LayerSpec) -> Result<(), Unapplied> {
         | Objects::InZoneOf { .. }
         | Objects::CardsIn { .. }
         | Objects::All { .. }
-        | Objects::Paid(_) => {
-            return Err(Unapplied::Affected);
-        }
+        | Objects::Paid(_) => false,
     }
-    match &spec.condition {
-        Some(condition) if !reads(condition) => return Err(Unapplied::Condition),
-        _ => {}
-    }
-    read_amounts(spec)
 }
 
 /// Whether the layers can read each part of a static ability whose amount they read as it
@@ -92,7 +106,10 @@ pub fn applied(spec: &LayerSpec) -> Result<(), Unapplied> {
 /// characteristics only if certain conditions are met". Its amount is read as layer 7a
 /// applies, against what layers 2 to 6 made of every permanent. "Has base power and
 /// toughness [amount]" ([`Modification::SetBasePt`]) applies in layer 7b on any set, and its
-/// amounts are read for each permanent as that layer applies.
+/// amounts are read for each permanent as that layer applies. There, and only there, "its
+/// mana value" ([`Amount::ManaValue`] of [`Objects::Those`]) is the mana value of each
+/// permanent the ability affects: Opalescence's "has base power and base toughness each
+/// equal to its mana value" ([`reads_each`]).
 pub fn read_amounts(spec: &LayerSpec) -> Result<(), Unapplied> {
     for modification in spec.modifications {
         match *modification {
@@ -103,8 +120,11 @@ pub fn read_amounts(spec: &LayerSpec) -> Result<(), Unapplied> {
                 read_as_the_layer_applies(amount)?;
             }
             Modification::SetBasePt(power, toughness) => {
-                read_as_the_layer_applies(power)?;
-                read_as_the_layer_applies(toughness)?;
+                for amount in [power, toughness] {
+                    if !is_its_mana_value(amount) {
+                        read_as_the_layer_applies(amount)?;
+                    }
+                }
             }
             _ => {}
         }
@@ -125,6 +145,23 @@ pub fn amounts_of(spec: &LayerSpec, part: u8) -> (&'static Amount, Option<&'stat
         Modification::SetBasePt(power, toughness) => (power, Some(toughness)),
         _ => unreachable!("the layers read the amounts of a part that has some"),
     }
+}
+
+/// Whether the amounts of the part at `part` of a static ability read each permanent it
+/// affects ([`read_amounts`]), so that the part changes each permanent its own way and is
+/// read once for each.
+pub fn reads_each(spec: &LayerSpec, part: u8) -> bool {
+    match spec.modifications[usize::from(part)] {
+        Modification::SetBasePt(power, toughness) => {
+            is_its_mana_value(power) || is_its_mana_value(toughness)
+        }
+        _ => false,
+    }
+}
+
+/// "Its mana value", said of each permanent a static ability affects ([`read_amounts`]).
+fn is_its_mana_value(amount: &Amount) -> bool {
+    matches!(amount, Amount::ManaValue(Objects::Those))
 }
 
 /// Refuses an amount the layers cannot read as they apply: they have each permanent's
@@ -188,7 +225,28 @@ pub(crate) fn check(def: &CardDef) -> Result<(), Unapplied> {
     }
     abilities()
         .filter_map(beryl_card::Ability::layer)
-        .try_for_each(applied)
+        .try_for_each(applied)?;
+    let granted = || (def.faces.iter()).flat_map(|face| face.grants.iter());
+    if granted()
+        .filter_map(beryl_card::Ability::layer)
+        .any(|spec| spec.modifications.iter().any(|&m| read_layer_amount(m)))
+    {
+        return Err(Unapplied::GrantedAmount);
+    }
+    Ok(())
+}
+
+/// Whether the layers read the amount of `modification` as its layer applies, rather than
+/// settling it as the ability is listed: a power, or a base power and toughness that is not
+/// two numbers.
+fn read_layer_amount(modification: Modification) -> bool {
+    match modification {
+        Modification::SetPower(_) => true,
+        Modification::SetBasePt(power, toughness) => {
+            !matches!((power, toughness), (Amount::Fixed(_), Amount::Fixed(_)))
+        }
+        _ => false,
+    }
 }
 
 /// Whether [`holds`] reads `condition`.

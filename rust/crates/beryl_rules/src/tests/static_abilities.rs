@@ -501,3 +501,139 @@ fn a_table_refuses_a_rule_change_the_engine_cannot_check() {
         assert_eq!(table.err(), Some(refused), "{name}");
     }
 }
+
+/// "This permanent is an artifact in addition to its other types": an ability to grant whose
+/// effect is in layer 4, before the layer 6 that grants it.
+static BECOMES_AN_ARTIFACT: Ability = Ability::static_ability(&LayerSpec {
+    affected: Objects::This,
+    condition: None,
+    modifications: &[Modification::AddTypes(Types::ARTIFACT)],
+});
+
+/// "This creature's power is equal to the number of artifacts you control": an ability to
+/// grant whose amount the layers read as they apply.
+static COUNTS_ARTIFACTS: Ability =
+    Ability::static_ability(&power_is(&[Modification::SetPower(&ARTIFACTS)]));
+
+/// "Has [the face's first grant]".
+static GRANT_FIRST: [Modification; 1] = [Modification::grant(0)];
+
+/// "[Permanents `filter` accepts] have [the face's first grant]".
+const fn grants_to(filter: Filter) -> LayerSpec {
+    LayerSpec {
+        affected: Objects::All {
+            zone: Zone::Battlefield,
+            filter,
+        },
+        condition: None,
+        modifications: &GRANT_FIRST,
+    }
+}
+
+/// An enchantment's face with these abilities and grants.
+const fn granter(abilities: &'static [Ability], grants: &'static [Ability]) -> Face {
+    Face {
+        types: Types::ENCHANTMENT,
+        abilities,
+        grants,
+        ..Face::EMPTY
+    }
+}
+
+/// "Creatures have 'This permanent is an artifact in addition to its other types.'"
+static FOUNDRY: CardDef = CardDef {
+    name: "Test Foundry",
+    faces: &[granter(
+        &[Ability::static_ability(&grants_to(Filter::Types(
+            Types::CREATURE,
+        )))],
+        &[BECOMES_AN_ARTIFACT],
+    )],
+    tokens: &[],
+};
+
+/// "Nonartifact creatures have 'This permanent is an artifact in addition to its other
+/// types.'": a creature granted it is an artifact, and so is not granted it.
+static PARADOX: CardDef = CardDef {
+    name: "Test Paradox",
+    faces: &[granter(
+        &[Ability::static_ability(&grants_to(Filter::All(&[
+            Filter::Types(Types::CREATURE),
+            Filter::Not(&Filter::Types(Types::ARTIFACT)),
+        ])))],
+        &[BECOMES_AN_ARTIFACT],
+    )],
+    tokens: &[],
+};
+
+/// "Creatures have 'This creature's power is equal to the number of artifacts you
+/// control.'"
+static RECKONER: CardDef = CardDef {
+    name: "Test Reckoner",
+    faces: &[granter(
+        &[Ability::static_ability(&grants_to(Filter::Types(
+            Types::CREATURE,
+        )))],
+        &[COUNTS_ARTIFACTS],
+    )],
+    tokens: &[],
+};
+
+static GRANT_CARDS: CardTable = CardTable::new(&[&LAND, &SMITH, &FOUNDRY, &PARADOX, &RECKONER]);
+
+/// A game in the first player's main phase with Test Smith, a 0/3 creature, and then
+/// `granter` on the battlefield under their control. Returns the Smith.
+fn granted_by(granter: &'static str) -> (State, GameTable, Slot) {
+    let deck: &[(u8, &str)] = &[(1, "Test Smith"), (1, granter), (8, "Test Land")];
+    let t = GameTable::new(&GRANT_CARDS, [deck, deck]).unwrap();
+    let mut s = State::new(&t, 3, Profile::EXACT).unwrap();
+    s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
+    let smith = find(&s, &t, Seat::P0, "Test Smith");
+    let source = find(&s, &t, Seat::P0, granter);
+    for slot in [smith, source] {
+        s.board().place(slot, Zone::Battlefield).unwrap();
+        layers::refresh(&mut s, &t, &mut crate::event::Sink::off()).unwrap();
+    }
+    (s, t, smith)
+}
+
+/// An ability granted in layer 6 whose effect belongs to layer 4 is found only after layer 4
+/// has applied ([CR 613.1f]): "Layer 6: Ability-adding effects, keyword counters,
+/// ability-removing effects, and effects that say an object can't have an ability are
+/// applied." The layers run again with it present, and the creature is an artifact, which
+/// it counts for its own power.
+///
+/// [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
+#[test]
+fn an_ability_granted_in_layer_6_applies_its_effect_in_an_earlier_layer() {
+    let (s, t, smith) = granted_by("Test Foundry");
+    assert!(s.derived(smith).types.contains(Types::ARTIFACT));
+    assert!(s.derived(smith).types.contains(Types::CREATURE));
+    assert_eq!(s.derived(smith).power, 2);
+    assert!(t.can(crate::table::Capability::GrantsLayerEffect));
+}
+
+/// An ability whose grant its own effect undoes would have the layers run forever: they run
+/// three times and keep the third run's results, in which the creature is granted the
+/// ability and is no artifact.
+#[test]
+fn the_layers_run_at_most_three_times_for_granted_abilities() {
+    let (s, _, smith) = granted_by("Test Paradox");
+    assert!(!s.derived(smith).types.contains(Types::ARTIFACT));
+    assert!({ s.derived(smith).granted }[0].is_some());
+}
+
+/// The card table refuses a granted ability whose amount the layers read as they apply: they
+/// read such an amount by its ability's place on its permanent's face.
+#[test]
+fn a_table_refuses_a_granted_ability_that_reads_an_amount() {
+    let card = "Test Reckoner";
+    let table = GameTable::new(&GRANT_CARDS, [&[(1, card)], &[(1, "Test Land")]]);
+    assert_eq!(
+        table.err(),
+        Some(TableError::Static {
+            card,
+            unapplied: Unapplied::GrantedAmount
+        })
+    );
+}

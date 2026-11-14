@@ -164,7 +164,8 @@ impl<L: Layout> Scene<'_, L> {
             | Objects::All { .. }
             | Objects::InZoneOf { .. }
             | Objects::CardsIn { .. }
-            | Objects::Paid(_) => None,
+            | Objects::Paid(_)
+            | Objects::Other(_) => None,
         };
         spec.into_iter()
             .flat_map(|spec| self.targets(spec))
@@ -264,6 +265,15 @@ impl<L: Layout> Scene<'_, L> {
                     _ => s.in_zone(zone),
                 };
                 filter.select_x(s, self.t, within, self.you(), self.x)
+            }
+            // "Each other creature": the set without the ability's source. A source that has
+            // changed zones since is a new object (CR 400.7), which is "other".
+            Objects::Other(objects) => {
+                let mut others = self.objects(*objects);
+                if let Some(source) = self.subject.of.source.filter(|&o| s.is_current(o)) {
+                    others.remove(source.slot);
+                }
+                others
             }
         }
     }

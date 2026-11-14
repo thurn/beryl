@@ -4,6 +4,7 @@
 mod apply;
 mod dependency;
 pub(crate) mod entering;
+mod granted;
 mod together;
 
 pub(crate) use entering::lost_entering;
@@ -13,7 +14,8 @@ use beryl_kernel::derive::Rederive;
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, AbilityKind, Colors, Layer, LayerSpec, Modification, Objects,
+    Ability, AbilityIx, AbilityKind, Colors, FaceIx, GrantIx, Layer, LayerSpec, Modification,
+    Objects,
 };
 use crate::decision::{Outcome, StallReason};
 use crate::event::{Listens, Replaces, Sink};
@@ -22,12 +24,14 @@ use crate::fixed::Full;
 use crate::ids::CardId;
 use crate::layout::{Layout, PerSeat, Queue, index};
 use crate::state::{
-    AbilityMask, CounterKind, Derived, LayerChange, LockedIn, Permanents, Rules, State, Zone,
-    read_layer,
+    AbilityMask, CounterKind, Derived, GrantRef, LayerChange, LockedIn, Permanents, Rules, State,
+    Zone, read_layer,
 };
 use crate::static_ability;
+use crate::table::Capability;
 use crate::table::GameTable;
 use crate::trigger::face;
+use granted::{GRANTED, Granted, GrantedTo, PASSES, granted_ability, granted_layer_effects, slice};
 
 /// What one continuous effect changes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -261,6 +265,10 @@ pub(crate) fn counters_matter<L: Layout>(
 /// recompute finishes ([`beryl_kernel::derive::Rederive::finish`]), and with them the rules
 /// the permanents' static abilities change for each player ([`player_rules`]).
 ///
+/// In a game where a card grants a static ability with a continuous effect, the layers run
+/// again while a run finds such abilities granted that it did not apply, at most three times
+/// ([`granted`]).
+///
 /// [`Full`] if the list of effects had no place for one: the results are stored all the
 /// same, lacking that effect, for a caller that ends the game.
 ///
@@ -271,7 +279,48 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable, trials: &mut u64) -> Re
     let Some(mut s) = s.rederive() else {
         return Ok(());
     };
+    let mut granted: Granted<L> = None;
+    let mut passes = 1;
+    let (listed, removed, land_types) = loop {
+        let (listed, removed, land_types) = apply_layers(&mut s, t, granted.as_ref(), trials);
+        if passes == PASSES || !t.can(Capability::GrantsLayerEffect) {
+            break (listed, removed, land_types);
+        }
+        match granted_layer_effects(&s, t) {
+            Ok(found) if slice::<L>(found.as_ref()) != slice::<L>(granted.as_ref()) => {
+                granted = found;
+            }
+            Ok(_) => break (listed, removed, land_types),
+            Err(full) => break (listed.and(Err(full)), removed, land_types),
+        }
+        passes += 1;
+    };
+    let (listening, replacing) = if removed {
+        listening(&s, t, s.rows())
+    } else {
+        listening_of_all(&s, t)
+    };
+    // A permanent that may change a rule for players said so in the mask just read for
+    // the replacements: with none on the battlefield, one AND.
+    let rules = if replacing.changes_player_rules() {
+        player_rules(&mut s, t)
+    } else {
+        [Rules::NONE; _]
+    };
+    s.finish(listening, replacing, rules, removed, land_types);
+    listed
+}
 
+/// One run of the layers over every permanent, from its copiable values to layer 7d, with
+/// the static abilities of `granted` listed with those of the permanents' faces. Returns
+/// [`Full`] if the list had no place for an effect, whether an effect that removes
+/// abilities applied and whether one changed land types.
+fn apply_layers<L: Layout>(
+    s: &mut Rederive<'_, L>,
+    t: &GameTable,
+    granted: Option<&<L as Layout>::Queue<GrantedTo<L>, 8>>,
+    trials: &mut u64,
+) -> (Result<(), Full>, bool, bool) {
     // Made at the first effect that applies: most recomputes have none, and the list is big.
     let mut list: Option<Applying<L>> = None;
     let mut listed = Ok(());
@@ -298,10 +347,30 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable, trials: &mut u64) -> Re
             let Some(spec) = ability.layer() else {
                 continue;
             };
-            listed = listed.and(list_static(&s, t, &mut list, i, n, ability, spec));
+            let (source, face) = what.record(t);
+            let on = Listed {
+                at: i,
+                order: n as u8,
+                source,
+                face,
+            };
+            listed = listed.and(list_static(s, &mut list, on, ability, spec));
         }
     }
-    listed = listed.and(resolved_effects(&s, &mut list));
+    for &GrantedTo { at, grant } in slice::<L>(granted) {
+        let ability = granted_ability(t, grant);
+        let Some(spec) = ability.layer() else {
+            unreachable!("only granted abilities with a continuous effect are kept");
+        };
+        let on = Listed {
+            at: usize::from(at),
+            order: GRANTED | grant.grant.index() as u8,
+            source: grant.card,
+            face: FaceIx::FRONT,
+        };
+        listed = listed.and(list_static(s, &mut list, on, ability, spec));
+    }
+    listed = listed.and(resolved_effects(s, &mut list));
     let mut removed = false;
     let mut land_types = false;
     match &mut list {
@@ -311,9 +380,9 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable, trials: &mut u64) -> Re
             let split = (list.as_slice()).partition_point(|a| a.layer <= Layer::PtModifying as u8);
             let (to_7c, after) = list.as_slice().split_at(split);
             let mut begun = None;
-            let first = apply_in_order(&mut s, t, to_7c, &mut begun, trials);
-            counters(&mut s);
-            let second = apply_in_order(&mut s, t, after, &mut begun, trials);
+            let first = apply_in_order(s, t, to_7c, &mut begun, trials);
+            counters(s);
+            let second = apply_in_order(s, t, after, &mut begun, trials);
             listed = listed.and(first).and(second);
             removed = list.iter().any(|a| a.change.removes_abilities());
             land_types = list.iter().any(|a| {
@@ -323,26 +392,40 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable, trials: &mut u64) -> Re
                 )
             });
         }
-        None => counters(&mut s),
+        None => counters(s),
     }
-    let (listening, replacing) = if removed {
-        listening(&s, t, s.rows())
-    } else {
-        listening_of_all(&s, t)
-    };
-    // A permanent that may change a rule for players said so in the mask just read for
-    // the replacements: with none on the battlefield, one AND.
-    let rules = if replacing.changes_player_rules() {
-        player_rules(&mut s, t)
-    } else {
-        [Rules::NONE; _]
-    };
-    s.finish(listening, replacing, rules, removed, land_types);
-    listed
+    (listed, removed, land_types)
 }
 
-/// Lists the static ability at `n` of the face of the permanent at battlefield position `i`,
-/// whose continuous effect is `spec`, among the effects to apply, if it applies now: one entry
+/// Where a static ability being listed is: the battlefield position of its permanent, its
+/// [`Apply::order`], and the card and face it is printed on.
+#[derive(Clone, Copy)]
+struct Listed<L: Layout> {
+    at: usize,
+    order: u8,
+    source: L::Card,
+    face: FaceIx,
+}
+
+/// The static ability `a`, a part of whose effect it is: an ability of its permanent's face,
+/// or one granted to the permanent ([`GRANTED`]).
+fn static_ability_of<L: Layout>(
+    s: &Rederive<'_, L>,
+    t: &GameTable,
+    from: L::Index,
+    a: &Apply<L>,
+) -> &'static Ability {
+    if a.order & GRANTED != 0 {
+        &t.def(a.source).front().grants[usize::from(a.order & !GRANTED)]
+    } else {
+        &s.copiable(s.battlefield()[position::<L>(from)])
+            .face(t)
+            .abilities[usize::from(a.order)]
+    }
+}
+
+/// Lists the static ability `on` names, of the permanent at its battlefield position, whose
+/// continuous effect is `spec`, among the effects to apply, if it applies now: one entry
 /// for each part of its effect, each in its own layer ([CR 613.6]): "If an effect should be
 /// applied in different layers and/or sublayers, the parts of the effect each apply in their
 /// appropriate ones."
@@ -353,16 +436,14 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable, trials: &mut u64) -> Re
 #[inline(never)]
 fn list_static<L: Layout>(
     s: &Rederive<'_, L>,
-    t: &GameTable,
     list: &mut Option<Applying<L>>,
-    i: usize,
-    n: usize,
+    on: Listed<L>,
     ability: &'static Ability,
     spec: &'static LayerSpec,
 ) -> Result<(), Full> {
+    let i = on.at;
     let slot = s.battlefield()[i];
     let o = s.object(slot);
-    let what = s.copiable(slot);
     // CR 611.3a: "A continuous effect generated by a static ability isn't 'locked
     // in'; it applies at any given moment to whatever its text indicates." Its "as
     // long as" and what it affects are read each time. One on its own permanent or
@@ -393,7 +474,6 @@ fn list_static<L: Layout>(
         }
         _ => Target::Static(index::<L>(i)),
     };
-    let (source, face) = what.record(t);
     let you = s.base_controller(slot);
     // The part in the earliest layer, where the effect begins: the first said of those.
     let layer_of = |modification: Modification| {
@@ -408,20 +488,24 @@ fn list_static<L: Layout>(
         // No static ability of the cards changes control. One that did would name
         // its source's controller as layer 2 has it, not as the permanent entered.
         debug_assert_ne!(modification, Modification::Control);
-        // An amount read as its layer applies is named by the ability that says it.
-        let change = LayerChange::resolve(modification, you).unwrap_or(LayerChange::Read {
-            layer: read_layer(modification),
-            face,
-            ability: AbilityIx::new(n as u8),
-            part: part as u8,
+        // An amount read as its layer applies is named by the ability that says it. The card
+        // table refuses a granted ability with one (`Unapplied::GrantedAmount`).
+        let change = LayerChange::resolve(modification, you).unwrap_or_else(|| {
+            debug_assert_eq!(on.order & GRANTED, 0);
+            LayerChange::Read {
+                layer: read_layer(modification),
+                face: on.face,
+                ability: AbilityIx::new(on.order),
+                part: part as u8,
+            }
         });
         let pushed = list.get_or_insert_with(Default::default).push(Apply {
             layer: change.layer() as u8,
             timestamp: o.timestamp(),
-            order: n as u8,
+            order: on.order,
             part: part as u8,
             target,
-            source,
+            source: on.source,
             change,
             from: Some((index::<L>(i), part == first)),
             parts: spec.modifications.len() as u8,
@@ -522,12 +606,14 @@ fn members<L: Layout>(
         (None, Target::Position(i)) => Some(Bitboard::single(s.battlefield()[position::<L>(i)])),
         (None, Target::Set(set)) => Some(s.locked_in(set)),
         (Some((from, true)), target) => {
-            if !s.has_ability_so_far(position::<L>(from), AbilityIx::new(a.order)) {
+            if !has_so_far(s, from, a) {
                 return None;
             }
             Some(match target {
                 Target::Position(i) => Bitboard::single(s.battlefield()[position::<L>(i)]),
-                Target::Static(i) => apply::static_members(s, t, i.into(), a.order),
+                Target::Static(i) => {
+                    apply::static_members(s, t, i.into(), static_ability_of(s, t, from, a))
+                }
                 Target::Set(_) => unreachable!("a static ability locks in no set"),
             })
         }
@@ -540,6 +626,22 @@ fn members<L: Layout>(
         }
         (None, Target::Static(_)) => unreachable!("a resolved effect names no ability"),
     }
+}
+
+/// Whether the permanent at `from` still has the static ability `a` is a part of as its
+/// effect comes up. An ability of its face, if no effect so far removed it. A granted one was
+/// found granted by the run of the layers before ([`Granted`]), and in that run's layers 1
+/// to 5 it is present, as no layer 6 effect has yet applied to take it away; from layer 6 on,
+/// if the permanent has been granted it again in this run.
+fn has_so_far<L: Layout>(s: &Rederive<'_, L>, from: L::Index, a: &Apply<L>) -> bool {
+    let at = position::<L>(from);
+    if a.order & GRANTED == 0 {
+        return s.has_ability_so_far(at, AbilityIx::new(a.order));
+    }
+    a.layer < Layer::Ability as u8 || { s.rows()[at].granted }.contains(&Some(GrantRef {
+        card: a.source,
+        grant: GrantIx::new(a.order & !GRANTED),
+    }))
 }
 
 /// A battlefield position the layout's index names, as a `usize`.

@@ -687,6 +687,7 @@ impl Scope<'_> {
                 _ => Err(Malformed::ZoneOf),
             },
             Objects::CardsIn { players, .. } => self.players(players),
+            Objects::Other(objects) => self.objects(objects),
         }
     }
 

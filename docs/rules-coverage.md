@@ -321,11 +321,22 @@ then counters (7c), then the rules static abilities change (CR 613.11)
   inputs, the recompute folds them for the battlefield as it folds the
   listeners, and a mutator marks the cache stale only when its input is in that
   set.
-- **A granted static ability.** An ability granted in layer 6 whose effect
-  belongs to an earlier layer is found only after that layer has run. The
-  recompute then runs once more with the ability present, at most three times.
-  The table knows whether any card grants a static ability, so other games run
-  the recompute once.
+- **A granted static ability** (landed with Opalescence). An ability granted in
+  layer 6 whose effect belongs to an earlier layer is found only after that
+  layer has run. The recompute then runs the layers once more with the abilities
+  the run before found granted (`layers/granted.rs`), until a run finds the same
+  ones, at most three runs. A granted ability's effect has its permanent's
+  timestamp and comes after the face's own abilities.
+  `Capability::GrantsLayerEffect` says whether any card of the game grants a
+  static ability with a continuous effect, so other games run the layers once.
+  The card table refuses a granted ability whose amount the layers read as they
+  apply (`Unapplied::GrantedAmount`), since they find such an amount by the
+  ability's place on its permanent's face.
+- **Each other, and its mana value** (landed with Opalescence). `Objects::Other`
+  is a set without the object whose ability it is, in a static ability's
+  affected set and in a resolving effect. In a static ability's base power and
+  toughness, `Amount::ManaValue(Objects::Those)` is the mana value of each
+  permanent it affects, read for each as layer 7b applies.
 
 The single stale flag stays. The Layers family's corpus says whether it needs
 splitting.

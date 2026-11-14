@@ -7,7 +7,7 @@ use beryl_kernel::static_ability::{self, LayerResults, NoResults};
 use beryl_card::Amount;
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityIx, FaceIx, Objects};
+use crate::card::Objects;
 use crate::card::{BasicLandTypes, Colors, Keywords, Types};
 use crate::filter::{self, Filter};
 use crate::fixed::Full;
@@ -21,7 +21,8 @@ use crate::table::GameTable;
 ///
 /// `you` is the controller of the permanent with the static ability the change is part of,
 /// as the layers so far left it, for an amount the change reads ([`LayerChange::Read`]):
-/// read once, since no amount the layers read names the permanent it changes.
+/// read once, unless it is the mana value of each permanent it changes
+/// ([`static_ability::reads_each`]).
 ///
 /// [`Full`] if a removal of abilities had no place in a member's mask.
 pub(super) fn apply_to_members<L: Layout>(
@@ -35,14 +36,38 @@ pub(super) fn apply_to_members<L: Layout>(
     if members.is_empty() {
         return Ok(());
     }
+    let each = reads_each::<L>(t, source, change);
     let change = settle(s, t, source, change, you);
     let mut applied = Ok(());
     for i in 0..s.battlefield().len() {
-        if members.contains(s.battlefield()[i]) {
+        let slot = s.battlefield()[i];
+        if members.contains(slot) {
+            let change = if each {
+                read(s, t, source, change, you, Some(slot))
+            } else {
+                change
+            };
             applied = applied.and(apply(s, t, i, source, change));
         }
     }
     applied
+}
+
+/// Whether `change` is a part of a static ability whose amounts read each permanent it
+/// changes ([`static_ability::reads_each`]).
+fn reads_each<L: Layout>(t: &GameTable, source: L::Card, change: LayerChange) -> bool {
+    let LayerChange::Read {
+        face,
+        ability,
+        part,
+        ..
+    } = change
+    else {
+        return false;
+    };
+    t.def(source).face(face).abilities[ability.index()]
+        .layer()
+        .is_some_and(|spec| static_ability::reads_each(spec, part))
 }
 
 /// `change` with any amount it reads ([`LayerChange::Read`]) read now, for `you`, the
@@ -56,19 +81,18 @@ pub(super) fn settle<L: Layout>(
     you: Option<Seat>,
 ) -> LayerChange {
     match change {
-        LayerChange::Read {
-            face,
-            ability,
-            part,
-            ..
-        } => read(s, t, source, face, ability, part, you),
+        // One that reads each permanent is read as it changes each: what it does depends on
+        // nothing the layers change, a permanent's mana value.
+        LayerChange::Read { .. } if reads_each::<L>(t, source, change) => change,
+        LayerChange::Read { .. } => read(s, t, source, change, you, None),
         change => change,
     }
 }
 
-/// The change the part at `part` of the static ability at `ability` of the face `face` of
-/// `source` makes, its amounts read now for `you`, the controller of the permanent with the
-/// ability: a characteristic-defining power ([CR 613.4a]): "Layer 7a: Effects from
+/// The change `change`, a [`LayerChange::Read`] naming a part of a static ability of
+/// `source`, makes, its amounts read now for `you`, the controller of the permanent with the
+/// ability, and of `member`, the permanent it changes, for one that reads each
+/// ([`static_ability::reads_each`]): a characteristic-defining power ([CR 613.4a]): "Layer 7a: Effects from
 /// characteristic-defining abilities that define power and/or toughness are applied", or a
 /// base power and toughness ([CR 613.4b]): "Layer 7b: Effects that set power and/or
 /// toughness to a specific number or value are applied." The layers before are done for
@@ -81,24 +105,32 @@ fn read<L: Layout>(
     s: &Rederive<'_, L>,
     t: &GameTable,
     source: L::Card,
-    face: FaceIx,
-    ability: AbilityIx,
-    part: u8,
+    change: LayerChange,
     you: Option<Seat>,
+    member: Option<L::Slot>,
 ) -> LayerChange {
+    let LayerChange::Read {
+        face,
+        ability,
+        part,
+        ..
+    } = change
+    else {
+        unreachable!("only a part whose amounts the layers read is read");
+    };
     let said_by = &t.def(source).face(face).abilities[ability.index()];
     let (Some(spec), Some(you)) = (said_by.layer(), you) else {
         unreachable!("a static ability's part names its ability and its controller");
     };
-    let number = |amount| i8::try_from(defined(s, t, amount, you)).unwrap_or(i8::MAX);
+    let number = |amount| i8::try_from(defined(s, t, amount, you, member)).unwrap_or(i8::MAX);
     match static_ability::amounts_of(spec, part) {
         (power, None) => LayerChange::DefinedPower(number(power)),
         (power, Some(toughness)) => LayerChange::SetBasePt(number(power), number(toughness)),
     }
 }
 
-/// The permanents a static ability of the permanent at battlefield position `at` applies
-/// to now, the ability at `n` of its face, or none if its "as long as" does not hold. Both
+/// The permanents `ability`, a static ability of the permanent at battlefield position `at`,
+/// applies to now, or none if its "as long as" does not hold. Both
 /// are read against the layer results so far ([CR 611.3a]): "A continuous effect generated
 /// by a static ability isn't 'locked in'; it applies at any given moment to whatever its
 /// text indicates." So "creatures you control" are the permanents that are creatures and
@@ -117,10 +149,9 @@ pub(super) fn static_members<L: Layout>(
     s: &Rederive<'_, L>,
     t: &GameTable,
     at: usize,
-    n: u8,
+    ability: &'static beryl_card::Ability,
 ) -> Bitboard<L::Slot> {
     let slot = s.battlefield()[at];
-    let ability = &s.copiable(slot).face(t).abilities[usize::from(n)];
     let Some(spec) = ability.layer() else {
         unreachable!("the recompute lists the static abilities that have a layer effect");
     };
@@ -144,16 +175,15 @@ pub(super) fn static_members<L: Layout>(
             .attached_to()
             .filter(|&a| s.battlefield_position(a).is_some())
             .map_or(Bitboard::EMPTY, Bitboard::single),
-        Objects::All { filter, .. } => {
-            let mut members = Bitboard::EMPTY;
-            for i in 0..s.battlefield().len() {
-                if so_far.passes_at(filter, i) {
-                    members.insert(s.battlefield()[i]);
-                }
-            }
+        Objects::All { filter, .. } => so_far.select(filter),
+        // "Each other": never the permanent with the ability, whatever it has become.
+        Objects::Other(&Objects::All { filter, .. }) => {
+            let mut members = so_far.select(filter);
+            members.remove(slot);
             members
         }
-        Objects::Target(_)
+        Objects::Other(_)
+        | Objects::Target(_)
         | Objects::Those
         | Objects::TriggeredOn
         | Objects::TriggeredOnIn(_)
@@ -194,6 +224,17 @@ struct SoFar<'r, 'a, L: Layout> {
 impl<L: Layout> SoFar<'_, '_, L> {
     fn passes_at(&self, filter: Filter, i: usize) -> bool {
         passes(self.s, self.t, filter, i, self.you)
+    }
+
+    /// The permanents that pass `filter`.
+    fn select(&self, filter: Filter) -> Bitboard<L::Slot> {
+        let mut members = Bitboard::EMPTY;
+        for i in 0..self.s.battlefield().len() {
+            if self.passes_at(filter, i) {
+                members.insert(self.s.battlefield()[i]);
+            }
+        }
+        members
     }
 }
 
@@ -353,14 +394,33 @@ fn modify<L: Layout>(
     }
 }
 
-/// The value of an amount a characteristic-defining ability defines, read as its layer
-/// applies for the permanent's controller `you`: of the permanents as layers 2 to 6 left
-/// them, so a count sees each one's final types and controller. The card table has only
-/// amounts read this way (`beryl_kernel`'s `static_ability::read_amounts`).
-fn defined<L: Layout>(s: &Rederive<'_, L>, t: &GameTable, amount: &Amount, you: Seat) -> usize {
+/// The value of an amount a static ability's part reads as its layer applies, for the
+/// controller `you` of the permanent with the ability: of the permanents as layers 2 to 6
+/// left them, so a count sees each one's final types and controller. "Its mana value" is
+/// that of `member`, the permanent the part changes ([CR 202.3]): "The mana value of an
+/// object is a number equal to the total amount of mana in its mana cost, regardless of
+/// color." No layer changes it. The card table has only amounts read this way
+/// (`beryl_kernel`'s `static_ability::read_amounts`).
+///
+/// [CR 202.3]: https://yawgatog.com/resources/magic-rules/#R2023
+fn defined<L: Layout>(
+    s: &Rederive<'_, L>,
+    t: &GameTable,
+    amount: &Amount,
+    you: Seat,
+    member: Option<L::Slot>,
+) -> usize {
     match *amount {
         Amount::Fixed(n) => usize::from(n),
-        Amount::Times(n, amount) => usize::from(n).saturating_mul(defined(s, t, amount, you)),
+        Amount::Times(n, amount) => {
+            usize::from(n).saturating_mul(defined(s, t, amount, you, member))
+        }
+        Amount::ManaValue(Objects::Those) => {
+            let Some(member) = member else {
+                unreachable!("a part that reads each permanent is read for each");
+            };
+            usize::from(s.mana_value(t, member))
+        }
         Amount::Count(&Objects::All { filter, .. }) => (0..s.battlefield().len())
             .filter(|&i| passes(s, t, filter, i, you))
             .count(),
@@ -424,7 +484,8 @@ pub(super) fn filter_reads(filter: Filter) -> Characteristics {
 pub(super) fn amount_reads(spec: &beryl_card::LayerSpec, part: u8) -> Characteristics {
     fn of(amount: &Amount) -> Characteristics {
         match *amount {
-            Amount::Fixed(_) => Characteristics::NONE,
+            // A number, or a permanent's mana value, which no layer changes.
+            Amount::Fixed(_) | Amount::ManaValue(Objects::Those) => Characteristics::NONE,
             Amount::Times(_, amount) => of(amount),
             Amount::Count(&Objects::All { filter, .. }) => filter_reads(filter),
             _ => Characteristics::FILTERED,

@@ -240,10 +240,7 @@ fn reads<L: Layout>(s: &Rederive<'_, L>, t: &GameTable, a: &Apply<L>) -> Charact
     let Some((from, first)) = a.from else {
         return Characteristics::NONE;
     };
-    let ability = &s
-        .copiable(s.battlefield()[position::<L>(from)])
-        .face(t)
-        .abilities[usize::from(a.order)];
+    let ability = super::static_ability_of(s, t, from, a);
     let Some(spec) = ability.layer() else {
         unreachable!("the recompute lists the static abilities that have a layer effect");
     };
@@ -254,7 +251,10 @@ fn reads<L: Layout>(s: &Rederive<'_, L>, t: &GameTable, a: &Apply<L>) -> Charact
     if first {
         reads = reads.union(Characteristics::REMOVES_ABILITIES);
         if let Target::Static(_) = a.target {
-            if let beryl_card::Objects::All { filter, .. } = spec.affected {
+            if let beryl_card::Objects::All { filter, .. }
+            | beryl_card::Objects::Other(&beryl_card::Objects::All { filter, .. }) =
+                spec.affected
+            {
                 reads = reads.union(apply::filter_reads(filter));
             }
             // An "as long as" that reads the results asks what filters ask.

@@ -263,6 +263,7 @@ impl Objects {
                 filter.walk(visit);
             }
             Objects::CardsIn { players, .. } => players.walk(visit),
+            Objects::Other(objects) => objects.walk(visit),
         }
     }
 }

@@ -96,12 +96,24 @@ pub enum Objects {
     /// pays a part with objects has each one remember, as a memo, the spell or the source
     /// it paid for, and this reads the objects that remember the one resolving.
     Paid(CostAction),
+    /// The objects of a set but the one the ability is on: "each other creature", "other
+    /// enchantments you control" ([CR 109.1]): "An object is an ability on the stack, a card,
+    /// a copy of a card, a token, a spell, a permanent, or an emblem." So a permanent is never
+    /// "other" than itself, and a static ability of one that is "each other [filter]" leaves
+    /// it out whatever it becomes.
+    ///
+    /// [CR 109.1]: https://yawgatog.com/resources/magic-rules/#R1091
+    Other(&'static Objects),
 }
 
 impl Objects {
     /// Whether it is what a cost took ([`Objects::Paid`]).
     pub const fn names_paid(&self) -> bool {
-        matches!(self, Objects::Paid(_))
+        match self {
+            Objects::Paid(_) => true,
+            Objects::Other(objects) => objects.names_paid(),
+            _ => false,
+        }
     }
 }
 
@@ -202,6 +214,7 @@ impl Objects {
                 players, filter, ..
             } => players.needs_a_resolution() || filter.needs_a_resolution(),
             Objects::CardsIn { players, .. } => players.needs_a_resolution(),
+            Objects::Other(objects) => objects.needs_a_resolution(),
         }
     }
 }

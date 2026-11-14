@@ -37,6 +37,11 @@ const UNREACHED: &[(&str, &str)] = &[
          Equipment's controller none; the card's hand-written scenario equips one",
     ),
     (
+        "Opalescence: ability 0 (Static)",
+        "it changes only other non-Aura enchantments, and a generated position has none; the \
+         card's hand-written scenarios put some beside it",
+    ),
+    (
         "Leonin Scimitar: ability 0 (Static)",
         "it changes only the creature the Equipment is attached to, as equip",
     ),
