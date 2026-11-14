@@ -146,6 +146,9 @@ pub struct Options {
     pub combat: bool,
     /// Try unvisited children in descending order of their greedy scores, including at the root.
     pub order: bool,
+    /// With the anchor, let the rollout policy answer choices of up to a number of
+    /// objects and offers to search a library without planting a tree.
+    pub sure: bool,
 }
 
 /// A searcher's settings.
@@ -269,8 +272,8 @@ impl FromStr for Family {
                 "{s:?} is no family: method/sight/leaf/knowledge[/options], as \
                  ismcts18/hidden/rollout/tuned (pimcN, ismctsN or turn72; hidden, hands or omniscient; \
                  rollout, cutN or eval; estimate or tuned; options anchor, expert, guard, mid, \
-                 means, hold, waste, combat and order joined by + in that order; \
-                 expert and guard require anchor)"
+                 means, hold, waste, combat, order and sure joined by + in that order; \
+                 expert, guard and sure require anchor)"
             )
         };
         let parts: Vec<&str> = s.split('/').collect();
@@ -293,6 +296,7 @@ impl FromStr for Family {
                         "waste" => &mut o.waste,
                         "combat" => &mut o.combat,
                         "order" => &mut o.order,
+                        "sure" => &mut o.sure,
                         _ => return Err(bad()),
                     };
                     if *flag {
@@ -301,7 +305,7 @@ impl FromStr for Family {
                     *flag = true;
                 }
                 // One spelling per family, so that a name read back prints as it was given.
-                if o.to_name() != *named || ((o.expert || o.guard) && !o.anchor) {
+                if o.to_name() != *named || ((o.expert || o.guard || o.sure) && !o.anchor) {
                     return Err(bad());
                 }
                 o
@@ -349,7 +353,7 @@ impl FromStr for Family {
 
 impl Options {
     /// The options as a family's name spells them, joined by `+` in this order:
-    /// `anchor+expert+guard+mid+means+hold+waste+combat+order`; empty for none.
+    /// `anchor+expert+guard+mid+means+hold+waste+combat+order+sure`; empty for none.
     fn to_name(self) -> String {
         [
             (self.anchor, "anchor"),
@@ -361,6 +365,7 @@ impl Options {
             (self.waste, "waste"),
             (self.combat, "combat"),
             (self.order, "order"),
+            (self.sure, "sure"),
         ]
         .into_iter()
         .filter_map(|(on, name)| on.then_some(name))
@@ -916,6 +921,12 @@ impl<L: Layout> LongSearch<L> {
         let kept = self.kept.take();
         if d.len() < 2 || d.prompt.orders_library_bottom() {
             return Choice(0);
+        }
+        if self.settings.family.options.sure
+            && (d.kind == DecisionKind::ChooseUpTo
+                || (d.kind == DecisionKind::YesNo && d.prompt.purpose == Purpose::MaySearch))
+        {
+            return self.policy.choose(&self.table, obs, d);
         }
         if d.kind == DecisionKind::Priority
             && obs
@@ -1887,6 +1898,7 @@ mod tests {
             "pimc72/hidden/rollout/tuned/anchor+expert",
             "pimc72/hidden/rollout/tuned/anchor+order",
             "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order",
+            "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order+sure",
         ] {
             let f: Family = s.parse().unwrap();
             assert_eq!(f.to_string(), s);
@@ -1911,6 +1923,8 @@ mod tests {
             "pimc18/hidden/rollout/tuned/expert",
             "pimc18/hidden/rollout/tuned/anchor+guard+expert",
             "pimc18/hidden/rollout/tuned/anchor+order+combat",
+            "pimc18/hidden/rollout/tuned/order+sure",
+            "pimc18/hidden/rollout/tuned/anchor+sure+order",
         ] {
             assert!(bad.parse::<Family>().is_err(), "{bad}");
         }

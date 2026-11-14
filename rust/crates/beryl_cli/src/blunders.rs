@@ -423,6 +423,80 @@ pub fn main(args: &[String]) -> Result<(), String> {
 mod tests {
     use super::*;
 
+    /// Detects any search, including one that ultimately plays the policy's answer.
+    struct PolicyOnly(beryl_search::LongSearch);
+
+    impl Agent for PolicyOnly {
+        fn choose(
+            &mut self,
+            obs: beryl_engine::Observation<'_>,
+            d: &Decision,
+            at: AgentDecision,
+        ) -> beryl_engine::Choice {
+            let choice = self.0.choose(obs, d, at);
+            assert!(self.0.last_search().is_none(), "{:?}", d.kind);
+            choice
+        }
+    }
+
+    #[test]
+    fn sure_plays_the_policy_at_free_choices() {
+        use beryl_engine::DecisionKind;
+        use beryl_engine::card::Purpose;
+
+        let family = "pimc72/hidden/rollout/tuned/anchor+guard+sure"
+            .parse()
+            .unwrap();
+        let settings = beryl_search::Settings {
+            family,
+            work: 100_000,
+            threads: 1,
+        };
+        for (name, kind) in [
+            ("decline-mana-crypt", DecisionKind::YesNo),
+            ("decline-both-teferi-untaps", DecisionKind::ChooseUpTo),
+            ("decline-second-teferi-untap", DecisionKind::ChooseUpTo),
+        ] {
+            let e = entry(name);
+            let at = reach(&e).unwrap();
+            assert_eq!(at.d.kind, kind, "{name}");
+            if kind == DecisionKind::YesNo {
+                assert_eq!(at.d.prompt.purpose, Purpose::MaySearch, "{name}");
+            }
+            let mut greedy = build(&at.t, "greedy", 0).unwrap();
+            let expected = play(&e, &at, greedy.as_mut());
+            assert!(passes(&e, &expected), "{name}: {expected:?}");
+            for index in 0..3 {
+                let seed = run_seed(name, index);
+                let mut agent = PolicyOnly(beryl_search::LongSearch::new(&at.t, settings, seed));
+                assert_eq!(play(&e, &at, &mut agent), expected, "{name} seed {index}");
+            }
+        }
+    }
+
+    #[test]
+    fn sure_still_searches_other_decisions() {
+        let at = reach(&entry("skip-teferi-plus-one")).unwrap();
+        let mut scratch = Scratch::new();
+        let obs = observe(&at.s, &at.t, &mut scratch, at.d.player);
+        let mut family = beryl_search::DEEP_SEARCHER;
+        assert!(!family.options.sure);
+        let mut run = |sure| {
+            family.options.sure = sure;
+            let settings = beryl_search::Settings {
+                family,
+                work: 100_000,
+                threads: 1,
+            };
+            let mut agent = beryl_search::LongSearch::new(&at.t, settings, 0);
+            let choice = agent.choose(obs, &at.d, AgentDecision(0));
+            (choice, agent.last_search().unwrap().rollouts)
+        };
+        let baseline = run(false);
+        assert!(baseline.1 > 0);
+        assert_eq!(run(true), baseline);
+    }
+
     /// An agent that plays the first candidate whose label it lists, else the first.
     struct Scripted {
         t: GameTable,

@@ -367,6 +367,7 @@ const DEEP_SEER: Family = Family {
         waste: false,
         combat: false,
         order: false,
+        sure: false,
     },
 };
 
@@ -398,6 +399,7 @@ pub const DEEP_SEARCHER: Family = Family {
         waste: false,
         combat: false,
         order: false,
+        sure: false,
     },
 };
 
