@@ -9,8 +9,9 @@
 use crate::prelude::*;
 
 /// Each "as long as you control a [land type]" is its own static ability, a layer 7c
-/// modification of this creature ([CR 613.4c]): "Effects that modify power and/or toughness
-/// but don't set power and/or toughness to a specific number or value are applied."
+/// modification of this creature ([CR 613.4c]): "Effects and counters that modify power
+/// and/or toughness (but don't set power and/or toughness to a specific number or value) are
+/// applied."
 /// The condition is read from the permanents as the layers before 7c left them, so a land
 /// that a layer 4 effect makes a Mountain counts ([CR 613.1d]): "Layer 4: Type-changing
 /// effects are applied." The two abilities are separate, so a land that is both a Mountain

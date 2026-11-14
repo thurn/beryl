@@ -9,9 +9,7 @@
 use crate::prelude::*;
 
 /// "Switch target creature's power and toughness until end of turn" is a layer 7d effect
-/// ([CR 613.4d]): "Effects that switch a creature's power and toughness are applied. Such
-/// effects take the value of power and apply it to toughness, and take the value of toughness
-/// and apply it to power." It applies after the modifying effects and counters of layer 7c
+/// ([CR 613.4d]): "Effects that switch a creature's power and toughness are applied." It applies after the modifying effects and counters of layer 7c
 /// whenever they began, so a creature with a +1/+1 counter is switched after the counter.
 /// It lasts until the turn ends ([CR 514.2]). Then its controller draws a card.
 ///

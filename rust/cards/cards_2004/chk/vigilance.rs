@@ -9,8 +9,9 @@
 use crate::prelude::*;
 
 /// "Enchanted creature has vigilance" is a static ability that adds a keyword in layer 6
-/// ([CR 613.1f]): "Layer 6: Ability-adding effects, ability-removing effects, and effects
-/// that say an object can't have an ability are applied." It affects the creature the Aura is
+/// ([CR 613.1f]): "Layer 6: Ability-adding effects, keyword
+/// counters, ability-removing effects, and effects that say an object can't have an ability
+/// are applied." It affects the creature the Aura is
 /// attached to ([CR 303.4a]). Attacking does not cause a creature with vigilance to tap
 /// ([CR 702.20b]).
 ///
