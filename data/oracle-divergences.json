@@ -33,5 +33,12 @@
     "scenario": "generated 1: cast from hand",
     "cr": "CR 701.23b (https://yawgatog.com/resources/magic-rules/#R70123b): \"If a player is searching a hidden zone for cards with a stated quality, such as a card with a certain card type or color, that player isn't required to find some or all of those cards even if they're present in that zone.\"",
     "reason": "XMage's Spellseeker searches with a target of exactly one card (\"from 1 to 1\") whenever one qualifies, so its controller cannot fail to find the card."
+  },
+  {
+    "oracle": "forge",
+    "card": "Blood Artist",
+    "scenario": "Blood Artist dying with two others triggers three times",
+    "cr": "CR 603.3b (https://yawgatog.com/resources/magic-rules/#R6033b): \"If multiple abilities have triggered since the last time a player received priority, the abilities are placed on the stack in a two-part process. First, each player, in APNAP order, puts each triggered ability they control with a trigger condition that isn't another ability triggering on the stack in any order they choose. (See rule 101.4.) Second, each player, in APNAP order, puts all remaining triggered abilities they control on the stack in any order they choose. Then the game once again checks for and performs state-based actions until none are performed, then abilities that triggered during this process go on the stack. This process repeats until no new state-based actions are performed and no abilities trigger. Then the appropriate player gets priority.\"",
+    "reason": "Forge's harness asks for the order of all three simultaneous triggers in one decision, where Beryl and XMage ask for one trigger at a time, so the second scripted order answer is never consumed"
   }
 ]

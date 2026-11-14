@@ -6,6 +6,13 @@
       "Beza, the Bounding Spring: when ~ enters , [-create a Treasure token-] if an opponent controls more lands than you {+, create a Treasure token+} . [-you gain 4 life-] if an opponent has more life than you {+, you gain 4 life+} . [-create two 1/1 blue Fish creature tokens-] if an opponent controls more creatures than you {+, create two 1/1 blue Fish creature tokens+} . [-draw a card-] if an opponent has more cards in hand than you {+, draw a card+} ."
     ]
   },
+  "Blood Artist": {
+    "reason": "wording",
+    "note": "\"Whenever this creature or another creature dies\" and \"whenever a creature dies\" are the same trigger, since \"a creature\" includes the creature the ability is on; the renderer says it the second way. Both instructions are the same, split into two sentences.",
+    "diff": [
+      "Blood Artist: whenever [-~ or another-] {+a+} creature dies , target player loses 1 life [-and-] {+.+} you gain 1 life ."
+    ]
+  },
   "Currency Converter": {
     "reason": "wording",
     "note": "The last ability chooses one card exiled with the Converter and puts it into the graveyard only if one was chosen; Oracle says \"put a card exiled with this artifact\", which is the same instruction. \"Otherwise\" after \"if it's a land card\" is \"if it's a nonland card\".",
