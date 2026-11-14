@@ -1,0 +1,2717 @@
+[
+  {
+    "id": "hand_card.play",
+    "label": "Play",
+    "applies_to": "hand_card",
+    "scope": "table",
+    "asks": "none",
+    "action": { "move": { "objects": "$objects", "in": "$in", "to": "play" } },
+    "menu": { "group": "Primary", "order": 10 },
+    "group": "Cards"
+  },
+  {
+    "id": "stack_entry.resolve",
+    "label": "Resolve",
+    "applies_to": "stack_entry",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": { "objects": "$objects", "in": "$in", "to": "resolve" }
+    },
+    "menu": { "group": "Primary", "order": 10 },
+    "group": "Cards"
+  },
+  {
+    "id": "pile_card.play",
+    "label": "Play",
+    "applies_to": "pile_card",
+    "scope": "table",
+    "asks": "none",
+    "action": { "move": { "objects": "$objects", "in": "$in", "to": "play" } },
+    "menu": { "group": "Primary", "order": 10 },
+    "group": "Cards",
+    "also_applies_to": { "viewer_card": true }
+  },
+  {
+    "id": "hand_card.play_face_down",
+    "label": "Play face down",
+    "applies_to": "hand_card",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": "battlefield",
+        "face": "down"
+      }
+    },
+    "menu": { "group": "Primary", "order": 20 },
+    "group": "Cards",
+    "also_applies_to": {
+      "stack_entry": { "group": "Card", "order": 80 },
+      "pile_card": false,
+      "viewer_card": true
+    }
+  },
+  {
+    "id": "hand_card.reveal",
+    "label": "Reveal",
+    "applies_to": "hand_card",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "reveal": { "in": "$in", "to": ["$other_seat"], "objects": "$objects" }
+    },
+    "menu": { "group": "Primary", "order": 30 },
+    "group": "Cards",
+    "also_applies_to": { "viewer_card": true }
+  },
+  {
+    "id": "permanent.tap",
+    "label": "Tap",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "tap": { "objects": "$objects", "in": "$in", "tapped": "$tapped" }
+    },
+    "menu": { "group": "Primary", "order": 10 },
+    "group": "Cards",
+    "also_applies_to": { "their_permanent": { "group": "Card", "order": 75 } }
+  },
+  {
+    "id": "permanent.take_control",
+    "label": "Take control",
+    "applies_to": "their_permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": { "give": { "objects": "$objects", "in": "$in", "to": "$seat" } },
+    "menu": { "group": "Card", "order": 70 },
+    "group": "Cards"
+  },
+  {
+    "id": "permanent.skip_untap",
+    "label": "Doesn't untap",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "flag": { "objects": "$objects", "in": "$in", "doesnt_untap": "$on" }
+    },
+    "key": { "mac": "Option+U", "other": "Alt+U" },
+    "menu": { "group": "Card", "order": 80 },
+    "group": "Cards",
+    "also_applies_to": { "their_permanent": true }
+  },
+  {
+    "id": "permanent.turn_over",
+    "label": "Turn over",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "face": { "objects": "$objects", "in": "$in", "face": "$face" }
+    },
+    "key": { "mac": "Option+F", "other": "Alt+F" },
+    "menu": { "group": "Card", "order": 90 },
+    "group": "Cards",
+    "also_applies_to": { "their_permanent": true }
+  },
+  {
+    "id": "card.transform",
+    "label": "Transform",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "face": { "objects": "$objects", "in": "$in", "face": "$face" }
+    },
+    "menu": { "group": "Card", "order": 100 },
+    "group": "Cards",
+    "also_applies_to": {
+      "their_permanent": true,
+      "hand_card": true,
+      "stack_entry": true,
+      "pile_card": true,
+      "viewer_card": true
+    },
+    "when": "two_faced"
+  },
+  {
+    "id": "permanent.peek",
+    "label": "Peek at card face",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": { "peek": { "objects": "$objects", "in": "$in" } },
+    "key": { "mac": "Option+L", "other": "Alt+L" },
+    "menu": { "group": "Card", "order": 110 },
+    "group": "Cards",
+    "when": "face_down"
+  },
+  {
+    "id": "card.clone",
+    "label": "Clone",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": { "clone": { "objects": "$objects", "in": "$in" } },
+    "key": { "mac": "Cmd+J", "other": "Ctrl+J" },
+    "menu": { "group": "Card", "order": 120 },
+    "group": "Cards",
+    "also_applies_to": {
+      "their_permanent": true,
+      "hand_card": true,
+      "stack_entry": true
+    }
+  },
+  {
+    "id": "card.attach",
+    "label": "Attach to…",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "target",
+    "action": {
+      "attach": { "objects": "$objects", "in": "$in", "host": "$target" }
+    },
+    "key": { "mac": "Cmd+Option+A", "other": "Ctrl+Alt+A" },
+    "menu": { "group": "Card", "order": 130 },
+    "group": "Cards",
+    "also_applies_to": {
+      "their_permanent": true,
+      "hand_card": true,
+      "stack_entry": true
+    }
+  },
+  {
+    "id": "permanent.unattach",
+    "label": "Unattach",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": { "unattach": { "objects": "$objects", "in": "$in" } },
+    "key": { "mac": "Cmd+Option+U", "other": "Ctrl+Alt+U" },
+    "menu": { "group": "Card", "order": 140 },
+    "group": "Cards",
+    "also_applies_to": { "their_permanent": true },
+    "when": "attached"
+  },
+  {
+    "id": "card.arrow",
+    "label": "Draw arrow…",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "target",
+    "action": {
+      "arrow": { "objects": "$objects", "in": "$in", "to": "$target" }
+    },
+    "key": { "mac": "Option+A", "other": "Alt+A" },
+    "menu": { "group": "Card", "order": 150 },
+    "group": "Cards",
+    "also_applies_to": {
+      "their_permanent": true,
+      "hand_card": true,
+      "stack_entry": true
+    }
+  },
+  {
+    "id": "permanent.note",
+    "label": "Note…",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "text",
+    "action": {
+      "note": { "objects": "$objects", "in": "$in", "note": "$text" }
+    },
+    "key": { "mac": "Option+N", "other": "Alt+N" },
+    "menu": { "group": "Card", "order": 160 },
+    "group": "Cards",
+    "also_applies_to": { "their_permanent": true }
+  },
+  {
+    "id": "permanent.reduce_life_by_power",
+    "label": "Reduce life by power",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": { "life": { "seat": "$seat", "add": "$number" } },
+    "key": { "mac": "Cmd+Shift+L", "other": "Ctrl+Shift+L" },
+    "group": "Cards",
+    "also_applies_to": { "their_permanent": false }
+  },
+  {
+    "id": "card.related",
+    "label": "View related cards",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "client": "view_related_cards",
+    "menu": { "group": "Card", "order": 170 },
+    "group": "Cards",
+    "also_applies_to": { "their_permanent": true },
+    "when": "related_cards"
+  },
+  {
+    "id": "move.battlefield",
+    "label": "Battlefield",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": { "objects": "$objects", "in": "$in", "to": "battlefield" }
+    },
+    "group": "Move to",
+    "also_applies_to": {
+      "their_permanent": true,
+      "hand_card": { "group": "Move to", "order": 90 },
+      "stack_entry": { "group": "Move to", "order": 50 },
+      "pile_card": { "group": "Move to", "order": 20 },
+      "viewer_card": { "group": "Move to", "order": 20 }
+    }
+  },
+  {
+    "id": "move.graveyard",
+    "label": "Graveyard",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "graveyard": "$owner" }
+      }
+    },
+    "key": { "mac": "Cmd+Delete", "other": "Ctrl+Delete" },
+    "menu": { "group": "Move to", "order": 20 },
+    "group": "Move to",
+    "also_applies_to": {
+      "their_permanent": true,
+      "hand_card": { "group": "Move to", "order": 60 },
+      "stack_entry": { "group": "Move to", "order": 20 },
+      "pile_card": { "group": "Move to", "order": 40 },
+      "viewer_card": { "group": "Move to", "order": 40 }
+    }
+  },
+  {
+    "id": "move.exile",
+    "label": "Exile",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "exile": "$owner" }
+      }
+    },
+    "menu": { "group": "Move to", "order": 30 },
+    "group": "Move to",
+    "also_applies_to": {
+      "their_permanent": true,
+      "hand_card": { "group": "Move to", "order": 70 },
+      "stack_entry": { "group": "Move to", "order": 30 },
+      "pile_card": { "group": "Move to", "order": 50 },
+      "viewer_card": { "group": "Move to", "order": 50 }
+    }
+  },
+  {
+    "id": "move.hand",
+    "label": "Hand",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": { "objects": "$objects", "in": "$in", "to": { "hand": "$owner" } }
+    },
+    "menu": { "group": "Move to", "order": 40 },
+    "group": "Move to",
+    "also_applies_to": {
+      "their_permanent": true,
+      "hand_card": { "group": "Move to", "order": 80 },
+      "stack_entry": { "group": "Move to", "order": 40 },
+      "pile_card": { "group": "Move to", "order": 30 },
+      "viewer_card": { "group": "Move to", "order": 30 }
+    }
+  },
+  {
+    "id": "move.library_top",
+    "label": "Top of library",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "library": "$owner" }
+      }
+    },
+    "menu": { "group": "Move to", "order": 50 },
+    "group": "Move to",
+    "also_applies_to": {
+      "their_permanent": true,
+      "hand_card": { "group": "Move to", "order": 100 },
+      "stack_entry": { "group": "Move to", "order": 60 },
+      "pile_card": { "group": "Move to", "order": 60 },
+      "viewer_card": { "group": "Move to", "order": 60 }
+    }
+  },
+  {
+    "id": "move.library_bottom",
+    "label": "Bottom of library",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "library": "$owner" },
+        "position": "bottom"
+      }
+    },
+    "key": { "mac": "Cmd+B", "other": "Ctrl+B" },
+    "menu": { "group": "Move to", "order": 60 },
+    "group": "Move to",
+    "also_applies_to": {
+      "their_permanent": true,
+      "hand_card": { "group": "Move to", "order": 110 },
+      "stack_entry": { "group": "Move to", "order": 70 },
+      "pile_card": { "group": "Move to", "order": 70 },
+      "viewer_card": { "group": "Move to", "order": 70 }
+    }
+  },
+  {
+    "id": "move.library_nth",
+    "label": "Cards from top of library…",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "library": "$owner" },
+        "position": { "nth": "$number" }
+      }
+    },
+    "group": "Move to",
+    "also_applies_to": {
+      "their_permanent": false,
+      "hand_card": false,
+      "stack_entry": false,
+      "pile_card": false,
+      "viewer_card": false
+    }
+  },
+  {
+    "id": "move.sideboard",
+    "label": "Sideboard",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "sideboard": "$owner" }
+      }
+    },
+    "group": "Move to",
+    "also_applies_to": {
+      "their_permanent": false,
+      "hand_card": false,
+      "stack_entry": false,
+      "pile_card": false,
+      "viewer_card": false
+    }
+  },
+  {
+    "id": "stats.power_up",
+    "label": "Increase power",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "stats": { "objects": "$objects", "in": "$in", "stats": "$stats" }
+    },
+    "key": { "mac": "Cmd+=", "other": "Ctrl+=" },
+    "key_aliases": [{ "mac": "Cmd++", "other": "Ctrl++" }],
+    "group": "Power and toughness",
+    "also_applies_to": { "their_permanent": false }
+  },
+  {
+    "id": "stats.power_down",
+    "label": "Decrease power",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "stats": { "objects": "$objects", "in": "$in", "stats": "$stats" }
+    },
+    "key": { "mac": "Cmd+−", "other": "Ctrl+−" },
+    "group": "Power and toughness",
+    "also_applies_to": { "their_permanent": false }
+  },
+  {
+    "id": "stats.toughness_up",
+    "label": "Increase toughness",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "stats": { "objects": "$objects", "in": "$in", "stats": "$stats" }
+    },
+    "key": { "mac": "Option+=", "other": "Alt+=" },
+    "key_aliases": [{ "mac": "Option++", "other": "Alt++" }],
+    "group": "Power and toughness",
+    "also_applies_to": { "their_permanent": false }
+  },
+  {
+    "id": "stats.toughness_down",
+    "label": "Decrease toughness",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "stats": { "objects": "$objects", "in": "$in", "stats": "$stats" }
+    },
+    "key": { "mac": "Option+−", "other": "Alt+−" },
+    "group": "Power and toughness",
+    "also_applies_to": { "their_permanent": false }
+  },
+  {
+    "id": "stats.both_up",
+    "label": "Increase power and toughness",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "stats": { "objects": "$objects", "in": "$in", "stats": "$stats" }
+    },
+    "key": { "mac": "Cmd+Option+=", "other": "Ctrl+Alt+=" },
+    "group": "Power and toughness",
+    "also_applies_to": { "their_permanent": false }
+  },
+  {
+    "id": "stats.both_down",
+    "label": "Decrease power and toughness",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "stats": { "objects": "$objects", "in": "$in", "stats": "$stats" }
+    },
+    "key": { "mac": "Cmd+Option+−", "other": "Ctrl+Alt+−" },
+    "group": "Power and toughness",
+    "also_applies_to": { "their_permanent": false }
+  },
+  {
+    "id": "stats.power_up_toughness_down",
+    "label": "Increase power and decrease toughness",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "stats": { "objects": "$objects", "in": "$in", "stats": "$stats" }
+    },
+    "group": "Power and toughness",
+    "also_applies_to": { "their_permanent": false }
+  },
+  {
+    "id": "stats.power_down_toughness_up",
+    "label": "Decrease power and increase toughness",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "stats": { "objects": "$objects", "in": "$in", "stats": "$stats" }
+    },
+    "group": "Power and toughness",
+    "also_applies_to": { "their_permanent": false }
+  },
+  {
+    "id": "stats.set",
+    "label": "Set power and toughness…",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "stats",
+    "action": {
+      "stats": { "objects": "$objects", "in": "$in", "stats": "$stats" }
+    },
+    "key": { "mac": "Cmd+P", "other": "Ctrl+P" },
+    "menu": { "group": "Power and toughness", "order": 200 },
+    "group": "Power and toughness",
+    "also_applies_to": { "their_permanent": true }
+  },
+  {
+    "id": "stats.reset",
+    "label": "Reset power and toughness",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "stats": { "objects": "$objects", "in": "$in", "stats": null }
+    },
+    "key": { "mac": "Cmd+Option+0", "other": "Ctrl+Alt+0" },
+    "menu": { "group": "Power and toughness", "order": 210 },
+    "group": "Power and toughness",
+    "also_applies_to": { "their_permanent": true },
+    "when": "manual_stats"
+  },
+  {
+    "id": "counter.first_add",
+    "label": "Add (name) counter",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "counter": {
+        "objects": "$objects",
+        "in": "$in",
+        "name": "$first_counter",
+        "add": 1
+      }
+    },
+    "key": { "mac": "Option+.", "other": "Alt+." },
+    "menu": { "group": "Card counters", "order": 220 },
+    "group": "Card counters",
+    "also_applies_to": { "their_permanent": true }
+  },
+  {
+    "id": "counter.first_remove",
+    "label": "Remove (name) counter",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "counter": {
+        "objects": "$objects",
+        "in": "$in",
+        "name": "$first_counter",
+        "add": -1
+      }
+    },
+    "key": { "mac": "Option+,", "other": "Alt+," },
+    "menu": { "group": "Card counters", "order": 221 },
+    "group": "Card counters",
+    "also_applies_to": { "their_permanent": true }
+  },
+  {
+    "id": "counter.first_set",
+    "label": "Set first counter…",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "counter": {
+        "objects": "$objects",
+        "in": "$in",
+        "name": "$first_counter",
+        "set": "$number"
+      }
+    },
+    "key": { "mac": "Option+/", "other": "Alt+/" },
+    "group": "Card counters",
+    "also_applies_to": { "their_permanent": true }
+  },
+  {
+    "id": "counter.second_add",
+    "label": "Add second counter",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "counter": {
+        "objects": "$objects",
+        "in": "$in",
+        "name": "$second_counter",
+        "add": 1
+      }
+    },
+    "key": { "mac": "Cmd+.", "other": "Ctrl+." },
+    "group": "Card counters",
+    "also_applies_to": { "their_permanent": true }
+  },
+  {
+    "id": "counter.second_remove",
+    "label": "Remove second counter",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "counter": {
+        "objects": "$objects",
+        "in": "$in",
+        "name": "$second_counter",
+        "add": -1
+      }
+    },
+    "key": { "mac": "Cmd+,", "other": "Ctrl+," },
+    "group": "Card counters",
+    "also_applies_to": { "their_permanent": true }
+  },
+  {
+    "id": "counter.second_set",
+    "label": "Set second counter…",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "counter": {
+        "objects": "$objects",
+        "in": "$in",
+        "name": "$second_counter",
+        "set": "$number"
+      }
+    },
+    "key": { "mac": "Cmd+/", "other": "Ctrl+/" },
+    "group": "Card counters",
+    "also_applies_to": { "their_permanent": true }
+  },
+  {
+    "id": "counter.third_add",
+    "label": "Add third counter",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "counter": {
+        "objects": "$objects",
+        "in": "$in",
+        "name": "$third_counter",
+        "add": 1
+      }
+    },
+    "key": { "mac": "Cmd+>", "other": "Ctrl+>" },
+    "group": "Card counters",
+    "also_applies_to": { "their_permanent": true }
+  },
+  {
+    "id": "counter.third_remove",
+    "label": "Remove third counter",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "counter": {
+        "objects": "$objects",
+        "in": "$in",
+        "name": "$third_counter",
+        "add": -1
+      }
+    },
+    "key": { "mac": "Cmd+<", "other": "Ctrl+<" },
+    "group": "Card counters",
+    "also_applies_to": { "their_permanent": true }
+  },
+  {
+    "id": "counter.third_set",
+    "label": "Set third counter…",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "counter": {
+        "objects": "$objects",
+        "in": "$in",
+        "name": "$third_counter",
+        "set": "$number"
+      }
+    },
+    "key": { "mac": "Cmd+?", "other": "Ctrl+?" },
+    "group": "Card counters",
+    "also_applies_to": { "their_permanent": true }
+  },
+  {
+    "id": "counter.add_named",
+    "label": "Add counter…",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "text",
+    "action": {
+      "counter": {
+        "objects": "$objects",
+        "in": "$in",
+        "name": "$text",
+        "add": 1
+      }
+    },
+    "menu": { "group": "Card counters", "order": 230 },
+    "group": "Card counters",
+    "also_applies_to": { "their_permanent": true }
+  },
+  {
+    "id": "counter.increment_all",
+    "label": "Increment all card counters",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": { "batch": { "actions": "$actions" } },
+    "key": { "mac": "Cmd+Shift+A", "other": "Ctrl+Shift+A" },
+    "group": "Card counters",
+    "also_applies_to": { "their_permanent": false }
+  },
+  {
+    "id": "token.create",
+    "label": "Create token…",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "token",
+    "action": {
+      "token": {
+        "card": "$card",
+        "count": 1,
+        "attached_to": null,
+        "note": "$text"
+      }
+    },
+    "key": { "mac": "Cmd+T", "other": "Ctrl+T" },
+    "group": "Tokens"
+  },
+  {
+    "id": "token.repeat",
+    "label": "Create another token",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "token": {
+        "card": "$card",
+        "count": 1,
+        "attached_to": null,
+        "note": "$text"
+      }
+    },
+    "key": { "mac": "Cmd+G", "other": "Ctrl+G" },
+    "group": "Tokens",
+    "when": "last_token"
+  },
+  {
+    "id": "token.deck_1",
+    "label": "Create deck token 1",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "token": {
+        "card": "$card",
+        "count": 1,
+        "attached_to": null,
+        "note": "$text"
+      }
+    },
+    "key": { "mac": "Option+1", "other": "Alt+1" },
+    "group": "Tokens",
+    "when": "deck_token_1"
+  },
+  {
+    "id": "token.deck_2",
+    "label": "Create deck token 2",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "token": {
+        "card": "$card",
+        "count": 1,
+        "attached_to": null,
+        "note": "$text"
+      }
+    },
+    "key": { "mac": "Option+2", "other": "Alt+2" },
+    "group": "Tokens",
+    "when": "deck_token_2"
+  },
+  {
+    "id": "token.deck_3",
+    "label": "Create deck token 3",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "token": {
+        "card": "$card",
+        "count": 1,
+        "attached_to": null,
+        "note": "$text"
+      }
+    },
+    "key": { "mac": "Option+3", "other": "Alt+3" },
+    "group": "Tokens",
+    "when": "deck_token_3"
+  },
+  {
+    "id": "token.deck_4",
+    "label": "Create deck token 4",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "token": {
+        "card": "$card",
+        "count": 1,
+        "attached_to": null,
+        "note": "$text"
+      }
+    },
+    "key": { "mac": "Option+4", "other": "Alt+4" },
+    "group": "Tokens",
+    "when": "deck_token_4"
+  },
+  {
+    "id": "token.deck_5",
+    "label": "Create deck token 5",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "token": {
+        "card": "$card",
+        "count": 1,
+        "attached_to": null,
+        "note": "$text"
+      }
+    },
+    "key": { "mac": "Option+5", "other": "Alt+5" },
+    "group": "Tokens",
+    "when": "deck_token_5"
+  },
+  {
+    "id": "token.deck_6",
+    "label": "Create deck token 6",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "token": {
+        "card": "$card",
+        "count": 1,
+        "attached_to": null,
+        "note": "$text"
+      }
+    },
+    "key": { "mac": "Option+6", "other": "Alt+6" },
+    "group": "Tokens",
+    "when": "deck_token_6"
+  },
+  {
+    "id": "token.deck_7",
+    "label": "Create deck token 7",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "token": {
+        "card": "$card",
+        "count": 1,
+        "attached_to": null,
+        "note": "$text"
+      }
+    },
+    "key": { "mac": "Option+7", "other": "Alt+7" },
+    "group": "Tokens",
+    "when": "deck_token_7"
+  },
+  {
+    "id": "token.deck_8",
+    "label": "Create deck token 8",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "token": {
+        "card": "$card",
+        "count": 1,
+        "attached_to": null,
+        "note": "$text"
+      }
+    },
+    "key": { "mac": "Option+8", "other": "Alt+8" },
+    "group": "Tokens",
+    "when": "deck_token_8"
+  },
+  {
+    "id": "token.deck_9",
+    "label": "Create deck token 9",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "token": {
+        "card": "$card",
+        "count": 1,
+        "attached_to": null,
+        "note": "$text"
+      }
+    },
+    "key": { "mac": "Option+9", "other": "Alt+9" },
+    "group": "Tokens",
+    "when": "deck_token_9"
+  },
+  {
+    "id": "token.deck_10",
+    "label": "Create deck token 10",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "token": {
+        "card": "$card",
+        "count": 1,
+        "attached_to": null,
+        "note": "$text"
+      }
+    },
+    "key": { "mac": "Option+0", "other": "Alt+0" },
+    "group": "Tokens",
+    "when": "deck_token_10"
+  },
+  {
+    "id": "token.from_card",
+    "label": "Token: (name)",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "token": {
+        "card": "$card",
+        "count": 1,
+        "attached_to": null,
+        "note": "$text"
+      }
+    },
+    "menu": { "group": "Tokens", "order": 250 },
+    "group": "Tokens",
+    "also_applies_to": { "their_permanent": true, "stack_entry": true },
+    "when": "card_tokens"
+  },
+  {
+    "id": "token.attached",
+    "label": "Token: Attach to (name)",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "token": {
+        "card": "$card",
+        "count": 1,
+        "attached_to": "$target",
+        "note": "$text"
+      }
+    },
+    "menu": { "group": "Tokens", "order": 260 },
+    "group": "Tokens",
+    "also_applies_to": { "their_permanent": true },
+    "when": "card_tokens"
+  },
+  {
+    "id": "token.all",
+    "label": "All tokens",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": { "batch": { "actions": "$actions" } },
+    "key": { "mac": "Cmd+Shift+T", "other": "Ctrl+Shift+T" },
+    "menu": { "group": "Tokens", "order": 270 },
+    "group": "Tokens",
+    "also_applies_to": { "their_permanent": true, "stack_entry": true },
+    "when": "multiple_card_tokens"
+  },
+  {
+    "id": "hand.sort_name",
+    "label": "Sort hand by name",
+    "applies_to": "hand",
+    "scope": "table",
+    "asks": "none",
+    "action": { "sort_hand": { "seat": "$seat", "by": "name" } },
+    "group": "Hand"
+  },
+  {
+    "id": "hand.sort_type",
+    "label": "Sort hand by type",
+    "applies_to": "hand",
+    "scope": "table",
+    "asks": "none",
+    "action": { "sort_hand": { "seat": "$seat", "by": "type" } },
+    "key": { "mac": "Cmd+Shift+H", "other": "Ctrl+Shift+H" },
+    "group": "Hand"
+  },
+  {
+    "id": "hand.sort_mana_value",
+    "label": "Sort hand by mana value",
+    "applies_to": "hand",
+    "scope": "table",
+    "asks": "none",
+    "action": { "sort_hand": { "seat": "$seat", "by": "mana_value" } },
+    "group": "Hand"
+  },
+  {
+    "id": "hand.reveal",
+    "label": "Reveal hand",
+    "applies_to": "hand",
+    "scope": "table",
+    "asks": "none",
+    "action": { "reveal": { "in": "$in", "to": ["$other_seat"] } },
+    "menu": { "group": "Hand", "order": 10 },
+    "group": "Hand"
+  },
+  {
+    "id": "hand.reveal_random",
+    "label": "Reveal random card",
+    "applies_to": "hand",
+    "scope": "table",
+    "asks": "none",
+    "action": { "reveal": { "in": "$in", "to": ["$other_seat"], "random": 1 } },
+    "menu": { "group": "Hand", "order": 20 },
+    "group": "Hand"
+  },
+  {
+    "id": "hand.reveal_random_cards",
+    "label": "Reveal random cards…",
+    "applies_to": "hand",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "reveal": { "in": "$in", "to": ["$other_seat"], "random": "$number" }
+    },
+    "group": "Hand"
+  },
+  {
+    "id": "hand.mulligan",
+    "label": "Mulligan…",
+    "applies_to": "hand",
+    "scope": "table",
+    "asks": "number",
+    "action": { "mulligan": { "seat": "$seat", "count": "$number" } },
+    "key": { "mac": "Cmd+M", "other": "Ctrl+M" },
+    "group": "Hand"
+  },
+  {
+    "id": "hand.mulligan_same_size",
+    "label": "Mulligan to same size",
+    "applies_to": "hand",
+    "scope": "table",
+    "asks": "none",
+    "action": { "mulligan": { "seat": "$seat", "count": "$number" } },
+    "key": { "mac": "Cmd+Shift+M", "other": "Ctrl+Shift+M" },
+    "group": "Hand"
+  },
+  {
+    "id": "hand.mulligan_one_fewer",
+    "label": "Mulligan to one fewer",
+    "applies_to": "hand",
+    "scope": "table",
+    "asks": "none",
+    "action": { "mulligan": { "seat": "$seat", "count": "$number" } },
+    "key": { "mac": "Cmd+Shift+Option+M", "other": "Ctrl+Shift+Alt+M" },
+    "group": "Hand"
+  },
+  {
+    "id": "hand.move_to_library_top",
+    "label": "Move hand to top of library",
+    "applies_to": "hand",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "library": "$seat" }
+      }
+    },
+    "group": "Hand"
+  },
+  {
+    "id": "hand.move_to_library_bottom",
+    "label": "Move hand to bottom of library",
+    "applies_to": "hand",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "library": "$seat" },
+        "position": "bottom"
+      }
+    },
+    "group": "Hand"
+  },
+  {
+    "id": "hand.move_to_graveyard",
+    "label": "Move hand to graveyard",
+    "applies_to": "hand",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "graveyard": "$seat" }
+      }
+    },
+    "group": "Hand"
+  },
+  {
+    "id": "hand.move_to_exile",
+    "label": "Move hand to exile",
+    "applies_to": "hand",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": { "objects": "$objects", "in": "$in", "to": { "exile": "$seat" } }
+    },
+    "group": "Hand"
+  },
+  {
+    "id": "graveyard.move_to_library_top",
+    "label": "Move graveyard to top of library",
+    "applies_to": "graveyard",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "library": "$seat" }
+      }
+    },
+    "group": "Graveyard"
+  },
+  {
+    "id": "graveyard.move_to_library_bottom",
+    "label": "Move graveyard to bottom of library",
+    "applies_to": "graveyard",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "library": "$seat" },
+        "position": "bottom"
+      }
+    },
+    "group": "Graveyard"
+  },
+  {
+    "id": "graveyard.move_to_hand",
+    "label": "Move graveyard to hand",
+    "applies_to": "graveyard",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": { "objects": "$objects", "in": "$in", "to": { "hand": "$seat" } }
+    },
+    "group": "Graveyard"
+  },
+  {
+    "id": "graveyard.move_to_exile",
+    "label": "Move graveyard to exile",
+    "applies_to": "graveyard",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": { "objects": "$objects", "in": "$in", "to": { "exile": "$seat" } }
+    },
+    "group": "Graveyard"
+  },
+  {
+    "id": "exile.move_to_library_top",
+    "label": "Move exile to top of library",
+    "applies_to": "exile",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "library": "$seat" }
+      }
+    },
+    "group": "Exile"
+  },
+  {
+    "id": "exile.move_to_library_bottom",
+    "label": "Move exile to bottom of library",
+    "applies_to": "exile",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "library": "$seat" },
+        "position": "bottom"
+      }
+    },
+    "group": "Exile"
+  },
+  {
+    "id": "exile.move_to_hand",
+    "label": "Move exile to hand",
+    "applies_to": "exile",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": { "objects": "$objects", "in": "$in", "to": { "hand": "$seat" } }
+    },
+    "group": "Exile"
+  },
+  {
+    "id": "exile.move_to_graveyard",
+    "label": "Move exile to graveyard",
+    "applies_to": "exile",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "graveyard": "$seat" }
+      }
+    },
+    "group": "Exile"
+  },
+  {
+    "id": "library.draw",
+    "label": "Draw",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": { "draw": { "seat": "$seat", "count": 1 } },
+    "key": { "mac": "Cmd+D", "other": "Ctrl+D" },
+    "menu": { "group": "Library", "order": 10 },
+    "group": "Library"
+  },
+  {
+    "id": "library.draw_cards",
+    "label": "Draw cards…",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "number",
+    "action": { "draw": { "seat": "$seat", "count": "$number" } },
+    "key": { "mac": "Cmd+E", "other": "Ctrl+E" },
+    "menu": { "group": "Library", "order": 20 },
+    "group": "Library"
+  },
+  {
+    "id": "library.look_top",
+    "label": "Look at top cards…",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "number",
+    "action": { "look": { "seat": "$seat", "portion": { "top": "$number" } } },
+    "key": { "mac": "Cmd+W", "other": "Ctrl+W" },
+    "menu": { "group": "Library", "order": 30 },
+    "group": "Library"
+  },
+  {
+    "id": "library.search",
+    "label": "Search",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": { "look": { "seat": "$seat", "portion": "all" } },
+    "key": { "mac": "F3", "other": "F3" },
+    "menu": { "group": "Library", "order": 40 },
+    "group": "Library"
+  },
+  {
+    "id": "library.shuffle",
+    "label": "Shuffle",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": { "shuffle": { "seat": "$seat", "portion": "all" } },
+    "key": { "mac": "Cmd+S", "other": "Ctrl+S" },
+    "menu": { "group": "Library", "order": 50 },
+    "group": "Library"
+  },
+  {
+    "id": "library.undo_draw",
+    "label": "Undo last draw",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": { "undo": { "entry": "$entry" } },
+    "key": { "mac": "Cmd+Shift+D", "other": "Ctrl+Shift+D" },
+    "menu": { "group": "Library", "order": 60 },
+    "group": "Library",
+    "when": "last_draw"
+  },
+  {
+    "id": "library.look_bottom",
+    "label": "Look at bottom cards…",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "look": { "seat": "$seat", "portion": { "bottom": "$number" } }
+    },
+    "key": { "mac": "Cmd+Shift+W", "other": "Ctrl+Shift+W" },
+    "menu": { "group": "Library", "order": 70, "submenu": "Bottom of library" },
+    "group": "Library"
+  },
+  {
+    "id": "library.reveal",
+    "label": "Reveal library",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": { "reveal": { "in": "$in", "to": ["$other_seat"] } },
+    "group": "Library"
+  },
+  {
+    "id": "library.lend",
+    "label": "Lend library",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": { "lend": { "in": "$in", "to": "$other_seat" } },
+    "group": "Library"
+  },
+  {
+    "id": "library.reveal_top",
+    "label": "Reveal top card",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "reveal": { "in": "$in", "to": ["$other_seat"], "objects": "$objects" }
+    },
+    "menu": { "group": "Library", "order": 80 },
+    "group": "Library"
+  },
+  {
+    "id": "library.reveal_top_cards",
+    "label": "Reveal top cards…",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "reveal": { "in": "$in", "to": ["$other_seat"], "objects": "$objects" }
+    },
+    "group": "Library"
+  },
+  {
+    "id": "library.keep_top_revealed",
+    "label": "Keep top card revealed",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": { "always_reveal_top": { "seat": "$seat", "on": "$on" } },
+    "key": { "mac": "Cmd+N", "other": "Ctrl+N" },
+    "menu": { "group": "Library", "order": 90 },
+    "group": "Library"
+  },
+  {
+    "id": "library.keep_top_known",
+    "label": "Always look at top card",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": { "always_look_at_top": { "seat": "$seat", "on": "$on" } },
+    "key": { "mac": "Cmd+Shift+N", "other": "Ctrl+Shift+N" },
+    "group": "Library"
+  },
+  {
+    "id": "library.play_top",
+    "label": "Play top card",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": { "move": { "objects": "$objects", "in": "$in", "to": "play" } },
+    "menu": { "group": "Library", "order": 100 },
+    "group": "Library"
+  },
+  {
+    "id": "library.play_top_face_down",
+    "label": "Play top card face down",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": "battlefield",
+        "face": "down"
+      }
+    },
+    "key": { "mac": "Cmd+Shift+E", "other": "Ctrl+Shift+E" },
+    "group": "Library"
+  },
+  {
+    "id": "library.put_top_on_bottom",
+    "label": "Put top card on bottom",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "library": "$seat" },
+        "position": "bottom"
+      }
+    },
+    "group": "Library"
+  },
+  {
+    "id": "library.move_top_card_to_graveyard",
+    "label": "Mill",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "graveyard": "$owner" }
+      }
+    },
+    "key": { "mac": "Option+Y", "other": "Alt+Y" },
+    "menu": { "group": "Library", "order": 110 },
+    "group": "Library"
+  },
+  {
+    "id": "library.move_top_cards_to_graveyard",
+    "label": "Mill cards…",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "graveyard": "$owner" }
+      }
+    },
+    "key": { "mac": "Option+M", "other": "Alt+M" },
+    "menu": { "group": "Library", "order": 120 },
+    "group": "Library"
+  },
+  {
+    "id": "library.move_top_cards_to_graveyard_face_down",
+    "label": "Move top cards to graveyard face down…",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "graveyard": "$owner" },
+        "face": "down"
+      }
+    },
+    "group": "Library"
+  },
+  {
+    "id": "library.move_top_card_to_exile",
+    "label": "Move top card to exile",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "exile": "$owner" }
+      }
+    },
+    "group": "Library"
+  },
+  {
+    "id": "library.move_top_cards_to_exile",
+    "label": "Move top cards to exile…",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "exile": "$owner" }
+      }
+    },
+    "group": "Library"
+  },
+  {
+    "id": "library.move_top_cards_to_exile_face_down",
+    "label": "Move top cards to exile face down…",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "exile": "$owner" },
+        "face": "down"
+      }
+    },
+    "group": "Library"
+  },
+  {
+    "id": "library.shuffle_top",
+    "label": "Shuffle top cards…",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "shuffle": { "seat": "$seat", "portion": { "top": "$number" } }
+    },
+    "group": "Library"
+  },
+  {
+    "id": "library.play_bottom",
+    "label": "Play bottom card",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": { "move": { "objects": "$objects", "in": "$in", "to": "play" } },
+    "group": "Library"
+  },
+  {
+    "id": "library.play_bottom_face_down",
+    "label": "Play bottom card face down",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": "battlefield",
+        "face": "down"
+      }
+    },
+    "group": "Library"
+  },
+  {
+    "id": "library.put_bottom_on_top",
+    "label": "Put bottom card on top",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "library": "$seat" }
+      }
+    },
+    "group": "Library"
+  },
+  {
+    "id": "library.move_bottom_card_to_graveyard",
+    "label": "Move bottom card to graveyard",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "graveyard": "$owner" }
+      }
+    },
+    "menu": {
+      "group": "Library",
+      "order": 140,
+      "submenu": "Bottom of library"
+    },
+    "group": "Library"
+  },
+  {
+    "id": "library.move_bottom_cards_to_graveyard",
+    "label": "Move bottom cards to graveyard…",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "graveyard": "$owner" }
+      }
+    },
+    "group": "Library"
+  },
+  {
+    "id": "library.move_bottom_cards_to_graveyard_face_down",
+    "label": "Move bottom cards to graveyard face down…",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "graveyard": "$owner" },
+        "face": "down"
+      }
+    },
+    "group": "Library"
+  },
+  {
+    "id": "library.move_bottom_card_to_exile",
+    "label": "Move bottom card to exile",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "exile": "$owner" }
+      }
+    },
+    "group": "Library"
+  },
+  {
+    "id": "library.move_bottom_cards_to_exile",
+    "label": "Move bottom cards to exile…",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "exile": "$owner" }
+      }
+    },
+    "group": "Library"
+  },
+  {
+    "id": "library.move_bottom_cards_to_exile_face_down",
+    "label": "Move bottom cards to exile face down…",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "move": {
+        "objects": "$objects",
+        "in": "$in",
+        "to": { "exile": "$owner" },
+        "face": "down"
+      }
+    },
+    "group": "Library"
+  },
+  {
+    "id": "library.shuffle_bottom",
+    "label": "Shuffle bottom cards…",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "shuffle": { "seat": "$seat", "portion": { "bottom": "$number" } }
+    },
+    "group": "Library"
+  },
+  {
+    "id": "library.move_top_to_stack",
+    "label": "Move top card to stack",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": { "move": { "objects": "$objects", "in": "$in", "to": "stack" } },
+    "key": { "mac": "Cmd+Y", "other": "Ctrl+Y" },
+    "group": "Library"
+  },
+  {
+    "id": "library.stack_until",
+    "label": "Put top cards on stack until…",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "text",
+    "action": { "move": { "objects": "$objects", "in": "$in", "to": "stack" } },
+    "key": { "mac": "Cmd+Shift+Y", "other": "Ctrl+Shift+Y" },
+    "group": "Library"
+  },
+  {
+    "id": "library.draw_bottom",
+    "label": "Draw bottom card",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "move": { "objects": "$objects", "in": "$in", "to": { "hand": "$seat" } }
+    },
+    "menu": {
+      "group": "Library",
+      "order": 130,
+      "submenu": "Bottom of library"
+    },
+    "group": "Library"
+  },
+  {
+    "id": "library.draw_bottom_cards",
+    "label": "Draw bottom cards…",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "move": { "objects": "$objects", "in": "$in", "to": { "hand": "$seat" } }
+    },
+    "group": "Library"
+  },
+  {
+    "id": "library.scry",
+    "label": "Scry…",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "flow": { "seat": "$seat", "flow": "scry", "count": "$number" }
+    },
+    "menu": { "group": "Assists", "order": 200 },
+    "group": "Library",
+    "assist": "library_flows"
+  },
+  {
+    "id": "library.surveil",
+    "label": "Surveil…",
+    "applies_to": "library",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "flow": { "seat": "$seat", "flow": "surveil", "count": "$number" }
+    },
+    "menu": { "group": "Assists", "order": 210 },
+    "group": "Library",
+    "assist": "library_flows"
+  },
+  {
+    "id": "card.scry",
+    "label": "Scry",
+    "applies_to": "stack_entry",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "flow": { "seat": "$seat", "flow": "scry", "count": "$number" }
+    },
+    "menu": { "group": "Assists", "order": 200 },
+    "group": "Library",
+    "also_applies_to": { "permanent": true },
+    "assist": "library_flows",
+    "when": "card_scry"
+  },
+  {
+    "id": "card.surveil",
+    "label": "Surveil",
+    "applies_to": "stack_entry",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "flow": { "seat": "$seat", "flow": "surveil", "count": "$number" }
+    },
+    "menu": { "group": "Assists", "order": 210 },
+    "group": "Library",
+    "also_applies_to": { "permanent": true },
+    "assist": "library_flows",
+    "when": "card_surveil"
+  },
+  {
+    "id": "card.look_at_top",
+    "label": "Look at top cards",
+    "applies_to": "stack_entry",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "flow": { "seat": "$seat", "flow": "look_at_top", "count": "$number" }
+    },
+    "menu": { "group": "Assists", "order": 220 },
+    "group": "Library",
+    "also_applies_to": { "permanent": true },
+    "assist": "library_flows",
+    "when": "card_look_at_top"
+  },
+  {
+    "id": "card.ability",
+    "label": "Activate ability",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "marker": { "objects": "$objects", "in": "$in", "text": "$text" }
+    },
+    "menu": { "group": "Assists", "order": 230 },
+    "group": "Library",
+    "assist": "ability_menus",
+    "when": "activated_abilities"
+  },
+  {
+    "id": "graveyard.view",
+    "label": "View graveyard",
+    "applies_to": "graveyard",
+    "scope": "table",
+    "asks": "none",
+    "client": "view_graveyard",
+    "key": { "mac": "F4", "other": "F4" },
+    "menu": { "group": "Graveyard", "order": 10 },
+    "group": "Graveyard"
+  },
+  {
+    "id": "exile.view",
+    "label": "View exile",
+    "applies_to": "exile",
+    "scope": "table",
+    "asks": "none",
+    "client": "view_exile",
+    "menu": { "group": "Exile", "order": 10 },
+    "group": "Exile"
+  },
+  {
+    "id": "sideboard.view",
+    "label": "View sideboard",
+    "applies_to": "sideboard",
+    "scope": "table",
+    "asks": "none",
+    "client": "view_sideboard",
+    "key": { "mac": "Cmd+F3", "other": "Ctrl+F3" },
+    "group": "Sideboard"
+  },
+  {
+    "id": "graveyard.reveal_random",
+    "label": "Reveal random card",
+    "applies_to": "graveyard",
+    "scope": "table",
+    "asks": "none",
+    "action": { "reveal": { "in": "$in", "to": ["$other_seat"], "random": 1 } },
+    "group": "Graveyard"
+  },
+  {
+    "id": "viewer.hide_revealed",
+    "label": "Hide",
+    "applies_to": "viewer_card",
+    "scope": "table",
+    "asks": "none",
+    "client": "hide_revealed_cards",
+    "key": { "mac": "Option+H", "other": "Alt+H" },
+    "menu": { "group": "Viewer", "order": 100 },
+    "group": "Viewing",
+    "when": "revealed_cards"
+  },
+  {
+    "id": "viewer.close",
+    "label": "Close viewer",
+    "applies_to": "viewer_card",
+    "scope": "table",
+    "asks": "none",
+    "client": "close_viewer",
+    "key": { "mac": "Escape", "other": "Escape" },
+    "group": "Viewing",
+    "when": "open_viewer"
+  },
+  {
+    "id": "viewer.search",
+    "label": "Search viewer",
+    "applies_to": "viewer_card",
+    "scope": "table",
+    "asks": "none",
+    "client": "search_viewer",
+    "group": "Viewing"
+  },
+  {
+    "id": "viewer.group_type",
+    "label": "Group by type",
+    "applies_to": "viewer_card",
+    "scope": "table",
+    "asks": "none",
+    "client": "group_viewer_by_type",
+    "group": "Viewing"
+  },
+  {
+    "id": "viewer.sort_name",
+    "label": "Sort by name",
+    "applies_to": "viewer_card",
+    "scope": "table",
+    "asks": "none",
+    "client": "sort_viewer_by_name",
+    "group": "Viewing"
+  },
+  {
+    "id": "viewer.sort_mana_value",
+    "label": "Sort by mana value",
+    "applies_to": "viewer_card",
+    "scope": "table",
+    "asks": "none",
+    "client": "sort_viewer_by_mana_value",
+    "group": "Viewing"
+  },
+  {
+    "id": "viewer.close_and_shuffle",
+    "label": "Shuffle",
+    "applies_to": "viewer_card",
+    "scope": "table",
+    "asks": "none",
+    "action": { "shuffle": { "seat": "$seat", "portion": "all" } },
+    "group": "Viewing",
+    "when": "whole_library"
+  },
+  {
+    "id": "viewer.close_without_shuffle",
+    "label": "Don't shuffle",
+    "applies_to": "viewer_card",
+    "scope": "table",
+    "asks": "none",
+    "client": "close_without_shuffle",
+    "group": "Viewing",
+    "when": "whole_library"
+  },
+  {
+    "id": "selection.all",
+    "label": "Select all",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "client": "select_all",
+    "key": { "mac": "Cmd+A", "other": "Ctrl+A" },
+    "group": "Selection"
+  },
+  {
+    "id": "selection.row",
+    "label": "Select row",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "client": "select_row",
+    "key": { "mac": "Cmd+Shift+X", "other": "Ctrl+Shift+X" },
+    "group": "Selection",
+    "also_applies_to": { "their_permanent": false }
+  },
+  {
+    "id": "selection.column",
+    "label": "Select column",
+    "applies_to": "viewer_card",
+    "scope": "table",
+    "asks": "none",
+    "client": "select_column",
+    "key": { "mac": "Cmd+Shift+C", "other": "Ctrl+Shift+C" },
+    "group": "Selection",
+    "also_applies_to": { "pile_card": false }
+  },
+  {
+    "id": "selection.tally",
+    "label": "Tally selection",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "client": "tally_selection",
+    "group": "Selection",
+    "also_applies_to": { "their_permanent": false }
+  },
+  {
+    "id": "life.lose_one",
+    "label": "−1",
+    "applies_to": "life",
+    "scope": "table",
+    "asks": "none",
+    "action": { "life": { "seat": "$seat", "add": -1 } },
+    "key": { "mac": "F11", "other": "F11" },
+    "key_aliases": [{ "mac": "−", "other": "−" }],
+    "menu": { "group": "Life", "order": 10 },
+    "group": "Life"
+  },
+  {
+    "id": "life.gain_one",
+    "label": "+1",
+    "applies_to": "life",
+    "scope": "table",
+    "asks": "none",
+    "action": { "life": { "seat": "$seat", "add": 1 } },
+    "key": { "mac": "F12", "other": "F12" },
+    "key_aliases": [{ "mac": "=", "other": "=" }],
+    "menu": { "group": "Life", "order": 20 },
+    "group": "Life"
+  },
+  {
+    "id": "life.lose_five",
+    "label": "−5",
+    "applies_to": "life",
+    "scope": "table",
+    "asks": "none",
+    "action": { "life": { "seat": "$seat", "add": -5 } },
+    "menu": { "group": "Life", "order": 30 },
+    "group": "Life"
+  },
+  {
+    "id": "life.gain_five",
+    "label": "+5",
+    "applies_to": "life",
+    "scope": "table",
+    "asks": "none",
+    "action": { "life": { "seat": "$seat", "add": 5 } },
+    "menu": { "group": "Life", "order": 40 },
+    "group": "Life"
+  },
+  {
+    "id": "life.set",
+    "label": "Set life…",
+    "applies_to": "life",
+    "scope": "table",
+    "asks": "number",
+    "action": { "life": { "seat": "$seat", "set": "$number" } },
+    "key": { "mac": "Cmd+L", "other": "Ctrl+L" },
+    "menu": { "group": "Life", "order": 50 },
+    "group": "Life"
+  },
+  {
+    "id": "player.storm_add",
+    "label": "Add storm counter",
+    "applies_to": "player",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "player_counter": { "seat": "$seat", "name": "storm", "add": 1 }
+    },
+    "key": { "mac": "Cmd+]", "other": "Ctrl+]" },
+    "group": "Player counters"
+  },
+  {
+    "id": "player.storm_remove",
+    "label": "Remove storm counter",
+    "applies_to": "player",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "player_counter": { "seat": "$seat", "name": "storm", "add": -1 }
+    },
+    "key": { "mac": "Cmd+[", "other": "Ctrl+[" },
+    "group": "Player counters"
+  },
+  {
+    "id": "player.storm_set",
+    "label": "Set storm counter…",
+    "applies_to": "player",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "player_counter": { "seat": "$seat", "name": "storm", "set": "$number" }
+    },
+    "key": { "mac": "Cmd+\\", "other": "Ctrl+\\" },
+    "group": "Player counters"
+  },
+  {
+    "id": "player.mana_add",
+    "label": "Add mana",
+    "applies_to": "player",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "player_counter": { "seat": "$seat", "name": "$text", "add": 1 }
+    },
+    "group": "Player counters",
+    "when": "mana_selected"
+  },
+  {
+    "id": "player.mana_remove",
+    "label": "Remove mana",
+    "applies_to": "player",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "player_counter": { "seat": "$seat", "name": "$text", "add": -1 }
+    },
+    "group": "Player counters",
+    "when": "mana_selected"
+  },
+  {
+    "id": "player.mana_set",
+    "label": "Set mana…",
+    "applies_to": "player",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "player_counter": { "seat": "$seat", "name": "$text", "set": "$number" }
+    },
+    "group": "Player counters",
+    "when": "mana_selected"
+  },
+  {
+    "id": "player.counter_add",
+    "label": "Add counter",
+    "applies_to": "player",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "player_counter": { "seat": "$seat", "name": "$text", "add": 1 }
+    },
+    "group": "Player counters",
+    "when": "counter_selected"
+  },
+  {
+    "id": "player.counter_remove",
+    "label": "Remove counter",
+    "applies_to": "player",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "player_counter": { "seat": "$seat", "name": "$text", "add": -1 }
+    },
+    "group": "Player counters",
+    "when": "counter_selected"
+  },
+  {
+    "id": "player.counter_set",
+    "label": "Set counter…",
+    "applies_to": "player",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "player_counter": { "seat": "$seat", "name": "$text", "set": "$number" }
+    },
+    "group": "Player counters",
+    "when": "counter_selected"
+  },
+  {
+    "id": "player.add_counter",
+    "label": "Add counter…",
+    "applies_to": "player",
+    "scope": "table",
+    "asks": "text",
+    "action": {
+      "player_counter": { "seat": "$seat", "name": "$text", "add": 1 }
+    },
+    "menu": { "group": "Player counters", "order": 10 },
+    "group": "Player counters"
+  },
+  {
+    "id": "table.untap_all",
+    "label": "Untap all permanents",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "tap": { "objects": "$objects", "in": "$in", "tapped": false }
+    },
+    "key": { "mac": "Cmd+U", "other": "Ctrl+U" },
+    "group": "Table"
+  },
+  {
+    "id": "table.roll",
+    "label": "Roll die…",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "number",
+    "action": { "roll": { "sides": "$number", "count": "$count" } },
+    "key": { "mac": "Cmd+I", "other": "Ctrl+I" },
+    "group": "Table"
+  },
+  {
+    "id": "table.flip_coin",
+    "label": "Flip coin",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "roll": { "sides": 2, "count": 1 } },
+    "key": { "mac": "Cmd+Shift+I", "other": "Ctrl+Shift+I" },
+    "group": "Table"
+  },
+  {
+    "id": "table.clear_arrows",
+    "label": "Remove all local arrows",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "clear_arrows": { "from": null, "to": null } },
+    "key": { "mac": "Cmd+R", "other": "Ctrl+R" },
+    "group": "Table"
+  },
+  {
+    "id": "table.delete_arrow",
+    "label": "Remove arrow",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "clear_arrows": { "from": "$source", "to": "$target" } },
+    "group": "Table",
+    "when": "arrow_selected"
+  },
+  {
+    "id": "table.undo",
+    "label": "Undo",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "undo": {} },
+    "key": { "mac": "Cmd+Z", "other": "Ctrl+Z" },
+    "group": "Table"
+  },
+  {
+    "id": "table.rewind",
+    "label": "Rewind to here",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "rewind": { "to": "$entry" } },
+    "group": "Table",
+    "when": "log_entry"
+  },
+  {
+    "id": "table.command_list",
+    "label": "Open command list",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "client": "open_command_list",
+    "key": { "mac": "Cmd+K", "other": "Ctrl+K" },
+    "group": "Table"
+  },
+  {
+    "id": "table.every_action",
+    "label": "Every action…",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "client": "open_command_list",
+    "menu": { "group": "", "order": 999 },
+    "group": "Table",
+    "also_applies_to": {
+      "their_permanent": true,
+      "hand_card": true,
+      "stack_entry": true,
+      "pile_card": true,
+      "viewer_card": true,
+      "library": true,
+      "graveyard": true,
+      "exile": true,
+      "sideboard": true,
+      "hand": true,
+      "life": true,
+      "player": true
+    }
+  },
+  {
+    "id": "table.bug_report",
+    "label": "Report a bug",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "client": "report_bug",
+    "key": { "mac": "Cmd+Shift+B", "other": "Ctrl+Shift+B" },
+    "group": "Table"
+  },
+  {
+    "id": "phase.untap",
+    "label": "Untap step",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "phase": { "phase": "untap" } },
+    "key": { "mac": "F5", "other": "F5" },
+    "group": "Phases and turns"
+  },
+  {
+    "id": "phase.upkeep",
+    "label": "Upkeep step",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "phase": { "phase": "upkeep" } },
+    "group": "Phases and turns"
+  },
+  {
+    "id": "phase.draw",
+    "label": "Draw step",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "phase": { "phase": "draw" } },
+    "key": { "mac": "F6", "other": "F6" },
+    "group": "Phases and turns"
+  },
+  {
+    "id": "phase.first_main",
+    "label": "First main phase",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "phase": { "phase": "first_main" } },
+    "key": { "mac": "F7", "other": "F7" },
+    "group": "Phases and turns"
+  },
+  {
+    "id": "phase.beginning_of_combat",
+    "label": "Beginning of combat step",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "phase": { "phase": "beginning_of_combat" } },
+    "key": { "mac": "F8", "other": "F8" },
+    "group": "Phases and turns"
+  },
+  {
+    "id": "phase.declare_attackers",
+    "label": "Declare attackers step",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "phase": { "phase": "declare_attackers" } },
+    "group": "Phases and turns"
+  },
+  {
+    "id": "phase.declare_blockers",
+    "label": "Declare blockers step",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "phase": { "phase": "declare_blockers" } },
+    "group": "Phases and turns"
+  },
+  {
+    "id": "phase.combat_damage",
+    "label": "Combat damage step",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "phase": { "phase": "combat_damage" } },
+    "group": "Phases and turns"
+  },
+  {
+    "id": "phase.end_of_combat",
+    "label": "End of combat step",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "phase": { "phase": "end_of_combat" } },
+    "group": "Phases and turns"
+  },
+  {
+    "id": "phase.second_main",
+    "label": "Second main phase",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "phase": { "phase": "second_main" } },
+    "key": { "mac": "F9", "other": "F9" },
+    "group": "Phases and turns"
+  },
+  {
+    "id": "phase.end",
+    "label": "End of turn step",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "phase": { "phase": "end" } },
+    "key": { "mac": "F10", "other": "F10" },
+    "group": "Phases and turns"
+  },
+  {
+    "id": "phase.untap_active",
+    "label": "Untap active player’s permanents",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": {
+      "tap": { "objects": "$objects", "in": "$in", "tapped": false }
+    },
+    "group": "Phases and turns",
+    "when": "active_untap"
+  },
+  {
+    "id": "phase.draw_active",
+    "label": "Draw for active player",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "draw": { "seat": "$seat", "count": 1 } },
+    "group": "Phases and turns",
+    "when": "active_draw"
+  },
+  {
+    "id": "phase.next",
+    "label": "Next phase",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "phase": { "phase": "$phase" } },
+    "key": { "mac": "Tab", "other": "Tab" },
+    "key_aliases": [{ "mac": "Space", "other": "Space" }],
+    "group": "Phases and turns"
+  },
+  {
+    "id": "phase.next_with_action",
+    "label": "Next phase with action",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "batch": { "actions": "$actions" } },
+    "key": { "mac": "Shift+Tab", "other": "Shift+Tab" },
+    "group": "Phases and turns"
+  },
+  {
+    "id": "phase.next_turn",
+    "label": "Next turn",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "next_turn": {} },
+    "key": { "mac": "Cmd+Return", "other": "Ctrl+Return" },
+    "group": "Phases and turns"
+  },
+  {
+    "id": "lobby.host",
+    "label": "Host a table",
+    "applies_to": "lobby",
+    "scope": "lobby",
+    "asks": "none",
+    "client": "host_table",
+    "key": { "mac": "Cmd+N", "other": "Ctrl+N" },
+    "group": "Setup",
+    "when": "start_screen"
+  },
+  {
+    "id": "lobby.game_settings",
+    "label": "Game settings",
+    "applies_to": "lobby",
+    "scope": "lobby",
+    "asks": "none",
+    "client": "game_settings",
+    "key": { "mac": "Cmd+Shift+N", "other": "Ctrl+Shift+N" },
+    "group": "Setup"
+  },
+  {
+    "id": "lobby.change_deck",
+    "label": "Change",
+    "applies_to": "lobby",
+    "scope": "lobby",
+    "asks": "none",
+    "client": "change_deck",
+    "key": { "mac": "Cmd+O", "other": "Ctrl+O" },
+    "group": "Setup"
+  },
+  {
+    "id": "lobby.paste_deck",
+    "label": "Paste decklist",
+    "applies_to": "lobby",
+    "scope": "lobby",
+    "asks": "none",
+    "client": "paste_decklist",
+    "key": { "mac": "Cmd+Shift+V", "other": "Ctrl+Shift+V" },
+    "group": "Setup"
+  },
+  {
+    "id": "lobby.unload_deck",
+    "label": "Unload deck",
+    "applies_to": "lobby",
+    "scope": "lobby",
+    "asks": "none",
+    "client": "change_deck",
+    "key": { "mac": "Cmd+Option+U", "other": "Ctrl+Alt+U" },
+    "group": "Setup"
+  },
+  {
+    "id": "lobby.sideboard",
+    "label": "Sideboard",
+    "applies_to": "lobby",
+    "scope": "lobby",
+    "asks": "none",
+    "client": "open_sideboard_swap",
+    "key": { "mac": "Cmd+Shift+B", "other": "Ctrl+Shift+B" },
+    "group": "Setup"
+  },
+  {
+    "id": "lobby.ready",
+    "label": "Ready",
+    "applies_to": "lobby",
+    "scope": "lobby",
+    "asks": "none",
+    "action": { "ready": { "seat": "$seat", "ready": "$on" } },
+    "key": { "mac": "Cmd+Shift+S", "other": "Ctrl+Shift+S" },
+    "group": "Setup"
+  },
+  {
+    "id": "lobby.first",
+    "label": "First",
+    "applies_to": "lobby",
+    "scope": "lobby",
+    "asks": "none",
+    "client": "choose_first",
+    "group": "Setup"
+  },
+  {
+    "id": "lobby.start",
+    "label": "Start",
+    "applies_to": "lobby",
+    "scope": "lobby",
+    "asks": "none",
+    "action": { "start": { "first": "$seat" } },
+    "group": "Setup"
+  },
+  {
+    "id": "lobby.keep",
+    "label": "Keep",
+    "applies_to": "lobby",
+    "scope": "lobby",
+    "asks": "none",
+    "client": "keep_opening_hand",
+    "group": "Setup"
+  },
+  {
+    "id": "lobby.mulligan",
+    "label": "Mulligan",
+    "applies_to": "lobby",
+    "scope": "lobby",
+    "asks": "none",
+    "action": { "mulligan": { "seat": "$seat", "count": "$number" } },
+    "group": "Setup"
+  },
+  {
+    "id": "lobby.copy_invite",
+    "label": "Copy",
+    "applies_to": "lobby",
+    "scope": "lobby",
+    "asks": "none",
+    "client": "copy_invite_code",
+    "group": "Setup"
+  },
+  {
+    "id": "table.lobby",
+    "label": "Lobby",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "client": "open_lobby",
+    "menu": { "group": "Game", "order": 10 },
+    "group": "Setup"
+  },
+  {
+    "id": "table.concede",
+    "label": "Concede",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "concede": {} },
+    "key": { "mac": "F2", "other": "F2" },
+    "menu": { "group": "Game", "order": 30 },
+    "group": "Setup"
+  },
+  {
+    "id": "table.next_game",
+    "label": "Next game",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "next_game": { "winner": "$winner" } },
+    "menu": { "group": "Game", "order": 20 },
+    "group": "Setup"
+  },
+  {
+    "id": "table.leave",
+    "label": "Leave table",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "client": "leave_table",
+    "key": { "mac": "Cmd+Q", "other": "Ctrl+Q" },
+    "menu": { "group": "Game", "order": 60 },
+    "group": "Setup"
+  },
+  {
+    "id": "table.assists",
+    "label": "Assists",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "client": "open_assists",
+    "menu": { "group": "Game", "order": 40 },
+    "group": "Setup"
+  },
+  {
+    "id": "table.shortcuts",
+    "label": "Shortcuts",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "client": "open_shortcuts",
+    "menu": { "group": "Game", "order": 50 },
+    "group": "Setup"
+  },
+  {
+    "id": "table.reset_shortcuts",
+    "label": "Reset shortcuts",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "client": "reset_shortcuts",
+    "group": "Setup"
+  },
+  {
+    "id": "assist.turn_upkeep",
+    "label": "Turn upkeep",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "set_assist": { "assist": "turn_upkeep", "on": "$on" } },
+    "group": "Assists"
+  },
+  {
+    "id": "assist.combat",
+    "label": "Combat",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "set_assist": { "assist": "combat", "on": "$on" } },
+    "group": "Assists"
+  },
+  {
+    "id": "assist.state_nudges",
+    "label": "State nudges",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "set_assist": { "assist": "state_nudges", "on": "$on" } },
+    "group": "Assists"
+  },
+  {
+    "id": "assist.library_flows",
+    "label": "Library flows",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "set_assist": { "assist": "library_flows", "on": "$on" } },
+    "group": "Assists"
+  },
+  {
+    "id": "assist.ability_menus",
+    "label": "Ability menus",
+    "applies_to": "table",
+    "scope": "table",
+    "asks": "none",
+    "action": { "set_assist": { "assist": "ability_menus", "on": "$on" } },
+    "group": "Assists"
+  },
+  {
+    "id": "card.damage",
+    "label": "Set damage…",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "number",
+    "action": {
+      "damage": { "objects": "$objects", "in": "$in", "damage": "$number" }
+    },
+    "group": "Card state",
+    "also_applies_to": { "their_permanent": false }
+  },
+  {
+    "id": "card.remove",
+    "label": "Remove token or marker",
+    "applies_to": "permanent",
+    "scope": "table",
+    "asks": "none",
+    "action": { "remove": { "objects": "$objects", "in": "$in" } },
+    "group": "Card state",
+    "also_applies_to": { "their_permanent": true, "stack_entry": true },
+    "when": "token_or_marker"
+  }
+]

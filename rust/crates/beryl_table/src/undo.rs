@@ -14,9 +14,11 @@ pub(crate) fn target(log: &Log, by: Seat, requested: Option<u32>) -> Result<&Ent
         !log.is_struck(entry.n) && !undone.contains(&entry.n) && entry.undoes.is_none()
     };
     let entry = if let Some(n) = requested {
-        log.get(n)
-            .filter(live)
-            .filter(|entry| matches!(entry.action, Action::Batch { .. }))
+        log.get(n).filter(live).filter(|entry| match entry.action {
+            Action::Batch { .. } => true,
+            Action::Draw { .. } => entry.by == by,
+            _ => false,
+        })
     } else {
         log.entries()
             .iter()

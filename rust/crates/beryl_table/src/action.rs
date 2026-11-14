@@ -297,7 +297,7 @@ pub enum Action {
         count: u16,
     },
     Undo {
-        /// The log's undo control can name a batch from either seat.
+        /// A seat can name its own draw or a batch from either seat.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         entry: Option<u32>,
     },

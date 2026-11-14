@@ -169,10 +169,13 @@ test("a view is delivered though its request fails, and asks again", async () =>
 // The card store has a record for every card there is: bundled, it would be most of the
 // page.
 // The design language's data is the one file of data/ the UI is built with.
-test("nothing under src imports from data/ but the design language", async () => {
+test("UI data imports are limited to UI conventions and table commands", async () => {
     const ui = resolve(dirname(fileURLToPath(import.meta.url)), "..");
     const data = resolve(ui, "..", "data");
-    const allowed = new Set([join(data, "ui-conventions.json")]);
+    const allowed = new Set([
+        join(data, "ui-conventions.json"),
+        join(data, "table-commands.json"),
+    ]);
     const imported =
         /(?:\bfrom|\bimport)\s*\(?\s*["']([^"']+)["']|\bnew URL\(\s*["']([^"']+)["']/g;
     const found = [];

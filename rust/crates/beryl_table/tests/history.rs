@@ -377,6 +377,38 @@ fn undoing_a_roll_discards_its_result_and_does_not_reuse_it() {
 }
 
 #[test]
+fn a_seat_can_name_its_last_draw_after_an_unrelated_play() {
+    let mut game = Game::new(fixtures());
+    let drawn = game.act(HOST, &draw(1));
+    let life_change = game.act(HOST, &life(HOST, 2));
+
+    for (by, entry) in [(GUEST, drawn.n), (HOST, life_change.n)] {
+        assert_eq!(
+            game.log.apply(
+                &mut game.table,
+                by,
+                &Action::Undo { entry: Some(entry) },
+                &mut game.chance,
+            ),
+            Err(Refusal::INVALID),
+        );
+    }
+
+    let undo = game.act(
+        HOST,
+        &Action::Undo {
+            entry: Some(drawn.n),
+        },
+    );
+    assert_eq!(undo.undoes, Some(drawn.n));
+    assert!(undo.seen);
+    assert_eq!(game.table.players[0].life, 22);
+    assert!(game.table.zone(HAND).unwrap().is_empty());
+    assert_eq!(game.table.zone(LIBRARY).unwrap()[0], ObjectId(2));
+    game.assert_reopens();
+}
+
+#[test]
 fn a_batch_uses_the_state_left_by_each_member_and_either_seat_can_reverse_it() {
     let mut game = Game::new(fixtures());
     let batch = game.act(
