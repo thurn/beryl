@@ -60,6 +60,7 @@ import { REVEALED, revealedIn, useRevealedOpen } from "./Revealed.tsx";
 import { OrderRow, TrayUnder } from "./Tray.tsx";
 import { landing } from "./tray.ts";
 import "./stage.css";
+import "./effects.css";
 import "./heft.css";
 
 const SIDES = ["opponent", "you"] as const;

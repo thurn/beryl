@@ -591,7 +591,7 @@ export const meets = (a: Act, b: Act | undefined) =>
 /** How a card that turns over where it lies is shared out and how large it grows (UI
  * Conventions, "A card turning face up": it "enlarges in place and flips"): it has grown by
  * `grown` of the step, shows its new face from the middle, and begins to settle at `settle`.
- * The veil that hides the change is the `cover` effect's (stage.css). */
+ * The veil that hides the change is the `cover` effect's (effects.css). */
 export const FLIP = { size: 1.2, grown: 0.3, turn: 0.5, settle: 0.7 };
 
 /** A card turning over in place: it grows about `middle` of itself, quickly and then slowing

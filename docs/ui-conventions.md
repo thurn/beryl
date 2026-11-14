@@ -688,7 +688,7 @@ An effect is light or a change of surface on one card or one player's life
 total, begun by a step of a verb as it starts, as it ends or as its blow lands
 and played on the stage's clock (`ui/src/stage/effects.ts`): it never moves a
 card and never holds up the script. The list is closed, each effect has one look
-in Beryl's skin (`ui/src/stage/stage.css`), and a verb names the effects its
+in Beryl's skin (`ui/src/stage/effects.css`), and a verb names the effects its
 steps begin. A mark says what a player may do; an effect says what just
 happened, and is gone.
 

@@ -90,7 +90,7 @@ export class DomSurface implements Surface {
     const node = this.#nodes.get(name);
     if (!node) return;
     node.dataset.zone = dress.zone;
-    // What an effect on it is sized by (stage.css).
+    // What an effect on it is sized by (effects.css).
     node.style.setProperty("--frame", `${dress.frame}px`);
     if (!object) {
       node.className = "hud stack-ability stage-node";
@@ -420,7 +420,7 @@ export class DomSurface implements Surface {
 
   effect(on: On, { name, layer }: Omit<Drawn, "progress">, progress?: number) {
     // The table shaking as a blow lands is drawn on the whole table, whatever the blow landed
-    // on: Arena's camera shakes (stage.css `[data-shaking]`). On the desktop that is the stage
+    // on: Arena's camera shakes (effects.css `[data-shaking]`). On the desktop that is the stage
     // the table is scaled in (game/Stage.tsx), which keeps a layer of its own, so a shake moves
     // that layer; on the phone it is the board, the layer's parent.
     const board = this.#layer.parentElement;

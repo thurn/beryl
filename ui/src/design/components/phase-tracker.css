@@ -126,9 +126,11 @@
   height: var(--step-size, 22px);
   fill: #f0e2c4;
   filter: drop-shadow(0 1px 1px rgb(0 0 0 / 75%));
-  transition:
-    opacity 120ms,
-    fill 120ms;
+  /* Only its opacity fades, on a layer of its own, so the compositor fades it. Fading its fill
+     too, or fading it without a layer, repainted the icon and its shadows every frame of the
+     fade, two icons each time the step changed: dozens of repaints in one combat. */
+  will-change: opacity;
+  transition: opacity 120ms;
 }
 .step-no-stop .step-icon {
   opacity: 0.6;

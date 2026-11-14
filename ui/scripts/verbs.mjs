@@ -182,6 +182,23 @@ async function walk({ tick, gap, answers, middle, whole, written }) {
             if (!made || !near(through, effect.progress, 0.0001)) {
                 return `has its ${effect.name} drawn ${through} through`;
             }
+            // The effect's own element reads that number, and nothing else inside what it is
+            // on sees it (src/stage/effects.css): a number inherited by the card or the orb
+            // restyled all that was inside it every frame, and a blow on a player repainted
+            // both life orbs' blurred art for the whole strike. A pulse swells numbers deep
+            // in its card, so it goes on down.
+            const read = (element) =>
+                getComputedStyle(element).getPropertyValue(`--${effect.name}`);
+            if (!near(Number(read(made) || NaN), through, 0.0001)) {
+                return `has its ${effect.name} not read by its own element`;
+            }
+            const rest = [...node.children].filter(
+                (child) =>
+                    !child.matches(".stage-effect, .stage-mark, .life-change"),
+            );
+            if (effect.name !== "pulse" && rest.some((child) => read(child))) {
+                return `passes its ${effect.name} down to what it is drawn on`;
+            }
         }
         return null;
     };
