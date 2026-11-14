@@ -44,7 +44,7 @@ pub use prompt::trigger_to_stack;
 pub use protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, StopsSetting};
 pub use replay::ReplayFile;
 pub use session::THREAD as SESSION_THREAD;
-pub use sessions::{Sessions, StartRequest};
+pub use sessions::{SessionIds, Sessions, StartRequest};
 
 /// A 64-bit FNV-1a hash of the generated TypeScript protocol, in lowercase hexadecimal.
 pub const WIRE_HASH: &str = env!("BERYL_WIRE_HASH");

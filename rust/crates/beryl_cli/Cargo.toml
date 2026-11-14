@@ -17,6 +17,8 @@ beryl_engine = { path = "../beryl_engine" }
 beryl_scenario = { path = "../beryl_scenario" }
 beryl_search = { path = "../beryl_search" }
 beryl_session = { path = "../beryl_session" }
+# Runs the manual table and projects it onto the shared game-update event.
+beryl_table_session = { path = "../beryl_table_session" }
 ctrlc = "3.5.2"
 serde = { version = "1.0.229", features = ["derive"] }
 # A search's rewards are logged and read back on resume: without exact float parsing a

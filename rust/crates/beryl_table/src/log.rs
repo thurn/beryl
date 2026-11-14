@@ -206,11 +206,29 @@ impl Log {
         action: &Action,
         chance: &mut Chance,
     ) -> Result<&Entry, Refusal> {
+        self.apply_checked(table, by, action, chance, |_, _| Ok(()))
+    }
+
+    /// Lets a session check whether it can publish the result before the action is recorded.
+    pub fn apply_checked(
+        &mut self,
+        table: &mut Table,
+        by: Seat,
+        action: &Action,
+        chance: &mut Chance,
+        check: impl FnOnce(&Table, &Entry) -> Result<(), Refusal>,
+    ) -> Result<&Entry, Refusal> {
         if table.entry_number != self.tip() {
             return Err(Refusal::INVALID);
         }
         let before = table.clone();
-        let entry = self.execute(table, by, action, chance)?;
+        let mut planned_chance = chance.clone();
+        let entry = self.execute(table, by, action, &mut planned_chance)?;
+        if let Err(refusal) = check(table, &entry) {
+            *table = before;
+            return Err(refusal);
+        }
+        *chance = planned_chance;
         self.record(&before, table, entry);
         Ok(self.entries.last().expect("appended entry"))
     }

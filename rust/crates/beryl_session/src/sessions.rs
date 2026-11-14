@@ -4,6 +4,7 @@
 //! both drive games through it.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -52,12 +53,29 @@ impl StartRequest {
 
 type Emit = dyn Fn(GameUpdate) + Send + Sync;
 
+/// The engine and manual table share one sequence when they emit to the same stage.
+#[derive(Clone, Default)]
+pub struct SessionIds(Arc<AtomicU32>);
+
+impl SessionIds {
+    pub fn allocate(&self) -> SessionId {
+        let previous = self
+            .0
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |last| {
+                last.checked_add(1)
+            })
+            .expect("session numbers exhausted");
+        SessionId(previous + 1)
+    }
+}
+
 /// The game in progress, if any, and every view it emits, sent to one callback.
 pub struct Sessions {
     /// Where replay files go, if anywhere.
     replays: Option<PathBuf>,
     pub(crate) ledger: Option<Arc<Ledger>>,
     emit: Arc<Emit>,
+    ids: SessionIds,
     current: Mutex<Current>,
     /// The latest view emitted, of whichever game emitted last.
     latest: Arc<Mutex<Option<GameUpdate>>>,
@@ -69,8 +87,6 @@ pub(crate) type LatestReplay = Arc<Mutex<Option<ReplayFile>>>;
 
 #[derive(Default)]
 struct Current {
-    /// The last session number given out; numbers only grow.
-    last: u32,
     game: Option<(SessionId, GameSession)>,
     /// The replay of the game in progress, if it was dealt from a seed: a prepared game has
     /// none that could reproduce it.
@@ -90,10 +106,16 @@ impl Sessions {
             replays,
             ledger: None,
             emit: Arc::new(emit),
+            ids: SessionIds::default(),
             current: Mutex::default(),
             latest: Arc::default(),
             budget: Budget::DEFAULT,
         }
+    }
+
+    /// Use these numbers for other sessions sending updates to the same receiver.
+    pub fn session_ids(&self) -> SessionIds {
+        self.ids.clone()
     }
 
     /// Uses `budget` for agents in new and resumed games.
@@ -264,8 +286,7 @@ impl Sessions {
         }
         current.replay = None;
         current.moves = None;
-        current.last += 1;
-        let session = SessionId(current.last);
+        let session = self.ids.allocate();
         about["session"] = json!(session.0);
         let started = game(session).and_then(|(mut game, first)| {
             if let Some(name) = stand_in {

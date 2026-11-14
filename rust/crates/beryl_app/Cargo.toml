@@ -25,6 +25,8 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 beryl_session = { path = "../beryl_session" }
+# Runs the manual table and projects it onto the shared game-update event.
+beryl_table_session = { path = "../beryl_table_session" }
 # The manual table uses iroh for router traversal and encrypted relays.
 beryl_link_iroh = { path = "../beryl_link_iroh", optional = true }
 # Replaces the desktop search budget with the smaller phone budget in the app shell.

@@ -674,3 +674,28 @@ fn generated_actions_undo_without_losing_knowledge_and_reopen_from_json() {
     assert!(missing.is_empty(), "missing {missing:?}");
     game.assert_reopens();
 }
+
+#[test]
+fn a_refused_publication_does_not_commit_an_action() {
+    let mut game = Game::new(Table::new(1));
+    let initial = game.table.clone();
+    let initial_chance = game.chance.clone();
+    let action = Action::Roll { count: 1, sides: 6 };
+    let result = game.log.apply_checked(
+        &mut game.table,
+        HOST,
+        &action,
+        &mut game.chance,
+        |table, entry| {
+            assert_eq!(table.revision(), entry.n);
+            assert!(entry.n > initial.revision());
+            Err(Refusal::INVALID)
+        },
+    );
+    assert_eq!(result, Err(Refusal::INVALID));
+    assert_eq!(game.table, initial);
+    assert_eq!(game.chance, initial_chance);
+    assert!(game.log.entries().is_empty());
+    game.act(HOST, &action);
+    game.assert_reopens();
+}

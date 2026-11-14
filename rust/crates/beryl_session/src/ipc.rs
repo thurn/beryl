@@ -6,13 +6,15 @@
 
 use std::fmt::Write;
 
+use beryl_table::Refusal;
+use beryl_table::deck::Deck;
 use serde::{Deserialize, Serialize};
 use ts_rs::{Config, TS};
 
 use crate::bugs::{BugReport, BugSaved, UiLogRequest};
 use crate::card_records::{CardRecords, CardRecordsRequest};
 use crate::prompt::{ClickReply, ClickRequest};
-use crate::protocol::{CandidateIndex, DecisionId, SessionId, StopsSetting};
+use crate::protocol::{CandidateIndex, DecisionId, SessionId, StopsSetting, TableAction};
 use crate::{AgentView, GameUpdate, SessionError, StartRequest};
 
 pub const APP_INFO: &str = "app_info";
@@ -45,6 +47,15 @@ pub const CURRENT_GAME: &str = "current_game";
 /// ([`crate::Sessions::resume_latest`]); returns the [`SessionId`] of the game in progress,
 /// if any now. Its views arrive as a started game's do.
 pub const RESUME_GAME: &str = "resume_game";
+
+/// Starts a solo manual table.
+pub const TABLE_SOLO: &str = "table_solo";
+/// Applies one manual action using references from the published view.
+pub const TABLE_ACT: &str = "table_act";
+/// Returns the manual table's latest update, if any.
+pub const TABLE_CURRENT: &str = "table_current";
+/// Closes the current manual table.
+pub const TABLE_LEAVE: &str = "table_leave";
 
 /// Snapshots the window as it is drawn now, the bug report's frozen frame, and returns its
 /// number: the app serves it at `beryl-art://localhost/snapshot/<n>` and turns it into the
@@ -131,6 +142,69 @@ pub struct ShareBugRequest {
 #[serde(rename_all = "camelCase")]
 pub struct StageAnimatingRequest {
     pub animating: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct TableSoloRequest {
+    pub deck: Deck,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct TableActRequest {
+    pub action: TableAction,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum TableRefusalReason {
+    Permission,
+    Stale,
+    Invalid,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct TableRefused {
+    pub refused: TableRefusalReason,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub blocked_by: Option<Vec<u32>>,
+}
+
+impl From<Refusal> for TableRefused {
+    fn from(refusal: Refusal) -> Self {
+        let (refused, blocked_by) = match refusal {
+            Refusal::Permission => (TableRefusalReason::Permission, None),
+            Refusal::Stale => (TableRefusalReason::Stale, None),
+            Refusal::Invalid { blocking } => (
+                TableRefusalReason::Invalid,
+                (!blocking.is_empty()).then_some(blocking),
+            ),
+        };
+        Self {
+            refused,
+            blocked_by,
+        }
+    }
+}
+
+/// A rejected action is a normal reply the stage can use for gesture feedback.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(untagged)]
+pub enum TableActReply {
+    Ok {
+        #[ts(type = "true")]
+        ok: bool,
+    },
+    Refused(TableRefused),
+}
+
+impl From<Result<(), Refusal>> for TableActReply {
+    fn from(result: Result<(), Refusal>) -> Self {
+        match result {
+            Ok(()) => Self::Ok { ok: true },
+            Err(refusal) => Self::Refused(refusal.into()),
+        }
+    }
 }
 
 /// The operating system hosting the app or live server.
@@ -322,6 +396,30 @@ pub(crate) fn typescript(cfg: &Config) -> String {
             RESUME_GAME,
             "Record<string, never>".to_owned(),
             name::<Option<SessionId>>(cfg),
+            never.clone(),
+        ),
+        (
+            TABLE_SOLO,
+            request(name::<TableSoloRequest>(cfg)),
+            name::<SessionId>(cfg),
+            name::<TableRefused>(cfg),
+        ),
+        (
+            TABLE_ACT,
+            request(name::<TableActRequest>(cfg)),
+            name::<TableActReply>(cfg),
+            never.clone(),
+        ),
+        (
+            TABLE_CURRENT,
+            "Record<string, never>".to_owned(),
+            name::<Option<GameUpdate>>(cfg),
+            never.clone(),
+        ),
+        (
+            TABLE_LEAVE,
+            "Record<string, never>".to_owned(),
+            name::<()>(cfg),
             never.clone(),
         ),
         (

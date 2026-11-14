@@ -70,6 +70,20 @@ impl TableActionRefs {
         action: TableAction,
         chance: &mut Chance,
     ) -> Result<&'log Entry, Refusal> {
+        self.apply_checked(table, log, by, action, chance, |_, _| Ok(()))
+    }
+
+    /// Checks the action's result before the new table and log become authoritative.
+    #[allow(clippy::too_many_arguments)] // Same inputs as apply, with a projection check.
+    pub fn apply_checked<'log>(
+        &self,
+        table: &mut Table,
+        log: &'log mut Log,
+        by: Seat,
+        action: TableAction,
+        chance: &mut Chance,
+        check: impl FnOnce(&Table, &Entry) -> Result<(), Refusal>,
+    ) -> Result<&'log Entry, Refusal> {
         if by != self.seat {
             return Err(Refusal::Stale);
         }
@@ -91,6 +105,6 @@ impl TableActionRefs {
             }
             Ok(id)
         })?;
-        log.apply(table, by, &action, chance)
+        log.apply_checked(table, by, &action, chance, check)
     }
 }

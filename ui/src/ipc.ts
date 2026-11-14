@@ -18,6 +18,8 @@ import type {
   Platform,
   SessionId,
   StopsSetting,
+  TableAction,
+  TableDeck,
 } from "./generated/protocol";
 import { cardRecords, strings } from "./cardRecords";
 import { brief, forwardTo, note, noteUpdate } from "./diagnostics";
@@ -426,6 +428,7 @@ const browserFixture: Fixture = {
     { kind: "response", command: "list_agents", value: [] },
     { kind: "response", command: "current_game", value: null },
     { kind: "response", command: "resume_game", value: null },
+    { kind: "response", command: "table_current", value: null },
     { kind: "response", command: "concede", value: null },
   ],
 };
@@ -654,6 +657,21 @@ export const currentGame = async () => {
 /** Resumes the newest unfinished game saved, unless one is in progress; resolves to the
  * session in progress, if any. Its views arrive as a started game's do. */
 export const resumeGame = () => call("resume_game", {});
+
+export const tableSolo = (deck: TableDeck) =>
+  call("table_solo", { request: { deck } });
+
+export const tableAct = (action: TableAction) =>
+  call("table_act", { request: { action } });
+
+/** Takes up the open manual table with its visible cards' records cached. */
+export const tableCurrent = async () => {
+  const update = await call("table_current", {});
+  await cardRecords.load(strings(update), askCards);
+  return update;
+};
+
+export const tableLeave = () => call("table_leave", {});
 
 /** Snapshots the window as drawn now; resolves to its number (only in the app:
  * `canCaptureWindow`). */

@@ -68,6 +68,18 @@ export type ShareBugRequest = { id: string, };
 
 export type StageAnimatingRequest = { animating: boolean, };
 
+export type TableDeck = { name: string, main: Array<[string, number]>, side: Array<[string, number]>, skipped?: Array<string>, };
+
+export type TableSoloRequest = { deck: TableDeck, };
+
+export type TableActRequest = { action: TableActionOf<TableObjectRef>, };
+
+export type TableActReply = { ok: true, } | TableRefused;
+
+export type TableRefusalReason = "permission" | "stale" | "invalid";
+
+export type TableRefused = { refused: TableRefusalReason, blocked_by?: Array<number>, };
+
 export type BugReport = { 
 /**
  * What the player says went wrong.
@@ -1032,6 +1044,10 @@ export type Commands = {
   concede: { args: { request: ConcedeRequest }; result: null; error: SessionError };
   current_game: { args: Record<string, never>; result: GameUpdate | null; error: never };
   resume_game: { args: Record<string, never>; result: SessionId | null; error: never };
+  table_solo: { args: { request: TableSoloRequest }; result: SessionId; error: TableRefused };
+  table_act: { args: { request: TableActRequest }; result: TableActReply; error: never };
+  table_current: { args: Record<string, never>; result: GameUpdate | null; error: never };
+  table_leave: { args: Record<string, never>; result: null; error: never };
   capture_window: { args: Record<string, never>; result: number; error: SessionError };
   report_bug: { args: { request: BugReport }; result: BugSaved; error: SessionError };
   export_bugs: { args: Record<string, never>; result: number | null; error: SessionError };

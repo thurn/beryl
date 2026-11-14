@@ -8,6 +8,7 @@ mod games;
 mod links;
 mod profile;
 mod snapshot;
+mod tables;
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -284,6 +285,10 @@ pub fn run() {
             games::concede = ipc::CONCEDE,
             games::current_game = ipc::CURRENT_GAME,
             games::resume_game = ipc::RESUME_GAME,
+            tables::table_solo = ipc::TABLE_SOLO,
+            tables::table_act = ipc::TABLE_ACT,
+            tables::table_current = ipc::TABLE_CURRENT,
+            tables::table_leave = ipc::TABLE_LEAVE,
             capture_window = ipc::CAPTURE_WINDOW,
             report_bug = ipc::REPORT_BUG,
             bug_reports::export_bugs = ipc::EXPORT_BUGS,
@@ -322,7 +327,9 @@ pub fn run() {
                 "started",
                 json!({ "smoke": smoke_seconds().is_some(), "bugs": bug_dir }),
             );
-            app.manage(games::sessions(app.handle()));
+            let games = games::sessions(app.handle());
+            app.manage(tables::sessions(app.handle(), games.session_ids()));
+            app.manage(games);
             app.manage(Snapshots::default());
             app.manage(BugDirectory(bug_dir));
             let dir = app.path().app_cache_dir()?.join("art");

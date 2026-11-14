@@ -21,10 +21,11 @@ use beryl_session::bugs::{self, BugReport, Images, UiLogRequest};
 use beryl_session::card_records::CardRecordsRequest;
 use beryl_session::ipc::{
     self, AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, PassOnRequest, Platform,
-    SetStopsRequest, UndoRequest,
+    SetStopsRequest, TableActReply, TableActRequest, TableRefused, TableSoloRequest, UndoRequest,
 };
 use beryl_session::prompt::ClickRequest;
 use beryl_session::{GameUpdate, SessionError, Sessions, StartRequest, agents};
+use beryl_table_session::TableSessions;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -37,23 +38,26 @@ pub fn serve(port: u16) -> Result<(), String> {
     let listener =
         TcpListener::bind(("127.0.0.1", port)).map_err(|e| format!("port {port}: {e}"))?;
     let streams: Streams = Arc::default();
-    let sessions = {
+    let emit = {
         let streams = Arc::clone(&streams);
-        Arc::new(Sessions::new(None, move |update: GameUpdate| {
+        move |update: GameUpdate| {
             let Ok(data) = serde_json::to_string(&update) else {
                 return;
             };
             let message = format!("event: {}\ndata: {data}\n\n", ipc::GAME_UPDATE);
             lock(&streams).retain(|s| s.send(message.clone()).is_ok());
-        }))
+        }
     };
+    let sessions = Arc::new(Sessions::new(None, emit.clone()));
+    let tables = Arc::new(TableSessions::new(sessions.session_ids(), emit));
     println!("beryl_cli: serving on http://127.0.0.1:{port}");
     for connection in listener.incoming() {
         let Ok(connection) = connection else { continue };
         let sessions = Arc::clone(&sessions);
+        let tables = Arc::clone(&tables);
         let streams = Arc::clone(&streams);
         std::thread::spawn(move || {
-            if let Err(e) = handle(connection, &sessions, &streams) {
+            if let Err(e) = handle(connection, &sessions, &tables, &streams) {
                 eprintln!("beryl_cli: {e}");
             }
         });
@@ -70,7 +74,12 @@ pub(crate) const CORS: &str = "Access-Control-Allow-Origin: *\r\n\
                     Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n\
                     Access-Control-Allow-Headers: Content-Type\r\n";
 
-fn handle(stream: TcpStream, sessions: &Sessions, streams: &Streams) -> Result<(), String> {
+fn handle(
+    stream: TcpStream,
+    sessions: &Sessions,
+    tables: &TableSessions,
+    streams: &Streams,
+) -> Result<(), String> {
     let HttpRequest {
         method, path, body, ..
     } = read_request(&stream)?;
@@ -80,7 +89,24 @@ fn handle(stream: TcpStream, sessions: &Sessions, streams: &Streams) -> Result<(
         ("GET", "/events") => events(stream, streams),
         ("POST", path) if path.starts_with("/invoke/") => {
             let args: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
-            let answer = invoke(sessions, &path["/invoke/".len()..], args);
+            let command = &path["/invoke/".len()..];
+            let answer = match command {
+                ipc::TABLE_SOLO => answer(request::<TableSoloRequest>(args).and_then(|r| {
+                    tables
+                        .solo(r.deck)
+                        .map_err(|e| json!(TableRefused::from(e)))
+                })),
+                ipc::TABLE_ACT => answer(
+                    request::<TableActRequest>(args)
+                        .map(|r| TableActReply::from(tables.act(r.action))),
+                ),
+                ipc::TABLE_CURRENT => answer::<_, ()>(Ok(tables.current())),
+                ipc::TABLE_LEAVE => {
+                    tables.leave();
+                    answer::<_, ()>(Ok(()))
+                }
+                _ => invoke(sessions, command, args),
+            };
             respond(&mut stream, "200 OK", &answer.to_string())
         }
         _ => respond(&mut stream, "404 Not Found", "{}"),
@@ -168,19 +194,21 @@ struct Request<T> {
     request: T,
 }
 
+fn request<T: for<'de> Deserialize<'de>>(args: Value) -> Result<T, Value> {
+    serde_json::from_value::<Request<T>>(args)
+        .map(|r| r.request)
+        .map_err(|e| json!({"kind": "badRequest", "message": e.to_string()}))
+}
+
+fn answer<T: serde::Serialize, E: serde::Serialize>(result: Result<T, E>) -> Value {
+    match result {
+        Ok(v) => json!({ "ok": v }),
+        Err(e) => json!({ "err": e }),
+    }
+}
+
 /// Runs `command` as `beryl_app` would: `{"ok": result}` or `{"err": error}`.
 pub(crate) fn invoke(sessions: &Sessions, command: &str, args: Value) -> Value {
-    fn request<T: for<'de> Deserialize<'de>>(args: Value) -> Result<T, Value> {
-        serde_json::from_value::<Request<T>>(args)
-            .map(|r| r.request)
-            .map_err(|e| json!({"kind": "badRequest", "message": e.to_string()}))
-    }
-    fn answer<T: serde::Serialize, E: serde::Serialize>(result: Result<T, E>) -> Value {
-        match result {
-            Ok(v) => json!({ "ok": v }),
-            Err(e) => json!({ "err": e }),
-        }
-    }
     match command {
         ipc::APP_INFO => answer::<_, ()>(Ok(AppInfo {
             version: format!("{} (live)", env!("CARGO_PKG_VERSION")),

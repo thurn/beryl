@@ -16,14 +16,16 @@ pub fn sessions(app: &AppHandle) -> Sessions {
     let data = profile::data_dir(app).ok();
     let replays = data.as_ref().map(|dir| dir.join("replays"));
     let app = app.clone();
-    let sessions = Sessions::new(replays, move |update| {
-        if let Err(e) = app.emit(ipc::GAME_UPDATE, update) {
-            beryl_session::journal::error("app", format!("view not sent: {e}"), json!(null));
-        }
-    });
+    let sessions = Sessions::new(replays, move |update| emit_update(&app, update));
     match data {
         Some(dir) => sessions.with_ledger(dir.join("games.jsonl")),
         None => sessions,
+    }
+}
+
+pub(super) fn emit_update(app: &AppHandle, update: GameUpdate) {
+    if let Err(e) = app.emit(ipc::GAME_UPDATE, update) {
+        beryl_session::journal::error("app", format!("view not sent: {e}"), json!(null));
     }
 }
 

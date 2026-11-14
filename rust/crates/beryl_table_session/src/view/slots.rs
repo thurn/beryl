@@ -20,7 +20,7 @@ impl Slots {
         self.by_id.get(&id).copied()
     }
 
-    pub(super) fn update(&mut self, table: &Table, seat: Seat, entries: &[Entry]) -> Option<()> {
+    pub(crate) fn update(&mut self, table: &Table, seat: Seat, entries: &[Entry]) -> Option<()> {
         let first = self.revision.map_or(entries.len(), |revision| {
             entries.partition_point(|entry| entry.n <= revision)
         });
