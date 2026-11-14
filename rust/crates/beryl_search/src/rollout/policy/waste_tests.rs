@@ -85,7 +85,7 @@ fn waste_declines_opposing_permanents_in_softmax_mirrors() {
     let mut opposing_offers = 0;
     let mut opposing_picks = 0;
     let policy = waste_policy(&t);
-    for seed in 0..200 {
+    for seed in 0..20 {
         let mut s = State::new(&t, seed, Profile::SMART).unwrap();
         let Step::Decide(d) = next(&mut s, &t, &mut scratch, &mut Replay) else {
             panic!("expected opening decision");

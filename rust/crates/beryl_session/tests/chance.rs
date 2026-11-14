@@ -200,7 +200,9 @@ fn sweep_decks(seed: u64) -> [&'static Decklist; 2] {
 #[test]
 fn a_save_replays_the_same_under_another_seed() {
     let mut kinds = BTreeSet::new();
-    for seed in 0..12 {
+    // Four games that between them show every kind of chance event below (seed 5 alone shows
+    // all seven); seeds 0 to 11 once played here cost 9 s of every fast check.
+    for seed in [1, 3, 5, 6] {
         let (game, view) = played(seed, [VINTAGE_WU_CONTROL, WU_CONTROL]);
         replays_under_another_seed(game.replay(), &view);
         kinds.extend(events(game.replay()));

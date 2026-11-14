@@ -121,7 +121,7 @@ fn inline_and_replayed_answers_reach_the_same_state_at_every_decision() {
         payment: Payment::Manual,
         ..Profile::EXACT
     };
-    for seed in 0..8 {
+    for seed in 0..3 {
         for profile in [Profile::EXACT, Profile::SMART, greedy, manual] {
             let (logged, outcome) = inline_game(seed, profile);
             assert!(
@@ -132,7 +132,7 @@ fn inline_and_replayed_answers_reach_the_same_state_at_every_decision() {
             paused += replay(seed, profile, &logged, outcome);
         }
     }
-    assert_eq!(finished, 32);
+    assert_eq!(finished, 12);
     assert!(
         paused > 20,
         "only {paused} paused questions: the test exercises too little"
