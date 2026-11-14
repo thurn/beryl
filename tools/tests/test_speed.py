@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
 
 import pytest
@@ -53,14 +52,17 @@ def test_a_broken_measurement_is_held_to_the_limits(reference: Path) -> None:
 def test_a_slower_machine_runs_the_clock_slower(
     reference: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # A fake perf_counter instead of a real sleep: under load a sleep overshoots, and the
+    # clock then read more than the bounds allowed.
+    wall = [100.0]
+    monkeypatch.setattr(clock.time, "perf_counter", lambda: wall[0])
     monkeypatch.setattr(clock.system, "loadavg", lambda: (0.0, 0.0, 0.0))
     write(reference, 1.0)
     write(paths.cache_root() / speed.CACHE_FILE, 2.0)
     slow = clock.Clock()
-    time.sleep(0.2)
-    # Half the wall time, give or take scheduling.
-    assert 0.08 < slow.now() < 0.15
-    assert slow.wall() >= 0.2
+    wall[0] += 0.2
+    assert slow.now() == pytest.approx(0.1)
+    assert slow.wall() == pytest.approx(0.2)
 
 
 def test_the_workload_task_is_deterministic() -> None:
