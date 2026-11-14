@@ -123,6 +123,9 @@ the client they describe, and later sections refer to them by number.
 - **C1. Both clients stay fully alive until the switch.** The web interface
   keeps taking every fix and feature, and each is also made in Beryl 3D. The
   shipping app never stalls. The cost is that interface fixes are written twice.
+  One part is moved so that it is written once: the rules for when each step of
+  a script plays leave the web interface for the session, which sends each
+  step's timing to both clients (see [Timing a script](#timing-a-script)).
 
 - **C2. The performance floor is a 2015-class device**: an iPhone 6s, a 2015
   mid-range Android phone with an OpenGL ES 3.0 GPU, a 2013 laptop with
@@ -197,18 +200,16 @@ the client they describe, and later sections refer to them by number.
 Beryl 3D is a second player of scripts the session already writes. Nothing in
 the engine, the rules, the AI or the session changes for it.
 
-- **The session's protocol.** Beryl 3D receives the same `GameUpdate` values (a
-  `PlayerView`, which carries its `Script`) and sends the same commands
-  (`choose`, `click`, `cancel`, `undo`, `pass_on`, `concede`, `set_stops`). It
-  links `beryl_session` directly, so the values cross a channel as Rust types
-  with no serialization.
-- **Scripts and verbs.** The client never works out what happened: the script
-  says it. A script's steps name verbs from the closed list, and the client has
-  one implementation of each. A client does work out when each step plays (which
-  timing case applies, and which steps wait for which), from rules the web
-  interface holds in `ui/src/stage/timing.ts` and `beat.ts`. Beryl 3D ports
-  those rules, and a check holds the two clients' timings equal (see
-  [Timing a script](#timing-a-script)).
+- **The session's protocol**, with one addition. Beryl 3D receives the same
+  `GameUpdate` values (a `PlayerView`, which carries its `Script`) and sends the
+  same commands (`choose`, `click`, `cancel`, `undo`, `pass_on`, `concede`,
+  `set_stops`). It links `beryl_session` directly, so the values cross a channel
+  as Rust types with no serialization. The addition is that a script carries the
+  timing of each of its steps, which both clients play.
+- **Scripts and verbs.** The client plays scripts and works out nothing about
+  the game: the script says what happened, and how each step is timed. A
+  script's steps name verbs from the closed list, and the client has one
+  implementation of each.
 - **Prompt state.** A prompt's state lives in the session. Each click is a
   command, and the reply says which marks to draw and which buttons are enabled.
 - **Arena as the reference** for flow, order, timing, table layout and wording,
@@ -812,11 +813,12 @@ flight start exactly where the card was.
 Each of the 16 verbs has one implementation in the client core, which turns a
 script step into segments on the scene objects it concerns.
 
-- **Timing comes from data.** A verb's duration, delay, easing curve and
-  **stagger** (the delay between successive objects when one step moves several,
-  such as three cards drawn a third of a second apart) are read from
-  `data/ui-conventions.json`, the same entries the web interface reads. A change
-  to a duration is one edit that both clients pick up.
+- **Timing comes from data, through the session.** A verb's duration, delay,
+  easing curve and **stagger** (the delay between successive objects when one
+  step moves several, such as three cards drawn a third of a second apart) are
+  in `data/ui-conventions.json`. The session reads them and sends each step's
+  numbers with its script. A change to a duration is one edit that both clients
+  pick up.
 - **Space comes from data too.** Values only a 3D client needs (how high a
   flight arcs, how far a held card lifts off the table, how far a striking
   creature lunges) are added to the same entries, and the web interface ignores
@@ -841,48 +843,100 @@ distances in millimetres:
 
 ### Timing a script
 
-A script says what happens and in what order. It does not say when each step
-starts or how long it lasts. The client works that out when the script starts,
-for the whole script at once, into a **timeline**: one entry per step, with its
-start and end in milliseconds from the script's start.
+A script's steps say what happens and in what order. How long each takes, which
+ones overlap and which effects each begins depend on rules: a spell the viewer
+casts is timed differently from one the opponent casts, and a permanent that
+taps and leaves in one beat leaves only after it has turned.
+
+Those rules were the web interface's, in `ui/src/stage/timing.ts`. They move
+into the session, in `beryl_session`'s `script::timing` module, which is the
+only place they exist. The session sends each step's timing with its script, and
+both clients play what they are sent.
 
 ```rust
-pub struct Timed {
-    pub beat: u16,             // which beat of the script
-    pub step: u16,             // which step of that beat
-    pub verb: Verb,
-    pub case: Option<CaseId>,  // the verb's case in data/ui-conventions.json
-    pub start: u32,            // milliseconds from the script's start
-    pub end: u32,
-    pub effects: EffectSet,    // the effects the step begins, and when
+pub struct Script {
+    pub reset: Option<Reset>,
+    pub beats: Vec<Vec<Step>>,
+    /// One entry for each step, in the order the steps are played: every
+    /// step of the first beat, then every step of the second, and so on.
+    pub timing: Vec<StepTiming>,
 }
 
-/// Pure: the same script, table and data give the same timeline.
-pub fn timeline(script: &Script, before: &Table, data: &Conventions,
-                out: &mut Vec<Timed>);
+/// How one step is played. Times are in milliseconds.
+pub struct StepTiming {
+    pub case: Option<String>,   // the verb's case in data/ui-conventions.json
+    pub duration: f64,          // how long its motion takes
+    pub delay: f64,             // how long after its turn comes it begins
+    pub stagger: f64,           // how long the next step waits for its turn
+    pub curve: Curve,           // Linear, EaseIn, EaseOut or EaseInOut
+    pub each: Option<f64>,      // for a step that moves several cards one
+                                // after another, how long each one moves
+    pub with: bool,             // it takes the turn of the step before it
+    pub after: Vec<Subject>,    // it waits until the steps of its beat that
+                                // move these have ended
+    pub hold: Option<f64>,      // it ends a span, and waits until the span
+                                // has stood whole this long
+    pub leads: bool,            // what follows it waits until it is over
+    pub passes: bool,           // its beat does not wait for it
+    pub alone: bool,            // it waits until nothing passes over the table
+    pub opens: bool,            // its act is applied as its delay begins
+    pub ahead: bool,            // its act is applied with the step before's
+    pub closes: Option<f64>,    // how long what it left room for takes to
+                                // close up after it
+    pub effects: Vec<StepEffect>,
+}
+
+/// An effect a step begins.
+pub struct StepEffect {
+    pub name: String,           // the effect's name in the data
+    pub when: Edge,             // Start or End of the step
+    pub on: Option<Subject>,    // what it is on, where that is not the
+                                // step's own subject
+    pub into: Option<f64>,      // how far through the step it begins, from
+                                // 0 to 1, where that is not an edge of it
+    pub duration: Option<f64>,
+    pub delay: f64,
+    pub curve: Curve,
+}
 ```
 
-- **The case** of a step is chosen from the step's act and from the table as it
-  was before the step. A `fly` from the viewer's hand to the stack is "own spell
-  cast". A `count` of a life total that fell is "life loss". A case's values
-  replace its verb's wherever the case gives one.
-- **A step starts** at its turn in the beat plus its delay. Steps of one kind in
-  one beat take their turns a stagger apart. Some steps wait for another to end:
-  a permanent that taps and leaves in one beat leaves after it has turned, and
-  an arrow waits for the spell it leaves to land.
-- **A beat ends** when its last motion ends, and the next beat starts then.
-- **The rules are the web interface's.** They are in `ui/src/stage/timing.ts`
-  (`caseOf`, the waits and `effectsOf`), `beat.ts` (laying a beat out in time)
-  and `tracks.ts`. `beryl_scene`'s `timing` module is a port of them, function
-  for function where it can be, and each ported function's comment names the
-  function it ports.
-- **A check holds the two equal.** Both clients can print a script's timeline,
-  and a check compares them for every recording (see
-  [Timeline parity](#timeline-parity)). A change to the timing rules in one
-  client fails that check until the other client is changed to match.
-- **Segments are made from the timeline.** Each entry becomes segments, at
-  absolute times, on the scene objects its step concerns. Nothing about timing
-  is decided later, so any moment of a script can be drawn directly.
+These fields are the web interface's `Timing` record (`ui/src/stage/tracks.ts`)
+and its `Effect` record, with the same meanings.
+
+What the session does and what a client still does:
+
+- **The session chooses the case and the waits.** For each step it looks at the
+  step's act, the table as the step finds it, the step before it and the other
+  steps of its beat, and fills in a `StepTiming`. This is what `caseOf`,
+  `timingOf` and `effectsOf` did in `timing.ts`.
+- **A client lays a beat out in time.** Given the timings of a beat's steps and
+  the time the beat starts, a small function works out when each step begins and
+  ends. It is arithmetic, and it cannot move to the session, because two of its
+  inputs are known only to the client: how long a span has already been on
+  screen (a player may have looked at an arrow for five seconds before
+  answering), and whether a banner is still passing over the table. The web
+  interface's is `laid` in `ui/src/stage/beat.ts`. Beryl 3D's is a port of that
+  one function, in `beryl_scene`'s `beat` module.
+- **A client makes a few steps itself.** While a prompt is open, the client
+  draws its marks, its arrows and the cards it holds up as steps of its own,
+  made from the prompt's state (`ui/src/stage/prompt.ts`). Their timing is a
+  short fixed table, because it does not depend on the game: `beryl_session`'s
+  `own_timings` function returns it. Beryl 3D calls that function, and the web
+  interface asks for the table once at startup.
+- **Segments are made from the laid-out beat.** Each step becomes segments, at
+  absolute times, on the scene objects it concerns.
+- **Reduced motion** is a client's choice: it plays every step with no duration,
+  whatever it was sent.
+
+The move is made in three changes, in this order, so that the web interface
+never plays a timing nobody has checked:
+
+1. The rules are written in Rust beside the web interface's, and a check,
+   `just timing-parity`, runs both over every recording and requires every
+   step's `StepTiming` to be equal. Nothing plays the Rust result yet.
+2. The session attaches the Rust result to every script it sends.
+3. The web interface plays what it is sent, its own rules are deleted, and the
+   check of step 1 is deleted with them.
 
 ## The flat layer
 
@@ -1931,7 +1985,7 @@ coverage is known and what the switch removes.
 Shared truth is kept in data and in the session, so that most fixes are one
 change there and a small change in each client.
 
-- **The session and its protocol**, unchanged.
+- **The session and its protocol**, including the timing of every step.
 - **`data/ui-conventions.json`**: verbs, marks, timing values and the numbered
   exceptions.
 - **Design tokens**: one data file generating CSS variables for the web
@@ -1949,11 +2003,15 @@ Beryl 3D's table is a real scene. Each is fitted to Arena separately.
 ### Timeline parity
 
 The two clients place things differently on purpose, so their pictures cannot be
-compared. What they must agree on is what plays and when. The **timeline
-parity** check holds that, from the day Beryl 3D plays its first verb.
+compared. What they must agree on is what plays and when. The session sends both
+the same timing for every step (see [Timing a script](#timing-a-script)), which
+leaves two things a client could still get wrong: laying a beat out in time, and
+the steps it makes for itself while a prompt is open. The **timeline parity**
+check holds both.
 
-Both clients print a recording's timelines in one format: one line of JSON for
-each step of each script, as one seat sees it.
+Both clients print what they played for a recording in one format: one line of
+JSON for each step, with its start and end in milliseconds from the start of its
+script, as one seat sees it. A step a client made itself has `"own": true`.
 
 ```json
 {"view":12,"beat":0,"step":1,"verb":"fly","case":"own spell cast","start":0,"end":370,"effects":["settle@end"]}
@@ -1962,9 +2020,8 @@ each step of each script, as one seat sees it.
 - **The web interface's side** is a script, `ui/scripts/timeline.mjs`. It plays
   a recording through the stage's model in Node, with no browser and no drawing
   surface, and records each step as the stage begins and ends it
-  (`ScriptStage.follow`). It adds a script and changes no code of the stage.
-- **Beryl 3D's side** is `just stage <fixture> --timeline`, printed from the
-  `timeline` function of [Timing a script](#timing-a-script).
+  (`ScriptStage.follow`).
+- **Beryl 3D's side** is `just stage <fixture> --timeline`.
 - **The check**, `just timeline-parity`, compares the two for every fixture and
   card spec moment, from both seats. Two timelines agree when they hold the same
   steps with the same verb, case and effects, and every start and end is within
@@ -1972,11 +2029,8 @@ each step of each script, as one seat sees it.
 - **Recordings that do not agree yet are listed** in
   `data/timeline-parity.json`, each with the number of its steps that differ.
   Like every allowlist under `data/`, its counts may only go down.
-- **It runs in the fast check** when the web stage's timing code, `beryl_scene`
-  or the verb data changes. A change to one client that breaks a recording that
-  agreed must make the same change in the other client. This is how decision
-  C1's "each is also made in Beryl 3D" is enforced for timing, the part of the
-  web interface that changes most often.
+- **It runs in the fast check** when either client's code for playing a script
+  changes.
 
 What the check does not cover is fixed by hand, and found by the parity list: a
 screen's layout, a prompt's wording, and how an effect looks.
@@ -2062,11 +2116,28 @@ iOS.
   `beryl_render` names a `wgpu` type, so an upgrade touches one crate.
 - **Dependencies are pinned**, and an upgrade is a change of its own.
 
+## Out of scope
+
+The project's owner ruled these out on 2026-11-14.
+
+- **Screen readers.** Every interactive element still has a role and a name, so
+  an accessibility tree can be built later.
+- **Keyboard-only play**, beyond the keyboard shortcuts the web interface has.
+- **Text in scripts the bundled fonts lack.** A character none of them has is
+  drawn as the missing-character box.
+- **A floor device.** None is bought or attached (decision C13), and the owner
+  has nothing older than a current iPhone.
+
 ## Alternatives considered
 
 Each of these was a real option in the design interview. They are recorded so
 the reasons are not rediscovered.
 
+- **Each client keeping its own timing rules, held equal by a check.** It would
+  have left the session's protocol and the web stage untouched. But the timing
+  rules are the part of the web interface that changes most often, and every
+  change would have been written twice. The owner chose to move them into the
+  session instead.
 - **Bevy.** A full engine with shadows, lighting, bloom and audio ready-made. It
   is an entity-component engine that owns the app's main loop through `winit`,
   which conflicts with decisions C3, C7 and C12. Every frame, even one that only
