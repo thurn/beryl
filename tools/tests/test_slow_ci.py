@@ -213,3 +213,25 @@ def test_slow_ci_plays_every_check_when_coverage_cannot_place_the_change(
     chooser = selection.Chooser("shots", base="base")
     assert sorted(chooser.run([], [])) == ["attack", "block"]
     assert all(r.startswith("every:") for r in chooser.choice.reasons.values())
+
+
+def test_slow_cis_lanes_leave_their_fast_only_checks_to_the_fast_check() -> None:
+    lanes: dict[str, checks.Lane] = {
+        name: make() for name, make in slow_ci.lanes_for(None).items()
+    }
+
+    def command(lane: str, step: str) -> list[str]:
+        return next(s.cmd for s in lanes[lane].steps if s.name == step)
+
+    fast_only = set(verdicts.FAST_ONLY)
+    assert "--slow" in command("python", "pytest")
+    assert "--slow" not in next(
+        s.cmd for s in checks.python_lane().steps if s.name == "pytest"
+    )
+    skips = {
+        f"script:{a[1:]}" for a in command("script", "script-check") if a[0] == "!"
+    }
+    assert skips == {c for c in fast_only if c.startswith("script:")}
+    ui = {s.name for s in lanes["ui"].steps}
+    assert ("test" in ui) == ("ui:test" not in fast_only)
+    assert "test" in {s.name for s in checks.ui_lane().steps}

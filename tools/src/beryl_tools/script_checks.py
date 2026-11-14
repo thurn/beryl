@@ -15,7 +15,7 @@ import tomllib
 from pathlib import Path
 from typing import IO, TYPE_CHECKING
 
-from . import paths, system
+from . import paths, slow_only, system
 from .reruns import CANNOT_RUN, failed_scripts
 
 if TYPE_CHECKING:
@@ -26,13 +26,16 @@ FIXTURES: Path = paths.UI / "fixtures.json"
 CHECKER = "beryl_cli"
 
 
-def lane() -> Lane:
+def lane(slow: bool = False) -> Lane:
     """Every card's spec moments from both seats and every UI fixture's recording, in a debug
     build that holds each script to the replay check and the rule invariants: one
-    check per moment, seat and recording."""
+    check per moment, seat and recording. Slow CI's (`slow`) leaves out those
+    slow_only.FAST_ONLY leaves to the fast check, each as a `!` filter of `script-check`.
+    """
     from .checks import Lane  # It imports this module.
 
-    cmd = [sys.executable, "-m", "beryl_tools.script_checks"]
+    skips = [f"!{c}" for c in slow_only.fast_only("script")] if slow else []
+    cmd = [sys.executable, "-m", "beryl_tools.script_checks", *skips]
     return Lane("script", warm=True).step("script-check", cmd, rerun=failed_scripts)
 
 

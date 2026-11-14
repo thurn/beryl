@@ -215,7 +215,8 @@ or seconds in the fast check.
      (`verdicts.SLOW_ONLY`). A check that once caught a bug (a `catch` verdict)
      can move from slow CI to the nightly (a step in `nightly.STEPS`). A check
      the fast check also runs leaves slow CI alone and stays in the fast check
-     (`verdicts.FAST_ONLY` for a Rust test).
+     (`verdicts.FAST_ONLY`, for a Rust or Python test, a script check or
+     `ui:test`).
    - **Delete it** when it has never caught a bug.
 
    A browser check you change follows `ui/AGENTS.md`. When you delete one, make

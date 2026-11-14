@@ -198,9 +198,10 @@ skill works them as one Enact run, grouped by shared cause.
   and CPU seconds. The agent working a bead deletes each check that caught
   nothing in 30 days and moves each one that caught something to the nightly,
   after first asking whether a fast, deterministic test could keep what the
-  check protects. A check the fast check also runs leaves slow CI alone: a Rust
-  test joins `verdicts.FAST_ONLY`, which slow CI's tests step leaves out, and a
-  test that only the nightly's `just fuzz` should play is marked `#[ignore]`.
+  check protects. A check the fast check also runs leaves slow CI alone: it
+  joins `verdicts.FAST_ONLY`, which slow CI's rust, python, script and ui lanes
+  leave out (a Rust or Python test, a script check, or the UI's Node tests), and
+  a test that only the nightly's `just fuzz` should play is marked `#[ignore]`.
   The checks in `budget.KEEP` (the app starting, the `ui-smoke` checks, clippy,
   the UI's typecheck, the `names` lane) are never named. While a `ci-cut` bead
   is open nothing more is filed; once the last one closes, only runs that

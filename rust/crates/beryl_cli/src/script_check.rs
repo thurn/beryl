@@ -43,7 +43,9 @@ struct Check {
 
 /// Runs the checks: every one, or those `filters` name, each a check's id or what one begins
 /// with (`script:` optional): `counterspell` is every check of its spec, and
-/// `fixtures/stack-two` both seats of a recording. `fixtures` is the definitions file. With
+/// `fixtures/stack-two` both seats of a recording. A filter that starts with `!` leaves out
+/// what it names instead: slow CI passes one for each script check it leaves to the fast check
+/// (`tools/src/beryl_tools/slow_only.py`). `fixtures` is the definitions file. With
 /// `--dump <dir>` first, the scripts of the checks run are written under `dir`.
 pub fn main(fixtures: &Path, filters: &[String]) -> Result<(), String> {
     let (dump, filters) = match filters {
@@ -87,17 +89,30 @@ pub fn main(fixtures: &Path, filters: &[String]) -> Result<(), String> {
     report(&checks, started.elapsed().as_secs_f64())
 }
 
-/// Whether `filters` take the check `id`.
+/// Whether `filters` take the check `id`: no `!` filter names it, and either no other filter is
+/// given or one names it.
 fn wanted(filters: &[&str], id: &str) -> bool {
-    filters.is_empty()
-        || filters
-            .iter()
-            .any(|f| id == *f || id.strip_prefix(*f).is_some_and(|r| r.starts_with('/')))
+    let names = |f: &str| id == f || id.strip_prefix(f).is_some_and(|r| r.starts_with('/'));
+    let (skips, takes) = split(filters);
+    !skips.iter().any(|f| names(f)) && (takes.is_empty() || takes.iter().any(|f| names(f)))
 }
 
-/// Whether `filters` take a check under `group`, a card's slug or [`FIXTURES`].
+/// Whether `filters` take a check under `group`, a card's slug or [`FIXTURES`]. A `!` filter
+/// leaves out single checks, never a whole group.
 fn group_wanted(filters: &[&str], group: &str) -> bool {
-    filters.is_empty() || filters.iter().any(|f| f.split('/').next() == Some(group))
+    let (_, takes) = split(filters);
+    takes.is_empty() || takes.iter().any(|f| f.split('/').next() == Some(group))
+}
+
+/// The `!` filters without their `!`, and the others.
+fn split<'a>(filters: &[&'a str]) -> (Vec<&'a str>, Vec<&'a str>) {
+    let skips = filters.iter().filter_map(|f| f.strip_prefix('!')).collect();
+    let takes = filters
+        .iter()
+        .copied()
+        .filter(|f| !f.starts_with('!'))
+        .collect();
+    (skips, takes)
 }
 
 fn add(checks: &mut BTreeMap<String, Check>, id: String, seconds: f64, failure: Option<String>) {
@@ -284,6 +299,18 @@ mod tests {
         assert!(!wanted(&["counterspell/start/theirs"], id));
         assert!(group_wanted(&["counterspell/start/yours"], "counterspell"));
         assert!(!group_wanted(&["counterspell"], FIXTURES));
+    }
+
+    /// A `!` filter leaves out what it names and nothing else, with or without other filters.
+    #[test]
+    fn a_bang_filter_leaves_out_what_it_names() {
+        let id = "fixtures/late-game/yours";
+        assert!(!wanted(&["!fixtures/late-game"], id));
+        assert!(!wanted(&["fixtures", "!fixtures/late-game/yours"], id));
+        assert!(wanted(&["!fixtures/late"], id));
+        assert!(wanted(&["!fixtures/stack-two"], id));
+        assert!(group_wanted(&["!fixtures/late-game"], FIXTURES));
+        assert!(!group_wanted(&["counterspell", "!fixtures/x"], FIXTURES));
     }
 
     /// A moment whose session panics fails its own checks, from each seat, with the panic; the

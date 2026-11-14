@@ -34,9 +34,11 @@ SLOW_ONLY: tuple[SlowOnly, ...] = (
 )
 
 
-# The checks slow CI leaves to the fast check alone: `rust:<binary>::<test path>` for a Rust
-# test (as the run log names it), or `rust:doctests` and `rust:allocations` for the steps
-# cargo test runs beside nextest (rust_tests.py). Each costs slow CI's CPU budget
+# The checks slow CI leaves to the fast check alone, as the run log names them:
+# `rust:<binary>::<test path>` for a Rust test, `rust:doctests` and `rust:allocations` for the
+# steps cargo test runs beside nextest (rust_tests.py), `python:<node id>` for a Python test
+# (python_tests.py), `script:<id>` for a script check (script_checks.py), and `ui:test` for the
+# UI's Node tests (checks.ui_lane). Each costs slow CI's CPU budget
 # (budget.SLOW_CPU_BUDGET) and caught no bug there in the 30 days before it moved; the fast
 # check still runs it before every push. A check here must not also be in SLOW_ONLY, or no
 # check would run it.
@@ -102,4 +104,17 @@ FAST_ONLY: tuple[str, ...] = (
     "rust:beryl_session::session::undo::undo_keeps_the_latest_points",
     "rust:beryl_search::greedy::greedy_beats_random",
     "rust:beryl_search::long::the_hidden_searches_decide_the_same_on_a_redeterminized_state",
+    "python:tests/test_checks.py::test_a_hung_step_is_killed_at_its_hang_limit_with_its_descendants",
+    "python:tests/test_bisect.py::test_a_probe_that_hangs_dies_at_the_search_limit_and_keeps_its_range",
+    "python:tests/test_checks.py::test_a_loaded_machine_stretches_the_hang_limit_and_the_budget",
+    "python:tests/test_video_measure.py::test_the_command_measures_a_recording_and_a_folder_of_frames",
+    "script:fixtures/combat-attackers/yours",
+    "script:fixtures/choice-trigger-order/yours",
+    "script:fixtures/late-game/yours",
+    "ui:test",
 )
+
+
+def fast_only(lane: str) -> list[str]:
+    """The checks of `lane` that slow CI leaves to the fast check, without their `<lane>:`."""
+    return [c.removeprefix(f"{lane}:") for c in FAST_ONLY if c.startswith(f"{lane}:")]

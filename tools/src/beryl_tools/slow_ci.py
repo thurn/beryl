@@ -62,6 +62,7 @@ from . import (
     sweep,
     system,
     ui_counts,
+    verdicts,
 )
 from .changes import changed_paths, master_base, run_git
 from .rust_tests import affected_packages
@@ -371,11 +372,11 @@ def lanes_for(packages: list[str] | None) -> dict[str, Callable[[], checks.Lane]
     the workspace)."""
     return {
         "repo": checks.repo_lane,
-        "python": checks.python_lane,
+        "python": python_lane,
         "scale": checks.scale_lane,
         "rust": lambda: checks.rust_lane(packages=packages),
-        "script": script_checks.lane,
-        "ui": checks.ui_lane,
+        "script": lambda: script_checks.lane(slow=True),
+        "ui": ui_lane,
         "names": lambda: checks.names_lane(fetch=True),
         "app": checks.app_lane,
         "ui-smoke": checks.ui_smoke_lane,
@@ -386,6 +387,23 @@ def lanes_for(packages: list[str] | None) -> dict[str, Callable[[], checks.Lane]
         "counts": bench.lane,
         "mobile": mobile.lane,
     }
+
+
+def python_lane() -> checks.Lane:
+    """The python lane with `--slow` on its pytest step, which leaves out the tests
+    verdicts.FAST_ONLY leaves to the fast check (python_tests.py)."""
+    lane = checks.python_lane()
+    next(s for s in lane.steps if s.name == "pytest").cmd.append("--slow")
+    return lane
+
+
+def ui_lane() -> checks.Lane:
+    """The ui lane without its Node tests when verdicts.FAST_ONLY leaves them to the fast
+    check."""
+    lane = checks.ui_lane()
+    if "ui:test" in verdicts.FAST_ONLY:
+        lane.steps = [s for s in lane.steps if s.name != "test"]
+    return lane
 
 
 @dataclass
