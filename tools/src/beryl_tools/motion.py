@@ -76,7 +76,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from . import conventions, paths, runlog, shots, suites, video_measure, video_shape
+from . import (
+    conventions,
+    paths,
+    runlog,
+    selection,
+    shots,
+    suites,
+    video_measure,
+    video_shape,
+)
 
 if TYPE_CHECKING:
     from .checks import Lane
@@ -112,6 +121,11 @@ SPANS: tuple[str, ...] = ("point", "mark")
 # no stagger is held between the two.
 ALONE: tuple[str, ...] = ("set", "dwell", "announce")
 UNSTAGGERED: tuple[str, ...] = SPANS + ALONE
+# Seconds the capture takes after its fixtures are recorded: serving the UI and playing the
+# stepped capture, 12 s to 19 s on this Mac at load 10 (2026-11-13). The fast check skips it
+# when recording, which builds beryl_cli when the cloned rust/target is behind, leaves less
+# than this of the box: under load, a rebuild of about 35 s and the capture passed 60 s.
+CAPTURE_SECONDS = 20.0
 # What the capture's verdicts follow: the stage, the capture, the tracker and the data the verbs
 # are played with and held to. The fast check runs the lane when one of them changed.
 INPUTS = (
@@ -583,14 +597,33 @@ def measure_capture(
     return out
 
 
-def capture(out: Path, tick: float | None = None, more: bool = False) -> int:
+def boxed_out(box: float, recording: float) -> str | None:
+    """Why the fast check skips the capture, when recording the fixtures took `recording` of
+    its `box` seconds and the capture would not fit in what is left; None when it fits.
+    """
+    left = box - selection.STARTUP - recording
+    if left >= CAPTURE_SECONDS:
+        return None
+    return (
+        f"recording the fixtures took {recording:.0f} s, leaving {max(left, 0):.0f} s of the"
+        f" {box:.0f} s box for a capture of about {CAPTURE_SECONDS:.0f} s; the nightly plays it"
+    )
+
+
+def capture(
+    out: Path, tick: float | None = None, more: bool = False, box: float | None = None
+) -> int | str:
     """Records the verb suite's fixtures, serves the UI and runs the stepped capture into
     `out`, in ticks of `tick` ms (stepped.mjs's sixtieth of a second by default), with the
-    moments of `more` if `more`; its exit code. An earlier capture's frames are
-    removed first, so that none is measured again."""
+    moments of `more` if `more`; its exit code. With `box`, the reason it skipped the
+    capture instead, when recording left too little of `box` seconds (`boxed_out`). An
+    earlier capture's frames are removed first, so that none is measured again."""
     recorded = out / "fixtures"
+    began = time.monotonic()
     if shots.record_fixtures(recorded, suites.verb_fixtures()):
         return 1
+    if box is not None and (why := boxed_out(box, time.monotonic() - began)):
+        return why
     shutil.rmtree(out / "frames", ignore_errors=True)
     env = shots.browser_env()
     ticks = ["--tick", str(tick)] if tick else []
@@ -629,10 +662,12 @@ def command(args: argparse.Namespace) -> int:
     out = paths.cache_root() / "motion" / paths.REPO.name
     began = time.monotonic()
     try:
-        code = capture(out, args.tick, args.more)
+        code = capture(out, args.tick, args.more, args.box)
     except shots.UiError as e:
         print(f"motion: {e}", file=sys.stderr)
         code = 1
+    if isinstance(code, str):
+        return cut(code, time.monotonic() - began)
     if code:
         print("motion: the capture failed", file=sys.stderr)
         return code
@@ -675,12 +710,29 @@ def command(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def cut(why: str, took: float) -> int:
+    """Logs every verb and layout as cut by the fast check's box (`boxed_out`), which fails
+    nothing."""
+    print(f"motion: capture cut: {why}")
+    verbs = suites.verb_suite().get("verbs")
+    checks = [
+        f"motion:{v}/{layout}"
+        for layout in LAYOUTS
+        for v in (verbs if isinstance(verbs, list) else [])
+    ]
+    for check in checks:
+        runlog.result(check, "skip", took / max(1, len(checks)), "cut")
+    return 0
+
+
 def lane() -> Lane:
     """The capture as a lane of the fast check (checks.py), which runs it when its inputs
-    changed; the nightly run always does (nightly.py)."""
+    changed, inside the browser lanes' box (selection.BOX); the nightly run always does
+    (nightly.py)."""
     from .checks import BY, Lane  # It imports this module.
 
-    return Lane("motion", warm=True).step("motion", [*BY, "motion"])
+    box = ["--box", str(selection.BOX)]
+    return Lane("motion", warm=True).step("motion", [*BY, "motion", *box])
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -716,6 +768,12 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "--instances",
         default="2",
         help="with --film, how many of Arena's instances of each case (default 2)",
+    )
+    p.add_argument(
+        "--box",
+        type=float,
+        help="skip the capture, logged as cut, when recording the fixtures leaves too little"
+        " of this many seconds for it (the fast check's lane)",
     )
     p.add_argument(
         "--tick",

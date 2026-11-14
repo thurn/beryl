@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from beryl_tools import conventions, motion, suites
+from beryl_tools import conventions, motion, runlog, suites
 from beryl_tools.video_measure import Clip
 
 # The values report: Beryl's own values beside Arena's, with no verdict.
@@ -525,3 +525,26 @@ def test_a_fights_two_blows_are_held_to_one_time() -> None:
 
     assert stagger(0) == [False]
     assert stagger(220) == [True]
+
+
+def test_a_capture_that_fits_the_box_is_played() -> None:
+    assert motion.boxed_out(45.0, 4.0) is None
+
+
+def test_a_capture_a_rebuild_left_no_room_for_is_cut() -> None:
+    # Recording rebuilt beryl_cli for 35 s: the capture's 20 s would pass the 45 s box.
+    why = motion.boxed_out(45.0, 35.0)
+    assert why is not None and "35 s" in why and "nightly" in why
+
+
+def test_a_cut_capture_logs_every_verb_and_layout_as_cut(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    results = tmp_path / "results.jsonl"
+    monkeypatch.setenv(runlog.RESULTS_ENV, str(results))
+    monkeypatch.setattr(suites, "verb_suite", lambda: {"verbs": ["tap", "point"]})
+    assert motion.cut("no room", 8.0) == 0
+    lines = [json.loads(line) for line in results.read_text().splitlines()]
+    expected = {f"motion:{v}/{l}" for v in ("tap", "point") for l in motion.LAYOUTS}
+    assert {line["check"] for line in lines} == expected
+    assert all(line["outcome"] == "skip" and line["chosen"] == "cut" for line in lines)

@@ -47,7 +47,10 @@ branch left `origin/staging`:
   data changed. It records each animation verb in stepped stage time, measures
   it the same way Arena's clips were measured, and compares it with its own
   values in `data/ui-conventions.json` (Arena's values are listed alongside).
-  Each is logged as a check named `motion:<verb>/<layout>`. It also runs
+  Each is logged as a check named `motion:<verb>/<layout>`. It shares the
+  browser checks' 45 s box: when recording the fixtures (which builds
+  `beryl_cli` if the cloned `rust/target` is behind) leaves too little of it for
+  the capture, the capture is skipped and each check logged as cut. It also runs
   nightly.
 
 For a change to `ui/` or `rust/`, it also runs as many of the `ui-test` and
