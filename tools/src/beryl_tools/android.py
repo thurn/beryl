@@ -190,7 +190,16 @@ def launch_until_ready(seconds: int) -> bool:
         return False
     # The app's own deadline ends it; this one catches an app that never exits.
     deadline = time.monotonic() + seconds + 30
-    while adb("shell", "pidof", PACKAGE).stdout.strip() == pid:
+    absent = 0
+    while True:
+        # `pidof` can briefly return no process while Android is still starting the
+        # WebView. Confirm that it has exited before ending the smoke run.
+        if adb("shell", "pidof", PACKAGE).stdout.strip() == pid:
+            absent = 0
+        else:
+            absent += 1
+            if absent == 4:
+                break
         if time.monotonic() > deadline:
             print(
                 f"android-smoke: the app appears hung, it did not exit in {seconds + 30} s"

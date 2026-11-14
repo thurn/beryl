@@ -25,11 +25,14 @@ body.phone .bug-panel {
   width: 100%;
   max-width: none;
   margin: 0;
-  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  padding: 12px 16px calc(12px + var(--phone-safe-bottom));
   border-radius: 12px 12px 0 0;
   overflow: auto;
   gap: 8px;
   animation: none;
+}
+body.phone .bug-panel[data-keyboard="true"] {
+  padding-bottom: 12px;
 }
 body.phone .bug-panel .bug-tools {
   top: 8px;

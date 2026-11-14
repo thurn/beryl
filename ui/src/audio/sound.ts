@@ -197,7 +197,8 @@ export async function installAudio() {
       startMusic(wanted);
     }
   });
-  context.resume().catch(() => undefined); // Locked: the first gesture resumes it.
+  if (document.hidden) void context.suspend();
+  else context.resume().catch(() => undefined); // Locked: the first gesture resumes it.
   for (const sound of Object.keys(SOUNDS) as Sound[]) {
     SOUNDS[sound].variants.forEach((_, n) => {
       const url = soundUrl(sound, n);
@@ -385,6 +386,10 @@ function installListeners() {
   listening = true;
   document.addEventListener("pointerdown", unlock, true);
   document.addEventListener("keydown", unlock, true);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) void engine?.context.suspend();
+    else unlock();
+  });
   document.addEventListener(
     "click",
     (e) => {

@@ -6,6 +6,7 @@ import {
   canReportBugs,
   isMobile,
   isRelayedGame,
+  onAndroidBack,
   uiReady,
   type OutcomeView,
 } from "./ipc";
@@ -69,11 +70,31 @@ function Main() {
   // it runs on a phone.
   const [exportReports, setExportReports] = useState(false);
   useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
     void appInfo().then((info) => {
       setMobile(isMobile(info.platform));
       setExportReports(canExportBugs());
+      if (info.platform === "android") {
+        void onAndroidBack(() => {
+          document.body.dispatchEvent(
+            new CustomEvent("beryl:android-back", { bubbles: true }),
+          );
+        })
+          .then((stop) => {
+            if (disposed) stop();
+            else unlisten = stop;
+          })
+          .catch((error: unknown) =>
+            console.warn("Android Back listener failed:", error),
+          );
+      }
       uiReady();
     });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
   }, []);
   const phone = usePhone();
   useEffect(() => {

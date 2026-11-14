@@ -3,6 +3,7 @@
 // plain browser (`just ui-shots`). Every command, its arguments, result and error, and every
 // event are generated from rust/crates/beryl_session (`Commands`, `Events`).
 import { invoke } from "@tauri-apps/api/core";
+import { onBackButtonPress } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import type {
   BugReport,
@@ -584,6 +585,12 @@ export const appInfo = () =>
   }));
 
 export const uiReady = () => call("ui_ready", {});
+
+/** Android's native Back event, taken from Tauri before its WebView navigates history. */
+export const onAndroidBack = async (handler: () => void): Promise<Unlisten> => {
+  const listener = await onBackButtonPress(handler);
+  return () => void listener.unregister();
+};
 
 // Games: one at a time, against an agent. Every view of the human's arrives as a
 // `game-update` event. The game commands reject with a `CommandError` carrying a

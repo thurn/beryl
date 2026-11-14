@@ -123,6 +123,14 @@ export function PhoneStageBoard({
   const [sheet, setSheet] = useState<
     "menu" | "log" | Pick<PhonePile, "side" | "zone">
   >();
+  useEffect(() => {
+    const back = (event: Event) => {
+      event.stopPropagation();
+      if (sheet) setSheet(undefined);
+    };
+    document.addEventListener("beryl:android-back", back);
+    return () => document.removeEventListener("beryl:android-back", back);
+  }, [sheet]);
   // The slot of the card a touch inspects, or the face of one of the Revealed Cards.
   const [inspecting, setInspecting] = useState<number | ObjectView>();
   const revealed = useMemo(() => revealedIn(resting), [resting]);

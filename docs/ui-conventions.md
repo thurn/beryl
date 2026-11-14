@@ -434,7 +434,10 @@ recordings do not show them.
   and saves both that frame and the region the player selects. On a phone, the
   reporter opens from the menu, a touch selects the whole screen or a drag
   selects a region, the description stays above the keyboard, and a saved report
-  offers Share and Done.
+  offers Share and Done. Android's Back closes the open sheet or bug reporter
+  and otherwise leaves a game in place. The phone keeps dark system chrome in
+  either system appearance. The bottom actions clear the gesture bar, and the
+  seed and game buttons rise above the numeric keyboard.
 
 ## Verbs
 

@@ -7,6 +7,8 @@
 
 /* No scroll, zoom or bounce on a phone (App.tsx sets the class). */
 body.phone {
+  --phone-safe-bottom: max(env(safe-area-inset-bottom, 0px), 24px);
+
   overflow: hidden;
   overscroll-behavior: none;
   touch-action: none;
@@ -27,7 +29,7 @@ body.phone {
   bottom: 0;
   max-width: 430px;
   margin-inline: auto;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: var(--phone-safe-bottom);
   overflow: clip;
   background: var(--tabletop);
 }
@@ -475,7 +477,7 @@ body.phone .phone-start-screen {
   display: flex;
   flex-direction: column;
   padding: env(safe-area-inset-top, 0px) 16px
-    calc(16px + env(safe-area-inset-bottom, 0px));
+    calc(16px + var(--phone-safe-bottom) + var(--phone-keyboard-inset, 0px));
 }
 .phone-start-screen .sound-corner {
   position: relative;
@@ -491,8 +493,7 @@ body.phone .phone-start-screen {
 .phone-start-screen .corner-panel {
   inset: 100% 0 auto;
   max-height: calc(
-    100dvh - 80px - env(safe-area-inset-top, 0px) -
-      env(safe-area-inset-bottom, 0px)
+    100dvh - 80px - env(safe-area-inset-top, 0px) - var(--phone-safe-bottom)
   );
   overflow-y: auto;
   touch-action: pan-y;
@@ -661,7 +662,7 @@ body.phone .phone-game-over {
 }
 body.phone :is(.phone-game-over > .dock, .phone-result-return) {
   position: fixed;
-  inset: auto auto calc(16px + env(safe-area-inset-bottom, 0px)) 50%;
+  inset: auto auto calc(16px + var(--phone-safe-bottom)) 50%;
   width: min(calc(100vw - 32px), 398px);
   transform: translateX(-50%);
   min-width: 0;
@@ -695,7 +696,7 @@ body.phone .phone-opening {
   max-width: 430px;
   margin-inline: auto;
   padding-block: calc(88px - var(--opening-coin-size) / 2)
-    calc(16px + env(safe-area-inset-bottom, 0px));
+    calc(16px + var(--phone-safe-bottom));
 }
 .phone-opening > .overlay-backdrop {
   inset: calc(-1 * env(safe-area-inset-top, 0px)) 0 0;

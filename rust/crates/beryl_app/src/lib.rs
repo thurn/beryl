@@ -332,13 +332,15 @@ pub fn run() {
             app.manage(BugDirectory(bug_dir));
             let dir = app.path().app_cache_dir()?.join("art");
             app.manage(ArtCache::new(dir, art::SCRYFALL));
-            // The main window starts hidden (tauri.conf.json) so a smoke run never shows it.
-            let Some(seconds) = smoke_seconds() else {
-                if let Some(window) = app.get_webview_window("main") {
-                    window.show()?;
-                }
-                return Ok(());
-            };
+            // The iOS Simulator needs the webview shown even in smoke mode to load the UI.
+            // Showing it there does not open a window on the Mac desktop.
+            let smoke = smoke_seconds();
+            if (cfg!(target_os = "ios") || smoke.is_none())
+                && let Some(window) = app.get_webview_window("main")
+            {
+                window.show()?;
+            }
+            let Some(seconds) = smoke else { return Ok(()) };
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Prohibited);
             std::thread::spawn(move || {

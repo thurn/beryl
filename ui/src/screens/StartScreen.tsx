@@ -12,7 +12,7 @@ import { SoundCorner } from "../audio/SoundControls";
 import { Stage } from "../game/Stage";
 import { usePhone } from "../mobile/phone";
 import { play } from "../audio/sound";
-import { useEffect, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 
 /** The agent that plays on the true state, hidden cards included. */
 const CHEATING = "mcts-omniscient";
@@ -61,6 +61,41 @@ export function StartScreen({
   exportReports: boolean;
 }) {
   const phone = usePhone();
+  const [keyboardInset, setKeyboardInset] = useState(0);
+  useEffect(() => {
+    if (!phone) return;
+    const fullHeight = window.innerHeight;
+    let nativeInset = 0;
+    const update = () => {
+      const viewport = window.visualViewport;
+      const covered = viewport
+        ? fullHeight - viewport.height - viewport.offsetTop
+        : 0;
+      // Some Android WebViews keep the visual viewport unchanged under the keyboard.
+      // If the layout viewport shrank too, do not count that space twice.
+      setKeyboardInset(
+        Math.max(
+          0,
+          Math.max(covered, nativeInset) - (fullHeight - window.innerHeight),
+        ),
+      );
+    };
+    const onKeyboard = (event: Event) => {
+      nativeInset =
+        (event as CustomEvent<number>).detail / window.devicePixelRatio;
+      update();
+    };
+    window.visualViewport?.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
+    window.addEventListener("beryl:keyboard-inset", onKeyboard);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("beryl:keyboard-inset", onKeyboard);
+    };
+  }, [phone]);
   const [agents, setAgents] = useState<AgentView[]>([]);
   const [agent, setAgent] = useState<string>();
   const [seed, setSeed] = useState(() => lastGame().seed ?? "");
@@ -152,6 +187,13 @@ export function StartScreen({
     <div
       className={
         phone ? "table start-screen phone-start-screen" : "table start-screen"
+      }
+      style={
+        phone
+          ? ({
+              "--phone-keyboard-inset": `${keyboardInset}px`,
+            } as CSSProperties)
+          : undefined
       }
     >
       <SoundCorner />

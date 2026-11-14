@@ -174,6 +174,13 @@ export function BugReporter({ route }: { route: string }) {
   // Enter takes the whole window. It hears keys first (the capture phase), and while it
   // captures or selects, nothing else on the page does: the board's Space would pass.
   useEffect(() => {
+    const onAndroidBack = (e: Event) => {
+      if (stageRef.current.kind !== "idle") {
+        e.stopPropagation();
+        close();
+      }
+    };
+    window.addEventListener("beryl:android-back", onAndroidBack, true);
     const onKey = (e: KeyboardEvent) => {
       const now = stageRef.current;
       const swallow = () => {
@@ -214,7 +221,10 @@ export function BugReporter({ route }: { route: string }) {
       }
     };
     window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("beryl:android-back", onAndroidBack, true);
+      window.removeEventListener("keydown", onKey, true);
+    };
   }, [start, close, choose]);
   useEffect(() => {
     const onRequest = () => {
@@ -420,6 +430,7 @@ function Describe({
   return (
     <form
       className="bug-panel"
+      data-keyboard={phone && viewport.bottom > 0}
       style={
         phone
           ? {
