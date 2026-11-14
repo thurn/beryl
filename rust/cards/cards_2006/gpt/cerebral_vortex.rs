@@ -33,7 +33,7 @@ pub static CARD: CardDef = Printed::CerebralVortex
 pub mod scenarios {
     use crate::prelude::*;
 
-    /// P0's upkeep of turn 3. The scenarios begin in turn 2, P1's, so that XMage's first turn is
+    /// P0's upkeep of turn 3. The scenarios begin in turn 2, P1's, so that the `XMage`'s first turn is
     /// not the one that counts: in it the starting player skips their draw ([CR 103.8a]): "In a
     /// two-player game, the player who plays first skips the draw step (see rule 504, "Draw Step")
     /// of their first turn."
