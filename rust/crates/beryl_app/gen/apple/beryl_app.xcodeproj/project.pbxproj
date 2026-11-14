@@ -191,7 +191,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					ACE85039F1D31145C2853D32 = {
-						DevelopmentTeam = FYHM4Q335L;
+						DevelopmentTeam = D77745XTVL;
 					};
 				};
 			};
@@ -329,7 +329,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = beryl_app_iOS/beryl_app_iOS.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = "FYHM4Q335L";
+				DEVELOPMENT_TEAM = "D77745XTVL";
 				ENABLE_BITCODE = NO;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -361,7 +361,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = beryl_app_iOS/beryl_app_iOS.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = "FYHM4Q335L";
+				DEVELOPMENT_TEAM = "D77745XTVL";
 				ENABLE_BITCODE = NO;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (

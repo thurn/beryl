@@ -486,7 +486,7 @@ def device(args: argparse.Namespace) -> int:
 
 
 SIGNING_HELP = """ios-device: if signing failed, once on this Mac:
-  1. Xcode > Settings > Accounts: sign in with the Apple ID of team FYHM4Q335L.
+  1. Xcode > Settings > Accounts: sign in with the Apple ID of team D77745XTVL.
   2. Connect the iPhone, trust this Mac, and turn on Settings > Privacy & Security >
      Developer Mode on the phone.
 then run `just ios-device` again."""
