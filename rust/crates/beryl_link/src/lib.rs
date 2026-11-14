@@ -1,8 +1,14 @@
 //! Ordered, bidirectional frame transport for a multiplayer table.
 
+mod connection;
+pub mod guest;
+pub mod host;
 mod invite;
 pub mod memory;
 pub mod tcp;
+pub mod wire;
+
+pub use connection::PING_INTERVAL;
 
 pub use invite::{Invite, secret};
 pub use memory::MemoryLink;
@@ -71,4 +77,22 @@ fn frame_length(length: usize) -> Result<u32, LinkError> {
         return Err(LinkError::Refused("The frame exceeds 8 MiB.".into()));
     }
     Ok(length as u32)
+}
+
+impl Link for Box<dyn Link> {
+    fn send(&mut self, frame: &[u8]) -> Result<(), LinkError> {
+        (**self).send(frame)
+    }
+
+    fn receive(&mut self) -> Result<Vec<u8>, LinkError> {
+        (**self).receive()
+    }
+
+    fn peer(&self) -> PeerInfo {
+        (**self).peer()
+    }
+
+    fn try_clone_sender(&self) -> Result<Box<dyn LinkSender>, LinkError> {
+        (**self).try_clone_sender()
+    }
 }

@@ -558,10 +558,11 @@ There are three implementations.
 The design adds three libraries with one-way dependencies.
 
 - **The table** depends on the card store only.
-- **The link** depends on neither the table nor the session.
-- **The table session** holds the host and guest message handling and the
-  adapter. It depends on the table, the link and the session's view and script
-  types.
+- **The link** implements the handshake and the host and guest message loops. It
+  depends on neither the table nor the session.
+- **The table session** implements the adapter and supplies actions, views and
+  lobby data to the link. It depends on the table, the link and the session's
+  view and script types.
 
 The rules engine and the card implementations take no networking dependency.
 
@@ -624,8 +625,9 @@ After it, the two sides exchange these messages.
   starts and between games.
 - **Either way, `leave`:** the player left on purpose. The other player is told
   so, and no reconnection is attempted.
-- **Either way, `ping`:** every five seconds, to measure the round trip and
-  detect a dead connection.
+- **Either way, `ping` and `pong`:** send a numbered `ping` every five seconds.
+  Echo the number in a `pong` to measure the round trip. Three unanswered pings
+  count as a dropped connection.
 
 ```json
 { "act": { "n": 118, "action": { "tap": { "objects": [41],
@@ -637,6 +639,11 @@ After it, the two sides exchange these messages.
 The host is the only source of order. It applies actions one at a time in the
 order they arrive, its own player's included, and sends each seat its update
 before applying the next.
+
+A wrong invite secret closes the link without a reply. After checking the
+secret, the host reports a wire hash mismatch with a
+`{"mismatch":{"reason":"Both players need the same version of Beryl."}}` frame
+and closes the link.
 
 Updates are small. Across 1,946 updates recorded from engine games, the median
 is 12 KB of JSON and the 95th percentile 27 KB, which compress to 1.3 KB and 2.1
