@@ -2,7 +2,7 @@
 //! resolving spell or ability creates: each is an entry of the Effects store
 //! (`beryl_kernel`'s contract, "Stores"), which the layers and the rules read by kind.
 
-use beryl_card::{Modification, Objects, RuleChange};
+use beryl_card::{Amount, Modification, Objects, RuleChange};
 
 use crate::bitboard::Bitboard;
 use crate::event::Event;
@@ -127,9 +127,21 @@ pub(crate) fn instruction<L: Layout>(
         }
         return Ok(Outcome::acted_on(permanents));
     }
-    // The card table refuses an effect that sets a power to an amount.
-    let Some(change) = LayerChange::resolve(modification, you) else {
-        no_primitive(&modification)
+    let change = match modification {
+        // A base power and toughness are settled as the effect begins
+        // ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "If an effect
+        // requires information from the game (such as the number of creatures on the
+        // battlefield), the answer is determined only once, when the effect is applied."
+        Modification::SetBasePt(power, toughness) => {
+            let scene = run.scene();
+            let number = |amount: &Amount| i8::try_from(scene.amount(*amount)).unwrap_or(i8::MAX);
+            LayerChange::SetBasePt(number(power), number(toughness))
+        }
+        // The card table refuses an effect that sets a power alone to an amount.
+        modification => match LayerChange::resolve(modification, you) {
+            Some(change) => change,
+            None => no_primitive(&modification),
+        },
     };
     // One effect, with one timestamp, on the set as it is now
     // ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137): "An effect with an

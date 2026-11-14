@@ -17,7 +17,7 @@ pub use crate::tokens::TokenEntry;
 use beryl_kernel::mutate::Arrival;
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityKind, CastingKinds, FaceIx, Replacement, Types};
+use crate::card::{AbilityIx, AbilityKind, CastingKinds, FaceIx, Replacement, Types};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -289,8 +289,10 @@ fn enter_replacements<L: Layout>(
     let o = s.object(slot);
     let face = s.copiable(slot).turned(entry.face).face(t);
     let controller = entry.controller.unwrap_or(o.owner());
-    for ability in face.abilities {
-        if ability.kind() != AbilityKind::Replacement {
+    for (n, ability) in face.abilities.iter().enumerate() {
+        if ability.kind() != AbilityKind::Replacement
+            || !s.has_ability(slot, AbilityIx::new(n as u8))
+        {
             continue;
         }
         match ability.replacement() {
@@ -339,8 +341,10 @@ fn pay_life_to_enter<L: Layout>(
     let o = s.object(slot);
     let face = s.copiable(slot).turned(entry.face).face(t);
     let player = entry.controller.unwrap_or(o.owner());
-    for ability in face.abilities {
-        if let Replacement::EntersTappedUnlessPayLife(n) = ability.replacement() {
+    for (i, ability) in face.abilities.iter().enumerate() {
+        if let Replacement::EntersTappedUnlessPayLife(n) = ability.replacement()
+            && s.has_ability(slot, AbilityIx::new(i as u8))
+        {
             // The life is lost to the permanent's own replacement effect
             // ([CR 614.1c](https://yawgatog.com/resources/magic-rules/#R6141c): "Effects that
             // read ... "As [this permanent] enters . . . ," ... are replacement effects."),

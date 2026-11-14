@@ -8,7 +8,7 @@
 //!   of each mana symbol to a unit of mana from the pool or a mana ability read off the cards.
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityKind, CostAction, CostPart, ManaCost, Types};
+use crate::card::{AbilityIx, AbilityKind, CostAction, CostPart, ManaCost, Types};
 use crate::event::Sink;
 use crate::filter::Evaluate;
 use crate::fixed::Fixed;
@@ -126,11 +126,12 @@ fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Resul
         .iter()
         .filter(|&&slot| s.controller(slot) == player)
         .flat_map(|&slot| {
-            face(s, t, slot)
-                .abilities
-                .iter()
-                .filter(|a| a.kind() == AbilityKind::Activated)
-                .map(|a| a.cost().mana)
+            (0u8..)
+                .zip(face(s, t, slot).abilities)
+                .filter(move |&(i, a)| {
+                    a.kind() == AbilityKind::Activated && s.has_ability(slot, AbilityIx::new(i))
+                })
+                .map(|(_, a)| a.cost().mana)
         });
     let Ok(funds) = Funds::of(s, t, player) else {
         return Ok(());
@@ -206,7 +207,11 @@ fn reference_units<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Opti
         }
         let mut kinds = 0u8;
         let mut amount = None;
-        for a in face(s, t, slot).abilities {
+        for (i, a) in (0u8..).zip(face(s, t, slot).abilities) {
+            // A permanent that lost the ability has none to tap (CR 613.1f).
+            if !s.has_ability(slot, AbilityIx::new(i)) {
+                continue;
+            }
             // {T}, or {T} and sacrificing it, and nothing else.
             let tap_only = a.cost().mana.is_zero()
                 && a.cost().does(CostAction::Tap)

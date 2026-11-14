@@ -19,7 +19,7 @@ pub static CARD: CardDef = Printed::LeoninScimitar
         Ability::static_ability(&LayerSpec {
             affected: Objects::AttachedTo,
             condition: None,
-            modification: Modification::ModifyPt(1, 1),
+            modifications: &[Modification::ModifyPt(1, 1)],
         }),
         Ability::equip(mana("{1}")),
     ])

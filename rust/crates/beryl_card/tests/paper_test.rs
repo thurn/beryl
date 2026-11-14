@@ -398,7 +398,7 @@ const STATICS: [(&str, &str, LayerSpec); 1] = [
                 filter: CREATURES,
             },
             condition: None,
-            modification: Modification::ModifyPt(1, 1),
+            modifications: &[Modification::ModifyPt(1, 1)],
         },
     ),
 ];

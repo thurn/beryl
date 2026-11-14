@@ -41,14 +41,14 @@ pub enum Unapplied {
     /// permanent passes a filter, and the number of permanents that pass one, each filter
     /// one of what the layers read ([`read_by_the_layers`]).
     Condition,
-    /// A power is set to an amount by anything but a characteristic-defining ability: by a
-    /// static ability of another permanent or one with a condition, which apply in layer
-    /// 7b, or by a resolving spell or ability, which would lock the amount in as it begins
-    /// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)).
+    /// "Power is equal to [amount]" said by anything but a characteristic-defining ability:
+    /// by a static ability of another permanent or one with a condition, or by a resolving
+    /// spell or ability. Either sets a power alone in layer 7b, which the engine has only
+    /// as a base power and toughness together ([`Modification::SetBasePt`]).
     SetPower,
-    /// A power is defined as an amount the layers do not read as they apply: anything but
-    /// a number, a count of permanents by their characteristics and controllers, and a
-    /// multiple of one.
+    /// A power or base power and toughness is an amount the layers do not read as they
+    /// apply: anything but a number, a count of permanents by their characteristics and
+    /// controllers, and a multiple of one.
     Amount,
 }
 
@@ -79,26 +79,51 @@ pub fn applied(spec: &LayerSpec) -> Result<(), Unapplied> {
         Some(condition) if !reads(condition) => return Err(Unapplied::Condition),
         _ => {}
     }
-    defined_power(spec).map(|_| ())
+    read_amounts(spec)
 }
 
-/// The amount a static ability defines its permanent's power as, if it does
-/// ([`Modification::SetPower`]), or why the layers cannot read it. They have one path for
-/// it, a characteristic-defining ability's
+/// Whether the layers can read each part of a static ability whose amount they read as it
+/// applies, or why not. "Power is equal to [amount]" ([`Modification::SetPower`]) has one
+/// path, a characteristic-defining ability's
 /// ([CR 604.3a](https://yawgatog.com/resources/magic-rules/#R6043a)): the ability "defines
 /// an object's colors, subtypes, power, or toughness", "does not directly affect the
 /// characteristics of any other objects" and "does not set the values of such
 /// characteristics only if certain conditions are met". Its amount is read as layer 7a
-/// applies, against what layers 2 to 6 made of every permanent.
-pub fn defined_power(spec: &LayerSpec) -> Result<Option<&'static Amount>, Unapplied> {
-    let Modification::SetPower(amount) = spec.modification else {
-        return Ok(None);
-    };
-    if !matches!(spec.affected, Objects::This) || spec.condition.is_some() {
-        return Err(Unapplied::SetPower);
+/// applies, against what layers 2 to 6 made of every permanent. "Has base power and
+/// toughness [amount]" ([`Modification::SetBasePt`]) applies in layer 7b on any set, and its
+/// amounts are read for each permanent as that layer applies.
+pub fn read_amounts(spec: &LayerSpec) -> Result<(), Unapplied> {
+    for modification in spec.modifications {
+        match *modification {
+            Modification::SetPower(amount) => {
+                if !matches!(spec.affected, Objects::This) || spec.condition.is_some() {
+                    return Err(Unapplied::SetPower);
+                }
+                read_as_the_layer_applies(amount)?;
+            }
+            Modification::SetBasePt(power, toughness) => {
+                read_as_the_layer_applies(power)?;
+                read_as_the_layer_applies(toughness)?;
+            }
+            _ => {}
+        }
     }
-    read_as_the_layer_applies(amount)?;
-    Ok(Some(amount))
+    Ok(())
+}
+
+/// The amounts the part at `part` of a static ability's continuous effect reads as its
+/// layer applies: the power of a [`Modification::SetPower`], or the power and toughness of
+/// a [`Modification::SetBasePt`].
+///
+/// # Panics
+///
+/// For a part that reads no amount, which the layers list as a settled change instead.
+pub fn amounts_of(spec: &LayerSpec, part: u8) -> (&'static Amount, Option<&'static Amount>) {
+    match spec.modifications[usize::from(part)] {
+        Modification::SetPower(amount) => (amount, None),
+        Modification::SetBasePt(power, toughness) => (power, Some(toughness)),
+        _ => unreachable!("the layers read the amounts of a part that has some"),
+    }
 }
 
 /// Refuses an amount the layers cannot read as they apply: they have each permanent's
@@ -333,7 +358,7 @@ mod tests {
         LayerSpec {
             affected,
             condition,
-            modification: GAINS_FLYING,
+            modifications: &[GAINS_FLYING],
         }
     }
 

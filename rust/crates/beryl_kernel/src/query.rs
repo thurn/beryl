@@ -9,14 +9,14 @@
 //! [`crate::Observation::card`] is the other door, for a player's view: nothing when the
 //! viewer does not know the card.
 
-use beryl_card::{CardDef, Face, FaceIx, Zone};
+use beryl_card::{AbilityIx, CardDef, Face, FaceIx, Zone};
 
 use crate::bitboard::Bitboard;
 use crate::event::{Listens, Replaces};
 use crate::ids::{CardId, CardIx, Seat};
 use crate::layout::{Layout, Small};
-use crate::object::CombatRole;
 use crate::object::Object;
+use crate::object::{AbilityMask, CombatRole};
 use crate::rule_changes::Rules;
 use crate::state::State;
 use crate::subtypes::GameSubtypes;
@@ -343,6 +343,58 @@ impl<L: Layout> State<L> {
         } else {
             t.def(o.card).front().cost.mana_value()
         }
+    }
+
+    /// Whether the object in `slot` has the ability at `ability` of its face up: the one
+    /// question every reader of an ability asks, whatever kind it is (triggered, activated,
+    /// static or mana). A permanent may have lost it to an ability-removing effect
+    /// ([CR 613.1f]): "Layer 6: Ability-adding effects, keyword counters, ability-removing
+    /// effects, and effects that say an object can't have an ability are applied." An object
+    /// in any other zone has no layer results, and the cards' effects change only
+    /// permanents, so it has every ability of its face.
+    ///
+    /// With no permanent missing an ability, as most games go, one test of a flag
+    /// the layers store.
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, for a permanent that lost an ability while the layer results are
+    /// stale.
+    ///
+    /// [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
+    #[inline]
+    pub fn has_ability(&self, slot: L::Slot, ability: AbilityIx) -> bool {
+        !self.flags.abilities_lost || self.keeps(slot, ability)
+    }
+
+    /// Whether the object in `slot` has every ability of its face up: [`State::has_ability`]
+    /// asked of all of them at once, for a reader whose card table's facts stand for the
+    /// whole face, as the mana solver's do.
+    #[inline]
+    pub fn has_every_ability(&self, slot: L::Slot) -> bool {
+        !self.flags.abilities_lost || self.keeps_all(slot)
+    }
+
+    /// [`State::has_every_ability`] when some permanent has lost an ability. Out of line:
+    /// most games never come here.
+    #[cold]
+    #[inline(never)]
+    fn keeps_all(&self, slot: L::Slot) -> bool {
+        self.battlefield_position(slot).is_none_or(|i| {
+            debug_assert!(!self.flags.derived_dirty, "derived read while dirty");
+            { self.derived[i].lost }.is_empty()
+        })
+    }
+
+    /// [`State::has_ability`] when some permanent has lost an ability. Out of line: most
+    /// games never come here.
+    #[cold]
+    #[inline(never)]
+    fn keeps(&self, slot: L::Slot, ability: AbilityIx) -> bool {
+        self.battlefield_position(slot).is_none_or(|i| {
+            debug_assert!(!self.flags.derived_dirty, "derived read while dirty");
+            !{ self.derived[i].lost }.contains(ability)
+        })
     }
 
     /// Who controls the object in `slot`: a permanent's controller after continuous effects

@@ -25,7 +25,7 @@ pub static CARD: CardDef = Printed::GloriousAnthem
             filter: Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),
         },
         condition: None,
-        modification: Modification::ModifyPt(1, 1),
+        modifications: &[Modification::ModifyPt(1, 1)],
     })])
     .card();
 

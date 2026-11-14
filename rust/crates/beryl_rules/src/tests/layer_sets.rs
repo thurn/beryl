@@ -64,7 +64,7 @@ static ANTHEM: CardDef = CardDef {
             filter: YOUR_CREATURES,
         },
         condition: None,
-        modification: Modification::ModifyPt(1, 1),
+        modifications: &[Modification::ModifyPt(1, 1)],
     })])],
     tokens: &[],
 };
@@ -78,7 +78,7 @@ static ANIMATOR: CardDef = CardDef {
             filter: YOUR_ARTIFACTS,
         },
         condition: None,
-        modification: Modification::AddTypes(Types::CREATURE),
+        modifications: &[Modification::AddTypes(Types::CREATURE)],
     })])],
     tokens: &[],
 };
@@ -92,7 +92,7 @@ static FORGE: CardDef = CardDef {
             filter: YOUR_CREATURES,
         },
         condition: None,
-        modification: Modification::AddTypes(Types::ARTIFACT),
+        modifications: &[Modification::AddTypes(Types::ARTIFACT)],
     })])],
     tokens: &[],
 };
@@ -110,7 +110,7 @@ static WALL: CardDef = CardDef {
             ]),
         },
         condition: None,
-        modification: Modification::ModifyPt(0, 3),
+        modifications: &[Modification::ModifyPt(0, 3)],
     })])],
     tokens: &[],
 };
@@ -134,12 +134,12 @@ static CAPTAIN: CardDef = CardDef {
                     Comparison::AtLeast,
                     Amount::Fixed(2),
                 )),
-                modification: Modification::ModifyPt(2, 0),
+                modifications: &[Modification::ModifyPt(2, 0)],
             }),
             Ability::static_ability(&LayerSpec {
                 affected: Objects::This,
                 condition: Some(Condition::Is(Objects::This, Filter::Types(Types::ARTIFACT))),
-                modification: Modification::ModifyPt(0, 1),
+                modifications: &[Modification::ModifyPt(0, 1)],
             }),
         ],
         ..Face::EMPTY

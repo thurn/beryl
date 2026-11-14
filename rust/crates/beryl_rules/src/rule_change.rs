@@ -171,7 +171,8 @@ fn maker_of<L: Layout>(
         let makes = ability.kind() == AbilityKind::Static
             && ability
                 .rule()
-                .is_some_and(|named| std::ptr::eq(named, rule));
+                .is_some_and(|named| std::ptr::eq(named, rule))
+            && s.has_ability(slot, AbilityIx::new(index));
         makes.then_some((AbilityIx::new(index), ability))
     })
 }

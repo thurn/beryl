@@ -2,7 +2,8 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, CostAction, Face, Keywords, ManaCost, Replacement, Timing, Types,
+    Ability, AbilityIx, AbilityKind, CostAction, Face, Keywords, ManaCost, Replacement, Timing,
+    Types,
 };
 use crate::fixed::Full;
 use crate::ids::Seat;
@@ -62,8 +63,11 @@ pub(super) fn later_costs<L: Layout>(
         if s.controller(slot) != player || o.is_tapped() {
             continue;
         }
-        for a in s.copiable(slot).face(t).abilities {
-            if a.kind() == AbilityKind::Activated && !a.is_loyalty() {
+        for (i, a) in s.copiable(slot).face(t).abilities.iter().enumerate() {
+            if a.kind() == AbilityKind::Activated
+                && !a.is_loyalty()
+                && s.has_ability(slot, AbilityIx::new(i as u8))
+            {
                 add(Later {
                     cost: a.cost().mana.with_x(0),
                     taps: a.cost().does(CostAction::Tap).then_some(slot),
@@ -261,8 +265,12 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
         if s.controller(slot) != player || o.is_tapped() {
             continue;
         }
-        for a in s.copiable(slot).face(t).abilities {
-            if a.kind() == AbilityKind::Activated && !a.is_loyalty() && activatable(a) {
+        for (i, a) in s.copiable(slot).face(t).abilities.iter().enumerate() {
+            if a.kind() == AbilityKind::Activated
+                && !a.is_loyalty()
+                && activatable(a)
+                && s.has_ability(slot, AbilityIx::new(i as u8))
+            {
                 ahead.add(
                     a.cost().mana,
                     a.cost().does(CostAction::Tap).then_some(slot),

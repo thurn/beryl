@@ -422,7 +422,7 @@ impl Ability {
         Ability::static_ability(&LayerSpec {
             affected: Objects::This,
             condition: Some(IMPENDING),
-            modification: Modification::RemoveTypes(Types::CREATURE),
+            modifications: &[Modification::RemoveTypes(Types::CREATURE)],
         })
     }
 
@@ -762,7 +762,7 @@ mod tests {
         let _ = Ability::static_ability(&LayerSpec {
             affected: Objects::This,
             condition: Some(Condition::Did),
-            modification: Modification::AddKeywords(Keywords::FLYING),
+            modifications: &[Modification::AddKeywords(Keywords::FLYING)],
         });
     }
 

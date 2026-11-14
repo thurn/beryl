@@ -115,6 +115,7 @@ fn replacement<L: Layout>(
             (0u8..).zip(abilities).find_map(|(index, a)| {
                 let ability = AbilityIx::new(index);
                 if !replacement::replaces_draws(a)
+                    || !s.has_ability(slot, ability)
                     || !interpret::static_condition_holds(s, t, slot, ability, a)
                 {
                     return None;

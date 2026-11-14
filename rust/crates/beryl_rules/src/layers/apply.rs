@@ -8,25 +8,79 @@ use beryl_card::Amount;
 
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityIx, FaceIx, Objects};
+use crate::card::{Colors, Keywords};
 use crate::filter::{self, Filter};
+use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::Layout;
-use crate::state::{Derived, GrantRef, LayerChange};
+use crate::state::{AbilityMask, Derived, GrantRef, LayerChange};
 use crate::table::GameTable;
 
 /// Applies `change` to each permanent in `members`, in battlefield order. One change to
 /// each member commutes with the others, so the order is nothing to the results.
+///
+/// `you` is the controller of the permanent with the static ability the change is part of,
+/// as the layers so far left it, for an amount the change reads ([`LayerChange::Read`]):
+/// read once, since no amount the layers read names the permanent it changes.
+///
+/// [`Full`] if a removal of abilities had no place in a member's mask.
 pub(super) fn apply_to_members<L: Layout>(
     s: &mut Rederive<'_, L>,
     t: &GameTable,
     members: Bitboard<L::Slot>,
     source: L::Card,
     change: LayerChange,
-) {
+    you: Option<Seat>,
+) -> Result<(), Full> {
+    if members.is_empty() {
+        return Ok(());
+    }
+    let change = match change {
+        LayerChange::Read {
+            face,
+            ability,
+            part,
+            ..
+        } => read(s, t, source, face, ability, part, you),
+        change => change,
+    };
+    let mut applied = Ok(());
     for i in 0..s.battlefield().len() {
         if members.contains(s.battlefield()[i]) {
-            apply(s, t, i, source, change);
+            applied = applied.and(apply(s, t, i, source, change));
         }
+    }
+    applied
+}
+
+/// The change the part at `part` of the static ability at `ability` of the face `face` of
+/// `source` makes, its amounts read now for `you`, the controller of the permanent with the
+/// ability: a characteristic-defining power ([CR 613.4a]): "Layer 7a: Effects from
+/// characteristic-defining abilities that define power and/or toughness are applied", or a
+/// base power and toughness ([CR 613.4b]): "Layer 7b: Effects that set power and/or
+/// toughness to a specific number or value are applied." The layers before are done for
+/// every permanent by now, so a count sees each one's final types and controller.
+///
+/// [CR 613.4a]: https://yawgatog.com/resources/magic-rules/#R6134a
+/// [CR 613.4b]: https://yawgatog.com/resources/magic-rules/#R6134b
+#[inline(never)]
+fn read<L: Layout>(
+    s: &Rederive<'_, L>,
+    t: &GameTable,
+    source: L::Card,
+    face: FaceIx,
+    ability: AbilityIx,
+    part: u8,
+    you: Option<Seat>,
+) -> LayerChange {
+    let said_by = &t.def(source).face(face).abilities[ability.index()];
+    let (Some(spec), Some(you)) = (said_by.layer(), you) else {
+        unreachable!("a static ability's part names its ability and its controller");
+    };
+    let number = |amount| i8::try_from(defined(s, t, amount, you)).unwrap_or(i8::MAX);
+    match static_ability::amounts_of(spec, part) {
+        (power, None) => LayerChange::DefinedPower(number(power)),
+        (power, Some(toughness)) => LayerChange::SetBasePt(number(power), number(toughness)),
     }
 }
 
@@ -141,44 +195,31 @@ impl<L: Layout> LayerResults for SoFar<'_, '_, L> {
     }
 }
 
-/// Applies one change to the permanent at battlefield index `i`.
+/// Applies one change to the permanent at battlefield index `i`. [`Full`] if it removes an
+/// ability the permanent's mask has no place for ([`AbilityMask`]): all the abilities of a
+/// face with more than the mask is wide, or one past its width.
 pub(super) fn apply<L: Layout>(
     s: &mut Rederive<'_, L>,
     t: &GameTable,
     i: usize,
     source: L::Card,
     change: LayerChange,
-) {
+) -> Result<(), Full> {
     match change {
-        LayerChange::DefinedPower { face, ability } => {
-            define_power(s, t, i, source, face, ability);
+        LayerChange::LoseAllAbilities
+            if s.copiable(s.battlefield()[i]).face(t).abilities.len() > L::AbilityMask::WIDTH =>
+        {
+            return Err(Full);
         }
-        change => modify(t, s.results(), i, source, change),
+        LayerChange::LoseAbility(ability) => {
+            let d = &mut s.results()[i];
+            d.lost = d.lost.with(ability).ok_or(Full)?;
+            return Ok(());
+        }
+        _ => {}
     }
-}
-
-/// Sets the power of the permanent at battlefield index `i` to the amount the static ability
-/// at `ability` of the face `face` of `source` defines it as ([CR 613.4a]): "Layer 7a:
-/// Effects from characteristic-defining abilities that define power and/or toughness are
-/// applied." Layers 2 to 6 are done for every permanent by now, so a count sees each one's
-/// final types and controller.
-///
-/// [CR 613.4a]: https://yawgatog.com/resources/magic-rules/#R6134a
-#[inline(never)]
-fn define_power<L: Layout>(
-    s: &mut Rederive<'_, L>,
-    t: &GameTable,
-    i: usize,
-    source: L::Card,
-    face: FaceIx,
-    ability: AbilityIx,
-) {
-    let said_by = &t.def(source).face(face).abilities[ability.index()];
-    let Some(Ok(Some(amount))) = said_by.layer().map(static_ability::defined_power) else {
-        unreachable!("the card table has only the defined powers the layers read");
-    };
-    let power = defined(s, t, amount, s.rows()[i].controller);
-    s.results()[i].power = i8::try_from(power).unwrap_or(i8::MAX);
+    modify(t, s.results(), i, source, change);
+    Ok(())
 }
 
 /// Applies one change that reads nothing but the permanent it changes to the permanent at
@@ -219,25 +260,56 @@ fn modify<L: Layout>(
         // effects, and effects that say an object can't have an ability are applied."
         LayerChange::AddKeywords(k) => d.keywords = d.keywords.union(k),
         LayerChange::Grant(grant) => {
-            if let Some(free) = d.granted.iter_mut().find(|g| g.is_none()) {
+            let mut granted = d.granted;
+            if let Some(free) = granted.iter_mut().find(|g| g.is_none()) {
                 *free = Some(GrantRef {
                     card: source,
                     grant,
                 });
             }
+            d.granted = granted;
+        }
+        // CR 613.1e: "Layer 5: Color-changing effects are applied."
+        LayerChange::SetColors(colors) => d.colors = colors,
+        LayerChange::AddColors(colors) => d.colors = d.colors.union(colors),
+        // CR 613.1f: an ability-removing effect removes the abilities it has now: its
+        // face's and those granted by effects applied before it in timestamp order. An
+        // effect applied after it still adds its own.
+        LayerChange::LoseAllAbilities => {
+            d.lost = L::AbilityMask::ALL;
+            d.keywords = Keywords::NONE;
+            d.protection = Colors::NONE;
+            d.granted = [None; 4];
+        }
+        LayerChange::LoseAbility(_) => unreachable!("applied by `apply`"),
+        // CR 613.4a: "Layer 7a: Effects from characteristic-defining abilities that define
+        // power and/or toughness are applied."
+        LayerChange::DefinedPower(power) => d.power = power,
+        // CR 613.4b: "Layer 7b: Effects that set power and/or toughness to a specific
+        // number or value are applied."
+        LayerChange::SetBasePt(power, toughness) => {
+            d.power = power;
+            d.toughness = toughness;
         }
         LayerChange::ModifyPt(p, t) => {
             d.power = d.power.saturating_add(p);
             d.toughness = d.toughness.saturating_add(t);
         }
-        LayerChange::DefinedPower { .. } => unreachable!("applied by `define_power`"),
+        // CR 613.4d: "Layer 7d: Effects that switch a creature's power and toughness are
+        // applied."
+        LayerChange::SwitchPt => {
+            let (power, toughness) = (d.power, d.toughness);
+            d.power = toughness;
+            d.toughness = power;
+        }
+        LayerChange::Read { .. } => unreachable!("settled by `apply_to_members`"),
     }
 }
 
 /// The value of an amount a characteristic-defining ability defines, read as its layer
 /// applies for the permanent's controller `you`: of the permanents as layers 2 to 6 left
 /// them, so a count sees each one's final types and controller. The card table has only
-/// amounts read this way (`beryl_kernel`'s `static_ability::defined_power`).
+/// amounts read this way (`beryl_kernel`'s `static_ability::read_amounts`).
 fn defined<L: Layout>(s: &Rederive<'_, L>, t: &GameTable, amount: &Amount, you: Seat) -> usize {
     match *amount {
         Amount::Fixed(n) => usize::from(n),

@@ -46,21 +46,22 @@ const fn creature(abilities: &'static [Ability]) -> Face {
     }
 }
 
-/// A static ability of the permanent itself, with no condition, that sets its power.
-const fn power_is(amount: &'static Amount) -> LayerSpec {
+/// A static ability of the permanent itself, with no condition, that sets its power:
+/// `sets` is that one modification, [`Modification::SetPower`].
+const fn power_is(sets: &'static [Modification]) -> LayerSpec {
     LayerSpec {
         affected: Objects::This,
         condition: None,
-        modification: Modification::SetPower(amount),
+        modifications: sets,
     }
 }
 
 /// "This creature's power is equal to twice the number of artifacts you control."
 static SMITH: CardDef = CardDef {
     name: "Test Smith",
-    faces: &[creature(&[Ability::static_ability(&power_is(
-        &Amount::Times(2, &ARTIFACTS),
-    ))])],
+    faces: &[creature(&[Ability::static_ability(&power_is(&[
+        Modification::SetPower(&Amount::Times(2, &ARTIFACTS)),
+    ]))])],
     tokens: &[],
 };
 
@@ -70,7 +71,7 @@ static MANTLE: CardDef = CardDef {
     name: "Test Mantle",
     faces: &[creature(&[Ability::static_ability(&LayerSpec {
         affected: Objects::AttachedTo,
-        ..power_is(&ARTIFACTS)
+        ..power_is(&[Modification::SetPower(&ARTIFACTS)])
     })])],
     tokens: &[],
 };
@@ -79,12 +80,12 @@ static MANTLE: CardDef = CardDef {
 /// have in hand as they apply.
 static SCHOLAR: CardDef = CardDef {
     name: "Test Scholar",
-    faces: &[creature(&[Ability::static_ability(&power_is(
-        &Amount::Count(&Objects::All {
+    faces: &[creature(&[Ability::static_ability(&power_is(&[
+        Modification::SetPower(&Amount::Count(&Objects::All {
             zone: Zone::Hand,
             filter: Filter::Whose(&Players::You),
-        }),
-    ))])],
+        })),
+    ]))])],
     tokens: &[],
 };
 

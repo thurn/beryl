@@ -18,8 +18,6 @@
 //! [`State::rule_applies`] is the one question about a rule change, whether a static
 //! ability or one of these effects makes it.
 
-use beryl_card::{AbilityIx, FaceIx, GrantIx, Keywords, Layer, Modification, Subtype, Types};
-
 use crate::fixed::Full;
 use crate::ids::{CardId, Seat};
 use crate::layout::{Layout, Queue, Small, Table};
@@ -30,10 +28,12 @@ use crate::state::State;
 use crate::store::{Duration, Ended};
 use crate::table::GameTable;
 
+mod change;
 pub mod regeneration;
 mod sets;
 mod store;
 
+pub use change::{LayerChange, read_layer};
 use sets::Sets;
 pub use sets::{LockedIn, SETS};
 
@@ -182,75 +182,6 @@ impl<L: Layout> Affects<L> {
         match self {
             Affects::Object { slot, incarnation } => Some(ObjectRef { slot, incarnation }),
             Affects::Player(_) | Affects::Set(_) => None,
-        }
-    }
-}
-
-/// A change to a permanent in a layer, with every word of the card that wrote it settled:
-/// the resolved form of `beryl_card`'s [`Modification`], as [`Duration`] is of its
-/// `Duration`. The layer it applies in follows from the change
-/// ([CR 613.1](https://yawgatog.com/resources/magic-rules/#R6131)).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum LayerChange {
-    /// Layer 2: this player controls it.
-    Control(Seat),
-    /// Layer 4: "becomes [types] in addition to its other types".
-    AddTypes(Types),
-    /// Layer 4: "isn't a [type]".
-    RemoveTypes(Types),
-    /// Layer 4: "is a [types] and loses all other card types".
-    SetTypes(Types),
-    /// Layer 4: "is a [subtype]".
-    AddSubtype(Subtype),
-    /// Layer 6: "gains [keywords]".
-    AddKeywords(Keywords),
-    /// Layer 6: "has [ability]", the ability at this index of the effect source's front
-    /// face's grants.
-    Grant(GrantIx),
-    /// Layer 7a: "power is equal to [amount]", the amount a static ability of the effect
-    /// source defines it as (`beryl_card`'s `Modification::SetPower`): the ability at this
-    /// index of this face of the source. The change names the expression and holds no
-    /// number, since the layers read it as they apply
-    /// ([CR 613.4a](https://yawgatog.com/resources/magic-rules/#R6134a)).
-    DefinedPower { face: FaceIx, ability: AbilityIx },
-    /// Layer 7c: "gets +X/+Y".
-    ModifyPt(i8, i8),
-}
-
-impl LayerChange {
-    /// What `modification` is for an ability whose controller is `you`: "gain control"
-    /// names that player. None for one whose amount the layers read as they apply, which
-    /// only the place of the static ability that says it names
-    /// ([`LayerChange::DefinedPower`]).
-    #[inline]
-    pub fn resolve(modification: Modification, you: Seat) -> Option<LayerChange> {
-        Some(match modification {
-            Modification::Control => LayerChange::Control(you),
-            Modification::AddTypes(types) => LayerChange::AddTypes(types),
-            Modification::RemoveTypes(types) => LayerChange::RemoveTypes(types),
-            Modification::SetTypes(types) => LayerChange::SetTypes(types),
-            Modification::AddSubtype(subtype) => LayerChange::AddSubtype(subtype),
-            Modification::AddKeywords(keywords) => LayerChange::AddKeywords(keywords),
-            Modification::Grant(grant) => LayerChange::Grant(grant),
-            Modification::SetPower(_) => return None,
-            Modification::ModifyPt(power, toughness) => LayerChange::ModifyPt(power, toughness),
-        })
-    }
-
-    /// The layer or sublayer it applies in
-    /// ([CR 613.1](https://yawgatog.com/resources/magic-rules/#R6131),
-    /// [CR 613.4](https://yawgatog.com/resources/magic-rules/#R6134)).
-    #[inline]
-    pub fn layer(self) -> Layer {
-        match self {
-            LayerChange::Control(_) => Layer::Control,
-            LayerChange::AddTypes(_)
-            | LayerChange::RemoveTypes(_)
-            | LayerChange::SetTypes(_)
-            | LayerChange::AddSubtype(_) => Layer::Type,
-            LayerChange::AddKeywords(_) | LayerChange::Grant(_) => Layer::Ability,
-            LayerChange::DefinedPower { .. } => Layer::PtDefining,
-            LayerChange::ModifyPt(..) => Layer::PtModifying,
         }
     }
 }

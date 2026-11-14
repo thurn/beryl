@@ -148,7 +148,7 @@ static ANTHEM: CardDef = CardDef {
                 filter: Filter::Whose(&Players::You),
             },
             condition: None,
-            modification: Modification::AddKeywords(Keywords::FLYING),
+            modifications: &[Modification::AddKeywords(Keywords::FLYING)],
         })],
         ..Face::EMPTY
     }],

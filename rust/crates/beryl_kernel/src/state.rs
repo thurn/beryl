@@ -9,11 +9,13 @@ pub use crate::counters::{
 pub use crate::effects::{
     Affects, Continuous, ContinuousEffect, CostChange, EFFECTS, Effects, EffectsOn, LayerChange,
     LockedIn, MoveReplacement, Payload, Permanents, Permission, Permitted, SETS, Subject,
+    read_layer,
 };
 pub use crate::last_known::{LAST_KNOWN, LastKnown};
 pub use crate::memos::{MEMOS, Memo, Memos, MemosOf};
 pub use crate::object::{
-    AttackTarget, CombatRole, Derived, Flag, GrantRef, Object, ObjectFlags, ObjectRef, SlotSet,
+    AbilityMask, AttackTarget, CombatRole, Derived, Flag, GrantRef, Object, ObjectFlags, ObjectRef,
+    SlotSet,
 };
 pub use crate::pending::{CastKind, CastStep, Casting, PayingObjects, Pending, Resolving};
 pub use crate::player::{ManaPool, MulliganStatus, Player};
@@ -106,6 +108,9 @@ pub struct Flags {
     /// A change since `derived` was last computed may have changed a layer result. Set by
     /// the mutators that change a layer input and cleared by [`State::rederive`] alone.
     pub(crate) derived_dirty: bool,
+    /// Some permanent has lost an ability of its face as the layers last applied: without
+    /// one, [`State::has_ability`] answers yes with no read of the layer results.
+    pub(crate) abilities_lost: bool,
 }
 
 /// The whole game, stored as its [`Layout`] says: as [`Small`], copied with one `memcpy`
@@ -391,6 +396,17 @@ impl<L: Layout> State<L> {
             .iter()
             .copied()
             .zip(self.derived.as_slice().iter())
+    }
+
+    /// The layer results, one for each permanent, in battlefield order.
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, if the layer results are stale.
+    #[inline]
+    pub fn layer_results(&self) -> &[Derived<L>] {
+        debug_assert!(!self.flags.derived_dirty, "derived read while dirty");
+        &self.derived.as_slice()[..self.battlefield.len()]
     }
 
     /// The kinds of event the permanents on the battlefield have triggered abilities for, as

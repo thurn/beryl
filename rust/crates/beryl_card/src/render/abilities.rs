@@ -6,7 +6,7 @@ use super::Ctx;
 use super::effects::says_nothing;
 use super::filters::{Kind, zone_name};
 use super::words::{
-    capitalized, counted, keywords, list, mana_text, number, pt_change, sentence, types,
+    capitalized, colors, counted, keywords, list, mana_text, number, pt_change, sentence, types,
     with_article,
 };
 use crate::ability::{Ability, AbilityKind, Behavior, Timing};
@@ -393,8 +393,6 @@ impl Ctx {
     /// 5" ([CR 611.3](https://yawgatog.com/resources/magic-rules/#R6113)).
     fn layered(&mut self, layer: &LayerSpec) -> String {
         let plural = self.is_plural(layer.affected);
-        let has = if plural { "have" } else { "has" };
-        let is = if plural { "are" } else { "is" };
         let mut who = self.objects(layer.affected);
         // A static ability over the permanents some players control names them with no
         // "all": "creatures you control get +1/+1", but "all creatures have flying".
@@ -407,36 +405,99 @@ impl Ctx {
         {
             who = rest.to_owned();
         }
-        match layer.modification {
-            Modification::Control => format!("you control {who}"),
+        // One effect with parts in several layers is one sentence, its subject once: "all
+        // creatures lose all abilities and have base power and toughness 1/1".
+        let mut clauses = Vec::new();
+        let mut predicates = Vec::new();
+        for &modification in layer.modifications {
+            match self.layered_part(modification, &who, plural) {
+                Part::Clause(clause) => clauses.push(clause),
+                Part::Predicate(predicate) => predicates.push(predicate),
+            }
+        }
+        if !predicates.is_empty() {
+            clauses.push(format!("{who} {}", list(&predicates, "and")));
+        }
+        list(&clauses, "and")
+    }
+
+    /// One part of a static ability's continuous effect, said of `who`.
+    fn layered_part(&mut self, modification: Modification, who: &str, plural: bool) -> Part {
+        let verb =
+            |single: &'static str, several: &'static str| if plural { several } else { single };
+        let (has, is) = (verb("has", "have"), verb("is", "are"));
+        Part::Predicate(match modification {
+            Modification::Control => return Part::Clause(format!("you control {who}")),
+            Modification::SetPower(amount) => {
+                return Part::Clause(format!(
+                    "{} power is equal to {}",
+                    possessive(who),
+                    self.amount(*amount)
+                ));
+            }
             Modification::AddTypes(set) => {
-                format!("{who} {is} {} in addition to its other types", a_types(set))
+                format!("{is} {} in addition to its other types", a_types(set))
             }
-            Modification::RemoveTypes(set) => {
-                format!("{who} {}n't {}", is, a_types(set))
-            }
+            Modification::RemoveTypes(set) => format!("{is}n't {}", a_types(set)),
             Modification::SetTypes(set) => {
-                format!("{who} {is} {} and loses all other card types", a_types(set))
+                format!("{is} {} and loses all other card types", a_types(set))
             }
             Modification::AddSubtype(subtype) => format!(
-                "{who} {is} {} in addition to its other types",
+                "{is} {} in addition to its other types",
                 with_article(subtype.name())
             ),
-            Modification::AddKeywords(set) => {
-                format!("{who} {has} {}", list(&keywords(set), "and"))
+            Modification::AddKeywords(set) => format!("{has} {}", list(&keywords(set), "and")),
+            Modification::Grant(ix) => format!("{has} {}", self.granted(ix)),
+            Modification::ModifyPt(power, toughness) => {
+                format!("{} {}", verb("gets", "get"), pt_change(power, toughness))
             }
-            Modification::Grant(ix) => format!("{who} {has} {}", self.granted(ix)),
-            Modification::SetPower(amount) => {
+            Modification::LoseAllAbilities => format!("{} all abilities", verb("loses", "lose")),
+            Modification::LoseAbility(ix) => {
+                format!("{} {}", verb("loses", "lose"), self.own_ability(ix))
+            }
+            Modification::SetColors(set) => format!("{is} {}", list(&colors(set), "and")),
+            Modification::AddColors(set) => format!(
+                "{is} {} in addition to its other colors",
+                list(&colors(set), "and")
+            ),
+            Modification::SetBasePt(power, toughness) => {
+                format!("{has} {}", self.base_pt(*power, *toughness))
+            }
+            Modification::SwitchPt => {
                 format!(
-                    "{} power is equal to {}",
-                    possessive(&who),
-                    self.amount(*amount)
+                    "{has} {} power and toughness switched",
+                    verb("its", "their")
                 )
             }
-            Modification::ModifyPt(power, toughness) => {
-                let gets = if plural { "get" } else { "gets" };
-                format!("{who} {gets} {}", pt_change(power, toughness))
-            }
+        })
+    }
+
+    /// "Base power and toughness 1/1", or the amounts in words when either is not a number
+    /// ([CR 613.4b](https://yawgatog.com/resources/magic-rules/#R6134b)).
+    fn base_pt(&mut self, power: Amount, toughness: Amount) -> String {
+        match (power, toughness) {
+            (Amount::Fixed(p), Amount::Fixed(t)) => format!("base power and toughness {p}/{t}"),
+            (p, t) if p == t => format!(
+                "base power and base toughness each equal to {}",
+                self.amount(p)
+            ),
+            (p, t) => format!(
+                "base power {} and base toughness {}",
+                self.amount(p),
+                self.amount(t)
+            ),
+        }
+    }
+
+    /// The ability at `ix` of the face being rendered, in quotation marks, as "loses" names
+    /// it.
+    fn own_ability(&mut self, ix: crate::AbilityIx) -> String {
+        match self.face.and_then(|face| face.abilities.get(ix.index())) {
+            Some(ability) => match Ctx::keyword_line(ability) {
+                Some(keyword) => super::words::uncapitalized(&keyword),
+                None => "that ability".to_owned(),
+            },
+            None => "[an ability]".to_owned(),
         }
     }
 
@@ -500,6 +561,28 @@ impl Ctx {
                     pt_change(power, toughness)
                 )
             }
+            Modification::LoseAllAbilities => {
+                format!("{who} {} all abilities", verb("loses", "lose"))
+            }
+            Modification::LoseAbility(ix) => {
+                format!("{who} {} {}", verb("loses", "lose"), self.own_ability(ix))
+            }
+            Modification::SetColors(set) => format!(
+                "{who} {} {}",
+                verb("becomes", "become"),
+                list(&colors(set), "and")
+            ),
+            Modification::AddColors(set) => format!(
+                "{who} {} {} in addition to its other colors",
+                verb("becomes", "become"),
+                list(&colors(set), "and")
+            ),
+            Modification::SetBasePt(power, toughness) => format!(
+                "{who} {} {}",
+                verb("has", "have"),
+                self.base_pt(*power, *toughness)
+            ),
+            Modification::SwitchPt => format!("switch {} power and toughness", possessive(&who)),
         };
         self.plural = plural;
         text
@@ -614,6 +697,13 @@ pub(super) fn sentences(clauses: &[String]) -> String {
 }
 
 /// Card types with their article: "an artifact creature".
+/// One part of a static ability's continuous effect as words: a whole clause, or what is
+/// said of the permanents it affects, which several parts share one subject for.
+enum Part {
+    Clause(String),
+    Predicate(String),
+}
+
 fn a_types(set: crate::Types) -> String {
     with_article(&types(set).join(" "))
 }

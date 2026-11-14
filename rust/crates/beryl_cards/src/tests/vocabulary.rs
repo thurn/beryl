@@ -109,11 +109,9 @@ impl Entries {
             self.add(format!("replacement {replacement}"), by, card);
         }
         if let Some(layer) = ability.layer() {
-            self.add(
-                format!("modification {}", variant(&layer.modification)),
-                by,
-                card,
-            );
+            for modification in layer.modifications {
+                self.add(format!("modification {}", variant(modification)), by, card);
+            }
         }
     }
 }

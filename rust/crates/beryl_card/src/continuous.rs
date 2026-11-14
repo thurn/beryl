@@ -1,10 +1,10 @@
 //! Continuous effects: what a static ability does all the time, and the replacement effects
 //! and layered modifications cards create.
 
-use crate::characteristics::{Keywords, Subtype, Types};
+use crate::characteristics::{Colors, Keywords, Subtype, Types};
 use crate::effect::{Amount, Condition, Objects, Players};
 use crate::filter::Filter;
-use crate::index::GrantIx;
+use crate::index::{AbilityIx, GrantIx};
 
 /// A change to a rule of the game rather than to an object's characteristics
 /// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311)): "Some continuous
@@ -138,7 +138,17 @@ pub struct LayerSpec {
     pub affected: Objects,
     /// Its "as long as", or `None` for an ability that applies all the time.
     pub condition: Option<Condition>,
-    pub modification: Modification,
+    /// What it does to each permanent it affects, in the order the card says it: one
+    /// effect, whose parts may apply in different layers ([CR 613.6]): "If an effect should
+    /// be applied in different layers and/or sublayers, the parts of the effect each apply in
+    /// their appropriate ones. If an effect starts to apply in one layer and/or sublayer, it
+    /// will continue to be applied to the same set of objects in each other applicable layer and/or
+    /// sublayer, even if the ability generating the effect is removed during this process."
+    /// "All creatures lose all abilities and have base power and toughness 1/1" is one
+    /// static ability with two parts, in layers 6 and 7b.
+    ///
+    /// [CR 613.6]: https://yawgatog.com/resources/magic-rules/#R6136
+    pub modifications: &'static [Modification],
 }
 
 impl LayerSpec {
@@ -184,6 +194,36 @@ pub enum Modification {
     SetPower(&'static Amount),
     /// Layer 7c: "gets +X/+Y".
     ModifyPt(i8, i8),
+    /// Layer 6: "loses all abilities" ([CR 613.1f]): "Layer 6: Ability-adding effects,
+    /// keyword counters, ability-removing effects, and effects that say an object can't have
+    /// an ability are applied." It removes its printed abilities and those that effects
+    /// applied before it in layer 6 granted; one applied after it still grants its ability.
+    ///
+    /// [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
+    LoseAllAbilities,
+    /// Layer 6: "loses [ability]", the ability at this index of the affected permanent's
+    /// own face, as a static ability of that permanent says it of itself.
+    LoseAbility(AbilityIx),
+    /// Layer 5: "is [colors]", replacing its colors ([CR 613.1e]): "Layer 5: Color-changing
+    /// effects are applied."
+    ///
+    /// [CR 613.1e]: https://yawgatog.com/resources/magic-rules/#R6131e
+    SetColors(Colors),
+    /// Layer 5: "is [colors] in addition to its other colors".
+    AddColors(Colors),
+    /// Layer 7b: "has base power and toughness [power]/[toughness]" ([CR 613.4b]): "Effects
+    /// that set power and/or toughness to a specific number or value are applied." A
+    /// resolving spell or ability settles each amount as its effect begins ([CR 608.2h]); a
+    /// static ability's is read for each permanent it affects as the layer applies.
+    ///
+    /// [CR 613.4b]: https://yawgatog.com/resources/magic-rules/#R6134b
+    /// [CR 608.2h]: https://yawgatog.com/resources/magic-rules/#R6082h
+    SetBasePt(&'static Amount, &'static Amount),
+    /// Layer 7d: "switch its power and toughness" ([CR 613.4d]): "Effects that switch a
+    /// creature's power and toughness are applied."
+    ///
+    /// [CR 613.4d]: https://yawgatog.com/resources/magic-rules/#R6134d
+    SwitchPt,
 }
 
 /// The layers and sublayers continuous effects apply in, in order
@@ -194,11 +234,16 @@ pub enum Modification {
 pub enum Layer {
     Control = 2,
     Type = 4,
+    Color = 5,
     Ability = 6,
     /// 7a: characteristic-defining abilities that define power and toughness.
     PtDefining = 7,
+    /// 7b: effects that set power and toughness to a number or value.
+    PtSetting = 8,
     /// 7c: effects and counters that modify power and toughness.
     PtModifying = 9,
+    /// 7d: effects that switch power and toughness.
+    PtSwitching = 10,
 }
 
 impl Modification {

@@ -483,6 +483,7 @@ fn derive_alike(s: &mut State) {
         crate::event::Listens::NONE,
         crate::event::Replaces::NONE,
         Default::default(),
+        false,
     );
 }
 

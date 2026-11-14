@@ -31,13 +31,13 @@ pub static CARD: CardDef = Printed::AdelineResplendentCathar
         Ability::static_ability(&LayerSpec {
             affected: Objects::This,
             condition: None,
-            modification: Modification::SetPower(&Amount::Count(&Objects::All {
+            modifications: &[Modification::SetPower(&Amount::Count(&Objects::All {
                 zone: Zone::Battlefield,
                 filter: Filter::All(&[
                     Filter::Types(Types::CREATURE),
                     Filter::Whose(&Players::You),
                 ]),
-            })),
+            }))],
         }),
         // "Whenever you attack"
         // ([CR 508.3d](https://yawgatog.com/resources/magic-rules/#R5083d)): it

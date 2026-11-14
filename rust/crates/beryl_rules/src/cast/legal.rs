@@ -426,23 +426,30 @@ fn activation_options<L: Layout, const TARGETS: bool>(
     let facts = |slot: L::Slot| s.copiable(slot).facts(t);
     let objects = objects.filter(|slot| {
         facts(slot).activates()
-            || (s.object(slot).zone() == Zone::Battlefield
-                && s.derived(slot).granted.iter().any(Option::is_some))
+            || (s.object(slot).zone() == Zone::Battlefield && { s.derived(slot).granted }
+                .iter()
+                .any(Option::is_some))
     });
     // Candidates are listed in the candidate order, which a `Choice` counts in.
     for slot in s.in_candidate_order(collapse(s, objects)) {
         let granted = if s.object(slot).zone() == Zone::Battlefield {
-            s.derived(slot).granted.len() as u8
+            { s.derived(slot).granted }.len() as u8
         } else {
             0
         };
         // Of its own abilities, only the activated ones can be activated (CR 602.1), so the
-        // rest are not checked; granted ones are checked whatever they are.
+        // rest are not checked; granted ones are checked whatever they are. One it has lost
+        // can't be activated (CR 613.1f): asked once of a permanent that has them all, as
+        // most have.
+        let lost = !s.has_every_ability(slot);
         let abilities = facts(slot)
             .activated()
             .map(ObjectAbility::Own)
             .chain((0..granted).map(ObjectAbility::Granted));
         for ability in abilities {
+            if lost && matches!(ability, ObjectAbility::Own(i) if !s.has_ability(slot, i)) {
+                continue;
+            }
             if activatable(s, t, now, slot, ability) && !(prunes && pointless(s, t, slot, ability))
             {
                 out.push(Opt::Activate { slot, ability })?;

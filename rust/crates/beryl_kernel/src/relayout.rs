@@ -159,6 +159,17 @@ impl<L: Layout> Relayout for LastKnown<L> {
     }
 }
 
+/// A mask of lost abilities in layout `M`: "all of them" stays all of them, whatever the
+/// width, and any other mask keeps its bits.
+fn widen_mask<L: Layout, M: Layout>(lost: L::AbilityMask) -> M::AbilityMask {
+    use crate::object::AbilityMask;
+    if lost == L::AbilityMask::ALL {
+        M::AbilityMask::ALL
+    } else {
+        M::AbilityMask::from_bits(lost.bits())
+    }
+}
+
 impl<L: Layout> Relayout for Derived<L> {
     type In<M: Layout> = Derived<M>;
 
@@ -179,6 +190,7 @@ impl<L: Layout> Relayout for Derived<L> {
                     grant: g.grant,
                 })
             }),
+            lost: widen_mask::<L, M>(self.lost),
         }
     }
 }

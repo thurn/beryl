@@ -11,11 +11,11 @@
 use crate::prelude::*;
 
 /// What a static ability of the Aura does to the permanent it enchants.
-const fn enchanted(modification: Modification) -> LayerSpec {
+const fn enchanted(modifications: &'static [Modification]) -> LayerSpec {
     LayerSpec {
         affected: Objects::AttachedTo,
         condition: None,
-        modification,
+        modifications,
     }
 }
 
@@ -26,9 +26,9 @@ pub static CARD: CardDef = Printed::SwiftReconfiguration
             Filter::Types(Types::CREATURE),
             Filter::Subtype(Subtype::Vehicle),
         ]))),
-        Ability::static_ability(&enchanted(Modification::SetTypes(Types::ARTIFACT))),
-        Ability::static_ability(&enchanted(Modification::AddSubtype(Subtype::Vehicle))),
-        Ability::static_ability(&enchanted(Modification::grant(0))),
+        Ability::static_ability(&enchanted(&[Modification::SetTypes(Types::ARTIFACT)])),
+        Ability::static_ability(&enchanted(&[Modification::AddSubtype(Subtype::Vehicle)])),
+        Ability::static_ability(&enchanted(&[Modification::grant(0)])),
     ])
     .grants(&[Ability::crew(5)])
     .card();

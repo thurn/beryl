@@ -1,6 +1,7 @@
 //! Engine tests, driven through `next` and `apply` with test-only cards.
 
 mod abilities_away;
+mod ability_removal;
 mod banned;
 mod cast;
 mod casting;

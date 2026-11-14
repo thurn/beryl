@@ -277,7 +277,7 @@ static ADELINE: CardDef = CardDef {
             Ability::static_ability(&LayerSpec {
                 affected: Objects::This,
                 condition: None,
-                modification: Modification::SetPower(&super::static_abilities::CREATURES),
+                modifications: &[Modification::SetPower(&super::static_abilities::CREATURES)],
             }),
             Ability::triggered(&Trigger::attack(Players::You))
                 .custom(custom_body::<HumanAttacking>()),
@@ -323,7 +323,7 @@ static OVERLORD: CardDef = CardDef {
                     Comparison::AtLeast,
                     Amount::Fixed(1),
                 )),
-                modification: Modification::RemoveTypes(Types::CREATURE),
+                modifications: &[Modification::RemoveTypes(Types::CREATURE)],
             }),
             Ability::triggered(&Trigger::ENTERS).effect(&create_tokens_of_kind(you(), &INSECT, 2)),
         ],
@@ -376,17 +376,17 @@ static RECONFIG: CardDef = CardDef {
             Ability::static_ability(&LayerSpec {
                 affected: Objects::AttachedTo,
                 condition: None,
-                modification: Modification::SetTypes(Types::ARTIFACT),
+                modifications: &[Modification::SetTypes(Types::ARTIFACT)],
             }),
             Ability::static_ability(&LayerSpec {
                 affected: Objects::AttachedTo,
                 condition: None,
-                modification: Modification::AddSubtype(Subtype::Vehicle),
+                modifications: &[Modification::AddSubtype(Subtype::Vehicle)],
             }),
             Ability::static_ability(&LayerSpec {
                 affected: Objects::AttachedTo,
                 condition: None,
-                modification: Modification::grant(0),
+                modifications: &[Modification::grant(0)],
             }),
         ],
         grants: &[CREW],

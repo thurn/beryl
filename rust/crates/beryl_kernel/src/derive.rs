@@ -9,11 +9,11 @@
 
 use std::ops::Deref;
 
-use beryl_card::FaceIx;
+use beryl_card::{AbilityIx, FaceIx};
 
 use crate::event::{Listens, Replaces};
 use crate::layout::{Layout, PerSeat, Queue, Table};
-use crate::object::Derived;
+use crate::object::{AbilityMask, Derived};
 use crate::rule_changes::Rules;
 use crate::state::State;
 
@@ -60,6 +60,14 @@ impl<L: Layout> Rederive<'_, L> {
         &self.0.derived.as_slice()[..self.0.battlefield.len()]
     }
 
+    /// Whether the permanent at battlefield position `i` has the ability at `ability` of its
+    /// face, as the layers applied so far left it: [`State::has_ability`] for the layers'
+    /// own reads, before the results are stored.
+    #[inline]
+    pub fn has_ability_so_far(&self, i: usize, ability: AbilityIx) -> bool {
+        !{ self.rows()[i].lost }.contains(ability)
+    }
+
     /// The layer results to write, one for each permanent, in battlefield order.
     #[inline]
     pub fn results(&mut self) -> &mut [Derived<L>] {
@@ -70,13 +78,20 @@ impl<L: Layout> Rederive<'_, L> {
     /// Stores the results as current, with `listening`, the kinds of event the permanents have
     /// triggered abilities for, `replacing`, the kinds of event their static abilities replace,
     /// and `rules`, the rules their static abilities change for each
-    /// player, by seat ([`State::rule_applies`]). Control is settled now, so each face-down
+    /// player, by seat ([`State::rule_applies`]), and `removed`, whether an effect that
+    /// removes abilities applied, for [`State::has_ability`]. Control is settled now, so each face-down
     /// permanent's controller sees it from here on ([CR 708.5]): "At any time, you may look at ...
     /// a face-down permanent you control".
     ///
     /// [CR 708.5]: https://yawgatog.com/resources/magic-rules/#R7085
     #[inline]
-    pub fn finish(self, listening: Listens, replacing: Replaces, rules: PerSeat<Rules>) {
+    pub fn finish(
+        self,
+        listening: Listens,
+        replacing: Replaces,
+        rules: PerSeat<Rules>,
+        removed: bool,
+    ) {
         let s = self.0;
         s.listening = listening;
         s.replacing = replacing;
@@ -87,6 +102,7 @@ impl<L: Layout> Rederive<'_, L> {
                 s.knowledge[s.derived[i].controller.index()].insert(slot);
             }
         }
+        s.flags.abilities_lost = removed;
         s.flags.derived_dirty = false;
     }
 }

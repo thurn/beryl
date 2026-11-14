@@ -90,7 +90,7 @@ pub(crate) fn match_event<L: Layout>(
         let listening = s.listening().map_or(t.listens_any(), |listening| {
             debug_assert_eq!(
                 listening,
-                layers::listening(s, t).0,
+                layers::listening(s, t, s.layer_results()).0,
                 "the battlefield's listeners, as the layer results found them"
             );
             listening
@@ -106,6 +106,10 @@ pub(crate) fn match_event<L: Layout>(
                 let controller = s.controller(slot);
                 let (card, face) = what.record(t);
                 for l in t.listeners(card, face, k) {
+                    // CR 613.1f: a permanent that lost the ability has no trigger to match.
+                    if !s.has_ability(slot, l.ability) {
+                        continue;
+                    }
                     if let Some(info) = fires(s, t, l.trigger, Some(slot), controller, e) {
                         for _ in 0..times(e) {
                             enqueue(s, t, Some(source), card, face, l.ability, controller, info)?;
@@ -156,7 +160,7 @@ fn match_away<L: Layout>(
         let controller = s.controller(slot);
         let (card, face) = s.copiable(slot).record(t);
         for l in t.away_listeners(card, face, k) {
-            if !l.zones.contains(zone) {
+            if !l.zones.contains(zone) || !s.has_ability(slot, l.ability) {
                 continue;
             }
             if let Some(info) = fires(s, t, l.trigger, Some(slot), controller, e) {
@@ -375,7 +379,11 @@ pub(crate) fn match_look_back<L: Layout>(
                     continue;
                 }
                 for l in t.listeners(card, face, kind) {
-                    if !about(s, t, l.trigger.subject, Some(slot), controller, object) {
+                    // CR 603.10: the game looks back to whether the ability existed just
+                    // before the event, as the permanent is now.
+                    if !s.has_ability(slot, l.ability)
+                        || !about(s, t, l.trigger.subject, Some(slot), controller, object)
+                    {
                         continue;
                     }
                     let info = TriggerInfo {
@@ -429,6 +437,7 @@ fn look_back_away<L: Layout>(
                 }
                 for l in t.away_listeners(card, face, kind) {
                     if l.zones.contains(zone)
+                        && s.has_ability(slot, l.ability)
                         && about(s, t, l.trigger.subject, Some(slot), controller, object)
                     {
                         enqueue(s, t, Some(source), card, face, l.ability, controller, info)?;
@@ -477,7 +486,9 @@ fn match_states_out_of_line<L: Layout>(s: &mut State<L>, t: &GameTable) -> Resul
             }
             let (card, face) = what.record(t);
             for l in t.listeners(card, face, kind) {
-                state_trigger(s, t, slot, card, face, l.ability, l.trigger)?;
+                if s.has_ability(slot, l.ability) {
+                    state_trigger(s, t, slot, card, face, l.ability, l.trigger)?;
+                }
             }
         }
     }
@@ -486,7 +497,7 @@ fn match_states_out_of_line<L: Layout>(s: &mut State<L>, t: &GameTable) -> Resul
             let zone = s.object(slot).zone();
             let (card, face) = s.copiable(slot).record(t);
             for l in t.away_listeners(card, face, kind) {
-                if l.zones.contains(zone) {
+                if l.zones.contains(zone) && s.has_ability(slot, l.ability) {
                     state_trigger(s, t, slot, card, face, l.ability, l.trigger)?;
                 }
             }

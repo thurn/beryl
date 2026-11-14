@@ -1,7 +1,7 @@
 //! Tapping and paying: carrying out a plan or a manual choice.
 
 use crate::bitboard::Bitboard;
-use crate::card::{CostAction, ManaColor, ManaCost, Types};
+use crate::card::{AbilityIx, CostAction, ManaColor, ManaCost, Types};
 use crate::decision::Opt;
 use crate::event::{self, Sink};
 use crate::fixed::Full;
@@ -232,8 +232,9 @@ pub(crate) fn activate<L: Layout>(
     let (index, ability) = (s.copiable(slot).face(t).abilities)
         .iter()
         .enumerate()
-        .find(|(_, a)| {
-            (is_simple(a) || is_sacrificed(a))
+        .find(|&(i, a)| {
+            s.has_ability(slot, AbilityIx::new(i as u8))
+                && (is_simple(a) || is_sacrificed(a))
                 && a.produces().includes(color)
                 && allowed(s, t, a, s.controller(slot))
         })

@@ -5,7 +5,10 @@
 //! chance chokepoints and the board door. No `&mut Object` leaves the
 //! crate. Other crates read an object through the getters below.
 
-use beryl_card::{Colors, FaceIx, GrantIx, Keywords, Supertypes, Types, Zone};
+use std::fmt::Debug;
+use std::hash::Hash;
+
+use beryl_card::{AbilityIx, Colors, FaceIx, GrantIx, Keywords, Supertypes, Types, Zone};
 
 use crate::counters::Counters;
 use crate::fixed::Full;
@@ -607,7 +610,13 @@ pub struct ObjectRef<L: Layout = Small> {
 
 /// The result of applying continuous effects to a permanent (architecture §9), by
 /// battlefield index. The layers work fills it in.
+///
+/// Packed to an alignment of two bytes: its fields fill 40 bytes, and with the two of
+/// [`Derived::lost`] an alignment of eight would round each of the 128 rows up to 48, which
+/// the 20 KiB of a [`State<Small>`](crate::state::State) has no room for. Fields are read and
+/// written by value; a reference to one does not compile.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[repr(Rust, packed(2))]
 pub struct Derived<L: Layout = Small> {
     pub power: i8,
     pub toughness: i8,
@@ -622,7 +631,74 @@ pub struct Derived<L: Layout = Small> {
     pub subtypes: crate::subtypes::GameSubtypes,
     /// The abilities other objects grant this permanent (§9), in the order granted.
     pub granted: [Option<GrantRef<L>>; 4],
+    /// The abilities of its face it has lost, by their index on the face
+    /// ([CR 613.1f]): "Layer 6: Ability-adding effects, keyword counters, ability-removing
+    /// effects, and effects that say an object can't have an ability are applied." Read it
+    /// through [`crate::state::State::has_ability`], which every reader asks.
+    ///
+    /// [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
+    pub lost: L::AbilityMask,
 }
+
+/// The abilities of a face a permanent has lost, one bit for each, by the index of the
+/// ability on the face: as many as the layout's mask is wide ([`AbilityMask::WIDTH`]). An
+/// effect that would remove an ability past that width, or all the abilities of a face
+/// with more, has no place in the mask, and the recompute stalls the game into a layout
+/// whose mask is wider.
+pub trait AbilityMask: Copy + Debug + Default + Eq + Hash + Send + Sync + 'static {
+    /// How many abilities of a face the mask can name.
+    const WIDTH: usize;
+    /// Every ability the mask can name: "loses all abilities".
+    const ALL: Self;
+    /// Whether the ability at `ability` is lost.
+    fn contains(self, ability: AbilityIx) -> bool;
+    /// The mask with the ability at `ability` lost too, or `None` past the mask's width.
+    fn with(self, ability: AbilityIx) -> Option<Self>;
+    /// Whether no ability is lost.
+    fn is_empty(self) -> bool;
+    /// The mask as bits, the ability at index `n` in bit `n`.
+    fn bits(self) -> u64;
+    /// The mask of `bits`, the ability at index `n` in bit `n`, dropping the bits past the
+    /// mask's width.
+    fn from_bits(bits: u64) -> Self;
+}
+
+macro_rules! ability_mask {
+    ($($bits:ty),*) => {$(
+        impl AbilityMask for $bits {
+            const WIDTH: usize = <$bits>::BITS as usize;
+            const ALL: Self = <$bits>::MAX;
+
+            #[inline]
+            fn contains(self, ability: AbilityIx) -> bool {
+                ability.index() < Self::WIDTH && self & (1 << ability.index()) != 0
+            }
+
+            #[inline]
+            fn with(self, ability: AbilityIx) -> Option<Self> {
+                (ability.index() < Self::WIDTH).then(|| self | (1 << ability.index()))
+            }
+
+            #[inline]
+            fn is_empty(self) -> bool {
+                self == 0
+            }
+
+            #[inline]
+            fn bits(self) -> u64 {
+                u64::from(self)
+            }
+
+            #[inline]
+            #[allow(clippy::cast_possible_truncation)]
+            fn from_bits(bits: u64) -> Self {
+                bits as $bits
+            }
+        }
+    )*};
+}
+
+ability_mask!(u16, u64);
 
 /// An ability one card grants to other objects: the card's game index and the index into its
 /// front face's [`beryl_card::Face::grants`] (§9).

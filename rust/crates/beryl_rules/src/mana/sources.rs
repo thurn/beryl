@@ -2,7 +2,7 @@
 //! interchangeable permanents.
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, Face, Types};
+use crate::card::{Ability, AbilityIx, Face, Types};
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::state::{Derived, State};
@@ -90,7 +90,7 @@ pub(super) fn source<L: Layout>(
     let mana = s.copiable(slot).facts(t).mana;
     // The table's facts stand in for reading the face: they must say what reading it would.
     debug_assert!(
-        mana != ManaFace::Not || read_source(s, t, player, face()).is_none(),
+        mana != ManaFace::Not || read_source(s, t, player, slot, face()).is_none(),
         "a face the table calls no source makes mana"
     );
     if mana == ManaFace::Not || d.controller != player || o.is_tapped() {
@@ -101,21 +101,24 @@ pub(super) fn source<L: Layout>(
     if d.types.intersects(Types::CREATURE) && o.is_summoning_sick() {
         return None;
     }
+    // The table's facts are the card's: a permanent that lost an ability is read ability
+    // by ability (CR 613.1f).
     if let ManaFace::Plain {
         kinds,
         amount,
         other,
     } = mana
+        && s.has_every_ability(slot)
     {
         let plain = Some((kinds, amount, other, false));
         debug_assert_eq!(
             plain,
-            read_source(s, t, player, face()),
+            read_source(s, t, player, slot, face()),
             "a plain source's mana, as the table has it"
         );
         return plain;
     }
-    read_source(s, t, player, face())
+    read_source(s, t, player, slot, face())
 }
 
 /// Amount and whether the source is consumed by its mana activation, for payment previews.
@@ -130,20 +133,24 @@ pub fn mana_contribution<L: Layout>(
 }
 
 /// What [`source`] finds, read from the face of an untapped source `player` controls that may
-/// tap for mana now.
+/// tap for mana now, the permanent in `slot`: of the abilities it has
+/// ([`State::has_ability`]).
 fn read_source<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
+    slot: L::Slot,
     face: &Face,
 ) -> Option<(u8, u8, bool, bool)> {
+    let has = |i: usize| s.has_ability(slot, AbilityIx::new(i as u8));
     let mut kinds = 0;
     let mut amount = 0;
     // A source whose mana depends on other permanents, as Floodfarm Verge's {U}, is a class
     // of its own: tapping it rather than another making the same mana now can leave
     // different mana for later.
     let mut conditional = false;
-    for a in face.abilities.iter().filter(|a| is_simple(a)) {
+    let mut abilities = face.abilities.iter().enumerate();
+    for (_, a) in abilities.clone().filter(|&(i, a)| is_simple(a) && has(i)) {
         conditional |= a.only_if_you_control().is_some();
         if !allowed(s, t, a, player) {
             continue;
@@ -154,10 +161,8 @@ fn read_source<L: Layout>(
     }
     if kinds == 0 {
         // A Treasure: its one mana ability sacrifices it.
-        let a = face
-            .abilities
-            .iter()
-            .find(|a| is_sacrificed(a) && allowed(s, t, a, player))?;
+        let (_, a) =
+            abilities.find(|&(i, a)| is_sacrificed(a) && has(i) && allowed(s, t, a, player))?;
         debug_assert!(
             a.produces().amount == 1 || a.produces().colors.is_power_of_two(),
             "a source of several mana makes one kind"

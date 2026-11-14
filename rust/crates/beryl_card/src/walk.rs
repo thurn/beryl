@@ -68,10 +68,10 @@ impl CardDef {
         for face in self.faces {
             visit(face.subtypes.union(face.keywords.landwalk()));
             for ability in face.abilities.iter().chain(face.grants) {
-                if let Some(spec) = ability.layer()
-                    && let Some(given) = given(&spec.modification)
-                {
-                    visit(given);
+                if let Some(spec) = ability.layer() {
+                    for given in spec.modifications.iter().filter_map(given) {
+                        visit(given);
+                    }
                 }
                 if let Behavior::Data(effect) = ability.body() {
                     let found = std::cell::RefCell::new(Subtypes::NONE);
@@ -193,14 +193,21 @@ impl LayerSpec {
         if let Some(condition) = &self.condition {
             condition.walk(visit);
         }
-        self.modification.walk(visit);
+        for modification in self.modifications {
+            modification.walk(visit);
+        }
     }
 }
 
 impl Modification {
     fn walk(&self, visit: Visit) {
-        if let Modification::SetPower(amount) = self {
-            amount.walk(visit);
+        match self {
+            Modification::SetPower(amount) => amount.walk(visit),
+            Modification::SetBasePt(power, toughness) => {
+                power.walk(visit);
+                toughness.walk(visit);
+            }
+            _ => {}
         }
     }
 }

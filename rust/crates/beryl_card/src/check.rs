@@ -34,6 +34,12 @@ pub enum Malformed {
     Paid,
     /// [`Modification::Grant`] of an ability past the end of its face's [`Face::grants`].
     Grant,
+    /// [`Modification::LoseAbility`] of an ability past the end of its face's abilities, or
+    /// said by anything but a static ability of the permanent about itself: the index names
+    /// an ability of the face it is printed on.
+    Lost,
+    /// A static ability whose continuous effect does nothing: no modification.
+    NoModification,
     /// [`CopyException::PowerToughness`] other than 1/1, which is all the engine's copy
     /// makes.
     Copy,
@@ -98,6 +104,10 @@ impl Malformed {
             Malformed::ThatPlayer => "\"that player\" is said outside a for-each-player effect",
             Malformed::Paid => "a condition asks about a cost its face cannot be cast with",
             Malformed::Grant => "a modification grants an ability its face does not list",
+            Malformed::Lost => {
+                "a modification removes an ability that is not one of its own permanent's"
+            }
+            Malformed::NoModification => "a static ability's continuous effect modifies nothing",
             Malformed::Copy => "a copy's exception is a power and toughness other than 1/1",
             Malformed::AddMana => "an effect adds mana outside a mana ability",
             Malformed::Countered => "a countered spell is put somewhere other than exile",
@@ -368,9 +378,32 @@ impl Scope<'_> {
             Some(condition) => self.condition(condition),
             None => Ok(()),
         };
+        let mut modifications = if layer.modifications.is_empty() {
+            Err(Malformed::NoModification)
+        } else {
+            Ok(())
+        };
+        let mut i = 0;
+        while i < layer.modifications.len() {
+            let modification = &layer.modifications[i];
+            let checked = match modification {
+                Modification::LoseAbility(ability) => {
+                    if matches!(layer.affected, Objects::This)
+                        && ability.index() < self.face.abilities.len()
+                    {
+                        Ok(())
+                    } else {
+                        Err(Malformed::Lost)
+                    }
+                }
+                modification => self.modification(modification),
+            };
+            modifications = both(modifications, checked);
+            i += 1;
+        }
         both(
             self.objects(&layer.affected),
-            both(condition, self.modification(&layer.modification)),
+            both(condition, modifications),
         )
     }
 
@@ -548,6 +581,11 @@ impl Scope<'_> {
                 Err(Malformed::Grant)
             }
             Modification::SetPower(amount) => self.amount(amount),
+            Modification::SetBasePt(power, toughness) => {
+                both(self.amount(power), self.amount(toughness))
+            }
+            // A resolving effect names no ability of its own permanent's face.
+            Modification::LoseAbility(_) => Err(Malformed::Lost),
             _ => Ok(()),
         }
     }

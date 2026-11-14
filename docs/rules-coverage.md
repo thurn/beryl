@@ -244,16 +244,25 @@ then counters (7c), then the rules static abilities change (CR 613.11)
   set or condition reads the results is listed by its source and ability and
   finds its set as it comes up. `Unapplied::Affected` remains for sets in other
   zones, which have no layer results.
-- **Ability removal.** `Derived` gains a mask of the face's abilities the
-  permanent has lost, all of them for "loses all abilities". An effect that
-  removes abilities also clears the keywords and grants applied before it; those
-  applied after it stay. `State::has_ability` is the one question every reader
-  asks: trigger matching, activation, the static scan, the replacement lookup
-  and the mana solver. With no removal in effect it is a constant.
-- **Continuing once begun** (CR 613.6). An effect with parts in several layers
-  finds its set once, where it first applies, and keeps it though its ability is
-  removed on the way. This is what makes Humility with Opalescence come out as
-  the rules say, and Oko's Elk keep its 3/3.
+- **Ability removal** (landed with Humility and Dress Down). `Derived::lost` is
+  a mask of the face's abilities the permanent has lost, all of them for "loses
+  all abilities": 16 bits in `Small`, 64 in `Large`, and a removal past the
+  mask's width stalls the game into `Large`. `Derived` is packed to an alignment
+  of two bytes so that the mask costs two bytes a row. An effect that removes
+  abilities also clears the keywords and grants applied before it; those applied
+  after it stay. `State::has_ability` is the one question every rules reader
+  asks: trigger matching, activation, the static scan, the replacement lookups,
+  the rule changes and the mana solver. With no removal in effect it is one test
+  of a flag the recompute stores. The AI's heuristics in `beryl_search` still
+  read the cards' faces.
+- **Continuing once begun** (CR 613.6). A static ability's `LayerSpec` lists the
+  parts of its one effect (`modifications`), and the recompute lists one entry
+  for each part. At the head of each layer, each static ability whose first
+  layer it is begins if its permanent still has it. A part in a later layer
+  applies to the set the first part found, though the ability is removed on the
+  way. This is what makes Humility with Opalescence come out as the rules say,
+  and Oko's Elk keep its 3/3. Within layer 6, two effects that remove each
+  other's abilities apply in timestamp order until dependencies land.
 - **Land types** (CR 305.7). Setting a land's type removes its printed abilities
   in layer 4, through the same mask. The mana ability of a basic land type comes
   from the derived subtypes, not from the card. The solver's per-card facts in

@@ -361,3 +361,13 @@ fixed in the same session. Newest first.
   thing to cards chosen one at a time, keep the picks (`Casting::chosen`, or a
   set in the resolution as `dig` does) and move the cards in one batch after the
   last; never move a card where its pick is answered.
+
+- A permanent that had lost all its abilities in a `Small` game was widened into
+  `Large` with only its first sixteen abilities lost: "all lost" is every bit of
+  the layout's mask (`AbilityMask::ALL`), and widening copied the bits, so a
+  `u16` of ones became a `u64` with sixteen. The widened game differed from one
+  played wide all along (`a_widened_game_plays_on_as_the_small_one`), and a face
+  of more than sixteen abilities would have kept the rest. Found and fixed in
+  the change that added the mask. Prevention: a value that means "everything" is
+  relayouted as that meaning (`widen_mask` maps `ALL` to `ALL`), never as its
+  bits; a flag or an enum for "all" would make the copy impossible to get wrong.

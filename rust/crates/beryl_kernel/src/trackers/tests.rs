@@ -98,6 +98,7 @@ fn derive<L: Layout>(t: &GameTable, s: &mut State<L>) {
         crate::event::Listens::NONE,
         crate::event::Replaces::NONE,
         Default::default(),
+        false,
     );
 }
 

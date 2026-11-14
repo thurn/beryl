@@ -76,7 +76,7 @@ fn a_grant_the_face_does_not_list_is_refused() {
     const GRANTS: &[Ability] = &[Ability::static_ability(&LayerSpec {
         affected: Objects::AttachedTo,
         condition: None,
-        modification: Modification::grant(0),
+        modifications: &[Modification::grant(0)],
     })];
     assert_eq!(checked(GRANTS), Err(Malformed::Grant));
 }

@@ -5,14 +5,20 @@ mod apply;
 
 use beryl_kernel::derive::Rederive;
 
-use crate::card::{Ability, AbilityIx, AbilityKind, Colors, LayerSpec, Modification, Objects};
+use crate::bitboard::Bitboard;
+use crate::card::{
+    Ability, AbilityIx, AbilityKind, Colors, Layer, LayerSpec, Modification, Objects,
+};
 use crate::decision::{Outcome, StallReason};
 use crate::event::{Listens, Replaces, Sink};
 use crate::filter;
 use crate::fixed::Full;
 use crate::ids::CardId;
 use crate::layout::{Layout, PerSeat, Queue, index};
-use crate::state::{CounterKind, Derived, LayerChange, LockedIn, Permanents, Rules, State, Zone};
+use crate::state::{
+    AbilityMask, CounterKind, Derived, LayerChange, LockedIn, Permanents, Rules, State, Zone,
+    read_layer,
+};
 use crate::static_ability;
 use crate::table::GameTable;
 use crate::trigger::face;
@@ -39,7 +45,10 @@ enum Target<L: Layout> {
 }
 
 /// One continuous effect to apply in this recompute, whatever the number of permanents it
-/// changes.
+/// changes, or one part of one: a static ability whose effect has parts in several layers
+/// is listed once for each part ([CR 613.6]).
+///
+/// [CR 613.6]: https://yawgatog.com/resources/magic-rules/#R6136
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct Apply<L: Layout> {
     layer: u8,
@@ -47,10 +56,24 @@ struct Apply<L: Layout> {
     /// Static abilities on one object share its timestamp; their order on the card breaks
     /// the tie.
     order: u8,
+    /// The part of a static ability's effect this is, in the order the card says them: two
+    /// parts in one layer apply in that order.
+    part: u8,
     target: Target<L>,
     /// The game index of the effect's source card, which a granted ability is printed on.
     source: L::Card,
     change: LayerChange,
+    /// Of a static ability, the battlefield position of the permanent it is on, and whether
+    /// this is the part in the ability's first layer, where the effect begins
+    /// ([`Begun`]); none for a resolved spell's or ability's effect, which began as it
+    /// resolved.
+    from: Option<(L::Index, bool)>,
+    /// How many parts the effect has: a static ability with more than one carries the set
+    /// it began on to its later parts.
+    parts: u8,
+    /// Of a static ability's first part, found at the head of its layer: its permanent no
+    /// longer has the ability, so the effect does not begin.
+    lost: bool,
 }
 
 impl<L: Layout> Apply<L> {
@@ -61,12 +84,12 @@ impl<L: Layout> Apply<L> {
     /// change to each member commutes.
     ///
     /// [CR 613.7]: https://yawgatog.com/resources/magic-rules/#R6137
-    fn key(&self) -> (u8, u16, u8, u16) {
+    fn key(&self) -> (u8, u16, u8, u8, u16) {
         let position: u16 = match self.target {
             Target::Position(i) | Target::Static(i) => i.into(),
             Target::Set(_) => 0,
         };
-        (self.layer, self.timestamp, self.order, position)
+        (self.layer, self.timestamp, self.order, self.part, position)
     }
 }
 
@@ -77,11 +100,32 @@ impl<L: Layout> Default for Apply<L> {
             layer: 0,
             timestamp: 0,
             order: 0,
+            part: 0,
             target: Target::Position(L::Index::default()),
             source: L::Card::FIRST,
             change: LayerChange::ModifyPt(0, 0),
+            from: None,
+            parts: 1,
+            lost: false,
         }
     }
+}
+
+/// What a static ability with parts in several layers did where it began: the permanents
+/// it applies to, or none if it did not begin, its permanent having lost the ability by the
+/// time its first layer came ([CR 613.6]): "If an effect starts to apply in one layer and/or
+/// sublayer, it will continue to be applied to the same set of objects in each other applicable layer
+/// and/or sublayer, even if the ability generating the effect is removed during this
+/// process." The later parts read it.
+///
+/// [CR 613.6]: https://yawgatog.com/resources/magic-rules/#R6136
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+struct Begun<L: Layout> {
+    /// The battlefield position of the permanent with the ability.
+    from: u16,
+    /// The ability's index on that permanent's face.
+    order: u8,
+    members: Option<Bitboard<L::Slot>>,
 }
 
 /// The effects one recompute applies: one entry for each effect of the Effects store
@@ -140,13 +184,35 @@ pub(crate) fn over_or_refreshed<L: Layout>(
 /// leaves both unchanged.
 ///
 /// [CR 708.2a]: https://yawgatog.com/resources/magic-rules/#R7082a
-pub(crate) fn listening<L: Layout>(s: &State<L>, t: &GameTable) -> (Listens, Replaces) {
+pub(crate) fn listening_of_all<L: Layout>(s: &State<L>, t: &GameTable) -> (Listens, Replaces) {
     s.battlefield()
         .iter()
         .fold((Listens::NONE, Replaces::NONE), |(l, r), &slot| {
             let what = s.copiable(slot);
             (l | what.may_listen(t), r | what.may_replace(t))
         })
+}
+
+/// [`listening_of_all`], leaving out the permanents that `rows`, the layer results, say have
+/// lost every ability.
+pub(crate) fn listening<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    rows: &[Derived<L>],
+) -> (Listens, Replaces) {
+    s.battlefield().iter().zip(rows).fold(
+        (Listens::NONE, Replaces::NONE),
+        |(l, r), (&slot, row)| {
+            // A permanent that lost all its abilities listens to nothing and replaces
+            // nothing (CR 613.1f); one that lost some keeps its card's masks, which say what
+            // it may do and are read again ability by ability.
+            if { row.lost } == L::AbilityMask::ALL {
+                return (l, r);
+            }
+            let what = s.copiable(slot);
+            (l | what.may_listen(t), r | what.may_replace(t))
+        },
+    )
 }
 
 /// Whether a change in the number of `kind` counters on the object in `slot` can change its derived
@@ -203,7 +269,6 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
     let Some(mut s) = s.rederive() else {
         return Ok(());
     };
-    let (listening, replacing) = listening(&s, t);
 
     // Made at the first effect that applies: most recomputes have none, and the list is big.
     let mut list: Option<Applying<L>> = None;
@@ -225,6 +290,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
             keywords: f.keywords,
             subtypes: what.subtypes(t),
             granted: [None; 4],
+            lost: Default::default(),
         };
         for (n, ability) in f.abilities.iter().enumerate() {
             let Some(spec) = ability.layer() else {
@@ -234,21 +300,27 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
         }
     }
     listed = listed.and(resolved_effects(&s, &mut list));
-    if let Some(list) = &mut list {
-        apply_in_order(&mut s, t, list);
+    let mut removed = false;
+    match &mut list {
+        Some(list) => {
+            list.as_mut_slice().sort_unstable_by_key(Apply::key);
+            // The counters of layer 7c apply after its effects and before those of 7d.
+            let split = (list.as_slice()).partition_point(|a| a.layer <= Layer::PtModifying as u8);
+            let (to_7c, after) = list.as_mut_slice().split_at_mut(split);
+            let mut begun = None;
+            let first = apply_in_order(&mut s, t, to_7c, &mut begun);
+            counters(&mut s);
+            let second = apply_in_order(&mut s, t, after, &mut begun);
+            listed = listed.and(first).and(second);
+            removed = list.iter().any(|a| a.change.removes_abilities());
+        }
+        None => counters(&mut s),
     }
-    let len = s.battlefield().len();
-    // Layer 7c: counters modify power and toughness
-    // ([CR 613.4c](https://yawgatog.com/resources/magic-rules/#R6134c)): "Effects and counters
-    // that modify power and/or toughness (but don't set power and/or toughness to a specific
-    // number or value) are applied." Additions commute, so they follow the effects.
-    for i in 0..len {
-        let c = s.object(s.battlefield()[i]).counters();
-        let d = &mut s.results()[i];
-        let delta = c.plus_one as i8 - c.minus_one as i8;
-        d.power = d.power.saturating_add(delta);
-        d.toughness = d.toughness.saturating_add(delta);
-    }
+    let (listening, replacing) = if removed {
+        listening(&s, t, s.rows())
+    } else {
+        listening_of_all(&s, t)
+    };
     // A permanent that may change a rule for players said so in the mask just read for
     // the replacements: with none on the battlefield, one AND.
     let rules = if replacing.changes_player_rules() {
@@ -256,14 +328,19 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
     } else {
         [Rules::NONE; _]
     };
-    s.finish(listening, replacing, rules);
+    s.finish(listening, replacing, rules, removed);
     listed
 }
 
 /// Lists the static ability at `n` of the face of the permanent at battlefield position `i`,
-/// whose continuous effect is `spec`, among the effects to apply, if it applies now.
+/// whose continuous effect is `spec`, among the effects to apply, if it applies now: one entry
+/// for each part of its effect, each in its own layer ([CR 613.6]): "If an effect should be
+/// applied in different layers and/or sublayers, the parts of the effect each apply in their
+/// appropriate ones."
 ///
 /// Out of line: few permanents have such an ability, and the scan runs for every one.
+///
+/// [CR 613.6]: https://yawgatog.com/resources/magic-rules/#R6136
 #[inline(never)]
 fn list_static<L: Layout>(
     s: &Rederive<'_, L>,
@@ -307,49 +384,152 @@ fn list_static<L: Layout>(
         }
         _ => Target::Static(index::<L>(i)),
     };
-    // No static ability of the cards changes control. One that did would name
-    // its source's controller as layer 2 has it, not as the permanent entered.
-    debug_assert_ne!(spec.modification, Modification::Control);
     let (source, face) = what.record(t);
-    // An amount read as its layer applies is named by the ability that says it.
-    let change =
-        LayerChange::resolve(spec.modification, s.base_controller(slot)).unwrap_or_else(|| {
-            LayerChange::DefinedPower {
-                face,
-                ability: AbilityIx::new(n as u8),
-            }
+    let you = s.base_controller(slot);
+    // The part in the earliest layer, where the effect begins: the first said of those.
+    let layer_of = |modification: Modification| {
+        LayerChange::resolve(modification, you)
+            .map_or_else(|| read_layer(modification), LayerChange::layer)
+    };
+    let first = (0..spec.modifications.len())
+        .min_by_key(|&part| (layer_of(spec.modifications[part]), part))
+        .unwrap_or(0);
+    let mut listed = Ok(());
+    for (part, &modification) in spec.modifications.iter().enumerate() {
+        // No static ability of the cards changes control. One that did would name
+        // its source's controller as layer 2 has it, not as the permanent entered.
+        debug_assert_ne!(modification, Modification::Control);
+        // An amount read as its layer applies is named by the ability that says it.
+        let change = LayerChange::resolve(modification, you).unwrap_or(LayerChange::Read {
+            layer: read_layer(modification),
+            face,
+            ability: AbilityIx::new(n as u8),
+            part: part as u8,
         });
-    list.get_or_insert_with(Default::default).push(Apply {
-        layer: change.layer() as u8,
-        timestamp: o.timestamp(),
-        order: n as u8,
-        target,
-        source,
-        change,
-    })
+        let pushed = list.get_or_insert_with(Default::default).push(Apply {
+            layer: change.layer() as u8,
+            timestamp: o.timestamp(),
+            order: n as u8,
+            part: part as u8,
+            target,
+            source,
+            change,
+            from: Some((index::<L>(i), part == first)),
+            parts: spec.modifications.len() as u8,
+            lost: false,
+        });
+        listed = listed.and(pushed);
+    }
+    listed
 }
 
-/// Applies the effects in layer and timestamp order: all of a layer's before any of the next
-/// one's, so each layer applies to what the layers before it made of every permanent, and an
-/// effect that finds what it applies to as it applies sees those results.
+/// Applies `list`, effects sorted by layer and timestamp: all of a layer's before any of the
+/// next one's, so each layer applies to what the layers before it made of every permanent,
+/// and an effect that finds what it applies to as it applies sees those results.
+///
+/// At the head of each layer, each static ability whose first layer it is begins, if its
+/// permanent still has the ability ([`Begun`]). One whose effect has parts in later layers
+/// carries the set it found to them in `begun`.
+///
+/// [`Full`] if an ability's set had no place in `begun`, or a removal of abilities no place
+/// in a permanent's mask ([`apply::apply`]): the rest still applies, for a caller that
+/// stalls the game.
 ///
 /// Out of line: most recomputes apply nothing, and the rest of the recompute runs for every
 /// one.
 #[inline(never)]
-fn apply_in_order<L: Layout>(s: &mut Rederive<'_, L>, t: &GameTable, list: &mut Applying<L>) {
-    list.as_mut_slice().sort_unstable_by_key(Apply::key);
-    for a in list.iter() {
-        match a.target {
-            Target::Position(i) => apply::apply(s, t, i.into(), a.source, a.change),
-            Target::Set(set) => {
-                let members = s.locked_in(set);
-                apply::apply_to_members(s, t, members, a.source, a.change);
-            }
-            Target::Static(i) => {
-                let members = apply::static_members(s, t, i.into(), a.order);
-                apply::apply_to_members(s, t, members, a.source, a.change);
+fn apply_in_order<L: Layout>(
+    s: &mut Rederive<'_, L>,
+    t: &GameTable,
+    list: &mut [Apply<L>],
+    begun: &mut Option<L::Queue<Begun<L>, 32>>,
+) -> Result<(), Full> {
+    let mut applied = Ok(());
+    let mut head = 0;
+    while head < list.len() {
+        let layer = list[head].layer;
+        let end = head + list[head..].partition_point(|a| a.layer == layer);
+        let segment = &mut list[head..end];
+        // Whether the permanent of each ability beginning in this layer still has it, read
+        // before any effect of the layer applies.
+        for a in segment.iter_mut() {
+            if let Some((from, true)) = a.from {
+                a.lost = !s.has_ability_so_far(position::<L>(from), AbilityIx::new(a.order));
             }
         }
+        for a in segment.iter() {
+            let members = match (a.from, a.target) {
+                (None, Target::Position(i)) => Bitboard::single(s.battlefield()[position::<L>(i)]),
+                (None, Target::Set(set)) => s.locked_in(set),
+                (Some((from, true)), target) => {
+                    let members = match target {
+                        _ if a.lost => None,
+                        Target::Position(i) => {
+                            Some(Bitboard::single(s.battlefield()[position::<L>(i)]))
+                        }
+                        Target::Static(i) => Some(apply::static_members(s, t, i.into(), a.order)),
+                        Target::Set(_) => unreachable!("a static ability locks in no set"),
+                    };
+                    if a.parts > 1 {
+                        let carried = Begun {
+                            from: from.into(),
+                            order: a.order,
+                            members,
+                        };
+                        applied =
+                            applied.and(begun.get_or_insert_with(Default::default).push(carried));
+                    }
+                    let Some(members) = members else {
+                        continue;
+                    };
+                    members
+                }
+                (Some((from, false)), _) => {
+                    let from: u16 = from.into();
+                    let carried = begun.as_ref().and_then(|begun| {
+                        begun
+                            .iter()
+                            .find(|b| (b.from, b.order) == (from, a.order))
+                            .copied()
+                    });
+                    match carried.and_then(|b| b.members) {
+                        Some(members) => members,
+                        None => continue,
+                    }
+                }
+                (None, Target::Static(_)) => unreachable!("a resolved effect names no ability"),
+            };
+            let you = a
+                .from
+                .map(|(from, _)| s.rows()[position::<L>(from)].controller);
+            applied = applied.and(apply::apply_to_members(
+                s, t, members, a.source, a.change, you,
+            ));
+        }
+        head = end;
+    }
+    applied
+}
+
+/// A battlefield position the layout's index names, as a `usize`.
+#[inline]
+fn position<L: Layout>(i: L::Index) -> usize {
+    i.into()
+}
+
+/// Layer 7c's counters ([CR 613.4c]): "Effects and counters that modify power and/or
+/// toughness (but don't set power and/or toughness to a specific number or value) are
+/// applied." Additions commute, so they follow the layer's effects.
+///
+/// [CR 613.4c]: https://yawgatog.com/resources/magic-rules/#R6134c
+#[inline]
+fn counters<L: Layout>(s: &mut Rederive<'_, L>) {
+    for i in 0..s.battlefield().len() {
+        let c = s.object(s.battlefield()[i]).counters();
+        let d = &mut s.results()[i];
+        let delta = c.plus_one as i8 - c.minus_one as i8;
+        d.power = d.power.saturating_add(delta);
+        d.toughness = d.toughness.saturating_add(delta);
     }
 }
 
@@ -387,9 +567,13 @@ fn resolved_effects<L: Layout>(
             layer: change.layer() as u8,
             timestamp: e.timestamp,
             order: 0,
+            part: 0,
             target,
             source: e.source,
             change,
+            from: None,
+            parts: 1,
+            lost: false,
         });
         listed = listed.and(pushed);
     }
@@ -418,10 +602,14 @@ fn player_rules<L: Layout>(s: &mut Rederive<'_, L>, t: &GameTable) -> PerSeat<Ru
             continue;
         }
         let controller = s.results()[i].controller;
-        for ability in what.face(t).abilities {
+        for (n, ability) in what.face(t).abilities.iter().enumerate() {
             let (AbilityKind::Static, Some(rule)) = (ability.kind(), ability.rule()) else {
                 continue;
             };
+            // A permanent that lost the ability changes no rule (CR 613.1f).
+            if !s.has_ability_so_far(i, AbilityIx::new(n as u8)) {
+                continue;
+            }
             // The card table has numbered every rule change its cards name.
             let Some(id) = t.rule_id(rule).filter(|&id| made.contains(id)) else {
                 continue;

@@ -165,6 +165,9 @@ pub trait Layout: Copy + Debug + Default + Eq + Hash + Send + Sync + 'static {
     /// One value for each player, indexed by [`Seat::index`]: as many entries as
     /// [`SlotId::PLAYERS`].
     type PerPlayer<T: Item>: Table<T>;
+    /// The abilities of a face a permanent has lost ([`crate::object::Derived::lost`]): how
+    /// many of a face's abilities an effect can remove one by one.
+    type AbilityMask: crate::object::AbilityMask;
 
     /// The slots of the shared pool for tokens and spell copies, after every deck's
     /// ([`SlotId::pool`]).
@@ -197,6 +200,7 @@ impl Layout for Small {
     type Table<T: Item, const N: usize> = [T; N];
     type Deck<T: Item + Default> = Fixed<T, { Slot::DECK_SLOTS }>;
     type PerPlayer<T: Item> = PerSeat<T>;
+    type AbilityMask = u16;
 
     const TOKEN_POOL: Bitboard =
         Bitboard([0, !0 << (Slot::POOL - 64), !0, !0 >> (256 - Slot::COUNT)]);
@@ -237,6 +241,7 @@ impl Layout for Large {
     type Table<T: Item, const N: usize> = PerSlot<T>;
     type Deck<T: Item + Default> = Vec<T>;
     type PerPlayer<T: Item> = PerSeat<T>;
+    type AbilityMask = u64;
 
     const TOKEN_POOL: Bitboard<LargeSlot> = {
         assert!(LargeSlot::POOL.is_multiple_of(64) && LargeSlot::COUNT == 16 * 64);
