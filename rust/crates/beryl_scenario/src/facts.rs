@@ -8,8 +8,9 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Debug, Write};
 
 use beryl_card::{
-    Ability, AbilityKind, Amount, Behavior, CardDef, CastingOption, Cost, CostAction, CostPart,
-    Effect, Face, ManaColor, ManaCost, ManaSet, Measure, Objects, Players, Taken, TargetSpec,
+    Ability, AbilityKind, Amount, BasicLandTypes, Behavior, CardDef, CastingOption, Cost,
+    CostAction, CostPart, Effect, Face, ManaColor, ManaCost, ManaSet, Measure, Modification,
+    Objects, Players, Taken, TargetSpec,
 };
 use beryl_engine::CardTable;
 use serde::Serialize;
@@ -70,6 +71,11 @@ pub struct AbilityFacts {
     /// A Rust body, which nothing can read.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub custom: bool,
+    /// A static ability that sets or adds basic land types, as Blood Moon's or Urborg's:
+    /// lands then tap for mana their own text doesn't write, so an exporter can't name the
+    /// mana ability a payment taps from a land's text.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub changes_land_types: bool,
 }
 
 /// A cost: its mana in Scryfall's notation, then its other parts in the order printed.
@@ -301,6 +307,13 @@ fn ability_facts(index: String, ability: &Ability) -> AbilityFacts {
         targets: ability.targets().iter().map(target_facts).collect(),
         instructions,
         custom,
+        changes_land_types: ability.layer().is_some_and(|spec| {
+            spec.modifications.iter().any(|m| match *m {
+                Modification::SetLandTypes(_) => true,
+                Modification::AddSubtype(subtype) => BasicLandTypes::of_subtype(subtype).is_some(),
+                _ => false,
+            })
+        }),
     }
 }
 

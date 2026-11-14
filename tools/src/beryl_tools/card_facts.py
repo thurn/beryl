@@ -185,6 +185,17 @@ class Cards:
         mana = [a for a in self.abilities(source) if a["kind"] == "Mana"]
         return len(mana) > 1 or (bool(mana) and source in self.modal_back)
 
+    def change_land_types(self) -> bool:
+        """Whether a card the scenario names sets or adds basic land types, as Blood Moon or
+        Urborg: a land may then tap for mana its own text doesn't write, so no payment's
+        mana ability can be named from a land's text."""
+        return any(
+            a.get("changes_land_types")
+            for faces in self.faces.values()
+            for f in faces
+            for a in cast(list[Json], f.get("abilities", []))
+        )
+
     def sacrificed_for_mana_of_any_color(self, source: str) -> bool:
         """Whether `source` makes mana by sacrificing itself for one of several colors, the
         color of which XMage asks and Beryl's trace does not record."""

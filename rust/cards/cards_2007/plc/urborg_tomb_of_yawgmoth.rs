@@ -38,17 +38,19 @@ pub mod scenarios {
     const URBORG: &str = Card::UrborgTombOfYawgmoth;
 
     // Damn is a {B}{B} sorcery that destroys target creature; `Prop::Creature` is Elite
-    // Spellbinder, a 3/1 flier.
+    // Spellbinder, a 3/1 flier. Each scenario has a second creature, so Damn's target is a
+    // choice the scenario names, as the oracles need.
 
     pub const SCENARIOS: &[Scenario] = &[
         // Urborg is a Swamp and so is the Plains: together they pay Damn's {B}{B}.
         Scenario::new("Urborg and another land are Swamps")
             .interaction(&[Card::Damn])
-            .battlefield(P0, &[URBORG, Card::Plains])
+            .battlefield(P0, &[URBORG, Card::Plains, Prop::SmallCreature])
             .hand(P0, &[Card::Damn])
             .battlefield(P1, &[Prop::Creature])
             .actions(&[
                 ME.casts(Card::Damn),
+                ME.targets(Prop::Creature),
                 Resolve,
                 THEM.has(Zone::Graveyard, Prop::Creature, 1),
             ]),
@@ -56,12 +58,13 @@ pub mod scenarios {
         Scenario::new("the opponent's lands are Swamps too")
             .interaction(&[Card::Damn])
             .battlefield(P0, &[URBORG, Prop::Creature])
-            .battlefield(P1, &[Card::Plains, Card::Plains])
+            .battlefield(P1, &[Card::Plains, Card::Plains, Prop::SmallCreature])
             .hand(P1, &[Card::Damn])
             .actions(&[
                 ME.done_attacking(),
                 advance_to(2, TurnStep::PrecombatMain),
                 THEM.casts(Card::Damn),
+                THEM.targets(Prop::Creature),
                 Resolve,
                 ME.has(Zone::Graveyard, Prop::Creature, 1),
             ]),

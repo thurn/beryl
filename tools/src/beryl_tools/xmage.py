@@ -489,7 +489,7 @@ class Exporter:
             return
         if source in taps:
             taps.remove(source)
-        if any(self.cards.mana_choice(name) for name in taps):
+        if self.cards.change_land_types() or any(map(self.cards.mana_choice, taps)):
             self.payment_left_to_xmage = True
             return
         for name in taps:

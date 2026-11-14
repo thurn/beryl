@@ -84,6 +84,21 @@ def test_payments_replay_the_lands_beryl_tapped() -> None:
     assert lines.index(tap) < lines.index(cast)
 
 
+def test_payments_are_left_to_xmage_where_land_types_change() -> None:
+    # With a card that sets or adds land types, as Urborg, a Plains may tap for {B}, which
+    # its own text doesn't write: XMage pays from its own choice of sources.
+    name = "Get Lost on a creature gives two Maps; one explores a land into hand"
+    dump = json.loads(FIXTURE.read_text())
+    entry = next(e for e in dump if e["name"] == name)
+    entry["cards"]["Plains"]["faces"][0]["abilities"].append(
+        {"index": "Own 1", "kind": "Static", "changes_land_types": True}
+    )
+    faces = xmage_java.Faces.load(card_store.STORE)
+    export = xmage.export_one(entry, 1, faces, XMAGE_CARDS)
+    assert export.unsupported is None, export.unsupported
+    assert not any(line.startswith("tapSource(") for line in export.body)
+
+
 def test_coin_flips_replay_beryls_results() -> None:
     lines = body("Mana Crypt's flip lost: 3 damage to its controller")
     assert "setFlipCoinResult(playerB, false);" in lines
