@@ -1,4 +1,9 @@
 {
+  "Bloodghast": {
+    "mechanic": "an effect returning a card from a graveyard to the battlefield under its owner's control (Effect has only ReturnToHand and ReturnTransformed); also a rule that a creature can't block (RuleChange governs only casting spells and loyalty abilities)",
+    "rule": "CR 113.6b",
+    "text": "This creature can't block.\nLandfall — Whenever a land you control enters, you may return this card from your graveyard to the battlefield."
+  },
   "Flickerwisp": {
     "mechanic": "a delayed ability that carries an object (the exiled card) and an effect returning a card from exile to the battlefield under its owner's control",
     "rule": "CR 603.7c",
