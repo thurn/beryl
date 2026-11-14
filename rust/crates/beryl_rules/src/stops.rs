@@ -10,6 +10,7 @@ use crate::layout::Layout;
 use crate::observation::Observation;
 use crate::profile::{Profile, StepStops, Stops};
 use crate::state::{Pending, State, TurnStep};
+use crate::table::GameTable;
 use crate::turn::any_attacking;
 
 /// Whether `player`'s priority now is a decision, given they have a legal action.
@@ -110,6 +111,6 @@ pub fn next_step_stop<L: Layout>(
 
 /// Whether the defending player in the position `obs` shows has a creature that can block
 /// now, so that declaring blockers would be a decision of theirs.
-pub fn can_declare_blockers<L: Layout>(obs: Observation<'_, L>) -> bool {
-    combat::can_declare_blockers(obs.shown())
+pub fn can_declare_blockers<L: Layout>(obs: Observation<'_, L>, t: &GameTable) -> bool {
+    combat::can_declare_blockers(obs.shown(), t)
 }

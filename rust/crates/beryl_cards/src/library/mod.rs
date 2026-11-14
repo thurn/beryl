@@ -107,6 +107,26 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         names::SNAPCASTER_MAGE,
         keywords::flashback::SCENARIOS,
     ),
+    (
+        "keywords::indestructible",
+        keywords::indestructible::INDESTRUCTIBLE,
+        keywords::indestructible::SCENARIOS,
+    ),
+    (
+        "keywords::landwalk",
+        keywords::landwalk::LANDWALKER,
+        keywords::landwalk::SCENARIOS,
+    ),
+    (
+        "keywords::lifelink",
+        keywords::lifelink::LIFELINKER,
+        keywords::lifelink::SCENARIOS,
+    ),
+    (
+        "keywords::trample",
+        keywords::trample::TRAMPLER,
+        keywords::trample::SCENARIOS,
+    ),
     ("linked", names::CURRENCY_CONVERTER, linked::SCENARIOS),
     ("mana", names::MANA_DRAIN, mana::SCENARIOS),
     (

@@ -79,7 +79,7 @@ pub(crate) fn begin_step<L: Layout>(
             }
         }
         TurnStep::DeclareAttackers => combat::begin_attackers(s),
-        TurnStep::DeclareBlockers => combat::begin_blockers(s),
+        TurnStep::DeclareBlockers => combat::begin_blockers(s, t),
         TurnStep::FirstStrikeDamage | TurnStep::CombatDamage => {
             combat::begin_damage(s, t, sink)?;
         }

@@ -193,6 +193,17 @@ this document.
   over the controls' (R3). A step whose choice the control does not offer is
   left out of both sums and counted in the report. `docs/benchmarking.md`, "The
   present-cost gate", describes what was built.
+- **Keywords the partner cards need.** Trample, lifelink and indestructible are
+  bits of `Keywords`. Landwalk was planned as a keyword holding a `Subtype`,
+  with a byte in `Derived` for the basic land types a permanent walks. `Derived`
+  has no padding, so that byte grows each of its 128 rows by 8 bytes and
+  `State<Small>` by 1,024, past its limit. Instead each basic landwalk is a bit
+  of `Keywords` (`ISLANDWALK` and the others, with `Keywords::LANDWALK` naming
+  each one's land type). That costs no bytes, a card complete from the store
+  reads "Islandwalk" with no other code, and Lord of Atlantis grants islandwalk
+  through `Modification::AddKeywords`. Trample offers no division when one
+  creature blocks, and gives what it attacks only the most it can take: damage
+  past lethal on a blocker changes nothing the pool reads.
 
 ### 2. Layers
 
@@ -327,9 +338,10 @@ are built with their first card.
 - **Words.** A color word, a basic land type and a creature type inside an
   ability become values of private types. The only way to the value takes the
   word changes of the object the ability is printed on. Filters, parameterized
-  keywords (protection from a color, landwalk), conditions and modifications
-  hold them. A card's name is never changed (CR 612.2), and a mana symbol is not
-  a color word.
+  keywords (protection from a color), conditions and modifications hold them.
+  The basic landwalks are five bits of `Keywords` (group 1), so a change of land
+  type word maps one landwalk bit to another. A card's name is never changed (CR
+  612.2), and a mana symbol is not a color word.
 - **A text change** is a layer 3 entry of the Effects store on one object,
   permanent or spell: a kind of word, from and to. Several compose in timestamp
   order. It does not reach an ability another object granted (CR 612.3), because

@@ -52,9 +52,9 @@ pub(super) fn decision_view<L: Layout>(
         candidates,
         prompt: Box::new(prompt_view(t, obs, d, asker)),
         resolving: item,
-        pass_to: (d.kind == DecisionKind::Priority).then(|| pass_to(obs, stops).into()),
+        pass_to: (d.kind == DecisionKind::Priority).then(|| pass_to(t, obs, stops).into()),
         pass_on: if d.kind == DecisionKind::Priority {
-            pass_on(obs, stops).map(Into::into)
+            pass_on(t, obs, stops).map(Into::into)
         } else {
             None
         },
@@ -114,7 +114,7 @@ pub(super) fn halt_view<L: Layout>(
         }],
         resolving: None,
         prompt: Box::new(halt_prompt()),
-        pass_to: Some(pass_to(obs, stops).into()),
+        pass_to: Some(pass_to(t, obs, stops).into()),
         pass_on: None,
         source: None,
         halt: true,
@@ -127,8 +127,13 @@ pub(super) fn halt_view<L: Layout>(
 
 /// [`DecisionView::pass_to`]: the engine's [`next_stop`], less the declare blockers step for a
 /// defender with nothing to block with under the smart stops ([`skip_idle_blocks`]).
-pub(super) fn pass_to<L: Layout>(obs: Observation<'_, L>, stops: StopsSetting) -> NextStop {
+pub(super) fn pass_to<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    stops: StopsSetting,
+) -> NextStop {
     skip_idle_blocks(
+        t,
         obs,
         stops,
         next_stop(obs, stops.stops(), stops.step_stops()),
@@ -137,11 +142,15 @@ pub(super) fn pass_to<L: Layout>(obs: Observation<'_, L>, stops: StopsSetting) -
 
 /// [`DecisionView::pass_on`]: where the viewer's next stop in a later step is, when passing
 /// would stop them again in this one, for the stack resolving or for combat damage.
-pub(crate) fn pass_on<L: Layout>(obs: Observation<'_, L>, stops: StopsSetting) -> Option<NextStop> {
-    match pass_to(obs, stops) {
+pub(crate) fn pass_on<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    stops: StopsSetting,
+) -> Option<NextStop> {
+    match pass_to(t, obs, stops) {
         NextStop::Resolve | NextStop::CombatDamage => {
             let later = next_step_stop(obs, stops.step_stops(), obs.turn().step());
-            Some(skip_idle_blocks(obs, stops, later))
+            Some(skip_idle_blocks(t, obs, stops, later))
         }
         NextStop::Step(_) | NextStop::NextTurn => None,
     }
@@ -152,6 +161,7 @@ pub(crate) fn pass_on<L: Layout>(obs: Observation<'_, L>, stops: StopsSetting) -
 /// on to their next stop after it: by default the end step, as the postcombat main phase is
 /// the active player's.
 fn skip_idle_blocks<L: Layout>(
+    t: &GameTable,
     obs: Observation<'_, L>,
     stops: StopsSetting,
     next: NextStop,
@@ -160,7 +170,7 @@ fn skip_idle_blocks<L: Layout>(
         NextStop::Step(TurnStep::DeclareBlockers)
             if !stops.full_control
                 && obs.turn().active() != obs.viewer()
-                && !can_declare_blockers(obs) =>
+                && !can_declare_blockers(obs, t) =>
         {
             next_step_stop(obs, stops.step_stops(), TurnStep::DeclareBlockers)
         }

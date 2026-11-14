@@ -58,12 +58,15 @@ impl CardDef {
     /// numbers what this finds (`beryl_kernel`'s `GameTable`); a Rust body that names
     /// another subtype is read by nothing, so it names none a game does not.
     pub fn subtypes(&self, visit: &mut dyn FnMut(Subtypes)) {
+        // "Islandwalk" asks whether a land the defending player controls is an Island
+        // (CR 702.14c), so a landwalk names its subtype.
         let given = |modification: &Modification| match *modification {
             Modification::AddSubtype(subtype) => Some(Subtypes::of(&[subtype])),
+            Modification::AddKeywords(keywords) => Some(keywords.landwalk()),
             _ => None,
         };
         for face in self.faces {
-            visit(face.subtypes);
+            visit(face.subtypes.union(face.keywords.landwalk()));
             for ability in face.abilities.iter().chain(face.grants) {
                 if let Some(spec) = ability.layer()
                     && let Some(given) = given(&spec.modification)

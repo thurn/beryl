@@ -3,7 +3,7 @@
 use crate::PlayerSet;
 use crate::actions::regenerate;
 use crate::bitboard::Bitboard;
-use crate::card::{Subtype, Supertypes, Types};
+use crate::card::{Keywords, Subtype, Supertypes, Types};
 use crate::decision::{Outcome, StallReason};
 use crate::event::{self, Entry, Event, LossCause, Reason, Sink};
 use crate::fixed::Full;
@@ -134,9 +134,13 @@ fn doomed<L: Layout>(s: &State<L>, t: &GameTable) -> Doomed<L> {
         }
         let o = s.object(slot);
         let types = d.types;
+        // CR 702.12b: indestructible permanents "ignore the state-based action that checks
+        // for lethal damage".
         let dies = types.contains(Types::CREATURE)
             && (d.toughness <= 0
-                || (o.damage() > 0 && i16::from(o.damage()) >= i16::from(d.toughness)));
+                || (o.damage() > 0
+                    && i16::from(o.damage()) >= i16::from(d.toughness)
+                    && !d.keywords.contains(Keywords::INDESTRUCTIBLE)));
         let unattached = auras && o.attached_to().is_none() && aura.of(d.subtypes);
         if dies || unattached || (types.contains(Types::PLANESWALKER) && o.counters().loyalty == 0)
         {

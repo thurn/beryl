@@ -37,7 +37,7 @@ impl Game {
         }
         let next = on_board!(&mut self.board, b => {
             let obs = Observation::new(view(&b.state, &self.table, &mut b.scratch), self.human);
-            crate::protocol::pass_on(obs, self.stops)
+            crate::protocol::pass_on(&self.table, obs, self.stops)
         })?;
         let turn = self.board.turn().number();
         Some(match next {

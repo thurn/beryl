@@ -102,6 +102,65 @@ bitset! {
         /// [CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a): "'Flash' means
         /// 'You may play this card any time you could cast an instant.'"
         FLASH = 1,
+        /// [CR 702.19b](https://yawgatog.com/resources/magic-rules/#R70219b): "The
+        /// controller of an attacking creature with trample first assigns damage to the
+        /// creature(s) blocking it. Once all those blocking creatures are assigned lethal
+        /// damage, any excess damage is assigned as its controller chooses among those
+        /// blocking creatures and the player, planeswalker, or battle the creature is
+        /// attacking."
+        TRAMPLE = 11,
+        /// [CR 702.15b](https://yawgatog.com/resources/magic-rules/#R70215b): "Damage dealt by
+        /// a source with lifelink causes that source's controller, or its owner if it has no
+        /// controller, to gain that much life (in addition to any other results that damage
+        /// causes)."
+        LIFELINK = 12,
+        /// [CR 702.12b](https://yawgatog.com/resources/magic-rules/#R70212b): "A permanent
+        /// with indestructible can't be destroyed. Such permanents aren't destroyed by lethal
+        /// damage, and they ignore the state-based action that checks for lethal damage (see
+        /// rule 704.5g)."
+        INDESTRUCTIBLE = 13,
+        /// Landwalk for each basic land type, a bit each
+        /// ([CR 702.14c](https://yawgatog.com/resources/magic-rules/#R70214c)): "A creature
+        /// with landwalk can't be blocked as long as the defending player controls at least
+        /// one land with the specified land type (as in “islandwalk”)". [`Keywords::LANDWALK`]
+        /// names the land type of each.
+        PLAINSWALK = 16,
+        ISLANDWALK = 17,
+        SWAMPWALK = 18,
+        MOUNTAINWALK = 19,
+        FORESTWALK = 20,
+    }
+}
+
+impl Keywords {
+    /// Each landwalk keyword with the land subtype it names
+    /// ([CR 702.14a](https://yawgatog.com/resources/magic-rules/#R70214a)): "Landwalk is a
+    /// generic term that appears within an object's rules text as “[type]walk,” where [type]
+    /// is usually a land type". Those for the basic land types are all the engine has.
+    pub const LANDWALK: [(Keywords, Subtype); 5] = [
+        (Keywords::PLAINSWALK, Subtype::Plains),
+        (Keywords::ISLANDWALK, Subtype::Island),
+        (Keywords::SWAMPWALK, Subtype::Swamp),
+        (Keywords::MOUNTAINWALK, Subtype::Mountain),
+        (Keywords::FORESTWALK, Subtype::Forest),
+    ];
+
+    /// Every landwalk keyword.
+    pub const ANY_LANDWALK: Keywords = Keywords::PLAINSWALK
+        .union(Keywords::ISLANDWALK)
+        .union(Keywords::SWAMPWALK)
+        .union(Keywords::MOUNTAINWALK)
+        .union(Keywords::FORESTWALK);
+
+    /// The land subtypes the landwalk keywords among `self` name.
+    pub fn landwalk(self) -> Subtypes {
+        let mut set = Subtypes::NONE;
+        for (keyword, subtype) in Self::LANDWALK {
+            if self.contains(keyword) {
+                set = set.union(Subtypes::of(&[subtype]));
+            }
+        }
+        set
     }
 }
 

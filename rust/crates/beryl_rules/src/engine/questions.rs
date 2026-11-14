@@ -83,7 +83,7 @@ pub(crate) fn decision<L: Layout>(
         )?
         .about(Bitboard::single(slot))),
         Pending::DeclareAttackers { attacker } => combat::attack_decision(s, attacker),
-        Pending::DeclareBlockers { blocker } => combat::block_decision(s, blocker),
+        Pending::DeclareBlockers { blocker } => combat::block_decision(s, t, blocker),
         Pending::CombatDamage { done, lethal } => combat::division_decision(s, done, lethal),
         Pending::Casting(c) => cast::decision(s, t, sink, &c),
         Pending::TurningFaceUp { slot, remaining } => {

@@ -1,5 +1,6 @@
 //! Combat (CR 506 to 511) with test-only creatures: declarations one pick at a time,
-//! evasion, damage and its division, first strike, planeswalkers and combat triggers.
+//! evasion, damage and its division, first strike, planeswalkers and combat triggers. The
+//! keywords that change combat damage, destruction and blocking are in [`keywords`].
 
 use beryl_card::effect::build::{
     create_attacking_tokens, each_opponent, for_each_player, gain_life, that_player, you,
@@ -45,6 +46,21 @@ creature!(BIRD, "Bird", 2 / 2, Keywords::FLYING);
 creature!(SPIDER, "Spider", 1 / 4, Keywords::REACH);
 creature!(KNIGHT, "Knight", 2 / 2, Keywords::FIRST_STRIKE);
 creature!(SENTRY, "Sentry", 1 / 3, Keywords::VIGILANCE);
+creature!(WURM, "Wurm", 5 / 5, Keywords::TRAMPLE);
+creature!(CLERIC, "Cleric", 2 / 2, Keywords::LIFELINK);
+creature!(GOLEM, "Golem", 2 / 2, Keywords::INDESTRUCTIBLE);
+creature!(WRAITH, "Wraith", 3 / 3, Keywords::SWAMPWALK);
+
+/// A land with the subtype Swamp, which a swampwalker's defender may control.
+static SWAMP: CardDef = CardDef {
+    name: "Swamp",
+    faces: &[Face {
+        types: Types::LAND,
+        subtypes: Subtypes::of(&[Subtype::Swamp]),
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
 
 static WALKER: CardDef = CardDef {
     name: "Walker",
@@ -121,6 +137,7 @@ static WAGON: CardDef = CardDef {
 
 static CARDS: CardTable = CardTable::new(&[
     &BEAR, &GIANT, &OGRE, &BIRD, &SPIDER, &KNIGHT, &SENTRY, &WALKER, &RAIDER, &CAPTAIN, &WAGON,
+    &WURM, &CLERIC, &GOLEM, &WRAITH, &SWAMP,
 ]);
 
 const DECK: &Decklist = &[
@@ -135,6 +152,11 @@ const DECK: &Decklist = &[
     (4, "Raider"),
     (4, "Captain"),
     (4, "Wagon"),
+    (2, "Wurm"),
+    (2, "Cleric"),
+    (2, "Golem"),
+    (2, "Wraith"),
+    (2, "Swamp"),
 ];
 
 /// A game stopped at the attacking player's first precombat main phase, with the event sink
@@ -433,9 +455,14 @@ fn flying_attackers_are_blocked_only_by_flying_or_reach() {
     g.pick(DecisionKind::Attacker, Opt::Attack(bear));
     let blockers = g.expect(DecisionKind::Blocker);
     assert_eq!(blockers.player, d);
+    // Blockers are offered in slot order, which the deal decides.
     assert_eq!(
         options(&blockers),
-        vec![Opt::Done, Opt::Block(ground), Opt::Block(spider)]
+        vec![
+            Opt::Done,
+            Opt::Block(ground.min(spider)),
+            Opt::Block(ground.max(spider))
+        ]
     );
     // The ground Bear can block only the ground Bear: no choice of attacker.
     g.pick(DecisionKind::Blocker, Opt::Block(ground));
@@ -981,3 +1008,5 @@ fn passing_goes_to_the_next_smart_stop() {
     assert_eq!(next(&g, a, Stops::Smart), NextStop::NextTurn);
     assert_eq!(next(&g, d, Stops::Smart), NextStop::Step(TurnStep::End));
 }
+
+mod keywords;

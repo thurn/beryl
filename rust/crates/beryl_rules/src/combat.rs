@@ -7,16 +7,19 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{Keywords, Part, Prompt, Purpose, Types};
-use crate::damage;
-use crate::decision::{Candidates, Choice, Decision, DecisionKind, Opt};
+use crate::decision::{Candidates, Decision, DecisionKind, Opt};
 use crate::engine::collapse;
-use crate::event::{self, Event, Recipient, Sink};
+use crate::event::{self, Event, Sink};
 use crate::fixed::Full;
-use crate::game::Game;
 use crate::ids::Seat;
-use crate::layout::{Layout, Queue, Small};
-use crate::state::{AttackTarget, BATTLEFIELD, CombatRole, ObjectRef, Pending, State, TurnStep};
+use crate::layout::{Layout, Queue};
+use crate::state::{AttackTarget, CombatRole, Pending, State, TurnStep};
 use crate::table::GameTable;
+
+mod assignment;
+
+pub use assignment::preferred_damage;
+pub(crate) use assignment::{begin_damage, divide, division_decision, first_strike_step};
 
 /// The defending player ([CR 506.2]): "During the combat phase of a two-player game, the nonactive
 /// player is the defending player".
@@ -248,7 +251,8 @@ fn declare_attack<L: Layout>(
 }
 
 /// Whether `blocker` may block `attacker`: an attacker attacking the defending player or a
-/// planeswalker they control (one attacking nothing can't be blocked), within its evasion.
+/// planeswalker they control (one attacking nothing can't be blocked), within its evasion:
+/// flying and its landwalk ([`landwalks`]).
 ///
 /// [CR 509.1a](https://yawgatog.com/resources/magic-rules/#R5091a): "For each of the chosen
 /// creatures, the defending player chooses one creature for it to block that's attacking that
@@ -256,13 +260,40 @@ fn declare_attack<L: Layout>(
 ///
 /// [CR 702.9b](https://yawgatog.com/resources/magic-rules/#R7029b): "A creature with flying can't
 /// be blocked except by creatures with flying and/or reach."
-fn can_block<L: Layout>(s: &State<L>, blocker: L::Slot, attacker: L::Slot) -> bool {
-    matches!(
-        s.object(attacker).attack_target(),
-        Some(AttackTarget::Player(_) | AttackTarget::Planeswalker(_))
-    ) && (!has(s, attacker, Keywords::FLYING)
+fn can_block<L: Layout>(s: &State<L>, t: &GameTable, blocker: L::Slot, attacker: L::Slot) -> bool {
+    let defending = match s.object(attacker).attack_target() {
+        Some(AttackTarget::Player(player)) => player,
+        Some(AttackTarget::Planeswalker(walker)) => s.controller(walker),
+        _ => return false,
+    };
+    (!has(s, attacker, Keywords::FLYING)
         || has(s, blocker, Keywords::FLYING)
         || has(s, blocker, Keywords::REACH))
+        && !landwalks(s, t, attacker, defending)
+}
+
+/// Whether `attacker` can't be blocked for its landwalk, attacking `defending` or a planeswalker
+/// of theirs ([CR 702.14c]): "A creature with landwalk can't be blocked as long as the defending
+/// player controls at least one land with the specified land type (as in “islandwalk”)". Most
+/// creatures have none, so the scan of the lands is out of line.
+///
+/// [CR 702.14c]: https://yawgatog.com/resources/magic-rules/#R70214c
+#[inline]
+fn landwalks<L: Layout>(s: &State<L>, t: &GameTable, attacker: L::Slot, defending: Seat) -> bool {
+    #[cold]
+    fn walks<L: Layout>(s: &State<L>, t: &GameTable, walk: Keywords, defending: Seat) -> bool {
+        Keywords::LANDWALK
+            .iter()
+            .filter(|&&(keyword, _)| walk.contains(keyword))
+            .any(|&(_, subtype)| {
+                let has = t.subtypes().has(subtype);
+                s.permanents().any(|(_, d)| {
+                    d.controller == defending && d.types.contains(Types::LAND) && has.of(d.subtypes)
+                })
+            })
+    }
+    let walk = s.derived(attacker).keywords;
+    walk.intersects(Keywords::ANY_LANDWALK) && walks(s, t, walk, defending)
 }
 
 /// Whether a creature may still be declared as a blocker: an untapped creature of the
@@ -271,27 +302,27 @@ fn can_block<L: Layout>(s: &State<L>, blocker: L::Slot, attacker: L::Slot) -> bo
 /// [CR 509.1a](https://yawgatog.com/resources/magic-rules/#R5091a): "The defending player chooses
 /// which creatures they control, if any, will block. The chosen creatures must be untapped and they
 /// can't also be battles."
-fn may_block<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
+fn may_block<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> bool {
     let o = s.object(slot);
     s.defending_players().contains(s.controller(slot))
         && is_creature(s, slot)
         && !o.is_tapped()
         && !o.is_blocking()
-        && s.battlefield().iter().any(|&a| can_block(s, slot, a))
+        && s.battlefield().iter().any(|&a| can_block(s, t, slot, a))
 }
 
 /// Whether the defending player has a creature that can block now, so that declaring blockers
 /// is a decision.
-pub(crate) fn can_declare_blockers<L: Layout>(s: &State<L>) -> bool {
-    s.battlefield().iter().any(|&slot| may_block(s, slot))
+pub(crate) fn can_declare_blockers<L: Layout>(s: &State<L>, t: &GameTable) -> bool {
+    s.battlefield().iter().any(|&slot| may_block(s, t, slot))
 }
 
 /// The declare blockers step's turn-based action begins ([CR 509.1]): "First, the defending player
 /// declares blockers. This turn-based action doesn't use the stack."
 ///
 /// [CR 509.1]: https://yawgatog.com/resources/magic-rules/#R5091
-pub(crate) fn begin_blockers<L: Layout>(s: &mut State<L>) {
-    if can_declare_blockers(s) {
+pub(crate) fn begin_blockers<L: Layout>(s: &mut State<L>, t: &GameTable) {
+    if can_declare_blockers(s, t) {
         s.ask(Pending::DeclareBlockers { blocker: None });
     }
 }
@@ -300,6 +331,7 @@ pub(crate) fn begin_blockers<L: Layout>(s: &mut State<L>) {
 /// chosen, the attacker it blocks. Evasion prunes both.
 pub(crate) fn block_decision<L: Layout>(
     s: &State<L>,
+    t: &GameTable,
     blocker: Option<L::Slot>,
 ) -> Result<Decision<L>, Full> {
     let player = defender(s);
@@ -308,7 +340,7 @@ pub(crate) fn block_decision<L: Layout>(
             .battlefield()
             .iter()
             .copied()
-            .filter(|&a| can_block(s, blocker, a))
+            .filter(|&a| can_block(s, t, blocker, a))
             .collect();
         return Ok(Decision {
             player,
@@ -325,7 +357,7 @@ pub(crate) fn block_decision<L: Layout>(
         .battlefield()
         .iter()
         .copied()
-        .filter(|&slot| may_block(s, slot))
+        .filter(|&slot| may_block(s, t, slot))
         .collect();
     // Candidates are listed in the candidate order, which a `Choice` counts in.
     for slot in s.in_candidate_order(collapse(s, able)) {
@@ -396,332 +428,6 @@ fn note_blocks<L: Layout>(s: &State<L>, sink: &mut Sink<L>) {
         }
     }
     sink.apart();
-}
-
-/// Whether the combat damage step gets a first-strike step before it ([CR 510.4]): "If at least one
-/// attacking or blocking creature has first strike ... as the combat damage step begins, the only
-/// creatures that assign combat damage in that step are those with first strike ... After that
-/// step, instead of proceeding to the end of combat step, the phase gets a second combat damage
-/// step." None of the cards has double strike.
-///
-/// [CR 510.4]: https://yawgatog.com/resources/magic-rules/#R5104
-pub(crate) fn first_strike_step<L: Layout>(s: &State<L>) -> bool {
-    s.battlefield()
-        .iter()
-        .any(|&slot| in_combat_now(s, slot) && has(s, slot, Keywords::FIRST_STRIKE))
-}
-
-/// Whether a creature in combat assigns combat damage in this step: in a first-strike step
-/// those with first strike; in the other, "the remaining attackers and blockers that had
-/// neither first strike nor double strike as the first combat damage step began" (CR 510.4).
-fn assigns_now<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
-    if !in_combat_now(s, slot) {
-        return false;
-    }
-    if s.turn().step() == TurnStep::FirstStrikeDamage {
-        has(s, slot, Keywords::FIRST_STRIKE)
-    } else {
-        !s.object(slot).struck_first()
-    }
-}
-
-/// The combat damage a creature assigns ([CR 510.1a]): "Each attacking creature and each blocking
-/// creature assigns combat damage equal to its power. Creatures that would assign 0 or less damage
-/// this way don't assign combat damage at all."
-///
-/// [CR 510.1a]: https://yawgatog.com/resources/magic-rules/#R5101a
-fn power<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
-    u8::try_from(s.derived(slot).power.max(0)).unwrap_or(0)
-}
-
-/// The damage that would be lethal to a creature: its toughness less the damage already marked on
-/// it ([CR 120.6]): "If the total damage marked on a creature is greater than or equal to its
-/// toughness, that creature has been dealt lethal damage". At least 1.
-///
-/// [CR 120.6]: https://yawgatog.com/resources/magic-rules/#R1206
-fn lethal<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
-    let left = i16::from(s.derived(slot).toughness) - i16::from(s.object(slot).damage());
-    u8::try_from(left.clamp(1, 255)).unwrap_or(1)
-}
-
-/// The next attacker whose damage its controller divides: blocked by two or more creatures
-/// and assigning damage now, and not yet divided.
-fn next_division<L: Layout>(s: &State<L>, done: Bitboard<L::Slot>) -> Option<L::Slot> {
-    s.battlefield().iter().copied().find(|&slot| {
-        s.object(slot).is_blocked()
-            && !done.contains(slot)
-            && assigns_now(s, slot)
-            && power(s, slot) > 0
-            && blockers_of(s, slot).count() >= 2
-    })
-}
-
-/// The combat damage step's turn-based actions begin ([CR 510.1]): "First, the active player
-/// announces how each attacking creature assigns its combat damage, then the defending player
-/// announces how each blocking creature assigns its combat damage." A blocking creature blocks one
-/// attacker, so only the attackers' divisions are choices; when none is, the damage is dealt at
-/// once.
-///
-/// [CR 510.1]: https://yawgatog.com/resources/magic-rules/#R5101
-pub(crate) fn begin_damage<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-) -> Result<(), Full> {
-    if s.turn().step() == TurnStep::FirstStrikeDamage {
-        for i in 0..s.battlefield().len() {
-            let slot = s.battlefield()[i];
-            if assigns_now(s, slot) {
-                s.mark_struck_first(slot);
-            }
-        }
-    }
-    if next_division(s, Bitboard::EMPTY).is_some() {
-        s.ask(Pending::CombatDamage {
-            done: Bitboard::EMPTY,
-            lethal: Bitboard::EMPTY,
-        });
-        Ok(())
-    } else {
-        deal(s, t, sink, Bitboard::EMPTY)
-    }
-}
-
-/// The next pick of a damage division: a blocker to deal lethal damage to, or done.
-///
-/// [CR 510.1c](https://yawgatog.com/resources/magic-rules/#R5101c): "If two or more creatures are
-/// blocking it, it assigns its combat damage to those creatures divided as its controller chooses
-/// among them." Divisions are offered by their distinct outcomes (§11): which blockers are dealt
-/// lethal damage, picked one at a time while the damage left covers another. "Done" is offered once
-/// the damage left can go somewhere without killing another blocker: onto a blocker already dealt
-/// lethal damage, or below lethal on the others. None of the cards deals noncombat damage to
-/// creatures, so damage on a survivor never matters.
-pub(crate) fn division_decision<L: Layout>(
-    s: &State<L>,
-    done: Bitboard<L::Slot>,
-    chosen: Bitboard<L::Slot>,
-) -> Result<Decision<L>, Full> {
-    let attacker = next_division(s, done).expect("a division without an attacker");
-    let blockers = blockers_of(s, attacker);
-    let killed = blockers & chosen;
-    let spent: u32 = killed.sum(|b| u32::from(lethal(s, b)));
-    let left = u32::from(power(s, attacker)) - spent;
-    let absorbable: u32 = (blockers & !chosen).sum(|b| u32::from(lethal(s, b)) - 1);
-    let mut list: L::Queue<Opt<L>, 64> = Default::default();
-    if !killed.is_empty() || left <= absorbable {
-        list.push(Opt::Done)?;
-    }
-    let more = (blockers & !chosen).filter(|b| u32::from(lethal(s, b)) <= left);
-    // Candidates are listed in the candidate order, which a `Choice` counts in.
-    for b in s.in_candidate_order(collapse(s, more)) {
-        list.push(Opt::Lethal(b))?;
-    }
-    Ok(Decision {
-        player: s.turn().active(),
-        kind: DecisionKind::DamageDivision,
-        candidates: Candidates::Options(list),
-        prompt: Prompt::new(Purpose::CombatDamage),
-        about: Bitboard::EMPTY,
-    })
-}
-
-/// The smart-stop recommendation for the next pick under [CR 510.1c] ("divided as its controller
-/// chooses among them"). Prefer killing more blockers by taking the cheapest lethal assignment
-/// first, breaking ties by power. The pick can be silent if it is the only distinct lethal pick or
-/// all killable blockers fit.
-///
-/// [CR 510.1c]: https://yawgatog.com/resources/magic-rules/#R5101c
-pub fn preferred_damage<L: Layout>(s: &State<L>, d: &Decision<L>) -> Option<(Choice, bool)> {
-    let Pending::CombatDamage {
-        done,
-        lethal: chosen,
-    } = *s.pending()
-    else {
-        return None;
-    };
-    let Candidates::Options(options) = &d.candidates else {
-        return None;
-    };
-    let attacker = next_division(s, done)?;
-    let blockers = blockers_of(s, attacker);
-    let spent: u32 = (blockers & chosen).sum(|b| u32::from(lethal(s, b)));
-    let left = u32::from(power(s, attacker)) - spent;
-    let cost: u32 = (blockers & !chosen).sum(|b| {
-        let cost = u32::from(lethal(s, b));
-        if cost <= left { cost } else { 0 }
-    });
-    let picks = options.iter().enumerate().filter_map(|(i, option)| {
-        let Opt::Lethal(slot) = *option else {
-            return None;
-        };
-        Some((Choice(i as u16), lethal(s, slot), s.derived(slot).power))
-    });
-    let unambiguous = cost <= left || picks.clone().count() == 1;
-    picks
-        .min_by_key(|&(_, cost, power)| (cost, std::cmp::Reverse(power)))
-        .map(|(pick, _, _)| (pick, unambiguous))
-}
-
-/// Applies one pick of a damage division, dealing the damage once every division is made.
-pub(crate) fn divide<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    done: Bitboard<L::Slot>,
-    mut chosen: Bitboard<L::Slot>,
-    opt: Opt<L>,
-) -> Result<(), Full> {
-    let mut done = done;
-    if let Opt::Lethal(b) = opt {
-        chosen.insert(b);
-    } else {
-        let attacker = next_division(s, done).expect("a division without an attacker");
-        done.insert(attacker);
-        if next_division(s, done).is_none() {
-            s.settle_question();
-            return deal(s, t, sink, chosen);
-        }
-    }
-    s.ask(Pending::CombatDamage {
-        done,
-        lethal: chosen,
-    });
-    Ok(())
-}
-
-/// One assignment of combat damage.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-struct Assignment<L: Layout = Small> {
-    source: ObjectRef<L>,
-    to: Option<Recipient<L>>,
-    amount: u8,
-}
-
-/// Deals the combat damage of this step, `lethal` holding the blockers the divisions chose
-/// to destroy.
-///
-/// [CR 510.2](https://yawgatog.com/resources/magic-rules/#R5102): "Second, all combat damage that's
-/// been assigned is dealt simultaneously." Every assignment is made from the creatures as they are
-/// before any damage is dealt, and the events of the damage are kept as one group. Damage to a
-/// player is the life they lose (CR 120.3a), in the one event.
-fn deal<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    lethal: Bitboard<L::Slot>,
-) -> Result<(), Full> {
-    sink.together();
-    let dealt = deal_assigned(s, t, sink, lethal);
-    sink.apart();
-    dealt
-}
-
-/// [`deal`], inside the group it opens.
-#[inline]
-fn deal_assigned<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    lethal: Bitboard<L::Slot>,
-) -> Result<(), Full> {
-    let mut assigned: L::Queue<Assignment<L>, 128> = Default::default();
-    for &slot in s.battlefield() {
-        if !assigns_now(s, slot) || power(s, slot) == 0 {
-            continue;
-        }
-        let o = s.object(slot);
-        let source = s.object_ref(slot);
-        let amount = power(s, slot);
-        let mut push = |to: Recipient<L>, amount: u8| {
-            assigned.push(Assignment {
-                source,
-                to: Some(to),
-                amount,
-            })
-        };
-        match *o.combat() {
-            // CR 510.1d: "A blocking creature assigns combat damage to the creatures it's
-            // blocking. If it isn't currently blocking any creatures ..., it assigns no
-            // combat damage." A creature that blocks more than one attacker divides its
-            // damage as an attacker does (CR 510.1d), which no card makes happen yet: it
-            // assigns all of it to the first.
-            CombatRole::Blocking { attackers, .. } => {
-                if let Some(other) = attackers.first() {
-                    push(Recipient::Permanent(s.object_ref(other)), amount)?;
-                }
-            }
-            CombatRole::Attacking { blocked: true, .. } => {
-                for (b, n) in division(s, slot, lethal).iter() {
-                    push(Recipient::Permanent(s.object_ref(*b)), *n)?;
-                }
-            }
-            // CR 510.1b: "An unblocked creature assigns its combat damage to the player,
-            // planeswalker, or battle it's attacking. If it isn't currently attacking anything
-            // (if, for example, it was attacking a planeswalker that has left the
-            // battlefield), it assigns no combat damage."
-            CombatRole::Attacking { target, .. } => match target {
-                AttackTarget::Player(player) => push(Recipient::Player(player), amount)?,
-                AttackTarget::Planeswalker(walker) => {
-                    push(Recipient::Permanent(s.object_ref(walker)), amount)?;
-                }
-                AttackTarget::Removed => {}
-            },
-            CombatRole::None => {}
-        }
-    }
-    for a in assigned.iter() {
-        if let Some(to) = a.to {
-            damage::deal(&mut Game::new(s, t, sink), a.source, to, a.amount, true)?;
-        }
-    }
-    Ok(())
-}
-
-/// How a blocked attacker's damage divides among its blockers, given the blockers chosen to
-/// be dealt lethal damage: each chosen one gets lethal damage, and what is left goes to the
-/// first of them, or, if none was chosen, below lethal onto the others, in the order they
-/// entered the battlefield. Slots are no order at all: the deal and shuffles put cards in
-/// them at random, so a slot order would make the outcome depend on the seed. A lone blocker
-/// gets everything (CR 510.1c: "If exactly one creature is blocking it, it assigns all its
-/// combat damage to that creature").
-fn division<L: Layout>(
-    s: &State<L>,
-    attacker: L::Slot,
-    lethal_to: Bitboard<L::Slot>,
-) -> L::Queue<(L::Slot, u8), BATTLEFIELD> {
-    // An entry for a blocker at most, and each blocker is a permanent: the list is as long
-    // as a fixed layout's battlefield, so every push below has room.
-    let mut out: L::Queue<(L::Slot, u8), BATTLEFIELD> = Default::default();
-    let blockers = blockers_of(s, attacker);
-    let mut left = power(s, attacker);
-    if let Some(blocker) = blockers.sole() {
-        out.push_bounded((blocker, left));
-        return out;
-    }
-    let killed = blockers & lethal_to;
-    let entered = |set: Bitboard<L::Slot>| {
-        s.battlefield()
-            .iter()
-            .copied()
-            .filter(move |&b| set.contains(b))
-    };
-    for b in entered(killed) {
-        let n = lethal(s, b).min(left);
-        left -= n;
-        out.push_bounded((b, n));
-    }
-    if let Some(first) = out.as_mut_slice().first_mut() {
-        first.1 += left;
-        return out;
-    }
-    for b in entered(blockers & !killed) {
-        let n = (lethal(s, b) - 1).min(left);
-        left -= n;
-        if n > 0 {
-            out.push_bounded((b, n));
-        }
-    }
-    out
 }
 
 /// Removes from combat what CR 506.4 removes while combat goes on: "A permanent is removed

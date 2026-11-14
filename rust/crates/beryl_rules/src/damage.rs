@@ -1,13 +1,15 @@
 //! Damage ([CR 120](https://yawgatog.com/resources/magic-rules/#R120)).
 
-use beryl_card::{Amount, Recipients};
+use beryl_card::{Amount, Keywords, Recipients};
 
 use crate::bitboard::Bitboard;
 use crate::event::Recipient;
 use crate::fixed::Full;
 use crate::game::Game;
+use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
+use crate::life;
 use crate::state::ObjectRef;
 
 /// Deals `amount` damage from `source` to a player or a permanent, combat damage with
@@ -43,7 +45,41 @@ pub fn deal<L: Layout>(
             game.state.mark_damage(source, r, amount, combat)
         }
     };
-    game.settle(e)
+    let lifelink = lifelink(game, source);
+    game.settle(e)?;
+    match lifelink {
+        Some(controller) => life::gain(game, controller, amount),
+        None => Ok(()),
+    }
+}
+
+/// Who gains the life a source's damage gives for its lifelink, if it has lifelink
+/// ([CR 702.15b]): "Damage dealt by a source with lifelink causes that source's controller, or
+/// its owner if it has no controller, to gain that much life (in addition to any other results
+/// that damage causes)." The gain is part of the damage event, not a trigger, so it follows the
+/// damage at once.
+///
+/// Per [CR 702.15d], "The lifelink rules function no matter what zone an object with lifelink deals
+/// damage from." A permanent's keywords are its layer results; anywhere else, those of the face
+/// it has there. A source that has left its zone since is a new object (CR 400.7) whose keywords
+/// are not kept, so it gives none.
+///
+/// [CR 702.15b]: https://yawgatog.com/resources/magic-rules/#R70215b
+/// [CR 702.15d]: https://yawgatog.com/resources/magic-rules/#R70215d
+#[inline]
+fn lifelink<L: Layout>(game: &Game<'_, L>, source: ObjectRef<L>) -> Option<Seat> {
+    let s = game.state();
+    if !s.is_current(source) {
+        return None;
+    }
+    let keywords = if game.on_battlefield(source) {
+        s.derived(source.slot).keywords
+    } else {
+        s.copiable(source.slot).face(game.table()).keywords
+    };
+    keywords
+        .contains(Keywords::LIFELINK)
+        .then(|| s.controller(source.slot))
 }
 
 /// [`Effect::DealDamage`](beryl_card::Effect::DealDamage): "This deals [amount] damage to
