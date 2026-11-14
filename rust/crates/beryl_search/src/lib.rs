@@ -239,8 +239,46 @@ pub struct AgentInfo {
     pub new: fn(t: &GameTable, seed: u64, budget: Budget) -> Box<dyn GameAgent + Send>,
 }
 
-/// Every agent, in the order a human is offered them.
+/// Every agent, in the order a human is offered them. The desktop and phone apps offer the
+/// same list with the same budgets.
 pub static AGENTS: &[AgentInfo] = &[
+    AgentInfo {
+        name: "mcts-omniscient-quick",
+        title: "Quick Seer",
+        description: "Cheats as the Seer does, answering in a moment",
+        new: quick_seer,
+    },
+    AgentInfo {
+        name: "mcts-hidden-quick",
+        title: "Quick Searcher",
+        description: "Searches a few guesses at the cards it cannot see, answering in a moment",
+        new: quick_searcher,
+    },
+    AgentInfo {
+        name: "mcts-hidden",
+        title: "Searcher",
+        description: "Searches many guesses at the cards it cannot see, playing each out greedily",
+        new: mcts_hidden,
+    },
+    AgentInfo {
+        name: "pimc18-omniscient-30m-anchor",
+        title: "Deep Seer",
+        description: "Cheats as the Seer does, thinking seconds a move",
+        new: deep_seer,
+    },
+    AgentInfo {
+        name: "pimc72-hidden-30m-anchor",
+        title: "Deep Searcher",
+        description: "Guesses at the cards it cannot see, thinking seconds a move",
+        new: deep_searcher,
+    },
+];
+
+/// Agents no longer offered, kept buildable by name so that games recorded against them can
+/// still be reviewed, and so that tools and tests can still play them. A review re-searches
+/// with today's search, so where the search has changed since (`TURN_DISCOUNT`, for one) it
+/// may not choose as the game did.
+pub static RETIRED: &[AgentInfo] = &[
     AgentInfo {
         name: "random",
         title: "Random",
@@ -272,34 +310,12 @@ pub static AGENTS: &[AgentInfo] = &[
         new: mcts_omniscient,
     },
     AgentInfo {
-        name: "mcts-hidden",
-        title: "Searcher",
-        description: "Searches many guesses at the cards it cannot see, playing each out greedily",
-        new: mcts_hidden,
-    },
-    AgentInfo {
-        name: "pimc18-omniscient-30m-anchor",
-        title: "Deep Seer",
-        description: "Cheats as the Seer does, thinking seconds a move",
-        new: deep_seer,
-    },
-    AgentInfo {
-        name: "pimc72-hidden-30m-anchor",
-        title: "Deep Searcher",
-        description: "Guesses at the cards it cannot see, thinking seconds a move",
-        new: deep_searcher,
+        name: "pimc18-omniscient-30m",
+        title: "Deep Seer, unanchored",
+        description: "Deep Seer before it held spells it was unsure of",
+        new: deep_seer_unanchored,
     },
 ];
-
-/// Agents no longer offered, kept buildable by name so that games recorded against them can
-/// still be reviewed. A review re-searches with today's search, so where the search has
-/// changed since (`TURN_DISCOUNT`, for one) it may not choose as the game did.
-pub static RETIRED: &[AgentInfo] = &[AgentInfo {
-    name: "pimc18-omniscient-30m",
-    title: "Deep Seer, unanchored",
-    description: "Deep Seer before it held spells it was unsure of",
-    new: deep_seer_unanchored,
-}];
 
 fn random(_t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
     Box::new(RandomAgent::new(seed))
@@ -333,6 +349,17 @@ fn mcts_hidden(t: &GameTable, seed: u64, budget: Budget) -> Box<dyn GameAgent + 
         budget,
         seed,
     )))
+}
+
+/// The Seer at [`Budget::QUICK`] whatever `budget` says: the budget phones used to give it.
+fn quick_seer(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
+    mcts_omniscient(t, seed, Budget::QUICK)
+}
+
+/// The Searcher at [`Budget::QUICK`] whatever `budget` says: the budget phones used to give
+/// it.
+fn quick_searcher(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
+    mcts_hidden(t, seed, Budget::QUICK)
 }
 
 /// `pimc18/omniscient/rollout/tuned/anchor@30M`: the long-think arena's leading family in

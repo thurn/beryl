@@ -15,10 +15,13 @@ import { play } from "../audio/sound";
 import { key } from "../profile";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 
-/** The agent that plays on the true state, hidden cards included. */
-const CHEATING = "mcts-omniscient";
-/** The opponent offered first: strong, and quick to answer. */
-const DEFAULT_AGENT = "expert";
+/** The agents that play on the true state, hidden cards included. */
+const CHEATING = new Set([
+  "mcts-omniscient-quick",
+  "pimc18-omniscient-30m-anchor",
+]);
+/** The opponent offered first: strong, and answers in about two seconds. */
+const DEFAULT_AGENT = "mcts-hidden";
 /** Where the start screen remembers the last opponent and seed. */
 const LAST_GAME = "beryl.lastGame";
 
@@ -179,7 +182,7 @@ export function StartScreen({
       />
       <span className="start-agent-name">
         {a.title}
-        {a.name === CHEATING && (
+        {CHEATING.has(a.name) && (
           <em className="start-cheating">cheating: sees your hand</em>
         )}
       </span>
