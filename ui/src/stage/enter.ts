@@ -31,6 +31,7 @@ import {
   struck,
   turned,
   turnedOver,
+  turning,
   type Track,
 } from "./tracks.ts";
 
@@ -431,3 +432,34 @@ function enters(
       return undefined;
   }
 }
+
+/** `resting` drawn as a card back. */
+export const backed = (resting: Resting): Resting => ({
+  ...resting,
+  dress: { ...resting.dress, back: true },
+});
+
+/** The face a card still shows at stage time `at` as `track` takes it where it goes, if
+ * `track` is not its own flight: the face a `lift` let it go with (tracks.ts `carried`).
+ * The stage keeps it when a later step of the beat moves that place again
+ * (`showingOn`). */
+export const stillShown = (
+  covered: Resting | undefined,
+  track: Track | undefined,
+  at: number,
+): Resting | undefined =>
+  covered && !covered.dress.back && !track?.own && turning(track, at)
+    ? covered
+    : undefined;
+
+/** The track a card goes on, and what it is drawn as until it is there: the face `kept`
+ * that `carried` gave it, or else the face it was `showing` (`stillShown`) until the track
+ * ends. Without this, the rest of a Stock Up, let go to the bottom of the library, took
+ * the pile's edge-only look as soon as the first card kept flew to the hand, and crossed
+ * the table as black slabs. */
+export const showingOn = (
+  track: Track,
+  kept: Resting | undefined,
+  showing: Resting | undefined,
+): [Track, Resting | undefined] =>
+  kept || !showing ? [track, kept] : [{ ...track, turn: 1 }, showing];

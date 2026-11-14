@@ -45,7 +45,7 @@
 import type { PlayerView } from "../generated/protocol";
 import { laid, under, type Edge, type Playing, type Run } from "./beat.ts";
 import { Clock, type Frames, type StageClock } from "./clock.ts";
-import { awaited, entering } from "./enter.ts";
+import { awaited, backed, entering, showingOn, stillShown } from "./enter.ts";
 import type { Effect, On } from "./effects.ts";
 import { sameDress, sameFace } from "./layout.ts";
 import type { Name, Resting, StageLayout } from "./layout.ts";
@@ -662,6 +662,7 @@ export class ScriptStage {
       const flying = entry.track?.own && at < entry.track.to;
       const moves = !still && !flying && run !== undefined && carries(run, at);
       const start = moves ? this.#poseOf(name, entry, at) : undefined;
+      const showing = stillShown(entry.covered, entry.track, at);
       // What did not change stays the very same, so that nothing drawn from it is drawn again.
       entry.resting = {
         ...(face ? before : resting),
@@ -669,10 +670,7 @@ export class ScriptStage {
         dress: dress ? before.dress : resting.dress,
       };
       if (!face || !dress) {
-        entry.covered &&= {
-          ...entry.resting,
-          dress: { ...entry.resting.dress, back: true },
-        };
+        entry.covered &&= showing ?? backed(entry.resting);
         this.#surface?.dress(name, entry.covered ?? entry.resting);
         // A frame of another width scales otherwise for the same pose.
         entry.moved = true;
@@ -687,7 +685,7 @@ export class ScriptStage {
           (pose, near) =>
             halfTurned(pose, this.#layout.middle(entry.resting, pose), near),
         );
-        this.#fly(name, entry, track, kept);
+        this.#fly(name, entry, ...showingOn(track, kept, showing));
       }
       entry.moved ||= !still;
     }

@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Prompts, trayOf } from "../src/stage/prompt.ts";
 import { laidOut, landing } from "../src/stage/tray.ts";
-import { object, stage, view } from "./stage-table.mjs";
+import { object, row, stage, view } from "./stage-table.mjs";
 
 const card = (slot) => ({ kind: "object", slot });
 
@@ -61,13 +61,40 @@ const table = (prompt, more = {}) => {
     };
 };
 
+/** The tests' rows, but with each library a pile, as the table's: a card lies 10 to the
+ * right of the one over it, counted from the top (desktop.ts lays a pile out by depth), and
+ * only the top one shows its face. */
+const piles = {
+    ...row,
+    rest(table) {
+        const out = row.rest(table);
+        for (const side of ["you", "opponent"]) {
+            const library = table.view.players[side].library;
+            library.forEach((slot, i) => {
+                const resting = out.get(slot);
+                if (resting.dress.look === "shown") return;
+                const depth = library.length - 1 - i;
+                const top = depth === 0;
+                out.set(slot, {
+                    ...resting,
+                    pose: { ...resting.pose, x: 3000 + depth * 10, depth: i },
+                    dress: { ...resting.dress, back: !top, rim: !top },
+                });
+            });
+        }
+        return out;
+    },
+};
+
 /** A stage whose lifts take 300 ms, or 200 to sort, and whose flights take 400; with its
- * prompts, and a session that answers each click when the test says. */
-function prompted() {
-    const { stage: made, surface } = stage((act) => {
+ * prompts, and a session that answers each click when the test says. Its `layout` is the
+ * tests' rows unless given. */
+function prompted(layout = row) {
+    const timed = (act) => {
         if (act.verb === "lift") return { duration: act.sorted ? 200 : 300 };
         return { duration: act.verb === "fly" ? 400 : 0 };
-    });
+    };
+    const { stage: made, surface } = stage(timed, undefined, layout);
     const sent = [];
     const waiting = [];
     const prompts = new Prompts(made, (decision, revision, click) => {
@@ -162,6 +189,73 @@ test("the cards go back as the first steps of what the answer did begin", async 
     assert.deepEqual(at(11), [400, 500]);
     assert.equal(made.shown.busy, false);
     assert.equal(prompts.asked().prompt, undefined);
+});
+
+test("a card the answer puts on the bottom of the library goes there as it is let go", async () => {
+    // A look at the top two of a library over 20, as Stock Up's: 11 is kept and 10 goes to
+    // the bottom. The answer's view says so, but its script sets the library's order only
+    // after 11's flight. Were 10 to go home to where it was taken from, it would be the top
+    // of the library once 11 is gone, and the layout would show its face there until the
+    // order was set, when it dropped out of sight under the pile.
+    const { made, prompts, reply } = prompted(piles);
+    const looked = table(split([11], [10]), {
+        objects: [
+            object(1),
+            object(3, "hand"),
+            object(20, "library"),
+            object(10, "library"),
+            object(11, "library"),
+        ],
+        players: {
+            you: { life: 20, library: [20, 10, 11], graveyard: [] },
+            opponent: { life: 20, library: [], graveyard: [] },
+        },
+    });
+    prompts.play(looked);
+    made.clock.advance(300);
+    prompts.press({ kind: "confirm" });
+    await reply({ kind: "answered" });
+    const kept = object(11, "hand");
+    const after = table(undefined, {
+        objects: [
+            object(1),
+            object(3, "hand"),
+            object(20, "library"),
+            object(10, "library"),
+            kept,
+        ],
+        players: {
+            you: { life: 20, library: [10, 20], graveyard: [] },
+            opponent: { life: 20, library: [], graveyard: [] },
+        },
+    });
+    const library = { kind: "library", player: "you", order: [10, 20] };
+    prompts.play(after, {
+        beats: [
+            [
+                {
+                    act: {
+                        verb: "fly",
+                        from: "library",
+                        why: "effect",
+                        object: kept,
+                    },
+                },
+            ],
+            [{ act: { verb: "set", fact: library } }],
+        ],
+    });
+    // Half way home, 10 is already under 20, the library's top, and still shows the face it
+    // was held up with; it lies there as a back once it is home.
+    made.clock.advance(150);
+    assert.deepEqual(made.shown.table.players.you.library, [10, 20]);
+    assert.equal(made.shown.resting.get(10).dress.back, false);
+    assert.equal(made.shown.resting.get(20).dress.back, false);
+    made.clock.advance(250);
+    assert.deepEqual(made.shown.table.players.you.library, [10, 20]);
+    assert.deepEqual(made.pose(10).x, 3010);
+    assert.equal(made.shown.resting.get(10).dress.back, true);
+    assert.equal(made.shown.busy, false);
 });
 
 test("a card carried between piles is dropped where the layout says it landed", async () => {

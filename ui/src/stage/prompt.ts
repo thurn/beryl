@@ -53,7 +53,7 @@ import { isRevealed, type Name, type Point } from "./layout.ts";
 import type { Drop, PointerEvents } from "./pointer.ts";
 import { keyOf, namedBy, type SpanAct } from "./spans.ts";
 import type { ScriptStage } from "./stage.ts";
-import type { Script, Step, Tray } from "./table.ts";
+import type { Hold, Script, Step, Tray } from "./table.ts";
 import { subjectOf as aboutOf } from "./tracks.ts";
 import type { Landing } from "./tray.ts";
 
@@ -144,10 +144,33 @@ function lowered(script: Script, tray: Tray): Script {
     }),
   );
   const at = Math.max(0, about);
-  const end: Step = { act: { verb: "lift", span: "end", tray } };
+  const end: Step = {
+    act: { verb: "lift", span: "end", tray, ...settled(script, at, held) },
+  };
   const beats = script.beats.length > 0 ? [...script.beats] : [[]];
   beats[at] = [end, ...beats[at]!];
   return { ...script, beats };
+}
+
+/** The order in which the steps of `script` from beat `at` on first set each library that
+ * holds one of the `held` cards (`set library`). The tray's end takes it (table.ts
+ * `Hold.libraries`), so that a card it lets go goes straight to its place in its library.
+ * Without it, a card put on the bottom (the rest of a Stock Up) went back to the top it had
+ * been taken from, the top one face up, and dropped out of sight only when the order was set
+ * a few beats later. */
+function settled(
+  script: Script,
+  at: number,
+  held: ReadonlySet<Name>,
+): Pick<Hold, "libraries"> {
+  const libraries: NonNullable<Hold["libraries"]> = {};
+  for (const { act } of script.beats.slice(at).flat()) {
+    if (act.verb !== "set" || act.fact.kind !== "library") continue;
+    const { player, order } = act.fact;
+    if (libraries[player] || !order.some((slot) => held.has(slot))) continue;
+    libraries[player] = order;
+  }
+  return Object.keys(libraries).length > 0 ? { libraries } : {};
 }
 
 /** `script` with the marks `paying` ended once it has tapped what they are on: in the beat

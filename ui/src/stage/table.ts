@@ -52,6 +52,9 @@ export interface Hold {
   span: Span;
   tray: Tray;
   sorted?: boolean;
+  /** On an end: each library in the order the script goes on to set it (`set library`), so
+   * that a card the tray lets go into a library goes straight to its place there. */
+  libraries?: Partial<Record<Side, readonly number[]>>;
 }
 
 /** What a step does: an act the session sent, or the stage's own. */
@@ -318,6 +321,27 @@ function heldUp(table: Table, object: ObjectView, cause?: Subject): Table {
   return { ...table, revealed: { cards, ...(cause && { cause }) } };
 }
 
+/** `table` with `side`'s library in the order `order` gives the cards both hold. A card only
+ * the library holds (one a later step takes from it, such as a card about to fly to a hand)
+ * stays on top; a card only `order` holds (one a later step puts there) is left out. */
+function reordered(table: Table, side: Side, order: readonly number[]): Table {
+  const library = table.view.players[side].library;
+  const now = new Set(library);
+  const kept = new Set(order);
+  const next = [
+    ...order.filter((slot) => now.has(slot)),
+    ...library.filter((slot) => !kept.has(slot)),
+  ];
+  const { players } = table.view;
+  return {
+    ...table,
+    view: {
+      ...table.view,
+      players: { ...players, [side]: { ...players[side], library: next } },
+    },
+  };
+}
+
 /** The table after the step `act`, which `cause` is responsible for. */
 export function apply(table: Table, act: Act, cause?: Subject): Table {
   const { view } = table;
@@ -420,7 +444,11 @@ export function apply(table: Table, act: Act, cause?: Subject): Table {
     case "lift": {
       if ("tray" in act) {
         const { tray: _, ...lowered } = table;
-        return act.span === "begin" ? { ...table, tray: act.tray } : lowered;
+        if (act.span === "begin") return { ...table, tray: act.tray };
+        let out: Table = lowered;
+        for (const [side, order] of Object.entries(act.libraries ?? {}))
+          out = reordered(out, side as Side, order);
+        return out;
       }
       const { handling: _, ...rest } = view;
       const { handled: __, ...other } = table;
