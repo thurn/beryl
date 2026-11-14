@@ -5,7 +5,8 @@
 // arrow (UI Conventions, "An arrow to the pointer"; Arena's ends on the creature under the
 // cursor as its prompt opens, `IEXcjBn3BXk 23:13.17`): out of the spell or ability that asks,
 // to the mouse, which becomes the arrow the choice will draw as the mouse comes onto
-// something that may be chosen. The click is the session's, whose reply draws the line or
+// something that may be chosen, until as many targets are picked as it takes. The click is
+// the session's, whose reply draws the line or
 // arrow as one of the stage's own (prompt.ts). These are the pointer's trace and no part of
 // the prompt's state: drawn in the stage's layer, and gone with the click or as the pointer
 // leaves the table. A touch has no pointer to follow.
@@ -87,9 +88,12 @@ export function Aim({
   const covered = coversTable(prompt);
   const waits = aiming.length > 0 && !covered;
   const arrow = declares?.arrow ?? "attack";
-  // A choice of targets, and what asks for it, where the stage holds that.
+  // A choice of targets, and what asks for it, where the stage holds that. Once as many
+  // targets are picked as the choice takes, nothing follows the pointer any more: the
+  // stage's own arrow runs to each target, and the prompt waits only for its button.
   const source = prompt?.purpose === "target" ? decision?.source : undefined;
-  const seeks = typeof source === "number" && !covered;
+  const full = state?.shape === "pick" && state.picked.length >= state.most;
+  const seeks = typeof source === "number" && !covered && !full;
   const marks = prompt?.marks;
   const [at, setAt] = useState<Point>();
   /** Where the mouse was last, in the window: a prompt that changes under a still mouse is

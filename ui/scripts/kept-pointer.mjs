@@ -743,32 +743,3 @@ await check(
         ready: `[data-slot="${handled}"][data-zone="hand"]`,
     },
 );
-
-// Nothing follows the pointer over a prompt's cards: a Snapcaster Mage trigger chooses among the
-// graveyard's cards, held up over the dimmed table, and the arrow from the trigger to the
-// cursor (UI Conventions, "An arrow to the pointer") is not drawn across them. The page's
-// layer says whether the stage pulls anything (`data-aimed`), which a browser without WebGL
-// shows no arrow for either. No generic check sees it: it is the absence of a trace that follows
-// the mouse, not a state of the table.
-await check(
-    "no arrow follows the cursor over cards a target prompt holds up",
-    async (page) => {
-        await page.waitForSelector(".stage-tray");
-        for (const [x, y] of [
-            [500, 300],
-            [900, 500],
-        ]) {
-            await page.mouse.move(x, y);
-            assert.equal(
-                await page.locator("[data-aimed]").count(),
-                0,
-                `no arrow to the cursor at ${x}, ${y}`,
-            );
-        }
-    },
-    {
-        fixture: "target-graveyard",
-        ready: ".stage-tray",
-        at: (await load("target-graveyard")).length,
-    },
-);
