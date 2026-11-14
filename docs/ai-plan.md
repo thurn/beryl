@@ -179,18 +179,19 @@ omniscient twin) and the search anchored to the expert (`anchor+expert+guard`).
 - **Cygnus only.** Every suite, screen, match and audit runs on Cygnus, the
   Windows PC (20 threads, `BERYL_CACHE=D:\beryl-cache`). The position set is at
   `D:\beryl-cache\ladder\positions`.
-- **One lane.** Every bead of the ladder carries `lane:ladder`. One session
-  works them in order, and no two matches run at once.
-- **The lane's session judges.** It reads each table and each match report and
-  decides: promote, drop, stack with another rung, or measure again. It writes
-  its reasoning with the numbers in the bead's notes. §4.4 is guidance for that
-  judgement, not a rule that overrides it.
+- **One match at a time.** Each measure bead depends on the one before it, so no
+  two matches run at once. The beads are the children of the epic by-ix1t.
+- **The session that works a measure bead judges.** It reads each table and each
+  match report and decides: promote, drop, stack with another rung, or measure
+  again. It writes its reasoning with the numbers in the bead's notes. §4.4 is
+  guidance for that judgement, not a rule that overrides it.
 - **It never waits for a person** and never files a bead asking one to look.
   Where a step fails in a way the bead does not cover, it writes what happened,
   chooses the sensible course and goes on.
-- **Builds run ahead of matches.** A match takes 6 to 18 hours. Build beads for
-  later rungs are worked while one runs, since an option that is off changes no
-  move. Nothing else heavy runs beside a match.
+- **Builds run ahead of matches.** A match takes 6 to 18 hours. Build beads are
+  in lanes of their own and are worked on the Mac while a match runs, since an
+  option that is off changes no move. Nothing else heavy runs on Cygnus beside a
+  match.
 
 ### 4.2 A rung is two beads
 
@@ -352,7 +353,7 @@ may reorder rungs when a result suggests it, and says why in the bead.
 
 ### 6.1 Tools
 
-Each is its own bead, before rung 1.
+Two beads, before rung 1.
 
 - **`just gate` reports and does not veto.** It runs 10 seeds, prints each
   entry's runs passed of 20 for both agents, marks an entry whose counts differ
@@ -364,8 +365,8 @@ Each is its own bead, before rung 1.
   answer at an attacker, an attack's target, a blocker and a block's target. It
   is what `just blunders POLICY` and a quick `just tournament` take. `greedy`
   alone plays as today.
-- **`just ladder` prints a `dropped` row** from two suite totals, for a rung
-  that plays no match.
+- **`just gate` also prints a `dropped` row** for `docs/ladder.md` from the two
+  suite totals, for a rung that plays no match.
 
 ### 6.2 Rung 1: `sure`, `hold` and `combat`, stacked
 
