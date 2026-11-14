@@ -60,4 +60,8 @@ FAST_ONLY: tuple[str, ...] = (
     "rust:beryl_cards::tests::the_dump_is_valid_json_with_every_scenario",
     "rust:beryl_cards::tests::mutation::every_mutant_of_a_card_is_killed_by_its_scenarios",
     "rust:beryl_session::sessions::no_view_shows_an_identity_its_viewer_does_not_know",
+    "rust:beryl_session::undo::passing_on_goes_past_the_stops_in_its_step",
+    "rust:beryl_bench::rollout::tests::rollouts_never_change",
+    "rust:beryl_cli::bin/beryl_cli::why::tests::tree_report_counts_the_ordinary_search_visits",
+    "rust:beryl_cards::tests::derive::every_ability_of_a_generated_card_is_exercised_by_its_generated_scenarios",
 )
