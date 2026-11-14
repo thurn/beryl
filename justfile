@@ -172,7 +172,7 @@ tokens:
 tokens-run *args:
     {{ by_anywhere }} tokens-run "$@"
 
-# Gungraun instruction counts in the Lima VM (cargo bench flags; default --bench '*_counts')
+# Gungraun instruction counts in the Lima VM (cargo bench flags; default -p beryl_bench --bench '*_counts')
 [group('bench')]
 bench-count *args:
     {{ by }} bench-count "$@"

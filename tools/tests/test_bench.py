@@ -72,12 +72,23 @@ def test_cargo_flags_go_before_the_harness_arguments() -> None:
         "cargo",
         "bench",
         "--locked",
+        "-p",
+        "beryl_bench",
         "--no-run",
         "--bench",
         "x",
         "--",
         "--quick",
     ]
+
+
+def test_benchmarks_build_their_package_alone_unless_told_otherwise() -> None:
+    # From the whole workspace, test-only features such as `coverage` would be built in.
+    assert bench.cargo_bench(["--bench", "x"])[3:5] == ["-p", "beryl_bench"]
+    assert "beryl_bench" not in bench.cargo_bench(["-p", "other", "--bench", "x"])
+    assert "beryl_bench" not in bench.cargo_bench(["--package=other"])
+    # A harness argument named -p isn't cargo's.
+    assert bench.cargo_bench(["--", "-p", "x"])[3:5] == ["-p", "beryl_bench"]
 
 
 def test_timing_builds_the_search_profile_unless_told_otherwise() -> None:
@@ -168,6 +179,7 @@ def test_the_gate_file_parses_and_names_a_counts_benchmark() -> None:
 def test_the_gate_counts_only_its_benchmark_as_json() -> None:
     cmd = bench.gate_cargo(GATE)
     assert cmd[cmd.index("--bench") + 1] == "rollout_counts"
+    assert cmd[cmd.index("-p") + 1] == "beryl_bench"
     harness = cmd[cmd.index("--") + 1 :]
     assert harness == ["--output-format=json", GATE.benchmark]
 

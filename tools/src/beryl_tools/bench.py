@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from . import paths, system, warm
+from . import count_trend, paths, system, warm
 
 if TYPE_CHECKING:
     from .checks import Lane
@@ -185,14 +185,34 @@ def probe() -> Machine:
     )
 
 
+# The package benchmarks build as, unless the flags name one. Built from the workspace with no
+# package named, Cargo turns on every feature any member's dev-dependencies ask for, such as
+# `beryl_engine`'s `coverage` (the card tests' record of which abilities ran), which no build
+# of the app or the search has. On 2026-11-13 that recording was 0.42% of the rollout
+# benchmark's instructions.
+BENCH_PACKAGE = "beryl_bench"
+
+
 def cargo_bench(extra: list[str], *flags: str) -> list[str]:
-    """`cargo bench` with our flags first: the user's may end in `-- <harness arguments>`."""
-    return ["cargo", "bench", "--locked", *flags, *extra]
+    """`cargo bench` with our flags first: the user's may end in `-- <harness arguments>`.
+    It builds [`BENCH_PACKAGE`] alone unless the user's flags pick the packages."""
+    ours = cargo_flags(extra)
+    picks = any(
+        f in ("-p", "--package", "--workspace", "--all") or f.startswith("--package=")
+        for f in ours
+    )
+    package = [] if picks else ["-p", BENCH_PACKAGE]
+    return ["cargo", "bench", "--locked", *package, *flags, *extra]
+
+
+def cargo_flags(cargo: list[str]) -> list[str]:
+    """The cargo flags, leaving out harness arguments after `--`."""
+    return cargo[: cargo.index("--")] if "--" in cargo else cargo
 
 
 def named_profile(cargo: list[str]) -> str | None:
     """The profile the cargo flags name, ignoring harness arguments after `--`."""
-    flags = cargo[: cargo.index("--")] if "--" in cargo else cargo
+    flags = cargo_flags(cargo)
     for i, a in enumerate(flags):
         if a.startswith("--profile="):
             return a.removeprefix("--profile=")
@@ -527,6 +547,8 @@ def count_gate(args: argparse.Namespace) -> int:
         return 2
     ok, message = judge(gate, measured)
     log(f"{gate.benchmark}: {message}")
+    for line in count_trend.report(measured, gate.instructions, ok):
+        log(line)
     return 0 if ok else 1
 
 

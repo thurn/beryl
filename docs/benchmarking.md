@@ -45,6 +45,10 @@ just bench -p beryl_bench --bench example_timing
 
 - `just bench-count [cargo bench flags]` runs the Gungraun benchmarks (default
   `--bench '*_counts'`) in the `beryl-bench` Lima VM, creating it on first use.
+  `just bench-count` and `just bench` build `-p beryl_bench` unless the flags
+  name a package: from the whole workspace, Cargo would build in the features
+  other members' tests turn on, such as `coverage`, which no app or search build
+  has.
 
 - `just bench [--force] [cargo bench flags] [-- harness flags]` builds, checks
   that the CPU is not slowed (battery, Low Power Mode, throttling), then times
