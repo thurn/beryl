@@ -307,31 +307,33 @@ A ledger of every blunder a human has caught: `data/blunders.json`.
   a board (`data/blunders/*.json`) or retired with a note. The suite fails on it
   until then.
 
-The entries, with the runs passed of 10 in the gates of 2026-11-12 and
-2026-11-13, and the rung of §6 that claims each:
+The champion and best measured columns show runs passed of 10 in the gates of
+2026-11-12 and 2026-11-13. The Policy column shows one run per entry with
+`greedy+hold+waste+combat`. The last column names the rungs of §6 that claim
+each entry.
 
-| Entry                              | Greedy | Champion | Best measured   | Claimed by        |
-| ---------------------------------- | ------ | -------- | --------------- | ----------------- |
-| `oust-own-token`                   | right  | 10       |                 | Fixed             |
-| `skip-beza-after-winds`            | right  | 10       |                 | Fixed             |
-| `decline-mana-crypt`               | right  | 10       |                 | `sure` pins it    |
-| `decline-both-teferi-untaps`       | right  | 10       |                 | `sure` pins it    |
-| `decline-second-teferi-untap`      | right  | 10       |                 | `sure` pins it    |
-| `snapcaster-sorcery-speed`         | wrong  | 9        | 10 with `hold`  | `hold`            |
-| `evoke-subtlety-no-target`         | wrong  | 9        | 10 with `waste` | `waste`           |
-| `staff-in-upkeep`                  | wrong  | 5        | 10 with `hold`  | `hold`            |
-| `staff-before-combat-damage`       | wrong  | 3        | 9 with `hold`   | `hold`            |
-| `subtlety-before-own-draw`         | wrong  | 3        | 10 with `hold`  | `hold`            |
-| `jace-loots-before-draw`           | wrong  | 0        | 9 with `hold`   | `hold`            |
-| `discard-emperor-over-spare-crypt` | right  | 0        | 10 with `hold`  | `hold`, `paired`  |
-| `evoke-subtlety-empty-stack-hunt`  | right  | 0        | 10 with `hold`  | `hold`, `waste`   |
-| `beza-trinket-into-blockers`       | wrong  | 0        | 8 with `combat` | `combat`          |
-| `manifest-into-samurai`            | right  | 1        | 8 with `combat` | `combat`          |
-| `subtlety-main-phase-empty-stack`  | right  | 4        | 4               | `paired`          |
-| `spirits-stay-home`                | right  | 2        | 5 with `hold`   | `paired`, `first` |
-| `skip-teferi-plus-one`             | right  | 0        | 4 with `turn72` | `first`           |
-| `samurai-into-jace`                | wrong  | 2        | 4 with `hold`   | `hold`, `paired`  |
-| `spare-jace-wielder`               | wrong  | 2        | 4 with `hold`   | `walker`          |
+| Entry                              | Greedy | Policy | Champion | Best measured   | Claimed by        |
+| ---------------------------------- | ------ | ------ | -------- | --------------- | ----------------- |
+| `oust-own-token`                   | right  | right  | 10       |                 | Fixed             |
+| `skip-beza-after-winds`            | right  | right  | 10       |                 | Fixed             |
+| `decline-mana-crypt`               | right  | right  | 10       |                 | `sure` pins it    |
+| `decline-both-teferi-untaps`       | right  | right  | 10       |                 | `sure` pins it    |
+| `decline-second-teferi-untap`      | right  | right  | 10       |                 | `sure` pins it    |
+| `snapcaster-sorcery-speed`         | wrong  | right  | 9        | 10 with `hold`  | `hold`            |
+| `evoke-subtlety-no-target`         | wrong  | right  | 9        | 10 with `waste` | `waste`           |
+| `staff-in-upkeep`                  | wrong  | right  | 5        | 10 with `hold`  | `hold`            |
+| `staff-before-combat-damage`       | wrong  | right  | 3        | 9 with `hold`   | `hold`            |
+| `subtlety-before-own-draw`         | wrong  | right  | 3        | 10 with `hold`  | `hold`            |
+| `jace-loots-before-draw`           | wrong  | right  | 0        | 9 with `hold`   | `hold`            |
+| `discard-emperor-over-spare-crypt` | right  | right  | 0        | 10 with `hold`  | `hold`, `paired`  |
+| `evoke-subtlety-empty-stack-hunt`  | right  | right  | 0        | 10 with `hold`  | `hold`, `waste`   |
+| `beza-trinket-into-blockers`       | wrong  | right  | 0        | 8 with `combat` | `combat`          |
+| `manifest-into-samurai`            | right  | right  | 1        | 8 with `combat` | `combat`          |
+| `subtlety-main-phase-empty-stack`  | right  | right  | 4        | 4               | `paired`          |
+| `spirits-stay-home`                | right  | right  | 2        | 5 with `hold`   | `paired`, `first` |
+| `skip-teferi-plus-one`             | right  | right  | 0        | 4 with `turn72` | `first`           |
+| `samurai-into-jace`                | wrong  | right  | 2        | 4 with `hold`   | `hold`, `paired`  |
+| `spare-jace-wielder`               | wrong  | wrong  | 2        | 4 with `hold`   | `walker`          |
 
 ## 6. The rungs
 
