@@ -470,3 +470,51 @@ test("a striking creature's wedge leans with its card", () => {
     assert.ok(Math.abs(wedge.at.x - (50 + 70)) < 1e-9);
     assert.ok(Math.abs(wedge.at.y - 570) < 1e-9);
 });
+
+test("a cursor arrow never starts on the face of the card it leaves", () => {
+    // A triggered ability on the stack is a card too: the arrow it pulls toward the pointer,
+    // pale or locked on a target, has to begin at the card's edge, on the side facing the
+    // pointer, and not run across the card's text.
+    const inside = ({ x, y }, { middle, half }) =>
+        Math.abs(x - middle.x) < half.x - 1e-6 &&
+        Math.abs(y - middle.y) < half.y - 1e-6;
+    const sources = [card(1000, 300), card(1000, 300, 1), card(0, 800)];
+    const targets = [
+        card(0, 0, 1),
+        card(700, 300),
+        card(1000, 0),
+        card(300, 900, -1),
+    ];
+    for (const source of sources) {
+        for (const dx of [-900, -300, -120, 0, 120, 300, 900]) {
+            for (const dy of [-500, -200, -60, 0, 60, 200, 500]) {
+                const at = {
+                    x: source.middle.x + dx,
+                    y: source.middle.y + dy,
+                };
+                const scenes = [sought(5000, source, at)];
+                for (const to of targets) {
+                    for (const friendly of [false, true]) {
+                        for (const now of [5000, 5010, 9000]) {
+                            scenes.push(
+                                sought(now, source, at, {
+                                    to,
+                                    friendly,
+                                    since: 5000,
+                                }),
+                            );
+                        }
+                    }
+                }
+                for (const { ribbons } of scenes) {
+                    for (const { curve } of ribbons) {
+                        assert.ok(
+                            !inside(curve[0], source),
+                            `from ${JSON.stringify(source.middle)} toward ${JSON.stringify(at)}: starts at ${JSON.stringify(curve[0])}`,
+                        );
+                    }
+                }
+            }
+        }
+    }
+});

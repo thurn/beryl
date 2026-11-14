@@ -460,6 +460,40 @@ export function lightOf(
   return lit;
 }
 
+/** The curve from `a` round `c` to `b` with the part that lies over `end`'s face cut off, so
+ * that it begins where it last leaves the card. An arrow that leaves a card's edge toward a
+ * point it bows round can swing back across the card's text first (a triggered ability
+ * on the stack at the right, with the pointer left of it and below). */
+function clear(
+  curve: [Point, Point, Point],
+  end: Reach,
+): [Point, Point, Point] | undefined {
+  const [a, c, b] = curve;
+  const blend = (p: Point, q: Point, t: number): Point => ({
+    x: mix(p.x, q.x, t),
+    y: mix(p.y, q.y, t),
+  });
+  const at = (t: number): Point => blend(blend(a, c, t), blend(c, b, t), t);
+  const over = (p: Point) =>
+    Math.abs(p.x - end.middle.x) < end.half.x &&
+    Math.abs(p.y - end.middle.y) < end.half.y;
+  const steps = 64;
+  let last = -1;
+  for (let i = 0; i <= steps; i++) if (over(at(i / steps))) last = i;
+  if (last < 0) return curve;
+  // Nothing of it lies clear of the card.
+  if (last === steps) return undefined;
+  // The curve is over the card at `last` and clear at the next sample: find the edge.
+  let [inside, outside] = [last / steps, (last + 1) / steps];
+  for (let i = 0; i < 24; i++) {
+    const half = (inside + outside) / 2;
+    if (over(at(half))) inside = half;
+    else outside = half;
+  }
+  const t = outside;
+  return [at(t), blend(c, b, t), b];
+}
+
 /** The arrow a choice of targets pulls toward the pointer (Aim.tsx), over what rests, as it
  * is at stage time `now`: out of `from`, what asks, to the pointer `at`, thin and pale while
  * the pointer is on nothing that may be chosen. On what may be (`lock`, since the stage time
@@ -485,7 +519,8 @@ export function sought(
   };
   const way = wayOf("hostile-target", from, pointer);
   // Its tip is the pointer's own place, not the edge of a point's reach.
-  const loose: [Point, Point, Point] | null = way && [way[0], way[1], at];
+  const loose: [Point, Point, Point] | null =
+    (way && clear([way[0], way[1], at], from)) ?? null;
   const k = sized(from);
   if (!lock) {
     if (!loose) return scene;
@@ -502,14 +537,21 @@ export function sought(
     return scene;
   }
   const arrow = lock.friendly ? "friendly-target" : "hostile-target";
-  const held = wayOf(arrow, from, lock.to);
-  if (!held) return scene;
+  const whole = wayOf(arrow, from, lock.to);
+  if (!whole) return scene;
+  const held = clear(whole, from) ?? whole;
   const age = Math.max(0, now - lock.since);
   const [swung, snap] = [1 - Math.exp(-age / 30), Math.exp(-age / 150)];
-  const curve = (loose ?? held).map((p, i) => ({
-    x: mix(p.x, held[i]!.x, swung),
-    y: mix(p.y, held[i]!.y, swung),
-  })) as [Point, Point, Point];
+  // Part way through the swing the two curves' blend can lie over the card (the pointer below
+  // it and the target above); then the arrow is on its target already.
+  const curve =
+    clear(
+      (loose ?? held).map((p, i) => ({
+        x: mix(p.x, held[i]!.x, swung),
+        y: mix(p.y, held[i]!.y, swung),
+      })) as [Point, Point, Point],
+      from,
+    ) ?? held;
   const tone = lock.friendly ? "friendly" : "hostile";
   const wide = 7.2 * Math.min(k, sized(lock.to));
   scene.ribbons.push({
