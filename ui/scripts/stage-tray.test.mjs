@@ -421,8 +421,8 @@ test("a card carried between piles is dropped where the layout says it landed", 
     prompts.play(table(asked));
     made.clock.advance(300);
     const told = [];
-    prompts.lands = (tray, point) => {
-        told.push({ tray, point });
+    prompts.lands = (tray, point, carried) => {
+        told.push({ tray, point, carried });
         return point.x < 900 ? { pile: 0, at: 0 } : undefined;
     };
     // A card of a split may be carried, wherever it came from; one of the table may not.
@@ -442,7 +442,14 @@ test("a card carried between piles is dropped where the layout says it landed", 
     assert.deepEqual(told.at(-1), {
         tray: trayOf(asked),
         point: { x: 310, y: -890 },
+        carried: { slot: 10, pose: told.at(-1).carried.pose },
     });
+    // The card itself is told of where it was let go, its corner as far from the pointer as
+    // where it was picked up.
+    assert.deepEqual(
+        [told.at(-1).carried.pose.x, told.at(-1).carried.pose.y],
+        [300, -900],
+    );
     assert.deepEqual(sent[0].click, {
         kind: "drop",
         on: card(10),
@@ -613,6 +620,43 @@ test("cards put back from the hand lie on the library and in a fan beside it", (
     assert.equal(landing(tray, space, { x: 800, y: 300 }).pile, 1);
     // A split of any other piles is laid out in boxes still.
     assert.equal(laidOut({ piles: tray.piles }, space).library, undefined);
+});
+
+test("a card on the library goes to the place nearest where it is let go", () => {
+    // Jace's 0 with both cards already on the library: 11 on top, lying lowest, and 13 under
+    // it, of which only the name bar shows.
+    const tray = {
+        piles: [{ cards: [11, 13], room: 2 }, { cards: [10] }],
+        putBack: true,
+    };
+    const laid = laidOut(tray, space);
+    const [under, over] = [13, 11].map((slot) => laid.cards.get(slot));
+    const height = 200 / space.card.aspect;
+    const pose = (place, down) => ({
+        x: place.x,
+        y: place.y + down,
+        width: 200,
+    });
+    const lands = (slot, place, down, grab) =>
+        landing(
+            tray,
+            space,
+            { x: place.x + 100, y: place.y + down + grab },
+            { slot, pose: pose(place, down) },
+        );
+    // 13, picked up by its name bar and let go squarely where 11 lies, goes on top; the
+    // pointer is then still above 11's middle, which a rule by the pointer read as no move.
+    const gap = over.y - under.y;
+    assert.deepEqual(lands(13, under, gap, 10), { pile: 0, at: 0 });
+    // Let go just short of half way there, it stays (its own place, which the session takes
+    // for no move), wherever on the card it was held.
+    assert.deepEqual(lands(13, under, gap * 0.4, 10), { pile: 0, at: 1 });
+    assert.deepEqual(lands(13, under, gap * 0.4, height - 10), {
+        pile: 0,
+        at: 1,
+    });
+    // 11, picked up low and let go where 13 lies, goes under it.
+    assert.deepEqual(lands(11, over, -gap, height - 10), { pile: 0, at: 2 });
 });
 
 test("cards picked out of the library lie in one row, in the order they were dealt", () => {

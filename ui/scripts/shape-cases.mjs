@@ -64,6 +64,39 @@ export const cardsUp = (prompt) => {
     return [...piles.flatMap((pile) => pile.cards), ...loose];
 };
 
+/** In the page: where to let go the pointer, which holds the card `carried` at `from`, so that
+ * the card lands before the card at `at` of a put-back's library, whose cards `selectors`
+ * find, the top first (src/stage/tray.ts `landing`). The library is a column with its top
+ * card lowest, and a card let go on it takes the place nearest its middle. Each of the
+ * column's places but the new top one is where one of the other cards' middles lies now, so
+ * the card's middle is aimed there, or for the top a third of a card below the lowest. */
+function placeOnLibrary({ selectors, carried, at, from }) {
+    const box = (selector) =>
+        document.querySelector(selector).getBoundingClientRect();
+    const held = box(carried);
+    const own = selectors.indexOf(carried);
+    const others = selectors
+        .filter((selector) => selector !== carried)
+        .map(box);
+    // Its index among the others: `at` counts the card itself where it lies now.
+    const among = own >= 0 && at > own ? at - 1 : at;
+    const middle = (rect) => rect.top + rect.height / 2;
+    const y =
+        others.length === 0
+            ? middle(held)
+            : among === 0
+              ? middle(others[0]) + held.height / 3
+              : middle(others[among - 1]);
+    const x =
+        others.length === 0
+            ? held.left + held.width / 2
+            : others[0].left + others[0].width / 2;
+    return {
+        x: from.x + x - (held.left + held.width / 2),
+        y: from.y + y - middle(held),
+    };
+}
+
 /** In the page: where to let go what is carried to before the thing at `at` of the things
  * `selectors` find in their order, along the `axis` they lie along (`backward`, if their
  * order runs against it), within the box `within` finds if any: short of the first's middle,
@@ -194,26 +227,32 @@ export async function carry(page, click, before, from) {
         click.pile === 0 &&
         state.piles[0].place === "onTop" &&
         state.piles[1].place === null;
-    const to = await page.evaluate(
-        placeFor,
-        state.shape === "split"
-            ? {
-                  selectors: state.piles[click.pile].cards.map(node),
-                  at: click.at,
-                  axis: column ? "y" : "x",
-                  backward: column,
-                  within: `.stage-tray-pile[data-pile="${click.pile}"]`,
-              }
-            : {
-                  selectors: state.items.map(
-                      ({ id }) => `.stage-order-item[data-item="${id}"]`,
-                  ),
-                  at: click.at,
-                  axis: "x",
-                  // The first to resolve is at the right.
-                  backward: true,
-              },
-    );
+    const to = column
+        ? await page.evaluate(placeOnLibrary, {
+              selectors: state.piles[0].cards.map(node),
+              carried: node(click.on.slot),
+              at: click.at,
+              from,
+          })
+        : await page.evaluate(
+              placeFor,
+              state.shape === "split"
+                  ? {
+                        selectors: state.piles[click.pile].cards.map(node),
+                        at: click.at,
+                        axis: "x",
+                        within: `.stage-tray-pile[data-pile="${click.pile}"]`,
+                    }
+                  : {
+                        selectors: state.items.map(
+                            ({ id }) => `.stage-order-item[data-item="${id}"]`,
+                        ),
+                        at: click.at,
+                        axis: "x",
+                        // The first to resolve is at the right.
+                        backward: true,
+                    },
+          );
     await page.mouse.move(from.x, from.y);
     await page.mouse.down();
     await page.mouse.move((from.x + to.x) / 2, (from.y + to.y) / 2 - 12, {

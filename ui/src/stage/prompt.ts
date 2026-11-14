@@ -62,7 +62,7 @@ import {
   type Tray,
 } from "./table.ts";
 import { subjectOf as aboutOf } from "./tracks.ts";
-import type { Landing } from "./tray.ts";
+import type { Carried, Landing } from "./tray.ts";
 
 type Subject = Extract<Click, { kind: "on" }>["on"];
 
@@ -337,9 +337,10 @@ export class Prompts {
   /** Which nodes a click on is the prompt's: all, until a board says otherwise (a phone's
    * hand is read by a touch and played by a drag). */
   clicks: (name: Name) => boolean = () => true;
-  /** Where in `tray` a card let go at `at` lands, as the board's layout has it laid out:
-   * nowhere, until a board says. */
-  lands: (tray: Tray, at: Point) => Landing | undefined = () => undefined;
+  /** Where in `tray` the card `carried` let go at `at` lands, as the board's layout has it
+   * laid out: nowhere, until a board says. */
+  lands: (tray: Tray, at: Point, carried: Carried) => Landing | undefined =
+    () => undefined;
   /** The view last played out, whose prompt this has opened or let be. */
   #view: PlayerView | undefined;
   #asked: Asked = IDLE;
@@ -594,12 +595,12 @@ export class Prompts {
    * rests, it goes back. One carried in a tray of piles is dropped where it lands, and goes
    * back let go outside every pile. A drop taken waits where it was let go for what the
    * click did. */
-  #dropped({ name, at }: Drop) {
+  #dropped({ name, at, pose }: Drop) {
     const rests = this.#stage.shown.resting.get(name);
     if (!rests || !this.#asked.prompt) return false;
     const tray = this.#piled(name);
     const on = subjectOf(name);
-    const landed = tray && this.lands(tray, at);
+    const landed = tray && this.lands(tray, at, { slot: name as number, pose });
     if (tray ? !landed : at.y >= rests.pose.y) return false;
     this.#carried = this.#clickOn(
       name,

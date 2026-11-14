@@ -104,7 +104,8 @@ export function StageBoard({
   );
   // A card carried between a tray's piles lands where the desktop lays the tray out.
   useEffect(() => {
-    prompts.lands = (tray, at) => landing(tray, desktopTray(), at);
+    prompts.lands = (tray, at, carried) =>
+      landing(tray, desktopTray(), at, carried);
     return () => {
       prompts.lands = () => undefined;
     };

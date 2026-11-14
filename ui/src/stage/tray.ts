@@ -46,6 +46,9 @@ export interface Laid {
   /** Where the library is drawn face down, in a tray of cards put back onto it. Its piles'
    * boxes are then drawn with no edges. */
   library?: Box;
+  /** In that tray, the top edge of each place in the library's column, the deepest first,
+   * as many as the library's pile can come to hold. */
+  column?: number[];
 }
 
 /** The widths a card is tried at, the widest first. */
@@ -254,6 +257,7 @@ function putBack(tray: Tray, space: TraySpace): Laid {
     cards: new Map(),
     boxes: [],
     library: { x: left, y: top - 0.05 * height, width, height },
+    column: Array.from({ length: deep }, (_, i) => top + span * i),
   };
   // The hand's fan, as long as the cards in it now, about the middle of the room it has.
   const handLeft = own
@@ -383,13 +387,23 @@ export interface Landing {
   at: number;
 }
 
+/** The card carried to a drop: its slot, and where it was let go (its frame's top-left
+ * corner and width, as a `Pose` has them). */
+export interface Carried {
+  slot: number;
+  pose: Place;
+}
+
 /** Where a card let go at `point` lands in `tray`, laid out in `space`: in the box the point
- * is in, before the first card of that pile whose middle is past it. None outside every box,
- * and in a tray of one pile, which has no order to give. */
+ * is in, before the first card of that pile whose middle is past it. On the library of a
+ * put-back it lands in the place of the library's column nearest to where the card itself
+ * was let go (`library`). None outside every box, and in a tray of one pile, which has no
+ * order to give. */
 export function landing(
   tray: Tray,
   space: TraySpace,
   point: Point,
+  carried?: Carried,
 ): Landing | undefined {
   const laid = laidOut(tray, space);
   const pile = laid.boxes.findIndex(
@@ -400,19 +414,46 @@ export function landing(
       point.y <= box.y + box.height,
   );
   if (pile < 0) return undefined;
-  if (laid.library && pile === 0) {
-    // On the library, a card goes onto each card whose middle it is below: the cards are
-    // listed the top first, and the top one lies lowest.
-    const cards = tray.piles[0]!.cards;
-    const under = cards.filter((slot) => {
-      const place = laid.cards.get(slot)!;
-      return place.y + place.width / space.card.aspect / 2 < point.y;
-    });
-    return { pile, at: cards.length - under.length };
+  if (laid.library && laid.column && pile === 0) {
+    return { pile, at: library(tray, space, laid, point, carried) };
   }
   const before = tray.piles[pile]!.cards.filter((slot) => {
     const place = laid.cards.get(slot)!;
     return place.x + place.width / 2 < point.x;
   });
   return { pile, at: before.length };
+}
+
+/** Where on the library of a put-back a card let go lands, as a `Landing`'s `at`. The cards
+ * on the library lie a name bar apart, so a rule that compared the pointer with their middles
+ * (as a row's does) left each place a strip a few dozen pixels tall, and one that depended on
+ * where on the card it was picked up: a card under the top one, picked up by its name bar
+ * and let go squarely over the top card's place, stayed where it was. Instead the card goes
+ * to whichever place in the column, once it is in it, lies nearest to where its middle was
+ * let go (the pointer's, if no card is given). */
+function library(
+  tray: Tray,
+  space: TraySpace,
+  laid: Laid,
+  point: Point,
+  carried: Carried | undefined,
+): number {
+  const cards = tray.piles[0]!.cards;
+  const own = carried ? cards.indexOf(carried.slot) : -1;
+  const others = cards.length - (own < 0 ? 0 : 1);
+  const height = laid.library!.height;
+  const middle = carried
+    ? carried.pose.y + carried.pose.width / space.card.aspect / 2
+    : point.y;
+  // The places it could take, the deepest first: one more than the others hold.
+  const places = laid.column!.slice(0, others + 1);
+  let nearest = 0;
+  places.forEach((top, i) => {
+    const off = (place: number) => Math.abs(place + height / 2 - middle);
+    if (off(top) < off(places[nearest]!)) nearest = i;
+  });
+  // Its index among the others, the top first; below where it lies now, one more, as `at`
+  // counts the card itself in its place (the session takes it out before putting it back).
+  const among = others - nearest;
+  return own >= 0 && among > own ? among + 1 : among;
 }

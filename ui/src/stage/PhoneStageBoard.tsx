@@ -150,10 +150,10 @@ export function PhoneStageBoard({
   }, [stage, prompts]);
   // A card carried between a tray's piles lands where the phone lays the tray out.
   useEffect(() => {
-    prompts.lands = (tray, at) => {
+    prompts.lands = (tray, at, carried) => {
       const table = stage.shown.table;
       return table && viewport
-        ? landing(tray, phoneTray(table, viewport), at)
+        ? landing(tray, phoneTray(table, viewport), at, carried)
         : undefined;
     };
     return () => {
