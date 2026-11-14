@@ -232,7 +232,7 @@ test("every line is lit over the cards, and the marks of combat under them", () 
             ["arrow", "hostile"],
             ["swell", "pale"],
             ["beam", "gold"],
-            ["beam", "ember"],
+            ["beam", "cyan"],
         ],
     );
     assert.deepEqual(under.ribbons, []);
