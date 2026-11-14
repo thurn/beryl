@@ -34,10 +34,10 @@ A scenario or card outside this vocabulary is reported as unsupported, with the 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import cast
 
 from .card_facts import Cards, Json, Unsupported, payment_taps
+from .xmage_trace import Position
 from .xmage_java import (
     EVERY_TURN,
     ORDER,
@@ -67,24 +67,6 @@ FORCED_TARGETS = ("put-back",)
 # waterbend's permanents, which Beryl asks as a payment whose purpose says so.
 CHOICE_KINDS = ("ChooseUpTo", "ChooseObject", "TriggerOrder")
 YES_NO_KINDS = ("YesNo", "CastOffer")
-
-
-@dataclass
-class Position:
-    turn: int
-    step: str
-    decider: int | None
-    kind: str | None
-    # What the open decision's prompt is for: a kind says only the form of its answer.
-    purpose: str | None
-    stack: list[Json]
-    flips: list[Json]
-    taps: list[str]
-    forced: list[Json]
-    flashback: list[str]
-    face_down: list[str]
-    # How many creatures each seat controls.
-    creatures: list[int]
 
 
 class Exporter:
@@ -191,8 +173,7 @@ class Exporter:
         self.arrange()
         actions = self.actions
         trace = [
-            self.position(cast(Json, t))
-            for t in cast(list[object], self.entry["trace"])
+            Position.of(cast(Json, t)) for t in cast(list[object], self.entry["trace"])
         ]
         self.trace = trace
         for i, (action, p) in enumerate(zip(actions, trace)):
@@ -264,23 +245,6 @@ class Exporter:
         if self.scry is not None and self.scry[2]:
             raise Unsupported("ordering a scry's cards on top")
         self.scry = None
-
-    @staticmethod
-    def position(t: Json) -> Position:
-        return Position(
-            turn=cast(int, t["turn"]),
-            step=cast(str, t["step"]),
-            decider=cast("int | None", t["decider"]),
-            kind=cast("str | None", t["kind"]),
-            purpose=cast("str | None", t.get("purpose")),
-            stack=cast(list[Json], t["stack"]),
-            flips=cast(list[Json], t["flips"]),
-            taps=cast(list[str], t["taps"]),
-            forced=cast(list[Json], t["forced"]),
-            flashback=cast(list[str], t.get("flashback", [])),
-            face_down=cast(list[str], t.get("face_down", [])),
-            creatures=cast(list[int], t.get("creatures", [1, 1])),
-        )
 
     def arrange(self) -> None:
         self.emit("removeAllCardsFromLibrary(playerA);")
