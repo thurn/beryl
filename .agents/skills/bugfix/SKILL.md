@@ -1,6 +1,6 @@
 ---
 name: bugfix
-description: Work the bug reports filed from Beryl's in-app bug button (⌘B) as an Enact run — file them as beads, settle what each complaint asks for, group them into lanes and model tiers, then run them through /enact-plan's vizier loop, where worker sessions reproduce, fix, verify and close each report. Use when asked to fix reported bugs, work the bug reports, or run /bugfix.
+description: Work the bug reports filed from Beryl's in-app bug button (⌘B) as an Enact run — file them as beads, group reports that share a cause into lanes and give each a model tier, then run them through /enact-plan's vizier loop, where worker sessions reproduce, fix, verify and close each report. Use when asked to fix reported bugs, work the bug reports, or run /bugfix.
 ---
 
 # Fixing reported bugs
@@ -24,7 +24,7 @@ the beads. In Claude Desktop the pool can only be started in the turn the user
 invoked you, so do all of the planning below in that turn.
 
 Nothing in this workflow waits for the user. Where a report leaves a real
-question, the vizier decides it (planning step 2) and proceeds. Never file a
+question, the worker decides it (Worker step 1) and proceeds. Never file a
 bead asking the user to look at something.
 
 MTG Arena is the reference for the UI's flow, motion, timing, table layout and
@@ -92,102 +92,47 @@ Enact, project setup, permission mode), then:
    labeled `human` (they wait on the reporter, below) and beads another
    session or vizier is actively working; name both in your summary.
 
-2. **Understand each complaint.** Read every report in scope and inspect its
-   available images and evidence before choosing an implementation. A report
-   from a spec page has a `url` naming the card and moment
-   (`/m/<card>/<moment>/…`). Record in each bead:
+2. **Read each report, briefly.** Read every report in scope: its words and
+   its screenshot. This reading is for routing, not for deciding what the
+   player wants; the worker does that with the evidence in front of it
+   (Worker step 1). Do not read code, open a worktree, reproduce, or run
+   subagents to interpret reports. Note on each bead only facts you checked:
 
-   - What the player saw, the experience they want, and observable acceptance
-     criteria covering every part of their complaint.
-   - The intended scope: a named card may illustrate a shared interaction. For
-     example, a chooser that opens with the wrong button on one card is a
-     complaint about that prompt shape on every card that opens it. Infer scope
-     from the player's words and evidence; do not turn a local preference into
-     an unrelated redesign.
-   - Related open and closed reports and fixing commits. For a repeat report,
-     check whether its app build contains the prior fix, and explain what that
-     fix or its verification missed before proposing another patch.
+   - related open and closed reports and the commits that fixed them, found by
+     searching `bd list --label bug-report --all --limit 0` and `git log`;
+   - for a repeat report, whether its app build (`commit` in the front matter)
+     already contains the earlier fix;
+   - the line "Follow the `bugfix` skill's 'Worker: fixing one report'
+     section."
 
-   Before delegating implementation or choosing a patch, check each complaint
-   for materially different interpretations. For sequencing words such as
-   "before", "after", or "when", identify the visible milestones: opening a
-   chooser, confirming a choice, paying a cost, and moving cards can be separate
-   events. Inspect the recorded views or do a short reproduction during this
-   review if needed to distinguish them. For example, "tap before exiling"
-   might mean before the exile chooser opens or before selected cards depart;
-   do not defer that question until a flight-order patch is already underway.
+   Never write a guess as a fact or a default. In particular, do not describe
+   how an earlier build or Arena showed something unless you have looked at
+   it; the worker finds that out.
 
-   Settle each such question yourself, in this order: what the player's words
-   and screenshot show; what Arena does at the same moment (the `arena-video`
-   skill: a still or filmstrip settles it); UI Conventions; the nearest
-   behavior Beryl already has. Take the interpretation that covers the whole
-   complaint, not a narrower one that is easier to build, record it and its
-   evidence in the bead, and proceed. The user overrules it with a new report
-   if he disagrees.
+3. **Group and route.** Several reports with one cause are one fix: give them
+   the same `lane:<name>` so one session fixes the cause once and verifies and
+   closes each report against it. Group only on a cause you can see from the
+   reports themselves (the same prompt misbehaving the same way, one animation
+   reported twice), not because two fixes might touch the same files or
+   directory: merge conflicts are cheap, and a lane costs parallelism. Do not
+   run `/enact-plan`'s "Lane and tier pass" over these beads. Add an edge
+   (`bd dep add <dependent> <prerequisite>`) only where one fix changes how
+   another report must be judged.
 
-3. **Triage** each UI report by what it is about:
-
-   - **script**: what plays, in what order, from where;
-   - **verb**: how a motion feels (its timing, path, easing);
-   - **shape**: a prompt (its buttons, defaults, ways to decline);
-   - **mark**: what an outline, glow or arrow means;
-   - **layout**: where things sit on the table;
-   - **skin**: colors, type, icons and frames, which stay Beryl's;
-   - **wording**: a label or prompt's text, which is Arena's exactly.
-
-   Rules and AI reports stay as they are. Record the kind on the bead.
-
-   A report about motion, arrows or combat lines (most script, verb and mark
-   reports) is fixed where the stage plays it. Read the moment's script first
-   (`just specs --script <card>`, or the steps `just ui-shots --views <fixture>`
-   lists; the `specs` skill, step 2): a wrong script is a session bug to fix
-   in the builder (`rust/crates/beryl_session/src/script/`), and a right
-   script played wrongly is the stage's (`ui/src/stage/`). Hold the fix with
-   a case of the verb or shape suite (`ui/scripts/verb-cases*.mjs`,
-   `shape-cases*.mjs`).
-
-   Steps 2 and 3 are for writing each bead's context packet, not for fixing:
-   read the evidence and the code only as far as you need to say what is
-   wrong, where, and how a worker reproduces it. Do not edit code, open a
-   worktree, or start reproducing beyond what settling an interpretation
-   needs. Each bead's notes (`bd update <bead> --append-notes`) and
-   `--acceptance` must let a fresh worker start where your reading ended:
-   the interpretation and its evidence, the triage kind (for a UI report,
-   that its fix is verified with `/arena-pixel-match`), the files, scripts,
-   specs or fixtures it likely touches, the reproduce commands from
-   [Worker step 1](#worker-fixing-one-report), related reports and commits,
-   and the line "Follow the `bugfix` skill's 'Worker: fixing one report'
-   section."
-
-4. **Group, route and lane.** Several reports with one cause are one fix:
-   give them the same lane so one session fixes the cause once and verifies
-   and closes each report against it, rather than two sessions fixing it in
-   parallel. Then give every bead a tier, since Beryl assigns models by name
+   Then give every bead a tier, since Beryl assigns models by name
    (`/enact-plan`, "Models by name"; AGENTS.md, Enact):
 
-   - `tier:opus` for reports that need judgment: an unknown or shared cause,
-     rules engine behavior, a script, verb or mark report that changes how
-     the stage plays a moment, a prompt's shape, a repeat report whose
-     earlier fix missed, and every `ai-play` report (judging a blunder is
-     design work).
-   - `tier:sonnet` for reports whose cause and fix you could already name in
-     the bead: a wording change, a skin or layout value in a known file, a
-     missing case in an existing builder.
-   - `tier:light` only for fully mechanical changes, such as replacing a
-     label with Arena's exact words in one place.
+   - `tier:opus` by default: reports whose cause is not obvious, rules engine
+     behavior, motion, prompt shapes, repeat reports, and every `ai-play`
+     report (judging a blunder is design work).
+   - `tier:sonnet` only where the report itself names a small, local change: a
+     wording change, a color, a misaligned element.
 
-   Never use `tier:fable` unless the user asked for it. Then run
-   `/enact-plan`'s "Lane and tier pass" over the beads: two to four beads of one tier touching the same code
-   (the stage, the session's script builder, one prompt, the rules for one
-   mechanic) share a `lane:<name>`; a bead alone on its code gets no lane;
-   a report big enough to fill a session stays out of lanes. Where one fix
-   must land before another report can be judged, add an edge
-   (`bd dep add <dependent> <prerequisite>`) instead.
+   Never use `tier:fable` unless the user asked for it.
 
-5. **Run them.** Continue with `/enact-plan` at "A bead", case "Several
+4. **Run them.** Continue with `/enact-plan` at "A bead", case "Several
    beads": create the run epic (title `Bug reports <date>`; its description
-   lists the reports in scope, the tier policy above and the decisions from
-   step 2), reparent each bead into it, then "Finish planning" and the loop.
+   lists the reports in scope and the tier policy above), reparent each bead into it, then "Finish planning" and the loop.
    A bug-report bead that already sits under the open epic of an earlier
    `/bugfix` run with claimed children belongs to that run's vizier: leave
    it. Under any other parent, move it into the new epic and note the old
@@ -196,7 +141,7 @@ Enact, project setup, permission mode), then:
    From here on you are the vizier in `/enact-plan`'s loop and nothing
    else: you never read a bead's progress, review a fix, or close a report.
 
-6. **Report.** When the loop returns `done` (or the run stops), reconcile
+5. **Report.** When the loop returns `done` (or the run stops), reconcile
    the reports in scope with `just bugs` and the final bead states, and give
    the reporter a concise outcome for every report: verified fixed (with
    commit), cataloged AI blunder, awaiting the reporter (`human`), handed
@@ -208,12 +153,44 @@ Enact, project setup, permission mode), then:
 You are an Enact executor session working one bug-report bead (or a lane of
 them). Your role files from Enact still apply: worktree, `enact push`,
 handoff comment and `enact close`. This section says what finishing a bug
-report means. Read the bead's notes first: the vizier has already settled
-what the player is asking for and recorded it with its evidence. If what you
-find contradicts that interpretation, take the reading that covers the whole
-complaint (planning step 2's order of evidence) and record why on the bead.
+report means. The bead holds the report and related history, not an
+interpretation: deciding what the player is asking for is your first job
+(step 1).
 
-1. **Reproduce.** Pick by what went wrong:
+1. **Decide what the player wants, then reproduce it.** Read the report's
+   words, `screenshot.png` and `window.png` before anything else, and decide
+   what the player saw and what they want. Write that down on the bead with
+   observable acceptance criteria covering every part of the complaint.
+
+   - **Scope.** A named card often stands for a shared interaction: a chooser
+     that opens with the wrong button on one card is a complaint about that
+     prompt shape on every card that opens it. Do not turn a local preference
+     into an unrelated redesign either.
+   - **Sequencing words** such as "before", "after" or "when" can point at
+     different visible moments: a chooser opening, a choice confirmed, a cost
+     paid, cards moving. Check the recorded views to tell which one the player
+     means before you choose a fix.
+   - **Settle each open question in this order:** the player's words and
+     screenshot; what Arena does at the same moment (for a UI report, the
+     `arena-pixel-match` film of step 2, started now: see Arena before you
+     design); UI Conventions; the nearest behavior Beryl already has. Take the
+     reading that covers the whole complaint, not a narrower one that is
+     easier to build.
+   - **"It used to be better."** Find out what the earlier build actually
+     showed at that moment (`git log`, `git show <commit>^:<path>`, an old
+     spec film) before you restore anything. Never assume which component it
+     was.
+   - **A repeat report:** say what the earlier fix or its verification missed
+     before you write another patch.
+   - **A motion, arrow or combat-line report:** read the moment's script first
+     (`just specs --script <card>`, or the steps
+     `just ui-shots --views <fixture>` lists; the `specs` skill, step 2). A
+     wrong script is a session bug in the builder
+     (`rust/crates/beryl_session/src/script/`); a right script played wrongly
+     is the stage's (`ui/src/stage/`). Hold the fix with a case of the verb or
+     shape suite (`ui/scripts/verb-cases*.mjs`, `shape-cases*.mjs`).
+
+   Then reproduce it. Pick by what went wrong:
 
    - An AI play (`kind: ai`, bead label `ai-play`): start from the digest and
      `searches.json`, then review the position and rerun the recorded agent with
@@ -272,9 +249,10 @@ complaint (planning step 2's order of evidence) and record why on the bead.
    `just conventions` regenerates `docs/ui-conventions.md`). Name the report's
    bead in the entry.
 
-   For UI complaints, verify the fix with the `arena-pixel-match` skill
-   (`/arena-pixel-match`): read it and follow it for the reported moment and
-   the neighboring cases. It films the same moment in an Arena recording and
+   **Every UI report runs `/arena-pixel-match`. This is not optional, however
+   small the change looks.** Read the skill and follow it for the reported
+   moment and the neighboring cases: film Arena first, while deciding the fix
+   (step 1), and film again after it. It films the same moment in an Arena recording and
    in Beryl side by side (through the `arena-video` and `specs` skills), lists
    every difference in what is shown, where, how large and when, and has you
    fix them until none is left or each one left is named. The player's report
@@ -282,7 +260,9 @@ complaint (planning step 2's order of evidence) and record why on the bead.
    screenshot, passing typecheck, engine event, or DOM presence alone cannot
    prove the screen behaves as requested. Extend the specs' coverage when
    necessary. Only when Arena has no such moment does the hand-written
-   expectation below stand in for the side-by-side film.
+   expectation below stand in for the side-by-side film, and "no such moment"
+   needs evidence: record on the bead the `arena-video` searches you ran and
+   what they found.
 
    Record the reproduction, shared cause, tests and commands, and observed
    result against each acceptance criterion in the bead. Keep remaining
@@ -290,11 +270,14 @@ complaint (planning step 2's order of evidence) and record why on the bead.
 
 3. **Close** it only after the above verification and required CI pass and
    `enact push` has landed the fix, or the AI blunder case meets step 1. You
-   close your own reports; the vizier never does. The evidence for closing a
-   UI report, recorded on its bead, is the `arena-pixel-match` side-by-side
-   film of Arena and Beryl at the same moment with its list of differences
-   (fixed, or named and explained), or, where Arena has no such moment, a hand-written expectation (the test
-   above, or the UI Conventions entry it follows). Then run
+   close your own reports; the vizier never does. A UI report cannot close
+   without this evidence on its bead: the path of the final `arena-pixel-match`
+   pair sheet of Arena and Beryl at the same moment, and its difference table
+   (each row fixed, or named with its reason). Where Arena has no such moment,
+   the bead instead records the `arena-video` searches that found none and the
+   hand-written expectation that stands in (the test above, or the UI
+   Conventions entry it follows). Without one of these, hand the report back
+   as "only partly fixed" below. Then run
    `just bugs done <bead> --commit <sha>` with the `staging` SHA that
    `enact push` reported, which marks the report done and moves it to
    `done/`, and finish as Enact's role files say: the handoff comment, then
