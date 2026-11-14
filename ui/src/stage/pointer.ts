@@ -222,6 +222,9 @@ export class Pointer {
    * drop. A press that wandered without picking anything up is neither. */
   release(at: Point, onto?: Under) {
     const press = this.#press;
+    // A WebView may deliver the release at a new point without an intervening move (for
+    // example, a simulator's injected touch). Treat that final distance as movement too.
+    if (press && (press.at.x !== at.x || press.at.y !== at.y)) this.move(at);
     this.#press = undefined;
     if (!press) return;
     const held = this.#held;

@@ -54,6 +54,18 @@ test("a press let go where it began is a click; one that wandered is nothing", (
     assert.equal(told.length, 1);
 });
 
+test("a distant release carries a card even without a move event", () => {
+    const { made, told } = listening({ holdable: (name) => name === 3 });
+    made.pointer.press(3, { x: 30, y: 540 });
+    made.pointer.release({ x: 230, y: 340 });
+    assert.deepEqual(
+        told.map(([event]) => event),
+        ["lift", "lift", "drop"],
+    );
+    assert.deepEqual(told[2][1].at, { x: 230, y: 340 });
+    assert.deepEqual(told[2][1].start, { x: 30, y: 540 });
+});
+
 test("a held card's pose is the pointer's, and the stage's model returns it", () => {
     const { made, surface, told } = listening({
         holdable: (name) => name === 3,
