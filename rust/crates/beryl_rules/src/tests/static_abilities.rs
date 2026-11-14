@@ -270,13 +270,15 @@ fn a_draw_replaced_by_draws_is_not_replaced_again() {
 /// a draw that silently happens anyway.
 #[test]
 fn a_table_refuses_a_draw_replacement_the_engine_cannot_do() {
-    for (card, unreplaced) in [("Test Favor", Unreplaced::Players)] {
-        let table = GameTable::new(&DRAW_CARDS, [&[(1, card)], &[(1, "Test Land")]]);
-        assert_eq!(
-            table.err(),
-            Some(TableError::Replacement { card, unreplaced })
-        );
-    }
+    let card = "Test Favor";
+    let table = GameTable::new(&DRAW_CARDS, [&[(1, card)], &[(1, "Test Land")]]);
+    assert_eq!(
+        table.err(),
+        Some(TableError::Replacement {
+            card,
+            unreplaced: Unreplaced::Players
+        })
+    );
 }
 
 /// An instant, a sorcery and a creature spell, as faces a rule change is asked about.
