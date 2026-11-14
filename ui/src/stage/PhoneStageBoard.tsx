@@ -106,7 +106,7 @@ export function PhoneStageBoard({
   const number = prompts.number.bind(prompts);
   const answers = { waiting, press, cancel, suggest, number };
   const { ref, viewport, frameStyle } = useViewport();
-  const { layer, surface } = useSurface(stage);
+  const { layer, surface } = useSurface(stage, prompts.pointerClient);
   const { table, counts, resting } = useSyncExternalStore(
     stage.subscribe,
     () => stage.shown,
@@ -135,7 +135,7 @@ export function PhoneStageBoard({
   // The slot of the card a touch inspects, or the face of one of the Revealed Cards.
   const [inspecting, setInspecting] = useState<number | ObjectView>();
   const revealed = useMemo(() => revealedIn(resting), [resting]);
-  const [revealedOpen, setRevealedOpen] = useRevealedOpen(prompts, revealed);
+  const [revealedOpen, setRevealedOpen] = useRevealedOpen(stage, revealed);
   // A touch on a card the player can read inspects it, and a second one puts it away: one
   // the open prompt had no use for, or on a card of the hand, which the prompt leaves to be
   // read.
@@ -162,7 +162,7 @@ export function PhoneStageBoard({
   }, [stage, prompts, viewport]);
   useEffect(
     () =>
-      prompts.listen({
+      stage.pointer.observe({
         click(name) {
           const touched = stage.shown.resting.get(name);
           const readable =
@@ -175,7 +175,7 @@ export function PhoneStageBoard({
           );
         },
       }),
-    [stage, prompts],
+    [stage],
   );
   const inspected =
     typeof inspecting === "number"

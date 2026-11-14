@@ -86,7 +86,7 @@ export function StageBoard({
 }) {
   const { stage, prompts } = pageStage();
   const asked = usePrompt(prompts);
-  const { layer, surface } = useSurface(stage);
+  const { layer, surface } = useSurface(stage, prompts.pointerClient);
   const width = useStageWidth();
   const [settings, setSettings] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
@@ -123,7 +123,7 @@ export function StageBoard({
     stage.subscribe,
     () => stage.shown,
   );
-  const hovered = useHovered(stage, prompts);
+  const hovered = useHovered(stage);
   // The card of your hand the pointer is on rises out of the fan (UI Conventions, "Hover
   // inspection").
   useLayoutEffect(() => {
@@ -262,7 +262,6 @@ export function StageBoard({
         <Shares asked={asked} prompts={prompts} stage={stage} />
         <Controls
           stage={stage}
-          prompts={prompts}
           asked={asked}
           hovered={hovered}
           stops={stops}
@@ -274,7 +273,6 @@ export function StageBoard({
         {!dimmed && (
           <RevealedCards
             stage={stage}
-            prompts={prompts}
             space={DESKTOP_REVEALED}
             onDismiss={(cards) => setCleared(new Set(cards))}
           />

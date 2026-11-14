@@ -13,8 +13,8 @@ function listening({ holdable = () => true, taken = false, timings } = {}) {
     const { stage: made, surface } = stage(timings);
     made.play(view([1, 2], [3]));
     const told = [];
-    made.pointer.holdable = holdable;
     made.pointer.listen({
+        holdable,
         hover: (name) => told.push(["hover", name]),
         click: (name, at) => told.push(["click", name, at]),
         lift: (name) => told.push(["lift", name]),
@@ -310,6 +310,7 @@ test("clicks and drops carry the modifiers held at release", () => {
     const pointer = made.pointer;
     const seen = [];
     pointer.listen({
+        holdable: () => true,
         click: (name, at, keys) => seen.push([name, at, keys]),
         drop: ({ keys }) => {
             seen.push(keys);
@@ -404,6 +405,7 @@ test("a held card reports the node or player under it while hover stays silent",
     const pointer = made.pointer;
     const seen = [];
     pointer.listen({
+        holdable: () => true,
         hover: (name) => seen.push(["hover", name]),
         over: (target, at) => seen.push(["over", target, at]),
     });
@@ -431,6 +433,7 @@ test("a touch can drag after 150 ms, but movement before then leaves the hand al
     const pointer = made.pointer;
     const seen = [];
     pointer.listen({
+        holdable: () => true,
         lift: (name) => seen.push(["lift", name]),
         click: () => assert.fail("a drag cannot click"),
         secondary: () => assert.fail("a moving finger cannot open a menu"),
@@ -467,6 +470,7 @@ test("a stationary touch opens its menu after 500 ms and consumes the tap", (t) 
     const pointer = made.pointer;
     const seen = [];
     pointer.listen({
+        holdable: () => true,
         click: (name) => seen.push(["click", name]),
         lift: () => assert.fail("a stationary finger cannot pick up a card"),
         secondary: (target, at) => seen.push(["secondary", target, at]),

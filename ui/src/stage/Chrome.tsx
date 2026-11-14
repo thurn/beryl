@@ -6,10 +6,9 @@
 // for as long as the step that makes them plays, on the stage's time (`Shown.notices`); the
 // combat banner, which no step announces, keeps a timer of its own.
 //
-// What the pointer does that is no prompt's is answered here (prompt.ts `listen`): the
-// inspector of the card it is on, placed clear of what the open prompt may have the player
-// pick next; the viewer a click on a card tucked under its host opens; and why a click was
-// refused (Refusal.tsx).
+// Hover opens the card inspector, placed clear of the open prompt's choices. An unused click
+// can open the viewer for cards tucked under their host or explain why the click was refused
+// (Refusal.tsx).
 import {
   useEffect,
   useMemo,
@@ -50,7 +49,7 @@ import {
   scryWords,
   stepAnnouncement,
 } from "./notices.ts";
-import { trayOf, type Asked, type Prompts } from "./prompt.ts";
+import { trayOf, type Asked } from "./prompt.ts";
 import { noticePlace, TimingRefusal, useRefusal } from "./Refusal.tsx";
 import type { ScriptStage } from "./stage.ts";
 
@@ -246,17 +245,13 @@ export function Hud({
   );
 }
 
-/** The node the pointer is on, as the stage tells it (pointer.ts) through what draws its
- * prompts, which hears the pointer first (prompt.ts). */
-export function useHovered(
-  stage: ScriptStage,
-  prompts: Prompts,
-): Name | undefined {
+/** The node the pointer is on, as the stage tells it (pointer.ts). */
+export function useHovered(stage: ScriptStage): Name | undefined {
   const [hovered, setHovered] = useState<Name>();
   useEffect(() => {
     setHovered(stage.pointer.hovered);
-    return prompts.listen({ hover: setHovered });
-  }, [stage, prompts]);
+    return stage.pointer.observe({ hover: setHovered });
+  }, [stage]);
   return hovered;
 }
 
@@ -297,7 +292,6 @@ export function keptClear(
  * on. */
 export function Controls({
   stage,
-  prompts,
   asked,
   hovered,
   stops,
@@ -306,7 +300,6 @@ export function Controls({
   children,
 }: {
   stage: ScriptStage;
-  prompts: Prompts;
   asked: Asked;
   /** The node the pointer is on (`useHovered`). */
   hovered: Name | undefined;
@@ -325,11 +318,11 @@ export function Controls({
   const [viewing, setViewing] = useState<
     { side: Side; zone: string } | { linked: number }
   >();
-  const { refused, notice } = useRefusal(prompts, asked, resting);
+  const { refused, notice } = useRefusal(stage, asked, resting);
   // A card peeking out from behind the permanent that holds it in exile opens them all.
   useEffect(
     () =>
-      prompts.listen({
+      stage.pointer.observe({
         click(name) {
           const { table, resting } = stage.shown;
           const clicked = resting.get(name);
@@ -339,7 +332,7 @@ export function Controls({
           if (host !== undefined) setViewing({ linked: host });
         },
       }),
-    [stage, prompts],
+    [stage],
   );
   const piles = useMemo(
     () => (table ? [...zonePiles(table), ...libraries(table)] : []),

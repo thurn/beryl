@@ -1,6 +1,6 @@
 // Why a click is refused, on the desktop's stage (UI Conventions, "Why a click is refused"). The
 // session says with each decision which cards it will not take and why (`DecisionView.refused`);
-// a click on one changes nothing of the prompt, so the prompt hands it on (prompt.ts `listen`),
+// a click on one changes nothing of the prompt, so the stage forwards it to its viewers,
 // and it is answered here: a sound, the reason under the card's inspector while the pointer
 // stays on it, and for a timing an opposing permanent imposes, a word at that permanent for a
 // moment. Nothing here works out what is allowed.
@@ -9,7 +9,8 @@ import { play } from "../audio/sound";
 import type { DecisionView, Refused } from "../generated/protocol";
 import { desktop } from "./desktop.ts";
 import type { Name, Resting } from "./layout.ts";
-import type { Asked, Prompts } from "./prompt.ts";
+import type { Asked } from "./prompt.ts";
+import type { ScriptStage } from "./stage.ts";
 
 /** How long the word at the permanent that forbids a click stays, in ms. */
 const NOTICE_MS = 1800;
@@ -24,7 +25,7 @@ interface Said {
  * for the inspector, and `notice`, the opposing permanent on the battlefield whose timing rule
  * forbade it, for a moment after the click wherever the pointer goes. */
 export function useRefusal(
-  prompts: Prompts,
+  stage: ScriptStage,
   { decision }: Asked,
   resting: ReadonlyMap<Name, Resting>,
 ) {
@@ -35,7 +36,7 @@ export function useRefusal(
   const ids = useRef(0);
   useEffect(
     () =>
-      prompts.listen({
+      stage.pointer.observe({
         click(name) {
           const decision = open.current;
           const refused = decision?.refused.find((r) => r.slot === name);
@@ -48,7 +49,7 @@ export function useRefusal(
           setSaid((s) => (s?.refused.slot === name ? s : undefined));
         },
       }),
-    [prompts],
+    [stage],
   );
   useEffect(() => {
     if (!noticed) return;

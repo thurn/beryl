@@ -33,9 +33,9 @@ let page: { stage: ScriptStage; feed: Feed; prompts: Prompts } | undefined;
 
 /** The page's one stage, what feeds it and what draws the session's prompts on it, made when
  * first asked for: the model lasts as long as the page, whatever of the screen is mounted, so
- * a table shown again finds every object where its scripts left it. It is laid out for the
- * desktop until a board says otherwise (StageBoard.tsx, PhoneStageBoard.tsx), and its steps
- * sound as they play. */
+ * a table shown again finds every object where its scripts left it. Its steps sound as they
+ * play. The mounted board attaches its pointer client and sets the layout, which defaults
+ * to desktop. */
 export function pageStage() {
   if (!page) {
     const stage = new ScriptStage({

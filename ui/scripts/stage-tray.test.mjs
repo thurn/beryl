@@ -120,6 +120,7 @@ function prompted(layout = row) {
         sent.push({ decision, revision, click });
         return new Promise((resolve) => waiting.push(resolve));
     });
+    made.pointer.listen(prompts.pointerClient);
     const reply = async (value) => {
         waiting.shift()(value);
         await new Promise(setImmediate);

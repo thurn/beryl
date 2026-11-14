@@ -1,6 +1,5 @@
-// The pointer on the stage: the one way the stage tells what draws around it (React: the
-// inspector and prompts) what the player's pointer did on the table. The listener may
-// also handle secondary presses, arrow drags and rectangle selection.
+// The pointer on the stage tells the active client what the player did on the table.
+// Viewers can follow hover and clicks the client leaves for them.
 //
 // The surface turns the browser's events into the calls below, in stage pixels and by the
 // names the stage gives its nodes (dom.ts); nothing here reads the page, so a test makes the
@@ -51,15 +50,18 @@ export interface Drop {
   keys: PointerKeys;
 }
 
-/** What the stage tells of the pointer. Each is told at most one listener's answer: what the
- * last to `listen` says. */
-export interface PointerEvents {
+/** What the stage tells its active client. */
+export interface PointerClient {
+  /** Which nodes a press may pick up. */
+  holdable?(name: Name): boolean;
+  /** A card click. Call `unhandled` if it should go to the stage's viewers. */
+  click?(name: Name, at: Point, keys: PointerKeys, unhandled: () => void): void;
+  /** A primary click or tap on a player's life total. */
+  playerClick?(side: Side, at: Point, keys: PointerKeys): void;
   /** The pointer came onto the node `name`; with none, it left the one it was on. None is
    * told while a card is held, and a card let go is not told to be under the pointer until
    * it comes to rest (`Pointer.arrived`). */
   hover?(name: Name | undefined): void;
-  /** A press let go where it began, on `name`. */
-  click?(name: Name, at: Point, keys: PointerKeys): void;
   /** A right click or a stationary long press, on the original target. */
   secondary?(target: Target, at: Point): void;
   /** A right drag from a node, with `done` on release. */
@@ -73,6 +75,12 @@ export interface PointerEvents {
   /** A held card was let go. Returns whether the drop was taken: a taken card stays where it
    * was let go until what the drop did plays, and any other glides back to where it rests. */
   drop?(drop: Drop): boolean | void;
+}
+
+/** Pointer events the stage's viewers can follow independently of the active client. */
+interface PointerViewer {
+  hover?: PointerClient["hover"];
+  click?(name: Name, at: Point, keys: PointerKeys): void;
 }
 
 /** The card the pointer holds. */
@@ -124,10 +132,9 @@ export function heldPose(from: Pose, start: Point, at: Point): Pose {
 }
 
 export class Pointer {
-  /** Which nodes a press may pick up: none until whoever answers drops says. */
-  holdable: (name: Name) => boolean = () => false;
   readonly #holding: Holding;
-  #listener: PointerEvents = {};
+  #registration: { client: PointerClient } | undefined;
+  readonly #viewers = new Set<PointerViewer>();
   #over: Name | undefined;
   #press: Press | undefined;
   #held: Held | undefined;
@@ -144,20 +151,38 @@ export class Pointer {
     this.#holding = holding;
   }
 
-  /** Tells `listener` what the pointer does from now on, in place of whoever listened; returns
-   * how to stop. */
-  listen(listener: PointerEvents) {
+  /** Takes over gestures and drag decisions together. Any press in progress is canceled.
+   * The returned cleanup detaches only this registration, even if the same client reattaches. */
+  listen(client: PointerClient) {
     this.cancel();
-    this.#listener = listener;
+    const registration = { client };
+    this.#registration = registration;
     return () => {
-      if (this.#listener !== listener) return;
+      if (this.#registration !== registration) return;
       this.cancel();
-      this.#listener = {};
+      if (this.#registration === registration) this.#registration = undefined;
     };
   }
 
+  /** Subscribes to hover and unused card clicks without taking over gestures. */
+  observe(viewer: PointerViewer) {
+    this.#viewers.add(viewer);
+    return () => {
+      this.#viewers.delete(viewer);
+    };
+  }
+
+  /** Whether the active client would pick this node up. */
+  holdable(name: Name): boolean {
+    return this.#registration?.client.holdable?.(name) ?? false;
+  }
+
+  get #client(): PointerClient | undefined {
+    return this.#registration?.client;
+  }
+
   get handlesContextMenu(): boolean {
-    return !!(this.#listener.secondary || this.#listener.aim);
+    return !!(this.#client?.secondary || this.#client?.aim);
   }
 
   /** The card the pointer holds, if it holds one. */
@@ -213,7 +238,8 @@ export class Pointer {
       this.#held || this.#over === this.#settling ? undefined : this.#over;
     if (over === this.#told) return;
     this.#told = over;
-    this.#listener.hover?.(over);
+    this.#client?.hover?.(over);
+    for (const viewer of [...this.#viewers]) viewer.hover?.(over);
   }
 
   /** The nodes `a` and `b` trade places on the stage (`ScriptStage.trade`): what the pointer
@@ -240,19 +266,16 @@ export class Pointer {
         : target;
     const player =
       typeof target === "object" && "player" in target ? target : undefined;
+    const client = this.#client;
+    if (!client) return false;
     if (kind === "secondary") {
-      if (
-        !this.#listener.secondary &&
-        !(name !== undefined && this.#listener.aim)
-      )
+      if (!client.secondary && !(name !== undefined && client.aim))
+        return false;
+    } else if (player) {
+      if (!client.playerClick && !(kind === "touch" && client.secondary))
         return false;
     } else if (name === undefined) {
-      if (
-        kind === "touch"
-          ? !this.#listener.secondary
-          : player || !this.#listener.sweep
-      )
-        return false;
+      if (!(kind === "touch" ? client.secondary : client.sweep)) return false;
     }
 
     this.cancel();
@@ -260,7 +283,7 @@ export class Pointer {
     // gestures let a finger move the hand before a card can be picked up.
     const delayed =
       kind === "touch" &&
-      (this.handlesContextMenu || this.#listener.over || this.#listener.sweep);
+      (this.handlesContextMenu || this.#client?.over || this.#client?.sweep);
     const press: Press = {
       name,
       player,
@@ -276,10 +299,10 @@ export class Pointer {
         () => (press.touchReady = true),
         TOUCH_DRAG_DELAY,
       );
-    if (kind === "touch" && this.#listener.secondary) {
+    if (kind === "touch" && this.#client?.secondary) {
       press.secondaryTimer = setTimeout(() => {
         this.#endPress();
-        this.#listener.secondary?.(press.name ?? press.player, press.at);
+        this.#client?.secondary?.(press.name ?? press.player, press.at);
       }, LONG_PRESS_DELAY);
     }
     return true;
@@ -291,14 +314,14 @@ export class Pointer {
     if (!press) return;
     press.at = at;
     this.#travel(press, at);
-    const { name, start, kind, moved } = press;
+    const { name, player, start, kind, moved } = press;
     if (kind === "secondary") {
       if (moved && name !== undefined)
-        this.#listener.aim?.(name, at, under?.(), false);
-    } else if (kind === "primary" && name === undefined) {
-      if (moved) this.#listener.sweep?.(start, at, false);
+        this.#client?.aim?.(name, at, under?.(), false);
+    } else if (kind === "primary" && name === undefined && !player) {
+      if (moved) this.#client?.sweep?.(start, at, false);
     } else if (name !== undefined && this.#carry(press, name)) {
-      this.#listener.over?.(under?.(), at);
+      this.#client?.over?.(under?.(), at);
     }
   }
 
@@ -332,7 +355,7 @@ export class Pointer {
     this.#settling = undefined;
     this.#tell();
     this.#holding.lifted(name);
-    this.#listener.lift?.(name);
+    this.#client?.lift?.(name);
     return true;
   }
 
@@ -344,12 +367,16 @@ export class Pointer {
     this.#travel(press, at);
     const { name, player, kind, start, moved } = press;
     if (kind === "secondary") {
-      if (!moved) this.#listener.secondary?.(name ?? player, at);
-      else if (name !== undefined) this.#listener.aim?.(name, at, onto, true);
+      if (!moved) this.#client?.secondary?.(name ?? player, at);
+      else if (name !== undefined) this.#client?.aim?.(name, at, onto, true);
+      return;
+    }
+    if (player) {
+      if (!moved) this.#client?.playerClick?.(player.player, at, keys);
       return;
     }
     if (name === undefined) {
-      if (kind === "primary" && moved) this.#listener.sweep?.(start, at, true);
+      if (kind === "primary" && moved) this.#client?.sweep?.(start, at, true);
       return;
     }
     if (press.at.x !== at.x || press.at.y !== at.y) {
@@ -358,16 +385,16 @@ export class Pointer {
     }
     const held = this.#held;
     if (!held) {
-      if (!moved) this.#listener.click?.(name, at, keys);
+      if (!moved) this.#click(name, at, keys);
       return;
     }
     this.#held = { ...held, at };
     const pose = this.#holding.pose(held.name) ?? undefined;
     this.#held = undefined;
-    this.#listener.lift?.(undefined);
+    this.#client?.lift?.(undefined);
     const taken =
       pose !== undefined &&
-      this.#listener.drop?.({
+      this.#client?.drop?.({
         name: held.name,
         start,
         at,
@@ -376,6 +403,18 @@ export class Pointer {
         keys,
       }) === true;
     this.#letGo(held.name, pose, taken);
+  }
+
+  #click(name: Name, at: Point, keys: PointerKeys) {
+    const registration = this.#registration;
+    if (!registration) return;
+    const { client } = registration;
+    const unhandled = () => {
+      if (this.#registration !== registration) return;
+      for (const viewer of [...this.#viewers]) viewer.click?.(name, at, keys);
+    };
+    if (client.click) client.click(name, at, keys, unhandled);
+    else unhandled();
   }
 
   #endPress(): Press | undefined {
@@ -406,7 +445,7 @@ export class Pointer {
     if (!held) return;
     const pose = this.#holding.pose(held.name) ?? undefined;
     this.#held = undefined;
-    this.#listener.lift?.(undefined);
+    this.#client?.lift?.(undefined);
     this.#letGo(held.name, pose, false);
   }
 

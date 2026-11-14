@@ -8,7 +8,6 @@ import { Button } from "../components/Controls";
 import type { ObjectView } from "../generated/protocol";
 import { ZoneViewer } from "../game/Piles";
 import { isRevealed, type Name, type Resting } from "./layout.ts";
-import type { Prompts } from "./prompt.ts";
 import type { PileSpace } from "./revealed.ts";
 import type { ScriptStage } from "./stage.ts";
 
@@ -25,18 +24,18 @@ export const revealedIn = (resting: ReadonlyMap<Name, Resting>): ObjectView[] =>
 /** Whether the pile's browser is open, and how to open or close it: a click on a face of
  * the pile opens it, and it closes with the pile's last face. */
 export function useRevealedOpen(
-  prompts: Prompts,
+  stage: ScriptStage,
   cards: readonly ObjectView[],
 ): [open: boolean, setOpen: (open: boolean) => void] {
   const [open, setOpen] = useState(false);
   useEffect(
     () =>
-      prompts.listen({
+      stage.pointer.observe({
         click(name) {
           if (isRevealed(name)) setOpen(true);
         },
       }),
-    [prompts],
+    [stage],
   );
   const none = cards.length === 0;
   useEffect(() => {
@@ -49,19 +48,17 @@ export function useRevealedOpen(
  * is open. Nothing while the pile holds nothing. */
 export function RevealedCards({
   stage,
-  prompts,
   space,
   onDismiss,
 }: {
   stage: ScriptStage;
-  prompts: Prompts;
   space: PileSpace;
   /** Puts the pile's `cards` away: they lie nowhere from here on. */
   onDismiss(cards: readonly ObjectView[]): void;
 }) {
   const { resting } = useSyncExternalStore(stage.subscribe, () => stage.shown);
   const cards = useMemo(() => revealedIn(resting), [resting]);
-  const [open, setOpen] = useRevealedOpen(prompts, cards);
+  const [open, setOpen] = useRevealedOpen(stage, cards);
   if (cards.length === 0) return null;
   return (
     <>

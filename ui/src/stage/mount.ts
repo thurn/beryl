@@ -3,14 +3,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useReducedMotion } from "motion/react";
 import { DomSurface } from "./dom.ts";
+import type { PointerClient } from "./pointer.ts";
 import { SNAP, type ScriptStage } from "./stage.ts";
 import { effectsOf, RELEASE, snap, timingOf } from "./timing.ts";
 
-/** Mounts `stage` on the element `layer` is given, and returns its surface once it is. */
-export function useSurface(stage: ScriptStage) {
+/** Mounts the stage on `layer` and attaches the board's pointer client while it is shown. */
+export function useSurface(stage: ScriptStage, client: PointerClient) {
   const layer = useRef<HTMLDivElement>(null);
   const [surface, setSurface] = useState<DomSurface>();
   const reduce = useReducedMotion() ?? false;
+  useLayoutEffect(() => stage.pointer.listen(client), [stage, client]);
   useLayoutEffect(() => {
     const surface = new DomSurface(layer.current!);
     stage.mount(surface);
@@ -18,7 +20,6 @@ export function useSurface(stage: ScriptStage) {
     setSurface(surface);
     return () => {
       unpoint();
-      stage.pointer.cancel();
       stage.unmount(surface);
     };
   }, [stage]);

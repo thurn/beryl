@@ -35,8 +35,8 @@
 // (PromptBar.tsx, Choose.tsx), which send what was pressed through `number` and `entry`.
 //
 // The stage is asked through this for what feeds it (feed.ts), so that no view's script
-// begins under an old prompt's marks, and its pointer has this for its one listener: the
-// chrome around the table hears through `listen` what the prompt had no use for.
+// begins under an old prompt's marks. The engine board attaches `pointerClient` while mounted.
+// Clicks the prompt leaves unused go to the stage's viewers.
 import type {
   Arrow,
   ButtonId,
@@ -51,7 +51,7 @@ import type {
   Purpose,
 } from "../generated/protocol";
 import { isRevealed, type Name, type Point } from "./layout.ts";
-import type { Drop, PointerEvents, PointerKeys } from "./pointer.ts";
+import type { Drop, PointerClient } from "./pointer.ts";
 import { keyOf, namedBy, type SpanAct } from "./spans.ts";
 import type { ScriptStage } from "./stage.ts";
 import {
@@ -69,7 +69,7 @@ type Subject = Extract<Click, { kind: "on" }>["on"];
 /** The stage as a prompt uses it. */
 export type Prompted = Pick<
   ScriptStage,
-  "play" | "skip" | "shown" | "subscribe" | "pointer" | "trade"
+  "play" | "skip" | "shown" | "subscribe" | "trade"
 >;
 
 /** Sends the session a click on the prompt of `decision` in its state `revision` (ipc.ts). */
@@ -364,23 +364,19 @@ export class Prompts {
   #away: number[] = [];
   #shut = false;
   readonly #listeners = new Set<() => void>();
-  readonly #pointing = new Set<PointerEvents>();
 
   constructor(stage: Prompted, send: Send) {
     this.#stage = stage;
     this.#send = send;
     stage.subscribe(this.#played);
-    stage.pointer.holdable = (name) => this.#lifts(name);
-    stage.pointer.listen({
-      hover: (name) => this.#tell((to) => to.hover?.(name)),
-      lift: (name) => {
-        this.#lifted(name);
-        this.#tell((to) => to.lift?.(name));
-      },
-      click: (name, at, keys) => this.#clicked(name, at, keys),
-      drop: (drop) => this.#dropped(drop),
-    });
   }
+
+  readonly pointerClient: PointerClient = {
+    holdable: (name) => this.#lifts(name),
+    lift: (name) => this.#lifted(name),
+    click: (name, _at, _keys, unhandled) => this.#clicked(name, unhandled),
+    drop: (drop) => this.#dropped(drop),
+  };
 
   /** What the screen draws of the prompt now. */
   readonly asked = () => this.#asked;
@@ -395,15 +391,6 @@ export class Prompts {
       unsubscribe();
     };
   };
-
-  /** Tells `events` what the pointer does that is not the prompt's: every hover and lift, and
-   * a click the prompt had no use for; returns how to stop. */
-  listen(events: PointerEvents) {
-    this.#pointing.add(events);
-    return () => {
-      this.#pointing.delete(events);
-    };
-  }
 
   get shown() {
     return this.#stage.shown;
@@ -536,10 +523,6 @@ export class Prompts {
     for (const listener of [...this.#listeners]) listener();
   }
 
-  #tell(each: (to: PointerEvents) => void) {
-    for (const to of [...this.#pointing]) each(to);
-  }
-
   /** The tray held up, if it has piles to carry a card between and `name` is in one. */
   #piled(name: Name): Tray | undefined {
     const tray = this.#up;
@@ -579,16 +562,15 @@ export class Prompts {
     else queueMicrotask(() => this.#carried || this.#mark());
   }
 
-  #clicked(name: Name, at: Point, keys: PointerKeys) {
-    const elsewhere = () => this.#tell((to) => to.click?.(name, at, keys));
+  #clicked(name: Name, unhandled: () => void) {
     // A face in the Revealed Cards pile is no prompt's: a click on it opens the pile.
-    if (isRevealed(name)) return elsewhere();
+    if (isRevealed(name)) return unhandled();
     // A card held up is the prompt's to click, wherever it came from.
     const held = this.#up?.piles.some((pile) =>
       pile.cards.includes(name as number),
     );
-    if (!this.#asked.prompt || !(held || this.clicks(name))) return elsewhere();
-    this.#clickOn(name, { kind: "on", on: subjectOf(name) }, elsewhere);
+    if (!this.#asked.prompt || !(held || this.clicks(name))) return unhandled();
+    this.#clickOn(name, { kind: "on", on: subjectOf(name) }, unhandled);
   }
 
   /** A card carried out of the hand is used as a click on it uses it; let go over where it

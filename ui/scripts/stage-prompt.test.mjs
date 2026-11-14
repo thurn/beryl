@@ -55,6 +55,7 @@ function prompted(durations = {}) {
             waiting.push({ resolve, reject }),
         );
     });
+    const detach = made.pointer.listen(prompts.pointerClient);
     const reply = async (value) => {
         waiting.shift().resolve(value);
         await new Promise(setImmediate);
@@ -68,7 +69,7 @@ function prompted(durations = {}) {
         made.pointer.press(name, { x: 1, y: 1 });
         made.pointer.release({ x: 1, y: 1 });
     };
-    return { made, surface, prompts, sent, reply, refuse, click };
+    return { made, surface, prompts, sent, reply, refuse, click, detach };
 }
 
 const drawn = (surface) => [...surface.marks.keys()].sort();
@@ -171,7 +172,7 @@ test("the reply to a click that a later view overtook is of no prompt shown", as
 test("a click the prompt had no use for goes on to who listens, and so does one with no prompt", async () => {
     const { made, prompts, sent, reply, click } = prompted();
     const told = [];
-    prompts.listen({
+    made.pointer.observe({
         click: (name) => told.push(["click", name]),
         hover: (name) => told.push(["hover", name]),
     });
@@ -196,6 +197,85 @@ test("a click the prompt had no use for goes on to who listens, and so does one 
     click(3);
     assert.equal(sent.length, 1);
     assert.deepEqual(told.at(-1), ["click", 3]);
+});
+
+test("a stage can switch from engine input to manual input and back", async () => {
+    const { made, prompts, sent, reply, click, detach } = prompted();
+    const pointer = made.pointer;
+    const asked = pick(marked("eligible", 3));
+    const viewed = [];
+    const hovered = [];
+    pointer.observe({
+        hover: (name) => hovered.push(name),
+        click: (name) => viewed.push(name),
+    });
+    prompts.play(asking(asked));
+    made.clock.advance(0);
+    const at = { x: 30, y: 540 };
+    const away = { x: 230, y: 300 };
+    const player = { player: "you" };
+    const keys = { meta: false, shift: true, alt: false };
+    const sentTo = () => sent.map(({ click }) => click.on);
+    const drag = (name) => {
+        pointer.press(name, at);
+        pointer.move(away);
+        const held = pointer.held?.name;
+        pointer.cancel();
+        return held;
+    };
+
+    assert.equal(drag(3), 3);
+    assert.equal(pointer.press(player, at), false);
+    click(2);
+    assert.deepEqual(sentTo(), [card(2)]);
+    assert.deepEqual(viewed, []);
+
+    const manual = [];
+    const stopManual = pointer.listen({
+        holdable: (name) => name === 1,
+        click: (name) => manual.push(["card", name]),
+        playerClick: (...event) => manual.push(["player", ...event]),
+        sweep: () => assert.fail("life drags must not start a selection"),
+    });
+    detach();
+    pointer.release(at);
+    assert.deepEqual(manual, [], "an engine press ends at the handoff");
+    await reply({ kind: "open", prompt: asked });
+    assert.deepEqual(viewed, [], "a reply from the old client cannot inspect");
+    pointer.over(2);
+    assert.deepEqual(hovered, [2]);
+    click(3);
+    assert.equal(drag(3), undefined);
+    assert.equal(drag(1), 1);
+    assert.equal(pointer.press(player, at), true);
+    pointer.release(at, player, keys);
+    assert.equal(pointer.press(player, at, "touch"), true);
+    pointer.release(at, player, keys);
+    pointer.press(player, at);
+    pointer.move(away);
+    pointer.release(away);
+    assert.deepEqual(manual, [
+        ["card", 3],
+        ["player", "you", at, keys],
+        ["player", "you", at, keys],
+    ]);
+    assert.deepEqual(sentTo(), [card(2)]);
+
+    const stopEngine = pointer.listen(prompts.pointerClient);
+    stopManual();
+    detach();
+    assert.equal(drag(1), undefined);
+    assert.equal(drag(3), 3);
+    assert.equal(pointer.press(player, at), false);
+    click(3);
+    assert.deepEqual(sentTo(), [card(2), card(3)]);
+    await reply({ kind: "open", prompt: asked });
+    assert.deepEqual(viewed, [3]);
+    assert.equal(manual.length, 3);
+
+    stopEngine();
+    assert.equal(pointer.press(3, at), false);
+    assert.equal(pointer.holdable(3), false);
 });
 
 test("a prompt answered elsewhere is let be", () => {
