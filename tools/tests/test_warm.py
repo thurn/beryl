@@ -303,3 +303,26 @@ def test_a_clone_gives_unchanged_files_the_times_of_the_build_it_cloned(
     assert (second / "rust" / "edited.rs").stat().st_mtime > built + 1800
     # rust/ held target/ at the save, which the clone gives it before the times are set.
     assert (second / "rust").stat().st_mtime == pytest.approx(built)
+
+
+def test_a_clone_lets_the_next_build_mark_the_units_it_reads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # APFS moves a file's access time on a read only while it is older than the modification
+    # time, so the clone puts each fingerprint file's access time behind it.
+    monkeypatch.setenv("BERYL_CACHE", str(tmp_path / "cache"))
+    first = checkout(tmp_path / "first", "lock-v1")
+    fingerprint = Path(
+        "rust/target/debug/.fingerprint/serde-0123456789abcdef/lib-serde"
+    )
+    write(first / fingerprint, "hash")
+    built = time.time() - 3 * 86400
+    os.utime(first / fingerprint, (built + 60, built))
+    warm.save(first)
+
+    second = checkout(tmp_path / "second", "lock-v1")
+    write(second / "ui" / "node_modules" / warm.STAMP, warm.lock_key(second))
+    assert warm.ensure(second) is False
+    stat = (second / fingerprint).stat()
+    assert stat.st_mtime == pytest.approx(built)
+    assert stat.st_atime < stat.st_mtime

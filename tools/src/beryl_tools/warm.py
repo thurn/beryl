@@ -266,13 +266,40 @@ def ensure_target(checkout: Path, tauri: bool) -> bool:
             return True
         forget_module_caches(target)
         restore_sources(checkout, target)
+        mark_unread(target)
     if tauri and not (target / TAURI).exists():
         for source in sources:
             if (source / TAURI).is_dir() and clone_into(source / TAURI, target / TAURI):
                 forget_module_caches(target)
+                mark_unread(target / TAURI)
                 return False
         return True
     return False
+
+
+def mark_unread(target: Path) -> int:
+    """Sets each fingerprint file's access time in a freshly cloned `target` to a second before
+    its modification time, and returns how many it set. macOS (APFS) updates a file's access
+    time on a read only while the access time is older than the modification time, so a unit
+    read once after it was built never showed a later use: `evict` took the third-party crates
+    that every build reads, built long ago, for the least recently used, and evicted them
+    first, and each new worktree rebuilt them and every crate above them (clippy in a fresh
+    worktree took 48 s with no change made). Cargo reads a unit's fingerprint file whenever a
+    build includes that unit, so after this the next such read records the use."""
+    count = 0
+    for fingerprints in [
+        *target.glob("*/.fingerprint"),
+        *target.glob(f"{TAURI}/*/.fingerprint"),
+    ]:
+        with suppress(OSError):
+            for unit in os.scandir(fingerprints):
+                with suppress(OSError), os.scandir(unit.path) as files:
+                    for f in files:
+                        with suppress(OSError):
+                            mtime = f.stat(follow_symlinks=False).st_mtime_ns
+                            os.utime(f.path, ns=(mtime - 1_000_000_000, mtime))
+                            count += 1
+    return count
 
 
 def unchanged_files(checkout: Path) -> dict[str, str]:
