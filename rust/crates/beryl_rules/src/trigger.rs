@@ -338,21 +338,21 @@ fn how_many<L: Layout>(
 pub(crate) fn match_look_back<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    leaving: &[(L::Slot, Zone)],
+    leaving: impl Iterator<Item = (L::Slot, Zone)> + Clone,
 ) -> Result<(), Full> {
     let mask = Listens::event(EventKind::Dies) | Listens::event(EventKind::Leaves);
-    if leaving.is_empty() || !t.listens_anywhere().intersects(mask) {
+    if !t.listens_anywhere().intersects(mask) {
         return Ok(());
     }
     if t.listens_away().intersects(mask) {
-        look_back_away(s, t, leaving)?;
+        look_back_away(s, t, leaving.clone())?;
     }
     if !t.listens_any().intersects(mask)
         || !s.listening().unwrap_or(t.listens_any()).intersects(mask)
     {
         return Ok(());
     }
-    for &(left, to) in leaving {
+    for (left, to) in leaving {
         let object = s.object_ref(left);
         let waiting = s.triggers().len();
         for i in 0..s.battlefield().len() {
@@ -402,10 +402,10 @@ pub(crate) fn match_look_back<L: Layout>(
 fn look_back_away<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
-    leaving: &[(L::Slot, Zone)],
+    leaving: impl Iterator<Item = (L::Slot, Zone)>,
 ) -> Result<(), Full> {
     let away = away(s, t);
-    for &(left, to) in leaving {
+    for (left, to) in leaving {
         let object = s.object_ref(left);
         let waiting = s.triggers().len();
         for slot in s.in_candidate_order(away) {

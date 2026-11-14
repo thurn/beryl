@@ -261,39 +261,52 @@ fn declare_attack<L: Layout>(
 /// [CR 702.9b](https://yawgatog.com/resources/magic-rules/#R7029b): "A creature with flying can't
 /// be blocked except by creatures with flying and/or reach."
 fn can_block<L: Layout>(s: &State<L>, t: &GameTable, blocker: L::Slot, attacker: L::Slot) -> bool {
-    let defending = match s.object(attacker).attack_target() {
-        Some(AttackTarget::Player(player)) => player,
-        Some(AttackTarget::Planeswalker(walker)) => s.controller(walker),
-        _ => return false,
+    let Some(target) = s.object(attacker).attack_target() else {
+        return false;
     };
-    (!has(s, attacker, Keywords::FLYING)
+    if !matches!(
+        target,
+        AttackTarget::Player(_) | AttackTarget::Planeswalker(_)
+    ) {
+        return false;
+    }
+    let evasion = s.derived(attacker).keywords;
+    (!evasion.contains(Keywords::FLYING)
         || has(s, blocker, Keywords::FLYING)
         || has(s, blocker, Keywords::REACH))
-        && !landwalks(s, t, attacker, defending)
+        && !(evasion.intersects(Keywords::ANY_LANDWALK) && landwalks(s, t, evasion, target))
 }
 
-/// Whether `attacker` can't be blocked for its landwalk, attacking `defending` or a planeswalker
-/// of theirs ([CR 702.14c]): "A creature with landwalk can't be blocked as long as the defending
-/// player controls at least one land with the specified land type (as in “islandwalk”)". Most
-/// creatures have none, so the scan of the lands is out of line.
+/// Whether an attacker with the keywords `walk`, attacking `target`, can't be blocked for its
+/// landwalk ([CR 702.14c]): "A creature with landwalk can't be blocked as long as the defending
+/// player controls at least one land with the specified land type (as in “islandwalk”)". The
+/// defending player is the one attacked, or the controller of the planeswalker attacked. Most
+/// creatures have no landwalk, and [`can_block`] tests that before it calls this, which it
+/// does for each blocker and attacker, so the scan of the lands is out of line.
 ///
 /// [CR 702.14c]: https://yawgatog.com/resources/magic-rules/#R70214c
-#[inline]
-fn landwalks<L: Layout>(s: &State<L>, t: &GameTable, attacker: L::Slot, defending: Seat) -> bool {
-    #[cold]
-    fn walks<L: Layout>(s: &State<L>, t: &GameTable, walk: Keywords, defending: Seat) -> bool {
-        Keywords::LANDWALK
-            .iter()
-            .filter(|&&(keyword, _)| walk.contains(keyword))
-            .any(|&(_, subtype)| {
-                let has = t.subtypes().has(subtype);
-                s.permanents().any(|(_, d)| {
-                    d.controller == defending && d.types.contains(Types::LAND) && has.of(d.subtypes)
-                })
+#[cold]
+#[inline(never)]
+fn landwalks<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    walk: Keywords,
+    target: AttackTarget<L>,
+) -> bool {
+    let defending = match target {
+        AttackTarget::Player(player) => player,
+        AttackTarget::Planeswalker(walker) => s.controller(walker),
+        AttackTarget::Removed => return false,
+    };
+    Keywords::LANDWALK
+        .iter()
+        .filter(|&&(keyword, _)| walk.contains(keyword))
+        .any(|&(_, subtype)| {
+            let has = t.subtypes().has(subtype);
+            s.permanents().any(|(_, d)| {
+                d.controller == defending && d.types.contains(Types::LAND) && has.of(d.subtypes)
             })
-    }
-    let walk = s.derived(attacker).keywords;
-    walk.intersects(Keywords::ANY_LANDWALK) && walks(s, t, walk, defending)
+        })
 }
 
 /// Whether a creature may still be declared as a blocker: an untapped creature of the

@@ -169,7 +169,6 @@ pub(crate) fn move_batch_to<L: Layout>(
 ) -> Result<(), Full> {
     layers::refresh(s, t, sink)?;
     let mut moves: L::Queue<(L::Slot, Zone, Zone, Entry<L>), 128> = Default::default();
-    let mut leaving: L::Queue<(L::Slot, Zone), 128> = Default::default();
     let mut returning = Bitboard::EMPTY;
     for &slot in s.in_game_order(t, objects)?.as_slice() {
         let o = *s.object(slot);
@@ -187,12 +186,17 @@ pub(crate) fn move_batch_to<L: Layout>(
         };
         moves.push((slot, o.zone(), dest, entry))?;
         if o.zone() == Zone::Battlefield {
-            // A subset of the moves, which have the same capacity.
-            leaving.push_bounded((slot, dest));
             returning |= s.exiled_until(slot);
         }
     }
-    trigger::match_look_back(s, t, leaving.as_slice())?;
+    // The permanents of the batch, each with where it goes. Read from the moves rather than
+    // kept in a queue of their own, which every zone move would fill even in a game where
+    // nothing looks back.
+    let leaving = moves
+        .iter()
+        .filter(|&&(_, from, _, _)| from == Zone::Battlefield)
+        .map(|&(slot, _, dest, _)| (slot, dest));
+    trigger::match_look_back(s, t, leaving)?;
     let changed = |object, from, to| Event::ZoneChange {
         object,
         from,

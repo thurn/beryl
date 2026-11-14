@@ -233,6 +233,7 @@
 //! | by-w8gv.7.8 | +64 (landed: +64) | two sets of slots |
 //! | by-w8gv.7.9 | +104 (landed: +96) | the counters table |
 //! | by-w8gv.7.10 | 0 or lower (landed: 0) | deletes only |
+//! | by-bajq.1.1 | +16 (landed: +16) | the listener mask grows from 16 to 64 bits, beside a 64-bit mask of what static abilities replace |
 //! | by-bajq.1.4 | +8 (landed: +8) | three counts for each of two players, padded |
 //! | by-bajq.1.2 | 0 or lower (landed: -56) | last-known information leaves every trigger record for a table of 16 rows |
 //!
@@ -357,9 +358,11 @@
 //! | "is a rule change of this kind in force" ([`State::rules_for`], [`GameTable::rules_of`]) | for a player, their two sets of rules joined and one AND with the table's set of the kind, which is the whole answer; for a permanent, one AND of the table's rules of its card and one of the store's kinds | for a permanent, a second AND of the rules of the face that is up, or one pass over the store's entries |
 //! | an event's match against triggered abilities (the rules' `trigger::match_event`) | one AND of the kinds any card of the game listens to ([`GameTable::listens_any`]) | one AND of the battlefield's listener mask; then, for each permanent whose card listens to the kind, the listeners of that kind on the face that is up ([`GameTable::listeners`]), and no other ability of it |
 //! | the same match against abilities that work outside the battlefield ([`listener::AWAY`]) | one AND of the kinds they listen to ([`GameTable::listens_away`]) | the membership of the zones some card works in ([`GameTable::zones_away`]), each slot's card's zones read once ([`GameTable::works_away`]), then its listeners of the kind ([`GameTable::away_listeners`]): the state keeps no set of these objects, which the zone move would have to keep with no table to ask |
+//! | a zone move's match against abilities that look back (the rules' `trigger::match_look_back`, CR 603.10a) | one AND of the kinds any card listens to with [`event::EventKind::Dies`] and [`event::EventKind::Leaves`]; the permanents leaving are read from the move's own list, so nothing else is written | for each permanent leaving, the battlefield's listeners of those kinds, then those that work away; a row of last-known information for each permanent some ability triggered on |
+//! | forgetting last-known information as a player would receive priority ([`State::forget_last_known`]) | one test of the table's length | out of line, a pass over the waiting triggers, delayed triggers and stack for each row |
 //! | state triggers (the rules' `trigger::match_states`, at each state-based check) | one AND of [`event::EventKind::State`] with the kinds any card listens to | as the match of an event, then for each such ability a pass over the waiting triggers and the stack for the same source and ability, so nothing is stored to say it triggered |
 //! | the layers' search for the rules static abilities change for players | one AND of the replacement mask the pass has just folded from the permanents ([`event::Replaces::PLAYER_RULE_CHANGE`]): no read of its own | a second pass over the permanents, out of line, in a recompute with such a permanent on the battlefield |
-//! | a tracker ([`State::track`], [`State::tracked`]) | one AND of the table's capabilities where the rules would write it; a read finds an empty set | a bit set or tested |
+//! | a tracker or a count ([`State::track`], [`State::tracked`], [`State::count`], [`State::counted`]) | one AND of the table's capabilities where the rules would write it; a read finds an empty set or zero | a bit set or tested, or a byte written or read |
 //! | a count of counters ([`State::counters_of`]) | of a kind the object keeps in a field, one read; of any other, one bit test of the keyed slots | one pass over the table's rows, at most 32 of 3 bytes |
 //!
 //! Measured for by-w8gv.7.2 on the rollout benchmark (404,858,188 instructions before):
