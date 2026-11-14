@@ -1,6 +1,0 @@
-2026-11-13 13:09:30,629 [PID 23317] INFO No binary specified, looking for `pyre.bin` in PATH
-2026-11-13 13:09:30,629 [PID 23317] INFO Pyre binary is located at `/Users/dthurn/beryl/.worktrees/by-34jc/tools/.venv/bin/pyre.bin`
-2026-11-13 13:09:30,629 [PID 23317] ERROR Invalid configuration: Cannot find any source files to analyze. Either `source_directories` or `targets` must be specified.
-2026-11-14 09:34:59,322 [PID 73735] INFO No binary specified, looking for `pyre.bin` in PATH
-2026-11-14 09:34:59,323 [PID 73735] INFO Pyre binary is located at `/Users/dthurn/beryl/.worktrees/ui-npm-warm/tools/.venv/bin/pyre.bin`
-2026-11-14 09:34:59,323 [PID 73735] ERROR Invalid configuration: Cannot find any source files to analyze. Either `source_directories` or `targets` must be specified.

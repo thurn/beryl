@@ -8,6 +8,7 @@
 /ui/public/fixtures/
 /tools/.venv/
 /tools/.pyre/
+/.pyre/
 /tools/.pytest_cache/
 __pycache__/
 *.egg-info/
