@@ -17,6 +17,8 @@ beryl_engine = { path = "../beryl_engine" }
 beryl_scenario = { path = "../beryl_scenario" }
 beryl_search = { path = "../beryl_search" }
 beryl_session = { path = "../beryl_session" }
+# Parses sample decks and fixture actions with the manual table's own schema.
+beryl_table = { path = "../beryl_table" }
 # Runs the manual table and projects it onto the shared game-update event.
 beryl_table_session = { path = "../beryl_table_session" }
 ctrlc = "3.5.2"

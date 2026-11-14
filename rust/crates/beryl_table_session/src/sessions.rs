@@ -42,10 +42,15 @@ impl TableSessions {
 
     /// Start a table with one seat, replacing any table after its new view is ready.
     pub fn solo(&self, deck: Deck) -> Result<SessionId, Refusal> {
+        self.solo_seeded(deck, RandomState::new().hash_one(0_u8))
+    }
+
+    /// Start a solo table with a repeatable shuffle for a recorded run.
+    pub fn solo_seeded(&self, deck: Deck, seed: u64) -> Result<SessionId, Refusal> {
         let mut current = self.lock();
         let mut table = Table::new(1);
         let mut log = Log::new(&table);
-        let mut chance = Chance::fresh(RandomState::new().hash_one(0_u8));
+        let mut chance = Chance::fresh(seed);
         log.apply(
             &mut table,
             SOLO,

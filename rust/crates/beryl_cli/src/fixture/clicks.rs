@@ -276,7 +276,7 @@ mod tests {
             "clicks": ["Counterspell", "Island", "press decline"],
         }))
         .unwrap();
-        let messages = super::super::record(&def).unwrap();
+        let messages = super::super::record_game(&def).unwrap();
         let replies: Vec<(ClickRequest, ClickReply)> = (messages.iter())
             .filter_map(|message| match message {
                 FixtureMessage::Response {
@@ -326,7 +326,7 @@ mod tests {
             "clicks": ["drop 0 0 Island", "press confirm"],
         }))
         .unwrap();
-        let messages = super::super::record(&def).unwrap();
+        let messages = super::super::record_game(&def).unwrap();
         let replies: Vec<(ClickRequest, ClickReply)> = (messages.iter())
             .filter_map(|message| match message {
                 FixtureMessage::Response {
@@ -369,7 +369,7 @@ mod tests {
             "clicks": ["press decline"],
         }))
         .unwrap();
-        let refused = super::super::record(&def).unwrap_err();
+        let refused = super::super::record_game(&def).unwrap_err();
         assert!(refused.contains("scripts must end"), "{refused}");
     }
 }

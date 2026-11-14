@@ -67,7 +67,7 @@ pub fn main(fixtures: &Path, filters: &[String]) -> Result<(), String> {
         .collect();
     moments(&chosen, &filters, &mut checks);
     let definitions = fixture::definitions(fixtures)?;
-    let recorded = recordings(&definitions, &filters, &mut checks);
+    let recorded = recordings(&definitions, fixtures, &filters, &mut checks);
     if let Some(dir) = dump {
         dump_moments(dir, &chosen, &filters)?;
         for (name, text) in recorded {
@@ -140,6 +140,7 @@ fn moments(chosen: &[&specs::Spec], filters: &[&str], checks: &mut BTreeMap<Stri
 /// that could be, as text, by its name.
 fn recordings(
     definitions: &[Definition],
+    source: &Path,
     filters: &[&str],
     checks: &mut BTreeMap<String, Check>,
 ) -> Vec<(String, String)> {
@@ -166,7 +167,7 @@ fn recordings(
             scope.spawn(|| {
                 while let Some((id, def)) = chosen.get(next.fetch_add(1, Ordering::Relaxed)) {
                     let started = Instant::now();
-                    let recorded = fixture::record(def);
+                    let recorded = fixture::record(def, source);
                     let seconds = started.elapsed().as_secs_f64();
                     let scripts = recorded.as_deref().ok().map(scripts);
                     let mut done = done

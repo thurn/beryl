@@ -2,11 +2,13 @@
 //! [`crate::boards`] its script plays, played through the app's [`Sessions`] with an agent
 //! standing in for the human seat, recorded as the messages the app would have sent the UI up
 //! to a named stopping condition, and through the clicks the definition then makes on the
-//! human's prompts ([`clicks`]).
+//! human's prompts ([`clicks`]). A manual table instead starts from a sample deck and
+//! plays a fixed list of actions through the solo session.
 
 mod clicks;
 mod condition;
 mod prop;
+mod table;
 mod until;
 mod view_predicates;
 
@@ -52,11 +54,12 @@ pub(crate) struct Definition {
     /// The board the game starts from, by its name in [`crate::boards::BOARDS`], in place of
     /// a seeded deal.
     board: Option<String>,
+    table: Option<table::Definition>,
     /// The agent playing each seat of a seeded game. The stopping condition's seat is the
     /// human's. A board's own actions play it.
     agents: Option<[String; 2]>,
     stops: Option<StopsSetting>,
-    until: String,
+    until: Option<String>,
     /// What else must hold of the view the recording stops at (see [`Condition::parse`]).
     #[serde(default, rename = "where")]
     conditions: Vec<String>,
@@ -83,7 +86,16 @@ impl Definition {
 
     /// The seat its recording is seen from: its human's.
     pub(crate) fn seat(&self) -> Result<Seat, String> {
-        Ok(Until::parse(&self.until)?.seat())
+        if self.table.is_some() {
+            return Ok(Seat::P0);
+        }
+        Ok(Until::parse(self.stop()?)?.seat())
+    }
+
+    fn stop(&self) -> Result<&str, String> {
+        self.until
+            .as_deref()
+            .ok_or_else(|| "a game fixture needs an `until` stop".to_owned())
     }
 }
 
@@ -110,7 +122,8 @@ pub fn record_all(definitions: &Path, out: &Path, only: &[String]) -> Result<(),
         if !only.is_empty() && !only.contains(&def.name) {
             continue;
         }
-        let mut messages = record(def).map_err(|e| format!("fixture {}: {e}", def.name))?;
+        let mut messages =
+            record(def, definitions).map_err(|e| format!("fixture {}: {e}", def.name))?;
         messages.insert(0, beryl_session::card_records::fixture_message(&messages));
         let path = out.join(format!("{}.json", def.name));
         let json = serde_json::to_string(&Fixture { messages }).expect("a fixture serializes");
@@ -132,7 +145,7 @@ struct Stop {
 impl Stop {
     fn parse(def: &Definition) -> Result<Stop, String> {
         Ok(Stop {
-            until: Until::parse(&def.until)?,
+            until: Until::parse(def.stop()?)?,
             conditions: (def.conditions.iter())
                 .map(|c| Condition::parse(c))
                 .collect::<Result<_, _>>()?,
@@ -145,9 +158,31 @@ impl Stop {
     }
 }
 
-/// The messages of `def`'s recording, or why it could not be made: a session whose thread
-/// panicked (in a debug build, a script that breaks its checks) says where.
-pub(crate) fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
+/// The messages of `def`'s recording, or why it could not be made.
+pub(crate) fn record(def: &Definition, source: &Path) -> Result<Vec<FixtureMessage>, String> {
+    if let Some(table) = &def.table {
+        if def.seed.is_some()
+            || def.decks.is_some()
+            || def.board.is_some()
+            || def.agents.is_some()
+            || def.stops.is_some()
+            || def.until.is_some()
+            || !def.conditions.is_empty()
+            || def.after != 0
+            || !def.clicks.is_empty()
+            || def.prop.is_some()
+        {
+            return Err("a table fixture cannot have game fixture options".to_owned());
+        }
+        return table::record(table, source);
+    }
+    record_game(def)
+}
+
+/// A session whose thread panicked (in a debug build, a script that breaks its checks)
+/// says where.
+fn record_game(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
+    let until = def.stop()?;
     let stop = Arc::new(Stop::parse(def)?);
     let clicks = (def.clicks.iter())
         .map(|c| Written::parse(c))
@@ -223,8 +258,7 @@ pub(crate) fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
             // a decision handed over anywhere else would wait for an answer nobody gives.
             if reached != handed {
                 return Err(format!(
-                    "the board's scripts must end at {:?}, where its clicks begin",
-                    def.until
+                    "the board's scripts must end at {until:?}, where its clicks begin"
                 ));
             }
             if reached {
@@ -252,8 +286,8 @@ pub(crate) fn record(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
         if ended {
             let why = boards::lock(&progress).stalled();
             return Err(match why {
-                Some(why) => format!("the game ended before {:?}, with {why}", def.until),
-                None => format!("the game ended before {:?}", def.until),
+                Some(why) => format!("the game ended before {until:?}, with {why}"),
+                None => format!("the game ended before {until:?}"),
             });
         }
         if deciding {
@@ -557,15 +591,16 @@ mod tests {
             // Fixed decks: fuzz decks are drawn from every card, so a new card changes the game.
             decks: Some(["wu-control".to_owned(), "wu-control".to_owned()]),
             board: None,
+            table: None,
             agents: Some(["random".to_owned(), "random".to_owned()]),
             stops: None,
-            until: "first target decision for seat 1".to_owned(),
+            until: Some("first target decision for seat 1".to_owned()),
             conditions: vec![],
             after: 0,
             clicks: vec![],
             prop: None,
         };
-        let messages = record(&def).unwrap();
+        let messages = record_game(&def).unwrap();
         let Some(FixtureMessage::Event { payload, .. }) = messages.last() else {
             panic!("a recording ends on a view");
         };

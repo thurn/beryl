@@ -89,6 +89,7 @@ export function fixtureTransport(
   fixture: Fixture,
   at?: number,
 ): Transport & {
+  advance(): boolean;
   calls: FixtureCall[];
   view(): Events["game-update"]["view"] | undefined;
   cards(names: string[]): CardRecords;
@@ -221,7 +222,19 @@ export function fixtureTransport(
       tokens: among(recorded?.tokens),
     };
   };
+  const advance = () => {
+    if (released >= events.length) return false;
+    const from = released;
+    let last;
+    do {
+      last = events[released];
+      released += 1;
+    } while (released < events.length && last && playsOn(last));
+    deliver(from, released);
+    return true;
+  };
   return {
+    advance,
     calls,
     cards,
     /** The latest view released, which the screen should show once it settles: what
@@ -262,15 +275,7 @@ export function fixtureTransport(
         command === "choose" ||
         (command === "click" &&
           (response as Result<"click">).kind === "answered");
-      if (answers && released < events.length) {
-        const from = released;
-        let last;
-        do {
-          last = events[released];
-          released += 1;
-        } while (released < events.length && last && playsOn(last));
-        deliver(from, released);
-      }
+      if (answers) advance();
       return Promise.resolve(response);
     },
     async listen<E extends keyof Events>(

@@ -9,9 +9,8 @@
 // play's findings and exits 1 if any is not ok or a page logs an error. Minor findings (taps
 // and untaps) are printed and counted only with --minor, as `by specs --motion` has them.
 //
-// A recording is played on by its transport's `choose` (src/ipc.ts), whatever its seat
-// answered with: what a prompt draws and takes is the shape suite's (shapes.mjs), and this
-// holds what the table plays between the prompts, in every game the fixtures record.
+// The transport advances engine recordings to the next answer with `choose`, and manual
+// recordings by one action. The shape suite (shapes.mjs) checks the prompts themselves.
 import { readFile } from "node:fs/promises";
 import {
     launch,
@@ -45,8 +44,8 @@ if (!base || !fixtures) {
 const { fixtures: defined } = JSON.parse(
     await readFile(new URL("../fixtures.json", import.meta.url), "utf8"),
 );
-const plays = defined.flatMap(({ name }) =>
-    Object.keys(LAYOUTS).map((layout) => ({
+const plays = defined.flatMap(({ name, table }) =>
+    (table ? ["desktop"] : Object.keys(LAYOUTS)).map((layout) => ({
         fixture: name,
         layout,
         check: `play:${name}/${layout}`,
@@ -76,11 +75,10 @@ async function played(page, fixture, layout) {
     const findings = [];
     for (let more = true; more;) {
         const watched = await watching(page);
-        // The transport hands the views an answer releases on in a microtask; a recording
-        // that has played out releases none.
         more = await page.evaluate(async () => {
             const replay = window.berylFixture;
             const last = replay.view();
+            if (last?.table) return replay.advance();
             await replay.invoke("choose", { request: {} });
             return replay.view() !== last;
         });

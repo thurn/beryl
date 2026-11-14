@@ -33,8 +33,9 @@ says how Beryl follows MTG Arena.
   (`scripts/verbs.mjs`; `just ui-test verb:` runs only these). Then it runs each
   prompt type, answering it with the clicks recorded in its fixture along with
   the session's replies (`scripts/shapes.mjs`; `just ui-test shape:`).
-- `just ui-play [fixtures]` plays every recorded fixture to the end, on both the
-  desktop and phone layouts, with the stage's checks turned on.
+- `just ui-play [fixtures]` plays every recorded fixture to the end with the
+  stage's checks turned on. Manual tables run on desktop. Engine games run on
+  desktop and phone.
 - `just specs --phone` and `just ui-live --phone` open the phone layout.
 - Every card has a spec page (`/specs/<card>`), generated from its definition
   and scenarios. It shows each UI moment of the card as a live game from both

@@ -80,9 +80,8 @@ def run(
 
 def inputs(rust: Path = paths.RUST) -> str:
     """A pattern of the paths a change to which can change a script check's outcome: the
-    workspace's manifest and lock, the fixtures' definitions, and the checker's crate with
-    every crate it depends on through path dependencies, the set crates under `cards` among
-    them."""
+    workspace's manifest and lock, the fixtures' definitions and sample decks, and the
+    checker's crate with every crate it depends on through path dependencies."""
     found: set[Path] = set()
     todo = [rust / "crates" / CHECKER]
     while todo:
@@ -96,7 +95,10 @@ def inputs(rust: Path = paths.RUST) -> str:
                 if isinstance(spec, dict) and isinstance(spec.get("path"), str):
                     todo.append(Path(os.path.normpath(crate / spec["path"])))
     names = "|".join(re.escape(c.relative_to(rust).as_posix()) for c in sorted(found))
-    return rf"^rust/(Cargo\.(toml|lock)$|({names})/)|^ui/fixtures\.json$"
+    return (
+        rf"^rust/(Cargo\.(toml|lock)$|({names})/)"
+        r"|^ui/fixtures\.json$|^docs/sample-decks/"
+    )
 
 
 if __name__ == "__main__":

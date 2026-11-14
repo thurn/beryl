@@ -26,8 +26,8 @@
 //!   champion's decisions and re-searches where they differ ([`screen`], `just screen`).
 //! - The budget flags `--iterations N` and `--trees K` set a searching agent's iterations
 //!   per decision and how many independent trees share them (`beryl_search::Budget`).
-//! - `beryl_cli record-fixture <definitions.json> <out-dir> [name...]` plays the seeded games
-//!   and boards a definitions file describes and writes, for each, the stream of messages the UI's
+//! - `beryl_cli record-fixture <definitions.json> <out-dir> [name...]` plays the seeded games,
+//!   boards and manual tables a definitions file describes. It writes the messages the UI's
 //!   fixture transport replays (`ui/src/ipc.ts`) to `<out-dir>/<name>.json`. `just ui-shots`
 //!   runs it over `ui/fixtures.json`, so fixtures are generated, never committed.
 //! - `beryl_cli eval-fit [--games N] [--seed N]` fits the board evaluation's weights on
