@@ -30,6 +30,7 @@ import { MenuButton, Middle, Orb, Piles, useViewport } from "../mobile/chrome";
 import { PHONE } from "../mobile/faces";
 import { phoneLayout } from "../mobile/layout";
 import "../mobile/phone.css";
+import "../mobile/phone-start.css";
 import { Faces } from "./Faces.tsx";
 import { useSurface } from "./mount.ts";
 import { lifeChange } from "./notices.ts";
