@@ -157,5 +157,19 @@
     "diff": [
       "Urborg, Tomb of Yawgmoth: [-each land is-] {+all lands are+} a Swamp in addition to its other land types ."
     ]
+  },
+  "Chains of Mephistopheles": {
+    "reason": "wording",
+    "note": "\"If you do\" is the renderer's wording for a condition on whether the instruction before it did anything, here the drawing player's discard: the same as \"if the player discards a card this way\". \"Otherwise\" is \"if the player doesn't discard a card this way\", and \"that player\" is \"they\".",
+    "diff": [
+      "Chains of Mephistopheles: if a player would draw a card except the first one they draw in each of their draw steps , that player discards a card instead . if [-the-] {+you do , that+} player [-discards a card this way , they draw-] {+draws+} a card . [-if the-] {+otherwise , that+} player [-doesn't discard a card this way , they mill-] {+mills+} a card ."
+    ]
+  },
+  "Notion Thief": {
+    "reason": "wording",
+    "note": "A replaced draw never happens (CR 614.6), so \"that player skips that draw and you draw a card\" instead is \"you draw a card instead\": the renderer does not name the skipped draw.",
+    "diff": [
+      "Notion Thief: if an opponent would draw a card except the first one they draw in each of their draw steps , [-instead that player skips that draw and-] you draw a card {+instead+} ."
+    ]
   }
 }
