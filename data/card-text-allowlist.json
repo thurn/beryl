@@ -49,6 +49,13 @@
       "Jace, Wielder of Mysteries: -8 : draw seven cards . [-then-] if your library has no cards in it , you win the game ."
     ]
   },
+  "Life and Limb": {
+    "reason": "wording",
+    "note": "The renderer lists each modification of the one static ability as its own clause (a creature land, a Saproling, a Forest, green, base power and toughness 1/1), where Oracle gives them as one phrase, \"1/1 green Saproling creatures and Forest lands in addition to their other types\". The set is the same (Forests or Saprolings: \"and\" reads as either) and the six modifications are the same.",
+    "diff": [
+      "Life and Limb: all Forests [-and all-] {+or+} Saprolings are [-1/1 green Saproling creatures and Forest lands-] {+a creature land+} in addition to [-their-] {+its+} other types {+, are a Saproling in addition to its other types , are a Forest in addition to its other land types , are green , and have base power and toughness 1/1+} ."
+    ]
+  },
   "Malcolm, Alluring Scoundrel": {
     "reason": "wording",
     "note": "Oracle says \"it\" for Malcolm where the renderer names the card.",
