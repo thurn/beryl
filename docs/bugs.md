@@ -455,4 +455,3 @@ fixed in the same session. Newest first.
   `Inputs` bit and a mutator that checks it, and a test of such a read changes
   the field through the mutator the rules use, never an arranger that marks the
   results stale itself.
-
