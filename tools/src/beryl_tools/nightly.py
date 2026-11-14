@@ -4,7 +4,8 @@ agent (`just nightly-install`): today, removing the cache folders of checkouts t
 check orders by (`by ci-history`), every card's spec (`by specs --check`, the sweep the tests
 sample), the fuzz (`just fuzz`: engine and session games at length, the script checks on
 throughout), the scale rehearsal at 50,000 cards held to its memory budget (`by scale --assert-memory`), the
-stage's verbs held to their own values in a stepped capture (`by motion`) and
+stage's verbs held to their own values in a stepped capture (`by motion`), the UI's work
+on the gated fixtures held to its counts (`by ui-counts --gate`) and
 every card scenario in the oracles (`by oracle`, which slow CI plays only some of). It costs no
 agent tokens and needs no session open. Its record is this machine's,
 in `$BERYL_CACHE/nightly`: `log.jsonl` (one line per attempt, skipped or not) and
@@ -153,6 +154,23 @@ def motion_step(commit: str, out: IO[str]) -> int:
     return code
 
 
+def ui_counts_step(commit: str, out: IO[str]) -> int:
+    """The UI's work playing the gated fixtures held to `data/ui-counts.json`
+    (`by ui-counts --gate`, ui_counts.py) on `commit` at low priority. It left slow CI for its
+    CPU budget: it caught a rise a few times in a month, and a night's delay finds the commit
+    as well. Its outcome goes to the run log as `ui-counts:ui-counts`, the name slow CI gave
+    it."""
+    from . import runlog  # It imports this module.
+
+    run = runlog.Run("nightly", commit, place="nightly")
+    began = time.monotonic()
+    with run.step(dict(os.environ)) as (env, results):
+        command = [sys.executable, "-m", "beryl_tools.cli", "ui-counts", "--gate"]
+        code = coverage.in_tree(commit, system.utility(command), out, env)
+        run.log("ui-counts", "ui-counts", code == 0, time.monotonic() - began, results)
+    return code
+
+
 def oracle_step(commit: str, out: IO[str]) -> int:
     """Every card scenario in XMage and Forge (`by oracle`, oracles.py) on `commit` at low
     priority: the full sweep slow CI, which plays the changed cards and a sample
@@ -200,6 +218,7 @@ STEPS: list[Step] = [
     Step("fuzz", fuzz_step),
     Step("scale", scale_step),
     Step("motion", motion_step),
+    Step("ui-counts", ui_counts_step),
     Step("oracle", oracle_step),
     Step("iroh", iroh_step),
 ]

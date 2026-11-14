@@ -49,7 +49,6 @@ def test_a_card_file_runs_the_lanes_that_build_and_play_it() -> None:
         "script",
         "app",
         "ui-smoke",
-        "ui-counts",
         "oracle",
     }
     # The rollout benchmark does not depend on the changed package.
@@ -232,6 +231,11 @@ def test_slow_cis_lanes_leave_their_fast_only_checks_to_the_fast_check() -> None
         f"script:{a[1:]}" for a in command("script", "script-check") if a[0] == "!"
     }
     assert skips == {c for c in fast_only if c.startswith("script:")}
-    ui = {s.name for s in lanes["ui"].steps}
-    assert ("test" in ui) == ("ui:test" not in fast_only)
-    assert "test" in {s.name for s in checks.ui_lane().steps}
+    # A whole step the fast check runs too (`<lane>:<step>`) leaves slow CI's lane, and only
+    # slow CI's.
+    for name, lane in lanes.items():
+        assert not {f"{name}:{s.name}" for s in lane.steps} & fast_only, name
+    assert {"ui:test", "ui:prettier", "rust:fmt"} <= fast_only
+    assert {"test", "prettier"} <= {s.name for s in checks.ui_lane().steps}
+    assert "fmt" in {s.name for s in checks.rust_lane(fast=True).steps}
+    assert "tsc" in {s.name for s in lanes["ui"].steps}

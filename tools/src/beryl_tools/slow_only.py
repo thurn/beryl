@@ -28,8 +28,9 @@ SLOW_ONLY: tuple[SlowOnly, ...] = ()
 # The checks slow CI leaves to the fast check alone, as the run log names them:
 # `rust:<binary>::<test path>` for a Rust test, `rust:doctests` and `rust:allocations` for the
 # steps cargo test runs beside nextest (rust_tests.py), `python:<node id>` for a Python test
-# (python_tests.py), `script:<id>` for a script check (script_checks.py), and `ui:test` for the
-# UI's Node tests (checks.ui_lane). Each costs slow CI's CPU budget
+# (python_tests.py), `script:<id>` for a script check (script_checks.py), and `<lane>:<step>`
+# for a whole step of a lane the fast check also runs, such as `ui:test` for the UI's Node
+# tests or a formatter (slow_ci.without_fast_only). Each costs slow CI's CPU budget
 # (budget.SLOW_CPU_BUDGET) and caught no bug there in the 30 days before it moved; the fast
 # check still runs it before every push. A check here must not also be in SLOW_ONLY, or no
 # check would run it.
@@ -132,6 +133,15 @@ FAST_ONLY: tuple[str, ...] = (
     "script:fixtures/choice-trigger-order/yours",
     "script:fixtures/late-game/yours",
     "ui:test",
+    # Formatters and file checks the fast check runs on every push that touches their files:
+    # slow CI ran them again on a tree they had already passed.
+    "ui:prettier",
+    "rust:fmt",
+    "rust:build-paths",
+    "rust:card-text",
+    "repo:just",
+    "repo:markdown",
+    "repo:conventions",
 )
 
 

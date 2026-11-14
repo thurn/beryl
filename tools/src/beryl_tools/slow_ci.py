@@ -61,7 +61,6 @@ from . import (
     speed,
     sweep,
     system,
-    ui_counts,
     verdicts,
 )
 from .changes import changed_paths, master_base, run_git
@@ -115,7 +114,6 @@ LANES: tuple[str, ...] = (
     "names",
     "app",
     "ui-smoke",
-    "ui-counts",
     "oracle",
     "counts",
 )
@@ -265,7 +263,6 @@ def lane_reason(
         "ui": ui,
         "app": ui or reaches(APP),
         "ui-smoke": browser,
-        "ui-counts": browser,
         "oracle": first(r"^rust/", oracle_selection.HARNESS.pattern),
         "counts": reaches(BENCH),
     }
@@ -369,24 +366,25 @@ def recordable() -> str:
 
 def lanes_for(packages: list[str] | None) -> dict[str, Callable[[], checks.Lane]]:
     """Each lane's constructor, the [`SWEPT`] ones too, the Rust lane held to `packages` (None:
-    the workspace)."""
-    return {
+    the workspace), each without the steps verdicts.FAST_ONLY leaves to the fast check.
+    """
+    made: dict[str, Callable[[], checks.Lane]] = {
         "repo": checks.repo_lane,
         "python": python_lane,
         "scale": checks.scale_lane,
         "rust": lambda: checks.rust_lane(packages=packages),
         "script": lambda: script_checks.lane(slow=True),
-        "ui": ui_lane,
+        "ui": checks.ui_lane,
         "names": lambda: checks.names_lane(fetch=True),
         "app": checks.app_lane,
         "ui-smoke": checks.ui_smoke_lane,
-        "ui-counts": ui_counts.lane,
         "shots": checks.shots_lane,
         "ui-test": checks.ui_test_lane,
         "oracle": checks.oracle_lane,
         "counts": bench.lane,
         "mobile": mobile.lane,
     }
+    return {name: without_fast_only(make) for name, make in made.items()}
 
 
 def python_lane() -> checks.Lane:
@@ -397,12 +395,18 @@ def python_lane() -> checks.Lane:
     return lane
 
 
-def ui_lane() -> checks.Lane:
-    """The ui lane without its Node tests when verdicts.FAST_ONLY leaves them to the fast
-    check."""
-    lane = checks.ui_lane()
-    if "ui:test" in verdicts.FAST_ONLY:
-        lane.steps = [s for s in lane.steps if s.name != "test"]
+def without_fast_only(make: Callable[[], checks.Lane]) -> Callable[[], checks.Lane]:
+    """`make`'s lane without the steps verdicts.FAST_ONLY leaves to the fast check, each named
+    `<lane>:<step>` as the run log names a step that logs no checks of its own (`ui:test`,
+    `rust:fmt`). The fast check still runs them before every push."""
+
+    def lane() -> checks.Lane:
+        made = make()
+        made.steps = [
+            s for s in made.steps if f"{made.name}:{s.name}" not in verdicts.FAST_ONLY
+        ]
+        return made
+
     return lane
 
 

@@ -4,7 +4,7 @@ mutations, and Chromium's style and layout work. Timing frames (`ui-perf`) measu
 machine, which is much faster than the laptops Beryl targets and is never quiet; counts measure
 the tree.
 
-`by ui-counts <fixtures>` prints the counts. `by ui-counts --gate`, slow CI's `ui-counts` lane,
+`by ui-counts <fixtures>` prints the counts. `by ui-counts --gate`, a step of the nightly (nightly.py),
 plays the gated fixtures and fails when a count rises more than the tolerance in
 `data/ui-counts.json` above its limit there. `--gate --update` writes the measured counts as
 the new limits.
@@ -179,15 +179,6 @@ def ui_counts(args: argparse.Namespace) -> int:
     for line in lines:
         print(f"ui-counts: {line}")
     return 0 if passed else 1
-
-
-def lane() -> checks.Lane:
-    """Holds the gated fixtures' counts to `data/ui-counts.json` (`by ui-counts --gate`)."""
-    from .reruns import whole
-
-    return checks.Lane("ui-counts", warm=True).step(
-        "ui-counts", [*checks.BY, "ui-counts", "--gate"], rerun=whole
-    )
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:

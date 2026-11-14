@@ -193,6 +193,32 @@ def test_the_motion_capture_runs_at_low_priority_and_logs_each_verb(
     assert all(r["script"] == "nightly" for r in records)
 
 
+def test_the_ui_counts_gate_runs_at_low_priority_under_its_slow_ci_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ran: list[list[str]] = []
+
+    def in_tree(
+        commit: str,
+        command: list[str],
+        out: IO[str] | None = None,
+        env: dict[str, str] | None = None,
+    ) -> int:
+        ran.append(command)
+        return 1
+
+    monkeypatch.setattr(nightly.coverage, "in_tree", in_tree)
+    assert "ui-counts" in [step.name for step in nightly.STEPS]
+    with open(nightly.folder() / "out.txt", "w") as out:
+        assert nightly.ui_counts_step("abc123", out) == 1
+    [command] = ran
+    unwrapped = [sys.executable, "-m", "beryl_tools.cli", "ui-counts", "--gate"]
+    assert command[-5:] == unwrapped and command != unwrapped
+    [record] = runlog.read_log(NOW - timedelta(days=3650))
+    assert (record["check"], record["outcome"]) == ("ui-counts:ui-counts", "fail")
+    assert record["script"] == "nightly"
+
+
 def test_the_oracles_play_every_scenario_at_low_priority_and_log_each(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

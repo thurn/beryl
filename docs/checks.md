@@ -64,7 +64,8 @@ badly formatted commit subjects.
 
 `just ci` (an 800 CPU-second budget; see below) runs the lanes below, plus the
 fast check's lanes, but only those that what changed since each lane last passed
-can affect (`slow_ci.py`):
+can affect (`slow_ci.py`). It leaves out the steps in `verdicts.FAST_ONLY`, such
+as the formatters, which the fast check already ran on every push:
 
 - Each lane's base is the commit at which it last passed on this machine
   (`$BERYL_CACHE/ci/lane-passes.json`), or where staging left `origin/master`. A
@@ -96,15 +97,6 @@ The lanes slow CI adds to the fast check's:
   machine. It runs the cards changed since `origin/master` plus a sample chosen
   from the commit hash, or every card if the exporters or harnesses changed. The
   nightly run plays every card on staging.
-- `ui-counts`: `just ui-counts --gate`, which plays the board fixtures named in
-  `data/ui-counts.json` on Playwright's paused clock, one frame at a time, and
-  counts the UI's work: React components rendered, DOM mutations, and elements
-  Chromium restyled and laid out. These counts don't depend on the machine's
-  speed or load, so a rise of more than the file's tolerance (3%) over its
-  limits fails the lane. The tolerance sits above the counts' run-to-run noise,
-  which is under 1% for these fixtures. A drop past the tolerance passes and
-  asks for lower limits (`--update`). Windows skips it: the limits were measured
-  on macOS.
 - `counts`: `just count-gate`, which checks the rollout benchmark's instruction
   count against the limit in `rust/crates/beryl_bench/count-gate.toml`. That
   file's comments say when the limit may go up. Each staging commit's count goes
@@ -127,6 +119,15 @@ machine tests `staging` whenever it's free and fixes failures as they appear.
 Windows leaves `app`, `ui-smoke`, `oracle` and `counts` to the Mac, and its fast
 check skips the browser checks and `motion` (see `WINDOWS_SKIPS` in
 `checks.py`).
+
+The nightly also runs `just ui-counts --gate` on staging, which plays the board
+fixtures named in `data/ui-counts.json` on Playwright's paused clock, one frame
+at a time, and counts the UI's work: React components rendered, DOM mutations,
+and elements Chromium restyled and laid out. These counts don't depend on the
+machine's speed or load, so a rise of more than the file's tolerance (3%) over
+its limits fails the step. The tolerance sits above the counts' run-to-run
+noise, which is under 1% for these fixtures. A drop past the tolerance passes
+and asks for lower limits (`--update`). It left slow CI for its CPU budget.
 
 The nightly builds `beryl_link_iroh` and tests its transport over loopback. The
 fast and slow Rust lanes exclude that package from clippy and tests, and the
@@ -213,8 +214,8 @@ skill works them as one Enact run, grouped by shared cause.
   caught something to the nightly, after first asking whether a fast,
   deterministic test could keep what the check protects. A check the fast check
   also runs leaves slow CI alone: it joins `verdicts.FAST_ONLY`, which slow CI's
-  rust, python, script and ui lanes leave out (a Rust or Python test, a script
-  check, or the UI's Node tests), and a test that only the nightly's `just fuzz`
+  lanes leave out (a Rust or Python test, a script check, or a whole step such
+  as `ui:test` or `rust:fmt`), and a test that only the nightly's `just fuzz`
   should play is marked `#[ignore]`. The checks in `budget.KEEP` (the app
   starting, the `ui-smoke` checks, clippy, the UI's typecheck, the `names` lane,
   and `rust:tests`, the record that stands for every Rust test where
