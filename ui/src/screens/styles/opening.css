@@ -95,11 +95,16 @@
   background: rgb(14 11 10 / 45%);
 }
 .game-over {
-  padding-top: 260px;
+  /* The result's group sits at the window's vertical middle. */
+  justify-content: center;
+  padding-top: 0;
 }
 .game-over-title {
   font-size: 72px;
   letter-spacing: 0.08em;
+  /* Letter-spacing also trails the last letter, which would push the glyphs left of center by
+   * half of it: an equal gap before the first letter balances it. */
+  padding-left: 0.08em;
   text-transform: uppercase;
   color: var(--gold);
   text-shadow:

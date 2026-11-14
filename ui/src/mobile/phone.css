@@ -638,7 +638,7 @@ body.phone .phone-game-over {
   position: fixed;
   max-width: 430px;
   margin-inline: auto;
-  padding: max(30dvh, env(safe-area-inset-top, 0px)) 16px 0;
+  padding: env(safe-area-inset-top, 0px) 16px 0;
   text-align: center;
 }
 .phone-game-over > .overlay-backdrop {
