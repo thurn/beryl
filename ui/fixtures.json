@@ -347,17 +347,17 @@
     },
     {
       "name": "pay-default",
+      "stops": { "fullControl": true },
       "board": "pay-default",
       "until": "first paymentPlan decision for seat 0",
       "after": 1
     },
     {
       "name": "pay-other",
-      "seed": 7,
-      "decks": ["wu-control", "wu-control"],
-      "agents": ["random", "random"],
+      "stops": { "fullControl": true },
+      "board": "pay-default",
       "until": "first paymentPlan decision for seat 0",
-      "after": 1
+      "clicks": ["Mana Crypt", "last Plains"]
     },
     {
       "name": "stack-tall",
@@ -385,6 +385,7 @@
     },
     {
       "name": "reprieve-target",
+      "stops": { "fullControl": true },
       "board": "reprieve-target",
       "until": "first paymentPlan decision for seat 0"
     },
