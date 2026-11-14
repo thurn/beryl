@@ -176,10 +176,15 @@ restore the old behavior.
   Remand on the opponent's spells (3sEoP_s4DQE 45:32.0, 3sEoP_s4DQE 56:19.5,
   TbrYIs2juCw 36:04.5).
 - **Hover inspection.** A hovered card in hand rises and grows in place to about
-  twice its size. A hovered permanent gets a separate copy about three times its
-  size, away from the cursor, with its keywords explained. A card on the stack
-  gets none. Estimated from stills, not measured (jD7VqaT8VC8 45:27.5,
-  SswBO8aOOgc 21:02.0, pE4XSNi-nZc 34:21.0, jD7VqaT8VC8 17:34.0).
+  twice its size, easing up in a tenth of a second and back down into the fan in
+  about a sixth when the pointer leaves. A hovered permanent gets a separate
+  copy about three times its size, away from the cursor, with its keywords
+  explained. A card on the stack gets none (by-jxo1). Sizes estimated from
+  stills. The hand card's rise (70 to 130 ms) and drop (130 to 200 ms) were
+  filmed at 30 frames a second; each covers about half its way in the first
+  frame and slows as it arrives (jD7VqaT8VC8 45:26.77, SswBO8aOOgc 21:02.75,
+  IEXcjBn3BXk 18:06.62, jD7VqaT8VC8 45:27.5, SswBO8aOOgc 21:02.0, pE4XSNi-nZc
+  34:21.0, jD7VqaT8VC8 17:34.0).
 - **The hand's fan.** Your hand's cards lie along one circle over the near edge,
   about 14 card widths across, on the desktop and the phone. A card's turn and
   how far it sinks follow its distance from the fan's middle, so a crowded hand

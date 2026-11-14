@@ -123,6 +123,67 @@ for (const [title, hand] of [
     );
 }
 
+// Why no audit: the audits see the page at rest, before and after a hover, and a card that
+// snaps up or down looks the same there as one that eases. This steps the browser's frames
+// the copy eases on (src/stage/raised.ts) and reads how high it is drawn in between.
+await check(
+    "a hovered hand card eases up out of the fan and back down as the pointer leaves",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const target = await handCard(page);
+        const box = await page.locator(target).boundingBox();
+        /** The top of the raised copy's card, or none while no copy is drawn. */
+        const copyTop = () =>
+            page.evaluate(
+                () =>
+                    document
+                        .querySelector(".stage-raised-copy > *")
+                        ?.getBoundingClientRect().top,
+            );
+        const rest = (await drawn(page))[
+            await page.$eval(target, (e) => e.dataset.slot)
+        ].box[1];
+        /** How high the copy is drawn at each 8 ms of the next 400 ms. */
+        const sampled = async () => {
+            const tops = [];
+            for (let t = 0; t < 50; t++) {
+                await page.clock.runFor(8);
+                await committed(page);
+                tops.push(await copyTop());
+            }
+            return tops;
+        };
+        /** Whether any of `tops` is clear of both `a` and `b`, between them. */
+        const between = (tops, a, b) =>
+            tops.some(
+                (top) =>
+                    top !== undefined &&
+                    top > Math.min(a, b) + 2 &&
+                    top < Math.max(a, b) - 2,
+            );
+        await page.mouse.move(box.x + box.width / 2, box.y + 40);
+        const rising = await sampled();
+        const up = rising.at(-1);
+        assert.ok(rest - up > 40, `the card rises ${rest - up} px`);
+        assert.ok(
+            between(rising, rest, up),
+            `the card is drawn on its way up: ${rising.join(" ")}`,
+        );
+        // Off the hand, onto the felt above it.
+        await page.mouse.move(box.x + box.width / 2, box.y - 300);
+        const dropping = await sampled();
+        assert.ok(
+            between(dropping, up, rest),
+            `the card is drawn on its way back down: ${dropping.join(" ")}`,
+        );
+        assert.equal(
+            dropping.at(-1),
+            undefined,
+            "the card is back in the fan, with no copy over it",
+        );
+    },
+);
+
 // The human's Swift Reconfiguration on the opponent's Sphinx of False Conclusions (or whatever the
 // fixture attaches across the table): an Aura one player controls on a permanent the other does.
 const attachedView = (await load("attached-across")).at(-1);

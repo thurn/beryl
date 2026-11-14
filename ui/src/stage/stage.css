@@ -23,13 +23,14 @@
    a little larger (game/placement.ts `RAISE`). The node keeps its place, its size and its
    depth in the fan, with its face unseen, so the pointer stays on it and finds its neighbors
    in their strips; a copy the pointer passes through (stage/raised.ts) shows it over the rest
-   of the hand. It follows the pointer and no clock, so it is there at once. */
+   of the hand, eased up and down off the stage's clock by `--raise-k` (0 in the fan). */
 .stage-node[data-raised] > *,
 .stage-raised-copy > * {
+  --k: var(--raise-k, 1);
   transform-origin: 50% 0;
-  translate: var(--raise-x) var(--raise-y);
-  rotate: var(--raise-turn);
-  scale: 1.06;
+  translate: calc(var(--raise-x) * var(--k)) calc(var(--raise-y) * var(--k));
+  rotate: calc(var(--raise-turn) * var(--k));
+  scale: calc(1 + 0.06 * var(--k));
 }
 /* Its face lets the pointer through to its hit box: the card's frame where it lies in the fan,
    reaching up as far as the card rises. */

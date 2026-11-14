@@ -114,8 +114,9 @@ export class DomSurface implements Surface {
    * screen and a little larger, about the middle of its top edge (stage.css). With no name,
    * none is raised. The node itself stays where the stage has it, at its depth in the fan, so
    * nothing else moves, the pointer that found the card keeps it and finds its neighbors in
-   * their strips; a copy draws it over the hand (raised.ts). It is the one look of a node that
-   * follows the pointer and not the clock, as a held card's pose does (pointer.ts). */
+   * their strips; a copy draws it over the hand (raised.ts), easing up out of the fan and
+   * back down into it. It is the one look of a node that follows the pointer and not the
+   * clock, as a held card's pose does (pointer.ts). */
   raise(name?: Name, turn = 0, lift = 0) {
     for (const [other, node] of this.#nodes) {
       if (other === name) continue;
@@ -127,7 +128,8 @@ export class DomSurface implements Surface {
     }
     const node = name === undefined ? undefined : this.#nodes.get(name);
     if (!node) {
-      this.#raised.show(undefined);
+      // A card the pointer picks up leaves the fan in its hand: no copy of it drops back.
+      this.#raised.show(undefined, this.#holder?.held !== undefined);
       return;
     }
     // Straight up the screen, in the turned node's own axes.

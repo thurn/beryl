@@ -682,10 +682,25 @@
     {
       "kind": "settled",
       "name": "Hover inspection",
-      "rule": "A hovered card in hand rises and grows in place to about twice its size. A hovered permanent gets a separate copy about three times its size, away from the cursor, with its keywords explained. A card on the stack gets none.",
+      "rule": "A hovered card in hand rises and grows in place to about twice its size, easing up in a tenth of a second and back down into the fan in about a sixth when the pointer leaves. A hovered permanent gets a separate copy about three times its size, away from the cursor, with its keywords explained. A card on the stack gets none.",
+      "reports": [
+        "by-jxo1"
+      ],
       "arena": {
-        "does": "Estimated from stills, not measured.",
+        "does": "Sizes estimated from stills. The hand card's rise (70 to 130 ms) and drop (130 to 200 ms) were filmed at 30 frames a second; each covers about half its way in the first frame and slows as it arrives.",
         "evidence": [
+          {
+            "recording": "jD7VqaT8VC8",
+            "time": "45:26.77"
+          },
+          {
+            "recording": "SswBO8aOOgc",
+            "time": "21:02.75"
+          },
+          {
+            "recording": "IEXcjBn3BXk",
+            "time": "18:06.62"
+          },
           {
             "recording": "jD7VqaT8VC8",
             "time": "45:27.5"
