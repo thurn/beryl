@@ -12,6 +12,7 @@
 import type { ObjectView, PlayerView, Side } from "../generated/protocol";
 import { CARD_ASPECT } from "../components/Card";
 import { BENEATH_STEP } from "../game/placement";
+import { zoneCards } from "../game/zoneCards";
 import { emblemObjects, held as holder } from "../game/zoneViews";
 import {
   BACKS,
@@ -190,9 +191,7 @@ function rest(table: Table, viewport: Viewport, left?: ReadonlySet<Name>) {
       dress: dressed(object.zone, "hand", spot.width),
     });
   }
-  const theirs = view.objects.filter(
-    (o) => o.zone === "hand" && o.owner === "opponent",
-  );
+  const theirs = zoneCards(view, "opponent", "hand");
   theirs.forEach((object, i) => {
     const place = backSpot(bands, viewport.width, i, theirs.length);
     out.set(object.slot, {
@@ -229,10 +228,11 @@ function rest(table: Table, viewport: Viewport, left?: ReadonlySet<Name>) {
   for (const object of view.objects) {
     if (out.has(object.slot) || object.zone === "stack") continue;
     const pile = pileOf(object.zone);
+    const side = object.zoneSide ?? object.owner;
     // A pile's top is the last card that has arrived: one still leaving for it is seen
     // where it was, and the pile shows the top it had until that one lands. One on its way
     // there shows as a top will, over it.
-    const arrived = view.players[object.owner][pile].filter(
+    const arrived = view.players[side][pile].filter(
       (slot) => !leaving?.has(slot) && !lifted.has(slot),
     );
     const top =
@@ -242,7 +242,7 @@ function rest(table: Table, viewport: Viewport, left?: ReadonlySet<Name>) {
     out.set(object.slot, {
       object,
       pose: upright(
-        pileSpot(bands, object.owner, pile),
+        pileSpot(bands, side, pile),
         top ? DEPTH.pile : 0,
         back ? "back" : faceOf(object),
       ),

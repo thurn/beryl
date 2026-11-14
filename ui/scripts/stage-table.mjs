@@ -1,6 +1,7 @@
 // What the stage's tests share (stage.test.mjs, stage-slice.test.mjs): a stage on a surface
 // that only records, over a layout that lays the table out in rows, so every expectation is a
 // number worked out by hand.
+import { zoneCards } from "../src/game/zoneCards.ts";
 import { abilityName } from "../src/stage/layout.ts";
 import { arranged } from "../src/stage/table.ts";
 import { ScriptStage, SNAP } from "../src/stage/stage.ts";
@@ -79,9 +80,13 @@ export const row = {
             });
         };
         table.battlefield.forEach((slot, i) => place(slot, i * 400, 0));
-        table.objects
-            .filter((o) => o.zone === "hand" || o.fanned)
-            .forEach((o, i) => place(o.slot, i * 400, 500));
+        const hand = table.table
+            ? [
+                  ...zoneCards(table, "you", "hand"),
+                  ...zoneCards(table, "opponent", "hand"),
+              ]
+            : table.objects.filter((o) => o.zone === "hand" || o.fanned);
+        hand.forEach((o, i) => place(o.slot, i * 400, 500));
         for (const side of ["you", "opponent"]) {
             for (const slot of table.players[side].library) {
                 place(slot, 3000, 500);

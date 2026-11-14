@@ -3,12 +3,7 @@
 // keeps from zone to zone (docs/engine-architecture.md §13), so the game screen draws one
 // element per slot and a card moving zones glides from its old place to its new one rather than
 // jumping. Pure functions of the view: the screen animates between their results.
-import type {
-  ObjectView,
-  PlayerView,
-  Side,
-  ZoneName,
-} from "../generated/protocol";
+import type { ObjectView, PlayerView, Side } from "../generated/protocol";
 import { CARD_ASPECT } from "../components/Card";
 import { referenced } from "./decisions";
 import type { Layout, Placement } from "./placement";
@@ -25,6 +20,7 @@ import {
 import { PILES, onPile, pileLook } from "./pileLook";
 import { fromMiddle, fromRight } from "./perspective";
 import { stackPlace } from "./stackLayout";
+import { zoneCards } from "./zoneCards";
 import type { ZonePile } from "./zoneViews";
 import {
   attachments,
@@ -133,8 +129,6 @@ export function layout(
 ): Layout {
   const out: Placement[] = [];
   const objects = view.objects;
-  const owned = (side: Side, zone: ZoneName) =>
-    objects.filter((o) => o.owner === side && o.zone === zone);
   const bySlot = new Map(objects.map((o) => [o.slot, o]));
   // Emblems stand after their player's other permanents.
   const permanents = [
@@ -156,7 +150,7 @@ export function layout(
   const named = referenced(view);
   const behindHost = new Set([...attached.values()].flat().map((o) => o.slot));
 
-  out.push(...heldPlacements(owned("opponent", "hand")));
+  out.push(...heldPlacements(zoneCards(view, "opponent", "hand")));
   // Blockers stand across from their attackers, which stand where they would anyway: only the
   // defending side's row depends on the other's.
   const groups = new Map(
@@ -197,7 +191,7 @@ export function layout(
   out.push(
     ...handLifts(
       handPlacements(
-        [...owned("you", "hand"), ...elsewhere],
+        [...zoneCards(view, "you", "hand"), ...elsewhere],
         hold,
         view.stack.length,
       ),

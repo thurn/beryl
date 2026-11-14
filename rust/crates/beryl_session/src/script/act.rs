@@ -16,13 +16,14 @@ use crate::protocol::{
 #[serde(tag = "verb", rename_all = "camelCase")]
 pub enum Act {
     /// The object travels to where its record puts it: another zone, another controller's
-    /// side, or onto the permanent it is now attached to.
+    /// side, another position in its own zone, or onto the permanent it is now attached to.
     Fly {
         from: ZoneName,
         why: Why,
         object: ObjectView,
-        /// Where in its zone's order it goes, counted from the bottom of a pile or the first
-        /// permanent: none is the end, in a new zone, and where it was, in the same one.
+        /// The destination index after removing this card from its old position. Count from
+        /// the bottom of a pile, the left end of a hand or the first permanent. With no
+        /// index, the card joins the end of a new pile or stays where it was in the same one.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         at: Option<u16>,

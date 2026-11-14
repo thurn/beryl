@@ -14,6 +14,7 @@ import type {
 import type { Phase } from "../components/Controls";
 import { referenced, twins } from "../game/decisions";
 import { onArc } from "../game/fanArc";
+import { zoneCards } from "../game/zoneCards";
 import { emblemObjects, playableElsewhere } from "../game/zoneViews";
 import { creatureHeight, RATIO } from "./sizing.ts";
 
@@ -357,7 +358,7 @@ export function phoneLayout(view: PlayerView, viewport: Viewport): PhoneLayout {
   // What you can play from outside your hand waits at the right of the fan, as on the desktop.
   const bySlot = new Map(view.objects.map((o) => [o.slot, o]));
   const hand = [
-    ...view.objects.filter((o) => o.zone === "hand" && o.owner === "you"),
+    ...zoneCards(view, "you", "hand"),
     ...playableElsewhere(view).flatMap((s) => bySlot.get(s) ?? []),
   ];
   const cards = [

@@ -331,6 +331,7 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         slot: ObjectId(slot.num()),
         zone: o.zone().into(),
         owner: side(obs, o.owner()),
+        zone_side: None,
         controller: side(obs, obs.controller(slot)),
         name: name(t, obs, slot).map(str::to_owned),
         facing: if o.face() == FaceIx::DOWN {

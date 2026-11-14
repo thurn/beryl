@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::{Side, TargetRef, ZoneName};
+use super::{ObjectId, Side, TargetRef, ZoneName};
 
 /// A battlefield row explicitly chosen by a player.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -125,6 +125,46 @@ pub enum TablePrompt {
     None,
 }
 
+/// A player's ordered slots for the zones whose order is specific to manual play.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualPiles {
+    /// Left to right.
+    pub hand: Vec<ObjectId>,
+    /// Bottom first.
+    pub exile: Vec<ObjectId>,
+    /// Bottom first.
+    pub sideboard: Vec<ObjectId>,
+}
+
+impl ManualPiles {
+    pub(crate) fn order(&self, zone: ZoneName) -> Option<&Vec<ObjectId>> {
+        match zone {
+            ZoneName::Hand => Some(&self.hand),
+            ZoneName::Exile => Some(&self.exile),
+            ZoneName::Sideboard => Some(&self.sideboard),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn order_mut(&mut self, zone: ZoneName) -> Option<&mut Vec<ObjectId>> {
+        match zone {
+            ZoneName::Hand => Some(&mut self.hand),
+            ZoneName::Exile => Some(&mut self.exile),
+            ZoneName::Sideboard => Some(&mut self.sideboard),
+            _ => None,
+        }
+    }
+}
+
+/// Ordered slots by the side whose zone contains them, relative to the viewer.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualOrders {
+    pub you: ManualPiles,
+    pub opponent: ManualPiles,
+}
+
 /// What the viewer can see or use on a manual table in addition to the shared game view.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -135,6 +175,7 @@ pub struct TableView {
     pub assists: AssistsView,
     pub phase: TablePhase,
     pub seats: u8,
+    pub orders: ManualOrders,
     /// Hidden zones lent or revealed to this viewer.
     pub acting: Vec<ZoneRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

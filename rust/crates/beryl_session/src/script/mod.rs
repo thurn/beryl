@@ -35,10 +35,11 @@
 //! after every step, without the view that follows.
 //!
 //! Each step carries all of what it changes. A step with an object's record replaces that
-//! slot's record; one that changes the object's zone also takes it out of its old zone's order
-//! and puts it into the new one's at `at`, or at the end (the top of a pile, the last on the
-//! battlefield) when `at` is none. An object leaving the stack takes its item with it, and one
-//! arriving there brings its `item`. [`Act`] says the rest, verb by verb.
+//! slot's record. An object that changes zones or has an explicit index leaves its old
+//! position and joins the destination at `at`, or at the end when no index is given. Manual
+//! views carry hand, exile and sideboard order in `PlayerView.table.orders`. An object
+//! leaving the stack takes its item with it, and one arriving there brings its `item`.
+//! [`Act`] says the rest, verb by verb.
 //!
 //! Everything else in a view is prompt and chrome, replaced whole when the script ends:
 //! `status` and its decision, `stops`, `pending_attackers`, `undone`, the turn's `priority`,

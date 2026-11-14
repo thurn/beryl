@@ -101,8 +101,6 @@ export const DESKTOP_REVEALED: PileSpace = {
   dress: { look: "shown", frame: FULL_WIDTH },
 };
 
-/** A hand's order of arrival is the table's (table.ts `arranged`): the layout is given its
- * cards in that order, and no other. */
 const NONE: ReadonlySet<Name> = new Set();
 
 /** How much of its source's width an ability is as it lifts out of it. */
@@ -198,6 +196,8 @@ function rest(
   leaving: ReadonlySet<Name> = NONE,
 ): Map<Name, Resting> {
   const { abilities, handled, tray, revealed } = table;
+  // Engine hands keep their order of arrival. The layout reads manual zone orders
+  // directly from the view.
   const view = arranged(table);
   // A card still leaving for a pile is off it: the pile lies as it did,
   // its top showing, and the card has its place on it for when it lands. So is a card a

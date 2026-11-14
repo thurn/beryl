@@ -8,6 +8,7 @@
 // it plays a prompt's marks (prompt.ts), from the state the session sent it.
 import type {
   Act as Sent,
+  ManualPiles,
   ObjectView,
   PlayerView,
   Reset,
@@ -18,6 +19,7 @@ import type {
   Subject,
   ZoneName,
 } from "../generated/protocol";
+import { zoneCards } from "../game/zoneCards.ts";
 
 /** The cards a prompt holds up off the table for its player to handle, in the piles it lays
  * them out in, each in its order: one pile to pick from, or the two a split deals them into.
@@ -135,6 +137,7 @@ export function arranged({ view, order }: Table): PlayerView {
  * other's turn in its order of arrival (`Table.order`), which is written out for every card
  * in a hand so that the two keep every other card's place. */
 export function traded(table: Table, a: number, b: number): Table {
+  if (table.view.table) return table;
   const order = new Map<number, number>();
   let turn = 0;
   for (const o of arranged(table).objects) {
@@ -204,9 +207,7 @@ function handledAt(
     return handling.count ? library.slice(-handling.count).reverse() : [];
   }
   if (handling.side !== "you") return [];
-  return view.objects
-    .filter((o) => o.owner === "you" && o.zone === "hand")
-    .map((o) => o.slot);
+  return zoneCards(view, "you", "hand").map((o) => o.slot);
 }
 
 /** `view` with its stack as a script's table has it (script/table.rs `Table::of`), the same
@@ -240,7 +241,7 @@ export function tableOf(
   const table = { view: tabled(view), abilities: reset?.abilities ?? [] };
   const held = (of: PlayerView) =>
     new Set(of.objects.filter((o) => o.zone === "hand").map((o) => o.slot));
-  if (!before?.order?.size) return table;
+  if (view.table || !before?.order?.size) return table;
   const [was, is] = [held(before.view), held(view)];
   const order = new Map(
     [...before.order].filter(([slot]) => was.has(slot) && is.has(slot)),
@@ -271,49 +272,70 @@ const inserted = <T>(list: readonly T[], item: T, at: number | undefined) => {
   return out;
 };
 
-/** The table with the object in `slot` taken out of `zone`'s order. A hand and exile keep no
- * order; a card lies in its owner's library and graveyard (CR 400.3). */
-function taken(table: Table, slot: number, zone: ZoneName, owner: Side): Table {
+/** Changes the slots in an ordered zone. The stack keeps spells and abilities instead. */
+function changeOrder(
+  table: Table,
+  zone: ZoneName,
+  side: Side,
+  change: (slots: number[]) => number[],
+): Table {
   const { view } = table;
-  const pile = (key: "library" | "graveyard"): Table => ({
+  if (zone === "battlefield")
+    return {
+      ...table,
+      view: { ...view, battlefield: change(view.battlefield) },
+    };
+  if (zone === "library" || zone === "graveyard") {
+    const player = view.players[side];
+    return {
+      ...table,
+      view: {
+        ...view,
+        players: {
+          ...view.players,
+          [side]: { ...player, [zone]: change(player[zone]) },
+        },
+      },
+    };
+  }
+  const manual = view.table;
+  if (!manual || !isManualPile(zone)) return table;
+  const orders = manual.orders;
+  const piles = orders[side];
+  return {
     ...table,
     view: {
       ...view,
-      players: {
-        ...view.players,
-        [owner]: {
-          ...view.players[owner],
-          [key]: view.players[owner][key].filter((s) => s !== slot),
+      table: {
+        ...manual,
+        orders: {
+          ...orders,
+          [side]: { ...piles, [zone]: change(piles[zone]) },
         },
       },
     },
-  });
-  switch (zone) {
-    case "battlefield":
-      return {
-        ...table,
-        view: {
-          ...view,
-          battlefield: view.battlefield.filter((s) => s !== slot),
-        },
-      };
-    case "stack": {
-      const stack = without(
-        view.stack,
-        stackIndex(table, { kind: "object", slot }),
-      );
-      return { ...table, view: { ...view, stack } };
-    }
-    case "library":
-    case "graveyard":
-      return pile(zone);
-    default:
-      return table;
-  }
+  };
 }
 
-/** The table with `object` put into its zone's order at `at`, or at the end: the top of a
- * pile, the last permanent, the top of the stack as `item`. */
+const isManualPile = (zone: ZoneName): zone is keyof ManualPiles =>
+  zone === "hand" || zone === "exile" || zone === "sideboard";
+
+/** The table with the card in `slot` taken out of its zone's order. */
+function taken(table: Table, slot: number, zone: ZoneName, side: Side): Table {
+  if (zone === "stack") {
+    const { view } = table;
+    const stack = without(
+      view.stack,
+      stackIndex(table, { kind: "object", slot }),
+    );
+    return { ...table, view: { ...view, stack } };
+  }
+  return changeOrder(table, zone, side, (slots) =>
+    slots.filter((s) => s !== slot),
+  );
+}
+
+/** The table with `object` put into its zone's order at `at`, or at the end. */
 function placed(
   table: Table,
   object: ObjectView,
@@ -321,44 +343,20 @@ function placed(
   item: StackItem | undefined,
 ): Table {
   const { view } = table;
-  switch (object.zone) {
-    case "battlefield":
-      return {
-        ...table,
-        view: {
-          ...view,
-          battlefield: inserted(view.battlefield, object.slot, at),
-        },
-      };
-    case "stack":
-      return item
-        ? { ...table, view: { ...view, stack: inserted(view.stack, item, at) } }
-        : table;
-    case "library":
-    case "graveyard": {
-      const player = view.players[object.owner];
-      return {
-        ...table,
-        view: {
-          ...view,
-          players: {
-            ...view.players,
-            [object.owner]: {
-              ...player,
-              [object.zone]: inserted(player[object.zone], object.slot, at),
-            },
-          },
-        },
-      };
-    }
-    default:
-      return table;
-  }
+  if (object.zone === "stack")
+    return item
+      ? { ...table, view: { ...view, stack: inserted(view.stack, item, at) } }
+      : table;
+  return changeOrder(
+    table,
+    object.zone,
+    object.zoneSide ?? object.owner,
+    (slots) => inserted(slots, object.slot, at),
+  );
 }
 
-/** The table with the record `object` in place of the one its slot held, kept in slot
- * order. When the record changes the object's zone, or gives it a place `at`, it leaves its
- * old zone's order (`from`, for an object the table did not hold) and enters the new one's. */
+/** Replaces the record in the object's slot. When an object changes zones, changes piles
+ * within a zone or has an explicit index, it leaves its old order and enters the new one. */
 function put(
   table: Table,
   object: ObjectView,
@@ -371,16 +369,19 @@ function put(
     ...table.view.objects.filter((o) => o.slot !== object.slot),
     object,
   ].sort((a, b) => a.slot - b.slot);
+  const manual = !!table.view.table;
   const zone = before?.zone ?? from;
-  const order = arrived(table.order, object.slot, zone, object.zone);
+  const order = manual
+    ? undefined
+    : arrived(table.order, object.slot, zone, object.zone);
   const next = { ...table, view: { ...table.view, objects }, order };
-  if (zone === object.zone && at === undefined) return next;
-  return placed(
-    taken(next, object.slot, zone, before?.owner ?? object.owner),
-    object,
-    at,
-    item,
-  );
+  const side = object.zoneSide ?? object.owner;
+  const oldSide = before?.zoneSide ?? before?.owner ?? side;
+  const changedPile =
+    side !== oldSide && zone !== "battlefield" && zone !== "stack";
+  if (manual && !before) return placed(next, object, at, item);
+  if (zone === object.zone && !changedPile && at === undefined) return next;
+  return placed(taken(next, object.slot, zone, oldSide), object, at, item);
 }
 
 /** `table` with the record `object` held up to be read by `cause`: with the others `cause`
@@ -450,7 +451,12 @@ export function apply(table: Table, act: Act, cause?: Subject): Table {
       // A token or a copy that is no more: its slot is free.
       const slot = act.subject.slot;
       const gone = view.objects.find((o) => o.slot === slot);
-      const rest = taken(table, slot, act.from, gone?.owner ?? "you");
+      const rest = taken(
+        table,
+        slot,
+        gone?.zone ?? act.from,
+        gone?.zoneSide ?? gone?.owner ?? "you",
+      );
       return {
         ...rest,
         view: {

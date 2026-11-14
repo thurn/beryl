@@ -1,8 +1,11 @@
 use beryl_session::protocol::{
-    Counter, CounterView, ManaPool, NamedCounter, ObjectId, ObjectView, PlayerState, PlayerView,
-    PowerToughness, Side, ZoneName,
+    AssistsView, Counter, CounterView, ManaPool, ManualOrders, ManualPiles, NamedCounter, ObjectId,
+    ObjectView, PlayerState, PlayerView, PowerToughness, Side, TablePhase, TableView, Why,
+    ZoneName,
 };
-use beryl_session::script::{Act, Notice, Reset, Script, Step, Table, Tally, failure, replay};
+use beryl_session::script::{
+    Act, Notice, Reset, Script, Step, Subject, Table, Tally, failure, replay,
+};
 
 fn round_trip(view: &PlayerView) -> PlayerView {
     serde_json::from_value(serde_json::to_value(view).unwrap()).unwrap()
@@ -125,4 +128,138 @@ fn manual_notices_round_trip_and_replay_without_a_card_source() {
         assert_eq!(decoded.script.as_ref(), Some(&script));
         assert_eq!(failure(&Table::of(&before), &script, &decoded), None);
     }
+}
+
+fn ordered_card(slot: u16, zone: ZoneName) -> ObjectView {
+    ObjectView::hidden(ObjectId(slot), zone, Side::You, Side::You)
+}
+
+fn slots(ids: &[u16]) -> Vec<ObjectId> {
+    ids.iter().copied().map(ObjectId).collect()
+}
+
+fn manual_view_with_ordered_zones() -> PlayerView {
+    let mut before = PlayerView::neutral(PlayerState::neutral(20), PlayerState::neutral(20));
+    before.objects = vec![
+        ordered_card(1, ZoneName::Hand),
+        ordered_card(2, ZoneName::Hand),
+        ordered_card(3, ZoneName::Hand),
+        ordered_card(4, ZoneName::Exile),
+        ordered_card(5, ZoneName::Sideboard),
+    ];
+    before.table = Some(TableView {
+        log: vec![],
+        proposals: vec![],
+        labels: vec![],
+        assists: AssistsView::default(),
+        phase: TablePhase::FirstMain,
+        seats: 2,
+        orders: ManualOrders {
+            you: ManualPiles {
+                hand: slots(&[1, 2, 3]),
+                exile: slots(&[4]),
+                sideboard: slots(&[5]),
+            },
+            opponent: ManualPiles::default(),
+        },
+        acting: vec![],
+        prompt: None,
+    });
+
+    before
+}
+
+#[test]
+fn manual_order_replays_without_renumbering_slots() {
+    let before = manual_view_with_ordered_zones();
+    let mut moved_exile = ordered_card(4, ZoneName::Exile);
+    moved_exile.zone_side = Some(Side::Opponent);
+    let moved_sideboard = ordered_card(5, ZoneName::Exile);
+    let sideboard = ordered_card(7, ZoneName::Sideboard);
+    let acts = [
+        Act::Fly {
+            from: ZoneName::Hand,
+            why: Why::Effect,
+            object: ordered_card(3, ZoneName::Hand),
+            at: Some(0),
+            item: None,
+        },
+        Act::Appear {
+            from: ZoneName::Nowhere,
+            why: Why::Created,
+            object: ordered_card(6, ZoneName::Exile),
+            at: Some(0),
+            item: None,
+        },
+        Act::Fly {
+            from: ZoneName::Exile,
+            why: Why::Effect,
+            object: moved_exile.clone(),
+            at: None,
+            item: None,
+        },
+        Act::Appear {
+            from: ZoneName::Nowhere,
+            why: Why::Created,
+            object: sideboard.clone(),
+            at: Some(0),
+            item: None,
+        },
+        Act::Vanish {
+            subject: Subject::Object { slot: ObjectId(5) },
+            from: ZoneName::Sideboard,
+            why: Why::Exile,
+            object: Some(moved_sideboard.clone()),
+            at: Some(0),
+        },
+        Act::Vanish {
+            subject: Subject::Object { slot: ObjectId(6) },
+            from: ZoneName::Exile,
+            why: Why::Effect,
+            object: None,
+            at: None,
+        },
+    ];
+
+    let mut after = before.clone();
+    let orders = &mut after.table.as_mut().unwrap().orders;
+    orders.you.hand = slots(&[3, 1, 2]);
+    orders.you.exile = slots(&[5]);
+    orders.you.sideboard = slots(&[7]);
+    orders.opponent.exile = slots(&[4]);
+    after.objects.truncate(3);
+    after
+        .objects
+        .extend([moved_exile, moved_sideboard, sideboard]);
+    after.script = Some(Script {
+        reset: None,
+        beats: acts
+            .into_iter()
+            .map(|act| vec![Step { act, cause: None }])
+            .collect(),
+    });
+
+    let decoded = round_trip(&after);
+    assert_eq!(decoded, after);
+    assert_eq!(decoded.script, after.script);
+    let mut script = decoded.script.clone().unwrap();
+    let start = Table::of(&before);
+    let reordered = replay(
+        start.clone(),
+        &Script {
+            reset: None,
+            beats: script.beats[..1].to_vec(),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        reordered.order(ZoneName::Hand, Side::You),
+        Some(&slots(&[3, 1, 2]))
+    );
+    assert_eq!(reordered.objects, start.objects);
+    assert_eq!(failure(&start, &script, &decoded), None);
+
+    script.beats.remove(0);
+    let mismatch = failure(&start, &script, &decoded).unwrap();
+    assert!(mismatch.contains("table.you.manual.hand"), "{mismatch}");
 }

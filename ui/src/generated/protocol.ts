@@ -179,7 +179,7 @@ pendingAttackers?: Array<ObjectId>, turn: TurnView, players: Players,
 battlefield: Array<ObjectId>, 
 /**
  * Every object in a zone, by slot: the battlefield, the stack, and each player's library,
- * hand, graveyard and exile.
+ * hand, graveyard, exile and sideboard.
  */
 objects: Array<ObjectView>, 
 /**
@@ -268,7 +268,12 @@ export type Declaration = "undeclared" | "willMulligan" | "kept";
 
 export type ManaPool = { white: number, blue: number, black: number, red: number, green: number, colorless: number, };
 
-export type ObjectView = { slot: ObjectId, zone: ZoneName, owner: Side, controller: Side, 
+export type ObjectView = { slot: ObjectId, zone: ZoneName, owner: Side, 
+/**
+ * The player whose zone contains this card, when it differs from its owner.
+ * Only the manual table can put a card in another player's pile or hand.
+ */
+zoneSide?: Side, controller: Side, 
 /**
  * The name of the face up, which keys its record in the card store
  * ([`crate::card_records`]); none for a card the viewer has not seen. A face-down
@@ -620,8 +625,9 @@ export type Subject = { "kind": "object", slot: ObjectId, } | { "kind": "ability
 
 export type Act = { "verb": "fly", from: ZoneName, why: Why, object: ObjectView, 
 /**
- * Where in its zone's order it goes, counted from the bottom of a pile or the first
- * permanent: none is the end, in a new zone, and where it was, in the same one.
+ * The destination index after removing this card from its old position. Count from
+ * the bottom of a pile, the left end of a hand or the first permanent. With no
+ * index, the card joins the end of a new pile or stays where it was in the same one.
  */
 at?: number, 
 /**
@@ -656,7 +662,23 @@ export type RowName = "creatures" | "others" | "lands";
 
 export type NamedCounter = { name: string, count: number, };
 
-export type TableView = { log: Array<LogLine>, proposals: Array<ProposalView>, labels: Array<LabelView>, assists: AssistsView, phase: TablePhase, seats: number, 
+export type ManualPiles = { 
+/**
+ * Left to right.
+ */
+hand: Array<ObjectId>, 
+/**
+ * Bottom first.
+ */
+exile: Array<ObjectId>, 
+/**
+ * Bottom first.
+ */
+sideboard: Array<ObjectId>, };
+
+export type ManualOrders = { you: ManualPiles, opponent: ManualPiles, };
+
+export type TableView = { log: Array<LogLine>, proposals: Array<ProposalView>, labels: Array<LabelView>, assists: AssistsView, phase: TablePhase, seats: number, orders: ManualOrders, 
 /**
  * Hidden zones lent or revealed to this viewer.
  */

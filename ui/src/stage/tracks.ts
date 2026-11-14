@@ -674,7 +674,7 @@ export function subjectOf(act: Act): Name | undefined {
 export const drawsToRead = (act: Act) =>
   draws(act) &&
   act.verb === "fly" &&
-  act.object.owner === "you" &&
+  (act.object.zoneSide ?? act.object.owner) === "you" &&
   act.object.name !== null;
 
 /** An entry's motion over a step: where it is `progress` of the way through, given where it

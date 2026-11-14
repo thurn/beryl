@@ -65,7 +65,7 @@ pub struct PlayerView {
     /// Permanents, in the order they entered.
     pub battlefield: Vec<ObjectId>,
     /// Every object in a zone, by slot: the battlefield, the stack, and each player's library,
-    /// hand, graveyard and exile.
+    /// hand, graveyard, exile and sideboard.
     pub objects: Vec<ObjectView>,
     /// Bottom first.
     pub stack: Vec<StackItem>,
@@ -246,6 +246,11 @@ pub struct ObjectView {
     pub slot: ObjectId,
     pub zone: ZoneName,
     pub owner: Side,
+    /// The player whose zone contains this card, when it differs from its owner.
+    /// Only the manual table can put a card in another player's pile or hand.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub zone_side: Option<Side>,
     pub controller: Side,
     /// The name of the face up, which keys its record in the card store
     /// ([`crate::card_records`]); none for a card the viewer has not seen. A face-down

@@ -76,6 +76,7 @@ impl ObjectView {
             slot,
             zone,
             owner,
+            zone_side: None,
             controller,
             name: None,
             facing: Facing::Up,

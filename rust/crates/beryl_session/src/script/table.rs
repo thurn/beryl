@@ -9,8 +9,8 @@ use serde::Serialize;
 use super::{Act, Fact, Subject, Tally};
 use crate::protocol::ObjectId;
 use crate::protocol::{
-    ManaPool, NamedCounter, ObjectView, PlayerState, PlayerView, Side, StackItem, Status,
-    Step as TurnStep, ZoneName,
+    ManaPool, ManualPiles, NamedCounter, ObjectView, PlayerState, PlayerView, Side, StackItem,
+    Status, Step as TurnStep, ZoneName,
 };
 
 /// What a seat's screen shows of the game.
@@ -47,6 +47,8 @@ pub struct Piles {
     pub library: Vec<ObjectId>,
     /// Bottom first.
     pub graveyard: Vec<ObjectId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    manual: Option<ManualPiles>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -58,13 +60,14 @@ pub struct Turn {
 }
 
 impl Piles {
-    fn of(player: &PlayerState) -> Piles {
+    fn of(player: &PlayerState, manual: Option<&ManualPiles>) -> Piles {
         Piles {
             life: player.life,
             mana: player.mana,
             named_counters: player.named_counters.clone(),
             library: player.library.clone(),
             graveyard: player.graveyard.clone(),
+            manual: manual.cloned(),
         }
     }
 }
@@ -121,12 +124,16 @@ impl Table {
                 },
             })
             .collect();
+        let manual = view.table.as_ref().map(|table| &table.orders);
         Table {
             objects,
             battlefield: view.battlefield.clone(),
             stack,
-            you: Piles::of(&view.players.you),
-            opponent: Piles::of(&view.players.opponent),
+            you: Piles::of(&view.players.you, manual.map(|orders| &orders.you)),
+            opponent: Piles::of(
+                &view.players.opponent,
+                manual.map(|orders| &orders.opponent),
+            ),
             turn: Turn {
                 number: view.turn.number,
                 own_number: view.turn.own_number,
@@ -166,23 +173,23 @@ impl Table {
         }
     }
 
-    /// The order `zone` keeps its cards in, for the cards `owner` owns: none for a hand, exile
-    /// and the stack, whose cards say where they are.
-    pub fn order(&self, zone: ZoneName, owner: Side) -> Option<&Vec<ObjectId>> {
+    /// The order of `zone` on `side`. Hand, exile and sideboard have an explicit
+    /// order on manual tables. The stack has its own list of spells and abilities.
+    pub fn order(&self, zone: ZoneName, side: Side) -> Option<&Vec<ObjectId>> {
         match zone {
             ZoneName::Battlefield => Some(&self.battlefield),
-            ZoneName::Library => Some(&self.piles(owner).library),
-            ZoneName::Graveyard => Some(&self.piles(owner).graveyard),
-            _ => None,
+            ZoneName::Library => Some(&self.piles(side).library),
+            ZoneName::Graveyard => Some(&self.piles(side).graveyard),
+            _ => self.piles(side).manual.as_ref()?.order(zone),
         }
     }
 
-    fn order_mut(&mut self, zone: ZoneName, owner: Side) -> Option<&mut Vec<ObjectId>> {
+    fn order_mut(&mut self, zone: ZoneName, side: Side) -> Option<&mut Vec<ObjectId>> {
         match zone {
             ZoneName::Battlefield => Some(&mut self.battlefield),
-            ZoneName::Library => Some(&mut self.piles_mut(owner).library),
-            ZoneName::Graveyard => Some(&mut self.piles_mut(owner).graveyard),
-            _ => None,
+            ZoneName::Library => Some(&mut self.piles_mut(side).library),
+            ZoneName::Graveyard => Some(&mut self.piles_mut(side).graveyard),
+            _ => self.piles_mut(side).manual.as_mut()?.order_mut(zone),
         }
     }
 
@@ -303,9 +310,9 @@ impl Table {
         Ok(())
     }
 
-    /// Puts `object`'s record in place of the one its slot had. In another zone than it was,
-    /// or with a place given, it leaves its old zone's order and joins the new one's at `at`,
-    /// or at the end; leaving the stack takes its spell, and arriving there brings `item`.
+    /// Replaces the record in `object`'s slot. A card that changes zones, changes piles
+    /// within a zone, or has an explicit index leaves its old order and joins the new one at
+    /// `at` or at the end. Leaving the stack takes its spell and arriving brings `item`.
     fn place(
         &mut self,
         object: &ObjectView,
@@ -313,26 +320,35 @@ impl Table {
         item: Option<&StackItem>,
     ) -> Result<(), String> {
         let slot = object.slot;
-        let was = self.objects.get(&slot).map(|o| (o.zone, o.owner));
+        let side = object.zone_side.unwrap_or(object.owner);
+        let was = self
+            .objects
+            .get(&slot)
+            .map(|o| (o.zone, o.zone_side.unwrap_or(o.owner)));
         let moved = was.is_none_or(|(zone, _)| zone != object.zone);
+        let changed_pile = was.is_some_and(|(zone, old_side)| {
+            zone == object.zone
+                && old_side != side
+                && !matches!(zone, ZoneName::Battlefield | ZoneName::Stack)
+        });
         let item = match item {
             _ if !moved || object.zone != ZoneName::Stack => None,
             Some(item) => Some(item),
             None => return Err(format!("#{slot} goes on the stack with no spell")),
         };
         if let Some(at) = at
-            && let Some(order) = self.order(object.zone, object.owner)
+            && let Some(order) = self.order(object.zone, side)
         {
             let others = order.iter().filter(|&&s| s != slot).count();
             if usize::from(at) > others {
                 return Err(format!("#{slot} at {at} of {others}"));
             }
         }
-        if moved || at.is_some() {
-            if let Some((zone, owner)) = was {
-                self.leave(slot, zone, owner, moved);
+        if moved || changed_pile || at.is_some() {
+            if let Some((zone, side)) = was {
+                self.leave(slot, zone, side, moved);
             }
-            if let Some(order) = self.order_mut(object.zone, object.owner) {
+            if let Some(order) = self.order_mut(object.zone, side) {
                 order.insert(at.map_or(order.len(), usize::from), slot);
             }
         }
@@ -347,8 +363,8 @@ impl Table {
     }
 
     /// Takes `slot` out of `zone`'s order, and its spell off the stack if it leaves that.
-    fn leave(&mut self, slot: ObjectId, zone: ZoneName, owner: Side, moved: bool) {
-        if let Some(order) = self.order_mut(zone, owner) {
+    fn leave(&mut self, slot: ObjectId, zone: ZoneName, side: Side, moved: bool) {
+        if let Some(order) = self.order_mut(zone, side) {
             order.retain(|&s| s != slot);
         }
         if moved && zone == ZoneName::Stack {
@@ -363,7 +379,12 @@ impl Table {
             .objects
             .remove(&slot)
             .ok_or_else(|| format!("no object is in #{slot}"))?;
-        self.leave(slot, object.zone, object.owner, true);
+        self.leave(
+            slot,
+            object.zone,
+            object.zone_side.unwrap_or(object.owner),
+            true,
+        );
         Ok(())
     }
 }

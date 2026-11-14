@@ -1,6 +1,7 @@
 // What the table draws for a player's zones apart from the battlefield: emblems,
 // attachments, linked cards and the piles a view shows.
 import type { ObjectView, PlayerView, Side } from "../generated/protocol";
+import { zoneCards } from "./zoneCards";
 import type { PileLook } from "./pileLook";
 import { PILES, pileLook } from "./pileLook";
 import { isLand } from "./battlefield";
@@ -171,12 +172,8 @@ export function zonePiles(view: PlayerView): ZonePile[] {
     const graveyard = view.players[side].graveyard.flatMap((slot) =>
       inHand.has(slot) ? [] : (bySlot.get(slot) ?? []),
     );
-    const exile = view.objects.filter(
-      (o) =>
-        o.owner === side &&
-        o.zone === "exile" &&
-        !inHand.has(o.slot) &&
-        held(o, holding) === undefined,
+    const exile = zoneCards(view, side, "exile").filter(
+      (o) => !inHand.has(o.slot) && held(o, holding) === undefined,
     );
     return [
       { zone: "graveyard" as const, cards: graveyard },
