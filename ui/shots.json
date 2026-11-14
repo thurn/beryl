@@ -851,6 +851,12 @@
       "height": 900
     },
     {
+      "name": "game-choice-thirst-crowded",
+      "route": "/?fixture=choice-thirst-crowded#/game",
+      "width": 1512,
+      "height": 949
+    },
+    {
       "name": "game-untap-teferi",
       "route": "/?fixture=choice-teferi#/game",
       "width": 1600,

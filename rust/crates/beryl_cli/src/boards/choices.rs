@@ -1,11 +1,12 @@
 //! Boards that put a choice to the human.
 
 use beryl_cards::names::{
-    AANGS_ICEBERG, COUNTERSPELL, CURRENCY_CONVERTER, DAMN, ELITE_SPELLBINDER, GET_LOST, ISLAND,
-    JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY, MALCOLM_ALLURING_SCOUNDREL, MANA_CRYPT, MANA_DRAIN,
-    MANA_TITHE, OUST, PLAINS, REPRIEVE, SINK_INTO_STUPOR, SNAPCASTER_MAGE, STOCK_UP,
-    SWIFT_RECONFIGURATION, TEFERI_HERO_OF_DOMINARIA, TEFERI_TIME_RAVELER, THIRST_FOR_DISCOVERY,
-    THUNDERTRAP_TRAINER, TIME_SPIRAL, TRINKET_MAGE, WINDS_OF_ABANDON,
+    AANGS_ICEBERG, ABHORRENT_OCULUS, COUNTERSPELL, CURRENCY_CONVERTER, DAMN, ELITE_SPELLBINDER,
+    GET_LOST, ISLAND, JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY, MALCOLM_ALLURING_SCOUNDREL,
+    MANA_CRYPT, MANA_DRAIN, MANA_TITHE, OUST, PLAINS, REPRIEVE, SEACHROME_COAST, SINK_INTO_STUPOR,
+    SNAPCASTER_MAGE, STOCK_UP, SWIFT_RECONFIGURATION, TEFERI_HERO_OF_DOMINARIA,
+    TEFERI_TIME_RAVELER, THE_WANDERING_EMPEROR, THIRST_FOR_DISCOVERY, THUNDERTRAP_TRAINER,
+    TIME_SPIRAL, TRINKET_MAGE, WINDS_OF_ABANDON,
 };
 use beryl_engine::{DecisionKind, TurnStep};
 use beryl_scenario::{Action, P0, P1, Permanent, Pick, Scenario};
@@ -225,6 +226,32 @@ pub(super) const CHOICES: &[Scenario] = &[
         .permanents(P0, &[ISLAND_, ISLAND_, PLAINS_])
         .hand(P0, &[THIRST_FOR_DISCOVERY, PLAINS, ISLAND, COUNTERSPELL])
         .library(P0, &[STOCK_UP, OUST, MANA_DRAIN, ISLAND, PLAINS])
+        .permanents(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[
+            Action::cast(P0, THIRST_FOR_DISCOVERY),
+            Action::answer(P0, DecisionKind::YesNo, Pick::Yes),
+        ]),
+    // Thirst for Discovery's discard with eight cards in hand and a card on each of the human's
+    // graveyard and exile piles at the bottom left: the fan must leave both piles in full view
+    // without a gap of empty table between them and the hand.
+    Scenario::new("choice-thirst-crowded")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .permanents(P0, &[ISLAND_, ISLAND_, PLAINS_])
+        .hand(
+            P0,
+            &[
+                THIRST_FOR_DISCOVERY,
+                STOCK_UP,
+                ABHORRENT_OCULUS,
+                THE_WANDERING_EMPEROR,
+                JACE_VRYNS_PRODIGY,
+                TEFERI_TIME_RAVELER,
+            ],
+        )
+        .graveyard(P0, &[REPRIEVE])
+        .exile(P0, &[OUST])
+        .library(P0, &[SEACHROME_COAST, PLAINS, ISLAND, ISLAND, PLAINS])
         .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[

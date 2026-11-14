@@ -609,6 +609,12 @@
       "where": ["resolving Thirst for Discovery", "prompt discard pick"]
     },
     {
+      "name": "choice-thirst-crowded",
+      "board": "choice-thirst-crowded",
+      "until": "first chooseObject decision for seat 0",
+      "where": ["resolving Thirst for Discovery", "prompt discard pick"]
+    },
+    {
       "name": "choice-cleanup",
       "board": "choice-cleanup",
       "until": "first chooseObject decision for seat 0",
