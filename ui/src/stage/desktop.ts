@@ -67,8 +67,10 @@ function held(rest: Map<Name, Resting>, tray: Tray) {
     rest.set(slot, {
       object: lies.object,
       pose: {
-        ...place,
-        rotation: 0,
+        x: place.x,
+        y: place.y,
+        width: place.width,
+        rotation: place.turn ?? 0,
         skew: 0,
         turn: 0,
         opacity: 1,

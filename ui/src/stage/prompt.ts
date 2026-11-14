@@ -110,8 +110,8 @@ export function waysOf(prompt: PromptView | undefined): PromptButton[] {
 }
 
 /** The cards `prompt` holds up off the table, as the session lists them: a pick's tray, a
- * split's two piles, each laid out for as many cards as it must come to hold, or the cards a
- * yes or no or a choice among answers is about (the card whose ways are chosen among is
+ * split's two piles, each laid out for as many cards as it must come to hold (marked as a
+ * put-back where the cards go from the hand onto the library), or the cards a yes or no or a choice among answers is about (the card whose ways are chosen among is
  * shown once a way instead). */
 export function trayOf(prompt: PromptView | undefined): Tray | undefined {
   const state = prompt?.body;
@@ -123,11 +123,15 @@ export function trayOf(prompt: PromptView | undefined): Tray | undefined {
     return { piles: [{ cards: state.about }] };
   }
   if (state?.shape !== "split") return undefined;
+  const [onto, from] = state.piles;
   return {
     piles: state.piles.map(({ cards, exactly }) => ({
       cards,
       ...(exactly === null ? {} : { room: exactly }),
     })),
+    ...(onto?.place === "onTop" && from?.place === null
+      ? { putBack: true as const }
+      : {}),
   };
 }
 

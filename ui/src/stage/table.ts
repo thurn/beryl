@@ -24,6 +24,9 @@ import type {
  * A card in a tray rests there, wherever the table has it, until the tray lets it go. */
 export interface Tray {
   piles: readonly Heap[];
+  /** The second pile is the hand, whose cards the player puts back onto the library, the
+   * first pile: the tray lies as the library and the hand do (tray.ts `putBack`). */
+  putBack?: true;
 }
 
 /** One pile of a tray. */

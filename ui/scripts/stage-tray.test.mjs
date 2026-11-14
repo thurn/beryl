@@ -421,3 +421,40 @@ test("where the second pile has a space of its own, each box is as wide as its s
     assert.deepEqual(placed(laid, 11).slice(0, 2), [110, 180]);
     assert.deepEqual(placed(laid, 12).slice(0, 2), [306, 730]);
 });
+
+test("cards put back from the hand lie on the library and in a fan beside it", () => {
+    // Two to go on the library from a hand of three, one of them (11) already on it.
+    const tray = {
+        piles: [{ cards: [11], room: 2 }, { cards: [10, 12] }],
+        putBack: true,
+    };
+    const laid = laidOut(tray, space);
+    // The library's column is a card and a name bar tall at 200 wide (280 and 46), within the
+    // 500 less the edges; the fan, laid out for the three the hand could hold, 130 apart, is
+    // 460 wide, half a card right of the library: 760 in all, from 220.
+    assert.equal(laid.library.width, 200);
+    assert.equal(Math.round(laid.library.x), 220);
+    assert.deepEqual(placed(laid, 11).slice(0, 1), [220]);
+    assert.equal(laid.cards.get(11).turn, 0);
+    // The hand's two cards, 130 apart about the middle of the fan's 460 from 520, turned away
+    // from it.
+    assert.deepEqual(
+        [10, 12].map((slot) => Math.round(laid.cards.get(slot).x)),
+        [585, 715],
+    );
+    assert.ok(laid.cards.get(10).turn < 0 && laid.cards.get(12).turn > 0);
+    // Let go on the library low down, a card goes on top of 11; high up, under it; and over
+    // the fan, back into the hand.
+    const library = laid.library;
+    assert.deepEqual(landing(tray, space, { x: 300, y: library.y + 270 }), {
+        pile: 0,
+        at: 0,
+    });
+    assert.deepEqual(landing(tray, space, { x: 300, y: library.y + 20 }), {
+        pile: 0,
+        at: 1,
+    });
+    assert.equal(landing(tray, space, { x: 800, y: 300 }).pile, 1);
+    // A split of any other piles is laid out in boxes still.
+    assert.equal(laidOut({ piles: tray.piles }, space).library, undefined);
+});

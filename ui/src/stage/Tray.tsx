@@ -6,10 +6,12 @@
 // where: a drop goes to the session, whose reply is drawn.
 //
 // The furniture lies in the stage's own layer, over everything at rest and under the cards
-// held up: a shade over the table, and for a split a box a pile under its name. Its places
-// are the layout's (tray.ts), the same the stage rests the cards at.
+// held up: a shade over the table, and for a split a box a pile under its name, or for cards
+// put back from the hand the library's backs the cards are put on. Its places are the
+// layout's (tray.ts), the same the stage rests the cards at.
 import { useRef, useState, type PointerEvent } from "react";
 import { createPortal } from "react-dom";
+import { CardBack } from "../components/Card";
 import { StackItem } from "../components/Stack";
 import type {
   DecisionView,
@@ -19,7 +21,7 @@ import type {
 import { abilityText, BLANK, useAbilityFace } from "../game/faces";
 import { DRAG_THRESHOLD } from "./pointer.ts";
 import { trayOf, waysOf, type Asked, type Prompts } from "./prompt.ts";
-import { laidOut, type TraySpace } from "./tray.ts";
+import { laidOut, type Box, type TraySpace } from "./tray.ts";
 
 /** The shade and the piles' boxes under the cards the open prompt holds up, or under what it
  * lists over the table (triggers in their order, the ways to use a card, a catalog), drawn in the stage's `layer` in the `space` its layout gives
@@ -43,12 +45,17 @@ export function TrayUnder({
     waysOf(prompt).length > 0;
   if (!(tray || listed) || !layer) return null;
   const piles = state?.shape === "split" ? state.piles : [];
-  const boxes = tray ? laidOut(tray, space).boxes : [];
+  const laid = tray && laidOut(tray, space);
+  const library = laid?.library;
+  const boxes = laid?.boxes ?? [];
   return createPortal(
     <div className="stage-tray" data-purpose={prompt?.purpose}>
+      {library && <Library box={library} />}
       {boxes.map((box, at) => (
         <div
           key={at}
+          // A put-back's piles are the library and the hand as they lie, with no edge drawn
+          // round them: Arena's player picks the cards out of the hand itself.
           className="stage-tray-pile"
           data-pile={at}
           style={{
@@ -57,6 +64,7 @@ export function TrayUnder({
             width: box.width,
             height: box.height,
             ["--heading" as string]: `${space.heading}px`,
+            ...(library && { border: "none", background: "none" }),
           }}
         >
           <span className="stage-tray-label">{piles[at]?.label}</span>
@@ -64,6 +72,41 @@ export function TrayUnder({
       ))}
     </div>,
     layer,
+  );
+}
+
+/** How many backs the library is drawn with, and how far each lies up and left of the one
+ * over it, so that its edge shows as a deck's does. */
+const DECK = { backs: 4, dx: -1.5, dy: -2.5 };
+
+/** The library a put-back's cards go onto, face down in `box`. */
+function Library({ box }: { box: Box }) {
+  return (
+    <div
+      className="stage-tray-library"
+      style={{
+        position: "absolute",
+        left: box.x,
+        top: box.y,
+        width: box.width,
+        height: box.height,
+      }}
+    >
+      {Array.from({ length: DECK.backs }, (_, i) => {
+        const depth = DECK.backs - 1 - i;
+        return (
+          <CardBack
+            key={i}
+            width={box.width}
+            style={{
+              position: "absolute",
+              left: DECK.dx * depth,
+              top: DECK.dy * depth,
+            }}
+          />
+        );
+      })}
+    </div>
   );
 }
 

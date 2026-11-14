@@ -79,6 +79,18 @@ export function drawn({ dock, title, captions, arrow, blocks }) {
         const box = node.getBoundingClientRect();
         return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
     };
+    // A pile's cards in the order they lie: left to right in a row; in a column (a
+    // put-back's library, src/stage/tray.ts `putBack`), from the lowest, which is the top
+    // card, up.
+    const across = (cards) => {
+        const spread = (axis) => {
+            const at = cards.map((node) => middle(node)[axis]);
+            return Math.max(...at) - Math.min(...at);
+        };
+        return cards.length > 1 && spread("y") > spread("x")
+            ? (a, b) => middle(b).y - middle(a).y
+            : (a, b) => middle(a).x - middle(b).x;
+    };
     const boxed = new Set();
     const piles = [...document.querySelectorAll(".stage-tray-pile")].map(
         (pile) => {
@@ -95,9 +107,7 @@ export function drawn({ dock, title, captions, arrow, blocks }) {
             for (const node of within) boxed.add(node);
             return {
                 label: pile.textContent.trim(),
-                cards: within
-                    .sort((a, b) => middle(a).x - middle(b).x)
-                    .map(slotOf),
+                cards: within.sort(across(within)).map(slotOf),
             };
         },
     );

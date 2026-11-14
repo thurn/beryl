@@ -175,13 +175,21 @@ const HELD_UP = 850;
  * to its place in the order. `from` is a point of it the pointer reaches. */
 export async function carry(page, click, before, from) {
     const { body: state } = before.prompt;
+    // The library of a put-back (cards from the hand put on top of it) is a column, its top
+    // card lowest (src/stage/tray.ts `putBack`): its cards, listed the top first, run up it.
+    const column =
+        state.shape === "split" &&
+        click.pile === 0 &&
+        state.piles[0].place === "onTop" &&
+        state.piles[1].place === null;
     const to = await page.evaluate(
         placeFor,
         state.shape === "split"
             ? {
                   selectors: state.piles[click.pile].cards.map(node),
                   at: click.at,
-                  axis: "x",
+                  axis: column ? "y" : "x",
+                  backward: column,
                   within: `.stage-tray-pile[data-pile="${click.pile}"]`,
               }
             : {

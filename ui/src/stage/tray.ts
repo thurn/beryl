@@ -5,7 +5,9 @@
 // so that a box keeps its place whatever is moved: a card goes to the end of its row, and
 // the rows close up over one another only where the space is too narrow. The boxes lie side
 // by side, or where the layout gives the second a space of its own (a phone, which is
-// narrow), one in each.
+// narrow), one in each. Cards put back from the hand onto the library lie as the hand and
+// the library do instead (`putBack`): the library face down at the left with the cards put
+// on it fanned down its face, and the hand fanned at the right.
 import type { Place, Point } from "./layout.ts";
 import type { Tray } from "./table.ts";
 
@@ -27,11 +29,21 @@ export interface TraySpace extends Box {
   second?: Box;
 }
 
+/** Where a card of a tray lies, turned `turn` degrees clockwise. */
+export interface TrayPlace extends Place {
+  turn?: number;
+}
+
 /** A tray laid out: where each card lies, and the box of each pile that has one. */
 export interface Laid {
-  cards: Map<number, Place>;
-  /** A box a pile, in the tray's order; none for a tray of one pile. */
+  /** Each card, in the order they are drawn, the deepest first. */
+  cards: Map<number, TrayPlace>;
+  /** A box a pile, in the tray's order, where a card let go lands in it; none for a tray of
+   * one pile. */
   boxes: Box[];
+  /** Where the library is drawn face down, in a tray of cards put back onto it. Its piles'
+   * boxes are then drawn with no edges. */
+  library?: Box;
 }
 
 /** The widths a card is tried at, the widest first. */
@@ -184,8 +196,135 @@ function boxes(tray: Tray, space: TraySpace): Laid {
   return laid;
 }
 
+/** The shape of a put-back, from the overlay Beryl drew before the stage: the library is a
+ * card wide, and each card put on it lies this share of a card's height below the one under
+ * it, so that its name bar shows; the hand's fan starts half a card right of the library,
+ * its neighbors at most this share of a card apart, turned up to `turn` degrees and dropped
+ * this share of a card's width at its ends. */
+const PUT_BACK = {
+  cascade: 0.165,
+  between: 0.5,
+  step: 0.65,
+  turn: 7,
+  drop: 0.1,
+};
+
+/** Cards put back from the hand (the second pile) onto the library (the first), each pile
+ * laid out for what it can come to hold: the library at the left of `space`, the cards put on
+ * it fanned down its face, the top one lowest and in front, and the hand fanned at the right,
+ * or in `space.second` where the layout gives the hand a space of its own. */
+function putBack(tray: Tray, space: TraySpace): Laid {
+  const { gap, card } = space;
+  const [onto, hand] = [tray.piles[0]!, tray.piles[1]!];
+  const [deep, held] = roomsOf(tray) as [number, number];
+  const own = space.second;
+  const handSpace = own ?? space;
+  // The widest card for which the library's column fits the height, and the whole fits
+  // across with the fan's neighbors no closer than a quarter of a card.
+  const tall = (width: number) =>
+    (width / card.aspect) * (1 + PUT_BACK.cascade * (deep - 1));
+  let width = card.least;
+  let step = 0;
+  for (const tried of widths(card)) {
+    width = tried;
+    const across = own
+      ? handSpace.width - 2 * gap
+      : space.width - 2 * gap - tried * (1 + PUT_BACK.between);
+    step = Math.min(
+      PUT_BACK.step * tried,
+      (across - tried) / Math.max(1, held - 1),
+    );
+    const fits = tall(tried) <= space.height - 2 * gap;
+    const roomy = own || step >= 0.25 * tried;
+    if (fits && roomy) break;
+  }
+  const height = width / card.aspect;
+  const fan = width + step * Math.max(0, held - 1);
+  const whole = own ? width : width * (1 + PUT_BACK.between) + fan;
+  const left = space.x + Math.max(gap, (space.width - whole) / 2);
+  const span = Math.min(
+    PUT_BACK.cascade * height,
+    (space.height - 2 * gap - height) / Math.max(1, deep - 1),
+  );
+  const column = height + span * (deep - 1);
+  const top = space.y + (space.height - column) / 2;
+  const laid: Laid = {
+    cards: new Map(),
+    boxes: [],
+    library: { x: left, y: top - 0.05 * height, width, height },
+  };
+  // The hand's fan, as long as the cards in it now, about the middle of the room it has.
+  const handLeft = own
+    ? handSpace.x + gap
+    : left + width * (1 + PUT_BACK.between);
+  const handWidth = own ? handSpace.width - 2 * gap : fan;
+  const count = hand.cards.length;
+  const start = handLeft + (handWidth - (width + step * (count - 1))) / 2;
+  const middle = handSpace.y + (handSpace.height - height) / 2;
+  hand.cards.forEach((slot, i) => {
+    const t = count > 1 ? (i / (count - 1)) * 2 - 1 : 0;
+    laid.cards.set(slot, {
+      x: start + step * i,
+      y: middle + PUT_BACK.drop * width * t * t,
+      width,
+      turn: PUT_BACK.turn * t,
+    });
+  });
+  // The library's column, the deepest first: the cards are listed the top first.
+  const down = [...onto.cards].reverse();
+  down.forEach((slot, i) => {
+    const front = i === down.length - 1;
+    laid.cards.set(slot, {
+      x: left,
+      y: top + span * i,
+      width,
+      turn: front ? 0 : i % 2 === 0 ? -1.6 : 1.4,
+    });
+  });
+  // Each pile's box spans its space's side from just over its cards, under its name, to
+  // just under them; side by side, the two share one strip and part half way between the
+  // library and the fan, so that a card let go left of there goes on the library.
+  const { heading } = space;
+  const deckStrip = {
+    y: laid.library!.y - heading,
+    bottom: top + column + gap,
+  };
+  const fanStrip = {
+    y: middle - heading - gap,
+    bottom: middle + height + PUT_BACK.drop * width + gap,
+  };
+  const strip = (
+    from: { y: number; bottom: number },
+    x: number,
+    wide: number,
+  ) => ({
+    x,
+    y: from.y,
+    width: wide,
+    height: from.bottom - from.y,
+  });
+  if (own) {
+    laid.boxes.push(
+      strip(deckStrip, space.x, space.width),
+      strip(fanStrip, own.x, own.width),
+    );
+  } else {
+    const both = {
+      y: Math.min(deckStrip.y, fanStrip.y),
+      bottom: Math.max(deckStrip.bottom, fanStrip.bottom),
+    };
+    const reach = (left + width + handLeft) / 2;
+    laid.boxes.push(
+      strip(both, space.x, reach - space.x),
+      strip(both, reach, space.x + space.width - reach),
+    );
+  }
+  return laid;
+}
+
 /** `tray` laid out in `space`. */
 export function laidOut(tray: Tray, space: TraySpace): Laid {
+  if (tray.putBack && tray.piles.length === 2) return putBack(tray, space);
   if (tray.piles.length === 1) return rows(tray.piles[0]!.cards, space);
   return tray.piles.length === 2 && space.second
     ? stacked(tray, space, space.second)
@@ -216,6 +355,16 @@ export function landing(
       point.y <= box.y + box.height,
   );
   if (pile < 0) return undefined;
+  if (laid.library && pile === 0) {
+    // On the library, a card goes onto each card whose middle it is below: the cards are
+    // listed the top first, and the top one lies lowest.
+    const cards = tray.piles[0]!.cards;
+    const under = cards.filter((slot) => {
+      const place = laid.cards.get(slot)!;
+      return place.y + place.width / space.card.aspect / 2 < point.y;
+    });
+    return { pile, at: cards.length - under.length };
+  }
   const before = tray.piles[pile]!.cards.filter((slot) => {
     const place = laid.cards.get(slot)!;
     return place.x + place.width / 2 < point.x;

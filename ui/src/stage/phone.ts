@@ -276,7 +276,7 @@ function rest(table: Table, viewport: Viewport, left?: ReadonlySet<Name>) {
     const face = faceOf(lies.object);
     out.set(slot, {
       object: lies.object,
-      pose: upright(place, depth++, face),
+      pose: { ...upright(place, depth++, face), rotation: place.turn ?? 0 },
       dress: dressed(lies.dress.zone, "hand", place.width, face === "back"),
     });
   }
