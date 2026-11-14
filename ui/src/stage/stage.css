@@ -92,8 +92,8 @@
    stands in its way, and is never read as that creature's. The stage writes each path's shape from where its model has the line's two ends,
    every tick; nothing here moves or fades one. Color says the relationship (UI Conventions,
    exception 4): green at what its controller controls and red at what they do not. The line
-   from an ability to its source and the lines of combat are thin and pale gold, as the skin's
-   combat marks are, so that a heavy arrow always means a target. The shadow keeps a line
+   from an ability to its source and the lines of combat are thin, pale gold (cyan for an
+   attack, so it is never read as a target's line), so that a heavy arrow always means a target. The shadow keeps a line
    legible over card art (WebKit's filters reach the drawing, not a shape inside it). */
 .stage-lines {
   position: absolute;
@@ -161,6 +161,9 @@
 .stage-line-source {
   stroke-width: 1.5;
   stroke-opacity: 0.6;
+}
+.stage-line-attack {
+  --tone: 150 240 250;
 }
 .stage-line-attack,
 .stage-line-block {

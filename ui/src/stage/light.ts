@@ -21,12 +21,13 @@ import { wayOf, type Reach } from "./lines.ts";
 export type Curve = readonly [Point, Point, Point];
 
 /** What a light says by its color (UI Conventions, exception 4): green at what its controller
- * controls and red at what they do not; ember an attack, gold a block; pale what only shows
+ * controls and red at what they do not; cyan an attack's line, gold a block's; pale what only shows
  * where something came from. */
 export type Tone =
   | "friendly"
   | "hostile"
   | "ember"
+  | "cyan"
   | "gold"
   | "pale"
   | "white"
@@ -42,6 +43,7 @@ export const TONES: Record<Tone, { glow: Rgb; core: Rgb }> = {
   friendly: { glow: [0.08, 0.92, 0.5], core: [0.86, 1, 0.9] },
   hostile: { glow: [1, 0.17, 0.1], core: [1, 0.86, 0.7] },
   ember: { glow: [1, 0.15, 0.04], core: [1, 0.8, 0.5] },
+  cyan: { glow: [0.1, 0.84, 0.95], core: [0.85, 0.99, 1] },
   gold: { glow: [1, 0.66, 0.1], core: [1, 0.97, 0.8] },
   pale: { glow: [0.86, 0.72, 0.46], core: [1, 0.95, 0.85] },
   // The colors of mana (flare.ts), and of the white light a card lands in.
@@ -325,7 +327,7 @@ function lineLight(scene: Scene, line: LitLine, now: number) {
     return;
   }
   if (arrow === "attack" || arrow === "block") {
-    const tone = arrow === "attack" ? "ember" : "gold";
+    const tone = arrow === "attack" ? "cyan" : "gold";
     const tip = way[2];
     const curve: Curve = [
       way[0],
@@ -587,7 +589,7 @@ export const aimed = (
     to: 1,
     cut: "beam",
     wide: 0.6,
-    tone: arrow === "attack" ? "ember" : arrow === "block" ? "gold" : "pale",
+    tone: arrow === "attack" ? "cyan" : arrow === "block" ? "gold" : "pale",
     gain: 0.85,
     seed: 0.5,
   }));
