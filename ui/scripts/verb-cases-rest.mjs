@@ -223,8 +223,8 @@ export const CASES = {
     // its step, play goes on under it, and the stage writes how far through it is at every
     // tick, from which the page draws it with Arena's words. A coin is waited for.
     announce(runs) {
-        const seen = { turn: 0, scry: 0, coin: 0 };
-        const said = { turn: 0, scry: 0, coin: 0 };
+        const seen = { turn: 0, scry: 0, topOrBottom: 0, coin: 0 };
+        const said = { turn: 0, scry: 0, topOrBottom: 0, coin: 0 };
         for (const [name, run] of runsOf(runs)) {
             for (const { act, from, to, under } of played(run, "announce")) {
                 const { kind } = act.notice;
@@ -232,9 +232,12 @@ export const CASES = {
                 seen[kind] += 1;
                 const length = durationOf(
                     "announce",
-                    { turn: "turn banner", scry: "scry pill", coin: "coin" }[
-                        kind
-                    ],
+                    {
+                        turn: "turn banner",
+                        scry: "scry pill",
+                        topOrBottom: "scry pill",
+                        coin: "coin",
+                    }[kind],
                 );
                 assert.equal(to - from, length, what);
                 // Written on the table at every tick of it, as far through as the clock is.
@@ -296,6 +299,14 @@ export const CASES = {
                         [`Scry: ${top} top, ${bottom} bottom.`],
                         what,
                     );
+                } else if (kind === "topOrBottom") {
+                    // Only the opponent's choice is told, beside their library.
+                    assert.equal(act.notice.player, "opponent", what);
+                    assert.deepEqual(
+                        shown.words,
+                        [act.notice.top ? "Top" : "Bottom"],
+                        what,
+                    );
                 } else {
                     const who =
                         act.notice.player === "you" ? "You" : "Opponent";
@@ -309,10 +320,28 @@ export const CASES = {
             }
         }
         // The board verbs-burn: a turn begins and Mana Crypt flips its coin; verbs-scry: a
-        // scry of two.
+        // scry of two. In verbs-tuck the opponent puts their spell on the bottom of their
+        // library: the first seat is told the end they chose, and the seat that chose it is
+        // told nothing.
         for (const kind of ["turn", "scry", "coin"]) {
             assert.ok(seen[kind] > 0, `no moment announces a ${kind}`);
             assert.ok(said[kind] > 0, `no ${kind} was read on the page`);
+        }
+        if (runs.seat === "yours") {
+            assert.ok(
+                seen.topOrBottom > 0,
+                "no moment announces a topOrBottom",
+            );
+            assert.ok(
+                said.topOrBottom > 0,
+                "no topOrBottom was read on the page",
+            );
+        } else {
+            assert.equal(
+                seen.topOrBottom,
+                0,
+                "the seat that chose is told its end",
+            );
         }
         // Play goes on under a turn's banner: the turn's first steps begin while it is up.
         const [banner] = played(runs.burn, "announce").filter(

@@ -264,6 +264,9 @@ pub enum Notice {
     Turn { active: Side },
     /// "Scry: 1 top, 1 bottom."
     Scry { player: Side, top: u8, bottom: u8 },
+    /// "Top" or "Bottom": the end of their library the opponent chose for a card, beside that
+    /// library. Never the viewer's own choice, which they just made.
+    TopOrBottom { player: Side, top: bool },
     /// A coin an ability of the permanent in `source` flipped: the card the banner names. The
     /// step's cause is the ability, as it resolves.
     Coin {

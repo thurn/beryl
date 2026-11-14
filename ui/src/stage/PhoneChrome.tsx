@@ -24,12 +24,13 @@ import { knownLibraries, zonePiles, type ZonePile } from "../game/zoneViews";
 import { CardScan } from "../mobile/faces";
 import {
   PILE,
+  pileSpot,
   type Band,
   type BandName,
   type Viewport,
 } from "../mobile/layout";
 import type { Name, Resting } from "./layout.ts";
-import { announced, coinBanner, scryWords } from "./notices.ts";
+import { announced, coinBanner, endWords, scryWords } from "./notices.ts";
 import type { ScriptStage } from "./stage.ts";
 
 /** The least a control measures on a phone (phone.css). */
@@ -332,6 +333,13 @@ export function MiddleEnd({
 /** How wide a scry's pill is at most, and how far it stands off the row it lies beside. */
 const PILL = { width: 132, gap: 8 };
 
+/** Where the pill naming the end of a library a player chose lies, from where that library
+ * lies: just past its edge toward the table, at its left. */
+const underLibrary = ({ x, y }: { x: number; y: number }): CSSProperties => ({
+  left: x,
+  top: y + PILE.height + 6,
+});
+
 /** What is announced, over the table: the turn across the middle band, a combat step or a coin's
  * flip under the opponent's strip, and what a scry did beside its player's lands. The combat
  * banner, which no step announces, keeps the desktop's timer. */
@@ -353,6 +361,7 @@ export function Notices({
   const { notices, resting } = stage.shown;
   const coin = announced(notices, "coin");
   const scry = announced(notices, "scry");
+  const end = announced(notices, "topOrBottom");
   const turn = announced(notices, "turn");
   const combat = combatBanner(view);
   const combatUp = useBannerUp(
@@ -421,6 +430,20 @@ export function Notices({
             style={beside(scry.notice.player)}
           >
             {scryWords(scry.notice)}
+          </div>
+        )}
+      </NoticeSlot>
+      <NoticeSlot>
+        {end && (
+          // Under the library, which lies at the left end of its player's strip, toward the
+          // table.
+          <div
+            className="phone-library-end"
+            style={underLibrary(pileSpot(bands, end.notice.player, "library"))}
+          >
+            <div className="phone-pill stage-notice-end" role="status">
+              {endWords(end.notice)}
+            </div>
           </div>
         )}
       </NoticeSlot>

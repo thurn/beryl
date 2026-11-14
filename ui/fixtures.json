@@ -151,6 +151,16 @@
       "after": 1
     },
     {
+      "name": "verbs-tuck",
+      "board": "verbs-tuck",
+      "until": "first priority decision for seat 0 from turn 3"
+    },
+    {
+      "name": "verbs-tuck-theirs",
+      "board": "verbs-tuck",
+      "until": "first priority decision for seat 1 from turn 3"
+    },
+    {
       "name": "verbs-look",
       "board": "verbs-look",
       "until": "first chooseUpTo decision for seat 0"

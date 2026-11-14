@@ -536,7 +536,7 @@ libraryTop?: boolean, } | { "kind": "damage", source: ObjectId, to: TargetRef, a
 /**
  * The public slots drawn, top first. Older recordings carry only the count.
  */
-slots?: Array<ObjectId>, } | { "kind": "scry", player: Side, top: number, bottom: number, } | { "kind": "libraryShuffled", player: Side, } | { "kind": "reveal", slot: ObjectId, } | { "kind": "lifeGain", player: Side, amount: number, } | { "kind": "lifeLoss", player: Side, amount: number, } | { "kind": "countersAdded", slot: ObjectId, counter: Counter, amount: number, } | { "kind": "countersRemoved", slot: ObjectId, counter: Counter, amount: number, } | { "kind": "tap", slot: ObjectId, } | { "kind": "untap", slot: ObjectId, } | { "kind": "mana", player: Side, 
+slots?: Array<ObjectId>, } | { "kind": "scry", player: Side, top: number, bottom: number, } | { "kind": "topOrBottom", player: Side, top: boolean, } | { "kind": "libraryShuffled", player: Side, } | { "kind": "reveal", slot: ObjectId, } | { "kind": "lifeGain", player: Side, amount: number, } | { "kind": "lifeLoss", player: Side, amount: number, } | { "kind": "countersAdded", slot: ObjectId, counter: Counter, amount: number, } | { "kind": "countersRemoved", slot: ObjectId, counter: Counter, amount: number, } | { "kind": "tap", slot: ObjectId, } | { "kind": "untap", slot: ObjectId, } | { "kind": "mana", player: Side, 
 /**
  * The mana ability's permanent, or the spell or ability that added it, in the slot
  * it had then: a source sacrificed for mana has left it by the time the view shows.
@@ -624,7 +624,7 @@ export type Tally = { "kind": "life", player: Side, life: number, } | { "kind": 
 
 export type Fact = { "kind": "turn", number: number, ownNumber: number, active: Side, step: Step, } | { "kind": "object", object: ObjectView, } | { "kind": "library", player: Side, order: Array<ObjectId>, } | { "kind": "item", subject: Subject, item: StackItem, };
 
-export type Notice = { "kind": "turn", active: Side, } | { "kind": "scry", player: Side, top: number, bottom: number, } | { "kind": "coin", player: Side, won: boolean, source: ObjectId, };
+export type Notice = { "kind": "turn", active: Side, } | { "kind": "scry", player: Side, top: number, bottom: number, } | { "kind": "topOrBottom", player: Side, top: boolean, } | { "kind": "coin", player: Side, won: boolean, source: ObjectId, };
 
 export type Span = "begin" | "end";
 

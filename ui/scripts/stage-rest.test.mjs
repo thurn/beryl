@@ -410,9 +410,14 @@ test("the design language says which announcements pass and how long each wait i
         notice: { kind: "scry", player: "you", top: 1, bottom: 1 },
     };
     assert.equal(timingOf(scry, table).passes, true);
+    const end = {
+        verb: "announce",
+        notice: { kind: "topOrBottom", player: "opponent", top: false },
+    };
+    assert.equal(timingOf(end, table).passes, true);
     assert.deepEqual(
-        [banner.act, scry, coin.act].map((act) => caseOf(act)),
-        ["turn banner", "scry pill", "coin"],
+        [banner.act, scry, end, coin.act].map((act) => caseOf(act)),
+        ["turn banner", "scry pill", "scry pill", "coin"],
     );
     // A spell or ability left to be read, and the table as the game ends.
     const read = { verb: "dwell", subject: card(1) };

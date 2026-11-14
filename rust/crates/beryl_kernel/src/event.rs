@@ -124,6 +124,15 @@ pub enum Event<L: Layout = Small> {
         top: u8,
         bottom: u8,
     },
+    /// A player put a card on the top (`top`) or the bottom of their library by their own
+    /// choice ([CR 608.2d]): "the player announces these while applying the effect." The
+    /// public result of the choice, without the card's identity.
+    ///
+    /// [CR 608.2d]: https://yawgatog.com/resources/magic-rules/#R6082d
+    TopOrBottom {
+        player: Seat,
+        top: bool,
+    },
     LibraryShuffled {
         player: Seat,
     },

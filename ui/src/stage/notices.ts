@@ -30,6 +30,12 @@ export function announced<K extends Notice["kind"]>(
 export const scryWords = ({ top, bottom }: Of<"scry">) =>
   `Scry: ${top} top, ${bottom} bottom.`;
 
+/** What the pill beside the opponent's library says of the end of it they chose for a card.
+ * Arena shows no words for it (UI Conventions, "Not seen in Arena"), so it is the end's name
+ * alone, as a scry's chooser names its piles. */
+export const endWords = ({ top }: Of<"topOrBottom">) =>
+  top ? "Top" : "Bottom";
+
 /** The banner of a coin's flip: the card that flipped it, which the notice names, and who won
  * or lost. */
 export function coinBanner(

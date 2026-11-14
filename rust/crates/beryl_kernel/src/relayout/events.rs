@@ -37,6 +37,26 @@ fn mana<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
     }
 }
 
+/// A library's event in another layout: a draw, a scry's or a top-or-bottom choice's result,
+/// a shuffle. None names an object.
+fn library<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
+    match *e {
+        Event::Draw { player, cards } => Event::Draw { player, cards },
+        Event::Scry {
+            player,
+            top,
+            bottom,
+        } => Event::Scry {
+            player,
+            top,
+            bottom,
+        },
+        Event::TopOrBottom { player, top } => Event::TopOrBottom { player, top },
+        Event::LibraryShuffled { player } => Event::LibraryShuffled { player },
+        _ => unreachable!("a library event"),
+    }
+}
+
 /// An [`Event::Cast`] in another layout.
 fn cast<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
     let Event::Cast {
@@ -202,19 +222,12 @@ impl<L: Layout> Relayout for Event<L> {
                 amount: *amount,
                 combat: *combat,
             },
-            &Event::Draw { player, cards } => Event::Draw { player, cards },
+            Event::Draw { .. }
+            | Event::Scry { .. }
+            | Event::TopOrBottom { .. }
+            | Event::LibraryShuffled { .. } => library(self),
             &Event::DrawCard { slot: drawn } => Event::DrawCard { slot: slot(drawn) },
             &Event::Reveal { slot: shown } => Event::Reveal { slot: slot(shown) },
-            &Event::Scry {
-                player,
-                top,
-                bottom,
-            } => Event::Scry {
-                player,
-                top,
-                bottom,
-            },
-            &Event::LibraryShuffled { player } => Event::LibraryShuffled { player },
             &Event::LifeGain { player, amount } => Event::LifeGain { player, amount },
             &Event::LifeLoss { player, amount } => Event::LifeLoss { player, amount },
             &Event::CountersAdded {

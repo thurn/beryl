@@ -5,7 +5,7 @@ use beryl_cards::names::{
     AANGS_ICEBERG, ADELINE_RESPLENDENT_CATHAR, BEZA_THE_BOUNDING_SPRING, COUNTERSPELL,
     CURRENCY_CONVERTER, DAMN, ELITE_SPELLBINDER, ISLAND, JACE_THE_MIND_SCULPTOR,
     JACE_WIELDER_OF_MYSTERIES, MANA_CRYPT, OUST, OVERLORD_OF_THE_MISTMOORS, PLAINS, PORTABLE_HOLE,
-    REPRIEVE, SNAPCASTER_MAGE, STOCK_UP, SWIFT_RECONFIGURATION, TEFERI_TIME_RAVELER,
+    REPRIEVE, SNAPCASTER_MAGE, STOCK_UP, SUBTLETY, SWIFT_RECONFIGURATION, TEFERI_TIME_RAVELER,
     THE_WANDERING_EMPEROR, THIEVING_SKYDIVER, THIRST_FOR_DISCOVERY, TRINKET_MAGE,
 };
 use beryl_engine::{DecisionKind, TurnStep};
@@ -303,5 +303,22 @@ pub(super) const VERBS: &[Scenario] = &[
             choose(P0, DecisionKind::ChooseUpTo, MANA_CRYPT),
             Action::cast(P1, OUST),
             choose(P1, DecisionKind::Target, SNAPCASTER_MAGE),
+        ]),
+    // A spell put on the bottom of its owner's library by their choice: in the opponent's
+    // turn the first seat answers their Elite Spellbinder with Subtlety, and the opponent puts
+    // the Spellbinder on the bottom, which the first seat is told beside their library.
+    Scenario::new("verbs-tuck")
+        .at(2, P1, TurnStep::PrecombatMain)
+        .permanents(P0, &[ISLAND_, ISLAND_, ISLAND_, ISLAND_])
+        .hand(P0, &[SUBTLETY])
+        .library(P0, LANDS)
+        .permanents(P1, &[PLAINS_, PLAINS_, PLAINS_])
+        .hand(P1, &[ELITE_SPELLBINDER, PLAINS])
+        .library(P1, LANDS)
+        .actions(&[
+            Action::cast(P1, ELITE_SPELLBINDER),
+            Action::cast(P0, SUBTLETY),
+            Action::answer(P0, DecisionKind::TargetCount, Pick::Number { n: 1 }),
+            Action::answer(P1, DecisionKind::YesNo, Pick::No),
         ]),
 ];

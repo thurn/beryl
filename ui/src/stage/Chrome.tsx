@@ -42,7 +42,14 @@ import {
 } from "../game/zoneViews";
 import { desktop } from "./desktop.ts";
 import type { Name, Resting } from "./layout.ts";
-import { announced, coinBanner, lifeChange, scryWords } from "./notices.ts";
+import { CARD_ASPECT } from "../components/Card";
+import {
+  announced,
+  coinBanner,
+  endWords,
+  lifeChange,
+  scryWords,
+} from "./notices.ts";
 import { trayOf, type Asked, type Prompts } from "./prompt.ts";
 import { noticePlace, TimingRefusal, useRefusal } from "./Refusal.tsx";
 import type { ScriptStage } from "./stage.ts";
@@ -54,6 +61,25 @@ const BADGES = { opponent: 62, you: 704 };
 
 /** Where the pill of a player's scry stands: under the opponent's orb, over the player's. */
 const SCRY_TOP = { opponent: 160, you: 580 };
+
+/** Where the pill naming the end of a library a player chose lies: under that library,
+ * toward the table, centred on it. The graveyard lies beside it and the card going onto it
+ * lands on it, so neither side of it is clear. */
+function underLibrary({
+  x,
+  y,
+  width,
+}: {
+  x: number;
+  y: number;
+  width: number;
+}) {
+  return {
+    left: x + width / 2,
+    top: y + width / CARD_ASPECT + 8,
+    translate: "-50% 0",
+  };
+}
 
 /** The attackers the open prompt has a blocker aimed at: blocked, once it is answered so. */
 export function blockedBy({ prompt }: Asked): ReadonlySet<number> {
@@ -103,6 +129,7 @@ export function Hud({
   useStageWidth();
   const coin = announced(notices, "coin");
   const scry = announced(notices, "scry");
+  const end = announced(notices, "topOrBottom");
   const turn = announced(notices, "turn");
   const combat = combatBanner(view);
   const combatKey =
@@ -165,6 +192,20 @@ export function Hud({
             <Button variant="secondary" onClick={onLog}>
               {scryWords(scry.notice)}
             </Button>
+          </div>
+        )}
+      </NoticeSlot>
+      <NoticeSlot>
+        {end && (
+          <div
+            className="hud library-end-hud"
+            style={underLibrary(anchors.pile(end.notice.player, "library"))}
+          >
+            <div className="stage-notice-end" role="status">
+              <Button variant="secondary" onClick={onLog}>
+                {endWords(end.notice)}
+              </Button>
+            </div>
           </div>
         )}
       </NoticeSlot>

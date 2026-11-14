@@ -197,6 +197,12 @@ restore the old behavior.
   undo with no gap kept for a missing button (by-kib, by-8g4).
 - **Why a click is refused.** An illegal click shows its reason at the permanent
   that forbids it (by-l2ez).
+- **The opponent's choice of top or bottom.** When the opponent puts a card on
+  the top or the bottom of their library by their own choice (Subtlety's "their
+  choice of the top or bottom"), a pill beside that library reads "Top" or
+  "Bottom" as the card goes there, and fades as a scry's pill does. Your own
+  choice gets none. Arena shows no words: the card only goes to the library
+  (iRr-GeSF0lI 1:01:07.5) (by-6dw5).
 - **Suggestions are sensible.** The suggested untap targets and the auto-pay
   sources are the ones a player would pick (by-svq, by-ufmq).
 - **Nothing overlaps.** The hand, the stack and their indicators never cover a
@@ -560,8 +566,9 @@ stage to; Arena's measured instances are kept beside them as reference in
   result covers it (pE4XSNi-nZc 22:00.4, pE4XSNi-nZc 23:22.5, IEXcjBn3BXk
   38:37.0). Beryl: 800 ms, in place.
 - **announce.** A notice passes over the table: the turn banner, the pill that
-  says what a scry did, a coin tossed. Play goes on under the banner and the
-  pill, which are drawn over the cards in flight and fade in, stand and fade
+  says what a scry did, the pill beside a library that names the end of it the
+  opponent chose for a card, a coin tossed. Play goes on under the banner and
+  the pill, which are drawn over the cards in flight and fade in, stand and fade
   out, the banner sinking toward its player as it goes. A coin is waited for,
   and has the table to itself: it is thrown only once the turn's banner has
   gone, mid-table, rises a diameter and a half toward the viewer turning fast,

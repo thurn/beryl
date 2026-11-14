@@ -370,6 +370,18 @@ body.phone {
 }
 /* What a prompt asks in a sentence of rules text (stage/PromptBar.tsx `LONG`) wraps, as wide
    as the screen has room for and beside the prompt's other buttons where it has them. */
+/* The pill naming the end of a library the opponent chose, placed by its holder under that
+   library (stage/PhoneChrome.tsx `underLibrary`); it rises into place as stage.css says. */
+.phone-library-end {
+  position: absolute;
+  z-index: 800;
+}
+.phone-pill.stage-notice-end {
+  position: relative;
+  left: 0;
+  display: block;
+  translate: 0 calc((1 - min(1, var(--through) / 0.05)) * 8px);
+}
 .phone-pill-long {
   left: 8px;
   right: 8px;

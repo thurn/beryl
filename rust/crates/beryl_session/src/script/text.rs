@@ -390,6 +390,10 @@ impl Display for Notice {
                 top,
                 bottom,
             } => write!(f, "scry {} {top} top {bottom} bottom", wire(player)),
+            Notice::TopOrBottom { player, top } => {
+                let end = if top { "top" } else { "bottom" };
+                write!(f, "end {} {end}", wire(player))
+            }
             Notice::Coin {
                 player,
                 won,

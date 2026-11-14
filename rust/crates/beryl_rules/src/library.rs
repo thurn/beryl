@@ -7,7 +7,7 @@ use crate::bitboard::Bitboard;
 use crate::card::{Part, Prompt, Purpose, Stop};
 use crate::cast;
 use crate::choices;
-use crate::event::{self, Entry, Reason};
+use crate::event::{self, Entry, Event, Reason};
 use crate::filter::Evaluate;
 use crate::fixed::Full;
 use crate::game::Game;
@@ -247,6 +247,7 @@ fn put_at_owners_choice<L: Layout>(
         let about = Bitboard::single(slot);
         let top = choices::yes_no(game, resolution, owner, top_or_bottom, about)?;
         put_into(game, object, if top { Place::Top } else { Place::Bottom })?;
+        game.sink.note(Event::TopOrBottom { player: owner, top });
     }
     Ok(run.now_in(objects, Zone::Library))
 }

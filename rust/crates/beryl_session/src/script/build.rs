@@ -391,7 +391,7 @@ impl<'a> Builder<'a> {
             } => self.block(blocker, attacker, cause),
             &GameEvent::StepBegins { step, active } => self.step_begins(i, step, active),
             &GameEvent::GainControl { slot, player } => self.gain_control(slot, player, cause),
-            GameEvent::CoinFlip { .. } | GameEvent::Scry { .. } => {
+            GameEvent::CoinFlip { .. } | GameEvent::Scry { .. } | GameEvent::TopOrBottom { .. } => {
                 if let Some(notice) = notice(&events[i]) {
                     self.emit(Act::Announce { notice }, cause);
                 }
@@ -622,6 +622,11 @@ fn notice(event: &GameEvent) -> Option<Notice> {
             top,
             bottom,
         }),
+        // The viewer's own choice needs no telling.
+        GameEvent::TopOrBottom {
+            player: player @ Side::Opponent,
+            top,
+        } => Some(Notice::TopOrBottom { player, top }),
         _ => None,
     }
 }

@@ -157,3 +157,45 @@ fn a_card_that_is_not_revealed_is_not_held_up() {
         assert!(!milled.contains("showcase"), "{milled}");
     }
 }
+
+/// `announce` of a top-or-bottom choice: when the opponent puts their spell on the top or the
+/// bottom of their library, a pill names the end they chose as the card goes there. The seat
+/// that chose sees no pill.
+#[test]
+fn the_opponents_choice_of_top_or_bottom_is_announced() {
+    let cases = [
+        (
+            "Subtlety hard cast: the creature spell's owner puts it on top",
+            7,
+            "#261 (Elite Spellbinder)",
+            "top",
+            &[
+                "-point source a1 > #0",
+                "vanish a1 stack>gone resolve <- a1",
+            ][..],
+        ),
+        (
+            "Subtlety evoked: sacrificed, its trigger still tucks a planeswalker spell",
+            10,
+            "#258 (Teferi, Time Raveler)",
+            "bottom",
+            &["vanish a1 stack>gone resolve <- a1"][..],
+        ),
+    ];
+    for (name, n, spell, end, after) in cases {
+        let [first, second] = script(names::SUBTLETY, name, n);
+        let lines = |told: bool| {
+            let mut lines = vec![
+                format!("-point hostile-target a1 > {}", &spell[..4]),
+                format!("vanish {spell} stack>library {end} effect <- a1"),
+            ];
+            if told {
+                lines.push(format!("& announce end opponent {end} <- a1"));
+            }
+            lines.extend(after.iter().map(|&line| line.to_owned()));
+            text(&lines)
+        };
+        assert_eq!(first, lines(true), "{name}");
+        assert_eq!(second, lines(false), "{name}");
+    }
+}

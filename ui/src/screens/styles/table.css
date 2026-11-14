@@ -163,7 +163,20 @@
   translate: -50% 0;
   z-index: 250;
 }
-.library-choice-hud .button {
+/* The pill naming the end of a library the opponent chose: placed by the stage beside
+   that library (stage/Chrome.tsx `underLibrary`). */
+.library-end-hud {
+  z-index: 250;
+}
+/* It rises into place, stands to be read and fades as a scry's pill does (stage/stage.css
+   `.stage-notice-scry`), on both layouts. */
+.stage-notice-end {
+  --through: var(--notice-topOrBottom, 0);
+  opacity: min(1, var(--through) / 0.05, (1 - var(--through)) / 0.1);
+  translate: 0 calc((1 - min(1, var(--through) / 0.05)) * 8px);
+}
+.library-choice-hud .button,
+.library-end-hud .button {
   min-width: 0;
   min-height: 28px;
   padding: 2px 12px;

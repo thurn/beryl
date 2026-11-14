@@ -174,6 +174,7 @@ const CUES: Cues = {
       case "coin":
         return at("start", "coin");
       case "scry":
+      case "topOrBottom":
         return [];
     }
   },

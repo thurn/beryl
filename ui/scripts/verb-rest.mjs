@@ -103,7 +103,7 @@ export function restSampler({ stage, clock, origin, layer, faults }) {
             return { kind, through: written === "" ? null : Number(written) };
         });
         // Nothing is left written for an announcement that is over.
-        for (const kind of ["turn", "scry", "coin"]) {
+        for (const kind of ["turn", "scry", "topOrBottom", "coin"]) {
             const stale =
                 writtenOf(kind) !== "" &&
                 !notices.some((notice) => notice.kind === kind);
@@ -132,10 +132,12 @@ export async function noticed() {
     };
     const turn = document.querySelector(".turn-banner.stage-notice");
     const scry = document.querySelector(".stage-notice-scry");
+    const end = document.querySelector(".stage-notice-end");
     const coin = document.querySelector(".step-banner.stage-notice");
     return [
         ...read("turn", turn, [turn?.querySelector(".turn-banner-title")]),
         ...read("scry", scry, [scry]),
+        ...read("topOrBottom", end, [end]),
         ...read("coin", coin, [
             coin?.querySelector(".step-banner-title"),
             coin?.querySelector(".step-banner-detail"),

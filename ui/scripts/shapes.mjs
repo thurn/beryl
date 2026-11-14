@@ -130,9 +130,9 @@ const LAYOUTS = {
             ).values(),
         ],
         dock: ".phone-dock, .phone-prompt-more, .stage-ways",
-        // The prompt's own pill, not a scry's, which may still be passing over the table
-        // (it outlasts its script: timing.ts, `passes`).
-        title: ".phone-pill:not(.stage-notice-scry)",
+        // The prompt's own pill, not a scry's or a library end's, which may still be passing
+        // over the table (it outlasts its script: timing.ts, `passes`).
+        title: ".phone-pill:not(.stage-notice-scry, .stage-notice-end)",
         captions: false,
         handClicks: false,
     },

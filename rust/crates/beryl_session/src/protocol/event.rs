@@ -46,6 +46,11 @@ pub enum GameEvent {
         top: u8,
         bottom: u8,
     },
+    /// A player put a card on the top or the bottom of their library by their own choice.
+    TopOrBottom {
+        player: Side,
+        top: bool,
+    },
     LibraryShuffled {
         player: Side,
     },
@@ -321,6 +326,10 @@ fn library_event<L: Layout>(obs: Observation<'_, L>, e: &Event<L>) -> GameEvent 
             top,
             bottom,
         },
+        Event::TopOrBottom { player, top } => GameEvent::TopOrBottom {
+            player: side(player),
+            top,
+        },
         Event::LibraryShuffled { player } => GameEvent::LibraryShuffled {
             player: side(player),
         },
@@ -438,9 +447,10 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
             amount,
             combat,
         },
-        Event::Draw { .. } | Event::Scry { .. } | Event::LibraryShuffled { .. } => {
-            library_event(obs, e)
-        }
+        Event::Draw { .. }
+        | Event::Scry { .. }
+        | Event::TopOrBottom { .. }
+        | Event::LibraryShuffled { .. } => library_event(obs, e),
         Event::DrawCard { .. } => unreachable!("draw slots are grouped with their draw"),
         Event::Reveal { slot } => GameEvent::Reveal {
             slot: ObjectId(slot.num()),

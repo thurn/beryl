@@ -115,7 +115,11 @@ export function record() {
             if (!hides(x)) continue;
             const node = x.closest("[data-stage]");
             if (node) return node.dataset.stage;
-            if (x.closest(".stage-notice, .stage-notice-scry")) {
+            if (
+                x.closest(
+                    ".stage-notice, .stage-notice-scry, .stage-notice-end",
+                )
+            ) {
                 return ".stage-notice";
             }
             return `.${String(x.className.baseVal ?? x.className).split(" ")[0]}`;

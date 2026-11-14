@@ -200,7 +200,13 @@ export function caseOf(
 }
 
 /** The data's name for the announcement of each kind. */
-const NOTICES = { turn: "turn banner", scry: "scry pill", coin: "coin" };
+const NOTICES = {
+  turn: "turn banner",
+  scry: "scry pill",
+  // The pill naming the end of a library the opponent chose stands as long as a scry's.
+  topOrBottom: "scry pill",
+  coin: "coin",
+};
 
 /** How long after one card of a batch begins to leave for exile the next does (UI
  * Conventions, "A batch exile": one at a time, about 0.3 s apart). Arena's instances are of
