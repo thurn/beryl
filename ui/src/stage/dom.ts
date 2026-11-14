@@ -323,6 +323,9 @@ export class DomSurface implements Surface {
    * it follows the pointer, not the tick. With none, it is gone. */
   aim(trace?: (now: number) => Lit) {
     this.#aim = trace;
+    // Whether the pointer pulls anything, whatever the browser can paint of it.
+    if (trace) this.#layer.dataset.aimed = "";
+    else delete this.#layer.dataset.aimed;
     this.#paint();
   }
 

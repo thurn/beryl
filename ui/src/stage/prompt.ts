@@ -109,6 +109,18 @@ export function waysOf(prompt: PromptView | undefined): PromptButton[] {
   );
 }
 
+/** Whether `prompt` is shown over the table on a shade that takes the pointer (Tray.tsx): cards
+ * it holds up, an order's row, a catalog's entries, or the ways to use a card. */
+export function coversTable(prompt: PromptView | undefined): boolean {
+  const shape = prompt?.body?.shape;
+  return (
+    trayOf(prompt) !== undefined ||
+    shape === "order" ||
+    shape === "catalog" ||
+    waysOf(prompt).length > 0
+  );
+}
+
 /** The cards `prompt` holds up off the table, as the session lists them: a pick's tray, a
  * split's two piles, each laid out for as many cards as it must come to hold (marked as a
  * put-back where the cards go from the hand onto the library), or the cards a yes or no or a choice among answers is about (the card whose ways are chosen among is

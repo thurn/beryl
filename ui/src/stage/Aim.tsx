@@ -20,7 +20,7 @@ import type { DomSurface } from "./dom.ts";
 import type { On } from "./effects.ts";
 import type { Name, Point } from "./layout.ts";
 import { aimed, dark, sought } from "./light.ts";
-import type { Asked } from "./prompt.ts";
+import { coversTable, type Asked } from "./prompt.ts";
 import { namedBy } from "./spans.ts";
 import type { ScriptStage } from "./stage.ts";
 
@@ -83,11 +83,13 @@ export function Aim({
   const state = prompt?.body;
   const declares = state?.shape === "declare" ? state : undefined;
   const aiming = declares?.aiming ?? NONE;
-  const waits = aiming.length > 0;
+  // Nothing follows the pointer while a prompt's cards or list lie over the dimmed table.
+  const covered = coversTable(prompt);
+  const waits = aiming.length > 0 && !covered;
   const arrow = declares?.arrow ?? "attack";
   // A choice of targets, and what asks for it, where the stage holds that.
   const source = prompt?.purpose === "target" ? decision?.source : undefined;
-  const seeks = typeof source === "number";
+  const seeks = typeof source === "number" && !covered;
   const marks = prompt?.marks;
   const [at, setAt] = useState<Point>();
   /** Where the mouse was last, in the window: a prompt that changes under a still mouse is
