@@ -9,6 +9,15 @@ and gave the human a second one. The human reported it from the app's bug
 button: "The AI cast fractured identity on its own mana crypt to give me a mana
 crypt!"
 
+**Verdict (2026-11-14): defensible, not a blunder.** On review the reporter
+judged the play sound. The agent had seven lands and no use for its Crypt's
+mana, so the Crypt was costing it an average of 1.5 life a turn for nothing.
+Moving that cost to an opponent at 13 life, in a game the agent was already
+winning, is a reasonable line even though exiling Subtlety was also good. The
+blunder suite no longer has an entry for this position. The analysis below is
+kept as written, because the search's large valuation of a Crypt's coin flips is
+still worth knowing about.
+
 ## The position
 
 The agent (P1) was far ahead and knew it: every candidate's mean was above 0.84
@@ -28,7 +37,7 @@ Neither player needed more mana: P0 had ten lands and P1 seven. A Mana Crypt
 there is mostly its coin flip, 3 damage to its controller on half of their
 upkeeps.
 
-## What a strong player plays
+## The two lines compared
 
 **Subtlety (P0).** P0 loses their only creature, and P1 gets a 3/3 flier.
 
@@ -50,9 +59,9 @@ Prodigy to P1, and P1's token copy of the Hole exiles one of P0's cheap
 permanents as it enters. Targeting any of P1's own permanents gives P0 a copy of
 it.
 
-The cost was small in a won game, but the reasoning is wrong in a way that will
-cost games: the agent spent a card to trade one Crypt's flips for two of the
-opponent's, instead of removing the opponent's only creature.
+Both lines win most of the time. The agent traded one Crypt's flips for two of
+the opponent's where it could have removed the opponent's only creature, and the
+difference between the two is small enough that neither is a mistake.
 
 ## Reproduction
 
@@ -61,7 +70,6 @@ the target choice at turn 16 decision index 14 (log 322).
 
 ```bash
 just review docs/incidents/2026-11-13-fractured-identity-own-crypt.replay.json --agent recorded --turn 16
-just blunders --only fractured-identity-own-crypt
 ```
 
 ## What the search shows
@@ -109,5 +117,7 @@ bring Subtlety above the Crypt if it is right.
 
 ## Follow-ups
 
-The blunder catalog case `fractured-identity-own-crypt` forbids every one of
-P1's own permanents as the target. The ladder owns the fix.
+None. The suite entry `fractured-identity-own-crypt`, which forbade every one of
+P1's own permanents as the target, was retired on 2026-11-14 with the verdict
+above. It had passed 1 run in 10 for both the champion and the one challenger
+gated while it existed, so it changed no gate's result.
