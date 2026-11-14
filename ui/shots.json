@@ -779,6 +779,13 @@
       "expect": ".phone-orb > .life-target"
     },
     {
+      "name": "phone-game-target-player-se",
+      "route": "/?phone&fixture=target-player#/game",
+      "width": 375,
+      "height": 647,
+      "expect": ".phone-orb > .life-target"
+    },
+    {
       "name": "game-choice-scry",
       "route": "/?fixture=choice-scry#/game",
       "width": 1600,

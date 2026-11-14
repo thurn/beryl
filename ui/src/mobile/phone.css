@@ -412,6 +412,10 @@ body.phone {
   align-self: flex-end;
   translate: none;
 }
+/* Tall mode labels must start below the menu, even when the row exceeds its tray. */
+.phone-board .stage-ways {
+  align-content: start;
+}
 .phone-prompt-more .prompt-value {
   min-width: 0;
 }

@@ -191,7 +191,7 @@ export function Menu({
             );
           }}
         >
-          Report Bug
+          Report bug
         </Button>
       </div>
       <Settings
