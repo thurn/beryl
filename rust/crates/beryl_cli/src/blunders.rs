@@ -498,6 +498,31 @@ mod tests {
     }
 
     #[test]
+    fn first_keeps_teferis_plus_one_when_search_prefers_to_pass() {
+        use beryl_engine::Opt;
+
+        let name = "skip-teferi-plus-one";
+        let e = entry(name);
+        let at = reach(&e).unwrap();
+        let family = "pimc72/hidden/rollout/tuned/anchor+guard+paired+first"
+            .parse()
+            .unwrap();
+        let settings = beryl_search::Settings {
+            family,
+            work: 300_000,
+            threads: 1,
+        };
+        let seed = run_seed(name, 14);
+        let mut agent = beryl_search::LongSearch::new(&at.t, settings, seed);
+        let choice = play(&e, &at, &mut agent);
+        let search = agent.last_search().unwrap();
+        let check = search.anchor.expect("paired override check");
+        assert_eq!(at.d.candidates.option(check.search), Some(Opt::Pass));
+        assert!(check.pairs.is_some_and(|count| count >= 2));
+        assert_eq!(choice, ["Teferi, Hero of Dominaria +1"]);
+    }
+
+    #[test]
     fn paired_search_keeps_the_default_at_reported_blunders() {
         for (name, rules, index) in [
             ("beza-trinket-into-blockers", "combat", 0),

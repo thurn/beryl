@@ -153,6 +153,8 @@ pub struct Options {
     pub sure: bool,
     /// Check a tree's guarded challenger against the default in fresh worlds with paired rollouts.
     pub paired: bool,
+    /// Hold the default at every searched decision. Requires paired rollouts.
+    pub first: bool,
     /// Value near-term alternate wins when scoring simulated combat lines. Requires combat.
     pub walker: bool,
 }
@@ -278,8 +280,9 @@ impl FromStr for Family {
                 "{s:?} is no family: method/sight/leaf/knowledge[/options], as \
                  ismcts18/hidden/rollout/tuned (pimcN, ismctsN or turn72; hidden, hands or omniscient; \
                  rollout, cutN or eval; estimate or tuned; options anchor, expert, guard, mid, \
-                 means, hold, waste, combat, order, sure, paired and walker joined by + in that order; \
-                 expert, guard, sure and paired require anchor; walker requires combat)"
+                 means, hold, waste, combat, order, sure, paired, first and walker joined by + in \
+                 that order; expert, guard, sure and paired require anchor; first requires paired; \
+                 walker requires combat)"
             )
         };
         let parts: Vec<&str> = s.split('/').collect();
@@ -304,6 +307,7 @@ impl FromStr for Family {
                         "order" => &mut o.order,
                         "sure" => &mut o.sure,
                         "paired" => &mut o.paired,
+                        "first" => &mut o.first,
                         "walker" => &mut o.walker,
                         _ => return Err(bad()),
                     };
@@ -315,6 +319,7 @@ impl FromStr for Family {
                 // One spelling per family, so that a name read back prints as it was given.
                 if o.to_name() != *named
                     || ((o.expert || o.guard || o.sure || o.paired) && !o.anchor)
+                    || (o.first && !o.paired)
                     || (o.walker && !o.combat)
                 {
                     return Err(bad());
@@ -364,7 +369,7 @@ impl FromStr for Family {
 
 impl Options {
     /// The options as a family's name spells them, joined by `+` in this order:
-    /// `anchor+expert+guard+mid+means+hold+waste+combat+order+sure+paired+walker`; empty for none.
+    /// `anchor+expert+guard+mid+means+hold+waste+combat+order+sure+paired+first+walker`; empty for none.
     fn to_name(self) -> String {
         [
             (self.anchor, "anchor"),
@@ -378,6 +383,7 @@ impl Options {
             (self.order, "order"),
             (self.sure, "sure"),
             (self.paired, "paired"),
+            (self.first, "first"),
             (self.walker, "walker"),
         ]
         .into_iter()
@@ -1581,6 +1587,8 @@ fn deal<L: Layout>(
 ///
 /// With [`Options::combat`], hold the planner's answer at combat declarations and targets.
 /// With [`Options::expert`], hold the default at every decision.
+/// With [`Options::first`], hold the default at every decision while keeping the `never_cast`
+/// exemption for casts.
 pub fn guarded<L: Layout>(
     t: &GameTable,
     policy: &RolloutPolicy,
@@ -1590,13 +1598,17 @@ pub fn guarded<L: Layout>(
     search: Choice,
     options: Options,
 ) -> bool {
-    if options.expert || (options.combat && combat::handles(d.kind)) {
-        return search != default;
-    }
     let eligible = |slot: L::Slot| {
         obs.card(slot)
             .is_none_or(|card| !policy.values().get(card).never_cast)
     };
+    if options.first {
+        return search != default
+            && !matches!(d.candidates.option(search), Some(Opt::Cast { slot, .. }) if !eligible(slot));
+    }
+    if options.expert || (options.combat && combat::handles(d.kind)) {
+        return search != default;
+    }
     if !options.guard {
         return d.kind == DecisionKind::Priority
             && d.candidates.option(default) == Some(Opt::Pass)
@@ -1931,6 +1943,7 @@ mod tests {
             "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order+sure",
             "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order+sure+walker",
             "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order+sure+paired+walker",
+            "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order+sure+paired+first+walker",
         ] {
             let f: Family = s.parse().unwrap();
             assert_eq!(f.to_string(), s);
@@ -1958,6 +1971,9 @@ mod tests {
             "pimc18/hidden/rollout/tuned/order+sure",
             "pimc18/hidden/rollout/tuned/guard+paired",
             "pimc18/hidden/rollout/tuned/paired",
+            "pimc18/hidden/rollout/tuned/anchor+first",
+            "pimc18/hidden/rollout/tuned/paired+first",
+            "pimc18/hidden/rollout/tuned/anchor+first+paired",
             "pimc18/hidden/rollout/tuned/anchor+sure+order",
             "pimc18/hidden/rollout/tuned/anchor+walker",
             "pimc18/hidden/rollout/tuned/anchor+walker+combat",
@@ -2241,6 +2257,12 @@ mod tests {
     fn the_anchor_does_not_hold_what_greedy_never_casts() {
         let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
         let policy = RolloutPolicy::new(&t);
+        let first = Options {
+            anchor: true,
+            paired: true,
+            first: true,
+            ..Options::default()
+        };
         let mut x = Scratch::new();
         let (mut never, mut other) = (0, 0);
         for seed in 0..40 {
@@ -2263,6 +2285,7 @@ mod tests {
                                 guarded(&t, &policy, obs, &d, g, c, Options::default()),
                                 !crypt
                             );
+                            assert_eq!(guarded(&t, &policy, obs, &d, g, c, first), !crypt);
                             if crypt {
                                 let options = Options {
                                     guard: true,
@@ -2283,6 +2306,63 @@ mod tests {
             }
         }
         assert!(never > 0 && other > 0, "Mana Crypt {never}, others {other}");
+    }
+
+    #[test]
+    fn first_holds_the_default_at_every_decision_kind() {
+        use DecisionKind::{
+            AttackTarget, Attacker, BlockTarget, Blocker, CastOffer, ChooseObject, ChooseUpTo,
+            DamageDivision, KeepOrMulligan, ManaPayment, PaymentPlan, PlayOrDraw, Priority, Target,
+            TargetCount, TriggerOrder, X, YesNo,
+        };
+
+        let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
+        let policy = RolloutPolicy::new(&t);
+        let mut state = State::<Small>::new(&t, 0, Profile::SMART).unwrap();
+        let mut scratch = Scratch::new();
+        let Step::Decide(opening) = next(&mut state, &t, &mut scratch, &mut Replay) else {
+            panic!("the game should ask for an opening decision");
+        };
+        assert!(opening.len() >= 2);
+        let obs = observe(&state, &t, &mut scratch, opening.player);
+        let options = Options {
+            anchor: true,
+            paired: true,
+            first: true,
+            ..Options::default()
+        };
+        // Use the opening's two candidates for every kind. Only casts need a specific
+        // candidate to test the guard, and the never_cast test covers those separately.
+        for kind in [
+            Priority,
+            PlayOrDraw,
+            KeepOrMulligan,
+            TriggerOrder,
+            Attacker,
+            AttackTarget,
+            Blocker,
+            BlockTarget,
+            DamageDivision,
+            X,
+            TargetCount,
+            Target,
+            PaymentPlan,
+            ManaPayment,
+            CastOffer,
+            YesNo,
+            ChooseObject,
+            ChooseUpTo,
+        ] {
+            let d = Decision { kind, ..opening };
+            assert!(
+                guarded(&t, &policy, obs, &d, Choice(0), Choice(1), options),
+                "{kind:?}"
+            );
+            assert!(
+                !guarded(&t, &policy, obs, &d, Choice(0), Choice(0), options),
+                "{kind:?}"
+            );
+        }
     }
     /// The decisions of a greedy mirror game from `seed`, each with the state it was asked in
     /// and greedy's answer.

@@ -139,7 +139,13 @@ fn search<L: Layout>(
             lead,
             error,
             trees: leads.len() as u16,
-            pairs: None,
+            // Each scoring world uses the same rollout seed for every continuation.
+            pairs: agent
+                .settings
+                .family
+                .options
+                .first
+                .then_some(leads.len() as u64),
         }
     });
     let visits: Vec<_> = rewards.iter().map(|xs| xs.len() as u32).collect();
