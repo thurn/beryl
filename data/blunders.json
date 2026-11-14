@@ -285,5 +285,25 @@
     "played": "attack with Beza, the Bounding Spring",
     "required": ["done"],
     "why": "The opposing Beza and a Fish can kill Beza, and Subtlety can kill Trinket Mage, while all planeswalkers survive. Keep both creatures back when entering combat without improving the attack."
+  },
+  {
+    "name": "fractured-identity-own-crypt",
+    "incident": "2026-11-13-fractured-identity-own-crypt",
+    "class": "Fractured Identity aimed at its own permanent, which gives the opponent a copy",
+    "source": { "replay": "docs/incidents/2026-11-13-fractured-identity-own-crypt.replay.json" },
+    "seat": 1,
+    "turn": 16,
+    "index": 14,
+    "played": "Mana Crypt (P1)",
+    "forbidden": [
+      "Portable Hole (P1)",
+      "The Wandering Emperor (P1)",
+      "Snapcaster Mage (P1)",
+      "Teferi, Time Raveler (P1)",
+      "Mana Crypt (P1)",
+      "Staff of the Storyteller (P1)",
+      "Samurai Token (P1)"
+    ],
+    "why": "Exiling its own permanent hands the opponent a token copy of it. Exiling Subtlety, the opponent's only creature, removes their blocker and gives the agent a 3/3 flier for a lethal attack next turn."
   }
 ]
