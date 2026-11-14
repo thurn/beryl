@@ -423,6 +423,23 @@ def test_the_script_checks_run_for_a_change_to_a_crate_a_script_comes_from(
         assert "script" not in lanes_for(monkeypatch, [path]), path
 
 
+def test_card_text_runs_only_for_a_change_that_can_alter_a_rendered_card(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def card_text_runs(*changed: str) -> bool:
+        rust = lanes_for(monkeypatch, list(changed))["rust"]
+        return [*checks.STEP, "card-text"] in rust
+
+    assert card_text_runs("rust/cards/cards_1993/lea/counterspell.rs")
+    assert card_text_runs("rust/crates/beryl_card/src/effect/mod.rs")
+    assert card_text_runs("data/card-store.tsv")
+    # beryl_scenario, which renders the cards, does not depend on the command-line crate.
+    assert not card_text_runs("rust/crates/beryl_cli/src/gate.rs")
+    assert card_text_runs(
+        "rust/crates/beryl_cli/src/gate.rs", "data/card-text-allowlist.json"
+    )
+
+
 def test_a_refreshed_card_store_runs_the_lanes_that_read_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

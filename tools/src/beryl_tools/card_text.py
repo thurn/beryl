@@ -32,6 +32,13 @@ from . import card_store, paths, render_diff
 ALLOWLIST: Path = paths.REPO / "data" / "card-text-allowlist.json"
 ESCALATIONS: Path = paths.REPO / "data" / "card-escalations.json"
 REASONS = ("wording", "escalated")
+# The package whose `beryl_scenario` binary renders the cards, and the check's inputs outside
+# the Rust packages: its two lists and its own code.
+PACKAGE = "beryl_cards"
+INPUTS = (
+    r"^data/card-(text-allowlist|escalations)\.json$"
+    r"|^tools/src/beryl_tools/(card_text|render_diff|card_store)\.py$"
+)
 
 Json = card_store.Json
 
@@ -77,6 +84,14 @@ def problems(
                 f"{name} is escalated but data/card-escalations.json has no partial entry"
             )
     return found
+
+
+def affected(packages: list[str] | None) -> bool:
+    """Whether a change to `packages` (`rust_tests.affected_packages`: the packages it touched
+    and their dependents; None for all of them) can change what the check renders. A change
+    outside [`PACKAGE`] and its dependencies cannot, so the fast check skips it there: after a
+    change to the command-line crate alone it took 13 s on Windows."""
+    return packages is None or PACKAGE in packages
 
 
 def load(path: Path) -> Json:

@@ -1,5 +1,6 @@
 import os
 import shutil
+import subprocess
 import time
 from pathlib import Path
 
@@ -262,3 +263,43 @@ def test_a_clone_another_process_beat_leaves_no_temporary_directory(
     assert warm.clone_into(source, dest) is True
     assert (dest / "debug" / "beryl").read_text() == "built here"
     assert sorted(p.name for p in dest.parent.iterdir()) == ["target"]
+
+
+def git(tree: Path, *args: str) -> None:
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+        cwd=tree,
+        check=True,
+        capture_output=True,
+    )
+
+
+def test_a_clone_gives_unchanged_files_the_times_of_the_build_it_cloned(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BERYL_CACHE", str(tmp_path / "cache"))
+    first = checkout(tmp_path / "first", "lock-v1")
+    write(first / "rust" / "same.rs", "same")
+    write(first / "rust" / "edited.rs", "before")
+    git(first, "init", "-q")
+    git(first, "add", "-A")
+    git(first, "commit", "-qm", "first")
+    write(first / "rust" / "target" / "debug" / "beryl", "binary")
+    built = time.time() - 3600
+    for path in (first / "rust" / "same.rs", first / "rust" / "edited.rs"):
+        os.utime(path, (built, built))
+    os.utime(first / "rust", (built, built))
+    warm.save(first)
+
+    # A new checkout writes every file afresh; one of them it changes and commits.
+    git(tmp_path, "clone", "-q", str(first), "second")
+    second = tmp_path / "second"
+    write(second / "rust" / "edited.rs", "after")
+    git(second, "commit", "-qam", "edit")
+    write(second / "ui" / "node_modules" / warm.STAMP, warm.lock_key(second))
+    assert warm.ensure(second) is False
+
+    assert (second / "rust" / "same.rs").stat().st_mtime == pytest.approx(built)
+    assert (second / "rust" / "edited.rs").stat().st_mtime > built + 1800
+    # rust/ held target/ at the save, which the clone gives it before the times are set.
+    assert (second / "rust").stat().st_mtime == pytest.approx(built)

@@ -10,6 +10,15 @@ gets its own, seeded from the per-machine cache:
 - `save` prunes what builds no longer use from `rust/target`, then moves both into the cache by
   rename, which is instant.
 
+Cargo decides that a workspace crate is up to date by modification times: a crate is rebuilt
+when any file or folder it read is newer than its last build. A new worktree's checkout writes
+every file afresh, so without help each clone rebuilt every workspace crate, and the fast check
+in a new worktree took two to five times as long as in a built one. So `save` records each
+tracked file's content (its git blob) and modification time in the target ([`SOURCES`]), and
+the clone gives each file of the new checkout whose content is the same, and each folder whose
+names are the same, the time recorded for it (`restore_sources`). Cargo then sees the times it
+saw when it last built those files, and rebuilds only the crates whose files differ.
+
 A clone takes time in proportion to the number of files, so the cache must not grow with every
 save: see `prune`.
 
@@ -21,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -50,6 +60,10 @@ RECENT = 3600.0
 # `<crate>-<hash>` and what cargo names after it: `lib<crate>-<hash>.rlib`, `.d`, `.exe`,
 # an incremental unit's `<crate>-<hash>.<cgu>.<build>.rcgu.o`, a build/ or .fingerprint/ folder.
 UNIT_NAME: re.Pattern[str] = re.compile(r"^(?:lib)?(.+-[0-9a-f]{16})(?:\..+)?$")
+# The file in a saved rust/target that records the saved checkout's tracked files and their
+# folders (`record_sources`): JSON, `files` from each path to its git blob id and modification
+# time in nanoseconds, `folders` from each path to a digest of its names and its time.
+SOURCES = ".beryl-sources.json"
 
 
 WINDOWS: bool = sys.platform == "win32"
@@ -251,6 +265,7 @@ def ensure_target(checkout: Path, tauri: bool) -> bool:
         if not any(clone_into(source, target, leave_out) for source in sources):
             return True
         forget_module_caches(target)
+        restore_sources(checkout, target)
     if tauri and not (target / TAURI).exists():
         for source in sources:
             if (source / TAURI).is_dir() and clone_into(source / TAURI, target / TAURI):
@@ -258,6 +273,109 @@ def ensure_target(checkout: Path, tauri: bool) -> bool:
                 return False
         return True
     return False
+
+
+def unchanged_files(checkout: Path) -> dict[str, str]:
+    """Each tracked regular file of `checkout` whose working copy is what the index holds, by
+    its path relative to the checkout, with its git blob id; empty when git fails. A file with
+    unstaged changes is left out, since its blob id does not describe its content."""
+
+    def git(*args: str) -> str | None:
+        run = subprocess.run(
+            ["git", *args],
+            cwd=checkout,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return run.stdout if run.returncode == 0 else None
+
+    listed = git("ls-files", "--stage", "-z")
+    changed = git("diff", "--name-only", "-z")
+    if listed is None or changed is None:
+        return {}
+    dirty = set(changed.split("\0"))
+    found: dict[str, str] = {}
+    for entry in listed.split("\0"):
+        info, _, path = entry.partition("\t")
+        fields = info.split()
+        # Mode 100644 or 100755, at stage 0: no symlink, submodule or unmerged path.
+        if len(fields) == 3 and fields[0].startswith("100") and fields[2] == "0":
+            if path not in dirty:
+                found[path] = fields[1]
+    return found
+
+
+def folders_of(files: dict[str, str]) -> set[str]:
+    """Every folder above the files `files` names, by path relative to the checkout, but the
+    checkout itself."""
+    found: set[str] = set()
+    for path in files:
+        parent = Path(path).parent
+        while parent != Path("."):
+            found.add(parent.as_posix())
+            parent = parent.parent
+    return found
+
+
+def listing(folder: Path) -> str:
+    """A digest of the names in `folder`, tracked or not: a folder's modification time changes
+    when an entry is added or removed, and cargo reads it when a build script asks to rerun
+    when a folder changes."""
+    names = "\0".join(sorted(os.listdir(folder)))
+    return hashlib.sha256(names.encode()).hexdigest()[:16]
+
+
+def record_sources(checkout: Path, target: Path) -> None:
+    """Writes [`SOURCES`] into `target`: each unchanged tracked file's blob id and modification
+    time, and each folder above them with a digest of its names and its modification time, as
+    the checkout's last builds saw them."""
+    files = unchanged_files(checkout)
+    record: dict[str, dict[str, list[object]]] = {"files": {}, "folders": {}}
+    for path, blob in files.items():
+        with suppress(OSError):
+            record["files"][path] = [blob, (checkout / path).stat().st_mtime_ns]
+    for path in folders_of(files):
+        with suppress(OSError):
+            folder = checkout / path
+            record["folders"][path] = [listing(folder), folder.stat().st_mtime_ns]
+    with suppress(OSError):
+        (target / SOURCES).write_text(json.dumps(record))
+
+
+def restore_sources(checkout: Path, target: Path) -> int:
+    """Gives each file of `checkout` whose content is the one [`SOURCES`] in the freshly cloned
+    `target` records, and each folder whose names are the ones it records, the modification
+    time recorded for it, so that cargo rebuilds only the crates whose files differ from the
+    build it cloned; returns how many files it set. A file whose content differs, or a folder
+    whose names differ, keeps its new time, so cargo rebuilds what reads it."""
+    try:
+        record = json.loads((target / SOURCES).read_text())
+    except (OSError, ValueError):
+        return 0
+    saved_files = record.get("files") if isinstance(record, dict) else None
+    saved_folders = record.get("folders") if isinstance(record, dict) else None
+    if not isinstance(saved_files, dict) or not isinstance(saved_folders, dict):
+        return 0
+    files = unchanged_files(checkout)
+
+    def restore(path: Path, saved: object, key: str) -> bool:
+        if not (isinstance(saved, list) and len(saved) == 2 and saved[0] == key):
+            return False
+        with suppress(OSError, TypeError, ValueError):
+            os.utime(path, ns=(int(saved[1]), int(saved[1])))
+            return True
+        return False
+
+    count = sum(
+        restore(checkout / path, saved_files.get(path), blob)
+        for path, blob in files.items()
+    )
+    for path in folders_of(files):
+        with suppress(OSError):
+            restore(checkout / path, saved_folders.get(path), listing(checkout / path))
+    log(f"gave {count} unchanged files the times of the build it cloned")
+    return count
 
 
 def ensure_node_modules(checkout: Path) -> bool:
@@ -525,6 +643,7 @@ def save(checkout: Path) -> None:
                 with suppress(OSError):
                     (cached / TAURI).rename(target / TAURI)
             prune(target)
+            record_sources(checkout, target)
             if replace(target, cached):
                 log(f"saved {target}")
         node_modules = checkout / "ui" / "node_modules"

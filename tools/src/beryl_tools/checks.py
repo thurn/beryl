@@ -132,6 +132,8 @@ SMOKE_TITLES: tuple[str, ...] = (
 )
 
 BY: list[str] = [sys.executable, "-m", "beryl_tools.cli"]
+# Runs one of this module's own steps (`steps`), such as `card-text`.
+STEP: list[str] = [sys.executable, "-m", "beryl_tools.checks"]
 
 
 @dataclass
@@ -519,22 +521,19 @@ def scale_lane() -> Lane:
     )
 
 
-def rust_lane(fast: bool = False, packages: list[str] | None = None) -> Lane:
+def rust_lane(
+    fast: bool = False, packages: list[str] | None = None, text_inputs: bool = False
+) -> Lane:
     """The rust lane; `fast` leaves out the tests in verdicts.SLOW_ONLY, slow CI's (not `fast`)
     those in verdicts.FAST_ONLY, and `packages` holds clippy and the tests to those packages
-    (`affected_packages`)."""
+    (`affected_packages`) and the card-text step to a change it can see (`card_text.affected`,
+    or `text_inputs`: its other inputs changed)."""
     scope = [a for p in packages for a in ("-p", p)] if packages else []
     named = [f"--packages={','.join(packages)}"] if packages else []
-    return (
+    lane = (
         Lane("rust", warm=True)
-        .step(
-            "build-paths", [sys.executable, "-m", "beryl_tools.checks", "build-paths"]
-        )
-        .step(
-            "fmt",
-            [sys.executable, "-m", "beryl_tools.checks", "rustfmt", "--check"],
-            paths.RUST,
-        )
+        .step("build-paths", [*STEP, "build-paths"])
+        .step("fmt", [*STEP, "rustfmt", "--check"], paths.RUST)
         .step(
             "clippy",
             [
@@ -551,19 +550,15 @@ def rust_lane(fast: bool = False, packages: list[str] | None = None) -> Lane:
         )
         .step(
             "tests",
-            [
-                sys.executable,
-                "-m",
-                "beryl_tools.checks",
-                "fast-rust-tests" if fast else "rust-tests",
-                *named,
-            ],
+            [*STEP, "fast-rust-tests" if fast else "rust-tests", *named],
             rerun=failed_tests,
         )
-        # Every card file's rendered rules text against its Oracle text (card_text.py), once
-        # the tests have built the scenario binary.
-        .step("card-text", [sys.executable, "-m", "beryl_tools.checks", "card-text"])
     )
+    if text_inputs or card_text.affected(packages):
+        # Every card file's rendered rules text against its Oracle text, once the tests have
+        # built the scenario binary.
+        lane.step("card-text", [*STEP, "card-text"])
+    return lane
 
 
 def ui_lane() -> Lane:
@@ -694,7 +689,9 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
     elif touched(CARD_FILES):
         lanes.append(scale_lane())  # The python lane runs these tests whole.
     if touched(r"^rust/") or touched(CARD_STORE):
-        lanes.append(rust_lane(True, affected_packages(changed)))
+        lanes.append(
+            rust_lane(True, affected_packages(changed), touched(card_text.INPUTS))
+        )
     if touched(script_checks.inputs()) or touched(CARD_STORE):
         lanes.append(script_checks.lane())
     if touched(r"^ui/"):
