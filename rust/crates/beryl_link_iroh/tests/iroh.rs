@@ -54,6 +54,26 @@ fn exchanges_ordered_frames_and_drains_before_close() {
 }
 
 #[test]
+fn a_reopened_iroh_listener_uses_the_original_invite() {
+    let directory = tempfile::tempdir().unwrap();
+    let host_key = Identity::open(directory.path().join("host")).unwrap();
+    let guest_key = Identity::open(directory.path().join("guest")).unwrap();
+    let (host, invite) = IrohHost::open(host_key.clone(), RelayChoice::Disabled).unwrap();
+    assert!(matches!(
+        IrohHost::resume(guest_key.clone(), &invite),
+        Err(LinkError::Refused(_))
+    ));
+    host.close().unwrap();
+    let host = IrohHost::resume(host_key, &invite).unwrap();
+    thread::scope(|scope| {
+        let accepting = scope.spawn(|| host.accept().unwrap());
+        let mut guest = IrohLink::connect(guest_key, &invite, RelayChoice::Disabled).unwrap();
+        guest.send(b"hello again").unwrap();
+        assert_eq!(accepting.join().unwrap().receive().unwrap(), b"hello again");
+    });
+}
+
+#[test]
 fn sender_closes_both_ends_while_receiving() {
     let directory = tempfile::tempdir().unwrap();
     let host_key = Identity::open(directory.path().join("host")).unwrap();

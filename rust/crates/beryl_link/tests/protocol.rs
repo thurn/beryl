@@ -1,4 +1,5 @@
 use std::{
+    io::Write,
     sync::{Mutex, mpsc},
     thread,
     time::Duration,
@@ -11,7 +12,7 @@ use beryl_link::{
     memory::{self, MemoryLink},
     wire::{Hello, Message, RefusalReason, TableStatus, VERSION_MISMATCH, decode, encode},
 };
-use flate2::read::DeflateDecoder;
+use flate2::{Compression, read::DeflateDecoder, write::DeflateEncoder};
 use serde_json::{Value, json};
 
 const WIRE: &str = "9c41e07ab2d35f18";
@@ -145,6 +146,30 @@ fn wire_uses_the_documented_json_envelopes() {
         assert_eq!(decode(&frame), Ok(message));
     }
     assert!(decode(b"invalid compressed bytes").is_err());
+}
+
+#[test]
+fn accepts_only_one_complete_deflate_stream_per_frame() {
+    // A nonfinal stored block with the complete JSON for Leave, but no final block.
+    let mut frame = b"\x00\x07\x00\xf8\xff\"leave\"".to_vec();
+    assert!(matches!(decode(&frame), Err(LinkError::Refused(_))));
+    frame.extend_from_slice(b"\x01\x00\x00\xff\xff");
+    assert_eq!(decode(&frame), Ok(Message::Leave));
+    frame.push(0);
+    assert!(matches!(decode(&frame), Err(LinkError::Refused(_))));
+}
+
+#[test]
+fn refuses_json_that_expands_beyond_the_wire_limit() {
+    // A syntactically valid update whose expansion would exceed the JSON limit.
+    let mut encoder = DeflateEncoder::new(Vec::new(), Compression::fast());
+    encoder.write_all(b"{\"update\":\"").unwrap();
+    for _ in 0..(32 * 1024) {
+        encoder.write_all(&[b'x'; 1024]).unwrap();
+    }
+    encoder.write_all(b"\"}").unwrap();
+    let frame = encoder.finish().unwrap();
+    assert!(matches!(decode(&frame), Err(LinkError::Refused(reason)) if reason.contains("32 MiB")));
 }
 
 #[test]
@@ -325,4 +350,37 @@ fn host_disconnects_after_three_unanswered_pings() {
         Err(LinkError::Closed)
     );
     assert_eq!(table.into_inner().unwrap().dropped, 1);
+}
+
+#[test]
+fn a_guest_stops_when_the_application_stops_draining_events() {
+    let (link, mut peer) = memory::pair();
+    let mut link = Some(link);
+    let mut guest = join(
+        move || Ok(peer_once(&mut link)),
+        hello(),
+        Duration::ZERO,
+        PING_INTERVAL,
+    );
+    let events = guest.take_events().unwrap();
+    assert!(matches!(
+        decode(&peer.receive().unwrap()),
+        Ok(Message::Hello(_))
+    ));
+    peer.send(&encode(&Message::Welcome {
+        seat: 1,
+        table: TableStatus::New,
+        host: "Derek".into(),
+    }))
+    .unwrap();
+    let update = encode(&Message::Update(json!({"count": 1})));
+    for _ in 0..128 {
+        if peer.send(&update).is_err() {
+            break;
+        }
+    }
+    assert_eq!(peer.receive(), Err(LinkError::Closed));
+    assert_eq!(events.recv().unwrap(), Event::Joined { seat: 1 });
+    assert!(events.into_iter().count() < 128);
+    assert_eq!(guest.act(json!("increment")), Err(LinkError::Closed));
 }

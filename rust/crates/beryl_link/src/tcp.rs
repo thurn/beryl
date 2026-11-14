@@ -12,19 +12,31 @@ pub struct TcpHost(TcpListener);
 
 impl TcpHost {
     pub fn listen() -> Result<(Self, Invite), LinkError> {
-        let listener =
-            TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).map_err(|error| io_error(&error))?;
-        let port = listener
+        let host = Self::bind(0)?;
+        let port = host
+            .0
             .local_addr()
             .map_err(|error| io_error(&error))?
             .port();
         Ok((
-            Self(listener),
+            host,
             Invite::Local {
                 port,
                 secret: secret(),
             },
         ))
+    }
+
+    /// Listen on the original port so a reconnecting guest can reuse its invite.
+    pub fn resume(invite: &Invite) -> Result<Self, LinkError> {
+        let port = invite_port(invite)?;
+        Self::bind(port)
+    }
+
+    fn bind(port: u16) -> Result<Self, LinkError> {
+        TcpListener::bind((Ipv4Addr::LOCALHOST, port))
+            .map(Self)
+            .map_err(|error| io_error(&error))
     }
 
     pub fn accept(&self) -> Result<TcpLink, LinkError> {
@@ -46,13 +58,9 @@ struct TcpConnection {
 impl TcpLink {
     /// Use the invite's loopback port. The wire handshake checks its secret.
     pub fn connect(invite: &Invite) -> Result<Self, LinkError> {
-        let Invite::Local { port, .. } = invite else {
-            return Err(LinkError::Refused(
-                "This connection needs a local invite.".into(),
-            ));
-        };
+        let port = invite_port(invite)?;
         let stream =
-            TcpStream::connect((Ipv4Addr::LOCALHOST, *port)).map_err(|error| io_error(&error))?;
+            TcpStream::connect((Ipv4Addr::LOCALHOST, port)).map_err(|error| io_error(&error))?;
         Self::from_stream(stream)
     }
 
@@ -145,6 +153,18 @@ impl LinkSender for Arc<TcpConnection> {
 
     fn close(&self) -> Result<(), LinkError> {
         TcpConnection::close(self)
+    }
+}
+
+fn invite_port(invite: &Invite) -> Result<u16, LinkError> {
+    match invite {
+        Invite::Local { port, .. } if *port != 0 => Ok(*port),
+        Invite::Local { .. } => Err(LinkError::Refused(
+            "The local invite has an invalid port.".into(),
+        )),
+        Invite::Remote(_) => Err(LinkError::Refused(
+            "This connection needs a local invite.".into(),
+        )),
     }
 }
 

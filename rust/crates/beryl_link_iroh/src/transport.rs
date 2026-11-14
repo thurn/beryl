@@ -44,7 +44,7 @@ impl IrohLink {
             ));
         }
         wait(async move {
-            let endpoint = bind(identity, relay).await?;
+            let endpoint = bind(identity, relay, 0).await?;
             tokio::time::timeout(CONNECT_TIMEOUT, async {
                 let connection = endpoint
                     .connect(invite.endpoint_addr(), ALPN)

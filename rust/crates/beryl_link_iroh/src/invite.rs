@@ -96,6 +96,10 @@ impl RemoteInvite {
         ))
     }
 
+    pub(crate) fn address(&self) -> &Address {
+        &self.address
+    }
+
     pub fn endpoint_id(&self) -> EndpointId {
         self.key
     }

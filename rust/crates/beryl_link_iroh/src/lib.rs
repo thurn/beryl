@@ -40,7 +40,7 @@ impl IrohHost {
     pub fn open(identity: Identity, relay: RelayChoice) -> Result<(Self, Invite), LinkError> {
         wait(async move {
             let offline = matches!(relay, RelayChoice::Disabled);
-            let endpoint = bind(identity, relay).await?;
+            let endpoint = bind(identity, relay, 0).await?;
             let address = if offline {
                 let port = endpoint
                     .bound_sockets()
@@ -49,9 +49,7 @@ impl IrohHost {
                     .port();
                 Address::Loopback(port)
             } else {
-                tokio::time::timeout(CONNECT_TIMEOUT, endpoint.online())
-                    .await
-                    .map_err(|_| LinkError::Io("Beryl could not reach its relay.".into()))?;
+                wait_for_relay(&endpoint).await?;
                 let status = endpoint.home_relay_status().get();
                 let relay = status
                     .iter()
@@ -61,6 +59,36 @@ impl IrohHost {
             };
             let invite = RemoteInvite::new(endpoint.id(), address)?.encode();
             Ok((Self { endpoint }, invite))
+        })
+    }
+
+    /// Restore the endpoint at the address in its saved invite.
+    pub fn resume(identity: Identity, invite: &Invite) -> Result<Self, LinkError> {
+        let invite = RemoteInvite::decode(invite)?;
+        if invite.endpoint_id() != identity.endpoint_id() {
+            return Err(LinkError::Refused(
+                "The saved invite belongs to a different Beryl identity.".into(),
+            ));
+        }
+        let (relay, port) = match invite.address() {
+            Address::Relay(url) => (RelayChoice::Url(url.to_string()), 0),
+            Address::Loopback(port) => (RelayChoice::Disabled, *port),
+        };
+        wait(async move {
+            let online = !matches!(relay, RelayChoice::Disabled);
+            let endpoint = bind(identity, relay, port).await?;
+            if online {
+                wait_for_relay(&endpoint).await?;
+            }
+            Ok(Self { endpoint })
+        })
+    }
+
+    /// Stop accepting and release the endpoint, including its bound socket.
+    pub fn close(self) -> Result<(), LinkError> {
+        wait(async {
+            self.endpoint.close().await;
+            Ok(())
         })
     }
 
@@ -80,7 +108,17 @@ impl IrohHost {
     }
 }
 
-async fn bind(identity: Identity, relay: RelayChoice) -> Result<Endpoint, LinkError> {
+async fn wait_for_relay(endpoint: &Endpoint) -> Result<(), LinkError> {
+    tokio::time::timeout(CONNECT_TIMEOUT, endpoint.online())
+        .await
+        .map_err(|_| LinkError::Io("Beryl could not reach its relay.".into()))
+}
+
+async fn bind(
+    identity: Identity,
+    relay: RelayChoice,
+    local_port: u16,
+) -> Result<Endpoint, LinkError> {
     // Minimal supplies TLS without publishing endpoint addresses to a DNS service.
     let builder = Endpoint::builder(presets::Minimal)
         .secret_key(identity.0)
@@ -97,7 +135,7 @@ async fn bind(identity: Identity, relay: RelayChoice) -> Result<Endpoint, LinkEr
             .portmapper_config(PortmapperConfig::Disabled)
             .net_report_config(NetReportConfig::minimal())
             .clear_ip_transports()
-            .bind_addr((Ipv4Addr::LOCALHOST, 0))
+            .bind_addr((Ipv4Addr::LOCALHOST, local_port))
             .map_err(io_error)?,
     };
     builder.bind().await.map_err(io_error)

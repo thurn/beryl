@@ -42,6 +42,24 @@ fn tcp_delivers_frames_in_order_in_both_directions() {
 }
 
 #[test]
+fn a_reopened_tcp_listener_uses_the_original_invite() {
+    let (host, invite) = TcpHost::listen().unwrap();
+    let guest = TcpLink::connect(&invite).unwrap();
+    let mut link = host.accept().unwrap();
+    // Close from the guest so its ephemeral port owns the TCP TIME_WAIT state.
+    drop(guest);
+    assert_eq!(link.receive(), Err(LinkError::Closed));
+    drop(link);
+    drop(host);
+
+    let host = TcpHost::resume(&invite).unwrap();
+    let mut guest = TcpLink::connect(&invite).unwrap();
+    let mut link = host.accept().unwrap();
+    guest.send(b"hello again").unwrap();
+    assert_eq!(link.receive().unwrap(), b"hello again");
+}
+
+#[test]
 fn sever_closes_memory_in_both_directions() {
     let (mut first, mut second) = memory::pair();
     let mut sender = first.try_clone_sender().unwrap();

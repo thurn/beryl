@@ -15,6 +15,7 @@ use crate::{
 };
 
 pub const REDIAL_DELAY: Duration = Duration::from_secs(3);
+const EVENT_CAPACITY: usize = 32;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Event {
@@ -62,7 +63,9 @@ impl Guest {
     }
 
     /// Take the event stream, for example to forward events from another
-    /// thread while the application keeps the action handle.
+    /// thread while the application keeps the action handle. Drain the stream
+    /// continuously. If it fills, the guest disconnects and closes the stream
+    /// rather than skipping updates that later updates depend on.
     pub fn take_events(&mut self) -> Option<mpsc::Receiver<Event>> {
         self.events.take()
     }
@@ -116,7 +119,7 @@ pub fn join<L: Link + 'static>(
         stopped: false,
         next_action: 1,
     }));
-    let (event_sender, events) = mpsc::channel();
+    let (event_sender, events) = mpsc::sync_channel(EVENT_CAPACITY);
     let (wake, cancellation) = mpsc::channel();
     let worker_state = Arc::clone(&state);
     thread::spawn(move || {
@@ -141,13 +144,14 @@ pub fn join<L: Link + 'static>(
 
 struct Session<'a> {
     state: &'a Mutex<State>,
-    events: &'a mpsc::Sender<Event>,
+    events: &'a mpsc::SyncSender<Event>,
     ping_interval: Duration,
 }
 
 enum End {
     Left,
     Mismatch(String),
+    EventConsumerUnavailable,
     Disconnected(LinkError),
 }
 
@@ -177,19 +181,20 @@ impl Session<'_> {
             }
             match result.unwrap_or_else(End::Disconnected) {
                 End::Left => {
-                    let _ = self.events.send(Event::Left);
+                    let _ = self.events.try_send(Event::Left);
                     return;
                 }
                 End::Mismatch(reason) => {
-                    let _ = self.events.send(Event::Mismatch(reason));
+                    let _ = self.events.try_send(Event::Mismatch(reason));
                     return;
                 }
+                End::EventConsumerUnavailable => return,
                 End::Disconnected(error) if !joined => {
-                    let _ = self.events.send(Event::Failed(error));
+                    let _ = self.events.try_send(Event::Failed(error));
                     return;
                 }
                 End::Disconnected(_) => {
-                    if !reconnecting && self.emit(Event::Reconnecting).is_err() {
+                    if !reconnecting && !self.emit(Event::Reconnecting) {
                         return;
                     }
                     reconnecting = true;
@@ -231,10 +236,12 @@ impl Session<'_> {
                 }
                 *joined = true;
                 *reconnecting = false;
-                self.emit(match table {
+                if !self.emit(match table {
                     TableStatus::New => Event::Joined { seat },
                     TableStatus::Resumed => Event::Resumed { seat },
-                })?;
+                }) {
+                    return Ok(End::EventConsumerUnavailable);
+                }
             }
             Message::Mismatch { reason } => return Ok(End::Mismatch(reason)),
             _ => {
@@ -254,7 +261,9 @@ impl Session<'_> {
                         return Ok(End::Left);
                     }
                     state.ready = true;
-                    self.emit(Event::Update(payload))?;
+                    if !self.emit(Event::Update(payload)) {
+                        return Ok(End::EventConsumerUnavailable);
+                    }
                     continue;
                 }
                 Message::Lobby(payload) => Event::Lobby(payload),
@@ -265,11 +274,13 @@ impl Session<'_> {
                     ));
                 }
             };
-            self.emit(event)?;
+            if !self.emit(event) {
+                return Ok(End::EventConsumerUnavailable);
+            }
         }
     }
 
-    fn emit(&self, event: Event) -> Result<(), LinkError> {
-        self.events.send(event).map_err(|_| LinkError::Closed)
+    fn emit(&self, event: Event) -> bool {
+        self.events.try_send(event).is_ok()
     }
 }

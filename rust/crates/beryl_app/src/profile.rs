@@ -19,6 +19,7 @@ struct InvalidName;
 fn parse_name(value: &OsStr) -> Result<String, InvalidName> {
     let name = value.to_str().ok_or(InvalidName)?;
     if name.is_empty()
+        || name.len() > 255
         || !name
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
@@ -26,14 +27,20 @@ fn parse_name(value: &OsStr) -> Result<String, InvalidName> {
         return Err(InvalidName);
     }
     // The volumes macOS uses by default fold case. Use the same name for the folder and WebView.
-    Ok(name.to_ascii_lowercase())
+    let name = name.to_ascii_lowercase();
+    let device = matches!(name.as_str(), "con" | "prn" | "aux" | "nul")
+        || matches!(
+            name.as_bytes(),
+            [b'c', b'o', b'm', b'1'..=b'9'] | [b'l', b'p', b't', b'1'..=b'9']
+        );
+    if device { Err(InvalidName) } else { Ok(name) }
 }
 
 fn warn_if_invalid() {
     if PROFILE.is_err() {
         journal::warn(
             "app",
-            "Ignoring BERYL_PROFILE: use a nonempty name with ASCII letters, digits or hyphens",
+            "Ignoring BERYL_PROFILE: use a portable folder name with ASCII letters, digits or hyphens",
             json!(null),
         );
     }
@@ -104,9 +111,10 @@ mod tests {
         let base = PathBuf::from("app");
         assert_eq!(path(None), base);
         for invalid in [
-            "", "..", "../guest", "a/b", "a\\b", "foo bar", "foo_bar", "é",
+            "", "..", "../guest", "a/b", "a\\b", "foo bar", "foo_bar", "é", "NUL", "COM1", "lpt9",
         ] {
             assert_eq!(path(Some(invalid)), base, "{invalid:?}");
         }
+        assert_eq!(path(Some(&"a".repeat(256))), base);
     }
 }

@@ -1,8 +1,8 @@
 //! JSON envelopes for the table protocol. Actions and views belong to the caller.
 
-use std::io::{Read, Write};
+use std::io::Write;
 
-use flate2::{Compression, read::DeflateDecoder, write::DeflateEncoder};
+use flate2::{Compression, Decompress, FlushDecompress, Status, write::DeflateEncoder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -106,12 +106,30 @@ fn check_json_size(len: usize) -> Result<(), LinkError> {
 
 pub fn decode(frame: &[u8]) -> Result<Message, LinkError> {
     crate::frame_length(frame.len())?;
-    let mut json = Vec::with_capacity(frame.len());
-    DeflateDecoder::new(frame)
-        .take((MAX_JSON_SIZE + 1) as u64)
-        .read_to_end(&mut json)
-        .map_err(|error| LinkError::Refused(format!("Invalid compressed message: {error}")))?;
-    check_json_size(json.len())?;
+    let mut json = Vec::with_capacity(frame.len().max(1));
+    let mut decoder = Decompress::new(false);
+    let mut consumed = 0;
+    loop {
+        let before = json.len();
+        let status = decoder
+            .decompress_vec(&frame[consumed..], &mut json, FlushDecompress::None)
+            .map_err(|error| LinkError::Refused(format!("Invalid compressed message: {error}")))?;
+        check_json_size(json.len())?;
+        let next = decoder.total_in() as usize;
+        if status == Status::StreamEnd && next == frame.len() {
+            break;
+        }
+        if status == Status::StreamEnd || (next == consumed && json.len() == before) {
+            return Err(LinkError::Refused(
+                "Invalid compressed message length.".into(),
+            ));
+        }
+        consumed = next;
+        if json.len() == json.capacity() {
+            let capacity = (2 * json.capacity()).min(MAX_JSON_SIZE + 1);
+            json.reserve_exact(capacity - json.len());
+        }
+    }
     serde_json::from_slice(&json)
         .map_err(|error| LinkError::Refused(format!("Invalid wire message: {error}")))
 }
