@@ -9,7 +9,7 @@
 //! card's own file.
 
 use crate::ability::{Ability, AbilityKind, Behavior};
-use crate::continuous::{Duration, LayerSpec, MODIFY_PARTS, Modification, Replaced, Replacement};
+use crate::continuous::{Duration, LayerSpec, MODIFY_PARTS, Modification};
 use crate::cost::{Chosen, Cost, CostAction, CostPart, Measure};
 use crate::definition::{CardDef, Face};
 use crate::effect::{Amount, Condition, CopyException, Effect, Objects, Operands, Players};
@@ -26,8 +26,8 @@ pub enum Malformed {
     /// of the other kind: an object where the ability targets a player, or a player where it
     /// targets an object ([CR 115.1](https://yawgatog.com/resources/magic-rules/#R1151)).
     Target,
-    /// [`Players::ThatPlayer`] outside an [`Effect::ForEachPlayer`] and the body of a
-    /// replacement of draws: there is no player the instruction is being done for.
+    /// [`Players::ThatPlayer`] outside an [`Effect::ForEachPlayer`] and the body (not the
+    /// condition) of a replacement of draws: no player the instruction is being done for.
     ThatPlayer,
     /// [`Condition::Paid`] of a kind of cost its face has no [`crate::CastingOption`] for:
     /// it could never have been paid.
@@ -59,15 +59,13 @@ pub enum Malformed {
     /// [`Amount::Carried`] or [`Objects::Carried`] in an ability that is not a delayed
     /// triggered ability: no effect made it, so it carries nothing.
     Carried,
-    /// [`Objects::TriggeredOn`] in an ability that is not triggered: no event was about
-    /// anything.
+    /// [`Objects::TriggeredOn`] in an ability that is not triggered: no event was about anything.
     TriggeredOn,
     /// [`Effect::Choose`] with a prompt that is not a pick of one object, which is the one
     /// choice the interpreter asks.
     Chosen,
-    /// [`Objects::InZoneOf`] a zone the players share: each has a library, a hand and a
-    /// graveyard of their own, and no other
-    /// ([CR 400.1](https://yawgatog.com/resources/magic-rules/#R4001)).
+    /// [`Objects::InZoneOf`] a zone the players share: each has a library, a hand and a graveyard
+    /// of their own, and no other ([CR 400.1](https://yawgatog.com/resources/magic-rules/#R4001)).
     ZoneOf,
     /// [`Effect::PermitCast`] for a duration other than this turn or for as long as the card
     /// stays where it is, which are the two a permission lasts.
@@ -75,8 +73,7 @@ pub enum Malformed {
     /// [`Effect::Unless`] of a cost the engine cannot take as an effect resolves: one other
     /// than mana alone or the discard of one card from a hand.
     Cost,
-    /// [`Effect::Fateseal`] of a number of cards other than one, which is all the engine
-    /// fateseals.
+    /// [`Effect::Fateseal`] of a number of cards other than one, which is all the engine fateseals.
     Fateseal,
     /// [`Effect::MayCast`] that is not the last thing its effect does, or that is said for
     /// each of several players: the card is cast as the effect finishes, so an instruction
@@ -104,9 +101,7 @@ impl Malformed {
             Malformed::Target => {
                 "an effect names a target its ability does not have, or one of the other kind"
             }
-            Malformed::ThatPlayer => {
-                "\"that player\" is said outside a for-each-player effect or a replacement of draws"
-            }
+            Malformed::ThatPlayer => "\"that player\" is said where no player is being done for",
             Malformed::Paid => "a condition asks about a cost its face cannot be cast with",
             Malformed::Grant => "a modification grants an ability its face does not list",
             Malformed::Lost => {
@@ -179,18 +174,10 @@ impl CardDef {
 const fn check_abilities(face: &Face, abilities: &[Ability]) -> Checked {
     let mut i = 0;
     while i < abilities.len() {
-        let ability = &abilities[i];
         let scope = Scope {
             face,
-            ability,
-            // "That player" in a replacement of draws is the player who would draw.
-            for_a_player: matches!(
-                ability.replacement(),
-                Some(Replacement {
-                    replaces: Replaced::Draw(..),
-                    ..
-                })
-            ),
+            ability: &abilities[i],
+            for_a_player: abilities[i].replaces_draws(),
             moved: Moved::NONE,
         };
         if let Err(malformed) = scope.ability() {
@@ -286,10 +273,9 @@ const fn rule_changes(effect: &Effect) -> usize {
     }
 }
 
-/// The objects an instruction sets out to move from where they are, if it names them: a
-/// new object once it has
-/// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)): "An object that moves
-/// from one zone to another becomes a new object with no memory of, or relation to, its
+/// The objects an instruction sets out to move from where they are, if it names them: a new object
+/// once it has ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)): "An object that
+/// moves from one zone to another becomes a new object with no memory of, or relation to, its
 /// previous existence."
 const fn moved_by(effect: &Effect) -> Option<&Objects> {
     match effect {
@@ -371,13 +357,12 @@ struct Scope<'a> {
 
 impl Scope<'_> {
     const fn ability(self) -> Checked {
-        // A condition is read before anyone would draw, so "that player" is no one there.
-        let before = Scope {
-            for_a_player: false,
-            ..self
-        };
         let condition = match self.ability.condition() {
-            Some(condition) => before.condition(condition),
+            Some(condition) => Scope {
+                for_a_player: false,
+                ..self
+            }
+            .condition(condition),
             None => Ok(()),
         };
         let layer = match self.ability.layer() {

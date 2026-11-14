@@ -60,13 +60,7 @@ pub fn instead_of_drawing(ability: &Ability) -> Result<Instead, Unreplaced> {
 /// Whether `ability` replaces draws.
 #[inline]
 pub fn replaces_draws(ability: &Ability) -> bool {
-    matches!(
-        ability.replacement(),
-        Some(Replacement {
-            replaces: Replaced::Draw(..),
-            ..
-        })
-    )
+    ability.replaces_draws()
 }
 
 /// The kinds of event the static abilities of a card's faces replace ([`Replaces`]), or the

@@ -232,6 +232,21 @@ pub enum Replaced {
     },
 }
 
+impl crate::Ability {
+    /// Whether it replaces draws ([`Replaced::Draw`]). In its body, "that player"
+    /// ([`crate::Players::ThatPlayer`]) is the player who would draw.
+    #[inline]
+    pub const fn replaces_draws(&self) -> bool {
+        matches!(
+            self.replacement(),
+            Some(Replacement {
+                replaces: Replaced::Draw(..),
+                ..
+            })
+        )
+    }
+}
+
 /// Which of a player's draws a replacement of draws ([`Replaced::Draw`]) replaces.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Draws {
