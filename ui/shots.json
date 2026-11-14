@@ -704,6 +704,14 @@
       "height": 900
     },
     {
+      "name": "stage-ways-disabled",
+      "route": "/?fixture=attached-across#/game",
+      "click": "[data-card='Teferi, Hero of Dominaria']",
+      "expect": ".stage-way:disabled",
+      "width": 1600,
+      "height": 900
+    },
+    {
       "name": "stage-pick-player",
       "route": "/?fixture=shape-pick&at=3#/game",
       "width": 1600,

@@ -35,7 +35,15 @@
 }
 .stage-way:disabled {
   cursor: default;
-  opacity: 0.45;
+}
+/* A way that cannot be chosen is dimmed and desaturated, never made translucent: `opacity`
+   would let the cards behind the chooser (a spell on the stack, say) show through its face and
+   label. */
+.stage-way:disabled .stage-way-face {
+  filter: grayscale(0.85) brightness(0.55);
+}
+.stage-way:disabled .stage-way-says {
+  color: #9a948d;
 }
 .stage-way-face {
   position: relative;
@@ -132,7 +140,7 @@
 }
 .stage-share-step:disabled {
   cursor: default;
-  color: rgb(255 255 255 / 30%);
+  color: #6f6d6a;
 }
 /* A number prompt's value in the dock (PromptBar.tsx), between the steps to the next number
    offered below and above it, with what the number makes the cost. */
@@ -166,5 +174,5 @@
 }
 .prompt-step:disabled {
   cursor: default;
-  color: rgb(242 231 216 / 35%);
+  color: #6f6a64;
 }

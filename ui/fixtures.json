@@ -312,7 +312,8 @@
       "name": "attached-across",
       "board": "attached-across",
       "until": "first priority decision for seat 0",
-      "where": ["attached across the table"]
+      "where": ["attached across the table"],
+      "clicks": ["Teferi, Hero of Dominaria"]
     },
     {
       "name": "exile-cast",

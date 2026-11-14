@@ -242,6 +242,17 @@ export async function screenFaults(page) {
                 );
             }
         }
+        // A control that cannot be used is dimmed with color and filter, never with `opacity`,
+        // which would let the cards behind it show through its face and label.
+        for (const control of document.querySelectorAll(
+            ".stage-way, .stage-entry, .stage-share-step, .prompt-step",
+        )) {
+            if (control.disabled && getComputedStyle(control).opacity !== "1") {
+                faults.push(
+                    `the disabled "${control.getAttribute("aria-label") ?? control.className}" is translucent (opacity ${getComputedStyle(control).opacity})`,
+                );
+            }
+        }
         // A prompt's row of ways, a catalog's entries and the order of triggers stand
         // centered on the table's middle, the line through the life totals, as Arena centers
         // what it asks on the screen.
