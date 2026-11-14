@@ -43,7 +43,8 @@
 // so `pose` returns it, a step that moves the card starts from where it is held, and a card
 // let go glides home on the stage's clock.
 import type { PlayerView } from "../generated/protocol";
-import { laid, under, type Edge, type Playing, type Run } from "./beat.ts";
+import { laid, under } from "./beat.ts";
+import type { Edge, Playback, Playing, Run } from "./beat.ts";
 import { Clock, type Frames, type StageClock } from "./clock.ts";
 import { awaited, backed, entering, showingOn, stillShown } from "./enter.ts";
 import type { Effect, On } from "./effects.ts";
@@ -54,11 +55,12 @@ import type { Shown } from "./shown.ts";
 import { samePose, type Pose } from "./pose.ts";
 import { reachOfCard, reachOfLife, reachOfPool } from "./lines.ts";
 import type { Reach } from "./lines.ts";
-import { Overlay, type OverlaySurface } from "./overlay.ts";
+import { Overlay, type Surface } from "./overlay.ts";
+export type { Surface } from "./overlay.ts";
 import type { Line, Marked } from "./spans.ts";
 import type { Streak } from "./streaks.ts";
-import { apply, tabled, tableOf } from "./table.ts";
-import type { Act, Script, Step as ScriptStep, Table } from "./table.ts";
+import { apply, tabled, tableOf, traded } from "./table.ts";
+import type { Act, Script, Table } from "./table.ts";
 import {
   carried,
   carries,
@@ -81,17 +83,6 @@ export type { Edge, Playing } from "./beat.ts";
 export type { Counting, Shown } from "./shown.ts";
 export { SNAP, type Timing } from "./tracks.ts";
 
-/** Where the stage draws: one node a name, made and removed only as the stage says, and
- * written only with what the model computed. */
-export interface Surface extends OverlaySurface {
-  make(name: Name): void;
-  remove(name: Name): void;
-  /** Dresses the node for where its object or ability now rests. */
-  dress(name: Name, resting: Resting): void;
-  /** Writes the node's pose, its frame `frame` wide. */
-  draw(name: Name, pose: Pose, frame: number): void;
-}
-
 interface Entry {
   resting: Resting;
   track?: Track;
@@ -104,20 +95,6 @@ interface Entry {
   /** What it is drawn as while it has yet to turn over on its way (`Track.turn`): as it
    * rests, but for its back. */
   covered?: Resting;
-}
-
-interface Playback {
-  view: PlayerView;
-  beats: ScriptStep[][];
-  /** The beat under way, none before the first. */
-  beat: number;
-  /** How many steps the beats before it held. */
-  played: number;
-  steps: Run[];
-  /** The steps whose act went ahead of them (`Run.opens`) and that have yet to begin. */
-  opened: Run[];
-  /** When the beat under way is over: when its last motion is. */
-  end: number;
 }
 
 export class ScriptStage {
@@ -301,6 +278,24 @@ export class ScriptStage {
     if (!run) return null;
     const { index, verb, from, to, step } = run;
     return { index, verb, from, to, step };
+  }
+
+  /** The cards in slots `a` and `b`, alike in every way, trade places: each takes the other's
+   * turn in its hand, pose and track, and the pointer and the surface take each for the
+   * other, so nothing on screen changes. Not while a script plays. */
+  trade(a: number, b: number) {
+    const [one, other] = [this.#entries.get(a), this.#entries.get(b)];
+    if (!one || !other || !this.#table || this.#busy) return;
+    this.#set(traded(this.#table, a, b));
+    [one.track, other.track] = [other.track, one.track];
+    const pose = one.resting.pose;
+    one.resting = { ...one.resting, pose: other.resting.pose };
+    other.resting = { ...other.resting, pose };
+    one.moved = other.moved = true;
+    this.pointer.trade(a, b);
+    this.#surface?.trade?.(a, b);
+    this.#lay(this.clock.now);
+    this.#write(this.clock.now);
   }
 
   /** The pose at `clock.now` of the object in the slot `name`, or of the ability on the stack

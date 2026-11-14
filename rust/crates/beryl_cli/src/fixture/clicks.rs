@@ -19,6 +19,9 @@ pub(super) enum Written {
     /// On a card, by its name: the one of that name the open prompt marks, or with none
     /// marked, the first the view shows.
     Card(String),
+    /// On a card, by its name: the last of that name the open prompt marks, the twin a
+    /// player picks where the engine offers one of two alike for both.
+    Last(String),
     /// On a player.
     Player(Side),
     /// On one of the prompt's buttons.
@@ -39,8 +42,9 @@ impl Written {
     /// option <n>" for a button, "player you" or "player opponent" for a player, "drop
     /// <pile> <at> <card>" for a card dropped into a pile, "move <item> <at>" for an item of
     /// an order moved, "number <n>" for a number prompt's value or "number <n> <card>" for
-    /// that card's share of a division, "entry <index>" for an entry of a catalog, and
-    /// anything else as the name of a card.
+    /// that card's share of a division, "entry <index>" for an entry of a catalog, "last
+    /// <card>" for the last card of that name the prompt marks, and anything else as the name
+    /// of a card.
     pub(super) fn parse(text: &str) -> Result<Written, String> {
         let words: Vec<&str> = text.split_whitespace().collect();
         match words.as_slice() {
@@ -73,6 +77,7 @@ impl Written {
             ["number"] => Err(format!("{text:?}: which number")),
             ["entry", index] => Ok(Written::Entry(super::number(text, index)?)),
             ["entry", ..] => Err(format!("{text:?}: an entry is named by its place")),
+            ["last", card @ ..] if !card.is_empty() => Ok(Written::Last(card.join(" "))),
             [] => Err("an empty click".to_owned()),
             _ => Ok(Written::Card(text.to_owned())),
         }
@@ -102,6 +107,14 @@ impl Written {
                 on: Subject::Player { player: *player },
             },
             Written::Card(name) => Click::On { on: card(name)? },
+            Written::Last(name) => Click::On {
+                on: (view.objects.iter())
+                    .rev()
+                    .filter(|o| o.name.as_deref() == Some(name.as_str()))
+                    .map(|o| Subject::Object { slot: o.slot })
+                    .find(|on| prompt.marks.iter().any(|m| m.on == *on))
+                    .ok_or_else(|| format!("the prompt marks no {name}"))?,
+            },
             Written::Drop {
                 card: name,
                 pile,
@@ -222,6 +235,10 @@ mod tests {
             })
         );
         assert_eq!(Written::parse("entry 4"), Ok(Written::Entry(4)));
+        assert_eq!(
+            Written::parse("last Plains"),
+            Ok(Written::Last("Plains".to_owned()))
+        );
         assert!(Written::parse("entry").is_err());
         assert!(Written::parse("number").is_err());
         assert_eq!(

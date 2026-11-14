@@ -359,6 +359,88 @@ test("a card castable from a graveyard, waiting in the hand fan, is carried out 
     assert.deepEqual(sent[0].click, { kind: "on", on: card(4) });
 });
 
+/** Two Plains in hand, slots 3 and 4, at x 0 and 400 of the hand's row, at a priority that
+ * marks both; and the script that plays the one the engine offered for both, slot 3, as the
+ * session plays whichever of them was clicked. */
+function twins(made, prompts, names = ["Plains", "Plains"]) {
+    made.release = { duration: 100, delay: 0, stagger: 0, ease: (p) => p };
+    const base = asking(pick(marked("eligible", 3, 4)));
+    const hand = (slot, name) => object(slot, "hand", { name });
+    prompts.play({
+        ...base,
+        objects: [object(1), object(2), hand(3, names[0]), hand(4, names[1])],
+    });
+    made.clock.advance(0);
+    const played = object(3, "battlefield", { name: names[0] });
+    const after = view([1, 2, 3], [4]);
+    after.objects = [object(1), object(2), played, hand(4, names[1])];
+    return () =>
+        prompts.play(after, {
+            beats: [
+                [
+                    {
+                        act: {
+                            verb: "fly",
+                            from: "hand",
+                            why: "play",
+                            object: played,
+                        },
+                    },
+                ],
+            ],
+        });
+}
+
+test("of two identical cards in hand, the one dragged out is the one that plays", async () => {
+    const { made, prompts, sent, reply } = prompted({ fly: { duration: 100 } });
+    const plays = twins(made, prompts);
+    // The right-hand Plains is carried out over the table and let go there.
+    made.pointer.press(4, { x: 430, y: 540 });
+    made.pointer.move({ x: 530, y: 240 });
+    made.pointer.release({ x: 530, y: 240 });
+    assert.deepEqual(sent[0].click, { kind: "on", on: card(4) });
+    await reply({ kind: "answered" });
+    plays();
+    made.clock.advance(0);
+    // The card that flies starts where the dragged one was let go, and the other Plains is
+    // where the left-hand one lay, never moving.
+    const at = (slot) => [made.pose(slot).x, made.pose(slot).y];
+    assert.deepEqual(at(3), [500, 200]);
+    assert.deepEqual(at(4), [0, 500]);
+    made.clock.advance(50);
+    assert.deepEqual(at(4), [0, 500]);
+    made.clock.advance(150);
+    assert.deepEqual(at(3), [800, 0]);
+    assert.deepEqual(at(4), [0, 500]);
+});
+
+test("of two identical cards in hand, the one clicked is the one that plays", async () => {
+    const { made, prompts, reply, click } = prompted({
+        fly: { duration: 100 },
+    });
+    const plays = twins(made, prompts);
+    click(4);
+    await reply({ kind: "answered" });
+    plays();
+    made.clock.advance(0);
+    assert.deepEqual([made.pose(3).x, made.pose(3).y], [400, 500]);
+    assert.deepEqual([made.pose(4).x, made.pose(4).y], [0, 500]);
+    made.clock.advance(200);
+    assert.deepEqual([made.pose(4).x, made.pose(4).y], [0, 500]);
+});
+
+test("a card clicked in hand trades places with none that differs from it", async () => {
+    const { made, prompts, reply, click } = prompted({
+        fly: { duration: 100 },
+    });
+    const plays = twins(made, prompts, ["Plains", "Island"]);
+    click(4);
+    await reply({ kind: "answered" });
+    plays();
+    made.clock.advance(0);
+    assert.deepEqual([made.pose(3).x, made.pose(3).y], [0, 500]);
+});
+
 test("an arrow runs from what asks to a target picked, and the script that casts at it takes it over", async () => {
     const { made, surface, prompts, reply, click } = prompted();
     const spell = { kind: "spell", slot: 3, targets: [] };

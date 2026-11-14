@@ -44,6 +44,7 @@ import type {
   ClickReply,
   DecisionId,
   DecisionView,
+  ObjectView,
   PlayerView,
   PromptButton,
   PromptView,
@@ -62,7 +63,7 @@ type Subject = Extract<Click, { kind: "on" }>["on"];
 /** The stage as a prompt uses it. */
 export type Prompted = Pick<
   ScriptStage,
-  "play" | "skip" | "shown" | "subscribe" | "pointer"
+  "play" | "skip" | "shown" | "subscribe" | "pointer" | "trade"
 >;
 
 /** Sends the session a click on the prompt of `decision` in its state `revision` (ipc.ts). */
@@ -192,6 +193,34 @@ function paid(script: Script, paying: readonly SpanAct[]): Script {
   return { ...script, beats };
 }
 
+/** The card the engine took in place of the card in a hand in slot `handled`, which the
+ * player clicked or dragged: the first card `script` moves out of a hand, if that is another
+ * card whose record on `table` is the same as the handled one's but for its slot. The engine
+ * offers one candidate for interchangeable cards (architecture §7.2) and the session takes a
+ * click on any of them for that candidate, so of two Plains in hand the engine plays the one
+ * it offered, whichever the player handled. The stage then trades the two cards' places
+ * (`ScriptStage.trade`) before the script plays, so that the card the player handled is the
+ * one that goes and its twin stays where it was. */
+export function twinOf(
+  table: PlayerView | undefined,
+  script: Script,
+  handled: number,
+): number | undefined {
+  const record = (slot: number) => table?.objects.find((o) => o.slot === slot);
+  const was = record(handled);
+  if (script.reset || was?.zone !== "hand") return undefined;
+  const moved = script.beats
+    .flat()
+    .find(({ act }) => act.verb === "fly" && act.from === "hand");
+  if (moved?.act.verb !== "fly") return undefined;
+  const slot = moved.act.object.slot;
+  const twin = record(slot);
+  const alike = (o: ObjectView) => JSON.stringify({ ...o, slot: 0 });
+  return slot !== handled && twin?.zone === "hand" && alike(twin) === alike(was)
+    ? slot
+    : undefined;
+}
+
 /** What a click on the node `name` is on. */
 export const subjectOf = (name: Name): Subject =>
   typeof name === "number"
@@ -228,6 +257,8 @@ export class Prompts {
   #marking = false;
   /** A card waits where a drop left it for what its click did. */
   #carried = false;
+  /** The card in a hand the last click or drop sent was on, until the next view plays. */
+  #handled: number | undefined;
   #shut = false;
   readonly #listeners = new Set<() => void>();
   readonly #pointing = new Set<PointerEvents>();
@@ -279,6 +310,14 @@ export class Prompts {
     let script = sent;
     // A script of marks alone is not waited out: the game's own steps begin now.
     if (this.#marking) this.#stage.skip();
+    // The card the player handled goes in place of its twin, before anything plays.
+    const handled = this.#handled;
+    this.#handled = undefined;
+    const twin =
+      handled === undefined || !script
+        ? undefined
+        : twinOf(this.#stage.shown.table, script, handled);
+    if (twin !== undefined) this.#stage.trade(twin, handled!);
     const before = this.#stage.shown.view;
     const next = view.status.kind === "deciding" && view.status.decision;
     const again = next && sameDecision(next.id, this.#asked.decision?.id);
@@ -424,7 +463,7 @@ export class Prompts {
       pile.cards.includes(name as number),
     );
     if (!this.#asked.prompt || !(held || this.clicks(name))) return elsewhere();
-    this.#click({ kind: "on", on: subjectOf(name) }, elsewhere);
+    this.#clickOn(name, { kind: "on", on: subjectOf(name) }, elsewhere);
   }
 
   /** A card carried out of the hand is used as a click on it uses it; let go over where it
@@ -438,10 +477,21 @@ export class Prompts {
     const on = subjectOf(name);
     const landed = tray && this.lands(tray, at);
     if (tray ? !landed : at.y >= rests.pose.y) return false;
-    this.#carried = this.#click(
+    this.#carried = this.#clickOn(
+      name,
       landed ? { kind: "drop", on, ...landed } : { kind: "on", on },
     );
     return this.#carried;
+  }
+
+  /** Sends `click`, made on the node `name` (`#click`), noting first that the player handled
+   * that card: the views its answer plays on to may arrive before the send returns. */
+  #clickOn(name: Name, click: Click, unused?: () => void): boolean {
+    const was = this.#handled;
+    this.#handled = typeof name === "number" ? name : undefined;
+    const sent = this.#click(click, unused);
+    if (!sent) this.#handled = was;
+    return sent;
   }
 
   /** Sends `click` on the open prompt, and takes its reply for the prompt's state; `unused`

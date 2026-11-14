@@ -105,6 +105,22 @@ export function arranged({ view, order }: Table): PlayerView {
   return { ...view, objects };
 }
 
+/** `table` with the cards in slots `a` and `b` trading places in their hand: each takes the
+ * other's turn in its order of arrival (`Table.order`), which is written out for every card
+ * in a hand so that the two keep every other card's place. */
+export function traded(table: Table, a: number, b: number): Table {
+  const order = new Map<number, number>();
+  let turn = 0;
+  for (const o of arranged(table).objects) {
+    if (o.zone === "hand") order.set(o.slot, (turn += 1));
+  }
+  const [at, bt] = [order.get(a), order.get(b)];
+  if (at === undefined || bt === undefined) return table;
+  order.set(a, bt);
+  order.set(b, at);
+  return { ...table, order };
+}
+
 /** `order` once the card in `slot` has gone from `from` to `to`: last of those in a hand,
  * or of none. */
 function arrived(

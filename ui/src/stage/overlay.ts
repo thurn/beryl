@@ -22,6 +22,7 @@ import {
   type LitStreak,
 } from "./flare.ts";
 import type { Name, Resting } from "./layout.ts";
+import type { Pose } from "./pose.ts";
 import { lightOf, type Fighter, type Lit, type LitLine } from "./light.ts";
 import { shapeOf, wayOf, type Reach } from "./lines.ts";
 import type { NoticeSurface } from "./shown.ts";
@@ -35,6 +36,20 @@ import {
 import { Streaks, type Streak, type StreakSurface } from "./streaks.ts";
 import type { Act } from "./table.ts";
 import { litBy, SNAP } from "./tracks.ts";
+
+/** Where the stage draws: one node a name, made and removed only as the stage says, and
+ * written only with what the model computed. */
+export interface Surface extends OverlaySurface {
+  make(name: Name): void;
+  remove(name: Name): void;
+  /** Dresses the node for where its object or ability now rests. */
+  dress(name: Name, resting: Resting): void;
+  /** Writes the node's pose, its frame `frame` wide. */
+  draw(name: Name, pose: Pose, frame: number): void;
+  /** The nodes `a` and `b` trade what the surface keeps of each beside its pose: a raise
+   * under the pointer, a held card's heft (`ScriptStage.trade`). */
+  trade?(a: Name, b: Name): void;
+}
 
 /** Where all of it is drawn. One that paints light is given all that is lit each tick, and
  * none once the stage no longer draws on it. */

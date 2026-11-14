@@ -93,7 +93,27 @@ export class RaisedCopy {
     this.#raised = copy;
     this.#face(copy);
     this.#posed(copy);
-    // React draws a face into the node, and the stage dresses and marks it, while it is raised.
+    this.#watch(copy);
+    this.#tick();
+  }
+
+  /** The nodes `a` and `b` trade places (dom.ts `trade`): a copy of either is the other's from
+   * now on, raised or dropping as far as it was. */
+  trade(a: HTMLElement, b: HTMLElement) {
+    for (const copy of [this.#raised, ...this.#dropping]) {
+      if (copy?.node !== a && copy?.node !== b) continue;
+      copy.node = copy.node === a ? b : a;
+      if (copy !== this.#raised) continue;
+      copy.watch?.disconnect();
+      this.#watch(copy);
+      this.#posed(copy);
+    }
+  }
+
+  /** Keeps `copy` as its node is: React draws a face into the node, and the stage dresses and
+   * marks it, while it is raised. */
+  #watch(copy: Copy) {
+    const { node } = copy;
     copy.watch = new MutationObserver((changes) => {
       if (changes.some((c) => c.target !== node || c.type !== "attributes")) {
         this.#face(copy);
@@ -106,7 +126,6 @@ export class RaisedCopy {
       attributes: true,
       characterData: true,
     });
-    this.#tick();
   }
 
   #make(node: HTMLElement, now: number): Copy {

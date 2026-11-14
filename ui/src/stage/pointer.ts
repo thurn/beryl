@@ -176,6 +176,19 @@ export class Pointer {
     this.#listener.hover?.(over);
   }
 
+  /** The nodes `a` and `b` trade places on the stage (`ScriptStage.trade`): what the pointer
+   * is on, presses, holds or waits to see come to rest as one is the other from now on, and
+   * the listener hears what it hovers by its new name. */
+  trade(a: Name, b: Name) {
+    const other = (name: Name) => (name === a ? b : name === b ? a : name);
+    if (this.#over !== undefined) this.#over = other(this.#over);
+    if (this.#settling !== undefined) this.#settling = other(this.#settling);
+    if (this.#press) this.#press.name = other(this.#press.name);
+    if (this.#held)
+      this.#held = { ...this.#held, name: other(this.#held.name) };
+    this.#tell();
+  }
+
   /** A press began on `name`, at `at`. */
   press(name: Name, at: Point) {
     this.cancel();

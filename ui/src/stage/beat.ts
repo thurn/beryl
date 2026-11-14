@@ -18,6 +18,21 @@ import {
 } from "./table.ts";
 import { moverOf, type Timing } from "./tracks.ts";
 
+/** A script being played: its view, its beats and how far through them the stage is. */
+export interface Playback {
+  view: PlayerView;
+  beats: ScriptStep[][];
+  /** The beat under way, none before the first. */
+  beat: number;
+  /** How many steps the beats before it held. */
+  played: number;
+  steps: Run[];
+  /** The steps whose act went ahead of them (`Run.opens`) and that have yet to begin. */
+  opened: Run[];
+  /** When the beat under way is over: when its last motion is. */
+  end: number;
+}
+
 /** The step playing now: its place in its script counting every step, its verb, its start
  * and end in stage milliseconds, and the step itself. */
 export interface Playing {

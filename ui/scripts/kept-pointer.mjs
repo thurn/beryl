@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import {
     ANSWERED,
+    ON,
     SAME,
     card,
     center,
@@ -676,3 +677,69 @@ for (const fixture of ["greedy-turn-9", "attached-across", "crew"]) {
         },
     );
 }
+
+// Why no audit: two Plains look the same, so no screen audit can tell which of them flew. The
+// engine offers one candidate for both (architecture §7.2), and the session takes a drag of
+// either for it: this follows the card the pointer let go of by where each Plains is drawn.
+const twinViews = await load("hand-pair-twin");
+const plainsIn = (v) =>
+    v.objects
+        .filter((o) => o.owner === "you" && o.zone === "hand")
+        .filter((o) => o.name === "Plains")
+        .map((o) => o.slot);
+const [handled] = plainsIn(twinViews.at(-1));
+const [offered] = plainsIn(twinViews[0]).filter((slot) => slot !== handled);
+assert.ok(offered !== undefined, "the fixture plays the other Plains");
+await check(
+    "of two Plains in hand, the one dragged out is the one that plays",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const before = await drawn(page);
+        const box = await page
+            .locator(`[data-slot="${handled}"]`)
+            .boundingBox();
+        const from = { x: box.x + box.width / 2, y: box.y + 40 };
+        const to = { x: from.x + 40, y: from.y - 320 };
+        await page.mouse.move(from.x, from.y);
+        await page.mouse.down();
+        for (let i = 1; i <= 10; i++) {
+            const k = i / 10;
+            await page.mouse.move(
+                from.x + (to.x - from.x) * k,
+                from.y + (to.y - from.y) * k,
+            );
+        }
+        await page.mouse.up();
+        assert.deepEqual(await clicked(page, 1), [ON(handled)]);
+        await page.clock.runFor(16);
+        await committed(page);
+        const now = await drawn(page);
+        const middle = ([left, top, right, bottom]) => ({
+            x: (left + right) / 2,
+            y: (top + bottom) / 2,
+        });
+        const off = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+        // The Plains that plays starts from where the dragged one was let go, and the one
+        // left in hand is where the other lay.
+        const flying = middle(now[offered].box);
+        const dropped = middle(before[handled].box);
+        assert.ok(
+            off(flying, { x: dropped.x + 40, y: dropped.y - 320 }) < 80,
+            `the Plains played starts at ${JSON.stringify(flying)}, not where it was let go`,
+        );
+        assert.ok(
+            off(middle(now[handled].box), middle(before[offered].box)) < 20,
+            "the Plains left in hand is where the other one lay",
+        );
+        await page.clock.runFor(3000);
+        assert.equal(
+            await page.$eval(`[data-slot="${offered}"]`, (e) => e.dataset.zone),
+            "battlefield",
+        );
+    },
+    {
+        fixture: "hand-pair-twin",
+        at: 1,
+        ready: `[data-slot="${handled}"][data-zone="hand"]`,
+    },
+);

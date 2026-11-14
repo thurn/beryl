@@ -144,6 +144,37 @@ export class DomSurface implements Surface {
     this.#raised.show(node);
   }
 
+  /** The nodes `a` and `b` trade places (`ScriptStage.trade`): the raise under the pointer
+   * and a held card's heft go with the place, to the node that is there now. */
+  trade(a: Name, b: Name) {
+    const [one, other] = [this.#nodes.get(a), this.#nodes.get(b)];
+    if (!one || !other) return;
+    const raise = ["x", "y", "turn", "lift"].map((of) => `--raise-${of}`);
+    const kept = (node: HTMLElement) => ({
+      raised: "raised" in node.dataset,
+      vars: raise.map((name) => node.style.getPropertyValue(name)),
+    });
+    const put = (
+      node: HTMLElement,
+      { raised, vars }: ReturnType<typeof kept>,
+    ) => {
+      node.toggleAttribute("data-raised", raised);
+      raise.forEach((name, i) => {
+        if (vars[i]) node.style.setProperty(name, vars[i]);
+        else node.style.removeProperty(name);
+      });
+    };
+    const [was, wasOther] = [kept(one), kept(other)];
+    put(one, wasOther);
+    put(other, was);
+    this.#raised.trade(one, other);
+    const [heft, heftOther] = [this.#hefts.get(a), this.#hefts.get(b)];
+    this.#hefts.delete(a);
+    this.#hefts.delete(b);
+    if (heft) this.#hefts.set(b, { ...heft, node: other });
+    if (heftOther) this.#hefts.set(a, { ...heftOther, node: one });
+  }
+
   /** Tells `pointer` what the browser's pointer does on the nodes, by their names and in stage
    * pixels, until the returned function is called: the one place the page's pointer events
    * become the stage's (pointer.ts). A touch has no hover: it presses, and is let go. */

@@ -269,6 +269,7 @@ KEPT_FIXTURES = [
     "choice-pay",
     "choice-trigger-order",
     "hand-pair",
+    "hand-pair-twin",
     "cast-oculus",
     "cast-exile-choice",
     "cast-kicker",
