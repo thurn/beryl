@@ -488,9 +488,17 @@ for (const tick of [10, 50]) {
         assert.deepEqual([made.pose(9).x, made.pose(9).y], [3000, 500]);
         assert.equal(made.pose(9).face, "back");
         assert.equal(made.shown.resting.get(9).dress.back, true);
-        // It turns over on its way in, off the straight line toward the table.
+        const library = made.pose(9).width;
+        // It leans as it lifts off the library, its top to the left, as if tossed.
+        reach(made.clock, Math.round(500 * HELD_TURN), tick);
+        assert.ok(made.pose(9).rotation < -3, `${made.pose(9).rotation}`);
+        // It turns over on its way in, off the straight line toward the table, at about the
+        // size it had on the library and level again: a card that had already grown to
+        // held size flipped end over end.
         reach(made.clock, Math.floor(1000 * HELD_TURN) - 10, tick);
         assert.equal(made.pose(9).face, "back");
+        assert.ok(made.pose(9).width < 1.05 * library, `${made.pose(9).width}`);
+        assert.ok(Math.abs(made.pose(9).rotation) < 2);
         reach(made.clock, Math.ceil(1000 * HELD_TURN) + 10, tick);
         assert.ok(made.pose(9).y < 500 - 300 * (1 - made.pose(9).x / 2600));
         assert.equal(made.pose(9).face, "front");

@@ -542,17 +542,18 @@ stage to; Arena's measured instances are kept beside them as reference in
   leaves the stack, rises up the screen by about a fifth of the table's height
   within 0.1 s, crosses to above its slot at that height and drops onto it,
   about 0.5 s in all, and the slot flashes. A drawn card leaves the library at
-  the lower left turning face up within about 0.2 s, flies right across the
-  table to a place beside the stack growing as it comes, holds there about 0.2 s
-  and drops into the right end of the hand, about 1.1 s in all; three drawn by
-  one spell leave a quarter second apart and fly the same way with no hold,
-  about 0.7 s each. A discard drops to the graveyard at hand size in about 0.2 s
-  (UrGalw_f35w 16:14.8, UrGalw_f35w 16:35.37, UrGalw_f35w 16:46.1, pE4XSNi-nZc
-  20:13.2, UrGalw_f35w 16:46.3, UrGalw_f35w 16:47.15, pE4XSNi-nZc 22:00.0,
-  pE4XSNi-nZc 23:23.5, UrGalw_f35w 17:01.3, UrGalw_f35w 16:15.8, WQiYBv23buw
-  29:14.3, vPdoSA5H5xU 17:46.2, 3sEoP_s4DQE 39:04.3, 5UHzpVvUkfI 1:01:50.3,
-  UrGalw_f35w 17:01.03). Beryl: 475 ms, 326 ms apart, ease-out. Effects: settle
-  as it ends (into the battlefield) (but not land played, opponent land played).
+  the lower left leaning a little, turns face up within about 0.2 s at the size
+  it had there, flies right across the table to a place beside the stack growing
+  as it comes, holds there about 0.2 s and drops into the right end of the hand,
+  about 1.1 s in all; three drawn by one spell leave a quarter second apart and
+  fly the same way with no hold, about 0.7 s each. A discard drops to the
+  graveyard at hand size in about 0.2 s (UrGalw_f35w 16:14.8, UrGalw_f35w
+  16:35.37, UrGalw_f35w 16:46.1, pE4XSNi-nZc 20:13.2, UrGalw_f35w 16:46.3,
+  UrGalw_f35w 16:47.15, pE4XSNi-nZc 22:00.0, pE4XSNi-nZc 23:23.5, UrGalw_f35w
+  17:01.3, UrGalw_f35w 16:15.8, WQiYBv23buw 29:14.3, vPdoSA5H5xU 17:46.2,
+  3sEoP_s4DQE 39:04.3, 5UHzpVvUkfI 1:01:50.3, UrGalw_f35w 17:01.03). Beryl: 475
+  ms, 326 ms apart, ease-out. Effects: settle as it ends (into the battlefield)
+  (but not land played, opponent land played).
 - **appear.** A card comes to be at its place with no flight: a token, the
   opening hand, a card a look put in the graveyard. Its row makes room in its
   delay, so it shows at a place already open. A token appears whole with a short

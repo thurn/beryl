@@ -342,7 +342,9 @@ function enters(
       const back = card.pose.face === "back";
       const way = several
         ? swept(card.pose, ease, layout.drawn)
-        : heldUp(card.pose, ease, layout.drawn);
+        : heldUp(card.pose, ease, layout.drawn, (pose) =>
+            layout.middle(card.resting, pose),
+          );
       const turn = several ? DRAW_TURN.at : HELD_TURN;
       return {
         name: act.object.slot,

@@ -2,6 +2,7 @@
 // your hand, or, one of several, sweeping past that place without stopping. Arena's flies
 // from the library right across the table to a place beside its stack and comes down into the
 // right end of the hand (`vPdoSA5H5xU 17:46.2`, `SswBO8aOOgc 20:28.5`, `WQiYBv23buw 29:14.2`).
+import type { Point } from "./layout.ts";
 import { ALOFT, between, type Pose } from "./pose.ts";
 import { bowed } from "./bows.ts";
 import {
@@ -35,12 +36,14 @@ const HELD_WAY = { bow: { share: 0.12, peak: 0.6 }, sinks: 0.08 };
 /** The way of a card that is held up to be read before it lands: from `start` to where
  * `held` puts it for its resting place, bowed `toward` its player's edge of the table's far
  * side and turning over on the way; a hold there, sinking a little; and the drop to where it
- * rests, slow at first and quickening into the hand. */
+ * rests, slow at first and quickening into the hand. `middle` is the card's middle were it
+ * drawn at a pose, which it grows about. */
 export const heldUp =
   (
     start: Pose,
     ease: Timing["ease"],
     held: (rest: Pose) => Pose,
+    middle: (pose: Pose) => Point,
     toward = 1,
   ): Path =>
   (progress, rest) => {
@@ -69,11 +72,53 @@ export const heldUp =
     };
     if (start.face !== "back") return pose;
     return {
-      ...pose,
+      ...resized(
+        pose,
+        middle(pose),
+        start.width + (up.width - start.width) * grown(flying),
+      ),
+      rotation: pose.rotation - HELD_LEAN * leaning(flying),
       face: progress < HELD_TURN ? "back" : pose.face,
       flat: flatAt(flying, HELD_TURNING),
     };
   };
+
+/** How far a card held up that turns over on its way has grown toward its size there, as a
+ * share of its growth, `flying` of its flight in: none until it is edge-on, and then evenly
+ * faster and slower again until it arrives. Arena's turns over at about the size it had on
+ * the library, 1.05 times as wide when edge-on and 1.08 once it lies flat, and grows only
+ * after that, as it crosses the table (`SswBO8aOOgc 20:28.65` to `28.82`, `UrGalw_f35w
+ * 16:52.68` to `52.85`). Growing over the whole flight made Beryl's 1.8 times as wide as on
+ * the library when edge-on, so that a card larger than those in the hand flipped end over
+ * end. */
+function grown(flying: number) {
+  const after = Math.min(
+    1,
+    Math.max(0, (flying - HELD_TURNING.at) / (1 - HELD_TURNING.at)),
+  );
+  return after * after * (3 - 2 * after);
+}
+
+/** How far, in degrees, a card held up that turns over leans as it leaves the library: its
+ * top to the left, as if tossed, level again by the time it is edge-on. Arena's leans 5 to 7
+ * degrees as it lifts off the library (`SswBO8aOOgc 20:28.59`, `UrGalw_f35w 16:52.58` to
+ * `52.61`). */
+const HELD_LEAN = 6;
+
+/** How much of `HELD_LEAN` a card held up leans `flying` of its flight in. */
+const leaning = (flying: number) =>
+  Math.sin(Math.PI * Math.min(1, flying / HELD_TURNING.at));
+
+/** `pose`, whose card's middle is at `about`, drawn `width` wide about that middle. */
+function resized(pose: Pose, about: Point, width: number): Pose {
+  const scale = width / pose.width;
+  return {
+    ...pose,
+    x: about.x - (about.x - pose.x) * scale,
+    y: about.y - (about.y - pose.y) * scale,
+    width,
+  };
+}
 
 /** The way of a card that passes by a place on its way and never stops there: one curve
  * from `start` to where it rests that goes as far across the table, as far up it and as
