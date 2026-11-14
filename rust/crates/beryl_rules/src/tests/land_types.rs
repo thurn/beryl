@@ -112,7 +112,24 @@ static HUMBLE: CardDef = CardDef {
     tokens: &[],
 };
 
-static CARDS: CardTable = CardTable::new(&[&LAND, &DUAL, &MOON, &TOMB, &MOONLAND, &ARBOR, &HUMBLE]);
+/// "Each Forest is an artifact in addition to its other types": a set that a land type change
+/// in the same layer can empty, as Life and Limb's "All Forests" can be.
+static GROVE: CardDef = CardDef {
+    name: "Test Grove",
+    faces: &[enchantment(&[Ability::static_ability(&LayerSpec {
+        affected: Objects::All {
+            zone: Zone::Battlefield,
+            filter: Filter::Subtype(Subtype::Forest),
+        },
+        condition: None,
+        modifications: &[Modification::AddTypes(Types::ARTIFACT)],
+    })])],
+    tokens: &[],
+};
+
+static CARDS: CardTable = CardTable::new(&[
+    &LAND, &DUAL, &MOON, &TOMB, &MOONLAND, &ARBOR, &HUMBLE, &GROVE,
+]);
 
 /// A game in the first player's main phase, each deck holding some of each card.
 fn game() -> (GameTable, State) {
@@ -124,6 +141,7 @@ fn game() -> (GameTable, State) {
         (2, "Test Moonland"),
         (2, "Test Arbor"),
         (2, "Test Humble"),
+        (2, "Test Grove"),
     ];
     let t = GameTable::new(&CARDS, [deck, deck]).unwrap();
     let mut s = State::new(&t, 3, Profile::EXACT).unwrap();
@@ -297,4 +315,37 @@ fn effects_that_read_nothing_the_others_write_are_never_tried() {
     assert_eq!(trials, 0);
     let (_, trials) = enters(&t, &mut s, Seat::P1, "Test Tomb");
     assert_eq!(trials, 0);
+}
+
+/// An effect whose set another effect of its layer empties depends on it ([CR 613.8a]):
+/// "applying the other would change ... what it applies to". The Moon makes Dryad Arbor a
+/// Mountain and no Forest, so the Grove's effect, whichever is earlier, waits for the Moon's
+/// and finds no Forest: the Arbor is no artifact. In timestamp order alone, a Grove before the
+/// Moon would have made it one.
+///
+/// [CR 613.8a]: https://yawgatog.com/resources/magic-rules/#R6138a
+#[test]
+fn an_effect_whose_set_a_type_change_empties_waits_for_it() {
+    for grove_first in [true, false] {
+        let (t, mut s) = game();
+        let arbor = on(&t, &mut s, "Test Arbor");
+        let first = if grove_first {
+            "Test Grove"
+        } else {
+            "Test Moon"
+        };
+        let second = if grove_first {
+            "Test Moon"
+        } else {
+            "Test Grove"
+        };
+        on(&t, &mut s, first);
+        let (_, trials) = enters(&t, &mut s, Seat::P1, second);
+        assert!(trials > 0);
+        assert!(is(&t, &s, arbor, Subtype::Mountain));
+        assert!(
+            !s.derived(arbor).types.intersects(Types::ARTIFACT),
+            "grove first: {grove_first}"
+        );
+    }
 }

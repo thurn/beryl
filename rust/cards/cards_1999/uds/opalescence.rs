@@ -119,6 +119,38 @@ pub mod scenarios {
                 ME.pt(Card::Humility, 1, 1),
                 ME.creature(OPALESCENCE, false),
             ]),
+        // As creatures, Humility and Dress Down each remove the other's ability in layer 6:
+        // a loop of dependencies, applied in timestamp order (CR 613.8b). Humility, the
+        // earlier, applies and takes Dress Down's ability, enters trigger included, so its
+        // 1/1 makes both 1/1.
+        Scenario::new("Humility before Dress Down: Dress Down's ability is lost")
+            .interaction(&[Card::Humility, Card::DressDown])
+            .battlefield(
+                P0,
+                &[OPALESCENCE, Card::Humility, Card::Island, Card::Island],
+            )
+            .hand(P0, &[Card::DressDown])
+            .library(P0, &[Card::Plains, Card::Island])
+            .actions(&[
+                ME.casts(Card::DressDown),
+                Resolve,
+                stack(0),
+                ME.has(Zone::Hand, Card::Plains, 0),
+                ME.pt(Card::Humility, 1, 1),
+                ME.pt(Card::DressDown, 1, 1),
+            ]),
+        // Dress Down, the earlier, applies and takes Humility's ability before it begins, so
+        // no 1/1 applies: each is as big as its mana value.
+        Scenario::new("Dress Down before Humility: Humility's ability is lost")
+            .interaction(&[Card::Humility, Card::DressDown])
+            .battlefield(P0, &with_plains([OPALESCENCE, Card::DressDown]))
+            .hand(P0, &[Card::Humility])
+            .actions(&[
+                ME.casts(Card::Humility),
+                Resolve,
+                ME.pt(Card::Humility, 4, 4),
+                ME.pt(Card::DressDown, 2, 2),
+            ]),
         // Each Opalescence makes the other a 4/4 creature.
         Scenario::new("two Opalescences make each other creatures")
             .battlefield(P0, &[OPALESCENCE])

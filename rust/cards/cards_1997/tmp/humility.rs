@@ -102,6 +102,17 @@ pub mod scenarios {
             .hand(P0, &[Prop::Artifact])
             .battlefield(P0, &[HUMILITY, Card::GoldMyr])
             .actions(&[ME.deciding(DecisionKind::Attacker, 2)]),
+        // Dryad Arbor's {G} comes from its Forest type, not its text (CR 305.6), and it goes
+        // with the creature's other abilities in layer 6. With the Plains alone P0 can't pay
+        // for Gold Myr, and is given no priority in the main phase.
+        Scenario::new("Dryad Arbor loses the mana ability of its land type")
+            .interaction(&[Card::GoldMyr])
+            .hand(P0, &[Card::GoldMyr])
+            .battlefield(P0, &[HUMILITY, Card::DryadArbor, Card::Plains])
+            .actions(&[
+                ME.pt(Card::DryadArbor, 1, 1),
+                ME.deciding(DecisionKind::Attacker, 2),
+            ]),
         // Glorious Anthem is no creature and keeps its ability; its +1/+1 applies after the
         // base 1/1.
         Scenario::new("an anthem's bonus applies on top of the base 1/1")

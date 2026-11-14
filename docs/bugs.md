@@ -17,8 +17,6 @@ fixed in the same session. Newest first.
   where it asked to send it, since every move goes through the replacement
   pipeline.
 
-||||||| parent of 14f8da95 (refactor: one test of what a layer effect's existence reads)
-
 - The test of whether the order of permanents entering the battlefield together
   could change the layer results (CR 613.7m, `layers::order_may_matter`) read
   what a static ability's filter reads only for a set "each X", not "each other
@@ -121,8 +119,6 @@ fixed in the same session. Newest first.
   query's rustdoc alone; renaming two slots through the `Relayout` walk and
   comparing the states would hold every field without a list, and was not built
   (by-w8gv.8.2 says why).
-
-||||||| parent of 51be9f58 (fix: layers and counts hold past a layout's widths)
 
 - Two objects of one card were offered as one candidate while different
   continuous effects were on them, whenever the effects came to the same layer

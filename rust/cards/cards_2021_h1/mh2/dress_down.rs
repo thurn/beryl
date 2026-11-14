@@ -94,6 +94,34 @@ pub mod scenarios {
                 ME.has(Zone::Graveyard, DRESS_DOWN, 1),
                 ME.pt(Card::AdelineResplendentCathar, 1, 4),
             ]),
+        // Made a 2/2 creature by Opalescence, it loses its own abilities with every other
+        // creature's, as its ruling has it, the end step trigger among them: it is still there
+        // in the next turn.
+        Scenario::new("made a creature, it loses its own sacrifice trigger")
+            .interaction(&[Card::Opalescence])
+            .battlefield(P0, &[Card::Opalescence, DRESS_DOWN])
+            .library(P0, &[Card::Island, Card::Island])
+            .library(P1, &[Card::Island, Card::Island])
+            .actions(&[
+                ME.pt(DRESS_DOWN, 2, 2),
+                ME.done_attacking(),
+                advance_to(2, TurnStep::PrecombatMain),
+                ME.controls(DRESS_DOWN, 1),
+            ]),
+        // Entering as a creature under Opalescence, it has already lost its enters trigger
+        // when the event is checked (CR 603.10), so it draws nothing.
+        Scenario::new("entering as a creature, it draws nothing")
+            .interaction(&[Card::Opalescence])
+            .hand(P0, &[DRESS_DOWN])
+            .battlefield(P0, &[Card::Opalescence, Card::Island, Card::Island])
+            .library(P0, &[Card::Plains, Card::Island])
+            .actions(&[
+                ME.casts(DRESS_DOWN),
+                Resolve,
+                stack(0),
+                ME.has(Zone::Hand, Card::Plains, 0),
+                ME.pt(DRESS_DOWN, 2, 2),
+            ]),
         // Flash: cast in the opponent's turn, it draws, and is sacrificed at that turn's end
         // step.
         Scenario::new("cast on the opponent's turn, it goes at that end step")

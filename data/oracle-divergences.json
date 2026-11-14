@@ -89,5 +89,12 @@
     "scenario": "an enchantment Opalescence would make a creature is exiled",
     "cr": "CR 614.12 (https://yawgatog.com/resources/magic-rules/#R61412): \"Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c-d.) Such effects may come from the permanent itself if they affect only that permanent (as opposed to a general subset of permanents that includes it). They may also come from other sources. To determine which replacement effects apply and how they apply, check the characteristics of the permanent as it would exist on the battlefield, taking into account replacement effects that have already modified how it enters the battlefield (see rule 616.1), continuous effects from the permanent's own static abilities that would apply to it once it's on the battlefield, and continuous effects that already exist and would apply to the permanent.\"",
     "reason": "XMage asks whether the returning object is a creature from the card as it is in exile, not as it would exist on the battlefield, so an enchantment Opalescence would make a creature returns instead of being exiled (the card's March of the Machines ruling says it is exiled)"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Opalescence",
+    "scenario": "Humility before Dress Down: Dress Down's ability is lost",
+    "cr": "CR 613.8b (https://yawgatog.com/resources/magic-rules/#R6138b): \"An effect dependent on one or more other effects waits to apply until just after all of those effects have been applied. If multiple dependent effects would apply simultaneously in this way, they're applied in timestamp order relative to each other. If several dependent effects form a dependency loop, then this rule is ignored and the effects in the dependency loop are applied in timestamp order.\"",
+    "reason": "Humility and Dress Down, both creatures under Opalescence, each remove the other's ability in layer 6, a dependency loop applied in timestamp order: Humility, the earlier, applies and Dress Down's ability is lost, so Humility's 1/1 applies. XMage applies Dress Down's removal to Humility first and leaves Humility 4/4"
   }
 ]
