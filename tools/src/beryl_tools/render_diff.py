@@ -404,11 +404,56 @@ def parse(result: subprocess.CompletedProcess[str]) -> Rendered | str:
     return out
 
 
-def rendered(names: list[str]) -> Rendered | str:
-    """Runs `render_command` on `names` and parses what it printed."""
+def test_build_binary(packages: list[str]) -> Path | str:
+    """The `beryl_scenario` binary that the rust lane's tests step built for `packages` (none:
+    the whole workspace), or the error cargo printed. The tests step builds with
+    `cargo test <scope> --no-run` (rust_tests.py), which unifies the features of every package
+    in scope and their dev-dependencies. `render_command` builds `beryl_cards` alone with only
+    `scenarios`, a different feature set, so after the tests step it compiled the card crate
+    and its binary a second time (about 20 s under load). The same `cargo test` command finds
+    the binary already built; it builds `beryl_cards`' binaries only when `beryl_cards` is in
+    scope, so the check adds it when it is not."""
+    scope = (
+        [a for p in dict.fromkeys([*packages, "beryl_cards"]) for a in ("-p", p)]
+        if packages
+        else ["--workspace"]
+    )
+    run = subprocess.run(
+        ["cargo", "test", "--locked", *scope, "--no-run", "--message-format=json"],
+        cwd=paths.RUST,
+        env=paths.run_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if run.returncode != 0:
+        return run.stderr.strip() or "cargo test --no-run failed"
+    for line in run.stdout.splitlines():
+        try:
+            message = json.loads(line)
+        except ValueError:
+            continue
+        target = message.get("target", {})
+        if (
+            message.get("reason") == "compiler-artifact"
+            and target.get("name") == "beryl_scenario"
+            and "bin" in target.get("kind", [])
+            and not message.get("profile", {}).get("test")
+            and message.get("executable")
+        ):
+            return Path(message["executable"])
+    return "cargo test --no-run built no beryl_scenario binary"
+
+
+def rendered(names: list[str], binary: Path | None = None) -> Rendered | str:
+    """Runs `render_command` on `names`, or `binary`'s `render --json` when given, and parses
+    what it printed."""
+    command = (
+        [str(binary), "render", "--json", *names] if binary else render_command(names)
+    )
     return parse(
         subprocess.run(
-            render_command(names),
+            command,
             cwd=paths.RUST,
             env=paths.run_env(),
             capture_output=True,

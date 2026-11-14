@@ -99,8 +99,21 @@ def load(path: Path) -> Json:
 
 
 def step(*args: str) -> int:
-    """Renders every card file and holds each mismatch to the allowlist."""
-    texts = render_diff.rendered([])
+    """Renders every card file and holds each mismatch to the allowlist. `--packages=a,b` is
+    the tests step's scope (checks.rust_lane), whose build already holds the binary that
+    renders the cards (render_diff.test_build_binary)."""
+    packages = [
+        p
+        for a in args
+        if a.startswith("--packages=")
+        for p in a.removeprefix("--packages=").split(",")
+        if p
+    ]
+    binary = render_diff.test_build_binary(packages)
+    if isinstance(binary, str):
+        print(f"card-text: {binary}")
+        return 1
+    texts = render_diff.rendered([], binary)
     if isinstance(texts, str):
         print(f"card-text: {texts}")
         return 1

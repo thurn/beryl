@@ -428,7 +428,9 @@ def test_card_text_runs_only_for_a_change_that_can_alter_a_rendered_card(
 ) -> None:
     def card_text_runs(*changed: str) -> bool:
         rust = lanes_for(monkeypatch, list(changed))["rust"]
-        return [*checks.STEP, "card-text"] in rust
+        return any(
+            c[: len(checks.STEP) + 1] == [*checks.STEP, "card-text"] for c in rust
+        )
 
     assert card_text_runs("rust/cards/cards_1993/lea/counterspell.rs")
     assert card_text_runs("rust/crates/beryl_card/src/effect/mod.rs")

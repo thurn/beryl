@@ -558,8 +558,8 @@ def rust_lane(
     )
     if text_inputs or card_text.affected(packages):
         # Every card file's rendered rules text against its Oracle text, once the tests have
-        # built the scenario binary.
-        lane.step("card-text", [*STEP, "card-text"])
+        # built the scenario binary, which it finds in the same scope.
+        lane.step("card-text", [*STEP, "card-text", *named])
     return lane
 
 
