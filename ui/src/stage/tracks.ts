@@ -332,6 +332,16 @@ export const roomIn = (
 ): [from: number, to: number] =>
   verb === "vanish" ? [to, to + Math.round(CLOSES * (to - from))] : [from, to];
 
+/** How long the cards that stay in a hand take to move to their new places when a card
+ * joins or leaves it, in stage milliseconds, easing out from the moment the change is
+ * applied. Arena's hand regroups in about a sixth of a second whatever the card's flight
+ * takes: for a draw it begins just before the card leaves the library and is at rest well
+ * before the card is held up beside the stack (`SswBO8aOOgc 20:28.35` to `20:28.53`), and
+ * for a cast it closes the card's gap as the card is let go (`SswBO8aOOgc 20:11.68` to
+ * `20:11.85`). Moving them over the whole flight instead, 1050 ms for a draw, read as a
+ * slow reshape of the hand. */
+export const REGROUP = 170;
+
 /** How long what a finished ability left room for takes to close up (the motion review of
  * vanish, by-w8gv.21.47: a phone's rows, hands and piles closed its band of the table "in
  * one frame"; "one move of about 200 to 250 ms, ease-out, starting on the frame after"). The
@@ -626,6 +636,11 @@ export function litBy(act: Act): On | undefined {
   return tally.kind === "pool" ? undefined : tally.object.slot;
 }
 
+/** Whether `resting` is a card lying in a hand's fan, either player's, rather than held up
+ * out of it by a prompt. */
+const fanned = ({ object, dress }: Resting) =>
+  object?.zone === "hand" && (dress.look === "hand" || dress.look === "held");
+
 /** A step as the track of what its change moves is made from (beat.ts `Run`). */
 type Moving = Pick<
   Run,
@@ -647,8 +662,10 @@ export const carries = (run: Moving, at: number) =>
  * room does, when its verb has it go: over the step; once a card has turned (`WAITS`);
  * after a card that left has gone, for `CLOSES` of its step or, after a cut, for the time
  * the step says (`Timing.closes`); or before the step begins, where its act went ahead of it
- * (`Timing.opens`), slowing into its place. A card a `lift` lets go to lie face down or out
- * of sight shows the face it had until it is there. */
+ * (`Timing.opens`), slowing into its place. A card that stays in a hand while another joins
+ * or leaves it goes to its new place in `REGROUP`, slowing into it, from when the change is
+ * applied, unless the step is a `vanish`, whose room closes once its card has gone. A card
+ * a `lift` lets go to lie face down or out of sight shows the face it had until it is there. */
 export function carried(
   run: Moving,
   at: number,
@@ -666,28 +683,37 @@ export function carried(
   const faceUp = flies && bowOf(run.step.act, toward)?.back !== undefined;
   const turns =
     flies && !faceUp && start.face === "back" && resting.pose.face === "front";
-  const opens = run.opens !== undefined && !flies;
-  const [from, to] = opens
-    ? [at, run.opens!.by]
-    : run.closes !== undefined
-      ? [end, end + run.closes]
-      : flies
-        ? [run.from, end]
-        : roomIn(verb, at, end);
-  const ease = opens || run.closes !== undefined ? out : run.ease;
-  const pose = run.each
-    ? later(start, ease, ...shareOf(run, table, name))
-    : ((opens ? undefined : makingRoom(verb, start, ease, toward)) ??
-      glide(start, ease, flies, {
-        over: turns ? halfTurn : undefined,
-        turning: turningOf(run.step.act),
-        bow: flies ? bowOf(run.step.act, toward) : undefined,
-        lift: flies && lifts(run.step.act),
-        round:
-          flies && (faceUp || resting.pose.face === "back")
-            ? halfTurn
-            : undefined,
-      }));
+  const regroups =
+    verb !== "vanish" &&
+    moverOf(run.step.act) !== name &&
+    fanned(before) &&
+    fanned(resting);
+  const opens = run.opens !== undefined && !flies && !regroups;
+  const [from, to] = regroups
+    ? [at, at + REGROUP]
+    : opens
+      ? [at, run.opens!.by]
+      : run.closes !== undefined
+        ? [end, end + run.closes]
+        : flies
+          ? [run.from, end]
+          : roomIn(verb, at, end);
+  const ease = regroups || opens || run.closes !== undefined ? out : run.ease;
+  const pose = regroups
+    ? glide(start, ease, false)
+    : run.each
+      ? later(start, ease, ...shareOf(run, table, name))
+      : ((opens ? undefined : makingRoom(verb, start, ease, toward)) ??
+        glide(start, ease, flies, {
+          over: turns ? halfTurn : undefined,
+          turning: turningOf(run.step.act),
+          bow: flies ? bowOf(run.step.act, toward) : undefined,
+          lift: flies && lifts(run.step.act),
+          round:
+            flies && (faceUp || resting.pose.face === "back")
+              ? halfTurn
+              : undefined,
+        }));
   const turn = turns ? turningOf(run.step.act).at : kept && 1;
   return [{ from, to, closes: to > end, pose, turn, own: flies }, kept];
 }

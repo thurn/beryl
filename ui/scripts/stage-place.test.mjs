@@ -13,6 +13,7 @@ import {
     roomIn,
     makingRoom,
     meets,
+    REGROUP,
     STRIKE,
     turned,
     TURNED,
@@ -123,6 +124,45 @@ test("what makes room for a tapped card waits for its turn, then steps past", ()
     assert.deepEqual(roomIn("vanish", 100, 600), [600, 600 + 500 * CLOSES]);
     assert.deepEqual(roomIn("fly", 100, 600), [100, 600]);
 });
+
+for (const side of ["you", "opponent"]) {
+    test(`${side === "you" ? "your" : "the opponent's"} hand closes up quickly behind a card cast from it, whatever its flight takes`, () => {
+        const { stage: made } = stage({ fly: { duration: 1000 } });
+        const card = (slot, zone) =>
+            object(slot, zone, { owner: side, controller: side });
+        const hand = (battlefield, held) =>
+            view(battlefield, [], {
+                objects: [
+                    ...battlefield.map((slot) => card(slot, "battlefield")),
+                    ...held.map((slot) => card(slot, "hand")),
+                ],
+            });
+        made.play(hand([], [2, 3, 4]));
+        assert.deepEqual([made.pose(3).x, made.pose(4).x], [400, 800]);
+        made.play(hand([2], [3, 4]), {
+            beats: [
+                [
+                    {
+                        act: {
+                            verb: "fly",
+                            from: "hand",
+                            why: "play",
+                            object: card(2, "battlefield"),
+                        },
+                    },
+                ],
+            ],
+        });
+        // Half way through the regroup the cards left are three quarters of the way to
+        // their places: they slow into them.
+        made.clock.advance(REGROUP / 2);
+        assert.deepEqual([made.pose(3).x, made.pose(4).x], [100, 500]);
+        // They are there long before the cast card lands.
+        made.clock.advance(REGROUP / 2);
+        assert.deepEqual([made.pose(3).x, made.pose(4).x], [0, 400]);
+        assert.notEqual(made.pose(2).y, 0, "the cast card is still on its way");
+    });
+}
 
 test("an untap turns it back the other way, and a card that lay so already does not turn", () => {
     const { stage: made } = stage({ tap: LINEAR });

@@ -448,24 +448,27 @@ stage to; Arena's measured instances are kept beside them as reference in
   right end of the hand; each of several drawn together sweeps past that place
   without stopping and comes down into the hand, which has made room for them
   all as the first left. A card that comes to a hand joins its right end, and
-  keeps its place there. A card that lands face down the other way up the table,
-  as the opponent's draw does, leaves the way up it will lie. A spell cast
-  leaves the straight line in a shallow arc that bows toward its controller's
-  edge of the table. A permanent resolving, either player's, is thrown up off
-  the stack: it is smaller in its first frame, rises up the screen at once,
-  crosses most of the way to its place at that height, half way across after a
-  quarter of its time, and then drops onto its place, shrinking as it comes
-  down. The player's own land glides straight to its place. The opponent's land
-  drops out of their hand into the open table on the side away from where it is
-  going, tilted, and swings back along the table to its place. A permanent waits
-  on the stack until the flare of the mana that paid for it has gone, and then
-  leaves. A played land glides from where it is released to its slot in about
-  0.3 s, gathering speed, and lands with no flash. The opponent's land leaves
-  their hand face up, drops down into the table on the side away from their
-  lands, tilted, and swings back to its slot, about 0.6 s in all, with no flash.
-  The opponent's spell leaves their hand as a card back and is face up when it
-  reaches the stack, about 0.4 s; the player's own flies from where it is
-  released in about 0.35 s. A resolving permanent, either player's, is the
+  keeps its place there. The cards that stay in a hand as one joins or leaves it
+  move to their new places in about a sixth of a second, slowing into them, as
+  the change happens: as a drawn card leaves the library, and as a card cast or
+  played leaves the hand. A card that lands face down the other way up the
+  table, as the opponent's draw does, leaves the way up it will lie. A spell
+  cast leaves the straight line in a shallow arc that bows toward its
+  controller's edge of the table. A permanent resolving, either player's, is
+  thrown up off the stack: it is smaller in its first frame, rises up the screen
+  at once, crosses most of the way to its place at that height, half way across
+  after a quarter of its time, and then drops onto its place, shrinking as it
+  comes down. The player's own land glides straight to its place. The opponent's
+  land drops out of their hand into the open table on the side away from where
+  it is going, tilted, and swings back along the table to its place. A permanent
+  waits on the stack until the flare of the mana that paid for it has gone, and
+  then leaves. A played land glides from where it is released to its slot in
+  about 0.3 s, gathering speed, and lands with no flash. The opponent's land
+  leaves their hand face up, drops down into the table on the side away from
+  their lands, tilted, and swings back to its slot, about 0.6 s in all, with no
+  flash. The opponent's spell leaves their hand as a card back and is face up
+  when it reaches the stack, about 0.4 s; the player's own flies from where it
+  is released in about 0.35 s. A resolving permanent, either player's, is the
   smaller battlefield card one frame after it leaves the stack, rises up the
   screen by about a fifth of the table's height within 0.1 s, crosses to above
   its slot at that height and drops onto it, about 0.5 s in all, and the slot
