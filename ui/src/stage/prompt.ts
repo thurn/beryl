@@ -46,6 +46,7 @@ import type {
   DecisionView,
   ObjectView,
   PlayerView,
+  PlaceName,
   PromptButton,
   PromptView,
   Purpose,
@@ -121,11 +122,28 @@ export function coversTable(prompt: PromptView | undefined): boolean {
   );
 }
 
+/** Where the first pile of a split takes cards out of the library and the second leaves them
+ * there, as a look that puts two of the cards into the hand does: a pick of the first pile's
+ * cards, which Arena shows as one fan ("Put two of them into your hand.",
+ * `AhTcvQ-lQQQ 11:11.5`). */
+const TAKEN = new Set<PlaceName | null>([
+  "hand",
+  "graveyard",
+  "exile",
+  "battlefield",
+]);
+const LEFT = new Set<PlaceName | null>(["top", "bottom"]);
+
 /** The cards `prompt` holds up off the table, as the session lists them: a pick's tray, a
  * split's two piles, each laid out for as many cards as it must come to hold (marked as a
- * put-back where the cards go from the hand onto the library), or the cards a yes or no or a choice among answers is about (the card whose ways are chosen among is
- * shown once a way instead). */
-export function trayOf(prompt: PromptView | undefined): Tray | undefined {
+ * put-back where the cards go from the hand onto the library, or as a pick where some are
+ * taken out of the library), or the cards a yes or no or a choice among answers is about (the
+ * card whose ways are chosen among is shown once a way instead). A pick's fan keeps the order
+ * of `before`, the tray held up until now, so that a card clicked stays where it lies. */
+export function trayOf(
+  prompt: PromptView | undefined,
+  before?: Tray,
+): Tray | undefined {
   const state = prompt?.body;
   if (state?.shape === "pick" && state.tray.length > 0) {
     return { piles: [{ cards: state.tray }] };
@@ -136,6 +154,21 @@ export function trayOf(prompt: PromptView | undefined): Tray | undefined {
   }
   if (state?.shape !== "split") return undefined;
   const [onto, from] = state.piles;
+  // Once the picks are made (the hand's pile closed), what is left is ordered in its box.
+  const choosing = onto && !onto.closed;
+  if (choosing && TAKEN.has(onto.place) && LEFT.has(from?.place ?? null)) {
+    const all = [...from!.cards, ...onto.cards];
+    const kept = (before?.order ?? []).filter((slot) => all.includes(slot));
+    const order = [...kept, ...all.filter((slot) => !kept.includes(slot))];
+    return {
+      piles: state.piles.map(({ cards, exactly }) => ({
+        cards,
+        ...(exactly === null ? {} : { room: exactly }),
+      })),
+      picks: true,
+      order,
+    };
+  }
   return {
     piles: state.piles.map(({ cards, exactly }) => ({
       cards,
@@ -644,8 +677,8 @@ export class Prompts {
     for (const [key, act] of wanted) this.#drawn.set(key, act);
     const { view, busy } = this.#stage.shown;
     // The cards held up are lifted as the prompt has them now, or let go with it.
-    const tray = trayOf(prompt);
     const up = this.#up;
+    const tray = trayOf(prompt, up);
     const sorted = up !== undefined;
     const held: Step[] = sameTray(tray, up)
       ? []

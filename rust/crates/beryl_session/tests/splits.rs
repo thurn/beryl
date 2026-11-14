@@ -209,8 +209,10 @@ fn to_the_look(play: &mut Play) {
     assert!(play.decision().prompt.is(Purpose::Arrange));
 }
 
-/// A look that takes two opens with every card bound for the bottom; the button waits until
-/// the hand's pile holds its two, and a third is refused.
+/// A look that takes two opens with every card bound for the bottom, as a pick: a card
+/// clicked is selected for the hand and the button counts the cards selected, waiting until
+/// the hand's pile holds its two; a third is refused, and a card clicked back goes back to
+/// its place among the rest.
 #[test]
 fn a_look_takes_its_cards_for_the_hand_and_orders_the_rest_on_the_bottom() {
     let mut play = Play::scenario(&STOCK);
@@ -218,6 +220,13 @@ fn a_look_takes_its_cards_for_the_hand_and_orders_the_rest_on_the_bottom() {
     let [island, plains, crypt, counterspell, reprieve] =
         [ISLAND, PLAINS, MANA_CRYPT, COUNTERSPELL, REPRIEVE].map(|name| in_library(&play, name));
     let all = cards(&[island, plains, crypt, counterspell, reprieve]);
+    let rest = |taken: &[ObjectId]| {
+        let left: Vec<ObjectId> = [island, plains, crypt, counterspell, reprieve]
+            .into_iter()
+            .filter(|slot| !taken.contains(slot))
+            .collect();
+        cards(&left)
+    };
     assert_eq!(
         play.prompt(),
         format!(
@@ -225,25 +234,40 @@ fn a_look_takes_its_cards_for_the_hand_and_orders_the_rest_on_the_bottom() {
              pile hand \"Hand\" exactly 2:\n\
              pile bottom \"Bottom\": #{island} #{plains} #{crypt} #{counterspell} #{reprieve}\n\
              eligible {all}\n\
-             confirm(Done)\n"
+             confirm(Submit 0)\n"
         )
     );
+    let one = format!(
+        "split arrange: Put two of them into your hand.\n\
+         pile hand \"Hand\" exactly 2: #{crypt}\n\
+         pile bottom \"Bottom\": #{island} #{plains} #{counterspell} #{reprieve}\n\
+         eligible {}\n\
+         selected #{crypt}\n\
+         confirm(Submit 1)\n",
+        rest(&[crypt])
+    );
+    assert_eq!(play.on(crypt).unwrap(), one);
+    // Clicked back, the Crypt goes back between the Plains and the Counterspell.
     assert_eq!(
         play.on(crypt).unwrap(),
         format!(
             "split arrange: Put two of them into your hand.\n\
-             pile hand \"Hand\" exactly 2: #{crypt}\n\
-             pile bottom \"Bottom\": #{island} #{plains} #{counterspell} #{reprieve}\n\
+             pile hand \"Hand\" exactly 2:\n\
+             pile bottom \"Bottom\": #{island} #{plains} #{crypt} #{counterspell} #{reprieve}\n\
              eligible {all}\n\
-             confirm(Done)\n"
+             confirm(Submit 0)\n"
         )
     );
+    assert_eq!(play.on(crypt).unwrap(), one);
     let taken = format!(
         "split arrange: Put two of them into your hand.\n\
          pile hand \"Hand\" exactly 2: #{crypt} #{counterspell}\n\
          pile bottom \"Bottom\": #{island} #{plains} #{reprieve}\n\
-         eligible {all}\n\
-         confirm[Done]*\n"
+         eligible {}\n\
+         selected {}\n\
+         confirm[Submit 2]*\n",
+        rest(&[crypt, counterspell]),
+        cards(&[crypt, counterspell])
     );
     assert_eq!(play.on(counterspell).unwrap(), taken);
     // The hand takes two: a third is not moved, by a click or by a drop.
@@ -257,8 +281,11 @@ fn a_look_takes_its_cards_for_the_hand_and_orders_the_rest_on_the_bottom() {
             "split arrange: Put two of them into your hand.\n\
              pile hand \"Hand\" exactly 2: #{crypt} #{counterspell}\n\
              pile bottom \"Bottom\": #{reprieve} #{plains} #{island}\n\
-             eligible {all}\n\
-             confirm[Done]*\n"
+             eligible {}\n\
+             selected {}\n\
+             confirm[Submit 2]*\n",
+            rest(&[crypt, counterspell]),
+            cards(&[crypt, counterspell])
         )
     );
 

@@ -7,7 +7,9 @@
 // by side, or where the layout gives the second a space of its own (a phone, which is
 // narrow), one in each. Cards put back from the hand onto the library lie as the hand and
 // the library do instead (`putBack`): the library face down at the left with the cards put
-// on it fanned down its face, and the hand fanned at the right.
+// on it fanned down its face, and the hand fanned at the right. Cards picked out of the
+// library from among the rest (`picks`) lie in one overlapping fan, as Arena's "Choose Two"
+// browser has them, in the order they were dealt, the prompt marking those picked.
 import type { Place, Point } from "./layout.ts";
 import type { Tray } from "./table.ts";
 
@@ -322,9 +324,52 @@ function putBack(tray: Tray, space: TraySpace): Laid {
   return laid;
 }
 
+/** The shape of a pick's fan, from Arena's "Choose Two" browser (`AhTcvQ-lQQQ 11:25.5`,
+ * `IT6nwh6HtYk 20:08`, `IHPV6yRaFlk 50:40`): neighbors this share of a card's width apart,
+ * each in front of the one before, the ends turned up to `turn` degrees away from the middle
+ * and dropped this share of a card's width. Arena's cards are about four tenths of the
+ * table's height tall: as tall as the space holds. */
+const FAN = { step: 0.42, turn: 8, drop: 0.08 };
+
+/** The cards of a pick, `cards` in their order, in one fan about the middle of `space`, as
+ * large as its height holds and its width takes. */
+function fan(cards: readonly number[], space: TraySpace): Laid {
+  const { gap, card } = space;
+  const count = Math.max(1, cards.length);
+  const across = space.width - 2 * gap;
+  const tall = (space.height - 2 * gap) * card.aspect;
+  const width = Math.max(
+    card.least,
+    Math.min(
+      tall / (1 + FAN.drop * card.aspect),
+      across / (1 + FAN.step * (count - 1)),
+    ),
+  );
+  const step = Math.min(
+    FAN.step * width,
+    (across - width) / Math.max(1, count - 1),
+  );
+  const height = width / card.aspect;
+  const whole = width + step * (count - 1);
+  const left = space.x + (space.width - whole) / 2;
+  const top = space.y + (space.height - height - FAN.drop * width) / 2;
+  const laid = new Map<number, TrayPlace>();
+  cards.forEach((slot, i) => {
+    const t = count > 1 ? (i / (count - 1)) * 2 - 1 : 0;
+    laid.set(slot, {
+      x: left + step * i,
+      y: top + FAN.drop * width * t * t,
+      width,
+      turn: FAN.turn * t,
+    });
+  });
+  return { cards: laid, boxes: [] };
+}
+
 /** `tray` laid out in `space`. */
 export function laidOut(tray: Tray, space: TraySpace): Laid {
   if (tray.putBack && tray.piles.length === 2) return putBack(tray, space);
+  if (tray.picks && tray.order) return fan(tray.order, space);
   if (tray.piles.length === 1) return rows(tray.piles[0]!.cards, space);
   return tray.piles.length === 2 && space.second
     ? stacked(tray, space, space.second)

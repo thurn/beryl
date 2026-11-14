@@ -23,22 +23,34 @@ const asksAbout = (prompt, state) =>
         ? state.about
         : [];
 
+/** Whether `state`, a split's, picks cards out of the library from among the rest, which
+ * stay there, and the picks are still to make: its cards lie in one row with no pile's box (src/stage/prompt.ts `trayOf`). */
+const picks = (state) =>
+    !state.piles[0].closed &&
+    ["hand", "graveyard", "exile", "battlefield"].includes(
+        state.piles[0].place,
+    ) &&
+    ["top", "bottom"].includes(state.piles[1].place);
+
 /** What `prompt` holds up, as the session's state says it: a split's piles, each under its
- * name with its cards in their order; a pick's tray and the cards a question is about, in no
- * order; an order's items, first to resolve first. No card of them shows its back, and none
- * is drawn twice. */
+ * name with its cards in their order; a pick's tray, the cards a split picks from among the
+ * rest and the cards a question is about, in no order; an order's items, first to resolve
+ * first. No card of them shows its back, and none is drawn twice. */
 export function heldUp(prompt) {
     const state = (prompt && onTable(prompt) && prompt.body) || {};
+    const picked = state.shape === "split" && picks(state);
     return {
         piles:
-            state.shape === "split"
+            state.shape === "split" && !picked
                 ? state.piles.map(({ label, cards }) => ({ label, cards }))
                 : [],
         loose: (state.shape === "pick"
             ? [...state.tray]
-            : state.shape
-              ? [...asksAbout(prompt, state)]
-              : []
+            : picked
+              ? state.piles.flatMap(({ cards }) => cards)
+              : state.shape
+                ? [...asksAbout(prompt, state)]
+                : []
         ).sort((a, b) => a - b),
         order: state.shape === "order" ? state.items.map(({ id }) => id) : [],
         backs: 0,

@@ -276,14 +276,15 @@ pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
         // "Scry", over "Drag cards to put them on the top or bottom of your library."
         // (`IHPV6yRaFlk 19:58.0`, `SN9QFe2kM4Y 14:50.5`).
         Purpose::Scry => arranges("Scry"),
-        // Two browsers in Arena, "Choose Two" over "Put two of them into your hand."
-        // (`SN9QFe2kM4Y 27:05.0`) and then "Order Cards" over "Drag cards to order them on the
-        // bottom of your library." (`SN9QFe2kM4Y 29:52.0`, `yvNZVakbnrQ 22:50.5`): one in
-        // Beryl, worded by the part it is at.
-        Purpose::Arrange => arranges(match part {
-            Part::Second => "Order Cards",
-            _ => of_them(to, false),
-        }),
+        // "Choose Two" over "Put two of them into your hand.", whose button counts the cards
+        // picked, "Submit 0" to "Submit 2" (`SN9QFe2kM4Y 27:05.0`, `AhTcvQ-lQQQ 11:11.5`, 11:25.0).
+        // A prompt that opens at its second part, the first's picks made, is Arena's "Order
+        // Cards" over "Drag cards to order them on the bottom of your library."
+        // (`SN9QFe2kM4Y 29:52.0`, `yvNZVakbnrQ 22:50.5`).
+        Purpose::Arrange => match part {
+            Part::Second => arranges("Order Cards"),
+            _ => picks(of_them(to, false)),
+        },
         // Composed from "Drag cards to order them on top of your library."
         // (`yvNZVakbnrQ 22:50.5`, 32:32.0): only an opponent's is in the recordings
         // (`pE4XSNi-nZc 27:18.0`).

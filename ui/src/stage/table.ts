@@ -27,6 +27,11 @@ export interface Tray {
   /** The second pile is the hand, whose cards the player puts back onto the library, the
    * first pile: the tray lies as the library and the hand do (tray.ts `putBack`). */
   putBack?: true;
+  /** The first pile is the cards picked out of the second, which stay in the library: the
+   * tray lies as one fan of every card in `order`, the order they were dealt in, and the
+   * prompt marks the picked ones (tray.ts `laidOut`). */
+  picks?: true;
+  order?: readonly number[];
 }
 
 /** One pile of a tray. */

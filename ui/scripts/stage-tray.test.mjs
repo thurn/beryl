@@ -15,8 +15,8 @@ const card = (slot) => ({ kind: "object", slot });
  * must come to hold `exactly`, and `cards` in the second. */
 const split = (first, second, more = {}) => ({
     revision: 0,
-    purpose: "arrange",
-    title: "Put one of them into your hand.",
+    purpose: "scry",
+    title: "Scry",
     marks: [...first, ...second].map((slot) => ({
         on: card(slot),
         mark: "eligible",
@@ -25,12 +25,31 @@ const split = (first, second, more = {}) => ({
     body: {
         shape: "split",
         piles: [
-            { place: "hand", label: "Hand", cards: first, exactly: 1 },
-            { place: "bottom", label: "Bottom", cards: second, exactly: null },
+            { place: "bottom", label: "Bottom", cards: first, exactly: 1 },
+            { place: "top", label: "Top", cards: second, exactly: null },
         ],
     },
     ...more,
 });
+
+/** A look that puts cards from among `first` and `second` into the hand and the rest on the
+ * bottom of the library. */
+const look = (first, second) => {
+    const asked = split(first, second);
+    const [hand, bottom] = asked.body.piles;
+    return {
+        ...asked,
+        purpose: "arrange",
+        title: "Put two of them into your hand.",
+        body: {
+            shape: "split",
+            piles: [
+                { ...hand, place: "hand", label: "Hand", exactly: 2 },
+                { ...bottom, place: "bottom", label: "Bottom" },
+            ],
+        },
+    };
+};
 
 /** A view of the permanent 1, the hand's card 3 and a library of 10 under 11, whose cards
  * the viewer knows; it asks `prompt`, if given one. */
@@ -457,4 +476,31 @@ test("cards put back from the hand lie on the library and in a fan beside it", (
     assert.equal(landing(tray, space, { x: 800, y: 300 }).pile, 1);
     // A split of any other piles is laid out in boxes still.
     assert.equal(laidOut({ piles: tray.piles }, space).library, undefined);
+});
+
+test("cards picked out of the library lie in one row, in the order they were dealt", () => {
+    // Three looked at, none picked yet: a pick of the hand's pile, in the bottom's order.
+    const opened = trayOf(look([], [12, 10, 11]));
+    assert.equal(opened.picks, true);
+    assert.deepEqual(opened.order, [12, 10, 11]);
+    // 12 is picked: the session lists it in the hand's pile, and the row keeps it first.
+    const picked = trayOf(look([12], [10, 11]), opened);
+    assert.deepEqual(picked.order, [12, 10, 11]);
+    // The row is Arena's fan: the three in that order, each overlapping the one before and
+    // in front of it, the ends turned away from the middle and lower than it.
+    const laid = laidOut(picked, space);
+    const [a, b, c] = picked.order.map((slot) => laid.cards.get(slot));
+    const xs = [a.x, b.x, c.x];
+    assert.ok(a.x < b.x && b.x < c.x);
+    assert.ok(b.x - a.x < a.width, "overlapping");
+    assert.ok(a.turn < 0 && b.turn === 0 && c.turn > 0);
+    assert.ok(a.y > b.y && Math.abs(a.y - c.y) < 1e-9);
+    assert.deepEqual(laid.boxes, []);
+    assert.equal(landing(picked, space, { x: xs[1], y: 300 }), undefined);
+    // Once the picks are made, the rest are ordered in their box.
+    const closed = look([], [10, 11]);
+    closed.body.piles[0].closed = true;
+    assert.equal(trayOf(closed).picks, undefined);
+    // A scry's piles are laid out in boxes still.
+    assert.equal(trayOf(split([], [10, 11])).picks, undefined);
 });

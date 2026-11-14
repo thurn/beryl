@@ -6,6 +6,12 @@
 //! order, and every card opens in the second: on top as it lies, or in the hand it stays in.
 //! A click on a card sends it to the other pile, and a drop puts it in a pile at a place.
 //!
+//! A look that takes some cards out of the library and leaves the rest there is a pick, as
+//! Arena asks it ("Put two of them into your hand.", `AhTcvQ-lQQQ 11:11.5`): the screen lays
+//! the cards out in one fan as they were dealt, those taken are marked selected, and the
+//! button counts them. A card clicked back goes back to its place among the rest, so the rest
+//! go to the library in the order the fan shows them.
+//!
 //! The engine asks for the first pile's cards one at a time, then for the order of the
 //! second's ([`Part::First`], [`Part::Second`]): the run makes those picks from the piles as
 //! they stand.
@@ -25,6 +31,11 @@ pub(crate) struct Split {
     purpose: Purpose,
     /// The first destination's pile, then the second's.
     piles: [Pile; 2],
+    /// Every card, as the prompt opened: the order a pick's cards are laid out in.
+    dealt: Vec<ObjectId>,
+    /// The first pile takes cards out of the library and the second leaves them there: the
+    /// prompt is a pick of the first pile's cards.
+    chooses: bool,
     /// The first pile's picks offer an end: it takes any number of the cards.
     ends: bool,
     confirm: String,
@@ -77,7 +88,11 @@ impl Split {
         let all = u8::try_from(cards.len()).unwrap_or(u8::MAX);
         let [to, rest] = table.record.places.map(PlaceName::of);
         let [to_label, rest_label] = prompt.words.piles.clone();
+        let stays = matches!(rest, Some(PlaceName::Top | PlaceName::Bottom));
+        let chooses = first && stays && matches!(picks(to), Picks::Any);
         Some(Split {
+            dealt: cards.clone(),
+            chooses,
             purpose: table.d?.prompt.purpose,
             piles: [
                 Pile {
@@ -137,10 +152,18 @@ impl Split {
 
     pub(crate) fn click(&mut self, click: Click) -> Clicked {
         match click {
-            // To the other pile, at its end.
+            // To the other pile, at its end; in a pick, one put back goes back to its place
+            // among the rest.
             Click::On {
                 on: Subject::Object { slot },
             } => match self.find(slot) {
+                Some((0, _)) if self.chooses => {
+                    let dealt = |card: &ObjectId| self.dealt.iter().position(|c| c == card);
+                    let at = (self.piles[1].cards.iter())
+                        .filter(|card| dealt(card) < dealt(&slot))
+                        .count();
+                    self.drop(slot, 1, Some(at))
+                }
                 Some((from, _)) => self.drop(slot, 1 - from, None),
                 None => Clicked::Same,
             },
@@ -173,20 +196,26 @@ impl Split {
         Run::new(self.purpose, steps)
     }
 
-    /// Writes the state into `view`: every card that can be moved is eligible.
+    /// Writes the state into `view`: every card that can be moved is eligible, but for a
+    /// pick's cards taken, which are selected. The button counts those.
     pub(crate) fn show(&self, view: &mut PromptView) {
-        view.marks = (self.piles.iter())
-            .filter(|pile| !pile.closed)
-            .flat_map(|pile| pile.cards.iter())
-            .map(|&slot| Marked {
+        view.marks = (self.piles.iter().enumerate())
+            .filter(|(_, pile)| !pile.closed)
+            .flat_map(|(at, pile)| pile.cards.iter().map(move |&slot| (at, slot)))
+            .map(|(at, slot)| Marked {
                 on: Subject::Object { slot },
-                mark: Mark::Eligible,
+                mark: if self.chooses && at == 0 {
+                    Mark::Selected
+                } else {
+                    Mark::Eligible
+                },
             })
             .collect();
         let ready = self.ready();
+        let picked = self.piles[0].cards.len().to_string();
         view.buttons = vec![PromptButton {
             id: ButtonId::Confirm,
-            label: self.confirm.clone(),
+            label: self.confirm.replace("{picked}", &picked),
             caption: String::new(),
             enabled: ready,
             primary: ready,
