@@ -922,6 +922,11 @@
     },
     {
       "kind": "not-seen",
+      "name": "Permanents entering together",
+      "rule": "When permanents a player controls enter the battlefield at the same time and the order of their timestamps could change what their abilities do, the player picks them one at a time, earliest first, in the ordinary pick prompt: \"Choose which enters first.\" Arena orders them without asking, as far as the recordings show."
+    },
+    {
+      "kind": "not-seen",
       "name": "Evoke and cycling",
       "rule": "A card with evoke, or a land with cycling, opens the same \"Choose One\" modal. No evoke is seen; Triomes cycle straight to the stack, but whether a land could still be played is not shown.",
       "reports": [

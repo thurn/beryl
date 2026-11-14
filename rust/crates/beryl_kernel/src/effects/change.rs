@@ -150,6 +150,30 @@ impl LayerChange {
         )
     }
 
+    /// Whether it and `other`, applied in one layer, give the same results in either order:
+    /// two equal changes, or two that only add to what a permanent has ("in addition to its
+    /// other types", "gains", "gets +X/+Y"). Any change that sets or removes something may
+    /// not, as "is blue" and "is red" do not. The rules ask it of permanents that entered
+    /// the battlefield together, whose controllers choose the order of their timestamps only
+    /// where it could change something ([CR 613.7m]).
+    ///
+    /// [CR 613.7m]: https://yawgatog.com/resources/magic-rules/#R6137m
+    #[inline]
+    pub fn commutes_with(self, other: LayerChange) -> bool {
+        fn adds(change: LayerChange) -> bool {
+            matches!(
+                change,
+                LayerChange::AddTypes(_)
+                    | LayerChange::AddSubtype(_)
+                    | LayerChange::AddKeywords(_)
+                    | LayerChange::Grant(_)
+                    | LayerChange::AddColors(_)
+                    | LayerChange::ModifyPt(..)
+            )
+        }
+        self == other || (adds(self) && adds(other))
+    }
+
     /// The characteristics it may change ([`Characteristics`]), for the layers' search for
     /// effects that depend on others ([CR 613.8a]): "An effect is said to “depend on” another
     /// if (a) it's applied in the same layer (and, if applicable, sublayer) as the other

@@ -304,6 +304,11 @@ recordings do not show them.
   attacks, and its line stays drawn throughout (by-l26, by-y3sp).
 - **A token that leaves.** It dissolves in place like any permanent. No token
   leaving the battlefield is seen (by-1ug).
+- **Permanents entering together.** When permanents a player controls enter the
+  battlefield at the same time and the order of their timestamps could change
+  what their abilities do, the player picks them one at a time, earliest first,
+  in the ordinary pick prompt: "Choose which enters first." Arena orders them
+  without asking, as far as the recordings show.
 - **Evoke and cycling.** A card with evoke, or a land with cycling, opens the
   same "Choose One" modal. No evoke is seen; Triomes cycle straight to the
   stack, but whether a land could still be played is not shown (by-lzl, by-9fb).

@@ -212,6 +212,8 @@ pub(crate) fn move_batch_to<L: Layout>(
         },
     };
     let first = moves.as_slice().as_ptr();
+    // The permanents the batch puts onto the battlefield, in the order they move.
+    let mut arrived: L::Queue<L::Slot, 128> = Default::default();
     for each in moves.iter() {
         let &(slot, from, dest, entry) = each;
         if dest == Zone::Battlefield && entry.pay_life {
@@ -220,12 +222,17 @@ pub(crate) fn move_batch_to<L: Layout>(
         s.move_object(sink, slot, dest, place)?;
         if dest == Zone::Battlefield {
             arrive(s, t, slot, entry)?;
+            arrived.push_bounded(slot);
         }
         sink.push_joined(changed(s.object_ref(slot), from, dest), || {
             !std::ptr::eq(each, first)
         });
     }
     layers::refresh(s, t, sink)?;
+    if arrived.len() > 1 {
+        crate::entered::order(s, t, arrived.as_slice())?;
+        layers::refresh(s, t, sink)?;
+    }
     for &(slot, from, dest, _) in moves.iter() {
         trigger::match_event(s, t, &changed(s.object_ref(slot), from, dest))?;
     }

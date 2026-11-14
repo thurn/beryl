@@ -3,6 +3,9 @@
 
 mod apply;
 mod dependency;
+mod together;
+
+pub(crate) use together::order_may_matter;
 
 use beryl_kernel::derive::Rederive;
 

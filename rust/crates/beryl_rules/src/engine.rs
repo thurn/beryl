@@ -14,7 +14,7 @@ use crate::scratch::assert_sound;
 pub use crate::scratch::{Counts, Scratch};
 use crate::state::{Pending, State, TurnStep, Zone};
 use crate::table::GameTable;
-use crate::{cast, combat, face_down, layers, mana, resolve, sba, start, trigger, turn};
+use crate::{cast, combat, entered, face_down, layers, mana, resolve, sba, start, trigger, turn};
 
 mod collapse;
 mod questions;
@@ -504,6 +504,9 @@ fn perform_machine<L: Layout>(
             } else {
                 sba::apply_legend_rule(s, t, &mut x.events, kept)
             }
+        }
+        Pending::OrderEntered { group } => {
+            entered::pick(s, group, d.candidates.object(c).expect("an object choice"))
         }
         _ => return None,
     })

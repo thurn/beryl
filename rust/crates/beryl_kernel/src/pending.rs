@@ -194,6 +194,15 @@ pub enum Pending<L: Layout = Small> {
     /// (CR 116.2b), and chooses how to pay its mana cost: among payment plans, or under manual
     /// payment one source at a time, `remaining` being what is left to pay.
     TurningFaceUp { slot: L::Slot, remaining: ManaCost },
+    /// Permanents that entered the battlefield together, whose controllers choose the order
+    /// of their timestamps ([CR 613.7m]): "Objects controlled by the active player ... have an
+    /// earlier relative timestamp in the order of that player's choice, followed by each
+    /// other player in turn order." `group` holds those still to order, two or more of each
+    /// player's; each pick gives the permanent picked the earliest of the timestamps left to
+    /// its controller's.
+    ///
+    /// [CR 613.7m]: https://yawgatog.com/resources/magic-rules/#R6137m
+    OrderEntered { group: Bitboard<L::Slot> },
 }
 
 impl Copy for Pending<Small> {}

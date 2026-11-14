@@ -317,6 +317,12 @@ purposes! {
     /// player chooses which creatures they control, if any, will block. ... For each of the
     /// chosen creatures, the defending player chooses one creature for it to block".
     Block = "block" => Declare,
+    /// Of the permanents a player controls that entered the battlefield together, the one
+    /// with the earliest timestamp of those left
+    /// ([CR 613.7m](https://yawgatog.com/resources/magic-rules/#R6137m)): "Objects controlled
+    /// by the active player ... have an earlier relative timestamp in the order of that
+    /// player's choice". Asked only where the order could change the layer results.
+    EnterOrder = "enter-order" => Pick,
 }
 
 /// Which part of its prompt's shape one pick answers. Before this said so, the kind of the

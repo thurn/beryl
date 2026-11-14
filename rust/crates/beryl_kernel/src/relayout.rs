@@ -320,6 +320,7 @@ impl<L: Layout> Relayout for Pending<L> {
             Pending::Mulligans => Pending::Mulligans,
             Pending::Discard => Pending::Discard,
             &Pending::LegendRule { kept } => Pending::LegendRule { kept: bits(kept) },
+            &Pending::OrderEntered { group } => Pending::OrderEntered { group: bits(group) },
             &Pending::EnterPayingLife { slot: s, life } => Pending::EnterPayingLife {
                 slot: slot(s),
                 life,

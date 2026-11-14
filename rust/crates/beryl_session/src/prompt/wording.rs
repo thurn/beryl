@@ -235,6 +235,8 @@ pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
             "Choose the legendary permanent that you wish to keep. All others will go to their \
              owner's graveyard.",
         ),
+        // Not seen in Arena, which orders permanents that enter together itself.
+        Purpose::EnterOrder => picks("Choose which enters first."),
         // Taking none is asked first (Part::Whether) and folded into the look, whose Decline
         // then stands beside Submit (`IHPV6yRaFlk 28:19.5`, `qF4GF-vfc8Y 30:13.0`).
         Purpose::Look => Wording {

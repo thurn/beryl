@@ -22,6 +22,29 @@ impl<L: Layout> State<L> {
         timestamp
     }
 
+    /// Gives the permanents of `order`, which took their timestamps together, those same
+    /// timestamps again in the order listed: the earliest to the first. So the rules order
+    /// permanents that entered the battlefield together ([CR 613.7m]): "If two or more objects
+    /// would receive a timestamp simultaneously, such as by entering a zone simultaneously or
+    /// becoming attached simultaneously, their relative timestamps are determined in APNAP
+    /// order (see rule 101.4)."
+    ///
+    /// [CR 613.7m]: https://yawgatog.com/resources/magic-rules/#R6137m
+    pub fn order_timestamps(&mut self, order: &[L::Slot]) {
+        debug_assert!(order.len() <= 128, "a batch moves at most 128 objects");
+        let mut timestamps = [0u16; 128];
+        let timestamps = &mut timestamps[..order.len()];
+        for (timestamp, &slot) in timestamps.iter_mut().zip(order) {
+            debug_assert_eq!(self.object(slot).zone, crate::state::Zone::Battlefield);
+            *timestamp = self.object(slot).timestamp;
+        }
+        timestamps.sort_unstable();
+        for (&timestamp, &slot) in timestamps.iter().zip(order) {
+            self.object_mut(slot).timestamp = timestamp;
+        }
+        self.flags.derived_dirty = true;
+    }
+
     /// Numbers the live timestamps 0, 1, 2 and on in the order they were given: those of
     /// the permanents and of the continuous effects, the ones the layers compare. An object
     /// off the battlefield keeps its stale timestamp, which nothing reads, and takes a new one

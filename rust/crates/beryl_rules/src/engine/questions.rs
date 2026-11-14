@@ -10,7 +10,7 @@ use crate::layout::{Layout, Queue};
 use crate::observation::Observation;
 use crate::state::{Pending, State};
 use crate::table::GameTable;
-use crate::{cast, combat, face_down, mana, sba, start, trigger, turn};
+use crate::{cast, combat, entered, face_down, mana, sba, start, trigger, turn};
 
 use super::collapse;
 
@@ -74,6 +74,7 @@ pub(crate) fn decision<L: Layout>(
             let kind = DecisionKind::ChooseObject;
             Ok(Decision::objects(p, kind, collapse(s, group), keep))
         }
+        Pending::OrderEntered { group } => Ok(entered::decision(s, group)),
         // The question is about the land entering, for this much life.
         Pending::EnterPayingLife { slot, life } => Ok(options(
             s.object(slot).owner(),

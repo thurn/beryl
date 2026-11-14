@@ -173,6 +173,7 @@ pub mod drawing;
 pub mod emblems;
 pub mod ending;
 mod engine;
+mod entered;
 pub mod event;
 mod face_down;
 pub mod game;
