@@ -25,7 +25,7 @@ pub enum Unpayable {
 }
 
 /// Whether the engine pays this part of an activation cost: something done to the ability's
-/// source, a loyalty cost, or tapping permanents measured by their total power or by the
+/// source, a loyalty cost, a payment of life, or tapping permanents measured by their total power or by the
 /// generic mana they pay.
 pub fn pays_for_ability(part: &CostPart) -> bool {
     match *part {
@@ -35,7 +35,8 @@ pub fn pays_for_ability(part: &CostPart) -> bool {
             | CostAction::Discard
             | CostAction::RemoveCounter(_),
         )
-        | CostPart::Loyalty(_) => true,
+        | CostPart::Loyalty(_)
+        | CostPart::Life(_) => true,
         CostPart::Chosen(CostAction::Tap, chosen) => matches!(
             chosen,
             Chosen {
@@ -182,7 +183,9 @@ mod tests {
     static BLOODLETTER: CardDef = CardDef {
         name: "Bloodletter",
         faces: &[Face {
-            abilities: &[activated(Cost::of_parts(&[CostPart::Life(2)]))],
+            abilities: &[activated(Cost::of_parts(&[CostPart::This(
+                CostAction::Reveal,
+            )]))],
             ..Face::EMPTY
         }],
         tokens: &[],
@@ -266,7 +269,10 @@ mod tests {
         assert_eq!(table("Rite").err(), refused("Rite", sacrifice));
         assert_eq!(
             table("Bloodletter").err(),
-            refused("Bloodletter", Unpayable::Part(CostPart::Life(2)))
+            refused(
+                "Bloodletter",
+                Unpayable::Part(CostPart::This(CostAction::Reveal))
+            )
         );
         assert!(matches!(
             table("Forager").err(),
@@ -291,7 +297,12 @@ mod tests {
     fn a_spell_and_an_ability_each_pay_their_own_parts() {
         let exile = CostPart::exile(1, Zone::Hand, Filter::Any);
         assert!(pays_for_spell(&exile) && !pays_for_ability(&exile));
-        for part in [CostPart::TAP, CostPart::crew(2), CostPart::Loyalty(1)] {
+        for part in [
+            CostPart::TAP,
+            CostPart::crew(2),
+            CostPart::Loyalty(1),
+            CostPart::Life(1),
+        ] {
             assert!(pays_for_ability(&part) && !pays_for_spell(&part));
         }
         // Only its source is exiled or revealed by no code, and only cards are exiled.

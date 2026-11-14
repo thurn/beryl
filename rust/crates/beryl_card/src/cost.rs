@@ -346,6 +346,13 @@ impl Cost {
         self.kinds & kinds::CHOSEN != 0
     }
 
+    /// Whether it has a payment of life or a choice of costs ([`CostPart::Life`],
+    /// [`CostPart::OneOf`]): most costs have neither, so a caller may skip looking at the parts.
+    #[inline]
+    pub const fn pays_life_or_chooses(&self) -> bool {
+        self.kinds & kinds::OTHER != 0
+    }
+
     /// The loyalty counters it puts on or removes, if it is a loyalty ability's (CR 606.4).
     #[inline]
     pub fn loyalty_change(&self) -> Option<i8> {

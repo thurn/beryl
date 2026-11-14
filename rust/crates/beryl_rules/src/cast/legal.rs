@@ -342,6 +342,9 @@ fn activatable<L: Layout, const TARGETS: bool>(
     if a.cost().chooses() && !parts::ability_payable(s, t, player, slot, a.cost().parts()) {
         return false;
     }
+    if a.cost().pays_life_or_chooses() && !parts::life_payable(s, player, a.cost().parts()) {
+        return false;
+    }
     if matches!(a.cost().removes(), Some(kind) if s.counters_of(slot, kind) == 0) {
         return false;
     }
