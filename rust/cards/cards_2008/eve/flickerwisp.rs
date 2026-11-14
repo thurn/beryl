@@ -69,7 +69,6 @@ pub mod scenarios {
         // P0 steals P1's Equipment with Thieving Skydiver, then flickers it: it returns under
         // P1's control, its owner.
         Scenario::new("Flickerwisp returns a stolen permanent to its owner")
-            .interaction(&[Card::ThievingSkydiver])
             .hand(P0, &[Card::ThievingSkydiver, WISP])
             .battlefield(
                 P0,
@@ -111,6 +110,7 @@ pub mod scenarios {
         // A token that is exiled ceases to exist and does not return. P0's Staff of the
         // Storyteller makes the Spirit token, and the Flickerwisp exiles it.
         Scenario::new("Flickerwisp exiles a token, which does not return")
+            .interaction(&[Card::StaffOfTheStoryteller])
             .hand(P0, &[Card::StaffOfTheStoryteller, WISP])
             .battlefield(P0, &[Card::Plains; 5])
             .library(P0, &[Card::Plains])

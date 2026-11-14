@@ -31,6 +31,13 @@ use neighbours::mutants;
 /// why. An entry a scenario kills fails too, so the list stays current.
 const EQUIVALENT: &[(&str, &str, &str, &str)] = &[
     (
+        "Flickerwisp",
+        "ability 0, step 1",
+        "Amount::Fixed(1)",
+        "the delayed trigger it makes (ability 1) returns the object the delay carries and reads \
+         no `Amount::Carried`, so the number the delay carries is never read",
+    ),
+    (
         "Teferi, Hero of Dominaria",
         "ability 0, step 1",
         "Amount::Fixed(1)",
