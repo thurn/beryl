@@ -2,6 +2,7 @@
 
 pub mod combat;
 pub mod nudges;
+pub mod text;
 pub mod upkeep;
 
 pub use crate::state::{Assist, Line, Proposal};
