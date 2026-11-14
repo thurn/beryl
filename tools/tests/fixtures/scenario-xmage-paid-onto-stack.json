@@ -1,0 +1,1823 @@
+[
+ {
+  "card": "Generated",
+  "name": "Thirst for Discovery paid by XMage onto a stack, then Blood Artist paid with both Swamps",
+  "setup": {
+   "seed": 24,
+   "turn": 3,
+   "active": 0,
+   "step": "PrecombatMain",
+   "players": [
+    {
+     "life": 20,
+     "hand": [
+      "Thirst for Discovery",
+      "Thundertrap Trainer",
+      "Blood Artist"
+     ],
+     "battlefield": [
+      {
+       "card": "Forest",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      },
+      {
+       "card": "Swamp",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      },
+      {
+       "card": "Swamp",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      },
+      {
+       "card": "Island",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      },
+      {
+       "card": "Forest",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      },
+      {
+       "card": "Gold Myr",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      },
+      {
+       "card": "The Wandering Emperor",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      }
+     ],
+     "graveyard": [
+      "Mana Tithe",
+      "Counterspell"
+     ],
+     "exile": [],
+     "library": [
+      "Island",
+      "Island",
+      "Island",
+      "Island",
+      "Island",
+      "Island",
+      "Island",
+      "Island"
+     ]
+    },
+    {
+     "life": 20,
+     "hand": [
+      "Leonin Scimitar"
+     ],
+     "battlefield": [
+      {
+       "card": "Mountain",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      },
+      {
+       "card": "Seachrome Coast",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      },
+      {
+       "card": "Swamp",
+       "tapped": false,
+       "face": 0,
+       "counters": null
+      }
+     ],
+     "graveyard": [
+      "Floodfarm Verge"
+     ],
+     "exile": [],
+     "library": [
+      "Island",
+      "Island",
+      "Island",
+      "Island",
+      "Island",
+      "Island",
+      "Island",
+      "Island"
+     ]
+    }
+   ]
+  },
+  "actions": [
+   {
+    "action": "Activate",
+    "player": 0,
+    "card": "The Wandering Emperor",
+    "ability": {
+     "Own": 2
+    }
+   },
+   {
+    "action": "Cast",
+    "player": 0,
+    "card": "Thirst for Discovery",
+    "face": 0,
+    "costs": 0
+   },
+   {
+    "action": "Resolve"
+   },
+   {
+    "action": "Answer",
+    "player": 0,
+    "kind": "YesNo",
+    "pick": {
+     "pick": "Yes"
+    }
+   },
+   {
+    "action": "Resolve"
+   },
+   {
+    "action": "Cast",
+    "player": 0,
+    "card": "Blood Artist",
+    "face": 0,
+    "costs": 0
+   },
+   {
+    "action": "Resolve"
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Life",
+     "player": 0,
+     "life": 20
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Life",
+     "player": 1,
+     "life": 20
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 0,
+     "zone": "Hand",
+     "card": null,
+     "count": 3
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 0,
+     "zone": "Graveyard",
+     "card": null,
+     "count": 4
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 0,
+     "zone": "Graveyard",
+     "card": "Thirst for Discovery",
+     "count": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 0,
+     "zone": "Graveyard",
+     "card": "Island",
+     "count": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 0,
+     "zone": "Graveyard",
+     "card": "Counterspell",
+     "count": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 0,
+     "zone": "Graveyard",
+     "card": "Mana Tithe",
+     "count": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 0,
+     "zone": "Exile",
+     "card": null,
+     "count": 0
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 0,
+     "zone": "Library",
+     "card": null,
+     "count": 5
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 1,
+     "zone": "Hand",
+     "card": null,
+     "count": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 1,
+     "zone": "Graveyard",
+     "card": null,
+     "count": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 1,
+     "zone": "Graveyard",
+     "card": "Floodfarm Verge",
+     "count": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 1,
+     "zone": "Exile",
+     "card": null,
+     "count": 0
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Count",
+     "player": 1,
+     "zone": "Library",
+     "card": null,
+     "count": 8
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Controls",
+     "player": 0,
+     "card": "Forest",
+     "count": 2
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Controls",
+     "player": 0,
+     "card": "Swamp",
+     "count": 2
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Controls",
+     "player": 0,
+     "card": "Island",
+     "count": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Controls",
+     "player": 0,
+     "card": "Gold Myr",
+     "count": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Pt",
+     "player": 0,
+     "card": "Gold Myr",
+     "token": false,
+     "power": 1,
+     "toughness": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Controls",
+     "player": 0,
+     "card": "The Wandering Emperor",
+     "count": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Tapped",
+     "player": 0,
+     "card": "The Wandering Emperor",
+     "count": 0
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Counters",
+     "player": 0,
+     "card": "The Wandering Emperor",
+     "kind": "Loyalty",
+     "count": 2
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Controls",
+     "player": 0,
+     "card": "Samurai Token",
+     "count": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Tapped",
+     "player": 0,
+     "card": "Samurai Token",
+     "count": 0
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Pt",
+     "player": 0,
+     "card": "Samurai Token",
+     "token": true,
+     "power": 2,
+     "toughness": 2
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Controls",
+     "player": 0,
+     "card": "Blood Artist",
+     "count": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Tapped",
+     "player": 0,
+     "card": "Blood Artist",
+     "count": 0
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Pt",
+     "player": 0,
+     "card": "Blood Artist",
+     "token": false,
+     "power": 0,
+     "toughness": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Controls",
+     "player": 1,
+     "card": "Mountain",
+     "count": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Controls",
+     "player": 1,
+     "card": "Seachrome Coast",
+     "count": 1
+    }
+   },
+   {
+    "action": "Assert",
+    "assertion": {
+     "assert": "Controls",
+     "player": 1,
+     "card": "Swamp",
+     "count": 1
+    }
+   }
+  ],
+  "snapshot": 7,
+  "trace": [
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     1,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [
+     {
+      "name": "The Wandering Emperor",
+      "spell": false,
+      "controller": 0
+     }
+    ],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     1,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [
+     {
+      "name": "The Wandering Emperor",
+      "spell": false,
+      "controller": 0
+     },
+     {
+      "name": "Thirst for Discovery",
+      "spell": true,
+      "controller": 0
+     }
+    ],
+    "flips": [],
+    "taps": [
+     "Forest",
+     "Forest",
+     "Island"
+    ],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     1,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "YesNo",
+    "purpose": "discard",
+    "stack": [
+     {
+      "name": "The Wandering Emperor",
+      "spell": false,
+      "controller": 0
+     },
+     {
+      "name": "Thirst for Discovery",
+      "spell": true,
+      "controller": 0
+     }
+    ],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     1,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [
+     {
+      "name": "The Wandering Emperor",
+      "spell": false,
+      "controller": 0
+     }
+    ],
+    "flips": [],
+    "taps": [],
+    "forced": [
+     {
+      "turn": 3,
+      "step": "PrecombatMain",
+      "purpose": "discard",
+      "action": "Answer",
+      "player": 0,
+      "kind": "ChooseObject",
+      "pick": {
+       "pick": "Card",
+       "card": "Island"
+      }
+     }
+    ],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     1,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     2,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [
+     {
+      "name": "Blood Artist",
+      "spell": true,
+      "controller": 0
+     }
+    ],
+    "flips": [],
+    "taps": [
+     "Swamp",
+     "Swamp"
+    ],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     2,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   },
+   {
+    "turn": 3,
+    "step": "PrecombatMain",
+    "active": 0,
+    "decider": 0,
+    "kind": "Priority",
+    "purpose": "priority",
+    "stack": [],
+    "flips": [],
+    "taps": [],
+    "forced": [],
+    "flashback": [],
+    "face_down": [],
+    "creatures": [
+     3,
+     0
+    ]
+   }
+  ],
+  "cards": {
+   "Blood Artist": {
+    "faces": [
+     {
+      "name": "Blood Artist",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Triggered",
+        "trigger": "Dies",
+        "targets": [
+         {
+          "kind": "Player",
+          "count": 1
+         }
+        ],
+        "instructions": [
+         {
+          "kind": "LoseLife",
+          "player": "Target 0",
+          "count": 1
+         },
+         {
+          "kind": "GainLife",
+          "player": "You",
+          "count": 1
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Counterspell": {
+    "faces": [
+     {
+      "name": "Counterspell",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Spell",
+        "targets": [
+         {
+          "kind": "Spell",
+          "count": 1
+         }
+        ],
+        "instructions": [
+         {
+          "kind": "Counter",
+          "objects": "Target 0"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Floodfarm Verge": {
+    "faces": [
+     {
+      "name": "Floodfarm Verge",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Mana",
+        "cost": {
+         "parts": [
+          {
+           "action": "Tap",
+           "of": "This"
+          }
+         ]
+        },
+        "produces": {
+         "colors": [
+          "White"
+         ],
+         "amount": 1
+        },
+        "instructions": [
+         {
+          "kind": "AddMana",
+          "player": "You"
+         }
+        ]
+       },
+       {
+        "index": "Own 1",
+        "kind": "Mana",
+        "cost": {
+         "parts": [
+          {
+           "action": "Tap",
+           "of": "This"
+          }
+         ]
+        },
+        "produces": {
+         "colors": [
+          "Blue"
+         ],
+         "amount": 1
+        },
+        "conditional": true,
+        "instructions": [
+         {
+          "kind": "AddMana",
+          "player": "You"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Forest": {
+    "faces": [
+     {
+      "name": "Forest",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Mana",
+        "cost": {
+         "parts": [
+          {
+           "action": "Tap",
+           "of": "This"
+          }
+         ]
+        },
+        "produces": {
+         "colors": [
+          "Green"
+         ],
+         "amount": 1
+        },
+        "instructions": [
+         {
+          "kind": "AddMana",
+          "player": "You"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Gold Myr": {
+    "faces": [
+     {
+      "name": "Gold Myr",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Mana",
+        "cost": {
+         "parts": [
+          {
+           "action": "Tap",
+           "of": "This"
+          }
+         ]
+        },
+        "produces": {
+         "colors": [
+          "White"
+         ],
+         "amount": 1
+        },
+        "instructions": [
+         {
+          "kind": "AddMana",
+          "player": "You"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Island": {
+    "faces": [
+     {
+      "name": "Island",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Mana",
+        "cost": {
+         "parts": [
+          {
+           "action": "Tap",
+           "of": "This"
+          }
+         ]
+        },
+        "produces": {
+         "colors": [
+          "Blue"
+         ],
+         "amount": 1
+        },
+        "instructions": [
+         {
+          "kind": "AddMana",
+          "player": "You"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Leonin Scimitar": {
+    "faces": [
+     {
+      "name": "Leonin Scimitar",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Static"
+       },
+       {
+        "index": "Own 1",
+        "kind": "Activated",
+        "cost": {
+         "mana": "{1}"
+        },
+        "targets": [
+         {
+          "kind": "Permanent",
+          "count": 1
+         }
+        ],
+        "instructions": [
+         {
+          "kind": "Attach",
+          "objects": "This"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Mana Tithe": {
+    "faces": [
+     {
+      "name": "Mana Tithe",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Spell",
+        "targets": [
+         {
+          "kind": "Spell",
+          "count": 1
+         }
+        ],
+        "instructions": [
+         {
+          "kind": "Unless",
+          "player": "ControllerOf Target 0",
+          "cost": {
+           "mana": "{1}"
+          }
+         },
+         {
+          "kind": "Counter",
+          "objects": "Target 0"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Mountain": {
+    "faces": [
+     {
+      "name": "Mountain",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Mana",
+        "cost": {
+         "parts": [
+          {
+           "action": "Tap",
+           "of": "This"
+          }
+         ]
+        },
+        "produces": {
+         "colors": [
+          "Red"
+         ],
+         "amount": 1
+        },
+        "instructions": [
+         {
+          "kind": "AddMana",
+          "player": "You"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Samurai Token": {
+    "faces": [
+     {
+      "name": "Samurai Token"
+     }
+    ]
+   },
+   "Seachrome Coast": {
+    "faces": [
+     {
+      "name": "Seachrome Coast",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Replacement"
+       },
+       {
+        "index": "Own 1",
+        "kind": "Mana",
+        "cost": {
+         "parts": [
+          {
+           "action": "Tap",
+           "of": "This"
+          }
+         ]
+        },
+        "produces": {
+         "colors": [
+          "White"
+         ],
+         "amount": 1
+        },
+        "instructions": [
+         {
+          "kind": "AddMana",
+          "player": "You"
+         }
+        ]
+       },
+       {
+        "index": "Own 2",
+        "kind": "Mana",
+        "cost": {
+         "parts": [
+          {
+           "action": "Tap",
+           "of": "This"
+          }
+         ]
+        },
+        "produces": {
+         "colors": [
+          "Blue"
+         ],
+         "amount": 1
+        },
+        "instructions": [
+         {
+          "kind": "AddMana",
+          "player": "You"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Swamp": {
+    "faces": [
+     {
+      "name": "Swamp",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Mana",
+        "cost": {
+         "parts": [
+          {
+           "action": "Tap",
+           "of": "This"
+          }
+         ]
+        },
+        "produces": {
+         "colors": [
+          "Black"
+         ],
+         "amount": 1
+        },
+        "instructions": [
+         {
+          "kind": "AddMana",
+          "player": "You"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "The Wandering Emperor": {
+    "faces": [
+     {
+      "name": "The Wandering Emperor",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Static"
+       },
+       {
+        "index": "Own 1",
+        "kind": "Loyalty",
+        "cost": {
+         "parts": [
+          {
+           "action": "Loyalty",
+           "amount": 1
+          }
+         ]
+        },
+        "targets": [
+         {
+          "kind": "Permanent",
+          "count": 1,
+          "optional": true
+         }
+        ],
+        "instructions": [
+         {
+          "kind": "AddCounters",
+          "objects": "Target 0",
+          "count": 1
+         },
+         {
+          "kind": "Modify",
+          "objects": "Target 0"
+         }
+        ]
+       },
+       {
+        "index": "Own 2",
+        "kind": "Loyalty",
+        "cost": {
+         "parts": [
+          {
+           "action": "Loyalty",
+           "amount": -1
+          }
+         ]
+        },
+        "instructions": [
+         {
+          "kind": "CreateTokens",
+          "player": "You",
+          "count": 1
+         }
+        ]
+       },
+       {
+        "index": "Own 3",
+        "kind": "Loyalty",
+        "cost": {
+         "parts": [
+          {
+           "action": "Loyalty",
+           "amount": -2
+          }
+         ]
+        },
+        "targets": [
+         {
+          "kind": "Permanent",
+          "count": 1
+         }
+        ],
+        "instructions": [
+         {
+          "kind": "Exile",
+          "objects": "Target 0"
+         },
+         {
+          "kind": "GainLife",
+          "player": "You",
+          "count": 2
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Thirst for Discovery": {
+    "faces": [
+     {
+      "name": "Thirst for Discovery",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Spell",
+        "instructions": [
+         {
+          "kind": "Draw",
+          "player": "You",
+          "count": 3
+         },
+         {
+          "kind": "Unless",
+          "player": "You",
+          "cost": {
+           "parts": [
+            {
+             "action": "Discard",
+             "of": "Chosen",
+             "zone": "Hand",
+             "count": 1
+            }
+           ]
+          }
+         },
+         {
+          "kind": "Discard",
+          "player": "You",
+          "count": 2
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "Thundertrap Trainer": {
+    "faces": [
+     {
+      "name": "Thundertrap Trainer",
+      "abilities": [
+       {
+        "index": "Own 0",
+        "kind": "Triggered",
+        "trigger": "Enters",
+        "instructions": [
+         {
+          "kind": "CreateCopies",
+          "player": "You",
+          "objects": "This",
+          "count": 1
+         }
+        ]
+       },
+       {
+        "index": "Own 1",
+        "kind": "Triggered",
+        "trigger": "Enters",
+        "instructions": [
+         {
+          "kind": "Dig",
+          "player": "You",
+          "count": 4,
+          "take": "MayReveal",
+          "rest": "Random"
+         }
+        ]
+       }
+      ],
+      "casting": [
+       {
+        "bit": 0,
+        "keyword": "Offspring",
+        "alternative": false,
+        "cost": {
+         "mana": "{4}"
+        }
+       }
+      ]
+     }
+    ]
+   }
+  }
+ }
+]

@@ -117,6 +117,24 @@ def test_what_the_exporter_cannot_say_is_unsupported_with_the_reason() -> None:
     assert reason == "XMage lacks Mana Drain"
 
 
+def test_a_payment_xmage_chose_onto_a_stack_makes_later_taps_by_name_unsupported() -> (
+    None
+):
+    # Thirst for Discovery is cast while The Wandering Emperor's ability is on the stack, so
+    # XMage chooses which lands pay its {2}{U}. Blood Artist then taps both Swamps by name,
+    # which fails whenever XMage paid Thirst with a Swamp: a flaky scenario, not a rules
+    # difference.
+    dump = json.loads(
+        (FIXTURE.parent / "scenario-xmage-paid-onto-stack.json").read_text()
+    )
+    named = card_facts.named_cards(dump)
+    faces = xmage_java.Faces.load(card_store.STORE, named)
+    [export] = xmage.export_all(dump, faces, set(named))
+    assert export.unsupported == (
+        "a payment tapping a source by name after one XMage chose the sources of"
+    )
+
+
 def test_write_makes_a_class_per_card_with_a_supported_scenario(tmp_path: Path) -> None:
     (tmp_path / "Stale.java").write_text("old")
     classes = xmage_java.write(list(exports().values()), tmp_path)

@@ -483,6 +483,9 @@ class Exporter:
                 raise Unsupported(
                     "a payment after one XMage chose the sources of, onto a stack"
                 )
+            # XMage chooses this payment's sources too, so a later payment that taps a source
+            # by name may find it already tapped, depending on which ones XMage chose.
+            self.payment_left_to_xmage = self.payment_left_to_xmage or bool(taps)
             return
         if source in taps:
             taps.remove(source)
