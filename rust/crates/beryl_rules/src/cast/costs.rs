@@ -111,7 +111,15 @@ pub(super) fn total_cost<L: Layout>(
 /// cost increases, and minus all cost reductions."
 pub fn cost_being_cast<L: Layout>(s: &State<L>, t: &GameTable, x: u8) -> Option<ManaCost> {
     match *s.pending() {
-        Pending::Casting(c) => Some(total_cost(s, t, &StackEntry { x, ..top(s) }, &c)),
+        Pending::Casting(c) => Some(total_cost(
+            s,
+            t,
+            &StackEntry {
+                x,
+                ..top(s).clone()
+            },
+            &c,
+        )),
         _ => None,
     }
 }

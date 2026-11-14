@@ -185,14 +185,14 @@ pub(crate) fn target_trigger<L: Layout>(
     sink: &mut Sink<L>,
 ) -> Result<(), Full> {
     let entry = top(s);
-    let Some(ability) = entry_ability(t, &entry) else {
+    let Some(ability) = entry_ability(t, entry) else {
         return Ok(());
     };
     if ability.targets().is_empty() {
         // The trigger is already on the stack, with no choices to announce first
         // ([CR 603.3](https://yawgatog.com/resources/magic-rules/#R6033)):
         // "its controller puts it on the stack as an object that's not a card".
-        sink.note(ability_event(&entry));
+        sink.note(ability_event(entry));
         return Ok(());
     }
     if !targetable(
@@ -202,7 +202,7 @@ pub(crate) fn target_trigger<L: Layout>(
         entry.controller(),
         None,
         entry.x,
-        source_of(&entry),
+        source_of(entry),
     ) {
         s.take_top_of_stack();
         sink.departed(|| s.stack().len());
@@ -220,9 +220,9 @@ pub(super) fn target_options<L: Layout>(
     c: &Casting<L>,
 ) -> TargetSet<L> {
     let entry = top(s);
-    let spec = &specs(t, &entry)[c.spec.index()];
+    let spec = &specs(t, entry)[c.spec.index()];
     let itself = entry.spell().map(|r| r.slot);
-    match candidates(s, t, spec, c.player, itself, entry.x, source_of(&entry)) {
+    match candidates(s, t, spec, c.player, itself, entry.x, source_of(entry)) {
         TargetSet::Objects(mut b) => {
             for target in entry.targets.iter().filter(|x| x.spec() == c.spec) {
                 if let Some(r) = target.as_object() {

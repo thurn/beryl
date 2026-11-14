@@ -116,11 +116,11 @@ pub(crate) fn begin_activate<L: Layout>(
     advance(s, t, sink, c)
 }
 
-pub(super) fn top<L: Layout>(s: &State<L>) -> StackEntry<L> {
-    s.stack()
-        .last()
-        .expect("the spell or ability being cast")
-        .clone()
+/// The entry of the spell or ability being cast, the top of the stack. Callers borrow it
+/// rather than copy it: casting asks for it at every step, and the derived `Clone` of the
+/// generic [`StackEntry`] copies field by field.
+pub(super) fn top<L: Layout>(s: &State<L>) -> &StackEntry<L> {
+    s.stack().last().expect("the spell or ability being cast")
 }
 
 /// The target specs of the spell or ability being cast.
@@ -142,11 +142,12 @@ pub(super) fn advance<L: Layout>(
             }
             CastStep::TargetCount | CastStep::Target { .. } => {
                 let entry = top(s);
-                let specs = specs(t, &entry);
+                let specs = specs(t, entry);
                 let Some(spec) = specs.get(c.spec.index()) else {
                     if c.triggered() {
+                        let event = ability_event(entry);
                         s.settle_question();
-                        sink.push(ability_event(&entry));
+                        sink.push(event);
                         return Ok(());
                     }
                     return begin_payment(s, t, sink, c);
@@ -198,7 +199,7 @@ pub(super) fn pay_mana<L: Layout>(
     mut c: Casting<L>,
 ) -> Result<(), Full> {
     let entry = top(s);
-    let cost = total_cost(s, t, &entry, &c);
+    let cost = total_cost(s, t, entry, &c);
     match s.profile().payment {
         Payment::Manual => {
             if cost.is_zero() {
@@ -295,7 +296,7 @@ pub(super) fn finish<L: Layout>(
             },
         )?;
     } else {
-        sink.push(ability_event(&entry));
+        sink.push(ability_event(entry));
     }
     Ok(())
 }
@@ -327,7 +328,7 @@ fn x_options<L: Layout>(
         } => x_range_start(t.def(card).face(face), costs, c.free()).unwrap_or(0),
         _ => 0,
     };
-    let exclude = spent_by_entry(t, &entry);
+    let exclude = spent_by_entry(t, entry);
     let mut out: L::Queue<Opt<L>, 64> = Default::default();
     for x in least..(least.saturating_add(64)) {
         let mut probe = entry.clone();
@@ -362,7 +363,7 @@ pub(crate) fn decision<L: Layout>(
         ),
         CastStep::TargetCount => {
             let entry = top(s);
-            let spec = &specs(t, &entry)[c.spec.index()];
+            let spec = &specs(t, entry)[c.spec.index()];
             let most = target_options(s, t, c).count().min(u32::from(spec.count));
             let mut list: L::Queue<Opt<L>, 64> = Default::default();
             for n in 0..=most {
@@ -397,7 +398,7 @@ pub(crate) fn decision<L: Layout>(
         },
         CastStep::Plan => {
             let entry = top(s);
-            let cost = total_cost(s, t, &entry, c);
+            let cost = total_cost(s, t, entry, c);
             let plans = mana::plans(s, t, sink, c.player, cost, Bitboard::EMPTY, false)?;
             let mut list: L::Queue<Opt<L>, 64> = Default::default();
             for i in 0..plans.len() {
@@ -452,7 +453,7 @@ pub(crate) fn perform<L: Layout>(
                 unreachable!("a payment plan");
             };
             let entry = top(s);
-            let cost = total_cost(s, t, &entry, &c);
+            let cost = total_cost(s, t, entry, &c);
             let plans = mana::plans(s, t, sink, c.player, cost, Bitboard::EMPTY, false)?;
             mana::pay(
                 s,

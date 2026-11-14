@@ -240,10 +240,9 @@ fn pay_with_source<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    entry: &StackEntry<L>,
     action: CostAction,
 ) -> Result<(), Full> {
-    let source = entry.object().expect("an activated ability's source");
+    let source = top(s).object().expect("an activated ability's source");
     match action {
         CostAction::Tap => event::set_tapped(s, t, sink, source, true),
         CostAction::Sacrifice => {
@@ -277,15 +276,15 @@ pub(super) fn pay<L: Layout>(
     mut c: Casting<L>,
     from: u8,
 ) -> Result<(), Full> {
-    let entry = top(s);
+    // Paying changes the state, so each read of the entry borrows it anew.
     let mut index = from;
-    while let Some(part) = part_at(t, &entry, index) {
+    while let Some(part) = part_at(t, top(s), index) {
         match *part {
-            CostPart::This(action) => pay_with_source(s, t, sink, &entry, action)?,
+            CostPart::This(action) => pay_with_source(s, t, sink, action)?,
             CostPart::Loyalty(n) => {
                 // CR 606.4: "The cost to activate a loyalty ability of a permanent is to put
                 // on or remove from that permanent a certain number of loyalty counters".
-                let source = entry.object().expect("an activated ability's source");
+                let source = top(s).object().expect("an activated ability's source");
                 let (game, amount) = (&mut Game::new(s, t, sink), n.unsigned_abs());
                 if n > 0 {
                     counters::add(game, source, CounterKind::Loyalty, amount)?;
@@ -309,7 +308,7 @@ pub(super) fn pay<L: Layout>(
         index += 1;
     }
     match c.kind {
-        CastKind::Activation => pay_substitutes(s, t, sink, &entry, c),
+        CastKind::Activation => pay_substitutes(s, t, sink, c),
         _ => finish(s, t, sink, c),
     }
 }
@@ -320,9 +319,9 @@ fn pay_substitutes<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    entry: &StackEntry<L>,
     mut c: Casting<L>,
 ) -> Result<(), Full> {
+    let entry = top(s);
     if let Some((part, _, _, most)) = substitute(entry_ability_of(t, entry).cost().parts()) {
         let left = most.min(total_cost(s, t, entry, &c).generic);
         c.step = CastStep::Objects(PayingObjects::start(part, left));
@@ -346,12 +345,12 @@ fn substitute_options<L: Layout>(
 ) -> Result<L::Queue<Opt<L>, 64>, Full> {
     let mut out: L::Queue<Opt<L>, 64> = Default::default();
     let entry = top(s);
-    let cost = total_cost(s, t, &entry, c);
+    let cost = total_cost(s, t, entry, c);
     let mut objects: L::Queue<Opt<L>, 64> = Default::default();
     let left = step(c).left;
     if left > 0 {
-        let (action, chosen) = part_being_paid(t, &entry, c);
-        let able = candidates(s, t, c.player, itself(&entry), action, chosen);
+        let (action, chosen) = part_being_paid(t, entry, c);
+        let able = candidates(s, t, c.player, itself(entry), action, chosen);
         let mut fewer = cost;
         fewer.generic -= 1;
         let funds = Funds::of(s, t, c.player)?;
@@ -447,7 +446,7 @@ pub(super) fn decision<L: Layout>(
     c: &Casting<L>,
 ) -> Result<Decision<L>, Full> {
     let entry = top(s);
-    let (action, chosen) = part_being_paid(t, &entry, c);
+    let (action, chosen) = part_being_paid(t, entry, c);
     let purpose = purpose(action, chosen);
     let left = step(c).left;
     Ok(match chosen.measure {
@@ -456,14 +455,14 @@ pub(super) fn decision<L: Layout>(
             player: c.player,
             kind: DecisionKind::ManaPayment,
             candidates: Candidates::Options(substitute_options(s, t, c)?),
-            prompt: Prompt::new(purpose).cost(total_cost(s, t, &entry, c)),
+            prompt: Prompt::new(purpose).cost(total_cost(s, t, entry, c)),
             about: Bitboard::EMPTY,
         },
         // The total the part asks for, and what of it is still to pay.
         Measure::TotalPower(n) => Decision {
             player: c.player,
             kind: DecisionKind::ChooseObject,
-            candidates: Candidates::Objects(choices(s, t, &entry, c)),
+            candidates: Candidates::Objects(choices(s, t, entry, c)),
             prompt: Prompt::new(purpose).count(n).most(left),
             about: Bitboard::EMPTY,
         },
@@ -471,7 +470,7 @@ pub(super) fn decision<L: Layout>(
         Measure::Count(_) => Decision {
             player: c.player,
             kind: DecisionKind::ChooseObject,
-            candidates: Candidates::Objects(choices(s, t, &entry, c)),
+            candidates: Candidates::Objects(choices(s, t, entry, c)),
             prompt: Prompt::new(purpose).most(left),
             about: Bitboard::EMPTY,
         },
@@ -524,7 +523,7 @@ pub(super) fn perform<L: Layout>(
     option: Option<Opt<L>>,
     object: Option<L::Slot>,
 ) -> Result<(), Full> {
-    let (action, chosen) = part_being_paid(t, &top(s), &c);
+    let (action, chosen) = part_being_paid(t, top(s), &c);
     let mut paying = step(&c);
     match chosen.measure {
         Measure::ForGeneric(_) => {
