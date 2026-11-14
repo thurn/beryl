@@ -187,11 +187,20 @@ fn destroyed_for_damage<L: Layout>(
 /// from that permanent or player. It remains on the battlefield." What may be equipped is
 /// `attach::may_equip`'s (CR 301.5c). An Equipment whose creature left the battlefield is
 /// already attached to nothing (`zone::leave` detaches it).
+#[inline]
 fn loose_equipment<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::Slot> {
-    // A game none of whose cards is an Equipment never asks.
+    // A game none of whose cards is an Equipment never asks, and the engine loop, which runs
+    // this check after every action, keeps only the test inline.
     if !t.subtypes().has(Subtype::Equipment).possible() {
         return Bitboard::EMPTY;
     }
+    attached_illegally(s, t)
+}
+
+/// [`loose_equipment`] in a game with an Equipment.
+#[cold]
+#[inline(never)]
+fn attached_illegally<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::Slot> {
     let mut loose = Bitboard::EMPTY;
     for (slot, d) in s.permanents() {
         let Some(host) = s.object(slot).attached_to() else {
