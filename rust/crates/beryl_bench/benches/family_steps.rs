@@ -17,11 +17,14 @@ fn main() {
         let w = FamilyWorkload::new(family.name);
         let p = roll_paired(&w);
         println!(
-            "{{\"family\": \"{}\", \"positions\": {}, \"paired\": {}, \"skipped\": {}}}",
+            "{{\"family\": \"{}\", \"positions\": {}, \"paired\": {}, \"skipped\": {}, \"capacity_stalls\": {}, \"rollouts\": {}, \"layer_recomputes\": {}}}",
             family.name,
             w.positions.len(),
             p.paired,
-            p.skipped
+            p.skipped,
+            p.capacity_stalls,
+            w.starts.len(),
+            p.layer_recomputes
         );
     }
 }

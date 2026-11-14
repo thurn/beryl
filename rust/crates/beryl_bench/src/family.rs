@@ -25,8 +25,8 @@ use beryl_cards::decks::WU_CONTROL;
 use beryl_cards::names;
 use beryl_engine::card::{AbilityKind, CardDef, Face, Keywords};
 use beryl_engine::{
-    CardIx, Choice, Decision, GameTable, Observation, Profile, Replay, Scratch, State, Step, Stops,
-    Zone, apply, apply_decided, next, observe, rederive,
+    CardIx, Choice, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch, State, Step, Stops,
+    StallReason, Zone, apply, apply_decided, next, observe, rederive,
 };
 use beryl_search::{Agent, AgentDecision, GreedyAgent, Inline, RolloutPolicy};
 use beryl_session::save::Chosen;
@@ -62,6 +62,24 @@ pub const FAMILIES: &[Family] = &[
             (1, names::LEONIN_SCIMITAR, names::CURRENCY_CONVERTER),
             (1, names::LEONIN_SCIMITAR, names::STAFF_OF_THE_STORYTELLER),
             (1, names::LEONIN_SCIMITAR, names::FRACTURED_IDENTITY),
+        ],
+    },
+    // The cards whose effects need every layer: Blood Moon (type changing, layer 4),
+    // Humility (abilities and power and toughness, layers 6 and 7b), Glorious Anthem
+    // (layer 7c) and Tarmogoyf (a characteristic-defining ability reading graveyards,
+    // layer 7a). Mountains and Forests stand in for basics so Blood Moon and Tarmogoyf
+    // can be cast.
+    Family {
+        name: "layers",
+        swaps: &[
+            (1, names::BLOOD_MOON, names::REPRIEVE),
+            (1, names::HUMILITY, names::OUST),
+            (1, names::GLORIOUS_ANTHEM, names::PORTABLE_HOLE),
+            (1, names::GLORIOUS_ANTHEM, names::NO_MORE_LIES),
+            (1, names::TARMOGOYF, names::COUNTERSPELL),
+            (1, names::TARMOGOYF, names::DAMN),
+            (2, names::MOUNTAIN, names::PLAINS),
+            (2, names::FOREST, names::ISLAND),
         ],
     },
 ];
@@ -328,6 +346,12 @@ pub struct Pairing {
     /// Steps left out of both: the control offered no candidate that does what the
     /// rollout's choice did, or its recompute had no room.
     pub skipped: u64,
+    /// Rollouts that ended in `Stalled(Capacity)`: a fixed-capacity list filled, which a game
+    /// in the `Large` layout would have gone on past. Their steps are in the sums, but a
+    /// state of `Small` that cannot go on is not what a `Large` one costs.
+    pub capacity_stalls: u64,
+    /// `layer_recomputes` the present side's steps made, from the rollout's own counts.
+    pub layer_recomputes: u64,
 }
 
 /// One transition of the rollout, the one the present side counts: `c` applied to `s`, then
@@ -397,6 +421,7 @@ pub fn roll_paired(w: &FamilyWorkload) -> Pairing {
     for start in &w.starts {
         let mut s = *start;
         let mut step = next(&mut s, t, &mut x, &mut a);
+        let mut before = x.counts.layer_recomputes;
         while let Step::Decide(d) = step {
             let c = w.policy.choose(t, Observation::new(&s, d.player), &d);
             let paired = control(&s, t, &w.in_table)
@@ -408,6 +433,11 @@ pub fn roll_paired(w: &FamilyWorkload) -> Pairing {
                 pairing.skipped += 1;
                 step = next_unpaired(&mut s, t, &mut x, &mut a, &d, c);
             }
+            pairing.layer_recomputes += x.counts.layer_recomputes - before;
+            before = x.counts.layer_recomputes;
+        }
+        if matches!(step, Step::Over(Outcome::Stalled(StallReason::Capacity))) {
+            pairing.capacity_stalls += 1;
         }
     }
     pairing

@@ -45,3 +45,6 @@ ratio = 1.25
 
 [family.attachments]
 ratio = 1.25
+
+[family.layers]
+ratio = 1.25

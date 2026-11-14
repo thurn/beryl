@@ -105,7 +105,9 @@ it is in play. The present-cost gate measures what it costs while one is:
   (`family::FAMILIES`). `blank` swaps in a Tundra, which has no static or
   triggered ability, and checks the method: it must measure 1.00. `attachments`
   swaps in Swift Reconfiguration and Leonin Scimitar, the cards whose static
-  abilities the layers apply.
+  abilities the layers apply. `layers` swaps in Blood Moon, Humility, Glorious
+  Anthem and Tarmogoyf (and Mountains and Forests, so the first and last can be
+  cast), one effect in each layer the engine has.
 - **Its corpus** is cut from seeded games between greedy agents playing the
   family's deck in both seats: the first decision with a card of the family on
   the battlefield, on the stack or the source of an effect in force, which is
@@ -139,7 +141,9 @@ it is in play. The present-cost gate measures what it costs while one is:
   It fails when the ratio passes the family's `ratio` in `count-gate.toml`
   (`[family.<name>] ratio = 1.25`), or when more than a tenth of the steps were
   skipped, since the ratio then describes too few of them. The steps come from
-  `benches/family_steps.rs`, which runs the same rollouts natively. Slow CI's
+  `benches/family_steps.rs`, which runs the same rollouts natively and also
+  prints the rollouts that ended in `Stalled(Capacity)` (a list filled, so a
+  `Large` game would have gone on) and the layer recomputes per step. Slow CI's
   `counts` lane runs every family with a bar in one step, `count-gate-families`.
 
 What a paired step does not see: work the mechanism did earlier that changed the
