@@ -13,7 +13,6 @@
 // answered with: what a prompt draws and takes is the shape suite's (shapes.mjs), and this
 // holds what the table plays between the prompts, in every game the fixtures record.
 import { readFile } from "node:fs/promises";
-import { basename, join } from "node:path";
 import {
     launch,
     recordResult,
@@ -22,6 +21,7 @@ import {
     stageFaults,
     workers,
 } from "./capture.mjs";
+import { serveRecordings } from "./fixture-views.mjs";
 import { toldErrors } from "./told.mjs";
 import { moving, option, retried } from "./moments.mjs";
 import { watching } from "./stage-audit.mjs";
@@ -62,31 +62,6 @@ const unknown = only.filter(
 if (unknown.length) {
     console.error(`ui-play: no fixture named ${unknown.join(", ")}`);
     process.exit(2);
-}
-
-/** Serves `context`'s pages the recordings in the fixtures folder, each with an answer to
- * `choose` if it recorded none (a board that ends at its seat's first decision, or one
- * answered by clicks), so that every recording plays on by it. */
-async function served(context) {
-    await context.route("**/fixtures/*.json", async (route) => {
-        const name = decodeURIComponent(
-            basename(new URL(route.request().url()).pathname),
-        );
-        const recording = JSON.parse(
-            await readFile(join(fixtures, name), "utf8"),
-        );
-        const answered = recording.messages.some(
-            (m) => m.kind === "response" && m.command === "choose",
-        );
-        if (!answered) {
-            recording.messages.push({
-                kind: "response",
-                command: "choose",
-                value: null,
-            });
-        }
-        await route.fulfill({ json: recording });
-    });
 }
 
 /** Plays `fixture` to its end on `page` in `layout`. Returns the audit's findings, and the
@@ -135,7 +110,7 @@ for (const { fixture, layout, check } of chosen) {
             const opened = await moving(browser, LAYOUTS[layout].size);
             errors = opened.errors;
             try {
-                await served(opened.context);
+                await serveRecordings(opened.context, fixtures);
                 result = await played(opened.page, fixture, layout);
             } catch (e) {
                 errors.push(String(e).split("\n")[0]);

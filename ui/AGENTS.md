@@ -48,6 +48,13 @@ says how Beryl follows MTG Arena.
   Anything that animates every frame should change only `transform` or `opacity`
   on an element with a layer of its own (`will-change`), or WebKit repaints what
   lies under it, filters and all, every frame.
+- `just ui-counts <fixtures>` counts the work the page does to play fixtures:
+  React components rendered (`--components` lists which), DOM mutations, and
+  elements Chromium restyled and laid out. It plays on Playwright's paused
+  clock, one frame at a time, so the counts don't depend on load and compare
+  across runs on this Mac; use them, not `ui-perf`'s timings, to tell whether a
+  change made the UI do more work. Slow CI holds a few fixtures to the limits in
+  `data/ui-counts.json`.
 - `just motion` records each animation verb in stepped stage time and compares
   it with its own values in `data/ui-conventions.json` (the `motion` lane in
   `docs/checks.md`).

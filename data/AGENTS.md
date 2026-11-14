@@ -43,6 +43,8 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   `python -m beryl_tools.checks card-names --shrink` lowers them after you
   remove some.
 - `file-length-allowlist.json`: source files allowed to be over 800 lines.
+- `ui-counts.json`: limits on the UI's renders, DOM mutations and style and
+  layout work for a few fixtures, held by slow CI's `ui-counts` lane.
 - `save-breaks.json`: saved games in the corpus that can't be migrated past a
   particular change.
 - `arena-motion.json`: MTG Arena's animation timings for each animation "verb"

@@ -1,0 +1,38 @@
+{
+  "$comment": "Limits on the work the UI does to play these fixtures, held by slow CI's `ui-counts` lane (`just ui-counts --gate`, tools/src/beryl_tools/ui_counts.py). A count that rises more than `tolerance_percent` above its limit fails the lane. Lower the limits whenever a change lowers the counts (`just ui-counts --gate --update`). Raise one only when the change needs the extra work, and say why in the commit's body. The limits are measured on macOS.",
+  "fixtures": [
+    "verbs-piles",
+    "verbs-zones"
+  ],
+  "layouts": [
+    "desktop",
+    "phone"
+  ],
+  "tolerance_percent": 3,
+  "limits": {
+    "verbs-piles/desktop": {
+      "renders": 12030,
+      "mutations": 12876,
+      "styled": 19736,
+      "laidOut": 16106
+    },
+    "verbs-piles/phone": {
+      "renders": 8532,
+      "mutations": 25980,
+      "styled": 28140,
+      "laidOut": 26633
+    },
+    "verbs-zones/desktop": {
+      "renders": 9129,
+      "mutations": 9851,
+      "styled": 19757,
+      "laidOut": 6734
+    },
+    "verbs-zones/phone": {
+      "renders": 5502,
+      "mutations": 13125,
+      "styled": 18675,
+      "laidOut": 3259
+    }
+  }
+}

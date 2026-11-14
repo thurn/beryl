@@ -91,6 +91,15 @@ The lanes slow CI adds to the fast check's:
   machine. It runs the cards changed since `origin/master` plus a sample chosen
   from the commit hash, or every card if the exporters or harnesses changed. The
   nightly run plays every card on staging.
+- `ui-counts`: `just ui-counts --gate`, which plays the board fixtures named in
+  `data/ui-counts.json` on Playwright's paused clock, one frame at a time, and
+  counts the UI's work: React components rendered, DOM mutations, and elements
+  Chromium restyled and laid out. These counts don't depend on the machine's
+  speed or load, so a rise of more than the file's tolerance (3%) over its
+  limits fails the lane. The tolerance sits above the counts' run-to-run noise,
+  which is under 1% for these fixtures. A drop past the tolerance passes and
+  asks for lower limits (`--update`). Windows skips it: the limits were measured
+  on macOS.
 - `counts`: `just count-gate`, which checks the rollout benchmark's instruction
   count against the limit in `rust/crates/beryl_bench/count-gate.toml`. That
   file's comments say when the limit may go up. Each staging commit's count goes

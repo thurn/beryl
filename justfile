@@ -101,6 +101,11 @@ ui-play *args:
 ui-perf *args:
     {{ by }} ui-perf "$@"
 
+# Count the UI's renders, DOM mutations and style and layout work playing fixtures (--phone, --components, --gate [--update])
+[group('app')]
+ui-counts *args:
+    {{ by }} ui-counts "$@"
+
 # Live games in a headless page an agent drives over HTTP, until interrupted (--release, --port N)
 [group('app')]
 ui-live *args:

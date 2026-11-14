@@ -11,8 +11,8 @@
 // and Chromium's time spent in script, style, layout and the rest of the main thread.
 import { writeFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
-import { basename, join } from "node:path";
 import { chromium, webkit } from "playwright";
+import { serveRecordings } from "./fixture-views.mjs";
 import { option } from "./moments.mjs";
 
 const args = process.argv.slice(2);
@@ -46,30 +46,6 @@ const browser = await (engine === "webkit" ? webkit : chromium).launch(
           }
         : {},
 );
-
-/** Serves the recordings, each answered as the play-through answers them (playthrough.mjs). */
-async function served(context) {
-    await context.route("**/fixtures/*.json", async (route) => {
-        const name = decodeURIComponent(
-            basename(new URL(route.request().url()).pathname),
-        );
-        const recording = JSON.parse(
-            await readFile(join(fixtures, name), "utf8"),
-        );
-        if (
-            !recording.messages.some(
-                (m) => m.kind === "response" && m.command === "choose",
-            )
-        ) {
-            recording.messages.push({
-                kind: "response",
-                command: "choose",
-                value: null,
-            });
-        }
-        await route.fulfill({ json: recording });
-    });
-}
 
 /** The milliseconds the page's main thread and the GPU process's main thread were busy, and
  * the GPU's share spent rasterizing, from a trace; writes the trace with `--trace`. */
@@ -134,7 +110,7 @@ async function measure(name) {
         viewport: size,
         deviceScaleFactor: 2,
     });
-    await served(context);
+    await serveRecordings(context, fixtures);
     // Times every animation-frame callback, the stage's tick among them, and every task
     // React's scheduler (a MessageChannel) and timers run, in every engine.
     await context.addInitScript(() => {

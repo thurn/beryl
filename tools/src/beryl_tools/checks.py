@@ -17,7 +17,8 @@ The fast check runs the lanes whose files changed since the branch left origin/s
 `oracle` on the scenarios of each card whose file changed, without Forge's AI games, and for a
 change to ui/ or rust/, `ui-test` and `shots` on the browser checks it can break, as many as fit
 its budget (selection.py). Slow CI has every lane plus `app` (the debug app built and launched
-headless until its UI loads), `ui-smoke` (a few browser checks, [`SMOKE_TITLES`]), `oracle` (the
+headless until its UI loads), `ui-smoke` (a few browser checks, [`SMOKE_TITLES`]), `ui-counts`
+(the UI's renders, DOM mutations and style and layout work held to their limits), `oracle` (the
 card scenarios checked against XMage and Forge) and `counts` (the rollout benchmark's
 instruction count held to its bar), and runs those that what changed since each one last passed
 can affect, and all of them hourly (slow_ci.py). The full `shots` (the screens rendered
@@ -107,7 +108,7 @@ FAST_BUDGET = 60
 SLOW_BUDGET = 450 if system.WINDOWS else 300
 # The lanes Windows leaves to the Mac, which ships the app: the count gate's VM is Lima's and
 # the phone toolchains are set up on macOS; the app and the browser lanes hung headless Chrome
-# on Windows (by-xppd) and are the Mac's to judge. The oracle lane took 400-600 s there alone,
+# on Windows and are the Mac's to judge, and `ui-counts`' limits were measured on macOS. The oracle lane took 400-600 s there alone,
 # over the budget, while its JVMs and its own build of the scenarios starved the rust lane
 # beside it (by-50vi); what it checks, Beryl against XMage and Forge, is the same on either OS,
 # and the fast check still runs it there on the cards a change touches. A Windows pass can then
@@ -117,6 +118,7 @@ WINDOWS_SKIPS: tuple[str, ...] = (
     "mobile",
     "app",
     "ui-smoke",
+    "ui-counts",
     "shots",
     "ui-test",
     "oracle",

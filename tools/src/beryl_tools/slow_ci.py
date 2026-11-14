@@ -61,6 +61,7 @@ from . import (
     speed,
     sweep,
     system,
+    ui_counts,
 )
 from .changes import changed_paths, master_base, run_git
 from .rust_tests import affected_packages
@@ -113,6 +114,7 @@ LANES: tuple[str, ...] = (
     "names",
     "app",
     "ui-smoke",
+    "ui-counts",
     "oracle",
     "counts",
 )
@@ -262,6 +264,7 @@ def lane_reason(
         "ui": ui,
         "app": ui or reaches(APP),
         "ui-smoke": browser,
+        "ui-counts": browser,
         "oracle": first(r"^rust/", oracle_selection.HARNESS.pattern),
         "counts": reaches(BENCH),
     }
@@ -376,6 +379,7 @@ def lanes_for(packages: list[str] | None) -> dict[str, Callable[[], checks.Lane]
         "names": lambda: checks.names_lane(fetch=True),
         "app": checks.app_lane,
         "ui-smoke": checks.ui_smoke_lane,
+        "ui-counts": ui_counts.lane,
         "shots": checks.shots_lane,
         "ui-test": checks.ui_test_lane,
         "oracle": checks.oracle_lane,

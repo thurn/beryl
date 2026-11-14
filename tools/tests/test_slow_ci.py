@@ -49,6 +49,7 @@ def test_a_card_file_runs_the_lanes_that_build_and_play_it() -> None:
         "script",
         "app",
         "ui-smoke",
+        "ui-counts",
         "oracle",
     }
     # The rollout benchmark does not depend on the changed package.

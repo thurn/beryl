@@ -3,6 +3,7 @@
 // prints them, and the driver's `spec.fixtureViews` returns them. Usage:
 //   node scripts/fixture-views.mjs <recorded-fixture.json>
 import { readFile } from "node:fs/promises";
+import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** A script step in brief: its verb (`+` or `-` before one that begins or ends a span) and
@@ -33,6 +34,29 @@ function stepBrief(step, name) {
     const on = what ? what() : a.object ? name(a.object.slot) : "";
     const span = a.span === "begin" ? "+" : a.span === "end" ? "-" : "";
     return `${span}${a.verb} ${on}`.trim();
+}
+
+/** Serves `context`'s pages the recordings in `dir`, each with an answer to `choose` if it
+ * recorded none (a board that ends at its seat's first decision, or one answered by clicks),
+ * so that every recording plays on by it. */
+export async function serveRecordings(context, dir) {
+    await context.route("**/fixtures/*.json", async (route) => {
+        const name = decodeURIComponent(
+            basename(new URL(route.request().url()).pathname),
+        );
+        const recording = JSON.parse(await readFile(join(dir, name), "utf8"));
+        const answered = recording.messages.some(
+            (m) => m.kind === "response" && m.command === "choose",
+        );
+        if (!answered) {
+            recording.messages.push({
+                kind: "response",
+                command: "choose",
+                value: null,
+            });
+        }
+        await route.fulfill({ json: recording });
+    });
 }
 
 /** Each view of `fixture` (a recording: `{ messages }`): its `at` index, turn, step, who
