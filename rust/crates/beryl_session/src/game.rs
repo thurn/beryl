@@ -300,20 +300,7 @@ impl Game {
         session: SessionId,
         budget: Budget,
     ) -> Result<Game, SessionError> {
-        let replay = ReplayFile {
-            format_version: FORMAT_VERSION,
-            legacy_waterbend: false,
-            legacy_waterbend_mana: false,
-            seed: start.seed,
-            decks: start.decks.clone(),
-            human: start.human.get(),
-            opponent: start.opponent.clone(),
-            stops: start.stops,
-            chooser: None,
-            from: None,
-            log: Vec::new(),
-            commit: None,
-        };
+        let replay = ReplayFile::dealt(start);
         let (table, state) = replay.setup(cards)?;
         // The agent draws from its own stream, apart from the game's.
         let agent = ai::new_agent(

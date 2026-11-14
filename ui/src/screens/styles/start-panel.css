@@ -95,6 +95,21 @@
   outline-color: var(--ember);
   color: var(--ember);
 }
+/* "Fair deal": a checkbox under the seed, labeled like it. */
+.start-fair {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 600 15px var(--font-sans);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.start-fair input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--gold);
+}
 .start-buttons {
   display: flex;
   gap: 14px;

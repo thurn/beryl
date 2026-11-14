@@ -26,7 +26,11 @@ export type StartRequest = { agent: string,
 /**
  * The game's seed; none picks one from the clock.
  */
-seed: number | null, };
+seed: number | null, 
+/**
+ * Deal the game the AI judges fairest of many, searched from the seed ([`crate::fair`]).
+ */
+fair: boolean, };
 
 export type ChooseRequest = { 
 /**

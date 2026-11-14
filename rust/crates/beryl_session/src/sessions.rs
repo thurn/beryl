@@ -14,6 +14,7 @@ use serde_json::json;
 use ts_rs::TS;
 
 use crate::ai::{self, AgentMove, AgentMoves};
+use crate::fair::{self, Fairness};
 use crate::game::Game;
 use crate::ipc::ChooseRequest;
 use crate::ledger::Ledger;
@@ -31,6 +32,9 @@ pub struct StartRequest {
     pub agent: String,
     /// The game's seed; none picks one from the clock.
     pub seed: Option<u32>,
+    /// Deal the game the AI judges fairest of many, searched from the seed ([`crate::fair`]).
+    #[serde(default)]
+    pub fair: bool,
 }
 
 impl StartRequest {
@@ -108,8 +112,14 @@ impl Sessions {
     }
 
     /// Starts the game the UI asked for, replacing any game in progress.
+    /// A fair deal is searched for before the game in progress is replaced, which takes up to
+    /// about 6 s on the Mac.
     pub fn start(&self, request: &StartRequest) -> Result<SessionId, SessionError> {
-        self.start_game(&request.game(), None)
+        let mut start = request.game();
+        if request.fair {
+            start.seed = fair::fair_seed(&start, Fairness::THIS_DEVICE)?;
+        }
+        self.start_game(&start, None)
     }
 
     /// Starts `start`, replacing any game in progress. A `stand_in` agent answers the human's

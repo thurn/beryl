@@ -619,6 +619,36 @@ body.phone .phone-start-screen {
   user-select: text;
   -webkit-user-select: text;
 }
+/* "Fair deal": drawn like the opponent radios, a 40px touch target around a 24px box. */
+.phone-start-screen .start-fair {
+  flex: 0 0 44px;
+  gap: 4px;
+}
+.phone-start-screen .start-fair input {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+}
+.phone-start-screen .start-fair input::before {
+  content: "";
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--metal);
+  border-radius: 5px;
+  background-color: var(--surface-sunk);
+}
+.phone-start-screen .start-fair input:checked::before {
+  border-color: var(--gold);
+  background: var(--gold)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 12.5l4 4 8-9' fill='none' stroke='%2329231f' stroke-width='3'/%3E%3C/svg%3E")
+    center / 100% no-repeat;
+}
+.phone-start-screen .start-fair input:focus-visible {
+  outline: 2px solid var(--metal-bright);
+  outline-offset: -3px;
+}
 .phone-start-screen .start-buttons {
   flex-direction: column-reverse;
   flex-shrink: 0;

@@ -153,6 +153,24 @@ impl ReplayFile {
         })
     }
 
+    /// The replay of a new game dealt from `start`'s seed, before its first decision.
+    pub(crate) fn dealt(start: &StartGame) -> ReplayFile {
+        ReplayFile {
+            format_version: FORMAT_VERSION,
+            legacy_waterbend: false,
+            legacy_waterbend_mana: false,
+            seed: start.seed,
+            decks: start.decks.clone(),
+            human: start.human.get(),
+            opponent: start.opponent.clone(),
+            stops: start.stops,
+            chooser: None,
+            from: None,
+            log: Vec::new(),
+            commit: None,
+        }
+    }
+
     /// The game's table and its state before the first decision.
     pub(crate) fn setup(
         &self,

@@ -22,29 +22,31 @@ const CHEATING = new Set([
 ]);
 /** The opponent offered first: strong, and answers in about two seconds. */
 const DEFAULT_AGENT = "mcts-hidden";
-/** Where the start screen remembers the last opponent and seed. */
+/** Where the start screen remembers the last opponent, seed and fair-deal setting. */
 const LAST_GAME = "beryl.lastGame";
 
-/** The opponent and seed of the last game started here, if the browser kept them. */
-function lastGame(): { agent?: string; seed?: string } {
+/** The opponent, seed and fair-deal setting of the last game started here, if the browser
+ * kept them. */
+function lastGame(): { agent?: string; seed?: string; fair?: boolean } {
   try {
     const saved: unknown = JSON.parse(
       localStorage.getItem(key(LAST_GAME)) ?? "{}",
     );
     if (typeof saved !== "object" || saved === null) return {};
-    const { agent, seed } = saved as Record<string, unknown>;
+    const { agent, seed, fair } = saved as Record<string, unknown>;
     return {
       agent: typeof agent === "string" ? agent : undefined,
       seed: typeof seed === "string" ? seed : undefined,
+      fair: fair === true,
     };
   } catch {
     return {};
   }
 }
 
-function rememberGame(agent: string, seed: string) {
+function rememberGame(agent: string, seed: string, fair: boolean) {
   try {
-    localStorage.setItem(key(LAST_GAME), JSON.stringify({ agent, seed }));
+    localStorage.setItem(key(LAST_GAME), JSON.stringify({ agent, seed, fair }));
   } catch {
     // Storage may be blocked; the start screen then offers the defaults.
   }
@@ -63,7 +65,8 @@ export function StartScreen({
   /** The game in progress was resumed at launch and not yet gone back to: a new game
    * concedes it without asking. */
   resumed: boolean;
-  onStart(agent: string, seed?: number): Promise<void>;
+  /** A `fair` game is dealt the deal the AI judges fairest of many. */
+  onStart(agent: string, seed?: number, fair?: boolean): Promise<void>;
   exportReports: boolean;
 }) {
   const phone = usePhone();
@@ -105,6 +108,7 @@ export function StartScreen({
   const [agents, setAgents] = useState<AgentView[]>([]);
   const [agent, setAgent] = useState<string>();
   const [seed, setSeed] = useState(() => lastGame().seed ?? "");
+  const [fair, setFair] = useState(() => lastGame().fair ?? false);
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState(false);
   // A new game was asked for with one in progress: the next click concedes it.
@@ -137,7 +141,7 @@ export function StartScreen({
     }
     starting.current = true;
     play("start");
-    rememberGame(agent, seed.trim());
+    rememberGame(agent, seed.trim(), fair);
     setPending(true);
     setError(undefined);
     // The new game replaces the old one whether or not the concession lands first.
@@ -146,7 +150,7 @@ export function StartScreen({
         ? Promise.resolve()
         : concede(inProgress).catch(() => undefined);
     void conceded
-      .then(() => onStart(agent, seedValue))
+      .then(() => onStart(agent, seedValue, fair))
       .then(
         () => (window.location.hash = "#/game"),
         (e: unknown) => {
@@ -227,6 +231,14 @@ export function StartScreen({
             onChange={(e) => setSeed(e.target.value)}
             aria-invalid={!seedOk}
           />
+        </label>
+        <label className="start-fair">
+          <input
+            type="checkbox"
+            checked={fair}
+            onChange={(e) => setFair(e.target.checked)}
+          />
+          <span>Fair deal</span>
         </label>
         {/* With a game in progress, going back to it comes first. */}
         <div className="start-buttons">

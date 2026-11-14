@@ -306,6 +306,22 @@
       "expect": ".phone-start-screen .start-buttons .button-primary"
     },
     {
+      "name": "phone-start-fair",
+      "route": "/?phone&fixture=greedy-turn-9&at=0#/",
+      "width": 393,
+      "height": 759,
+      "click": ".start-fair input",
+      "expect": ".start-fair input:checked"
+    },
+    {
+      "name": "phone-start-fair-se",
+      "route": "/?phone&fixture=greedy-turn-9&at=0#/",
+      "width": 375,
+      "height": 647,
+      "click": ".start-fair input",
+      "expect": ".start-fair input:checked"
+    },
+    {
       "name": "phone-start-resume",
       "route": "/?phone&fixture=greedy-turn-9&at=49#/",
       "width": 393,

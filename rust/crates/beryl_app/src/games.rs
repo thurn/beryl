@@ -32,7 +32,9 @@ pub fn list_agents() -> Vec<AgentView> {
     beryl_session::agents()
 }
 
-#[tauri::command]
+// Async, so it runs off the main thread: a fair deal's search takes seconds and would
+// otherwise freeze the window.
+#[tauri::command(async)]
 #[allow(clippy::needless_pass_by_value)] // Tauri passes command arguments by value.
 pub fn start_game(
     sessions: State<'_, Sessions>,

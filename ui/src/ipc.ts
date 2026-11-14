@@ -601,8 +601,10 @@ export const onAndroidBack = async (handler: () => void): Promise<Unlisten> => {
 export const listAgents = () => call("list_agents", {});
 
 /** Starts a game against `agent`, replacing any in progress; resolves to its session. */
-export const startGame = (agent: string, seed?: number) =>
-  call("start_game", { request: { agent, seed: seed ?? null } });
+/** Starts a game against `agent`. A `fair` game is dealt the deal the AI judges fairest of
+ * many searched from the seed, which takes a few seconds. */
+export const startGame = (agent: string, seed?: number, fair = false) =>
+  call("start_game", { request: { agent, seed: seed ?? null, fair } });
 
 /** Answers the human's decision `decision` with its candidate `index`. */
 export const choose = (decision: DecisionId, index: CandidateIndex) =>

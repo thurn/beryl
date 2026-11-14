@@ -90,8 +90,9 @@ export function usePlayback(): {
   resuming: boolean;
   /** The game resumed from its save as the page loaded, if one was. */
   resumed?: SessionId;
-  /** Starts a game against `agent`, replacing any in progress. */
-  start(agent: string, seed?: number): Promise<void>;
+  /** Starts a game against `agent`, replacing any in progress; a `fair` one is dealt the
+   * deal the AI judges fairest of many. */
+  start(agent: string, seed?: number, fair?: boolean): Promise<void>;
 } {
   const { stage, feed } = pageStage();
   const [starting, setStarting] = useState(false);
@@ -117,10 +118,10 @@ export function usePlayback(): {
   }, [behind, busy]);
   useShownToFrame(shown !== undefined);
 
-  const start = async (agent: string, seed?: number) => {
+  const start = async (agent: string, seed?: number, fair?: boolean) => {
     setStarting(true);
     try {
-      await startGame(agent, seed);
+      await startGame(agent, seed, fair);
     } catch (e) {
       setStarting(false);
       throw e;
