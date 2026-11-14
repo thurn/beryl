@@ -148,18 +148,16 @@ export const CASES = {
                     flight.from < other.to,
             );
             // A drawn card turns over as it leaves the library, held up or not, and has
-            // its face up by half way; a spell turns over a little past half way.
+            // its face up by half way; so does a spell as it leaves the hand.
             const drawn = route === "library>hand" && flight.act.why === "draw";
             const read = drawn && object.name !== null && others.length === 0;
             if (turns) {
-                assert.equal(
-                    half.face,
-                    drawn ? "front" : "back",
-                    `${what}: its face half way`,
-                );
-                // It turns over, top over bottom: flat as it leaves and as it lands. A
-                // spell is narrowing toward edge-on by half way, its back still showing,
-                // and a drawn card lies flat again by then.
+                assert.equal(half.face, "front", `${what}: its face half way`);
+                // It turns over, top over bottom: flat as it leaves and as it lands. By half
+                // way it has its face up: a drawn card lies flat again by then, and a spell
+                // has its face more than half up, as Arena's does as it leaves the hand,
+                // where a card back that crossed most of the table and flipped beside the
+                // stack read as an end-over-end flip.
                 assert.equal(start.flat ?? 1, 1, `${what}: it leaves flat`);
                 assert.equal(end.flat ?? 1, 1, `${what}: it lands flat`);
                 if (drawn) {
@@ -169,17 +167,22 @@ export const CASES = {
                         `${what}: it has turned over`,
                     );
                 } else {
-                    // Half way it shows less than half its height: it tips over a fifth of
-                    // a second, as Arena's does, and does not flick over in a few frames
-                    // just past half way.
                     assert.ok(
-                        half.flat < 0.5,
-                        `${what}: half way it still shows ${half.flat} of its height`,
+                        (half.flat ?? 1) > 0.5,
+                        `${what}: half way it shows only ${half.flat} of its height`,
                     );
                 }
                 if (!read) {
-                    // And it never spins round in the table's plane besides.
-                    const spun = Math.abs(half.rotation - start.rotation);
+                    // And it never spins round in the table's plane besides. Once its face
+                    // is up it lies the way it will land: tossed top over bottom, a card
+                    // from a hand that faces the opponent comes up half a turn round from
+                    // how its back lay.
+                    const lies = half.face === start.face ? start : end;
+                    const spun = Math.abs(
+                        ((((half.rotation - lies.rotation) % 360) + 540) %
+                            360) -
+                            180,
+                    );
                     assert.ok(spun < 45, `${what}: it spun ${spun} degrees`);
                 }
             }

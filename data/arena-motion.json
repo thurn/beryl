@@ -10,7 +10,7 @@
   "verbs": [
     {
       "verb": "fly",
-      "path": "Rises out of the hand or library and glides on a shallow arc to its place, easing out. An opponent's card turns face up a little past halfway. A draw holds large beside the library for about 0.2 s, then drops into the hand.",
+      "path": "Rises out of the hand or library and glides on a shallow arc to its place, easing out. An opponent's card turns face up as it leaves their hand, edge-on about a third of the way along. A draw holds large beside the library for about 0.2 s, then drops into the hand.",
       "gaps": [
         "Land played: both instances are in UrGalw_f35w; no land drop was found in pE4XSNi-nZc's turn windows. Opponent land played: two instances, whose farthest points differ (0.93 and 0.68 of the table's width).",
         "Discard: one two-card discard (pE4XSNi-nZc); in UrGalw_f35w 57:20.4 a looted card left the hand with no flight in the crop filmed.",
@@ -336,7 +336,7 @@
           "peak": null,
           "path": "card back drops out of the opponent's hand at the top centre, swings down and right, turns over in flight, lands at the stack slot on the right",
           "curve": "ease-out",
-          "note": "Sentinel of the Nameless City. Back leaves the hand 16:47.25, begins to tip away 16:47.40, edge-on 16:47.47 as a sliver rising to the right about 10 degrees, face up 16:47.50, flat by 16:47.57, at rest 16:47.65 (+-33 ms; filmed at 30 fps). Turns over a little past halfway, over about 170 ms. Size not measured; the shadow stays beneath the card."
+          "note": "Sentinel of the Nameless City. Back rises in the hand from 16:47.25 and leaves it 16:47.38, begins to tip away 16:47.40, edge-on 16:47.47 as a sliver rising to the right about 10 degrees, face up 16:47.50, flat by 16:47.57, at rest 16:47.65 (+-33 ms; filmed at 30 fps). Edge-on about 30% of the way along its route, face up and flat from about 60%; it turns over as it leaves the hand, over about 160 ms. Size not measured; the shadow stays beneath the card."
         },
         {
           "case": "opponent spell cast",
@@ -359,7 +359,7 @@
           "peak": null,
           "path": "card back leaves the opponent's hand, arcs down and right to the stack slot, face up on arrival",
           "curve": "ease-out",
-          "note": "Esika's Chariot. Back leaves 17:16.13, begins to tip away 17:16.23, edge-on 17:16.33, face up 17:16.37, flat by 17:16.43, at rest 17:16.50 (+-33 ms). Mana-payment flashes appear at the top left only after it lands."
+          "note": "Esika's Chariot. Back rises in the hand from 17:16.13 and leaves it 17:16.25, begins to tip away 17:16.27, edge-on 17:16.33, face up 17:16.37, flat by 17:16.43, at rest 17:16.50 (+-33 ms). Edge-on about 37% of the way along its route. Mana-payment flashes appear at the top left only after it lands."
         },
         {
           "case": "opponent spell cast",
@@ -382,7 +382,7 @@
           "peak": null,
           "path": "card back leaves the opponent's hand at the top centre, arcs right and down to the stack slot at the right edge, face up on arrival",
           "curve": "ease-out",
-          "note": "Skullclamp. Back leaves 23:03.63, edge-on 23:03.87, face up 23:03.93, at rest 23:04.03 (+-33 ms). The back turns over at about 60% of the flight. Three instances: 370-400 ms, consistent with the 0.4 s claim. Size not measured."
+          "note": "Skullclamp. Back rises in the hand from 23:03.63 and leaves it 23:03.80, edge-on 23:03.87, face up 23:03.93, at rest 23:04.03 (+-33 ms). Edge-on about 45% of the way along its route; counted from when the back rises in the hand, that is about 60% of the time. Three instances: 370-400 ms, consistent with the 0.4 s claim. Size not measured."
         },
         {
           "case": "draw",

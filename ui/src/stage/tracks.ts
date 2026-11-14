@@ -68,18 +68,21 @@ export const SNAP: Timing = {
 export type Path = (progress: number, rest: Pose) => Pose;
 
 /** How far through its flight a card that leaves face down and lands face up is edge-on to
- * the eye: Arena's opponent's spell is, a little past half way (data/arena-motion.json, fly,
- * "opponent spell cast": 16:47.25 to 16:47.47 of 400 ms). */
-export const TURN = 0.55;
+ * the eye. Arena's opponent's spell turns over as it leaves their hand: it is edge-on 30 to
+ * 45% of the way along its route and flies the last third of it face up (`UrGalw_f35w
+ * 16:47.47`, `17:16.33`, `SswBO8aOOgc 23:03.87`). At 0.27 of the flight's time the
+ * ease-out has carried the card about 40% of the way. Edge-on at 0.55 of the time put it
+ * three quarters of the way along, so a full-size card back crossed most of the table and
+ * then flipped beside the stack, which read as an end-over-end flip. */
+export const TURN = 0.27;
 
 /** How long a card that turns over on its way takes to come edge-on, and as long again to
  * lie flat with its face up, as a share of its flight; before and after, it lies flat.
- * Arena's opponent's spell tips away from the eye as it clears their hand, is edge-on 80 to
- * 100 ms later and lies flat with its face up as long again, about 180 ms in all of a flight
- * of 370 to 400 (`UrGalw_f35w 16:47.40` to `16:47.57`, `17:16.23` to `17:16.43`). A turn of
- * 88 ms in all was over in five frames at 60 a second and read as the card flicking end
- * over end. */
-export const TURNING = 0.22;
+ * Arena's opponent's spell begins to tip away from the eye as it clears their hand, is
+ * edge-on 60 to 80 ms later and lies flat with its face up 70 to 100 ms after that, about
+ * 160 ms in all (`UrGalw_f35w 16:47.40` to `16:47.56`, `17:16.27` to `17:16.40`). Of a
+ * flight of 400 ms, 0.2 is 80 ms. */
+export const TURNING = 0.2;
 
 /** When a card turns over on its way: how far through its flight it is edge-on, and how
  * long before and after that it turns, as shares of the flight. */

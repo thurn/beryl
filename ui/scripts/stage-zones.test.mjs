@@ -331,7 +331,7 @@ const theirCast = {
 };
 
 for (const tick of [16, 100]) {
-    test(`a card that leaves face down turns over a little past half way: ticks of ${tick} ms`, () => {
+    test(`a card that leaves face down turns over as it leaves: ticks of ${tick} ms`, () => {
         const { stage: made, surface } = stage({ fly: { duration: 400 } });
         made.play(theirs());
         assert.equal(made.pose(5).face, "back");
