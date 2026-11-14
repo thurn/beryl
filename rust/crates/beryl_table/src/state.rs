@@ -13,6 +13,7 @@ pub struct ObjectId(pub u32);
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Card {
+    Hidden,
     Named(String),
     Custom {
         name: String,

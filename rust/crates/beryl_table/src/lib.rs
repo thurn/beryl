@@ -9,6 +9,7 @@ pub mod chance;
 pub mod change;
 pub mod helpers;
 pub mod permissions;
+pub mod redact;
 pub mod state;
 
 pub use action::Action;

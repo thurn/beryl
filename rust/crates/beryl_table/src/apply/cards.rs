@@ -225,6 +225,7 @@ fn destination_zone(
     let type_line = match &card.card {
         Card::Custom { types, .. } => types,
         Card::Named(_) => printed.map_or("", |printed| printed.type_line.as_str()),
+        Card::Hidden => "",
     };
     match destination {
         Destination::Zone(to) => Ok(to),
@@ -251,7 +252,7 @@ pub(super) fn card_record(card: &Card) -> Option<Record> {
         Card::Named(name) => STORE
             .card(name)
             .or_else(|| STORE.tokens(name).into_iter().next()),
-        Card::Custom { .. } => None,
+        Card::Hidden | Card::Custom { .. } => None,
     }
 }
 
@@ -690,6 +691,7 @@ pub(super) fn token(
 ) -> Changes {
     let attached_to = host.map(|host| attachment_host(table, host)).transpose()?;
     let record = match card {
+        Card::Hidden => return Err(Refusal::Invalid),
         Card::Named(name) => Some(
             STORE
                 .tokens(name)

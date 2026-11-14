@@ -274,9 +274,11 @@ pub(super) fn sort_hand(table: &Table, seat: Seat, by: SortBy) -> Changes {
             card @ Card::Named(name) => cards::card_record(card)
                 .map_or_else(|| name.to_lowercase(), |record| record.name.to_lowercase()),
             Card::Custom { name, .. } => name.to_lowercase(),
+            Card::Hidden => String::new(),
         }),
         SortBy::Type => ids.sort_by_cached_key(|id| match &table.objects[id].card {
             Card::Custom { types, .. } => types.to_lowercase(),
+            Card::Hidden => String::new(),
             card @ Card::Named(_) => cards::card_record(card)
                 .and_then(|record| {
                     record
