@@ -11,7 +11,7 @@ import { MANA_POOLS } from "../game/tableRows";
 import {
   emblemObjects,
   emblemSlot,
-  knownLibraries,
+  libraries,
   zonePiles,
 } from "../game/zoneViews";
 import {
@@ -314,7 +314,7 @@ export function middle(resting: Resting, pose: Pose): Point {
 }
 
 function anchors(table: PlayerView): Anchors {
-  const piles = [...zonePiles(table), ...knownLibraries(table)];
+  const piles = [...zonePiles(table), ...libraries(table)];
   return {
     pile(side, zone) {
       const { x, y, width } = piles.find(

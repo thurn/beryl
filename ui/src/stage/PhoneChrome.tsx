@@ -16,11 +16,16 @@ import type {
 import { FullControlIcon, Settings, UndoButton } from "../game/Corner";
 import type { LogEntry } from "../game/log";
 import { GameLog } from "../game/Narration";
-import { Inspect, pileName } from "../game/Piles";
+import { Inspect, pileName, pileTitle } from "../game/Piles";
 import { StepBanner, useBannerUp } from "../game/StepBanner";
 import { combatBanner } from "../game/stepLabels";
 import { NoticeSlot, TurnAnnouncement } from "../game/TurnBanner";
-import { knownLibraries, zonePiles, type ZonePile } from "../game/zoneViews";
+import {
+  knowsAny,
+  libraries,
+  zonePiles,
+  type ZonePile,
+} from "../game/zoneViews";
 import { CardScan } from "../mobile/faces";
 import {
   PILE,
@@ -49,10 +54,10 @@ export type PhonePile = ZonePile & {
 };
 
 /** The piles a touch opens: a graveyard that holds anything, and a library of which a card is
- * known. */
+ * known, listed whole with backs for the cards nobody has seen. */
 export function phonePiles(table: PlayerView): PhonePile[] {
   const zones = zonePiles(table);
-  const stripPiles = [...zones, ...knownLibraries(table)].filter(
+  const stripPiles = [...zones, ...libraries(table)].filter(
     (pile): pile is ZonePile & { zone: "library" | "graveyard" } =>
       pile.zone !== "exile",
   );
@@ -61,8 +66,9 @@ export function phonePiles(table: PlayerView): PhonePile[] {
       (other) => other.side === pile.side && other.zone === "exile",
     );
     if (
-      pile.cards.length === 0 &&
-      !(pile.zone === "graveyard" && exile?.cards.length)
+      pile.zone === "library"
+        ? !knowsAny(pile)
+        : pile.cards.length === 0 && !exile?.cards.length
     )
       return [];
     return [{ ...pile, exile: pile.zone === "graveyard" ? exile : undefined }];
@@ -235,7 +241,7 @@ export function PileSheet({
   onInspect(slot: number | undefined): void;
   onClose(): void;
 }) {
-  const name = title ?? ("zone" in pile ? pileName(pile) : "");
+  const name = title ?? ("zone" in pile ? pileTitle(pile) : "");
   const section = (cards: readonly ObjectView[]) => (
     <div className="phone-sheet-cards" onClick={() => onInspect(undefined)}>
       {[...cards].reverse().map((object) => (
@@ -246,7 +252,8 @@ export function PileSheet({
           aria-label={object.name ?? "A card"}
           onClick={(e) => {
             e.stopPropagation();
-            onInspect(object.slot);
+            // A library's card back has nothing to inspect.
+            onInspect(object.name === null ? undefined : object.slot);
           }}
         >
           <CardScan object={object} width={LISTED} field={false} />

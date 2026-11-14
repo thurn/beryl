@@ -833,14 +833,19 @@
     {
       "kind": "not-seen",
       "name": "Known cards in a library",
-      "rule": "A known top card shows face up on its library, and clicking a library lists its known cards. No known card in the opponent's library is seen.",
+      "rule": "A known top card shows face up on its library. Clicking a library opens its browser, headed \"Library\" (or \"Opponent's Library\") and \"N Cards\": every card in library order, top first, each known card face up at its place and the rest as backs. No known card in the opponent's library is seen.",
       "reports": [
         "by-nva",
-        "by-9es"
+        "by-9es",
+        "by-dxx4"
       ],
       "arena": {
-        "does": "The player's own library stays a card back after their tutor puts a card on top, and after a look.",
+        "does": "The player's own library stays a card back after their tutor puts a card on top, and after a look. Its \"Library\" browser (\"9 Cards\") lists the cards top first in a row, three unknown ones as backs and then the known ones face up.",
         "evidence": [
+          {
+            "recording": "SN9QFe2kM4Y",
+            "time": "38:16.5"
+          },
           {
             "recording": "gIhJjyoJ0_M",
             "time": "29:48"

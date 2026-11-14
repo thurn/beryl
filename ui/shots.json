@@ -521,6 +521,14 @@
       "click": "[data-pile=graveyard][data-side=you]"
     },
     {
+      "name": "game-library-viewer",
+      "route": "/?fixture=choice-scry&at=1#/game",
+      "width": 1600,
+      "height": 900,
+      "click": "[data-pile=library][data-side=you]",
+      "expect": ".zone-viewer[data-pile=library]"
+    },
+    {
       "name": "game-exile-viewer",
       "route": "/?fixture=choice-scry&at=1#/game",
       "width": 1600,

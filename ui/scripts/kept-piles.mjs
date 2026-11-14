@@ -106,20 +106,40 @@ await derive("choice-scry", "known-library", pilesAt, (v) => ({
             : o,
     ),
 }));
-// Why no audit: which cards a viewer lists, of those its player knows.
+// Why no audit: which cards a library's viewer lists face up, and where: as on Arena, every card
+// in library order, top first, with the one its player knows at its own place, second from the
+// top, and backs for the rest (by-dxx4).
 await check(
-    "known library browser never reveals unknown cards",
+    "a library's viewer shows a known card at its place among backs",
     async (page) => {
         await page.clock.runFor(2000);
+        const titles = { you: "Library", opponent: "Opponent's Library" };
         for (const side of ["you", "opponent"]) {
+            const size = pilesView.players[side].library.length;
             await page
                 .locator(`button[data-pile="library"][data-side="${side}"]`)
                 .click();
             await page.clock.runFor(1000);
-            const dialog = page.getByRole("dialog");
-            assert.match(await dialog.innerText(), /Known cards/);
-            assert.equal(await dialog.locator(".zone-viewer-card").count(), 1);
-            assert.match(await dialog.innerText(), /Jace/);
+            const dialog = page.getByRole("dialog", {
+                name: titles[side],
+                exact: true,
+            });
+            assert.match(
+                await dialog.locator(".zone-viewer-count").innerText(),
+                new RegExp(`^${size} Cards`),
+            );
+            const faces = await dialog
+                .locator(".zone-viewer-card")
+                .evaluateAll((cards) =>
+                    cards.map((card) => card.dataset.card ?? null),
+                );
+            assert.deepEqual(
+                faces,
+                Array.from({ length: size }, (_, i) =>
+                    i === 1 ? "Jace, Vryn's Prodigy" : null,
+                ),
+                `${side}: the known card second from the top, backs elsewhere`,
+            );
             await dialog
                 .getByRole("button", { name: "Close", exact: true })
                 .click();
@@ -330,14 +350,18 @@ await check(
     },
 );
 
-// Why no audit: what a viewer says of a pile with nothing known in it.
+// Why no audit: what a library's viewer shows when its player knows none of its cards.
 await check(
-    "an empty known library opens without revealing cards",
+    "a library with nothing known opens as backs alone",
     async (page) => {
         await page.locator(`button${pile("you", "library")}`).click();
-        const dialog = page.getByRole("dialog", { name: /Known cards/ });
-        assert.match(await dialog.innerText(), /Nothing here/);
-        assert.equal(await dialog.locator("[data-viewer-slot]").count(), 0);
+        const dialog = page.getByRole("dialog", {
+            name: "Library",
+            exact: true,
+        });
+        const cards = dialog.locator("[data-viewer-slot]");
+        assert.equal(await cards.count(), pilesView.players.you.library.length);
+        assert.equal(await dialog.locator("[data-card]").count(), 0);
         await dialog.getByRole("button", { name: "Close" }).click();
     },
     {

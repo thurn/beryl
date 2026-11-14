@@ -37,7 +37,7 @@ import { NoticeSlot, TurnAnnouncement } from "../game/TurnBanner";
 import {
   exiledWith,
   held as heldBy,
-  knownLibraries,
+  libraries,
   zonePiles,
 } from "../game/zoneViews";
 import { desktop } from "./desktop.ts";
@@ -342,7 +342,7 @@ export function Controls({
     [stage, prompts],
   );
   const piles = useMemo(
-    () => (table ? [...zonePiles(table), ...knownLibraries(table)] : []),
+    () => (table ? [...zonePiles(table), ...libraries(table)] : []),
     // The piles hold to the stage's edges.
     [table, width],
   );
@@ -365,11 +365,9 @@ export function Controls({
         ? `${viewed.side}:${viewed.zone}`
         : "";
   const viewedTitle =
-    host !== undefined
-      ? (resting.get(host)?.object?.name ?? undefined)
-      : viewed && "zone" in viewed && viewed.zone === "library"
-        ? `Known cards · ${viewed.side === "you" ? "Your" : "Opponent’s"} library`
-        : undefined;
+    host === undefined
+      ? undefined
+      : (resting.get(host)?.object?.name ?? undefined);
   const keeps = keptClear(asked, resting);
   // The card the pointer is on, where it is shown alone: not one under the top of a pile.
   const pointed = hovered === undefined ? undefined : resting.get(hovered);

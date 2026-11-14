@@ -242,11 +242,15 @@ recordings do not show them.
   stack, but whether a land could still be played is not shown (by-lzl, by-9fb).
   Arena shows no chooser before these cycles (RwKoGGUmw2k 19:23.5, WQiYBv23buw
   45:29.5).
-- **Known cards in a library.** A known top card shows face up on its library,
-  and clicking a library lists its known cards. No known card in the opponent's
-  library is seen (by-nva, by-9es). The player's own library stays a card back
-  after their tutor puts a card on top, and after a look (gIhJjyoJ0_M 29:48,
-  SswBO8aOOgc 20:15).
+- **Known cards in a library.** A known top card shows face up on its library.
+  Clicking a library opens its browser, headed "Library" (or "Opponent's
+  Library") and "N Cards": every card in library order, top first, each known
+  card face up at its place and the rest as backs. No known card in the
+  opponent's library is seen (by-nva, by-9es, by-dxx4). The player's own library
+  stays a card back after their tutor puts a card on top, and after a look. Its
+  "Library" browser ("9 Cards") lists the cards top first in a row, three
+  unknown ones as backs and then the known ones face up (SN9QFe2kM4Y 38:16.5,
+  gIhJjyoJ0_M 29:48, SswBO8aOOgc 20:15).
 - **A card turning face up.** A face-down permanent turning face up enlarges in
   place and flips; one leaving reveals its face during its flight, and one that
   leaves for a hand or a library, where no face shows, joins the Revealed Cards

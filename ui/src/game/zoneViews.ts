@@ -118,8 +118,11 @@ export interface ZonePile {
   look: PileLook;
 }
 
-/** Only identities already disclosed by the session may be browsed in a library. */
-export function knownLibraries(view: PlayerView): ZonePile[] {
+/** Each player's library as its viewer lists it: every card in library order, bottom first,
+ * where a card the session has disclosed (one with a name) shows face up at its place and every
+ * other card is a back. As on Arena, opening a library shows where in it each known card lies,
+ * second from the top or at the bottom, and nothing of the cards nobody has seen. */
+export function libraries(view: PlayerView): ZonePile[] {
   const objects = new Map(view.objects.map((o) => [o.slot, o]));
   return (["you", "opponent"] as const).map((side) => ({
     side,
@@ -130,12 +133,15 @@ export function knownLibraries(view: PlayerView): ZonePile[] {
       PILES[side].library,
       view.players[side].library.length,
     ),
-    cards: view.players[side].library.flatMap((slot) => {
-      const object = objects.get(slot);
-      return object?.name ? [object] : [];
-    }),
+    cards: view.players[side].library.flatMap(
+      (slot) => objects.get(slot) ?? [],
+    ),
   }));
 }
+
+/** Whether any card in `pile` shows its face: a library of backs alone has nothing to show. */
+export const knowsAny = (pile: ZonePile) =>
+  pile.cards.some((o) => o.name !== null);
 
 /** The permanent among `onField` holding the card `o` in exile, drawn behind it: the one that
  * exiled it until it leaves (CR 610.3), or else the one whose abilities find it "exiled with"

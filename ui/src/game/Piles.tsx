@@ -37,7 +37,18 @@ export function pileName({ side, zone }: Pick<ZonePile, "side" | "zone">) {
   return `${side === "you" ? "Your" : "Opponent's"} ${zone}`;
 }
 
+/** What a pile's viewer is called: "Your graveyard", or, as Arena heads a library's browser,
+ * "Library" for yours and "Opponent's Library" for theirs. */
+export function pileTitle(pile: Pick<ZonePile, "side" | "zone">) {
+  if (pile.zone !== "library") return pileName(pile);
+  return pile.side === "you" ? "Library" : "Opponent's Library";
+}
+
 const cardCount = (n: number) => `${n} card${n === 1 ? "" : "s"}`;
+
+/** How many cards a viewer lists, in Arena's words for a library's browser: "9 Cards". */
+const viewerCount = (n: number, zone: string | undefined) =>
+  zone === "library" ? `${n} Card${n === 1 ? "" : "s"}` : cardCount(n);
 
 /** What a pile's tip says on hover: its zone and how many cards, "Graveyard · 5". */
 const pileTip = (zone: string, count: number) =>
@@ -109,7 +120,7 @@ export function ZoneViewer({
   const cards = [...pile.cards].reverse();
   const columns = Math.min(VIEWER_COLUMNS, Math.max(1, cards.length));
   const zone = "zone" in pile ? pile : undefined;
-  const name = title ?? (zone ? pileName(zone) : "");
+  const name = title ?? (zone ? pileTitle(zone) : "");
   const [list, more, onScroll] = useScrollEdges();
   const panel = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
@@ -150,7 +161,7 @@ export function ZoneViewer({
         <header className="zone-viewer-header">
           <h2 className="zone-viewer-title">{name}</h2>
           <span className="zone-viewer-count">
-            {cardCount(cards.length)}
+            {viewerCount(cards.length, zone?.zone)}
             {cards.length > 1 && title === undefined && " · top first"}
           </span>
           <button
