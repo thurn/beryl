@@ -448,7 +448,7 @@ impl Condition {
                         .iter()
                         .find(|c| c.kind == *kind)
                         .map_or(0, |c| c.count)
-                        == *n
+                        == i32::from(*n)
             }),
             _ => unreachable!("not a spec's condition"),
         }

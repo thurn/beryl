@@ -143,6 +143,9 @@ const CUES: Cues = {
         const was = counted(recordOf(table, tally.object.slot), tally.counter);
         return at("start", now > was ? "chip" : now < was && "chips");
       }
+      case "playerCounters":
+      case "namedCounters":
+      case "damage":
       case "stats":
         return [];
     }
@@ -174,6 +177,15 @@ const CUES: Cues = {
         return at("start", "turn");
       case "coin":
         return at("start", "coin");
+      case "roll":
+        return at("start", "coin");
+      case "tableTurn":
+        return at("start", "turn");
+      case "phase":
+        return at("start", "step");
+      case "shuffle":
+      case "rewind":
+      case "game":
       case "scry":
       case "topOrBottom":
         return [];
@@ -219,7 +231,8 @@ function sideOf({ act, cause }: ScriptStep, table: Table): Side | undefined {
   }
   if (act.verb === "set" && act.fact.kind === "turn") return act.fact.active;
   if (act.verb === "announce") {
-    return "active" in act.notice ? act.notice.active : act.notice.player;
+    if ("active" in act.notice) return act.notice.active;
+    if ("player" in act.notice) return act.notice.player;
   }
   return undefined;
 }

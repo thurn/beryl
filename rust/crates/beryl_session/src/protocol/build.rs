@@ -182,9 +182,9 @@ pub(super) fn pending_attackers<L: Layout>(
 
 fn player_state<L: Layout>(t: &GameTable, obs: Observation<'_, L>, p: Seat) -> PlayerState {
     let player = obs.player(p);
-    let [white, blue, black, red, green, colorless] = player.mana().amounts();
+    let [white, blue, black, red, green, colorless] = player.mana().amounts().map(u32::from);
     PlayerState {
-        life: player.life(),
+        life: player.life().into(),
         mana: ManaPool {
             white,
             blue,
@@ -323,7 +323,7 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         .iter()
         .map(|(kind, count)| CounterView {
             kind: kind.into(),
-            count,
+            count: count.into(),
         })
         .collect();
     let some = |s: Option<L::Slot>| s.map(|s| ObjectId(s.num()));
@@ -341,7 +341,7 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         token: o.is_token(),
         tapped: o.is_tapped(),
         summoning_sick: creature && o.is_summoning_sick(),
-        damage: o.damage(),
+        damage: o.damage().into(),
         counters,
         types: CardType::ALL
             .iter()
@@ -349,8 +349,8 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
             .map(|&(_, ty)| ty)
             .collect(),
         pt: derived.filter(|_| creature).map(|d| PowerToughness {
-            power: d.power,
-            toughness: d.toughness,
+            power: d.power.into(),
+            toughness: d.toughness.into(),
         }),
         keywords: derived.map_or_else(Vec::new, |d| {
             Keyword::ALL

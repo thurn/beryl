@@ -9,8 +9,8 @@ use serde::Serialize;
 use super::{Act, Fact, Subject, Tally};
 use crate::protocol::ObjectId;
 use crate::protocol::{
-    ManaPool, ObjectView, PlayerState, PlayerView, Side, StackItem, Status, Step as TurnStep,
-    ZoneName,
+    ManaPool, NamedCounter, ObjectView, PlayerState, PlayerView, Side, StackItem, Status,
+    Step as TurnStep, ZoneName,
 };
 
 /// What a seat's screen shows of the game.
@@ -39,8 +39,10 @@ pub struct Entry {
 /// One player's numbers and ordered piles.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Piles {
-    pub life: i16,
+    pub life: i32,
     pub mana: ManaPool,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub named_counters: Vec<NamedCounter>,
     /// Bottom first.
     pub library: Vec<ObjectId>,
     /// Bottom first.
@@ -60,6 +62,7 @@ impl Piles {
         Piles {
             life: player.life,
             mana: player.mana,
+            named_counters: player.named_counters.clone(),
             library: player.library.clone(),
             graveyard: player.graveyard.clone(),
         }
@@ -225,7 +228,11 @@ impl Table {
             | Act::Tap { object }
             | Act::Showcase { object }
             | Act::Count {
-                tally: Tally::Counters { object, .. } | Tally::Stats { object },
+                tally:
+                    Tally::Counters { object, .. }
+                    | Tally::NamedCounters { object, .. }
+                    | Tally::Stats { object }
+                    | Tally::Damage { object },
             }
             | Act::Strike {
                 object: Some(object),
@@ -245,6 +252,12 @@ impl Table {
                 tally: Tally::Pool { player, mana },
             } => {
                 self.piles_mut(*player).mana = *mana;
+                Ok(())
+            }
+            Act::Count {
+                tally: Tally::PlayerCounters { player, counters },
+            } => {
+                self.piles_mut(*player).named_counters.clone_from(counters);
                 Ok(())
             }
             Act::Set { fact } => self.set(fact),

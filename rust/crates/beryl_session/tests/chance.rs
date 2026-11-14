@@ -87,7 +87,7 @@ fn same_boards(t: &GameTable, a: &ReplayFile, b: &ReplayFile) {
 
 /// What the human sees of the game, by name rather than by slot: the turn, the life totals,
 /// and each object they see.
-fn seen(view: &PlayerView) -> (String, [i16; 2], Vec<String>) {
+fn seen(view: &PlayerView) -> (String, [i32; 2], Vec<String>) {
     let mut objects: Vec<String> = view
         .objects
         .iter()

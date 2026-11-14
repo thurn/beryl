@@ -45,10 +45,10 @@ import type { Name, Resting } from "./layout.ts";
 import { CARD_ASPECT } from "../components/Card";
 import {
   announced,
-  coinBanner,
   endWords,
   lifeChange,
   scryWords,
+  stepAnnouncement,
 } from "./notices.ts";
 import { trayOf, type Asked, type Prompts } from "./prompt.ts";
 import { noticePlace, TimingRefusal, useRefusal } from "./Refusal.tsx";
@@ -127,17 +127,17 @@ export function Hud({
   );
   // The orbs and the pills hold to the stage's middle.
   useStageWidth();
-  const coin = announced(notices, "coin");
+  const announcement = table && stepAnnouncement(notices, table);
   const scry = announced(notices, "scry");
   const end = announced(notices, "topOrBottom");
   const turn = announced(notices, "turn");
   const combat = combatBanner(view);
   const combatKey =
-    coin || !combat ? undefined : `${combat.title}|${combat.detail}`;
+    announcement || !combat ? undefined : `${combat.title}|${combat.detail}`;
   const combatUp = useBannerUp(combatKey);
   if (!table) return null;
-  const banner = coin ? coinBanner(coin, table) : combat;
-  const bannerUp = coin !== undefined || combatUp;
+  const banner = announcement ?? combat;
+  const bannerUp = announcement !== undefined || combatUp;
   const anchors = desktop.anchors(table);
   const early = table.turn.number <= 2;
   const blocked = blockedBy(asked);
@@ -230,8 +230,8 @@ export function Hud({
           <StepBanner
             key={`${banner.title}|${banner.detail}`}
             shown={bannerUp}
-            coin={coin !== undefined}
-            staged={coin !== undefined}
+            coin={announcement?.coin ?? false}
+            staged={announcement?.kind}
             {...banner}
           />
         )}

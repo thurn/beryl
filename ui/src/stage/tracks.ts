@@ -572,7 +572,7 @@ export function litBy(act: Act): On | undefined {
   if (act.verb !== "count") return subjectOf(act);
   const { tally } = act;
   if (tally.kind === "life") return tally.player;
-  return tally.kind === "pool" ? undefined : tally.object.slot;
+  return "object" in tally ? tally.object.slot : undefined;
 }
 
 /** Whether `resting` is a card lying in a hand's fan, either player's, rather than held up

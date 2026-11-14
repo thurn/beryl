@@ -6,8 +6,8 @@ use ts_rs::TS;
 use super::{Arrow, Mark, Span, Subject, Verb};
 use crate::protocol::ObjectId;
 use crate::protocol::{
-    CardHandling, Counter, Mana, ManaPool, ObjectView, Side, StackItem, Step as TurnStep, Why,
-    ZoneName,
+    CardHandling, Counter, Mana, ManaPool, NamedCounter, ObjectView, Side, StackItem,
+    Step as TurnStep, TablePhase, Why, ZoneName,
 };
 
 /// A verb with what it is applied to. An `object` is always the object's whole record once
@@ -148,7 +148,11 @@ impl Act {
             | Act::Tap { object }
             | Act::Showcase { object }
             | Act::Count {
-                tally: Tally::Counters { object, .. } | Tally::Stats { object },
+                tally:
+                    Tally::Counters { object, .. }
+                    | Tally::NamedCounters { object, .. }
+                    | Tally::Stats { object }
+                    | Tally::Damage { object },
             }
             | Act::Set {
                 fact: Fact::Object { object },
@@ -168,7 +172,11 @@ impl Act {
             | Act::Tap { object }
             | Act::Showcase { object }
             | Act::Count {
-                tally: Tally::Counters { object, .. } | Tally::Stats { object },
+                tally:
+                    Tally::Counters { object, .. }
+                    | Tally::NamedCounters { object, .. }
+                    | Tally::Stats { object }
+                    | Tally::Damage { object },
             }
             | Act::Set {
                 fact: Fact::Object { object },
@@ -216,7 +224,7 @@ pub enum Stream {
 pub enum Tally {
     Life {
         player: Side,
-        life: i16,
+        life: i32,
     },
     /// A player's unspent mana.
     Pool {
@@ -226,6 +234,20 @@ pub enum Tally {
     /// The object's counters of one kind, as its record has them.
     Counters {
         counter: Counter,
+        object: ObjectView,
+    },
+    /// The object's counters with a player-supplied name.
+    NamedCounters {
+        name: String,
+        object: ObjectView,
+    },
+    /// A player's named counters, in their view order.
+    PlayerCounters {
+        player: Side,
+        counters: Vec<NamedCounter>,
+    },
+    /// The damage marked on the object, without a hit or a source.
+    Damage {
         object: ObjectView,
     },
     /// The object's power and toughness.
@@ -256,8 +278,8 @@ pub enum Fact {
     Item { subject: Subject, item: StackItem },
 }
 
-/// What an `announce` says. The words are the stage's, and Arena's.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+/// What an `announce` says. The stage turns these values into banner or pill text.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Notice {
     /// "Your Turn" or "Opponent's Turn".
@@ -274,4 +296,16 @@ pub enum Notice {
         won: bool,
         source: ObjectId,
     },
+    /// A manual roll. Outcomes are zero-based, with zero meaning heads on a two-sided roll.
+    Roll { sides: u32, outcomes: Vec<u32> },
+    /// A manual shuffle. A separate `set` carries the library's new order.
+    Shuffle,
+    /// A manual rewind to the numbered log entry.
+    Rewind { to: u32 },
+    /// The phase selected on a manual table.
+    Phase { phase: TablePhase },
+    /// A manual turn began, with the active player's display name.
+    TableTurn { name: String },
+    /// The table has started this game of the match.
+    Game { number: u32 },
 }

@@ -57,7 +57,7 @@ fn prompt_decls(cfg: &Config) -> [String; 18] {
     ]
 }
 
-/// Types used by manual table views.
+/// Types used by manual table views and their scripts.
 fn table_decls(cfg: &Config) -> [String; 12] {
     [
         FaceName::decl(cfg),

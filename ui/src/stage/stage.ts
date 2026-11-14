@@ -60,7 +60,7 @@ import { Overlay, type Surface } from "./overlay.ts";
 export type { Surface } from "./overlay.ts";
 import type { Line, Marked } from "./spans.ts";
 import type { Streak } from "./streaks.ts";
-import { apply, tabled, tableOf, traded } from "./table.ts";
+import { apply, resetSteps, tabled, tableOf, traded } from "./table.ts";
 import type { Act, Script, Table } from "./table.ts";
 import {
   carried,
@@ -207,7 +207,7 @@ export class ScriptStage {
   /** Shows `view`, by playing the `script` that came with it over the table as it stands.
    * With no script, or one that resets (a seat's first view, an undone one), the stage starts
    * over from the view at once: whatever was playing or waiting is dropped, and nothing
-   * moves. */
+   * moves. Announcements can still play over the reset table. */
   play(view: PlayerView, script?: Script) {
     this.#idle.playing();
     if (script && !script.reset && this.#table) {
@@ -226,16 +226,20 @@ export class ScriptStage {
       entry.leaving = entry.landing = undefined;
     }
     let table = tableOf(view, script?.reset, this.#table);
-    // A reset's steps are only the spans to show, begun at once.
-    for (const { act } of script?.beats.flat() ?? []) {
+    const { immediate, announcements } = resetSteps(script);
+    for (const { act } of immediate) {
       table = apply(table, act);
       this.#over.play(act, -Infinity, -Infinity);
     }
     this.#set(table);
     this.#view = view;
     this.#lay(this.clock.now);
+    if (announcements.length) {
+      this.#at = this.clock.now;
+      this.#queue.push({ view, script: { beats: announcements } });
+    }
     this.#write(this.clock.now);
-    this.#idle.settled(this.#view?.status.kind);
+    if (!this.#busy) this.#idle.settled(this.#view?.status.kind);
   }
 
   /** Resolves when everything given to `play` has played out. Settled inside the tick. */

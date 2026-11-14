@@ -39,7 +39,7 @@ impl FaceName {
 #[serde(rename_all = "camelCase")]
 pub struct NamedCounter {
     pub name: String,
-    pub count: u16,
+    pub count: i32,
 }
 
 /// The current phase on the manual table's turn track.

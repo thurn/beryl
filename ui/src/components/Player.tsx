@@ -270,7 +270,9 @@ export function ManaPool({ pool, pulse = 0 }: { pool: Pool; pulse?: number }) {
       className={held ? "mana-pool mana-pool-pulse" : "mana-pool"}
       role="img"
       aria-label={`Unspent mana: ${symbols
-        .map(([k, s]) => `{${s}}`.repeat(shown[k]))
+        .map(([k, s]) =>
+          shown[k] <= 255 ? `{${s}}`.repeat(shown[k]) : `${shown[k]} {${s}}`,
+        )
         .join("")}`}
       data-pool
     >

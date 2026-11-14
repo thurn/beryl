@@ -239,13 +239,18 @@ impl Display for Pool {
         if symbols.iter().all(|&(_, amount)| amount == 0) {
             return f.write_str("0");
         }
-        symbols
-            .iter()
-            .try_for_each(|&(symbol, amount)| f.write_str(&symbol.repeat(usize::from(amount))))
+        for (symbol, amount) in symbols {
+            if let Ok(amount) = u8::try_from(amount) {
+                f.write_str(&symbol.repeat(usize::from(amount)))?;
+            } else {
+                write!(f, "{amount}{symbol}")?;
+            }
+        }
+        Ok(())
     }
 }
 
-fn counters(object: &ObjectView, kind: Counter) -> u8 {
+fn counters(object: &ObjectView, kind: Counter) -> i32 {
     object
         .counters
         .iter()
@@ -352,6 +357,22 @@ impl Display for Tally {
                 let count = counters(object, *counter);
                 write!(f, "{} {} {count}", Named(object), wire(counter))
             }
+            Tally::NamedCounters { name, object } => {
+                let count = object
+                    .named_counters
+                    .iter()
+                    .find(|c| &c.name == name)
+                    .map_or(0, |c| c.count);
+                write!(f, "{} {name} {count}", Named(object))
+            }
+            Tally::PlayerCounters { player, counters } => {
+                write!(f, "{} counters", wire(player))?;
+                for counter in counters {
+                    write!(f, " {} {}", counter.name, counter.count)?;
+                }
+                Ok(())
+            }
+            Tally::Damage { object } => write!(f, "{} damage {}", Named(object), object.damage),
             Tally::Stats { object } => {
                 write!(f, "{} pt", Named(object))?;
                 match object.pt {
@@ -402,6 +423,15 @@ impl Display for Notice {
                 let result = if won { "won" } else { "lost" };
                 write!(f, "coin {} {result} by #{source}", wire(player))
             }
+            Notice::Roll {
+                sides,
+                ref outcomes,
+            } => write!(f, "roll d{sides} {outcomes:?}"),
+            Notice::Shuffle => f.write_str("shuffle"),
+            Notice::Rewind { to } => write!(f, "rewind {to}"),
+            Notice::Phase { phase } => write!(f, "phase {}", wire(phase)),
+            Notice::TableTurn { ref name } => write!(f, "turn {name}"),
+            Notice::Game { number } => write!(f, "game {number}"),
         }
     }
 }

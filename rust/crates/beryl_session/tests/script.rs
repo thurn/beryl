@@ -21,7 +21,7 @@ fn hidden(slot: u16, zone: ZoneName) -> ObjectView {
     ObjectView::hidden(ObjectId(slot), zone, Side::Opponent, Side::Opponent)
 }
 
-fn creature(slot: u16, name: &str, power: i8, toughness: i8) -> ObjectView {
+fn creature(slot: u16, name: &str, power: i32, toughness: i32) -> ObjectView {
     ObjectView {
         types: vec![CardType::Creature],
         pt: Some(PowerToughness { power, toughness }),

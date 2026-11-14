@@ -35,6 +35,8 @@ mod refused;
 mod saves;
 mod script;
 mod script_build;
+mod script_manual;
+
 mod script_order;
 mod script_piles;
 mod script_spans;

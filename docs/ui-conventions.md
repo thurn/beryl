@@ -272,6 +272,10 @@ restore the old behavior.
   and show their shortcuts. Up and Down move between results, Return runs the
   selected command, Option+Return opens key binding for it, and Escape closes
   the list.
+- **Manual table announcements.** The stage uses its existing step banner for a
+  manual shuffle, roll, phase, turn, rewind or game start. It reads Shuffled,
+  Rolled 4 (d6), Heads, the phase name, the active player's name followed by 's
+  turn, Rewound to 41, or Game 2. The banner fades on the stage's clock.
 
 ## Not seen in Arena
 

@@ -636,11 +636,11 @@ from?: Subject, to: Subject, stream: Stream, amount: number, object?: ObjectView
 
 export type Stream = { "kind": "mana", color: Mana, } | { "kind": "damage" };
 
-export type Tally = { "kind": "life", player: Side, life: number, } | { "kind": "pool", player: Side, mana: ManaPool, } | { "kind": "counters", counter: Counter, object: ObjectView, } | { "kind": "stats", object: ObjectView, };
+export type Tally = { "kind": "life", player: Side, life: number, } | { "kind": "pool", player: Side, mana: ManaPool, } | { "kind": "counters", counter: Counter, object: ObjectView, } | { "kind": "namedCounters", name: string, object: ObjectView, } | { "kind": "playerCounters", player: Side, counters: Array<NamedCounter>, } | { "kind": "damage", object: ObjectView, } | { "kind": "stats", object: ObjectView, };
 
 export type Fact = { "kind": "turn", number: number, ownNumber: number, active: Side, step: Step, } | { "kind": "object", object: ObjectView, } | { "kind": "library", player: Side, order: Array<ObjectId>, } | { "kind": "item", subject: Subject, item: StackItem, };
 
-export type Notice = { "kind": "turn", active: Side, } | { "kind": "scry", player: Side, top: number, bottom: number, } | { "kind": "topOrBottom", player: Side, top: boolean, } | { "kind": "coin", player: Side, won: boolean, source: ObjectId, };
+export type Notice = { "kind": "turn", active: Side, } | { "kind": "scry", player: Side, top: number, bottom: number, } | { "kind": "topOrBottom", player: Side, top: boolean, } | { "kind": "coin", player: Side, won: boolean, source: ObjectId, } | { "kind": "roll", sides: number, outcomes: Array<number>, } | { "kind": "shuffle" } | { "kind": "rewind", to: number, } | { "kind": "phase", phase: TablePhase, } | { "kind": "tableTurn", name: string, } | { "kind": "game", number: number, };
 
 export type Span = "begin" | "end";
 

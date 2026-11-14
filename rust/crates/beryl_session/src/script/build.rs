@@ -499,28 +499,29 @@ impl<'a> Builder<'a> {
             return;
         };
         let had = counted(&object.counters, counter);
-        let count = i16::from(had) + by;
-        let count = u8::try_from(count.max(0)).unwrap_or(u8::MAX);
+        let count = (had + i32::from(by)).clamp(0, i32::from(u8::MAX));
         set_counters(&mut object.counters, counter, count);
         // The counter's own change to its creature shows with it
         // ([CR 122.1a](https://yawgatog.com/resources/magic-rules/#R1221a): "A +X/+Y counter
         // on a creature ... adds X to that object's power and Y to that object's toughness.
         // Similarly, -X/-Y counters subtract from power and toughness").
         let each = match counter {
-            Counter::PlusOne => i16::from(count) - i16::from(had),
-            Counter::MinusOne => i16::from(had) - i16::from(count),
+            Counter::PlusOne => count - had,
+            Counter::MinusOne => had - count,
             _ => 0,
         };
         if let (Some(pt), Ok(each)) = (&mut object.pt, i8::try_from(each)) {
-            pt.power = pt.power.saturating_add(each);
-            pt.toughness = pt.toughness.saturating_add(each);
+            pt.power = (pt.power + i32::from(each)).clamp(i32::from(i8::MIN), i32::from(i8::MAX));
+            pt.toughness =
+                (pt.toughness + i32::from(each)).clamp(i32::from(i8::MIN), i32::from(i8::MAX));
         }
         let tally = Tally::Counters { counter, object };
         self.emit(Act::Count { tally }, cause);
     }
 
     fn life(&mut self, player: Side, by: i16, cause: Option<Subject>) {
-        let life = self.table.piles(player).life.saturating_add(by);
+        let life = (self.table.piles(player).life + i32::from(by))
+            .clamp(i32::from(i16::MIN), i32::from(i16::MAX));
         let tally = Tally::Life { player, life };
         self.emit(Act::Count { tally }, cause);
     }
@@ -542,11 +543,11 @@ impl<'a> Builder<'a> {
                 let mut object = self.table.objects.get(&slot).cloned();
                 if let Some(object) = &mut object {
                     if object.pt.is_some() {
-                        object.damage = object.damage.saturating_add(amount);
+                        object.damage = (object.damage + i32::from(amount)).min(i32::from(u8::MAX));
                     }
                     if object.types.contains(&CardType::Planeswalker) {
                         let loyalty = counted(&object.counters, Counter::Loyalty);
-                        let loyalty = loyalty.saturating_sub(amount);
+                        let loyalty = (loyalty - i32::from(amount)).max(0);
                         set_counters(&mut object.counters, Counter::Loyalty, loyalty);
                     }
                 }

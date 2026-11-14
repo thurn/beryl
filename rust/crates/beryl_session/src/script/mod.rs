@@ -74,8 +74,8 @@
 //!
 //! A seat's first script, and the script beside an undone view, has [`Script::reset`]: the
 //! stage drops its table and every span and takes the view's table as it stands, with no
-//! motion. The script's steps are then only the spans to show, begun at once. A stage with no
-//! table yet does the same with whatever view it first gets (a page reloaded into a game in
+//! card motion. Spans begin at once, and announcements play over the reset table. A stage
+//! with no table yet takes the first view as it stands (a page reloaded into a game in
 //! progress), whose script was written for a screen that had the view before. A page that shows
 //! first a view other than its seat's first has [`Follow`] write that view a reset of its own.
 //!

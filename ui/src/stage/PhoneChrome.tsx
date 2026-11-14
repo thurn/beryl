@@ -35,7 +35,7 @@ import {
   type Viewport,
 } from "../mobile/layout";
 import type { Name, Resting } from "./layout.ts";
-import { announced, coinBanner, endWords, scryWords } from "./notices.ts";
+import { announced, endWords, scryWords, stepAnnouncement } from "./notices.ts";
 import type { ScriptStage } from "./stage.ts";
 
 /** The least a control measures on a phone (phone.css). */
@@ -366,15 +366,15 @@ export function Notices({
   width: number;
 }) {
   const { notices, resting } = stage.shown;
-  const coin = announced(notices, "coin");
+  const announcement = stepAnnouncement(notices, table);
   const scry = announced(notices, "scry");
   const end = announced(notices, "topOrBottom");
   const turn = announced(notices, "turn");
   const combat = combatBanner(view);
   const combatUp = useBannerUp(
-    coin || !combat ? undefined : `${combat.title}|${combat.detail}`,
+    announcement || !combat ? undefined : `${combat.title}|${combat.detail}`,
   );
-  const banner = coin ? coinBanner(coin, table) : combat;
+  const banner = announcement ?? combat;
   const middle = bands.middle.top + bands.middle.height / 2;
   /** Where a pill lies beside `side`'s lands: past the end of their row, on whichever side
    * of it has the room, so that it covers no permanent while play goes on under it. */
@@ -415,15 +415,15 @@ export function Notices({
         {banner && (
           <div
             className="phone-announce phone-announce-step"
-            // A coin is tossed mid-table, just above where the turn is announced; a combat
-            // step's banner lies under the opponent's strip.
-            style={{ top: coin ? middle - 95 : edge("opponent") }}
+            // Scripted banners sit above the middle band. A combat step's banner sits under
+            // the opponent's strip.
+            style={{ top: announcement ? middle - 95 : edge("opponent") }}
           >
             <StepBanner
               key={`${banner.title}|${banner.detail}`}
-              shown={coin !== undefined || combatUp}
-              coin={coin !== undefined}
-              staged={coin !== undefined}
+              shown={announcement !== undefined || combatUp}
+              coin={announcement?.coin ?? false}
+              staged={announcement?.kind}
               {...banner}
             />
           </div>

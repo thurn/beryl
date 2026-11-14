@@ -18,7 +18,7 @@ pub(super) const COUNTERS: [Counter; 6] = [
     Counter::Chorus,
 ];
 
-pub(super) fn counted(counters: &[CounterView], kind: Counter) -> u8 {
+pub(super) fn counted(counters: &[CounterView], kind: Counter) -> i32 {
     counters
         .iter()
         .find(|c| c.kind == kind)
@@ -27,7 +27,7 @@ pub(super) fn counted(counters: &[CounterView], kind: Counter) -> u8 {
 
 /// Sets how many `kind` counters `counters` lists, as a view lists them: in order, and none
 /// of a kind there are none of.
-pub(super) fn set_counters(counters: &mut Vec<CounterView>, kind: Counter, count: u8) {
+pub(super) fn set_counters(counters: &mut Vec<CounterView>, kind: Counter, count: i32) {
     counters.retain(|c| c.kind != kind);
     if count > 0 {
         let place = |k: Counter| COUNTERS.iter().position(|&c| c == k);
@@ -331,8 +331,8 @@ fn public(zone: ZoneName) -> bool {
 fn rewound(mut object: ObjectView, later: &[GameEvent]) -> ObjectView {
     let slot = object.slot;
     let count = |object: &mut ObjectView, counter: Counter, by: i16| {
-        let count = i16::from(counted(&object.counters, counter)) + by;
-        let count = u8::try_from(count.max(0)).unwrap_or(u8::MAX);
+        let count = counted(&object.counters, counter) + i32::from(by);
+        let count = count.clamp(0, i32::from(u8::MAX));
         set_counters(&mut object.counters, counter, count);
     };
     for event in later.iter().rev() {
@@ -353,7 +353,7 @@ fn rewound(mut object: ObjectView, later: &[GameEvent]) -> ObjectView {
                 to: TargetRef::Object { slot: s },
                 amount,
                 ..
-            } if *s == slot => object.damage = object.damage.saturating_sub(*amount),
+            } if *s == slot => object.damage = (object.damage - i32::from(*amount)).max(0),
             GameEvent::GainControl { slot: s, .. } if *s == slot => {
                 object.controller = object.owner;
             }

@@ -40,7 +40,7 @@ impl PlayerView {
 
 impl PlayerState {
     /// A player's life total with empty zones and no engine state.
-    pub fn neutral(life: i16) -> Self {
+    pub fn neutral(life: i32) -> Self {
         Self {
             life,
             mana: ManaPool::default(),

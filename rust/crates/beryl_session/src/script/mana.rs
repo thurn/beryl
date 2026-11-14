@@ -22,7 +22,7 @@ const COLORS: [Mana; 6] = [
     Mana::Colorless,
 ];
 
-fn amount(pool: &mut ManaPool, color: Mana) -> &mut u8 {
+fn amount(pool: &mut ManaPool, color: Mana) -> &mut u32 {
     match color {
         Mana::White => &mut pool.white,
         Mana::Blue => &mut pool.blue,
@@ -103,7 +103,7 @@ impl Builder<'_> {
         let mut end = self.after.piles(player).mana;
         let mut mana = self.table.piles(player).mana;
         let (now, end) = (amount(&mut mana, color), *amount(&mut end, color));
-        let counted = now.saturating_add(made).min(end.max(*now));
+        let counted = now.saturating_add(u32::from(made)).min(end.max(*now));
         if counted != *now {
             *now = counted;
             let tally = Tally::Pool { player, mana };
@@ -123,7 +123,13 @@ impl Builder<'_> {
             if let Some(paid) = now.checked_sub(end).filter(|&paid| paid > 0) {
                 *now = end;
                 spent = true;
-                self.streak(from, to, color, paid, cause);
+                self.streak(
+                    from,
+                    to,
+                    color,
+                    u8::try_from(paid).expect("engine mana fits in u8"),
+                    cause,
+                );
             }
         }
         if spent {

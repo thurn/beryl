@@ -205,7 +205,7 @@ pub struct Players {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerState {
-    pub life: i16,
+    pub life: i32,
     /// Unspent mana.
     pub mana: ManaPool,
     pub lands_played: u8,
@@ -227,12 +227,12 @@ pub struct PlayerState {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ManaPool {
-    pub white: u8,
-    pub blue: u8,
-    pub black: u8,
-    pub red: u8,
-    pub green: u8,
-    pub colorless: u8,
+    pub white: u32,
+    pub blue: u32,
+    pub black: u32,
+    pub red: u32,
+    pub green: u32,
+    pub colorless: u32,
 }
 
 /// One object, with its identity only if the viewer knows it.
@@ -258,7 +258,7 @@ pub struct ObjectView {
     pub tapped: bool,
     /// Can't attack or use its tap abilities yet (CR 302.6), if it is a creature.
     pub summoning_sick: bool,
-    pub damage: u8,
+    pub damage: i32,
     pub counters: Vec<CounterView>,
     /// On the battlefield: the card types after continuous effects.
     pub types: Vec<CardType>,
@@ -298,15 +298,15 @@ pub struct ObjectView {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PowerToughness {
-    pub power: i8,
-    pub toughness: i8,
+    pub power: i32,
+    pub toughness: i32,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CounterView {
     pub kind: Counter,
-    pub count: u8,
+    pub count: i32,
 }
 
 /// A creature's part in combat.

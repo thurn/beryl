@@ -1,7 +1,8 @@
 // A step's announcement over the battlefield.
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Coin } from "../components/Player";
+import type { Notice } from "../generated/protocol";
 
 /** How long an announcing banner shows, in ms. */
 export const BANNER_MS = 2500;
@@ -32,12 +33,11 @@ export function StepBanner({
   staged,
 }: {
   title: string;
-  detail: string;
+  detail?: string;
   shown: boolean;
   coin: boolean;
-  /** The stage's announcement of a coin: drawn from how far through its step is
-   * (stage/stage.css `.stage-notice`). */
-  staged?: boolean;
+  /** The stage supplies the progress of a scripted announcement. */
+  staged?: Notice["kind"];
 }) {
   const reduce = useReducedMotion() ?? false;
   return (
@@ -45,6 +45,11 @@ export function StepBanner({
       {shown && (
         <motion.div
           className={staged ? "step-banner stage-notice" : "step-banner"}
+          style={
+            staged
+              ? ({ "--through": `var(--notice-${staged}, 0)` } as CSSProperties)
+              : undefined
+          }
           role="status"
           exit={
             reduce ? undefined : { opacity: 0, transition: { duration: 0.4 } }
@@ -62,7 +67,7 @@ export function StepBanner({
           <i className="step-banner-dot" />
           <i className="step-banner-rule step-banner-rule-right" />
           <i className="step-banner-underline" />
-          <span className="step-banner-detail">{detail}</span>
+          {detail && <span className="step-banner-detail">{detail}</span>}
           <svg className="step-banner-notch" viewBox="0 0 140 12" aria-hidden>
             <path d="M0 1.5 H60.5 L70 10.5 L79.5 1.5 H140" />
           </svg>

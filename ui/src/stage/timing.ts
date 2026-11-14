@@ -7,7 +7,7 @@
 // too (`effects`, and each verb's list of those its steps begin): `effectsOf`.
 import { easeIn, easeInOut, easeOut } from "motion";
 import conventions from "../../../data/ui-conventions.json" with { type: "json" };
-import type { PlayerView } from "../generated/protocol";
+import type { Notice, PlayerView } from "../generated/protocol";
 import type { Act } from "./table.ts";
 import type { Effect, Layer, On } from "./effects.ts";
 import { SNAP, type Timing } from "./stage.ts";
@@ -200,7 +200,7 @@ export function caseOf(
 }
 
 /** The data's name for the announcement of each kind. */
-const NOTICES = {
+const NOTICES: Partial<Record<Notice["kind"], string>> = {
   turn: "turn banner",
   scry: "scry pill",
   // The pill naming the end of a library the opponent chose stands as long as a scry's.

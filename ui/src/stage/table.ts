@@ -87,6 +87,21 @@ export interface Script {
   beats: Step[][];
 }
 
+/** A reset applies its spans immediately and plays its announcements on the clock. */
+export function resetSteps(script?: Script) {
+  const immediate: Step[] = [];
+  const announcements: Step[][] = [];
+  for (const beat of script?.beats ?? []) {
+    const banners: Step[] = [];
+    for (const step of beat) {
+      if (script?.reset && step.act.verb === "announce") banners.push(step);
+      else immediate.push(step);
+    }
+    if (banners.length) announcements.push(banners);
+  }
+  return { immediate, announcements };
+}
+
 /** A view whose table the steps so far have changed, and the numbers its scripts gave the
  * abilities on its stack, bottom first: a view's stack does not name them. The rest of the
  * view is the chrome of the last view taken whole. */
@@ -464,6 +479,12 @@ export function apply(table: Table, act: Act, cause?: Subject): Table {
           return player(act.tally.player, { life: act.tally.life });
         case "pool":
           return player(act.tally.player, { mana: act.tally.mana });
+        case "playerCounters":
+          return player(act.tally.player, {
+            namedCounters: act.tally.counters.length
+              ? act.tally.counters
+              : undefined,
+          });
         default:
           return put(table, act.tally.object);
       }

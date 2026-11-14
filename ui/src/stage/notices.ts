@@ -6,6 +6,7 @@ import type {
   PlayerView,
   ScriptStep,
   Side,
+  TablePhase,
 } from "../generated/protocol";
 import type { Counting } from "./stage.ts";
 
@@ -38,8 +39,8 @@ export const endWords = ({ top }: Of<"topOrBottom">) =>
 
 /** The banner of a coin's flip: the card that flipped it, which the notice names, and who won
  * or lost. */
-export function coinBanner(
-  { notice }: { notice: Of<"coin"> },
+function coinBanner(
+  notice: Of<"coin">,
   table: PlayerView,
 ): { title: string; detail: string } {
   const source = table.objects.find((o) => o.slot === notice.source)?.name;
@@ -48,6 +49,73 @@ export function coinBanner(
     title: source ?? "Coin flip",
     detail: `${who} ${notice.won ? "won" : "lost"} the flip`,
   };
+}
+
+const PHASES: Record<TablePhase, string> = {
+  untap: "Untap",
+  upkeep: "Upkeep",
+  draw: "Draw",
+  firstMain: "First main",
+  beginningOfCombat: "Beginning of combat",
+  declareAttackers: "Declare attackers",
+  declareBlockers: "Declare blockers",
+  combatDamage: "Combat damage",
+  endOfCombat: "End of combat",
+  secondMain: "Second main",
+  end: "End step",
+};
+
+/** The most recent announcement that uses the shared step banner. */
+export function stepAnnouncement(
+  notices: readonly ScriptStep[],
+  table: PlayerView,
+) {
+  for (const { act } of [...notices].reverse()) {
+    if (act.verb !== "announce") continue;
+    const { notice } = act;
+    const words = bannerWords(notice, table);
+    if (words)
+      return { ...words, kind: notice.kind, coin: notice.kind === "coin" };
+  }
+  return undefined;
+}
+
+function bannerWords(
+  notice: Notice,
+  table: PlayerView,
+): { title: string; detail?: string } | undefined {
+  switch (notice.kind) {
+    case "coin":
+      return coinBanner(notice, table);
+    case "roll": {
+      const { sides, outcomes } = notice;
+      const results = outcomes.map((outcome) =>
+        sides === 2 ? (outcome === 0 ? "Heads" : "Tails") : outcome + 1,
+      );
+      if (results.length === 1) {
+        return {
+          title:
+            sides === 2
+              ? String(results[0])
+              : `Rolled ${results[0]} (d${sides})`,
+        };
+      }
+      return {
+        title: sides === 2 ? "Flipped coins" : `Rolled dice (d${sides})`,
+        detail: results.join(", "),
+      };
+    }
+    case "shuffle":
+      return { title: "Shuffled" };
+    case "rewind":
+      return { title: `Rewound to ${notice.to}` };
+    case "phase":
+      return { title: PHASES[notice.phase] };
+    case "tableTurn":
+      return { title: `${notice.name}'s turn` };
+    case "game":
+      return { title: `Game ${notice.number}` };
+  }
 }
 
 /** By how much `side`'s life total is changing now: over the `count` steps of it under way,
