@@ -28,6 +28,7 @@
 //! name: a reference is a value of its expression type.
 
 mod amount;
+mod asks;
 pub mod build;
 mod condition;
 mod operands;
@@ -38,7 +39,9 @@ pub use amount::Amount;
 pub use condition::{Comparison, Condition};
 pub use operands::Operands;
 pub use reference::{Objects, Players, Recipients};
-pub use terms::{CastTerms, CopyException, Found, LibraryOrder, LibraryPosition, Taken};
+pub use terms::{
+    CastTerms, CopyException, Found, LibraryOrder, LibraryPosition, Prevention, Taken,
+};
 
 use crate::continuous::{Duration, Modification, RuleChange};
 use crate::cost::Cost;
@@ -312,6 +315,23 @@ pub enum Effect {
     /// the ability is on, or the spell
     /// ([CR 120.2b](https://yawgatog.com/resources/magic-rules/#R1202b)).
     DealDamage { to: Recipients, amount: Amount },
+    /// A prevention shield on each of the recipients for the rest of the turn
+    /// ([CR 615.1a](https://yawgatog.com/resources/magic-rules/#R6151a)): "Effects that use
+    /// the word 'prevent' are prevention effects. Prevention effects use 'prevent' to indicate
+    /// what damage will not be dealt." It prevents what `prevention` says of the next damage
+    /// dealt to the recipient this turn. With `from`, only damage from a source of the
+    /// controller's choice that the filter accepts as the instruction is carried out: "the
+    /// next time a red source of your choice would deal damage to you this turn". The source
+    /// is chosen then and is not a target
+    /// ([CR 609.7a](https://yawgatog.com/resources/magic-rules/#R6097a)): "If an effect
+    /// requires a player to choose a source of damage, they may choose a permanent; a spell
+    /// on the stack (including a permanent spell); any object referred to by an object on the
+    /// stack".
+    PreventDamage {
+        to: Recipients,
+        prevention: Prevention,
+        from: Option<&'static Filter>,
+    },
     /// "[Player] gains [amount] life"
     /// ([CR 119.3](https://yawgatog.com/resources/magic-rules/#R1193)): "If an effect causes
     /// a player to gain life or lose life, that player's life total is adjusted accordingly."
@@ -520,94 +540,6 @@ impl Effect {
     /// No instruction: what an ability that never resolves does, such as a static ability.
     pub const NOTHING: Effect = Effect::Sequence(&[]);
 
-    /// Whether carrying this out may ask a player to choose
-    /// ([CR 608.2d](https://yawgatog.com/resources/magic-rules/#R6082d)): "If an effect of a
-    /// spell or ability offers any choices other than choices already made as part of
-    /// casting the spell, activating the ability, or otherwise putting the spell or ability
-    /// on the stack, the player announces these while applying the effect." The kind of mana
-    /// a mana ability adds is chosen as it is activated, so [`Effect::AddMana`] asks nothing, and
-    /// whether to cast a card an [`Effect::MayCast`] offers is the engine's to ask once the
-    /// effect has finished.
-    pub const fn asks(&self) -> bool {
-        match *self {
-            Effect::May { .. }
-            | Effect::Unless { .. }
-            | Effect::Discard { .. }
-            | Effect::Scry { .. }
-            | Effect::Explore(_)
-            | Effect::UntapUpTo { .. }
-            | Effect::ManifestDread(_)
-            | Effect::CreateAttackingTokens { .. }
-            | Effect::Choose { .. }
-            | Effect::PutBack { .. }
-            | Effect::Dig { .. }
-            | Effect::Fateseal { .. }
-            | Effect::Search { .. }
-            | Effect::PutIntoLibrary {
-                position: LibraryPosition::TopOrBottom,
-                ..
-            } => true,
-            Effect::Sequence(effects) => {
-                let mut i = 0;
-                while i < effects.len() {
-                    if effects[i].asks() {
-                        return true;
-                    }
-                    i += 1;
-                }
-                false
-            }
-            Effect::If {
-                then, otherwise, ..
-            } => {
-                then.asks()
-                    || match otherwise {
-                        Some(otherwise) => otherwise.asks(),
-                        None => false,
-                    }
-            }
-            Effect::ForEachPlayer { effect, .. } => effect.asks(),
-            Effect::Modify { modifications, .. } => Modification::any_asks(modifications),
-            Effect::LookAt { .. }
-            | Effect::Counter(_)
-            | Effect::CounterInto { .. }
-            | Effect::Destroy { .. }
-            | Effect::Regenerate(_)
-            | Effect::Exile(_)
-            | Effect::ExileUntilThisLeaves(_)
-            | Effect::ExileLinked(_)
-            | Effect::Sacrifice(_)
-            | Effect::ReturnToHand(_)
-            | Effect::PutIntoGraveyard(_)
-            | Effect::ReturnToBattlefield(_)
-            | Effect::ReturnTransformed(_)
-            | Effect::PutIntoLibrary { .. }
-            | Effect::GainFlashback(_)
-            | Effect::PermitCast { .. }
-            | Effect::ShuffleInto { .. }
-            | Effect::Draw { .. }
-            | Effect::Mill { .. }
-            | Effect::GainLife { .. }
-            | Effect::LoseLife { .. }
-            | Effect::CreateTokens { .. }
-            | Effect::CreateCopies { .. }
-            | Effect::AddCounters { .. }
-            | Effect::RemoveCounters { .. }
-            | Effect::AddMana { .. }
-            | Effect::AddManaOfKind { .. }
-            | Effect::ExchangeControl(..)
-            | Effect::Attach { .. }
-            | Effect::FlipCoin(_)
-            | Effect::DealDamage { .. }
-            | Effect::ChangeRule { .. }
-            | Effect::MayCast { .. }
-            | Effect::Delay { .. }
-            | Effect::GetEmblem { .. }
-            | Effect::WinGame(_)
-            | Effect::LoseGame(_) => false,
-        }
-    }
-
     /// Whether `test` holds of this instruction or of one inside it, whichever of them a
     /// resolution comes to.
     pub fn any(&self, test: &impl Fn(&Effect) -> bool) -> bool {
@@ -672,6 +604,7 @@ impl Effect {
             Effect::Attach { .. }
             | Effect::ExchangeControl(..)
             | Effect::Regenerate(_)
+            | Effect::PreventDamage { .. }
             | Effect::Draw { .. }
             | Effect::Discard { .. }
             | Effect::Mill { .. }

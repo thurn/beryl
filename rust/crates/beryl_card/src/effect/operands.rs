@@ -230,6 +230,14 @@ impl Effect {
                     .objects(objects)
                     .amount(amount),
             },
+            Effect::PreventDamage { to, from, .. } => match to {
+                Recipients::Players(players) => Operands::of_players(players),
+                Recipients::Permanents(objects) => Operands::of_objects(objects),
+                Recipients::Both(players, objects) => {
+                    Operands::of_players(players).objects(objects)
+                }
+            }
+            .filter(*from),
             Effect::CreateCopies {
                 player,
                 of: objects,

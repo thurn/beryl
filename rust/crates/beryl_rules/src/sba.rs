@@ -1,7 +1,7 @@
 //! State-based actions (architecture §8.4).
 
 use crate::PlayerSet;
-use crate::actions::regenerate;
+
 use crate::bitboard::Bitboard;
 use crate::card::{Keywords, Subtype, Supertypes, Types};
 use crate::decision::{Outcome, StallReason};
@@ -10,9 +10,10 @@ use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layers;
 use crate::layout::{Layout, PerPlayer, Table};
-use crate::protection;
 use crate::state::{Pending, State, Zone};
 use crate::table::GameTable;
+use crate::{protection, replace};
+use beryl_card::Regeneration;
 
 /// Checks state-based actions and performs them, returning whether any were performed. A
 /// player losing ends the game; a legend-rule choice opens [`Pending::LegendRule`], whose
@@ -64,13 +65,15 @@ pub(crate) fn check<L: Layout>(
         }
         return Ok(true);
     }
-    // A creature with lethal damage is destroyed (CR 704.5g), so a regeneration shield
-    // replaces that ([CR 614.8](https://yawgatog.com/resources/magic-rules/#R6148)):
-    // "Regeneration is a destruction-replacement effect." With no shield on any permanent,
-    // one bit test.
+    // A creature with lethal damage is destroyed (CR 704.5g), so its destruction is proposed
+    // to the replacement effects of destruction: a regeneration shield replaces it
+    // ([CR 614.8](https://yawgatog.com/resources/magic-rules/#R6148)): "Regeneration is a
+    // destruction-replacement effect." With no shield on any permanent, one bit test.
     if s.has_regeneration_shields() {
         let lethal = destroyed_for_damage(s, t, graveyard);
-        graveyard &= !regenerate::regenerate_any(s, t, sink, lethal)?;
+        let allowed = Regeneration::Allowed;
+        let destroyed = replace::destruction(s, t, sink, lethal, allowed)?;
+        graveyard &= !(lethal & !destroyed);
     }
     // "As a single event": the one batch below is every action of this check that has an
     // event, and a batch's events are kept as one group (`event::move_batch`).

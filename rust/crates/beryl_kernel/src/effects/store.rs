@@ -95,8 +95,8 @@ impl<L: Layout> Store<L> for Effects<L> {
                 }
                 Affects::Player(player) => {
                     check(
-                        matches!(e.payload, Payload::Rule(_)),
-                        "an effect on a player that is no rule change",
+                        matches!(e.payload, Payload::Rule(_) | Payload::Prevent(_)),
+                        "an effect on a player that is no rule change or shield",
                         Some(At::Player(player)),
                     )?;
                     None
@@ -224,7 +224,7 @@ impl<L: Layout> Relayout for ContinuousEffect<L> {
                 Affects::Player(player) => Affects::Player(player),
                 Affects::Set(set) => Affects::Set(set.relayout()),
             },
-            payload: self.payload,
+            payload: self.payload.relayout(),
         }
     }
 }

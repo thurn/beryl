@@ -193,6 +193,15 @@ impl Replacement {
             rewrite: Rewrite::ToZone(instead),
         }
     }
+
+    /// "If a source would deal damage to a permanent or player, it deals [N times] that damage
+    /// to that permanent or player instead." (Furnace of Rath)
+    pub const fn multiplies_damage(n: u8) -> Replacement {
+        Replacement {
+            replaces: Replaced::Damage,
+            rewrite: Rewrite::Multiply(n),
+        }
+    }
 }
 
 /// The event a replacement effect replaces.
@@ -230,6 +239,10 @@ pub enum Replaced {
         objects: &'static Filter,
         not_cast: bool,
     },
+    /// Damage a source would deal to a permanent or a player, whichever the source and the
+    /// recipient ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)): "Effects
+    /// that use the word 'instead' are replacement effects."
+    Damage,
 }
 
 impl crate::Ability {
@@ -283,6 +296,9 @@ pub enum Rewrite {
     /// Its controller chooses a value of this kind as it enters, which the permanent
     /// remembers ([`Replacement::choose_as_enters`]).
     Choose(ChosenKind),
+    /// The damage is multiplied by N: "it deals double that damage to that permanent or
+    /// player instead" is 2. The damage still comes from its source.
+    Multiply(u8),
 }
 
 /// The kind of value a permanent chooses as it enters ([`Rewrite::Choose`]): one entry of a

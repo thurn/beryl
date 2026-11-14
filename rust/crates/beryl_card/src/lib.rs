@@ -55,7 +55,7 @@ pub use definition::{
 };
 pub use effect::{
     Amount, CastTerms, Comparison, Condition, CopyException, Effect, Found, LibraryOrder,
-    LibraryPosition, Objects, Players, Recipients, Regeneration, Taken,
+    LibraryPosition, Objects, Players, Prevention, Recipients, Regeneration, Taken,
 };
 pub use filter::Filter;
 pub use ids::{Seat, TurnStep, Zone, ZoneSet};
@@ -74,8 +74,9 @@ pub mod prelude {
         Ability, Amount, BasicLandTypes, CardDef, CastTerms, CastingKind, CastingOption, Castings,
         Colors, Comparison, Condition, Cost, CostAction, CostPart, CounterKind, Duration, Effect,
         Face, FaceIx, Filter, Found, Governed, Keywords, LayerSpec, LibraryOrder, LibraryPosition,
-        ManaColor, ManaCost, ManaSet, Modification, Objects, Place, Players, Prompt, Protection,
-        Purpose, Recipients, Replacement, RuleChange, Subtype, Subtypes, Supertypes, Taken,
-        TargetKind, TargetSpec, Trigger, TriggerEvent, TurnStep, Types, When, Zone, card, mana,
+        ManaColor, ManaCost, ManaSet, Modification, Objects, Place, Players, Prevention, Prompt,
+        Protection, Purpose, Recipients, Replacement, RuleChange, Subtype, Subtypes, Supertypes,
+        Taken, TargetKind, TargetSpec, Trigger, TriggerEvent, TurnStep, Types, When, Zone, card,
+        mana,
     };
 }

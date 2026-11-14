@@ -231,7 +231,7 @@ pub(crate) fn shows_the_same<L: Layout>(a: Observation<'_, L>, b: Observation<'_
 /// differ in.
 fn unshown_effects<L: Layout>(
     o: Observation<'_, L>,
-) -> impl Iterator<Item = (Affects<L>, Payload, Duration)> {
+) -> impl Iterator<Item = (Affects<L>, Payload<L>, Duration)> {
     o.effects()
         .iter()
         .filter(|e| !matches!(e.payload, Payload::Layer(_)))

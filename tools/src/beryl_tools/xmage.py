@@ -258,6 +258,7 @@ class Exporter:
         # makes every run play the same game, as Forge's harness already does.
         self.emit(f"mage.util.RandomUtil.setSeed({cast(int, self.setup['seed'])}L);")
         start = cast(str, self.setup["step"])
+        self.cards.refuse_identical_damage_replacements(self.setup)
         for seat, setup in enumerate(cast(list[Json], self.setup["players"])):
             who = self.player(seat)
             life = cast(int, setup["life"])
@@ -663,8 +664,7 @@ class Exporter:
             text = java_string(cast(str, self.cards.first_trigger_text(card)))
             self.emit(f"setChoice({who}, {text});")
         elif action.get("purpose", p.purpose) == "color" and what == "Number":
-            # XMage names a chosen color (`ChoiceColor`); Beryl numbers the five in the
-            # order of CR 105.1.
+            # XMage names the color (`ChoiceColor`); Beryl numbers it as CR 105.1 does.
             self.emit(f"setChoice({who}, {java_string(COLORS[cast(int, pick['n'])])});")
         elif action.get("purpose", p.purpose) == "replace":
             # Dredge's yes or no (`chooseUse`); mandatory effects' order by source name.

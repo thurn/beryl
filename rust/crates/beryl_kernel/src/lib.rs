@@ -289,7 +289,10 @@
 //! names.
 //!
 //! Its payload ([`effects::Payload`]) is a layer change, a zone-change replacement or a
-//! rule change, a permission to cast or a cost change (built). A payload is a
+//! rule change, a permission to cast, a cost change, a regeneration shield or a prevention
+//! shield (built). A prevention shield is the one payload on a player besides a rule change, and
+//! names the source of damage chosen for it, if any, by an [`object::ObjectRef`] that stops
+//! matching once that source changes zones. A payload is a
 //! resolved kernel type: every word of the card that needed the resolving ability to
 //! settle it is settled, as [`store::Duration`] names the player "your next turn" means. A
 //! rule change is one the game numbered ([`rule_changes::RuleId`], a byte), which names no

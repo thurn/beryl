@@ -59,14 +59,14 @@ fn an_effect_survives_small_to_large_and_back() {
                 timestamp: 0,
                 duration: Duration::UntilYourNextTurn(Seat::P1),
                 affected: Affects::object(nth(&large, 7)),
-                payload: PUMP,
+                payload: PUMP.relayout(),
             },
             ContinuousEffect {
                 source: LargeCardIx::FIRST,
                 timestamp: 1,
                 duration: Duration::Indefinite,
                 affected: Affects::object(large.object_ref(pooled)),
-                payload: EXILE,
+                payload: EXILE.relayout(),
             },
         ]
     );

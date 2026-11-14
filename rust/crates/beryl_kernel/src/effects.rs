@@ -9,10 +9,10 @@
 //! them by kind: the layers ask for [`State::layer_effects`], a zone change for
 //! [`State::move_replacements`]. A kind with nothing live costs its reader one AND.
 //!
-//! Built so far: an object (by-w8gv.7.2), a player (by-w8gv.7.3) and a locked-in set of
-//! objects ([`sets`], by-w8gv.7.5) as the affected side, and the layer change, the
-//! zone-change replacement, the rule change, the permission to cast and the cost change
-//! (by-w8gv.7.4) as payloads, and the regeneration shield ([`regeneration`]). The game as a side is designed in the contract and built with
+//! Built so far: an object, a player and a locked-in set of objects ([`sets`]) as the
+//! affected side, and the layer change, the zone-change replacement, the rule change, the
+//! permission to cast, the cost change, the regeneration shield ([`regeneration`]) and the
+//! prevention shield ([`prevention`]) as payloads. The game as a side is designed in the contract and built with
 //! its first user.
 //!
 //! [`State::rule_applies`] is the one question about a rule change, whether a static
@@ -29,11 +29,13 @@ use crate::store::{Duration, Ended};
 use crate::table::GameTable;
 
 mod change;
+pub mod prevention;
 pub mod regeneration;
 mod sets;
 mod store;
 
 pub use change::{Characteristics, LayerChange, read_layer};
+pub use prevention::{ChosenSource, Shield, ShieldAt};
 use sets::Sets;
 pub use sets::{LockedIn, SETS};
 
@@ -74,6 +76,8 @@ pub enum Continuous<L: Layout = Small> {
     Cost(ObjectRef<L>, CostChange),
     /// A regeneration shield on the permanent ([`regeneration`]).
     Regeneration(ObjectRef<L>),
+    /// A prevention shield on a player or a permanent ([`prevention`]).
+    Prevent(Subject<L>, Shield<L>),
 }
 
 impl<L: Layout> Continuous<L> {
@@ -86,13 +90,13 @@ impl<L: Layout> Continuous<L> {
             | Continuous::Cast(object, _)
             | Continuous::Cost(object, _)
             | Continuous::Regeneration(object) => Subject::Object(object),
-            Continuous::Rule(subject, _) => subject,
+            Continuous::Rule(subject, _) | Continuous::Prevent(subject, _) => subject,
         }
     }
 
     /// What it does, as an entry keeps it.
     #[inline]
-    fn payload(self) -> Payload {
+    fn payload(self) -> Payload<L> {
         match self {
             Continuous::Layer(_, change) => Payload::Layer(change),
             Continuous::Move(_, replacement) => Payload::Move(replacement),
@@ -100,6 +104,7 @@ impl<L: Layout> Continuous<L> {
             Continuous::Cast(_, terms) => Payload::Cast(terms),
             Continuous::Cost(_, change) => Payload::Cost(change),
             Continuous::Regeneration(_) => Payload::Regeneration,
+            Continuous::Prevent(_, shield) => Payload::Prevent(shield),
         }
     }
 }
@@ -147,8 +152,8 @@ pub enum Permanents<L: Layout = Small> {
 /// be 32 bytes in [`Small`] and not 24: a layer change is 16 with an alignment of 8. So the
 /// store's mutators are what keep the pairs to those that mean something: one takes a
 /// [`Continuous`], which has no other, and the other a layer change for a set. A player is
-/// affected by a rule change alone, since a layer changes a permanent and a zone change is
-/// an object's. A set is affected by a layer change alone: only a change to
+/// affected by a rule change or a prevention shield alone, since a layer changes a permanent
+/// and a zone change is an object's. A set is affected by a layer change alone: only a change to
 /// characteristics or control locks in what it affects (CR 611.2c), and nothing else that
 /// the cards do is one effect on several objects.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -255,7 +260,7 @@ pub struct Permitted<L: Layout = Small> {
 
 /// What a continuous effect does, as an entry keeps it beside its [`Affects`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Payload {
+pub enum Payload<L: Layout = Small> {
     /// Changes the affected permanent in a layer (architecture §9).
     Layer(LayerChange),
     /// Replaces a zone change of the affected object.
@@ -272,9 +277,11 @@ pub enum Payload {
     Cost(CostChange),
     /// Replaces the next destruction of the affected permanent ([`regeneration`]).
     Regeneration,
+    /// Prevents damage to the affected player or permanent ([`prevention`]).
+    Prevent(Shield<L>),
 }
 
-impl Payload {
+impl<L: Layout> Payload<L> {
     /// The bit of its kind in a store's [`Kinds`].
     #[inline]
     fn kind(self) -> u16 {
@@ -285,6 +292,7 @@ impl Payload {
             Payload::Cast(_) => Kinds::CAST,
             Payload::Cost(_) => Kinds::COST,
             Payload::Regeneration => Kinds::REGENERATION,
+            Payload::Prevent(_) => Kinds::PREVENTION,
         }
     }
 }
@@ -301,6 +309,7 @@ impl Kinds {
     const CAST: u16 = 1 << 3;
     const COST: u16 = 1 << 4;
     const REGENERATION: u16 = 1 << 5;
+    const PREVENTION: u16 = 1 << 6;
 }
 
 /// A continuous effect from a resolved spell or ability
@@ -318,7 +327,7 @@ pub struct ContinuousEffect<L: Layout = Small> {
     pub timestamp: u16,
     pub duration: Duration,
     pub affected: Affects<L>,
-    pub payload: Payload,
+    pub payload: Payload<L>,
 }
 
 /// An entry is 24 bytes in [`Small`], whichever side and payload it has: the store's room
@@ -488,7 +497,7 @@ impl<L: Layout> EffectsOn<'_, L> {
     /// The effects on the object, in the order they began: the card each came from, what
     /// it does and how long it lasts.
     #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = (L::Card, Payload, Duration)> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = (L::Card, Payload<L>, Duration)> + '_ {
         let slot = self.slot;
         self.store.into_iter().flat_map(move |store| {
             (store.entries.iter())
@@ -594,9 +603,11 @@ impl<L: Layout> State<L> {
                     let rules = &mut self.effects.rules[player.index()];
                     *rules = rules.with(rule);
                 }
+                Continuous::Prevent(Subject::Player(_), _) => {}
                 Continuous::Layer(object, _)
                 | Continuous::Move(object, _)
                 | Continuous::Rule(Subject::Object(object), _)
+                | Continuous::Prevent(Subject::Object(object), _)
                 | Continuous::Cast(object, _)
                 | Continuous::Cost(object, _)
                 | Continuous::Regeneration(object) => {

@@ -106,6 +106,8 @@ pub enum ReplacementKind {
     /// An object being put into a zone (`beryl_card`'s `Replaced::PutInto`), or entering the
     /// battlefield (`Replaced::Enters`).
     Move,
+    /// Damage (`beryl_card`'s `Replaced::Damage`).
+    Damage,
 }
 
 /// What a card's static abilities do that the layers' pass over the battlefield collects:

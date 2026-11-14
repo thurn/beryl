@@ -669,6 +669,7 @@ impl Ctx {
                 }
                 return instead;
             }
+            (Replaced::Damage, Rewrite::Multiply(n)) => vec![super::prevention::multiplied(n)],
             _ => self.body(ability.body()),
         };
         if let Some(&condition) = ability.condition() {

@@ -173,7 +173,7 @@ impl Ability {
             ) => {
                 filter.walk(visit);
             }
-            Some(Replaced::None | Replaced::ThisEnters) | None => {}
+            Some(Replaced::None | Replaced::ThisEnters | Replaced::Damage) | None => {}
         }
         if let Some(rule) = self.rule() {
             rule.players.walk(visit);

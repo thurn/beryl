@@ -494,6 +494,33 @@ Built by by-bajq.3.4 (Chains of Mephistopheles, Notion Thief):
 - Two Chains of different players are still two candidates: the check for "the
   same" does not know that Chains' body never reads "you".
 
+Built by by-bajq.3.10:
+
+- A prevention shield is an Effects entry on a player or a permanent
+  (`Payload::Prevent`, `beryl_kernel::effects::prevention`): what is left of it
+  (an amount, or the next event) and, for "a source of your choice", the source
+  as an `ObjectRef` with the face and ability that made it, whose filter the
+  source must still pass (CR 615.9). It ends when used up or at end of turn. The
+  vocabulary is `Effect::PreventDamage` (Circle of Protection: Red, Mending
+  Hands); the source is chosen among the permanents and the spells on the stack
+  the filter accepts.
+- Doubling is `Replacement::multiplies_damage` (`Replaced::Damage`,
+  `Rewrite::Multiply`), a static ability of a permanent gated by
+  `ReplacementKind::Damage` (Furnace of Rath).
+- `replace::damage` (`beryl_rules/src/replace/damage.rs`) is the loop of CR
+  616.1 for damage: protection, shields and multipliers, each applying once (CR
+  614.5). One that prevents all the damage applies first without asking, and
+  shields of an amount apply earliest first; the one question is a multiplier
+  against a shield of an amount, asked of the affected player as `Replace`
+  (`ChooseObject`, the shield's card or the permanent). A card that replaces
+  damage adds `ReplacementKind::Damage` to the card table's mask, which turns on
+  `replace::may_ask`, so resolutions and combat damage can pause for it.
+- Regeneration's shields are applied by `replace::destruction`, the destruction
+  proposal that `actions::destroy` and the lethal-damage SBA make.
+- Not built: damage that can't be prevented skips every prevention (no card
+  makes damage unpreventable yet), and a permanent spell chosen as a source is
+  not followed onto the battlefield (CR 609.7a's last sentence).
+
 ### 4. Characteristics in every zone, and text
 
 - **Reading.** `query.rs` answers colors, types, keywords and "has this ability"

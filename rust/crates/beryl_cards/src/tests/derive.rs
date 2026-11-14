@@ -37,6 +37,11 @@ const UNREACHED: &[(&str, &str)] = &[
          card's hand-written scenarios have the opponent loot under it",
     ),
     (
+        "Furnace of Rath: ability 0 (Replacement)",
+        "casting it deals no damage, and a generated position has nothing that deals damage \
+         after; the card's hand-written scenarios double Lightning Bolt's and combat damage",
+    ),
+    (
         "Containment Priest: ability 0 (Replacement)",
         "a generated scenario puts onto the battlefield only spells it casts, which were cast; \
          the card's hand-written scenarios return creatures with Flickerwisp under it",

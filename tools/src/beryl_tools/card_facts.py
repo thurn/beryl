@@ -302,6 +302,25 @@ class Cards:
         queue (`CHOICES_AS_TARGETS`)."""
         return any(i["kind"] in CHOICES_AS_TARGETS for i in self.instructions(card))
 
+    def refuse_identical_damage_replacements(self, setup: Json) -> None:
+        """Refuses a scenario that starts with two permanents of one card whose replacement
+        effect modifies damage, as two Furnaces of Rath: XMage asks the player dealt the damage
+        to order the two (`chooseReplacementEffect`), where Beryl applies effects that do the
+        same together, asking nothing (CR 616.1e lets the player choose any)."""
+        names = [
+            cast(str, p["card"])
+            for player in cast(list[Json], setup["players"])
+            for p in cast(list[Json], player["battlefield"])
+        ]
+        for name in sorted(set(names)):
+            text = self.oracle.get(name, "")
+            if (
+                names.count(name) > 1
+                and "would deal damage" in text
+                and "instead" in text
+            ):
+                raise Unsupported(f"ordering the replacement effects of two {name}")
+
     def scries(self, card: str) -> bool:
         """Whether resolving `card` scries. Beryl chooses the cards for the bottom one at a
         time until done, then the rest from the top down; XMage takes the bottom ones as one

@@ -226,6 +226,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::PutIntoLibrary { .. }
         | Effect::Explore(_)
         | Effect::DealDamage { .. }
+        | Effect::PreventDamage { .. }
         | Effect::AddCounters { .. }
         | Effect::RemoveCounters { .. }
         | Effect::Modify { .. }

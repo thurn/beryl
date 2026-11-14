@@ -1157,14 +1157,19 @@ public final class BerylForgeHarness {
 
         @Override
         public ReplacementEffect chooseSingleReplacementEffect(List<ReplacementEffect> possibleReplacers) {
-            // Which of several mandatory effects applies first, as Chains of Mephistopheles or
-            // Notion Thief: Beryl asks it as a pick of one card, with no way to decline.
+            // Which of several mandatory effects applies first, as Chains of Mephistopheles,
+            // Notion Thief, or Furnace of Rath against a damage shield: Beryl asks it as a pick of
+            // one card, with no way to decline.
             if (replacing == null && possibleReplacers.size() > 1
                     && possibleReplacers.stream().noneMatch(re -> re.hasParam("Optional"))) {
                 JsonObject pick = run.take(player, Set.of("ChooseObject"), "replacement among " + possibleReplacers);
                 if (pick != null && pick.has("card")) {
+                    String first = pick.get("card").getAsString();
                     for (ReplacementEffect re : possibleReplacers) {
-                        if (Run.named(re.getHostCard(), pick.get("card").getAsString())) {
+                        // A shield a spell made is hosted by an effect card of that spell's.
+                        Card host = re.getHostCard();
+                        Card source = host.getEffectSource();
+                        if (Run.named(host, first) || (source != null && Run.named(source, first))) {
                             return re;
                         }
                     }

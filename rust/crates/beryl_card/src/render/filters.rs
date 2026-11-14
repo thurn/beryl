@@ -19,6 +19,8 @@ pub(super) enum Kind {
     Card(Option<Zone>),
     Spell,
     Player,
+    /// A source of damage, whatever zone it is in: "a red source of your choice".
+    Source,
 }
 
 impl Kind {
@@ -74,7 +76,7 @@ impl Ctx {
                     let owner = self.zone_owner(*players);
                     noun.suffixes.push(format!("in {owner} zones"));
                 }
-                Kind::Permanent | Kind::Spell => {
+                Kind::Permanent | Kind::Spell | Kind::Source => {
                     let who = self.controls(*players, true);
                     noun.suffixes.push(who);
                 }
@@ -269,6 +271,7 @@ impl Noun {
             Kind::Card(_) => Some("card"),
             Kind::Spell => Some("spell"),
             Kind::Player => Some("player"),
+            Kind::Source => Some("source"),
         }
     }
 

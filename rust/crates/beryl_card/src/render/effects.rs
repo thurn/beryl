@@ -12,7 +12,7 @@ use crate::continuous::Duration;
 use crate::definition::CardDef;
 use crate::effect::{
     Amount, CopyException, Effect, Found, LibraryOrder, LibraryPosition, Objects, Players,
-    Recipients, Regeneration, Taken,
+    Regeneration, Taken,
 };
 use crate::filter::Filter;
 use crate::ids::Zone;
@@ -242,19 +242,14 @@ impl Ctx {
             }
             Effect::DealDamage { to, amount } => {
                 let damage = self.quantity(amount, "damage");
-                let to = match to {
-                    Recipients::Players(players) => self.player(players),
-                    Recipients::Permanents(objects) => self.objects(objects),
-                    // "Any target": the one target, said once.
-                    Recipients::Both(Players::Target(a), Objects::Target(b)) if a == b => {
-                        self.objects(Objects::Target(b))
-                    }
-                    Recipients::Both(players, objects) => {
-                        format!("{} and {}", self.objects(objects), self.player(players))
-                    }
-                };
+                let to = self.recipients(to);
                 vec![format!("{} deals {damage} to {to}", self.this)]
             }
+            Effect::PreventDamage {
+                to,
+                prevention,
+                from,
+            } => vec![self.prevention(to, prevention, from)],
             Effect::GainLife { player, amount } => {
                 vec![self.stated(player, ("gain", "gains"), |c| c.quantity(amount, "life"))]
             }

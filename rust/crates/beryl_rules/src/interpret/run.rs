@@ -188,6 +188,11 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 regeneration,
             } => destroy::instruction(self, objects, regeneration)?,
             Effect::Regenerate(objects) => regenerate::instruction(self, objects)?,
+            Effect::PreventDamage {
+                to,
+                prevention,
+                from,
+            } => damage::prevent_instruction(self, to, prevention, from)?,
             Effect::Attach { objects, to } => attach::instruction(self, objects, to),
             Effect::Exile(objects) => exile::instruction(self, objects)?,
             Effect::ExileUntilThisLeaves(objects) => {

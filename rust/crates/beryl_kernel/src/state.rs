@@ -7,9 +7,9 @@ pub use crate::counters::{
     COUNTERS, CounterRows, CounterTable, Counters, CountersHeld, CountersOf,
 };
 pub use crate::effects::{
-    Affects, Characteristics, Continuous, ContinuousEffect, CostChange, EFFECTS, Effects,
-    EffectsOn, LayerChange, LockedIn, MoveReplacement, Payload, Permanents, Permission, Permitted,
-    SETS, Subject, read_layer,
+    Affects, Characteristics, ChosenSource, Continuous, ContinuousEffect, CostChange, EFFECTS,
+    Effects, EffectsOn, LayerChange, LockedIn, MoveReplacement, Payload, Permanents, Permission,
+    Permitted, SETS, Shield, ShieldAt, Subject, read_layer,
 };
 pub use crate::last_known::{LAST_KNOWN, LastKnown};
 pub use crate::memos::{MEMOS, Memo, Memos, MemosOf};

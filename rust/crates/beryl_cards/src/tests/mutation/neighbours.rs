@@ -7,7 +7,7 @@
 //! made required and the reverse, a "may" or an "unless" removed, an `If` condition negated,
 //! one element dropped from a `Sequence` and a filter widened to `Filter::Any`.
 
-use beryl_card::{Filter, Regeneration};
+use beryl_card::{Filter, Prevention, Regeneration};
 use beryl_engine::Zone;
 use beryl_engine::card::{
     Ability, AbilityKind, Amount, Behavior, CardDef, Condition, Effect, Face, Objects, Players,
@@ -617,26 +617,44 @@ fn local(effect: &'static Effect) -> Neighbours<Effect> {
             }
         }
         Effect::DealDamage { to, amount } => {
-            let recipients: Neighbours<Recipients> = match to {
-                Recipients::Players(p) => players(p)
-                    .into_iter()
-                    .map(|(n, p)| (n, Recipients::Players(p)))
-                    .collect(),
-                Recipients::Permanents(o) => objects(o)
-                    .into_iter()
-                    .map(|(n, o)| (n, Recipients::Permanents(o)))
-                    .collect(),
-                // Damage to only the players, or only the permanents, of the two.
-                Recipients::Both(p, o) => vec![
-                    ("only players".to_owned(), Recipients::Players(p)),
-                    ("only permanents".to_owned(), Recipients::Permanents(o)),
-                ],
-            };
-            for (name, to) in recipients {
+            for (name, to) in recipients(to) {
                 add(name, Effect::DealDamage { to, amount });
             }
             for (name, amount) in amounts(amount) {
                 add(name, Effect::DealDamage { to, amount });
+            }
+        }
+        Effect::PreventDamage {
+            to,
+            prevention,
+            from,
+        } => {
+            let prevent = |to, prevention, from| Effect::PreventDamage {
+                to,
+                prevention,
+                from,
+            };
+            for (name, to) in recipients(to) {
+                add(name, prevent(to, prevention, from));
+            }
+            let preventions = match prevention {
+                Prevention::NextTime => vec![("the next 1".to_owned(), Prevention::Next(1))],
+                Prevention::Next(n) => {
+                    let mut near = vec![
+                        ("the next time".to_owned(), Prevention::NextTime),
+                        (format!("the next {}", n + 1), Prevention::Next(n + 1)),
+                    ];
+                    if n > 1 {
+                        near.push((format!("the next {}", n - 1), Prevention::Next(n - 1)));
+                    }
+                    near
+                }
+            };
+            for (name, prevention) in preventions {
+                add(name, prevent(to, prevention, from));
+            }
+            if from.is_some() {
+                add("from any source".to_owned(), prevent(to, prevention, None));
             }
         }
         Effect::GainLife { player, amount } => {
@@ -913,6 +931,25 @@ fn local(effect: &'static Effect) -> Neighbours<Effect> {
 }
 
 /// The neighbours of an instruction over one set of objects.
+/// The neighbours of who is dealt damage: other players or objects, and for both, only the
+/// players or only the permanents of the two.
+fn recipients(to: Recipients) -> Neighbours<Recipients> {
+    match to {
+        Recipients::Players(p) => players(p)
+            .into_iter()
+            .map(|(n, p)| (n, Recipients::Players(p)))
+            .collect(),
+        Recipients::Permanents(o) => objects(o)
+            .into_iter()
+            .map(|(n, o)| (n, Recipients::Permanents(o)))
+            .collect(),
+        Recipients::Both(p, o) => vec![
+            ("only players".to_owned(), Recipients::Players(p)),
+            ("only permanents".to_owned(), Recipients::Permanents(o)),
+        ],
+    }
+}
+
 fn objects_of(which: Objects, build: fn(Objects) -> Effect, add: &mut impl FnMut(String, Effect)) {
     for (name, which) in objects(which) {
         add(name, build(which));

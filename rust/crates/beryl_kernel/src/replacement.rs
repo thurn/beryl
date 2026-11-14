@@ -100,6 +100,9 @@ pub(crate) fn check(def: &CardDef) -> Result<Replaces, Unreplaced> {
             // mask the layers fold over permanents: the game's table says whether any card has
             // it ([`crate::table::Capability::Dredge`]).
             (Replaced::Draw(Players::You, Draws::Each), Rewrite::Dredge(n)) if n > 0 => {}
+            (Replaced::Damage, Rewrite::Multiply(n)) if n > 1 => {
+                mask = mask | ReplacementKind::Damage;
+            }
             _ => return Err(Unreplaced::Rewrite),
         }
     }

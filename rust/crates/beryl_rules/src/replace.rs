@@ -23,7 +23,7 @@ use beryl_kernel::chosen::ChosenValue;
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityIx, AbilityKind, Replaced, Replacement, Rewrite, Types};
 use crate::decision::{Choice, Decision, DecisionKind, Opt};
-use crate::event::{Entry, Reason, Recipient, ReplacementKind, Sink};
+use crate::event::{Entry, Reason, ReplacementKind, Sink};
 use crate::filter::Evaluate;
 use crate::fixed::{Fixed, Full};
 use crate::game::Game;
@@ -34,7 +34,12 @@ use crate::life;
 use crate::profile::Stops;
 use crate::state::{AbilityMask, CounterKind, MoveReplacement, ObjectRef, State, Zone, ZoneKey};
 use crate::table::{Capability, GameTable};
-use crate::{actions, chosen, interpret, protection, trigger, zones};
+use crate::{actions, chosen, interpret, trigger, zones};
+
+mod damage;
+mod destruction;
+pub(crate) use damage::{Damage, damage};
+pub(crate) use destruction::destruction;
 
 mod draws;
 
@@ -77,48 +82,6 @@ pub(crate) fn moving<L: Layout>(
         proposal.entry = entering(s, t, sink, proposal.slot, proposal.entry)?;
     }
     Ok(proposal)
-}
-
-/// Damage proposed before it is dealt: the proposal that prevention and replacement effects
-/// of damage rewrite ([`damage`]).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Damage<L: Layout> {
-    pub source: ObjectRef<L>,
-    pub to: Recipient<L>,
-    pub amount: u8,
-    /// It is combat damage ([CR 510.2]).
-    ///
-    /// [CR 510.2]: https://yawgatog.com/resources/magic-rules/#R5102
-    pub combat: bool,
-    /// It can be prevented: no effect says it can't ([CR 615.12]), "Some effects state that
-    /// damage “can’t be prevented.” If unpreventable damage would be dealt, any applicable
-    /// prevention effects are still applied to it. Those effects won’t prevent any damage,
-    /// but any additional effects they have will take place."
-    ///
-    /// [CR 615.12]: https://yawgatog.com/resources/magic-rules/#R61512
-    pub preventable: bool,
-}
-
-/// Applies the prevention effects of damage to `proposal`. The one there is yet is
-/// protection ([CR 702.16e]): "Any damage that would be dealt by sources that have the stated
-/// quality to a permanent or player with protection is prevented." Prevented damage is never
-/// dealt ([CR 615.6]): "If damage that would be dealt is prevented, it never happens." Gated on
-/// the kind: while no effect gives protection, the proposal is returned as built after one
-/// AND.
-///
-/// [CR 702.16e]: https://yawgatog.com/resources/magic-rules/#R70216e
-/// [CR 615.6]: https://yawgatog.com/resources/magic-rules/#R6156
-#[inline]
-pub(crate) fn damage<L: Layout>(s: &State<L>, t: &GameTable, mut proposal: Damage<L>) -> Damage<L> {
-    if !protection::live(s) || !proposal.preventable {
-        return proposal;
-    }
-    if let Recipient::Permanent(r) = proposal.to
-        && protection::protected_from_cold(s, t, r.slot, proposal.source.slot)
-    {
-        proposal.amount = 0;
-    }
-    proposal
 }
 
 /// A replacement effect that applies to a move, by where it comes from: what [CR 614.5] counts
@@ -410,7 +373,11 @@ fn entering<L: Layout>(
                 sink.chosen.push((slot, value));
             }
             // The card table holds no other rewrite of entering.
-            Rewrite::None | Rewrite::ToZone(_) | Rewrite::Instead | Rewrite::Dredge(_) => continue,
+            Rewrite::None
+            | Rewrite::ToZone(_)
+            | Rewrite::Instead
+            | Rewrite::Dredge(_)
+            | Rewrite::Multiply(_) => continue,
         }
         crate::coverage::hit(ability);
     }
@@ -492,20 +459,23 @@ pub(crate) fn exiled_instead<L: Layout>(s: &State<L>, object: ObjectRef<L>, to: 
 }
 
 /// Whether a replacement effect's choice can come up ([CR 616.1]): an optional replacement
-/// may apply during the next resolution or step, or a replacement of draws whose instructions
-/// may ask a question. The engine runs each resolution and step that may meet such a choice on
+/// may apply during the next resolution or step, a replacement of draws whose instructions
+/// may ask a question, or two replacements of damage whose order changes the result. The engine runs each resolution and step that may meet such a choice on
 /// a copy of the state, so the choice can pause it ([`crate::asking`]). A run that does not run
 /// on the copy cannot pause, and takes the first candidate of any choice it meets ([`answer`]),
 /// which declines an optional replacement.
 ///
-/// The one optional replacement is dredge, so this holds in every game with a card that has
-/// dredge, wherever that card is. Dredge works from the graveyard as the draw happens
+/// It holds in every game with a card that has dredge, wherever that card is. Dredge works
+/// from the graveyard as the draw happens
 /// ([CR 702.52a]), and the same run can put a dredge card there before it draws, as an
 /// ability that mills two cards and then draws one does. A replacement of draws by
 /// instructions ([`ReplacementKind::DrawInstructions`]) may ask too ("discards a card"), and
 /// the drawing player chooses the order of it and another replacement of the draw ([`draw`]),
 /// so this holds in every game with a card that has one: such a card may enter the battlefield
-/// during the run. A game whose cards have neither pays two ANDs. Two replacements of a move
+/// during the run. So does a game with a card whose static ability replaces damage
+/// ([`ReplacementKind::Damage`]): the player dealt the damage chooses its order against a
+/// prevention shield of an amount ([`damage`]). A game whose cards have none of these pays two
+/// ANDs. Two replacements of a move
 /// that would put an object into different zones would be a choice too, but no card yet puts
 /// one anywhere but exile, so [`destination`] has nothing to choose between. Two replacements
 /// of a draw that each end the game, of permanents of different players, would differ too: no
@@ -515,16 +485,20 @@ pub(crate) fn exiled_instead<L: Layout>(s: &State<L>, object: ObjectRef<L>, to: 
 /// [CR 702.52a]: https://yawgatog.com/resources/magic-rules/#R70252a
 #[inline]
 pub(crate) fn may_ask(t: &GameTable) -> bool {
-    t.can(Capability::Dredge) || t.replaces_any().replaces(ReplacementKind::DrawInstructions)
+    let replaces = t.replaces_any();
+    t.can(Capability::Dredge)
+        || replaces.replaces(ReplacementKind::DrawInstructions)
+        || replaces.replaces(ReplacementKind::Damage)
 }
 
 /// Whether a resolution may meet a choice it did not declare it asks: a replacement effect's
 /// ([`may_ask`]), or a value a permanent chooses as it enters, which any resolution may put
 /// onto the battlefield in a game with a card that chooses one
-/// ([`Capability::ChoosesAsEnters`]). A game with neither pays the one AND [`may_ask`] does.
+/// ([`Capability::ChoosesAsEnters`]). A game with none of them pays the ANDs [`may_ask`]
+/// does and one more.
 #[inline]
 pub(crate) fn resolution_may_ask(t: &GameTable) -> bool {
-    t.can_either(Capability::Dredge, Capability::ChoosesAsEnters)
+    may_ask(t) || t.can(Capability::ChoosesAsEnters)
 }
 
 /// N of the card in `slot`'s dredge, with its ability, if it has dredge.

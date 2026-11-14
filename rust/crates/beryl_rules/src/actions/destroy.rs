@@ -2,27 +2,28 @@
 
 use beryl_card::{Keywords, Objects, Regeneration};
 
-use crate::actions::regenerate;
 use crate::bitboard::Bitboard;
 use crate::event::{self, Entry, Reason};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
+use crate::replace;
 use crate::state::{ObjectRef, State, Zone};
 
 /// Destroys a permanent ([CR 701.8a](https://yawgatog.com/resources/magic-rules/#R7018a)):
 /// "To destroy a permanent, move it from the battlefield to its owner's graveyard." One that
 /// has left the battlefield since is not destroyed (CR 400.7), nor is one with indestructible
 /// ([`indestructible`]). A regeneration shield on it replaces the destruction
-/// ([`regenerate::regenerate_any`]).
+/// ([`replace::destruction`]).
 #[inline]
 pub fn destroy<L: Layout>(game: &mut Game<'_, L>, object: ObjectRef<L>) -> Result<(), Full> {
     let one = Bitboard::single(object.slot);
     if !game.on_battlefield(object) || !indestructible(game.state(), one).is_empty() {
         return Ok(());
     }
-    if !regenerate::regenerate_any(game.state, game.table, game.sink, one)?.is_empty() {
+    let allowed = Regeneration::Allowed;
+    if replace::destruction(game.state, game.table, game.sink, one, allowed)?.is_empty() {
         return Ok(());
     }
     let (to, reason) = (Zone::Graveyard, Reason::Destroy);
@@ -31,12 +32,9 @@ pub fn destroy<L: Layout>(game: &mut Game<'_, L>, object: ObjectRef<L>) -> Resul
 
 /// Destroys a set of permanents simultaneously (CR 701.8a), as "Destroy each creature"
 /// does: one event, so "whenever one or more" abilities see them together. Those with
-/// indestructible stay ([`indestructible`]). Unless
-/// `regeneration` forbids it, a regeneration shield replaces the destruction of the
-/// permanent it is on ([CR 701.19c]): effects that say a permanent can't be regenerated
-/// "cause regeneration shields to not be applied."
-///
-/// [CR 701.19c]: https://yawgatog.com/resources/magic-rules/#R70119c
+/// indestructible stay ([`indestructible`]). Unless `regeneration` forbids it, a
+/// regeneration shield replaces the destruction of the permanent it is on
+/// ([`replace::destruction`]).
 #[inline]
 pub fn destroy_all<L: Layout>(
     game: &mut Game<'_, L>,
@@ -44,13 +42,8 @@ pub fn destroy_all<L: Layout>(
     regeneration: Regeneration,
 ) -> Result<(), Full> {
     let permanents = permanents & !indestructible(game.state(), permanents);
-    let permanents = match regeneration {
-        Regeneration::Allowed => {
-            let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
-            permanents & !regenerate::regenerate_any(s, t, sink, permanents)?
-        }
-        Regeneration::Forbidden => permanents,
-    };
+    let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
+    let permanents = replace::destruction(s, t, sink, permanents, regeneration)?;
     let (to, reason) = (Zone::Graveyard, Reason::Destroy);
     let entry = Entry::default();
     event::move_batch(
