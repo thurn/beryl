@@ -14,6 +14,8 @@ mod animation;
 mod common;
 #[path = "history/markers.rs"]
 mod markers;
+#[path = "history/projection.rs"]
+mod projection;
 use common::random::{ASSIST_AND_LOG, CORE, Generator, Kind};
 
 const HOST: Seat = Seat(0);
@@ -66,6 +68,13 @@ impl Game {
         assert_eq!(self.table, table);
         assert_eq!(self.log.entries(), log.entries());
         assert_eq!(self.chance, chance);
+        for viewer in table.seats() {
+            assert!(
+                self.log
+                    .history(&self.table, viewer)
+                    .eq(log.history(&table, viewer))
+            );
+        }
         for entry in log.entries() {
             assert_eq!(self.log.is_struck(entry.n), log.is_struck(entry.n));
         }

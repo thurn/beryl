@@ -2,6 +2,7 @@
 
 use std::collections::BTreeSet;
 
+use crate::action::Selection;
 use crate::change::{ObjectEdit, TableEdit};
 use crate::state::{AbilityMarker, Card, LineVisibility, Object, ObjectId};
 use crate::{Action, Change, Entry, Seat, Table};
@@ -247,6 +248,20 @@ fn unknown_card(object: Option<&Object>, seat: Seat) -> Option<&Card> {
         .map(|object| &object.card)
 }
 
+pub(crate) fn private_counter_name(
+    selection: &Selection,
+    name: &str,
+    before: &Table,
+    after: &Table,
+    seat: Seat,
+) -> bool {
+    selection.objects.iter().any(|id| {
+        [before, after].into_iter().any(|state| {
+            unknown_card(state.objects.get(id), seat).is_some_and(|card| mentions_card(name, card))
+        })
+    })
+}
+
 fn marker_visible(marker: &AbilityMarker, seat: Seat) -> bool {
     marker
         .display_source
@@ -352,12 +367,7 @@ fn redact_action(
         Action::Counter {
             selection, name, ..
         } => {
-            if selection.objects.iter().any(|id| {
-                [before, table].into_iter().any(|state| {
-                    unknown_card(state.objects.get(id), seat)
-                        .is_some_and(|card| mentions_card(name, card))
-                })
-            }) {
+            if private_counter_name(selection, name, before, table, seat) {
                 name.clear();
             }
         }

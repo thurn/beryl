@@ -1,45 +1,78 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::apply::{AppliedChanges, Presentation};
+use crate::log::UndoControl;
 use crate::state::Zone;
 use crate::{Action, Change, Entry, Log, Refusal, Seat, Table};
 
-pub(crate) fn target(log: &Log, by: Seat, requested: Option<u32>) -> Result<&Entry, Refusal> {
-    let undone: BTreeSet<_> = log
-        .entries()
-        .iter()
-        .filter(|entry| !log.is_struck(entry.n))
-        .filter_map(|entry| entry.undoes)
-        .collect();
-    let live = |entry: &&Entry| {
-        !log.is_struck(entry.n) && !undone.contains(&entry.n) && entry.undoes.is_none()
-    };
-    let entry = if let Some(n) = requested {
-        log.get(n).filter(live).filter(|entry| match entry.action {
-            Action::Batch { .. } => true,
-            Action::Draw { .. } => entry.by == by,
-            _ => false,
-        })
-    } else {
-        log.entries()
+pub(crate) struct Targets<'a> {
+    live: Vec<&'a Entry>,
+}
+
+impl<'a> Targets<'a> {
+    pub(crate) fn new(log: &'a Log) -> Self {
+        let strikes = log.struck_at(log.tip());
+        let unstruck = log
+            .entries()
+            .iter()
+            .filter(|entry| !strikes.is_some_and(|strikes| strikes.contains(&entry.n)));
+        let undone: BTreeSet<_> = unstruck.clone().filter_map(|entry| entry.undoes).collect();
+        let live = unstruck
+            .filter(|entry| entry.undoes.is_none() && !undone.contains(&entry.n))
+            .collect();
+        Self { live }
+    }
+
+    pub(crate) fn last_draw(&self, by: Seat) -> Option<u32> {
+        self.live
             .iter()
             .rev()
-            .filter(live)
-            .find(|entry| entry.by == by)
+            .find(|entry| own_draw(entry, by))
+            .map(|entry| entry.n)
     }
-    .ok_or(Refusal::INVALID)?;
-    let blocking: Vec<_> = log
-        .entries()
-        .iter()
-        .filter(live)
-        .filter(|later| later.n > entry.n && entry.touches.conflicts(&later.touches))
-        .map(|later| later.n)
-        .collect();
-    if blocking.is_empty() {
-        Ok(entry)
-    } else {
-        Err(Refusal::Invalid { blocking })
+
+    fn named(&self, by: Seat, n: u32) -> Option<&'a Entry> {
+        let index = self.live.binary_search_by_key(&n, |entry| entry.n).ok()?;
+        let entry = self.live[index];
+        (matches!(entry.action, Action::Batch { .. }) || own_draw(entry, by)).then_some(entry)
     }
+
+    pub(crate) fn target(&self, by: Seat, requested: Option<u32>) -> Result<&'a Entry, Refusal> {
+        let entry = match requested {
+            Some(n) => self.named(by, n),
+            None => self.live.iter().rev().copied().find(|entry| entry.by == by),
+        }
+        .ok_or(Refusal::INVALID)?;
+        match self.control(entry) {
+            UndoControl::Available => Ok(entry),
+            UndoControl::Blocked(blocking) => Err(Refusal::Invalid { blocking }),
+        }
+    }
+
+    pub(crate) fn batch_control(&self, by: Seat, entry: &Entry) -> Option<UndoControl> {
+        if !matches!(entry.action, Action::Batch { .. }) {
+            return None;
+        }
+        self.named(by, entry.n).map(|target| self.control(target))
+    }
+
+    fn control(&self, entry: &Entry) -> UndoControl {
+        let first_later = self.live.partition_point(|later| later.n <= entry.n);
+        let blocking: Vec<_> = self.live[first_later..]
+            .iter()
+            .filter(|later| entry.touches.conflicts(&later.touches))
+            .map(|later| later.n)
+            .collect();
+        if blocking.is_empty() {
+            UndoControl::Available
+        } else {
+            UndoControl::Blocked(blocking)
+        }
+    }
+}
+
+fn own_draw(entry: &Entry, by: Seat) -> bool {
+    matches!(entry.action, Action::Draw { .. }) && entry.by == by
 }
 
 pub(crate) fn inverse(log: &Log, table: &Table, entry: &Entry) -> (AppliedChanges, bool) {

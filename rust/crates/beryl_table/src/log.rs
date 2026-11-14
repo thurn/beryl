@@ -14,11 +14,31 @@ pub(crate) use line::Summary;
 pub use line::{ConnectionEvent, connection_line, line};
 pub use touches::Touches;
 
-/// The history belongs to the host. The adapter sends projected entries and
-/// strike status to its viewers.
+/// An offered row-level undo and the entry numbers that would block it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum UndoControl {
+    Available,
+    Blocked(Vec<u32>),
+}
+
+/// One row of a seat's history. The actor is a seat id so the adapter can
+/// supply the corresponding display name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HistoryLine<'a> {
+    pub n: u32,
+    pub by: Seat,
+    pub text: &'a str,
+    pub struck: bool,
+    pub undo: Option<UndoControl>,
+}
+
+/// The authoritative history belongs to the host. Use [`Self::history`]
+/// to build a seat's log view.
 #[derive(Clone, Debug)]
 pub struct Log {
     entries: Vec<Entry>,
+    /// Per-entry wording in seat order, captured when the action happened.
+    lines: Vec<Vec<String>>,
     snapshots: BTreeMap<u32, Table>,
     /// Strike status changes only when a rewind is applied or undone.
     strikes: BTreeMap<u32, BTreeSet<u32>>,
@@ -30,6 +50,7 @@ impl Log {
     pub fn new(initial: &Table) -> Self {
         Self {
             entries: Vec::new(),
+            lines: Vec::new(),
             snapshots: BTreeMap::from([(initial.entry_number, initial.clone())]),
             strikes: BTreeMap::new(),
             prior_ids: BTreeMap::new(),
@@ -43,6 +64,58 @@ impl Log {
     pub fn is_struck(&self, n: u32) -> bool {
         self.struck_at(self.tip())
             .is_some_and(|set| set.contains(&n))
+    }
+
+    /// Projects the complete log from recorded wording and current strike and
+    /// undo state. Row-level undo is offered for live batches. Draws use the
+    /// separate [`Self::last_draw`] shortcut.
+    pub fn history(&self, table: &Table, viewer: Seat) -> impl Iterator<Item = HistoryLine<'_>> {
+        let targets = self
+            .undo_ready(table, viewer)
+            .ok()
+            .map(|()| undo::Targets::new(self));
+        let strikes = self.struck_at(self.tip());
+        self.entries
+            .iter()
+            .zip(&self.lines)
+            .filter_map(move |(entry, lines)| {
+                Some(HistoryLine {
+                    n: entry.n,
+                    by: entry.by,
+                    text: lines.get(usize::from(viewer.0))?,
+                    struck: strikes.is_some_and(|strikes| strikes.contains(&entry.n)),
+                    undo: targets
+                        .as_ref()
+                        .and_then(|targets| targets.batch_control(viewer, entry)),
+                })
+            })
+    }
+
+    /// Returns the entry that `Action::Undo { entry }` would undo, or the
+    /// same refusal applying the action would return.
+    pub fn undo_target(&self, table: &Table, by: Seat, entry: Option<u32>) -> Result<u32, Refusal> {
+        Ok(self.resolve_undo(table, by, entry)?.n)
+    }
+
+    /// Finds the seat's latest live draw, even if it is currently blocked.
+    /// Pass its number to [`Self::undo_target`] or to `Action::Undo`.
+    pub fn last_draw(&self, table: &Table, by: Seat) -> Option<u32> {
+        self.undo_ready(table, by).ok()?;
+        undo::Targets::new(self).last_draw(by)
+    }
+
+    fn undo_ready(&self, table: &Table, by: Seat) -> Result<(), Refusal> {
+        if table.entry_number != self.tip() {
+            return Err(Refusal::INVALID);
+        }
+        permissions::check_actor(table, by)?;
+        next_entry(table)?;
+        Ok(())
+    }
+
+    fn resolve_undo(&self, table: &Table, by: Seat, entry: Option<u32>) -> Result<&Entry, Refusal> {
+        self.undo_ready(table, by)?;
+        undo::Targets::new(self).target(by, entry)
     }
 
     pub(crate) fn tip(&self) -> u32 {
@@ -60,11 +133,14 @@ impl Log {
     }
 
     pub(crate) fn get(&self, n: u32) -> Option<&Entry> {
-        let index = n.checked_sub(self.base())?.checked_sub(1)?;
-        self.entries.get(index as usize)
+        self.entries.get(self.index(n)?)
     }
 
-    fn struck_at(&self, n: u32) -> Option<&BTreeSet<u32>> {
+    fn index(&self, n: u32) -> Option<usize> {
+        Some(n.checked_sub(self.base())?.checked_sub(1)? as usize)
+    }
+
+    pub(crate) fn struck_at(&self, n: u32) -> Option<&BTreeSet<u32>> {
         self.strikes.range(..=n).next_back().map(|(_, set)| set)
     }
 
@@ -87,9 +163,9 @@ impl Log {
         if table.entry_number != self.tip() {
             return Err(Refusal::INVALID);
         }
-        let turn = (table.game_match.in_game, table.turn);
+        let before = table.clone();
         let entry = self.execute(table, by, action, chance)?;
-        self.record(table, turn, entry);
+        self.record(&before, table, entry);
         Ok(self.entries.last().expect("appended entry"))
     }
 
@@ -102,9 +178,8 @@ impl Log {
     ) -> Result<Entry, Refusal> {
         match *action {
             Action::Undo { entry } => {
-                permissions::check(table, by, action)?;
+                let target = self.resolve_undo(table, by, entry)?;
                 let n = next_entry(table)?;
-                let target = undo::target(self, by, entry)?;
                 let (applied, seen) = undo::inverse(self, table, target);
                 let (applied, touches) = perform_history(table, action, applied);
                 let mut result = commit(table, n, by, action, applied, touches);
@@ -134,7 +209,7 @@ impl Log {
         }
     }
 
-    fn record(&mut self, table: &Table, turn: (bool, u32), entry: Entry) {
+    fn record(&mut self, before: &Table, table: &Table, entry: Entry) {
         if let Action::Rewind { to } = entry.action {
             let mut struck = self.struck_at(to).cloned().unwrap_or_default();
             struck.extend(to + 1..entry.n);
@@ -152,9 +227,22 @@ impl Log {
             }
         }
 
-        if turn != (table.game_match.in_game, table.turn) {
+        if (before.game_match.in_game, before.turn) != (table.game_match.in_game, table.turn) {
             self.snapshots.insert(entry.n, table.clone());
         }
+        let lines = if let Some(target) = entry.undoes {
+            let index = self.index(target).expect("recorded undo target");
+            self.lines[index]
+                .iter()
+                .map(|text| line::undo_line(text, entry.seen))
+                .collect()
+        } else {
+            table
+                .seats()
+                .map(|viewer| line::recorded_line(&entry, before, table, viewer))
+                .collect()
+        };
+        self.lines.push(lines);
         self.entries.push(entry);
     }
 }

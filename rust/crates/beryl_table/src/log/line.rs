@@ -99,21 +99,49 @@ impl Summary {
 /// Formats a projected entry against a table projected for the same seat.
 /// The caller supplies the actor's name and the log's strike status.
 pub fn line(entry: &Entry, table: &Table, for_seat: Seat) -> String {
-    let mut text = if let Some(action) = &entry.undone_action {
-        let description = describe(action, entry, table, for_seat);
+    let cards = Cards {
+        before: table,
+        after: table,
+        viewer: for_seat,
+    };
+    let text = if let Some(action) = &entry.undone_action {
+        let description = describe(action, &entry.summary, &cards);
         format!("Undid: {description}")
     } else {
-        describe(&entry.action, entry, table, for_seat)
+        describe(&entry.action, &entry.summary, &cards)
     };
-    if entry.seen {
+    finish(text, entry.seen)
+}
+
+fn finish(mut text: String, seen: bool) -> String {
+    if seen {
         text.push_str(" (seen)");
     }
     text.push('.');
     text
 }
 
-fn describe(action: &Action, entry: &Entry, table: &Table, viewer: Seat) -> String {
-    let cards = |selection: &Selection| selected(selection, table, viewer);
+/// Capture wording against the tables on either side of the action. An
+/// action can remove a public object or replace its id before it is logged.
+pub(super) fn recorded_line(entry: &Entry, before: &Table, after: &Table, viewer: Seat) -> String {
+    let cards = Cards {
+        before,
+        after,
+        viewer,
+    };
+    finish(describe(&entry.action, &entry.summary, &cards), entry.seen)
+}
+
+pub(super) fn undo_line(text: &str, seen: bool) -> String {
+    let description = text
+        .strip_suffix('.')
+        .expect("recorded line ends with a period");
+    finish(format!("Undid: {description}"), seen)
+}
+
+fn describe(action: &Action, summary: &Summary, names: &Cards<'_>) -> String {
+    let viewer = names.viewer;
+    let cards = |selection: &Selection| names.selected(selection);
     let pile = |zone| zone_name(zone, viewer);
     let player = |seat| player_name(seat, viewer);
     match action {
@@ -123,15 +151,7 @@ fn describe(action: &Action, entry: &Entry, table: &Table, viewer: Seat) -> Stri
             position,
             face,
             ..
-        } => movement(
-            selection,
-            *to,
-            *position,
-            *face,
-            &entry.summary,
-            table,
-            viewer,
-        ),
+        } => movement(selection, *to, *position, *face, summary, names),
         Action::Reorder { selection, .. } => {
             format!("Reordered {} in {}", cards(selection), pile(selection.zone))
         }
@@ -139,7 +159,7 @@ fn describe(action: &Action, entry: &Entry, table: &Table, viewer: Seat) -> Stri
         Action::Give { selection, to } => {
             format!("Gave control of {} to {}", cards(selection), player(*to))
         }
-        Action::Tap { tapped: false, .. } if entry.summary.untapped_all => {
+        Action::Tap { tapped: false, .. } if summary.untapped_all => {
             "Untapped all permanents".into()
         }
         Action::Tap { selection, tapped } => {
@@ -167,6 +187,17 @@ fn describe(action: &Action, entry: &Entry, table: &Table, viewer: Seat) -> Stri
             name,
             adjustment,
         } => {
+            let name = if crate::redact::private_counter_name(
+                selection,
+                name,
+                names.before,
+                names.after,
+                viewer,
+            ) {
+                ""
+            } else {
+                name
+            };
             format!(
                 "{} on {}",
                 counter_change(name, *adjustment),
@@ -188,11 +219,7 @@ fn describe(action: &Action, entry: &Entry, table: &Table, viewer: Seat) -> Stri
         }
         Action::Note { selection, .. } => format!("Annotated {}", cards(selection)),
         Action::Attach { selection, host } => {
-            format!(
-                "Attached {} to {}",
-                cards(selection),
-                object_name(table, host.id, viewer)
-            )
+            format!("Attached {} to {}", cards(selection), names.object(host.id))
         }
         Action::Unattach { selection } => format!("Detached {}", cards(selection)),
         Action::Clone { selection } => format!("Created a token copy of {}", cards(selection)),
@@ -209,8 +236,8 @@ fn describe(action: &Action, entry: &Entry, table: &Table, viewer: Seat) -> Stri
         | Action::Lend { .. }
         | Action::AlwaysRevealTop { .. }
         | Action::AlwaysLookAtTop { .. }
-        | Action::SortHand { .. } => library(action, &entry.summary, viewer),
-        _ => game(action, &entry.summary, table, viewer),
+        | Action::SortHand { .. } => library(action, summary, viewer),
+        _ => game(action, summary, names),
     }
 }
 
@@ -269,7 +296,8 @@ fn library(action: &Action, summary: &Summary, viewer: Seat) -> String {
     }
 }
 
-fn game(action: &Action, summary: &Summary, table: &Table, viewer: Seat) -> String {
+fn game(action: &Action, summary: &Summary, names: &Cards<'_>) -> String {
+    let viewer = names.viewer;
     let player = |seat| player_name(seat, viewer);
     match action {
         Action::Life { seat, .. } => summary.life.map_or_else(
@@ -289,7 +317,7 @@ fn game(action: &Action, summary: &Summary, table: &Table, viewer: Seat) -> Stri
         }
         Action::Phase { phase } => format!("Moved to {}", phase_name(*phase)),
         Action::NextTurn {} => {
-            let seat = summary.turn_seat.unwrap_or(table.active);
+            let seat = summary.turn_seat.unwrap_or(names.after.active);
             if seat == viewer {
                 "Started your turn".into()
             } else {
@@ -300,11 +328,11 @@ fn game(action: &Action, summary: &Summary, table: &Table, viewer: Seat) -> Stri
         Action::Arrow { selection, to } => {
             let target = match to {
                 Target::Player(seat) => player(*seat),
-                Target::Object(seen) => object_name(table, seen.id, viewer).to_owned(),
+                Target::Object(seen) => names.object(seen.id).to_owned(),
             };
             format!(
                 "Drew an arrow from {} to {target}",
-                selected(selection, table, viewer)
+                names.selected(selection)
             )
         }
         Action::ClearArrows { .. } => "Cleared arrows".into(),
@@ -339,18 +367,26 @@ fn movement(
     position: Position,
     face: Option<Face>,
     summary: &Summary,
-    table: &Table,
-    viewer: Seat,
+    names: &Cards<'_>,
 ) -> String {
+    let viewer = names.viewer;
     let from = zone_name(selection.zone, viewer);
     let subject = if face == Some(Face::Down) {
         format!("{} face down", card_count(selection.objects.len()))
+    } else if let Destination::Zone(Zone::Hand(owner)) = destination
+        && selection.zone != Zone::Hand(owner)
+        && owner != viewer
+        && selection.objects.len() == 1
+    {
+        // The hand entry replaces the visible id. Keep the flight and its
+        // history anonymous for seats that cannot see the new identity.
+        "a card".into()
     } else if let [id] = selection.objects.as_slice()
         && matches!(destination, Destination::Computed(_))
     {
-        object_name(table, *id, viewer).to_owned()
+        names.object(*id).to_owned()
     } else {
-        selected(selection, table, viewer)
+        names.selected(selection)
     };
     match destination {
         Destination::Computed(ComputedDestination::Play) if summary.cast => {
@@ -367,30 +403,37 @@ fn movement(
     }
 }
 
-fn selected(selection: &Selection, table: &Table, viewer: Seat) -> String {
-    if let [id] = selection.objects.as_slice()
-        && selection.zone.is_public()
-    {
-        return object_name(table, *id, viewer).to_owned();
-    }
-    if selection.objects.len() == 1 {
-        "a card".into()
-    } else {
-        card_count(selection.objects.len())
-    }
+struct Cards<'a> {
+    before: &'a Table,
+    after: &'a Table,
+    viewer: Seat,
 }
 
-fn object_name(table: &Table, id: ObjectId, viewer: Seat) -> &str {
-    if let Some(object) = table.objects.get(&id)
-        && object.known_to.contains(&viewer)
-        && let Card::Named(name) | Card::Custom { name, .. } = &object.card
-    {
-        return name;
+impl Cards<'_> {
+    fn selected(&self, selection: &Selection) -> String {
+        match selection.objects.as_slice() {
+            [id] if selection.zone.is_public() => self.object(*id).to_owned(),
+            [_] => "a card".into(),
+            objects => card_count(objects.len()),
+        }
     }
-    if table.markers.contains_key(&id) {
-        "an ability"
-    } else {
-        "a card"
+
+    fn object(&self, id: ObjectId) -> &str {
+        if let Some(object) = self
+            .after
+            .objects
+            .get(&id)
+            .or_else(|| self.before.objects.get(&id))
+            && object.known_to.contains(&self.viewer)
+            && let Card::Named(name) | Card::Custom { name, .. } = &object.card
+        {
+            return name;
+        }
+        if self.after.markers.contains_key(&id) || self.before.markers.contains_key(&id) {
+            "an ability"
+        } else {
+            "a card"
+        }
     }
 }
 
