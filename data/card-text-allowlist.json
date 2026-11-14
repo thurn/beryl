@@ -114,6 +114,14 @@
       "Trinket Mage: when ~ enters , you may search your library for an artifact card with mana value 1 or less , reveal [-that card-] {+it+} , put it into your hand , then shuffle ."
     ]
   },
+  "Wild Nacatl": {
+    "reason": "wording",
+    "note": "Oracle says \"as long as you control a Mountain\" and the renderer says \"one or more Mountains\" with the effect after the condition. Same condition (at least one) and the same +1/+1 for each of the two abilities.",
+    "diff": [
+      "Wild Nacatl: [-~ gets +1/+1-] as long as you control [-a Mountain-] {+one or more Mountains , ~ gets +1/+1+} .",
+      "Wild Nacatl: [-~ gets +1/+1-] as long as you control [-a Plains-] {+one or more Plainses , ~ gets +1/+1+} ."
+    ]
+  },
   "Winds of Abandon": {
     "reason": "wording",
     "note": "Oracle words the land search per exiled creature, the renderer per player and their exiled permanents: each controller searches for as many basic lands as creatures of theirs were exiled, the same instruction.",
