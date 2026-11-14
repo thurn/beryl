@@ -160,7 +160,7 @@ impl Touches {
                 self.fields.insert(Field::LookAtTop);
             }
             Change::RestoreTable(_) => self.whole_table = true,
-            Change::Random { .. } | Change::Nothing => {}
+            Change::Random { .. } | Change::Roll { .. } | Change::Nothing => {}
         }
     }
 

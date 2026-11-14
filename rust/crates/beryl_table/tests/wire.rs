@@ -131,5 +131,11 @@ fn applies_lobby_and_roll_actions_decoded_from_json() {
     assert_eq!(table.zone(Zone::Hand(seat)).unwrap().len(), 2);
     let action = serde_json::from_str(r#"{"roll":{"count":1,"sides":6}}"#).unwrap();
     let entry = apply(&mut table, seat, &action, &mut chance).unwrap();
-    assert_eq!(entry.changes, [Change::Random { outcomes: vec![5] }]);
+    assert_eq!(
+        entry.changes,
+        [Change::Roll {
+            sides: 6,
+            outcomes: vec![5]
+        }]
+    );
 }

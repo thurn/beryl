@@ -48,7 +48,7 @@ pub(super) fn roll(count: u16, sides: u32, chance: &mut Chance) -> Changes {
     let outcomes = (0..count)
         .map(|_| chance.below(sides))
         .collect::<Result<_, _>>()?;
-    Ok(vec![Change::Random { outcomes }])
+    Ok(vec![Change::Roll { sides, outcomes }])
 }
 
 fn target_card(table: &Table, seen: SeenObject) -> Result<&Object, Refusal> {

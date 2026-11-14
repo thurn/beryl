@@ -47,6 +47,7 @@ pub(crate) fn inverse(log: &Log, table: &Table, entry: &Entry) -> (Vec<Change>, 
             Change::Nothing => {}
             Change::RestoreTable(mut edit) => {
                 keep_knowledge(log, table, &mut edit.after);
+                edit.before.clone_from(table);
                 changes.push(Change::RestoreTable(edit));
             }
             inverse => changes.push(inverse),
@@ -63,11 +64,46 @@ pub(crate) fn inverse(log: &Log, table: &Table, entry: &Entry) -> (Vec<Change>, 
 }
 
 pub(crate) fn keep_knowledge(log: &Log, current: &Table, restored: &mut Table) {
-    let known: BTreeMap<_, _> = current
+    let mut known: BTreeMap<_, _> = current
         .objects
         .values()
         .map(|object| (log.original_id(object.id), &object.known_to))
         .collect();
+    // A rewind can restore a token or a card removed when a game ended.
+    // In that case use its last recorded knowledge before it left the table.
+    let mut missing: BTreeSet<_> = restored
+        .objects
+        .keys()
+        .map(|&id| log.original_id(id))
+        .filter(|id| !known.contains_key(id))
+        .collect();
+    for change in log
+        .entries()
+        .iter()
+        .rev()
+        .flat_map(|entry| entry.changes.iter().rev())
+    {
+        if missing.is_empty() {
+            break;
+        }
+        match change {
+            Change::Remove { object, .. } => {
+                let id = log.original_id(object.id);
+                if missing.remove(&id) {
+                    known.insert(id, &object.known_to);
+                }
+            }
+            Change::RestoreTable(edit) => {
+                for object in edit.before.objects.values() {
+                    let id = log.original_id(object.id);
+                    if missing.remove(&id) {
+                        known.insert(id, &object.known_to);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
     for object in restored.objects.values_mut() {
         if let Some(seats) = known.get(&log.original_id(object.id)) {
             for &seat in *seats {

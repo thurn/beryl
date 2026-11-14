@@ -186,7 +186,9 @@ pub(crate) fn outcomes(changes: &[Change]) -> impl Iterator<Item = u32> + '_ {
     changes
         .iter()
         .filter_map(|change| match change {
-            Change::Random { outcomes } => Some(outcomes.as_slice()),
+            Change::Random { outcomes } | Change::Roll { outcomes, .. } => {
+                Some(outcomes.as_slice())
+            }
             _ => None,
         })
         .flatten()

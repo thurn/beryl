@@ -671,6 +671,9 @@ pub(super) fn clone(table: &Table, by: Seat, selection: &Selection) -> Changes {
         .into_iter()
         .enumerate()
         .map(|(index, card)| {
+            if !card.known_to.contains(&by) {
+                return Err(Refusal::Permission);
+            }
             let id = table.fresh_id(index).ok_or(Refusal::INVALID)?;
             let mut copy = Object::new(id, card.card.clone(), by, Zone::Battlefield);
             copy.face = card.face;

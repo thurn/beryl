@@ -326,6 +326,22 @@ fn rewinding_a_shuffle_and_undoing_the_rewind_restore_both_branches() {
 }
 
 #[test]
+fn rewind_keeps_knowledge_of_cards_removed_at_the_end_of_the_game() {
+    let mut initial = fixtures();
+    initial.game_match.in_game = true;
+    let mut game = Game::new(initial);
+    game.act(HOST, &draw(1));
+    game.act(HOST, &Action::NextGame { winner: None });
+    assert!(game.table.objects.is_empty());
+
+    game.act(GUEST, &Action::Rewind { to: 0 });
+    let card = &game.table.objects[&ObjectId(2)];
+    assert_eq!(card.zone, LIBRARY);
+    assert_eq!(card.known_to, [HOST]);
+    game.assert_reopens();
+}
+
+#[test]
 fn rewinding_into_a_struck_branch_reactivates_its_own_prefix() {
     let mut game = Game::new(fixtures());
     game.act(HOST, &life(HOST, -1));
@@ -576,7 +592,7 @@ fn generated_actions_undo_without_losing_knowledge_and_reopen_from_json() {
         })
         .collect();
     let mut game = Game::new(fixtures());
-    for index in 0..2_000 {
+    for index in 0..1_024 {
         let (kind, by, action) = generator.next(&game.table, &kinds);
         let before = game.table.clone();
         let Ok(entry) = game
@@ -594,7 +610,7 @@ fn generated_actions_undo_without_losing_knowledge_and_reopen_from_json() {
             assert_eq!(undo.undoes, Some(entry.n));
             assert_restored(&before, &game.table);
         }
-        if index % 200 == 0 {
+        if index % 128 == 0 {
             let before_rewind = game.table.clone();
             let rewind = game.act(
                 by,

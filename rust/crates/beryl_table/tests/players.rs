@@ -85,7 +85,7 @@ fn dice_and_coins_record_replayable_results() {
         let action = Action::Roll { count, sides };
         let start = table.clone();
         let entry = apply(&mut table, HOST, &action, &mut chance).unwrap();
-        let [Change::Random { outcomes }] = entry.changes.as_slice() else {
+        let [Change::Roll { outcomes, .. }] = entry.changes.as_slice() else {
             panic!("roll should only record outcomes");
         };
         assert_eq!(outcomes.len(), usize::from(count));

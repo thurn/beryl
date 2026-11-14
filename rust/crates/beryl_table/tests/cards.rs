@@ -309,7 +309,10 @@ fn clone_creates_fresh_tokens_with_the_printed_identity_and_no_marked_damage() {
     first.damage = 1;
     first.tapped = true;
     first.counters.push(("charge".into(), 3));
-    let mut table = table_with([first, card(2, "Forest", BATTLEFIELD)]);
+    let mut second = card(2, "Forest", BATTLEFIELD);
+    first.known_to = vec![OWNER, GUEST];
+    second.known_to = vec![OWNER, GUEST];
+    let mut table = table_with([first, second]);
     let entry = act(
         &mut table,
         GUEST,

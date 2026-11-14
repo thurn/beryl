@@ -231,13 +231,20 @@ fn assert_hidden_names(table: &Table, seat: Seat, json: &str, index: usize) {
         .objects
         .values()
         .partition(|object| object.known_to.contains(&seat));
+    let own = &table.game_match.seats[usize::from(seat.0)];
     let visible: BTreeSet<_> = visible
         .into_iter()
         .map(|object| name(&object.card))
+        .chain(
+            own.deck
+                .iter()
+                .chain(&own.sideboard)
+                .map(|(name, _)| name.as_str()),
+        )
         .collect();
     for name in hidden.into_iter().map(|object| name(&object.card)) {
-        // Cloning copies an identity. The view assertion above checks each
-        // object by id even when a second, visible object shares its name.
+        // A visible card or the viewer's own deck list can share the spelling.
+        // The view assertion above checks each object's actual identity by id.
         assert!(
             visible.contains(name) || !json.contains(name),
             "action {index} leaked {name} for {seat:?}: {json}"
@@ -344,4 +351,105 @@ fn projection_keeps_die_rolls_but_hides_random_reveal_offsets() {
     )
     .unwrap();
     assert_eq!(entry_seen_by(&roll, &before, GUEST), roll);
+}
+
+#[test]
+fn a_seat_sees_its_deck_list_even_if_another_seat_has_the_same_card() {
+    let mut table = Table::new(2);
+    let mut chance = Chance::fresh(1);
+    let main = vec![("Island".into(), 4)];
+    let side = vec![("Plains".into(), 2)];
+    add(&mut table, ObjectId(1), "Island", LIBRARY, &[]);
+    for seat in [HOST, GUEST] {
+        let before = table.clone();
+        let action = Action::LoadDeck {
+            seat,
+            main: main.clone(),
+            side: side.clone(),
+        };
+        let entry = apply(&mut table, seat, &action, &mut chance).unwrap();
+        assert_eq!(entry_seen_by(&entry, &before, seat).action, action);
+    }
+
+    let guest = seen_by(&table, GUEST);
+    assert_eq!(guest.game_match.seats[1].deck, main);
+    assert_eq!(guest.game_match.seats[1].sideboard, side);
+    assert!(guest.game_match.seats[0].deck.is_empty());
+    assert_eq!(guest.objects[&ObjectId(1)].card, Card::Hidden);
+}
+
+#[test]
+fn batched_rolls_keep_only_the_public_random_outcomes() {
+    let mut table = Table::new(2);
+    add(&mut table, ObjectId(1), "First Card", LIBRARY, &[]);
+    add(&mut table, ObjectId(2), "Second Card", LIBRARY, &[]);
+    let before = table.clone();
+    let entry = apply(
+        &mut table,
+        HOST,
+        &Action::Batch {
+            actions: vec![
+                Action::Roll { count: 1, sides: 6 },
+                Action::Batch {
+                    actions: vec![
+                        Action::Shuffle {
+                            seat: HOST,
+                            portion: Portion::All,
+                        },
+                        Action::Roll {
+                            count: 1,
+                            sides: 20,
+                        },
+                    ],
+                },
+            ],
+        },
+        &mut Chance::replaying(vec![2, 1, 16]),
+    )
+    .unwrap();
+
+    let entry = entry_seen_by(&entry, &before, GUEST);
+    assert_eq!(
+        entry.changes,
+        vec![
+            Change::Roll {
+                sides: 6,
+                outcomes: vec![2]
+            },
+            Change::Roll {
+                sides: 20,
+                outcomes: vec![16]
+            },
+        ]
+    );
+}
+
+#[test]
+fn another_seat_cannot_clone_a_card_it_cannot_identify() {
+    let mut table = Table::new(2);
+    let id = ObjectId(1);
+    add(&mut table, id, "First Card", LIBRARY, &[]);
+    let mut chance = Chance::fresh(1);
+    apply(
+        &mut table,
+        HOST,
+        &Action::Lend {
+            zone: LIBRARY,
+            to: GUEST,
+        },
+        &mut chance,
+    )
+    .unwrap();
+    let action = Action::Clone {
+        selection: Selection {
+            objects: vec![id],
+            zone: LIBRARY,
+        },
+    };
+    let before = table.clone();
+    assert_eq!(
+        apply(&mut table, GUEST, &action, &mut chance),
+        Err(beryl_table::Refusal::Permission),
+    );
+    assert_eq!(table, before);
 }

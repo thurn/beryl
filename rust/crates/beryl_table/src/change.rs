@@ -148,7 +148,13 @@ pub enum Change {
         index: usize,
         on: bool,
     },
+    /// Private offsets used in a shuffle or a random reveal.
     Random {
+        outcomes: Vec<u32>,
+    },
+    /// A public die or coin result, even when rolled as part of a batch.
+    Roll {
+        sides: u32,
         outcomes: Vec<u32>,
     },
     /// A rewind sets the whole host table. It is sent as a redacted view.
@@ -264,7 +270,7 @@ impl Change {
                 table.next_id = table.next_id.max(next_id);
                 table.entry_number = entry_number;
             }
-            Self::Random { .. } | Self::Nothing => {}
+            Self::Random { .. } | Self::Roll { .. } | Self::Nothing => {}
         }
     }
 
@@ -338,7 +344,9 @@ impl Change {
                 on: !on,
             },
             Self::RestoreTable(edit) => Self::RestoreTable(Box::new(edit.inverse())),
-            Self::Learn { .. } | Self::Random { .. } | Self::Nothing => Self::Nothing,
+            Self::Learn { .. } | Self::Random { .. } | Self::Roll { .. } | Self::Nothing => {
+                Self::Nothing
+            }
         }
     }
 

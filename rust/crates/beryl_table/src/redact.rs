@@ -22,8 +22,8 @@ pub fn seen_by(table: &Table, seat: Seat) -> Table {
         names.redact_counters(&mut player.counters);
     }
     for (state, owner) in view.game_match.seats.iter_mut().zip(table.seats()) {
-        redact_deck(&mut state.deck, owner, seat, &names);
-        redact_deck(&mut state.sideboard, owner, seat, &names);
+        redact_deck(&mut state.deck, owner, seat);
+        redact_deck(&mut state.sideboard, owner, seat);
     }
     for proposal in &mut view.proposals {
         for line in &mut proposal.lines {
@@ -83,9 +83,8 @@ pub fn entry_seen_by(entry: &Entry, table_before: &Table, seat: Seat) -> Entry {
     }
     projected.touches.project(&private_ids, &after, seat);
     projected.changes.retain_mut(|change| match change {
-        Change::Random { .. } => matches!(entry.action, Action::Roll { .. }),
         Change::Move { id, .. } | Change::ReplaceId { from: id, .. } => !private_ids.contains(id),
-        Change::RestoreTable(_) | Change::ResetKnowledge { .. } => false,
+        Change::Random { .. } | Change::RestoreTable(_) | Change::ResetKnowledge { .. } => false,
         Change::Learn { id, .. } => knows(&after, *id, seat),
         Change::Create { object, .. } => {
             if private_ids.contains(&object.id) {
@@ -126,7 +125,8 @@ pub fn entry_seen_by(entry: &Entry, table_before: &Table, seat: Seat) -> Entry {
             true
         }
         Change::SetTable(edit) => redact_table_edit(edit, seat, &names),
-        Change::InsertArrow { .. }
+        Change::Roll { .. }
+        | Change::InsertArrow { .. }
         | Change::RemoveArrow { .. }
         | Change::Lend { .. }
         | Change::AlwaysRevealTop { .. }
@@ -193,14 +193,8 @@ fn redact_object_edit(edit: &mut ObjectEdit, knew: bool, knows: bool, names: &Hi
 
 fn redact_table_edit(edit: &mut TableEdit, seat: Seat, names: &HiddenNames) -> bool {
     match edit {
-        TableEdit::SetDeck { seat: owner, edit }
-        | TableEdit::SetSideboard { seat: owner, edit } => {
-            if *owner != seat {
-                return false;
-            }
-            redact_deck(&mut edit.before, *owner, seat, names);
-            redact_deck(&mut edit.after, *owner, seat, names);
-            true
+        TableEdit::SetDeck { seat: owner, .. } | TableEdit::SetSideboard { seat: owner, .. } => {
+            *owner == seat
         }
         TableEdit::SetPlayerCounters { edit, .. } => {
             names.redact_counters(&mut edit.before);
@@ -225,16 +219,16 @@ fn redact_action(action: &mut Action, table: &Table, seat: Seat, names: &HiddenN
             main,
             side,
         } => {
-            redact_deck(main, *owner, seat, names);
-            redact_deck(side, *owner, seat, names);
+            redact_deck(main, *owner, seat);
+            redact_deck(side, *owner, seat);
         }
         Action::Sideboard {
             seat: owner,
             into_main,
             into_side,
         } => {
-            redact_deck(into_main, *owner, seat, names);
-            redact_deck(into_side, *owner, seat, names);
+            redact_deck(into_main, *owner, seat);
+            redact_deck(into_side, *owner, seat);
         }
         Action::Note { selection, note } => {
             if selection.objects.iter().any(|id| !knows(table, *id, seat)) {
@@ -311,10 +305,8 @@ fn redact_action(action: &mut Action, table: &Table, seat: Seat, names: &HiddenN
     }
 }
 
-fn redact_deck(cards: &mut Vec<(String, u16)>, owner: Seat, viewer: Seat, names: &HiddenNames) {
-    if owner == viewer {
-        cards.retain(|(name, _)| !names.0.contains(&name.to_lowercase()));
-    } else {
+fn redact_deck(cards: &mut Vec<(String, u16)>, owner: Seat, viewer: Seat) {
+    if owner != viewer {
         cards.clear();
     }
 }

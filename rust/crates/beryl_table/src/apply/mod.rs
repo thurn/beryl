@@ -132,7 +132,19 @@ pub(crate) fn perform_history(
     mut changes: Vec<Change>,
 ) -> (Vec<Change>, Touches) {
     let mut touches = Touches::default();
-    perform_with_top_knowledge(table, action, &mut changes, &mut touches);
+    for index in 0..changes.len() {
+        // The inverse of a creation carries the original visibility. Record
+        // what the players actually knew when the undo removed the card.
+        if let Change::Remove { object, .. } = &mut changes[index] {
+            object
+                .known_to
+                .clone_from(&table.objects[&object.id].known_to);
+        }
+        let change = &changes[index];
+        touches.record(table, change);
+        perform_one(table, action, &changes, index, change);
+    }
+    perform_top_knowledge(table, action, &mut changes, &mut touches);
     (changes, touches)
 }
 
@@ -143,6 +155,15 @@ fn perform_with_top_knowledge(
     touches: &mut Touches,
 ) {
     perform_tracking(table, changes, action, touches);
+    perform_top_knowledge(table, action, changes, touches);
+}
+
+fn perform_top_knowledge(
+    table: &mut Table,
+    action: &Action,
+    changes: &mut Vec<Change>,
+    touches: &mut Touches,
+) {
     let top_knowledge = library::keep_top_known(table);
     perform_tracking(table, &top_knowledge, action, touches);
     changes.extend(top_knowledge);

@@ -63,7 +63,7 @@ impl Chance {
     }
 
     /// Draws a zero-based outcome below `upper`. The caller records it in
-    /// `Change::Random` so replay consumes the same outcomes in the same order.
+    /// a change so replay consumes the same outcomes in the same order.
     pub fn below(&mut self, upper: u32) -> Result<u32, Refusal> {
         if upper == 0 {
             return Err(Refusal::INVALID);
