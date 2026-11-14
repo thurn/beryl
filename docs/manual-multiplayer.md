@@ -1154,8 +1154,8 @@ after each round:
 An example: a 3/3 with first strike and trample attacks and is blocked by a 2/2
 and a 1/1. In the first round it assigns 2 to the first blocker, 1 to the
 second, and nothing tramples over. Both blockers die before the second round and
-deal no damage. The proposal reads as follows. Each line ends with whose card it
-is.
+deal no damage. The proposal shows the two combat results below, followed by “Go
+to end of combat.” Each card line ends with whose card it is.
 
 ```text
 COMBAT

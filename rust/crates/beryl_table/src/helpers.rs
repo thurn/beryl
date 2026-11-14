@@ -39,3 +39,10 @@ pub(crate) fn printed_face(record: &Record, face: Face) -> Option<&beryl_card_st
         Face::Down => None,
     }
 }
+
+pub(crate) fn counter(card: &Object, name: &str) -> i32 {
+    card.counters
+        .iter()
+        .find_map(|(kind, count)| (kind == name).then_some(*count))
+        .unwrap_or_default()
+}

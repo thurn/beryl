@@ -4,7 +4,7 @@ use beryl_card_store::facts;
 
 use crate::action::{Destination, Position, Selection};
 use crate::assist::{Assist, enabled};
-use crate::helpers::{card_record, printed_face};
+use crate::helpers::{card_record, counter, printed_face};
 use crate::state::{Card, Face, Object, ObjectId, Zone};
 use crate::{Action, Seat, Table};
 
@@ -40,13 +40,6 @@ impl Label {
             show_to: show_to.to_vec(),
         }
     }
-}
-
-fn counter(card: &Object, name: &str) -> i32 {
-    card.counters
-        .iter()
-        .find_map(|(kind, count)| (kind == name).then_some(*count))
-        .unwrap_or_default()
 }
 
 /// Suggests manual fixes using the public face and counters of battlefield

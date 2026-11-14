@@ -1,5 +1,6 @@
 //! Optional host-side suggestions built from ordinary table actions.
 
+pub mod combat;
 pub mod nudges;
 pub mod upkeep;
 
