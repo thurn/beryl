@@ -242,6 +242,30 @@ export async function screenFaults(page) {
                 );
             }
         }
+        // A prompt's row of ways, a catalog's entries and the order of triggers stand
+        // centered on the table's middle, the line through the life totals, as Arena centers
+        // what it asks on the screen.
+        const total = document
+            .querySelector('[data-life="you"] .life-orb-total')
+            ?.getBoundingClientRect();
+        for (const [what, selector] of [
+            ["the ways to use a card", ".stage-way"],
+            ["the catalog's entries", ".stage-entry"],
+            ["the triggers to order", ".stage-order-item"],
+        ]) {
+            const boxes = [...document.querySelectorAll(selector)].map((e) =>
+                e.getBoundingClientRect(),
+            );
+            if (!total || boxes.length === 0) continue;
+            const left = Math.min(...boxes.map((box) => box.left));
+            const right = Math.max(...boxes.map((box) => box.right));
+            const off = (left + right) / 2 - (total.left + total.right) / 2;
+            if (Math.abs(off) > 2) {
+                faults.push(
+                    `${what} stand ${Math.round(off)}px off the table's middle`,
+                );
+            }
+        }
         for (const slot of drawn.keys()) {
             if (slot >= 0 && !objects.has(slot))
                 faults.push(`slot ${slot} drawn but not in the view`);

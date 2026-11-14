@@ -36,13 +36,15 @@ const ORB = { width: 272 / 1.045, height: 116 / 1.045 };
 /** Where the cards a prompt holds up lie: over the middle of the table, clear of the hands,
  * the dock and the stack, where what asks stays in sight; at the size of a card read in a
  * browser of Arena's (UI Conventions, "The local player's scry"), smaller where there are
- * many. */
+ * many. The space is centered on the stage's middle, as Arena centers a browser on the
+ * screen, and reaches as far each way as it can before the stack's column on the right. */
 export function desktopTray(): TraySpace {
-  const x = fromMiddle(150);
+  const middle = STAGE.width / 2;
+  const half = Math.min(middle - fromMiddle(150), STACK.x - 16 - middle);
   return {
-    x,
+    x: middle - half,
     y: 152,
-    width: STACK.x - 16 - x,
+    width: 2 * half,
     height: 420,
     card: { most: 200, least: 104, aspect: CARD_ASPECT },
     gap: 14,
