@@ -531,19 +531,19 @@ fn a_permanent_put_into_a_library_takes_its_place() {
 
 /// `flip` and `lift`: a manifested card comes onto the battlefield face down, named only for
 /// its controller, and turns face up where it lies. No event says that it turned: the step
-/// closes the script. The opponent sees the two cards looked at come off the library while
-/// the choice is made; the manifested one then flies from where it is held, and the other
-/// is in the graveyard with no flight, before the lift ends.
+/// closes the script. The opponent's library lies as it was while the choice is made, as
+/// Arena's does for a look that is not a scry; the manifested card then flies from it, and
+/// the other is in the graveyard with no flight.
 #[test]
 fn a_face_down_permanent_flips() {
     let name = "A manifested creature turns face up for its mana cost, entering no more";
-    // The player choosing sees both cards' faces; the other sees them lifted.
+    // The player choosing sees both cards' faces; the other sees nothing yet.
     let [first, second] = script(names::ABHORRENT_OCULUS, name, 2);
     assert_eq!(
         first,
         text(&["flip #2 (Snapcaster Mage)", "& flip #4 (Island)"])
     );
-    assert_eq!(second, "+lift opponent library 2\n");
+    assert_eq!(second, "");
     let [first, second] = script(names::ABHORRENT_OCULUS, name, 3);
     assert_eq!(
         first,
@@ -559,7 +559,6 @@ fn a_face_down_permanent_flips() {
         text(&[
             "fly #2 (face down) library>battlefield effect <- a1",
             "appear #4 (Island) library>graveyard effect <- a1",
-            "-lift opponent library 2",
             "-point source a1 > #0",
             "vanish a1 stack>gone resolve <- a1",
         ])

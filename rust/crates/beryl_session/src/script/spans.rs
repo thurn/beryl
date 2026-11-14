@@ -17,6 +17,24 @@ use crate::protocol::{
     ZoneName,
 };
 
+/// The lift a view's `handling` calls for: the cards the opponent handles, drawn beside their
+/// pile while they choose. Arena holds the opponent's scried cards beside their library (UI
+/// Conventions, "Cards the opponent looks at"), but not the cards of another look at the top
+/// of a library: while the opponent chooses among the top five for Stock Up, their library
+/// lies as it was, and the two cards taken then fly from it to their hand (`3sEoP_s4DQE
+/// 46:04.0`, `0VsYGs88NXA 1:13:06.3`, `WCknTZNbraE 1:22:28.2`). A search, which counts no
+/// cards, and a look at a hand lift nothing that moves, as they did.
+pub(super) fn lift_of(handling: Option<CardHandling>) -> Option<CardHandling> {
+    handling.filter(|handling| match *handling {
+        CardHandling::Library {
+            count: Some(_),
+            scry,
+            ..
+        } => scry == Some(true),
+        _ => true,
+    })
+}
+
 /// Whether the opponent handling `now` goes on with the look whose lift holds `held`: the
 /// same player's same pile, and for a library no more of its cards. A look sends cards away
 /// one choice at a time (Stock Up's two to the hand, then the rest to the bottom one by one),
@@ -329,7 +347,7 @@ impl Builder<'_> {
         // The records are the view's now: only its own aimless attackers have no line.
         self.aimless = self.pending.to_vec();
         self.sync();
-        if let Some(handling) = view.handling {
+        if let Some(handling) = lift_of(view.handling) {
             let held = self.spans.iter().any(
                 |span| matches!(*span, Open::Lift { handling: held } if continues(held, handling)),
             );

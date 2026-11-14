@@ -96,13 +96,17 @@ const CAST: Turning = { at: TURN, each: TURNING };
  * 740 where it is not held up (`WQiYBv23buw 29:14.23` to `14.40`). */
 export const DRAW_TURN: Turning = { at: 0.16, each: 0.08 };
 
-/** Whether `act` is a card drawn: the flight from a library to its player's hand that the
- * game calls a draw, and no other way a card comes to a hand. */
+/** Whether `act` is a card drawn, or a card flown as one is: the flight from a library to
+ * its player's hand that the game calls a draw, or one no one at the table can read that an
+ * effect puts there. Arena flies the opponent's cards that Stock Up takes from their library
+ * exactly as it flies their draw, dropping toward the middle of the table and rising into
+ * their hand (`3sEoP_s4DQE 46:04.0`, `0VsYGs88NXA 1:13:06.3`, `WCknTZNbraE 1:22:28.2`). A
+ * card whose name the viewer knows comes to a hand no other way. */
 export const draws = (act: Act) =>
   act.verb === "fly" &&
-  act.why === "draw" &&
   act.from === "library" &&
-  act.object.zone === "hand";
+  act.object.zone === "hand" &&
+  (act.why === "draw" || act.object.name === null);
 
 /** How a card on the flight of the step `act` turns over, if it does. */
 export const turningOf = (act: Act): Turning => (draws(act) ? DRAW_TURN : CAST);
@@ -159,6 +163,7 @@ export const BOWS = {
   played: { share: 0.3, back: 1, peak: 0.6, lean: 20 },
   lifts: { share: 0.02 },
   drawn: { share: 0.2, peak: 0.42 },
+  taken: { share: 0.58, back: 0.45, peak: 0.5 },
 };
 
 /** How the flight of the step `act` bows, if it does, its card's controller sitting at the
@@ -169,6 +174,15 @@ export function bowOf(act: Act, toward: number): Bow | undefined {
   if (act.verb !== "fly") return undefined;
   if (act.object.zone === "stack") {
     return { ...(toward < 0 ? BOWS.theirs : BOWS.cast), toward };
+  }
+  // A card no one reads that an effect takes from a library into a hand (the two cards of
+  // the opponent's Stock Up) drops into the table first: Arena's falls almost straight down
+  // from their library, is deepest half way, about 0.38 of the table's height below its
+  // straight line and still over the library, then crosses and rises into the hand
+  // (`3sEoP_s4DQE 46:04.03` to `46:04.70`). Beryl's library lies farther from the hand than
+  // Arena's, so the same depth is a smaller share of its longer line.
+  if (draws(act) && act.why !== "draw") {
+    return { ...BOWS.taken, toward: -toward };
   }
   if (draws(act)) return { ...BOWS.drawn, toward: -toward };
   if (act.object.zone !== "battlefield") return undefined;

@@ -298,10 +298,12 @@ recordings do not show them.
   card back and a "Revealed Cards" panel then shows its face at the top left
   (I3Te0m1bBFw 29:42.9).
 - **Cards a look returns.** Cards a look puts back into a library fly straight
-  to it. The opponent's look lifts its cards once: each card it takes leaves
-  from where it is held, and the rest go back to the library only as the look
-  ends, never lifting again between choices. No look at several cards with the
-  rest returned is filmed (by-ubgt, by-o5fn).
+  to it. The opponent's look at the top of their library that is not a scry
+  lifts nothing: while they choose, their library lies as it was; each card it
+  takes drops from the library into the table, deepest half way, and rises into
+  their hand; the rest are never seen to move (Arena's Stock Up, 3sEoP_s4DQE
+  46:04.0, 0VsYGs88NXA 1:13:06.3, WCknTZNbraE 1:22:28.2). Your own look's cards
+  put back are not filmed (by-ubgt, by-o5fn).
 - **A linked exile returning.** The exiled card returns as its source departs,
   moving with it. No exiling permanent is seen leaving with its card returning
   (by-esr2).

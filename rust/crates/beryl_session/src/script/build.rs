@@ -80,7 +80,7 @@ impl Screen {
                 let pregame = before.turn.number == 0;
                 let mut builder = Builder::new(before, &after, view, heard, self);
                 let told = staging::tell(view, heard, &builder.causes, &self.looked, pregame);
-                builder.lower(view.handling);
+                builder.lower(spans::lift_of(view.handling));
                 builder.walk(&told, staging::making(view));
                 builder.settle();
                 builder.close(view);
@@ -123,7 +123,7 @@ impl Screen {
         self.held.clear();
         self.spans = spans::wanted(table, view.pending_attackers.as_deref().unwrap_or(&[]));
         self.spans
-            .extend(view.handling.map(|handling| Open::Lift { handling }));
+            .extend(spans::lift_of(view.handling).map(|handling| Open::Lift { handling }));
         self.broken.clear();
         let script = Script {
             reset: Some(Reset { abilities }),
