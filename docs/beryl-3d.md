@@ -300,7 +300,8 @@ A draw record is 64 bytes, so 1,000 of them are 64,000 bytes written in order:
 #[repr(C)]
 pub struct Draw {
     pub model: [f32; 12],   // a 3 by 4 transform, world space     (48 bytes)
-    pub uv: [u16; 4],       // rectangle in the texture layer       (8 bytes)
+    pub uv: [u16; 4],       // rectangle in the texture layer, or   (8 bytes)
+                            // a card's back layer (see below)
     pub layer: u16,         // which layer of the texture array     (2 bytes)
     pub material: u8,       // index into the closed material list  (1 byte)
     pub flags: u8,          // which texture array and which mesh   (1 byte)
@@ -315,6 +316,13 @@ The rules for building a frame:
   board the engine can hold. After a game has started, `frame` performs zero
   heap allocations; a frame that outgrew an array would grow it, and the
   allocation gate would fail.
+- **A card has two layers.** A card that turns over shows its face from one side
+  and its back from the other, so its record must name two layers. A card's face
+  always fills its layer, so a card record has no use for the `uv` rectangle,
+  and `uv[0]` holds the layer of its back. The shader picks the layer by which
+  side of the triangle faces the camera, and mirrors the texture coordinates on
+  the back. The prototype confirmed this works with one mesh and no second
+  record.
 - **Three texture arrays.** A record's `flags` name one of them: the small card
   faces, the full-size card faces, or **the atlas**, which holds everything else
   (glyph pages, icons, and the shapes of shadows and glows).
@@ -346,13 +354,19 @@ The rules for building a frame:
   7. flat-layer elements that must cover those cards, such as a tooltip.
 - **Marks are hidden with their cards.** Blended records on the table are tested
   against the depth buffer, so a mark on a card that another card covers is
-  covered too. Cards in a row that overlap each lie 0.3 millimetres above the
-  one they cover, so which is on top is a matter of position, never of drawing
-  order. The flat layer is drawn without the depth test.
+  covered too. Every card in a row lies 0.3 millimetres above the one before it,
+  whether or not the row overlaps, because a tapped card is wider than the step
+  between untapped ones and would otherwise share a height with its neighbour
+  and flicker where they overlap (the prototype showed this). Which card is on
+  top is therefore a matter of position, never of drawing order. The flat layer
+  is drawn without the depth test.
 - **Few draw calls.** Consecutive records that use the same mesh and texture
-  array are one instanced draw call, whatever their materials. Every blended
-  record outside a card face samples the atlas, so a whole band is one call. A
-  frame is normally four to eight calls.
+  array are one instanced draw call, whatever their materials. The table and a
+  shadow can be the card mesh scaled, its rounded corners far off screen or
+  inside the shadow's blur, so in the prototype every opaque record was one call
+  and every blended record another: two calls a frame on every board. Every
+  blended record outside a card face samples the atlas, so a whole band is one
+  call. A frame is normally four to eight calls.
 - **Load counted as it is built.** While it builds the list, the client core
   adds up numbers that predict GPU load: draw calls, instances, bytes to upload,
   and the screen area of its opaque and of its blended records, each divided by
@@ -761,13 +775,24 @@ as many pixels opaque as it can.
   a single shader that picks its branch from the record's `material`. The card
   mesh, its edge strip and a unit quad are the only meshes. The 64-byte records
   are uploaded as the instance buffer unchanged.
+- **The face is sampled before the branch.** WGSL allows `textureSample` only in
+  uniform control flow, and a record's material varies from one instance to the
+  next, so the shader samples the face array before it branches on the material
+  (as the prototype does). Every table and shadow pixel then pays for one unused
+  texture fetch. On the floor that is the cost to watch; the alternative is
+  `textureSampleLevel` inside the card branch, which needs no derivatives and so
+  may branch, at the price of choosing the mipmap level by hand.
 - **Card faces in a texture array.** All the small faces of a match are layers
   of one array texture, so every card on the table can be in one call. Cards
   shown at full size use a second array and add a call.
 - **Shadows are single quads.** A card above the table (in flight, held up, in a
   hand) gets one pre-blurred shadow quad beneath it, drawn just above the cards
   lying on the table, which spreads and fades with the card's height. Cards
-  lying on the table get none.
+  lying on the table get none. A shadow drawn at one fixed height is hidden
+  wherever the cards beneath it stand taller, as they do in a library pile or on
+  a stress board whose overlapping rows rise 40 millimetres: the prototype
+  raised its shadows on the stress boards to clear them. The real client should
+  place a shadow at the height of what lies under it, which placement knows.
 - **No per-pixel lighting.** A face's color is its texture times a tint.
 
 What that buys, as an estimate for a typical board, in screens of pixels shaded
@@ -1335,49 +1360,97 @@ Counted work predicts a frame's cost. It does not measure a real device.
 ### Measurements
 
 These were taken 2026-11-14 on the development machine, an Apple M5 Max, at a
-load average of 13 to 50 from other jobs. They come from three throwaway
-prototypes, not from Beryl 3D, and are replaced by the real client's numbers
-when it exists.
+load average of 5 to 8 from other jobs, by the prototype in
+`rust/prototypes/beryl3d` (`just proto3d --stats <board>`). The prototype is not
+Beryl 3D: it is a throwaway program that keeps the doc's central split (a core
+with no GPU, clock or thread that writes 64-byte draw records, and a `wgpu`
+renderer that draws them) and leaves out text, prompts and the flat layer. Its
+numbers are replaced by the real client's when it exists.
 
-The first prototype is a frame's inner loop with no GPU: for 600 cards, advance
-one eased animation each, build a transform, project four corners through a
-camera matrix, write a 64-byte draw record, and sort the records by depth.
+Each number is the median of five runs, with the worst of the five beside it.
+The frames are 1920 by 1080, drawn into a texture.
 
-| Measure                                  | Result                 |
-| ---------------------------------------- | ---------------------- |
-| Time per frame, median of five runs      | 54 microseconds        |
-| Time per frame, best and worst run       | 26 and 63 microseconds |
-| Heap allocations per frame after frame 1 | 0                      |
+- **live** is a real game, the WU Control mirror between the `mcts-hidden` agent
+  and an `expert` agent answering for the viewer, played by `Sessions` with the
+  AI's search threads running, 1,800 frames paced at 60 frames a second.
+- **stress-255** and **stress-1024** are battlefields of 255 and 1,024 cards in
+  overlapping rows, with 40 cards in flight at any time, 1,200 frames drawn back
+  to back.
 
-At 54 microseconds, 600 cards use 0.3% of a 60 Hz frame on this machine. The
-spread between runs is the machine's load, which is why the gates count
-instructions instead of timing.
+| Measure                                   | live         | stress-255   | stress-1024  |
+| ----------------------------------------- | ------------ | ------------ | ------------ |
+| Core time per frame, mean                 | 22 µs (22)   | 12 µs (12)   | 31 µs (32)   |
+| Core time, worst single frame             | 241 µs (490) | 22 µs (43)   | 62 µs (66)   |
+| Encode and submit per frame, mean         | 279 µs (283) | 36 µs (38)   | 40 µs (43)   |
+| Heap allocations per core frame after 1 s | 0            | 0            | 0            |
+| Draw records, most in a frame             | 126          | 296          | 1,065        |
+| Draw calls, most in a frame               | 2            | 2            | 2            |
+| Opaque records' screen area, mean         | 1.68 screens | 3.02 screens | 9.23 screens |
+| Blended records' screen area, most        | 0.42 screens | 0.67 screens | 0.73 screens |
+| Submit to GPU done, as built              | 439 µs       | 225 µs       | 259 µs       |
+| Submit to GPU done, all blended, no depth | 539 µs       | 282 µs       | 423 µs       |
 
-The other two prototypes draw the same scene with a GPU, one with `wgpu` 30.0.2
-used directly and one with the Bevy engine 0.20.1: 600 textured cards, each with
-its own transform changing every frame, drawn into a 1920 by 1080 texture with
-no window, for 2,000 frames. Each number is the median of five runs.
+What these show:
 
-| Measure                             | `wgpu` directly | Bevy         |
-| ----------------------------------- | --------------- | ------------ |
-| Release build from nothing          | 76 seconds      | 546 seconds  |
-| Executable, stripped                | 4.6 MB          | 41.7 MB      |
-| Peak memory while running           | 47 MB           | 185 MB       |
-| Threads alive at the end of the run | 4 to 5          | 24 to 26     |
-| CPU time per frame, all threads     | 0.22 ms         | 4.6 ms       |
-| Draw calls per frame                | 1               | not measured |
+- **`frame` allocates nothing**, on every board, including the frames in which a
+  new script starts and is turned into segments. The core sizes its arrays at
+  startup and plays scripts from small copies of the records it needs.
+- **Two draw calls a frame**, because the table and the shadows are the card
+  mesh scaled. The doc's limit of 16 is far off.
+- **The opaque pass with a depth buffer is faster on this GPU too.** The same
+  frame drawn all blended, back to front, with no depth buffer took 1.2 to 1.6
+  times as long to finish. The gap grows with overlap: stress-1024's opaque
+  records cover 9.2 screens before the depth test, and Apple's GPU shades only
+  what is in front. The floor's GPUs do the same for opaque pixels, so this
+  confirms the direction of the Baseline table's estimate, not its numbers.
+- **Blended area stays inside the 0.75-screen limit**, but stress-1024 comes
+  within 3% of it with shadows alone, before any mark, glow or flat layer. The
+  real client's stress boards will exceed it, and the limit or the shadows' size
+  will need a decision from a measurement.
+- **The worst core frame is the one that starts a script.** It walks every
+  object slot several times (placement once per beat), which the prototype sized
+  for 1,100 objects whatever the board. Walking only the live objects, as the
+  real client should, removes most of it.
+- **Paced frames cost several times what back-to-back frames do.** live is paced
+  like a window; the stress boards are not. Run paced at 60 frames a second
+  (`BERYL3D_PACED=1`), stress-255's core time rose from 12 to 42 µs, its encode
+  and submit from 36 to 354 µs, and its time to a finished frame from 225 to 433
+  µs, at a load of 5 to 7. The processor and the GPU lower their clocks while
+  the thread sleeps between frames. Asking for the user-interactive scheduling
+  class (`QOS_CLASS_USER_INTERACTIVE`) did not change this: live measured 257 µs
+  to encode and submit without it and 279 µs with it, within the runs' spread. A
+  frame's cost must therefore be timed paced, and the instruction counts the
+  gates use are unaffected by clocks, which is one more reason to gate on them.
+- **The AI's search did not lengthen frames.** In live, the longest frame (core
+  plus encode) while the AI searched was 0.70 ms (worst run 1.9 ms), and while
+  it did not, 1.15 ms (2.6 ms), over about 580 frames drawn during search per
+  run. The search threads ran at their default priority. The machine was lightly
+  loaded, so this does not yet test decision C9's priorities.
+- **The floor's limits.** Every board drew on a device created with
+  `wgpu::Limits::downlevel_webgl2_defaults()` with no validation error.
 
-- **The `wgpu` prototype's 0.22 milliseconds** is 30 microseconds to build the
-  frame's data and 192 to encode and submit it. At 5,000 cards the two are 85
-  and 160 microseconds: the cost barely grows with the board.
-- **The two frame loops are not alike**, so their frame times are not compared
-  here. The `wgpu` prototype waits for the GPU every frame, and Bevy's loop runs
-  ahead of its renderer.
-- **Bevy was not trimmed to its minimum.** It ran with its default plugins
-  limited to those needed to render, which include its render thread and its
-  task pools. A more careful setup would lower its numbers, but not to those of
-  a program that has no scheduler, no asset system and no second copy of the
-  scene.
+| Measure                                   | Result                          |
+| ----------------------------------------- | ------------------------------- |
+| Release executable, stripped              | 33.7 MB                         |
+| Peak memory                               | 109 MB in live, 90 MB in stress |
+| Start to first frame, faces decoded       | 44 to 65 ms                     |
+| Card faces at 256 by 360, uncompressed    | 33 layers, 12 MB                |
+| Release build of the prototype from clean | about 65 seconds                |
+
+- **Most of the executable is the game, not the client.** The earlier `wgpu`
+  prototype with no game was 4.6 MB. Linking `beryl_session` brings the engine,
+  the cards, the card store and the search.
+- **Peak memory includes the session and the AI.** The faces are 12 MB of it.
+- **GPU timestamps do not work on this Mac.** `wgpu` 30 offers
+  `Features::TIMESTAMP_QUERY` on Metal, but a render pass's end timestamp comes
+  back 0.2 to 0.3 ms earlier than its start. The table above therefore gives the
+  wall-clock time from submitting a frame to the GPU finishing it, which
+  includes the driver's latency. GPU time on the Mac needs Xcode's tools.
+- **What earlier prototypes measured.** Two throwaway programs before this one
+  timed a frame's inner loop with no GPU (54 µs for 600 cards, with no sorting
+  of real poses) and compared `wgpu` used directly with the Bevy engine (Bevy:
+  41.7 MB, 185 MB of memory, 24 threads, a 546-second build). Those were the
+  numbers that chose `wgpu`; this prototype's replace their frame times.
 
 ## Sound
 

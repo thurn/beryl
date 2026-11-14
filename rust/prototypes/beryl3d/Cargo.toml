@@ -1,0 +1,41 @@
+# A throwaway prototype of Beryl 3D: a real game drawn as a 3D table with wgpu, and the frame
+# statistics that test the design in docs/beryl-3d.md. It has its own empty workspace so that the
+# main workspace's checks never build it. The real client replaces it and it is deleted then.
+[package]
+name = "beryl3d"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[workspace]
+
+[dependencies]
+beryl_cards = { path = "../../crates/beryl_cards" }
+beryl_search = { path = "../../crates/beryl_search" }
+beryl_session = { path = "../../crates/beryl_session" }
+# Casts the 64-byte draw records to bytes for upload, in place of hand-written unsafe casts.
+bytemuck = { version = "1.25.2", features = ["derive"] }
+# Vector and matrix math for the camera and poses, in place of hand-written math.
+glam = "0.34.3"
+# Decodes the cached Scryfall JPEG scans, scales them to 256 by 360 and writes PNG pictures.
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
+# Peak memory and the load average (getrusage, getloadavg), in place of spawning `ps`.
+libc = "0.2"
+# Blocks on wgpu's adapter and device requests, in place of an async runtime.
+pollster = "1.0.1"
+# Reads data/ui-conventions.json for verb timings.
+serde_json = "1.0.154"
+# The GPU API (Metal on this Mac).
+wgpu = "30.0.2"
+# The desktop window and its events.
+winit = "0.30.13"
+
+[profile.release]
+strip = true
+codegen-units = 1
+lto = "thin"
+
+# The card crates' build scripts read the whole card store; optimized, they run in seconds.
+[profile.release.build-override]
+opt-level = 3

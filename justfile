@@ -46,6 +46,11 @@ dev *args:
 smoke *args:
     {{ by }} smoke "$@"
 
+# The Beryl 3D prototype: a real game on a 3D table in a window (humans), or --stats live|stress-255|stress-1024, or --png <ms> <path>
+[group('app')]
+proto3d *args:
+    {{ by }} proto3d "$@"
+
 # Install the phone apps' toolchains: Rust targets, CocoaPods, the iOS Simulator runtime, the Android SDK (idempotent)
 [group('app')]
 mobile-setup:
