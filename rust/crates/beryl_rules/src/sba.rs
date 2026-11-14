@@ -37,6 +37,9 @@ pub(crate) fn check<L: Layout>(
         return Ok(true);
     }
     layers::refresh(s, t, sink)?;
+    // State triggers are no state-based actions (CR 603.8: "Note that state triggers aren't the
+    // same as state-based actions."), but they are found at the same moments.
+    crate::trigger::match_states(s, t)?;
     let (mut graveyard, tokens, legendary) = doomed(s, t);
     let loose = loose_equipment(s, t);
     let legends = legend_group_in(s, t, &legendary, Bitboard::EMPTY).is_some();

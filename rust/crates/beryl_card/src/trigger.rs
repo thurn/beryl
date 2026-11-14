@@ -1,7 +1,7 @@
 //! Triggers: what a triggered ability triggers on, said as an event, the object it is about
 //! and the player it happens to or who does it.
 
-use crate::effect::Players;
+use crate::effect::{Condition, Players};
 use crate::filter::Filter;
 use crate::ids::TurnStep;
 
@@ -38,7 +38,11 @@ pub struct Trigger {
 
 /// The event of a trigger: one of the kinds of event the engine raises. An entry names what
 /// happens and never which object or player it happens to ([`Subject`], [`Players`]).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+///
+/// Two events are the same when they are the same entry, and for [`TriggerEvent::State`] the
+/// same condition: the same static, compared by address, since a [`Condition`] has no
+/// equality of its own.
+#[derive(Clone, Copy, Debug)]
 pub enum TriggerEvent {
     /// "When [subject] enters"
     /// ([CR 603.6a](https://yawgatog.com/resources/magic-rules/#R6036a)).
@@ -88,6 +92,39 @@ pub enum TriggerEvent {
     /// ([CR 614.6](https://yawgatog.com/resources/magic-rules/#R6146)), so it triggers nothing.
     /// No subject.
     Draws,
+    /// "When [condition]": a state trigger ([CR 603.8]): "Some triggered abilities trigger when
+    /// a game state (such as a player controlling no permanents of a particular card type) is
+    /// true, rather than triggering when an event occurs. These abilities trigger as soon as the
+    /// game state matches the condition." The condition is read for the ability's controller and
+    /// object, as an intervening "if" is, and only as it triggers: "A state-triggered ability
+    /// doesn't trigger again until the ability has resolved, has been countered, or has
+    /// otherwise left the stack." No subject.
+    ///
+    /// [CR 603.8]: https://yawgatog.com/resources/magic-rules/#R6038
+    State(&'static Condition),
+}
+
+impl PartialEq for TriggerEvent {
+    fn eq(&self, other: &TriggerEvent) -> bool {
+        match (self, other) {
+            (TriggerEvent::Step(a), TriggerEvent::Step(b)) => a == b,
+            (TriggerEvent::State(a), TriggerEvent::State(b)) => std::ptr::eq(*a, *b),
+            _ => std::mem::discriminant(self) == std::mem::discriminant(other),
+        }
+    }
+}
+
+impl Eq for TriggerEvent {}
+
+/// The entry, and its step: a state trigger's condition is left out, which keeps equal events'
+/// hashes equal and the hash the same in every run.
+impl std::hash::Hash for TriggerEvent {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        std::mem::discriminant(self).hash(h);
+        if let TriggerEvent::Step(step) = self {
+            step.hash(h);
+        }
+    }
 }
 
 /// The object a trigger's event is about.
@@ -157,6 +194,11 @@ impl Trigger {
     /// "Whenever [whose] draw a card."
     pub const fn draws(whose: Players) -> Trigger {
         Trigger::of(TriggerEvent::Draws, Subject::A(Filter::Any)).whose(whose)
+    }
+
+    /// "When [condition]", a state trigger (CR 603.8).
+    pub const fn state(condition: &'static Condition) -> Trigger {
+        Trigger::of(TriggerEvent::State(condition), Subject::A(Filter::Any))
     }
 
     /// This trigger, for these players.

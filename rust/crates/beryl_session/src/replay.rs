@@ -189,6 +189,11 @@ impl ReplayFile {
                 TableError::Unlisted { card, creates } => SessionError::Deck {
                     reason: format!("{card} creates {creates}, which it does not list"),
                 },
+                TableError::Zone { card } => SessionError::Deck {
+                    reason: format!(
+                        "{card} has an ability that works in a zone the engine does not look in"
+                    ),
+                },
                 TableError::Players { card } => SessionError::Deck {
                     reason: format!("{card} has a filter naming players the engine cannot read"),
                 },

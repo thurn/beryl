@@ -21,6 +21,12 @@ pub enum EventKind {
     ///
     /// [CR 603.10a]: https://yawgatog.com/resources/magic-rules/#R60310a
     Leaves,
+    /// No event: a state trigger, matched as state-based actions are checked ([CR 603.8]):
+    /// "Some triggered abilities trigger when a game state ... is true, rather than triggering
+    /// when an event occurs."
+    ///
+    /// [CR 603.8]: https://yawgatog.com/resources/magic-rules/#R6038
+    State,
 }
 
 /// The [`EventKind`]s that a card's triggered abilities listen to, as one 64-bit mask, at

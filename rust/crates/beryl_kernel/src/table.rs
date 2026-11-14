@@ -3,10 +3,10 @@
 
 use beryl_card::{
     Ability, AbilityIx, AbilityKind, Amount, CardDef, Condition, CostAction, CostPart, FACE_DOWN,
-    FACE_DOWN_COPY, Face, FaceIx, Node, RuleChange,
+    FACE_DOWN_COPY, Face, FaceIx, Node, RuleChange, Zone, ZoneSet,
 };
 
-use crate::event::{EventKind, Listens, Replaces};
+use crate::event::{Listens, Replaces};
 use crate::ids::{CardId, CardIx, LargeCardIx, Seat};
 use crate::layout::{Layout, PerLayout, PerSeat};
 use crate::listener::{self, Listener, Unmatched};
@@ -15,8 +15,10 @@ use crate::replacement::{self, Unreplaced};
 use crate::rule_changes::{self, RuleChanges, RuleId, RuleKind, Rules, Unchecked};
 use crate::static_ability::{self, Unapplied};
 use crate::subtypes::{GameSubtypes, SubtypeNumbers};
+use listeners::Indexed;
 
 mod cards;
+mod listeners;
 
 pub use cards::CardTable;
 
@@ -35,6 +37,11 @@ pub enum TableError {
         card: &'static str,
         unmatched: Unmatched,
     },
+    /// A card of the game, or a token or emblem one makes, has an ability other than a
+    /// triggered one that says it works in a zone its kind is not found in
+    /// ([`listener::found_where_it_works`]): it would work only where its kind does, so no
+    /// game is played with it.
+    Zone { card: &'static str },
     /// A card of the game, or a token or emblem one makes, has a static ability whose
     /// continuous effect the layers have no code to apply ([`static_ability::applied`]): it
     /// would change nothing, so no game is played with it.
@@ -110,6 +117,22 @@ pub struct GameTable {
     /// Per game index, where its listeners start in `listeners`, and after the last where
     /// they end.
     listeners_from: Vec<u32>,
+    /// The triggered abilities that work in a zone of [`listener::AWAY`], as `listeners` holds
+    /// those that work on the battlefield: an ability that works in both is in both.
+    away_listeners: Vec<Listener>,
+    /// Per game index, where its listeners start in `away_listeners`, and after the last
+    /// where they end.
+    away_from: Vec<u32>,
+    /// Per game index, the zones of [`listener::AWAY`] in which some triggered ability of it
+    /// works.
+    works_away: Vec<ZoneSet>,
+    /// Every zone any card of the game has a triggered ability that works in, but the
+    /// battlefield.
+    zones_away: ZoneSet,
+    /// Every kind of event the abilities of `away_listeners` listen to.
+    listens_away: Listens,
+    /// `listens_any` and `listens_away` together: whether to match an event at all, in one AND.
+    listens_anywhere: Listens,
     /// Per game index, the facts of its first two faces.
     faces: Vec<[FaceFacts; 2]>,
     /// Per game index, the rule changes the static abilities of its first two faces make.
@@ -201,6 +224,21 @@ impl Capability {
     #[inline]
     const fn bit(self) -> u8 {
         1 << (self as u8)
+    }
+}
+
+/// Whether the engine finds each ability of `def`, and each it grants, wherever it says it
+/// works ([`listener::found_where_it_works`]).
+fn found_where_they_work(def: &CardDef) -> Result<(), TableError> {
+    let found = def
+        .faces
+        .iter()
+        .flat_map(|f| f.abilities.iter().chain(f.grants))
+        .all(listener::found_where_it_works);
+    if found {
+        Ok(())
+    } else {
+        Err(TableError::Zone { card: def.name })
     }
 }
 
@@ -312,9 +350,8 @@ impl GameTable {
                 unpayable,
             })?;
         }
-        let mut listeners = Vec::new();
-        let mut listeners_from = Vec::with_capacity(defs.len() + 1);
-        let mut listens = Vec::with_capacity(defs.len());
+        let mut here = Indexed::default();
+        let mut away = Indexed::default();
         let mut replaces = Vec::with_capacity(defs.len());
         let mut rule_changes = RuleChanges::default();
         for def in &defs {
@@ -322,6 +359,7 @@ impl GameTable {
                 card: def.name,
                 unmatched,
             })?;
+            found_where_they_work(def)?;
             static_ability::check(def).map_err(|unapplied| TableError::Static {
                 card: def.name,
                 unapplied,
@@ -330,12 +368,17 @@ impl GameTable {
                 return Err(TableError::Players { card: def.name });
             }
             replaces.push(replaced(def, &mut rule_changes)?);
-            listens.push(of.iter().fold(Listens::NONE, |mask, l| mask | l.kind));
-            listeners_from.push(u32::try_from(listeners.len()).expect("fewer listeners"));
-            listeners.extend(of);
+            here.push(of.iter().filter(|l| l.zones.contains(Zone::Battlefield)));
+            away.push(
+                of.iter()
+                    .filter(|l| !l.zones.without(ZoneSet::BATTLEFIELD).is_empty()),
+            );
         }
-        listeners_from.push(u32::try_from(listeners.len()).expect("fewer listeners"));
-        let listens_any = listens.iter().fold(Listens::NONE, |a, &b| a | b);
+        let (here, away) = (here.finish(), away.finish());
+        let zones_away = away.zones.iter().fold(ZoneSet::NONE, |a, &b| a.union(b));
+        let listens_away = away.kinds.iter().fold(Listens::NONE, |a, &b| a | b);
+        let listens_any = here.kinds.iter().fold(Listens::NONE, |a, &b| a | b);
+        let listens_anywhere = listens_any | listens_away;
         let replaces_any = replaces.iter().fold(Replaces::NONE, |a, &b| a | b);
         let needy = defs.iter().any(|d| {
             d.faces
@@ -362,12 +405,18 @@ impl GameTable {
             cards,
             defs,
             decks: indices,
-            listens,
+            listens: here.kinds,
             listens_any,
             replaces,
             replaces_any,
-            listeners,
-            listeners_from,
+            listeners: here.listeners,
+            listeners_from: here.from,
+            away_listeners: away.listeners,
+            away_from: away.from,
+            works_away: away.zones,
+            zones_away,
+            listens_away,
+            listens_anywhere,
             faces,
             face_rules,
             rules,
@@ -430,38 +479,11 @@ impl GameTable {
             .map(C::from_index)
     }
 
-    /// The event kinds the triggered abilities of the card at `card` listen to. The crate's
-    /// own: others ask [`crate::Copiable::may_listen`], which is nothing for a face-down
-    /// permanent whatever its hidden card listens to.
-    #[inline]
-    pub(crate) fn listens(&self, card: impl CardId) -> Listens {
-        self.listens[card.index()]
-    }
-
     /// The kinds of event the static abilities of the card at `card` replace. The crate's own:
     /// others ask [`crate::Copiable::may_replace`], which is nothing for a face-down permanent.
     #[inline]
     pub(crate) fn replaces(&self, card: impl CardId) -> Replaces {
         self.replaces[card.index()]
-    }
-
-    /// The triggered abilities of the face `face` of the card at `card` that listen to events of
-    /// `kind`, in the order the face lists them: what an event of that kind is matched against, and
-    /// nothing else of the face is read. A face-down permanent's face has none ([CR 708.2a]).
-    ///
-    /// [CR 708.2a]: https://yawgatog.com/resources/magic-rules/#R7082a
-    #[inline]
-    pub fn listeners(
-        &self,
-        card: impl CardId,
-        face: FaceIx,
-        kind: EventKind,
-    ) -> impl Iterator<Item = &Listener> {
-        let from = self.listeners_from[card.index()] as usize;
-        let to = self.listeners_from[card.index() + 1] as usize;
-        self.listeners[from..to]
-            .iter()
-            .filter(move |l| l.kind == kind && l.face == face)
     }
 
     /// The facts of the face `face` of the card at `card`: found once per game for its first
@@ -533,12 +555,6 @@ impl GameTable {
     #[inline]
     pub fn player_rules(&self) -> Rules {
         self.rule_changes.of_players()
-    }
-
-    /// The event kinds any card of this game listens to.
-    #[inline]
-    pub fn listens_any(&self) -> Listens {
-        self.listens_any
     }
 
     /// The kinds of event any card of this game replaces, and whether any changes a rule for

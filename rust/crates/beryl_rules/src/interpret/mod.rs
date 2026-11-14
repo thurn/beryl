@@ -252,16 +252,28 @@ pub(crate) fn condition_holds<L: Layout>(
     subject: &PendingTrigger<L>,
     ability: &Ability,
 ) -> bool {
-    ability.condition().is_none_or(|condition| {
-        let scene = Scene {
-            s,
-            t,
-            subject,
-            costs: None,
-            x: 0,
-            targets: &[],
-            registers: &Registers::default(),
-        };
-        scene.holds(condition)
-    })
+    ability
+        .condition()
+        .is_none_or(|condition| holds(s, t, subject, condition))
+}
+
+/// Whether `condition` holds for a triggered ability, read for its source as "this" and its
+/// controller as "you", before it is on the stack: an intervening "if" (CR 603.4) or a state
+/// trigger's condition (CR 603.8).
+pub(crate) fn holds<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    subject: &PendingTrigger<L>,
+    condition: &Condition,
+) -> bool {
+    let scene = Scene {
+        s,
+        t,
+        subject,
+        costs: None,
+        x: 0,
+        targets: &[],
+        registers: &Registers::default(),
+    };
+    scene.holds(condition)
 }

@@ -175,6 +175,7 @@ impl Ctx {
             }
             TriggerEvent::Discards => format!("whenever {} a card", player_verb("discard")),
             TriggerEvent::Draws => format!("whenever {} a card", player_verb("draw")),
+            TriggerEvent::State(&condition) => format!("when {}", self.condition(condition)),
         }
     }
 
@@ -200,7 +201,8 @@ impl Ctx {
             | TriggerEvent::CreatesTokens
             | TriggerEvent::Casts
             | TriggerEvent::Discards
-            | TriggerEvent::Draws => String::new(),
+            | TriggerEvent::Draws
+            | TriggerEvent::State(_) => String::new(),
         }
     }
 

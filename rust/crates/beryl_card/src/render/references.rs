@@ -271,7 +271,7 @@ impl Ctx {
             | TriggerEvent::Attacks
             | TriggerEvent::PlayerAttacks
             | TriggerEvent::DealsCombatDamageToPlayer => "that creature",
-            TriggerEvent::Step(_) | TriggerEvent::MainPhase => "it",
+            TriggerEvent::Step(_) | TriggerEvent::MainPhase | TriggerEvent::State(_) => "it",
         }
         .to_owned()
     }

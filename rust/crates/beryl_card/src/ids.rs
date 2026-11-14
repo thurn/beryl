@@ -86,6 +86,69 @@ impl Zone {
     }
 }
 
+/// A set of zones: those an ability works in ([CR 113.6]): "Abilities of an instant or sorcery
+/// spell usually function only while that object is on the stack. Abilities of all other objects
+/// usually function only while that object is on the battlefield."
+///
+/// [CR 113.6]: https://yawgatog.com/resources/magic-rules/#R1136
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct ZoneSet(u8);
+
+impl ZoneSet {
+    pub const NONE: ZoneSet = ZoneSet(0);
+    pub const BATTLEFIELD: ZoneSet = ZoneSet::of(Zone::Battlefield);
+    pub const STACK: ZoneSet = ZoneSet::of(Zone::Stack);
+    pub const GRAVEYARD: ZoneSet = ZoneSet::of(Zone::Graveyard);
+    /// Every zone an object can be in.
+    pub const ALL: ZoneSet = ZoneSet((1 << Zone::Nowhere as u8) - 1);
+
+    /// The set of one zone.
+    pub const fn of(zone: Zone) -> ZoneSet {
+        ZoneSet(1 << zone as u8)
+    }
+
+    /// The zones of either set.
+    #[must_use]
+    pub const fn union(self, other: ZoneSet) -> ZoneSet {
+        ZoneSet(self.0 | other.0)
+    }
+
+    /// The zones of this set that are not in `other`.
+    #[must_use]
+    pub const fn without(self, other: ZoneSet) -> ZoneSet {
+        ZoneSet(self.0 & !other.0)
+    }
+
+    /// Whether `zone` is in the set.
+    #[inline]
+    pub const fn contains(self, zone: Zone) -> bool {
+        self.0 & (1 << zone as u8) != 0
+    }
+
+    /// Whether every zone of `other` is in the set.
+    pub const fn includes(self, other: ZoneSet) -> bool {
+        self.0 & other.0 == other.0
+    }
+
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    /// The zones of the set, in the order [`Zone`] lists them.
+    pub fn iter(self) -> impl Iterator<Item = Zone> {
+        [
+            Zone::Library,
+            Zone::Hand,
+            Zone::Battlefield,
+            Zone::Graveyard,
+            Zone::Exile,
+            Zone::Stack,
+        ]
+        .into_iter()
+        .filter(move |&zone| self.contains(zone))
+    }
+}
+
 /// The steps of a turn ([CR 500.1](https://yawgatog.com/resources/magic-rules/#R5001)): "A
 /// turn consists of five phases, in this order: beginning, precombat main, combat, postcombat
 /// main, and ending."

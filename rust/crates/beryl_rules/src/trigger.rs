@@ -14,7 +14,7 @@ use crate::layout::{Layout, Queue, index};
 use crate::query::Copiable;
 use crate::state::{
     AbilityRef, ObjectRef, PendingTrigger, StackEntry, StackItem, State, TriggerInfo, TurnStep,
-    Zone,
+    Zone, ZoneKey,
 };
 use crate::table::GameTable;
 
@@ -34,9 +34,38 @@ pub(crate) fn ability(
     &t.def(card).face(face).abilities[ability.index()]
 }
 
+/// The objects outside the battlefield with a triggered ability that works where they are: the
+/// cards in a graveyard, in exile or on the stack whose card the game's table says has one for
+/// that zone ([`GameTable::works_away`]). A game none of whose cards has such an ability reads
+/// nothing ([`GameTable::zones_away`]), and a game with one reads the zones' membership, which the
+/// zone move keeps, and the table, so the state keeps no set of its own.
+///
+/// [CR 113.6b](https://yawgatog.com/resources/magic-rules/#R1136b): "An ability that states which
+/// zones it functions in functions only from those zones."
+pub(crate) fn away<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::Slot> {
+    let zones = t.zones_away();
+    if zones.is_empty() {
+        return Bitboard::EMPTY;
+    }
+    let mut candidates = Bitboard::EMPTY;
+    for zone in zones.iter() {
+        candidates |= match zone {
+            Zone::Stack => s.zone(ZoneKey::Stack),
+            zone => s
+                .players_in_seat_order(s.players())
+                .fold(Bitboard::EMPTY, |all, p| all | s.zone(ZoneKey::Of(p, zone))),
+        };
+    }
+    candidates.filter(|slot| {
+        let (card, _) = s.copiable(slot).record(t);
+        t.works_away(card).contains(s.object(slot).zone())
+    })
+}
+
 /// Matches an executed event against every triggered ability that listens to its kind: those of the
-/// permanents on the battlefield and of the players' emblems ([CR 114.4]: "Abilities of emblems
-/// function in the command zone"), then the delayed triggers waiting for a step.
+/// permanents on the battlefield, then those of the objects in other zones whose abilities work
+/// there ([`away`]), and of the players' emblems ([CR 114.4]: "Abilities of emblems function in the
+/// command zone"), then the delayed triggers waiting for a step.
 ///
 /// The game's table has each card's triggered abilities under the kind of event they listen
 /// to ([`GameTable::listeners`]), so an event reads only those of its kind, and where no
@@ -56,7 +85,7 @@ pub(crate) fn match_event<L: Layout>(
         return Ok(());
     };
     let mask = Listens::event(k);
-    if t.listens_any().intersects(mask) {
+    if t.listens_anywhere().intersects(mask) {
         // Only permanents can have changed what listens while the layer results are stale.
         let listening = s.listening().map_or(t.listens_any(), |listening| {
             debug_assert_eq!(
@@ -85,6 +114,9 @@ pub(crate) fn match_event<L: Layout>(
                 }
             }
         }
+        if t.listens_away().intersects(mask) {
+            match_away(s, t, k, e)?;
+        }
         // Triggers wait in the order found, which the queue of them keeps: by seat.
         for player in s.players_in_seat_order(s.players()) {
             for index in 0..s.player(player).emblems().len() {
@@ -104,6 +136,35 @@ pub(crate) fn match_event<L: Layout>(
     }
     if let Event::StepBegins { step, active } = *e {
         fire_delayed(s, t, step, active)?;
+    }
+    Ok(())
+}
+
+/// Matches `e`, an event of kind `k`, against the abilities of the objects outside the battlefield
+/// that work where they are ([`away`]). Out of line: most games have none.
+#[cold]
+#[inline(never)]
+fn match_away<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    k: EventKind,
+    e: &Event<L>,
+) -> Result<(), Full> {
+    for slot in s.in_candidate_order(away(s, t)) {
+        let zone = s.object(slot).zone();
+        let source = s.object_ref(slot);
+        let controller = s.controller(slot);
+        let (card, face) = s.copiable(slot).record(t);
+        for l in t.away_listeners(card, face, k) {
+            if !l.zones.contains(zone) {
+                continue;
+            }
+            if let Some(info) = fires(s, t, l.trigger, Some(slot), controller, e) {
+                for _ in 0..times(e) {
+                    enqueue(s, t, Some(source), card, face, l.ability, controller, info)?;
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -280,10 +341,15 @@ pub(crate) fn match_look_back<L: Layout>(
     leaving: &[(L::Slot, Zone)],
 ) -> Result<(), Full> {
     let mask = Listens::event(EventKind::Dies) | Listens::event(EventKind::Leaves);
-    if leaving.is_empty() || !t.listens_any().intersects(mask) {
+    if leaving.is_empty() || !t.listens_anywhere().intersects(mask) {
         return Ok(());
     }
-    if !s.listening().unwrap_or(t.listens_any()).intersects(mask) {
+    if t.listens_away().intersects(mask) {
+        look_back_away(s, t, leaving)?;
+    }
+    if !t.listens_any().intersects(mask)
+        || !s.listening().unwrap_or(t.listens_any()).intersects(mask)
+    {
         return Ok(());
     }
     for &(left, to) in leaving {
@@ -326,6 +392,154 @@ pub(crate) fn match_look_back<L: Layout>(
         }
     }
     Ok(())
+}
+
+/// [`match_look_back`] for the abilities of objects outside the battlefield that work where they
+/// are ([`away`]): a card in a graveyard that says "whenever a creature dies" sees each creature of
+/// the batch die. Out of line: most games have none.
+#[cold]
+#[inline(never)]
+fn look_back_away<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    leaving: &[(L::Slot, Zone)],
+) -> Result<(), Full> {
+    let away = away(s, t);
+    for &(left, to) in leaving {
+        let object = s.object_ref(left);
+        let waiting = s.triggers().len();
+        for slot in s.in_candidate_order(away) {
+            let zone = s.object(slot).zone();
+            let source = s.object_ref(slot);
+            let controller = s.controller(slot);
+            let (card, face) = s.copiable(slot).record(t);
+            let info = TriggerInfo {
+                object: Some(object),
+                player: s.controller(left),
+                amount: 0,
+            };
+            // CR 700.4: dying is going to a graveyard.
+            let kinds = [
+                (EventKind::Dies, to == Zone::Graveyard),
+                (EventKind::Leaves, true),
+            ];
+            for (kind, happened) in kinds {
+                if !happened {
+                    continue;
+                }
+                for l in t.away_listeners(card, face, kind) {
+                    if l.zones.contains(zone)
+                        && about(s, t, l.trigger.subject, Some(slot), controller, object)
+                    {
+                        enqueue(s, t, Some(source), card, face, l.ability, controller, info)?;
+                    }
+                }
+            }
+        }
+        if s.triggers().len() > waiting {
+            s.record_last_known(left)?;
+        }
+    }
+    Ok(())
+}
+
+/// Triggers each state-triggered ability whose condition holds now and that is neither waiting to
+/// be put on the stack nor on it ([CR 603.8]): "These abilities trigger as soon as the game state
+/// matches the condition. ... A state-triggered ability doesn't trigger again until the ability has
+/// resolved, has been countered, or has otherwise left the stack. Then, if the object with the
+/// ability is still in the same zone and the game state still matches its trigger condition, the
+/// ability will trigger again." Whether one is waiting or on the stack is found there, by its source
+/// and ability, so nothing else records it; a source that changed zones is a new object, whose
+/// ability is another.
+///
+/// Checked as state-based actions are, behind the game's [`EventKind::State`] listeners: a game
+/// none of whose cards has a state trigger pays one AND, and the rest is out of line.
+///
+/// [CR 603.8]: https://yawgatog.com/resources/magic-rules/#R6038
+#[inline]
+pub(crate) fn match_states<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
+    if t.listens_anywhere().hears(EventKind::State) {
+        match_states_out_of_line(s, t)?;
+    }
+    Ok(())
+}
+
+#[cold]
+#[inline(never)]
+fn match_states_out_of_line<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
+    let kind = EventKind::State;
+    if t.listens_any().hears(kind) && s.listening().unwrap_or(t.listens_any()).hears(kind) {
+        for i in 0..s.battlefield().len() {
+            let slot = s.battlefield()[i];
+            let what = s.copiable(slot);
+            if !what.may_listen(t).hears(kind) {
+                continue;
+            }
+            let (card, face) = what.record(t);
+            for l in t.listeners(card, face, kind) {
+                state_trigger(s, t, slot, card, face, l.ability, l.trigger)?;
+            }
+        }
+    }
+    if t.listens_away().hears(kind) {
+        for slot in s.in_candidate_order(away(s, t)) {
+            let zone = s.object(slot).zone();
+            let (card, face) = s.copiable(slot).record(t);
+            for l in t.away_listeners(card, face, kind) {
+                if l.zones.contains(zone) {
+                    state_trigger(s, t, slot, card, face, l.ability, l.trigger)?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Triggers the state-triggered ability `ability` of the object in `slot`, if its condition
+/// holds and it is neither waiting nor on the stack ([`match_states`]).
+fn state_trigger<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    card: L::Card,
+    face: FaceIx,
+    ability: AbilityIx,
+    trigger: &Trigger,
+) -> Result<(), Full> {
+    let TriggerEvent::State(condition) = trigger.event else {
+        unreachable!("a listener of state triggers is a state trigger");
+    };
+    let source = Some(s.object_ref(slot));
+    let same = |of: &AbilityRef<L, AbilityIx>| {
+        of.source == source && of.card == card && of.face == face && of.ability == ability
+    };
+    let triggered = s.triggers().iter().any(|tr| same(&tr.of))
+        || s.stack().iter().any(|entry| match &entry.item {
+            StackItem::Triggered { of, .. } => same(of),
+            _ => false,
+        });
+    if triggered {
+        return Ok(());
+    }
+    let controller = s.controller(slot);
+    let pending = PendingTrigger {
+        of: AbilityRef {
+            source,
+            card,
+            face,
+            ability,
+            controller,
+        },
+        info: TriggerInfo {
+            object: None,
+            player: controller,
+            amount: 0,
+        },
+    };
+    if !crate::interpret::holds(s, t, &pending, condition) {
+        return Ok(());
+    }
+    enqueue(s, t, source, card, face, ability, controller, pending.info)
 }
 
 /// Records a triggered ability, if its intervening "if" holds now ([CR 603.4]): "When the trigger

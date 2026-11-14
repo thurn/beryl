@@ -145,11 +145,21 @@ this document.
   replacement, but the layers' pass collects it with them as the last bit of
   `Replaces`, `PLAYER_RULE_CHANGE`.
 - **Abilities outside the battlefield** (CR 113.6). An ability says where it
-  works, defaulting from its kind. `GameTable` records, for each card, the zones
-  other than the battlefield in which some ability of it works. The state keeps
-  one bitboard of the slots that are in such a zone now, written by the zone
-  move behind a capability. Matching walks the battlefield's listeners, then
-  that set. A game whose cards have no such ability never writes or reads it.
+  works (`Ability::zones`), defaulting from its kind: a spell's on the stack,
+  any other on the battlefield. `.in_graveyard()`, `.on_the_stack()` and
+  `.everywhere()` say otherwise. `GameTable` keeps the triggered abilities that
+  work in a graveyard, in exile or on the stack (`listener::AWAY`) in a list of
+  their own, and records for each card the zones of those it works in. Matching
+  of events, of look-back and of state triggers walks the battlefield's
+  listeners, then the objects in those zones whose card works there
+  (`trigger::away`). The state keeps no bitboard of them: the zone move has no
+  table to ask, the board door moves objects too, and the membership of the
+  zones already says where each object is, so the set is found from it when a
+  game has such a card and never otherwise. A library or a hand is refused
+  (`Unmatched::Zone`), since a card there may be dealt anew among hidden cards,
+  and so is any ability but a triggered one outside its kind's zone
+  (`TableError::Zone`) until the rules find it there (characteristic-defining
+  abilities, group 2; replacement effects, group 3).
 - **Look-back** (CR 603.10). `trigger::match_look_back` matches every ability
   that looks back ("dies" and "leaves the battlefield", `TriggerEvent::Leaves`),
   with either subject, against every permanent of the batch before any of it
@@ -172,9 +182,11 @@ this document.
   rather than freeing about 900. The interpreter's own record of the targets an
   effect moves (`interpret::scene::Known`, CR 608.2h) stays in the resolution:
   it keeps every kind of counter and the mana value, which a row does not.
-- **State triggers** (CR 603.8). Checked with the state-based actions behind
-  their own kind. Whether one is already waiting or on the stack is found by
-  looking there, so no flag is stored.
+- **State triggers** (CR 603.8). `TriggerEvent::State(&Condition)`, matched by
+  `trigger::match_states` at each state-based check behind its own kind,
+  `EventKind::State`. Whether one is already waiting or on the stack is found by
+  looking there for the same source and ability, so no flag is stored. Its
+  condition is read only as it triggers, never again as it resolves.
 - **This turn's counts.** The Trackers store gains a count kept for each player:
   spells cast this turn and cards drawn this turn, each behind its capability.
 - **The present-cost corpus.** A benchmark of its own, `family_counts`, has a

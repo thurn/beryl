@@ -10,11 +10,13 @@ use crate::cost::{CastingKind, Cost, CostPart};
 use crate::counter::CounterKind;
 use crate::effect::{Amount, Comparison, Condition, CopyException, Effect, Objects, Players};
 use crate::filter::Filter;
-use crate::ids::TurnStep;
+use crate::ids::{TurnStep, ZoneSet};
 use crate::index::SpecIx;
 use crate::mana::{ManaCost, ManaSet};
 use crate::target::{Takes, TargetKind, TargetSpec};
 use crate::trigger::Trigger;
+
+mod zones;
 
 /// What kind of ability this is ([CR 113.3](https://yawgatog.com/resources/magic-rules/#R1133)):
 /// "There are four general categories of abilities": spell, activated, triggered and static.
@@ -199,7 +201,7 @@ const fn add_mana(mana: ManaSet) -> &'static Effect {
 /// The engine scans a face's abilities for every decision it builds, so the size is kept a
 /// power of two, which makes stepping through them a shift: at 120 bytes the rollout
 /// benchmark counted 0.11% more instructions than at 128. The alignment is what rounds it
-/// up: the fields fill 105 bytes.
+/// up: the fields fill 106 bytes.
 #[derive(Clone, Copy, Debug)]
 #[repr(align(32))]
 pub struct Ability {
@@ -214,8 +216,7 @@ pub struct Ability {
     needy: bool,
     body: Behavior,
     /// Triggered abilities: what they trigger on. Held by reference, as the body and the
-    /// condition are: a [`Trigger`] names a filter and players, and an ability has 23 bytes
-    /// to spare before it is 256.
+    /// condition are: a [`Trigger`] names a filter and players.
     trigger: Option<&'static Trigger>,
     /// A static or replacement ability: its "as long as" or "while", read as often as the
     /// ability is. Triggered abilities: an intervening "if" clause, checked when the ability
@@ -247,6 +248,8 @@ pub struct Ability {
     /// break in a card's text marks a separate ability"); a face lists one ability for each
     /// event it triggers on. Read [`Ability::shares_paragraph`].
     shares_paragraph: bool,
+    /// The zones it works in: its kind's unless its card says otherwise ([`zones`]).
+    zones: ZoneSet,
 }
 
 const _: () = assert!(size_of::<Ability>().is_power_of_two());
@@ -270,6 +273,7 @@ impl Ability {
             rule: None,
             only_if_you_control: None,
             shares_paragraph: false,
+            zones: zones::usual_zones(kind),
         }
     }
 

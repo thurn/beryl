@@ -57,7 +57,7 @@ pub use effect::{
     LibraryPosition, Objects, Players, Recipients, Regeneration, Taken,
 };
 pub use filter::Filter;
-pub use ids::{Seat, TurnStep, Zone};
+pub use ids::{Seat, TurnStep, Zone, ZoneSet};
 pub use index::{AbilityIx, CastingIx, GrantIx, ModeIx, SpecIx};
 pub use mana::{ManaColor, ManaCost, ManaSet, mana};
 pub use prompt::{Part, Place, Prompt, Purpose, Shape};
