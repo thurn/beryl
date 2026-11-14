@@ -26,14 +26,14 @@ trace is what places each Beryl action as XMage commands:
   states the same fact and `BerylScenarioTest`'s helpers where it does not. Beryl's decision
   assertions (who decides, among how many candidates) are about Beryl's decision surface and are
   skipped, as are assertions in the middle of a decision, where XMage has no priority to run
-  them.
+  them, and Tapped assertions after a payment whose sources XMage chose.
 
 A scenario or card outside this vocabulary is reported as unsupported, with the reason.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import cast
 
@@ -48,6 +48,7 @@ from .xmage_java import (
     assertion_code,
     java_string,
     method_name,
+    setup_cards,
     trample_amount,
 )
 
@@ -742,6 +743,12 @@ class Exporter:
         if p.kind != "Priority":
             self.export.skipped.append(f"{what}: in the middle of a {p.kind} decision")
             return
+        if what == "Tapped" and self.payment_left_to_xmage:
+            # XMage paid an earlier cost from sources of its own choosing, which may not be
+            # the ones Beryl tapped (Urborg and a Plains where XMage taps a Swamp and a Plains),
+            # so which permanents are tapped no longer has to match.
+            self.export.skipped.append("Tapped: after XMage chose a payment's sources")
+            return
         code = assertion_code(assertion, self.player(assertion.get("player")))
         who = self.player(p.decider)
         self.prepare(who, p)
@@ -780,14 +787,6 @@ def export_one(entry: Json, index: int, faces: Faces, cards: set[str]) -> Export
         export.unsupported = str(e)
         export.body.clear()
     return export
-
-
-def setup_cards(entry: Json) -> Iterable[str]:
-    for setup in cast(list[Json], cast(Json, entry["setup"])["players"]):
-        for zone in ("hand", "graveyard", "exile", "library"):
-            yield from cast(list[str], setup[zone])
-        for permanent in cast(list[Json], setup["battlefield"]):
-            yield cast(str, permanent["card"])
 
 
 def export_all(dump: Sequence[Json], faces: Faces, cards: set[str]) -> list[Export]:

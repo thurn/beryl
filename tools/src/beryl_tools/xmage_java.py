@@ -267,3 +267,12 @@ def xmage_cards(checkout: Path) -> set[str]:
             m.group(1) for m in pattern.finditer(path.read_text(errors="replace"))
         )
     return names
+
+
+def setup_cards(entry: Json) -> Iterable[str]:
+    """Every card in a scenario's setup, in any zone, by name."""
+    for setup in cast(list[Json], cast(Json, entry["setup"])["players"]):
+        for zone in ("hand", "graveyard", "exile", "library"):
+            yield from cast(list[str], setup[zone])
+        for permanent in cast(list[Json], setup["battlefield"]):
+            yield cast(str, permanent["card"])

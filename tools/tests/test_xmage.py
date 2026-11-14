@@ -99,6 +99,30 @@ def test_payments_are_left_to_xmage_where_land_types_change() -> None:
     assert not any(line.startswith("tapSource(") for line in export.body)
 
 
+def test_tapped_assertions_are_skipped_after_xmage_chose_a_payments_sources() -> None:
+    # Beryl paid Get Lost with Urborg and a Plains where XMage may tap two Plains, so whether
+    # Urborg is tapped afterwards depends on XMage's choice, not on the rules.
+    name = "Get Lost on a creature gives two Maps; one explores a land into hand"
+    dump = json.loads(FIXTURE.read_text())
+    entry = next(e for e in dump if e["name"] == name)
+    entry["cards"]["Plains"]["faces"][0]["abilities"].append(
+        {"index": "Own 1", "kind": "Static", "changes_land_types": True}
+    )
+    # Replaces the assertion just after the cast, keeping the trace's positions in step.
+    assert entry["actions"][2]["action"] == "Assert"
+    entry["actions"][2]["assertion"] = {
+        "assert": "Tapped",
+        "player": 0,
+        "card": "Plains",
+        "count": 1,
+    }
+    faces = xmage_java.Faces.load(card_store.STORE)
+    export = xmage.export_one(entry, 1, faces, XMAGE_CARDS)
+    assert export.unsupported is None, export.unsupported
+    assert not any("assertTapped" in line for line in export.body)
+    assert "Tapped: after XMage chose a payment's sources" in export.skipped
+
+
 def test_coin_flips_replay_beryls_results() -> None:
     lines = body("Mana Crypt's flip lost: 3 damage to its controller")
     assert "setFlipCoinResult(playerB, false);" in lines
