@@ -52,6 +52,14 @@ impl<L: Layout> Deref for Rederive<'_, L> {
 }
 
 impl<L: Layout> Rederive<'_, L> {
+    /// The layer results so far, one for each permanent, in battlefield order: what the
+    /// layers applied until now made of each, for an effect that finds what it applies to
+    /// against them.
+    #[inline]
+    pub fn rows(&self) -> &[Derived<L>] {
+        &self.0.derived.as_slice()[..self.0.battlefield.len()]
+    }
+
     /// The layer results to write, one for each permanent, in battlefield order.
     #[inline]
     pub fn results(&mut self) -> &mut [Derived<L>] {

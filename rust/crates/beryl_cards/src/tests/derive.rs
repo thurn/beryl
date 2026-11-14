@@ -41,6 +41,11 @@ const UNREACHED: &[(&str, &str)] = &[
         "it changes only the creature the Equipment is attached to, as equip",
     ),
     (
+        "Glorious Anthem: ability 0 (Static)",
+        "it changes only creatures its controller controls, and a generated position gives \
+         its controller none; the card's hand-written scenarios give it some",
+    ),
+    (
         "Jace, Wielder of Mysteries: ability 0 (Replacement)",
         "it replaces a draw from an empty library, and a generated position's library empties \
          only under the −8, whose own second sentence wins the game first",

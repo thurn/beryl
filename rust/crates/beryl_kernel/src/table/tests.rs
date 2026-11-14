@@ -137,14 +137,14 @@ fn a_table_refuses_a_trigger_the_engine_cannot_match() {
     }
 }
 
-/// "Creatures you control have flying", which the layers have no code to apply, and
-/// "as long as you do", which no static ability can mean.
+/// "Cards in your hand have flying": cards in a hand have no layer results, so the layers
+/// have no code to apply it.
 static ANTHEM: CardDef = CardDef {
     name: "Anthem",
     faces: &[Face {
         abilities: &[Ability::static_ability(&LayerSpec {
             affected: Objects::All {
-                zone: Zone::Battlefield,
+                zone: Zone::Hand,
                 filter: Filter::Whose(&Players::You),
             },
             condition: None,

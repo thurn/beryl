@@ -393,7 +393,18 @@ impl Ctx {
         let plural = self.is_plural(layer.affected);
         let has = if plural { "have" } else { "has" };
         let is = if plural { "are" } else { "is" };
-        let who = self.objects(layer.affected);
+        let mut who = self.objects(layer.affected);
+        // A static ability over the permanents some players control names them with no
+        // "all": "creatures you control get +1/+1", but "all creatures have flying".
+        if let Objects::All {
+            zone: Zone::Battlefield,
+            filter,
+        } = layer.affected
+            && super::references::mentions_owner(filter)
+            && let Some(rest) = who.strip_prefix("all ")
+        {
+            who = rest.to_owned();
+        }
         match layer.modification {
             Modification::Control => format!("you control {who}"),
             Modification::AddTypes(set) => {

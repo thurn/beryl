@@ -691,7 +691,7 @@ fn without_you(filter: Filter) -> Option<Filter> {
 }
 
 /// Whether the filter says whose zone a card is in, so the zone is said with it.
-fn mentions_owner(filter: Filter) -> bool {
+pub(super) fn mentions_owner(filter: Filter) -> bool {
     match filter {
         Filter::Whose(_) => true,
         Filter::All(filters) => filters.iter().any(|&f| mentions_owner(f)),

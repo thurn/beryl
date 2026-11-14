@@ -27,17 +27,17 @@ owns the state, a card vocabulary of effect data, and three stores for what
 cards create. It added no rules. What the rules can do is still what the 48
 implemented cards need.
 
-| Mechanism           | In code today                                                                                                                                                          | What the keystones need                                                                                                   |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Layers              | A static ability affects its own permanent or the one it is attached to; the card table refuses any other set. Layers 2, 4, 6, 7a and 7c. Timestamps order everything. | Sets chosen by a filter, layers 3, 5, 7b and 7d, ability removal, CR 613.6 and 613.8, a permanent "as it would exist"     |
-| Replacement effects | Five cases, each written by hand: three ways to enter tapped, "exile it instead" on one object, and a draw replaced by winning or losing                               | One pipeline for moves, draws, damage and destruction, with the ordering choice of CR 616.1 and replacements outside play |
-| Triggers            | 9 kinds of event in a `u16` set. "Dies" matches only "when this dies". Only permanents and emblems listen.                                                             | Look-back for anything leaving, state triggers, abilities that work in a graveyard or on the stack                        |
-| Characteristics     | Layer results exist for permanents. Everywhere else an object has its printed values.                                                                                  | A color or an ability given to cards in every zone; characteristic-defining abilities read in every zone                  |
-| Copies              | A token whose `card` is the copied definition, with one exception flag (`Flag::OneOne`)                                                                                | A card that is a copy, exceptions that are copied in turn, copies with a duration, copies of spells                       |
-| Rule changes        | Two things governed (casting spells, activating loyalty abilities) at two timings                                                                                      | Cost increases, reductions and floors, "can't" effects keyed on a chosen name, permissions for a class of cards           |
-| Mana                | Six counts in a pool                                                                                                                                                   | Mana that remembers what it may be spent on and what it does to the spell                                                 |
-| Objects             | One slot is one card or token. Abilities on the stack have no identity. Every permanent is in the battlefield list.                                                    | Abilities as targets, one permanent made of several cards, permanents that are treated as though they don't exist         |
-| Decisions           | `Decision::player` both owns the decision and answers it. Every pick is public to the engine's search.                                                                 | A player who answers for another, a pick hidden until both players have made one, a name chosen from every card ever made |
+| Mechanism           | In code today                                                                                                                                                                                                    | What the keystones need                                                                                                   |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Layers              | A static ability affects its own permanent, the one it is attached to, or the permanents a filter accepts, found as its layer applies (Glorious Anthem). Layers 2, 4, 6, 7a and 7c. Timestamps order everything. | Layers 3, 5, 7b and 7d, ability removal, CR 613.6 and 613.8, a permanent "as it would exist"                              |
+| Replacement effects | Five cases, each written by hand: three ways to enter tapped, "exile it instead" on one object, and a draw replaced by winning or losing                                                                         | One pipeline for moves, draws, damage and destruction, with the ordering choice of CR 616.1 and replacements outside play |
+| Triggers            | 9 kinds of event in a `u16` set. "Dies" matches only "when this dies". Only permanents and emblems listen.                                                                                                       | Look-back for anything leaving, state triggers, abilities that work in a graveyard or on the stack                        |
+| Characteristics     | Layer results exist for permanents. Everywhere else an object has its printed values.                                                                                                                            | A color or an ability given to cards in every zone; characteristic-defining abilities read in every zone                  |
+| Copies              | A token whose `card` is the copied definition, with one exception flag (`Flag::OneOne`)                                                                                                                          | A card that is a copy, exceptions that are copied in turn, copies with a duration, copies of spells                       |
+| Rule changes        | Two things governed (casting spells, activating loyalty abilities) at two timings                                                                                                                                | Cost increases, reductions and floors, "can't" effects keyed on a chosen name, permissions for a class of cards           |
+| Mana                | Six counts in a pool                                                                                                                                                                                             | Mana that remembers what it may be spent on and what it does to the spell                                                 |
+| Objects             | One slot is one card or token. Abilities on the stack have no identity. Every permanent is in the battlefield list.                                                                                              | Abilities as targets, one permanent made of several cards, permanents that are treated as though they don't exist         |
+| Decisions           | `Decision::player` both owns the decision and answers it. Every pick is public to the engine's search.                                                                                                           | A player who answers for another, a pick hidden until both players have made one, a name chosen from every card ever made |
 
 `State<Small>` is 20,216 of its 20,480 bytes, and the count gate stands at
 389,343,295 instructions.
@@ -225,9 +225,13 @@ then counters (7c), then the rules static abilities change (CR 613.11)
 ```
 
 - **Sets.** A static ability may affect the permanents a filter accepts. The
-  filter is read against the results so far (`layers::passes`, which today
-  serves one case). The refusals `Unapplied::Affected` and
-  `Unapplied::Condition` go as their cases are built.
+  filter is read against the results so far (`layers::apply::passes`), and so is
+  an "as long as" that asks whether the permanent passes a filter or how many
+  permanents do (landed with Glorious Anthem). The effects are applied in one
+  list sorted by layer, then timestamp, which is the loop above: an effect whose
+  set or condition reads the results is listed by its source and ability and
+  finds its set as it comes up. `Unapplied::Affected` remains for sets in other
+  zones, which have no layer results.
 - **Ability removal.** `Derived` gains a mask of the face's abilities the
   permanent has lost, all of them for "loses all abilities". An effect that
   removes abilities also clears the keywords and grants applied before it; those

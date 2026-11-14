@@ -32,16 +32,14 @@ pub enum Unapplied {
     /// ([`LayerSpec::needs_a_resolution`]): a target, X, "that player", or what an
     /// instruction before did. No code could read it: a static ability never resolves.
     Resolving,
-    /// It affects a set the layers do not find: any but the permanent it is on and the one
-    /// that permanent is attached to. The permanents a filter accepts are settled by the
-    /// layers themselves, layer by layer and in dependency order
-    /// ([CR 613.8](https://yawgatog.com/resources/magic-rules/#R6138)), which they do not
-    /// yet do.
+    /// It affects a set the layers do not find: any but the permanent it is on, the one that
+    /// permanent is attached to, and the permanents a filter of what the layers read
+    /// accepts ([`read_by_the_layers`]). Objects in other zones have no layer results.
     Affected,
-    /// Its "as long as" reads more than the layers' inputs: anything but a cost paid for
-    /// the permanent it is on and the counters on that permanent. What a characteristic or a
-    /// count of permanents is depends on the layers' own results, so the condition would
-    /// have to be read as they run.
+    /// Its "as long as" reads something the layers do not have as they apply: anything but
+    /// a cost paid for the permanent it is on, the counters on that permanent, whether that
+    /// permanent passes a filter, and the number of permanents that pass one, each filter
+    /// one of what the layers read ([`read_by_the_layers`]).
     Condition,
     /// A power is set to an amount by anything but a characteristic-defining ability: by a
     /// static ability of another permanent or one with a condition, which apply in layer
@@ -61,6 +59,10 @@ pub fn applied(spec: &LayerSpec) -> Result<(), Unapplied> {
     }
     match spec.affected {
         Objects::This | Objects::AttachedTo => {}
+        Objects::All {
+            zone: Zone::Battlefield,
+            filter,
+        } if read_by_the_layers(filter) => {}
         Objects::Target(_)
         | Objects::Those
         | Objects::TriggeredOn
@@ -108,25 +110,30 @@ fn read_as_the_layer_applies(amount: &Amount) -> Result<(), Unapplied> {
         Amount::Count(&Objects::All {
             zone: Zone::Battlefield,
             filter,
-        }) if of_a_permanents_characteristics(filter) => Ok(()),
+        }) if read_by_the_layers(filter) => Ok(()),
         _ => Err(Unapplied::Amount),
     }
 }
 
-/// Whether a filter asks only for a permanent's characteristics and who controls it.
-fn of_a_permanents_characteristics(filter: Filter) -> bool {
+/// Whether the layers can read `filter` of a permanent as they apply: it asks for the
+/// permanent's characteristics and who controls it, which the layers before have settled,
+/// or for whether it is tapped and its mana value, which no layer changes. "Mana value X or
+/// less" names a resolution's X, which a static ability has none of.
+pub fn read_by_the_layers(filter: Filter) -> bool {
     match filter {
         Filter::Any
         | Filter::Types(_)
         | Filter::Supertypes(_)
         | Filter::Subtype(_)
         | Filter::Colors(_)
-        | Filter::Whose(_) => true,
-        Filter::Tapped | Filter::ManaValueAtMost(_) | Filter::ManaValueAtMostX => false,
-        Filter::Not(filter) => of_a_permanents_characteristics(*filter),
-        Filter::All(filters) | Filter::AnyOf(filters) => filters
-            .iter()
-            .all(|&filter| of_a_permanents_characteristics(filter)),
+        | Filter::Whose(_)
+        | Filter::Tapped
+        | Filter::ManaValueAtMost(_) => true,
+        Filter::ManaValueAtMostX => false,
+        Filter::Not(filter) => read_by_the_layers(*filter),
+        Filter::All(filters) | Filter::AnyOf(filters) => {
+            filters.iter().all(|&filter| read_by_the_layers(filter))
+        }
     }
 }
 
@@ -164,11 +171,35 @@ fn reads(condition: &Condition) -> bool {
     match condition {
         Condition::Paid(_) => true,
         Condition::Compare(left, _, right) => counted(left).is_some() && counted(right).is_some(),
+        Condition::Is(Objects::This, filter) => read_by_the_layers(*filter),
         Condition::Not(condition) => reads(condition),
         Condition::All(conditions) | Condition::Any(conditions) => conditions.iter().all(reads),
         Condition::Did
         | Condition::WonFlip
         | Condition::Is(..)
+        | Condition::EnteredThisTurn(_)
+        | Condition::DrewInDrawStep(_)
+        | Condition::Token(_) => false,
+    }
+}
+
+/// Whether `condition` reads the layers' own results: whether the permanent with the ability
+/// passes a filter, or how many permanents do. Such a condition is read as its effect's
+/// layer applies, against what the layers before it made of every permanent; any other is
+/// the same before and after the layers run.
+pub fn reads_results(condition: &Condition) -> bool {
+    match condition {
+        Condition::Is(..) => true,
+        Condition::Compare(left, _, right) => [left, right]
+            .into_iter()
+            .any(|amount| matches!(counted(amount), Some(Counted::Permanents(_)))),
+        Condition::Not(condition) => reads_results(condition),
+        Condition::All(conditions) | Condition::Any(conditions) => {
+            conditions.iter().any(reads_results)
+        }
+        Condition::Paid(_)
+        | Condition::Did
+        | Condition::WonFlip
         | Condition::EnteredThisTurn(_)
         | Condition::DrewInDrawStep(_)
         | Condition::Token(_) => false,
@@ -181,6 +212,9 @@ enum Counted {
     Number(u8),
     /// The counters of a kind on the permanent with the ability.
     Counters(CounterKind),
+    /// The number of permanents the filter accepts, read for the controller of the
+    /// permanent with the ability.
+    Permanents(Filter),
 }
 
 /// `amount` as a static ability's condition may compare it, or `None` for any other amount.
@@ -188,32 +222,70 @@ fn counted(amount: &Amount) -> Option<Counted> {
     match amount {
         Amount::Fixed(n) => Some(Counted::Number(*n)),
         Amount::Counters(Objects::This, kind) => Some(Counted::Counters(*kind)),
+        Amount::Count(Objects::All {
+            zone: Zone::Battlefield,
+            filter,
+        }) if read_by_the_layers(*filter) => Some(Counted::Permanents(*filter)),
         _ => None,
     }
 }
 
+/// What the layers have made of the permanents so far, for a condition that reads it
+/// ([`reads_results`]): the rules implement it over the results of the layers before the
+/// one the condition's effect applies in.
+pub trait LayerResults {
+    /// Whether the permanent with the ability passes `filter`.
+    fn is(&self, filter: Filter) -> bool;
+    /// The number of permanents that pass `filter`, read for the controller of the
+    /// permanent with the ability.
+    fn count(&self, filter: Filter) -> usize;
+}
+
+/// No layer results, for a condition that reads none: what a caller passes [`holds`] for a
+/// condition [`reads_results`] says no to.
+pub struct NoResults;
+
+impl LayerResults for NoResults {
+    fn is(&self, _: Filter) -> bool {
+        unreachable!("a condition that reads the layer results is read as they apply")
+    }
+
+    fn count(&self, _: Filter) -> usize {
+        unreachable!("a condition that reads the layer results is read as they apply")
+    }
+}
+
 /// Whether a static ability's "as long as" holds for the permanent in `slot`, which has the
-/// ability. It reads only what the layers start from, never their results, so it is the
-/// same before and after they run.
+/// ability. What the layers start from is read from the state; whether a permanent passes a
+/// filter, and how many do, from `results`, what the layers have made of them so far.
 ///
 /// # Panics
 ///
 /// For a condition [`applied`] refuses, which no static ability of a game's table has.
-pub fn holds<L: Layout>(s: &State<L>, slot: L::Slot, condition: &Condition) -> bool {
+pub fn holds<L: Layout>(
+    s: &State<L>,
+    slot: L::Slot,
+    condition: &Condition,
+    results: &impl LayerResults,
+) -> bool {
     let amount = |amount: &Amount| match counted(amount) {
-        Some(Counted::Number(n)) => n,
-        Some(Counted::Counters(kind)) => s.counters_of(slot, kind),
+        Some(Counted::Number(n)) => i32::from(n),
+        Some(Counted::Counters(kind)) => i32::from(s.counters_of(slot, kind)),
+        Some(Counted::Permanents(filter)) => {
+            i32::try_from(results.count(filter)).unwrap_or(i32::MAX)
+        }
         None => unreachable!("the card table refuses a static ability that compares this"),
     };
     match condition {
         // CR 702.33d: a permanent remembers each kind of cost its spell paid.
         Condition::Paid(kind) => s.paid(slot, *kind),
         Condition::Compare(left, comparison, right) => {
-            comparison.holds(i32::from(amount(left)), i32::from(amount(right)))
+            comparison.holds(amount(left), amount(right))
         }
-        Condition::Not(condition) => !holds(s, slot, condition),
-        Condition::All(conditions) => conditions.iter().all(|c| holds(s, slot, c)),
-        Condition::Any(conditions) => conditions.iter().any(|c| holds(s, slot, c)),
+        Condition::Is(Objects::This, filter) => results.is(*filter),
+        Condition::Not(condition) => !holds(s, slot, condition, results),
+        Condition::All(conditions) => conditions.iter().all(|c| holds(s, slot, c, results)),
+        Condition::Any(conditions) => conditions.iter().any(|c| holds(s, slot, c, results)),
         Condition::Did
         | Condition::WonFlip
         | Condition::Is(..)
@@ -299,14 +371,22 @@ mod tests {
         }
     }
 
-    /// "Other Squirrels you control have menace", "all creatures have double strike": the
-    /// vocabulary says them and the layers do not apply them.
+    /// "Creatures you control get +1/+1", "all artifacts are blue": the layers find the
+    /// permanents a filter accepts as they apply. Cards in a hand have no layer results, and
+    /// "mana value X or less" has no X to read.
     #[test]
-    fn a_static_ability_over_a_filtered_set_is_refused() {
-        assert_eq!(
-            applied(&spec(CREATURES_YOU_CONTROL, None)),
-            Err(Unapplied::Affected)
-        );
+    fn a_static_ability_over_the_permanents_a_filter_accepts_is_applied() {
+        assert_eq!(applied(&spec(CREATURES_YOU_CONTROL, None)), Ok(()));
+        let untapped_cheap = Objects::All {
+            zone: Zone::Battlefield,
+            filter: Filter::All(&[Filter::Not(&Filter::Tapped), Filter::ManaValueAtMost(2)]),
+        };
+        assert_eq!(applied(&spec(untapped_cheap, None)), Ok(()));
+        let in_hand = Objects::All {
+            zone: Zone::Hand,
+            filter: Filter::Any,
+        };
+        assert_eq!(applied(&spec(in_hand, None)), Err(Unapplied::Affected));
     }
 
     /// A static ability has no resolution, so nothing was done before it, nothing was
@@ -337,23 +417,42 @@ mod tests {
         }
     }
 
-    /// "As long as you control a red creature", "as long as it's a creature": what they read
-    /// is the layers' own result.
+    /// "As long as you control a creature", "as long as it's a creature": the layers read
+    /// them as the effect's layer applies.
     #[test]
-    fn a_condition_on_what_the_layers_decide_is_refused() {
+    fn a_condition_on_what_the_layers_decide_is_read_as_they_apply() {
         for condition in [
             at_least(Amount::Count(&CREATURES_YOU_CONTROL), 1),
+            Condition::Is(Objects::This, Filter::Types(Types::CREATURE)),
+            Condition::Any(&[
+                HAS_A_TIME_COUNTER,
+                Condition::Is(Objects::This, Filter::Tapped),
+            ]),
+        ] {
+            assert_eq!(
+                applied(&spec(Objects::This, Some(condition))),
+                Ok(()),
+                "{condition:?}"
+            );
+            assert!(reads_results(&condition), "{condition:?}");
+        }
+        for condition in [HAS_A_TIME_COUNTER, IMPENDING] {
+            assert!(!reads_results(&condition), "{condition:?}");
+        }
+    }
+
+    /// "As long as its power is 4 or greater", "as long as enchanted creature has a +1/+1
+    /// counter": nothing the layers read.
+    #[test]
+    fn a_condition_the_layers_cannot_read_is_refused() {
+        for condition in [
             at_least(Amount::Power(Objects::This), 4),
             at_least(
                 Amount::Counters(Objects::AttachedTo, CounterKind::PlusOne),
                 1,
             ),
             at_least(Amount::Times(2, &TIME_COUNTERS), 2),
-            Condition::Is(Objects::This, Filter::Types(Types::CREATURE)),
-            Condition::Any(&[
-                HAS_A_TIME_COUNTER,
-                Condition::Is(Objects::This, Filter::Tapped),
-            ]),
+            Condition::Is(Objects::AttachedTo, Filter::Types(Types::CREATURE)),
         ] {
             assert_eq!(
                 applied(&spec(Objects::This, Some(condition))),
