@@ -1,1 +1,7 @@
-{}
+{
+  "Flickerwisp": {
+    "mechanic": "a delayed ability that carries an object (the exiled card) and an effect returning a card from exile to the battlefield under its owner's control",
+    "rule": "CR 603.7c",
+    "text": "When this creature enters, exile another target permanent. Return that card to the battlefield under its owner's control at the beginning of the next end step."
+  }
+}
