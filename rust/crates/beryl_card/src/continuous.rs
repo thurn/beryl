@@ -1,7 +1,7 @@
 //! Continuous effects: what a static ability does all the time, and the replacement effects
 //! and layered modifications cards create.
 
-use crate::characteristics::{Colors, Keywords, Subtype, Types};
+use crate::characteristics::{BasicLandTypes, Colors, Keywords, Subtype, Types};
 use crate::effect::{Amount, Condition, Objects, Players};
 use crate::filter::Filter;
 use crate::index::{AbilityIx, GrantIx};
@@ -178,7 +178,10 @@ pub enum Modification {
     /// Layer 4: "is a [types] and loses all other card types". Subtypes go with the card
     /// types they belong to; subtypes it gains are added separately.
     SetTypes(Types),
-    /// Layer 4: "is a [subtype] in addition to its other types".
+    /// Layer 4: "is a [subtype] in addition to its other types". A land that becomes a basic land type it
+    /// was not gains that type's intrinsic mana ability ([CR 305.6]).
+    ///
+    /// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056
     AddSubtype(Subtype),
     /// Layer 4: "is a [subtype]", which replaces its subtypes of the same kind ([CR 205.1a]):
     /// "when an effect sets one or more of an object's subtypes, the new subtype(s) replaces
@@ -188,6 +191,15 @@ pub enum Modification {
     ///
     /// [CR 205.1a]: https://yawgatog.com/resources/magic-rules/#R2051a
     SetSubtype(Subtype),
+    /// Layer 4: "is a [basic land types]", setting a land's land types ([CR 305.7]): "If an
+    /// effect sets a land's subtype to one or more of the basic land types, the land no longer
+    /// has its old land type. It loses all abilities generated from its rules text, its old
+    /// land types, and any copiable effects affecting that land, and it gains the appropriate mana
+    /// ability for each new basic land type. Note that this doesn't remove any abilities that
+    /// were granted to the land by other effects."
+    ///
+    /// [CR 305.7]: https://yawgatog.com/resources/magic-rules/#R3057
+    SetLandTypes(BasicLandTypes),
     /// Layer 6: "gains [keywords]".
     AddKeywords(Keywords),
     /// Layer 6: "has [ability]": the ability at this index of the effect source's front

@@ -174,6 +174,23 @@ pub const fn mana(notation: &str) -> ManaCost {
     }
 }
 
+/// The intrinsic mana ability of each basic land type, in the order of
+/// [`crate::BasicLandTypes`] and of the mana each makes, W, U, B, R, G ([CR 305.6]): "An
+/// object with the land card type and a basic land type has the intrinsic ability '{T}: Add
+/// [mana symbol],' even if the text box doesn't actually contain that text or the object has
+/// no text box. For Plains, [mana symbol] is {W}; for Islands, {U}; for Swamps, {B}; for
+/// Mountains, {R}; and for Forests, {G}." The engine activates one of these for a land that
+/// has the ability without its face writing it out ([`crate::Keywords::PLAINS_MANA`]).
+///
+/// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056
+pub static INTRINSIC_MANA: [crate::Ability; 5] = [
+    crate::Ability::tap_for_mana(ManaSet::one(ManaColor::White)),
+    crate::Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
+    crate::Ability::tap_for_mana(ManaSet::one(ManaColor::Black)),
+    crate::Ability::tap_for_mana(ManaSet::one(ManaColor::Red)),
+    crate::Ability::tap_for_mana(ManaSet::one(ManaColor::Green)),
+];
+
 #[cfg(test)]
 mod tests {
     use super::{ManaCost, mana};

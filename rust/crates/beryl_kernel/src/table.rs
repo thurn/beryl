@@ -630,6 +630,9 @@ impl PerLayout for GameIndex {
 pub struct FaceFacts {
     /// What it makes as a mana source.
     pub mana: ManaFace,
+    /// The kinds of mana the intrinsic abilities of its basic land types make that its
+    /// abilities do not write out, a bit per [`beryl_card::ManaColor`] ([`land_mana`]).
+    pub land_mana: u8,
     /// A bit per [`AbilityIx`] of its activated abilities.
     activated: u64,
 }
@@ -638,6 +641,7 @@ impl FaceFacts {
     /// No face: never read, as no object has it up.
     const NONE: FaceFacts = FaceFacts {
         mana: ManaFace::Read,
+        land_mana: 0,
         activated: 0,
     };
 
@@ -671,6 +675,7 @@ impl FaceFacts {
         assert!(face.abilities.len() <= 64, "a face of at most 64 abilities");
         let mut facts = FaceFacts {
             mana: ManaFace::of(face),
+            land_mana: land_mana(face),
             activated: 0,
         };
         for (i, a) in face.abilities.iter().enumerate() {
@@ -697,21 +702,28 @@ pub enum ManaFace {
 }
 
 impl ManaFace {
+    /// What `face` makes as a source, with its basic land types' mana ([`land_mana`]).
     pub fn of(face: &Face) -> ManaFace {
+        let intrinsic = land_mana(face);
         let simple = || face.abilities.iter().filter(|a| is_simple(a));
-        if !face
-            .abilities
-            .iter()
-            .any(|a| is_simple(a) || is_sacrificed(a))
+        if intrinsic == 0
+            && !face
+                .abilities
+                .iter()
+                .any(|a| is_simple(a) || is_sacrificed(a))
         {
             return ManaFace::Not;
         }
-        if simple().next().is_none() || simple().any(|a| a.only_if_you_control().is_some()) {
+        if (intrinsic == 0 && simple().next().is_none())
+            || simple().any(|a| a.only_if_you_control().is_some())
+        {
             return ManaFace::Read;
         }
-        let kinds = simple().fold(0, |k, a| k | a.produces().colors);
-        let amount = simple().next_back().map_or(0, |a| a.produces().amount);
-        if kinds == 0 {
+        let kinds = simple().fold(intrinsic, |k, a| k | a.produces().colors);
+        let amount = simple()
+            .next_back()
+            .map_or(u8::from(intrinsic != 0), |a| a.produces().amount);
+        if kinds == 0 || (intrinsic != 0 && amount != 1) {
             return ManaFace::Read;
         }
         ManaFace::Plain {
@@ -720,6 +732,26 @@ impl ManaFace {
             other: has_other_ability(face),
         }
     }
+}
+
+/// The kinds of mana the intrinsic abilities of the basic land types of `face` make
+/// ([CR 305.6]), a bit per [`beryl_card::ManaColor`], less those its abilities write out: a
+/// card file may write out that ability, as Plains does, or not, as Dryad Arbor.
+///
+/// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056
+pub fn land_mana(face: &Face) -> u8 {
+    if !face.types.intersects(beryl_card::Types::LAND) {
+        return 0;
+    }
+    let written = face
+        .abilities
+        .iter()
+        .filter(|a| is_simple(a) && a.produces().amount == 1)
+        .fold(0, |k, a| k | a.produces().colors);
+    beryl_card::BasicLandTypes::of(face.subtypes)
+        .mana()
+        .intrinsic_mana()
+        & !written
 }
 
 /// Whether a face has an ability other than those the solver taps for, which tapping it for

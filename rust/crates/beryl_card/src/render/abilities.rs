@@ -443,10 +443,12 @@ impl Ctx {
                 format!("{is} {} and loses all other card types", a_types(set))
             }
             Modification::AddSubtype(subtype) => format!(
-                "{is} {} in addition to its other types",
-                with_article(subtype.name())
+                "{is} {} in addition to its other {}",
+                with_article(subtype.name()),
+                other_types(subtype)
             ),
             Modification::SetSubtype(subtype) => format!("{is} {}", with_article(subtype.name())),
+            Modification::SetLandTypes(set) => format!("{is} {}", land_types(set, plural)),
             Modification::AddKeywords(set) => format!("{has} {}", list(&keywords(set), "and")),
             Modification::Grant(ix) => format!("{has} {}", self.granted(ix)),
             Modification::ModifyPt(power, toughness) => {
@@ -672,4 +674,27 @@ pub(super) fn part_of_keyword(ability: &Ability) -> bool {
             .layer()
             .and_then(|layer| layer.condition.as_ref())
             .is_some_and(keyword)
+}
+
+/// What a subtype is added to: "its other land types" for a land type, "its other types"
+/// for any other.
+pub(super) fn other_types(subtype: crate::Subtype) -> &'static str {
+    if subtype.card_type() == crate::Types::LAND {
+        "land types"
+    } else {
+        "types"
+    }
+}
+
+/// Basic land types as a land becomes them: "a Mountain", or "Mountains" for several lands.
+pub(super) fn land_types(set: crate::BasicLandTypes, plural: bool) -> String {
+    let names: Vec<String> = set
+        .subtypes()
+        .map(|subtype| match (plural, subtype.name()) {
+            (false, name) => with_article(name),
+            (true, name) if name.ends_with('s') => name.to_owned(),
+            (true, name) => format!("{name}s"),
+        })
+        .collect();
+    list(&names, "and")
 }

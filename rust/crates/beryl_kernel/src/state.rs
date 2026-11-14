@@ -7,9 +7,9 @@ pub use crate::counters::{
     COUNTERS, CounterRows, CounterTable, Counters, CountersHeld, CountersOf,
 };
 pub use crate::effects::{
-    Affects, Continuous, ContinuousEffect, CostChange, EFFECTS, Effects, EffectsOn, LayerChange,
-    LockedIn, MoveReplacement, Payload, Permanents, Permission, Permitted, SETS, Subject,
-    read_layer,
+    Affects, Characteristics, Continuous, ContinuousEffect, CostChange, EFFECTS, Effects,
+    EffectsOn, LayerChange, LockedIn, MoveReplacement, Payload, Permanents, Permission, Permitted,
+    SETS, Subject, read_layer,
 };
 pub use crate::last_known::{LAST_KNOWN, LastKnown};
 pub use crate::memos::{MEMOS, Memo, Memos, MemosOf};
@@ -111,6 +111,13 @@ pub struct Flags {
     /// Some permanent has lost an ability of its face as the layers last applied: without
     /// one, [`State::has_ability`] answers yes with no read of the layer results.
     pub(crate) abilities_lost: bool,
+    /// Some effect that removes abilities, or changes a land's land types and so the mana
+    /// abilities they give ([CR 305.7]), applied as the layers last applied: without one,
+    /// each permanent makes the mana its card's facts say, and the mana solver reads no layer
+    /// result for it ([`State::makes_card_mana`]).
+    ///
+    /// [CR 305.7]: https://yawgatog.com/resources/magic-rules/#R3057
+    pub(crate) mana_changed: bool,
 }
 
 /// The whole game, stored as its [`Layout`] says: as [`Small`], copied with one `memcpy`

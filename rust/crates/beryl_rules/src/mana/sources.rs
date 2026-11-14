@@ -88,12 +88,17 @@ pub(super) fn source<L: Layout>(
     // Looked up only past the table's facts, which most permanents stop at.
     let face = || s.copiable(slot).face(t);
     let mana = s.copiable(slot).facts(t).mana;
-    // The table's facts stand in for reading the face: they must say what reading it would.
+    // The table's facts stand in for reading the face, for a permanent that makes its card's
+    // mana: they must say what reading it would. One that lost an ability, or whose land
+    // types an effect changed, is read ability by ability (CR 613.1f, CR 305.7).
     debug_assert!(
-        mana != ManaFace::Not || read_source(s, t, player, slot, face()).is_none(),
+        mana != ManaFace::Not
+            || !s.makes_card_mana(slot)
+            || read_source(s, t, player, slot, face()).is_none(),
         "a face the table calls no source makes mana"
     );
-    if mana == ManaFace::Not || d.controller != player || o.is_tapped() {
+    if (mana == ManaFace::Not && s.makes_card_mana(slot)) || d.controller != player || o.is_tapped()
+    {
         return None;
     }
     // CR 302.6: a creature's {T} abilities need it under its controller's control since their
@@ -101,14 +106,12 @@ pub(super) fn source<L: Layout>(
     if d.types.intersects(Types::CREATURE) && o.is_summoning_sick() {
         return None;
     }
-    // The table's facts are the card's: a permanent that lost an ability is read ability
-    // by ability (CR 613.1f).
     if let ManaFace::Plain {
         kinds,
         amount,
         other,
     } = mana
-        && s.has_every_ability(slot)
+        && s.makes_card_mana(slot)
     {
         let plain = Some((kinds, amount, other, false));
         debug_assert_eq!(
@@ -134,7 +137,8 @@ pub fn mana_contribution<L: Layout>(
 
 /// What [`source`] finds, read from the face of an untapped source `player` controls that may
 /// tap for mana now, the permanent in `slot`: of the abilities it has
-/// ([`State::has_ability`]).
+/// ([`State::has_ability`]), with the intrinsic mana abilities of its basic land types
+/// ([`State::intrinsic_mana`]), each of which makes one mana of its kind.
 fn read_source<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -143,8 +147,8 @@ fn read_source<L: Layout>(
     face: &Face,
 ) -> Option<(u8, u8, bool, bool)> {
     let has = |i: usize| s.has_ability(slot, AbilityIx::new(i as u8));
-    let mut kinds = 0;
-    let mut amount = 0;
+    let mut kinds = s.intrinsic_mana(t, slot);
+    let mut amount = u8::from(kinds != 0);
     // A source whose mana depends on other permanents, as Floodfarm Verge's {U}, is a class
     // of its own: tapping it rather than another making the same mana now can leave
     // different mana for later.

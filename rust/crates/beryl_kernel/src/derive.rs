@@ -78,8 +78,10 @@ impl<L: Layout> Rederive<'_, L> {
     /// Stores the results as current, with `listening`, the kinds of event the permanents have
     /// triggered abilities for, `replacing`, the kinds of event their static abilities replace,
     /// and `rules`, the rules their static abilities change for each
-    /// player, by seat ([`State::rule_applies`]), and `removed`, whether an effect that
-    /// removes abilities applied, for [`State::has_ability`]. Control is settled now, so each face-down
+    /// player, by seat ([`State::rule_applies`]), `removed`, whether an effect that
+    /// removes abilities applied, for [`State::has_ability`], and `land_types`, whether an
+    /// effect that changes a land's land types applied, for [`State::makes_card_mana`].
+    /// Control is settled now, so each face-down
     /// permanent's controller sees it from here on ([CR 708.5]): "At any time, you may look at ...
     /// a face-down permanent you control".
     ///
@@ -91,6 +93,7 @@ impl<L: Layout> Rederive<'_, L> {
         replacing: Replaces,
         rules: PerSeat<Rules>,
         removed: bool,
+        land_types: bool,
     ) {
         let s = self.0;
         s.listening = listening;
@@ -103,6 +106,7 @@ impl<L: Layout> Rederive<'_, L> {
             }
         }
         s.flags.abilities_lost = removed;
+        s.flags.mana_changed = removed || land_types;
         s.flags.derived_dirty = false;
     }
 }

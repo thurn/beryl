@@ -1,7 +1,7 @@
 //! Tapping and paying: carrying out a plan or a manual choice.
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityIx, CostAction, ManaColor, ManaCost, Types};
+use crate::card::{AbilityIx, CostAction, INTRINSIC_MANA, ManaColor, ManaCost, Types};
 use crate::decision::Opt;
 use crate::event::{self, Sink};
 use crate::fixed::Full;
@@ -229,7 +229,7 @@ pub(crate) fn activate<L: Layout>(
     color: ManaColor,
 ) -> Result<(), Full> {
     let (card, face) = s.copiable(slot).record(t);
-    let (index, ability) = (s.copiable(slot).face(t).abilities)
+    let printed = (s.copiable(slot).face(t).abilities)
         .iter()
         .enumerate()
         .find(|&(i, a)| {
@@ -237,6 +237,15 @@ pub(crate) fn activate<L: Layout>(
                 && (is_simple(a) || is_sacrificed(a))
                 && a.produces().includes(color)
                 && allowed(s, t, a, s.controller(slot))
+        });
+    // [CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056): a land of a basic land
+    // type "has the intrinsic ability “{T}: Add [mana symbol],” even if the text box doesn't
+    // actually contain that text". It is no ability of the face, so its activation names
+    // none: the ability adds its mana with no resolution that would read one.
+    let (index, ability) = printed
+        .or_else(|| {
+            (s.intrinsic_mana(t, slot) & (1 << color.index()) != 0)
+                .then(|| (usize::from(u8::MAX), &INTRINSIC_MANA[color.index()]))
         })
         .expect("a mana ability that makes the chosen mana");
     let source = s.object_ref(slot);

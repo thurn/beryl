@@ -39,7 +39,7 @@ pub mod trigger;
 mod walk;
 
 pub use ability::{Ability, AbilityKind, Behavior, Custom, Says, Timing};
-pub use characteristics::{Colors, Keywords, Subtype, Subtypes, Supertypes, Types};
+pub use characteristics::{BasicLandTypes, Colors, Keywords, Subtype, Subtypes, Supertypes, Types};
 pub use check::Malformed;
 pub use continuous::{
     Duration, Governed, Layer, LayerSpec, MODIFY_PARTS, Modification, Replacement, RuleChange, When,
@@ -59,7 +59,7 @@ pub use effect::{
 pub use filter::Filter;
 pub use ids::{Seat, TurnStep, Zone, ZoneSet};
 pub use index::{AbilityIx, CastingIx, GrantIx, ModeIx, SpecIx};
-pub use mana::{ManaColor, ManaCost, ManaSet, mana};
+pub use mana::{INTRINSIC_MANA, ManaColor, ManaCost, ManaSet, mana};
 pub use prompt::{Part, Place, Prompt, Purpose, Shape};
 pub use target::{Takes, TargetKind, TargetSpec};
 pub use trigger::{Subject, Trigger, TriggerEvent};
@@ -70,9 +70,9 @@ pub use walk::Node;
 pub mod prelude {
     pub use crate::effect::build::*;
     pub use crate::{
-        Ability, Amount, CardDef, CastTerms, CastingKind, CastingOption, Castings, Colors,
-        Comparison, Condition, Cost, CostAction, CostPart, CounterKind, Duration, Effect, Face,
-        FaceIx, Filter, Found, Governed, Keywords, LayerSpec, LibraryOrder, LibraryPosition,
+        Ability, Amount, BasicLandTypes, CardDef, CastTerms, CastingKind, CastingOption, Castings,
+        Colors, Comparison, Condition, Cost, CostAction, CostPart, CounterKind, Duration, Effect,
+        Face, FaceIx, Filter, Found, Governed, Keywords, LayerSpec, LibraryOrder, LibraryPosition,
         ManaColor, ManaCost, ManaSet, Modification, Objects, Place, Players, Prompt, Purpose,
         Recipients, Replacement, RuleChange, Subtype, Subtypes, Supertypes, Taken, TargetKind,
         TargetSpec, Trigger, TriggerEvent, TurnStep, Types, When, Zone, card, mana,

@@ -375,6 +375,9 @@ pub struct Work {
     /// Events executed, kept or not.
     pub events: u64,
     pub layer_recomputes: u64,
+    /// Trials of whether one continuous effect depends on another, each applying one to the
+    /// layer results and undoing it (CR 613.8a).
+    pub dependency_trials: u64,
     pub solver_runs: u64,
 }
 

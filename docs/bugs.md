@@ -371,3 +371,18 @@ fixed in the same session. Newest first.
   the change that added the mask. Prevention: a value that means "everything" is
   relayouted as that meaning (`widen_mask` maps `ALL` to `ALL`), never as its
   bits; a flag or an enum for "all" would make the copy impossible to get wrong.
+
+- A static ability whose permanent lost it to another effect of the same layer
+  still applied. The recompute asked whether each permanent still had its
+  ability at the head of the layer, before any of the layer's effects applied,
+  so Urborg, Tomb of Yawgmoth entering after Blood Moon still made every land a
+  Swamp, and a creature's own layer 6 ability still applied under a "creatures
+  lose all abilities" with an earlier timestamp. CR 613.8a makes such an effect
+  depend on the one that removes its ability, and CR 613.8b applies it after;
+  with no dependencies the head-of-layer check was the closest approximation.
+  Found and fixed in the change that added dependencies: the existence of a
+  static ability is asked as its effect comes up, after the effects it depends
+  on. Prevention: a fact that an effect of the same layer can change is read
+  where the effect applies, never cached at the layer's head; each effect's
+  declared reads and writes (`LayerChange::writes`, `dependency::reads`) say
+  which facts those are.

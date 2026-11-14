@@ -2,6 +2,7 @@
 //! dirty (architecture §9, decision D5, CR 613).
 
 mod apply;
+mod dependency;
 
 use beryl_kernel::derive::Rederive;
 
@@ -71,9 +72,6 @@ struct Apply<L: Layout> {
     /// How many parts the effect has: a static ability with more than one carries the set
     /// it began on to its later parts.
     parts: u8,
-    /// Of a static ability's first part, found at the head of its layer: its permanent no
-    /// longer has the ability, so the effect does not begin.
-    lost: bool,
 }
 
 impl<L: Layout> Apply<L> {
@@ -106,7 +104,6 @@ impl<L: Layout> Default for Apply<L> {
             change: LayerChange::ModifyPt(0, 0),
             from: None,
             parts: 1,
-            lost: false,
         }
     }
 }
@@ -149,7 +146,7 @@ pub(crate) fn refresh<L: Layout>(
 ) -> Result<(), Full> {
     if s.is_derived_stale() {
         sink.work.layer_recomputes += 1;
-        return recompute(s, t);
+        return recompute(s, t, &mut sink.work.dependency_trials);
     }
     Ok(())
 }
@@ -246,8 +243,8 @@ pub(crate) fn counters_matter<L: Layout>(
 /// Within a layer, effects apply in timestamp order ([CR 613.7]): "An effect with an earlier
 /// timestamp is applied before an effect with a later timestamp." A characteristic-defining ability
 /// defines power alone and sits in layer 7a with no other effect, so "apply effects from
-/// characteristic-defining abilities first" (CR 613.3) holds by the layer order. No two of the
-/// cards' effects in one layer depend on each other ([CR 613.8]), so timestamps decide.
+/// characteristic-defining abilities first" (CR 613.3) holds by the layer order. An effect
+/// that depends on another in its layer waits for it ([CR 613.8], [`dependency`]).
 ///
 /// The layers apply one at a time: every effect of a layer is applied to every permanent
 /// before any effect of the next. A static ability whose set is chosen by a filter, or whose
@@ -265,7 +262,7 @@ pub(crate) fn counters_matter<L: Layout>(
 /// [CR 613.1]: https://yawgatog.com/resources/magic-rules/#R6131
 /// [CR 613.7]: https://yawgatog.com/resources/magic-rules/#R6137
 /// [CR 613.8]: https://yawgatog.com/resources/magic-rules/#R6138
-fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
+fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable, trials: &mut u64) -> Result<(), Full> {
     let Some(mut s) = s.rederive() else {
         return Ok(());
     };
@@ -301,18 +298,25 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
     }
     listed = listed.and(resolved_effects(&s, &mut list));
     let mut removed = false;
+    let mut land_types = false;
     match &mut list {
         Some(list) => {
             list.as_mut_slice().sort_unstable_by_key(Apply::key);
             // The counters of layer 7c apply after its effects and before those of 7d.
             let split = (list.as_slice()).partition_point(|a| a.layer <= Layer::PtModifying as u8);
-            let (to_7c, after) = list.as_mut_slice().split_at_mut(split);
+            let (to_7c, after) = list.as_slice().split_at(split);
             let mut begun = None;
-            let first = apply_in_order(&mut s, t, to_7c, &mut begun);
+            let first = apply_in_order(&mut s, t, to_7c, &mut begun, trials);
             counters(&mut s);
-            let second = apply_in_order(&mut s, t, after, &mut begun);
+            let second = apply_in_order(&mut s, t, after, &mut begun, trials);
             listed = listed.and(first).and(second);
             removed = list.iter().any(|a| a.change.removes_abilities());
+            land_types = list.iter().any(|a| {
+                matches!(
+                    a.change,
+                    LayerChange::SetLandTypes(_) | LayerChange::AddSubtype(_)
+                )
+            });
         }
         None => counters(&mut s),
     }
@@ -328,7 +332,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
     } else {
         [Rules::NONE; _]
     };
-    s.finish(listening, replacing, rules, removed);
+    s.finish(listening, replacing, rules, removed, land_types);
     listed
 }
 
@@ -416,7 +420,6 @@ fn list_static<L: Layout>(
             change,
             from: Some((index::<L>(i), part == first)),
             parts: spec.modifications.len() as u8,
-            lost: false,
         });
         listed = listed.and(pushed);
     }
@@ -427,8 +430,9 @@ fn list_static<L: Layout>(
 /// next one's, so each layer applies to what the layers before it made of every permanent,
 /// and an effect that finds what it applies to as it applies sees those results.
 ///
-/// At the head of each layer, each static ability whose first layer it is begins, if its
-/// permanent still has the ability ([`Begun`]). One whose effect has parts in later layers
+/// Within a layer, effects apply in timestamp order unless one depends on another
+/// ([`dependency`]). A static ability begins in its first layer if its permanent still has
+/// it as the ability comes up ([`Begun`]). One whose effect has parts in later layers
 /// carries the set it found to them in `begun`.
 ///
 /// [`Full`] if an ability's set had no place in `begun`, or a removal of abilities no place
@@ -441,74 +445,96 @@ fn list_static<L: Layout>(
 fn apply_in_order<L: Layout>(
     s: &mut Rederive<'_, L>,
     t: &GameTable,
-    list: &mut [Apply<L>],
+    list: &[Apply<L>],
     begun: &mut Option<L::Queue<Begun<L>, 32>>,
+    trials: &mut u64,
 ) -> Result<(), Full> {
     let mut applied = Ok(());
     let mut head = 0;
     while head < list.len() {
         let layer = list[head].layer;
         let end = head + list[head..].partition_point(|a| a.layer == layer);
-        let segment = &mut list[head..end];
-        // Whether the permanent of each ability beginning in this layer still has it, read
-        // before any effect of the layer applies.
-        for a in segment.iter_mut() {
-            if let Some((from, true)) = a.from {
-                a.lost = !s.has_ability_so_far(position::<L>(from), AbilityIx::new(a.order));
+        let segment = &list[head..end];
+        if segment.len() > 1 && dependency::may_depend(s, t, segment) {
+            applied = applied.and(dependency::apply_ordered(s, t, segment, begun, trials));
+        } else {
+            for a in segment {
+                applied = applied.and(apply_one(s, t, a, begun));
             }
-        }
-        for a in segment.iter() {
-            let members = match (a.from, a.target) {
-                (None, Target::Position(i)) => Bitboard::single(s.battlefield()[position::<L>(i)]),
-                (None, Target::Set(set)) => s.locked_in(set),
-                (Some((from, true)), target) => {
-                    let members = match target {
-                        _ if a.lost => None,
-                        Target::Position(i) => {
-                            Some(Bitboard::single(s.battlefield()[position::<L>(i)]))
-                        }
-                        Target::Static(i) => Some(apply::static_members(s, t, i.into(), a.order)),
-                        Target::Set(_) => unreachable!("a static ability locks in no set"),
-                    };
-                    if a.parts > 1 {
-                        let carried = Begun {
-                            from: from.into(),
-                            order: a.order,
-                            members,
-                        };
-                        applied =
-                            applied.and(begun.get_or_insert_with(Default::default).push(carried));
-                    }
-                    let Some(members) = members else {
-                        continue;
-                    };
-                    members
-                }
-                (Some((from, false)), _) => {
-                    let from: u16 = from.into();
-                    let carried = begun.as_ref().and_then(|begun| {
-                        begun
-                            .iter()
-                            .find(|b| (b.from, b.order) == (from, a.order))
-                            .copied()
-                    });
-                    match carried.and_then(|b| b.members) {
-                        Some(members) => members,
-                        None => continue,
-                    }
-                }
-                (None, Target::Static(_)) => unreachable!("a resolved effect names no ability"),
-            };
-            let you = a
-                .from
-                .map(|(from, _)| s.rows()[position::<L>(from)].controller);
-            applied = applied.and(apply::apply_to_members(
-                s, t, members, a.source, a.change, you,
-            ));
         }
         head = end;
     }
     applied
+}
+
+/// Applies one effect of [`apply_in_order`]: finds what it applies to now
+/// ([`members`]) and changes each. The first part of a static ability with more parts
+/// records the set it began on, or that it did not begin, for the later parts.
+fn apply_one<L: Layout>(
+    s: &mut Rederive<'_, L>,
+    t: &GameTable,
+    a: &Apply<L>,
+    begun: &mut Option<L::Queue<Begun<L>, 32>>,
+) -> Result<(), Full> {
+    let members = members(s, t, a, begun.as_ref());
+    let mut applied = Ok(());
+    if let Some((from, true)) = a.from
+        && a.parts > 1
+    {
+        let carried = Begun {
+            from: from.into(),
+            order: a.order,
+            members,
+        };
+        applied = begun.get_or_insert_with(Default::default).push(carried);
+    }
+    let Some(members) = members else {
+        return applied;
+    };
+    let you = a
+        .from
+        .map(|(from, _)| s.rows()[position::<L>(from)].controller);
+    applied.and(apply::apply_to_members(
+        s, t, members, a.source, a.change, you,
+    ))
+}
+
+/// The permanents `a` applies to now, or none if it does not apply. A static ability's
+/// first part begins only if its permanent still has the ability ([CR 613.6]): "If an effect
+/// starts to apply in one layer and/or sublayer, it will continue to be applied to the same
+/// set of objects in each other applicable layer and/or sublayer, even if the ability
+/// generating the effect is removed during this process." A later part applies to the set
+/// the first found, which `begun` holds.
+///
+/// [CR 613.6]: https://yawgatog.com/resources/magic-rules/#R6136
+fn members<L: Layout>(
+    s: &Rederive<'_, L>,
+    t: &GameTable,
+    a: &Apply<L>,
+    begun: Option<&L::Queue<Begun<L>, 32>>,
+) -> Option<Bitboard<L::Slot>> {
+    match (a.from, a.target) {
+        (None, Target::Position(i)) => Some(Bitboard::single(s.battlefield()[position::<L>(i)])),
+        (None, Target::Set(set)) => Some(s.locked_in(set)),
+        (Some((from, true)), target) => {
+            if !s.has_ability_so_far(position::<L>(from), AbilityIx::new(a.order)) {
+                return None;
+            }
+            Some(match target {
+                Target::Position(i) => Bitboard::single(s.battlefield()[position::<L>(i)]),
+                Target::Static(i) => apply::static_members(s, t, i.into(), a.order),
+                Target::Set(_) => unreachable!("a static ability locks in no set"),
+            })
+        }
+        (Some((from, false)), _) => {
+            let from: u16 = from.into();
+            begun?
+                .iter()
+                .find(|b| (b.from, b.order) == (from, a.order))
+                .and_then(|b| b.members)
+        }
+        (None, Target::Static(_)) => unreachable!("a resolved effect names no ability"),
+    }
 }
 
 /// A battlefield position the layout's index names, as a `usize`.
@@ -573,7 +599,6 @@ fn resolved_effects<L: Layout>(
             change,
             from: None,
             parts: 1,
-            lost: false,
         });
         listed = listed.and(pushed);
     }

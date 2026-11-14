@@ -69,7 +69,6 @@ impl<L: Layout> State<L> {
         let from = o.zone;
         leave(self, slot);
         self.forget_stored(slot);
-        let timestamp = self.zones.next_timestamp;
         let o = self.object_mut(slot);
         o.incarnation = o.incarnation.wrapping_add(1);
         o.zone = to;
@@ -98,10 +97,10 @@ impl<L: Layout> State<L> {
                 self.enter_battlefield(slot)?;
                 // CR 302.6: a permanent that just arrived hasn't been under its controller's
                 // control since their most recent turn began.
+                let timestamp = self.take_timestamp();
                 let o = self.object_mut(slot);
                 o.timestamp = timestamp;
                 o.flags.set(Flag::SummoningSick, true);
-                self.zones.next_timestamp = timestamp.wrapping_add(1);
                 self.flags.derived_dirty = true;
             }
             Zone::Stack => self.zones.stack.insert(slot),

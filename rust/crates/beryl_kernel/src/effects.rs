@@ -33,7 +33,7 @@ pub mod regeneration;
 mod sets;
 mod store;
 
-pub use change::{LayerChange, read_layer};
+pub use change::{Characteristics, LayerChange, read_layer};
 use sets::Sets;
 pub use sets::{LockedIn, SETS};
 
@@ -368,6 +368,14 @@ impl<L: Layout> std::hash::Hash for Effects<L> {
 }
 
 impl<L: Layout> Effects<L> {
+    /// The timestamp of each entry, to number again ([`crate::state::State`]'s timestamps).
+    pub(crate) fn timestamps_mut(&mut self) -> impl Iterator<Item = &mut u16> {
+        self.entries
+            .as_mut_slice()
+            .iter_mut()
+            .map(|e| &mut e.timestamp)
+    }
+
     /// The entries, if one of them has a payload of a kind in `kinds`; none otherwise.
     #[inline]
     fn of(&self, kinds: u16) -> &[ContinuousEffect<L>] {
@@ -559,15 +567,6 @@ impl<L: Layout> State<L> {
             self.push_effect(source, effect, duration, timestamp)?;
         }
         Ok(())
-    }
-
-    /// The next timestamp ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137)),
-    /// taken.
-    #[inline]
-    pub(crate) fn take_timestamp(&mut self) -> u16 {
-        let timestamp = self.zones.next_timestamp;
-        self.zones.next_timestamp = timestamp.wrapping_add(1);
-        timestamp
     }
 
     /// Stores a continuous effect that began at `timestamp`.

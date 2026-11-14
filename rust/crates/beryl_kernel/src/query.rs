@@ -375,6 +375,59 @@ impl<L: Layout> State<L> {
         !self.flags.abilities_lost || self.keeps_all(slot)
     }
 
+    /// Whether the permanent in `slot` makes the mana its card table's facts say
+    /// ([`crate::table::FaceFacts::mana`]): it has every ability of its face and no intrinsic
+    /// mana ability of a basic land type but its face's ([CR 305.7]). With no effect on the
+    /// battlefield removing abilities or changing land types, as most games go, one test of
+    /// a flag the layers store.
+    ///
+    /// [CR 305.7]: https://yawgatog.com/resources/magic-rules/#R3057
+    #[inline]
+    pub fn makes_card_mana(&self, slot: L::Slot) -> bool {
+        !self.flags.mana_changed || self.keeps_card_mana(slot)
+    }
+
+    /// [`State::makes_card_mana`] when some effect changed abilities or land types. Out of
+    /// line: most games never come here.
+    #[cold]
+    #[inline(never)]
+    fn keeps_card_mana(&self, slot: L::Slot) -> bool {
+        self.battlefield_position(slot).is_none_or(|i| {
+            debug_assert!(!self.flags.derived_dirty, "derived read while dirty");
+            let d = self.derived[i];
+            { d.lost }.is_empty() && { d.keywords }.intrinsic_mana() == 0
+        })
+    }
+
+    /// The kinds of mana the intrinsic mana abilities of the basic land types of the object
+    /// in `slot` make, a bit per [`beryl_card::ManaColor`] ([CR 305.6]): "An object with the
+    /// land card type and a basic land type has the intrinsic ability “{T}: Add [mana
+    /// symbol],” even if the text box doesn't actually contain that text or the object has no
+    /// text box." Those of its face it does not write out ([`crate::table::land_mana`]),
+    /// unless it has lost all its abilities, with those its effects gave it in layer 4
+    /// ([`beryl_card::Keywords::PLAINS_MANA`]). A land whose land types an effect set has
+    /// lost all of its face's ([CR 305.7]): "It loses all abilities generated from its rules
+    /// text, its old land types".
+    ///
+    /// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056
+    /// [CR 305.7]: https://yawgatog.com/resources/magic-rules/#R3057
+    pub fn intrinsic_mana(&self, t: &crate::table::GameTable, slot: L::Slot) -> u8 {
+        let printed = self.copiable(slot).facts(t).land_mana;
+        match self.battlefield_position(slot) {
+            None => printed,
+            Some(i) => {
+                debug_assert!(!self.flags.derived_dirty, "derived read while dirty");
+                let d = self.derived[i];
+                let kept = if { d.lost } == L::AbilityMask::ALL {
+                    0
+                } else {
+                    printed
+                };
+                kept | { d.keywords }.intrinsic_mana()
+            }
+        }
+    }
+
     /// [`State::has_every_ability`] when some permanent has lost an ability. Out of line:
     /// most games never come here.
     #[cold]

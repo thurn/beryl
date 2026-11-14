@@ -3,7 +3,7 @@
 
 use beryl_engine::TurnStep;
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Cost, Face, FaceIx, Players, TriggerEvent, Types,
+    Ability, AbilityKind, CardDef, Cost, Face, FaceIx, ManaColor, Players, TriggerEvent, Types,
 };
 use beryl_engine::state::CounterKind;
 use beryl_scenario::{Action, P0, P1, Permanent, PlayerSetup, Scenario};
@@ -189,9 +189,12 @@ fn permanent(def: &'static CardDef, f: FaceIx) -> Permanent {
 /// what `witness` adds.
 pub(super) fn start(def: &'static CardDef, place: Place, witness: Option<&Witness>) -> Scenario {
     let card = def.name;
-    let lands = match place {
-        Place::Mana(_, land) => vec![land],
-        _ => without(LANDS, card),
+    let lands = if let Place::Mana(_, land) = place {
+        vec![land]
+    } else {
+        let mut lands = without(LANDS, card);
+        lands.extend(red_and_green(def));
+        lands
     };
     let mut battlefield: Vec<Permanent> = lands.into_iter().map(Permanent::new).collect();
     let mut hand = without(HAND, card);
@@ -247,6 +250,21 @@ pub(super) fn start(def: &'static CardDef, place: Place, witness: Option<&Witnes
         },
     ];
     scenario
+}
+
+/// A Mountain for each {R} and a Forest for each {G} of the costliest of `def`'s faces in
+/// each color, beside [`LANDS`], which make neither: so that a red or green card can be
+/// cast, and the positions of every other card stay as they were.
+fn red_and_green(def: &'static CardDef) -> Vec<&'static str> {
+    let most = |color: ManaColor| {
+        (def.faces.iter())
+            .map(|face| face.cost.symbols[color.index()])
+            .max()
+            .unwrap_or(0)
+    };
+    let mut lands = vec![names::MOUNTAIN; usize::from(most(ManaColor::Red))];
+    lands.extend(vec![names::FOREST; usize::from(most(ManaColor::Green))]);
+    without(&lands, def.name)
 }
 
 /// What a scenario does before its opening: for a card on the battlefield with an ability

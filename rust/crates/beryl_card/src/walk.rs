@@ -54,7 +54,8 @@ impl CardDef {
     /// Calls `visit` with every set of subtypes an object of the card can have or a rule of
     /// it can ask about: each face's printed subtypes, each subtype a filter names
     /// ([`Filter::Subtype`]) and each a continuous effect gives
-    /// ([`Modification::AddSubtype`], [`Modification::SetSubtype`]), in its static abilities or its effect data. The game
+    /// ([`Modification::AddSubtype`], [`Modification::SetSubtype`],
+    /// [`Modification::SetLandTypes`]), in its static abilities or its effect data. The game
     /// numbers what this finds (`beryl_kernel`'s `GameTable`); a Rust body that names
     /// another subtype is read by nothing, so it names none a game does not.
     pub fn subtypes(&self, visit: &mut dyn FnMut(Subtypes)) {
@@ -63,6 +64,9 @@ impl CardDef {
         let given = |modification: &Modification| match *modification {
             Modification::AddSubtype(subtype) | Modification::SetSubtype(subtype) => {
                 Some(Subtypes::of(&[subtype]))
+            }
+            Modification::SetLandTypes(types) => {
+                Some(types.subtypes().fold(Subtypes::NONE, Subtypes::with))
             }
             Modification::AddKeywords(keywords) => Some(keywords.landwalk()),
             _ => None,

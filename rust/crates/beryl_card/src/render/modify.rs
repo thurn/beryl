@@ -5,7 +5,7 @@
 //! [`Effect::Modify`]: crate::Effect::Modify
 
 use super::Ctx;
-use super::abilities::{a_types, possessive};
+use super::abilities::{a_types, land_types, other_types, possessive};
 use super::words::{colors, keywords, list, pt_change, types, with_article};
 use crate::continuous::Modification;
 use crate::effect::{Objects, Players};
@@ -120,10 +120,14 @@ impl Ctx {
                 verb("loses", "lose")
             ),
             Modification::AddSubtype(subtype) => format!(
-                "{} {} in addition to its other types",
+                "{} {} in addition to its other {}",
                 verb("becomes", "become"),
-                with_article(subtype.name())
+                with_article(subtype.name()),
+                other_types(subtype)
             ),
+            Modification::SetLandTypes(set) => {
+                format!("{} {}", verb("becomes", "become"), land_types(set, plural))
+            }
             Modification::SetSubtype(subtype) => {
                 format!(
                     "{} {}",

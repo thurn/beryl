@@ -588,6 +588,10 @@ fn perf_counts_stay_in_their_bands() {
     let mut outside = Vec::new();
     for (greedy, seed, pinned) in pinned {
         let (c, _) = mirror_game(&t, greedy, seed);
+        // No two effects of one layer in the mirror read what the other writes, so the
+        // layers never try one against another (CR 613.8a): the dependency search costs
+        // these games nothing.
+        assert_eq!(c.dependency_trials, 0, "trials in game ({greedy}, {seed})");
         let actual = [
             c.decisions,
             c.silent,

@@ -6,7 +6,8 @@
 //! [CR 613.1]: https://yawgatog.com/resources/magic-rules/#R6131
 
 use beryl_card::{
-    AbilityIx, Amount, Colors, FaceIx, GrantIx, Keywords, Layer, Modification, Subtype, Types,
+    AbilityIx, Amount, BasicLandTypes, Colors, FaceIx, GrantIx, Keywords, Layer, Modification,
+    Subtype, Types,
 };
 
 use crate::ids::Seat;
@@ -27,6 +28,11 @@ pub enum LayerChange {
     SetTypes(Types),
     /// Layer 4: "is a [subtype] in addition to its other types".
     AddSubtype(Subtype),
+    /// Layer 4: "is a [basic land types]", setting a land's land types and replacing the
+    /// abilities of its rules text with their mana abilities ([CR 305.7]).
+    ///
+    /// [CR 305.7]: https://yawgatog.com/resources/magic-rules/#R3057
+    SetLandTypes(BasicLandTypes),
     /// Layer 6: "gains [keywords]".
     AddKeywords(Keywords),
     /// Layer 6: "has [ability]", the ability at this index of the effect source's front
@@ -87,6 +93,7 @@ impl LayerChange {
             Modification::SetTypes(types) => LayerChange::SetTypes(types),
             Modification::AddSubtype(subtype) => LayerChange::AddSubtype(subtype),
             Modification::SetSubtype(subtype) => LayerChange::SetSubtype(subtype),
+            Modification::SetLandTypes(types) => LayerChange::SetLandTypes(types),
             Modification::AddKeywords(keywords) => LayerChange::AddKeywords(keywords),
             Modification::Grant(grant) => LayerChange::Grant(grant),
             Modification::SetColors(colors) => LayerChange::SetColors(colors),
@@ -113,7 +120,8 @@ impl LayerChange {
             | LayerChange::RemoveTypes(_)
             | LayerChange::SetTypes(_)
             | LayerChange::AddSubtype(_)
-            | LayerChange::SetSubtype(_) => Layer::Type,
+            | LayerChange::SetSubtype(_)
+            | LayerChange::SetLandTypes(_) => Layer::Type,
             LayerChange::SetColors(_) | LayerChange::AddColors(_) => Layer::Color,
             LayerChange::AddKeywords(_)
             | LayerChange::Grant(_)
@@ -129,14 +137,55 @@ impl LayerChange {
 }
 
 impl LayerChange {
-    /// Whether it removes abilities ([`LayerChange::LoseAllAbilities`],
-    /// [`LayerChange::LoseAbility`]).
+    /// Whether it removes abilities of the face ([`LayerChange::LoseAllAbilities`],
+    /// [`LayerChange::LoseAbility`], and [`LayerChange::SetLandTypes`], which removes those
+    /// of the rules text).
     #[inline]
     pub fn removes_abilities(self) -> bool {
         matches!(
             self,
-            LayerChange::LoseAllAbilities | LayerChange::LoseAbility(_)
+            LayerChange::LoseAllAbilities
+                | LayerChange::LoseAbility(_)
+                | LayerChange::SetLandTypes(_)
         )
+    }
+
+    /// The characteristics it may change ([`Characteristics`]), for the layers' search for
+    /// effects that depend on others ([CR 613.8a]): "An effect is said to “depend on” another
+    /// if (a) it's applied in the same layer (and, if applicable, sublayer) as the other
+    /// effect; (b) applying the other would change the text or the existence of the first
+    /// effect, what it applies to, or what it does to any of the things it applies to; and
+    /// (c) neither effect is from a characteristic-defining ability or both are from
+    /// characteristic-defining abilities."
+    ///
+    /// [CR 613.8a]: https://yawgatog.com/resources/magic-rules/#R6138a
+    #[inline]
+    pub fn writes(self) -> Characteristics {
+        match self {
+            LayerChange::Control(_) => Characteristics::CONTROLLER,
+            // A card type removed takes the subtypes that go with it (CR 205.1a).
+            LayerChange::AddTypes(_) | LayerChange::RemoveTypes(_) | LayerChange::SetTypes(_) => {
+                Characteristics::TYPES.union(Characteristics::SUBTYPES)
+            }
+            // A land that becomes a basic land type gains its mana ability (CR 305.6).
+            LayerChange::AddSubtype(_) => {
+                Characteristics::SUBTYPES.union(Characteristics::ADDS_ABILITIES)
+            }
+            LayerChange::SetSubtype(_) => Characteristics::SUBTYPES,
+            LayerChange::SetLandTypes(_) => Characteristics::SUBTYPES
+                .union(Characteristics::ADDS_ABILITIES)
+                .union(Characteristics::REMOVES_ABILITIES),
+            LayerChange::SetColors(_) | LayerChange::AddColors(_) => Characteristics::COLORS,
+            LayerChange::AddKeywords(_) | LayerChange::Grant(_) => Characteristics::ADDS_ABILITIES,
+            LayerChange::LoseAllAbilities | LayerChange::LoseAbility(_) => {
+                Characteristics::REMOVES_ABILITIES
+            }
+            LayerChange::DefinedPower(_)
+            | LayerChange::SetBasePt(..)
+            | LayerChange::ModifyPt(..)
+            | LayerChange::SwitchPt
+            | LayerChange::Read { .. } => Characteristics::PT,
+        }
     }
 }
 
@@ -154,5 +203,54 @@ pub fn read_layer(modification: Modification) -> Layer {
     match modification {
         Modification::SetPower(_) => Layer::PtDefining,
         _ => Layer::PtSetting,
+    }
+}
+
+/// A set of the characteristics continuous effects read and change, one bit each: what an
+/// effect may change ([`LayerChange::writes`]) and what finding its set, its existence or
+/// its amount reads, which the layers compare to find the effects that may depend on
+/// others ([CR 613.8a]). Gaining and losing abilities are apart: what a face's static
+/// ability rests on is that its permanent has not lost it, which only a removal changes,
+/// and no filter reads abilities.
+///
+/// [CR 613.8a]: https://yawgatog.com/resources/magic-rules/#R6138a
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Characteristics(u8);
+
+impl Characteristics {
+    pub const NONE: Characteristics = Characteristics(0);
+    pub const TYPES: Characteristics = Characteristics(1);
+    pub const SUBTYPES: Characteristics = Characteristics(1 << 1);
+    pub const SUPERTYPES: Characteristics = Characteristics(1 << 2);
+    pub const COLORS: Characteristics = Characteristics(1 << 3);
+    pub const CONTROLLER: Characteristics = Characteristics(1 << 4);
+    pub const PT: Characteristics = Characteristics(1 << 5);
+    pub const ADDS_ABILITIES: Characteristics = Characteristics(1 << 6);
+    pub const REMOVES_ABILITIES: Characteristics = Characteristics(1 << 7);
+    /// What a filter may read of a permanent's layer results, and so what any static
+    /// ability's set, "as long as" or counted amount may: never its power and toughness or
+    /// the abilities it has.
+    pub const FILTERED: Characteristics = Characteristics(
+        Characteristics::TYPES.0
+            | Characteristics::SUBTYPES.0
+            | Characteristics::SUPERTYPES.0
+            | Characteristics::COLORS.0
+            | Characteristics::CONTROLLER.0,
+    );
+    /// What any effect may read: what a filter reads, and whether a static ability's
+    /// permanent has lost it. An effect that writes nothing of this, as one that changes
+    /// power and toughness or grants an ability, changes nothing another reads.
+    pub const READABLE: Characteristics =
+        Characteristics(Characteristics::FILTERED.0 | Characteristics::REMOVES_ABILITIES.0);
+
+    #[inline]
+    #[must_use]
+    pub const fn union(self, other: Characteristics) -> Characteristics {
+        Characteristics(self.0 | other.0)
+    }
+
+    #[inline]
+    pub const fn intersects(self, other: Characteristics) -> bool {
+        self.0 & other.0 != 0
     }
 }

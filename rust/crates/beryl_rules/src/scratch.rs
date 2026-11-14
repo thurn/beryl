@@ -83,6 +83,7 @@ impl<L: Layout> Scratch<L> {
         let work = std::mem::take(&mut self.events.work);
         self.counts.events += work.events;
         self.counts.layer_recomputes += work.layer_recomputes;
+        self.counts.dependency_trials += work.dependency_trials;
         self.counts.solver_runs += work.solver_runs;
     }
 }
@@ -103,6 +104,10 @@ pub struct Counts {
     pub state_copies: u64,
     /// Recomputes of the derived characteristics (§9).
     pub layer_recomputes: u64,
+    /// Trials of whether one continuous effect depends on another in a recompute
+    /// ([CR 613.8a](https://yawgatog.com/resources/magic-rules/#R6138a)): none in a game
+    /// whose effects in each layer never read what the others write.
+    pub dependency_trials: u64,
     /// Runs of the mana payment solver (§10).
     pub solver_runs: u64,
     /// Events executed (§8), whether or not the sink keeps them.

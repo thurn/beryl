@@ -158,8 +158,7 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn turn_face_up(&mut self, slot: L::Slot) {
         debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
-        let timestamp = self.zones.next_timestamp;
-        self.zones.next_timestamp = timestamp.wrapping_add(1);
+        let timestamp = self.take_timestamp();
         let o = self.object_mut(slot);
         o.face = FaceIx::FRONT;
         o.timestamp = timestamp;
@@ -184,8 +183,7 @@ impl<L: Layout> State<L> {
     pub fn attach(&mut self, slot: L::Slot, host: L::Slot) {
         debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
         debug_assert_eq!(self.object(host).zone, Zone::Battlefield);
-        let timestamp = self.zones.next_timestamp;
-        self.zones.next_timestamp = timestamp.wrapping_add(1);
+        let timestamp = self.take_timestamp();
         let o = self.object_mut(slot);
         o.attached_to = Some(host);
         o.timestamp = timestamp;

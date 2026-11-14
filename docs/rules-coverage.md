@@ -257,31 +257,51 @@ then counters (7c), then the rules static abilities change (CR 613.11)
   read the cards' faces.
 - **Continuing once begun** (CR 613.6). A static ability's `LayerSpec` lists the
   parts of its one effect (`modifications`), and the recompute lists one entry
-  for each part. At the head of each layer, each static ability whose first
-  layer it is begins if its permanent still has it. A part in a later layer
-  applies to the set the first part found, though the ability is removed on the
-  way. This is what makes Humility with Opalescence come out as the rules say,
-  and Oko's Elk keep its 3/3. Within layer 6, two effects that remove each
-  other's abilities apply in timestamp order until dependencies land.
-- **Land types** (CR 305.7). Setting a land's type removes its printed abilities
-  in layer 4, through the same mask. The mana ability of a basic land type comes
-  from the derived subtypes, not from the card. The solver's per-card facts in
-  `GameTable` stay the fast path, behind a flag that says no land's types differ
-  from its card's.
-- **Dependencies** (CR 613.8). In a layer with two or more effects, A depends on
-  B when applying B changes whether A exists, what A applies to, or what A does
-  to it. Each kind of change declares what it reads and writes among the
-  characteristics, and a pair whose sets do not meet is never tried. For a pair
-  that might, B is applied to a scratch copy of the results and A's existence,
-  set and change are compared before and after. The effect applied next is the
-  earliest by timestamp that depends on nothing still waiting; a loop falls back
-  to timestamps; the order is found again after each application. Effects from
-  characteristic-defining abilities are compared only with each other.
+  for each part. A static ability begins in its first layer if its permanent
+  still has it when the effect comes up, after the effects of that layer it
+  depends on. A part in a later layer applies to the set the first part found,
+  though the ability is removed on the way. This is what makes Humility with
+  Opalescence come out as the rules say, and Oko's Elk keep its 3/3. Two effects
+  that remove each other's abilities form a loop of dependencies and apply in
+  timestamp order (CR 613.8b).
+- **Land types** (landed with Blood Moon, Urborg and Dryad Arbor). A land has
+  the intrinsic mana ability of each basic land type it has (CR 305.6). A card
+  file may write that ability out, as Plains does, or not, as Dryad Arbor; the
+  card table's facts hold the ones a face does not write out
+  (`table::land_mana`), and `ManaFace` counts them, so the solver's per-card
+  fast path is unchanged. Abilities a layer effect gives are bits of
+  `Derived::keywords` (`Keywords::PLAINS_MANA` to `FOREST_MANA`), since a row
+  has no byte to spare: "is a [basic land type]" in addition to the land's
+  others adds the bit for a type it lacked (CR 305.7), and
+  `Modification::SetLandTypes` replaces the land types, sets the whole ability
+  mask and leaves only the new types' bits. A layer 6 removal of all abilities
+  clears the bits with the other keywords. `State::intrinsic_mana` is what the
+  mana readers ask; `State::makes_card_mana`, one flag in a game with no removal
+  and no land type change, says when the card's facts still hold.
+- **Dependencies** (landed with the same cards). In a layer with two or more
+  effects, A depends on B when applying B changes whether A exists, what A
+  applies to, or what A does to it (`layers/dependency.rs`). Each `LayerChange`
+  declares what it writes (`LayerChange::writes`) among `Characteristics`, and
+  each listed effect what it reads: its filter and "as long as", its counted
+  amount, and, for a static ability, whether its permanent has lost it. Gaining
+  and losing abilities are apart, and no filter reads power, toughness or
+  abilities, so a layer whose effects write only those is never searched and a
+  WU mirror game runs no trial. For a pair that might depend, B is applied to
+  the results, A's existence, set and change are compared, and the rows are put
+  back. The effect applied next is the earliest by timestamp that depends on
+  nothing still waiting; with every one waiting, the earliest in a loop; the
+  order is found again after each application. A static ability's existence is
+  asked as its effect comes up, not at the head of its layer. The cards'
+  characteristic-defining abilities are all in layer 7a, where nothing else
+  applies, so CR 613.8a's (c) needs no code.
 - **Timestamps** (CR 613.7). An Aura or Equipment gets a new one as it becomes
-  attached, and a permanent as it turns face up or transforms. Objects that
-  enter together are ordered by a decision only when two of them have effects in
-  one layer that the dependency prefilter says could interact. The `u16` counter
-  is renumbered, out of line, when it would overflow.
+  attached, and a permanent as it turns face up (both already built). The `u16`
+  counter is renumbered by rank, out of line, before it would run out
+  (`State::take_timestamp`). Not built: transforming permanents, which the
+  engine does not yet turn, and the order of objects that enter together (CR
+  613.7m), which is still the order they move in; a decision is needed only when
+  two of them have effects in one layer that the dependency search's prefilter
+  says could interact.
 - **As it would exist** (CR 614.12). `layers::as_it_would_exist` runs the
   recompute with one entering object added as a row of scratch memory. The
   replacement pipeline calls it only for an object that has, or meets, a

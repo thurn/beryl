@@ -129,6 +129,95 @@ bitset! {
         SWAMPWALK = 18,
         MOUNTAINWALK = 19,
         FORESTWALK = 20,
+        /// The intrinsic mana ability of each basic land type, a bit each, in the order of
+        /// the mana it makes, W, U, B, R, G ([CR 305.6]): "An object with the land card type
+        /// and a basic land type has the intrinsic ability '{T}: Add [mana symbol],' even if
+        /// the text box doesn't actually contain that text or the object has no text box." No
+        /// face names one: the layers give a land the ability of each basic land type it has
+        /// and its face does not already write out ([`BasicLandTypes::mana`]), and an effect
+        /// that removes all abilities removes it with the rest.
+        ///
+        /// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056
+        PLAINS_MANA = 24,
+        ISLAND_MANA = 25,
+        SWAMP_MANA = 26,
+        MOUNTAIN_MANA = 27,
+        FOREST_MANA = 28,
+    }
+}
+
+/// Where the intrinsic mana abilities start among [`Keywords`]' bits.
+const INTRINSIC_MANA_SHIFT: u32 = 24;
+
+impl Keywords {
+    /// Every intrinsic mana ability of a basic land type ([`Keywords::PLAINS_MANA`]).
+    pub const INTRINSIC_MANA: Keywords = BasicLandTypes::ALL.mana();
+
+    /// The kinds of mana the intrinsic mana abilities among `self` make, a bit per
+    /// [`crate::ManaColor`] in its order: each makes one mana of its kind ([CR 305.6]).
+    ///
+    /// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056
+    pub const fn intrinsic_mana(self) -> u8 {
+        ((self.0 >> INTRINSIC_MANA_SHIFT) & 0x1f) as u8
+    }
+}
+
+bitset! {
+    /// The basic land types ([CR 205.3i](https://yawgatog.com/resources/magic-rules/#R2053i)):
+    /// "Of that list, Forest, Island, Mountain, Plains, and Swamp are the basic land types."
+    /// In the order of the mana each one's intrinsic ability makes, W, U, B, R, G.
+    BasicLandTypes(u8) {
+        PLAINS = 0,
+        ISLAND = 1,
+        SWAMP = 2,
+        MOUNTAIN = 3,
+        FOREST = 4,
+    }
+}
+
+impl BasicLandTypes {
+    /// All five.
+    pub const ALL: BasicLandTypes = BasicLandTypes(0x1f);
+
+    /// Each basic land type with its subtype, in the set's order.
+    pub const SUBTYPES: [(BasicLandTypes, Subtype); 5] = [
+        (BasicLandTypes::PLAINS, Subtype::Plains),
+        (BasicLandTypes::ISLAND, Subtype::Island),
+        (BasicLandTypes::SWAMP, Subtype::Swamp),
+        (BasicLandTypes::MOUNTAIN, Subtype::Mountain),
+        (BasicLandTypes::FOREST, Subtype::Forest),
+    ];
+
+    /// The intrinsic mana ability of each type in the set ([`Keywords::PLAINS_MANA`]).
+    pub const fn mana(self) -> Keywords {
+        Keywords((self.0 as u64) << INTRINSIC_MANA_SHIFT)
+    }
+
+    /// The basic land types among `subtypes`.
+    pub fn of(subtypes: Subtypes) -> BasicLandTypes {
+        let mut set = BasicLandTypes::NONE;
+        for (types, subtype) in BasicLandTypes::SUBTYPES {
+            if subtypes.contains(subtype) {
+                set = set.union(types);
+            }
+        }
+        set
+    }
+
+    /// The basic land type of `subtype`, if it is one.
+    pub fn of_subtype(subtype: Subtype) -> Option<BasicLandTypes> {
+        BasicLandTypes::SUBTYPES
+            .iter()
+            .find(|&&(_, s)| s == subtype)
+            .map(|&(types, _)| types)
+    }
+
+    /// The subtypes in the set, in its order.
+    pub fn subtypes(self) -> impl Iterator<Item = Subtype> {
+        BasicLandTypes::SUBTYPES
+            .into_iter()
+            .filter(move |&(types, _)| self.contains(types))
+            .map(|(_, subtype)| subtype)
     }
 }
 

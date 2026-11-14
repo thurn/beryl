@@ -149,6 +149,7 @@ fn derive(t: &GameTable, s: &mut State, boost: i8) {
         beryl_kernel::event::Replaces::NONE,
         Default::default(),
         false,
+        false,
     );
 }
 

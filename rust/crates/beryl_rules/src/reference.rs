@@ -205,8 +205,9 @@ fn reference_units<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Opti
         if d.types.intersects(Types::CREATURE) && o.is_summoning_sick() {
             continue;
         }
-        let mut kinds = 0u8;
-        let mut amount = None;
+        // The intrinsic mana abilities of its basic land types make one mana each (CR 305.6).
+        let mut kinds = s.intrinsic_mana(t, slot);
+        let mut amount = (kinds != 0).then_some(1);
         for (i, a) in (0u8..).zip(face(s, t, slot).abilities) {
             // A permanent that lost the ability has none to tap (CR 613.1f).
             if !s.has_ability(slot, AbilityIx::new(i)) {

@@ -8,12 +8,12 @@ use beryl_card::Amount;
 
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityIx, FaceIx, Objects};
-use crate::card::{Colors, Keywords};
+use crate::card::{BasicLandTypes, Colors, Keywords, Types};
 use crate::filter::{self, Filter};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::Layout;
-use crate::state::{AbilityMask, Derived, GrantRef, LayerChange};
+use crate::state::{AbilityMask, Characteristics, Derived, GrantRef, LayerChange};
 use crate::table::GameTable;
 
 /// Applies `change` to each permanent in `members`, in battlefield order. One change to
@@ -35,15 +35,7 @@ pub(super) fn apply_to_members<L: Layout>(
     if members.is_empty() {
         return Ok(());
     }
-    let change = match change {
-        LayerChange::Read {
-            face,
-            ability,
-            part,
-            ..
-        } => read(s, t, source, face, ability, part, you),
-        change => change,
-    };
+    let change = settle(s, t, source, change, you);
     let mut applied = Ok(());
     for i in 0..s.battlefield().len() {
         if members.contains(s.battlefield()[i]) {
@@ -51,6 +43,27 @@ pub(super) fn apply_to_members<L: Layout>(
         }
     }
     applied
+}
+
+/// `change` with any amount it reads ([`LayerChange::Read`]) read now, for `you`, the
+/// controller of the permanent with the static ability the change is part of: what it does
+/// to each permanent it applies to.
+pub(super) fn settle<L: Layout>(
+    s: &Rederive<'_, L>,
+    t: &GameTable,
+    source: L::Card,
+    change: LayerChange,
+    you: Option<Seat>,
+) -> LayerChange {
+    match change {
+        LayerChange::Read {
+            face,
+            ability,
+            part,
+            ..
+        } => read(s, t, source, face, ability, part, you),
+        change => change,
+    }
 }
 
 /// The change the part at `part` of the static ability at `ability` of the face `face` of
@@ -207,7 +220,7 @@ pub(super) fn apply<L: Layout>(
     change: LayerChange,
 ) -> Result<(), Full> {
     match change {
-        LayerChange::LoseAllAbilities
+        LayerChange::LoseAllAbilities | LayerChange::SetLandTypes(_)
             if s.copiable(s.battlefield()[i]).face(t).abilities.len() > L::AbilityMask::WIDTH =>
         {
             return Err(Full);
@@ -254,7 +267,16 @@ fn modify<L: Layout>(
             d.types = types;
             d.subtypes = d.subtypes.of_types(t.subtypes(), types);
         }
+        // CR 305.7: "If a land gains one or more land types in addition to its own, it keeps
+        // its land types and rules text, and it gains the new land types and mana
+        // abilities." A basic land type it already has gives it nothing more.
         LayerChange::AddSubtype(subtype) => {
+            if let Some(basic) = BasicLandTypes::of_subtype(subtype)
+                && d.types.intersects(Types::LAND)
+                && !d.subtypes.contains(t.subtypes(), subtype)
+            {
+                d.keywords = d.keywords.union(basic.mana());
+            }
             d.subtypes = d.subtypes.with(t.subtypes(), subtype);
         }
         // CR 205.1a: "when an effect sets one or more of an object's subtypes, the new
@@ -263,6 +285,23 @@ fn modify<L: Layout>(
         LayerChange::SetSubtype(subtype) => {
             let kept = d.subtypes.without_types(t.subtypes(), subtype.card_type());
             d.subtypes = kept.with(t.subtypes(), subtype);
+        }
+        // CR 305.7: "If an effect sets a land's subtype to one or more of the basic land
+        // types, the land no longer has its old land type. It loses all abilities generated
+        // from its rules text, its old land types, and any copiable effects affecting that
+        // land, and it gains the appropriate mana ability for each new basic land type." Its
+        // other subtypes, a land creature's creature types, stay. In layer 4 no effect has
+        // granted it anything yet, so all it has is its rules text's.
+        LayerChange::SetLandTypes(types) => {
+            let mut subtypes = d
+                .subtypes
+                .of_types(t.subtypes(), d.types.minus(Types::LAND));
+            for subtype in types.subtypes() {
+                subtypes = subtypes.with(t.subtypes(), subtype);
+            }
+            d.subtypes = subtypes;
+            d.lost = L::AbilityMask::ALL;
+            d.keywords = types.mana();
         }
         // CR 613.1f: "Layer 6: Ability-adding effects, keyword counters, ability-removing
         // effects, and effects that say an object can't have an ability are applied."
@@ -356,5 +395,43 @@ fn passes<L: Layout>(
         Filter::ManaValueAtMostX | Filter::PowerAtMost(_) => {
             unreachable!("the card table refuses a filter the layers cannot read")
         }
+    }
+}
+
+/// The characteristics `filter` reads of a permanent's layer results ([`passes`]): whether it
+/// is tapped and its mana value are the object's, which no layer changes.
+pub(super) fn filter_reads(filter: Filter) -> Characteristics {
+    match filter {
+        Filter::Any | Filter::Tapped | Filter::ManaValueAtMost(_) | Filter::ManaValueAtMostX => {
+            Characteristics::NONE
+        }
+        Filter::Types(_) => Characteristics::TYPES,
+        Filter::Supertypes(_) => Characteristics::SUPERTYPES,
+        Filter::Subtype(_) => Characteristics::SUBTYPES,
+        Filter::Colors(_) => Characteristics::COLORS,
+        Filter::Whose(_) => Characteristics::CONTROLLER,
+        // The card table refuses it in a layer effect ([`passes`]), but it would read power.
+        Filter::PowerAtMost(_) => Characteristics::PT,
+        Filter::Not(filter) => filter_reads(*filter),
+        Filter::All(filters) | Filter::AnyOf(filters) => filters
+            .iter()
+            .fold(Characteristics::NONE, |r, &f| r.union(filter_reads(f))),
+    }
+}
+
+/// The characteristics the amounts of the part at `part` of a static ability read as its
+/// layer applies ([`read`]): those of the permanents an amount counts.
+pub(super) fn amount_reads(spec: &beryl_card::LayerSpec, part: u8) -> Characteristics {
+    fn of(amount: &Amount) -> Characteristics {
+        match *amount {
+            Amount::Fixed(_) => Characteristics::NONE,
+            Amount::Times(_, amount) => of(amount),
+            Amount::Count(&Objects::All { filter, .. }) => filter_reads(filter),
+            _ => Characteristics::FILTERED,
+        }
+    }
+    match static_ability::amounts_of(spec, part) {
+        (power, None) => of(power),
+        (power, Some(toughness)) => of(power).union(of(toughness)),
     }
 }
