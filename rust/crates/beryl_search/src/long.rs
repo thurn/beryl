@@ -64,6 +64,7 @@ use crate::values::Knowledge;
 use crate::{Agent, AgentDecision, ExpertAgent, Search, Sight, Widen};
 
 mod paired;
+mod prior;
 mod trace;
 mod turn;
 pub use paired::{PAIRED_ERRORS, PairedRollouts, PairedScores, RolloutPair};
@@ -157,6 +158,8 @@ pub struct Options {
     pub first: bool,
     /// Value near-term alternate wins when scoring simulated combat lines. Requires combat.
     pub walker: bool,
+    /// Explore tree children using softmax priors from the rollout policy.
+    pub prior: bool,
 }
 
 /// A searcher's settings.
@@ -280,7 +283,7 @@ impl FromStr for Family {
                 "{s:?} is no family: method/sight/leaf/knowledge[/options], as \
                  ismcts18/hidden/rollout/tuned (pimcN, ismctsN or turn72; hidden, hands or omniscient; \
                  rollout, cutN or eval; estimate or tuned; options anchor, expert, guard, mid, \
-                 means, hold, waste, combat, order, sure, paired, first and walker joined by + in \
+                 means, hold, waste, combat, order, sure, paired, first, walker and prior joined by + in \
                  that order; expert, guard, sure and paired require anchor; first requires paired; \
                  walker requires combat)"
             )
@@ -309,6 +312,7 @@ impl FromStr for Family {
                         "paired" => &mut o.paired,
                         "first" => &mut o.first,
                         "walker" => &mut o.walker,
+                        "prior" => &mut o.prior,
                         _ => return Err(bad()),
                     };
                     if *flag {
@@ -369,7 +373,7 @@ impl FromStr for Family {
 
 impl Options {
     /// The options as a family's name spells them, joined by `+` in this order:
-    /// `anchor+expert+guard+mid+means+hold+waste+combat+order+sure+paired+first+walker`; empty for none.
+    /// `anchor+expert+guard+mid+means+hold+waste+combat+order+sure+paired+first+walker+prior`; empty for none.
     fn to_name(self) -> String {
         [
             (self.anchor, "anchor"),
@@ -385,6 +389,7 @@ impl Options {
             (self.paired, "paired"),
             (self.first, "first"),
             (self.walker, "walker"),
+            (self.prior, "prior"),
         ]
         .into_iter()
         .filter_map(|(on, name)| on.then_some(name))
@@ -1329,8 +1334,8 @@ impl<L: Layout> Tree<L> {
         true
     }
 
-    /// One iteration: a world, a walk down by UCB1 among the actions available in it to one
-    /// not yet played, its leaf's score, and that score for every node on the way.
+    /// Each iteration samples a world, walks to an unplayed action available in that world,
+    /// scores its leaf, and records the score at every node along the way.
     fn iterate(&mut self, t: &GameTable, policy: &RolloutPolicy) {
         let mut s = if self.resample {
             let mut rng = self.rng;
@@ -1428,7 +1433,8 @@ impl<L: Layout> Tree<L> {
     /// The child of `node` to play next among the actions `keys` names, adding any it lacks
     /// and counting each as available. Try an unplayed action first, by greedy score with
     /// `order` and at random otherwise. Once all have played, use the highest UCB1 bound for
-    /// `mover` over its availability, breaking ties at random.
+    /// `mover` over its availability, breaking ties at random. With `prior`, policy scores
+    /// set the order of first visits and weight the exploration bonus thereafter.
     fn select(
         &mut self,
         node: u32,
@@ -1448,6 +1454,11 @@ impl<L: Layout> Tree<L> {
         let mut children = Vec::with_capacity(keys.len());
         for &k in keys {
             children.push(self.only(node, k, mover));
+        }
+        if self.family.options.prior {
+            let scores = scores(&mut self.x);
+            let i = prior::pick(&self.nodes, &children, |i| scores[candidate_index(i)]);
+            return (children[i], Choice(candidate_index(i) as u16));
         }
         let unplayed = || {
             children
@@ -1944,6 +1955,8 @@ mod tests {
             "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order+sure+walker",
             "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order+sure+paired+walker",
             "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order+sure+paired+first+walker",
+            "pimc72/hidden/rollout/tuned/prior",
+            "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order+sure+paired+first+walker+prior",
         ] {
             let f: Family = s.parse().unwrap();
             assert_eq!(f.to_string(), s);
@@ -1977,6 +1990,7 @@ mod tests {
             "pimc18/hidden/rollout/tuned/anchor+sure+order",
             "pimc18/hidden/rollout/tuned/anchor+walker",
             "pimc18/hidden/rollout/tuned/anchor+walker+combat",
+            "pimc18/hidden/rollout/tuned/prior+anchor",
         ] {
             assert!(bad.parse::<Family>().is_err(), "{bad}");
         }

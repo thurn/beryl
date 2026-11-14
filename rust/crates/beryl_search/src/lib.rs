@@ -372,6 +372,7 @@ const DEEP_SEER: Family = Family {
         paired: false,
         first: false,
         walker: false,
+        prior: false,
     },
 };
 
@@ -407,6 +408,7 @@ pub const DEEP_SEARCHER: Family = Family {
         paired: false,
         first: false,
         walker: false,
+        prior: false,
     },
 };
 
