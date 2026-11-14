@@ -1,6 +1,6 @@
 // Checks for phone behavior that needs an event or gesture to verify.
 import assert from "node:assert/strict";
-import { check } from "./kept-harness.mjs";
+import { card, check, clicksSent } from "./kept-harness.mjs";
 
 // Why no audit: Android's Back is a native event; a screen audit cannot check which overlay
 // receives it or whether it changes a game with no overlay open.
@@ -89,5 +89,95 @@ await check(
         phone: true,
         ready: ".start-seed input",
         viewport: { width: 393, height: 759 },
+    },
+);
+
+// Why no audit: an audit sees a screen, not a gesture. This plays the touches a double tap is
+// made of and checks that they open the report without playing or inspecting a card. Playwright has no multi-touch
+// for WebKit, so the page gets synthetic pointer events, and pointer capture is stubbed for
+// their made-up pointer ids.
+await check(
+    "a double tap opens the bug report and a multi-finger one plays nothing",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const box = await page.locator(card).boundingBox();
+        const onCard = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        const felt = await page.evaluate(() => {
+            for (let y = 100; y < innerHeight; y += 10)
+                for (let x = 10; x < innerWidth; x += 10)
+                    if (
+                        document.elementFromPoint(x, y)?.dataset.felt !==
+                        undefined
+                    )
+                        return { x, y };
+            return null;
+        });
+        assert.ok(felt, "the phone board shows some bare felt");
+        /** One tap with a finger at each of `points`, landing and lifting together. */
+        const tap = (points) =>
+            page.evaluate((points) => {
+                const send = (kind, { x, y }, i) =>
+                    document.elementFromPoint(x, y).dispatchEvent(
+                        new PointerEvent(kind, {
+                            pointerId: (window.nextFinger ?? 100) + i,
+                            pointerType: "touch",
+                            isPrimary: i === 0,
+                            clientX: x,
+                            clientY: y,
+                            bubbles: true,
+                            cancelable: true,
+                        }),
+                    );
+                points.forEach((p, i) => send("pointerdown", p, i));
+                points.forEach((p, i) => send("pointerup", p, i));
+                window.nextFinger = (window.nextFinger ?? 100) + points.length;
+            }, points);
+        const reports = () => page.evaluate(() => window.reports);
+        const twoFingers = [onCard, { x: onCard.x + 20, y: onCard.y }];
+
+        await tap([felt]);
+        await page.clock.runFor(500);
+        assert.equal(await reports(), 0, "one tap on the felt");
+        await tap([felt]);
+        await page.clock.runFor(100);
+        await tap([felt]);
+        assert.equal(await reports(), 1, "a double tap on the felt");
+        await page.clock.runFor(500);
+        // Each tap is checked on its own: a second tap on a card would close the inspector
+        // the first one opened.
+        const inspected = () => page.locator(".inspect").count();
+        const untouched = async () => {
+            await page.clock.runFor(100);
+            assert.deepEqual(await clicksSent(page), [], "the card was played");
+            assert.equal(await inspected(), 0, "the card was inspected");
+        };
+        await tap(twoFingers);
+        await untouched();
+        await tap(twoFingers);
+        assert.equal(await reports(), 2, "a two-finger double tap on a card");
+        await untouched();
+        await page.clock.runFor(500);
+        // A plain tap on the card still inspects it.
+        await tap([onCard]);
+        await page.clock.runFor(500);
+        assert.equal(await inspected(), 1, "a one-finger tap inspects");
+    },
+    {
+        phone: true,
+        viewport: { width: 393, height: 759 },
+        init: () => {
+            window.reports = 0;
+            window.addEventListener("beryl:report-bug", () => window.reports++);
+            for (const name of [
+                "setPointerCapture",
+                "releasePointerCapture",
+                "hasPointerCapture",
+            ]) {
+                const real = Element.prototype[name];
+                Element.prototype[name] = function (id) {
+                    return id >= 100 ? false : real.call(this, id);
+                };
+            }
+        },
     },
 );

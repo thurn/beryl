@@ -10,7 +10,11 @@ import {
   uiReady,
   type OutcomeView,
 } from "./ipc";
-import { BugReporter, bugReportPreview } from "./components/BugReport";
+import {
+  BugReporter,
+  bugReportPreview,
+  requestBugReport,
+} from "./components/BugReport";
 import { Gallery } from "./screens/Gallery";
 import { Testing } from "./screens/Testing";
 import { GameScreen } from "./screens/Game";
@@ -18,6 +22,7 @@ import { StartScreen } from "./screens/StartScreen";
 import { usePlayback } from "./stage/playback";
 import { useMusic } from "./audio/SoundControls";
 import { setMobile, usePhone } from "./mobile/phone";
+import { listenForReportTaps } from "./mobile/report-taps";
 
 // Routes live in the hash so they work from the Tauri asset server and from Vite alike.
 const subscribe = (onChange: () => void) => {
@@ -100,6 +105,9 @@ function Main() {
   useEffect(() => {
     document.body.classList.toggle("phone", phone);
   }, [phone]);
+  // On a touch screen, a double tap opens the bug report: one finger on bare felt, or two or
+  // more anywhere. Where there is no reporter (a fixture), nothing hears the request.
+  useEffect(() => listenForReportTaps(requestBugReport), []);
 
   // Motion honors the reduced-motion setting, which `just ui-shots` turns on for still captures.
   return (

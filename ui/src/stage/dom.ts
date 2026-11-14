@@ -23,6 +23,7 @@ import type { Arrow, Mark, Side } from "../generated/protocol";
 import type { Drawn, On } from "./effects.ts";
 import { Glow } from "./glow.ts";
 import { drawn, Heft } from "./heft.ts";
+import { inMultiTouch } from "../mobile/report-taps.ts";
 import { RaisedCopy } from "./raised.ts";
 import type { Name, Point, Resting } from "./layout.ts";
 import { dark, type Lit } from "./light.ts";
@@ -264,7 +265,15 @@ export class DomSurface implements Surface {
       if (here && !pointer.held)
         pointer.over(nameOf(document.elementFromPoint(here.x, here.y)));
     };
+    // Bare felt, where a double tap with one finger opens the bug report
+    // (mobile/report-taps.ts).
+    board.dataset.felt = "";
+    layer.dataset.felt = "";
     const stops = [
+      () => {
+        delete board.dataset.felt;
+        delete layer.dataset.felt;
+      },
       () => window.removeEventListener("pointermove", where),
       () => document.removeEventListener("lostpointercapture", cancel),
       on(layer, "pointerover", (e) => {
@@ -274,6 +283,15 @@ export class DomSurface implements Surface {
         if (e.pointerType !== "touch") pointer.over(nameOf(e.relatedTarget));
       }),
       on(board, "pointerdown", (e) => {
+        // Fingers that land together are a tap for the bug report, not a move: the press
+        // the first finger started is dropped, and the others start none.
+        if (e.pointerType === "touch" && inMultiTouch()) {
+          if (active?.capture.hasPointerCapture(active.id))
+            active.capture.releasePointerCapture(active.id);
+          if (active) pointer.cancel();
+          active = undefined;
+          return;
+        }
         if (active || (e.button !== 0 && e.button !== 2) || !onTable(e.target))
           return;
         const node = nodeOf(e.target);
