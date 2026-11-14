@@ -12,6 +12,7 @@ const LEVELS: usize = 4;
 pub struct TreeReport {
     pub choice: Choice,
     pub branches: [Branch; 2],
+    pub anchor: Option<super::AnchorCheck>,
     pub turn: Option<super::TurnReport>,
 }
 
@@ -84,6 +85,7 @@ impl<L: Layout> LongSearch<L> {
         TreeReport {
             choice,
             branches: capture.branches,
+            anchor: self.last.as_ref().and_then(|search| search.anchor),
             turn: self.last.as_ref().and_then(|search| search.turn),
         }
     }

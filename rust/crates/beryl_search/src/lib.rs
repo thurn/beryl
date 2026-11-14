@@ -31,8 +31,9 @@ pub use frozen::FrozenExpertAgent;
 pub use greedy::GreedyAgent;
 pub use long::{
     ANCHOR_ERRORS, ANCHOR_MARGIN, AnchorCheck, EVAL_STEPS, Family, Leaf, LongSearch, Method,
-    Options, ROLLOUT_TEMPERATURE, Settings, TURN_DISCOUNT, TreeReport, TurnReport, Visits,
-    WORLD_STEPS, guarded, value as outcome_value,
+    Options, PAIRED_ERRORS, PairedRollouts, PairedScores, ROLLOUT_TEMPERATURE, RolloutPair,
+    Settings, TURN_DISCOUNT, TreeReport, TurnReport, Visits, WORLD_STEPS, guarded,
+    value as outcome_value,
 };
 pub use mcts::{Budget, Mcts, Search, Sight, rollouts_run};
 pub use rollout::{
@@ -368,6 +369,7 @@ const DEEP_SEER: Family = Family {
         combat: false,
         order: false,
         sure: false,
+        paired: false,
         walker: false,
     },
 };
@@ -401,6 +403,7 @@ pub const DEEP_SEARCHER: Family = Family {
         combat: false,
         order: false,
         sure: false,
+        paired: false,
         walker: false,
     },
 };

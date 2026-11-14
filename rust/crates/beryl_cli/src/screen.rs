@@ -21,9 +21,9 @@
 //!   searches grow trees the rebuilt challenger never had, so those decisions are asked but not
 //!   compared: one difference counts once.
 //! - **Rechecks.** Up to N of the differing decisions, spread over the games, are searched again
-//!   from a fresh seed at the proxy budget with the whole of it split between the two answers
-//!   ([`duel`], `LongSearch::duel`): the challenger's lead over the champion's choice, tree by
-//!   tree, unbiased by having been chosen, as `anchor-replay --recheck` does.
+//!   from a fresh seed with the whole proxy budget spent on the two answers
+//!   ([`duel`], `LongSearch::duel`). As in `anchor-replay --recheck`, the lead comes from fresh
+//!   trees or paired rollouts according to the family used for the recheck.
 //! - **Report.** Differing decisions a game, by kind, and the cost a game: differences a game
 //!   times the mean lead lost, with its standard error. A cost beyond [`COST_NOTED`] a game is
 //!   written beside the match's result in the rung's bead; it stops nothing.

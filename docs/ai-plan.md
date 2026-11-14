@@ -345,7 +345,7 @@ may reorder rungs when a result suggests it, and says why in the bead.
 | ----- | -------------------------- | -------- | --------------- | -------------- |
 | 0     | Tools                      |          |                 | Partly         |
 | 1     | `sure` + `hold` + `combat` | Blunders | Policy and root | All but `sure` |
-| 2     | `paired`                   | Blunders | Root            | No             |
+| 2     | `paired`                   | Blunders | Root            | Yes            |
 | 3     | `first`                    | Both     | Root            | No             |
 | 4     | `prior`                    | Strength | Tree            | No             |
 | 5     | `waste`                    | Blunders | Policy          | Yes            |

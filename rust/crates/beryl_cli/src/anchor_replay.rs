@@ -1,14 +1,13 @@
 //! `beryl_cli anchor-replay <run-dir> <entrant> [--examples N]`: what anchoring a long-think
-//! entrant to greedy's answer (`beryl_search::Options::anchor`, epic by-7wl) would have
+//! entrant to greedy's answer (`beryl_search::Options::anchor`) would have
 //! changed in a run's games, from their logs alone, searching nothing. Each game replays from
 //! its seed through its logged answers; at each of the entrant's searched decisions, greedy's
 //! answer is set beside the search's root visits and means. For each margin it reports how
 //! often the anchor would have played greedy's answer instead and what the search itself
 //! estimates that costs: the sum, over those decisions, of its choice's mean less greedy's.
 //!
-//! The logs keep each candidate's visits and rewards summed over the trees, not tree by tree,
-//! so the noise term here is a binomial standard error from the visits: an approximation of
-//! the anchor's own, which reads the spread across the trees.
+//! Where a logged paired check compares the same two moves, use its lead and error. Otherwise
+//! estimate the noise from the visits in each candidate's pooled tree results.
 //!
 //! That estimate of the cost is biased upward: the search's choice is the candidate it
 //! visited most, which leads greedy's answer even where the two are worth the same. With
@@ -29,11 +28,12 @@ use beryl_engine::{
     Choice, Decision, DecisionKind, GameTable, Profile, Replay, Scratch, State, Step, apply, next,
     observe,
 };
-use beryl_search::{ANCHOR_ERRORS, Family, LongSearch, Settings, guarded};
+use beryl_search::{ANCHOR_ERRORS, Family, LongSearch, PAIRED_ERRORS, Settings, guarded};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
 use crate::game::{mirror, parse_work};
+use crate::match_log::AnchorRecord;
 use crate::positions::{self, Position};
 use crate::transcript::Transcript;
 
@@ -143,8 +143,8 @@ pub fn fits(dir: &Path, t: &GameTable, g: &GameLine) -> Result<(), String> {
 }
 
 /// A fresh duel of candidates `a` and `b` at decision `d` of `s`, the whole budget of
-/// `settings` split between them (`LongSearch::duel`), from `seed`: `a`'s lead over `b`, tree
-/// by tree, without the bias of a lead the search chose.
+/// `settings` spent comparing them (`LongSearch::duel`), from `seed`: `a`'s lead over `b`
+/// without the bias of a lead the search chose.
 pub fn duel(
     t: &GameTable,
     settings: Settings,
@@ -172,6 +172,7 @@ struct LogLine {
 pub struct Searched {
     pub visits: Vec<u32>,
     pub rewards: Vec<f64>,
+    pub anchor: Option<AnchorRecord>,
 }
 
 /// One searched decision where greedy's answer differs from the search's choice.
@@ -181,8 +182,8 @@ struct Differs {
     decision: Decision,
     search: Choice,
     greedy: Choice,
-    /// The search's choice's mean less greedy's, and the binomial standard error of that
-    /// difference; none if the search never visited greedy's answer.
+    /// The search's choice's mean less greedy's and the noise threshold for that difference.
+    /// None if the search never measured one of the choices.
     lead: Option<(f64, f64)>,
     /// The decision as a transcript shows it, with both candidates' visits and means.
     line: String,
@@ -242,12 +243,19 @@ fn replay(
                 let v = f64::from(search.visits[usize::from(c)]);
                 (v > 0.0).then(|| (search.rewards[usize::from(c)] / v, v))
             };
-            let lead = mean(choice)
-                .zip(mean(greedy.0))
-                .map(|((mc, vc), (mg, vg))| {
-                    let var = |m: f64, v: f64| m * (1.0 - m) / v;
-                    (mc - mg, (var(mc, vc) + var(mg, vg)).sqrt())
-                });
+            let pair = search.anchor.filter(|a| {
+                a.pairs.is_some_and(|n| n >= 2) && a.search == choice && a.greedy == greedy.0
+            });
+            let lead = if let Some(pair) = pair {
+                Some((pair.lead, PAIRED_ERRORS * pair.error))
+            } else {
+                mean(choice)
+                    .zip(mean(greedy.0))
+                    .map(|((mc, vc), (mg, vg))| {
+                        let var = |m: f64, v: f64| m * (1.0 - m) / v;
+                        (mc - mg, ANCHOR_ERRORS * (var(mc, vc) + var(mg, vg)).sqrt())
+                    })
+            };
             let mut transcript = Transcript::new(names);
             transcript.decision(&t, s, d, Choice(choice), &[]);
             let shown = transcript.text().lines().last().unwrap_or_default().trim();
@@ -359,8 +367,7 @@ fn rechecked(
 
 /// Whether the anchor would play greedy's answer over the search's choice at `margin`.
 fn switches(d: &Differs, margin: f64) -> bool {
-    d.lead
-        .is_none_or(|(lead, error)| lead <= margin.max(ANCHOR_ERRORS * error))
+    d.lead.is_none_or(|(lead, noise)| lead <= margin.max(noise))
 }
 
 fn report(

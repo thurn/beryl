@@ -63,8 +63,10 @@ use crate::rollout::{RolloutPolicy, Rules, Softmax, soft_rollout, soft_rollout_t
 use crate::values::Knowledge;
 use crate::{Agent, AgentDecision, ExpertAgent, Search, Sight, Widen};
 
+mod paired;
 mod trace;
 mod turn;
+pub use paired::{PAIRED_ERRORS, PairedRollouts, PairedScores, RolloutPair};
 use trace::{Capture, Trace};
 pub use trace::{TreeReport, Visits};
 pub use turn::TurnReport;
@@ -108,7 +110,7 @@ impl Family {
     }
 }
 
-/// What a family adds to the plain search, each switchable on its own (epic by-7wl). None by
+/// What a family adds to the plain search, each switchable on its own. None by
 /// default: a family named without them plays as it always has.
 // Independent switches by design, one a part of the family's name, each set or not by a rung.
 #[allow(clippy::struct_excessive_bools)]
@@ -149,6 +151,8 @@ pub struct Options {
     /// With the anchor, let the rollout policy answer choices of up to a number of
     /// objects and offers to search a library without planting a tree.
     pub sure: bool,
+    /// Check a tree's guarded challenger against the default in fresh worlds with paired rollouts.
+    pub paired: bool,
     /// Value near-term alternate wins when scoring simulated combat lines. Requires combat.
     pub walker: bool,
 }
@@ -274,8 +278,8 @@ impl FromStr for Family {
                 "{s:?} is no family: method/sight/leaf/knowledge[/options], as \
                  ismcts18/hidden/rollout/tuned (pimcN, ismctsN or turn72; hidden, hands or omniscient; \
                  rollout, cutN or eval; estimate or tuned; options anchor, expert, guard, mid, \
-                 means, hold, waste, combat, order, sure and walker joined by + in that order; \
-                 expert, guard and sure require anchor; walker requires combat)"
+                 means, hold, waste, combat, order, sure, paired and walker joined by + in that order; \
+                 expert, guard, sure and paired require anchor; walker requires combat)"
             )
         };
         let parts: Vec<&str> = s.split('/').collect();
@@ -299,6 +303,7 @@ impl FromStr for Family {
                         "combat" => &mut o.combat,
                         "order" => &mut o.order,
                         "sure" => &mut o.sure,
+                        "paired" => &mut o.paired,
                         "walker" => &mut o.walker,
                         _ => return Err(bad()),
                     };
@@ -309,7 +314,7 @@ impl FromStr for Family {
                 }
                 // One spelling per family, so that a name read back prints as it was given.
                 if o.to_name() != *named
-                    || ((o.expert || o.guard || o.sure) && !o.anchor)
+                    || ((o.expert || o.guard || o.sure || o.paired) && !o.anchor)
                     || (o.walker && !o.combat)
                 {
                     return Err(bad());
@@ -359,7 +364,7 @@ impl FromStr for Family {
 
 impl Options {
     /// The options as a family's name spells them, joined by `+` in this order:
-    /// `anchor+expert+guard+mid+means+hold+waste+combat+order+sure+walker`; empty for none.
+    /// `anchor+expert+guard+mid+means+hold+waste+combat+order+sure+paired+walker`; empty for none.
     fn to_name(self) -> String {
         [
             (self.anchor, "anchor"),
@@ -372,6 +377,7 @@ impl Options {
             (self.combat, "combat"),
             (self.order, "order"),
             (self.sure, "sure"),
+            (self.paired, "paired"),
             (self.walker, "walker"),
         ]
         .into_iter()
@@ -507,7 +513,8 @@ impl<L: Layout> LongSearch<L> {
     /// leader differs from the default and `guards` holds, the rest of the work goes to the two
     /// alone, so that the choice between them is not made against a starved estimate.
     /// Returns the iterations run, the work they spent and the candidate checked against
-    /// the default answer that way, if one was.
+    /// the default answer, if one was. With paired rollouts, the caller spends the reserved
+    /// work outside the trees.
     fn grow(
         &self,
         trees: &mut [Tree<L>],
@@ -540,6 +547,8 @@ impl<L: Layout> LongSearch<L> {
                     if !settled(trees, &shares, &credit, &start) {
                         self.rounds(trees, &plan, FREE_ROUNDS + 1..=ROUNDS, true);
                     }
+                } else if self.settings.family.options.paired {
+                    checked = Some(Choice(b as u16));
                 } else {
                     for tree in trees.iter_mut() {
                         tree.allowed = Some([b, g]);
@@ -572,9 +581,8 @@ impl<L: Layout> LongSearch<L> {
         }
     }
 
-    /// For research: grows fresh trees on decision `d` for the whole budget with their roots
-    /// held to candidates `a` and `b`, and returns `a`'s lead over `b` tree by tree, as an
-    /// anchored search checks it (`a` as its choice, `b` as greedy's answer). Unlike the lead
+    /// For research: spend the whole budget comparing `a` with `b` at decision `d`, as an
+    /// anchored search checks its own choice against the default. Unlike the lead
     /// a search reports for the candidate it visited most, it carries no bias from having
     /// been chosen. Keeps nothing.
     pub fn duel(
@@ -584,6 +592,12 @@ impl<L: Layout> LongSearch<L> {
         a: Choice,
         b: Choice,
     ) -> AnchorCheck {
+        if self.settings.family.options.paired {
+            return self
+                .paired_rollouts(obs, self.decision)
+                .check([a, b], self.settings.work, self.settings.threads)
+                .0;
+        }
         let mut trees = self.plant(obs, d, self.decision);
         let n = trees.len() as u64;
         let work = self.settings.work;
@@ -653,20 +667,26 @@ pub struct AnchorCheck {
     pub greedy: Choice,
     /// The search's own choice: the candidate visited most.
     pub search: Choice,
-    /// The search's choice's mean reward less the default's, averaged over the trees that visited
-    /// both, and the standard error of that average across them.
+    /// The mean reward difference between the search choice and the default, and its standard error.
     pub lead: f64,
     pub error: f64,
-    /// The trees the lead was averaged over.
+    /// Number of trees that visited both choices, or worlds in a turn search.
     pub trees: u16,
+    /// Number of completed pairs for a paired check, including zero when the budget ran out.
+    pub pairs: Option<u64>,
 }
 
 impl AnchorCheck {
     /// Whether the search's choice leads the default answer clearly enough to be played instead:
-    /// by [`ANCHOR_MARGIN`], and by [`ANCHOR_ERRORS`] standard errors where more than one tree
-    /// measured it.
+    /// by [`ANCHOR_MARGIN`] and the standard error threshold for the comparison.
+    /// Paired rollouts need two completed pairs to estimate an error.
     #[must_use]
     pub fn overrides(&self) -> bool {
+        if let Some(pairs) = self.pairs {
+            return self.search != self.greedy
+                && pairs >= 2
+                && self.lead >= ANCHOR_MARGIN.max(PAIRED_ERRORS * self.error);
+        }
         let noise = if self.trees > 1 {
             ANCHOR_ERRORS * self.error
         } else {
@@ -706,6 +726,7 @@ fn check<L: Layout>(trees: &[Tree<L>], search: Choice, default: Choice) -> Ancho
         lead,
         error,
         trees: u16::try_from(leads.len()).unwrap_or(u16::MAX),
+        pairs: None,
     }
 }
 
@@ -974,18 +995,18 @@ impl<L: Layout> LongSearch<L> {
         if let Some(capture) = capture.as_ref() {
             capture.start(&mut trees);
         }
-        let (iterations, work, checked) = self.grow(&mut trees, default, guards);
+        let (iterations, mut work, checked) = self.grow(&mut trees, default, guards);
         if let Some(capture) = capture {
             capture.finish(&mut trees);
         }
         let (visits, rewards) = totals(&trees);
         let best = Choice(self.pick(&trees) as u16);
         let means = crate::mcts::tree_means(visits.len(), root_stats(&trees));
-        // The candidate checked against the default after the two had the last of the work
-        // to themselves, whichever then has more visits; else the leader, if guarded.
         let anchor = default.and_then(|g| {
             let search = checked.or(guards(best).then_some(best))?;
-            Some(check(&trees, search, g))
+            let (check, spent) = self.check_challenger(&trees, obs, decision, [search, g], work);
+            work += spent;
+            Some(check)
         });
         let choice = anchor.map_or(best, |a| a.played());
         if combat_default && default != Some(choice) {
@@ -995,7 +1016,8 @@ impl<L: Layout> LongSearch<L> {
         self.last = Some(Search {
             decision,
             chain,
-            rollouts: u32::try_from(iterations).unwrap_or(u32::MAX),
+            rollouts: u32::try_from(iterations + 2 * anchor.and_then(|a| a.pairs).unwrap_or(0))
+                .unwrap_or(u32::MAX),
             inherited,
             work,
             visits,
@@ -1908,6 +1930,7 @@ mod tests {
             "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order",
             "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order+sure",
             "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order+sure+walker",
+            "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order+sure+paired+walker",
         ] {
             let f: Family = s.parse().unwrap();
             assert_eq!(f.to_string(), s);
@@ -1933,6 +1956,8 @@ mod tests {
             "pimc18/hidden/rollout/tuned/anchor+guard+expert",
             "pimc18/hidden/rollout/tuned/anchor+order+combat",
             "pimc18/hidden/rollout/tuned/order+sure",
+            "pimc18/hidden/rollout/tuned/guard+paired",
+            "pimc18/hidden/rollout/tuned/paired",
             "pimc18/hidden/rollout/tuned/anchor+sure+order",
             "pimc18/hidden/rollout/tuned/anchor+walker",
             "pimc18/hidden/rollout/tuned/anchor+walker+combat",
@@ -1951,6 +1976,7 @@ mod tests {
             lead,
             error,
             trees,
+            pairs: None,
         };
         // The Deep Seer incident's Oust on its own token led passing by 0.006.
         assert!(!check(0.006, 0.001, 18).overrides());
@@ -1972,6 +1998,23 @@ mod tests {
         assert!((mean - 0.2).abs() < 1e-12 && (error - 0.1).abs() < 1e-12);
         assert_eq!(mean_and_error(&[0.4]), (0.4, 0.0));
         assert_eq!(mean_and_error(&[]), (0.0, 0.0));
+    }
+
+    #[test]
+    fn a_paired_anchor_requires_the_margin_and_three_standard_errors() {
+        let check = |lead, error, pairs| AnchorCheck {
+            greedy: Choice(0),
+            search: Choice(1),
+            lead,
+            error,
+            trees: 0,
+            pairs: Some(pairs),
+        };
+        assert!(!check(0.019, 0.0, 20).overrides());
+        assert!(!check(0.025, 0.01, 20).overrides());
+        assert!(check(0.03, 0.01, 20).overrides());
+        assert!(check(ANCHOR_MARGIN, 0.0, 20).overrides());
+        assert!(!check(0.5, 0.0, 1).overrides());
     }
 
     /// A family of one omniscient world with `options`, for tests.

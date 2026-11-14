@@ -497,6 +497,58 @@ mod tests {
         assert_eq!(run(true), baseline);
     }
 
+    #[test]
+    fn paired_search_keeps_the_default_at_reported_blunders() {
+        for (name, rules, index) in [
+            ("beza-trinket-into-blockers", "combat", 0),
+            ("manifest-into-samurai", "combat", 0),
+            ("spirits-stay-home", "hold+combat", 0),
+            ("subtlety-main-phase-empty-stack", "hold", 7),
+        ] {
+            let e = entry(name);
+            let at = reach(&e).unwrap();
+            let family = format!("pimc72/hidden/rollout/tuned/anchor+guard+{rules}+paired")
+                .parse()
+                .unwrap();
+            let settings = beryl_search::Settings {
+                family,
+                work: 300_000,
+                threads: 1,
+            };
+            let seed = run_seed(name, index);
+            let mut agent = beryl_search::LongSearch::new(&at.t, settings, seed);
+            let choice = play(&e, &at, &mut agent);
+            if name == "subtlety-main-phase-empty-stack" {
+                let check = agent.last_search().unwrap().anchor.unwrap();
+                assert!(check.pairs.is_some_and(|count| count >= 2));
+            }
+            let mut default = build(&at.t, &format!("greedy+{rules}"), seed).unwrap();
+            assert_eq!(choice, play(&e, &at, default.as_mut()), "{name}");
+            assert!(passes(&e, &choice), "{name}: {choice:?}");
+        }
+    }
+
+    #[test]
+    fn paired_checks_are_budgeted_and_thread_independent() {
+        let at = reach(&entry("beza-trinket-into-blockers")).unwrap();
+        let mut scratch = Scratch::new();
+        let obs = observe(&at.s, &at.t, &mut scratch, at.d.player);
+        let policy = DEEP_SEARCHER.rollout_policy(&at.t);
+        let pairs = beryl_search::PairedRollouts::new(&at.t, &policy, obs, DEEP_SEARCHER.sight, 0);
+        let [a, b] = [beryl_engine::Choice(0), beryl_engine::Choice(1)];
+        let budget = 150_000;
+        let (check, spent) = pairs.check([a, b], budget, 1);
+        assert!(check.pairs.unwrap() > 8);
+        assert!(spent > 0 && spent <= budget);
+        assert_eq!((check, spent), pairs.check([a, b], budget, 8));
+        let (same, _) = pairs.check([b, b], budget, 1);
+        assert!(same.pairs.unwrap() > 8);
+        assert_eq!((same.lead, same.error), (0.0, 0.0));
+        let (empty, spent) = pairs.check([a, b], 1, 1);
+        assert_eq!((empty.pairs, spent), (Some(0), 0));
+        assert_eq!(empty.played(), b);
+    }
+
     /// An agent that plays the first candidate whose label it lists, else the first.
     struct Scripted {
         t: GameTable,

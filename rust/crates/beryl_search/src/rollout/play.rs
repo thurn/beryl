@@ -109,21 +109,25 @@ pub(crate) fn soft_rollout_within<L: Layout>(
         soft,
         record: |_: Observation<'_, L>, _: &Decision<L>, _: Choice| {},
     };
+    play_within(s, t, x, &mut inline, turn, work_limit)
+}
+
+fn play_within<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    x: &mut Scratch<L>,
+    inline: &mut SoftInline<'_, '_, impl FnMut(Observation<'_, L>, &Decision<L>, Choice)>,
+    turn: u16,
+    work_limit: u64,
+) -> Option<RolloutEnd> {
     loop {
-        match next_within(
-            s,
-            t,
-            x,
-            &mut inline,
-            (u16::MAX, TurnStep::Cleanup),
-            work_limit,
-        )? {
+        match next_within(s, t, x, inline, (u16::MAX, TurnStep::Cleanup), work_limit)? {
             Step::Over(outcome) => return Some(RolloutEnd::Outcome(outcome)),
             Step::Decide(_) if s.turn().number() >= turn => return Some(RolloutEnd::Cutoff),
             Step::Decide(d) => {
                 let c = inline.choose(Observation::new(s, d.player), &d);
                 // An inline answer does not need a transactional copy.
-                apply_decided(s, t, x, &mut inline, &d, c);
+                apply_decided(s, t, x, inline, &d, c);
             }
         }
     }
@@ -140,6 +144,26 @@ pub fn soft_rollout_after<L: Layout>(
     choice: Choice,
     record: impl FnMut(Observation<'_, L>, &Decision<L>, Choice),
 ) -> Outcome {
+    soft_rollout_after_within(s, t, x, policy, soft, choice, record, u64::MAX)
+        .expect("a game ends before turn 65535")
+}
+
+/// The forced move and rollout, with the same engine work limit for recorded and unrecorded play.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn soft_rollout_after_within<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    x: &mut Scratch<L>,
+    policy: &RolloutPolicy,
+    soft: &mut Softmax<'_>,
+    choice: Choice,
+    record: impl FnMut(Observation<'_, L>, &Decision<L>, Choice),
+    work_limit: u64,
+) -> Option<Outcome> {
+    // Applying the root through Replay can take two state copies.
+    if work_limit.saturating_sub(x.counts.decision_work()) < 2 {
+        return None;
+    }
     apply(s, t, x, &mut Replay, choice);
     smart(s);
     s.reseed(soft.rng.next_u64());
@@ -149,8 +173,10 @@ pub fn soft_rollout_after<L: Layout>(
         soft,
         record,
     };
-    play_out(s, t, x, &mut inline, u16::MAX, SoftInline::choose)
-        .expect("a game ends before turn 65535")
+    match play_within(s, t, x, &mut inline, u16::MAX, work_limit)? {
+        RolloutEnd::Outcome(outcome) => Some(outcome),
+        RolloutEnd::Cutoff => None,
+    }
 }
 
 /// The rollout loop: `answers` answers inline, `choose` every decision `next` returns.

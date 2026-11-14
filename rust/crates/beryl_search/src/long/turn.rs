@@ -139,6 +139,7 @@ fn search<L: Layout>(
             lead,
             error,
             trees: leads.len() as u16,
+            pairs: None,
         }
     });
     let visits: Vec<_> = rewards.iter().map(|xs| xs.len() as u32).collect();

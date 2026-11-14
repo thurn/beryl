@@ -88,8 +88,7 @@ pub struct DecisionRecord {
 }
 
 /// An anchored search's check, as `decisions.jsonl` records it ([`beryl_search::AnchorCheck`]):
-/// the default answer, the search's own choice, its lead in mean reward over the default's averaged
-/// over the trees that visited both, and the lead's standard error across them.
+/// the default answer, the search choice, and their mean reward difference and standard error.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AnchorRecord {
     /// The default answer, from greedy or the live expert according to the family.
@@ -98,6 +97,8 @@ pub struct AnchorRecord {
     pub lead: f64,
     pub error: f64,
     pub trees: u16,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pairs: Option<u64>,
 }
 
 /// A budget, short: 300k, 3M, 1G.

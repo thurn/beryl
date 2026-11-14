@@ -371,6 +371,7 @@ fn searched(s: &Search) -> Searched {
             lead: a.lead,
             error: a.error,
             trees: a.trees,
+            pairs: a.pairs,
         }),
     }
 }
