@@ -1,4 +1,5 @@
-"""Which cards slow CI's oracle lane plays.
+"""Which cards slow CI's oracle lane plays, and which of a change's cards the fast check's oracle
+lane has time for (`fitted`).
 
 Slow CI tests staging's commits since master, so the lane plays the cards whose files changed
 since `origin/master`, plus a sample fixed by the commit, so that every run checks something
@@ -12,9 +13,14 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, cast
 
-from . import card_files
+from . import card_files, deadline, runlog
 from .changes import changed_paths, git, master_base
+
+if TYPE_CHECKING:
+    from .selection import Record
 
 # The files the exporters and the harnesses are built from: the exporters and the rules they
 # share, the scenario dump they read (`beryl_scenario dump`: its JSON, its card facts and the
@@ -68,3 +74,46 @@ def slow_ci(every: list[str]) -> dict[str, str] | None:
     """`choose` among `every` card with scenarios for the commit checked out, against what
     changed since `origin/master`."""
     return choose(changed_paths(master_base()), git("rev-parse", "HEAD"), every)
+
+
+# The seconds of a scenario in one oracle with no record in the run log: the mean of the
+# fast check's runs, startup shared out among the scenarios a run played.
+SCENARIO_SECONDS = 8.0
+
+
+def fitted(
+    entries: list[dict[str, object]], known: Mapping[str, Record]
+) -> list[dict[str, object]]:
+    """The scenarios of the cards that fit what is left of the fast check's target
+    (deadline.py), the cheapest cards first by their run-log `known` records. The rest are
+    logged as skipped, for slow CI's oracle lane, which plays every card changed since
+    `master`."""
+    cost: dict[str, float] = {}
+    for e in entries:
+        for engine in ("xmage", "forge"):
+            r = known.get(f"oracle:{e['card']}/{e['name']}/{engine}")
+            seconds = r.seconds if r and r.seconds > 0 else SCENARIO_SECONDS
+            card = cast(str, e["card"])
+            cost[card] = cost.get(card, 0.0) + seconds
+    left, spent, kept = deadline.left() or 0.0, 0.0, set()
+    for card in sorted(cost, key=lambda c: (cost[c], c)):
+        if spent + cost[card] > left:
+            break
+        spent += cost[card]
+        kept.add(card)
+    cut = [e for e in entries if e["card"] not in kept]
+    if cut:
+        skip_all(
+            cut,
+            f"deferred to slow CI: {len(cost) - len(kept)} of {len(cost)} cards do not fit"
+            f" the {max(left, 0):.0f} s left of the fast check's target",
+        )
+    return [e for e in entries if e["card"] in kept]
+
+
+def skip_all(entries: list[dict[str, object]], why: str) -> None:
+    """Reports every scenario of `entries` as skipped in each oracle, saying why."""
+    print(f"oracle: skipped: {why}")
+    for e in entries:
+        for engine in ("xmage", "forge"):
+            runlog.result(f"oracle:{e['card']}/{e['name']}/{engine}", "skip", 0.0)

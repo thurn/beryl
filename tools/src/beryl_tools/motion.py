@@ -78,6 +78,7 @@ from typing import TYPE_CHECKING, Any
 
 from . import (
     conventions,
+    deadline,
     paths,
     runlog,
     selection,
@@ -601,12 +602,19 @@ def boxed_out(box: float, recording: float) -> str | None:
     """Why the fast check skips the capture, when recording the fixtures took `recording` of
     its `box` seconds and the capture would not fit in what is left; None when it fits.
     """
-    left = box - selection.STARTUP - recording
+    contract = deadline.left()
+    if contract is not None:
+        # Inside a fast check, what is left of its target (deadline.py), not a box of its own.
+        left = contract - selection.STARTUP
+        of = "the fast check's target"
+    else:
+        left = box - selection.STARTUP - recording
+        of = f"the {box:.0f} s box"
     if left >= CAPTURE_SECONDS:
         return None
     return (
-        f"recording the fixtures took {recording:.0f} s, leaving {max(left, 0):.0f} s of the"
-        f" {box:.0f} s box for a capture of about {CAPTURE_SECONDS:.0f} s; the nightly plays it"
+        f"recording the fixtures took {recording:.0f} s, leaving {max(left, 0):.0f} s of"
+        f" {of} for a capture of about {CAPTURE_SECONDS:.0f} s; the nightly plays it"
     )
 
 

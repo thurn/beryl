@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import checks, paths, runlog, system, verdicts
+from . import checks, deadline, paths, runlog, system, verdicts
 from .suites import (
     SHAPE_CASES,
     SHAPE_PREFIX,
@@ -56,8 +56,8 @@ from .suites import (
 
 # Coverage older than this is not trusted to choose: checks fall back to their records.
 STALE_DAYS = 3
-# How long a selected step may take, from its start: with the rust lane beside it, the fast
-# check stays inside its 60 s.
+# How long a selected step run by hand may take, from its start. Inside a fast check the step
+# fills what is left of the check's target instead (deadline.py).
 BOX = 45.0
 # Serving the UI and launching the browser, before the first check starts.
 STARTUP = 4.0
@@ -737,7 +737,11 @@ class Chooser:
             return self.unboxed(known)
         if choice.fallback:
             print(f"{self.lane}: choosing by failure record: {choice.fallback}")
-        left = BOX - STARTUP - (self.clock.now() - self.started)
+        # Inside a fast check, the checks fill what is left of its target (deadline.py);
+        # run by hand, a box of their own from the step's start.
+        contract = deadline.left()
+        boxed = BOX - (self.clock.now() - self.started)
+        left = (boxed if contract is None else contract) - STARTUP
         workers = int(os.environ.get("BERYL_UI_WORKERS") or WORKERS)
         chosen, self.cut = fit(ranked, known, left, workers)
         why: dict[str, int] = {}

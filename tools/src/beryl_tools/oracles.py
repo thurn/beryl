@@ -42,7 +42,8 @@ from pathlib import Path
 from typing import cast
 
 from . import card_store, cards, checks, forge, oracle_selection, paths, runlog, system
-from . import card_diverge, card_facts, xmage, xmage_java
+from . import card_diverge, card_facts, deadline, xmage, xmage_java
+from .oracle_selection import skip_all
 
 FORMULAS = ("maven", "openjdk@21")
 
@@ -692,14 +693,6 @@ def log_results(
             )
 
 
-def skip_all(entries: list[dict[str, object]], why: str) -> None:
-    """Reports every scenario of `entries` as skipped in each oracle, saying why."""
-    print(f"oracle: skipped: {why}")
-    for e in entries:
-        for engine in ("xmage", "forge"):
-            runlog.result(f"oracle:{e['card']}/{e['name']}/{engine}", "skip", 0.0)
-
-
 def oracle(args: argparse.Namespace) -> int:
     work = root() / "run"
     work.mkdir(exist_ok=True)
@@ -707,6 +700,9 @@ def oracle(args: argparse.Namespace) -> int:
     built = False
     try:
         require_built()
+        # Inside a fast check, the scenarios that fit its target (deadline.py) are played, with
+        # the records to plan with read while the scenarios dump.
+        records = deadline.Records("oracle") if deadline.left() is not None else None
         # The dump needs no oracle, so it runs before the wait for the lock, into a file of its
         # own: two runs may dump at once.
         with tempfile.TemporaryDirectory(prefix="beryl-oracle-") as dump:
@@ -723,6 +719,10 @@ def oracle(args: argparse.Namespace) -> int:
         wanted = chosen or args.cards
         if wanted:
             entries = [e for e in entries if e["card"] in wanted]
+        if records is not None:
+            entries = oracle_selection.fitted(entries, records.get())
+            if not entries:
+                return 0
         try:
             with locked(args.lock_wait):
                 require_built()  # Again: a setup may have held the lock to rebuild one.

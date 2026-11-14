@@ -1,5 +1,6 @@
-"""The checks. `by check` is the fast one `enact push` runs (budget 60 s); `by ci` is slow CI
-on the staging tip (300 s, 450 s on Windows, shown for reference). Both run lanes in parallel,
+"""The checks. `by check` is the fast one `enact push` runs, held to a 60 s target, 90 s under
+load and a 180 s hard limit at which a step still running is deferred to slow CI (deadline.py);
+`by ci` is slow CI on the staging tip (300 s, 450 s on Windows, shown for reference). Both run lanes in parallel,
 each a sequence of timed steps, and print failed lanes last. A run over its budget fails
 nothing: the fast check files a bead to audit its slowest steps, and slow CI, whose budget is
 in CPU seconds, files beads naming the checks to cut (budget.py). No timer fails a run for being slow: each
@@ -61,6 +62,7 @@ from . import (
     card_text,
     citations,
     conventions,
+    deadline,
     discarded_push,
     file_length,
     hang,
@@ -103,7 +105,7 @@ from .rust_tests import (
 )
 from .step_runner import Steps
 
-FAST_BUDGET = 60
+FAST_BUDGET = int(deadline.TARGET)
 # Slow CI's wall seconds, shown beside its run time; going over files nothing, since slow CI's
 # budget is in CPU seconds (`budget.SLOW_CPU_BUDGET`). Windows runs the same lanes markedly
 # slower (process start, file system, antivirus).
@@ -194,6 +196,9 @@ class Outcome:
     failure: Failure | None = None
     # Whether a step of the lane was killed at its hang limit (hang.py).
     hung: bool = False
+    # The steps the fast check's hard limit cut off or left unstarted (deadline.py), which slow
+    # CI runs instead.
+    deferred: list[str] = field(default_factory=list)
 
 
 def run_lane(
@@ -324,9 +329,27 @@ def lane_steps(
         log.append(ended)
         return code, records, output
 
-    for step in lane.steps:
+    for n, step in enumerate(lane.steps):
         t, flakes = now(), len(flaky)
         code, records, output = attempt(step, step.cmd)
+        if code is None and steps.walled() and script == "check":
+            # The fast check's hard limit (deadline.py): what it did not finish is slow CI's.
+            deferred = [s.name for s in lane.steps[n:]]
+            log.append(
+                f"{script} {lane.name}: deferred to slow CI at the"
+                f" {deadline.HARD_LIMIT:.0f} s hard limit: {', '.join(deferred)}"
+            )
+            timings.append(f"{step.name} deferred")
+            return Outcome(
+                lane.name,
+                True,
+                now() - started,
+                "\n".join(log),
+                timings,
+                flaky,
+                excused,
+                deferred=deferred,
+            )
         why = verdicts.excused(records) if code not in (0, None, CANNOT_RUN) else []
         if why:
             excused.extend(why)
@@ -378,6 +401,7 @@ def run_all(
     budget: int,
     wall_limit: float | None = None,
     chosen: str = "all",
+    extra_env: dict[str, str] | None = None,
 ) -> Report:
     """Runs the lanes at once and reports them; with `wall_limit`, a step still running that
     many wall seconds in is killed (`Steps.wall_limit`). A lane a hung step failed is not run
@@ -389,7 +413,7 @@ def run_all(
     cold = bool(warm.ensure()) if any(lane.warm for lane in lanes) else False
     if any(lane.warm for lane in lanes):
         caches.tidy_target(paths.REPO)
-    env = dict(os.environ)
+    env = {**os.environ, **(extra_env or {})}
     run = runlog.Run.start(script)
     run.chosen = chosen
     outcomes = play(lanes, run, env, steps, limits)
@@ -404,6 +428,8 @@ def run_all(
             print(f"flaky: {o.lane} {check}")
         for why, check in o.excused:
             print(f"{why}: {o.lane} {check}")
+        for step in o.deferred:
+            print(f"deferred: {o.lane} {step}")
     for line in run.settle():
         print(line)
     if script == "ci":
@@ -414,7 +440,9 @@ def run_all(
     # (`lane_steps`): lanes run at once, and a wait is time the machine spent on other work.
     elapsed = max((o.seconds for o in outcomes), default=0.0)
     failed = [o.lane for o in outcomes if not o.ok]
-    over = elapsed > budget
+    # The fast check also has a wall target however loaded the machine is (deadline.py).
+    wall = steps.clock.wall()
+    over = elapsed > budget or (script == "check" and wall > deadline.LOADED_TARGET)
     print(
         f"{script}: {'FAILED: ' + ' '.join(failed) if failed else 'passed'} in {took(steps.clock.wall(), elapsed)} (budget {budget} s)"
     )
@@ -640,7 +668,13 @@ def fast(args: argparse.Namespace) -> int:
         f"check: {'every lane (no base)' if changed is None else f'{len(changed)} paths changed since {base[:8]}'}"
     )
     lanes = narrow(fast_lanes(changed), base, fast_lanes, lambda l: l.name)
-    return run_lanes(lanes, "check", FAST_BUDGET)
+    return run_all(
+        lanes,
+        "check",
+        FAST_BUDGET,
+        wall_limit=deadline.HARD_LIMIT,
+        extra_env=deadline.env(),
+    ).code
 
 
 def fast_lanes(changed: list[str] | None) -> list[Lane]:

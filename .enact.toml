@@ -24,9 +24,13 @@ root = ".worktrees"   # inside the checkout; gitignored
 remove = 'f="$ENACT_WORKTREE_PATH/tools/src/beryl_tools/warm.py"; [ -f "$f" ] || f="$ENACT_REPO/tools/src/beryl_tools/warm.py"; python3 "$f" remove'
 
 [push]
-# Land this host's pushes through Enact's merge queue: one fast check for a batch of up to 8
-# branches, instead of one per push plus a re-check whenever another push lands first.
-queue = true
+# Each push checks itself and pushes, and a push that loses the race to staging rebases and checks
+# again, rerunning only the lanes the commits that landed meanwhile can affect (`narrow` in
+# tools/src/beryl_tools/changes.py). The merge queue (`queue = true`) ran a second check of each
+# batch behind a lock shared with Cygnus; a lost lock threw a passing check away, and on
+# 2026-11-14 a push waited 20 minutes in it. The fast check now fits 60 s and stops at 180 s
+# (tools/src/beryl_tools/deadline.py), so a lost race costs little, and slow CI is the gate.
+queue = false
 
 # Beads labeled tier:light (mechanical work) run on a cheaper model.
 [tiers.light.claude]

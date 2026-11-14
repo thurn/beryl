@@ -26,6 +26,8 @@ def own_cache(
     monkeypatch.setenv("BERYL_CI_BEADS", "off")
     monkeypatch.setenv("BERYL_SPEED", "off")
     monkeypatch.delenv("BERYL_CHECK_RESULTS", raising=False)
+    # Nor does the fast check's time contract (deadline.py) reach a test run under it.
+    monkeypatch.delenv("BERYL_CHECK_STARTED", raising=False)
     monkeypatch.setattr(caches, "free_space", lambda _: 10 * caches.LOW_DISK)
     return cache
 

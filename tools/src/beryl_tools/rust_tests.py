@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from . import card_text, paths, runlog, tokens, verdicts, warm
+from . import card_text, deadline, paths, runlog, rust_fit, tokens, verdicts, warm
 from .reruns import ALLOCATIONS_FAILED, CANNOT_RUN, DOCTESTS_FAILED, failed_tests
 
 if TYPE_CHECKING:
@@ -237,6 +237,13 @@ def rust_tests_step(
             flush=True,
         )
         return subprocess.run(cargo, cwd=paths.RUST, check=False).returncode
+    # Inside a fast check, the tests that run are those that fit its target (rust_fit.py); the
+    # records to plan with are read while the tests build.
+    records = (
+        deadline.Records("rust")
+        if fast and not only and deadline.left() is not None
+        else None
+    )
     started = time.perf_counter()
     build = subprocess.run(
         [*cargo, "--no-run", "--message-format=json-render-diagnostics"],
@@ -296,19 +303,38 @@ def rust_tests_step(
     if slow:
         for check in [c for c in beside if c in verdicts.FAST_ONLY]:
             del beside[check]
-    jobs = [nextest] if only else [nextest, *(cmd for cmd, _ in beside.values())]
-    junit = nextest_junit()
-    junit.unlink(missing_ok=True)
-
     # The step's lease was sized when it started, often beside the browser lanes, which finish
     # first: nextest runs as wide as the tokens free once the build is done allow (tokens.py,
     # `top_up`). The other jobs only build and run a few binaries, so keep the step's lease.
     extra = tokens.top_up(tokens.largest(tokens.pool_size()))
+    threads = int(os.environ.get(tokens.LEASE_ENV) or 1) + extra.size
     wide: dict[str, str] | None = None
     if extra.size:
-        threads = int(os.environ[tokens.LEASE_ENV]) + extra.size
         print(f"rust-tests: nextest runs {threads} wide", flush=True)
         wide = {**os.environ, "NEXTEST_TEST_THREADS": str(threads)}
+    run_nextest = True
+    left = deadline.left()
+    tests = rust_fit.listed(scope, every) if records and left is not None else None
+    if records and tests is not None and left is not None:
+        chosen, kept, cut = rust_fit.plan(
+            tests, list(beside), records.get(), left, threads
+        )
+        if cut:
+            print(rust_fit.deferred_line(cut, left), flush=True)
+            for check in cut:
+                runlog.result(check, "skip", 0.0, "cut")
+            for check in [c for c in beside if c not in kept]:
+                del beside[check]
+            run_nextest = bool(chosen)
+            nextest[-1] = nextest_filter(chosen) if chosen else ""
+    jobs = [nextest] if only else [nextest, *(cmd for cmd, _ in beside.values())]
+    if not run_nextest:
+        jobs.remove(nextest)
+    if not jobs:
+        extra.release()
+        return 0
+    junit = nextest_junit()
+    junit.unlink(missing_ok=True)
 
     def run(cmd: list[str]) -> tuple[subprocess.CompletedProcess[str], float]:
         started = time.perf_counter()

@@ -8,14 +8,34 @@ The checks are defined in `.enact.toml`: `just check` (fast) and `just ci`
 
 ## The fast check
 
-`just check` (60 s budget) runs the lanes whose files have changed since the
-branch left `origin/staging`:
+`just check` runs the lanes whose files have changed since the branch left
+`origin/staging`. It is held to a time contract (`deadline.py`), because slow CI
+on staging is the gate that keeps `master` green and the fast check only has to
+catch the likely breaks before a push:
+
+- It should finish in 60 s on the reference machine with nothing else running
+  (the load-adjusted clock, `clock.py`).
+- However loaded the machine is, it should finish in 90 wall seconds. The steps
+  that can choose their work plan for less of it under load.
+- At 180 wall seconds it kills any step still running. That step and the rest of
+  its lane are deferred to slow CI (`deferred: <lane> <step>` lines), and the
+  run passes on what it did check.
+
+The steps that choose read the seconds left until the target: the browser
+checks, the Rust tests, the oracles and the motion capture. Each runs what fits
+and logs the rest as cut or deferred.
+
+The lanes:
 
 - `repo`: justfile and Markdown formatting.
 - `python`: black, pyre and pytest. If only cards or vocabulary changed, it runs
   just the scale harness's tests.
-- `rust`: rustfmt, clippy and tests, then `card-text`: every card file's
-  rendered rules text against its Oracle text, with the differences
+- `rust`: rustfmt, clippy and tests, then `card-text`. The tests that run are
+  those that fit the time left once they are built (`rust_fit.py`): tests the
+  run log has never timed first, then those that caught a break, then those that
+  fail most often, then the cheapest. Doctests and the `allocations` binaries
+  are planned the same way. Then `card-text` checks every card file's rendered
+  rules text against its Oracle text, with the differences
   `data/card-text-allowlist.json` pins (`card_text.py`), skipped when the change
   cannot reach `beryl_cards` or the check's own lists and code. The tests
   include the mutation check `every_mutant_of_a_card_is_killed_by_its_scenarios`
@@ -41,8 +61,11 @@ branch left `origin/staging`:
   - `citations`: `just citations` on the changed files, using the cached rules
     text, and skipped if none is cached. Slow CI runs it on the whole tree and
     downloads the text.
-- `oracle`: the scenarios in each changed card file, run in XMage and Forge.
-  Skipped if another oracle run has held the oracles for more than 10 s.
+- `oracle`: the scenarios in each changed card file, run in XMage and Forge, for
+  the cards whose recorded times fit what is left, cheapest first
+  (`oracle_selection.fitted`). Slow CI's `oracle` lane plays every card changed
+  since `master`. Skipped if another oracle run has held the oracles for more
+  than 10 s.
 - `motion`: `just motion`, when the stage, its capture code or the animation
   data changed. It records each animation verb in stepped stage time, measures
   it the same way Arena's clips were measured, and compares it with its own
@@ -54,19 +77,19 @@ branch left `origin/staging`:
   nightly.
 
 For a change to `ui/` or `rust/`, it also runs as many of the `ui-test` and
-`shots` browser checks as fit in the budget, choosing those the change could
+`shots` browser checks as fit in the time left, choosing those the change could
 break according to the coverage data (`just coverage`), worst failure history
 first. The run log's `chosen` field says why each one ran, and `cut` marks the
 ones left to the browser sweep. The fast check also rejects conflict markers and
 badly formatted commit subjects.
 
-`enact push` runs the fast check in the branch's own worktree, then lands the
-branch through Enact's merge queue, which checks a batch of pushes together on
-the staging tip. That second check reruns only the lanes that a branch's own
-change and the rest of the merged tree both select: the commits that landed on
-staging since the branch's check, and the batch's other branches (`narrow` in
-`changes.py`). A branch that lands alone on the tip it was checked on is not
-checked again.
+`enact push` runs the fast check in the branch's own worktree and pushes to
+staging. A push that loses the race to staging rebases and checks again,
+rerunning only the lanes that both the branch's own change and the commits that
+landed meanwhile select (`narrow` in `changes.py`). Enact's merge queue, which
+checked each batch of pushes a second time behind a lock shared with Cygnus, is
+off (`[push] queue` in `.enact.toml`): a lost lock threw passing checks away,
+and pushes waited up to 20 minutes in it.
 
 ## Slow CI
 
@@ -207,8 +230,10 @@ skill works them as one Enact run, grouped by shared cause.
 ## Budgets and hang limits
 
 - A run that goes over budget still passes. No timer fails a run for being slow.
-  A fast check over its 60 s budget files a `check-budget` bead (`budget.py`) to
-  speed up, move or delete its slowest steps instead of raising the budget.
+  A fast check over its 60 s target, or over 90 wall seconds, files a
+  `check-budget` bead (`budget.py`) to speed up, move or delete its slowest
+  steps instead of raising the budget. A step the fast check's 180 s hard limit
+  cuts off is deferred to slow CI, not failed.
 - Slow CI's budget is in CPU seconds (`budget.SLOW_CPU_BUDGET`, 800), because
   the machine is never quiet and wall seconds measure its load. Its summary line
   still shows wall seconds against 300 s (450 s on Windows), which files
@@ -301,14 +326,15 @@ processes are attributed.
   lanes with heavy steps still running, so ten lanes that start at once share
   the pool instead of the first taking most of it.
 - The classes, highest first, are the merge queue's fast check of a batch of
-  pushes, the fast check a push runs in its own worktree, a command an agent
-  runs by hand, and slow CI. Every push on the machine waits for the queue's
-  check, so it comes first: pushes' own checks together hold at most seven
-  eighths of the pool. Agents' commands and slow CI together hold at most three
-  quarters, so a push always finds free tokens. Slow CI may take any of those
-  tokens that nobody else holds. A class takes nothing while a higher one waits.
-  Work at utility QoS (tournaments, the nightly, the justfile's `low`) takes no
-  tokens, because macOS already gives every core to normal-priority work first.
+  pushes (unused while the queue is off), the fast check a push runs in its own
+  worktree, a command an agent runs by hand, and slow CI. Every push on the
+  machine waits for the queue's check, so it comes first: pushes' own checks
+  together hold at most seven eighths of the pool. Agents' commands and slow CI
+  together hold at most three quarters, so a push always finds free tokens. Slow
+  CI may take any of those tokens that nobody else holds. A class takes nothing
+  while a higher one waits. Work at utility QoS (tournaments, the nightly, the
+  justfile's `low`) takes no tokens, because macOS already gives every core to
+  normal-priority work first.
 - A check step's wait for tokens does not count against its hang limit or the
   run's budget: the step's log line reports the wait apart from the step's own
   time. `just tokens` shows who holds and waits for tokens. `BERYL_CPU_POOL=0`
