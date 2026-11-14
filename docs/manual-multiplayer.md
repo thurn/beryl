@@ -294,9 +294,11 @@ naming what to do and to which objects. Gestures, menu rows, shortcuts, the
 command list and assists all produce actions, and nothing else changes the
 table.
 
-Every action names its objects by id together with the zone the sender saw them
-in. Two examples show the shape. The first moves two cards from a hand to a
-graveyard. The second adds a counter.
+The host log records object ids together with the zones they occupied when the
+action was chosen. In the examples below, one action moves two cards from a hand
+to a graveyard and the other adds a counter. Player requests use the same fields
+with the viewer references described under
+[Views and animation](#views-and-animation).
 
 ```json
 { "move": { "objects": [12, 15], "in": { "hand": 0 },
@@ -386,9 +388,9 @@ me choose a card from your hand takes two actions (you reveal, I move the card
 to your graveyard) where Cockatrice needs a third step in between: I tell you
 which card, and you move it.
 
-The host also refuses an action whose objects are no longer in the zone the
-action names. If the other player moved the card a moment earlier, the action is
-refused as stale and never applied to the wrong place.
+The host returns a stale refusal for a reference from an older view, from
+another seat, or with a different expected zone. The host resolves current
+references to its object ids before checking the action’s permissions.
 
 ### The log, undo and rewind
 
@@ -514,6 +516,33 @@ games, and the adapter translates seat numbers into those sides for each viewer.
 This is the one place the design is tied to two seats. A table for more players
 would change the view type and the stage's layout, and nothing beneath them.
 
+### Object references for actions
+
+`TableView.objectActions` lists the displayed cards and stack markers the viewer
+can act on. Each entry pairs a stage subject with an opaque `reference` and its
+expected `zone`. A card uses its displayed slot as the subject. A marker uses
+the same ability number as its animation, so two markers from the same source
+with the same text can still be chosen separately. A card back can have an
+action reference, for example in a lent opposing pile.
+
+The client looks up the entry for the displayed subject and copies its reference
+and zone into the request. In a `TableAction`, a selection lists these
+references in `objects` and supplies their common zone in `in`. An individual
+target like `attach.host` carries a reference in `id` and its zone in `in`. The
+same rule applies to explicit reveals and every member of a batch. Seat numbers
+and zones use the existing action format. The generated protocol includes these
+types, so `WIRE_HASH` covers them.
+
+On the host, create a `TableActionRefs` mapping for the viewer when publishing a
+view. Register each projected card or marker with `expose` and copy the entries
+from `actions` into `TableView.object_actions`. Keep the matching mapping per
+authenticated seat alongside the view, and route `table_act` and linked requests
+through `TableActionRefs::apply`. The host issues fresh references on each
+publication and refuses old references even if the same slot now contains a card
+in the same zone. A committed action also invalidates references from earlier
+table revisions before a replacement view is published. The log and save file
+continue to use the host's object ids.
+
 ## Networking
 
 This section specifies how two apps share a table. The **host** is the player
@@ -631,8 +660,10 @@ After it, the two sides exchange these messages.
   count as a dropped connection.
 
 ```json
-{ "act": { "n": 118, "action": { "tap": { "objects": [41],
-                                          "in": "battlefield", "to": true } } } }
+{ "act": { "n": 118, "action": { "tap": {
+    "objects": [{ "view": "e61eb43cb57846e8b853fd0aa20c38bc", "handle": 3 }],
+    "in": "battlefield", "tapped": true
+} } } }
 { "done": { "n": 118 } }
 { "update": { "view": { "…": "…" }, "script": { "…": "…" } } }
 ```

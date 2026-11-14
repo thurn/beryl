@@ -18,6 +18,8 @@ beryl_card_store = { path = "../beryl_card_store" }
 beryl_cards = { path = "../beryl_cards" }
 beryl_engine = { path = "../beryl_engine" }
 beryl_search = { path = "../beryl_search" }
+# Generates viewer table commands from the action schema shared with the host log.
+beryl_table = { path = "../beryl_table", features = ["ts"] }
 # The frozen save corpus is gzipped (`corpus`): a save's JSON shrinks twentyfold.
 flate2 = "1.1.10"
 serde = { version = "1.0.229", features = ["derive"] }

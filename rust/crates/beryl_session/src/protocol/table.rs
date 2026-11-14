@@ -4,6 +4,31 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::{ObjectId, Side, TargetRef, ZoneName};
+use crate::script::Subject;
+
+mod actions;
+
+pub use actions::TableActionRefs;
+
+/// An opaque object reference issued to one viewer for one published view.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TableObjectRef {
+    view: String,
+    handle: u32,
+}
+
+/// The action schema shared with the host log, with viewer references in every object field.
+pub type TableAction = beryl_table::Action<TableObjectRef>;
+
+/// An actionable card or stack marker in this view, with the zone required by commands.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TableObjectAction {
+    pub subject: Subject,
+    pub reference: TableObjectRef,
+    pub zone: beryl_table::state::Zone,
+}
 
 /// A battlefield row explicitly chosen by a player.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -187,6 +212,8 @@ pub struct TableView {
     pub orders: ManualOrders,
     /// Hidden zones lent or revealed to this viewer.
     pub acting: Vec<ZoneRef>,
+    /// References for actionable objects and stack markers shown in this view.
+    pub object_actions: Vec<TableObjectAction>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub prompt: Option<TablePrompt>,

@@ -4,12 +4,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::Action;
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableSeat"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Seat(pub u8);
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ObjectId(pub u32);
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableCard"))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Card {
@@ -24,6 +27,7 @@ pub enum Card {
     },
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableFace"))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Face {
@@ -33,6 +37,7 @@ pub enum Face {
     Down,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableRow"))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Row {
@@ -43,6 +48,7 @@ pub enum Row {
     Lands,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableZone"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Zone {
@@ -154,6 +160,7 @@ impl Player {
     }
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableActionPhase"))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Phase {
@@ -214,6 +221,7 @@ pub struct Match {
     pub last_winner: Option<Seat>,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableAssist"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Assist {
@@ -320,6 +328,11 @@ impl Table {
             next_id: 1,
             entry_number: 0,
         }
+    }
+
+    /// Advances with every committed action, including undo and rewind.
+    pub fn revision(&self) -> u32 {
+        self.entry_number
     }
 
     pub fn seats(&self) -> impl Iterator<Item = Seat> + '_ {

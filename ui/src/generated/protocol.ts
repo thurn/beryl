@@ -696,7 +696,15 @@ export type TableView = { log: Array<LogLine>, proposals: Array<ProposalView>, l
 /**
  * Hidden zones lent or revealed to this viewer.
  */
-acting: Array<ZoneRef>, prompt?: TablePrompt, };
+acting: Array<ZoneRef>, 
+/**
+ * References for actionable objects and stack markers shown in this view.
+ */
+objectActions: Array<TableObjectAction>, prompt?: TablePrompt, };
+
+export type TableObjectRef = { view: string, handle: number, };
+
+export type TableObjectAction = { subject: Subject, reference: TableObjectRef, zone: TableZone, };
 
 export type LogLine = { n: number, 
 /**
@@ -717,6 +725,52 @@ export type TablePhase = "untap" | "upkeep" | "draw" | "firstMain" | "beginningO
 export type ZoneRef = { side: Side, zone: ZoneName, };
 
 export type TablePrompt = { "kind": "none" };
+
+export type TableActionOf<Id> = { "move": { to: TableDestination, position?: TablePosition, face?: TableFace, tapped?: boolean, objects: Array<Id>, in: TableZone, } } | { "reorder": { position: TablePosition, objects: Array<Id>, in: TableZone, } } | { "pin": { row: TableRow, objects: Array<Id>, in: TableZone, } } | { "give": { to: TableSeat, objects: Array<Id>, in: TableZone, } } | { "tap": { tapped: boolean, objects: Array<Id>, in: TableZone, } } | { "face": { face: TableFace, objects: Array<Id>, in: TableZone, } } | { "flag": { doesnt_untap: boolean, objects: Array<Id>, in: TableZone, } } | { "peek": { objects: Array<Id>, in: TableZone, } } | { "counter": { name: string, objects: Array<Id>, in: TableZone, } & ({ "add": number } | { "set": number }) } | { "stats": { stats: [number, number] | null, objects: Array<Id>, in: TableZone, } } | { "damage": { damage: number, objects: Array<Id>, in: TableZone, } } | { "note": { note: string | null, objects: Array<Id>, in: TableZone, } } | { "attach": { host: TableSeenObject<Id>, objects: Array<Id>, in: TableZone, } } | { "unattach": { objects: Array<Id>, in: TableZone, } } | { "clone": { objects: Array<Id>, in: TableZone, } } | { "token": { card: TableCard, count: number, attached_to: TableSeenObject<Id> | null, note: string | null, } } | { "marker": { text: string, objects: Array<Id>, in: TableZone, } } | { "remove": { objects: Array<Id>, in: TableZone, } } | { "draw": { seat: TableSeat, count: number, } } | { "mulligan": { seat: TableSeat, count: number, } } | { "shuffle": { seat: TableSeat, portion: TablePortion, } } | { "look": { seat: TableSeat, portion: TablePortion, } } | { "reveal": { in: TableZone, 
+/**
+ * With neither objects nor a count, reveal the whole zone.
+ */
+objects?: Array<Id>, random?: number, to: Array<TableSeat>, } } | { "lend": { in: TableZone, to: TableSeat, } } | { "always_reveal_top": { seat: TableSeat, on: boolean, } } | { "always_look_at_top": { seat: TableSeat, on: boolean, } } | { "sort_hand": { seat: TableSeat, by: TableSortBy, } } | { "life": { seat: TableSeat, } & ({ "add": number } | { "set": number }) } | { "player_counter": { seat: TableSeat, name: string, } & ({ "add": number } | { "set": number }) } | { "phase": { phase: TableActionPhase, } } | { "next_turn": Record<symbol, never> } | { "roll": { count: number, sides: number, } } | { "arrow": { to: TableTarget<Id>, objects: Array<Id>, in: TableZone, } } | { "clear_arrows": { from: TableSeenObject<Id> | null, to: TableTarget<Id> | null, } } | { "load_deck": { seat: TableSeat, main: Array<[string, number]>, side: Array<[string, number]>, } } | { "sideboard": { seat: TableSeat, into_main: Array<[string, number]>, into_side: Array<[string, number]>, } } | { "ready": { seat: TableSeat, ready: boolean, } } | { "start": { first: TableSeat, } } | { "next_game": { winner: TableSeat | null, } } | { "concede": Record<symbol, never> } | { "set_assist": { assist: TableAssist, on: boolean, } } | { "flow": { seat: TableSeat, flow: TableFlow, count: number, } } | { "undo": { 
+/**
+ * A seat can name its own draw or a batch from either seat.
+ */
+entry?: number, } } | { "rewind": { to: number, } } | { "batch": { actions: Array<TableActionOf<Id>>, } };
+
+export type TableAction = TableActionOf<TableObjectRef>;
+
+export type TableSelection<Id> = { objects: Array<Id>, in: TableZone, };
+
+export type TableSeenObject<Id> = { id: Id, in: TableZone, };
+
+export type TableTarget<Id> = { "object": TableSeenObject<Id> } | { "player": TableSeat };
+
+export type TableAdjustment = { "add": number } | { "set": number };
+
+export type TableDestination = TableZone | TableComputedDestination;
+
+export type TableComputedDestination = "play" | "resolve";
+
+export type TableFlow = "scry" | "surveil" | "look_at_top";
+
+export type TablePortion = "all" | { "top": number } | { "bottom": number };
+
+export type TablePosition = "top" | "bottom" | { "nth": number };
+
+export type TableSortBy = "name" | "type" | "mana_value";
+
+export type TableAssist = "turn_upkeep" | "combat" | "state_nudges" | "library_flows" | "ability_menus";
+
+export type TableCard = "hidden" | { "named": string } | { "custom": { name: string, types: string, colors: Array<string>, stats: [number, number] | null, } };
+
+export type TableFace = "front" | "back" | "down";
+
+export type TableActionPhase = "untap" | "upkeep" | "draw" | "first_main" | "beginning_of_combat" | "declare_attackers" | "declare_blockers" | "combat_damage" | "end_of_combat" | "second_main" | "end";
+
+export type TableRow = "auto" | "creatures" | "others" | "lands";
+
+export type TableSeat = number;
+
+export type TableZone = { "library": TableSeat } | { "hand": TableSeat } | { "graveyard": TableSeat } | { "exile": TableSeat } | { "sideboard": TableSeat } | "battlefield" | "stack";
 
 export type PromptView = { 
 /**

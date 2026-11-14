@@ -45,6 +45,7 @@ mod smart_stops;
 mod splits;
 mod stop_places;
 mod streaming;
+mod table_actions;
 mod typescript;
 mod undo;
 mod zone_picks;

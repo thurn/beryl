@@ -163,6 +163,7 @@ fn manual_view_with_ordered_zones() -> PlayerView {
             opponent: ManualPiles::default(),
         },
         acting: vec![],
+        object_actions: vec![],
         prompt: None,
     });
 

@@ -105,6 +105,13 @@ fn can_use_zone(table: &Table, by: Seat, zone: Zone) -> bool {
     hidden_owner(zone).is_none_or(|owner| owner == by) || table.lent_zones.contains(&(zone, by))
 }
 
+/// The expected zone to offer with a projected object the seat can act on.
+pub fn reference_zone(table: &Table, by: Seat, id: ObjectId) -> Option<Zone> {
+    table.players.get(usize::from(by.0))?;
+    let (zone, _) = table.position(id)?;
+    can_use_card(table, by, SeenObject { id, zone }).then_some(zone)
+}
+
 fn can_use_card(table: &Table, by: Seat, seen: SeenObject) -> bool {
     can_use_zone(table, by, seen.zone)
         || (matches!(seen.zone, Zone::Hand(_))

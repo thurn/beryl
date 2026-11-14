@@ -25,7 +25,8 @@ use crate::protocol::{
 };
 use crate::protocol::{
     AssistsView, FaceName, LabelView, LogLine, ManualAbility, ManualOrders, ManualPiles,
-    NamedCounter, ProposalLine, ProposalView, RowName, TablePhase, TablePrompt, TableView, ZoneRef,
+    NamedCounter, ProposalLine, ProposalView, RowName, TableObjectAction, TableObjectRef,
+    TablePhase, TablePrompt, TableView, ZoneRef,
 };
 use crate::script::{
     Act, Arrow, Fact, Mark, Notice, Reset, Script, Span, Step as ScriptStep, Stream, Subject,
@@ -58,7 +59,7 @@ fn prompt_decls(cfg: &Config) -> [String; 18] {
 }
 
 /// Types used by manual table views and their scripts.
-fn table_decls(cfg: &Config) -> [String; 15] {
+fn table_decls(cfg: &Config) -> [String; 17] {
     [
         FaceName::decl(cfg),
         ManualAbility::decl(cfg),
@@ -67,6 +68,8 @@ fn table_decls(cfg: &Config) -> [String; 15] {
         ManualPiles::decl(cfg),
         ManualOrders::decl(cfg),
         TableView::decl(cfg),
+        TableObjectRef::decl(cfg),
+        TableObjectAction::decl(cfg),
         LogLine::decl(cfg),
         ProposalView::decl(cfg),
         ProposalLine::decl(cfg),
@@ -78,103 +81,139 @@ fn table_decls(cfg: &Config) -> [String; 15] {
     ]
 }
 
+fn table_action_decls(cfg: &Config) -> [String; 19] {
+    use beryl_table::action::{
+        Action, Adjustment, ComputedDestination, Destination, Flow, Portion, Position, SeenObject,
+        Selection, SortBy, Target,
+    };
+    use beryl_table::state::{Assist, Card, Face, Phase, Row, Seat, Zone};
+
+    [
+        Action::<TableObjectRef>::decl(cfg).replace("Id = ObjectId", "Id"),
+        "type TableAction = TableActionOf<TableObjectRef>;".into(),
+        Selection::<TableObjectRef>::decl(cfg).replace("Id = ObjectId", "Id"),
+        SeenObject::<TableObjectRef>::decl(cfg).replace("Id = ObjectId", "Id"),
+        Target::<TableObjectRef>::decl(cfg).replace("Id = ObjectId", "Id"),
+        Adjustment::decl(cfg),
+        Destination::decl(cfg),
+        ComputedDestination::decl(cfg),
+        Flow::decl(cfg),
+        Portion::decl(cfg),
+        Position::decl(cfg),
+        SortBy::decl(cfg),
+        Assist::decl(cfg),
+        Card::decl(cfg),
+        Face::decl(cfg),
+        Phase::decl(cfg),
+        Row::decl(cfg),
+        Seat::decl(cfg),
+        Zone::decl(cfg),
+    ]
+}
+
+fn session_decls(cfg: &Config) -> impl IntoIterator<Item = String> {
+    [
+        AppInfo::decl(cfg),
+        Platform::decl(cfg),
+        Fixture::decl(cfg),
+        FixtureMessage::decl(cfg),
+        StartRequest::decl(cfg),
+        ChooseRequest::decl(cfg),
+        SetStopsRequest::decl(cfg),
+        CancelRequest::decl(cfg),
+        UndoRequest::decl(cfg),
+        PassOnRequest::decl(cfg),
+        ConcedeRequest::decl(cfg),
+        ShareBugRequest::decl(cfg),
+        BugReport::decl(cfg),
+        Region::decl(cfg),
+        PageInfo::decl(cfg),
+        BugSaved::decl(cfg),
+        CardRecordsRequest::decl(cfg),
+        CardRecords::decl(cfg),
+        CardEntry::decl(cfg),
+        CardFace::decl(cfg),
+        CardImages::decl(cfg),
+        UiLogRequest::decl(cfg),
+        UiLogEntry::decl(cfg),
+        Level::decl(cfg),
+        SessionError::decl(cfg),
+        GameUpdate::decl(cfg),
+        AgentView::decl(cfg),
+        SessionId::decl(cfg),
+        DecisionId::decl(cfg),
+        CandidateIndex::decl(cfg),
+        PlayerView::decl(cfg),
+        Status::decl(cfg),
+        CardHandling::decl(cfg),
+        Side::decl(cfg),
+        TurnView::decl(cfg),
+        Players::decl(cfg),
+        PlayerState::decl(cfg),
+        Declaration::decl(cfg),
+        ManaPool::decl(cfg),
+        ObjectView::decl(cfg),
+        Facing::decl(cfg),
+        PowerToughness::decl(cfg),
+        CounterView::decl(cfg),
+        Combat::decl(cfg),
+        StackItem::decl(cfg),
+        PaidCost::decl(cfg),
+        TargetRef::decl(cfg),
+        DecisionView::decl(cfg),
+        PassTo::decl(cfg),
+        Refused::decl(cfg),
+        RefusalView::decl(cfg),
+        CandidateView::decl(cfg),
+        Payment::decl(cfg),
+        Candidate::decl(cfg),
+        OutcomeView::decl(cfg),
+        Stall::decl(cfg),
+        LossReason::decl(cfg),
+        Culprit::decl(cfg),
+        AbilityRef::decl(cfg),
+        AbilityClass::decl(cfg),
+        StopsSetting::decl(cfg),
+        GameEvent::decl(cfg),
+        Kind::decl(cfg),
+        Step::decl(cfg),
+        ZoneName::decl(cfg),
+        Why::decl(cfg),
+        Counter::decl(cfg),
+        Mana::decl(cfg),
+        CardType::decl(cfg),
+        Keyword::decl(cfg),
+        Script::decl(cfg),
+        Reset::decl(cfg),
+        ScriptStep::decl(cfg),
+        Subject::decl(cfg),
+        Act::decl(cfg),
+        Stream::decl(cfg),
+        Tally::decl(cfg),
+        Fact::decl(cfg),
+        Notice::decl(cfg),
+        Span::decl(cfg),
+        Verb::decl(cfg),
+        Mark::decl(cfg),
+        Arrow::decl(cfg),
+    ]
+}
+
 /// Where the generated file lives, from the repository root.
 pub const PATH: &str = "ui/src/generated/protocol.ts";
 
 /// The generated file's contents.
 pub fn typescript() -> String {
     let cfg = Config::new();
-    let decls = [
-        AppInfo::decl(&cfg),
-        Platform::decl(&cfg),
-        Fixture::decl(&cfg),
-        FixtureMessage::decl(&cfg),
-        StartRequest::decl(&cfg),
-        ChooseRequest::decl(&cfg),
-        SetStopsRequest::decl(&cfg),
-        CancelRequest::decl(&cfg),
-        UndoRequest::decl(&cfg),
-        PassOnRequest::decl(&cfg),
-        ConcedeRequest::decl(&cfg),
-        ShareBugRequest::decl(&cfg),
-        BugReport::decl(&cfg),
-        Region::decl(&cfg),
-        PageInfo::decl(&cfg),
-        BugSaved::decl(&cfg),
-        CardRecordsRequest::decl(&cfg),
-        CardRecords::decl(&cfg),
-        CardEntry::decl(&cfg),
-        CardFace::decl(&cfg),
-        CardImages::decl(&cfg),
-        UiLogRequest::decl(&cfg),
-        UiLogEntry::decl(&cfg),
-        Level::decl(&cfg),
-        SessionError::decl(&cfg),
-        GameUpdate::decl(&cfg),
-        AgentView::decl(&cfg),
-        SessionId::decl(&cfg),
-        DecisionId::decl(&cfg),
-        CandidateIndex::decl(&cfg),
-        PlayerView::decl(&cfg),
-        Status::decl(&cfg),
-        CardHandling::decl(&cfg),
-        Side::decl(&cfg),
-        TurnView::decl(&cfg),
-        Players::decl(&cfg),
-        PlayerState::decl(&cfg),
-        Declaration::decl(&cfg),
-        ManaPool::decl(&cfg),
-        ObjectView::decl(&cfg),
-        Facing::decl(&cfg),
-        PowerToughness::decl(&cfg),
-        CounterView::decl(&cfg),
-        Combat::decl(&cfg),
-        StackItem::decl(&cfg),
-        PaidCost::decl(&cfg),
-        TargetRef::decl(&cfg),
-        DecisionView::decl(&cfg),
-        PassTo::decl(&cfg),
-        Refused::decl(&cfg),
-        RefusalView::decl(&cfg),
-        CandidateView::decl(&cfg),
-        Payment::decl(&cfg),
-        Candidate::decl(&cfg),
-        OutcomeView::decl(&cfg),
-        Stall::decl(&cfg),
-        LossReason::decl(&cfg),
-        Culprit::decl(&cfg),
-        AbilityRef::decl(&cfg),
-        AbilityClass::decl(&cfg),
-        StopsSetting::decl(&cfg),
-        GameEvent::decl(&cfg),
-        Kind::decl(&cfg),
-        Step::decl(&cfg),
-        ZoneName::decl(&cfg),
-        Why::decl(&cfg),
-        Counter::decl(&cfg),
-        Mana::decl(&cfg),
-        CardType::decl(&cfg),
-        Keyword::decl(&cfg),
-        Script::decl(&cfg),
-        Reset::decl(&cfg),
-        ScriptStep::decl(&cfg),
-        Subject::decl(&cfg),
-        Act::decl(&cfg),
-        Stream::decl(&cfg),
-        Tally::decl(&cfg),
-        Fact::decl(&cfg),
-        Notice::decl(&cfg),
-        Span::decl(&cfg),
-        Verb::decl(&cfg),
-        Mark::decl(&cfg),
-        Arrow::decl(&cfg),
-    ];
     let mut out = String::from(
         "// Generated from rust/crates/beryl_session by ts-rs; do not edit. Regenerate with\n\
          // `BERYL_UPDATE_TS=1 just test-rust -p beryl_session --test session typescript`.\n",
     );
-    let extra = table_decls(&cfg).into_iter().chain(prompt_decls(&cfg));
-    for decl in decls.into_iter().chain(extra) {
+    let extra = table_decls(&cfg)
+        .into_iter()
+        .chain(table_action_decls(&cfg))
+        .chain(prompt_decls(&cfg));
+    for decl in session_decls(&cfg).into_iter().chain(extra) {
         out.push('\n');
         out.push_str("export ");
         out.push_str(&decl);

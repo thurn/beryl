@@ -2,29 +2,35 @@ use serde::{Deserialize, Serialize};
 
 use crate::state::{Assist, Card, Face, ObjectId, Phase, Row, Seat, Zone};
 
+mod references;
+
 /// The ids and the zone they occupied when the sender chose them.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableSelection"))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Selection {
-    pub objects: Vec<ObjectId>,
+pub struct Selection<Id = ObjectId> {
+    pub objects: Vec<Id>,
     #[serde(rename = "in")]
     pub zone: Zone,
 }
 
 /// A secondary target carries the same staleness information as the selection.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableSeenObject"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SeenObject {
-    pub id: ObjectId,
+pub struct SeenObject<Id = ObjectId> {
+    pub id: Id,
     #[serde(rename = "in")]
     pub zone: Zone,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableTarget"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Target {
-    Object(SeenObject),
+pub enum Target<Id = ObjectId> {
+    Object(SeenObject<Id>),
     Player(Seat),
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableDestination"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Destination {
@@ -32,6 +38,11 @@ pub enum Destination {
     Computed(ComputedDestination),
 }
 
+#[cfg_attr(
+    feature = "ts",
+    derive(ts_rs::TS),
+    ts(rename = "TableComputedDestination")
+)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ComputedDestination {
@@ -40,6 +51,7 @@ pub enum ComputedDestination {
 }
 
 /// `Nth(0)` means the top. The index is measured after excluding the moving cards.
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TablePosition"))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Position {
@@ -55,6 +67,7 @@ impl Position {
     }
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableAdjustment"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Adjustment {
@@ -71,6 +84,7 @@ impl Adjustment {
     }
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TablePortion"))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Portion {
@@ -80,6 +94,7 @@ pub enum Portion {
     Bottom(u16),
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableSortBy"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SortBy {
@@ -88,6 +103,7 @@ pub enum SortBy {
     ManaValue,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableFlow"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Flow {
@@ -96,103 +112,107 @@ pub enum Flow {
     LookAtTop,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableActionOf"))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Action {
+#[serde(bound(deserialize = "Id: Deserialize<'de>"))]
+pub enum Action<Id = ObjectId> {
     Move {
         #[serde(flatten)]
-        selection: Selection,
+        selection: Selection<Id>,
         to: Destination,
         #[serde(default, skip_serializing_if = "Position::is_top")]
         position: Position,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(feature = "ts", ts(optional))]
         face: Option<Face>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(feature = "ts", ts(optional))]
         tapped: Option<bool>,
     },
     Reorder {
         #[serde(flatten)]
-        selection: Selection,
+        selection: Selection<Id>,
         position: Position,
     },
     Pin {
         #[serde(flatten)]
-        selection: Selection,
+        selection: Selection<Id>,
         row: Row,
     },
     Give {
         #[serde(flatten)]
-        selection: Selection,
+        selection: Selection<Id>,
         to: Seat,
     },
     Tap {
         #[serde(flatten)]
-        selection: Selection,
+        selection: Selection<Id>,
         tapped: bool,
     },
     Face {
         #[serde(flatten)]
-        selection: Selection,
+        selection: Selection<Id>,
         face: Face,
     },
     Flag {
         #[serde(flatten)]
-        selection: Selection,
+        selection: Selection<Id>,
         doesnt_untap: bool,
     },
     Peek {
         #[serde(flatten)]
-        selection: Selection,
+        selection: Selection<Id>,
     },
     Counter {
         #[serde(flatten)]
-        selection: Selection,
+        selection: Selection<Id>,
         name: String,
         #[serde(flatten)]
         adjustment: Adjustment,
     },
     Stats {
         #[serde(flatten)]
-        selection: Selection,
+        selection: Selection<Id>,
         stats: Option<(i32, i32)>,
     },
     Damage {
         #[serde(flatten)]
-        selection: Selection,
+        selection: Selection<Id>,
         damage: i32,
     },
     Note {
         #[serde(flatten)]
-        selection: Selection,
+        selection: Selection<Id>,
         note: Option<String>,
     },
     Attach {
         #[serde(flatten)]
-        selection: Selection,
-        host: SeenObject,
+        selection: Selection<Id>,
+        host: SeenObject<Id>,
     },
     Unattach {
         #[serde(flatten)]
-        selection: Selection,
+        selection: Selection<Id>,
     },
     Clone {
         #[serde(flatten)]
-        selection: Selection,
+        selection: Selection<Id>,
     },
     Token {
         card: Card,
         count: u16,
-        attached_to: Option<SeenObject>,
+        attached_to: Option<SeenObject<Id>>,
         note: Option<String>,
     },
     Marker {
         #[serde(flatten)]
-        selection: Selection,
+        selection: Selection<Id>,
         text: String,
     },
     Remove {
         #[serde(flatten)]
-        selection: Selection,
+        selection: Selection<Id>,
     },
     Draw {
         seat: Seat,
@@ -216,8 +236,10 @@ pub enum Action {
         zone: Zone,
         /// With neither objects nor a count, reveal the whole zone.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        objects: Option<Vec<ObjectId>>,
+        #[cfg_attr(feature = "ts", ts(optional))]
+        objects: Option<Vec<Id>>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(feature = "ts", ts(optional))]
         random: Option<u16>,
         to: Vec<Seat>,
     },
@@ -259,12 +281,12 @@ pub enum Action {
     },
     Arrow {
         #[serde(flatten)]
-        selection: Selection,
-        to: Target,
+        selection: Selection<Id>,
+        to: Target<Id>,
     },
     ClearArrows {
-        from: Option<SeenObject>,
-        to: Option<Target>,
+        from: Option<SeenObject<Id>>,
+        to: Option<Target<Id>>,
     },
     LoadDeck {
         seat: Seat,
@@ -299,12 +321,13 @@ pub enum Action {
     Undo {
         /// A seat can name its own draw or a batch from either seat.
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(feature = "ts", ts(optional))]
         entry: Option<u32>,
     },
     Rewind {
         to: u32,
     },
     Batch {
-        actions: Vec<Action>,
+        actions: Vec<Action<Id>>,
     },
 }

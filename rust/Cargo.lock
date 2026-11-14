@@ -452,6 +452,7 @@ dependencies = [
  "beryl_engine",
  "beryl_scenario",
  "beryl_search",
+ "beryl_table",
  "flate2",
  "proptest",
  "serde",
@@ -469,6 +470,7 @@ dependencies = [
  "beryl_card_store",
  "serde",
  "serde_json",
+ "ts-rs",
 ]
 
 [[package]]
