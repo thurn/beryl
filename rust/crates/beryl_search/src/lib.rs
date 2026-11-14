@@ -368,6 +368,7 @@ const DEEP_SEER: Family = Family {
         combat: false,
         order: false,
         sure: false,
+        walker: false,
     },
 };
 
@@ -400,6 +401,7 @@ pub const DEEP_SEARCHER: Family = Family {
         combat: false,
         order: false,
         sure: false,
+        walker: false,
     },
 };
 
@@ -446,7 +448,7 @@ pub fn find_agent(name: &str) -> Result<Option<&'static AgentInfo>, String> {
     let found = agent(name);
     if found.is_none() && name.starts_with("greedy+") {
         return Err(format!(
-            "{name:?}: greedy rules are hold, waste, combat, each at most once and in that order"
+            "{name:?}: greedy rules are hold, waste, combat, walker, each at most once and in that order (walker requires combat)"
         ));
     }
     Ok(found)

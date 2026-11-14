@@ -588,6 +588,48 @@ mod tests {
     }
 
     #[test]
+    fn walker_sends_both_attackers_at_the_planeswalker_that_can_win() {
+        let e = entry("spare-jace-wielder");
+        let at = reach(&e).unwrap();
+        let seed = run_seed(&e.name, 0);
+        let mut base = build(&at.t, "greedy+hold+waste+combat", seed).unwrap();
+        let mut walker = build(&at.t, "greedy+hold+waste+combat+walker", seed).unwrap();
+        assert!(!passes(&e, &play(&e, &at, &mut base)));
+        assert!(passes(&e, &play(&e, &at, &mut walker)));
+
+        // A zero-budget anchored search should use the same plan through both declarations.
+        let family = "pimc2/hidden/rollout/tuned/anchor+hold+waste+combat+walker"
+            .parse()
+            .unwrap();
+        let settings = beryl_search::Settings {
+            family,
+            work: 0,
+            threads: 1,
+        };
+        let mut search = beryl_search::LongSearch::new(&at.t, settings, seed);
+        assert!(passes(&e, &play(&e, &at, &mut search)));
+    }
+
+    #[test]
+    fn walker_preserves_the_other_combat_answers() {
+        for name in [
+            "beza-trinket-into-blockers",
+            "manifest-into-samurai",
+            "spirits-stay-home",
+            "skip-beza-after-winds",
+        ] {
+            let e = entry(name);
+            let at = reach(&e).unwrap();
+            let seed = run_seed(name, 0);
+            let mut base = build(&at.t, "greedy+hold+waste+combat", seed).unwrap();
+            let mut walker = build(&at.t, "greedy+hold+waste+combat+walker", seed).unwrap();
+            let expected = play(&e, &at, &mut base);
+            assert!(passes(&e, &expected), "{name}: {expected:?}");
+            assert_eq!(play(&e, &at, &mut walker), expected, "{name}");
+        }
+    }
+
+    #[test]
     fn combat_planner_holds_back_at_the_two_blocker_positions() {
         for name in ["beza-trinket-into-blockers", "manifest-into-samurai"] {
             let at = reach(&entry(name)).unwrap();

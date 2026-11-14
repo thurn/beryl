@@ -82,27 +82,31 @@ impl Widen for WithCombat<Small> {
 // Every subset uses the same order in the name. These are measurement tools outside
 // the app's list of opponents.
 pub(super) static VARIANTS: &[AgentInfo] = &[
-    variant::<true, false, false>("greedy+hold"),
-    variant::<false, true, false>("greedy+waste"),
-    variant::<false, false, true>("greedy+combat"),
-    variant::<true, true, false>("greedy+hold+waste"),
-    variant::<true, false, true>("greedy+hold+combat"),
-    variant::<false, true, true>("greedy+waste+combat"),
-    variant::<true, true, true>("greedy+hold+waste+combat"),
+    variant::<true, false, false, false>("greedy+hold"),
+    variant::<false, true, false, false>("greedy+waste"),
+    variant::<false, false, true, false>("greedy+combat"),
+    variant::<true, true, false, false>("greedy+hold+waste"),
+    variant::<true, false, true, false>("greedy+hold+combat"),
+    variant::<false, true, true, false>("greedy+waste+combat"),
+    variant::<true, true, true, false>("greedy+hold+waste+combat"),
+    variant::<false, false, true, true>("greedy+combat+walker"),
+    variant::<true, false, true, true>("greedy+hold+combat+walker"),
+    variant::<false, true, true, true>("greedy+waste+combat+walker"),
+    variant::<true, true, true, true>("greedy+hold+waste+combat+walker"),
 ];
 
-const fn variant<const HOLD: bool, const WASTE: bool, const COMBAT: bool>(
+const fn variant<const HOLD: bool, const WASTE: bool, const COMBAT: bool, const WALKER: bool>(
     name: &'static str,
 ) -> AgentInfo {
     AgentInfo {
         name,
         title: "Greedy",
         description: "Plays the rollout policy with the rules named",
-        new: build::<HOLD, WASTE, COMBAT>,
+        new: build::<HOLD, WASTE, COMBAT, WALKER>,
     }
 }
 
-fn build<const HOLD: bool, const WASTE: bool, const COMBAT: bool>(
+fn build<const HOLD: bool, const WASTE: bool, const COMBAT: bool, const WALKER: bool>(
     t: &GameTable,
     seed: u64,
     _budget: Budget,
@@ -112,6 +116,7 @@ fn build<const HOLD: bool, const WASTE: bool, const COMBAT: bool>(
         Rules {
             hold: HOLD,
             waste: WASTE,
+            walker: WALKER,
         },
     );
     if COMBAT {

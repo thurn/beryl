@@ -62,6 +62,8 @@ const LAND_MAX: i32 = 15;
 pub struct Rules {
     pub hold: bool,
     pub waste: bool,
+    /// Appraise alternate-win threats in the combat planner.
+    pub walker: bool,
 }
 
 /// The rollout policy for one game: its per-card values and rules. Stateless between
@@ -111,6 +113,10 @@ impl RolloutPolicy {
             values: CardValues::with(t, knowledge),
             rules,
         }
+    }
+
+    pub(super) fn appraises_walkers(&self) -> bool {
+        self.rules.walker
     }
 
     /// Its card values.

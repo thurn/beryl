@@ -22,6 +22,8 @@ use beryl_engine::{Large, LargeSlot, Layout, Relayout, Small};
 
 use std::marker::PhantomData;
 
+mod walker;
+
 use crate::AgentDecision;
 use crate::rollout::{Inline, Policy, RolloutPolicy};
 
@@ -596,7 +598,14 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
             if s.derived(slot).types.intersects(Types::LAND) {
                 continue;
             }
-            let v = p.value(slot);
+            let v = p.value(slot)
+                + if self.policy.appraises_walkers()
+                    && s.derived(slot).types.intersects(Types::PLANESWALKER)
+                {
+                    walker::value(self.t, s, slot)
+                } else {
+                    0
+                };
             e += if s.controller(slot) == me { v } else { -v };
         }
         let mine = J::life(self.t, s, me);

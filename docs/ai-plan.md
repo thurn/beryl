@@ -350,7 +350,7 @@ may reorder rungs when a result suggests it, and says why in the bead.
 | 4     | `prior`                    | Strength | Tree            | No             |
 | 5     | `waste`                    | Blunders | Policy          | Yes            |
 | 6     | `fit`                      | Strength | Numbers         | No             |
-| 7     | `walker`                   | Blunders | Planner         | No             |
+| 7     | `walker`                   | Blunders | Planner         | Yes            |
 | 8     | `turn72`                   | Strength | Method          | Yes            |
 
 ### 6.1 Tools
@@ -519,12 +519,12 @@ The policy's card values (`values.rs`) and the constants of its rules
 
 ### 6.8 Rung 7: `walker`, the attack that leaves a lethal planeswalker alive
 
-At `spare-jace-wielder` greedy, the expert and the planner all attack the wrong
-target. The planner has a plan that kills Jace, Wielder of Mysteries and scores
-another plan higher. The build bead finds which term of the planner's score
-prefers the other plan and proposes a general correction, read from what the
-planeswalker's abilities do. It needs judgement and may conclude that the plan
-set, not the score, is at fault.
+At `spare-jace-wielder` the base planner prefers killing the higher-valued
+planeswalker, although the other one threatens a library win. With `walker`, the
+planner adds a premium to a surviving planeswalker whose loyalty abilities and
+draw replacement or explicit win effect give it a short clock. It reads the
+ability definitions, current loyalty and library size. Test it without search
+using `just blunders greedy+hold+waste+combat+walker --seeds 1`.
 
 - **Claims:** `spare-jace-wielder`.
 - **Measure:** a root rung, 3M, `plausible`.

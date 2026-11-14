@@ -26,10 +26,20 @@ fn greedy_variant_names_use_canonical_rule_order() {
         "greedy+hold+combat",
         "greedy+waste+combat",
         "greedy+hold+waste+combat",
+        "greedy+combat+walker",
+        "greedy+hold+combat+walker",
+        "greedy+waste+combat+walker",
+        "greedy+hold+waste+combat+walker",
     ] {
         assert_eq!(find_agent(name).unwrap().unwrap().name, name);
     }
-    for name in ["greedy+unknown", "greedy+combat+hold", "greedy+hold+hold"] {
+    for name in [
+        "greedy+unknown",
+        "greedy+combat+hold",
+        "greedy+hold+hold",
+        "greedy+walker",
+        "greedy+walker+combat",
+    ] {
         assert!(
             find_agent(name)
                 .unwrap_err()

@@ -149,6 +149,8 @@ pub struct Options {
     /// With the anchor, let the rollout policy answer choices of up to a number of
     /// objects and offers to search a library without planting a tree.
     pub sure: bool,
+    /// Value near-term alternate wins when scoring simulated combat lines. Requires combat.
+    pub walker: bool,
 }
 
 /// A searcher's settings.
@@ -272,8 +274,8 @@ impl FromStr for Family {
                 "{s:?} is no family: method/sight/leaf/knowledge[/options], as \
                  ismcts18/hidden/rollout/tuned (pimcN, ismctsN or turn72; hidden, hands or omniscient; \
                  rollout, cutN or eval; estimate or tuned; options anchor, expert, guard, mid, \
-                 means, hold, waste, combat, order and sure joined by + in that order; \
-                 expert, guard and sure require anchor)"
+                 means, hold, waste, combat, order, sure and walker joined by + in that order; \
+                 expert, guard and sure require anchor; walker requires combat)"
             )
         };
         let parts: Vec<&str> = s.split('/').collect();
@@ -297,6 +299,7 @@ impl FromStr for Family {
                         "combat" => &mut o.combat,
                         "order" => &mut o.order,
                         "sure" => &mut o.sure,
+                        "walker" => &mut o.walker,
                         _ => return Err(bad()),
                     };
                     if *flag {
@@ -305,7 +308,10 @@ impl FromStr for Family {
                     *flag = true;
                 }
                 // One spelling per family, so that a name read back prints as it was given.
-                if o.to_name() != *named || ((o.expert || o.guard || o.sure) && !o.anchor) {
+                if o.to_name() != *named
+                    || ((o.expert || o.guard || o.sure) && !o.anchor)
+                    || (o.walker && !o.combat)
+                {
                     return Err(bad());
                 }
                 o
@@ -353,7 +359,7 @@ impl FromStr for Family {
 
 impl Options {
     /// The options as a family's name spells them, joined by `+` in this order:
-    /// `anchor+expert+guard+mid+means+hold+waste+combat+order+sure`; empty for none.
+    /// `anchor+expert+guard+mid+means+hold+waste+combat+order+sure+walker`; empty for none.
     fn to_name(self) -> String {
         [
             (self.anchor, "anchor"),
@@ -366,6 +372,7 @@ impl Options {
             (self.combat, "combat"),
             (self.order, "order"),
             (self.sure, "sure"),
+            (self.walker, "walker"),
         ]
         .into_iter()
         .filter_map(|(on, name)| on.then_some(name))
@@ -377,6 +384,7 @@ impl Options {
         Rules {
             hold: self.hold,
             waste: self.waste,
+            walker: self.walker,
         }
     }
 }
@@ -1899,6 +1907,7 @@ mod tests {
             "pimc72/hidden/rollout/tuned/anchor+order",
             "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order",
             "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order+sure",
+            "pimc72/hidden/rollout/tuned/anchor+expert+guard+mid+means+hold+waste+combat+order+sure+walker",
         ] {
             let f: Family = s.parse().unwrap();
             assert_eq!(f.to_string(), s);
@@ -1925,6 +1934,8 @@ mod tests {
             "pimc18/hidden/rollout/tuned/anchor+order+combat",
             "pimc18/hidden/rollout/tuned/order+sure",
             "pimc18/hidden/rollout/tuned/anchor+sure+order",
+            "pimc18/hidden/rollout/tuned/anchor+walker",
+            "pimc18/hidden/rollout/tuned/anchor+walker+combat",
         ] {
             assert!(bad.parse::<Family>().is_err(), "{bad}");
         }
