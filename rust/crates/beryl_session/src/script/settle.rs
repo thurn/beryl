@@ -277,6 +277,7 @@ impl Builder<'_> {
         if self.table.turn != after.turn {
             let fact = Fact::Turn {
                 number: after.turn.number,
+                own_number: after.turn.own_number,
                 active: after.turn.active,
                 step: after.turn.step,
             };

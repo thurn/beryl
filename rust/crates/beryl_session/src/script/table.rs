@@ -50,6 +50,7 @@ pub struct Piles {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct Turn {
     pub number: u16,
+    pub own_number: u16,
     pub active: Side,
     pub step: TurnStep,
 }
@@ -125,6 +126,7 @@ impl Table {
             opponent: Piles::of(&view.players.opponent),
             turn: Turn {
                 number: view.turn.number,
+                own_number: view.turn.own_number,
                 active: view.turn.active,
                 step: view.turn.step,
             },
@@ -261,11 +263,13 @@ impl Table {
         match fact {
             &Fact::Turn {
                 number,
+                own_number,
                 active,
                 step,
             } => {
                 self.turn = Turn {
                     number,
+                    own_number,
                     active,
                     step,
                 };

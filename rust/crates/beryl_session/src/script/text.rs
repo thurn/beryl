@@ -370,6 +370,7 @@ impl Display for Fact {
                 number,
                 active,
                 step,
+                ..
             } => write!(f, "turn {number} {} {}", wire(active), wire(step)),
             Fact::Object { object } => write!(f, "{} {}", Named(object), Status(object)),
             Fact::Library { player, order } => {

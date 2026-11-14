@@ -183,7 +183,7 @@ export function logLines(view: PlayerView, names: Names): LogLine[] {
         if (e.step === "untap") {
           say(
             e.active,
-            `Turn ${view.turn.number}: ${e.active === "you" ? "your" : "Opponent's"} turn`,
+            `Turn ${view.turn.ownNumber}: ${e.active === "you" ? "your" : "Opponent's"} turn`,
             "turn",
           );
         }

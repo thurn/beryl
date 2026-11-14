@@ -16,6 +16,7 @@ use super::{
     CardHandling, CardType, Combat, CounterView, DecisionId, Facing, Keyword, ManaPool, ObjectId,
     ObjectView, PaidCost, PlayerState, PlayerView, Players, PowerToughness, Side, StackItem,
     Status, StopsSetting, TargetRef, TurnView, decision_view, game_events, halt_view, outcome_view,
+    own_number,
 };
 
 /// Where the game stands, as the session knows it: what [`player_view`] turns into a [`Status`].
@@ -143,6 +144,7 @@ pub fn player_view<L: Layout>(
         pending_attackers: pending_attackers(obs, moment),
         turn: TurnView {
             number: turn.number(),
+            own_number: own_number(turn.number()),
             active: side(obs, turn.active()),
             step: turn.step().into(),
             priority: side(obs, turn.priority()),

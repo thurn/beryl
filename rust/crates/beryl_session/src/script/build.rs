@@ -18,7 +18,7 @@ use super::{Act, Fact, Notice, Open, Reset, Script, Step, Stream, Subject, Tally
 use crate::protocol::ObjectId;
 use crate::protocol::{
     CardType, Counter, GameEvent, ObjectView, PlayerView, Side, StackItem, Step as TurnStep,
-    TargetRef, Why, ZoneName,
+    TargetRef, Why, ZoneName, own_number,
 };
 
 /// What one seat's screen last showed: the session keeps one per seat it sends views to, and
@@ -589,6 +589,7 @@ impl<'a> Builder<'a> {
         };
         let fact = Fact::Turn {
             number,
+            own_number: own_number(number),
             active,
             step,
         };

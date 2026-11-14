@@ -241,6 +241,8 @@ pub enum Fact {
     /// A step of the turn began.
     Turn {
         number: u16,
+        #[serde(rename = "ownNumber")]
+        own_number: u16,
         active: Side,
         step: TurnStep,
     },

@@ -368,7 +368,7 @@ export function Controls({
               key={side}
               side={side}
               current={table.turn.active === side ? table.turn.step : undefined}
-              now={`Turn ${table.turn.number} · ${STEP_NAMES[table.turn.step]}`}
+              now={`Turn ${table.turn.ownNumber} · ${STEP_NAMES[table.turn.step]}`}
               whose={side === "you" ? "Your" : "Opponent's"}
               stops={stops[key]}
               onStops={(steps) => setStops({ ...stops, [key]: steps })}

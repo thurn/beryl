@@ -159,11 +159,23 @@ pub struct DecisionId {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct CandidateIndex(pub u16);
 
+/// The count of the active player's own turns, the current one included, when the game's
+/// `number`th turn is under way. The two sides take turns in strict alternation
+/// ([CR 103.8](https://yawgatog.com/resources/magic-rules/#R1038): "The starting player takes
+/// their first turn."), so turns 1 and 2 are each side's first, turns 3 and 4 their second.
+#[must_use]
+pub const fn own_number(number: u16) -> u16 {
+    number.div_ceil(2)
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnView {
-    /// 0 before the first turn.
+    /// The game's turns so far, both players' together: 0 before the first turn. Orders turns.
     pub number: u16,
+    /// The active player's own turn count, which is what players call "turn N": the starting
+    /// player's first turn and the other player's first turn are both 1. See [`own_number`].
+    pub own_number: u16,
     pub active: Side,
     pub step: Step,
     pub priority: Side,

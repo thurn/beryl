@@ -28,7 +28,7 @@ export const view = (battlefield, hand = [], more = {}) => ({
         you: { life: 20, library: [], graveyard: [] },
         opponent: { life: 20, library: [], graveyard: [] },
     },
-    turn: { number: 1, active: "you", step: "precombatMain" },
+    turn: { number: 1, ownNumber: 1, active: "you", step: "precombatMain" },
     status: { kind: "playing" },
     ...more,
 });

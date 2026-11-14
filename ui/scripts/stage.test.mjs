@@ -487,11 +487,18 @@ test("replaying a step changes the table as the script module says", () => {
     });
     run({
         verb: "set",
-        fact: { kind: "turn", number: 2, active: "opponent", step: "upkeep" },
+        fact: {
+            kind: "turn",
+            number: 2,
+            ownNumber: 1,
+            active: "opponent",
+            step: "upkeep",
+        },
     });
     assert.equal(table.view.players.opponent.life, 17);
     assert.deepEqual(table.view.turn, {
         number: 2,
+        ownNumber: 1,
         active: "opponent",
         step: "upkeep",
     });

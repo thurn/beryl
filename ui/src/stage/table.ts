@@ -396,6 +396,7 @@ export function apply(table: Table, act: Act, cause?: Subject): Table {
               turn: {
                 ...view.turn,
                 number: fact.number,
+                ownNumber: fact.ownNumber,
                 active: fact.active,
                 step: fact.step,
               },

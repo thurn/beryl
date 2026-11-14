@@ -505,6 +505,7 @@ fn the_table_sets_and_the_stage_dwells_and_announces() {
     assert_eq!(
         set(Fact::Turn {
             number: 3,
+            own_number: 2,
             active: Side::Opponent,
             step: TurnStep::PrecombatMain,
         }),

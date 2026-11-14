@@ -214,9 +214,14 @@ export type Side = "you" | "opponent";
 
 export type TurnView = { 
 /**
- * 0 before the first turn.
+ * The game's turns so far, both players' together: 0 before the first turn. Orders turns.
  */
-number: number, active: Side, step: Step, priority: Side, 
+number: number, 
+/**
+ * The active player's own turn count, which is what players call "turn N": the starting
+ * player's first turn and the other player's first turn are both 1. See [`own_number`].
+ */
+ownNumber: number, active: Side, step: Step, priority: Side, 
 /**
  * Who takes the first turn (CR 103.1); none while the coin flip's winner chooses.
  */
@@ -617,7 +622,7 @@ export type Stream = { "kind": "mana", color: Mana, } | { "kind": "damage" };
 
 export type Tally = { "kind": "life", player: Side, life: number, } | { "kind": "pool", player: Side, mana: ManaPool, } | { "kind": "counters", counter: Counter, object: ObjectView, } | { "kind": "stats", object: ObjectView, };
 
-export type Fact = { "kind": "turn", number: number, active: Side, step: Step, } | { "kind": "object", object: ObjectView, } | { "kind": "library", player: Side, order: Array<ObjectId>, } | { "kind": "item", subject: Subject, item: StackItem, };
+export type Fact = { "kind": "turn", number: number, ownNumber: number, active: Side, step: Step, } | { "kind": "object", object: ObjectView, } | { "kind": "library", player: Side, order: Array<ObjectId>, } | { "kind": "item", subject: Subject, item: StackItem, };
 
 export type Notice = { "kind": "turn", active: Side, } | { "kind": "scry", player: Side, top: number, bottom: number, } | { "kind": "coin", player: Side, won: boolean, source: ObjectId, };
 

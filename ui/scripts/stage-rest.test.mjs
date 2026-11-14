@@ -422,7 +422,13 @@ test("the design language says which announcements pass and how long each wait i
     assert.ok(timingOf(ended, table).duration > timingOf(read, table).duration);
     assert.ok(timingOf(read, table).duration > 0);
     // What changes with no motion.
-    const turn = { kind: "turn", number: 2, active: "you", step: "untap" };
+    const turn = {
+        kind: "turn",
+        number: 2,
+        ownNumber: 1,
+        active: "you",
+        step: "untap",
+    };
     const shuffled = { kind: "library", player: "you", order: [] };
     assert.equal(caseOf({ verb: "set", fact: turn }), "step begins");
     assert.equal(caseOf({ verb: "set", fact: shuffled }), "library shuffled");
