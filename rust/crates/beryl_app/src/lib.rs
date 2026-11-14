@@ -35,11 +35,12 @@ const SMOKE_PROPERTY: &str = "debug.beryl.smoke";
 
 struct BugDirectory(PathBuf);
 
-#[cfg_attr(desktop, allow(clippy::unused_async))] // Only phones await a native plugin.
-async fn report_environment(_app: &tauri::AppHandle) -> bugs::Environment {
+// Only phones use the app and await a native plugin.
+#[cfg_attr(desktop, allow(unused_variables, clippy::unused_async))]
+async fn report_environment(app: &tauri::AppHandle) -> bugs::Environment {
     let environment = bugs::Environment::current();
     #[cfg(mobile)]
-    let environment = match _app
+    let environment = match app
         .state::<beryl_mobile::Mobile<tauri::Wry>>()
         .device()
         .await

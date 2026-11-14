@@ -26,7 +26,11 @@ def copy_reports(source: Path, root: Path) -> tuple[int, int]:
     root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=root, prefix=".mobile-bugs-") as temp:
         for folder in sorted(source.iterdir()):
-            if not folder.is_dir() or not bugs.REPORT_ID.fullmatch(folder.name):
+            if (
+                folder.is_symlink()
+                or not folder.is_dir()
+                or not bugs.REPORT_ID.fullmatch(folder.name)
+            ):
                 continue
             staged = Path(temp) / folder.name
             staged.mkdir()
@@ -177,34 +181,47 @@ def device_reports(root: Path) -> tuple[int, int] | None:
         )
         if copied.returncode != 0:
             raise RuntimeError(copied.stderr.strip())
-        return copy_reports(destination, root)
+        # devicectl versions may place the received directory at the destination or inside it.
+        received = (
+            destination / "bugs" if (destination / "bugs").is_dir() else destination
+        )
+        return copy_reports(received, root)
 
 
 def run(args: argparse.Namespace) -> int:
     if args.bundle is not None:
         return bugs.import_cmd(argparse.Namespace(bundle=args.bundle))
     root = bugs.bugs_dir()
+    failed = False
     try:
         source = simulator_container()
         if source is None:
             print("iOS Simulator: no booted Beryl simulator or installed app")
         else:
             print_counts("iOS Simulator", copy_reports(source / BUGS_RELATIVE, root))
+    except (OSError, ValueError, RuntimeError, tarfile.TarError) as error:
+        print(f"mobile-bugs: iOS Simulator: {error}", file=sys.stderr)
+        failed = True
+    try:
         android_count = android_reports(root)
         if android_count is None:
             print("Android emulator: not running or Beryl is not installed")
         else:
             print_counts("Android emulator", android_count)
-        if args.device:
+    except (OSError, ValueError, RuntimeError, tarfile.TarError) as error:
+        print(f"mobile-bugs: Android emulator: {error}", file=sys.stderr)
+        failed = True
+    if args.device:
+        try:
             device_count = device_reports(root)
             if device_count is None:
                 print("iPhone: no paired device")
             else:
                 print_counts("iPhone", device_count)
-    except (OSError, ValueError, RuntimeError, tarfile.TarError) as error:
-        print(f"mobile-bugs: {error}", file=sys.stderr)
-        return 1
-    return 0
+        except (OSError, ValueError, RuntimeError, tarfile.TarError) as error:
+            print(f"mobile-bugs: iPhone: {error}", file=sys.stderr)
+            failed = True
+    return int(failed)
 
 
 def print_counts(source: str, counts: tuple[int, int]) -> None:

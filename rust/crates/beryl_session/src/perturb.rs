@@ -84,6 +84,8 @@ impl Perturbation {
 }
 
 thread_local! {
+    // Cross-target Clippy reports this const initializer as non-const through `thread_local!`.
+    #[allow(clippy::missing_const_for_thread_local)]
     static CURRENT: Cell<Perturbation> = const {
         Cell::new(Perturbation { seed: false, order: Order::Listed, slots: false })
     };

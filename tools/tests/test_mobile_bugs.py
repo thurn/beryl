@@ -36,6 +36,14 @@ def test_adopts_once_and_skips_a_done_report(tmp_path: Path) -> None:
     assert bugs.load(root / "done" / ID) is not None
 
 
+def test_skips_a_symlinked_report_folder(tmp_path: Path) -> None:
+    source = tmp_path / "phone"
+    source.mkdir()
+    outside = report(tmp_path / "outside")
+    (source / ID).symlink_to(outside, target_is_directory=True)
+    assert mobile_bugs.copy_reports(source, tmp_path / "local") == (0, 0)
+
+
 def test_android_tar_uses_run_as_and_adopts_report(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -77,15 +85,17 @@ def test_android_tar_uses_run_as_and_adopts_report(
     assert source.joinpath("report.md").is_file()
 
 
+@pytest.mark.parametrize("nested", [False, True])
 def test_device_copy_command_is_only_used_on_explicit_path(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, nested: bool
 ) -> None:
     monkeypatch.setattr(mobile, "paired_device", lambda: "paired-id")
     commands: list[list[str]] = []
 
     def fake_run(command: list[str], **_kwargs: object) -> CompletedProcess[str]:
         commands.append(command)
-        report(Path(command[-1]))
+        destination = Path(command[-1])
+        report(destination / "bugs" if nested else destination)
         return CompletedProcess[str](command, 0, "", "")
 
     monkeypatch.setattr(mobile_bugs.subprocess, "run", fake_run)
@@ -120,3 +130,29 @@ def test_shared_zip_uses_existing_import(
     monkeypatch.setattr(bugs, "import_cmd", fake_import)
     assert mobile_bugs.run(argparse.Namespace(bundle=bundle, device=False)) == 0
     assert bundles == [bundle]
+
+
+def test_one_source_failure_does_not_stop_other_sources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(bugs, "bugs_dir", lambda: tmp_path)
+
+    def failed_simulator() -> Path:
+        calls.append("simulator")
+        raise RuntimeError("simulator copy failed")
+
+    def working_android(_root: Path) -> tuple[int, int]:
+        calls.append("android")
+        return (1, 0)
+
+    monkeypatch.setattr(mobile_bugs, "simulator_container", failed_simulator)
+    monkeypatch.setattr(mobile_bugs, "android_reports", working_android)
+
+    def working_device(_root: Path) -> tuple[int, int]:
+        calls.append("device")
+        return (1, 0)
+
+    monkeypatch.setattr(mobile_bugs, "device_reports", working_device)
+    assert mobile_bugs.run(argparse.Namespace(bundle=None, device=True)) == 1
+    assert set(calls) == {"simulator", "android", "device"}

@@ -21,9 +21,12 @@ use beryl_session::bugs::{Images, Region};
 use tauri::http::{Response, StatusCode};
 use tauri::{AppHandle, Manager};
 
-/// How long a snapshot may take before the report goes on without one.
-#[cfg(any(target_os = "macos", windows, mobile))]
+/// How long a desktop snapshot may take before the report goes on without one.
+#[cfg(any(target_os = "macos", windows))]
 const TIMEOUT: Duration = Duration::from_secs(5);
+/// A phone's `WebView` may need seconds to draw a PNG under load; this is a hang guard.
+#[cfg(mobile)]
+const TIMEOUT: Duration = Duration::from_secs(45);
 /// The path the snapshots are served under, on the `beryl-art` scheme.
 pub const PATH: &str = "/snapshot/";
 
@@ -133,7 +136,11 @@ impl Pixels {
     fn crop(&self, region: Region, page_width: f64) -> Pixels {
         let scale = f64::from(self.width) / page_width;
         let clamp = |v: f64, max: u32| (v * scale).round().clamp(0.0, f64::from(max)) as u32;
-        let (x0, y0) = (clamp(region.x, self.width), clamp(region.y, self.height));
+        // An IPC caller can send a region beyond the image; keep its one-pixel fallback inside it.
+        let (x0, y0) = (
+            clamp(region.x, self.width).min(self.width.saturating_sub(1)),
+            clamp(region.y, self.height).min(self.height.saturating_sub(1)),
+        );
         let x1 = clamp(region.x + region.width, self.width)
             .max(x0 + 1)
             .min(self.width);
@@ -248,6 +255,26 @@ mod tests {
         assert_eq!(&crop.rgba[8..], &[24, 25, 26, 27, 28, 29, 30, 31]);
         let png = encode(&crop).unwrap();
         assert!(png.starts_with(b"\x89PNG"));
+    }
+
+    #[test]
+    fn crop_beyond_the_image_stays_inside_the_image() {
+        let pixels = Pixels {
+            width: 2,
+            height: 2,
+            rgba: (0..16).collect(),
+        };
+        let crop = pixels.crop(
+            Region {
+                x: 100.0,
+                y: 100.0,
+                width: 1.0,
+                height: 1.0,
+            },
+            2.0,
+        );
+        assert_eq!((crop.width, crop.height), (1, 1));
+        assert_eq!(crop.rgba, [12, 13, 14, 15]);
     }
 
     /// Windows and phone snapshots are PNGs, whose pixels a report crops.

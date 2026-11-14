@@ -27,6 +27,7 @@ kotlin {
 }
 
 dependencies {
+    // Gives the native snapshot and share commands Tauri's plugin and invocation APIs.
     implementation(project(":tauri-android"))
     // FileProvider grants chooser apps read access only to cache/share.
     implementation("androidx.core:core:1.15.0")

@@ -133,6 +133,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(desktop)]
     fn desktop_cannot_open_a_phone_share_sheet() {
         let error = share_bug(beryl_session::ipc::ShareBugRequest {
             id: "20261113-102030-report".to_owned(),
@@ -150,7 +151,7 @@ mod tests {
         std::fs::create_dir(&folder).unwrap();
         std::fs::write(folder.join("report.md"), "report").unwrap();
         assert_eq!(report_folder(root, id).unwrap(), folder);
-        for bad in ["", "..", "../report", "x/y", "missing"] {
+        for bad in ["", "..", "../report", "/tmp/report", "x/y", "missing"] {
             assert!(report_folder(root, bad).is_err(), "{bad}");
         }
     }
