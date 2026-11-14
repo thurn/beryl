@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::apply::{commit, next_entry, perform, perform_history};
+use crate::apply::{AppliedChanges, Presentation, commit, next_entry, perform, perform_history};
 use crate::change::Edit;
 use crate::state::ObjectId;
 use crate::{Action, Chance, Change, Entry, Refusal, Seat, Table, apply, permissions, undo};
@@ -105,9 +105,9 @@ impl Log {
                 permissions::check(table, by, action)?;
                 let n = next_entry(table)?;
                 let target = undo::target(self, by, entry)?;
-                let (changes, seen) = undo::inverse(self, table, target);
-                let (changes, touches) = perform_history(table, action, changes);
-                let mut result = commit(table, n, by, action, changes, touches);
+                let (applied, seen) = undo::inverse(self, table, target);
+                let (applied, touches) = perform_history(table, action, applied);
+                let mut result = commit(table, n, by, action, applied, touches);
                 result.undoes = Some(target.n);
                 result.seen = seen;
                 result.undone_action = Some(target.action.clone());
@@ -119,12 +119,16 @@ impl Log {
                 let n = next_entry(table)?;
                 let mut after = rebuild(self, to)?;
                 undo::keep_knowledge(self, table, &mut after);
-                let changes = vec![Change::RestoreTable(Box::new(Edit {
-                    before: table.clone(),
-                    after,
-                }))];
-                let (changes, touches) = perform_history(table, action, changes);
-                Ok(commit(table, n, by, action, changes, touches))
+                let mut applied = AppliedChanges::default();
+                applied.record(
+                    vec![Change::RestoreTable(Box::new(Edit {
+                        before: table.clone(),
+                        after,
+                    }))],
+                    Some(Presentation::Reset),
+                );
+                let (applied, touches) = perform_history(table, action, applied);
+                Ok(commit(table, n, by, action, applied, touches))
             }
             _ => apply(table, by, action, chance),
         }

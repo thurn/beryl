@@ -6,6 +6,12 @@ use crate::change::{ObjectEdit, TableEdit};
 use crate::state::{AbilityMarker, Card, LineVisibility, Object, ObjectId};
 use crate::{Action, Change, Entry, Seat, Table};
 
+mod animation;
+
+pub use animation::{
+    AnimationEvent, AnimationMember, AnimationProjection, ShownCard, animation_seen_by,
+};
+
 /// Keep zone order and public object state while hiding identities the seat
 /// hasn't learned. The host retains the full table.
 #[must_use]
@@ -39,17 +45,24 @@ pub fn seen_by(table: &Table, seat: Seat) -> Table {
 }
 
 /// Project the entry for display using the host table immediately before it.
-/// The host retains the original entry for replay, including private changes.
+/// Use the result with [`crate::log::line`]. For animation, use
+/// [`animation_seen_by`] on the original host entry.
 #[must_use]
 pub fn entry_seen_by(entry: &Entry, table_before: &Table, seat: Seat) -> Entry {
-    let mut after = table_before.clone();
-    for change in &entry.changes {
-        change.perform(&mut after);
-    }
+    let mut private_ids = BTreeSet::new();
+    let mut projected_changes = Vec::new();
+    let after = visit_members(entry, table_before, |_, changes, before, after| {
+        let mut names = HiddenNames::new(before, seat);
+        names.include_table(after, seat);
+        let forgotten = forgotten_ids(changes, before, after, seat);
+        projected_changes.extend(changes.iter().cloned().filter_map(|mut change| {
+            project_change(&mut change, before, after, seat, &names, &forgotten).then_some(change)
+        }));
+        private_ids.extend(forgotten);
+    });
     let mut names = HiddenNames::new(table_before, seat);
     names.include_table(&after, seat);
 
-    let private_ids = forgotten_ids(entry, table_before, &after, seat);
     let private_marker_sources = entry
         .changes
         .iter()
@@ -82,10 +95,39 @@ pub fn entry_seen_by(entry: &Entry, table_before: &Table, seat: Seat) -> Entry {
         );
     }
     projected.touches.project(&private_ids, &after, seat);
-    projected.changes.retain_mut(|change| match change {
+    projected.members.clear();
+    projected.changes = projected_changes;
+    projected
+}
+
+fn visit_members(
+    entry: &Entry,
+    table_before: &Table,
+    mut visit: impl FnMut(Option<&crate::apply::Presentation>, &[Change], &Table, &Table),
+) -> Table {
+    let mut after = table_before.clone();
+    for (presentation, changes) in entry.member_changes() {
+        let before = after.clone();
+        for change in changes {
+            change.perform(&mut after);
+        }
+        visit(presentation, changes, &before, &after);
+    }
+    after
+}
+
+fn project_change(
+    change: &mut Change,
+    before: &Table,
+    after: &Table,
+    seat: Seat,
+    names: &HiddenNames,
+    private_ids: &BTreeSet<ObjectId>,
+) -> bool {
+    match change {
         Change::Move { id, .. } | Change::ReplaceId { from: id, .. } => !private_ids.contains(id),
         Change::Random { .. } | Change::RestoreTable(_) | Change::ResetKnowledge { .. } => false,
-        Change::Learn { id, .. } => knows(&after, *id, seat),
+        Change::Learn { id, .. } => knows(after, *id, seat),
         Change::Create { object, .. } => {
             if private_ids.contains(&object.id) {
                 return false;
@@ -95,29 +137,24 @@ pub fn entry_seen_by(entry: &Entry, table_before: &Table, seat: Seat) -> Entry {
             } else {
                 object.known_to.clear();
             }
-            redact_object(object, seat, &names);
+            redact_object(object, seat, names);
             true
         }
         Change::Remove { object, .. } => {
-            if !knows(table_before, object.id, seat)
-                || (after.objects.contains_key(&object.id) && !knows(&after, object.id, seat))
+            if !knows(before, object.id, seat)
+                || (after.objects.contains_key(&object.id) && !knows(after, object.id, seat))
             {
                 object.known_to.clear();
             }
-            redact_object(object, seat, &names);
+            redact_object(object, seat, names);
             true
         }
         Change::CreateMarker { marker, .. } | Change::RemoveMarker { marker, .. } => {
-            redact_marker(marker, seat, &names);
+            redact_marker(marker, seat, names);
             true
         }
         Change::SetObject { id, edit } => {
-            redact_object_edit(
-                edit,
-                table_before.objects.get(id),
-                after.objects.get(id),
-                seat,
-            );
+            redact_object_edit(edit, before.objects.get(id), after.objects.get(id), seat);
             true
         }
         Change::SetTable(edit) => redact_table_edit(edit, seat),
@@ -128,15 +165,19 @@ pub fn entry_seen_by(entry: &Entry, table_before: &Table, seat: Seat) -> Entry {
         | Change::AlwaysRevealTop { .. }
         | Change::AlwaysLookAtTop { .. }
         | Change::Nothing => true,
-    });
-    projected
+    }
 }
 
-fn forgotten_ids(entry: &Entry, before: &Table, after: &Table, seat: Seat) -> BTreeSet<ObjectId> {
+fn forgotten_ids(
+    changes: &[Change],
+    before: &Table,
+    after: &Table,
+    seat: Seat,
+) -> BTreeSet<ObjectId> {
     // Suppressing the random numbers alone would leave the shuffle order
     // recoverable from the moves and the links between old and new ids.
     let mut private_ids = BTreeSet::new();
-    for pair in entry.changes.windows(2) {
+    for pair in changes.windows(2) {
         match pair {
             [
                 Change::ResetKnowledge {
@@ -179,7 +220,11 @@ fn redact_object(object: &mut Object, seat: Seat, names: &HiddenNames) {
         object.card = Card::Hidden;
         object.note = None;
     }
-    if let Card::Custom { types, colors, .. } = &mut object.card {
+    redact_projected_card(&mut object.card, names);
+}
+
+fn redact_projected_card(card: &mut Card, names: &HiddenNames) {
+    if let Card::Custom { types, colors, .. } = card {
         names.redact_text(types);
         colors.retain(|color| !names.mentions_hidden(color));
     }
@@ -216,10 +261,7 @@ fn redact_marker(marker: &mut AbilityMarker, seat: Seat, names: &HiddenNames) {
         return;
     }
     let source = marker.display_source.as_mut().expect("visible source");
-    if let Card::Custom { types, colors, .. } = &mut source.card {
-        names.redact_text(types);
-        colors.retain(|color| !names.mentions_hidden(color));
-    }
+    redact_projected_card(&mut source.card, names);
     source.known_to.retain(|&viewer| viewer == seat);
 }
 

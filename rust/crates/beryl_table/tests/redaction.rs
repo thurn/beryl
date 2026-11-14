@@ -2,12 +2,14 @@ use std::collections::BTreeSet;
 
 use beryl_table::action::{Adjustment, Destination, Portion, Position, Selection};
 use beryl_table::log::line;
-use beryl_table::redact::{entry_seen_by, seen_by};
+use beryl_table::redact::{AnimationEvent, ShownCard, animation_seen_by, entry_seen_by, seen_by};
 use beryl_table::state::{
     Assist, Card, Face, Line, LineVisibility, Object, ObjectId, Proposal, Zone,
 };
 use beryl_table::{Action, Chance, Change, Seat, Table, apply};
 
+#[path = "redaction/animation.rs"]
+mod animation;
 mod common;
 use common::random::{ASSIST_AND_LOG, CORE, Generator, Kind};
 
@@ -97,7 +99,25 @@ fn a_shuffle_preserves_the_new_order_without_showing_how_the_cards_were_reordere
             .iter()
             .any(|change| matches!(change, Change::Random { .. }))
     );
+    let mut unpermuted = before.clone();
+    let other_entry = apply(
+        &mut unpermuted,
+        HOST,
+        &entry.action,
+        &mut Chance::replaying(vec![0]),
+    )
+    .unwrap();
+    assert_ne!(table, unpermuted);
     for seat in table.seats() {
+        let animation = animation_seen_by(&entry, &before, seat);
+        assert_eq!(animation, animation_seen_by(&other_entry, &before, seat));
+        assert_eq!(
+            animation.members[0].events,
+            [AnimationEvent::Shuffle {
+                library: LIBRARY,
+                order: table.zone(LIBRARY).unwrap().to_vec(),
+            }]
+        );
         let view = seen_by(&table, seat);
         assert_eq!(view.zone(LIBRARY), table.zone(LIBRARY));
         let order = view.zone(LIBRARY).unwrap();
@@ -501,6 +521,51 @@ fn projection_keeps_die_rolls_but_hides_random_reveal_offsets() {
         }],
     );
     assert!(entry_seen_by(&entry, &before, GUEST).changes.is_empty());
+
+    let host = animation_seen_by(&entry, &before, HOST);
+    assert_eq!(
+        host.members[0].events,
+        [
+            AnimationEvent::Learn(ShownCard {
+                id: ObjectId(2),
+                card: Card::Named("Second Card".into()),
+                face: Face::Front,
+            }),
+            AnimationEvent::Reveal {
+                zone: LIBRARY,
+                cards: vec![ShownCard {
+                    id: ObjectId(2),
+                    card: Card::Named("Second Card".into()),
+                    face: Face::Front
+                }],
+            },
+        ]
+    );
+    assert!(
+        animation_seen_by(&entry, &before, GUEST).members[0]
+            .events
+            .is_empty()
+    );
+
+    // The same random choice still produces a reveal after its identity is known.
+    let before = table.clone();
+    let repeated = apply(
+        &mut table,
+        HOST,
+        &entry.action,
+        &mut Chance::replaying(vec![1]),
+    )
+    .unwrap();
+    assert!(matches!(&repeated.changes[..], [Change::Random { .. }]));
+    assert_eq!(
+        animation_seen_by(&repeated, &before, HOST).members[0].events,
+        host.members[0].events[1..]
+    );
+    assert!(
+        animation_seen_by(&repeated, &before, GUEST).members[0]
+            .events
+            .is_empty()
+    );
 
     let before = table.clone();
     let roll = apply(

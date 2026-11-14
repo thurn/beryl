@@ -9,6 +9,8 @@ use beryl_table::save::{self, SaveError};
 use beryl_table::state::{Card, Object, ObjectId, Phase, Zone};
 use beryl_table::{Action, Chance, Change, Entry, Log, Refusal, Seat, Table};
 
+#[path = "history/animation.rs"]
+mod animation;
 mod common;
 use common::random::{ASSIST_AND_LOG, CORE, Generator, Kind};
 

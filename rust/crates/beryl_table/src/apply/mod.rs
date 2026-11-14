@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::change::{Edit, TableEdit};
 use crate::log::Touches;
+use crate::state::{ObjectId, Zone};
 use crate::{Action, Chance, Change, Seat, Table, permissions};
 
 mod cards;
@@ -40,6 +41,89 @@ pub struct Entry {
     /// Display data captured before private changes are projected away.
     #[serde(default)]
     pub(crate) summary: crate::log::Summary,
+    // Save replay reconstructs these facts from the action and its outcomes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) members: Vec<Member>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Member {
+    len: usize,
+    presentation: Option<Presentation>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum Presentation {
+    Look {
+        library: Zone,
+        ids: Vec<ObjectId>,
+    },
+    Reveal {
+        zone: Zone,
+        ids: Vec<ObjectId>,
+        to: Vec<Seat>,
+    },
+    Shuffle {
+        library: Zone,
+    },
+    Reset,
+}
+
+impl Entry {
+    pub(crate) fn member_changes(
+        &self,
+    ) -> impl Iterator<Item = (Option<&Presentation>, &[Change])> {
+        let single = self.members.is_empty()
+            && (!self.changes.is_empty() || !matches!(self.action, Action::Batch { .. }));
+        let mut remaining = self.changes.as_slice();
+        self.members
+            .iter()
+            .map(move |member| {
+                let (changes, rest) = remaining.split_at(member.len);
+                remaining = rest;
+                (member.presentation.as_ref(), changes)
+            })
+            .chain(single.then_some((None, self.changes.as_slice())))
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct AppliedChanges {
+    pub(crate) changes: Vec<Change>,
+    members: Vec<Member>,
+}
+
+impl AppliedChanges {
+    pub(crate) fn record(&mut self, changes: Vec<Change>, presentation: Option<Presentation>) {
+        self.members.push(Member {
+            len: changes.len(),
+            presentation,
+        });
+        self.changes.extend(changes);
+    }
+
+    fn append(&mut self, mut other: Self) {
+        self.changes.append(&mut other.changes);
+        self.members.append(&mut other.members);
+    }
+
+    fn presented(changes: Vec<Change>, presentation: Presentation) -> Self {
+        let mut applied = Self::default();
+        applied.record(changes, Some(presentation));
+        applied
+    }
+
+    fn extend_last_member(&mut self, len: usize) {
+        if let Some(member) = self.members.last_mut() {
+            member.len += len;
+        } else if len > 0 {
+            self.members.push(Member {
+                len,
+                presentation: None,
+            });
+        }
+    }
 }
 
 type Changes = Result<Vec<Change>, Refusal>;
@@ -71,9 +155,19 @@ pub fn apply(
     let n = next_entry(table)?;
     let mut planned_chance = chance.clone();
     let mut touches = Touches::default();
-    let changes = apply_action(table, by, action, &mut planned_chance, &mut touches)?;
+    let mut applied = apply_action(table, by, action, &mut planned_chance, &mut touches)?;
+    if matches!(
+        &applied.members[..],
+        [Member {
+            presentation: None,
+            ..
+        }]
+    ) && !matches!(action, Action::Batch { .. })
+    {
+        applied.members.clear();
+    }
     *chance = planned_chance;
-    Ok(commit(table, n, by, action, changes, touches))
+    Ok(commit(table, n, by, action, applied, touches))
 }
 
 pub(crate) fn next_entry(table: &Table) -> Result<u32, Refusal> {
@@ -85,21 +179,22 @@ pub(crate) fn commit(
     n: u32,
     by: Seat,
     action: &Action,
-    changes: Vec<Change>,
+    applied: AppliedChanges,
     touches: Touches,
 ) -> Entry {
     table.entry_number = n;
-    let summary = crate::log::Summary::new(table, by, action, &changes);
+    let summary = crate::log::Summary::new(table, by, action, &applied.changes);
     Entry {
         n,
         by,
         action: action.clone(),
-        changes,
+        changes: applied.changes,
         undoes: None,
         touches,
         seen: false,
         undone_action: None,
         summary,
+        members: applied.members,
     }
 }
 
@@ -109,24 +204,28 @@ fn apply_action(
     action: &Action,
     chance: &mut Chance,
     touches: &mut Touches,
-) -> Changes {
+) -> Result<AppliedChanges, Refusal> {
     if let Action::Batch { actions } = action {
         permissions::check_actor(table, by)?;
         let mut staged = table.clone();
-        let mut changes = Vec::new();
+        let mut applied = AppliedChanges::default();
         for member in actions {
-            changes.extend(apply_action(&mut staged, by, member, chance, touches)?);
+            applied.append(apply_action(&mut staged, by, member, chance, touches)?);
         }
         *table = staged;
-        return Ok(changes);
+        return Ok(applied);
     }
     permissions::check(table, by, action)?;
-    let mut changes = changes_for(table, by, action, chance)?;
+    let mut applied = plan_action(table, by, action, chance)?;
+    let len = applied.changes.len();
     if table.turn_plays.is_some() && counts_as_turn_play(action, table.turn) {
-        changes.push(Change::SetTable(TableEdit::TurnPlay { add: true }));
+        applied
+            .changes
+            .push(Change::SetTable(TableEdit::TurnPlay { add: true }));
     }
-    perform_with_top_knowledge(table, action, &mut changes, touches);
-    Ok(changes)
+    perform_with_top_knowledge(table, action, &mut applied.changes, touches);
+    applied.extend_last_member(applied.changes.len() - len);
+    Ok(applied)
 }
 
 /// Opening-hand steps and assist switches can be used before the first play.
@@ -157,23 +256,25 @@ fn counts_as_turn_play(action: &Action, turn: u32) -> bool {
 pub(crate) fn perform_history(
     table: &mut Table,
     action: &Action,
-    mut changes: Vec<Change>,
-) -> (Vec<Change>, Touches) {
+    mut applied: AppliedChanges,
+) -> (AppliedChanges, Touches) {
     let mut touches = Touches::default();
-    for index in 0..changes.len() {
+    let len = applied.changes.len();
+    for index in 0..len {
         // The inverse of a creation carries the original visibility. Record
         // what the players actually knew when the undo removed the card.
-        if let Change::Remove { object, .. } = &mut changes[index] {
+        if let Change::Remove { object, .. } = &mut applied.changes[index] {
             object
                 .known_to
                 .clone_from(&table.objects[&object.id].known_to);
         }
-        let change = &changes[index];
+        let change = &applied.changes[index];
         touches.record(table, change);
-        perform_one(table, action, &changes, index, change);
+        perform_one(table, action, &applied.changes, index, change);
     }
-    perform_top_knowledge(table, action, &mut changes, &mut touches);
-    (changes, touches)
+    perform_top_knowledge(table, action, &mut applied.changes, &mut touches);
+    applied.extend_last_member(applied.changes.len() - len);
+    (applied, touches)
 }
 
 fn perform_with_top_knowledge(
@@ -277,8 +378,13 @@ fn valid_knowledge_change(
     }
 }
 
-fn changes_for(table: &Table, by: Seat, action: &Action, chance: &mut Chance) -> Changes {
-    match action {
+fn plan_action(
+    table: &Table,
+    by: Seat,
+    action: &Action,
+    chance: &mut Chance,
+) -> Result<AppliedChanges, Refusal> {
+    let changes = match action {
         Action::Move {
             selection,
             to,
@@ -319,15 +425,19 @@ fn changes_for(table: &Table, by: Seat, action: &Action, chance: &mut Chance) ->
         Action::Marker { selection, text } => cards::marker(table, selection, text),
         Action::Remove { selection } => cards::remove(table, selection),
         Action::Draw { seat, count } => library::draw(table, *seat, *count),
-        Action::Mulligan { seat, count } => library::mulligan(table, *seat, *count, chance, action),
-        Action::Shuffle { seat, portion } => library::shuffle(table, *seat, *portion, chance),
-        Action::Look { seat, portion } => library::look(table, by, *seat, *portion),
+        Action::Mulligan { seat, count } => {
+            return library::mulligan(table, *seat, *count, chance, action);
+        }
+        Action::Shuffle { seat, portion } => {
+            return library::plan_shuffle(table, *seat, *portion, chance);
+        }
+        Action::Look { seat, portion } => return library::look(table, by, *seat, *portion),
         Action::Reveal {
             zone,
             objects,
             random,
             to,
-        } => library::reveal(table, *zone, objects.as_deref(), *random, to, chance),
+        } => return library::reveal(table, *zone, objects.as_deref(), *random, to, chance),
         Action::Lend { zone, to } => library::lend(table, *zone, *to),
         Action::AlwaysRevealTop { seat, on } => library::always_reveal_top(table, *seat, *on),
         Action::AlwaysLookAtTop { seat, on } => library::always_look_at_top(table, *seat, *on),
@@ -350,11 +460,24 @@ fn changes_for(table: &Table, by: Seat, action: &Action, chance: &mut Chance) ->
             into_side,
         } => game::sideboard(table, *seat, into_main, into_side),
         Action::Ready { seat, ready } => game::ready(table, *seat, *ready),
-        Action::Start { first } => game::start(table, *first, chance, action),
-        Action::NextGame { winner } => game::next_game(table, *winner),
+        Action::Start { first } => {
+            return Ok(AppliedChanges::presented(
+                game::start(table, *first, chance, action)?,
+                Presentation::Reset,
+            ));
+        }
+        Action::NextGame { winner } => {
+            return Ok(AppliedChanges::presented(
+                game::next_game(table, *winner)?,
+                Presentation::Reset,
+            ));
+        }
         Action::Concede {} => game::concede(table, by),
         Action::SetAssist { assist, on } => Ok(game::set_assist(table, by, *assist, *on)),
         Action::Flow { .. } => library::flow(action),
         Action::Undo { .. } | Action::Rewind { .. } | Action::Batch { .. } => Err(Refusal::INVALID),
-    }
+    }?;
+    let mut applied = AppliedChanges::default();
+    applied.record(changes, None);
+    Ok(applied)
 }

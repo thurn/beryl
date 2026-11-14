@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::apply::{AppliedChanges, Presentation};
 use crate::state::Zone;
 use crate::{Action, Change, Entry, Log, Refusal, Seat, Table};
 
@@ -41,28 +42,37 @@ pub(crate) fn target(log: &Log, by: Seat, requested: Option<u32>) -> Result<&Ent
     }
 }
 
-pub(crate) fn inverse(log: &Log, table: &Table, entry: &Entry) -> (Vec<Change>, bool) {
+pub(crate) fn inverse(log: &Log, table: &Table, entry: &Entry) -> (AppliedChanges, bool) {
     let mut seen = false;
-    let mut changes = Vec::new();
-    for change in entry.changes.iter().rev() {
-        match change.inverse() {
-            Change::Nothing => {}
-            Change::RestoreTable(mut edit) => {
-                keep_knowledge(log, table, &mut edit.after);
-                edit.before.clone_from(table);
-                changes.push(Change::RestoreTable(edit));
+    let mut applied = AppliedChanges::default();
+    let members: Vec<_> = entry.member_changes().collect();
+    for (presentation, forward) in members.into_iter().rev() {
+        let mut changes = Vec::new();
+        for change in forward.iter().rev() {
+            match change.inverse() {
+                Change::Nothing => {}
+                Change::RestoreTable(mut edit) => {
+                    keep_knowledge(log, table, &mut edit.after);
+                    edit.before.clone_from(table);
+                    changes.push(Change::RestoreTable(edit));
+                }
+                inverse => changes.push(inverse),
             }
-            inverse => changes.push(inverse),
+            // Returning a draw restores its library position and retains what
+            // the players learned. Keep that distinction in the undo line.
+            if matches!(change, Change::Move { from, to, .. }
+                if matches!(from.zone, Zone::Library(_)) && matches!(to.zone, Zone::Hand(_)))
+            {
+                seen = true;
+            }
         }
-        // The resulting card remains known even when its old id and library
-        // position are restored. Keep that distinction in the undo line.
-        if matches!(change, Change::Move { from, to, .. }
-            if matches!(from.zone, Zone::Library(_)) && matches!(to.zone, Zone::Hand(_)))
-        {
-            seen = true;
-        }
+        let presentation = match presentation {
+            Some(Presentation::Shuffle { .. } | Presentation::Reset) => presentation.cloned(),
+            _ => None,
+        };
+        applied.record(changes, presentation);
     }
-    (changes, seen)
+    (applied, seen)
 }
 
 pub(crate) fn keep_knowledge(log: &Log, current: &Table, restored: &mut Table) {

@@ -9,7 +9,7 @@ use crate::helpers::card_record;
 use crate::state::{Card, Object, ObjectId, Zone};
 use crate::{Action, Chance, Change, Refusal, Seat, Table};
 
-use super::{Changes, cards, perform};
+use super::{AppliedChanges, Changes, Presentation, cards, perform};
 
 super::unimplemented_actions!(flow);
 
@@ -57,10 +57,10 @@ pub(super) fn mulligan(
     count: u16,
     chance: &mut Chance,
     action: &Action,
-) -> Changes {
+) -> Result<AppliedChanges, Refusal> {
     let hand = Zone::Hand(seat);
     let library = Zone::Library(seat);
-    let mut changes = move_to(
+    let returned = move_to(
         table,
         hand,
         zone_cards(table, hand)?.to_vec(),
@@ -69,12 +69,14 @@ pub(super) fn mulligan(
     )?;
     // The shuffle sees the returned hand and the draw sees the shuffle's new ids.
     let mut staged = table.clone();
-    perform(&mut staged, &changes, action);
+    perform(&mut staged, &returned, action);
     let shuffled = shuffle(&staged, seat, Portion::All, chance)?;
     perform(&mut staged, &shuffled, action);
-    changes.extend(shuffled);
-    changes.extend(draw(&staged, seat, count)?);
-    Ok(changes)
+    let mut applied = AppliedChanges::default();
+    applied.record(returned, None);
+    applied.record(shuffled, Some(Presentation::Shuffle { library }));
+    applied.record(draw(&staged, seat, count)?, None);
+    Ok(applied)
 }
 
 /// Put a uniformly random sample at the front, in draw order. For a full
@@ -88,6 +90,20 @@ fn sample(ids: &mut [ObjectId], count: usize, chance: &mut Chance) -> Result<Vec
         outcomes.push(offset);
     }
     Ok(outcomes)
+}
+
+pub(super) fn plan_shuffle(
+    table: &Table,
+    seat: Seat,
+    portion: Portion,
+    chance: &mut Chance,
+) -> Result<AppliedChanges, Refusal> {
+    Ok(AppliedChanges::presented(
+        shuffle(table, seat, portion, chance)?,
+        Presentation::Shuffle {
+            library: Zone::Library(seat),
+        },
+    ))
 }
 
 pub(super) fn shuffle(table: &Table, seat: Seat, portion: Portion, chance: &mut Chance) -> Changes {
@@ -143,12 +159,23 @@ fn learn(card: &Object, seat: Seat) -> Option<Change> {
     (!card.known_to.contains(&seat)).then_some(Change::Learn { id: card.id, seat })
 }
 
-pub(super) fn look(table: &Table, by: Seat, seat: Seat, portion: Portion) -> Changes {
-    let ids = zone_cards(table, Zone::Library(seat))?;
-    Ok(ids[portion_range(ids.len(), portion)]
+pub(super) fn look(
+    table: &Table,
+    by: Seat,
+    seat: Seat,
+    portion: Portion,
+) -> Result<AppliedChanges, Refusal> {
+    let library = Zone::Library(seat);
+    let ids = zone_cards(table, library)?;
+    let ids = ids[portion_range(ids.len(), portion)].to_vec();
+    let changes = ids
         .iter()
         .filter_map(|id| learn(&table.objects[id], by))
-        .collect())
+        .collect();
+    Ok(AppliedChanges::presented(
+        changes,
+        Presentation::Look { library, ids },
+    ))
 }
 
 pub(super) fn reveal(
@@ -158,7 +185,7 @@ pub(super) fn reveal(
     random: Option<u16>,
     to: &[Seat],
     chance: &mut Chance,
-) -> Changes {
+) -> Result<AppliedChanges, Refusal> {
     if to
         .iter()
         .any(|seat| !table.seats().any(|other| other == *seat))
@@ -192,10 +219,18 @@ pub(super) fn reveal(
         }
     };
     let seats: BTreeSet<_> = to.iter().copied().collect();
-    for card in cards {
+    for card in &cards {
         changes.extend(seats.iter().filter_map(|&seat| learn(card, seat)));
     }
-    Ok(changes)
+    let ids = cards.iter().map(|card| card.id).collect();
+    Ok(AppliedChanges::presented(
+        changes,
+        Presentation::Reveal {
+            zone,
+            ids,
+            to: to.to_vec(),
+        },
+    ))
 }
 
 pub(super) fn lend(table: &Table, zone: Zone, to: Seat) -> Changes {
