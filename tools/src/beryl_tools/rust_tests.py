@@ -20,7 +20,17 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from . import card_text, deadline, paths, runlog, rust_fit, tokens, verdicts, warm
+from . import (
+    card_text,
+    deadline,
+    paths,
+    runlog,
+    rust_fit,
+    system,
+    tokens,
+    verdicts,
+    warm,
+)
 from .reruns import ALLOCATIONS_FAILED, CANNOT_RUN, DOCTESTS_FAILED, failed_tests
 
 if TYPE_CHECKING:
@@ -194,6 +204,11 @@ def slow_rust_tests_step(*args: str) -> int:
 
 
 def packaged_tests_step(*args: str, fast: bool, slow: bool = False) -> int:
+    # Windows slow CI can fail to link when rustc reuses incremental objects with
+    # missing LLVM symbols (rust-lang/rust#86049). Use the same setting in both
+    # test steps so the fast check can reuse slow CI's compiled artifacts.
+    if system.WINDOWS:
+        os.environ["CARGO_INCREMENTAL"] = "0"
     named = [a.split("=", 1)[1] for a in args if a.startswith("--packages=")]
     only = [a for a in args if not a.startswith("--packages=")]
     packages = named[0].split(",") if named else None
