@@ -666,16 +666,11 @@ class Exporter:
             # XMage names a chosen color (`ChoiceColor`); Beryl numbers the five in the
             # order of CR 105.1.
             self.emit(f"setChoice({who}, {java_string(COLORS[cast(int, pick['n'])])});")
-        elif action.get("purpose", p.purpose) == "replace" and kind == "ChooseObject":
-            # Which of several mandatory replacement effects applies first, as Chains of
-            # Mephistopheles or Notion Thief: XMage matches the choice against each effect's
-            # text, which begins with its source's name (`chooseReplacementEffect`).
-            name = java_string(self.object_name(cast(str, card), p))
-            self.emit(f"setChoice({who}, {name});")
         elif action.get("purpose", p.purpose) == "replace":
-            # XMage asks whether to apply an optional replacement effect, as dredge, with a
-            # yes or no (`chooseUse`): Beryl's pick of the card is the yes.
-            self.emit(f"setChoice({who}, {'false' if card is None else 'true'});")
+            # Dredge's yes or no (`chooseUse`); mandatory effects' order by source name.
+            yes = "false" if card is None else "true"
+            name = java_string(self.object_name(card, p)) if card else yes
+            self.emit(f"setChoice({who}, {name if kind == 'ChooseObject' else yes});")
         elif (kind in CHOICE_KINDS or bending) and card is not None:
             name = java_string(self.object_name(card, p))
             self.emit(f"{self.choice_command(source, kind)}({who}, {name});")
