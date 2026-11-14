@@ -117,7 +117,7 @@
       "name": "gallery",
       "route": "/#/gallery",
       "width": 1536,
-      "height": 1400
+      "height": 1554
     },
     {
       "name": "gallery-menu-permanent",
@@ -143,6 +143,30 @@
       "hover": "[role=menuitem]:has-text('Bottom of library')",
       "expect": "[role=menuitem]:has-text('Draw bottom card')",
       "keep": "Shows the library menu and its submenu at the smallest desktop window."
+    },
+    {
+      "name": "gallery-commands-all",
+      "route": "/?commands=#/gallery",
+      "width": 1536,
+      "height": 1024,
+      "expect": "[role=option]:has-text('Draw cards')",
+      "keep": "Shows the unfiltered command list and its shortcut hints."
+    },
+    {
+      "name": "gallery-commands-matches",
+      "route": "/?commands=top#/gallery",
+      "width": 1536,
+      "height": 1024,
+      "expect": "[role=group][aria-label='Selected card'] [role=option]",
+      "keep": "Shows search results in both the Library and Selected card groups."
+    },
+    {
+      "name": "gallery-commands-none",
+      "route": "/?commands=untap#/gallery",
+      "width": 1536,
+      "height": 1024,
+      "expect": "[role=status]:has-text('No matching commands')",
+      "keep": "Shows the command list with no matches."
     },
     {
       "name": "game-first-target",

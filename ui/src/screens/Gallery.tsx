@@ -17,6 +17,7 @@ import {
 } from "../components/Player";
 import { StackItem } from "../components/Stack";
 import { AskPrompt } from "../table/AskPrompt";
+import { CommandList, type CommandListEntry } from "../table/CommandList";
 import { Menu, type MenuProps } from "../table/Menu";
 import { costless, SAMPLE } from "./samples";
 import { ScryOverlay } from "./Scry";
@@ -535,6 +536,64 @@ function TableMenus() {
   );
 }
 
+const commandExamples: readonly CommandListEntry[] = [
+  { id: "draw", label: "Draw cards…", group: "Library", key: "⌘E" },
+  { id: "look-top", label: "Look at top cards…", group: "Library", key: "⌘W" },
+  { id: "shuffle", label: "Shuffle", group: "Library", key: "⌘S" },
+  { id: "move-top", label: "Move to top of library", group: "Selected card" },
+  { id: "tap", label: "Tap", group: "Selected card" },
+];
+
+const commandQueries = [
+  { query: "", label: "Empty query" },
+  { query: "top", label: "Two groups" },
+  { query: "untap", label: "No matches" },
+];
+
+function TableCommandList() {
+  const [query, setQuery] = useState(() => {
+    const preset = new URLSearchParams(window.location.search).get("commands");
+    return commandQueries.find((example) => example.query === preset)?.query;
+  });
+  const [result, setResult] = useState("");
+  const close = () => setQuery(undefined);
+  const choose = (action: "Run" | "Bind", id: string) => {
+    const command = commandExamples.find((command) => command.id === id);
+    setResult(`${action} ${command?.label ?? id}`);
+    close();
+  };
+  return (
+    <Panel n="09" title="Command list">
+      <div className="gallery-menus">
+        {commandQueries.map(({ query, label }) => (
+          <Button
+            key={label}
+            variant="secondary"
+            onClick={() => {
+              setResult("");
+              setQuery(query);
+            }}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+      {result && <output className="gallery-command-result">{result}</output>}
+      {query !== undefined && (
+        <CommandList
+          commands={commandExamples}
+          acting="Your library"
+          presentation="panel"
+          initialQuery={query}
+          onRun={(id) => choose("Run", id)}
+          onBind={(id) => choose("Bind", id)}
+          onClose={close}
+        />
+      )}
+    </Panel>
+  );
+}
+
 export function Gallery() {
   return (
     <main className="gallery">
@@ -555,6 +614,7 @@ export function Gallery() {
       <ScryPanel />
       <TablePrompts />
       <TableMenus />
+      <TableCommandList />
     </main>
   );
 }

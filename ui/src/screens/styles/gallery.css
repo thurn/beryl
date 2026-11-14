@@ -4,7 +4,7 @@
 .gallery {
   position: relative;
   width: 1536px;
-  height: 1400px;
+  height: 1554px;
   margin: 0 auto;
   overflow: hidden;
   background:
@@ -143,6 +143,17 @@
   right: 17px;
   top: 1271px;
   height: 112px;
+}
+.panel-09 {
+  left: 16px;
+  right: 17px;
+  top: 1400px;
+  height: 137px;
+}
+.gallery-command-result {
+  display: block;
+  margin-top: 4px;
+  text-align: center;
 }
 .gallery-menus {
   display: flex;

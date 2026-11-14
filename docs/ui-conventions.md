@@ -267,6 +267,11 @@ restore the old behavior.
   whose it is. It lists commands as plain labeled rows with key hints, check
   marks for active switches and at most one submenu level. A command that needs
   a number opens a prompt when chosen.
+- **Command list.** The manual table's command list shows what it acts on and
+  filters commands by label as you type. Results are grouped by what they act on
+  and show their shortcuts. Up and Down move between results, Return runs the
+  selected command, Option+Return opens key binding for it, and Escape closes
+  the list.
 
 ## Not seen in Arena
 

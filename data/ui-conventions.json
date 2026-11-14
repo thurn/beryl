@@ -878,6 +878,11 @@
       "rule": "The manual table's context menu names the card or pile and whose it is. It lists commands as plain labeled rows with key hints, check marks for active switches and at most one submenu level. A command that needs a number opens a prompt when chosen."
     },
     {
+      "kind": "no-equivalent",
+      "name": "Command list",
+      "rule": "The manual table's command list shows what it acts on and filters commands by label as you type. Results are grouped by what they act on and show their shortcuts. Up and Down move between results, Return runs the selected command, Option+Return opens key binding for it, and Escape closes the list."
+    },
+    {
       "kind": "not-seen",
       "name": "Paying with permanents",
       "rule": "Waterbend, convoke, crew. Start with no payment highlights. Hover over Auto Pay on desktop or long-press it on mobile to see which permanents Beryl would use. Click or tap the button to accept. To pay manually, click or tap each permanent you want to contribute. For a three-creature Convoke, pick A, B and D directly even if Auto Pay would use A, B and C. After each manual pick, recalculate the proposal for the remaining cost and keep the player's picks. Let the player finish manually or accept Auto Pay for the remainder, and stop taking picks once the cost is covered. A question whose yes pays a cost at once (pay {1}, or the spell is countered) shows what that button would tap the same way, on hover or a long press, and nothing before. Arena documents the preview and acceptance gestures in its [May 23, 2019 patch notes](https://devtrackers.gg/magic-arena/p/3e5941f1-may-23-0-15-00-00-patch-notes). A selected permanent turns and carries a tap mark, and an outline means one thing at a time: at rest every permanent that can pay wears the outline of what may be picked, and while Auto Pay shows its proposal those it would tap alone show, in their ring. Once a pick has paid part of the cost, the prompt says after what it asks how much is still to pay.",
