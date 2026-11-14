@@ -298,7 +298,7 @@ pub fn report(
 /// The challenger `name` names, for the screen: a long-think entrant, rebuilt as it stands
 /// before a decision ([`LongSearch::resumed`]) on one thread, or a registered agent.
 fn builder(name: &str) -> Result<Box<Build<'static>>, String> {
-    if let Some(info) = beryl_search::agent(name) {
+    if let Some(info) = beryl_search::find_agent(name)? {
         let budget = Budget {
             parallel: false,
             ..Budget::DEFAULT

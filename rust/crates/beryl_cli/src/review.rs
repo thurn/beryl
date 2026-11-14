@@ -18,7 +18,7 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{Choice, Seat, Small};
 use beryl_engine::{observe, view};
-use beryl_search::{Agent, AgentDecision, Budget, GameAgent, Search, agent};
+use beryl_search::{Agent, AgentDecision, Budget, GameAgent, Search, find_agent};
 use beryl_session::ReplayFile;
 
 use crate::game;
@@ -60,7 +60,7 @@ fn searcher(
     name: &str,
     seed: u64,
 ) -> Result<Box<dyn GameAgent + Send>, String> {
-    if let Some(info) = agent(name) {
+    if let Some(info) = find_agent(name)? {
         return Ok((info.new)(t, seed, Budget::DEFAULT));
     }
     let threads = std::thread::available_parallelism()

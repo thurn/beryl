@@ -147,7 +147,10 @@ pub fn main(args: &[String]) -> Result<(), String> {
 /// The entrant `name` names, as a long-think label: a registered agent as it is, a family
 /// without a budget at `work`.
 pub fn resolve(name: &str, work: u64) -> Result<String, String> {
-    if name.contains('@') || beryl_search::agent(name).is_some() {
+    if beryl_search::find_agent(name)?.is_some() {
+        return Ok(name.to_owned());
+    }
+    if name.contains('@') {
         entrant(name)?;
         return Ok(name.to_owned());
     }
@@ -157,13 +160,15 @@ pub fn resolve(name: &str, work: u64) -> Result<String, String> {
 
 /// The arena's entrant for `name`, searching on one thread: games run one to a core.
 fn entrant(name: &str) -> Result<Entrant, String> {
+    if beryl_search::find_agent(name)?.is_some() {
+        return Ok(Entrant::Fixed(name.to_owned()));
+    }
     match name.rsplit_once('@') {
         Some((family, work)) => Ok(Entrant::Search(Settings {
             family: family.parse()?,
             work: parse_work(work).ok_or_else(|| format!("{name:?}: no budget {work:?}"))?,
             threads: 1,
         })),
-        None if beryl_search::agent(name).is_some() => Ok(Entrant::Fixed(name.to_owned())),
         None => Err(format!(
             "no agent {name:?}: a registered agent, a family or family@budget"
         )),

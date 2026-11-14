@@ -8,7 +8,7 @@ use beryl_engine::rng::SplitMix64;
 use beryl_engine::{GameTable, Outcome, Profile, Replay, Scratch, Small, State, Step};
 use beryl_engine::{apply, next, observe, view};
 use beryl_search::{
-    Agent, AgentDecision, Budget, Family, GameAgent, LongSearch, Settings, Widening, agent,
+    Agent, AgentDecision, Budget, Family, GameAgent, LongSearch, Settings, Widening, find_agent,
 };
 
 use crate::transcript::Transcript;
@@ -43,11 +43,12 @@ pub fn agents(
     let seeds = seat_seeds(seed);
     let build = |seat: usize| {
         let name = names[seat];
+        let fixed = find_agent(name)?;
         // Games may run one to a core, so a long-think entrant searches on one thread.
         if let Some(built) = entrant(t, name, seeds[seat], 1) {
             return built.map(|a| a as Box<dyn Agent + Send>);
         }
-        let info = agent(name).ok_or_else(|| {
+        let info = fixed.ok_or_else(|| {
             let known: Vec<&str> = beryl_search::AGENTS.iter().map(|a| a.name).collect();
             format!("no agent is named {name:?} (agents: {})", known.join(", "))
         })?;

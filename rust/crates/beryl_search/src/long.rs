@@ -955,17 +955,8 @@ impl<L: Layout> LongSearch<L> {
         let combat_default = options.anchor && options.combat && combat::handles(d.kind);
         let default = options.anchor.then(|| match &mut self.expert {
             _ if combat_default => {
-                // Use a stream separate from the worlds planted for the search.
-                let mut rng = SplitMix64::new(self.seed ^ !u64::from(decision.0));
-                let start = obs.determinize(&self.table, &mut rng);
-                combat::Sim::<_, combat::General>::new(
-                    &self.table,
-                    &self.policy,
-                    &mut Scratch::unchecked(),
-                    d.player,
-                    &mut self.combat_plan,
-                )
-                .choose(&start, d)
+                self.combat_plan
+                    .choose(&self.table, &self.policy, obs, d, self.seed, decision)
             }
             Some(expert) => expert.choose(obs, d, decision),
             None => self.policy.choose(&self.table, obs, d),

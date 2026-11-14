@@ -11,6 +11,7 @@
 
 use beryl_engine::card::{Keywords, Types};
 use beryl_engine::layout::Queue;
+use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::CombatRole;
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
@@ -21,6 +22,7 @@ use beryl_engine::{Large, LargeSlot, Layout, Relayout, Small};
 
 use std::marker::PhantomData;
 
+use crate::AgentDecision;
 use crate::rollout::{Inline, Policy, RolloutPolicy};
 
 /// The decisions that can be answered by a combat plan.
@@ -81,6 +83,23 @@ pub(super) struct Plan<L: Layout = Small> {
 }
 
 impl<L: Layout> Plan<L> {
+    /// Plans from one world dealt from the player's observation. Its stream is separate
+    /// from the worlds planted for search.
+    pub(super) fn choose(
+        &mut self,
+        table: &GameTable,
+        policy: &RolloutPolicy,
+        obs: Observation<'_, L>,
+        d: &Decision<L>,
+        seed: u64,
+        at: AgentDecision,
+    ) -> Choice {
+        let mut rng = SplitMix64::new(seed ^ !u64::from(at.0));
+        let start = obs.determinize(table, &mut rng);
+        Sim::<_, General>::new(table, policy, &mut Scratch::unchecked(), d.player, self)
+            .choose(&start, d)
+    }
+
     pub(super) fn is_pending(&self, turn: u16) -> bool {
         self.turn == turn && (!self.rest.is_empty() || self.follow_up.is_some())
     }

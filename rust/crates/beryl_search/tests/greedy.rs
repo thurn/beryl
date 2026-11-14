@@ -7,11 +7,74 @@ use beryl_cards::{CARDS, names};
 use beryl_engine::card::{ObjectAbility, Purpose};
 use beryl_engine::{
     Answers, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
-    Profile, Replay, Scratch, Seat, State, Step, TurnStep, Zone, apply, next,
+    Profile, Replay, Scratch, Seat, Small, State, Step, TurnStep, Zone, apply, next, observe,
 };
 use beryl_scenario::{Action, Live, P0, P1, Permanent, Scenario};
-use beryl_search::{Agent, GreedyAgent, Inline, RandomAgent, RolloutPolicy};
+use beryl_search::{
+    Agent, AgentDecision, Budget, GreedyAgent, Inline, RandomAgent, RolloutPolicy, find_agent,
+};
 use common::{fingerprint, mirror, play};
+
+#[test]
+fn greedy_variant_names_use_canonical_rule_order() {
+    for name in [
+        "greedy",
+        "greedy+hold",
+        "greedy+waste",
+        "greedy+combat",
+        "greedy+hold+waste",
+        "greedy+hold+combat",
+        "greedy+waste+combat",
+        "greedy+hold+waste+combat",
+    ] {
+        assert_eq!(find_agent(name).unwrap().unwrap().name, name);
+    }
+    for name in ["greedy+unknown", "greedy+combat+hold", "greedy+hold+hold"] {
+        assert!(
+            find_agent(name)
+                .unwrap_err()
+                .contains("hold, waste, combat")
+        );
+    }
+}
+
+#[test]
+fn registered_greedy_matches_the_original_rollout_policy() {
+    let t = mirror();
+    let info = find_agent("greedy").unwrap().unwrap();
+    for seed in 0..3 {
+        let mut agent = (info.new)(&t, seed, Budget::DEFAULT);
+        let policy = RolloutPolicy::new(&t);
+        let mut s = State::<Small>::new(&t, seed, Profile::SMART).unwrap();
+        let mut x = Scratch::new();
+        let mut asked = [AgentDecision(0); 2];
+        while let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) {
+            let obs = observe(&s, &t, &mut x, d.player);
+            let c = agent.choose(obs, &d, asked[d.player.index()].take());
+            assert_eq!(c, policy.choose(&t, obs, &d));
+            apply(&mut s, &t, &mut x, &mut Replay, c);
+        }
+    }
+}
+
+#[test]
+fn seeded_games_with_the_combat_policy_repeat() {
+    let t = mirror();
+    let info = find_agent("greedy+hold+waste+combat").unwrap().unwrap();
+    let run = || {
+        let mut agents = [11, 22].map(|seed| (info.new)(&t, seed, Budget::DEFAULT));
+        let mut s = State::<Small>::new(&t, 9, Profile::SMART).unwrap();
+        let mut combat_decisions = 0;
+        let outcome = play(&t, &mut s, &mut Scratch::new(), &mut agents, |_, d| {
+            if matches!(d.kind, DecisionKind::Attacker | DecisionKind::Blocker) {
+                combat_decisions += 1;
+            }
+        });
+        assert!(combat_decisions > 0);
+        (outcome, fingerprint(&s))
+    };
+    assert_eq!(run(), run());
+}
 
 /// Greedy against random, seats alternated: at least 90%. The CLI's 200-game tournament
 /// measures the gate; this pins a smaller seeded sample so a weakened policy fails here.

@@ -9,6 +9,7 @@ mod estimate;
 mod eval;
 mod expert;
 mod frozen;
+mod greedy;
 mod long;
 mod mcts;
 mod overlay;
@@ -26,6 +27,7 @@ use serde::{Deserialize, Serialize};
 pub use eval::{FEATURES, Features, NAMES, WEIGHTS, evaluate, features, logit, sigmoid};
 pub use expert::ExpertAgent;
 pub use frozen::FrozenExpertAgent;
+pub use greedy::GreedyAgent;
 pub use long::{
     ANCHOR_ERRORS, ANCHOR_MARGIN, AnchorCheck, EVAL_STEPS, Family, Leaf, LongSearch, Method,
     Options, ROLLOUT_TEMPERATURE, Settings, TURN_DISCOUNT, TreeReport, TurnReport, Visits,
@@ -198,30 +200,6 @@ impl RandomAgent {
 impl<L: Layout> Agent<L> for RandomAgent {
     fn choose(&mut self, _obs: Observation<'_, L>, d: &Decision<L>, at: AgentDecision) -> Choice {
         Choice(at.rng(self.seed).below(d.len() as u64) as u16)
-    }
-}
-
-/// The rollout policy as an opponent (decision 4 of the Milestone 1 plan): deterministic, so
-/// it needs no seed. It keeps its own copy of the game's table, since an agent outlives the
-/// borrow it was built from.
-#[derive(Clone, Debug)]
-pub struct GreedyAgent {
-    table: GameTable,
-    policy: RolloutPolicy,
-}
-
-impl GreedyAgent {
-    pub fn new(t: &GameTable) -> Self {
-        Self {
-            table: t.clone(),
-            policy: RolloutPolicy::new(t),
-        }
-    }
-}
-
-impl<L: Layout> Agent<L> for GreedyAgent {
-    fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>, _at: AgentDecision) -> Choice {
-        self.policy.choose(&self.table, obs, d)
     }
 }
 
@@ -451,7 +429,22 @@ fn deep_family(t: &GameTable, seed: u64, family: Family, work: u64) -> Box<dyn G
     Box::new(Widening::new(LongSearch::<Small>::new(t, settings, seed)))
 }
 
-/// The agent registered under `name`, offered or retired.
+/// The agent registered under `name`, including the greedy variants used by the CLI.
 pub fn agent(name: &str) -> Option<&'static AgentInfo> {
-    AGENTS.iter().chain(RETIRED).find(|a| a.name == name)
+    AGENTS
+        .iter()
+        .chain(RETIRED)
+        .chain(greedy::VARIANTS)
+        .find(|a| a.name == name)
+}
+
+/// Looks up an agent name and explains malformed greedy variant names.
+pub fn find_agent(name: &str) -> Result<Option<&'static AgentInfo>, String> {
+    let found = agent(name);
+    if found.is_none() && name.starts_with("greedy+") {
+        return Err(format!(
+            "{name:?}: greedy rules are hold, waste, combat, each at most once and in that order"
+        ));
+    }
+    Ok(found)
 }

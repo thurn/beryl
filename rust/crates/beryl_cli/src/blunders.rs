@@ -244,7 +244,7 @@ pub(crate) fn run_seed(name: &str, k: u32) -> u64 {
 /// The agent `name` for a run from `seed`: a registered agent, or a long-think entrant
 /// searching on every core.
 fn build(t: &GameTable, name: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
-    if let Some(info) = beryl_search::agent(name) {
+    if let Some(info) = beryl_search::find_agent(name)? {
         return Ok((info.new)(t, seed, Budget::DEFAULT));
     }
     let threads = std::thread::available_parallelism()
@@ -266,7 +266,7 @@ pub fn run(
     mut progress: impl FnMut(&str),
 ) -> Result<Report, String> {
     let names: Vec<(String, String)> =
-        if agent.contains('@') || beryl_search::agent(agent).is_some() {
+        if beryl_search::find_agent(agent)?.is_some() || agent.contains('@') {
             vec![(agent.to_owned(), "as named".to_owned())]
         } else {
             budgets
@@ -533,6 +533,12 @@ mod tests {
             let choice = planner.choose(obs, &at.d, AgentDecision(0));
             assert_eq!(planner.last_search().unwrap().rollouts, 0);
             assert_eq!(shown[usize::from(choice.0)], "done", "{name}");
+            let mut policy = build(&at.t, "greedy+combat", seed).unwrap();
+            assert_eq!(
+                policy.choose(obs, &at.d, AgentDecision(0)),
+                choice,
+                "{name}"
+            );
 
             let mut first = beryl_search::LongSearch::new(&at.t, settings(20_000), seed);
             let mut second = beryl_search::LongSearch::new(&at.t, settings(20_000), seed);
