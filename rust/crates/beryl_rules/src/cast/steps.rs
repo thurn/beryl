@@ -14,7 +14,7 @@ use crate::layout::{Layout, Queue, index};
 use crate::mana;
 use crate::profile::Payment;
 use crate::state::{
-    AbilityRef, CastKind, CastStep, Casting, Pending, StackEntry, StackItem, State, Target,
+    AbilityRef, CastKind, CastStep, Casting, Count, Pending, StackEntry, StackItem, State, Target,
     Tracker, Zone,
 };
 use crate::table::GameTable;
@@ -267,6 +267,11 @@ pub(super) fn finish<L: Layout>(
     s.settle_question();
     let active = s.turn().active();
     s.give_priority(if c.resolving() { active } else { c.player });
+    // The spell is counted as it becomes cast, before its cast triggers anything (CR 601.2i),
+    // so an ability that triggers on the cast and counts the spells cast this turn counts it.
+    if let StackItem::Spell { controller, .. } = top(s).item {
+        s.count(t, Count::SpellsCast, controller);
+    }
     let entry = top(s);
     if let StackItem::Spell {
         object: spell,

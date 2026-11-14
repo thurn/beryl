@@ -1,5 +1,6 @@
-//! Walking a definition: every [`Filter`] it holds, wherever it holds one, for a check that
-//! must see them all, and every [`Subtype`](crate::Subtype) it names.
+//! Walking a definition: every [`Filter`], [`Amount`] and [`Condition`] it holds, wherever it
+//! holds one, for a check that must see them all, and every [`Subtype`](crate::Subtype) it
+//! names.
 
 use crate::ability::{Ability, Behavior};
 use crate::characteristics::Subtypes;
@@ -10,21 +11,40 @@ use crate::effect::{Amount, Condition, Effect, Objects, Players};
 use crate::filter::Filter;
 use crate::trigger::Subject;
 
-/// What is done with each filter.
-type Visit<'a> = &'a mut dyn FnMut(&Filter);
+/// A part of a definition a walk meets: each filter, amount and condition, those inside
+/// another included.
+#[derive(Clone, Copy, Debug)]
+pub enum Node<'a> {
+    Filter(&'a Filter),
+    Amount(&'a Amount),
+    Condition(&'a Condition),
+}
+
+/// What is done with each part met.
+type Visit<'a> = &'a mut dyn FnMut(Node<'_>);
 
 impl CardDef {
-    /// Calls `visit` with every filter of the card's faces: those of its abilities, of the
-    /// abilities it grants and of the costs it is cast with, the filters inside them included. A token it makes is a card of
-    /// its own ([`CardDef::tokens`]) and is not walked.
-    pub fn filters(&self, visit: Visit) {
+    /// Calls `visit` with every filter of the card's faces ([`CardDef::walk`]).
+    pub fn filters(&self, visit: &mut dyn FnMut(&Filter)) {
+        self.walk(&mut |node| {
+            if let Node::Filter(filter) = node {
+                visit(filter);
+            }
+        });
+    }
+
+    /// Calls `visit` with every filter, amount and condition of the card's faces: those of
+    /// its abilities, of the abilities it grants and of the costs it is cast with, those
+    /// inside them included. A token it makes is a card of its own ([`CardDef::tokens`]) and
+    /// is not walked.
+    pub fn walk(&self, visit: Visit) {
         for face in self.faces {
             for ability in face.abilities.iter().chain(face.grants) {
-                ability.filters(visit);
+                ability.walk(visit);
             }
             let options = face.casting.iter().flat_map(|option| option.parts());
             for part in face.additional_cost.iter().chain(options) {
-                part.filters(visit);
+                part.walk(visit);
             }
         }
     }
@@ -102,52 +122,62 @@ impl CardDef {
 }
 
 impl Ability {
-    /// Calls `visit` with every filter of the ability: what it may target, what pays its
-    /// cost, what triggers it, what it needs to be activated, its conditions, its continuous
-    /// effect, the rule change it names and its effect data. A Rust body holds none anything can read.
-    pub fn filters(&self, visit: Visit) {
+    /// Calls `visit` with every filter of the ability ([`Ability::walk`]).
+    pub fn filters(&self, visit: &mut dyn FnMut(&Filter)) {
+        self.walk(&mut |node| {
+            if let Node::Filter(filter) = node {
+                visit(filter);
+            }
+        });
+    }
+
+    /// Calls `visit` with every filter, amount and condition of the ability: what it may
+    /// target, what pays its cost, what triggers it, what it needs to be activated, its
+    /// conditions, its continuous effect, the rule change it names and its effect data. A
+    /// Rust body holds none anything can read.
+    pub fn walk(&self, visit: Visit) {
         for spec in self.targets() {
-            spec.filter.filters(visit);
+            spec.filter.walk(visit);
         }
         for part in self.cost().parts() {
-            part.filters(visit);
+            part.walk(visit);
         }
         if let Some(trigger) = self.trigger() {
             if let Subject::A(filter) = &trigger.subject {
-                filter.filters(visit);
+                filter.walk(visit);
             }
-            trigger.whose.filters(visit);
+            trigger.whose.walk(visit);
         }
         if let Some(condition) = self.condition() {
-            condition.filters(visit);
+            condition.walk(visit);
         }
         if let Some(layer) = self.layer() {
-            layer.filters(visit);
+            layer.walk(visit);
         }
         if let Some(rule) = self.rule() {
-            rule.players.filters(visit);
+            rule.players.walk(visit);
             match &rule.what {
-                Governed::CastSpells(filter) => filter.filters(visit),
-                Governed::ActivateLoyaltyAbilities(objects) => objects.filters(visit),
+                Governed::CastSpells(filter) => filter.walk(visit),
+                Governed::ActivateLoyaltyAbilities(objects) => objects.walk(visit),
             }
         }
         if let Some(filter) = &self.only_if_you_control() {
-            filter.filters(visit);
+            filter.walk(visit);
         }
         if let Behavior::Data(effect) = self.body() {
-            effect.filters(visit);
+            effect.walk(visit);
         }
     }
 }
 
 impl CostPart {
-    fn filters(&self, visit: Visit) {
+    fn walk(&self, visit: Visit) {
         match self {
             CostPart::This(_) | CostPart::Loyalty(_) | CostPart::Life(_) => {}
-            CostPart::Chosen(_, chosen) => chosen.filter.filters(visit),
+            CostPart::Chosen(_, chosen) => chosen.filter.walk(visit),
             CostPart::OneOf(costs) => {
                 for part in costs.iter().flat_map(Cost::parts) {
-                    part.filters(visit);
+                    part.walk(visit);
                 }
             }
         }
@@ -155,27 +185,27 @@ impl CostPart {
 }
 
 impl LayerSpec {
-    fn filters(&self, visit: Visit) {
-        self.affected.filters(visit);
+    fn walk(&self, visit: Visit) {
+        self.affected.walk(visit);
         if let Some(condition) = &self.condition {
-            condition.filters(visit);
+            condition.walk(visit);
         }
-        self.modification.filters(visit);
+        self.modification.walk(visit);
     }
 }
 
 impl Modification {
-    fn filters(&self, visit: Visit) {
+    fn walk(&self, visit: Visit) {
         if let Modification::SetPower(amount) = self {
-            amount.filters(visit);
+            amount.walk(visit);
         }
     }
 }
 
 impl Filter {
-    /// Calls `visit` with this filter and then with every filter inside it.
-    pub fn filters(&self, visit: Visit) {
-        visit(self);
+    /// Calls `visit` with this filter and then with every part inside it.
+    pub fn walk(&self, visit: Visit) {
+        visit(Node::Filter(self));
         match self {
             Filter::Any
             | Filter::Types(_)
@@ -185,11 +215,11 @@ impl Filter {
             | Filter::Tapped
             | Filter::ManaValueAtMost(_)
             | Filter::ManaValueAtMostX => {}
-            Filter::Whose(players) => players.filters(visit),
-            Filter::Not(filter) => filter.filters(visit),
+            Filter::Whose(players) => players.walk(visit),
+            Filter::Not(filter) => filter.walk(visit),
             Filter::All(filters) | Filter::AnyOf(filters) => {
                 for filter in *filters {
-                    filter.filters(visit);
+                    filter.walk(visit);
                 }
             }
         }
@@ -197,7 +227,7 @@ impl Filter {
 }
 
 impl Objects {
-    fn filters(&self, visit: Visit) {
+    fn walk(&self, visit: Visit) {
         match self {
             Objects::This
             | Objects::Target(_)
@@ -207,70 +237,78 @@ impl Objects {
             | Objects::TriggeredOn
             | Objects::TriggeredOnIn(_)
             | Objects::ExiledWithThis => {}
-            Objects::All { filter, .. } => filter.filters(visit),
+            Objects::All { filter, .. } => filter.walk(visit),
             Objects::InZoneOf {
                 players, filter, ..
             } => {
-                players.filters(visit);
-                filter.filters(visit);
+                players.walk(visit);
+                filter.walk(visit);
             }
-            Objects::CardsIn { players, .. } => players.filters(visit),
+            Objects::CardsIn { players, .. } => players.walk(visit),
         }
     }
 }
 
 impl Players {
-    fn filters(&self, visit: Visit) {
+    fn walk(&self, visit: Visit) {
         match self {
             Players::You
             | Players::EachOpponent
             | Players::EachPlayer
             | Players::Target(_)
             | Players::ThatPlayer => {}
-            Players::ControllerOf(objects) | Players::OwnerOf(objects) => objects.filters(visit),
-            Players::EachOther(players) => players.filters(visit),
+            Players::ControllerOf(objects) | Players::OwnerOf(objects) => objects.walk(visit),
+            Players::EachOther(players) => players.walk(visit),
         }
     }
 }
 
 impl Amount {
-    fn filters(&self, visit: Visit) {
+    /// Calls `visit` with this amount and then with every part inside it.
+    pub fn walk(&self, visit: Visit) {
+        visit(Node::Amount(self));
         match self {
             Amount::Fixed(_) | Amount::X | Amount::ThatMany | Amount::Carried => {}
-            Amount::Count(objects) => objects.filters(visit),
-            Amount::Times(_, amount) => amount.filters(visit),
-            Amount::Life(players) | Amount::ThoseOf(players) => players.filters(visit),
+            Amount::Count(objects) => objects.walk(visit),
+            Amount::Times(_, amount) => amount.walk(visit),
+            Amount::Life(players)
+            | Amount::ThoseOf(players)
+            | Amount::SpellsCast(players)
+            | Amount::CardsDrawn(players) => players.walk(visit),
             Amount::Most(players, amount) => {
-                players.filters(visit);
-                amount.filters(visit);
+                players.walk(visit);
+                amount.walk(visit);
             }
             Amount::Power(objects)
             | Amount::Toughness(objects)
             | Amount::ManaValue(objects)
-            | Amount::Counters(objects, _) => objects.filters(visit),
+            | Amount::Counters(objects, _) => objects.walk(visit),
         }
     }
 }
 
 impl Condition {
-    fn filters(&self, visit: Visit) {
+    /// Calls `visit` with this condition and then with every part inside it.
+    pub fn walk(&self, visit: Visit) {
+        visit(Node::Condition(self));
         match self {
             Condition::Did | Condition::WonFlip | Condition::Paid(_) => {}
+            Condition::DrewInDrawStep(players) => players.walk(visit),
             Condition::Compare(left, _, right) => {
-                left.filters(visit);
-                right.filters(visit);
+                left.walk(visit);
+                right.walk(visit);
             }
             Condition::Is(objects, filter) => {
-                objects.filters(visit);
-                filter.filters(visit);
+                objects.walk(visit);
+                filter.walk(visit);
             }
             Condition::EnteredThisTurn(objects) | Condition::Token(objects) => {
-                objects.filters(visit);
+                objects.walk(visit);
             }
-            Condition::Not(condition) => condition.filters(visit),
+            Condition::Not(condition) => condition.walk(visit),
             Condition::All(conditions) | Condition::Any(conditions) => {
                 for condition in *conditions {
-                    condition.filters(visit);
+                    condition.walk(visit);
                 }
             }
         }
@@ -278,24 +316,24 @@ impl Condition {
 }
 
 impl Effect {
-    fn filters(&self, visit: Visit) {
+    fn walk(&self, visit: Visit) {
         let operands = self.operands();
         for players in [operands.players, operands.others].into_iter().flatten() {
-            players.filters(visit);
+            players.walk(visit);
         }
         for objects in [operands.objects, operands.to].into_iter().flatten() {
-            objects.filters(visit);
+            objects.walk(visit);
         }
         if let Some(amount) = operands.amount {
-            amount.filters(visit);
+            amount.walk(visit);
         }
         if let Some(filter) = operands.filter {
-            filter.filters(visit);
+            filter.walk(visit);
         }
         match self {
             Effect::Sequence(effects) => {
                 for effect in *effects {
-                    effect.filters(visit);
+                    effect.walk(visit);
                 }
             }
             Effect::If {
@@ -303,16 +341,16 @@ impl Effect {
                 then,
                 otherwise,
             } => {
-                condition.filters(visit);
-                then.filters(visit);
+                condition.walk(visit);
+                then.walk(visit);
                 if let Some(otherwise) = otherwise {
-                    otherwise.filters(visit);
+                    otherwise.walk(visit);
                 }
             }
             Effect::May { effect, .. }
             | Effect::Unless { effect, .. }
-            | Effect::ForEachPlayer { effect, .. } => effect.filters(visit),
-            Effect::Modify { modification, .. } => modification.filters(visit),
+            | Effect::ForEachPlayer { effect, .. } => effect.walk(visit),
+            Effect::Modify { modification, .. } => modification.walk(visit),
             _ => {}
         }
     }

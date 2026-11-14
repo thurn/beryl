@@ -2,8 +2,8 @@
 //! decision D20).
 
 use beryl_card::{
-    Ability, AbilityIx, AbilityKind, Behavior, CardDef, Condition, CostAction, CostPart, Effect,
-    FACE_DOWN, FACE_DOWN_COPY, Face, FaceIx, RuleChange,
+    Ability, AbilityIx, AbilityKind, Amount, CardDef, Condition, CostAction, CostPart, FACE_DOWN,
+    FACE_DOWN_COPY, Face, FaceIx, Node, RuleChange,
 };
 
 use crate::event::{EventKind, Listens, Replaces};
@@ -158,6 +158,16 @@ pub enum Capability {
     ///
     /// [CR 606.3]: https://yawgatog.com/resources/magic-rules/#R6063
     LoyaltyActivated,
+    /// A card reads how many spells a player cast this turn
+    /// ([`Amount::SpellsCast`]), so that is counted for each player.
+    SpellsCast,
+    /// A card reads how many cards a player drew this turn ([`Amount::CardsDrawn`]), so that
+    /// is counted for each player.
+    CardsDrawn,
+    /// A card asks whether a player has drawn the first card of their draw step this turn
+    /// ([`Condition::DrewInDrawStep`]), so the cards each player draws in their own draw
+    /// step are counted.
+    DrewInDrawStep,
 }
 
 impl Capability {
@@ -166,12 +176,24 @@ impl Capability {
         let mut found = 0;
         // An ability a permanent is granted reads what one of its own does.
         for a in face.abilities.iter().chain(face.grants) {
-            if asks_what_entered_this_turn(a) {
-                found |= Capability::EnteredThisTurn.bit();
-            }
             if a.cost().is_loyalty() {
                 found |= Capability::LoyaltyActivated.bit();
             }
+            // Wherever the ability holds the amount or condition that reads it: its own
+            // condition, one its effect reads, its continuous effect's.
+            a.walk(&mut |node| {
+                found |= match node {
+                    Node::Condition(Condition::EnteredThisTurn(_)) => {
+                        Capability::EnteredThisTurn.bit()
+                    }
+                    Node::Amount(Amount::SpellsCast(_)) => Capability::SpellsCast.bit(),
+                    Node::Amount(Amount::CardsDrawn(_)) => Capability::CardsDrawn.bit(),
+                    Node::Condition(Condition::DrewInDrawStep(_)) => {
+                        Capability::DrewInDrawStep.bit()
+                    }
+                    _ => 0,
+                };
+            });
         }
         found
     }
@@ -237,18 +259,6 @@ fn gather(
     }
     defs.push(&FACE_DOWN_COPY);
     Ok((defs, indices))
-}
-
-/// Whether an ability asks whether a permanent entered this turn
-/// ([`Condition::EnteredThisTurn`]): in its own condition, or in one its effect reads.
-fn asks_what_entered_this_turn(ability: &Ability) -> bool {
-    let asks = |condition: &Condition| {
-        condition.any(&|condition| matches!(condition, Condition::EnteredThisTurn(_)))
-    };
-    ability.condition().is_some_and(asks)
-        || matches!(ability.body(), Behavior::Data(effect) if effect.any(&|effect| {
-            matches!(effect, Effect::If { condition, .. } if asks(condition))
-        }))
 }
 
 /// Whether every token and emblem `def`'s effects create is one of `defs`, the cards of a

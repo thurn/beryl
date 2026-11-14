@@ -168,9 +168,12 @@
 //! a tracker is reset whole by the turn and exists only in a game with a card that reads
 //! it. Kept as memos, each turn's reset would walk a keyed list and each read search it;
 //! as a tracker the fact is one bit of a set of slots. The list of kinds
-//! ([`trackers::Tracker`]) is closed and holds what a card of the pool reads: no card yet
-//! reads a count of this game or one kept for a player, and such a kind joins with a shape
-//! and a span of its own.
+//! ([`trackers::Tracker`]) is closed and holds what a card of the pool reads. How many
+//! times a player did something this turn (spells cast, cards drawn, cards drawn in their
+//! draw step) is the store's second shape, a count kept for each player
+//! ([`trackers::Count`]), noted with [`State::count`] and read with [`State::counted`]. A
+//! count of the whole game, or one that outlasts the turn, joins with a shape and a span of
+//! its own.
 //!
 //! ### Shapes, capacities and bytes
 //!
@@ -182,6 +185,7 @@
 //! | the rules changed for each player | two sets of rules for each: those of the permanents' static abilities, stored with the layer results, and those of the Effects store's entries, its index | 8, a bit for each rule change the game numbered | 2 players, twice | 32 | the same |
 //! | Memos | a queue of (slot, memo) and a mask of the kinds live in it | 3, of the 4 allowed | 32 ([`memos::MEMOS`]) | 100, of the 136 allowed | a `Vec` of 4-byte entries |
 //! | Trackers | a set of slots for each kind keyed by permanent | 32 | 2 kinds | 64 | 128 each |
+//! | Trackers' counts | a byte for each player and kind of count, padded to the sets' alignment | 1 | 3 kinds, 2 players | 8 | the same |
 //! | Counters | a queue of (slot, kind, count), in the order each kind was first put on its object | 3 | 32 ([`counters::COUNTERS`]) | 97, of the 104 allowed | a `Vec` |
 //!
 //! A store that fills returns [`fixed::Full`] and the game stalls into `Large`
@@ -209,7 +213,8 @@
 //! ability or a triggered ability with only the fields of its kind: each of the 64 entries
 //! is 56 bytes, two fewer. It is 20,104 since what the permanents listen to is a 64-bit
 //! [`event::Listens`], where it was 16 bits, beside a 64-bit [`event::Replaces`] of what
-//! their static abilities replace: 16 more.
+//! their static abilities replace: 16 more. After by-bajq.1.4 it is 20,112: the Trackers
+//! store's counts for each player, 8.
 //! The limit is 20,480. Each bead may change the size at its
 //! own push by at most its allotment, whatever landed before it, and reports the size as it
 //! reports the count:
@@ -224,6 +229,7 @@
 //! | by-w8gv.7.8 | +64 (landed: +64) | two sets of slots |
 //! | by-w8gv.7.9 | +104 (landed: +96) | the counters table |
 //! | by-w8gv.7.10 | 0 or lower (landed: 0) | deletes only |
+//! | by-bajq.1.4 | +8 (landed: +8) | three counts for each of two players, padded |
 //!
 //! With every bead but by-w8gv.7.4 landed the size is at most 20,448, so any order holds
 //! the limit; the target with all landed was at most 20,256, and the milestone ends at
@@ -341,7 +347,7 @@
 //! | `event::destination` ([`State::move_replacements`]) | one AND | one pass comparing each entry's affected object |
 //! | what a player may cast ([`State::cast_permissions`]) and what a spell costs more ([`State::cost_increase`]) | one AND each | one pass; a hand's cards need no entry |
 //! | the zone move's reset | one bit test of the keyed slots | each store ends its entries about the slot, out of line; an arrival also tests the Memos kinds for a link to the slot |
-//! | the turn's reset | Effects: the store's length read twice a turn. Trackers: eight words cleared, since the kernel begins the turn with no table to ask | Effects: one pass. Trackers: the same eight words, in place of two flags on every permanent |
+//! | the turn's reset | Effects: the store's length read twice a turn. Trackers: nine words cleared, since the kernel begins the turn with no table to ask | Effects: one pass. Trackers: the same nine words, in place of two flags on every permanent |
 //! | [`State::signature`] | one bit test of the keyed slots, and one of the two bits as two objects are compared (`store::Stored`) | out of line, the two objects' memos, their rows of counters and the effects on them compared: a permanent's layer results show what its effects make of it now, not for how long |
 //! | "is a rule change of this kind in force" ([`State::rules_for`], [`GameTable::rules_of`]) | for a player, their two sets of rules joined and one AND with the table's set of the kind, which is the whole answer; for a permanent, one AND of the table's rules of its card and one of the store's kinds | for a permanent, a second AND of the rules of the face that is up, or one pass over the store's entries |
 //! | an event's match against triggered abilities (the rules' `trigger::match_event`) | one AND of the kinds any card of the game listens to ([`GameTable::listens_any`]) | one AND of the battlefield's listener mask; then, for each permanent whose card listens to the kind, the listeners of that kind on the face that is up ([`GameTable::listeners`]), and no other ability of it |

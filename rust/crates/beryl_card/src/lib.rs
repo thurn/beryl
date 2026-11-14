@@ -63,6 +63,7 @@ pub use mana::{ManaColor, ManaCost, ManaSet, mana};
 pub use prompt::{Part, Place, Prompt, Purpose, Shape};
 pub use target::{Takes, TargetKind, TargetSpec};
 pub use trigger::{Subject, Trigger, TriggerEvent};
+pub use walk::Node;
 
 /// Everything a card file uses: the vocabulary's types and its builders,
 /// `use beryl_card::prelude::*;`.

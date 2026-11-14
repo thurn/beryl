@@ -17,8 +17,8 @@ use crate::ids::Seat;
 use crate::layout::{Layout, PerPlayer, Table};
 use crate::query::Copiable;
 use crate::state::{
-    AbilityRef, CountersHeld, PendingTrigger, State, TARGETS, Target, TargetPlace, TargetPlaces,
-    Tracker, Zone, ZoneKey, placed,
+    AbilityRef, Count, CountersHeld, PendingTrigger, State, TARGETS, Target, TargetPlace,
+    TargetPlaces, Tracker, Zone, ZoneKey, placed,
 };
 use crate::table::GameTable;
 use crate::trigger::entered_with;
@@ -420,6 +420,10 @@ impl<L: Layout> Scene<'_, L> {
                 let players = self.s.players_in_seat_order(who);
                 players.map(|p| i32::from(self.s.player(p).life())).sum()
             }
+            // Counted for each player this turn, in a game with a card that reads the count
+            // (`beryl_kernel`'s `Capability::SpellsCast` and `Capability::CardsDrawn`).
+            Amount::SpellsCast(players) => self.counted(players, Count::SpellsCast),
+            Amount::CardsDrawn(players) => self.counted(players, Count::CardsDrawn),
             Amount::Most(players, amount) => {
                 let who = self.players(players);
                 let each = self.s.players_in_seat_order(who);
@@ -448,6 +452,14 @@ impl<L: Layout> Scene<'_, L> {
                 |known| i32::from(known.counters.get(kind)),
             ),
         }
+    }
+
+    /// The total of `count` this turn over the players `players` names.
+    fn counted(&self, players: Players, count: Count) -> i32 {
+        let who = self.players(players);
+        let each = self.s.players_in_seat_order(who);
+        each.map(|player| i32::from(self.s.counted(count, player)))
+            .sum()
     }
 
     /// The value of `amount` as its instruction is reached (CR 608.2h), never less than zero
@@ -487,6 +499,15 @@ impl<L: Layout> Scene<'_, L> {
                 let objects = self.objects(names);
                 !objects.is_empty()
                     && objects.all(|slot| self.s.tracked(Tracker::EnteredThisTurn, slot))
+            }
+            // CR 504.1: whether each of the players has drawn a card in their own draw step
+            // this turn, counted in a game with a card that asks
+            // (`beryl_kernel`'s `Capability::DrewInDrawStep`).
+            Condition::DrewInDrawStep(players) => {
+                let who = self.players(players);
+                let mut each = self.s.players_in_seat_order(who).peekable();
+                each.peek().is_some()
+                    && each.all(|player| self.s.counted(Count::DrewInDrawStep, player) > 0)
             }
             Condition::Not(condition) => !self.holds(condition),
             Condition::All(conditions) => conditions.iter().all(|c| self.holds(c)),

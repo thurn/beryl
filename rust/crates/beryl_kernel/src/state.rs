@@ -21,7 +21,7 @@ pub use crate::stack::{
     TargetPlace, TargetPlaces, TriggerInfo, placed,
 };
 pub use crate::store::{Duration, Stored};
-pub use crate::trackers::{Tracked, Tracker, Trackers};
+pub use crate::trackers::{Count, Tracked, Tracker, Trackers};
 pub use crate::turn::Turn;
 
 use beryl_card::FaceIx;

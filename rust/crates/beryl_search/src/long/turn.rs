@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use beryl_engine::layout::Queue;
-use beryl_engine::state::Tracker;
+use beryl_engine::state::{Count, Tracker};
 use beryl_engine::{SlotId, TurnStep, apply_decided, next_within, payable_responses};
 use serde::{Deserialize, Serialize};
 
@@ -175,6 +175,9 @@ fn observation_key<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>, actions:
     obs.battlefield().hash(&mut h);
     for seat in Seat::BOTH {
         obs.player(seat).hash(&mut h);
+        for count in Count::ALL {
+            obs.counted(count, seat).hash(&mut h);
+        }
         obs.graveyard(seat).hash(&mut h);
         for &slot in obs.library(seat) {
             // Which known cards occupy which positions matters. So does the

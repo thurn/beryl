@@ -170,6 +170,7 @@ fn reads(condition: &Condition) -> bool {
         | Condition::WonFlip
         | Condition::Is(..)
         | Condition::EnteredThisTurn(_)
+        | Condition::DrewInDrawStep(_)
         | Condition::Token(_) => false,
     }
 }
@@ -217,6 +218,7 @@ pub fn holds<L: Layout>(s: &State<L>, slot: L::Slot, condition: &Condition) -> b
         | Condition::WonFlip
         | Condition::Is(..)
         | Condition::EnteredThisTurn(_)
+        | Condition::DrewInDrawStep(_)
         | Condition::Token(_) => {
             unreachable!("the card table refuses a static ability with this condition")
         }
@@ -240,6 +242,7 @@ pub fn reads_counters(condition: &Condition, kind: CounterKind) -> bool {
         | Condition::WonFlip
         | Condition::Is(..)
         | Condition::EnteredThisTurn(_)
+        | Condition::DrewInDrawStep(_)
         | Condition::Token(_) => false,
     }
 }

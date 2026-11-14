@@ -3,37 +3,42 @@
 use crate::counter::CounterKind;
 use crate::effect::{Objects, Players};
 
-/// A number an instruction uses, read as the instruction is reached
-/// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "If an effect requires
-/// information from the game (such as the number of creatures on the battlefield), the answer
-/// is determined only once, when the effect is applied." It is never less than zero
-/// ([CR 107.1b](https://yawgatog.com/resources/magic-rules/#R1071b)): "If a calculation that
-/// would determine the result of an effect yields a negative number, zero is used instead".
+/// A number an instruction uses, read as the instruction is reached ([CR 608.2h]): "If an effect
+/// requires information from the game (such as the number of creatures on the battlefield), the
+/// answer is determined only once, when the effect is applied." It is never less than zero
+/// ([CR 107.1b]): "If a calculation that would determine the result of an effect yields a negative
+/// number, zero is used instead".
+///
+/// [CR 608.2h]: https://yawgatog.com/resources/magic-rules/#R6082h
+/// [CR 107.1b]: https://yawgatog.com/resources/magic-rules/#R1071b
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Amount {
     /// A number printed on the card: "two cards", "3 life".
     Fixed(u8),
-    /// X ([CR 107.3](https://yawgatog.com/resources/magic-rules/#R1073)): "Many objects use
-    /// the letter X as a placeholder for a number that needs to be determined." The value
-    /// announced for the spell or ability
-    /// ([CR 107.3a](https://yawgatog.com/resources/magic-rules/#R1073a)).
+    /// X ([CR 107.3]): "Many objects use the letter X as a placeholder for a number that needs to
+    /// be determined." The value announced for the spell or ability ([CR 107.3a]).
+    ///
+    /// [CR 107.3]: https://yawgatog.com/resources/magic-rules/#R1073
+    /// [CR 107.3a]: https://yawgatog.com/resources/magic-rules/#R1073a
     X,
     /// "That many", "that much": how many or how much the instruction before did (the
     /// [module](crate::effect) says which instruction that is): the cards it drew or
     /// discarded, the life gained or lost, the counters put or removed, the objects it moved.
     ThatMany,
-    /// "That much", or "that spell's mana value" of a spell long gone, in a delayed
-    /// triggered ability: the number it carries from the effect that made it
-    /// ([`crate::Effect::Delay`]), settled as that effect was applied (CR 608.2h).
-    /// [CR 603.7c](https://yawgatog.com/resources/magic-rules/#R6037c): "A delayed triggered
-    /// ability that refers to a particular object still affects it even if the object
-    /// changes characteristics."
+    /// "That much", or "that spell's mana value" of a spell long gone, in a delayed triggered
+    /// ability: the number it carries from the effect that made it ([`crate::Effect::Delay`]),
+    /// settled as that effect was applied (CR 608.2h). [CR 603.7c]: "A delayed triggered ability
+    /// that refers to a particular object still affects it even if the object changes
+    /// characteristics."
+    ///
+    /// [CR 603.7c]: https://yawgatog.com/resources/magic-rules/#R6037c
     Carried,
-    /// "For each [of them] [player] controlled": how many of the permanents the instruction
-    /// before took from the battlefield these players controlled as it did, as "for each
-    /// creature exiled this way, its controller searches" counts for each controller
-    /// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "the effect uses
-    /// the object's last known information."
+    /// "For each [of them] [player] controlled": how many of the permanents the instruction before
+    /// took from the battlefield these players controlled as it did, as "for each creature exiled
+    /// this way, its controller searches" counts for each controller ([CR 608.2h]): "the effect
+    /// uses the object's last known information."
+    ///
+    /// [CR 608.2h]: https://yawgatog.com/resources/magic-rules/#R6082h
     ThoseOf(Players),
     /// "The number of [objects]", "for each [object]".
     Count(&'static Objects),
@@ -45,22 +50,37 @@ pub enum Amount {
     Power(Objects),
     /// "Its toughness", or their total toughness.
     Toughness(Objects),
-    /// "Its mana value"
-    /// ([CR 202.3](https://yawgatog.com/resources/magic-rules/#R2023)): "The mana value of an
-    /// object is a number equal to the total amount of mana in its mana cost, regardless of
-    /// color." Or their total mana value.
+    /// "Its mana value" ([CR 202.3]): "The mana value of an object is a number equal to the total
+    /// amount of mana in its mana cost, regardless of color." Or their total mana value.
+    ///
+    /// [CR 202.3]: https://yawgatog.com/resources/magic-rules/#R2023
     ManaValue(Objects),
     /// "The number of [kind] counters on [objects]".
     Counters(Objects, CounterKind),
-    /// "Your life total", "their life total"
-    /// ([CR 119.1](https://yawgatog.com/resources/magic-rules/#R1191)): "Each player begins
-    /// the game with a starting life total of 20." Of several players, their total.
+    /// "Your life total", "their life total" ([CR 119.1]): "Each player begins the game with a
+    /// starting life total of 20." Of several players, their total.
+    ///
+    /// [CR 119.1]: https://yawgatog.com/resources/magic-rules/#R1191
     Life(Players),
     /// The most any of the players has of an amount, as "an opponent controls more lands
     /// than you" holds the most lands any opponent controls against yours. The amount is
     /// read for each of them in your place: its "you" is that player. Zero with no such
     /// player.
     Most(Players, &'static Amount),
+    /// "The number of spells [players] cast this turn", or of several players, their total. A spell
+    /// counts from the moment it becomes cast ([CR 601.2i]): "the spell becomes cast." Kept only in
+    /// a game with a card that reads it (`beryl_kernel`'s `Count`).
+    ///
+    /// [CR 601.2i]: https://yawgatog.com/resources/magic-rules/#R6012i
+    SpellsCast(Players),
+    /// "The number of cards [players] drew this turn", or of several players, their total
+    /// ([CR 121.1]): "A player draws a card by putting the top card of their library into their
+    /// hand." A draw that was replaced never happened and does not count ([CR 614.6]): "If an event
+    /// is replaced, it never happens."
+    ///
+    /// [CR 121.1]: https://yawgatog.com/resources/magic-rules/#R1211
+    /// [CR 614.6]: https://yawgatog.com/resources/magic-rules/#R6146
+    CardsDrawn(Players),
 }
 
 impl Amount {
@@ -72,7 +92,9 @@ impl Amount {
             Amount::X | Amount::ThatMany | Amount::Carried | Amount::ThoseOf(_) => true,
             Amount::Count(objects) => objects.needs_a_resolution(),
             Amount::Times(_, amount) => amount.needs_a_resolution(),
-            Amount::Life(players) => players.needs_a_resolution(),
+            Amount::Life(players) | Amount::SpellsCast(players) | Amount::CardsDrawn(players) => {
+                players.needs_a_resolution()
+            }
             Amount::Most(players, amount) => {
                 players.needs_a_resolution() || amount.needs_a_resolution()
             }
@@ -91,7 +113,10 @@ impl Amount {
             Amount::Fixed(_) | Amount::X | Amount::ThatMany | Amount::Carried => false,
             Amount::Count(objects) => objects.names_paid(),
             Amount::Times(_, amount) => amount.names_paid(),
-            Amount::Life(players) | Amount::ThoseOf(players) => players.names_paid(),
+            Amount::Life(players)
+            | Amount::ThoseOf(players)
+            | Amount::SpellsCast(players)
+            | Amount::CardsDrawn(players) => players.names_paid(),
             Amount::Most(players, amount) => players.names_paid() || amount.names_paid(),
             Amount::Power(objects)
             | Amount::Toughness(objects)

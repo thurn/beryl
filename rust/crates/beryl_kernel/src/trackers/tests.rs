@@ -1,7 +1,8 @@
-//! The Trackers store's tests: which games keep a tracker, what ends one, what it tells
-//! apart and what it keeps across layouts.
+//! The Trackers store's tests: which games keep a tracker or a count, what ends one, what it
+//! tells apart and what it keeps across layouts.
 
-use beryl_card::{Ability, CardDef, Condition, Face, Objects, Types};
+use beryl_card::effect::build::{gain_life, if_then, sequence, you};
+use beryl_card::{Ability, Amount, CardDef, Condition, Effect, Face, Objects, Types};
 
 use super::*;
 use crate::event::Sink;
@@ -40,7 +41,30 @@ static WALKER: CardDef = CardDef {
     tokens: &[],
 };
 
-static CARDS: CardTable = CardTable::new(&[&BEAR, &WALKER]);
+/// "You gain life equal to the number of spells you cast this turn, then equal to the number
+/// of cards you drew this turn. If you drew a card in your draw step this turn, you gain 1
+/// life": every count read.
+static TALLY: CardDef = CardDef {
+    name: "Test Tally",
+    faces: &[Face {
+        types: Types::SORCERY,
+        abilities: &[Ability::spell().effect(&sequence(&[
+            Effect::GainLife {
+                player: you(),
+                amount: Amount::SpellsCast(you()),
+            },
+            Effect::GainLife {
+                player: you(),
+                amount: Amount::CardsDrawn(you()),
+            },
+            if_then(Condition::DrewInDrawStep(you()), &gain_life(you(), 1)),
+        ]))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+static CARDS: CardTable = CardTable::new(&[&BEAR, &WALKER, &TALLY]);
 
 /// A game of bears with `walkers` of the second player's cards a planeswalker, and two of
 /// the first player's bears on the battlefield.
@@ -173,4 +197,73 @@ fn trackers_survive_small_to_large_and_back() {
     assert_eq!(large.fits::<Small>(&t), Ok(()));
     let back: State<Small> = large.relayout();
     assert_eq!(back, small);
+}
+
+/// A game of bears, with a Test Tally in the second player's deck if `reads`.
+fn counting(reads: bool) -> (GameTable, State) {
+    let bears: &[(u8, &str)] = &[(40, "Test Bear")];
+    let mixed: &[(u8, &str)] = &[(39, "Test Bear"), (1, "Test Tally")];
+    let t = GameTable::new(&CARDS, [bears, if reads { mixed } else { bears }]).unwrap();
+    let s = State::new(&t, 7, Profile::EXACT).unwrap();
+    (t, s)
+}
+
+#[test]
+fn a_count_is_kept_only_in_a_game_with_a_card_that_reads_it() {
+    // No card of the game reads a count: the rules' write is one AND, and nothing is kept.
+    let (t, mut s) = counting(false);
+    let active = s.turn().active();
+    for count in Count::ALL {
+        assert!(!t.can(count.capability()));
+        s.count(&t, count, active);
+        assert_eq!(s.counted(count, active), 0);
+    }
+    assert_eq!(s.trackers, Trackers::empty());
+    assert_eq!(s.check_stores(&t), Ok(()));
+    // One arranged all the same breaks the store's invariant.
+    s.board().set_counted(active, Count::SpellsCast, 1);
+    assert!(s.check_stores(&t).is_err());
+
+    // A card that reads them, in either deck, and each is kept for each player.
+    let (t, mut s) = counting(true);
+    let other = s.next_player(active);
+    for count in Count::ALL {
+        assert!(t.can(count.capability()));
+        s.count(&t, count, active);
+        s.count(&t, count, active);
+        assert_eq!(s.counted(count, active), 2);
+        assert_eq!(s.counted(count, other), 0);
+        assert_eq!(Observation::new(&s, other).counted(count, active), 2);
+    }
+    s.count(&t, Count::SpellsCast, other);
+    assert_eq!(s.counted(Count::SpellsCast, other), 1);
+    assert_eq!(s.check_stores(&t), Ok(()));
+    // A player draws in their own draw step only, on their own turn (CR 504.1).
+    s.board().set_counted(other, Count::DrewInDrawStep, 1);
+    assert!(s.check_stores(&t).is_err());
+}
+
+#[test]
+fn a_count_ends_with_the_turn_and_survives_small_to_large_and_back() {
+    let (t, mut s) = counting(true);
+    let active = s.turn().active();
+    s.count(&t, Count::CardsDrawn, active);
+    s.count(&t, Count::SpellsCast, s.next_player(active));
+    // A checkpoint of the board would lose what the turn has counted.
+    assert!(s.stores_lingering(&t).is_some());
+
+    let large: State<Large> = s.widen();
+    for count in Count::ALL {
+        for player in s.players().in_seat_order() {
+            assert_eq!(large.counted(count, player), s.counted(count, player));
+        }
+    }
+    assert_eq!(large.check_stores(&t), Ok(()));
+    let back: State<Small> = large.relayout();
+    assert_eq!(back, s);
+
+    // The next turn begins with nothing counted.
+    s.begin_turn();
+    assert_eq!(s.trackers, Trackers::empty());
+    assert_eq!(s.stores_lingering(&t), None);
 }

@@ -637,7 +637,10 @@ impl Scope<'_> {
             },
             Amount::Count(objects) => self.objects(objects),
             Amount::Times(_, amount) => self.amount(amount),
-            Amount::Life(players) | Amount::ThoseOf(players) => self.players(players),
+            Amount::Life(players)
+            | Amount::ThoseOf(players)
+            | Amount::SpellsCast(players)
+            | Amount::CardsDrawn(players) => self.players(players),
             Amount::Most(players, amount) => both(self.players(players), self.amount(amount)),
             Amount::Power(objects)
             | Amount::Toughness(objects)
@@ -660,6 +663,7 @@ impl Scope<'_> {
     const fn condition(self, condition: &Condition) -> Checked {
         match condition {
             Condition::Did | Condition::WonFlip => Ok(()),
+            Condition::DrewInDrawStep(players) => self.players(players),
             Condition::Paid(kind) => {
                 let casting = self.face.casting;
                 let mut i = 0;

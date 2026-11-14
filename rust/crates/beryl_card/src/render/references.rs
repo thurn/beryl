@@ -302,6 +302,18 @@ impl Ctx {
                 self.objects(objects)
             ),
             Amount::Life(players) => format!("{} life total", self.possessive(players)),
+            Amount::SpellsCast(players) => {
+                format!(
+                    "the number of spells {} cast this turn",
+                    self.player(players)
+                )
+            }
+            Amount::CardsDrawn(players) => {
+                format!(
+                    "the number of cards {} drew this turn",
+                    self.player(players)
+                )
+            }
             Amount::Most(players, amount) => {
                 let who = self.player(players);
                 format!("the greatest {} among {who}", self.amount(*amount))
@@ -417,6 +429,10 @@ impl Ctx {
                 format!("{} a token", be(&what, false, true))
             }
             Condition::WonFlip => "you win the flip".to_owned(),
+            Condition::DrewInDrawStep(players) => format!(
+                "{} drew a card in their draw step this turn",
+                self.player(players)
+            ),
             Condition::Not(inner) => self.negated(*inner),
             Condition::All(conditions) => {
                 let each: Vec<String> = conditions.iter().map(|&c| self.condition(c)).collect();
@@ -449,6 +465,10 @@ impl Ctx {
                 format!("{} a token", be(&what, false, false))
             }
             Condition::WonFlip => "you lose the flip".to_owned(),
+            Condition::DrewInDrawStep(players) => format!(
+                "{} didn't draw a card in their draw step this turn",
+                self.player(players)
+            ),
             Condition::Not(inner) => self.condition(*inner),
             Condition::Compare(..) | Condition::All(_) | Condition::Any(_) => {
                 format!("it's not true that {}", self.condition(condition))

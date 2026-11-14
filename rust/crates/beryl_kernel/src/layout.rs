@@ -293,7 +293,7 @@ impl Layout for Large {
             keyed: *keyed,
             memos: memos.clone(),
             counters: counters.clone(),
-            trackers: *trackers,
+            trackers: trackers.clone(),
             pending: pending.clone(),
             knowledge: *knowledge,
             rng: *rng,

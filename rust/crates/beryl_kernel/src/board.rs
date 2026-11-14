@@ -15,7 +15,8 @@ use crate::ids::{CardIx, Seat, Slot, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::stack::StackItem;
 use crate::state::{
-    CounterKind, Flag, ManaPool, Memo, MulliganStatus, Pending, State, Tracker, TurnStep, Zone,
+    Count, CounterKind, Flag, ManaPool, Memo, MulliganStatus, Pending, State, Tracker, TurnStep,
+    Zone,
 };
 use crate::table::GameTable;
 use crate::two_player::TwoPlayerSeat as _;
@@ -298,6 +299,13 @@ impl<L: Layout> Board<'_, L> {
     pub fn set_tracked(&mut self, slot: L::Slot, tracker: Tracker, on: bool) {
         debug_assert_eq!(self.0.object(slot).zone, Zone::Battlefield);
         self.0.trackers.set(tracker, slot, on);
+    }
+
+    /// Sets `player`'s `count` for this turn ([`crate::trackers`]): the spells they cast, the
+    /// cards they drew, or those drawn in their draw step. Arrange it only in a game with a
+    /// card that reads the count: no other keeps it.
+    pub fn set_counted(&mut self, player: Seat, count: Count, n: u8) {
+        self.0.trackers.set_count(count, player, n);
     }
 
     /// Trades the identities of two cards, as the deal could have dealt them: which card a

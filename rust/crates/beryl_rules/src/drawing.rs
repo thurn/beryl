@@ -16,7 +16,7 @@ use crate::ids::Seat;
 use crate::interpret::{self, Outcome, Run};
 use crate::layout::Layout;
 use crate::replacement::{self, Instead};
-use crate::state::{State, Zone, ZoneKey};
+use crate::state::{Count, State, TurnStep, Zone, ZoneKey};
 use crate::table::GameTable;
 use crate::{ending, trigger};
 
@@ -31,14 +31,23 @@ use crate::{ending, trigger};
 /// ends the game, the draws left are never made. With no such permanent on the battlefield a draw
 /// reads no ability.
 ///
+/// Each card drawn is counted for the player this turn, and in their own draw step as drawn
+/// in it ([CR 504.1]): "First, the active player draws a card." A replaced draw never happened
+/// ([CR 614.6]): "If an event is replaced, it never happens." Neither is a draw from an empty
+/// library, which draws no card.
+///
 /// [CR 121.2]: https://yawgatog.com/resources/magic-rules/#R1212
 /// [CR 614.11]: https://yawgatog.com/resources/magic-rules/#R61411
+/// [CR 504.1]: https://yawgatog.com/resources/magic-rules/#R5041
+/// [CR 614.6]: https://yawgatog.com/resources/magic-rules/#R6146
 pub fn draw<L: Layout>(game: &mut Game<'_, L>, player: Seat, cards: u8) -> Result<(), Full> {
     let replaceable = game
         .state
         .replacing()
         .unwrap_or(game.table.replaces_any())
         .replaces(ReplacementKind::Draw);
+    let turn = game.state.turn();
+    let in_draw_step = turn.step() == TurnStep::Draw && turn.active() == player;
     let mut left = cards;
     loop {
         let s = &mut *game.state;
@@ -55,6 +64,10 @@ pub fn draw<L: Layout>(game: &mut Game<'_, L>, player: Seat, cards: u8) -> Resul
             if let Some(&slot) = s.library(player).last() {
                 drawn += 1;
                 game.sink.note(Event::DrawCard { slot });
+                s.count(game.table, Count::CardsDrawn, player);
+                if in_draw_step {
+                    s.count(game.table, Count::DrewInDrawStep, player);
+                }
             }
             s.draw(game.sink, player)?;
         }
