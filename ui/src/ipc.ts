@@ -463,8 +463,11 @@ const askCards = (names: string[]) =>
 function instrumented(inner: Transport): Transport {
   return {
     async invoke<C extends Command>(command: C, args: Args<C>) {
-      // The log's own forwarding is not logged: it would never end.
-      if (command === "ui_log") return inner.invoke(command, args);
+      // The log's own forwarding is not logged: it would never end. Nor is the stage's every
+      // start and stop.
+      if (command === "ui_log" || command === "stage_animating") {
+        return inner.invoke(command, args);
+      }
       note("debug", "invoke", command, logged(command, args));
       try {
         const result = await inner.invoke(command, args);
@@ -508,6 +511,12 @@ export const canCaptureWindow = () =>
 export const canExportBugs = () =>
   isNativeApp() && platform !== undefined && !isMobile(platform);
 export const exportBugs = () => call("export_bugs", {});
+
+/** Tells the app whether the stage is animating, so that the opponent's long search runs
+ * fewer threads meanwhile and the frames play on time. Only the app runs searches this way. */
+export const stageAnimating = (animating: boolean) => {
+  if (isNativeApp()) void call("stage_animating", { request: { animating } });
+};
 
 export const canShareBugs = () =>
   isNativeApp() && platform !== undefined && isMobile(platform);

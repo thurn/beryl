@@ -61,6 +61,9 @@ pub const SHARE_BUG: &str = "share_bug";
 pub const UI_LOG: &str = "ui_log";
 /// The card store's records for the names asked for ([`crate::card_records`]).
 pub const CARD_RECORDS: &str = "card_records";
+/// Says whether the stage is animating, so that a long search runs fewer threads meanwhile
+/// and the frames play on time (`beryl_search::pace`).
+pub const STAGE_ANIMATING: &str = "stage_animating";
 
 /// The event every view arrives on, carrying a [`GameUpdate`].
 pub const GAME_UPDATE: &str = "game-update";
@@ -121,6 +124,13 @@ pub struct ConcedeRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ShareBugRequest {
     pub id: String,
+}
+
+/// The [`STAGE_ANIMATING`] command's request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct StageAnimatingRequest {
+    pub animating: bool,
 }
 
 /// The operating system hosting the app or live server.
@@ -348,6 +358,12 @@ pub(crate) fn typescript(cfg: &Config) -> String {
             CARD_RECORDS,
             request(name::<CardRecordsRequest>(cfg)),
             name::<CardRecords>(cfg),
+            never.clone(),
+        ),
+        (
+            STAGE_ANIMATING,
+            request(name::<StageAnimatingRequest>(cfg)),
+            name::<()>(cfg),
             never.clone(),
         ),
     ];

@@ -66,6 +66,8 @@ export type ConcedeRequest = { session: SessionId, };
 
 export type ShareBugRequest = { id: string, };
 
+export type StageAnimatingRequest = { animating: boolean, };
+
 export type BugReport = { 
 /**
  * What the player says went wrong.
@@ -1036,6 +1038,7 @@ export type Commands = {
   share_bug: { args: { request: ShareBugRequest }; result: null; error: SessionError };
   ui_log: { args: { request: UiLogRequest }; result: null; error: never };
   card_records: { args: { request: CardRecordsRequest }; result: CardRecords; error: never };
+  stage_animating: { args: { request: StageAnimatingRequest }; result: null; error: never };
 };
 
 /** Each event's payload. */

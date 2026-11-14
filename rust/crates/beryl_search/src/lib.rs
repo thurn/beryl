@@ -13,6 +13,7 @@ mod greedy;
 mod long;
 mod mcts;
 mod overlay;
+pub mod pace;
 mod rollout;
 mod values;
 

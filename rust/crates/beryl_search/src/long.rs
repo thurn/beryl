@@ -48,9 +48,6 @@ use std::collections::hash_map::DefaultHasher;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::thread;
 
 use beryl_engine::card::{FaceIx, Purpose};
 use beryl_engine::rng::SplitMix64;
@@ -714,7 +711,8 @@ fn mean_and_error(xs: &[f64]) -> (f64, f64) {
 }
 
 /// Grows each tree to its target on `threads` threads, each taking the next tree not yet
-/// grown: a tree's growth depends on nothing but itself, so neither does the move.
+/// grown, fewer while the app animates ([`crate::pace`]): a tree's growth depends on nothing
+/// but itself, so neither does the move.
 fn grow_parallel<L: Layout>(
     t: &GameTable,
     policy: &RolloutPolicy,
@@ -722,18 +720,8 @@ fn grow_parallel<L: Layout>(
     targets: &[u64],
     threads: usize,
 ) {
-    let queue: Vec<Mutex<&mut Tree<L>>> = trees.iter_mut().map(Mutex::new).collect();
-    let taken = AtomicUsize::new(0);
-    thread::scope(|scope| {
-        for _ in 0..threads {
-            scope.spawn(|| {
-                loop {
-                    let i = taken.fetch_add(1, Ordering::Relaxed);
-                    let Some(tree) = queue.get(i) else { break };
-                    tree.lock().expect("a tree").grow_to(t, policy, targets[i]);
-                }
-            });
-        }
+    crate::pace::share(trees, threads, |tree, i, held| {
+        tree.grow_until(t, policy, targets[i], held)
     });
 }
 
@@ -1270,12 +1258,28 @@ impl<L: Layout> Tree<L> {
 
     /// Grows the tree until its work reaches `target`.
     fn grow_to(&mut self, t: &GameTable, policy: &RolloutPolicy, target: u64) {
+        self.grow_until(t, policy, target, &|| false);
+    }
+
+    /// Grows the tree until its work reaches `target`, and returns `true`, or until `held()`
+    /// between iterations, and returns `false`.
+    fn grow_until(
+        &mut self,
+        t: &GameTable,
+        policy: &RolloutPolicy,
+        target: u64,
+        held: &dyn Fn() -> bool,
+    ) -> bool {
         while self.work < target {
+            if held() {
+                return false;
+            }
             self.iterate(t, policy);
             self.iterations += 1;
             self.work = self.spent();
             crate::mcts::count_rollout();
         }
+        true
     }
 
     /// One iteration: a world, a walk down by UCB1 among the actions available in it to one

@@ -8,7 +8,7 @@ use crate::bugs::{BugReport, BugSaved, PageInfo, Region, UiLogEntry, UiLogReques
 use crate::card_records::{CardEntry, CardFace, CardImages, CardRecords, CardRecordsRequest};
 use crate::ipc::{
     AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, Fixture, FixtureMessage, PassOnRequest,
-    Platform, SetStopsRequest, ShareBugRequest, UndoRequest,
+    Platform, SetStopsRequest, ShareBugRequest, StageAnimatingRequest, UndoRequest,
 };
 use crate::journal::Level;
 use crate::prompt::{
@@ -126,6 +126,7 @@ fn session_decls(cfg: &Config) -> impl IntoIterator<Item = String> {
         PassOnRequest::decl(cfg),
         ConcedeRequest::decl(cfg),
         ShareBugRequest::decl(cfg),
+        StageAnimatingRequest::decl(cfg),
         BugReport::decl(cfg),
         Region::decl(cfg),
         PageInfo::decl(cfg),

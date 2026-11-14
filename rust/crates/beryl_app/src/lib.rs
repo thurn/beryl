@@ -222,6 +222,13 @@ fn card_records(request: CardRecordsRequest) -> CardRecords {
     beryl_session::card_records::card_records(&request)
 }
 
+/// Tells long searches whether the stage is animating ([`ipc::STAGE_ANIMATING`]).
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn stage_animating(request: ipc::StageAnimatingRequest) {
+    beryl_search::pace::set_animating(request.animating);
+}
+
 /// The Tauri handler for the commands, each `function = name`: Tauri names a command for its
 /// function, so each must be named as `beryl_session::ipc` (and so `ui/src/ipc.ts`) calls it.
 macro_rules! handlers {
@@ -283,6 +290,7 @@ pub fn run() {
             bug_reports::share_bug = ipc::SHARE_BUG,
             ui_log = ipc::UI_LOG,
             card_records = ipc::CARD_RECORDS,
+            stage_animating = ipc::STAGE_ANIMATING,
         ])
         .register_asynchronous_uri_scheme_protocol(art::SCHEME, |ctx, request, responder| {
             let app = ctx.app_handle().clone();

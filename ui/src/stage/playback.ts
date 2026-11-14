@@ -5,7 +5,13 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { play } from "../audio/sound";
 import { note } from "../diagnostics";
 import { soundSteps } from "../audio/steps.ts";
-import { click, startGame, type GameUpdate, type SessionId } from "../ipc";
+import {
+  click,
+  stageAnimating,
+  startGame,
+  type GameUpdate,
+  type SessionId,
+} from "../ipc";
 import type { LogEntry } from "../game/log";
 import { useGameUpdates, useShownToFrame } from "../game/updates";
 import { animationFrames } from "./clock.ts";
@@ -54,6 +60,18 @@ export function pageStage() {
         note(lagged ? "warn" : "info", "frames", message, run);
       });
     }
+    // While the stage animates, the opponent's search leaves the cores it would take frames
+    // from.
+    let animating = false;
+    stage.follow(() => {
+      if (animating) return;
+      animating = true;
+      stageAnimating(true);
+      void stage.idle().then(() => {
+        animating = false;
+        stageAnimating(false);
+      });
+    });
     const prompts = new Prompts(stage, click);
     prompts.heard = () => play("select");
     // A check of the audits plants a fault here (fault.ts): none otherwise.
