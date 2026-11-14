@@ -20,6 +20,9 @@ The web interface works, and it has costs that this design removes.
 - **Checks.** Every interface check runs in a headless browser. Browsers are
   slow to start and limited in number, so the full set of checks runs every
   three hours, not on every change, and 27,000 lines of test scripts drive them.
+  From 11 to 14 November 2026 the browser checks took half of all the time the
+  project's checks ran, and one check of one animation took 36 seconds at the
+  90th percentile.
 - **Phones.** The phone apps are the same page in a WebView, with Swift and
   Kotlin code around it for what a page cannot do.
 - **Looks.** The table's perspective, shadows and lighting are imitated with CSS
@@ -40,8 +43,9 @@ The requirements, most important first:
    terms and tests written in the style of Playwright.
 3. **Deterministic performance tests**, in the manner of the engine's
    instruction-count gate (defined below).
-4. **Deterministic interface tests** that enforce layout and motion rules
-   quickly and on every state.
+4. **Deterministic interface tests** that enforce layout and motion rules on
+   every state, fast enough that tens of thousands of them run in seconds before
+   every push.
 5. **Phones.** Native iOS and Android builds.
 6. **Easy to program.** Expressive APIs, with good support for many screen sizes
    and for text.
@@ -181,6 +185,12 @@ the client they describe, and later sections refer to them by number.
   is bought or attached to confirm them. A counted number is a stand-in for
   device performance: where the two are found to disagree, the device is right,
   and no design choice is made to suit a count at the device's expense.
+
+- **C14. Interface tests are fast enough to run all of them before every push.**
+  A test costs about a millisecond, because it checks the moments at which
+  something can go wrong instead of every tick, and never runs the engine.
+  Slower, exhaustive checking runs after the push. Interface checks are half of
+  the project's check time today, and the full set runs only every three hours.
 
 ## What does not change
 
@@ -1174,31 +1184,13 @@ screen, so they cover every card spec that is ever generated.
 
 What the checks run over:
 
-- **Every tick.** Each fixture is played at 60 ticks a second from both seats,
-  and the checks run on every frame, not on sampled moments.
+- **Every fixture, every card spec, every stress board**, from both seats.
 - **A matrix of windows.** In the desktop layout: 1440 by 900, 1600 by 900, 1920
   by 1080 and 2560 by 1080. In the phone layout: 393 by 759 and 375 by 647, the
   two sizes the web interface's phone checks use, and 430 by 932.
-- **Every fixture, every card spec, every stress board.**
 
-What that costs, as an estimate to be replaced by measurement:
-
-- A frame of the measured prototype (see [Measurements](#measurements)) takes
-  about 54 microseconds. Allow 100 for the real client core with layout, text
-  and the checks themselves.
-- One card spec moment of 10 seconds is 600 frames, so 60 milliseconds for one
-  seat at one window size.
-- 1,400 moments, two seats and seven window sizes come to about 20 minutes of
-  CPU time.
-- The 134 recorded games, at about a minute each, add about 11 minutes.
-- Together that is about half an hour of CPU time, or under two minutes across
-  the development machine's 18 cores.
-
-So the split between the two automated checks is:
-
-- **Before every push**: the fixtures and card specs a change can affect, at one
-  desktop size and one phone size, on every tick.
-- **After every push**: everything, over the whole matrix, on every tick.
+How they are run fast enough to gate every push is the subject of the
+[Test speed](#test-speed) section below.
 
 A fix for an interface bug adds the broken state as a fixture, so the generic
 checks cover it from then on. A scripted check for one screen is written only
@@ -1207,6 +1199,122 @@ when no generic check can express the rule, as for the web interface.
 A small set of **renderer tests** covers what numbers cannot: they draw known
 scenes into a texture and sample a few single pixels with a tolerance, to catch
 a wrong texture, a blending mistake or a missing glyph.
+
+## Test speed
+
+Interface checks are only worth what they catch before a change lands. This
+section specifies how Beryl 3D runs all of them before every push, in seconds.
+
+### What a test is
+
+An **interface test** is one recording played from one seat in one window, with
+every interface check applied. It is a pure function: the same three inputs give
+the same faults, with no browser, no GPU, no engine and no clock.
+
+```text
+ui:counterspell/cast/you/1600x900
+ui:counterspell/cast/opponent/375x647
+ui:verbs-zones/you/2560x1080
+ui:stress-255/you/393x759
+```
+
+`just stage --all` runs every test, and a name or the start of one runs those
+that match.
+
+How many there are, with the 47 cards the engine knows today:
+
+- About 1,400 card spec moments and 134 recorded games.
+- Two seats and seven window sizes each.
+- About 21,500 tests in all.
+
+### The target
+
+These numbers are targets on the development machine under its usual load. The
+first measurement of the real client replaces them.
+
+| Measure                                          | Target           |
+| ------------------------------------------------ | ---------------- |
+| CPU time for one card spec moment's test         | 2 milliseconds   |
+| All 21,500 tests, before every push              | under 10 seconds |
+| The same tests checked on every tick, after push | under 2 minutes  |
+
+For comparison, the web interface's browser check of one animation takes 36
+seconds at the 90th percentile, and the existing check of the session's scripts
+for one card spec moment, which is plain Rust, takes 14 milliseconds in an
+unoptimized build.
+
+### How a test costs a millisecond
+
+Four things make a test this cheap. The first is the largest.
+
+- **It checks the moments at which something can go wrong, not every tick.**
+  Positions are functions of time with a known form, so a fault can only begin
+  where something starts, ends, peaks or changes layout. A ten-second moment is
+  600 ticks and about 20 such times.
+- **It never runs the engine.** Recordings are made once and read from a file.
+- **It never touches a GPU.** The checks read the frame's resolved elements.
+- **It shares nothing.** Tests run on every core in one process, with no server,
+  no page and nothing to wait for.
+
+The **check times** of a test are:
+
+- the frame after each input that changes the element tree or starts a script;
+- for each segment: its start, its midpoint and its end, and for a flight the
+  top of its arc;
+- the start and end of each transition of a flat-layer element;
+- the first frame in which everything is still after each script.
+
+Two checks need no frame at all. "No jumps" and "verb values" read the segments
+directly.
+
+Checking every tick remains, as the second line:
+
+- **After every push**, the same tests run again with the checks applied on
+  every tick. This is the exhaustive form.
+- **A differential test** holds the two together. On a fixed sample of tests it
+  plants each kind of fault at a random tick and requires the check times to
+  find it. A fault only the every-tick run finds is a missing check time, and is
+  fixed by adding one.
+
+### Recordings
+
+A recording is the stream of session updates for one fixture or card spec
+moment. Making one means playing the engine and the session, which costs more
+than the test that reads it.
+
+- **Recordings are packed into one file**, built by the same program that checks
+  the session's scripts today, as a by-product of that check.
+- **The file is cached** under a hash of everything a recording depends on: the
+  engine, rules, session and card sources, the fixture definitions and the verb
+  data.
+- **A change to client code alone leaves the hash unchanged**, so the tests read
+  the file and run no engine.
+- **A change to a card or a rule** rebuilds the recordings it affects and no
+  others.
+
+### What keeps it fast
+
+- **A counted limit.** The number of frames a test evaluates is deterministic.
+  Its median and its maximum over all tests have limits in the gate file, so a
+  change that makes tests evaluate more frames fails before it makes them slow.
+- **A measured report.** Each run reports tests per CPU-second. A run over its
+  time target files a task to speed it up, as the project's other checks do. No
+  target is raised to make a run pass.
+- **A small test program.** The program that runs the tests depends on the
+  client core and on no GPU crate, so rebuilding it after an edit is quick.
+  Rebuilding is expected to take longer than running the tests.
+
+### At 50,000 cards
+
+The engine's goal is 50,000 cards. At about three moments a card that is 2.1
+million tests over the full matrix, or roughly 50 minutes of CPU time.
+
+- **Before every push** the tests run at one desktop size and one phone size:
+  600,000 tests, about 15 minutes of CPU time, about a minute across the
+  development machine's 18 cores.
+- **After every push** they run over the full matrix.
+- **Nothing is chosen by guessing what a change affects.** A change to the
+  client core can break any card's moment, so all of them run.
 
 ## Performance gates
 
