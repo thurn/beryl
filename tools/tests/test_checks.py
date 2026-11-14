@@ -670,3 +670,32 @@ def test_the_allocations_binaries_come_from_the_workspace_build() -> None:
     found = rust_tests.executables(messages, "allocations")
     assert found == ["/t/deps/allocations-a", "/t/deps/allocations-b"]
     assert rust_tests.executables("", "allocations") == []
+
+
+def test_only_blocks_rustdoc_compiles_are_doctests() -> None:
+    assert rust_tests.has_doctest("/// ```\n/// let a = 1;\n/// ```\n")
+    assert rust_tests.has_doctest("//! ```compile_fail\n//! x\n//! ```\n")
+    assert rust_tests.has_doctest("/// ```rust,edition2024\n/// x\n/// ```\n")
+    assert not rust_tests.has_doctest("/// ```text\n/// x\n/// ```\n")
+    assert not rust_tests.has_doctest("/// ```ignore\n/// x\n/// ```\n")
+    assert not rust_tests.has_doctest("// ```\n// x\n// ```\n")
+    # A closing fence is not the start of a block.
+    assert not rust_tests.has_doctest("/// ```text\n/// x\n/// ```\nfn f() {}\n")
+
+
+def test_doctests_run_only_in_the_packages_that_hold_them(tmp_path: Path) -> None:
+    def package(name: str, source: str, doctest: bool = True) -> dict[str, object]:
+        src = tmp_path / name / "src"
+        src.mkdir(parents=True)
+        (src / "lib.rs").write_text(source)
+        lib = {"kind": ["lib"], "src_path": str(src / "lib.rs"), "doctest": doctest}
+        return {"name": name, "targets": [lib]}
+
+    block = "/// ```\n/// x\n/// ```\npub fn f() {}\n"
+    packages = [
+        package("with", block),
+        package("without", "pub fn f() {}\n"),
+        package("switched_off", block, doctest=False),
+    ]
+    assert rust_tests.doctest_packages(packages, None) == ["with"]
+    assert rust_tests.doctest_packages(packages, ["without"]) == []

@@ -145,8 +145,8 @@ def rust_tests_step(
     cargo-nextest runs the test binaries in parallel (cargo test runs them one after another);
     it cannot list the harness-less `allocations` targets and runs no doctest, so those run
     beside it once everything is built: the `allocations` binaries that build made, and cargo
-    test's doctests, which are where a `compile_fail` block holds that one index type cannot
-    pass for another. Plain cargo test where
+    test's doctests of the packages that hold any (`doctest_packages`), which are where a
+    `compile_fail` block holds that one index type cannot pass for another. Plain cargo test where
     cargo-nextest is missing. Each test's result goes to the run log: nextest's from its JUnit
     report (rust/.config/nextest.toml), the `allocations` targets' and the doctests' as one
     check each."""
@@ -193,16 +193,18 @@ def rust_tests_step(
     ]
     # Beside nextest: what it does not run, with the check and the line a failure is named by.
     allocations = executables(build.stdout, "allocations")
-    beside = {
+    beside: dict[str, tuple[list[str], str]] = {
         "rust:allocations": (run_each(allocations), ALLOCATIONS_FAILED),
-        "rust:doctests": ([*cargo, "--doc"], DOCTESTS_FAILED),
     }
+    documented = doctest_packages(workspace_packages(), packages)
+    if documented:
+        beside["rust:doctests"] = (
+            ["cargo", "test", "--locked", *scope_of(documented), "-q", "--doc"],
+            DOCTESTS_FAILED,
+        )
     if not allocations:
         # None of the packages has an `allocations` target.
         del beside["rust:allocations"]
-    # Cargo refuses `--doc` when none of the packages it is given has a library.
-    if packages and "lib" not in targets(workspace_packages(), packages):
-        del beside["rust:doctests"]
     if slow:
         for check in [c for c in beside if c in verdicts.FAST_ONLY]:
             del beside[check]
@@ -279,17 +281,62 @@ def run_each(binaries: list[str]) -> list[str]:
     return [sys.executable, "-c", RUN_EACH, *binaries]
 
 
-def targets(packages: list[dict[str, object]], names: list[str]) -> set[str]:
-    """The kinds of the targets of the packages named `names`, and their test targets' names."""
-    found: set[str] = set()
+def scope_of(packages: list[str]) -> list[str]:
+    """Cargo's flags that select `packages`."""
+    return [a for p in packages for a in ("-p", p)]
+
+
+# A Markdown code fence in a `///` or `//!` doc comment, and the tags after its backticks.
+DOC_FENCE: re.Pattern[str] = re.compile(r"^\s*//[/!]\s*```\s*(.*?)\s*$")
+# The tags that leave a fenced block a Rust doctest that rustdoc compiles (`ignore` and any
+# other language, such as `text`, do not).
+DOCTEST_TAGS: frozenset[str] = frozenset(
+    {"", "rust", "compile_fail", "should_panic", "no_run", "test_harness"}
+)
+
+
+def has_doctest(source: str) -> bool:
+    """Whether a Rust source file holds a doc-comment code block that rustdoc compiles."""
+    opened = False
+    for line in source.splitlines():
+        fence = DOC_FENCE.match(line)
+        if fence is None:
+            continue
+        if not opened:
+            tags = [t.strip() for t in fence.group(1).split(",")]
+            if all(t in DOCTEST_TAGS or t.startswith("edition") for t in tags):
+                return True
+        opened = not opened
+    return False
+
+
+def doctest_packages(
+    packages: list[dict[str, object]], names: list[str] | None
+) -> list[str]:
+    """The packages among `names` (None: the workspace) whose library holds a doctest.
+
+    `cargo test --doc` builds the library of every package it is given, in a configuration no
+    other step builds, before it runs any doctest. Given the whole workspace, that took 60 to
+    100 s of the fast check after a change to the kernel, to run the seven doctests in two
+    crates; given only those two crates, it takes under 10 s."""
+    found: list[str] = []
     for p in packages:
-        if p["name"] not in names:
+        name = str(p["name"])
+        if names is not None and name not in names:
             continue
         for target in p.get("targets") or []:  # pyre-ignore[16]: JSON
-            kinds = set(target.get("kind") or [])
-            found |= {"lib"} if kinds & {"lib", "rlib"} else set()
-            found |= {str(target.get("name"))} if "test" in kinds else set()
-    return found
+            if not set(target.get("kind") or []) & {"lib", "rlib"}:
+                continue
+            if not target.get("doctest", True):
+                continue
+            root = Path(str(target.get("src_path"))).parent
+            if any(
+                has_doctest(f.read_text(encoding="utf-8", errors="replace"))
+                for f in sorted(root.rglob("*.rs"))
+            ):
+                found.append(name)
+                break
+    return sorted(found)
 
 
 NEXTEST_PROFILE = "check"
