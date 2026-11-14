@@ -58,6 +58,8 @@ pub enum GameEvent {
     /// ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a)): "To reveal a card,
     /// show that card to all players for a brief time."
     Reveal {
+        /// The player whose effect revealed it.
+        player: Side,
         slot: ObjectId,
     },
     LifeGain {
@@ -452,7 +454,8 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
         | Event::TopOrBottom { .. }
         | Event::LibraryShuffled { .. } => library_event(obs, e),
         Event::DrawCard { .. } => unreachable!("draw slots are grouped with their draw"),
-        Event::Reveal { slot } => GameEvent::Reveal {
+        Event::Reveal { player, slot } => GameEvent::Reveal {
+            player: side(player),
             slot: ObjectId(slot.num()),
         },
         Event::LifeGain { player, amount } => GameEvent::LifeGain {

@@ -103,7 +103,8 @@
 //!
 //! A card an effect reveals is a `showcase` step: it is held up to be read where it lies, and
 //! the stage keeps its face in its "Revealed Cards" pile, which is chrome. The engine says
-//! which cards are revealed ([`GameEvent::Reveal`]); a face-down permanent that leaves for a
+//! which cards are revealed and whose effect reveals them ([`GameEvent::Reveal`]); a seat's
+//! own reveal has no step for it, since it already knows the card; a face-down permanent that leaves for a
 //! hand or a library is revealed as it goes, which its move says (`moves.rs`). A revealed
 //! card whose next move takes it to a zone that shows its face has no step: its flight
 //! shows it.

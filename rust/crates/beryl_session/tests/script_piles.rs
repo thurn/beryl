@@ -81,14 +81,13 @@ fn a_card_cast_from_exile_flies_to_the_stack() {
 }
 
 /// `showcase` of a card found by a search: it is held up where it lies, in the library, for
-/// both seats, and then goes to the hand.
+/// the opponent only, and then goes to the hand. The searcher already knows the card, so
+/// their seat gets only its flight to the hand.
 #[test]
 fn a_card_found_and_revealed_is_held_up_before_it_goes_to_the_hand() {
     let [first, second] = script(names::TRINKET_MAGE, "Trinket Mage finds Mana Crypt", 6);
-    let found = [
-        "showcase #5 (Mana Crypt) <- a1",
-        "fly #5 (Mana Crypt) library>hand effect <- a1",
-    ];
+    let found = ["fly #5 (Mana Crypt) library>hand effect <- a1"];
+    let held = ["showcase #5 (Mana Crypt) <- a1"];
     let own = [
         "set you library 5 <- a1",
         "-point source a1 > #4",
@@ -107,26 +106,30 @@ fn a_card_found_and_revealed_is_held_up_before_it_goes_to_the_hand() {
     ];
     assert_eq!(first, text(&[&found[..], &own[..]].concat()));
     let look = ["-lift opponent library all"];
-    assert_eq!(second, text(&[&look[..], &found[..], &theirs[..]].concat()));
+    assert_eq!(
+        second,
+        text(&[&look[..], &held[..], &found[..], &theirs[..]].concat())
+    );
 }
 
-/// `showcase` of an explore's card: revealed on top of the library, it is held up before the
-/// land goes to the hand, and where a nonland stays on top it is held up all the same.
+/// `showcase` of an explore's card: revealed on top of the library, it is held up for the
+/// opponent only, before the land goes to the hand, and where a nonland stays on top it is
+/// held up all the same.
 #[test]
 fn an_explored_card_is_held_up_whether_it_leaves_the_library_or_stays() {
     let name = "Get Lost on a creature gives two Maps; one explores a land into hand";
-    for explored in script(names::GET_LOST, name, 6) {
-        let held = "showcase #261 (Plains) <- a1\nfly #261 (Plains) library>hand effect <- a1\n";
-        assert!(explored.contains(held), "{explored}");
-    }
+    let [theirs, own] = script(names::GET_LOST, name, 6);
+    let held = "showcase #261 (Plains) <- a1\nfly #261 (Plains) library>hand effect <- a1\n";
+    assert!(theirs.contains(held), "{theirs}");
+    assert!(!own.contains("showcase"), "{own}");
     let name = "A Map explores a nonland into a counter, left on top";
-    let stays = text(&[
-        "showcase #261 (Oust) <- a1",
+    let rest = [
         "count #257 (Elite Spellbinder) plusOne 1 <- a1",
         "-point friendly-target a1 > #257",
         "vanish a1 stack>gone resolve <- a1",
-    ]);
-    assert_eq!(script(names::GET_LOST, name, 4), [stays.clone(), stays]);
+    ];
+    let held = text(&[&["showcase #261 (Oust) <- a1"][..], &rest[..]].concat());
+    assert_eq!(script(names::GET_LOST, name, 4), [held, text(&rest)]);
 }
 
 /// `showcase` of a face-down permanent that leaves for a zone that shows no face: it is held

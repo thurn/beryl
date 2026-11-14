@@ -187,7 +187,7 @@ pub fn dig<L: Layout>(
                 .most(1)
                 .places(prompt::Place::Hand, prompt::Place::None);
             if let Some(slot) = choices::may_pick(game, resolution, player, accepted, look)? {
-                reveal::reveal(game, slot);
+                reveal::reveal(game, player, slot);
                 let card = game.state.object_ref(slot);
                 zones::move_to(game, card, Zone::Hand, Reason::Effect)?;
                 taken.insert(slot);

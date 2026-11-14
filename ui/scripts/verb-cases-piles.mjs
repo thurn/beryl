@@ -315,11 +315,18 @@ export const CASES = {
     // seat's table: a face of it comes to be seen there, where the layout rests it, and
     // travels nowhere, while the card itself lies where it was, so the step that then moves
     // the card finds it there. What another spell or ability reveals takes the pile's place:
-    // the face-down permanent's face is there alone as it leaves.
+    // the face-down permanent's face is there alone as it leaves. The card Trinket Mage finds
+    // is its controller's own reveal, so only the opponent's seat holds it up: yours sees its
+    // flight to the hand alone, and never a pile for a card you found yourself.
     showcase({ reveal, seat }) {
         const shown = reveal.steps.filter((s) => s.verb === "showcase");
-        assert.equal(shown.length, 2, "two cards are revealed");
-        const [found, unveiled] = shown;
+        assert.equal(
+            shown.length,
+            seat === "yours" ? 1 : 2,
+            "the cards revealed to the seat",
+        );
+        const found = seat === "yours" ? null : shown[0];
+        const unveiled = shown[shown.length - 1];
         for (const step of shown) {
             const { slot, name } = step.act.object;
             const face = faceOf(slot);
@@ -360,36 +367,42 @@ export const CASES = {
             );
             assert.equal(to.zones[face], "nowhere", "its face is in no zone");
         }
-        // The card found lies in its library while its face comes up, and then flies to the
-        // hand; nothing else moves meanwhile.
-        const { slot } = found.act.object;
-        for (const [name, pose] of Object.entries(found.at.from.poses)) {
-            if (name === faceOf(slot)) continue;
-            // As it ends, the step after it has begun in the same tick.
-            assert.deepEqual(
-                found.at.middle.poses[name],
-                pose,
-                `${name} moved`,
+        if (found) {
+            // The card found lies in its library while its face comes up, and then flies to
+            // the hand; nothing else moves meanwhile.
+            const { slot } = found.act.object;
+            for (const [name, pose] of Object.entries(found.at.from.poses)) {
+                if (name === faceOf(slot)) continue;
+                // As it ends, the step after it has begun in the same tick.
+                assert.deepEqual(
+                    found.at.middle.poses[name],
+                    pose,
+                    `${name} moved`,
+                );
+            }
+            assert.equal(found.at.middle.zones[slot], "library");
+            const taken = reveal.steps.find(
+                (s) => s.verb !== "showcase" && s.act.object?.slot === slot,
+            );
+            assert.equal(
+                taken?.act.object.zone,
+                "hand",
+                "it then goes to the hand",
+            );
+            assert.ok(taken.from >= found.to, "once it has been held up");
+            // Its face stays in the pile until another reveal takes its place.
+            const until = before(reveal, unveiled);
+            assert.equal(
+                until.poses[faceOf(slot)]?.opacity,
+                1,
+                "the pile stays",
+            );
+            assert.ok(
+                !(faceOf(slot) in unveiled.at.to.poses),
+                "another's replaces it",
             );
         }
-        assert.equal(found.at.middle.zones[slot], "library");
-        const taken = reveal.steps.find(
-            (s) => s.verb !== "showcase" && s.act.object?.slot === slot,
-        );
-        assert.equal(
-            taken?.act.object.zone,
-            "hand",
-            "it then goes to the hand",
-        );
-        assert.ok(taken.from >= found.to, "once it has been held up");
-        // Its face stays in the pile until another reveal takes its place.
-        const until = before(reveal, unveiled);
-        assert.equal(until.poses[faceOf(slot)]?.opacity, 1, "the pile stays");
         const gone = unveiled.act.object.slot;
-        assert.ok(
-            !(faceOf(slot) in unveiled.at.to.poses),
-            "another's replaces it",
-        );
         // The face-down permanent is held up in the beat that takes it: its face comes up
         // while it goes from sight where it lay, face down for the seat that did not know it.
         const leaves = reveal.steps.find(

@@ -1,6 +1,7 @@
 //! Reveal ([CR 701.20](https://yawgatog.com/resources/magic-rules/#R70120)).
 
 use crate::game::Game;
+use crate::ids::Seat;
 use crate::layout::Layout;
 
 /// Reveals a card to every player
@@ -8,6 +9,6 @@ use crate::layout::Layout;
 /// show that card to all players for a brief time." Each player knows it from then on,
 /// until it is shuffled or otherwise hidden anew.
 #[inline]
-pub fn reveal<L: Layout>(game: &mut Game<'_, L>, card: L::Slot) {
-    game.state.reveal(game.sink, card);
+pub fn reveal<L: Layout>(game: &mut Game<'_, L>, player: Seat, card: L::Slot) {
+    game.state.reveal(game.sink, player, card);
 }

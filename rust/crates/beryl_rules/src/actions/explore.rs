@@ -39,7 +39,7 @@ pub fn explore<L: Layout>(
     };
     let top = game.state.library(player).last().copied();
     if let Some(slot) = top {
-        reveal(game, slot);
+        reveal(game, player, slot);
         // A card in a library has its front face's characteristics (CR 712.6a).
         let face = game.state.copiable(slot).face(game.table);
         if face.types.contains(Types::LAND) {

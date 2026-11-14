@@ -227,7 +227,13 @@ impl<L: Layout> Relayout for Event<L> {
             | Event::TopOrBottom { .. }
             | Event::LibraryShuffled { .. } => library(self),
             &Event::DrawCard { slot: drawn } => Event::DrawCard { slot: slot(drawn) },
-            &Event::Reveal { slot: shown } => Event::Reveal { slot: slot(shown) },
+            &Event::Reveal {
+                player,
+                slot: shown,
+            } => Event::Reveal {
+                player,
+                slot: slot(shown),
+            },
             &Event::LifeGain { player, amount } => Event::LifeGain { player, amount },
             &Event::LifeLoss { player, amount } => Event::LifeLoss { player, amount },
             &Event::CountersAdded {

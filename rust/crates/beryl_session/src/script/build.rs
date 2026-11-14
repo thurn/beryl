@@ -397,7 +397,7 @@ impl<'a> Builder<'a> {
                 }
             }
             &GameEvent::LibraryShuffled { player } => self.shuffle(player, cause),
-            &GameEvent::Reveal { slot } => self.reveal(i, slot, cause),
+            &GameEvent::Reveal { player, slot } => self.reveal(i, player, slot, cause),
             &GameEvent::Mana {
                 player,
                 source,

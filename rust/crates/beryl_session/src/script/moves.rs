@@ -112,8 +112,19 @@ impl Builder<'_> {
     /// ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a)): "To reveal a card,
     /// show that card to all players for a brief time." It is held up to be read where it
     /// lies, named as the seat's view comes to name it. One that goes on to a zone that shows
-    /// its face is not: its flight there shows it.
-    pub(super) fn reveal(&mut self, i: usize, slot: ObjectId, cause: Option<Subject>) {
+    /// its face is not: its flight there shows it. A card the seat's own effect reveals is
+    /// not held up either: the seat already knows it, and the pile is for what the
+    /// opponents are shown.
+    pub(super) fn reveal(
+        &mut self,
+        i: usize,
+        player: Side,
+        slot: ObjectId,
+        cause: Option<Subject>,
+    ) {
+        if player == Side::You {
+            return;
+        }
         let Some(was) = self.table.objects.get(&slot) else {
             return;
         };

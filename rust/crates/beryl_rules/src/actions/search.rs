@@ -81,7 +81,7 @@ pub(crate) fn instruction<L: Layout>(
             // find, which is all a card of the pool searches for, there is no order.
             Found::RevealToHand => {
                 for slot in game.state.in_candidate_order(cards) {
-                    reveal::reveal(game, slot);
+                    reveal::reveal(game, player, slot);
                     let card = game.state.object_ref(slot);
                     zones::move_to(game, card, Zone::Hand, Reason::Effect)?;
                 }

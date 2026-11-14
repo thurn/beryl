@@ -141,6 +141,8 @@ pub enum Event<L: Layout = Small> {
     ///
     /// [CR 701.20a]: https://yawgatog.com/resources/magic-rules/#R70120a
     Reveal {
+        /// The player whose effect revealed the card.
+        player: Seat,
         slot: L::Slot,
     },
     LifeGain {

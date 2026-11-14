@@ -18,13 +18,14 @@ impl<L: Layout> State<L> {
     /// Reveals a card to every player
     /// ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a)): "To reveal a card,
     /// show that card to all players for a brief time." Each player knows it from then on,
-    /// until it is shuffled or otherwise hidden anew.
-    pub fn reveal(&mut self, sink: &mut Sink<L>, slot: L::Slot) {
+    /// until it is shuffled or otherwise hidden anew. `player` is the one whose effect reveals
+    /// it, which the UI uses to show the card to the others only.
+    pub fn reveal(&mut self, sink: &mut Sink<L>, player: Seat, slot: L::Slot) {
         chance::settle(self, sink, slot);
         for k in self.knowledge.as_mut_slice() {
             k.insert(slot);
         }
-        sink.note(Event::Reveal { slot });
+        sink.note(Event::Reveal { player, slot });
     }
 
     /// `player` looks at the cards in `cards` and from then on knows them: a library and a
