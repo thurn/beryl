@@ -21,6 +21,7 @@ use beryl_engine::{
     TurnStep, apply, next,
 };
 use beryl_scenario::{P0, P1, Permanent, Scenario};
+use beryl_session::StopsSetting;
 use beryl_session::prompt::{ButtonId, Click, Clicked, Held};
 use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{Candidate, Side, ZoneName};
@@ -454,9 +455,11 @@ const PLANS: Scenario = Scenario::new("payment plans")
     .library(P0, &[PLAINS; 6])
     .library(P1, &[PLAINS; 6]);
 
-/// Casts the Skydiver of [`PLANS`] with no kicker, to the choice of its payment plan.
+/// Casts the Skydiver of [`PLANS`] with no kicker under full control, to the choice of its
+/// payment plan: the smart stops pay it without asking
+/// ([`smart_stops_pay_with_the_plan_that_floats_least`]).
 fn planning() -> Play {
-    let mut play = Play::scenario(&PLANS);
+    let mut play = Play::with(&PLANS, None, StopsSetting::EXACT);
     play.choose(|c| matches!(c, Candidate::Cast { costs, .. } if costs.is_empty()));
     assert!(play.decision().prompt.is(Purpose::Mana));
     play
@@ -516,6 +519,38 @@ fn a_payment_plan_is_chosen_by_picking_what_it_taps() {
     assert_eq!(play.press(ButtonId::Auto), None);
     assert_eq!(play.game.state(), picked.game.state());
     assert_eq!(play.game.replay().log, picked.game.replay().log);
+}
+
+/// Under the smart stops, plans that sacrifice nothing and differ only in the mana they leave
+/// floating are not asked about: the session pays with the engine's first plan, the two
+/// Islands, and leaves the Crypt untapped, as Arena does (`WCknTZNbraE 1:18:50`). The answer
+/// is the session's own, logged as such.
+#[test]
+fn smart_stops_pay_with_the_plan_that_floats_least() {
+    let mut play = Play::scenario(&PLANS);
+    let from = play.game.replay().log.len();
+    play.choose(|c| matches!(c, Candidate::Cast { costs, .. } if costs.is_empty()));
+    let log = &play.game.replay().log[from..];
+    let auto = log.iter().any(|entry| {
+        matches!(entry, Entry::Auto(c)
+            if c.what.as_ref().is_some_and(|w| w.kind == SavedKind::PaymentPlan))
+    });
+    assert!(auto, "the plan is logged as the session's answer");
+    // The board as the opponent's turn begins, before anything untaps.
+    let board = log
+        .iter()
+        .find_map(|entry| match entry {
+            Entry::Checkpoint(c) => Some(&c.battlefield),
+            _ => None,
+        })
+        .expect("the turn passes");
+    let tapped = |name: &str| {
+        (board.iter().filter(|p| p.card == name))
+            .map(|p| p.tapped)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(tapped(ISLAND), [true, true]);
+    assert_eq!(tapped(MANA_CRYPT), [false]);
 }
 
 /// Thieving Skydiver, {1}{U}, with an Island and two Plains.

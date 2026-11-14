@@ -5,7 +5,8 @@ use beryl_engine::layout::Queue;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::StackEntry;
 use beryl_engine::{
-    Candidates, Choice, Decision, DecisionKind, Large, Layout, Opt, Relayout, State, Step, TurnStep,
+    Candidates, Choice, Decision, DecisionKind, GameTable, Large, Layout, Opt, Relayout, Replay,
+    Scratch, State, Step, TurnStep, apply,
 };
 use beryl_search::{AgentDecision, Budget};
 
@@ -120,8 +121,11 @@ impl Game {
     /// ([`Game::own_top`]) or in combat with nothing new to answer ([`Game::quiet_combat`]),
     /// orders their simultaneous triggers ([`crate::prompt::trigger_to_stack`]), searches
     /// their library whenever they may ([`Game::searches_unasked`]), takes unambiguous
-    /// lethal combat assignments ([`beryl_engine::preferred_damage`]), and aims at the
-    /// opponent's spell where it is all there is to target ([`Game::lone_target`]). Waterbend
+    /// lethal combat assignments ([`beryl_engine::preferred_damage`]), aims at the
+    /// opponent's spell where it is all there is to target ([`Game::lone_target`]), and pays
+    /// mana with the engine's first plan, the one that leaves the least floating, where no
+    /// plan sacrifices a source ([`keeps_every_source`]): Arena pays {1}{B} with two lands
+    /// and leaves a spare mana rock untapped without asking (`WCknTZNbraE 1:18:50`). Waterbend
     /// remains a human payment choice even when mana alone could pay it.
     /// Like halts, these are the session's alone: the engine's smart stops, which the agent's
     /// search shares, are unchanged, and exact stops ask every one. A function of the position,
@@ -149,6 +153,10 @@ impl Game {
                     .and_then(|(choice, unambiguous)| unambiguous.then_some(choice))
             }),
             DecisionKind::Target if !replaying => self.lone_target(d),
+            DecisionKind::PaymentPlan if !replaying && d.prompt.purpose == Purpose::Mana => {
+                on_board!(&self.board, b => keeps_every_source(&b.state, &self.table, &d.relayout()))
+                    .then_some(Choice(0))
+            }
             DecisionKind::YesNo if Self::searches_unasked(d) => (0..d.len() as u16)
                 .map(Choice)
                 .find(|&c| d.candidates.option(c) == Some(Opt::Yes)),
@@ -294,4 +302,26 @@ pub(super) fn without_floating<L: Layout>(mut d: Decision<L>) -> Decision<L> {
         list.retain(|o| !matches!(o, Opt::Mana { .. }));
     }
     d
+}
+
+/// Whether `d`, a choice among payment plans open in `s`, is one the session may take for
+/// its player. Mana they floated themselves means they are already paying by hand, so it
+/// must be none. Every plan must also leave each permanent on the battlefield. The plans then
+/// differ only in which sources they tap and how much mana they leave floating, which
+/// empties at the end of the step ([CR 500.5]: "As a step or phase ends ... any unspent mana
+/// left in a player's mana pool empties."). A plan that sacrifices a source, such as a
+/// Treasure, is still the human's to choose.
+///
+/// [CR 500.5]: https://yawgatog.com/resources/magic-rules/#R5005
+fn keeps_every_source<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> bool {
+    if s.player(d.player).mana().amounts().iter().any(|&n| n > 0) {
+        return false;
+    }
+    let mut scratch = Scratch::new();
+    (0..d.len()).all(|i| {
+        let mut copy = crate::prompt::forced(s);
+        let i = u16::try_from(i).expect("at most 64 plans");
+        apply(&mut copy, t, &mut scratch, &mut Replay, Choice(i));
+        (s.battlefield().iter()).all(|&slot| copy.is_current(s.object_ref(slot)))
+    })
 }

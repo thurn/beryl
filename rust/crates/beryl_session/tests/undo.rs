@@ -104,11 +104,8 @@ fn undo_groups_a_casts_automatic_payment_even_after_resume() {
             .position(|c| c.label == format!("Cast {MANA_CRYPT}"));
         view = answer(&mut game, &view, cast_crypt.unwrap_or_else(|| policy(d, 1)));
     };
-    let payment = deciding(&view).unwrap();
-    assert_eq!(payment.kind, Kind::PaymentPlan);
-    let paid = game.answer(payment.id, CandidateIndex(0)).unwrap();
-    game.choose(paid.as_continuation());
-    to_human(&mut game);
+    // The smart stops pay with the plan that leaves the least floating without asking.
+    assert!(deciding(&view).is_none_or(|d| d.kind != Kind::PaymentPlan));
 
     let saved = serde_json::to_string(game.replay()).unwrap();
     let file: ReplayFile = serde_json::from_str(&saved).unwrap();

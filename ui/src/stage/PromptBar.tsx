@@ -4,7 +4,8 @@
 // only where each stands: the button put forward at the foot of the desktop's dock, where the
 // turn button is, with what it says under it; the button that passes on to a later stop as the
 // round one beside it; and the others stacked over, in the order they came. A cost paid with
-// permanents says after what it asks how much is still to pay, and its Auto Pay shows what
+// permanents says after what it asks how much is still to pay once a pick has paid part of
+// it, and its Auto Pay shows what
 // it would tap while the pointer is over it or a touch is held on it (UI Conventions,
 // "Paying with permanents"), as does the yes of a question that pays a cost. A division says
 // the same of what is still to give out. A number is set by the two steps beside it, over the
@@ -186,12 +187,16 @@ function usePresses(
   };
 }
 
-/** What a prompt asks, and for a cost paid with permanents how much of it is still to pay,
- * or for a division how much is still to give out, as the session wrote each. */
+/** What a prompt asks, and for a cost paid with permanents how much of it is still to pay
+ * once a pick has paid part of it, or for a division how much is still to give out, as the
+ * session wrote each. Before any pick the title already names the whole cost ("Pay {1}{W}."),
+ * as Arena's does, and repeating it in parentheses says nothing more. */
 function Asks({ prompt: { title, body: state } }: { prompt: PromptView }) {
   const left =
     state.shape === "pay"
-      ? state.left
+      ? state.left === state.cost
+        ? undefined
+        : state.left
       : state.shape === "divide"
         ? `${state.left}`
         : undefined;

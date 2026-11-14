@@ -268,13 +268,7 @@ impl Game {
                     Some((_, outcomes)) => outcomes.push(outcome),
                     None => before.push(outcome),
                 },
-                // Damage assignments and targets are recorded choices, even when the
-                // session took them. Replaying them preserves earlier manual choices.
-                None if matches!(entry, Entry::Auto(c)
-                if c.what.as_ref().is_some_and(|w| {
-                    matches!(w.kind, save::Kind::DamageDivision | save::Kind::Target)
-                })) =>
-                {
+                None if replays_as_recorded(entry) => {
                     steps.push((entry, Vec::new()));
                 }
                 None if matches!(entry, Entry::Auto(_) | Entry::Checkpoint(_)) => {}
@@ -631,4 +625,14 @@ impl Game {
             reason: format!("turn {} {:?}: {what}", turn.number(), turn.step()),
         }
     }
+}
+
+/// Whether `entry` is an answer the session took for the human that replay plays as recorded
+/// rather than finding again: a damage assignment, a target or a payment plan. Replaying them
+/// preserves the manual choices of records made before the session took them.
+fn replays_as_recorded(entry: &Entry) -> bool {
+    matches!(entry, Entry::Auto(c) if c.what.as_ref().is_some_and(|w| matches!(
+        w.kind,
+        save::Kind::DamageDivision | save::Kind::Target | save::Kind::PaymentPlan
+    )))
 }
