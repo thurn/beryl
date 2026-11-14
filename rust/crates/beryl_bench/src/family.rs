@@ -25,8 +25,8 @@ use beryl_cards::decks::WU_CONTROL;
 use beryl_cards::names;
 use beryl_engine::card::{AbilityKind, CardDef, Face, Keywords};
 use beryl_engine::{
-    CardIx, Choice, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch, State, Step, Stops,
-    StallReason, Zone, apply, apply_decided, next, observe, rederive,
+    CardIx, Choice, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch,
+    StallReason, State, Step, Stops, Zone, apply, apply_decided, next, observe, rederive,
 };
 use beryl_search::{Agent, AgentDecision, GreedyAgent, Inline, RolloutPolicy};
 use beryl_session::save::Chosen;
