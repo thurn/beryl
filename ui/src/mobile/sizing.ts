@@ -1,3 +1,6 @@
+/** A card scan's width over its height. */
+export const RATIO = 0.716;
+
 /** Phone layouts use one column: 375px at least, 430px at most. */
 export const PHONE_WIDTH = { min: 375, max: 430 } as const;
 

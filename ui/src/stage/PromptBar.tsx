@@ -12,6 +12,7 @@
 // card are not buttons here: the card is shown once for each (Choose.tsx).
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -27,6 +28,8 @@ import {
   TurnButton,
 } from "../components/Controls";
 import { RulesText } from "../components/Mana";
+import { askedTop } from "../mobile/asked";
+import type { PhoneLayout } from "../mobile/layout";
 import { floating } from "../components/Player";
 import type {
   ButtonId,
@@ -120,12 +123,15 @@ export function useLostMana(
 
 /** How many letters a prompt asks in as a heading: what asks in more, a sentence of rules
  * text, is set smaller in the desktop's dock, so that the dock stays under the stack
- * (stage.css), and wraps in the phone's pill, beside the prompt's other buttons
- * (mobile/phone.css). */
+ * (stage.css), and wraps in the phone's pill (mobile/phone.css). */
 const LONG = 40;
 
 /** How many letters the phone's pill has room for beside a prompt's other buttons. */
 const BESIDE = 20;
+
+/** The height of the phone's pill on one line (mobile/phone.css `.phone-pill`), until it is
+ * measured. */
+const PILL_HEIGHT = 24;
 
 /** How long a touch is held on Auto Pay before it shows what it would tap, in ms. */
 const HELD = 450;
@@ -465,29 +471,47 @@ export function PhonePromptDock({
   );
 }
 
-/** What of the open prompt stands over the phone's player strip, whose top is `top`: what it
- * asks, and its other buttons stacked over the dock. */
+/** What of the open prompt stands over the phone's table laid out as `layout`: what it asks,
+ * and its other buttons stacked over the dock, above the player's strip. What it asks is a
+ * pill across the middle, clear of the cards on the table (`askedTop`), since a prompt may
+ * pick among them where they lie. While the prompt holds cards up (`held`, the tray), the
+ * table lies under the tray's shade and the tray's piles fill the middle, so the pill stands
+ * over the player's strip, beside the prompt's other buttons, where the tray leaves it room
+ * (phone.ts `phoneTray`). */
 export function PhonePromptOver({
   asked: { prompt, decision, sending },
   press,
   cancel,
   suggest,
   number,
-  top,
-}: { asked: Asked; top: number } & Answers) {
+  layout,
+  held,
+}: { asked: Asked; layout: PhoneLayout; held: boolean } & Answers) {
   const presses = usePresses(prompt, { press, suggest });
+  // The pill's height, measured before it is painted: a long one wraps onto several lines.
+  const pill = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState(PILL_HEIGHT);
+  useLayoutEffect(() => {
+    const measured = pill.current?.offsetHeight;
+    if (measured && measured !== height) setHeight(measured);
+  });
   if (!prompt) return null;
+  const top = layout.bands.yourStrip.top;
   const { others } = standing(prompt);
   const takesBack = decision?.cancellable && cancel;
   const steps = prompt.body.shape === "number";
   const more = others.length > 0 || Boolean(takesBack) || steps;
   // Beside the prompt's other buttons a pill has less room.
-  const long = prompt.title.length > (more ? BESIDE : LONG);
+  const beside = held && more;
+  const long = prompt.title.length > (beside ? BESIDE : LONG);
   const asks = (className: string, style?: CSSProperties) => (
     <div
+      ref={steps ? undefined : pill}
       className={className}
       role="status"
-      data-beside={(long && more) || undefined}
+      data-asks
+      data-beside={(long && beside) || undefined}
+      data-middle={!held || undefined}
       style={style}
     >
       <Asks prompt={prompt} />
@@ -499,8 +523,12 @@ export function PhonePromptOver({
         !steps &&
         asks(
           long ? "phone-pill phone-pill-long" : "phone-pill",
-          // A pill of several lines stands on the strip as one line does.
-          long ? { bottom: `calc(100% - ${top - 6}px)` } : { top: top - 30 },
+          !held
+            ? { top: askedTop(layout, height) }
+            : // A pill of several lines stands on the strip as one line does.
+              long
+              ? { bottom: `calc(100% - ${top - 6}px)` }
+              : { top: top - 30 },
         )}
       {more && (
         <div

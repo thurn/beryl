@@ -425,10 +425,13 @@ recordings do not show them.
   the end of their row; a coin is tossed just above the middle band. A prompt
   picked on the table is the desktop's: the button it puts forward stands in the
   player's strip where the turn button is, with the one that passes on beside
-  it; what it asks is a pill over that strip, and its other buttons are stacked
-  over the turn button. A touch on a card the prompt can use uses it, and one it
-  has no use for shows the card whole; a card in your hand is read by a touch
-  and played by carrying it out of the hand. The Revealed Cards lie in the
+  it; what it asks is a pill on the middle band's line, as Arena writes it
+  across the middle of the table, or at the nearest height clear of every card
+  where the stack lies on that line, and over the strip while the table is
+  shaded under cards the prompt holds up; its other buttons are stacked over the
+  turn button. A touch on a card the prompt can use uses it, and one it has no
+  use for shows the card whole; a card in your hand is read by a touch and
+  played by carrying it out of the hand. The Revealed Cards lie in the
   opponent's strip beside their graveyard, at a pile's size with no pill, and a
   touch opens them as it opens a pile. The bug reporter freezes the whole page
   and saves both that frame and the region the player selects. On a phone, the

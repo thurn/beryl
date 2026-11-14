@@ -522,7 +522,8 @@ export async function stageFaults(page) {
  * control that is neither inside it nor around it, so that a click meant for one may land on
  * the other; or one of the table's fixtures (a step stop, a life orb, the dock's and the
  * corners' buttons) that a permanent or a spell on the stack lies over or under, as lands
- * crowding a life orb's stops on a narrow stage would. A menu or a screen opened over the
+ * crowding a life orb's stops on a narrow stage would; or what the open prompt asks lying
+ * over a permanent. A menu or a screen opened over the
  * table (a dialog's buttons too), and a pile's own cards under its button, are meant to
  * overlap them. Cards may overlap
  * one another, as a fan or a pile does. Each is described for a failure message. */
@@ -596,6 +597,33 @@ export async function crowdedControls(page) {
             );
             return hit !== null && (e.contains(hit) || hit.contains(e));
         });
+        // What the open prompt asks (`data-asks`, the phone's pill) lies clear of every
+        // permanent. It takes no pointer, so neither the controls above nor clippedText's
+        // test of text under a card sees it, yet a prompt that picks among permanents in
+        // place is unreadable when its words hide the very cards it picks among. Under the
+        // tray's shade (src/stage/Tray.tsx) the table is not what is being read.
+        const shaded = document.querySelector(".stage-tray") !== null;
+        for (const asks of shaded
+            ? []
+            : document.querySelectorAll("[data-asks]")) {
+            const style = getComputedStyle(asks);
+            if (style.visibility === "hidden" || Number(style.opacity) <= 0)
+                continue;
+            const box = asks.getBoundingClientRect();
+            const under = cards.find(({ card, box: c }) => {
+                if (card.dataset.zone !== "battlefield") return false;
+                const w =
+                    Math.min(box.right, c.right) - Math.max(box.left, c.left);
+                const h =
+                    Math.min(box.bottom, c.bottom) - Math.max(box.top, c.top);
+                return w > 3 && h > 3;
+            })?.card;
+            if (under) {
+                faults.push(
+                    `what the prompt asks ("${asks.textContent?.trim().slice(0, 30)}") lies over ${under.dataset.card ?? "a permanent"}`,
+                );
+            }
+        }
         const slack = 1;
         // The light of a mark on a player (stage.css `[data-life] > .stage-mark`) stays within
         // the art of their life orb. A box shadow has no box of its own, so no overlap test

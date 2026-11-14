@@ -1269,6 +1269,12 @@
       "height": 647
     },
     {
+      "name": "phone-untap-teferi",
+      "route": "/?phone&fixture=choice-teferi#/game",
+      "width": 393,
+      "height": 759
+    },
+    {
       "name": "phone-untap-teferi-lands",
       "route": "/?phone&fixture=choice-teferi-lands#/game",
       "width": 393,

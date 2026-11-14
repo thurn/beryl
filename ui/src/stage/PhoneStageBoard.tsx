@@ -57,7 +57,7 @@ import {
   usePrompt,
 } from "./PromptBar.tsx";
 import { REVEALED, revealedIn, useRevealedOpen } from "./Revealed.tsx";
-import { OrderRow, TrayUnder } from "./Tray.tsx";
+import { OrderRow, shades, TrayUnder } from "./Tray.tsx";
 import { landing } from "./tray.ts";
 import "./stage.css";
 import "./effects.css";
@@ -115,10 +115,11 @@ export function PhoneStageBoard({
   useLayoutEffect(() => {
     if (viewport) stage.relayout(phone(viewport));
   }, [stage, viewport]);
-  const bands = useMemo(
-    () => viewport && table && phoneLayout(table, viewport).bands,
+  const layout = useMemo(
+    () => viewport && table && phoneLayout(table, viewport),
     [table, viewport],
   );
+  const bands = layout && layout.bands;
   const piles = useMemo(() => (table ? phonePiles(table) : []), [table]);
   const [sheet, setSheet] = useState<
     "menu" | "log" | Pick<PhonePile, "side" | "zone">
@@ -326,7 +327,8 @@ export function PhoneStageBoard({
           <PhonePromptOver
             asked={asked}
             {...answers}
-            top={bands.yourStrip.top}
+            layout={layout}
+            held={shades(asked.prompt)}
           />
         </>
       )}

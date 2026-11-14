@@ -15,10 +15,9 @@ import type { Phase } from "../components/Controls";
 import { referenced, twins } from "../game/decisions";
 import { onArc } from "../game/fanArc";
 import { emblemObjects, playableElsewhere } from "../game/zoneViews";
-import { creatureHeight } from "./sizing.ts";
+import { creatureHeight, RATIO } from "./sizing.ts";
 
-/** A card scan's width over its height. */
-export const RATIO = 0.716;
+export { RATIO };
 /** The gap between cards in a row. */
 export const GAP = 5;
 /** How far each copy beneath the top card of a stack of identical permanents peeks out, up and

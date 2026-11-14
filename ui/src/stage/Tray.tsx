@@ -23,6 +23,19 @@ import { DRAG_THRESHOLD } from "./pointer.ts";
 import { trayOf, waysOf, type Asked, type Prompts } from "./prompt.ts";
 import { laidOut, type Box, type TraySpace } from "./tray.ts";
 
+/** Whether `prompt` lays the tray's shade over the table: it holds cards up, or lists an
+ * order's row, the ways to use a card or a catalog's entries over the same shade (`OrderRow`,
+ * Choose.tsx). */
+export function shades(prompt: Asked["prompt"]): boolean {
+  const shape = prompt?.body.shape;
+  return (
+    trayOf(prompt) !== undefined ||
+    shape === "order" ||
+    shape === "catalog" ||
+    waysOf(prompt).length > 0
+  );
+}
+
 /** The shade and the piles' boxes under the cards the open prompt holds up, or under what it
  * lists over the table (triggers in their order, the ways to use a card, a catalog), drawn in the stage's `layer` in the `space` its layout gives
  * a tray. Nothing while the open prompt holds nothing up. */
@@ -37,13 +50,7 @@ export function TrayUnder({
 }) {
   const tray = trayOf(prompt);
   const state = prompt?.body;
-  // An order's row lies over the same shade (`OrderRow`), as do the ways to use a card and
-  // a catalog's entries (Choose.tsx).
-  const listed =
-    state?.shape === "order" ||
-    state?.shape === "catalog" ||
-    waysOf(prompt).length > 0;
-  if (!(tray || listed) || !layer) return null;
+  if (!shades(prompt) || !layer) return null;
   const piles = state?.shape === "split" ? state.piles : [];
   const laid = tray && laidOut(tray, space);
   const library = laid?.library;
