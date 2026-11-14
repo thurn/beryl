@@ -47,7 +47,7 @@ import { laid, under } from "./beat.ts";
 import type { Edge, Playback, Playing, Run } from "./beat.ts";
 import { Clock, type Frames, type StageClock } from "./clock.ts";
 import { StageIdle } from "./idle.ts";
-import { awaited, backed, entering, showingOn, stillShown } from "./enter.ts";
+import { awaited, coverOf, entering, showingOn, stillShown } from "./enter.ts";
 import type { Effect, On } from "./effects.ts";
 import { sameDress, sameFace } from "./layout.ts";
 import type { Name, Resting, StageLayout } from "./layout.ts";
@@ -625,12 +625,12 @@ export class ScriptStage {
    * no longer does, and each entry's resting place. An entry whose place moved glides there
    * over the `run` that moved it, from wherever it is, aloft if the run is about it; with no
    * run, or one that takes no time, it is there at once, unless a glide still under way
-   * carries it. The layout is told what is still leaving, or flying to a pile: it has yet to
-   * arrive. */
+   * carries it. The layout is told what is still leaving, flying to a pile, or waiting where
+   * a tray let it go for its own flight: it has yet to arrive. */
   #lay(at: number, run?: Run) {
     const leaving = new Set<Name>();
-    for (const [name, entry] of this.#entries)
-      if (entry.leaving || entry.landing) leaving.add(name);
+    for (const [name, e] of this.#entries)
+      if (e.leaving || e.landing || e.track?.waits) leaving.add(name);
     const rest = this.#layout.rest(this.#table!, leaving);
     for (const [name, entry] of [...this.#entries]) {
       if (rest.has(name) || entry.leaving) continue;
@@ -658,8 +658,8 @@ export class ScriptStage {
       if (still && face && dress) continue;
       // What is on its own step's track goes on along it, as what a tray kept waits for one.
       const flying =
-        (entry.track?.own && at < entry.track.to) ||
-        (entry.track?.waits && moverOf(run?.step.act) !== name);
+        (!!entry.track?.own && at < entry.track.to) ||
+        (!!entry.track?.waits && moverOf(run?.step.act) !== name);
       const moves = !still && !flying && run !== undefined && carries(run, at);
       const start = moves ? this.#poseOf(name, entry, at) : undefined;
       const showing = stillShown(entry.covered, entry.track, at);
@@ -670,7 +670,7 @@ export class ScriptStage {
         dress: dress ? before.dress : resting.dress,
       };
       if (!face || !dress) {
-        entry.covered &&= showing ?? backed(entry.resting);
+        [entry.covered, entry.track] = coverOf(entry, before, flying, showing);
         this.#surface?.dress(name, entry.covered ?? entry.resting);
         // A frame of another width scales otherwise for the same pose.
         entry.moved = true;
@@ -785,9 +785,9 @@ export class ScriptStage {
     return pose && reachOfCard(layout, entry.resting, pose);
   }
 
-  /** Writes one entry's pose, as the pointer moves it between ticks. */
+  /** Writes one entry's pose, sized by the face it shows, as the pointer moves it. */
   #draw(name: Name, entry: Entry, now = this.clock.now) {
-    const pose = this.#poseOf(name, entry, now);
-    this.#surface?.draw(name, pose, entry.resting.dress.frame);
+    const { dress } = entry.covered ?? entry.resting;
+    this.#surface?.draw(name, this.#poseOf(name, entry, now), dress.frame);
   }
 }

@@ -26,6 +26,7 @@ import {
   glide,
   lunge,
   meets,
+  shownUntil,
   shownUp,
   STRIKE,
   struck,
@@ -463,3 +464,33 @@ export const showingOn = (
   showing: Resting | undefined,
 ): [Track, Resting | undefined] =>
   kept || !showing ? [track, kept] : [{ ...track, turn: 1 }, showing];
+
+/** What a card whose resting place changed is drawn as until its track turns it over
+ * (`Entry.covered`; as it rests if none), and the track it goes on. A card that keeps going
+ * along the track it is on (`flying`: its own flight, or a tray holding it for its own step)
+ * and now rests where its face would not show, under others on a pile, keeps the face it
+ * showed (`shownUntil`), and its track counts as turning until it ends (`Track.turn`), so
+ * the stage keeps that face until the card is there. Without this, the cards a cost exiled
+ * from a graveyard tray crossed the table as empty dark cards: they took the pile's
+ * edge-only look as soon as the tray let them go. Any other card that had a cover keeps the
+ * face it was `showing` (`stillShown`), or else a card back. */
+export function coverOf(
+  {
+    covered,
+    track,
+    resting,
+  }: { covered?: Resting; track?: Track; resting: Resting },
+  before: Resting,
+  flying: boolean,
+  showing: Resting | undefined,
+): [Resting | undefined, Track | undefined] {
+  if (flying && track) {
+    const held = covered
+      ? covered.dress.back
+        ? undefined
+        : covered
+      : shownUntil(before, resting, false);
+    if (held) return [held, { ...track, turn: track.turn ?? 1 }];
+  }
+  return [covered && (showing ?? backed(resting)), track];
+}

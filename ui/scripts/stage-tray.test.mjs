@@ -5,32 +5,10 @@
 // hand.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Prompts, trayOf } from "../src/stage/prompt.ts";
+import { trayOf } from "../src/stage/prompt.ts";
 import { laidOut, landing } from "../src/stage/tray.ts";
-import { object, row, stage, view } from "./stage-table.mjs";
-
-const card = (slot) => ({ kind: "object", slot });
-
-/** A split of the library's cards as the session sends it: nothing in the first pile, which
- * must come to hold `exactly`, and `cards` in the second. */
-const split = (first, second, more = {}) => ({
-    revision: 0,
-    purpose: "scry",
-    title: "Scry",
-    marks: [...first, ...second].map((slot) => ({
-        on: card(slot),
-        mark: "eligible",
-    })),
-    buttons: [],
-    body: {
-        shape: "split",
-        piles: [
-            { place: "bottom", label: "Bottom", cards: first, exactly: 1 },
-            { place: "top", label: "Top", cards: second, exactly: null },
-        ],
-    },
-    ...more,
-});
+import { object, row } from "./stage-table.mjs";
+import { card, prompted, split, table } from "./stage-prompted.mjs";
 
 /** A look that puts cards from among `first` and `second` into the hand and the rest on the
  * bottom of the library. */
@@ -48,35 +26,6 @@ const look = (first, second) => {
                 { ...bottom, place: "bottom", label: "Bottom" },
             ],
         },
-    };
-};
-
-/** A view of the permanent 1, the hand's card 3 and a library of 10 under 11, whose cards
- * the viewer knows; it asks `prompt`, if given one. */
-const table = (prompt, more = {}) => {
-    const base = view([1], [3]);
-    return {
-        ...base,
-        objects: [
-            ...base.objects,
-            object(10, "library"),
-            object(11, "library"),
-        ],
-        players: {
-            ...base.players,
-            you: { ...base.players.you, library: [10, 11] },
-        },
-        status: prompt
-            ? {
-                  kind: "deciding",
-                  decision: {
-                      id: { session: 1, seq: 1 },
-                      source: null,
-                      prompt,
-                  },
-              }
-            : { kind: "playing" },
-        ...more,
     };
 };
 
@@ -104,33 +53,6 @@ const piles = {
         return out;
     },
 };
-
-/** A stage whose lifts take 300 ms, or 200 to sort, and whose flights take 400; with its
- * prompts, and a session that answers each click when the test says. Its `layout` is the
- * tests' rows unless given. */
-function prompted(layout = row) {
-    const timed = (act) => {
-        if (act.verb === "lift") return { duration: act.sorted ? 200 : 300 };
-        return { duration: act.verb === "fly" ? 400 : 0 };
-    };
-    const { stage: made, surface } = stage(timed, undefined, layout);
-    const sent = [];
-    const waiting = [];
-    const prompts = new Prompts(made, (decision, revision, click) => {
-        sent.push({ decision, revision, click });
-        return new Promise((resolve) => waiting.push(resolve));
-    });
-    made.pointer.listen(prompts.pointerClient);
-    const reply = async (value) => {
-        waiting.shift()(value);
-        await new Promise(setImmediate);
-    };
-    const at = (slot) => {
-        const { x, y } = made.pose(slot);
-        return [x, y];
-    };
-    return { made, surface, prompts, sent, reply, at };
-}
 
 test("a prompt lifts the cards it holds up as it opens, and each reply sorts them", async () => {
     const { made, prompts, sent, reply, at } = prompted();

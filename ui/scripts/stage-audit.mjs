@@ -18,6 +18,8 @@
 //   duplicate two painted instances of one object shared a tick, but for what the design
 //             language shows twice (data/ui-conventions.json, `twice`): the cards of a prompt
 //             of a shape an entry names, and the face a verb holds up beside its card
+//   blank     a card was drawn as only its paper edge, an empty dark card, with nothing over
+//             it: only a card under the top of a pile is drawn so (src/stage/Faces.tsx)
 //   jump      an arrow or line whole on the table changed shape while both its ends stood
 //             still, read from the stage's model (`stage.lines`). One redrawn as an end of it
 //             moves is no finding: a line is "drawn every
@@ -26,7 +28,15 @@
 // A finding about a tap or untap is `minor`. What the screen around the table
 // animates on the page's own time (a button sliding in) is not judged here: it is no step's.
 import { readFile } from "node:fs/promises";
-import { duplicates, record, CROWDED, MIN_MS, MIN_PX, SEEN } from "./audit.mjs";
+import {
+    blanks,
+    duplicates,
+    record,
+    CROWDED,
+    MIN_MS,
+    MIN_PX,
+    SEEN,
+} from "./audit.mjs";
 import { LONGEST, rest } from "./moments.mjs";
 
 /** The stage time between two measurements of the page: two frames'. Measuring the page is
@@ -630,6 +640,7 @@ export function judge(
                 (card.slot == null && frame.prompt.names.includes(card.name))));
     for (const found of [
         ...duplicates(frames, allows),
+        ...blanks(frames),
         ...lineFindings(frames),
     ]) {
         const view = views.find((v) => v.at >= found.start) ?? views.at(-1);

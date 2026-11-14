@@ -104,7 +104,10 @@ export const row = {
         });
         (tray?.piles ?? []).forEach((pile, at) =>
             pile.cards.forEach((slot, i) => {
-                const { object } = out.get(slot);
+                // A card held up from a zone the rows lay nowhere, as a graveyard.
+                const object =
+                    out.get(slot)?.object ??
+                    table.objects.find((o) => o.slot === slot);
                 out.set(slot, {
                     object,
                     pose: {
@@ -146,7 +149,8 @@ export const row = {
 };
 
 /** A surface that records what the stage did to it: the nodes it made and removed (`log`),
- * how it dressed each, as its zone or as a card back (`dressed`), each node's pose, how far
+ * how it dressed each, as its zone or as a card back (`dressed`), the dress it drew each in
+ * last (`dresses`), each node's pose, how far
  * through each effect drawn on a node is, by `<node> <effect> <layer>` (`effects`), the path
  * of each line drawn, by its key (`lines`), how far each mark has come in, by `<node>
  * <mark>` (`marks`), and each line and mark made and taken away, in order (`spans`); the
@@ -156,6 +160,7 @@ export const row = {
 export function recorder() {
     const log = [];
     const dressed = [];
+    const dresses = new Map();
     const nodes = new Map();
     const effects = new Map();
     const lines = new Map();
@@ -176,6 +181,7 @@ export function recorder() {
     return {
         log,
         dressed,
+        dresses,
         nodes,
         effects,
         lines,
@@ -219,8 +225,10 @@ export function recorder() {
             }
             log.push(`remove ${slot}`);
         },
-        dress: (slot, { dress }) =>
-            dressed.push(`${slot} ${dress.back ? "back" : dress.zone}`),
+        dress(slot, { dress }) {
+            dressed.push(`${slot} ${dress.back ? "back" : dress.zone}`);
+            dresses.set(slot, dress);
+        },
         draw: (slot, pose) => nodes.set(slot, pose),
     };
 }

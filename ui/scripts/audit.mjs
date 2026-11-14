@@ -213,6 +213,11 @@ export function record() {
                 ...(e.hasAttribute("data-dissolving") && {
                     mask: getComputedStyle(e).maskPosition,
                 }),
+                // Drawn as only its paper edge, as a card under a pile's top is: `blanks`.
+                // The node's class says so as the stage dresses it (src/stage/dom.ts), the
+                // same tick its pose changes; its face is drawn over by React, which may not
+                // have run when a tick is measured, but runs before the screen is painted.
+                ...(e.classList.contains("card-el-rim") && { rim: true }),
             });
         }
         // The rule stays in from tick to tick, each change of it restyling the whole page:
@@ -283,6 +288,29 @@ export function duplicates(frames, allows = () => false) {
             // have no slot. A name match is the only evidence for those.
             if (cards.length > 1 && cards.some((c) => c.slot == null))
                 report(`name:${key}`, cards);
+        }
+    }
+    return out;
+}
+
+/** Report each card drawn as only its paper edge where a player sees it, even for a single
+ * frame: an empty dark card. Only a card under the top of a pile is drawn so, and the cards
+ * over it cover it. */
+export function blanks(frames) {
+    const reported = new Set();
+    const out = [];
+    for (const { t, instances } of frames) {
+        for (const card of instances) {
+            if (!card.rim || !card.top || reported.has(card.id)) continue;
+            reported.add(card.id);
+            const name = card.name ?? "Face-down card";
+            out.push({
+                kind: "blank",
+                what: `${name}${card.slot == null ? "" : ` (slot ${card.slot})`} drawn as a bare edge`,
+                verdict: "blank",
+                why: `${card.where} #${card.id} at (${card.x}, ${card.y}), nothing over it`,
+                start: t,
+            });
         }
     }
     return out;

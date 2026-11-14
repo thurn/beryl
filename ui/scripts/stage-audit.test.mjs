@@ -274,3 +274,26 @@ test("an arrow that changes shape with its ends still jumped", () => {
         [],
     );
 });
+
+test("a card drawn as a bare edge with nothing over it is blank", () => {
+    // Bear, in a graveyard, is drawn as only its paper edge, as a card under the pile's top
+    // is: under Spirit for the first 50 ms, and then on its own.
+    const pile = (t) => [
+        card(7, 300, 300, { name: "Spirit", zone: "graveyard" }),
+        card(9, 302, 300, {
+            name: "Bear",
+            zone: "graveyard",
+            rim: true,
+            top: t >= 50,
+        }),
+    ];
+    const found = judge(run([], frames(100, pile))).map(
+        (f) => `${f.verdict} ${f.what}: ${f.why}`,
+    );
+    assert.deepEqual(found, [
+        "blank Bear (slot 9) drawn as a bare edge: graveyard #109 at (302, 300), nothing over it",
+    ]);
+    // Covered all the while, it is none.
+    const covered = (t) => pile(t).map((c) => ({ ...c, top: c.slot === "7" }));
+    assert.deepEqual(judge(run([], frames(100, covered))), []);
+});

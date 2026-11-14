@@ -198,15 +198,17 @@ export const glide =
   };
 
 /** What a card that showed its face at `before` is drawn as on its way to `after`, where it
- * lies face down or out of sight: as it was, there. None for any other move, which is
- * dressed as it will rest from the first. */
+ * lies face down (if `backs`) or out of sight: as it was, there. Out of sight includes a
+ * card of which only its paper edge shows (`Dress.rim`), under the top of a pile. None for
+ * any other move, which is dressed as it will rest from the first. */
 export function shownUntil(
   before: Resting,
   after: Resting,
+  backs = true,
 ): Resting | undefined {
-  const hid = ({ dress }: Resting) =>
-    dress.back || dress.rim || dress.look === "hidden";
-  return hid(after) && !hid(before)
+  const hid = ({ dress }: Resting, back: boolean) =>
+    (back && dress.back) || dress.rim || dress.look === "hidden";
+  return hid(after, backs) && !hid(before, true)
     ? { ...before, pose: after.pose }
     : undefined;
 }
@@ -604,7 +606,9 @@ export const carries = (run: Moving, at: number) =>
  * (`Timing.opens`), slowing into its place. A card that stays in a hand while another joins
  * or leaves it goes to its new place in `REGROUP`, slowing into it, from when the change is
  * applied, unless the step is a `vanish`, whose room closes once its card has gone. A card
- * a `lift` lets go to lie face down or out of sight shows the face it had until it is there. */
+ * that goes to lie out of sight, or face down where a `lift` lets it go, shows the face it
+ * had until it is there (`shownUntil`): on other moves a card that comes to lie face down
+ * turns over on its way. */
 export function carried(
   run: Moving,
   at: number,
@@ -613,7 +617,7 @@ export function carried(
   halfTurn: NonNullable<Flown["over"]>,
 ): [Track, Resting | undefined] {
   const { verb, to: end } = run;
-  const kept = verb === "lift" ? shownUntil(before, resting) : undefined;
+  const kept = shownUntil(before, resting, verb === "lift");
   const toward = resting.object?.controller === "opponent" ? -1 : 1;
   const about = verb === "fly" || verb === "count";
   const flies = about && litBy(run.step.act) === name;
