@@ -77,7 +77,7 @@ def workspace_packages() -> list[dict[str, object]]:
 def affected_packages(
     changed: Iterable[str] | None, packages: list[dict[str, object]] | None = None
 ) -> list[str] | None:
-    """The packages a change can break, for the fast check's clippy and tests: each package it
+    """The packages a change can break, for the rust lane's tests to run: each package it
     touched and every package that depends on one of them, through any kind of dependency.
     None for the whole workspace: no list of changes, a change under rust/ outside every
     package (the workspace's manifest, lock file or cargo configuration), the card store,
@@ -120,11 +120,23 @@ def affected_packages(
 NIGHTLY_PACKAGE = "beryl_link_iroh"
 
 
+# What the rust lane builds, whichever packages a change can break. Cargo resolves features
+# over the packages it is given, and other packages' dev-dependencies turn features on in
+# shared crates: `beryl_cards` and `beryl_search` turn on `beryl_rules`' `coverage`. A build
+# of `-p beryl_cli -p beryl_session` left it off, so after any change on staging to the rules,
+# that build compiled the rules, engine and every card crate a second time, under hashes the
+# cached target (warm.py), which slow CI fills from the whole workspace, did not hold: clippy
+# took 65 s of the fast check after a one-line change to `beryl_session`, against 7 s for the
+# same change checked over the whole workspace. Cargo rebuilds only what changed either way,
+# so the packages a change can break choose only which tests run.
+BUILD_SCOPE: list[str] = ["--workspace", "--exclude", NIGHTLY_PACKAGE]
+
+
 def rust_lane(
     fast: bool = False, packages: list[str] | None = None, text_inputs: bool = False
 ) -> Lane:
     """The rust lane; `fast` leaves out the tests in verdicts.SLOW_ONLY, slow CI's (not `fast`)
-    those in verdicts.FAST_ONLY, and `packages` holds clippy and the tests to those packages
+    those in verdicts.FAST_ONLY, and `packages` holds the tests that run to those packages
     (`affected_packages`) and the card-text step to a change it can see (`card_text.affected`,
     or `text_inputs`: its other inputs changed)."""
     from .checks import STEP, Lane
@@ -132,11 +144,8 @@ def rust_lane(
     checked = (
         None if packages is None else [p for p in packages if p != NIGHTLY_PACKAGE]
     )
-    scope = (
-        ["--workspace", "--exclude", NIGHTLY_PACKAGE]
-        if checked is None
-        else scope_of(checked)
-    )
+    # Clippy checks the whole workspace even when `packages` names a few: see `BUILD_SCOPE`.
+    scope = BUILD_SCOPE
     named = [f"--packages={','.join(checked)}"] if checked else []
     lane = (
         Lane("rust", warm=True)
@@ -166,7 +175,7 @@ def rust_lane(
     if text_inputs or card_text.affected(checked):
         # Every card file's rendered rules text against its Oracle text, once the tests have
         # built the scenario binary, which it finds in the same scope.
-        lane.step("card-text", [*STEP, "card-text", *named])
+        lane.step("card-text", [*STEP, "card-text"])
     return lane
 
 
@@ -214,9 +223,9 @@ def rust_tests_step(
         packages = [package for package in packages if package != NIGHTLY_PACKAGE]
         if not packages:
             return 0
-    scope = scope_of(packages) if packages else ["--workspace"]
-    if routine and packages is None:
-        scope.extend(["--exclude", NIGHTLY_PACKAGE])
+    # The whole workspace builds, as clippy's does (`BUILD_SCOPE`); `packages` chooses the
+    # tests that run.
+    scope = list(BUILD_SCOPE) if routine or packages else ["--workspace"]
     cargo = ["cargo", "test", "--locked", *scope, "-q"]
     if shutil.which("cargo-nextest") is None:
         # cargo test reports no test to the run log, so the step logs one `rust:tests` record
@@ -251,6 +260,8 @@ def rust_tests_step(
     )
     if left_out:
         every += f" & not ({left_out})"
+    if packages:
+        every += f" & ({package_filter(packages)})"
     nextest: list[str] = [
         "cargo",
         "nextest",
@@ -266,7 +277,7 @@ def rust_tests_step(
         nextest_filter(only) if only else every,
     ]
     # Beside nextest: what it does not run, with the check and the line a failure is named by.
-    allocations = executables(build.stdout, "allocations")
+    allocations = executables(build.stdout, "allocations", packages)
     beside: dict[str, tuple[list[str], str]] = {
         "rust:allocations": (run_each(allocations), ALLOCATIONS_FAILED),
     }
@@ -330,9 +341,16 @@ def rust_tests_step(
     return next((r.returncode for r, _ in runs if r.returncode != 0), 0)
 
 
-def executables(messages: str, target: str) -> list[str]:
+def package_filter(packages: Iterable[str]) -> str:
+    """A nextest filterset of the tests in `packages`."""
+    return " | ".join(f"package({p})" for p in packages)
+
+
+def executables(
+    messages: str, target: str, packages: list[str] | None = None
+) -> list[str]:
     """The test binaries named `target` among the artifacts that `cargo test --no-run
-    --message-format=json` reports in `messages`.
+    --message-format=json` reports in `messages`, of `packages` (None: of any package).
 
     The step runs these rather than `cargo test --test <target>`: cargo resolves the features of
     a build of one test target apart from the whole workspace's, since the other packages'
@@ -352,9 +370,21 @@ def executables(messages: str, target: str) -> list[str]:
         ):
             continue
         executable = message.get("executable")
+        if packages is not None and package_name(message) not in packages:
+            continue
         if executable and (message.get("target") or {}).get("name") == target:
             found.append(str(executable))
     return sorted(found)
+
+
+def package_name(message: dict[str, object]) -> str:
+    """The name of the package a cargo JSON message is about. Its `package_id` is
+    `path+file:///.../<dir>#<name>@<version>`, or `...#<version>` when the name is the
+    directory's."""
+    package_id = str(message.get("package_id") or "")
+    location, _, spec = package_id.rpartition("#")
+    name, at, _ = spec.partition("@")
+    return name if at else location.rstrip("/").rsplit("/", 1)[-1]
 
 
 # Runs each test binary given to it in turn, and fails if any failed.

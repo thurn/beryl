@@ -550,6 +550,10 @@ def test_routine_lanes_leave_the_iroh_build_to_the_nightly() -> None:
         app = checks.rust_lane(fast=fast, packages=[nightly, "beryl_app"])
         tests = next(step for step in app.steps if step.name == "tests")
         assert tests.cmd[-1] == "--packages=beryl_app"
+        # Clippy checks the whole workspace for any change, so that it resolves the same
+        # features as the cached target's build and reuses it.
+        clippy = next(step for step in app.steps if step.name == "clippy")
+        assert clippy.cmd[3:6] == ["--workspace", "--exclude", nightly]
 
 
 def test_a_session_runs_rust_tests_as_the_check_does() -> None:
@@ -662,10 +666,13 @@ def test_a_wait_for_tokens_does_not_count_towards_the_hang_limit(
 
 
 def test_the_allocations_binaries_come_from_the_workspace_build() -> None:
-    def artifact(name: str, executable: str | None) -> str:
+    def artifact(
+        name: str, executable: str | None, package: str = "beryl_rules"
+    ) -> str:
         return json.dumps(
             {
                 "reason": "compiler-artifact",
+                "package_id": f"path+file:///w/rust/crates/{package}#0.1.0",
                 "target": {"name": name, "kind": ["test"]},
                 "executable": executable,
             }
@@ -675,7 +682,7 @@ def test_the_allocations_binaries_come_from_the_workspace_build() -> None:
         [
             artifact("allocations", "/t/deps/allocations-b"),
             artifact("beryl_rules", None),
-            artifact("allocations", "/t/deps/allocations-a"),
+            artifact("allocations", "/t/deps/allocations-a", "beryl_bench"),
             artifact("corpus", "/t/deps/corpus-c"),
             json.dumps({"reason": "build-finished", "success": True}),
             "not json",
@@ -684,6 +691,20 @@ def test_the_allocations_binaries_come_from_the_workspace_build() -> None:
     found = rust_tests.executables(messages, "allocations")
     assert found == ["/t/deps/allocations-a", "/t/deps/allocations-b"]
     assert rust_tests.executables("", "allocations") == []
+    # The fast check runs only the affected packages' binaries of the workspace's build.
+    assert rust_tests.executables(messages, "allocations", ["beryl_bench"]) == [
+        "/t/deps/allocations-a"
+    ]
+
+
+def test_a_package_id_names_its_package() -> None:
+    name = rust_tests.package_name
+    assert name({"package_id": "path+file:///w/rust/crates/beryl_cli#0.1.0"}) == (
+        "beryl_cli"
+    )
+    assert name({"package_id": "path+file:///w/rust/cards/x#cards_2004@0.1.0"}) == (
+        "cards_2004"
+    )
 
 
 def test_only_blocks_rustdoc_compiles_are_doctests() -> None:

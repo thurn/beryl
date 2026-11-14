@@ -73,7 +73,9 @@ can affect (`slow_ci.py`):
   read reach the `rust` lane, `ui/` and the data files the UI imports reach
   `ui`, and both reach `app` and `ui-smoke`. A docs-only change runs just `repo`
   and `names`. Within a lane, `rust` tests only the packages the change can
-  break.
+  break, but clippy and the test build cover the whole workspace, so that cargo
+  resolves the same features as the cached target and rebuilds only what
+  changed.
 - Tools changes are judged by fingerprint: each lane's pass records a hash of
   its step commands and of the `tools/src` modules they run or import. A lane
   whose fingerprint changed runs in full, as does a lane reached by a path no
