@@ -246,7 +246,7 @@ fn destination_zone(
     }
 }
 
-fn card_record(card: &Card) -> Option<Record> {
+pub(super) fn card_record(card: &Card) -> Option<Record> {
     match card {
         Card::Named(name) => STORE
             .card(name)
@@ -279,7 +279,11 @@ fn source_index(source: &[ObjectId], id: ObjectId) -> usize {
         .expect("validated source")
 }
 
-fn remove_arrows(table: &Table, selected: &BTreeSet<ObjectId>, changes: &mut Vec<Change>) {
+pub(super) fn remove_arrows(
+    table: &Table,
+    selected: &BTreeSet<ObjectId>,
+    changes: &mut Vec<Change>,
+) {
     for (index, arrow) in table.arrows.iter().enumerate().rev() {
         let target_moved = matches!(arrow.to, ArrowTarget::Object(id) if selected.contains(&id));
         if selected.contains(&arrow.from) || target_moved {
@@ -417,7 +421,10 @@ fn validate_seen(table: &Table, seen: SeenObject) -> Result<(), Refusal> {
     Ok(())
 }
 
-fn selected_cards<'a>(table: &'a Table, selection: &Selection) -> Result<Vec<&'a Object>, Refusal> {
+pub(super) fn selected_cards<'a>(
+    table: &'a Table,
+    selection: &Selection,
+) -> Result<Vec<&'a Object>, Refusal> {
     selected_ids(table, selection)?;
     selection
         .objects

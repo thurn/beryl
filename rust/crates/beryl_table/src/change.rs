@@ -127,6 +127,22 @@ pub enum Change {
         arrow: Arrow,
         index: usize,
     },
+    Lend {
+        zone: Zone,
+        to: Seat,
+        index: usize,
+        on: bool,
+    },
+    AlwaysRevealTop {
+        seat: Seat,
+        index: usize,
+        on: bool,
+    },
+    AlwaysLookAtTop {
+        seat: Seat,
+        index: usize,
+        on: bool,
+    },
     Random {
         outcomes: Vec<u32>,
     },
@@ -136,6 +152,14 @@ pub enum Change {
 fn learn(known_to: &mut Vec<Seat>, seat: Seat) {
     if !known_to.contains(&seat) {
         known_to.push(seat);
+    }
+}
+
+fn toggle<T: Copy + Eq + std::fmt::Debug>(items: &mut Vec<T>, item: T, index: usize, on: bool) {
+    if on {
+        items.insert(index, item);
+    } else {
+        assert_eq!(items.remove(index), item);
     }
 }
 
@@ -211,6 +235,20 @@ impl Change {
             }
             Self::InsertArrow { arrow, index } => table.arrows.insert(*index, arrow.clone()),
             Self::RemoveArrow { arrow, index } => assert_eq!(table.arrows.remove(*index), *arrow),
+            Self::Lend {
+                zone,
+                to,
+                index,
+                on,
+            } => {
+                toggle(&mut table.lent_zones, (*zone, *to), *index, *on);
+            }
+            Self::AlwaysRevealTop { seat, index, on } => {
+                toggle(&mut table.always_reveal_top, *seat, *index, *on);
+            }
+            Self::AlwaysLookAtTop { seat, index, on } => {
+                toggle(&mut table.always_look_at_top, *seat, *index, *on);
+            }
             Self::Random { .. } | Self::Nothing => {}
         }
     }
@@ -261,6 +299,27 @@ impl Change {
             Self::RemoveArrow { arrow, index } => Self::InsertArrow {
                 arrow: arrow.clone(),
                 index: *index,
+            },
+            Self::Lend {
+                zone,
+                to,
+                index,
+                on,
+            } => Self::Lend {
+                zone: *zone,
+                to: *to,
+                index: *index,
+                on: !on,
+            },
+            Self::AlwaysRevealTop { seat, index, on } => Self::AlwaysRevealTop {
+                seat: *seat,
+                index: *index,
+                on: !on,
+            },
+            Self::AlwaysLookAtTop { seat, index, on } => Self::AlwaysLookAtTop {
+                seat: *seat,
+                index: *index,
+                on: !on,
             },
             Self::Learn { .. } | Self::Random { .. } | Self::Nothing => Self::Nothing,
         }

@@ -42,12 +42,17 @@ pub fn apply(
     table: &mut Table,
     by: Seat,
     action: &Action,
-    _chance: &mut Chance,
+    chance: &mut Chance,
 ) -> Result<Entry, Refusal> {
     permissions::check(table, by, action)?;
     let n = table.entry_number.checked_add(1).ok_or(Refusal::Invalid)?;
-    let changes = changes_for(table, by, action)?;
-    perform(table, &changes);
+    let mut planned_chance = chance.clone();
+    let mut changes = changes_for(table, by, action, &mut planned_chance)?;
+    perform(table, &changes, action);
+    let top_knowledge = library::keep_top_known(table);
+    perform(table, &top_knowledge, action);
+    changes.extend(top_knowledge);
+    *chance = planned_chance;
     table.entry_number = n;
     Ok(Entry {
         n,
@@ -58,8 +63,12 @@ pub fn apply(
     })
 }
 
-fn perform(table: &mut Table, changes: &[Change]) {
-    for change in changes {
+fn perform(table: &mut Table, changes: &[Change], action: &Action) {
+    for (index, change) in changes.iter().enumerate() {
+        debug_assert!(
+            valid_knowledge_change(table, action, changes, index),
+            "knowledge may only shrink when a card enters a hand or is shuffled"
+        );
         change.perform(table);
         if let Some(id) = change.introduced_id() {
             table.next_id = table.next_id.max(u64::from(id.0) + 1);
@@ -67,7 +76,57 @@ fn perform(table: &mut Table, changes: &[Change]) {
     }
 }
 
-fn changes_for(table: &Table, by: Seat, action: &Action) -> Changes {
+fn valid_knowledge_change(
+    table: &Table,
+    action: &Action,
+    changes: &[Change],
+    index: usize,
+) -> bool {
+    use crate::state::Zone;
+
+    let Change::ResetKnowledge {
+        id,
+        edit,
+        forget: true,
+    } = &changes[index]
+    else {
+        return true;
+    };
+    let object = &table.objects[id];
+    if object.known_to.iter().all(|seat| edit.after.contains(seat)) {
+        return true;
+    }
+    if !matches!(changes.get(index + 1), Some(Change::ReplaceId { from, .. }) if from == id) {
+        return false;
+    }
+    match object.zone {
+        Zone::Hand(owner) => {
+            edit.after == [owner]
+                && changes[..index]
+                    .iter()
+                    .rev()
+                    .find_map(|change| match change {
+                        Change::Move {
+                            id: moved,
+                            from,
+                            to,
+                        } if id == moved => Some(from.zone != to.zone && to.zone == object.zone),
+                        _ => None,
+                    })
+                    == Some(true)
+        }
+        Zone::Library(owner) => {
+            edit.after.is_empty()
+                && matches!(
+                    action,
+                    Action::Shuffle { seat, .. } | Action::Mulligan { seat, .. } if *seat == owner
+                )
+        }
+        _ => false,
+    }
+}
+
+fn changes_for(table: &Table, by: Seat, action: &Action, chance: &mut Chance) -> Changes {
     match action {
         Action::Move {
             selection,
@@ -108,15 +167,20 @@ fn changes_for(table: &Table, by: Seat, action: &Action) -> Changes {
         } => cards::token(table, by, card, *count, *attached_to, note.as_deref()),
         Action::Marker { selection, text } => cards::marker(table, selection, text),
         Action::Remove { selection } => cards::remove(table, selection),
-        Action::Draw { .. } => library::draw(action),
-        Action::Mulligan { .. } => library::mulligan(action),
-        Action::Shuffle { .. } => library::shuffle(action),
-        Action::Look { .. } => library::look(action),
-        Action::Reveal { .. } => library::reveal(action),
-        Action::Lend { .. } => library::lend(action),
-        Action::AlwaysRevealTop { .. } => library::always_reveal_top(action),
-        Action::AlwaysLookAtTop { .. } => library::always_look_at_top(action),
-        Action::SortHand { .. } => library::sort_hand(action),
+        Action::Draw { seat, count } => library::draw(table, *seat, *count),
+        Action::Mulligan { seat, count } => library::mulligan(table, *seat, *count, chance, action),
+        Action::Shuffle { seat, portion } => library::shuffle(table, *seat, *portion, chance),
+        Action::Look { seat, portion } => library::look(table, by, *seat, *portion),
+        Action::Reveal {
+            zone,
+            objects,
+            random,
+            to,
+        } => library::reveal(table, *zone, objects.as_deref(), *random, to, chance),
+        Action::Lend { zone, to } => library::lend(table, *zone, *to),
+        Action::AlwaysRevealTop { seat, on } => library::always_reveal_top(table, *seat, *on),
+        Action::AlwaysLookAtTop { seat, on } => library::always_look_at_top(table, *seat, *on),
+        Action::SortHand { seat, by } => library::sort_hand(table, *seat, *by),
         Action::Life { .. } => players::life(action),
         Action::PlayerCounter { .. } => players::player_counter(action),
         Action::Phase { .. } => game::phase(action),

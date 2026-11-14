@@ -175,3 +175,30 @@ fn chance_replays_in_order_and_checks_each_requested_range() {
     assert_eq!(replay.below(4), Err(Refusal::Invalid));
     assert_eq!(replay.below(5), Ok(4));
 }
+
+#[test]
+fn inverses_restore_lends_and_library_top_settings() {
+    let mut table = Table::new(2);
+    for change in [
+        Change::Lend {
+            zone: Zone::Library(OWNER),
+            to: GUEST,
+            index: 0,
+            on: true,
+        },
+        Change::AlwaysRevealTop {
+            seat: OWNER,
+            index: 0,
+            on: true,
+        },
+        Change::AlwaysLookAtTop {
+            seat: GUEST,
+            index: 0,
+            on: true,
+        },
+    ] {
+        assert_inverse(&table, &change);
+        change.perform(&mut table);
+        assert_inverse(&table, &change.inverse());
+    }
+}
