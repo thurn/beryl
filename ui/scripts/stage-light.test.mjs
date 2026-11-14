@@ -5,6 +5,7 @@
 // is glow.ts's, which the browser checks see.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { showLightLayers } from "../src/stage/light-layer.ts";
 import { flaresOf, SETTLE, STREAK, TRAIL } from "../src/stage/flare.ts";
 import { lightOf as layered, sought, widthOf } from "../src/stage/light.ts";
 import { wayOf } from "../src/stage/lines.ts";
@@ -41,6 +42,34 @@ const line = (arrow, from, to, more = {}) => ({
     shown: 1,
     whole: 1000,
     ...more,
+});
+
+test("an idle light layer does not mutate the table each frame", () => {
+    const writes = [];
+    const dataset = new Proxy(
+        {},
+        {
+            set(target, key, value) {
+                writes.push(["set", key, value]);
+                target[key] = value;
+                return true;
+            },
+            deleteProperty(target, key) {
+                writes.push(["delete", key]);
+                return delete target[key];
+            },
+        },
+    );
+    const layer = { dataset };
+    for (let frame = 0; frame < 60; frame++) showLightLayers(layer, "under");
+    assert.deepEqual(writes, [["set", "light", "under"]]);
+    showLightLayers(layer, "under over");
+    showLightLayers(layer, "");
+    showLightLayers(layer, "");
+    assert.deepEqual(writes.slice(1), [
+        ["set", "light", "under over"],
+        ["delete", "light"],
+    ]);
 });
 
 test("what is lit at a stage time is that time's alone", () => {

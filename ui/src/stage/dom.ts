@@ -26,6 +26,7 @@ import { drawn, Heft } from "./heft.ts";
 import { RaisedCopy } from "./raised.ts";
 import type { Name, Point, Resting } from "./layout.ts";
 import { dark, type Lit } from "./light.ts";
+import { showLightLayers } from "./light-layer.ts";
 import type { Shape } from "./lines.ts";
 import type { StreakShape } from "./streaks.ts";
 import type { Pointer, Under } from "./pointer.ts";
@@ -362,8 +363,7 @@ export class DomSurface implements Surface {
     const painted = (["under", "over"] as const).filter(
       (where) => this.#glow[where],
     );
-    if (painted.length === 0) delete this.#layer.dataset.light;
-    else this.#layer.dataset.light = painted.join(" ");
+    showLightLayers(this.#layer, painted.join(" "));
   }
 
   streak(key: string, look?: string, shape?: StreakShape | null) {
