@@ -3,7 +3,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::cast;
-use crate::event::{self, Reason};
+use crate::event::Reason;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -34,7 +34,7 @@ pub fn spell_mana_value<L: Layout>(s: &State<L>, t: &GameTable, spell: ObjectRef
 
 /// Takes the spells among `objects` off the stack, for an effect that moves their cards to
 /// `to` without their resolving, and exiles those that are exiled instead
-/// ([`event::exiled_instead`]). Returns the objects still to move.
+/// ([`crate::replace::exiled_instead`]). Returns the objects still to move.
 pub(crate) fn unstack<L: Layout>(
     game: &mut Game<'_, L>,
     objects: Bitboard<L::Slot>,
@@ -47,7 +47,7 @@ pub(crate) fn unstack<L: Layout>(
     for slot in game.state.in_candidate_order(spells) {
         let spell = game.state.object_ref(slot);
         let taken = game.state.take_off_stack(game.sink, spell).is_some();
-        if taken && event::exiled_instead(game.state, spell, to) {
+        if taken && crate::replace::exiled_instead(game.state, spell, to) {
             flashback.insert(slot);
         }
     }

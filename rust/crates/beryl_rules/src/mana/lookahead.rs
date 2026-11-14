@@ -2,8 +2,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, AbilityKind, CostAction, Face, Keywords, ManaCost, Replacement, Timing,
-    Types,
+    Ability, AbilityIx, AbilityKind, CostAction, Face, Keywords, ManaCost, Rewrite, Timing, Types,
 };
 use crate::fixed::Full;
 use crate::ids::Seat;
@@ -171,11 +170,11 @@ fn instant_speed<L: Layout>(s: &State<L>, t: &GameTable, face: &Face, player: Se
 fn enters_untapped<L: Layout>(s: &State<L>, player: Seat, face: &Face) -> bool {
     face.abilities
         .iter()
-        .filter(|a| a.kind() == AbilityKind::Replacement)
-        .all(|a| match a.replacement() {
-            Replacement::EntersTapped => false,
-            Replacement::EntersTappedUnlessFewLands(n) => {
-                // As [`event`] counts them: every land is another land.
+        .filter_map(Ability::replacement)
+        .all(|r| match r.rewrite {
+            Rewrite::EntersTapped => false,
+            Rewrite::EntersTappedUnlessFewLands(n) => {
+                // As [`crate::replace::entering`] counts them: every land is another land.
                 s.battlefield()
                     .iter()
                     .filter(|&&p| {

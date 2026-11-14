@@ -165,18 +165,20 @@ const fn face(abilities: &'static [Ability]) -> Face {
 /// "If you would draw a card, you lose the game instead": no condition, and a loss.
 static DOOM: CardDef = CardDef {
     name: "Test Doom",
-    faces: &[face(&[
-        Ability::replacing(Replacement::WouldDraw).effect(&lose_game(you()))
-    ])],
+    faces: &[face(&[Ability::replacing(&Replacement::draws(
+        Players::You,
+    ))
+    .effect(&lose_game(you()))])],
     tokens: &[],
 };
 
 /// "If you would draw a card, each opponent wins the game instead."
 static GIFT: CardDef = CardDef {
     name: "Test Gift",
-    faces: &[face(&[
-        Ability::replacing(Replacement::WouldDraw).effect(&win_game(Players::EachOpponent))
-    ])],
+    faces: &[face(&[Ability::replacing(&Replacement::draws(
+        Players::You,
+    ))
+    .effect(&win_game(Players::EachOpponent))])],
     tokens: &[],
 };
 
@@ -184,9 +186,10 @@ static GIFT: CardDef = CardDef {
 /// ending the game.
 static WINDFALL: CardDef = CardDef {
     name: "Test Windfall",
-    faces: &[face(&[
-        Ability::replacing(Replacement::WouldDraw).effect(&draw(you(), 2))
-    ])],
+    faces: &[face(&[Ability::replacing(&Replacement::draws(
+        Players::You,
+    ))
+    .effect(&draw(you(), 2))])],
     tokens: &[],
 };
 
@@ -194,8 +197,10 @@ static WINDFALL: CardDef = CardDef {
 /// no target.
 static FAVOR: CardDef = CardDef {
     name: "Test Favor",
-    faces: &[face(&[Ability::replacing(Replacement::WouldDraw)
-        .effect(&Effect::WinGame(Players::Target(SpecIx::new(0))))])],
+    faces: &[face(&[Ability::replacing(&Replacement::draws(
+        Players::You,
+    ))
+    .effect(&Effect::WinGame(Players::Target(SpecIx::new(0))))])],
     tokens: &[],
 };
 

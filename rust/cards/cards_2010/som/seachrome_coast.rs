@@ -15,7 +15,7 @@ use crate::prelude::*;
 /// [CR 614.1d]: https://yawgatog.com/resources/magic-rules/#R6141d
 pub static CARD: CardDef = Printed::SeachromeCoast
     .abilities(&[
-        Ability::replacing(Replacement::EntersTappedUnlessFewLands(2)),
+        Ability::replacing(&Replacement::enters_tapped_unless_few_lands(2)),
         Ability::tap_for_mana(ManaSet::one(ManaColor::White)),
         Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
     ])

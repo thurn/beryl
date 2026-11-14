@@ -6,6 +6,18 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- A replacement of an opponent's draws ("If an opponent would draw a card, you
+  win the game instead") would have made the drawing player win. What happens
+  instead of a draw names players such as "you", and `drawing::draw` read them
+  for the player drawing, which was right only while a draw replacement could
+  replace nothing but its own controller's draws. Widening `Replaced::Draw` to
+  name whose draws it replaces broke that unstated assumption; a unit test for
+  the new case found it before it landed. Prevention: `replace::draw` returns
+  the replacement's controller beside what happens instead, so the reader of
+  those players has the right player in hand and no other to choose. A function
+  that reads `Players` should take the player they are read for from the source
+  of the ability, never from the event it is about.
+
 - Five card definitions did less than their Oracle text said, and every check
   passed. Thieving Skydiver stole an Equipment without attaching it to itself
   ([CR 701.3a](https://yawgatog.com/resources/magic-rules/#R7013a)): its comment

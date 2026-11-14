@@ -255,7 +255,7 @@ static RECLUSE: CardDef = CardDef {
     name: "Test Recluse",
     faces: &[Face {
         types: Types::LAND,
-        abilities: &[Ability::replacing(Replacement::EntersTapped).in_graveyard()],
+        abilities: &[Ability::replacing(&Replacement::ENTERS_TAPPED).in_graveyard()],
         ..Face::EMPTY
     }],
     tokens: &[],

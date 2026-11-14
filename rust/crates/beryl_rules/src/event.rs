@@ -4,8 +4,7 @@
 //! A primitive performs its mutation through here: zone changes get replacement effects,
 //! look-back trigger matching with last-known information, execution, a layer refresh, then
 //! trigger matching and the sink; every other event is executed by its primitive and then
-//! [`settle`]d the same way. The other implemented replacement and prevention effects (damage,
-//! most draws) arrive with the cards that create them.
+//! [`settle`]d the same way. The replacement effects are applied by [`replace`].
 
 pub use beryl_kernel::cause::{Cause, StackIx, Tag};
 pub use beryl_kernel::event::{
@@ -17,16 +16,13 @@ pub use crate::tokens::TokenEntry;
 use beryl_kernel::mutate::Arrival;
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityIx, AbilityKind, CastingKinds, FaceIx, Replacement, Types};
+use crate::card::{CastingKinds, FaceIx};
 use crate::fixed::Full;
-use crate::game::Game;
 use crate::ids::Seat;
 use crate::layers;
 use crate::layout::{Layout, Queue, Small};
-use crate::life;
-use crate::state::{
-    AbilityMask, CounterKind, Memo, MoveReplacement, ObjectRef, State, Tracker, Zone,
-};
+use crate::replace;
+use crate::state::{CounterKind, Memo, ObjectRef, State, Tracker, Zone};
 use crate::table::GameTable;
 use crate::trigger;
 use crate::zone::Place;
@@ -124,7 +120,10 @@ pub(crate) fn move_one<L: Layout>(
 
 /// Moves a set of objects to one zone simultaneously, through the whole pipeline (§8.2).
 ///
-/// 1. Replacement effects decide each object's destination and how a permanent enters.
+/// 1. Each move is proposed ([`replace::Move`]), and replacement effects decide the object's
+///    destination and how a permanent enters ([`replace::moving`]). The events are those of
+///    the moves as replaced, so a creature exiled instead of being put into a graveyard did
+///    not die.
 /// 2. Leaves-the-battlefield abilities look back in time
 ///    ([CR 603.10a](https://yawgatog.com/resources/magic-rules/#R60310a)): they are matched
 ///    against the objects as they were, before any of the batch moves, with last-known
@@ -169,6 +168,9 @@ pub(crate) fn move_batch_to<L: Layout>(
     entry: Entry<L>,
 ) -> Result<(), Full> {
     layers::refresh(s, t, sink)?;
+    // Each move as replaced: the object, where it was, where it goes and how it enters. A
+    // tuple rather than a `replace::Move`: the queue is filled with defaults first, and
+    // filling it with `replace::Move`s cost the rollout benchmark 1% more instructions.
     let mut moves: L::Queue<(L::Slot, Zone, Zone, Entry<L>), 128> = Default::default();
     let mut returning = Bitboard::EMPTY;
     for &slot in s.in_game_order(t, objects)?.as_slice() {
@@ -179,13 +181,15 @@ pub(crate) fn move_batch_to<L: Layout>(
         if o.is_token() && !matches!(o.zone(), Zone::Battlefield | Zone::Nowhere) {
             continue;
         }
-        let dest = destination(s, slot, to);
-        let entry = if dest == Zone::Battlefield {
-            enter_replacements(s, t, slot, entry)?
-        } else {
-            entry
+        let from = o.zone();
+        let proposal = replace::Move {
+            slot,
+            from,
+            to,
+            entry,
         };
-        moves.push((slot, o.zone(), dest, entry))?;
+        let m = replace::moving(s, t, proposal)?;
+        moves.push((m.slot, m.from, m.to, m.entry))?;
         if o.zone() == Zone::Battlefield {
             returning |= s.exiled_until(slot);
         }
@@ -218,7 +222,7 @@ pub(crate) fn move_batch_to<L: Layout>(
     for each in moves.iter() {
         let &(slot, from, dest, entry) = each;
         if dest == Zone::Battlefield && entry.pay_life {
-            pay_life_to_enter(s, t, sink, slot, entry)?;
+            replace::pay_life_to_enter(s, t, sink, slot, entry)?;
         }
         s.move_object(sink, slot, dest, place)?;
         if dest == Zone::Battlefield {
@@ -254,158 +258,6 @@ pub(crate) fn move_batch_to<L: Layout>(
         returned?;
     }
     Ok(())
-}
-
-/// Whether `object`, about to move to `to`, is exiled instead by a replacement effect on
-/// it: "exile it instead" of a graveyard, or a flashback cost's, which is on the spell
-/// alone and exiles it wherever else it would go
-/// ([CR 702.34a](https://yawgatog.com/resources/magic-rules/#R70234a): "If the flashback
-/// cost was paid, exile this card instead of putting it anywhere else any time it would
-/// leave the stack."). With no such effect on any object it is one AND.
-pub(crate) fn exiled_instead<L: Layout>(s: &State<L>, object: ObjectRef<L>, to: Zone) -> bool {
-    s.move_replacements(object).any(|r| match r {
-        MoveReplacement::ExileInsteadOfGraveyard => to == Zone::Graveyard,
-        MoveReplacement::Flashback => true,
-    })
-}
-
-/// Where an object actually goes after the replacement effects on it
-/// ([`exiled_instead`]). Each sends it to exile, and no two of them can apply to one event
-/// differently, so the ordering of [CR 616.1](https://yawgatog.com/resources/magic-rules/#R6161)
-/// never becomes a choice.
-fn destination<L: Layout>(s: &State<L>, slot: L::Slot, to: Zone) -> Zone {
-    if exiled_instead(s, s.object_ref(slot), to) {
-        Zone::Exile
-    } else {
-        to
-    }
-}
-
-/// Applies the permanent's own replacement effects that modify how it enters (CR 614.12):
-/// they "check the characteristics of the permanent as it would exist on the battlefield".
-/// One it would not have there does not apply ([`layers::lost_entering`]): under an effect
-/// that makes nonbasic lands Mountains, a land that would enter tapped unless its controller
-/// paid life enters untapped, and no life is paid. They are self-replacement effects of a
-/// kind that never conflict, so each applies in turn. Then the planeswalker's intrinsic one
-/// ([CR 306.5b](https://yawgatog.com/resources/magic-rules/#R3065b)): "A planeswalker has the
-/// intrinsic ability 'This permanent enters with a number of loyalty counters on it equal to
-/// its printed loyalty number.'"
-fn enter_replacements<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    slot: L::Slot,
-    mut entry: Entry<L>,
-) -> Result<Entry<L>, Full> {
-    let o = s.object(slot);
-    let face = s.copiable(slot).turned(entry.face).face(t);
-    let controller = entry.controller.unwrap_or(o.owner());
-    // Found at the first replacement of entering: most permanents have none.
-    let mut lost = None;
-    let mut pays_life = false;
-    for (n, ability) in face.abilities.iter().enumerate() {
-        if ability.kind() != AbilityKind::Replacement
-            // Not about entering: the draw machinery reads it.
-            || matches!(ability.replacement(), Replacement::None | Replacement::WouldDraw)
-        {
-            continue;
-        }
-        let lost = match lost {
-            Some(lost) => lost,
-            None => *lost.insert(layers::lost_entering(s, t, slot, entry, face)?),
-        };
-        if lost.contains(AbilityIx::new(n as u8)) {
-            continue;
-        }
-        match ability.replacement() {
-            Replacement::None | Replacement::WouldDraw => continue,
-            Replacement::EntersTapped => entry.tapped = true,
-            Replacement::EntersTappedUnlessFewLands(n) => {
-                // Not yet on the battlefield, so every land counted is another land.
-                let lands = s
-                    .battlefield()
-                    .iter()
-                    .filter(|&&p| {
-                        let d = s.derived(p);
-                        d.controller == controller && d.types.contains(Types::LAND)
-                    })
-                    .count();
-                if lands > usize::from(n) {
-                    entry.tapped = true;
-                }
-            }
-            Replacement::EntersTappedUnlessPayLife(_) => {
-                pays_life = entry.pay_life;
-                if !entry.pay_life {
-                    entry.tapped = true;
-                }
-            }
-        }
-        crate::coverage::hit(ability);
-    }
-    // Life is paid only to an ability that applied.
-    entry.pay_life = pays_life;
-    if let Some(loyalty) = face.loyalty {
-        entry.counters = Some((CounterKind::Loyalty, loyalty));
-    }
-    Ok(entry)
-}
-
-/// Pays the life an "unless you pay N life" entering replacement asks for
-/// ([CR 119.4](https://yawgatog.com/resources/magic-rules/#R1194)): "If a player pays life,
-/// the payment is subtracted from their life total; in other words, the player loses that
-/// much life."
-fn pay_life_to_enter<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    slot: L::Slot,
-    entry: Entry<L>,
-) -> Result<(), Full> {
-    let o = s.object(slot);
-    let face = s.copiable(slot).turned(entry.face).face(t);
-    let player = entry.controller.unwrap_or(o.owner());
-    for (i, ability) in face.abilities.iter().enumerate() {
-        if let Replacement::EntersTappedUnlessPayLife(n) = ability.replacement()
-            && s.has_ability(slot, AbilityIx::new(i as u8))
-        {
-            // The life is lost to the permanent's own replacement effect
-            // ([CR 614.1c](https://yawgatog.com/resources/magic-rules/#R6141c): "Effects that
-            // read ... "As [this permanent] enters . . . ," ... are replacement effects."),
-            // not to whatever puts the permanent onto the battlefield.
-            sink.enter_source(|| s.object_ref(slot));
-            let lost = life::lose(&mut Game::new(s, t, sink), player, n);
-            sink.leave();
-            lost?;
-        }
-    }
-    Ok(())
-}
-
-/// The life an entering replacement of the object in `slot` asks for as it enters as
-/// `entry` says, if any: none when the object would not have that ability on the
-/// battlefield ([`layers::lost_entering`], CR 614.12).
-///
-/// [`Full`] if finding what it would have ran out of room.
-pub(crate) fn life_to_enter<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    slot: L::Slot,
-    entry: Entry<L>,
-) -> Result<Option<u8>, Full> {
-    let face = s.copiable(slot).turned(entry.face).face(t);
-    let Some((n, life)) =
-        face.abilities
-            .iter()
-            .enumerate()
-            .find_map(|(n, a)| match a.replacement() {
-                Replacement::EntersTappedUnlessPayLife(life) => Some((n, life)),
-                _ => None,
-            })
-    else {
-        return Ok(None);
-    };
-    let lost = layers::lost_entering(s, t, slot, entry, face)?;
-    Ok((!lost.contains(AbilityIx::new(n as u8))).then_some(life))
 }
 
 /// Taps or untaps a permanent.

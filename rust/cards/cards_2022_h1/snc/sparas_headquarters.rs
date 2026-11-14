@@ -20,7 +20,7 @@ pub static CARD: CardDef = Printed::SparasHeadquarters
         Ability::tap_for_mana(ManaSet::one(ManaColor::Green)),
         Ability::tap_for_mana(ManaSet::one(ManaColor::White)),
         Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
-        Ability::replacing(Replacement::EntersTapped),
+        Ability::replacing(&Replacement::ENTERS_TAPPED),
         Ability::cycling(mana("{3}")),
     ])
     .card();

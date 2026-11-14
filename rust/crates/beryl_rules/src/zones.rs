@@ -51,7 +51,7 @@ pub fn move_all<L: Layout>(
 }
 
 /// Returns a spell or a permanent to its owner's hand (CR 400.3). A spell leaves the stack
-/// without resolving, or is exiled instead ([`event::exiled_instead`]).
+/// without resolving, or is exiled instead ([`crate::replace::exiled_instead`]).
 pub fn return_to_hand<L: Layout>(game: &mut Game<'_, L>, object: ObjectRef<L>) -> Result<(), Full> {
     if !game.state.is_current(object) {
         return Ok(());

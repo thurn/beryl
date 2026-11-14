@@ -225,8 +225,9 @@ pub struct Ability {
     /// only if it is; otherwise it does nothing. If the ability triggers, it checks the
     /// stated condition again as it resolves."
     condition: Option<&'static Condition>,
-    /// Replacement abilities: the event they modify.
-    replacement: Replacement,
+    /// Replacement abilities: what they replace and how. Held by reference, as the trigger
+    /// is: a [`Replacement`] may name a filter.
+    replacement: Option<&'static Replacement>,
     /// Static abilities: the continuous effect they generate on the battlefield. Held by
     /// reference, as the trigger is: a [`LayerSpec`] names objects and a condition.
     layer: Option<&'static LayerSpec>,
@@ -268,7 +269,7 @@ impl Ability {
             body: Behavior::Data(&Effect::NOTHING),
             trigger: None,
             condition: None,
-            replacement: Replacement::None,
+            replacement: None,
             layer: None,
             rule: None,
             only_if_you_control: None,
@@ -362,9 +363,9 @@ impl Ability {
     }
 
     /// A static ability creating a replacement effect.
-    pub const fn replacing(replacement: Replacement) -> Ability {
+    pub const fn replacing(replacement: &'static Replacement) -> Ability {
         Ability {
-            replacement,
+            replacement: Some(replacement),
             ..Ability::of(AbilityKind::Replacement)
         }
     }
@@ -643,9 +644,10 @@ impl Ability {
         self.condition
     }
 
-    /// A replacement ability: the event it modifies.
+    /// A replacement ability: what it replaces and how; `None` for an ability of another
+    /// kind.
     #[inline]
-    pub const fn replacement(&self) -> Replacement {
+    pub const fn replacement(&self) -> Option<&'static Replacement> {
         self.replacement
     }
 
@@ -770,7 +772,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "only a spell, activated or triggered ability has targets")]
     fn a_replacement_with_targets_is_refused() {
-        let _ = Ability::replacing(Replacement::EntersTapped).targeting(&[]);
+        let _ = Ability::replacing(&Replacement::ENTERS_TAPPED).targeting(&[]);
     }
 
     #[test]

@@ -22,6 +22,7 @@ mod many_layers;
 mod mulligan;
 mod payment;
 mod regeneration;
+mod replace;
 mod replay;
 mod rules;
 mod static_abilities;

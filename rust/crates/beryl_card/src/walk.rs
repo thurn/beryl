@@ -4,7 +4,7 @@
 
 use crate::ability::{Ability, Behavior};
 use crate::characteristics::Subtypes;
-use crate::continuous::{Governed, LayerSpec, Modification};
+use crate::continuous::{Governed, LayerSpec, Modification, Replaced};
 use crate::cost::{Cost, CostPart};
 use crate::definition::CardDef;
 use crate::effect::{Amount, Condition, Effect, Objects, Players};
@@ -142,8 +142,8 @@ impl Ability {
 
     /// Calls `visit` with every filter, amount and condition of the ability: what it may
     /// target, what pays its cost, what triggers it, what it needs to be activated, its
-    /// conditions, its continuous effect, the rule change it names and its effect data. A
-    /// Rust body holds none anything can read.
+    /// conditions, its continuous effect, what it replaces, the rule change it names and its
+    /// effect data. A Rust body holds none anything can read.
     pub fn walk(&self, visit: Visit) {
         for spec in self.targets() {
             spec.filter.walk(visit);
@@ -162,6 +162,11 @@ impl Ability {
         }
         if let Some(layer) = self.layer() {
             layer.walk(visit);
+        }
+        match self.replacement().map(|r| &r.replaces) {
+            Some(Replaced::Draw(players)) => players.walk(visit),
+            Some(Replaced::PutInto(filter, _)) => filter.walk(visit),
+            Some(Replaced::None | Replaced::ThisEnters) | None => {}
         }
         if let Some(rule) = self.rule() {
             rule.players.walk(visit);

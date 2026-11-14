@@ -96,8 +96,10 @@ impl std::ops::BitOrAssign for Listens {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum ReplacementKind {
-    /// Its controller's draws (`beryl_card`'s `Replacement::WouldDraw`).
+    /// Draws (`beryl_card`'s `Replaced::Draw`).
     Draw,
+    /// An object being put into a zone (`beryl_card`'s `Replaced::PutInto`).
+    Move,
 }
 
 /// What a card's static abilities do that the layers' pass over the battlefield collects:

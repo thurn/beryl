@@ -41,7 +41,7 @@ pub static CARD: CardDef = Printed::JaceWielderOfMysteries
         // A replacement effect ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)):
         // "Effects that use the word 'instead' are replacement effects." The draw
         // machinery offers it each draw, an empty library or not (CR 614.11).
-        Ability::replacing(Replacement::WouldDraw)
+        Ability::replacing(&Replacement::draws(Players::You))
             .only_if(&LIBRARY_IS_EMPTY)
             .effect(&YOU_WIN),
         Ability::loyalty(1)

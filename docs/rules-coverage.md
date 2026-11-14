@@ -306,15 +306,15 @@ then counters (7c), then the rules static abilities change (CR 613.11)
   copies the state, moves the entering object onto the battlefield in the copy
   as its entry says, and runs the recompute there, so every effect finds the
   object as it finds any permanent and the real state is never changed. The
-  replacement pipeline (`event::enter_replacements`, `event::life_to_enter`)
-  asks for it only for an object whose face has a replacement of its entering,
-  and only when an effect in force removes abilities or the face has a static
-  ability of its own (`layers::entering::lost_entering`), so other games pay one
-  flag test. Under Blood Moon a land that would ask for life as it enters is a
-  Mountain with no such ability, and enters untapped. A recompute over the
-  battlefield's rows plus one scratch row was the first design; it would have
-  needed every filter and layer read to know about a row that is not a
-  permanent, and the copy costs nothing in a game that never asks.
+  replacement pipeline (`replace::entering`, `replace::life_to_enter`) asks for
+  it only for an object whose face has a replacement of its entering, and only
+  when an effect in force removes abilities or the face has a static ability of
+  its own (`layers::entering::lost_entering`), so other games pay one flag test.
+  Under Blood Moon a land that would ask for life as it enters is a Mountain
+  with no such ability, and enters untapped. A recompute over the battlefield's
+  rows plus one scratch row was the first design; it would have needed every
+  filter and layer read to know about a row that is not a permanent, and the
+  copy costs nothing in a game that never asks.
 - **What makes the cache stale.** `layers::counters_matter` is one case of a
   general fact: a characteristic-defining ability reads something no layer
   writes, as Tarmogoyf reads the graveyards. Each card's abilities declare such
@@ -386,6 +386,32 @@ proposal, a filter over it, a class from CR 616.1 and a rewrite.
 
 Counters and tokens are proposals of the same form with no keystone here. They
 are built with their first card.
+
+Built so far (by-bajq.3.1):
+
+- `beryl_card::Replacement` is a product of what it replaces (`Replaced`: this
+  permanent entering, a draw by some players, an object a filter accepts being
+  put into a zone) and a rewrite (`Rewrite`). An `Ability` holds it by
+  reference, as it holds its trigger, so `Ability` keeps its power-of-two size.
+  `replacement::check` in the kernel accepts only the pairs the rules have code
+  for, and the card table refuses the rest. Optional replacements and
+  replacements that work outside the battlefield are refused until the choice of
+  CR 616.1 is built.
+- `beryl_rules/src/replace.rs` holds every replacement. A move is proposed as
+  `replace::Move` (object, from, to, how it enters); `replace::moving` decides
+  where it goes, collecting the Effects store's move entries and the static
+  abilities of permanents (gated by `ReplacementKind::Move` in the layers' mask)
+  and applying candidates until none is left (CR 616.1f). Candidates that put
+  the object into the same zone are one. A self-replacement effect is applied by
+  the instruction that proposes the move, so the loop needs no class of its own
+  for it, and no rewrite of a move belongs to CR 616.1b to 616.1d yet. Where two
+  candidates differ, a `debug_assert` marks the choice that by-bajq.3.2 builds.
+  The entering object's own replacements are applied after its destination is
+  settled: they only change how it enters and never conflict with one another or
+  with a change of destination.
+- A draw keeps `drawing::draw`'s loop of single draws and asks `replace::draw`
+  before each. Damage gets its proposal with prevention (by-bajq.3.9), the first
+  replacement of damage.
 
 ### 4. Characteristics in every zone, and text
 

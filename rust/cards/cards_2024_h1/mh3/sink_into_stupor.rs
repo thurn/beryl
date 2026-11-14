@@ -36,7 +36,7 @@ pub static CARD: CardDef = card(
             ))
             .effect(&return_to_hand(target()))]),
         Printed::SoporificSprings.abilities(&[
-            Ability::replacing(Replacement::EntersTappedUnlessPayLife(3)),
+            Ability::replacing(&Replacement::enters_tapped_unless_pay_life(3)),
             Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
         ]),
     ],

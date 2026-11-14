@@ -1,0 +1,419 @@
+//! Replacement effects ([CR 614.1]): "Such effects watch for a particular event that would
+//! happen and completely or partially replace that event with a different event."
+//!
+//! Each replaceable happening is decided here before the state changes: where an object that
+//! is about to move goes and how a permanent enters ([`moving`]), and what happens instead of a
+//! card drawn ([`draw`]). The caller then performs what is decided, so the
+//! event that was replaced never happens and nothing triggers on it ([CR 614.6]): "If an event
+//! is replaced, it never happens. A modified event occurs instead, which may in turn trigger
+//! abilities." A creature exiled instead of being put into a graveyard did not die.
+//!
+//! The replacements come from three places: an entry of the Effects store on the object
+//! ([`MoveReplacement`]), a static ability of a permanent ([`Replaced`]), and the entering
+//! object's own abilities. The card table holds only replacements this module has code for
+//! ([`crate::replacement::check`]).
+//!
+//! [CR 614.1]: https://yawgatog.com/resources/magic-rules/#R6141
+//! [CR 614.6]: https://yawgatog.com/resources/magic-rules/#R6146
+
+use crate::card::{AbilityIx, AbilityKind, FaceAbility, Replaced, Replacement, Rewrite, Types};
+use crate::event::{Entry, LossCause, ReplacementKind, Sink};
+use crate::filter::{self, Evaluate};
+use crate::fixed::{Fixed, Full};
+use crate::game::Game;
+use crate::ids::Seat;
+use crate::layers;
+use crate::layout::Layout;
+use crate::life;
+use crate::replacement::{self, Instead};
+use crate::state::{AbilityMask, CounterKind, MoveReplacement, ObjectRef, State, Zone};
+use crate::table::GameTable;
+use crate::{interpret, trigger};
+
+/// A move proposed for one object of a batch, before the state changes: the proposal the
+/// replacement effects of a move rewrite ([`moving`]). Where in a library it goes and why it
+/// moves are the same for the whole batch, and are kept by the batch.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Move<L: Layout> {
+    pub slot: L::Slot,
+    pub from: Zone,
+    pub to: Zone,
+    /// How it enters, if it is put onto the battlefield.
+    pub entry: Entry<L>,
+}
+
+/// Applies the replacement effects of a move to `proposal`: where the object goes
+/// ([`destination`]), then, for a permanent that enters, how it enters ([`entering`]).
+#[inline]
+pub(crate) fn moving<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    mut proposal: Move<L>,
+) -> Result<Move<L>, Full> {
+    proposal.to = destination(s, t, proposal.slot, proposal.to)?;
+    if proposal.to == Zone::Battlefield {
+        proposal.entry = entering(s, t, proposal.slot, proposal.entry)?;
+    }
+    Ok(proposal)
+}
+
+/// A replacement effect that applies to a move, by where it comes from: what [CR 614.5] counts
+/// as having applied. "A replacement effect doesn't invoke itself repeatedly; it gets only one
+/// opportunity to affect an event or any modified events that may replace that event."
+///
+/// [CR 614.5]: https://yawgatog.com/resources/magic-rules/#R6145
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Source<S> {
+    /// An entry of the Effects store on the moving object.
+    Effect(MoveReplacement),
+    /// A static ability of a permanent.
+    Ability(S, AbilityIx),
+}
+
+/// The most replacements one move can meet: the scratch lists of [`destination`] hold this
+/// many.
+const MOST: usize = 16;
+
+/// The zone the object in `slot`, about to be put into `to`, goes to after the replacement
+/// effects that apply to it, read while the layer results are current.
+///
+/// Applying them follows [CR 616.1]: "If two or more replacement and/or prevention effects are
+/// attempting to modify the way an event affects an object or player, the affected object's
+/// controller (or its owner if it has no controller) or the affected player chooses one to
+/// apply". The effects that apply and have not applied are collected, one is applied, and
+/// they are collected again ([CR 616.1f]): "Once the chosen effect has been applied, this
+/// process is repeated (taking into account only replacement or prevention effects that would
+/// now be applicable) until there are no more left to apply."
+///
+/// Effects that would put the object into the same zone are one candidate, applied together:
+/// which of two Rest in Peace exiles a card makes no difference. A self-replacement effect
+/// ([CR 616.1a]), such as "counter it; if it is countered this way, exile it instead", was
+/// applied by the instruction that asked for the move, before it got here. No replacement of a
+/// move changes control, copies or turns a face (CR 616.1b to 616.1d), so every candidate here
+/// is of [CR 616.1e]: "Any of the applicable replacement and/or prevention effects may be
+/// chosen." Where two candidates differ, they are applied in the order they are found, which
+/// no card of a game makes happen yet.
+///
+/// With no replacement of a move on the battlefield or on the object, it is one AND and an
+/// empty search of the Effects store.
+///
+/// [`Full`] past [`MOST`] replacements.
+///
+/// [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
+/// [CR 616.1f]: https://yawgatog.com/resources/magic-rules/#R6161f
+/// [CR 616.1a]: https://yawgatog.com/resources/magic-rules/#R6161a
+/// [CR 616.1e]: https://yawgatog.com/resources/magic-rules/#R6161e
+#[inline]
+fn destination<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    to: Zone,
+) -> Result<Zone, Full> {
+    let statics = s
+        .replacing()
+        .is_some_and(|r| r.replaces(ReplacementKind::Move));
+    if !statics && s.move_replacements(s.object_ref(slot)).next().is_none() {
+        return Ok(to);
+    }
+    replaced_destination(s, t, slot, to, statics)
+}
+
+/// [`destination`] once some replacement of a move may apply: the loop of CR 616.1.
+#[inline(never)]
+fn replaced_destination<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    mut to: Zone,
+    statics: bool,
+) -> Result<Zone, Full> {
+    let object = s.object_ref(slot);
+    let mut applied: Fixed<Option<Source<L::Slot>>, MOST> = Fixed::new();
+    loop {
+        let mut found: Fixed<Option<(Source<L::Slot>, Zone)>, MOST> = Fixed::new();
+        let mut add = |source, instead| {
+            if applied.as_slice().contains(&Some(source)) {
+                Ok(())
+            } else {
+                found.push(Some((source, instead)))
+            }
+        };
+        for r in s.move_replacements(object) {
+            if let Some(instead) = effect_destination(r, to) {
+                add(Source::Effect(r), instead)?;
+            }
+        }
+        if statics {
+            for (permanent, ability, instead) in static_destinations(s, t, slot, to) {
+                add(Source::Ability(permanent, ability), instead)?;
+            }
+        }
+        let Some(&Some((_, instead))) = found.as_slice().first() else {
+            return Ok(to);
+        };
+        debug_assert!(
+            found.iter().flatten().all(|&(_, zone)| zone == instead),
+            "the affected player would choose between replacements putting it into different zones"
+        );
+        for &(source, zone) in found.iter().flatten() {
+            if zone == instead {
+                applied.push(Some(source))?;
+            }
+        }
+        to = instead;
+    }
+}
+
+/// Where an entry of the Effects store puts an object that would be put into `to`, if it
+/// applies: "exile it instead" of a graveyard, or a flashback cost's, which exiles the spell
+/// wherever else it would go ([CR 702.34a]): "If the flashback cost was paid, exile this card
+/// instead of putting it anywhere else any time it would leave the stack."
+///
+/// [CR 702.34a]: https://yawgatog.com/resources/magic-rules/#R70234a
+fn effect_destination(r: MoveReplacement, to: Zone) -> Option<Zone> {
+    let applies = match r {
+        MoveReplacement::ExileInsteadOfGraveyard => to == Zone::Graveyard,
+        MoveReplacement::Flashback => to != Zone::Exile,
+    };
+    applies.then_some(Zone::Exile)
+}
+
+/// The static abilities of permanents that replace the object in `slot` being put into `to`,
+/// each with the zone it goes to instead, in the order of the battlefield: "If a card or token
+/// would be put into a graveyard from anywhere, exile it instead." The filter is read for the
+/// permanent's controller.
+fn static_destinations<'a, L: Layout>(
+    s: &'a State<L>,
+    t: &'a GameTable,
+    slot: L::Slot,
+    to: Zone,
+) -> impl Iterator<Item = (L::Slot, AbilityIx, Zone)> + 'a {
+    s.battlefield()
+        .iter()
+        .filter(move |&&p| s.copiable(p).may_replace(t).replaces(ReplacementKind::Move))
+        .flat_map(move |&p| {
+            let controller = s.controller(p);
+            (0u8..)
+                .zip(trigger::face(s, t, p).abilities)
+                .filter_map(move |(index, a)| {
+                    let Some(&Replacement {
+                        replaces: Replaced::PutInto(objects, zone),
+                        rewrite: Rewrite::ToZone(instead),
+                    }) = a.replacement()
+                    else {
+                        return None;
+                    };
+                    let ability = AbilityIx::new(index);
+                    let applies = a.kind() == AbilityKind::Replacement
+                        && zone == to
+                        && s.has_ability(p, ability)
+                        && interpret::static_condition_holds(s, t, p, ability, a)
+                        && objects.matches(s, t, slot, controller);
+                    if !applies {
+                        return None;
+                    }
+                    crate::coverage::hit(a);
+                    Some((p, ability, instead))
+                })
+        })
+}
+
+/// What happens instead of `player`'s next draw, the ability that says so and that
+/// permanent's controller, for whom the players it names are read, if a permanent replaces it
+/// now: the first, in the order of the battlefield, whose condition
+/// holds. It replaces a draw from an empty library too ([CR 614.11]): "Some effects replace
+/// card draws. These effects are applied even if no cards could be drawn because there are no
+/// cards in the affected player's library."
+///
+/// [CR 614.11]: https://yawgatog.com/resources/magic-rules/#R61411
+pub(crate) fn draw<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+) -> Option<(Instead, LossCause<L>, Seat)> {
+    s.battlefield()
+        .iter()
+        .filter(|&&slot| {
+            s.copiable(slot)
+                .may_replace(t)
+                .replaces(ReplacementKind::Draw)
+        })
+        .find_map(|&slot| {
+            let controller = s.controller(slot);
+            let source = Some(s.object_ref(slot));
+            let (card, face) = s.copiable(slot).record(t);
+            let abilities = trigger::face(s, t, slot).abilities;
+            (0u8..).zip(abilities).find_map(|(index, a)| {
+                let ability = AbilityIx::new(index);
+                let Some(&Replacement {
+                    replaces: Replaced::Draw(players),
+                    ..
+                }) = a.replacement()
+                else {
+                    return None;
+                };
+                if !replacement::replaces_draws(a)
+                    || !filter::is_for(&players, player, controller)
+                    || !s.has_ability(slot, ability)
+                    || !interpret::static_condition_holds(s, t, slot, ability, a)
+                {
+                    return None;
+                }
+                crate::coverage::hit(a);
+                // The card table has only draw replacements the engine can do.
+                let instead = replacement::instead_of_drawing(a).ok()?;
+                let ability = Some(FaceAbility::Own(ability));
+                Some((
+                    instead,
+                    LossCause::Effect {
+                        source,
+                        card,
+                        face,
+                        ability,
+                    },
+                    controller,
+                ))
+            })
+        })
+}
+
+/// Applies the permanent's own replacement effects that modify how it enters (CR 614.12):
+/// they "check the characteristics of the permanent as it would exist on the battlefield".
+/// One it would not have there does not apply ([`layers::lost_entering`]): under an effect
+/// that makes nonbasic lands Mountains, a land that would enter tapped unless its controller
+/// paid life enters untapped, and no life is paid. Each changes only how it enters and none
+/// conflicts with another, so each applies in turn. Then the planeswalker's intrinsic one
+/// ([CR 306.5b]): "A planeswalker has the intrinsic ability 'This permanent enters with a
+/// number of loyalty counters on it equal to its printed loyalty number.'"
+///
+/// [CR 306.5b]: https://yawgatog.com/resources/magic-rules/#R3065b
+fn entering<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    mut entry: Entry<L>,
+) -> Result<Entry<L>, Full> {
+    let o = s.object(slot);
+    let face = s.copiable(slot).turned(entry.face).face(t);
+    let controller = entry.controller.unwrap_or(o.owner());
+    // Found at the first replacement of entering: most permanents have none.
+    let mut lost = None;
+    let mut pays_life = false;
+    for (n, ability) in face.abilities.iter().enumerate() {
+        let Some(replacement) = ability.replacement() else {
+            continue;
+        };
+        if replacement.replaces != Replaced::ThisEnters {
+            continue;
+        }
+        let lost = match lost {
+            Some(lost) => lost,
+            None => *lost.insert(layers::lost_entering(s, t, slot, entry, face)?),
+        };
+        if lost.contains(AbilityIx::new(n as u8)) {
+            continue;
+        }
+        match replacement.rewrite {
+            Rewrite::EntersTapped => entry.tapped = true,
+            Rewrite::EntersTappedUnlessFewLands(n) => {
+                // Not yet on the battlefield, so every land counted is another land.
+                let lands = s
+                    .battlefield()
+                    .iter()
+                    .filter(|&&p| {
+                        let d = s.derived(p);
+                        d.controller == controller && d.types.contains(Types::LAND)
+                    })
+                    .count();
+                if lands > usize::from(n) {
+                    entry.tapped = true;
+                }
+            }
+            Rewrite::EntersTappedUnlessPayLife(_) => {
+                pays_life = entry.pay_life;
+                if !entry.pay_life {
+                    entry.tapped = true;
+                }
+            }
+            // The card table holds no other rewrite of entering.
+            Rewrite::None | Rewrite::ToZone(_) | Rewrite::Instead => continue,
+        }
+        crate::coverage::hit(ability);
+    }
+    // Life is paid only to an ability that applied.
+    entry.pay_life = pays_life;
+    if let Some(loyalty) = face.loyalty {
+        entry.counters = Some((CounterKind::Loyalty, loyalty));
+    }
+    Ok(entry)
+}
+
+/// The life an "unless you pay N life" replacement of the entering object asks for, if it has
+/// one ([`Rewrite::EntersTappedUnlessPayLife`]), with the index of its ability.
+fn life_asked(face: &crate::card::Face) -> Option<(AbilityIx, u8)> {
+    (0u8..)
+        .zip(face.abilities)
+        .find_map(|(n, a)| match a.replacement()?.rewrite {
+            Rewrite::EntersTappedUnlessPayLife(life) => Some((AbilityIx::new(n), life)),
+            _ => None,
+        })
+}
+
+/// Pays the life an "unless you pay N life" entering replacement asks for
+/// ([CR 119.4]): "If a player pays life, the payment is subtracted from their life total; in
+/// other words, the player loses that much life."
+///
+/// [CR 119.4]: https://yawgatog.com/resources/magic-rules/#R1194
+pub(crate) fn pay_life_to_enter<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
+    entry: Entry<L>,
+) -> Result<(), Full> {
+    let o = s.object(slot);
+    let face = s.copiable(slot).turned(entry.face).face(t);
+    let player = entry.controller.unwrap_or(o.owner());
+    if let Some((ability, n)) = life_asked(face)
+        && s.has_ability(slot, ability)
+    {
+        // The life is lost to the permanent's own replacement effect ([CR 614.1c]: "Effects
+        // that read ... "As [this permanent] enters . . . ," ... are replacement effects."),
+        // not to whatever puts the permanent onto the battlefield.
+        //
+        // [CR 614.1c]: https://yawgatog.com/resources/magic-rules/#R6141c
+        sink.enter_source(|| s.object_ref(slot));
+        let lost = life::lose(&mut Game::new(s, t, sink), player, n);
+        sink.leave();
+        lost?;
+    }
+    Ok(())
+}
+
+/// The life an entering replacement of the object in `slot` asks for as it enters as
+/// `entry` says, if any: none when the object would not have that ability on the
+/// battlefield ([`layers::lost_entering`], CR 614.12).
+///
+/// [`Full`] if finding what it would have ran out of room.
+pub(crate) fn life_to_enter<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    entry: Entry<L>,
+) -> Result<Option<u8>, Full> {
+    let face = s.copiable(slot).turned(entry.face).face(t);
+    let Some((ability, life)) = life_asked(face) else {
+        return Ok(None);
+    };
+    let lost = layers::lost_entering(s, t, slot, entry, face)?;
+    Ok((!lost.contains(ability)).then_some(life))
+}
+
+/// Whether `object`, about to move to `to`, is exiled instead by an entry of the Effects store
+/// on it ([`effect_destination`]), for an instruction that takes a spell off the stack and
+/// must know where its card goes before it moves.
+pub(crate) fn exiled_instead<L: Layout>(s: &State<L>, object: ObjectRef<L>, to: Zone) -> bool {
+    s.move_replacements(object)
+        .any(|r| effect_destination(r, to).is_some())
+}

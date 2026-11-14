@@ -186,6 +186,7 @@ pub mod linked;
 pub mod mana;
 pub mod one_shot;
 mod reference;
+mod replace;
 pub mod resolution;
 mod resolve;
 mod rule_change;

@@ -693,7 +693,7 @@ fn play_land<L: Layout>(
         face,
         ..Entry::default()
     };
-    match event::life_to_enter(s, t, slot, entry)? {
+    match crate::replace::life_to_enter(s, t, slot, entry)? {
         Some(life) if s.player(player).life() >= i16::from(life) => {
             s.ask(Pending::EnterPayingLife { slot, life });
             Ok(())

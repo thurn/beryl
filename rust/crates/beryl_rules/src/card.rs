@@ -12,8 +12,9 @@ pub use beryl_card::{
     CostAction, CostPart, Custom, Effect, FACE_DOWN, FACE_DOWN_COPY, Face, FaceAbility, FaceIx,
     GrantIx, INTRINSIC_MANA, Keywords, Layer, LayerSpec, ManaColor, ManaCost, ManaSet, Measure,
     Modification, ObjectAbility, Objects, Part, Place, Players, Prompt, Purpose, Recipients,
-    Replacement, RuleChange, Says, Shape, SpecIx, Subject, Subtype, Subtypes, Supertypes, Taken,
-    Takes, TargetKind, TargetSpec, Timing, Trigger, TriggerEvent, Types, counter_kinds, mana,
+    Replaced, Replacement, Rewrite, RuleChange, Says, Shape, SpecIx, Subject, Subtype, Subtypes,
+    Supertypes, Taken, Takes, TargetKind, TargetSpec, Timing, Trigger, TriggerEvent, Types,
+    counter_kinds, mana,
 };
 
 /// The result of a body, and of any step of a resolution that can stop it early. The engine

@@ -10,9 +10,12 @@ use super::words::{
     with_article,
 };
 use crate::ability::{Ability, AbilityKind, Behavior, Timing};
-use crate::continuous::{Governed, LayerSpec, Modification, Replacement, RuleChange, When};
+use crate::continuous::{
+    Governed, LayerSpec, Modification, Replaced, Replacement, Rewrite, RuleChange, When,
+};
 use crate::cost::{CastingKind, Chosen, Cost, CostAction, CostPart, Measure};
 use crate::effect::{Amount, Condition, Effect, Objects, Players};
+use crate::filter::Filter;
 use crate::ids::{TurnStep, Zone};
 use crate::index::GrantIx;
 use crate::trigger::{Subject, Trigger, TriggerEvent};
@@ -561,22 +564,43 @@ impl Ctx {
     /// ([CR 614.1](https://yawgatog.com/resources/magic-rules/#R6141)).
     fn replacement(&mut self, ability: &Ability) -> Vec<String> {
         let this = self.this.clone();
-        let mut clauses = match ability.replacement() {
-            Replacement::None => self.body(ability.body()),
-            Replacement::EntersTapped => vec![format!("{this} enters tapped")],
-            Replacement::EntersTappedUnlessFewLands(n) => vec![format!(
+        let &Replacement { replaces, rewrite } =
+            ability.replacement().unwrap_or(&Replacement::NONE);
+        let mut clauses = match (replaces, rewrite) {
+            (_, Rewrite::EntersTapped) => vec![format!("{this} enters tapped")],
+            (_, Rewrite::EntersTappedUnlessFewLands(n)) => vec![format!(
                 "{this} enters tapped unless you control {} or fewer other lands",
                 number(n)
             )],
-            Replacement::EntersTappedUnlessPayLife(n) => vec![
+            (_, Rewrite::EntersTappedUnlessPayLife(n)) => vec![
                 format!("as {this} enters, you may pay {n} life"),
                 "if you don't, it enters tapped".to_owned(),
             ],
-            Replacement::WouldDraw => {
+            (Replaced::PutInto(&objects, zone), Rewrite::ToZone(instead)) => {
+                let what = if objects == Filter::Any {
+                    "a card or token".to_owned()
+                } else {
+                    let kind = Kind::Card(None);
+                    with_article(&self.noun(objects, kind).singular(kind))
+                };
+                let place = match zone {
+                    Zone::Exile => "exile".to_owned(),
+                    zone => with_article(zone_name(zone)),
+                };
+                let instead = match instead {
+                    Zone::Exile => "exile it instead".to_owned(),
+                    zone => format!("put it into its owner's {} instead", zone_name(zone)),
+                };
+                vec![format!(
+                    "if {what} would be put into {place} from anywhere, {instead}"
+                )]
+            }
+            (Replaced::Draw(players), Rewrite::Instead) => {
                 let condition = ability
                     .condition()
                     .map(|&c| format!(" while {}", self.condition(c)))
                     .unwrap_or_default();
+                let who = self.player(players);
                 let mut instead = self.body(ability.body());
                 if let Some(first) = instead.first_mut() {
                     let you = if first.starts_with("you ") {
@@ -584,15 +608,13 @@ impl Ctx {
                     } else {
                         "you "
                     };
-                    *first = format!("if you would draw a card{condition}, {you}{first} instead");
+                    *first = format!("if {who} would draw a card{condition}, {you}{first} instead");
                 }
                 return instead;
             }
+            _ => self.body(ability.body()),
         };
-        if let (Some(&condition), false) = (
-            ability.condition(),
-            matches!(ability.replacement(), Replacement::WouldDraw),
-        ) {
+        if let Some(&condition) = ability.condition() {
             let condition = self.condition(condition);
             if let Some(first) = clauses.first_mut() {
                 *first = format!("if {condition}, {first}");

@@ -4,6 +4,7 @@
 use crate::characteristics::{BasicLandTypes, Colors, Keywords, Subtype, Types};
 use crate::effect::{Amount, Condition, Objects, Players};
 use crate::filter::Filter;
+use crate::ids::Zone;
 use crate::index::{AbilityIx, GrantIx};
 
 /// A change to a rule of the game rather than to an object's characteristics
@@ -87,36 +88,109 @@ fn spells(filter: Filter) -> &'static str {
     }
 }
 
-/// A replacement effect of a permanent's own static ability: the event it replaces. Most
-/// modify how the permanent enters
-/// ([CR 614.1c](https://yawgatog.com/resources/magic-rules/#R6141c)): "Effects that read
-/// '[This permanent] enters with . . . ,' 'As [this permanent] enters . . . ,' or '[This
-/// permanent] enters as . . . ' are replacement effects."
+/// A replacement effect of a static ability
+/// ([CR 614.1](https://yawgatog.com/resources/magic-rules/#R6141)): "Some continuous effects
+/// are replacement effects." It is what it replaces ([`Replaced`]) and what happens instead
+/// ([`Rewrite`]). Whether it applies at a given moment is also its ability's
+/// [`condition`](crate::Ability::condition), and a [`Rewrite::Instead`] is its ability's
+/// [`body`](crate::Ability::body).
 ///
-/// [CR 614.12](https://yawgatog.com/resources/magic-rules/#R61412): "Some replacement effects
-/// modify how a permanent enters the battlefield. ... Such effects may come from the
-/// permanent itself if they affect only that permanent".
+/// The engine applies the pairs it has code for and refuses the rest when it builds a game's
+/// card table.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Replacement {
-    None,
+pub struct Replacement {
+    pub replaces: Replaced,
+    pub rewrite: Rewrite,
+}
+
+impl Replacement {
+    /// No replacement: the ability is of another kind.
+    pub const NONE: Replacement = Replacement {
+        replaces: Replaced::None,
+        rewrite: Rewrite::None,
+    };
+
     /// "This enters tapped."
-    EntersTapped,
+    pub const ENTERS_TAPPED: Replacement = Replacement::this_enters(Rewrite::EntersTapped);
+
+    /// A replacement of how the permanent with the ability enters.
+    pub const fn this_enters(rewrite: Rewrite) -> Replacement {
+        Replacement {
+            replaces: Replaced::ThisEnters,
+            rewrite,
+        }
+    }
+
     /// "This enters tapped unless you control N or fewer other lands." (Seachrome Coast)
-    EntersTappedUnlessFewLands(u8),
+    pub const fn enters_tapped_unless_few_lands(n: u8) -> Replacement {
+        Replacement::this_enters(Rewrite::EntersTappedUnlessFewLands(n))
+    }
+
     /// "As this enters, you may pay N life. If you don't, it enters tapped." (Soporific
-    /// Springs) Whoever puts it onto the battlefield asks its controller first.
+    /// Springs)
+    pub const fn enters_tapped_unless_pay_life(n: u8) -> Replacement {
+        Replacement::this_enters(Rewrite::EntersTappedUnlessPayLife(n))
+    }
+
+    /// "If [players] would draw a card, [the ability's body] instead."
+    pub const fn draws(players: Players) -> Replacement {
+        Replacement {
+            replaces: Replaced::Draw(players),
+            rewrite: Rewrite::Instead,
+        }
+    }
+
+    /// "If [objects] would be put into [zone] from anywhere, put it into [instead] instead":
+    /// "If a card or token would be put into a graveyard from anywhere, exile it instead."
+    pub const fn put_into(objects: &'static Filter, zone: Zone, instead: Zone) -> Replacement {
+        Replacement {
+            replaces: Replaced::PutInto(objects, zone),
+            rewrite: Rewrite::ToZone(instead),
+        }
+    }
+}
+
+/// The event a replacement effect replaces.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Replaced {
+    /// No event.
+    None,
+    /// The permanent with the ability entering the battlefield
+    /// ([CR 614.1c](https://yawgatog.com/resources/magic-rules/#R6141c)): "Effects that read
+    /// '[This permanent] enters with . . . ,' 'As [this permanent] enters . . . ,' or '[This
+    /// permanent] enters as . . . ' are replacement effects."
+    /// ([CR 614.12](https://yawgatog.com/resources/magic-rules/#R61412)): "Some replacement
+    /// effects modify how a permanent enters the battlefield. ... Such effects may come from
+    /// the permanent itself if they affect only that permanent".
+    ThisEnters,
+    /// A card drawn by these players, "you" being the permanent's controller
+    /// ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)): "Effects that use the
+    /// word 'instead' are replacement effects." It applies even to a draw from an empty
+    /// library ([CR 121.6a](https://yawgatog.com/resources/magic-rules/#R1216a)): "An effect
+    /// that replaces a card draw is applied even if no cards could be drawn because there are
+    /// no cards in the affected player's library."
+    Draw(Players),
+    /// An object the filter accepts, read for the permanent's controller, being put into a
+    /// zone from any zone.
+    PutInto(&'static Filter, Zone),
+}
+
+/// What a replacement effect has happen instead of the event it replaces.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Rewrite {
+    /// Nothing.
+    None,
+    /// The object is put into this zone instead ("exile it instead").
+    ToZone(Zone),
+    /// It enters tapped.
+    EntersTapped,
+    /// It enters tapped unless its controller controls N or fewer other lands.
+    EntersTappedUnlessFewLands(u8),
+    /// Its controller may pay N life as it enters; if they don't, it enters tapped. Whoever
+    /// puts it onto the battlefield asks its controller first.
     EntersTappedUnlessPayLife(u8),
-    /// "If you would draw a card [while condition], [effect] instead."
-    /// ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)): "Effects that use
-    /// the word 'instead' are replacement effects." Not a way of entering: the event is a
-    /// draw by the permanent's controller, the ability's
-    /// [`condition`](crate::Ability::condition) is the "while", read for that player before
-    /// each card they would draw, and its [`body`](crate::Ability::body) is what happens
-    /// instead of that draw
-    /// ([CR 121.6a](https://yawgatog.com/resources/magic-rules/#R1216a)): "An effect that
-    /// replaces a card draw is applied even if no cards could be drawn because there are no
-    /// cards in the affected player's library."
-    WouldDraw,
+    /// The ability's [`body`](crate::Ability::body) happens instead.
+    Instead,
 }
 
 /// A static ability's continuous effect: what it affects, when, and how

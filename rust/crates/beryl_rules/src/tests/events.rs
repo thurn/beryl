@@ -61,7 +61,7 @@ static TAPLAND: CardDef = CardDef {
     name: "Test Tapland",
     faces: &[Face {
         types: Types::LAND,
-        abilities: &[Ability::replacing(Replacement::EntersTapped)],
+        abilities: &[Ability::replacing(&Replacement::ENTERS_TAPPED)],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -71,9 +71,9 @@ static COAST: CardDef = CardDef {
     name: "Test Coast",
     faces: &[Face {
         types: Types::LAND,
-        abilities: &[Ability::replacing(Replacement::EntersTappedUnlessFewLands(
-            2,
-        ))],
+        abilities: &[Ability::replacing(
+            &Replacement::enters_tapped_unless_few_lands(2),
+        )],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -83,9 +83,9 @@ static SPRINGS: CardDef = CardDef {
     name: "Test Springs",
     faces: &[Face {
         types: Types::LAND,
-        abilities: &[Ability::replacing(Replacement::EntersTappedUnlessPayLife(
-            3,
-        ))],
+        abilities: &[Ability::replacing(
+            &Replacement::enters_tapped_unless_pay_life(3),
+        )],
         ..Face::EMPTY
     }],
     tokens: &[],

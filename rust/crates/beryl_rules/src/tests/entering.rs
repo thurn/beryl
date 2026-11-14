@@ -67,7 +67,7 @@ static SPRINGS: CardDef = CardDef {
     faces: &[Face {
         types: Types::LAND,
         abilities: &[
-            Ability::replacing(Replacement::EntersTappedUnlessPayLife(3)),
+            Ability::replacing(&Replacement::enters_tapped_unless_pay_life(3)),
             Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
         ],
         ..Face::EMPTY
@@ -82,7 +82,7 @@ static TAPLAND: CardDef = CardDef {
         supertypes: Supertypes::BASIC,
         types: Types::LAND,
         abilities: &[
-            Ability::replacing(Replacement::EntersTapped),
+            Ability::replacing(&Replacement::ENTERS_TAPPED),
             Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),
         ],
         ..Face::EMPTY
@@ -141,7 +141,10 @@ fn an_entering_replacement_the_permanent_would_lose_does_not_apply() {
     put(&t, &mut s, &mut x, Seat::P0, "Test Moon");
     let springs = find(&s, &t, Seat::P0, "Test Springs");
     let entry = Entry::default();
-    assert_eq!(event::life_to_enter(&s, &t, springs, entry), Ok(None));
+    assert_eq!(
+        crate::replace::life_to_enter(&s, &t, springs, entry),
+        Ok(None)
+    );
     let life = s.player(Seat::P0).life();
     event::move_one(
         &mut s,

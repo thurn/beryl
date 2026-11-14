@@ -106,9 +106,12 @@ impl Entries {
         if let Some(rule) = ability.rule() {
             self.add(format!("rule {}", variant(&rule.what)), by, card);
         }
-        let replacement = variant(&ability.replacement());
-        if replacement != "None" {
-            self.add(format!("replacement {replacement}"), by, card);
+        if let Some(replacement) = ability.replacement() {
+            let (replaced, rewrite) = (
+                variant(&replacement.replaces),
+                variant(&replacement.rewrite),
+            );
+            self.add(format!("replacement {replaced} {rewrite}"), by, card);
         }
         if let Some(layer) = ability.layer() {
             for modification in layer.modifications {

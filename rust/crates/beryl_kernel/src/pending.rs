@@ -166,7 +166,7 @@ pub enum Pending<L: Layout = Small> {
     /// far.
     LegendRule { kept: Bitboard<L::Slot> },
     /// A land being played asks whether its controller pays life so that it doesn't enter
-    /// tapped ([`beryl_card::Replacement::EntersTappedUnlessPayLife`]).
+    /// tapped ([`beryl_card::Rewrite::EntersTappedUnlessPayLife`]).
     EnterPayingLife { slot: L::Slot, life: u8 },
     /// The active player declares attackers (CR 508.1), one creature at a time: `attacker`
     /// is the creature just chosen, whose defender is still to choose, if any.
