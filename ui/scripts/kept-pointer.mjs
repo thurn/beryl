@@ -479,6 +479,41 @@ for (const [fixture, at] of [
     );
 }
 
+// The prompt's title and buttons are drawn over every card at rest (a card's depth is a
+// `z-index` the layout gives it, and the dock once had none, so a wide row of permanents was
+// painted over its title). On the attacker step the dock is deeper than every node of the
+// stage that is not held up (850 and over, desktop.ts) or in flight (900 and over).
+// Why no audit: the generic overlap audit compares boxes, not paint order, and no fixture
+// has a card standing under the dock's box.
+await check(
+    "the attacker prompt is drawn over the cards at rest",
+    async (page) => {
+        await page.clock.runFor(2000);
+        const { dock, resting } = await page.evaluate(() => {
+            const depth = (e) => Number(getComputedStyle(e).zIndex) || 0;
+            const nodes = [...document.querySelectorAll("[data-stage]")];
+            return {
+                dock: depth(document.querySelector(".dock")),
+                resting: Math.max(
+                    0,
+                    ...nodes.map(depth).filter((d) => d < 850),
+                ),
+            };
+        });
+        assert.ok(resting > 0, "the table's cards are drawn");
+        assert.ok(
+            dock > resting,
+            `the dock (${dock}) is under a card at rest (${resting})`,
+        );
+        assert.ok(dock < 850, `the dock (${dock}) is over a held card`);
+    },
+    {
+        fixture: "combat-declare",
+        at: (await load("combat-declare")).length,
+        ready: ".dock .prompt-title",
+    },
+);
+
 // In a target step, a card shows whole clear of every target it might cover (by-isv.17):
 // Fractured Identity's in greedy-turn-9, whose targets fill the table's middle, and Swift
 // Reconfiguration's in attached-across and in crew, whose targets lie on both sides.
