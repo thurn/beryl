@@ -20,6 +20,7 @@ On an Apple silicon Mac:
 | Node.js 24               | `brew install node`                                                                      |
 | uv                       | `brew install uv`                                                                        |
 | just 1.59+               | `cargo install just --locked`                                                            |
+| cargo-nextest            | `cargo install cargo-nextest --locked`; the fast check runs the Rust tests with it       |
 | Enact, Beads 1.3+, Dolt  | [Enact](https://github.com/thurn/enact)'s setup, then `enact setup` here                 |
 | Maven, JDK 21            | `just oracle-setup`, with Homebrew; it also builds the XMage and Forge oracles           |
 | Rosetta                  | `softwareupdate --install-rosetta --agree-to-license`; Forge's build runs an x86-64 tool |
@@ -39,6 +40,7 @@ On Windows 11 (x64), which runs the app, the tests and the agents, but not
 | Rust                      | [rustup](https://rustup.rs); `rust-toolchain.toml` pins it               |
 | Node.js 24, uv            | `winget install OpenJS.NodeJS astral-sh.uv`                              |
 | just 1.59+                | `cargo install just --locked`                                            |
+| cargo-nextest             | `cargo install cargo-nextest --locked`                                   |
 | JDK 21, Maven             | `just oracle-setup`, with winget and Apache's Maven download             |
 
 Set `PYTHONUTF8=1`, so Python reads and writes text as UTF-8. Keep the checkout
