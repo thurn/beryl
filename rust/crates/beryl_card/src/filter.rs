@@ -33,6 +33,11 @@ pub enum Filter {
     Whose(&'static Players),
     Tapped,
     ManaValueAtMost(u8),
+    /// Power N or less: "creature an opponent controls with power 3 or less". A permanent's
+    /// power is its derived one, after continuous effects
+    /// ([CR 613.4](https://yawgatog.com/resources/magic-rules/#R6134)); elsewhere it is the
+    /// face's.
+    PowerAtMost(i8),
     /// Mana value X or less, X being the value of the spell or ability whose target this is
     /// (Thieving Skydiver's "target artifact with mana value X or less").
     ManaValueAtMostX,
@@ -52,7 +57,8 @@ impl Filter {
             | Filter::Subtype(_)
             | Filter::Colors(_)
             | Filter::Tapped
-            | Filter::ManaValueAtMost(_) => false,
+            | Filter::ManaValueAtMost(_)
+            | Filter::PowerAtMost(_) => false,
             Filter::ManaValueAtMostX => true,
             Filter::Whose(players) => players.needs_a_resolution(),
             Filter::Not(filter) => filter.needs_a_resolution(),

@@ -84,17 +84,19 @@ impl Effect {
             } => is_target(objects),
             Effect::Modify {
                 objects,
-                modification,
+                modifications,
                 ..
             } => {
                 is_target(objects)
-                    && match *modification {
-                        Modification::AddKeywords(_) => true,
-                        Modification::ModifyPt(power, toughness) => {
-                            power >= 0 && toughness >= 0 && (power, toughness) != (0, 0)
-                        }
-                        _ => false,
-                    }
+                    && modifications
+                        .iter()
+                        .all(|modification| match *modification {
+                            Modification::AddKeywords(_) => true,
+                            Modification::ModifyPt(power, toughness) => {
+                                power >= 0 && toughness >= 0 && (power, toughness) != (0, 0)
+                            }
+                            _ => false,
+                        })
             }
             _ => false,
         })

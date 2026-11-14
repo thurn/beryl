@@ -570,13 +570,23 @@ pub const fn delay_with(ability: u8, object: Objects) -> Effect {
     }
 }
 
-/// [`Effect::Modify`]: "[objects] get, gain or become [modification] [duration]".
-pub const fn modify(objects: Objects, modification: Modification, duration: Duration) -> Effect {
+/// [`Effect::Modify`]: "[objects] get, gain or become [modifications] [duration]", the
+/// parts of one effect that begin together.
+pub const fn modify(
+    objects: Objects,
+    modifications: &'static [Modification],
+    duration: Duration,
+) -> Effect {
     Effect::Modify {
         objects,
-        modification,
+        modifications,
         duration,
     }
+}
+
+/// [`Effect::ExchangeControl`]: "exchange control of [first] and [second]".
+pub const fn exchange_control(first: Objects, second: Objects) -> Effect {
+    Effect::ExchangeControl(first, second)
 }
 
 /// [`Effect::ChangeRule`]: "[rule change] [duration]".

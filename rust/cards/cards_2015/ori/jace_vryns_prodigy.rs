@@ -69,7 +69,7 @@ pub static CARD: CardDef = card(
                 .target(&TargetSpec::creature().optional())
                 .effect(&modify(
                     target(),
-                    Modification::ModifyPt(-2, 0),
+                    &[Modification::ModifyPt(-2, 0)],
                     Duration::UntilYourNextTurn,
                 )),
             Ability::loyalty(-3)

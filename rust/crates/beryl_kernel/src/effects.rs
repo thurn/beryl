@@ -533,10 +533,54 @@ impl<L: Layout> State<L> {
         effect: Continuous<L>,
         duration: Duration,
     ) -> Result<(), Full> {
-        let subject = effect.subject();
-        let payload = effect.payload();
+        let timestamp = self.take_timestamp();
+        self.push_effect(source, effect, duration, timestamp)
+    }
+
+    /// Starts several continuous effects of the card `source` that begin together, with one
+    /// timestamp ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137)): the
+    /// changes of control of an exchange
+    /// ([CR 701.12b](https://yawgatog.com/resources/magic-rules/#R70112b): "each of those
+    /// players simultaneously gains control of the permanent that was controlled by the other
+    /// player"). Each is as [`State::start_effect`] starts it.
+    ///
+    /// # Errors
+    ///
+    /// When the store is full; the effects before the one that did not fit have begun.
+    #[inline]
+    pub fn start_effects(
+        &mut self,
+        source: L::Card,
+        effects: &[Continuous<L>],
+        duration: Duration,
+    ) -> Result<(), Full> {
+        let timestamp = self.take_timestamp();
+        for &effect in effects {
+            self.push_effect(source, effect, duration, timestamp)?;
+        }
+        Ok(())
+    }
+
+    /// The next timestamp ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137)),
+    /// taken.
+    #[inline]
+    pub(crate) fn take_timestamp(&mut self) -> u16 {
         let timestamp = self.zones.next_timestamp;
         self.zones.next_timestamp = timestamp.wrapping_add(1);
+        timestamp
+    }
+
+    /// Stores a continuous effect that began at `timestamp`.
+    #[inline]
+    fn push_effect(
+        &mut self,
+        source: L::Card,
+        effect: Continuous<L>,
+        duration: Duration,
+        timestamp: u16,
+    ) -> Result<(), Full> {
+        let subject = effect.subject();
+        let payload = effect.payload();
         let pushed = self.effects.entries.push(ContinuousEffect {
             source,
             timestamp,

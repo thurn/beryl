@@ -446,6 +446,7 @@ impl Ctx {
                 "{is} {} in addition to its other types",
                 with_article(subtype.name())
             ),
+            Modification::SetSubtype(subtype) => format!("{is} {}", with_article(subtype.name())),
             Modification::AddKeywords(set) => format!("{has} {}", list(&keywords(set), "and")),
             Modification::Grant(ix) => format!("{has} {}", self.granted(ix)),
             Modification::ModifyPt(power, toughness) => {
@@ -474,7 +475,7 @@ impl Ctx {
 
     /// "Base power and toughness 1/1", or the amounts in words when either is not a number
     /// ([CR 613.4b](https://yawgatog.com/resources/magic-rules/#R6134b)).
-    fn base_pt(&mut self, power: Amount, toughness: Amount) -> String {
+    pub(super) fn base_pt(&mut self, power: Amount, toughness: Amount) -> String {
         match (power, toughness) {
             (Amount::Fixed(p), Amount::Fixed(t)) => format!("base power and toughness {p}/{t}"),
             (p, t) if p == t => format!(
@@ -491,7 +492,7 @@ impl Ctx {
 
     /// The ability at `ix` of the face being rendered, in quotation marks, as "loses" names
     /// it.
-    fn own_ability(&mut self, ix: crate::AbilityIx) -> String {
+    pub(super) fn own_ability(&mut self, ix: crate::AbilityIx) -> String {
         match self.face.and_then(|face| face.abilities.get(ix.index())) {
             Some(ability) => match Ctx::keyword_line(ability) {
                 Some(keyword) => super::words::uncapitalized(&keyword),
@@ -501,96 +502,9 @@ impl Ctx {
         }
     }
 
-    /// What a resolving spell's continuous effect does: "it gains first strike", "gain
-    /// control of target artifact", "up to one target creature gets -2/-0"
-    /// ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a)).
-    pub(super) fn modify(&mut self, objects: Objects, modification: Modification) -> String {
-        if modification == Modification::Control {
-            return self.clause(Players::You, ("gain", "gains"), |c| {
-                format!("control of {}", c.objects(objects))
-            });
-        }
-        let plural = self.is_plural(objects);
-        let verb =
-            |single: &'static str, several: &'static str| if plural { several } else { single };
-        let who = self.objects(objects);
-        let text = match modification {
-            Modification::Control => String::new(),
-            Modification::AddTypes(set) => {
-                format!("{who} {} {}", verb("becomes", "become"), a_types(set))
-            }
-            Modification::RemoveTypes(set) => {
-                format!(
-                    "{who} {} {}",
-                    verb("stops being", "stop being"),
-                    a_types(set)
-                )
-            }
-            Modification::SetTypes(set) => format!(
-                "{who} {} {} and {} all other card types",
-                verb("becomes", "become"),
-                a_types(set),
-                verb("loses", "lose")
-            ),
-            Modification::AddSubtype(subtype) => format!(
-                "{who} {} {} in addition to its other types",
-                verb("becomes", "become"),
-                with_article(subtype.name())
-            ),
-            Modification::AddKeywords(set) => {
-                format!(
-                    "{who} {} {}",
-                    verb("gains", "gain"),
-                    list(&keywords(set), "and")
-                )
-            }
-            Modification::Grant(ix) => {
-                format!("{who} {} {}", verb("gains", "gain"), self.granted(ix))
-            }
-            Modification::SetPower(amount) => {
-                format!(
-                    "{} power becomes {}",
-                    possessive(&who),
-                    self.amount(*amount)
-                )
-            }
-            Modification::ModifyPt(power, toughness) => {
-                format!(
-                    "{who} {} {}",
-                    verb("gets", "get"),
-                    pt_change(power, toughness)
-                )
-            }
-            Modification::LoseAllAbilities => {
-                format!("{who} {} all abilities", verb("loses", "lose"))
-            }
-            Modification::LoseAbility(ix) => {
-                format!("{who} {} {}", verb("loses", "lose"), self.own_ability(ix))
-            }
-            Modification::SetColors(set) => format!(
-                "{who} {} {}",
-                verb("becomes", "become"),
-                list(&colors(set), "and")
-            ),
-            Modification::AddColors(set) => format!(
-                "{who} {} {} in addition to its other colors",
-                verb("becomes", "become"),
-                list(&colors(set), "and")
-            ),
-            Modification::SetBasePt(power, toughness) => format!(
-                "{who} {} {}",
-                verb("has", "have"),
-                self.base_pt(*power, *toughness)
-            ),
-            Modification::SwitchPt => format!("switch {} power and toughness", possessive(&who)),
-        };
-        self.plural = plural;
-        text
-    }
-
     /// An ability a continuous effect grants: a keyword as its keyword ("crew 5"), any
     /// other in quotation marks.
-    fn granted(&mut self, ix: GrantIx) -> String {
+    pub(super) fn granted(&mut self, ix: GrantIx) -> String {
         let Some(ability) = self.face.and_then(|face| face.grants.get(ix.index())) else {
             return "[granted ability]".to_owned();
         };
@@ -704,12 +618,12 @@ enum Part {
     Predicate(String),
 }
 
-fn a_types(set: crate::Types) -> String {
+pub(super) fn a_types(set: crate::Types) -> String {
     with_article(&types(set).join(" "))
 }
 
 /// "Its" for "it", or the phrase with "'s".
-fn possessive(who: &str) -> String {
+pub(super) fn possessive(who: &str) -> String {
     if who == "it" {
         "its".to_owned()
     } else {

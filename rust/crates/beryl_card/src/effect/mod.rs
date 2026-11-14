@@ -389,7 +389,7 @@ pub enum Effect {
         kind: ManaColor,
         amount: Amount,
     },
-    /// "[Objects] get, gain or become [modification] [duration]": a continuous effect from a
+    /// "[Objects] get, gain or become [modifications] [duration]": a continuous effect from a
     /// resolving spell or ability
     /// ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a)): it "lasts as long as
     /// stated by the spell or ability creating it (such as 'until end of turn')." What it
@@ -397,11 +397,31 @@ pub enum Effect {
     /// ([CR 611.2c](https://yawgatog.com/resources/magic-rules/#R6112c)): "the set of objects
     /// it affects is determined when that continuous effect begins. After that point, the set
     /// won't change."
+    ///
+    /// The modifications are the parts of one effect, in the order the card says them, which
+    /// begin together with one timestamp and may apply in different layers ([CR 613.6]): "If
+    /// an effect should be applied in different layers and/or sublayers, the parts of the
+    /// effect each apply in their appropriate ones." "Loses all abilities and becomes a green
+    /// Elk creature with base power and toughness 3/3" is one effect with parts in layers 4,
+    /// 5, 6 and 7b.
+    ///
+    /// [CR 613.6]: https://yawgatog.com/resources/magic-rules/#R6136
     Modify {
         objects: Objects,
-        modification: Modification,
+        modifications: &'static [Modification],
         duration: Duration,
     },
+    /// "Exchange control of [first] and [second]": each of the two permanents gets the
+    /// other's controller, together, for the rest of the game
+    /// ([CR 701.12b](https://yawgatog.com/resources/magic-rules/#R70112b)): "When control of
+    /// two permanents is exchanged, if those permanents are controlled by different players,
+    /// each of those players simultaneously gains control of the permanent that was controlled
+    /// by the other player. If, on the other hand, those permanents are controlled by the same
+    /// player, the exchange effect does nothing." Each side names one permanent, and when
+    /// either is gone nothing is exchanged
+    /// ([CR 701.12a](https://yawgatog.com/resources/magic-rules/#R70112a)): "if the entire
+    /// exchange can't be completed, no part of the exchange occurs."
+    ExchangeControl(Objects, Objects),
     /// "Attach [objects] to [host]": an Equipment the objects name moves onto the one
     /// creature `to` names
     /// ([CR 701.3a](https://yawgatog.com/resources/magic-rules/#R7013a)): "To attach an Aura,
@@ -585,6 +605,7 @@ impl Effect {
             | Effect::AddMana { .. }
             | Effect::AddManaOfKind { .. }
             | Effect::Modify { .. }
+            | Effect::ExchangeControl(..)
             | Effect::Attach { .. }
             | Effect::FlipCoin(_)
             | Effect::DealDamage { .. }
@@ -659,6 +680,7 @@ impl Effect {
             | Effect::Unless { effect, .. }
             | Effect::ForEachPlayer { effect, .. } => effect.takes(target, how),
             Effect::Attach { .. }
+            | Effect::ExchangeControl(..)
             | Effect::Regenerate(_)
             | Effect::Draw { .. }
             | Effect::Discard { .. }

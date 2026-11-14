@@ -229,6 +229,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::AddCounters { .. }
         | Effect::RemoveCounters { .. }
         | Effect::Modify { .. }
+        | Effect::ExchangeControl(..)
         | Effect::Attach { .. }
         | Effect::ChangeRule { .. }
         | Effect::GainFlashback(_)

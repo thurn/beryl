@@ -114,6 +114,7 @@ fn accepts_composed(filter: Filter, face: &Face) -> bool {
         Filter::Whose(_)
         | Filter::Tapped
         | Filter::ManaValueAtMost(_)
+        | Filter::PowerAtMost(_)
         | Filter::ManaValueAtMostX => {
             unreachable!("the card table refuses a filter that is not of a spell's own")
         }

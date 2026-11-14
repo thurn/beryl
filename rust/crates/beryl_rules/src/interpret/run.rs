@@ -265,9 +265,12 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             } => mana::add_of_kind_instruction(self, player, kind, amount),
             Effect::Modify {
                 objects,
-                modification,
+                modifications,
                 duration,
-            } => continuous::instruction(self, objects, modification, duration)?,
+            } => continuous::instruction(self, objects, modifications, duration)?,
+            Effect::ExchangeControl(first, second) => {
+                continuous::exchange_instruction(self, first, second)?
+            }
             Effect::ChangeRule { rule, duration } => {
                 continuous::change_rule_instruction(self, rule, duration)?
             }

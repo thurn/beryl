@@ -60,7 +60,7 @@ fn every_member_of_three_locked_in_sets_gets_all_three_effects() {
     let bears = tokens(&mut s, p, card, 120);
     for _ in 0..3 {
         let change = LayerChange::ModifyPt(1, 1);
-        s.start_effect_on_set(card, set_of(&bears), change, Duration::Indefinite)
+        s.start_effect_on_set(card, set_of(&bears), &[change], Duration::Indefinite)
             .unwrap();
     }
     refresh(&mut s, &t);

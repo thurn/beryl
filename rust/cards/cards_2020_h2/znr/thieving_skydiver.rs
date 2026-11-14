@@ -29,7 +29,7 @@ pub static CARD: CardDef = Printed::ThievingSkydiver
             ])))
             .only_if(&Condition::Paid(CastingKind::Kicker))
             .effect(&sequence(&[
-                modify(target(), Modification::Control, Duration::Indefinite),
+                modify(target(), &[Modification::Control], Duration::Indefinite),
                 if_then(
                     Condition::Is(target(), Filter::Subtype(Subtype::Equipment)),
                     &attach(target(), this()),

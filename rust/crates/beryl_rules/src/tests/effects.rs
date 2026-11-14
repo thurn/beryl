@@ -308,7 +308,11 @@ fn a_target_the_effect_moved_is_known_as_it_last_was() {
     static SWORDS: Ability = does_to(
         &[A_CREATURE],
         &sequence(&[
-            modify(target(), Modification::ModifyPt(1, 1), Duration::EndOfTurn),
+            modify(
+                target(),
+                &[Modification::ModifyPt(1, 1)],
+                Duration::EndOfTurn,
+            ),
             exile(target()),
             Effect::LoseLife {
                 player: its_controller(),
@@ -551,7 +555,7 @@ fn damage_to_permanents_is_marked_on_each_and_a_token_is_told_from_a_card() {
 fn gaining_control_as_data_changes_the_controller_and_says_so() {
     static STEAL: Ability = does_to(
         &[A_CREATURE],
-        &modify(target(), Modification::Control, Duration::Indefinite),
+        &modify(target(), &[Modification::Control], Duration::Indefinite),
     );
     let (t, mut s, mut x, p, source) = game_with_source();
     let bear = put(&t, &mut s, &mut x, p.opponent(), "Test Bear");
@@ -615,12 +619,12 @@ const fn creatures_get_bigger(duration: Duration) -> Ability {
     };
     static UNTIL_END_OF_TURN: Effect = modify(
         ALL_CREATURES,
-        Modification::ModifyPt(1, 1),
+        &[Modification::ModifyPt(1, 1)],
         Duration::EndOfTurn,
     );
     static INDEFINITELY: Effect = modify(
         ALL_CREATURES,
-        Modification::ModifyPt(1, 1),
+        &[Modification::ModifyPt(1, 1)],
         Duration::Indefinite,
     );
     does(match duration {

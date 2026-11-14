@@ -155,7 +155,9 @@ pub fn read_by_the_layers(filter: Filter) -> bool {
         | Filter::Whose(_)
         | Filter::Tapped
         | Filter::ManaValueAtMost(_) => true,
-        Filter::ManaValueAtMostX => false,
+        // A power is a result of layer 7, which no filter of an earlier layer may read until
+        // the layers order effects by dependency.
+        Filter::ManaValueAtMostX | Filter::PowerAtMost(_) => false,
         Filter::Not(filter) => read_by_the_layers(*filter),
         Filter::All(filters) | Filter::AnyOf(filters) => {
             filters.iter().all(|&filter| read_by_the_layers(filter))
@@ -165,14 +167,11 @@ pub fn read_by_the_layers(filter: Filter) -> bool {
 
 /// Whether an instruction, or one inside it, sets a power to an amount.
 fn sets_power(effect: &Effect) -> bool {
-    effect.any(&|effect| {
-        matches!(
-            effect,
-            Effect::Modify {
-                modification: Modification::SetPower(_),
-                ..
-            }
-        )
+    effect.any(&|effect| match effect {
+        Effect::Modify { modifications, .. } => modifications
+            .iter()
+            .any(|m| matches!(m, Modification::SetPower(_))),
+        _ => false,
     })
 }
 

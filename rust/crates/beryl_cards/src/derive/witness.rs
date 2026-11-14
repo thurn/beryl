@@ -83,11 +83,25 @@ const STOLEN: Witness = Witness {
     ],
 };
 
+/// `Effect::ExchangeControl`: an artifact player 0 controls, Portable Hole, already on the
+/// battlefield, so that an exchange has a permanent of each player's to trade. The opening
+/// positions give player 0 lands alone, and an exchange of a permanent "you control" for one
+/// an opponent controls then has nothing to target.
+const OWN_ARTIFACT: Witness = Witness {
+    words: "with an artifact of one's own",
+    mine: &[Permanent::new(props::ARTIFACT)],
+    theirs: &[],
+    hand: &[],
+    prelude: &[],
+};
+
 /// The witnesses of one instruction's own fields, its children aside.
 fn of(effect: &Effect) -> Vec<&'static Witness> {
     let mut out = Vec::new();
-    if let Effect::Destroy { .. } = effect {
-        out.push(&REGENERATION_SHIELD);
+    match effect {
+        Effect::Destroy { .. } => out.push(&REGENERATION_SHIELD),
+        Effect::ExchangeControl(..) => out.push(&OWN_ARTIFACT),
+        _ => {}
     }
     let operands = effect.operands();
     let names_an_object_s_player = [operands.players, operands.others]

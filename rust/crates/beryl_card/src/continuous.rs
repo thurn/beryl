@@ -178,8 +178,16 @@ pub enum Modification {
     /// Layer 4: "is a [types] and loses all other card types". Subtypes go with the card
     /// types they belong to; subtypes it gains are added separately.
     SetTypes(Types),
-    /// Layer 4: "is a [subtype]".
+    /// Layer 4: "is a [subtype] in addition to its other types".
     AddSubtype(Subtype),
+    /// Layer 4: "is a [subtype]", which replaces its subtypes of the same kind ([CR 205.1a]):
+    /// "when an effect sets one or more of an object's subtypes, the new subtype(s) replaces
+    /// any existing subtypes from the appropriate set (creature types, land types, artifact
+    /// types, enchantment types, planeswalker types, or spell types)." "Becomes a green Elk
+    /// creature" makes it an Elk and no other creature type.
+    ///
+    /// [CR 205.1a]: https://yawgatog.com/resources/magic-rules/#R2051a
+    SetSubtype(Subtype),
     /// Layer 6: "gains [keywords]".
     AddKeywords(Keywords),
     /// Layer 6: "has [ability]": the ability at this index of the effect source's front

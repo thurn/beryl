@@ -147,7 +147,7 @@ impl Effect {
             | Effect::PutIntoLibrary { objects, .. }
             | Effect::Explore(objects)
             | Effect::Modify { objects, .. } => Operands::of_objects(objects),
-            Effect::Attach { objects, to } => Operands {
+            Effect::Attach { objects, to } | Effect::ExchangeControl(objects, to) => Operands {
                 to: Some(to),
                 ..Operands::of_objects(objects)
             },

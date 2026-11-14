@@ -19,6 +19,11 @@ use crate::index::SpecIx;
 use crate::prompt::Shape;
 use crate::target::TargetKind;
 
+/// The parts of one resolving continuous effect ([`Effect::Modify`]) the engine begins at
+/// once: as many as a card says ("loses all abilities and becomes a green Elk creature with
+/// base power and toughness 3/3" is five) with room to spare.
+pub const MODIFY_PARTS: usize = 8;
+
 /// What is wrong with a definition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Malformed {
@@ -38,8 +43,11 @@ pub enum Malformed {
     /// said by anything but a static ability of the permanent about itself: the index names
     /// an ability of the face it is printed on.
     Lost,
-    /// A static ability whose continuous effect does nothing: no modification.
+    /// A continuous effect that does nothing: no modification.
     NoModification,
+    /// A resolving continuous effect of more parts than [`MODIFY_PARTS`], what the engine
+    /// begins at once.
+    Parts,
     /// [`CopyException::PowerToughness`] other than 1/1, which is all the engine's copy
     /// makes.
     Copy,
@@ -109,7 +117,10 @@ impl Malformed {
             Malformed::Lost => {
                 "a modification removes an ability that is not one of its own permanent's"
             }
-            Malformed::NoModification => "a static ability's continuous effect modifies nothing",
+            Malformed::NoModification => "a continuous effect modifies nothing",
+            Malformed::Parts => {
+                "a resolving continuous effect has more parts than the engine begins at once"
+            }
             Malformed::Copy => "a copy's exception is a power and toughness other than 1/1",
             Malformed::AddMana => "an effect adds mana outside a mana ability",
             Malformed::Countered => "a countered spell is put somewhere other than exile",
@@ -496,7 +507,7 @@ impl Scope<'_> {
             Effect::AddMana { .. } if !matches!(self.ability.kind(), AbilityKind::Mana) => {
                 Err(Malformed::AddMana)
             }
-            Effect::Modify { modification, .. } => self.modification(modification),
+            Effect::Modify { modifications, .. } => self.resolved_modifications(modifications),
             // One object, picked: the one run of picks the interpreter asks.
             Effect::Choose { prompt, .. }
                 if !(matches!(prompt.purpose.shape(), Shape::Pick) && prompt.most == 1) =>
@@ -589,6 +600,23 @@ impl Scope<'_> {
             ] if no_mana(cost) => self.filter(filter),
             _ => Err(Malformed::Cost),
         }
+    }
+
+    /// The parts of a resolving effect: at least one, each checked.
+    const fn resolved_modifications(self, modifications: &[Modification]) -> Checked {
+        let mut checked = if modifications.is_empty() {
+            Err(Malformed::NoModification)
+        } else if modifications.len() > MODIFY_PARTS {
+            Err(Malformed::Parts)
+        } else {
+            Ok(())
+        };
+        let mut i = 0;
+        while i < modifications.len() {
+            checked = both(checked, self.modification(&modifications[i]));
+            i += 1;
+        }
+        checked
     }
 
     const fn modification(self, modification: &Modification) -> Checked {
@@ -769,6 +797,7 @@ impl Scope<'_> {
             | Filter::Colors(_)
             | Filter::Tapped
             | Filter::ManaValueAtMost(_)
+            | Filter::PowerAtMost(_)
             | Filter::ManaValueAtMostX => Ok(()),
         }
     }

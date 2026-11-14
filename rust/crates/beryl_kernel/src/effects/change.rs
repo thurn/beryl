@@ -25,7 +25,7 @@ pub enum LayerChange {
     RemoveTypes(Types),
     /// Layer 4: "is a [types] and loses all other card types".
     SetTypes(Types),
-    /// Layer 4: "is a [subtype]".
+    /// Layer 4: "is a [subtype] in addition to its other types".
     AddSubtype(Subtype),
     /// Layer 6: "gains [keywords]".
     AddKeywords(Keywords),
@@ -68,6 +68,9 @@ pub enum LayerChange {
         ability: AbilityIx,
         part: u8,
     },
+    /// Layer 4: "is a [subtype]", replacing its subtypes of the same kind. Last, so that the
+    /// hashes of states saved before it was added keep their values.
+    SetSubtype(Subtype),
 }
 
 impl LayerChange {
@@ -83,6 +86,7 @@ impl LayerChange {
             Modification::RemoveTypes(types) => LayerChange::RemoveTypes(types),
             Modification::SetTypes(types) => LayerChange::SetTypes(types),
             Modification::AddSubtype(subtype) => LayerChange::AddSubtype(subtype),
+            Modification::SetSubtype(subtype) => LayerChange::SetSubtype(subtype),
             Modification::AddKeywords(keywords) => LayerChange::AddKeywords(keywords),
             Modification::Grant(grant) => LayerChange::Grant(grant),
             Modification::SetColors(colors) => LayerChange::SetColors(colors),
@@ -108,7 +112,8 @@ impl LayerChange {
             LayerChange::AddTypes(_)
             | LayerChange::RemoveTypes(_)
             | LayerChange::SetTypes(_)
-            | LayerChange::AddSubtype(_) => Layer::Type,
+            | LayerChange::AddSubtype(_)
+            | LayerChange::SetSubtype(_) => Layer::Type,
             LayerChange::SetColors(_) | LayerChange::AddColors(_) => Layer::Color,
             LayerChange::AddKeywords(_)
             | LayerChange::Grant(_)

@@ -115,6 +115,10 @@ impl Ctx {
                 let host = self.objects(to);
                 vec![self.acts(("attach", "attaches"), objects, &format!(" to {host}"))]
             }
+            Effect::ExchangeControl(first, second) => {
+                let (first, second) = (self.objects(first), self.objects(second));
+                vec![format!("exchange control of {first} and {second}")]
+            }
             Effect::Exile(objects) | Effect::ExileLinked(objects) => {
                 vec![self.acts(("exile", "exiles"), objects, "")]
             }
@@ -335,10 +339,10 @@ impl Ctx {
             })],
             Effect::Modify {
                 objects,
-                modification,
+                modifications,
                 duration,
             } => {
-                let text = self.modify(objects, modification);
+                let text = self.modify(objects, modifications);
                 vec![format!("{text}{}", duration_suffix(duration))]
             }
             Effect::ChangeRule { rule, duration } => {

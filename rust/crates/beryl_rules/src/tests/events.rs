@@ -1971,7 +1971,7 @@ static THIEF: CardDef = CardDef {
             .only_if(&Condition::Paid(CastingKind::Kicker))
             .effect(&modify(
                 target(),
-                Modification::Control,
+                &[Modification::Control],
                 beryl_card::Duration::Indefinite,
             ))],
         casting: &[CastingOption::Kicker {

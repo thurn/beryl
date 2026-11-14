@@ -206,6 +206,15 @@ impl GameSubtypes {
         kept
     }
 
+    /// The members correlated with none of `types`
+    /// ([CR 205.3c](https://yawgatog.com/resources/magic-rules/#R2053c)): what is left when
+    /// an effect sets a subtype of those card types.
+    #[must_use]
+    pub fn without_types(self, numbers: &SubtypeNumbers, types: Types) -> GameSubtypes {
+        let of = self.of_types(numbers, types);
+        GameSubtypes([self.0[0] & !of.0[0], self.0[1] & !of.0[1]])
+    }
+
     /// The numbered members, in [`Subtype`]'s order; with every creature type, those the
     /// game numbers.
     pub fn iter(self, numbers: &SubtypeNumbers) -> impl Iterator<Item = Subtype> + '_ {

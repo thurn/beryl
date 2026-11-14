@@ -76,8 +76,10 @@ impl Entries {
                 let node = std::ptr::from_ref(e).addr();
                 let mut nodes = nodes.borrow_mut();
                 nodes.push((format!("instruction {}", variant(e)), node));
-                if let Effect::Modify { modification, .. } = e {
-                    nodes.push((format!("modification {}", variant(modification)), node));
+                if let Effect::Modify { modifications, .. } = e {
+                    for modification in *modifications {
+                        nodes.push((format!("modification {}", variant(modification)), node));
+                    }
                 }
                 false
             });

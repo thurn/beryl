@@ -128,7 +128,9 @@ const ATTACH_TO_TARGET: Effect = Effect::Attach {
 /// turn."
 const BECOME_ARTIFACT_CREATURE: Effect = Effect::Modify {
     objects: Objects::This,
-    modification: Modification::AddTypes(Types::ARTIFACT.union(Types::CREATURE)),
+    modifications: &[Modification::AddTypes(
+        Types::ARTIFACT.union(Types::CREATURE),
+    )],
     duration: Duration::EndOfTurn,
 };
 

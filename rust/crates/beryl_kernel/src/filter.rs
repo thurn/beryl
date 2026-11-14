@@ -94,6 +94,7 @@ impl Evaluate for Filter {
             Filter::Tapped => o.flags.has(Flag::Tapped),
             Filter::ManaValueAtMost(n) => s.mana_value(t, slot) <= n,
             Filter::ManaValueAtMostX => s.mana_value(t, slot) <= x,
+            Filter::PowerAtMost(n) => s.power(t, slot) <= n,
             Filter::Not(f) => !f.matches_x(s, t, slot, you, x),
             Filter::All(fs) => fs.iter().all(|f| f.matches_x(s, t, slot, you, x)),
             Filter::AnyOf(fs) => fs.iter().any(|f| f.matches_x(s, t, slot, you, x)),

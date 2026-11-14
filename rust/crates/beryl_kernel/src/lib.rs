@@ -57,7 +57,7 @@
 //! | queue triggers | [`State::queue_trigger`], [`State::take_trigger`], [`State::delay_trigger`], [`State::fire_delayed`] | a delayed trigger that fires waits with the others, once |
 //! | keep and forget last-known information (CR 603.10a) | [`State::record_last_known`], [`State::forget_last_known`] | one row for each object that left, copied from its current layer results before it moves; a row no waiting trigger, stack entry or delayed trigger names is forgotten |
 //! | open and settle a question | [`State::ask`], [`State::settle_question`], [`State::pause_resolution`], [`State::resume_resolution`], [`State::record_answer`] | a question is open or priority is; a paused resolution keeps what each player knew as it began, and only resuming it gives that back |
-//! | start and end what a card creates | [`State::start_effect`], [`State::start_effect_on_set`], [`State::expire`] | an effect's timestamp; the kinds live in its store; the slots a store has entries about; a locked-in set's place in the store's table; `derived_dirty` where the entry is a layer input |
+//! | start and end what a card creates | [`State::start_effect`], [`State::start_effects`], [`State::start_effect_on_set`], [`State::expire`] | an effect's timestamp; the kinds live in its store; the slots a store has entries about; a locked-in set's place in the store's table; `derived_dirty` where the entry is a layer input |
 //!
 //! ## Events
 //!
@@ -270,14 +270,15 @@
 //!
 //! A locked-in set is the objects one effect affects when it affects several ([CR 611.2c], "the set
 //! of objects it affects is determined when that continuous effect begins. After that point, the
-//! set won't change."): [`State::start_effect_on_set`] starts one entry with one timestamp (CR
-//! 613.7) for the permanents it is given, and the layers apply it to each member
+//! set won't change."): [`State::start_effect_on_set`] starts one entry for each part of the
+//! effect, all with one timestamp (CR 613.6, 613.7), for the permanents it is given, and the
+//! layers apply it to each member
 //! ([`State::locked_in`]). A set holds slots, not incarnations: a member that ends leaves its set
 //! where every stored thing about it ends ("Duration and expiry"), so whatever a set holds is still
 //! the object it was, and a card that comes back is no member. The effect ends with its duration or
 //! with its last member, and its place in the table is free again. Only an effect on two objects or
-//! more takes a place: on one it is an entry on that object, the same effect, and on none it never
-//! begins. A set is affected by a layer change alone, as a player is by a rule change alone (the
+//! more takes places, one for each part: on one it is an entry on that object for each part, the
+//! same effect, and on none it never begins. A set is affected by a layer change alone, as a player is by a rule change alone (the
 //! store's invariants, which the mutators' arguments keep): nothing else the cards do is one effect
 //! on several objects, and each query by kind would otherwise search the sets. An effect cannot be
 //! started on another's set: only [`State::start_effect_on_set`] names one, and it makes the set it

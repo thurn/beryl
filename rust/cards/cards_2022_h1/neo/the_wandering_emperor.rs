@@ -52,7 +52,7 @@ pub static CARD: CardDef = Printed::TheWanderingEmperor
                 add_counters(target(), CounterKind::PlusOne, 1),
                 modify(
                     target(),
-                    Modification::AddKeywords(Keywords::FIRST_STRIKE),
+                    &[Modification::AddKeywords(Keywords::FIRST_STRIKE)],
                     Duration::EndOfTurn,
                 ),
             ])),

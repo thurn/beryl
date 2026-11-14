@@ -3,7 +3,8 @@
 //! the card that creates it.
 
 use crate::Token;
-use beryl_card::{Ability, CardDef, Cost, CostPart, ManaSet, card};
+use beryl_card::effect::build::{gain_life, you};
+use beryl_card::{Ability, CardDef, Cost, CostPart, ManaCost, ManaSet, card};
 
 /// A token's name where the effect creating it gives none
 /// ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)): "If the spell or ability
@@ -14,6 +15,22 @@ pub const INSECT_TOKEN: &str = "Insect Token";
 pub const MAP_TOKEN: &str = "Map Token";
 pub const ROGUE_TOKEN: &str = "Rogue Token";
 pub const SAMURAI_TOKEN: &str = "Samurai Token";
+
+/// The Food token's name: its subtype plus the word "Token"
+/// ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)).
+pub const FOOD_TOKEN: &str = "Food Token";
+
+/// The predefined Food token
+/// ([CR 111.10b](https://yawgatog.com/resources/magic-rules/#R11110b)): "A Food token is a
+/// colorless Food artifact token with "{2}, {T}, Sacrifice this token: You gain 3 life.""
+pub static FOOD: CardDef = card(
+    FOOD_TOKEN,
+    &[Token::FoodToken.abilities(&[Ability::activated(Cost::of(
+        ManaCost::generic(2),
+        &[CostPart::TAP, CostPart::SACRIFICE],
+    ))
+    .effect(&gain_life(you(), 3))])],
+);
 
 /// The Treasure token's name: its subtype plus the word "Token"
 /// ([CR 111.4](https://yawgatog.com/resources/magic-rules/#R1114)).

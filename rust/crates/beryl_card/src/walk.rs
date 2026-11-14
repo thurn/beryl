@@ -54,14 +54,16 @@ impl CardDef {
     /// Calls `visit` with every set of subtypes an object of the card can have or a rule of
     /// it can ask about: each face's printed subtypes, each subtype a filter names
     /// ([`Filter::Subtype`]) and each a continuous effect gives
-    /// ([`Modification::AddSubtype`]), in its static abilities or its effect data. The game
+    /// ([`Modification::AddSubtype`], [`Modification::SetSubtype`]), in its static abilities or its effect data. The game
     /// numbers what this finds (`beryl_kernel`'s `GameTable`); a Rust body that names
     /// another subtype is read by nothing, so it names none a game does not.
     pub fn subtypes(&self, visit: &mut dyn FnMut(Subtypes)) {
         // "Islandwalk" asks whether a land the defending player controls is an Island
         // (CR 702.14c), so a landwalk names its subtype.
         let given = |modification: &Modification| match *modification {
-            Modification::AddSubtype(subtype) => Some(Subtypes::of(&[subtype])),
+            Modification::AddSubtype(subtype) | Modification::SetSubtype(subtype) => {
+                Some(Subtypes::of(&[subtype]))
+            }
             Modification::AddKeywords(keywords) => Some(keywords.landwalk()),
             _ => None,
         };
@@ -76,11 +78,11 @@ impl CardDef {
                 if let Behavior::Data(effect) = ability.body() {
                     let found = std::cell::RefCell::new(Subtypes::NONE);
                     effect.any(&|instruction| {
-                        if let Effect::Modify { modification, .. } = instruction
-                            && let Some(given) = given(modification)
-                        {
+                        if let Effect::Modify { modifications, .. } = instruction {
                             let mut found = found.borrow_mut();
-                            *found = found.union(given);
+                            for given in modifications.iter().filter_map(given) {
+                                *found = found.union(given);
+                            }
                         }
                         false
                     });
@@ -224,6 +226,7 @@ impl Filter {
             | Filter::Colors(_)
             | Filter::Tapped
             | Filter::ManaValueAtMost(_)
+            | Filter::PowerAtMost(_)
             | Filter::ManaValueAtMostX => {}
             Filter::Whose(players) => players.walk(visit),
             Filter::Not(filter) => filter.walk(visit),
@@ -361,7 +364,11 @@ impl Effect {
             Effect::May { effect, .. }
             | Effect::Unless { effect, .. }
             | Effect::ForEachPlayer { effect, .. } => effect.walk(visit),
-            Effect::Modify { modification, .. } => modification.walk(visit),
+            Effect::Modify { modifications, .. } => {
+                for modification in *modifications {
+                    modification.walk(visit);
+                }
+            }
             _ => {}
         }
     }

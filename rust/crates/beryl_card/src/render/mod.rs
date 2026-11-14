@@ -26,6 +26,7 @@ mod card;
 mod clauses;
 mod effects;
 mod filters;
+mod modify;
 mod references;
 mod words;
 

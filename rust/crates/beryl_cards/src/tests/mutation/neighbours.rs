@@ -777,7 +777,7 @@ fn local(effect: &'static Effect) -> Neighbours<Effect> {
         }
         Effect::Modify {
             objects: which,
-            modification,
+            modifications,
             duration,
         } => {
             for (name, which) in objects(which) {
@@ -785,9 +785,20 @@ fn local(effect: &'static Effect) -> Neighbours<Effect> {
                     name,
                     Effect::Modify {
                         objects: which,
-                        modification,
+                        modifications,
                         duration,
                     },
+                );
+            }
+        }
+        Effect::ExchangeControl(first, second) => {
+            for (name, first) in objects(first) {
+                add(name, Effect::ExchangeControl(first, second));
+            }
+            for (name, second) in objects(second) {
+                add(
+                    format!("second: {name}"),
+                    Effect::ExchangeControl(first, second),
                 );
             }
         }

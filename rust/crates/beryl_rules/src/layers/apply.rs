@@ -257,6 +257,13 @@ fn modify<L: Layout>(
         LayerChange::AddSubtype(subtype) => {
             d.subtypes = d.subtypes.with(t.subtypes(), subtype);
         }
+        // CR 205.1a: "when an effect sets one or more of an object's subtypes, the new
+        // subtype(s) replaces any existing subtypes from the appropriate set (creature types,
+        // land types, artifact types, enchantment types, planeswalker types, or spell types)."
+        LayerChange::SetSubtype(subtype) => {
+            let kept = d.subtypes.without_types(t.subtypes(), subtype.card_type());
+            d.subtypes = kept.with(t.subtypes(), subtype);
+        }
         // CR 613.1f: "Layer 6: Ability-adding effects, keyword counters, ability-removing
         // effects, and effects that say an object can't have an ability are applied."
         LayerChange::AddKeywords(k) => d.keywords = d.keywords.union(k),
@@ -346,7 +353,7 @@ fn passes<L: Layout>(
         Filter::Not(filter) => !passes(s, t, *filter, i, you),
         Filter::All(filters) => filters.iter().all(|&filter| passes(s, t, filter, i, you)),
         Filter::AnyOf(filters) => filters.iter().any(|&filter| passes(s, t, filter, i, you)),
-        Filter::ManaValueAtMostX => {
+        Filter::ManaValueAtMostX | Filter::PowerAtMost(_) => {
             unreachable!("the card table refuses a filter the layers cannot read")
         }
     }

@@ -99,7 +99,7 @@ static REFORGE: CardDef = CardDef {
             draw(you(), 1),
             modify(
                 target(),
-                Modification::SetPower(&ARTIFACTS),
+                &[Modification::SetPower(&ARTIFACTS)],
                 Duration::EndOfTurn,
             ),
         ]))],

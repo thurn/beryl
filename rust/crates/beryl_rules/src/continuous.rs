@@ -2,7 +2,7 @@
 //! resolving spell or ability creates: each is an entry of the Effects store
 //! (`beryl_kernel`'s contract, "Stores"), which the layers and the rules read by kind.
 
-use beryl_card::{Amount, Modification, Objects, RuleChange};
+use beryl_card::{Amount, MODIFY_PARTS, Modification, Objects, RuleChange};
 
 use crate::bitboard::Bitboard;
 use crate::event::Event;
@@ -36,21 +36,22 @@ pub fn start<L: Layout>(
     layers::refresh(game.state, game.table, game.sink)
 }
 
-/// Starts one continuous effect of what is resolving that changes each of `permanents` in a
-/// layer ([CR 611.2c](https://yawgatog.com/resources/magic-rules/#R6112c)): "the set of
-/// objects it affects is determined when that continuous effect begins. After that point,
-/// the set won't change." They are the permanents as they are now; the effect has one
-/// timestamp, whichever of them it changes
+/// Starts one continuous effect of what is resolving that changes each of `permanents` in
+/// the layers of its parts `changes`
+/// ([CR 611.2c](https://yawgatog.com/resources/magic-rules/#R6112c)): "the set of objects it
+/// affects is determined when that continuous effect begins. After that point, the set won't
+/// change." They are the permanents as they are now; the effect has one timestamp, whichever
+/// of them it changes and in whichever layer
 /// ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137)).
 #[inline]
 pub fn start_on_set<L: Layout>(
     game: &mut Game<'_, L>,
     resolution: &Resolution<'_, L>,
     permanents: Bitboard<L::Slot>,
-    change: LayerChange,
+    changes: &[LayerChange],
     duration: Duration,
 ) -> Result<(), Full> {
-    (game.state).start_effect_on_set(resolution.entry.card(), permanents, change, duration)?;
+    (game.state).start_effect_on_set(resolution.entry.card(), permanents, changes, duration)?;
     layers::refresh(game.state, game.table, game.sink)
 }
 
@@ -102,15 +103,20 @@ pub fn gain_control<L: Layout>(
 }
 
 /// [`Effect::Modify`](beryl_card::Effect::Modify): "[Objects] get, gain or become
-/// [modification] [duration]"
+/// [modifications] [duration]"
 /// ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a)): a continuous effect
 /// from a resolving ability "lasts as long as stated by the spell or ability creating
 /// it". It affects the permanents that are there as it begins (CR 611.2c): "After that
 /// point, the set won't change." The outcome is those permanents.
+///
+/// Its parts begin together, with one timestamp, and each applies in its own layer
+/// ([CR 613.6](https://yawgatog.com/resources/magic-rules/#R6136)): "If an effect should be
+/// applied in different layers and/or sublayers, the parts of the effect each apply in their
+/// appropriate ones."
 pub(crate) fn instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     objects: Objects,
-    modification: Modification,
+    modifications: &[Modification],
     duration: beryl_card::Duration,
 ) -> Result<Outcome<L>, Full> {
     // "You" in what it says is the ability's controller as it resolves.
@@ -119,36 +125,91 @@ pub(crate) fn instruction<L: Layout>(
     let permanents = run.permanents(objects);
     // "Gain control of": each permanent's own effect, which says it has a new controller
     // (CR 302.6).
-    if modification == Modification::Control {
+    if modifications.contains(&Modification::Control) {
         let mut left = permanents;
         while let Some(permanent) = run.next_permanent(&mut left) {
             let (game, resolution) = run.resolving();
             gain_control(game, resolution, permanent, duration)?;
         }
-        return Ok(Outcome::acted_on(permanents));
     }
-    let change = match modification {
-        // A base power and toughness are settled as the effect begins
-        // ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "If an effect
-        // requires information from the game (such as the number of creatures on the
-        // battlefield), the answer is determined only once, when the effect is applied."
-        Modification::SetBasePt(power, toughness) => {
-            let scene = run.scene();
-            let number = |amount: &Amount| i8::try_from(scene.amount(*amount)).unwrap_or(i8::MAX);
-            LayerChange::SetBasePt(number(power), number(toughness))
-        }
-        // The card table refuses an effect that sets a power alone to an amount.
-        modification => match LayerChange::resolve(modification, you) {
-            Some(change) => change,
-            None => no_primitive(&modification),
-        },
-    };
-    // One effect, with one timestamp, on the set as it is now
-    // ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137): "An effect with an
-    // earlier timestamp is applied before an effect with a later timestamp.").
-    let (game, resolution) = run.resolving();
-    start_on_set(game, resolution, permanents, change, duration)?;
+    let mut changes = [LayerChange::SwitchPt; MODIFY_PARTS];
+    let mut parts = 0;
+    for &modification in modifications {
+        let change = match modification {
+            Modification::Control => continue,
+            // A base power and toughness are settled as the effect begins
+            // ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)): "If an
+            // effect requires information from the game (such as the number of creatures on
+            // the battlefield), the answer is determined only once, when the effect is
+            // applied."
+            Modification::SetBasePt(power, toughness) => {
+                let scene = run.scene();
+                let number =
+                    |amount: &Amount| i8::try_from(scene.amount(*amount)).unwrap_or(i8::MAX);
+                LayerChange::SetBasePt(number(power), number(toughness))
+            }
+            // The card table refuses an effect that sets a power alone to an amount.
+            modification => match LayerChange::resolve(modification, you) {
+                Some(change) => change,
+                None => no_primitive(&modification),
+            },
+        };
+        // The definition check refuses more parts than there is room for.
+        changes[parts] = change;
+        parts += 1;
+    }
+    if parts > 0 {
+        let (game, resolution) = run.resolving();
+        start_on_set(game, resolution, permanents, &changes[..parts], duration)?;
+    }
     Ok(Outcome::acted_on(permanents))
+}
+
+/// [`Effect::ExchangeControl`](beryl_card::Effect::ExchangeControl): "exchange control of
+/// [first] and [second]". The outcome is the two permanents, if they were exchanged.
+///
+/// [CR 701.12a](https://yawgatog.com/resources/magic-rules/#R70112a): "When such a spell or
+/// ability resolves, if the entire exchange can't be completed, no part of the exchange
+/// occurs." A side that names no permanent, as a target that has become illegal or has left
+/// the battlefield names none, exchanges nothing.
+///
+/// [CR 701.12b](https://yawgatog.com/resources/magic-rules/#R70112b): "When control of two
+/// permanents is exchanged, if those permanents are controlled by different players, each of
+/// those players simultaneously gains control of the permanent that was controlled by the
+/// other player. If, on the other hand, those permanents are controlled by the same player,
+/// the exchange effect does nothing." The two changes of control are layer-2 effects that
+/// begin together, with one timestamp, and last for the rest of the game
+/// ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a): "If no duration is
+/// stated, it lasts until the end of the game."). Neither permanent has been under its new
+/// controller's control since their most recent turn began
+/// ([CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026)).
+pub(crate) fn exchange_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    first: Objects,
+    second: Objects,
+) -> Result<Outcome<L>, Full> {
+    let (Some(a), Some(b)) = (run.permanents(first).sole(), run.permanents(second).sole()) else {
+        return Ok(Outcome::NOTHING);
+    };
+    let (game, resolution) = run.resolving();
+    let (a_controller, b_controller) = (game.state.controller(a), game.state.controller(b));
+    if a == b || a_controller == b_controller {
+        return Ok(Outcome::NOTHING);
+    }
+    let (a, b) = (game.state.object_ref(a), game.state.object_ref(b));
+    let exchange = [
+        Continuous::Layer(a, LayerChange::Control(b_controller)),
+        Continuous::Layer(b, LayerChange::Control(a_controller)),
+    ];
+    (game.state).start_effects(resolution.entry.card(), &exchange, Duration::Indefinite)?;
+    layers::refresh(game.state, game.table, game.sink)?;
+    for (object, player) in [(a, b_controller), (b, a_controller)] {
+        game.state.set_summoning_sick(object.slot, true);
+        game.settle(Event::GainControl { object, player })?;
+    }
+    let mut exchanged = Bitboard::single(a.slot);
+    exchanged.insert(b.slot);
+    Ok(Outcome::acted_on(exchanged))
 }
 
 /// A duration as a card says it, for an effect `you` control

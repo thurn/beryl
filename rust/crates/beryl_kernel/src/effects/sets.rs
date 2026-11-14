@@ -132,7 +132,7 @@ impl<L: Layout> Sets<L> {
 
 impl<L: Layout> State<L> {
     /// Starts one continuous effect of the card `source` that changes each of `members` in
-    /// a layer, with one timestamp
+    /// the layers its parts `changes` apply in, with one timestamp
     /// ([CR 611.2c](https://yawgatog.com/resources/magic-rules/#R6112c)): "the set of objects
     /// it affects is determined when that continuous effect begins. After that point, the set
     /// won't change."
@@ -141,25 +141,46 @@ impl<L: Layout> State<L> {
     /// objects of the battlefield as they are now. One that leaves is no longer affected
     /// and the rest still are; the effect ends with the last of them.
     ///
-    /// An effect on one object is an entry on that object ([`State::start_effect`]): the
-    /// same effect, and the table's places stay for the effects that need one. An effect on
-    /// none never begins.
+    /// Each part is an entry of its own, all with the effect's timestamp ([CR 613.6]): "If an
+    /// effect should be applied in different layers and/or sublayers, the parts of the effect
+    /// each apply in their appropriate ones." An effect on one object is an entry on that
+    /// object for each part ([`State::start_effect`]): the same effect, and the table's
+    /// places stay for the effects that need one. On several, each part locks in a set of
+    /// its own. An effect on none never begins.
+    ///
+    /// # Errors
+    ///
+    /// When the store or its table of sets is full; the parts before the one that did not
+    /// fit have begun.
+    ///
+    /// [CR 613.6]: https://yawgatog.com/resources/magic-rules/#R6136
     #[inline]
     pub fn start_effect_on_set(
         &mut self,
         source: L::Card,
         members: Bitboard<L::Slot>,
-        change: LayerChange,
+        changes: &[LayerChange],
         duration: Duration,
     ) -> Result<(), Full> {
         let mut rest = members.iter();
         match (rest.next(), rest.next()) {
             (None, _) => Ok(()),
             (Some(sole), None) => {
-                let effect = Continuous::Layer(self.object_ref(sole), change);
-                self.start_effect(source, effect, duration)
+                let object = self.object_ref(sole);
+                let timestamp = self.take_timestamp();
+                for &change in changes {
+                    let effect = Continuous::Layer(object, change);
+                    self.push_effect(source, effect, duration, timestamp)?;
+                }
+                Ok(())
             }
-            _ => self.lock_in(source, members, change, duration),
+            _ => {
+                let timestamp = self.take_timestamp();
+                for &change in changes {
+                    self.lock_in(source, members, change, duration, timestamp)?;
+                }
+                Ok(())
+            }
         }
     }
 
@@ -173,10 +194,9 @@ impl<L: Layout> State<L> {
         members: Bitboard<L::Slot>,
         change: LayerChange,
         duration: Duration,
+        timestamp: u16,
     ) -> Result<(), Full> {
         debug_assert!(members.all(|slot| self.object(slot).zone() == Zone::Battlefield));
-        let timestamp = self.zones.next_timestamp;
-        self.zones.next_timestamp = timestamp.wrapping_add(1);
         let set = self.effects.sets.lock_in(members)?;
         let pushed = self.effects.entries.push(ContinuousEffect {
             source,

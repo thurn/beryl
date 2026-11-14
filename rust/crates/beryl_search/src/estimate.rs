@@ -234,9 +234,11 @@ impl Effects {
             } => e.removal = removed(objects),
             Effect::Modify {
                 objects,
-                modification,
+                modifications,
                 ..
-            } if hinders(modification) => e.removal = removed(objects),
+            } if modifications.iter().any(|&m| hinders(m)) => e.removal = removed(objects),
+            // Taking the opponent's permanent for one of one's own.
+            Effect::ExchangeControl(_, theirs) => e.removal = removed(theirs),
             Effect::Counter(_) | Effect::CounterInto { .. } => e.counters = 1,
             _ => {}
         }
@@ -301,7 +303,7 @@ fn removed(objects: Objects) -> i16 {
 /// it, or giving it −N power or toughness.
 fn hinders(modification: Modification) -> bool {
     match modification {
-        Modification::Control => true,
+        Modification::Control | Modification::LoseAllAbilities => true,
         Modification::ModifyPt(power, toughness) => power < 0 || toughness < 0,
         _ => false,
     }
