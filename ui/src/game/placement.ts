@@ -60,6 +60,10 @@ export interface Placement {
   z: number;
   /** Under the top card, only the physical rim is painted when the card is at rest. */
   rim?: boolean;
+  /** Lies on more of its pile, so it casts no shadow: a shadow from a card higher in a pile
+   * would darken the edges of the cards beneath it, and only the deepest card drawn casts the
+   * pile's shadow on the felt. */
+  stacked?: boolean;
   /** Face down in this library, unless it is the disclosed top card. */
   back?: boolean;
   librarySide?: Side;

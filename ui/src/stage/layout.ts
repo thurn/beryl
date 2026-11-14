@@ -43,6 +43,8 @@ export interface Dress {
   back: boolean;
   /** Only its paper edge shows, under the top of a pile. */
   rim: boolean;
+  /** Lies on more of its pile, so it casts no shadow (game/placement.ts). */
+  stacked?: boolean;
   /** On the top card of a pile of identical permanents, how many it holds. */
   count?: number;
   /** How far a card of your hand rises under the pointer, where the layout raises it and by
@@ -76,6 +78,7 @@ export const sameDress = (a: Dress, b: Dress) =>
   a.frame === b.frame &&
   a.back === b.back &&
   a.rim === b.rim &&
+  a.stacked === b.stacked &&
   a.count === b.count &&
   a.lift === b.lift &&
   JSON.stringify(a.cast) === JSON.stringify(b.cast);

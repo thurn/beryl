@@ -102,6 +102,7 @@ export class DomSurface implements Surface {
       `card-el-${dress.look}`,
       `card-el-${object.controller}`,
       dress.rim && "card-el-rim",
+      dress.stacked && "card-el-stacked",
     ]
       .filter(Boolean)
       .join(" ");

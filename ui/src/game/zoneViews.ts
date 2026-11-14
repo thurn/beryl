@@ -128,11 +128,7 @@ export function libraries(view: PlayerView): ZonePile[] {
     side,
     zone: "library",
     count: view.players[side].library.length,
-    look: pileLook(
-      side,
-      PILES[side].library,
-      view.players[side].library.length,
-    ),
+    look: pileLook(side, PILES[side].library),
     cards: view.players[side].library.flatMap(
       (slot) => objects.get(slot) ?? [],
     ),
@@ -189,7 +185,7 @@ export function zonePiles(view: PlayerView): ZonePile[] {
       side,
       zone,
       cards,
-      look: pileLook(side, PILES[side][zone], cards.length),
+      look: pileLook(side, PILES[side][zone]),
     }));
   });
 }

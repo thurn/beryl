@@ -130,6 +130,7 @@ const resting = (object: ObjectView, place: Placement): Resting => ({
     frame: place.width,
     back: place.back ?? false,
     rim: place.rim ?? false,
+    stacked: place.stacked,
     count: place.count,
     lift: place.lift,
   },

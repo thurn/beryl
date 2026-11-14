@@ -24,13 +24,37 @@
 .card-el-pile {
   pointer-events: none;
 }
-/* A parked card under another only needs its paper edge. */
+/* A card under the top two of a pile shows only its paper edge (game/pileLook.ts): the
+   light card stock of its side toward the table's middle, over the dark of the card beneath,
+   as Arena's piles show the edges of their cards (`kvVLJ_cS_KE 11:15.5`). Your piles spread
+   to the right, so their right edges show; the opponent's spread down and a little left, so
+   their near edges show, and their left edges in shade. */
 .pile-card-rim {
   border: 1px solid #161210;
-  border-bottom-color: #756458;
-  border-right-color: #66554a;
+  border-right: 2px solid #a39787;
   border-radius: 4.8% / 3.4%;
   background: #211b18;
+}
+.card-el-opponent .pile-card-rim {
+  border-right: 1px solid #161210;
+  border-bottom: 2px solid #a39787;
+  border-left-color: #6b6155;
+}
+
+/* Only the deepest card drawn of a pile casts a shadow, on the felt (game/placement.ts
+   `stacked`): the cards above it cast none on the edges beneath them. */
+.card-el-stacked .card-back,
+.card-el-stacked .card-face-down {
+  box-shadow: none;
+}
+.card-el-pile .card {
+  --card-shadow: 0 3px 8px rgb(0 0 0 / 55%);
+}
+.card-el-stacked .card {
+  --card-shadow: none;
+}
+.card-el-rim:not(.card-el-stacked) .pile-card-rim {
+  box-shadow: var(--shadow-card);
 }
 
 /* The wrapper takes its card's size, so it is what the pointer and tests hit. */
@@ -38,7 +62,6 @@
 .card-el .hand-card {
   position: relative;
 }
-.card-el-pile .card,
 .card-el-stack .card {
   --card-shadow: 0 3px 8px rgb(0 0 0 / 55%);
 }

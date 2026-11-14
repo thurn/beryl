@@ -33,6 +33,8 @@ import {
   playableElsewhere,
 } from "./zoneViews";
 
+/** How deep in a pile a card is drawn: none deeper shows. */
+const HIDDEN_DEPTH = 64;
 /** How far a targeted card under a pile's top rises out of it, in its own heights. */
 const PILE_RISE = 0.6;
 
@@ -48,9 +50,7 @@ function handlingPlacements(
   const library = handling.zone === "library";
   const columns = Math.min(library ? 5 : 7, cards.length);
   const packet = Math.ceil(cards.length / columns);
-  const pile = library
-    ? pileLook(side, PILES[side].library, view.players[side].library.length)
-    : undefined;
+  const pile = library ? pileLook(side, PILES[side].library) : undefined;
   const width = pile ? pile.width * 1.95 : opening ? 72 : 104;
   const step = width * (library ? 0.27 : 0.72);
   const center = library ? fromRight(1445) : fromMiddle(opening ? 465 : 800);
@@ -88,19 +88,18 @@ function pileCards(
   aimed: ReadonlySet<number>,
   library?: { top?: number },
 ): Placement[] {
-  const full = pileLook(side, PILES[side][zone], cards.length);
+  const look = pileLook(side, PILES[side][zone]);
   const remaining = cards.filter((o) => !borrowed.has(o.slot)).length;
-  const rest = pileLook(side, PILES[side][zone], remaining);
   let depthLeft = remaining;
   return cards.map((o, i) => {
     const away = borrowed.has(o.slot);
     const depth = away ? cards.length - 1 - i : --depthLeft;
-    const at = onPile(away ? full : rest, side, depth);
+    const at = onPile(look, side, depth);
     const raised = !library && aimed.has(o.slot) && depth > 0;
     const lift = raised
-      ? ((side === "you" ? -1 : 1) * rest.width * PILE_RISE) / CARD_ASPECT
+      ? ((side === "you" ? -1 : 1) * look.width * PILE_RISE) / CARD_ASPECT
       : 0;
-    const hidden = depth >= 64 && !raised;
+    const hidden = depth >= HIDDEN_DEPTH && !raised;
     return {
       ...at,
       slot: o.slot,
@@ -111,6 +110,7 @@ function pileCards(
       opacity: hidden ? 0 : 1,
       z: raised ? 92 : 80 - Math.min(depth, 79),
       rim: depth > 1 && !raised,
+      stacked: !away && depth < Math.min(remaining - 1, HIDDEN_DEPTH - 1),
       back: !!library && ((!away && o.slot !== library.top) || !o.name),
       librarySide: library ? side : undefined,
       lendingFace: !!library && away && !!o.name,
