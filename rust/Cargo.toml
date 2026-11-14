@@ -58,3 +58,11 @@ inherits = "release"
 lto = "fat"
 panic = "abort"
 codegen-units = 1
+
+# `cargo test` (the rust lane's tests step, `just test-rust`) at opt-level 1. Unoptimized, the
+# workspace's tests took about 437 test-seconds, 27 s on the clock at load 40 on 18 cores, and
+# the step took 44 s after a kernel change, most of the fast check's 60 s budget; at opt-level 1
+# they take 2.6 s and the step 17 s, with no slower build. Debug assertions and overflow checks
+# stay on, as `dev` has them.
+[profile.test]
+opt-level = 1
