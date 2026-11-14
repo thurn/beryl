@@ -1114,6 +1114,7 @@ searcher optimistic, which is tuned, not fixed.
 | `beryl_cli`            | Headless games between agents, tournaments, the ladder, transcripts, UI fixtures recorded from sessions of seeded games or of scripted boards                                                                                                                                                                                                                                                                                                                                                    | `beryl_cards`, `beryl_scenario`, `beryl_search`, `beryl_session`                |
 | `beryl_bench`          | Benchmark support and the `_counts`, `_abba` and `_timing` targets of the example and of the rollout benchmark                                                                                                                                                                                                                                                                                                                                                                                   | `beryl_cards`, `beryl_engine`, `beryl_search`                                   |
 | `beryl_app`            | The Tauri shell: IPC commands and events around `beryl_session`, the card-art cache                                                                                                                                                                                                                                                                                                                                                                                                              | all of the above                                                                |
+| `beryl_mobile`         | Native iOS and Android WebView snapshots, device details and report sharing through Swift and Kotlin                                                                                                                                                                                                                                                                                                                                                                                             | Tauri                                                                           |
 
 The engine knows no card and no card knows the engine's internals: a card is
 effect data in `beryl_card`'s vocabulary, and `beryl_cards` takes from the
@@ -1124,6 +1125,9 @@ engine's tests. Nothing may read meaning into the order of `CARDS`: a game
 numbers its cards from its decklists, and everything else looks a card up by
 name. Exporters that turn dumped scenarios into XMage and Forge inputs are
 Python in `tools/`, per AGENTS.md.
+
+On iOS and Android, `beryl_app` gives `beryl_session` the
+`beryl_search::Budget::PHONE` search budget (64 iterations across four trees).
 
 ## 17. Testing and verification (D13)
 

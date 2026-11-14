@@ -49,6 +49,10 @@ Then `just` lists the commands. `just dev` opens the app with hot reload;
 `just smoke` builds it and checks that it starts, headless; `just ci` runs every
 check.
 
+The app also builds for iOS and Android. Run `just mobile-setup` for their
+toolchains, then `just ios-smoke` or `just android-smoke` to check a native
+build in a headless simulator or emulator.
+
 ## Credits
 
 The step icons beside each life total are from

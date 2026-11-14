@@ -60,15 +60,17 @@ write:
 ## Layout
 
 - `rust/` is the Cargo workspace (`rust/AGENTS.md`).
-  - `crates/beryl_app` is the Tauri shell. Keep it thin. Game rules and AI go in
-    their own library crates under `rust/crates/`, which build and test without
-    Tauri.
+  - `crates/beryl_app` is the Tauri shell; `crates/beryl_mobile` supplies native
+    iOS and Android WebView snapshots, device details and sharing. Keep the
+    shell thin. Game rules and AI go in their own library crates under
+    `rust/crates/`, which build and test without Tauri.
   - Each card is one file, `rust/cards/<crate>/<set>/<card>.rs`. Adding a card
     means adding a file: build scripts generate every list of cards, and each
     card's mana cost, type line and header comment are generated from the card
     store.
 - `ui/` is the frontend: Vite, React and TypeScript in strict mode
   (`ui/AGENTS.md`). Always call Rust through the typed wrappers in `src/ipc.ts`.
+  The phone uses the stage's layout in `src/stage/phone.ts` and `src/mobile/`.
 - `data/` holds data files, each described in `data/AGENTS.md`. The card store,
   `card-store.tsv`, is built by `just cards` and embedded in the app. The UI
   bundles no card data of its own.
@@ -204,9 +206,11 @@ Use the cheapest test that covers your change. Agents never open a window;
    debug or check a card's behavior in the UI, use the `specs` skill.
 3. The app: `just smoke` builds the debug app, launches it without a window and
    waits until the UI reports that it has loaded.
-4. The phone apps: `just ios-smoke` and `just android-smoke` do the same in a
-   headless simulator or emulator (`rust/AGENTS.md`). Agents never install onto
-   a real phone: `just ios-device` is only for the user.
+4. The phone apps: `just ios-smoke` and `just android-smoke` load the UI in a
+   headless simulator or emulator and require a PNG window snapshot
+   (`rust/AGENTS.md`). `just mobile-bugs` pulls their saved bug reports into the
+   Mac's bugs folder; `--device` also pulls from a paired iPhone. Agents never
+   install onto a real phone: `just ios-device` is only for the user.
 
 Benchmarks follow `docs/benchmarking.md`. Tournaments (`just tournament`,
 `just play` and `just review --agent`) use the whole machine for minutes to
@@ -217,6 +221,10 @@ hours, so read "Tournaments" in `rust/AGENTS.md` before running one.
 `just check` (fast) and `just ci` (slow) are split into "lanes", one per kind of
 file or test. The fast check runs only the lanes whose files have changed.
 `docs/checks.md` describes each lane, the time budgets and what Windows skips.
+
+A phone UI state is a shot in `ui/shots.json` with `?phone` in its route at both
+393×759 and 375×647. The shot checks include `phoneFaults` for text and touch
+target sizes (`ui/scripts/capture.mjs`).
 
 - A UI bug fix adds the broken state as a fixture or spec moment, so the generic
   UI checks (overlap, off-screen, reachability, duplicate objects, page errors,
