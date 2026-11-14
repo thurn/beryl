@@ -47,6 +47,7 @@ import { RevealedCards } from "./Revealed.tsx";
 import { OrderRow, TrayUnder } from "./Tray.tsx";
 import { landing } from "./tray.ts";
 import "./stage.css";
+import "./heft.css";
 
 export function StageBoard({
   view,

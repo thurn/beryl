@@ -22,6 +22,7 @@
 import type { Arrow, Mark } from "../generated/protocol";
 import type { Drawn, On } from "./effects.ts";
 import { Glow } from "./glow.ts";
+import { drawn, Heft } from "./heft.ts";
 import { RaisedCopy } from "./raised.ts";
 import type { Name, Point, Resting } from "./layout.ts";
 import { dark, type Lit } from "./light.ts";
@@ -53,6 +54,13 @@ export class DomSurface implements Surface {
   #pointer: { x: number; y: number } | undefined;
   #repoint: (() => void) | undefined;
   readonly #raised: RaisedCopy;
+  /** The pointer the page's events are told to (`point`), which says which card is held. */
+  #holder: Pointer | undefined;
+  /** The cards held, or let go and not yet settled, each with its heft (heft.ts). */
+  readonly #hefts = new Map<Name, Weighed>();
+  /** The browser frame the hefts run on, while any does, and when the last one ran. */
+  #heftFrame = 0;
+  #heftLast: number | undefined;
 
   constructor(layer: HTMLElement) {
     this.#layer = layer;
@@ -137,6 +145,7 @@ export class DomSurface implements Surface {
    * become the stage's (pointer.ts). A touch has no hover: it presses, and is let go. */
   point(pointer: Pointer) {
     const layer = this.#layer;
+    this.#holder = pointer;
     const nodeOf = (target: EventTarget | null) => {
       const node =
         target instanceof Element
@@ -211,6 +220,7 @@ export class DomSurface implements Surface {
     ];
     return () => {
       this.#repoint = undefined;
+      if (this.#holder === pointer) this.#holder = undefined;
       for (const stop of stops) stop();
     };
   }
@@ -420,5 +430,115 @@ export class DomSurface implements Surface {
     const tipped = tippedOf(pose);
     style.setProperty("--tipped", tipped);
     node.toggleAttribute("data-turning-over", tipped !== "");
+    this.#weigh(name, node, pose, frame);
+  }
+
+  /** Gives the card of node `name` its heft (heft.ts) as the pointer picks it up, and keeps
+   * it running with where `pose` now has it until it settles after it is let go. Reduced
+   * motion leaves a held card as its pose draws it. */
+  #weigh(name: Name, node: HTMLElement, pose: Pose, frame: number) {
+    let weighed = this.#hefts.get(name);
+    const held = this.#holder?.held;
+    const holding = held?.name === name;
+    if (!weighed || weighed.node !== node) {
+      if (weighed) this.#unweigh(name, weighed);
+      if (!held || held.name !== name || reducedMotion()) return;
+      const scale = pose.width / frame;
+      // Its shadow lies on the felt, so it is the layer's and not the node's: the node leans.
+      const shadow = document.createElement("div");
+      shadow.className = "stage-held-shadow";
+      shadow.setAttribute("aria-hidden", "true");
+      shadow.style.setProperty("--frame", `${frame}px`);
+      shadow.style.opacity = "0";
+      this.#layer.insertBefore(shadow, node);
+      weighed = {
+        node,
+        shadow,
+        // Where the press is on the card, in the node's own frame: what it grows and leans
+        // about.
+        grip: [(held.at.x - pose.x) / scale, (held.at.y - pose.y) / scale],
+        heft: new Heft(held.at.x, held.at.y),
+        pose,
+        frame,
+        held: true,
+      };
+      this.#hefts.set(name, weighed);
+    }
+    weighed.pose = pose;
+    weighed.frame = frame;
+    weighed.held = holding;
+    this.#lean(weighed);
+    if (!this.#heftFrame) {
+      this.#heftFrame = requestAnimationFrame((now) => this.#heave(now));
+    }
+  }
+
+  /** One browser frame of every card with a heft: advanced and drawn, or put back as its pose
+   * draws it once it has settled or its node is gone. */
+  #heave(now: number) {
+    const last = this.#heftLast;
+    const dt = last === undefined ? 1 / 60 : (now - last) / 1000;
+    this.#heftLast = now;
+    for (const [name, weighed] of this.#hefts) {
+      const { node, pose, frame, grip, heft } = weighed;
+      if (this.#nodes.get(name) !== node) {
+        this.#unweigh(name, weighed);
+        continue;
+      }
+      const scale = pose.width / frame;
+      const moving = heft.advance(
+        {
+          x: pose.x + grip[0] * scale,
+          y: pose.y + grip[1] * scale,
+          held: weighed.held,
+          reach: [(frame * scale) / 2, (frame * scale * (88 / 63)) / 2],
+        },
+        dt,
+      );
+      if (moving) this.#lean(weighed);
+      else this.#unweigh(name, weighed);
+    }
+    this.#heftFrame =
+      this.#hefts.size > 0
+        ? requestAnimationFrame((later) => this.#heave(later))
+        : 0;
+    if (!this.#heftFrame) this.#heftLast = undefined;
+  }
+
+  /** Draws a card with a heft as it looks now: its node raised and leaned after its pose's
+   * transform, and its shadow on the felt just under it. */
+  #lean({ node, shadow, pose, frame, grip, heft }: Weighed) {
+    const placed = transformOf(pose, frame);
+    const look = drawn(heft.look, grip, frame, pose.width / frame);
+    node.style.transform = `${placed} ${look.card}`;
+    shadow.style.transform = `${placed} ${look.shadow}`;
+    shadow.style.opacity = String(look.opacity * pose.opacity);
+    shadow.style.zIndex = String(Math.round(pose.depth) - 1);
+  }
+
+  /** Puts the card of node `name` back as its pose draws it, with no heft. */
+  #unweigh(name: Name, { node, shadow, pose, frame }: Weighed) {
+    this.#hefts.delete(name);
+    shadow.remove();
+    if (this.#nodes.get(name) === node) {
+      node.style.transform = transformOf(pose, frame);
+    }
   }
 }
+
+/** A card with a heft (heft.ts), and what it is drawn with. */
+interface Weighed {
+  node: HTMLElement;
+  shadow: HTMLElement;
+  grip: [number, number];
+  heft: Heft;
+  /** Its pose as last drawn, the width of its frame, and whether the pointer holds it. */
+  pose: Pose;
+  frame: number;
+  held: boolean;
+}
+
+/** Whether the player asked for reduced motion. */
+const reducedMotion = () =>
+  typeof matchMedia === "function" &&
+  matchMedia("(prefers-reduced-motion: reduce)").matches;

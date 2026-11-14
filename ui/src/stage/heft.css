@@ -1,0 +1,27 @@
+/* The shadow on the felt of a card the pointer holds, or has let go and is settling
+   (stage/heft.ts, stage/dom.ts): a soft dark card shape, painted once into a layer of its
+   own, which the surface only moves, stretches and fades from frame to frame, so a held card
+   costs the compositor a little and repaints nothing. The element reaches `--margin` past the
+   card on every side, so that its layer holds the whole blur, and it turns about the point
+   where the card's top-left corner is, as the card's node does. */
+.stage-held-shadow {
+  --margin: calc(var(--frame) * 0.3);
+  position: absolute;
+  left: calc(-1 * var(--margin));
+  top: calc(-1 * var(--margin));
+  width: calc(var(--frame) + 2 * var(--margin));
+  height: calc(var(--frame) * 88 / 63 + 2 * var(--margin));
+  transform-origin: var(--margin) var(--margin);
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+/* A core inset from the card's edge, blurred out past it: a penumbra, not an outline. */
+.stage-held-shadow::before {
+  content: "";
+  position: absolute;
+  inset: calc(var(--margin) + var(--frame) * 0.1);
+  border-radius: calc(var(--frame) * 0.1);
+  background: rgb(8 6 4 / 75%);
+  box-shadow: 0 0 calc(var(--frame) * 0.22) calc(var(--frame) * 0.06)
+    rgb(8 6 4 / 75%);
+}
