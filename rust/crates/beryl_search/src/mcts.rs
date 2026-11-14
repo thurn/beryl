@@ -150,6 +150,8 @@ pub struct Search {
     pub means: Vec<Option<f64>>,
     /// For an anchored long-think search, its check of its choice against greedy's answer.
     pub anchor: Option<crate::long::AnchorCheck>,
+    /// Work and completed lines from a bounded turn search.
+    pub turn: Option<crate::TurnReport>,
 }
 
 /// The searching agent.
@@ -379,6 +381,7 @@ impl<L: Layout> Agent<L> for Mcts<L> {
             rewards,
             means,
             anchor: None,
+            turn: None,
         });
         if trees.iter().all(|tree| tree.expanded(choice)) {
             self.kept = Some(Kept {

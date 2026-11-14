@@ -95,7 +95,7 @@ pub fn next<L: Layout>(
     x: &mut Scratch<L>,
     a: &mut dyn Answers<L>,
 ) -> Step<L> {
-    let step = advance::<false, L>(s, t, x, a, (s.turn().number(), s.turn().step()));
+    let step = advance::<false, false, L>(s, t, x, a, (s.turn().number(), s.turn().step()), 0);
     x.settle_counts();
     #[cfg(debug_assertions)]
     assert_sound(s, t, x);
@@ -122,7 +122,7 @@ pub fn next_in_step<L: Layout>(
     a: &mut dyn Answers<L>,
     seen: (u16, TurnStep),
 ) -> Option<Step<L>> {
-    let step = advance::<true, L>(s, t, x, a, seen);
+    let step = advance::<true, false, L>(s, t, x, a, seen, 0);
     x.settle_counts();
     // Stopped at a new step, the game has yet to check state-based actions: a player who drew
     // from an empty library has not lost yet, so the invariants need not hold.
@@ -133,13 +133,39 @@ pub fn next_in_step<L: Layout>(
     step
 }
 
-/// The engine loop; with `STEPS`, it returns `None` once the turn is past `seen`.
-fn advance<const STEPS: bool, L: Layout>(
+/// Advances as [`next`] does, stopping at `end` or when the absolute
+/// [`Counts::decision_work`] allowance in this scratch is too small to advance.
+/// A `None` before the boundary means the search must discard this simulation.
+///
+/// Under [CR 117.4], "If all players pass in succession ... the spell or ability on top of
+/// the stack resolves or, if the stack is empty, the phase or step ends."
+///
+/// [CR 117.4]: https://yawgatog.com/resources/magic-rules/#R1174
+pub fn next_within<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    x: &mut Scratch<L>,
+    a: &mut dyn Answers<L>,
+    end: (u16, TurnStep),
+    work_limit: u64,
+) -> Option<Step<L>> {
+    let step = advance::<false, true, L>(s, t, x, a, end, work_limit);
+    x.settle_counts();
+    #[cfg(debug_assertions)]
+    if step.is_some() {
+        assert_sound(s, t, x);
+    }
+    step
+}
+
+/// The engine loop; `STEPS` stops at a new step and `BOUNDED` checks work and turn limits.
+fn advance<const STEPS: bool, const BOUNDED: bool, L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     x: &mut Scratch<L>,
     a: &mut dyn Answers<L>,
     seen: (u16, TurnStep),
+    work_limit: u64,
 ) -> Option<Step<L>> {
     // Whether a state-based check found nothing and priority has only been passed since,
     // from one player to the other: a pass changes nothing the check reads, so the next
@@ -154,6 +180,14 @@ fn advance<const STEPS: bool, L: Layout>(
             combat::prune(s);
         }
         if STEPS && (s.turn().number(), s.turn().step()) != seen {
+            return None;
+        }
+        // One loop can silently answer a decision and copy twice to resolve it
+        // transactionally. Reserve those counts before changing the state.
+        if BOUNDED
+            && ((s.turn().number(), s.turn().step()) >= seen
+                || work_limit.saturating_sub(x.counts.decision_work()) < 3)
+        {
             return None;
         }
         if *s.pending() == Pending::None {

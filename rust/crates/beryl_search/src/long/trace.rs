@@ -12,6 +12,7 @@ const LEVELS: usize = 4;
 pub struct TreeReport {
     pub choice: Choice,
     pub branches: [Branch; 2],
+    pub turn: Option<super::TurnReport>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -83,11 +84,22 @@ impl<L: Layout> LongSearch<L> {
         TreeReport {
             choice,
             branches: capture.branches,
+            turn: self.last.as_ref().and_then(|search| search.turn),
         }
     }
 }
 
 impl<L: Layout> Capture<L> {
+    pub(super) fn finish_turn(&mut self, search: &crate::Search) {
+        for (choice, branch) in self.choices.into_iter().zip(&mut self.branches) {
+            let i = usize::from(choice.0);
+            branch.visits = Visits {
+                count: u64::from(search.visits[i]),
+                reward: search.rewards[i],
+            };
+        }
+    }
+
     pub(super) fn start(&self, trees: &mut [Tree<L>]) {
         for tree in trees {
             tree.trace = Some(Box::new(Trace {

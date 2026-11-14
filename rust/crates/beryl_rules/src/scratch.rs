@@ -110,6 +110,11 @@ pub struct Counts {
 }
 
 impl Counts {
+    /// Decisions, silent decisions and state copies charged by bounded search.
+    pub fn decision_work(&self) -> u64 {
+        self.decisions + self.silent + self.state_copies
+    }
+
     /// Counts a copy of a whole state that a caller of the engine made.
     pub fn copied(&mut self) {
         self.state_copies += 1;

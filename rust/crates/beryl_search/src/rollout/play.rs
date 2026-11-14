@@ -2,7 +2,7 @@
 
 use beryl_engine::{
     Answers, Choice, Decision, GameTable, Layout, Observation, Outcome, Replay, Scratch, State,
-    Step, apply, apply_decided, next,
+    Step, TurnStep, apply, apply_decided, next, next_within,
 };
 
 use crate::mcts::smart;
@@ -85,6 +85,48 @@ pub fn soft_rollout<L: Layout>(
     soft: &mut Softmax<'_>,
 ) -> Outcome {
     soft_rollout_to(s, t, x, policy, soft, u16::MAX).expect("a game ends before turn 65535")
+}
+
+pub(crate) enum RolloutEnd {
+    Outcome(Outcome),
+    Cutoff,
+}
+
+/// A softmax rollout with a hard allowance for decisions and copies. Returns
+/// `None` if the allowance ran out.
+pub(crate) fn soft_rollout_within<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    x: &mut Scratch<L>,
+    policy: &RolloutPolicy,
+    soft: &mut Softmax<'_>,
+    turn: u16,
+    work_limit: u64,
+) -> Option<RolloutEnd> {
+    let mut inline = SoftInline {
+        policy,
+        t,
+        soft,
+        record: |_: Observation<'_, L>, _: &Decision<L>, _: Choice| {},
+    };
+    loop {
+        match next_within(
+            s,
+            t,
+            x,
+            &mut inline,
+            (u16::MAX, TurnStep::Cleanup),
+            work_limit,
+        )? {
+            Step::Over(outcome) => return Some(RolloutEnd::Outcome(outcome)),
+            Step::Decide(_) if s.turn().number() >= turn => return Some(RolloutEnd::Cutoff),
+            Step::Decide(d) => {
+                let c = inline.choose(Observation::new(s, d.player), &d);
+                // An inline answer does not need a transactional copy.
+                apply_decided(s, t, x, &mut inline, &d, c);
+            }
+        }
+    }
 }
 
 /// Plays the forced root choice of a search, then rolls out the game. Calls `record` for

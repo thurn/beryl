@@ -221,12 +221,12 @@ pub mod profile {
 
 pub use announced::target_takes;
 pub use bodies::{CustomBody, custom_body};
-pub use cast::{cost_being_cast, pointless};
+pub use cast::{cost_being_cast, payable_responses, pointless};
 pub use combat::preferred_damage;
 pub use drawing::wins_instead_of_drawing;
 pub use engine::{
-    Counts, Scratch, apply, apply_decided, concede, interchangeable, next, next_in_step, observe,
-    paused_events, refusal, view,
+    Counts, Scratch, apply, apply_decided, concede, interchangeable, next, next_in_step,
+    next_within, observe, paused_events, refusal, view,
 };
 pub use game::Game;
 pub use keywords::flashback::paid as flashback_paid;

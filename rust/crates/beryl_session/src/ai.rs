@@ -182,6 +182,7 @@ mod tests {
             rewards: vec![30.0, 30.0, 0.0],
             means: vec![Some(0.4), Some(0.75), None],
             anchor: None,
+            turn: None,
         };
         let view = SearchView::of(&search);
         assert_eq!(view.means, vec![Some(0.4), Some(0.75), None]);

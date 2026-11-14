@@ -67,14 +67,18 @@ use crate::values::Knowledge;
 use crate::{Agent, AgentDecision, ExpertAgent, Search, Sight, Widen};
 
 mod trace;
+mod turn;
 use trace::{Capture, Trace};
 pub use trace::{TreeReport, Visits};
+pub use turn::TurnReport;
 
 /// How the search treats what it cannot see.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Method {
     /// A tree per world, each world sampled once.
     Pimc { worlds: u16 },
+    /// Bounded turn search on own-turn empty-stack priority, PIMC elsewhere.
+    Turn,
     /// `trees` root-parallel trees, a fresh world each iteration.
     Ismcts { trees: u16 },
 }
@@ -231,6 +235,7 @@ impl fmt::Display for Family {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.method {
             Method::Pimc { worlds } => write!(f, "pimc{worlds}")?,
+            Method::Turn => write!(f, "turn72")?,
             Method::Ismcts { trees } => write!(f, "ismcts{trees}")?,
         }
         let sight = match self.sight {
@@ -265,7 +270,7 @@ impl FromStr for Family {
         let bad = || {
             format!(
                 "{s:?} is no family: method/sight/leaf/knowledge[/options], as \
-                 ismcts18/hidden/rollout/tuned (pimcN or ismctsN; hidden, hands or omniscient; \
+                 ismcts18/hidden/rollout/tuned (pimcN, ismctsN or turn72; hidden, hands or omniscient; \
                  rollout, cutN or eval; estimate or tuned; options anchor, expert, guard, mid, \
                  means, hold, waste, combat and order joined by + in that order; \
                  expert and guard require anchor)"
@@ -311,6 +316,8 @@ impl FromStr for Family {
             Method::Pimc { worlds: n }
         } else if let Some(n) = method.strip_prefix("ismcts").and_then(count) {
             Method::Ismcts { trees: n }
+        } else if method == "turn72" {
+            Method::Turn
         } else {
             return Err(bad());
         };
@@ -438,6 +445,7 @@ impl<L: Layout> LongSearch<L> {
         let (n, resample) = match self.settings.family.method {
             Method::Pimc { worlds } => (worlds, false),
             Method::Ismcts { trees } => (trees, true),
+            Method::Turn => (72, false),
         };
         let known: Bitboard<L::Slot> = L::Slot::all().filter(|&slot| obs.knows(slot)).collect();
         (0..n.max(1))
@@ -929,6 +937,13 @@ impl<L: Layout> LongSearch<L> {
         {
             return Choice(0);
         }
+        if self.settings.family.method == Method::Turn
+            && d.kind == DecisionKind::Priority
+            && d.player == obs.turn().active()
+            && obs.stack().is_empty()
+        {
+            return self.choose_turn(obs, d, decision, capture);
+        }
         let chain = kept.as_ref().map(|k| k.chain);
         let (mut trees, chain) = match kept.and_then(|k| self.descend(k, obs, d)) {
             Some(trees) => (trees, chain.expect("kept trees")),
@@ -989,6 +1004,7 @@ impl<L: Layout> LongSearch<L> {
             rewards,
             means,
             anchor,
+            turn: None,
         });
         if trees.iter().all(|tree| tree.expanded(choice)) {
             self.kept = Some(Kept {
@@ -1135,15 +1151,7 @@ impl<L: Layout> Tree<L> {
     /// A world for an iteration: from the true root, what the sight keeps and the rest dealt.
     fn deal(&self, t: &GameTable, rng: &mut SplitMix64) -> State<L> {
         let obs = Observation::new(&self.state, self.viewer);
-        match self.family.sight {
-            Sight::Hidden => obs.determinize(t, rng),
-            Sight::Hands => obs.determinize_libraries(t, rng),
-            Sight::Omniscient => {
-                let mut s = self.state.clone();
-                s.reseed(rng.next_u64());
-                s
-            }
-        }
+        deal(t, self.family.sight, obs, rng)
     }
 
     /// The steps spent over the tree's life.
@@ -1492,6 +1500,23 @@ impl<L: Layout> Tree<L> {
     /// The turns from the tree's first root to `s`.
     fn turns(&self, s: &State<L>) -> u16 {
         s.turn().number().saturating_sub(self.origin)
+    }
+}
+
+fn deal<L: Layout>(
+    t: &GameTable,
+    sight: Sight,
+    obs: Observation<'_, L>,
+    rng: &mut SplitMix64,
+) -> State<L> {
+    match sight {
+        Sight::Hidden => obs.determinize(t, rng),
+        Sight::Hands => obs.determinize_libraries(t, rng),
+        Sight::Omniscient => {
+            let mut s = obs.unmasked_root().clone();
+            s.reseed(rng.next_u64());
+            s
+        }
     }
 }
 
@@ -1856,6 +1881,7 @@ mod tests {
             "pimc72/hidden/rollout/tuned/means",
             "pimc72/hidden/rollout/tuned/anchor+mid+means",
             "pimc72/hidden/rollout/tuned/anchor+guard",
+            "turn72/hidden/rollout/tuned/anchor+guard",
             "pimc72/hidden/rollout/tuned/anchor+guard+mid+means",
             "pimc72/hidden/rollout/tuned/anchor+hold",
             "pimc72/hidden/rollout/tuned/anchor+guard+hold+waste+combat",

@@ -15,7 +15,7 @@ use beryl_engine::state::CombatRole;
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
     Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome, Scratch,
-    Seat, Slot, State, Step, TurnStep, apply, next,
+    Seat, Slot, State, Step, TurnStep, apply, next, next_within,
 };
 use beryl_engine::{Large, LargeSlot, Layout, Relayout, Small};
 
@@ -80,6 +80,12 @@ pub(super) struct Plan<L: Layout = Small> {
     follow_up: Option<Opt<L>>,
 }
 
+impl<L: Layout> Plan<L> {
+    pub(super) fn is_pending(&self, turn: u16) -> bool {
+        self.turn == turn && (!self.rest.is_empty() || self.follow_up.is_some())
+    }
+}
+
 impl Plan<Small> {
     /// The same plan in [`Large`], by the same slots.
     pub(super) fn widen(&self) -> Plan<Large> {
@@ -110,6 +116,7 @@ pub(super) struct Sim<'a, L: Layout, J> {
     /// Whether this simulates the other side's blocks inside one of our attacks, so that
     /// its own simulations leave the attacker's choices to the rollout policy.
     nested: bool,
+    work_limit: Option<u64>,
     judgments: PhantomData<J>,
 }
 
@@ -128,12 +135,34 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
             me,
             plan,
             nested: false,
+            work_limit: None,
             judgments: PhantomData,
         }
     }
 
     /// The answer to a combat decision in the determinized position `start`.
     pub fn choose(&mut self, start: &State<L>, d: &Decision<L>) -> Choice {
+        self.plan_choice(start, d).expect("unbounded combat")
+    }
+
+    /// Returns a choice only after weighing complete combat lines. A nested
+    /// simulation shares the same scratch allowance and can abandon its line.
+    pub(super) fn choose_within(
+        &mut self,
+        start: &State<L>,
+        d: &Decision<L>,
+        work_limit: u64,
+    ) -> Option<Choice> {
+        self.work_limit = Some(work_limit);
+        self.plan_choice(start, d)
+    }
+
+    fn room(&self, work: u64) -> bool {
+        self.work_limit
+            .is_none_or(|limit| limit.saturating_sub(self.x.counts.decision_work()) >= work)
+    }
+
+    fn plan_choice(&mut self, start: &State<L>, d: &Decision<L>) -> Option<Choice> {
         let turn = start.turn().number();
         if self.plan.turn != turn {
             *self.plan = Plan {
@@ -144,7 +173,7 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
         match d.kind {
             DecisionKind::AttackTarget | DecisionKind::BlockTarget => {
                 if let Some(c) = self.plan.follow_up.take().and_then(|o| option(d, o)) {
-                    return c;
+                    return Some(c);
                 }
                 self.follow_up(start, d)
             }
@@ -157,16 +186,16 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
                         self.plan.rest.remove(0);
                     }
                     self.plan.follow_up = Some(follow_up(next));
-                    return c;
+                    return Some(c);
                 }
                 let plans = if d.kind == DecisionKind::Attacker {
                     self.attack_plans(start, d)
                 } else {
                     self.block_plans(start, d)
                 };
-                let mut top: (&[Declare<L>], i32) = (&[], self.weigh(start, d, &[], None));
+                let mut top: (&[Declare<L>], i32) = (&[], self.weigh(start, d, &[], None)?);
                 for p in &plans {
-                    let score = self.weigh(start, d, p, None);
+                    let score = self.weigh(start, d, p, None)?;
                     // Every attacker, the unsafe ones too, is the lethal check only.
                     if matches!(p.first(), Some(Declare::Every(_))) && score < DECIDED {
                         continue;
@@ -193,7 +222,7 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
                     top.0 = chumps;
                 }
                 let Some((&first, rest)) = top.0.split_first() else {
-                    return option(d, Opt::Done).unwrap_or(Choice(0));
+                    return Some(option(d, Opt::Done).unwrap_or(Choice(0)));
                 };
                 self.plan.rest = if matches!(first, Declare::Every(_)) {
                     top.0.to_vec()
@@ -201,9 +230,9 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
                     rest.to_vec()
                 };
                 self.plan.follow_up = Some(follow_up(first));
-                declare(start, d, first).unwrap_or(Choice(0))
+                Some(declare(start, d, first).unwrap_or(Choice(0)))
             }
-            _ => Choice(0),
+            _ => Some(Choice(0)),
         }
     }
 
@@ -369,19 +398,19 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
     }
 
     /// What the creature just declared attacks, or blocks, with no plan to follow.
-    fn follow_up(&mut self, start: &State<L>, d: &Decision<L>) -> Choice {
+    fn follow_up(&mut self, start: &State<L>, d: &Decision<L>) -> Option<Choice> {
         let candidates: Vec<Opt<L>> = match &d.candidates {
             Candidates::Options(o) => o.iter().copied().collect(),
             Candidates::Objects(_) => d.candidates.objects().map(Opt::Object).collect(),
         };
         let mut top = (0, i32::MIN);
         for (i, &o) in candidates.iter().enumerate() {
-            let score = self.weigh(start, d, &[], Some(o));
+            let score = self.weigh(start, d, &[], Some(o))?;
             if score > top.1 {
                 top = (i, score);
             }
         }
-        Choice(top.0 as u16)
+        Some(Choice(top.0 as u16))
     }
 
     /// What an attacker could attack: the player, then each planeswalker the opponent
@@ -412,19 +441,19 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
         d: &Decision<L>,
         plan: &[Declare<L>],
         pending: Option<Opt<L>>,
-    ) -> i32 {
-        let planned = self.run(start, plan, pending, true);
+    ) -> Option<i32> {
+        let planned = self.run(start, plan, pending, true)?;
         let ours = matches!(d.kind, DecisionKind::Attacker | DecisionKind::AttackTarget);
         if !ours || self.nested || planned >= DECIDED {
-            return planned;
+            return Some(planned);
         }
-        let free = self.run(start, plan, pending, false);
+        let free = self.run(start, plan, pending, false)?;
         let (lo, hi) = (planned.min(free), planned.max(free));
-        if hi >= DECIDED || lo <= -DECIDED {
+        Some(if hi >= DECIDED || lo <= -DECIDED {
             lo
         } else {
             lo + (hi - lo) / 4
-        }
+        })
     }
 
     /// Plays combat on from `start` with our next declarations `plan`, then stopping, and
@@ -437,7 +466,10 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
         plan: &[Declare<L>],
         mut pending: Option<Opt<L>>,
         blocks: bool,
-    ) -> i32 {
+    ) -> Option<i32> {
+        if !self.room(1) {
+            return None;
+        }
         let mut s = start.clone();
         self.x.counts.copied();
         let turn = s.turn().number();
@@ -458,9 +490,24 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
             {
                 break;
             }
-            let d = match next(&mut s, self.t, self.x, &mut inline) {
-                Step::Over(_) => break,
-                Step::Decide(d) => d,
+            let step = match self.work_limit {
+                Some(limit) => next_within(
+                    &mut s,
+                    self.t,
+                    self.x,
+                    &mut inline,
+                    (turn, TurnStep::EndOfCombat),
+                    limit,
+                ),
+                None => Some(next(&mut s, self.t, self.x, &mut inline)),
+            };
+            let d = match step {
+                None if (s.turn().number(), s.turn().step()) >= (turn, TurnStep::EndOfCombat) => {
+                    break;
+                }
+                None => return None,
+                Some(Step::Over(_)) => break,
+                Some(Step::Decide(d)) => d,
             };
             let c = match (d.kind, d.player == self.me) {
                 (DecisionKind::Priority, _) => Choice(0),
@@ -496,17 +543,21 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
                         me: d.player,
                         plan: &mut theirs,
                         nested: true,
+                        work_limit: self.work_limit,
                         judgments: PhantomData::<J>,
                     };
-                    sim.choose(&s, &d)
+                    sim.plan_choice(&s, &d)?
                 }
                 _ => self
                     .policy
                     .choose(self.t, Observation::new(&s, d.player), &d),
             };
+            if !self.room(2) {
+                return None;
+            }
             apply(&mut s, self.t, self.x, &mut inline, c);
         }
-        self.score(&s, s.turn().active() == self.me)
+        Some(self.score(&s, s.turn().active() == self.me))
     }
 
     /// A position's score for us: the permanents' values on each side, other than lands,

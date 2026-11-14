@@ -286,6 +286,24 @@ fn write_tree(
         out,
         "\nTree ({work} steps, suite seed {seed}, chose {chosen:?})"
     );
+    if let Some(turn) = report.turn {
+        let _ = writeln!(
+            out,
+            "Turn search used {} proposal steps and {} scoring steps. \
+             {} lines completed, {} merged, {} reserves kept, {} continuation fallbacks.{}",
+            turn.proposal_work,
+            turn.scoring_work,
+            turn.completed,
+            turn.merged,
+            turn.reserved,
+            turn.fallbacks,
+            if turn.defaulted {
+                " Kept the default after incomplete scoring."
+            } else {
+                ""
+            },
+        );
+    }
     for ((side, choice), branch) in ["A", "B"].into_iter().zip(choices).zip(report.branches) {
         let name = &candidates[usize::from(choice.0)];
         let _ = writeln!(out, "{side} {name:?}  {}", stats(branch.visits));

@@ -32,6 +32,7 @@ pub(super) struct Situation<L: Layout = Small> {
     /// needed them.
     funds: OnceCell<Option<Funds<L>>>,
     full: Cell<bool>,
+    check_targets: bool,
 }
 
 impl<L: Layout> Situation<L> {
@@ -40,6 +41,7 @@ impl<L: Layout> Situation<L> {
             player,
             funds: OnceCell::new(),
             full: Cell::new(false),
+            check_targets: true,
         }
     }
 
@@ -136,15 +138,16 @@ fn refused<L: Layout>(
     if !parts::spell_payable(s, t, player, slot, face, costs) {
         return Some(Refusal::Cost);
     }
-    (!targetable(
-        s,
-        t,
-        face.spell_ability_with(costs),
-        player,
-        Some(slot),
-        0,
-        None,
-    ))
+    (now.check_targets
+        && !targetable(
+            s,
+            t,
+            face.spell_ability_with(costs),
+            player,
+            Some(slot),
+            0,
+            None,
+        ))
     .then_some(Refusal::Target)
 }
 
@@ -361,7 +364,7 @@ fn activatable<L: Layout>(
         }
         None => funds.pays(s, t, cost, spent),
     });
-    paid && targetable(s, t, Some(a), player, None, 0, Some(slot))
+    paid && (!now.check_targets || targetable(s, t, Some(a), player, None, 0, Some(slot)))
 }
 
 /// Whether activating `ability` of the object in `slot` now would do nothing, as its effect
@@ -392,7 +395,7 @@ fn activation_options<L: Layout>(
     let player = now.player;
     // Activations that would do nothing, left out for the player the profile hides them from,
     // where a card of the game has one.
-    let prunes = s.profile().hides_pointless[player.index()] && t.needy();
+    let prunes = now.check_targets && s.profile().hides_pointless[player.index()] && t.needy();
     let objects = s
         .in_zone(Zone::Battlefield)
         .filter(|slot| s.controller(slot) == player)
@@ -441,4 +444,37 @@ pub(crate) fn priority_options<L: Layout>(
     activation_options(s, t, &now, out)?;
     now.complete()?;
     Ok(())
+}
+
+/// Spells and abilities whose costs `player` could pay at instant speed on another
+/// player's turn. A response's target may only appear after the other player acts.
+///
+/// Under [CR 117.1a], "A player may cast an instant spell any time they have priority."
+/// Under [CR 118.3], "A player can't pay a cost without having the necessary resources
+/// to pay it fully."
+///
+/// [CR 117.1a]: https://yawgatog.com/resources/magic-rules/#R1171a
+/// [CR 118.3]: https://yawgatog.com/resources/magic-rules/#R1183
+pub fn payable_responses<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+) -> Result<L::Queue<Opt<L>, 64>, Full> {
+    debug_assert_ne!(s.turn().active(), player);
+    let now = Situation {
+        check_targets: false,
+        ..Situation::of(player)
+    };
+    let mut out = Default::default();
+    cast_options(
+        s,
+        t,
+        &now,
+        cast_sources(s, player),
+        From::Priority,
+        &mut out,
+    )?;
+    activation_options(s, t, &now, &mut out)?;
+    now.complete()?;
+    Ok(out)
 }

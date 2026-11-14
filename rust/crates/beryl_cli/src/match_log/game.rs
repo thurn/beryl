@@ -104,6 +104,8 @@ pub struct Searched {
     /// An anchored family's check of its choice against greedy's answer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub anchor: Option<AnchorRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn: Option<beryl_search::TurnReport>,
 }
 
 /// How much of a search's play a game takes from its log.
@@ -362,6 +364,7 @@ fn searched(s: &Search) -> Searched {
         visits: s.visits.clone(),
         rewards: s.rewards.clone(),
         means: s.means.clone(),
+        turn: s.turn,
         anchor: s.anchor.map(|a| AnchorRecord {
             greedy: a.greedy.0,
             search: a.search.0,
