@@ -118,7 +118,7 @@ robin for over 2 hours.
   busy.
 - Wardens (the sessions that evaluate AI changes) rerun only the matches that
   decide whether a change is accepted, never the ones that are only reported.
-- The "long-think arena" is retired and its command deleted
-  (`docs/ai-strategy.md` §8): it used the machine for days, and the AI now
-  improves through the ladder's head-to-head matches instead. Its last run is
-  recorded in `docs/longthink-run-003.md`.
+- The "long-think arena" is retired and its command deleted: it used the machine
+  for days, and the AI now improves through the ladder's head-to-head matches
+  instead (`docs/ai-plan.md` §4). Its last run is recorded in
+  `docs/longthink-run-003.md`.

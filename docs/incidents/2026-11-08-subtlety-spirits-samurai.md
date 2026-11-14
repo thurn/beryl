@@ -142,8 +142,9 @@ P1 Priority  pass | Emperor +1 | Emperor −1      (Jace, the Mind Sculptor on t
 
 ## Follow-ups
 
-The ladder (by-97g, `docs/ai-strategy.md` §6) already holds the rungs that fit.
-Notes on each bead name this replay as a case:
+The ladder of that week (by-97g) already held the rungs that fit;
+`docs/ai-plan.md` §6 holds the current ones. Notes on each bead name this replay
+as a case:
 
 1. **Evoke in the rollouts** (rung 4, by-97g.8). A creature cast for evoke is
    worth its enters ability alone. `enters_worth` should check its targeted

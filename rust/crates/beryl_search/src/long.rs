@@ -1,7 +1,7 @@
 //! The long-think searcher: one Monte Carlo tree search with every axis the long-think
-//! arena varied (docs/longthink-run-003.md; the arena is retired, docs/ai-strategy.md §8),
+//! arena varied (docs/longthink-run-003.md; the arena is retired),
 //! so that its entrants differ in one setting at a time. The ladder's champion and its
-//! challengers (docs/ai-strategy.md §3, §6) are its settings. [`Mcts`](crate::Mcts), the
+//! challengers are its settings. [`Mcts`](crate::Mcts), the
 //! UI's quick opponent, stays as it is.
 //!
 //! - **Method.** [`Method::Pimc`] searches a fixed number of worlds, each sampled once at the
@@ -125,7 +125,7 @@ pub struct Options {
     /// flip.
     pub anchor: bool,
     /// With [`Options::anchor`], use the live expert's answer as the default at every
-    /// searched decision. Used for the yardstick in docs/ai-strategy.md §6.6.
+    /// searched decision. A yardstick for how much a good default is worth, never a champion.
     pub expert: bool,
     /// With [`Options::anchor`], [`guarded`] holds greedy's answer at attacker declarations,
     /// choices of up to a number of objects, and picks from the player's hand other than

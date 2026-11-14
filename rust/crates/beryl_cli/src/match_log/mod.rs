@@ -1,7 +1,7 @@
 //! Games between entrants, played and logged so a run resumes and replays: the ladder's
 //! matches and the commands that read them (`gate`, `hunt`, `positions`, `screen`). The
-//! layout is the retired long-think arena's (docs/longthink-run-003.md; docs/ai-strategy.md
-//! §8), whose command is gone. A run directory holds:
+//! layout is the retired long-think arena's (docs/longthink-run-003.md),
+//! whose command is gone. A run directory holds:
 //!
 //! - `games.jsonl`, a line per finished game ([`GameRecord`]), the record that commits it;
 //! - `decisions.jsonl`, a line per searched decision ([`DecisionRecord`]): the root's

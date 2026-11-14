@@ -2,8 +2,9 @@
 
 Champion: `pimc72/hidden/rollout/tuned/anchor+guard`
 
-One row a match or audit, newest first. docs/ai-strategy.md §4 says how each row
-is made.
+One row a match or audit, newest first. docs/ai-plan.md §4 says how each row is
+made. Rows up to 2026-11-13 were made by the plan before it, whose gate stopped
+a rung at the suite on any one lower entry.
 
 | Date       | Challenger                                         | Champion                                    | Budget | Games | Score | Elo (95%)      | Verdict             | Suite open / fixed | Human games |
 | ---------- | -------------------------------------------------- | ------------------------------------------- | ------ | ----- | ----- | -------------- | ------------------- | ------------------ | ----------- |

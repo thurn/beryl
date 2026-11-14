@@ -368,14 +368,14 @@ const DEEP_SEER: Family = Family {
 /// can see, with the anchor and guard enabled. 30M engine steps a decision whatever
 /// `budget` says, on every core.
 ///
-/// The ladder's champion (docs/ai-strategy.md §3): always the current best fair agent, so a
+/// The ladder's champion: always the current best fair agent, so a
 /// promotion changes [`DEEP_SEARCHER`], and its comment names the match that made it.
 fn deep_searcher(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + Send> {
     deep_family(t, seed, DEEP_SEARCHER, DEEP_WORK)
 }
 
 /// The Deep Searcher's family, the ladder's champion, which `beryl_cli ladder` plays at the
-/// proxy budget unless told otherwise (docs/ai-strategy.md §4).
+/// proxy budget unless told otherwise.
 /// Rung 1 (by-97g.23) promoted guard after it scored 52.4% over 574 games at 3M steps.
 pub const DEEP_SEARCHER: Family = Family {
     method: Method::Pimc { worlds: 72 },

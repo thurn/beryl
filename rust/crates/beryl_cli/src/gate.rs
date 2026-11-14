@@ -1,4 +1,4 @@
-//! The ladder's blunder suite gate (docs/ai-strategy.md §4.3).
+//! The ladder's blunder suite gate: the suite run for the champion and a challenger, compared.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -138,7 +138,7 @@ impl Round {
             .collect::<Vec<_>>()
             .join("\n");
         Err(format!(
-            "rebuild or retire the drifted entries (docs/ai-strategy.md §5)\n{reasons}"
+            "rebuild each drifted entry as a board in data/blunders/ or retire it\n{reasons}"
         ))
     }
 

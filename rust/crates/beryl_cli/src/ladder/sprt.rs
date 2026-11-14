@@ -1,9 +1,8 @@
-//! The sequential test: the bars' hypotheses, the pairs it counts and the verdict it reaches
-//! (docs/ai-strategy.md §4).
+//! The sequential test: the bars' hypotheses, the pairs it counts and the verdict it reaches.
 
 use serde::Serialize;
 
-/// The match bars of docs/ai-strategy.md §§4.4–4.5.
+/// The bars a ladder match or audit is played to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Bar {
     /// "No gain" against "+30 Elo" at α = β = 0.05.

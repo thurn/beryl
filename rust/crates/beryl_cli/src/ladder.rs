@@ -1,6 +1,6 @@
 //! `beryl_cli ladder <challenger> [--vs NAME] [--work 3M] [--bar stronger|plausible|audit] [--cap N]
 //! [--seed N] [--out DIR]` (`just ladder`): a paired match between a challenger and the
-//! champion (docs/ai-strategy.md §4).
+//! champion.
 //!
 //! - **The agents.** Each is a registered agent or a long-think entrant (`family@budget`); a
 //!   family named without a budget plays at `--work`, the proxy budget of 3M engine steps a
@@ -51,8 +51,8 @@ mod sprt;
 pub use report::{Match, Report};
 pub use sprt::{Bar, Pairs, Sprt, Verdict};
 
-/// Games played at once, one thread each and one a hardware thread (docs/ai-strategy.md
-/// §4.1): 18 on an M5 Max, 20 on an i7-12700F, where 20 play 6% more games an hour than 18.
+/// Games played at once, one thread each and one a hardware thread:
+/// 18 on an M5 Max, 20 on an i7-12700F, where 20 play 6% more games an hour than 18.
 /// Games count in seed order, so how many run at once changes no result.
 pub fn games_at_once() -> usize {
     thread::available_parallelism().map_or(1, usize::from)

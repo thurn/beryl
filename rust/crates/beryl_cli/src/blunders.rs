@@ -1,5 +1,5 @@
 //! `beryl_cli blunders [agent] [--work 3M,30M] [--seeds 5] [--only NAME,...] [--json FILE]`
-//! (`just blunders`): the blunder suite (docs/ai-strategy.md §5), a regression gate built
+//! (`just blunders`): the blunder suite, a regression gate built
 //! from every blunder a human has caught.
 //!
 //! - **An entry** of `data/blunders.json` ([`Entry`]) names an incident, a position and the
@@ -412,7 +412,7 @@ pub fn main(args: &[String]) -> Result<(), String> {
     }
     if report.drifted > 0 {
         return Err(format!(
-            "{} entries drifted: rebuild or retire them (docs/ai-strategy.md §5)",
+            "{} entries drifted: rebuild each as a board in data/blunders/ or retire it",
             report.drifted
         ));
     }

@@ -1,4 +1,4 @@
-//! The ladder's start positions (docs/ai-strategy.md §4.1): balanced mid-game boards that take
+//! The ladder's start positions: balanced mid-game boards that take
 //! the openings' luck out of a match's variance.
 //!
 //! - `beryl_cli positions build [--games N] [--seed N] [--work 3M] [--out DIR]` plays N seeded

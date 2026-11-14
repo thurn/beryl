@@ -1,6 +1,6 @@
 //! `beryl_cli screen <challenger> <match-dir> [--vs NAME] [--recheck N] [--work 3M] [--games N]`
 //! (`just screen`): a cheap estimate of what a challenger that changes few moves costs, from
-//! the champion's last match, before the hours of its own (docs/ai-strategy.md §4.2).
+//! the champion's last match, before the hours of its own.
 //!
 //! - **Replay.** Each game of the match directory replays through its log
 //!   (`anchor_replay`'s [`games`], [`start`] and [`log`]). The challenger, built from the
