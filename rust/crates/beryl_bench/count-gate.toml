@@ -26,8 +26,11 @@
 # "it's under 2%"; room for work to come. Never raise `tolerance_percent` to
 # pass a change.
 #
-# Lower `instructions` whenever the gate reports a drop past the tolerance, so
-# the slack isn't banked for the next regression.
+# Lower `instructions` whenever the count is more than 0.5% below it, so the
+# slack isn't banked for the next regression. Slow CI files a `count-lower`
+# bead when it measures that, and a `count-creep` bead when one tested range
+# adds more than 0.25% or the count drifts 0.5% above its lowest since the bar
+# moved, while the gate still passes (`tools/src/beryl_tools/count_trend.py`).
 
 benchmark = "rollout_counts::cube_rollout::rollouts::corpus"
 instructions = 389_343_295

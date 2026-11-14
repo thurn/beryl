@@ -93,7 +93,13 @@ The lanes slow CI adds to the fast check's:
   nightly run plays every card on staging.
 - `counts`: `just count-gate`, which checks the rollout benchmark's instruction
   count against the limit in `rust/crates/beryl_bench/count-gate.toml`. That
-  file's comments say when the limit may go up.
+  file's comments say when the limit may go up. Each staging commit's count goes
+  in `$BERYL_CACHE/ci/counts.jsonl`, and the step prints the change since the
+  last commit measured. Without failing anything, it files a `count-creep` bead
+  when one tested range adds more than 0.25%, or when the count is more than
+  0.5% above the lowest it reached since the limit last moved, and a
+  `count-lower` bead when the count is more than 0.5% under the limit
+  (`count_trend.py`).
 
 Slow CI runs on two machines: this Mac and Cygnus, a Windows PC. A pass on
 either one moves `master` forward. A failure's Steward bead (the P0 bead Enact
