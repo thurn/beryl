@@ -225,8 +225,7 @@ pub struct Ability {
     /// only if it is; otherwise it does nothing. If the ability triggers, it checks the
     /// stated condition again as it resolves."
     condition: Option<&'static Condition>,
-    /// Replacement abilities: what they replace and how. Held by reference, as the trigger
-    /// is: a [`Replacement`] may name a filter.
+    /// Replacement abilities: what they replace and how, held by reference as the trigger is.
     replacement: Option<&'static Replacement>,
     /// Static abilities: the continuous effect they generate on the battlefield. Held by
     /// reference, as the trigger is: a [`LayerSpec`] names objects and a condition.
@@ -644,8 +643,7 @@ impl Ability {
         self.condition
     }
 
-    /// A replacement ability: what it replaces and how; `None` for an ability of another
-    /// kind.
+    /// A replacement ability: what it replaces and how; `None` for any other kind.
     #[inline]
     pub const fn replacement(&self) -> Option<&'static Replacement> {
         self.replacement
