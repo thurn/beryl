@@ -60,6 +60,14 @@ first. The run log's `chosen` field says why each one ran, and `cut` marks the
 ones left to the browser sweep. The fast check also rejects conflict markers and
 badly formatted commit subjects.
 
+`enact push` runs the fast check in the branch's own worktree, then lands the
+branch through Enact's merge queue, which checks a batch of pushes together on
+the staging tip. That second check reruns only the lanes that a branch's own
+change and the rest of the merged tree both select: the commits that landed on
+staging since the branch's check, and the batch's other branches (`narrow` in
+`changes.py`). A branch that lands alone on the tip it was checked on is not
+checked again.
+
 ## Slow CI
 
 `just ci` (an 800 CPU-second budget; see below) runs the lanes below, plus the

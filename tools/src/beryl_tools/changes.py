@@ -1,11 +1,18 @@
 """What changed, for the checks (checks.py re-exports these): the paths a branch changed since
-it left staging, and the fast check run again after `enact push` lost the race to staging
-(checks.fast, `narrow`): Enact
-names the commit the last pass checked in `$ENACT_CHECKED`. Staging takes about twenty pushes
-an hour, so a two-minute check often loses that race, and running every lane again repeated
-work the commits that landed meanwhile could not affect. A lane reruns only when those commits
-select it too: a lane none of their paths selects reads nothing they changed, by the same rule
-that let the first pass leave out the lanes the change itself did not select.
+it left staging, and the fast check run again on a tree that holds branches already checked
+(checks.fast, `narrow`).
+
+Enact names the commits whose fast check passed in `$ENACT_CHECKED`, separated by spaces. A push
+checks its branch in its own tree, then Enact's merge queue checks a batch of such branches
+together on the staging tip; a push that lost a race to staging checks again after it rebases.
+Running every lane again repeated work that nothing new could affect: on 2026-11-14 the queue's
+checks took 150-300 s a batch, one batch at a time, and pushes waited up to 25 minutes.
+
+So a lane runs again only where a checked branch's own change and the rest of the tree both
+select it. The rest is what the tree holds that the branch's check did not see: the commits that
+landed on staging since, and the batch's other branches. A lane none of their paths selects
+reads nothing that changed under the branch, by the same rule that let the first pass leave out
+the lanes the change itself did not select.
 """
 
 from __future__ import annotations
@@ -68,14 +75,33 @@ def markdown_files() -> list[str]:
     ]
 
 
-def landed(checked: str, base: str) -> list[str] | None:
-    """The paths the commits between the base `checked` was built on and the new `base`
-    changed; None when git cannot tell, and every lane runs."""
+def own_paths(checked: str, base: str) -> list[str] | None:
+    """The paths the branch that passed at `checked` changed since it left staging, the old
+    staging it was built on (its merge base with `base`); None when git cannot tell."""
     old = run_git("merge-base", checked, base)
     if not old:
         return None
-    diff = run_git("diff", "--name-only", "--no-renames", old, base)
+    diff = run_git("diff", "--name-only", "--no-renames", old, checked)
     return None if diff is None else [p for p in diff.splitlines() if p]
+
+
+def landed(checked: str) -> list[str] | None:
+    """The paths that the tree at HEAD changed beyond what passed at `checked`: those of each
+    commit HEAD has and `checked` lacks, but the replays of `checked`'s own commits (a rebase or
+    the merge queue's cherry-picks: `--cherry-pick` matches them by their patch). None when git
+    cannot tell, and every lane runs."""
+    if run_git("rev-parse", "--verify", "--quiet", f"{checked}^{{commit}}") is None:
+        return None
+    log = run_git(
+        "log",
+        "--cherry-pick",
+        "--right-only",
+        "--no-merges",
+        "--name-only",
+        "--format=",
+        f"{checked}...HEAD",
+    )
+    return None if log is None else sorted({p for p in log.splitlines() if p})
 
 
 def narrow(
@@ -84,20 +110,26 @@ def narrow(
     lanes_for: Callable[[list[str] | None], list[L]],
     name: Callable[[L], str],
 ) -> list[L]:
-    """`lanes`, the change's own, less those the commits landed since `$ENACT_CHECKED`
-    passed cannot reach (`lanes_for` their paths); all of them on a first run."""
-    checked = os.environ.get(CHECKED_ENV)
+    """`lanes`, the change's own, less those no branch checked in `$ENACT_CHECKED` needs again:
+    a branch needs a lane again when its own paths and the paths landed beyond it both select it
+    (`lanes_for`). All of them on a first run, or when git cannot place a checked commit.
+    """
+    checked = os.environ.get(CHECKED_ENV, "").split()
     if not checked or not base:
         return lanes
-    found = landed(checked, base)
-    if found is None:
-        return lanes
-    reached = {name(lane) for lane in lanes_for(found)}
+    reached: set[str] = set()
+    for commit in checked:
+        own, found = own_paths(commit, base), landed(commit)
+        if own is None or found is None:
+            return lanes
+        reached |= {name(lane) for lane in lanes_for(own)} & {
+            name(lane) for lane in lanes_for(found)
+        }
     kept = [lane for lane in lanes if name(lane) in reached]
     left = sorted(name(lane) for lane in lanes if name(lane) not in reached)
     if left:
         print(
-            f"check: {checked[:8]} passed before staging moved; the {len(found)} paths"
-            f" that landed since reach none of {', '.join(left)}, which stand"
+            f"check: {' '.join(c[:8] for c in checked)} passed their fast checks; what the tree"
+            f" holds beyond them reaches none of {', '.join(left)}, which stand"
         )
     return kept
