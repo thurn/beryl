@@ -5,7 +5,9 @@ use beryl_card_store::facts;
 use crate::action::{Adjustment, Destination, Position, Selection};
 use crate::assist::{Assist, Line, Proposal, enabled};
 use crate::helpers::{card_record, counter, printed_face};
-use crate::state::{ArrowKind, ArrowTarget, Card, Face, Object, ObjectId, Phase, Zone};
+use crate::state::{
+    ArrowKind, ArrowTarget, Card, Face, LineVisibility, Object, ObjectId, Phase, Zone,
+};
 use crate::{Action, Seat, Table};
 
 #[derive(PartialEq, Eq)]
@@ -266,6 +268,7 @@ impl<'a> Combat<'a> {
                 lines.push(line(
                     format!("{} loses {lost} loyalty", name(card)),
                     card.controller,
+                    LineVisibility::KnownObject(card.id),
                     Action::Counter {
                         selection: select(id),
                         name: "loyalty".into(),
@@ -291,6 +294,7 @@ impl<'a> Combat<'a> {
         lines.push(line(
             "Go to end of combat".into(),
             self.table.active,
+            LineVisibility::Public,
             Action::Phase {
                 phase: Phase::EndOfCombat,
             },
@@ -325,7 +329,12 @@ impl<'a> Combat<'a> {
                 },
             )
         };
-        Some(line(text, card.controller, action))
+        Some(line(
+            text,
+            card.controller,
+            LineVisibility::KnownObject(card.id),
+            action,
+        ))
     }
 }
 
@@ -371,9 +380,10 @@ fn select(id: ObjectId) -> Selection {
     }
 }
 
-fn line(text: String, whose: Seat, action: Action) -> Line {
+fn line(text: String, whose: Seat, visibility: LineVisibility, action: Action) -> Line {
     Line {
         text,
+        visibility,
         whose,
         on: true,
         actions: vec![action],
@@ -384,6 +394,7 @@ fn life_line(seat: Seat, verb: &str, amount: i32, change: i32) -> Line {
     line(
         format!("Seat {} {verb} {amount}", u16::from(seat.0) + 1),
         seat,
+        LineVisibility::Public,
         Action::Life {
             seat,
             adjustment: Adjustment::Add(change),

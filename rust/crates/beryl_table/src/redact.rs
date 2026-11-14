@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use crate::change::{ObjectEdit, TableEdit};
-use crate::state::{AbilityMarker, Card, Object, ObjectId};
+use crate::state::{AbilityMarker, Card, LineVisibility, Object, ObjectId};
 use crate::{Action, Change, Entry, Seat, Table};
 
 /// Keep zone order and public object state while hiding identities the seat
@@ -16,10 +16,7 @@ pub fn seen_by(table: &Table, seat: Seat) -> Table {
         redact_object(object, seat, &names);
     }
     for marker in view.markers.values_mut() {
-        redact_marker(marker, table, seat, &names);
-    }
-    for player in &mut view.players {
-        names.redact_counters(&mut player.counters);
+        redact_marker(marker, seat, &names);
     }
     for (state, owner) in view.game_match.seats.iter_mut().zip(table.seats()) {
         redact_deck(&mut state.deck, owner, seat);
@@ -27,9 +24,14 @@ pub fn seen_by(table: &Table, seat: Seat) -> Table {
     }
     for proposal in &mut view.proposals {
         for line in &mut proposal.lines {
-            names.redact_text(&mut line.text);
+            match line.visibility {
+                LineVisibility::Public => {}
+                LineVisibility::KnownObject(id) if knows(table, id, seat) => {}
+                LineVisibility::KnownObject(_) => line.text.clear(),
+                LineVisibility::Unstructured => names.redact_text(&mut line.text),
+            }
             for action in &mut line.actions {
-                redact_action(action, table, seat, &names);
+                redact_action(action, table, table, seat, &names, &BTreeSet::new());
             }
         }
     }
@@ -47,39 +49,37 @@ pub fn entry_seen_by(entry: &Entry, table_before: &Table, seat: Seat) -> Entry {
     let mut names = HiddenNames::new(table_before, seat);
     names.include_table(&after, seat);
 
-    // Suppressing the random numbers alone would leave the shuffle order
-    // recoverable from the moves and the links between old and new ids.
-    let mut private_ids = BTreeSet::new();
-    for pair in entry.changes.windows(2) {
-        match pair {
-            [
-                Change::ResetKnowledge {
-                    id,
-                    edit,
-                    forget: true,
-                },
-                Change::ReplaceId { from, to },
-            ] if id == from && (edit.after.is_empty() || !knows(&after, *to, seat)) => {
-                private_ids.extend([*from, *to]);
+    let private_ids = forgotten_ids(entry, table_before, &after, seat);
+    let private_marker_sources = entry
+        .changes
+        .iter()
+        .filter_map(|change| match change {
+            Change::CreateMarker { marker, .. } | Change::RemoveMarker { marker, .. }
+                if !marker_visible(marker, seat) =>
+            {
+                Some(marker.source)
             }
-            [
-                Change::ReplaceId { from, to },
-                Change::ResetKnowledge {
-                    id,
-                    edit,
-                    forget: false,
-                },
-            ] if id == to && (edit.before.is_empty() || !knows(table_before, *from, seat)) => {
-                private_ids.extend([*from, *to]);
-            }
-            _ => {}
-        }
-    }
-
+            _ => None,
+        })
+        .collect();
     let mut projected = entry.clone();
-    redact_action(&mut projected.action, &after, seat, &names);
+    redact_action(
+        &mut projected.action,
+        table_before,
+        &after,
+        seat,
+        &names,
+        &private_marker_sources,
+    );
     if let Some(action) = &mut projected.undone_action {
-        redact_action(action, &after, seat, &names);
+        redact_action(
+            action,
+            table_before,
+            &after,
+            seat,
+            &names,
+            &private_marker_sources,
+        );
     }
     projected.touches.project(&private_ids, &after, seat);
     projected.changes.retain_mut(|change| match change {
@@ -107,24 +107,20 @@ pub fn entry_seen_by(entry: &Entry, table_before: &Table, seat: Seat) -> Entry {
             redact_object(object, seat, &names);
             true
         }
-        Change::CreateMarker { marker, .. } => {
-            redact_marker(marker, &after, seat, &names);
-            true
-        }
-        Change::RemoveMarker { marker, .. } => {
-            redact_marker(marker, table_before, seat, &names);
+        Change::CreateMarker { marker, .. } | Change::RemoveMarker { marker, .. } => {
+            redact_marker(marker, seat, &names);
             true
         }
         Change::SetObject { id, edit } => {
             redact_object_edit(
                 edit,
-                knows(table_before, *id, seat),
-                knows(&after, *id, seat),
-                &names,
+                table_before.objects.get(id),
+                after.objects.get(id),
+                seat,
             );
             true
         }
-        Change::SetTable(edit) => redact_table_edit(edit, seat, &names),
+        Change::SetTable(edit) => redact_table_edit(edit, seat),
         Change::Roll { .. }
         | Change::InsertArrow { .. }
         | Change::RemoveArrow { .. }
@@ -136,6 +132,38 @@ pub fn entry_seen_by(entry: &Entry, table_before: &Table, seat: Seat) -> Entry {
     projected
 }
 
+fn forgotten_ids(entry: &Entry, before: &Table, after: &Table, seat: Seat) -> BTreeSet<ObjectId> {
+    // Suppressing the random numbers alone would leave the shuffle order
+    // recoverable from the moves and the links between old and new ids.
+    let mut private_ids = BTreeSet::new();
+    for pair in entry.changes.windows(2) {
+        match pair {
+            [
+                Change::ResetKnowledge {
+                    id,
+                    edit,
+                    forget: true,
+                },
+                Change::ReplaceId { from, to },
+            ] if id == from && (edit.after.is_empty() || !knows(after, *to, seat)) => {
+                private_ids.extend([*from, *to]);
+            }
+            [
+                Change::ReplaceId { from, to },
+                Change::ResetKnowledge {
+                    id,
+                    edit,
+                    forget: false,
+                },
+            ] if id == to && (edit.before.is_empty() || !knows(before, *from, seat)) => {
+                private_ids.extend([*from, *to]);
+            }
+            _ => {}
+        }
+    }
+    private_ids
+}
+
 fn knows(table: &Table, id: ObjectId, seat: Seat) -> bool {
     table
         .objects
@@ -145,6 +173,9 @@ fn knows(table: &Table, id: ObjectId, seat: Seat) -> bool {
 
 fn redact_object(object: &mut Object, seat: Seat, names: &HiddenNames) {
     if !object.known_to.contains(&seat) {
+        object
+            .counters
+            .retain(|(label, _)| !mentions_card(label, &object.card));
         object.card = Card::Hidden;
         object.note = None;
     }
@@ -152,33 +183,68 @@ fn redact_object(object: &mut Object, seat: Seat, names: &HiddenNames) {
         names.redact_text(types);
         colors.retain(|color| !names.mentions_hidden(color));
     }
-    names.redact_note(&mut object.note);
-    names.redact_counters(&mut object.counters);
 }
 
-fn redact_marker(marker: &mut AbilityMarker, table: &Table, seat: Seat, names: &HiddenNames) {
-    if knows(table, marker.source, seat) {
-        names.redact_text(&mut marker.text);
-    } else {
-        marker.text.clear();
+// A label attached to an unidentified card can disclose that card's identity.
+// Counters elsewhere can independently use the same word.
+fn mentions_card(label: &str, card: &Card) -> bool {
+    match card {
+        Card::Named(name) | Card::Custom { name, .. } => {
+            !name.is_empty() && label.to_lowercase().contains(&name.to_lowercase())
+        }
+        Card::Hidden => false,
     }
 }
 
-fn redact_object_edit(edit: &mut ObjectEdit, knew: bool, knows: bool, names: &HiddenNames) {
+fn unknown_card(object: Option<&Object>, seat: Seat) -> Option<&Card> {
+    object
+        .filter(|object| !object.known_to.contains(&seat))
+        .map(|object| &object.card)
+}
+
+fn marker_visible(marker: &AbilityMarker, seat: Seat) -> bool {
+    marker
+        .display_source
+        .as_ref()
+        .is_some_and(|source| source.known_to.contains(&seat) && source.card != Card::Hidden)
+}
+
+fn redact_marker(marker: &mut AbilityMarker, seat: Seat, names: &HiddenNames) {
+    if !marker_visible(marker, seat) {
+        marker.display_source = None;
+        marker.text.clear();
+        return;
+    }
+    let source = marker.display_source.as_mut().expect("visible source");
+    if let Card::Custom { types, colors, .. } = &mut source.card {
+        names.redact_text(types);
+        colors.retain(|color| !names.mentions_hidden(color));
+    }
+    source.known_to.retain(|&viewer| viewer == seat);
+}
+
+fn redact_object_edit(
+    edit: &mut ObjectEdit,
+    before: Option<&Object>,
+    after: Option<&Object>,
+    seat: Seat,
+) {
     match edit {
         ObjectEdit::Note(edit) => {
-            if !knew {
+            if !before.is_some_and(|object| object.known_to.contains(&seat)) {
                 edit.before = None;
             }
-            if !knows {
+            if !after.is_some_and(|object| object.known_to.contains(&seat)) {
                 edit.after = None;
             }
-            names.redact_note(&mut edit.before);
-            names.redact_note(&mut edit.after);
         }
         ObjectEdit::Counters(edit) => {
-            names.redact_counters(&mut edit.before);
-            names.redact_counters(&mut edit.after);
+            if let Some(card) = unknown_card(before.or(after), seat) {
+                edit.before.retain(|(label, _)| !mentions_card(label, card));
+            }
+            if let Some(card) = unknown_card(after.or(before), seat) {
+                edit.after.retain(|(label, _)| !mentions_card(label, card));
+            }
         }
         ObjectEdit::Controller(_)
         | ObjectEdit::Face(_)
@@ -191,17 +257,13 @@ fn redact_object_edit(edit: &mut ObjectEdit, knew: bool, knows: bool, names: &Hi
     }
 }
 
-fn redact_table_edit(edit: &mut TableEdit, seat: Seat, names: &HiddenNames) -> bool {
+fn redact_table_edit(edit: &TableEdit, seat: Seat) -> bool {
     match edit {
         TableEdit::SetDeck { seat: owner, .. } | TableEdit::SetSideboard { seat: owner, .. } => {
             *owner == seat
         }
-        TableEdit::SetPlayerCounters { edit, .. } => {
-            names.redact_counters(&mut edit.before);
-            names.redact_counters(&mut edit.after);
-            true
-        }
-        TableEdit::SetLife { .. }
+        TableEdit::SetPlayerCounters { .. }
+        | TableEdit::SetLife { .. }
         | TableEdit::SetActive { .. }
         | TableEdit::SetTurn { .. }
         | TableEdit::SetPhase { .. }
@@ -215,7 +277,14 @@ fn redact_table_edit(edit: &mut TableEdit, seat: Seat, names: &HiddenNames) -> b
     }
 }
 
-fn redact_action(action: &mut Action, table: &Table, seat: Seat, names: &HiddenNames) {
+fn redact_action(
+    action: &mut Action,
+    before: &Table,
+    table: &Table,
+    seat: Seat,
+    names: &HiddenNames,
+    private_marker_sources: &BTreeSet<ObjectId>,
+) {
     match action {
         Action::LoadDeck {
             seat: owner,
@@ -237,28 +306,33 @@ fn redact_action(action: &mut Action, table: &Table, seat: Seat, names: &HiddenN
             if selection.objects.iter().any(|id| !knows(table, *id, seat)) {
                 *note = None;
             }
-            names.redact_note(note);
+        }
+        Action::Counter {
+            selection, name, ..
+        } => {
+            if selection.objects.iter().any(|id| {
+                [before, table].into_iter().any(|state| {
+                    unknown_card(state.objects.get(id), seat)
+                        .is_some_and(|card| mentions_card(name, card))
+                })
+            }) {
+                name.clear();
+            }
         }
         Action::Marker { selection, text } => {
-            if selection.objects.iter().any(|id| !knows(table, *id, seat)) {
+            // A batch can reveal its source after placing a private marker.
+            // The projected marker change carries its exact display text.
+            if selection
+                .objects
+                .iter()
+                .any(|id| private_marker_sources.contains(id) || !knows(table, *id, seat))
+            {
                 text.clear();
             }
-            names.redact_text(text);
         }
         Action::Token { card, note, .. } => {
-            match card {
-                Card::Named(name) if names.mentions_hidden(name) => *card = Card::Hidden,
-                Card::Custom { name, .. } if names.mentions_hidden(name) => *card = Card::Hidden,
-                Card::Custom { types, colors, .. } => {
-                    names.redact_text(types);
-                    colors.retain(|color| !names.mentions_hidden(color));
-                }
-                Card::Named(_) | Card::Hidden => {}
-            }
+            names.redact_token(card);
             names.redact_note(note);
-        }
-        Action::Counter { name, .. } | Action::PlayerCounter { name, .. } => {
-            names.redact_text(name);
         }
         Action::Reveal {
             objects: Some(ids), ..
@@ -266,7 +340,7 @@ fn redact_action(action: &mut Action, table: &Table, seat: Seat, names: &HiddenN
         Action::Peek { selection } => selection.objects.retain(|&id| knows(table, id, seat)),
         Action::Batch { actions } => {
             for action in actions {
-                redact_action(action, table, seat, names);
+                redact_action(action, before, table, seat, names, private_marker_sources);
             }
         }
         Action::Move { .. }
@@ -292,6 +366,7 @@ fn redact_action(action: &mut Action, table: &Table, seat: Seat, names: &HiddenN
         | Action::AlwaysLookAtTop { .. }
         | Action::SortHand { .. }
         | Action::Life { .. }
+        | Action::PlayerCounter { .. }
         | Action::Phase { .. }
         | Action::NextTurn { .. }
         | Action::Roll { .. }
@@ -314,12 +389,24 @@ fn redact_deck(cards: &mut Vec<(String, u16)>, owner: Seat, viewer: Seat) {
     }
 }
 
-/// Free text has no object references. If it mentions the name of a card the
-/// seat can't identify, suppress the whole label. Structured cards use their
-/// own knowledge even when two different objects share a name.
+/// Older proposal labels and unstructured custom card descriptions can mention
+/// a card whose identity is private. Structured labels have their own visibility.
 struct HiddenNames(BTreeSet<String>);
 
 impl HiddenNames {
+    fn redact_token(&self, card: &mut Card) {
+        match card {
+            Card::Named(name) | Card::Custom { name, .. } if self.mentions_hidden(name) => {
+                *card = Card::Hidden;
+            }
+            Card::Custom { types, colors, .. } => {
+                self.redact_text(types);
+                colors.retain(|color| !self.mentions_hidden(color));
+            }
+            Card::Named(_) | Card::Hidden => {}
+        }
+    }
+
     fn new(table: &Table, seat: Seat) -> Self {
         let mut names = Self(BTreeSet::new());
         names.include_table(table, seat);
@@ -368,9 +455,5 @@ impl HiddenNames {
         if note.as_ref().is_some_and(|text| self.mentions_hidden(text)) {
             *note = None;
         }
-    }
-
-    fn redact_counters(&self, counters: &mut Vec<(String, i32)>) {
-        counters.retain(|(name, _)| !self.mentions_hidden(name));
     }
 }

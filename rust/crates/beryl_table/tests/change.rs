@@ -71,6 +71,7 @@ fn inverses_restore_positions_ids_cards_markers_and_arrows() {
     let marker = Change::CreateMarker {
         id: OTHER,
         marker: AbilityMarker {
+            display_source: None,
             source: CARD,
             text: "example ability".into(),
         },

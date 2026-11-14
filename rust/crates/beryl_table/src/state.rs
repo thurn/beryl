@@ -74,9 +74,11 @@ pub struct Object {
     pub face: Face,
     pub tapped: bool,
     pub token: bool,
+    /// Labels are table state independent of the other cards in play.
     pub counters: Vec<(String, i32)>,
     pub stats: Option<(i32, i32)>,
     pub damage: i32,
+    /// Visible to seats that know the annotated card.
     pub note: Option<String>,
     pub attached_to: Option<ObjectId>,
     pub doesnt_untap: bool,
@@ -109,8 +111,29 @@ impl Object {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AbilityMarker {
+    /// The original object id, used as an animation origin while it exists.
     pub source: ObjectId,
     pub text: String,
+    /// The source as it appeared when the ability went on the stack.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_source: Option<MarkerSource>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MarkerSource {
+    pub card: Card,
+    pub face: Face,
+    pub(crate) known_to: Vec<Seat>,
+}
+
+impl MarkerSource {
+    pub(crate) fn capture(object: &Object) -> Self {
+        Self {
+            card: object.card.clone(),
+            face: object.face,
+            known_to: object.known_to.clone(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -207,9 +230,22 @@ pub struct Proposal {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Line {
     pub text: String,
+    /// Older proposals without this field are projected as unstructured text.
+    #[serde(default)]
+    pub visibility: LineVisibility,
     pub whose: Seat,
     pub on: bool,
     pub actions: Vec<Action>,
+}
+
+/// Identifies whether a proposal label uses a card's identity.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LineVisibility {
+    #[default]
+    Unstructured,
+    Public,
+    KnownObject(ObjectId),
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

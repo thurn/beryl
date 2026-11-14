@@ -1,7 +1,7 @@
 use crate::action::Selection;
 use crate::assist::{Assist, Line, Proposal, enabled};
 use crate::helpers::untap_targets;
-use crate::state::{Card, Face, Phase, Zone};
+use crate::state::{Card, Face, LineVisibility, Phase, Zone};
 use crate::{Action, Seat, Table};
 
 /// Offers the active seat the routine actions at the start of its turn.
@@ -24,24 +24,29 @@ pub fn proposal(table: &Table, seat: Seat) -> Option<Proposal> {
         return None;
     }
 
-    let line = |text: &str, action| Line {
-        text: text.into(),
+    let line = |text: String, visibility, action| Line {
+        text,
+        visibility,
         whose: seat,
         on: true,
         actions: vec![action],
     };
     let mut lines = Vec::new();
     for card in untap_targets(table, seat) {
-        let text = match &card.card {
+        let (text, visibility) = match &card.card {
             Card::Named(name) | Card::Custom { name, .. }
                 if card.face != Face::Down && card.known_to.contains(&seat) =>
             {
-                format!("Untap {name}")
+                (
+                    format!("Untap {name}"),
+                    LineVisibility::KnownObject(card.id),
+                )
             }
-            _ => "Untap a card".into(),
+            _ => ("Untap a card".into(), LineVisibility::Public),
         };
         lines.push(line(
-            &text,
+            text,
+            visibility,
             Action::Tap {
                 selection: Selection {
                     objects: vec![card.id],
@@ -52,10 +57,15 @@ pub fn proposal(table: &Table, seat: Seat) -> Option<Proposal> {
         ));
     }
     if table.turn != 1 {
-        lines.push(line("Draw a card", Action::Draw { seat, count: 1 }));
+        lines.push(line(
+            "Draw a card".into(),
+            LineVisibility::Public,
+            Action::Draw { seat, count: 1 },
+        ));
     }
     lines.push(line(
-        "Go to first main",
+        "Go to first main".into(),
+        LineVisibility::Public,
         Action::Phase {
             phase: Phase::FirstMain,
         },

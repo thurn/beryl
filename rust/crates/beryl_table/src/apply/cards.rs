@@ -7,7 +7,9 @@ use crate::action::{
 };
 use crate::change::{Edit, Location, ObjectEdit};
 use crate::helpers::{card_record, printed_face};
-use crate::state::{AbilityMarker, ArrowTarget, Card, Face, Object, ObjectId, Row, Zone};
+use crate::state::{
+    AbilityMarker, ArrowTarget, Card, Face, MarkerSource, Object, ObjectId, Row, Zone,
+};
 use crate::{Change, Refusal, Seat, Table};
 
 use super::{Changes, edit, players};
@@ -708,6 +710,7 @@ pub(super) fn marker(table: &Table, selection: &Selection, text: &str) -> Change
             let marker = AbilityMarker {
                 source: card.id,
                 text: text.to_owned(),
+                display_source: Some(MarkerSource::capture(card)),
             };
             Ok(Change::CreateMarker { id, marker, index })
         })

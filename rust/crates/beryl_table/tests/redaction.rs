@@ -1,8 +1,11 @@
 use std::collections::BTreeSet;
 
-use beryl_table::action::{Destination, Portion, Position, Selection};
+use beryl_table::action::{Adjustment, Destination, Portion, Position, Selection};
+use beryl_table::log::line;
 use beryl_table::redact::{entry_seen_by, seen_by};
-use beryl_table::state::{Assist, Card, Line, Object, ObjectId, Proposal, Zone};
+use beryl_table::state::{
+    Assist, Card, Face, Line, LineVisibility, Object, ObjectId, Proposal, Zone,
+};
 use beryl_table::{Action, Chance, Change, Seat, Table, apply};
 
 mod common;
@@ -141,26 +144,106 @@ fn proposal_text_and_actions_obey_the_same_visibility_as_the_table() {
     add(&mut table, id, name, HAND, &[HOST]);
     table.proposals.push(Proposal {
         assist: Assist::TurnUpkeep,
-        lines: vec![Line {
+        lines: [
+            LineVisibility::Unstructured,
+            LineVisibility::KnownObject(id),
+        ]
+        .into_iter()
+        .map(|visibility| Line {
             text: format!("Remember {}", name.to_uppercase()),
+            visibility,
             whose: HOST,
             on: true,
             actions: vec![Action::Batch {
-                actions: vec![Action::Note {
+                actions: vec![Action::Marker {
                     selection: Selection {
                         objects: vec![id],
                         zone: HAND,
                     },
-                    note: Some(name.into()),
+                    text: "Private ability text".into(),
                 }],
             }],
-        }],
+        })
+        .collect(),
     });
     let host = seen_by(&table, HOST);
     assert_eq!(host.proposals, table.proposals);
     let guest = seen_by(&table, GUEST);
-    assert!(guest.proposals[0].lines[0].text.is_empty());
-    assert!(!serde_json::to_string(&guest).unwrap().contains(name));
+    assert!(
+        guest.proposals[0]
+            .lines
+            .iter()
+            .all(|line| line.text.is_empty())
+    );
+    let serialized = serde_json::to_string(&guest).unwrap();
+    assert!(!serialized.contains(name));
+    assert!(!serialized.contains("Private ability text"));
+}
+
+#[test]
+fn public_labels_survive_a_hidden_card_with_the_same_name() {
+    let mut table = Table::new(2);
+    let id = ObjectId(1);
+    let hidden = ObjectId(2);
+    add(
+        &mut table,
+        id,
+        "Public Card",
+        Zone::Battlefield,
+        &[HOST, GUEST],
+    );
+    add(&mut table, hidden, "Charge", HAND, &[HOST]);
+    table.game_match.seats[0].deck.push(("Charge".into(), 1));
+    let selection = Selection {
+        objects: vec![id],
+        zone: Zone::Battlefield,
+    };
+    let counter = Action::Counter {
+        selection: selection.clone(),
+        name: "charge".into(),
+        adjustment: Adjustment::Add(1),
+    };
+    let note = Action::Note {
+        selection,
+        note: Some("Add a charge counter".into()),
+    };
+    let player_counter = Action::PlayerCounter {
+        seat: HOST,
+        name: "charge".into(),
+        adjustment: Adjustment::Add(1),
+    };
+    table.proposals.push(Proposal {
+        assist: Assist::TurnUpkeep,
+        lines: vec![Line {
+            text: "Add a charge counter".into(),
+            visibility: LineVisibility::Public,
+            whose: HOST,
+            on: true,
+            actions: vec![counter.clone()],
+        }],
+    });
+    let mut chance = Chance::fresh(1);
+    for action in [counter, note, player_counter] {
+        let before = table.clone();
+        let entry = apply(&mut table, HOST, &action, &mut chance).unwrap();
+        for seat in table.seats() {
+            let projected = entry_seen_by(&entry, &before, seat);
+            assert_eq!(projected.action, action);
+            assert_eq!(projected.changes, entry.changes);
+            if matches!(
+                action,
+                Action::Counter { .. } | Action::PlayerCounter { .. }
+            ) {
+                assert!(line(&projected, &seen_by(&table, seat), seat).contains("charge counter"));
+            }
+        }
+    }
+    let guest = seen_by(&table, GUEST);
+    assert_eq!(guest.proposals, table.proposals);
+    assert_eq!(guest.objects[&id], table.objects[&id]);
+    assert_eq!(guest.players[0].counters, vec![("charge".into(), 1)]);
+    assert_eq!(guest.objects[&hidden].card, Card::Hidden);
+    assert!(guest.game_match.seats[0].deck.is_empty());
 }
 
 #[test]
@@ -190,6 +273,83 @@ fn opponent_deck_names_are_hidden_in_the_lobby_and_in_both_sides_of_an_edit() {
     };
     check_load("First List", "First Sideboard", "No Previous Deck");
     check_load("New List", "New Sideboard", "First List");
+}
+
+#[test]
+fn a_counter_cannot_name_its_own_hidden_card() {
+    let mut table = Table::new(2);
+    let id = ObjectId(1);
+    let name = "Private Card";
+    add(&mut table, id, name, Zone::Battlefield, &[HOST]);
+    table.objects.get_mut(&id).unwrap().face = Face::Down;
+    let before = table.clone();
+    let entry = apply(
+        &mut table,
+        HOST,
+        &Action::Counter {
+            selection: Selection {
+                objects: vec![id],
+                zone: Zone::Battlefield,
+            },
+            name: name.into(),
+            adjustment: Adjustment::Add(1),
+        },
+        &mut Chance::fresh(1),
+    )
+    .unwrap();
+    let host = seen_by(&table, HOST);
+    assert_eq!(host.objects[&id].counters, vec![(name.into(), 1)]);
+    assert_eq!(entry_seen_by(&entry, &before, HOST).action, entry.action);
+    let guest = seen_by(&table, GUEST);
+    assert!(guest.objects[&id].counters.is_empty());
+    let entry = entry_seen_by(&entry, &before, GUEST);
+    assert!(!serde_json::to_string(&entry).unwrap().contains(name));
+}
+
+#[test]
+fn revealing_a_source_later_in_the_batch_keeps_its_marker_private() {
+    let mut table = Table::new(2);
+    let id = ObjectId(1);
+    add(&mut table, id, "Private Card", Zone::Battlefield, &[HOST]);
+    table.objects.get_mut(&id).unwrap().face = Face::Down;
+    let before = table.clone();
+    let selection = Selection {
+        objects: vec![id],
+        zone: Zone::Battlefield,
+    };
+    let text = "Private ability";
+    let entry = apply(
+        &mut table,
+        HOST,
+        &Action::Batch {
+            actions: vec![
+                Action::Marker {
+                    selection: selection.clone(),
+                    text: text.into(),
+                },
+                Action::Face {
+                    selection,
+                    face: Face::Front,
+                },
+            ],
+        },
+        &mut Chance::fresh(1),
+    )
+    .unwrap();
+    let projected = |seat| entry_seen_by(&entry, &before, seat);
+    assert!(
+        serde_json::to_string(&projected(HOST))
+            .unwrap()
+            .contains(text)
+    );
+    assert!(
+        !serde_json::to_string(&projected(GUEST))
+            .unwrap()
+            .contains(text)
+    );
+    let guest = seen_by(&table, GUEST);
+    assert_eq!(guest.objects[&id].card, table.objects[&id].card);
+    assert!(guest.markers[&guest.stack[0]].display_source.is_none());
 }
 
 #[test]

@@ -6,6 +6,7 @@ use std::io::{self, BufRead, BufReader, Seek, SeekFrom, Write};
 
 use serde::{Deserialize, Serialize};
 
+use crate::state::MarkerSource;
 use crate::{Chance, Entry, Log, Refusal, Table};
 
 const FORMAT: u32 = 1;
@@ -143,6 +144,13 @@ fn read_save(mut reader: impl BufRead) -> Result<((Table, Log, Chance), u64), Sa
     }
     let header: Header<Table> = serde_json::from_slice(&line)?;
     let mut table = header.initial;
+    // A format-1 header written before markers captured their source may still
+    // have its source object. Entries below rebuild snapshots during replay.
+    for marker in table.markers.values_mut() {
+        if marker.display_source.is_none() {
+            marker.display_source = table.objects.get(&marker.source).map(MarkerSource::capture);
+        }
+    }
     let mut log = Log::new(&table);
     let mut fresh = Chance::fresh(header.seed);
     loop {
