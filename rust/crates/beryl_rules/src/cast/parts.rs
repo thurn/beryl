@@ -191,14 +191,13 @@ pub(super) fn ability_payable<L: Layout>(
     })
 }
 
-/// Whether `player` can pay every payment of life among `parts`
-/// ([CR 119.4](https://yawgatog.com/resources/magic-rules/#R1194)): "If a cost or effect allows
-/// a player to pay an amount of life greater than 0, the player may do so only if their life
-/// total is greater than or equal to the amount of the payment."
+/// Whether `player` can pay every payment of life among `parts`, as [`State::can_pay_life`]
+/// answers for each ([CR 119.4](https://yawgatog.com/resources/magic-rules/#R1194)): "If a
+/// cost or effect allows a player to pay an amount of life greater than 0, the player may do
+/// so only if their life total is greater than or equal to the amount of the payment."
 pub(super) fn life_payable<L: Layout>(s: &State<L>, player: Seat, parts: &[CostPart]) -> bool {
-    let life = s.player(player).life();
     parts.iter().all(|part| match part {
-        CostPart::Life(n) => life >= i16::from(*n),
+        CostPart::Life(n) => s.can_pay_life(player, *n),
         _ => true,
     })
 }
@@ -316,7 +315,8 @@ pub(super) fn pay<L: Layout>(
             },
             CostPart::Life(n) => {
                 // CR 119.4: "If a player pays life, the payment is subtracted from their life
-                // total; in other words, the player loses that much life". The player is the one activating the ability.
+                // total; in other words, the player loses that much life". The player who
+                // pays is the one activating the ability.
                 let player = top(s).controller();
                 life::lose(&mut Game::new(s, t, sink), player, n)?;
             }
