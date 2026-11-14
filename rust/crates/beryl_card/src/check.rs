@@ -617,7 +617,7 @@ impl Scope<'_> {
                 Err(Malformed::Grant)
             }
             Modification::SetPower(amount) => self.amount(amount),
-            Modification::SetBasePt(power, toughness) => {
+            Modification::SetPt(power, toughness) | Modification::SetBasePt(power, toughness) => {
                 both(self.amount(power), self.amount(toughness))
             }
             // A resolving effect names no ability of its own permanent's face.
@@ -714,8 +714,8 @@ impl Scope<'_> {
                 Some(trigger) if trigger.delayed => Ok(()),
                 _ => Err(Malformed::Carried),
             },
-            Amount::Count(objects) => self.objects(objects),
-            Amount::Times(_, amount) => self.amount(amount),
+            Amount::Count(objects) | Amount::CardTypesAmong(objects) => self.objects(objects),
+            Amount::Times(_, amount) | Amount::Plus(_, amount) => self.amount(amount),
             Amount::Life(players)
             | Amount::ThoseOf(players)
             | Amount::SpellsCast(players)

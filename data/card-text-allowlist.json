@@ -90,7 +90,7 @@
     "reason": "wording",
     "note": "Oracle says \"its\" for the Emperor where the renderer names the card.",
     "diff": [
-      "The Wandering Emperor: as long as ~ entered this turn , you may activate [-its-] {+The Wandering Emperor's+} loyalty abilities any time you could cast an instant ."
+      "The Wandering Emperor: as long as ~ entered this turn , you may activate [-its-] {+~'s+} loyalty abilities any time you could cast an instant ."
     ]
   },
   "Thirst for Discovery": {

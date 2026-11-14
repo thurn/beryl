@@ -16,6 +16,7 @@ use crate::layout::{Layout, PerSeat, Queue, Table};
 use crate::object::{AbilityMask, Derived};
 use crate::rule_changes::Rules;
 use crate::state::State;
+use crate::static_ability::Inputs;
 
 /// The stale cache, lent by [`State::rederive`] to be filled. It reads as the [`State`] it
 /// borrows.
@@ -78,7 +79,8 @@ impl<L: Layout> Rederive<'_, L> {
     /// Stores the results as current, with `listening`, the kinds of event the permanents have
     /// triggered abilities for, `replacing`, the kinds of event their static abilities replace,
     /// and `rules`, the rules their static abilities change for each
-    /// player, by seat ([`State::rule_applies`]), `removed`, whether an effect that
+    /// player, by seat ([`State::rule_applies`]), `inputs`, what the permanents' static
+    /// abilities read that no layer writes ([`Inputs`]), `removed`, whether an effect that
     /// removes abilities applied, for [`State::has_ability`], and `land_types`, whether an
     /// effect that changes a land's land types applied, for [`State::makes_card_mana`].
     /// Control is settled now, so each face-down
@@ -92,6 +94,7 @@ impl<L: Layout> Rederive<'_, L> {
         listening: Listens,
         replacing: Replaces,
         rules: PerSeat<Rules>,
+        inputs: Inputs,
         removed: bool,
         land_types: bool,
     ) {
@@ -99,6 +102,7 @@ impl<L: Layout> Rederive<'_, L> {
         s.listening = listening;
         s.replacing = replacing;
         s.static_rules = Table::from_fn(|player| rules[player]);
+        s.layer_inputs = inputs;
         for i in 0..s.battlefield.len() {
             let slot = s.battlefield.as_slice()[i];
             if s.object(slot).face == FaceIx::DOWN {

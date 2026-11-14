@@ -315,12 +315,20 @@ then counters (7c), then the rules static abilities change (CR 613.11)
   rows plus one scratch row was the first design; it would have needed every
   filter and layer read to know about a row that is not a permanent, and the
   copy costs nothing in a game that never asks.
-- **What makes the cache stale.** `layers::counters_matter` is one case of a
-  general fact: a characteristic-defining ability reads something no layer
-  writes, as Tarmogoyf reads the graveyards. Each card's abilities declare such
-  inputs, the recompute folds them for the battlefield as it folds the
-  listeners, and a mutator marks the cache stale only when its input is in that
-  set.
+- **What makes the cache stale** (landed with Tarmogoyf). A static ability may
+  read something no layer writes, as Tarmogoyf's characteristic-defining ability
+  reads the graveyards. Each face's static abilities declare such inputs
+  (`static_ability::Inputs`, held per face in the card table's `FaceFacts`): the
+  counters of a kind on its own permanent, which an "as long as" compares, and
+  the cards in graveyards, which `Amount::CardTypesAmong` counts. In a game
+  where some card has one (the table's `Capability::LayerInputs`), the recompute
+  stores the union of the battlefield's inputs. The zone move marks the cache
+  stale for a card entering or leaving a graveyard only while that union holds
+  the graveyards, and `State::layers_read_counters` answers the counter mutators
+  from it. A hand's size and a life total are not inputs yet, since no
+  characteristic-defining ability of the cards reads one. Tarmogoyf defines
+  power and toughness together (`Modification::SetPt`, with `Amount::Plus` for
+  "that number plus 1").
 - **A granted static ability** (landed with Opalescence). An ability granted in
   layer 6 whose effect belongs to an earlier layer is found only after that
   layer has run. The recompute then runs the layers once more with the abilities

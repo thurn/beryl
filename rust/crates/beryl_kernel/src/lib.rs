@@ -31,9 +31,13 @@
 //!
 //! The zones, the battlefield order, each player's knowledge and the derived cache are the
 //! crate's too ([`zone`], [`derive::Rederive`]). Only a mutator marks the cache stale, and only
-//! [`State::rederive`] clears the mark, so no rules code holds the flag. Whether counters
-//! change a layer result is the rules' to say, with the card in hand, so the counter
-//! mutators take that answer (`layers::counters_matter`). A zone is named by a
+//! [`State::rederive`] clears the mark, so no rules code holds the flag. Besides the
+//! battlefield's own changes, the static abilities on the battlefield may read what no layer
+//! writes, as a characteristic-defining ability reads the graveyards: each face declares such
+//! inputs ([`static_ability::Inputs`]), the recompute stores those of the permanents, and the
+//! zone move marks the cache stale for a graveyard only while one is in that set. The counter
+//! mutators take whether the layers read the counters as an argument, which
+//! [`State::layers_read_counters`] answers from the same set. A zone is named by a
 //! [`state::ZoneKey`], whose rustdoc says how a shared zone and a command zone would join it.
 //!
 //! The players, the turn, the random streams, the profile, the budgets and the outcome are
@@ -45,7 +49,7 @@
 //!
 //! | The rules | Mutators | What each leaves consistent |
 //! | --- | --- | --- |
-//! | move an object between zones (CR 400.7), draw, order or shuffle a library, end a token | [`State::move_object`], [`State::draw`], [`State::reorder_library`], [`State::shuffle_library`], [`State::rebind_at_random`], [`State::cease_to_exist`] | the new incarnation and its reset fields; both zones' membership bitboards; the ordered library, graveyard and stack; the battlefield queue and every permanent's index into it; `derived_dirty`; the attachments, combat references and exile links that named it; what the stores held about it, which ends ("Stores"); its identity, settled before anyone sees it ([`chance`]); both players' knowledge |
+//! | move an object between zones (CR 400.7), draw, order or shuffle a library, end a token | [`State::move_object`], [`State::draw`], [`State::reorder_library`], [`State::shuffle_library`], [`State::rebind_at_random`], [`State::cease_to_exist`] | the new incarnation and its reset fields; both zones' membership bitboards; the ordered library, graveyard and stack; the battlefield queue and every permanent's index into it; `derived_dirty`, for a graveyard while a permanent reads the graveyards; the attachments, combat references and exile links that named it; what the stores held about it, which ends ("Stores"); its identity, settled before anyone sees it ([`chance`]); both players' knowledge |
 //! | change a permanent's status, damage or counters | [`State::set_tapped`], [`State::set_summoning_sick`], [`State::reset_permanents_for_turn`], [`State::turn_face_up`], [`State::mark_damage`], [`State::clear_damage`], [`State::add_counters`], [`State::remove_counters`], [`State::order_timestamps`] | a face with its timestamp and who knows it; permanents reordered keep the timestamps they had among them; `derived_dirty` where the kernel can tell the layers read the field |
 //! | put a spell on the stack, make a token, have a permanent enter | [`State::become_spell`], [`State::make_token`], [`State::arrive`] with a [`mutate::Arrival`], [`State::remember`] | what a permanent enters with (tapped, attacking, its face, controller, counters and what it is attached to) is set as one change, before anything reads it |
 //! | declare and end combat | [`State::declare_attacker`], [`State::choose_attacked`], [`State::forget_attacked`], [`State::declare_blocker`], [`State::block`], [`State::mark_struck_first`], [`State::remove_from_combat`], [`State::end_combat`] | the combat flags and the combat reference change together; nothing stays related to a permanent removed from combat |

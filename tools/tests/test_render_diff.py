@@ -31,6 +31,10 @@ def test_unify_self_reference_covers_the_name_its_short_form_and_this_type() -> 
     )
     # A longer word that starts with the short name is not the card.
     assert render_diff.unify_self_reference("Jaces", JACE) == "Jaces"
+    # Its possessive is, as "this creature's" is.
+    assert render_diff.unify_self_reference(
+        "Jace's power and this creature's toughness", JACE
+    ) == ("~'s power and ~'s toughness")
 
 
 def test_unify_punctuation_writes_minus_signs_quotes_and_em_dashes_plainly() -> None:

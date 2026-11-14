@@ -286,6 +286,10 @@ pub enum Modification {
     /// ([CR 613.4a](https://yawgatog.com/resources/magic-rules/#R6134a)): "Effects from
     /// characteristic-defining abilities that define power and/or toughness are applied."
     SetPower(&'static Amount),
+    /// "Power is equal to [amount] and toughness is equal to [amount]": a characteristic-defining
+    /// ability of the permanent itself that defines both, applied in layer 7a as
+    /// [`Modification::SetPower`] is.
+    SetPt(&'static Amount, &'static Amount),
     /// Layer 7c: "gets +X/+Y".
     ModifyPt(i8, i8),
     /// Layer 6: "loses all abilities" ([CR 613.1f]): "Layer 6: Ability-adding effects,

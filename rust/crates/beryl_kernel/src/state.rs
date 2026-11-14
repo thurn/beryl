@@ -39,6 +39,7 @@ use crate::object::OFF_BATTLEFIELD;
 use crate::profile::{Limits, Profile};
 use crate::rng::Rng;
 pub use crate::rule_changes::{RuleId, RuleKind, Rules};
+use crate::static_ability::Inputs;
 
 /// Object slots: deck cards, tokens and spell copies.
 pub const SLOTS: usize = Slot::COUNT;
@@ -153,6 +154,10 @@ pub struct State<L: Layout = Small> {
     pub(crate) outcome: Option<Outcome>,
     pub(crate) profile: Profile,
     pub(crate) flags: Flags,
+    /// What the static abilities of the permanents on the battlefield read that no layer
+    /// writes ([`Inputs`]), found with the layer results: a mutator that changes one of
+    /// these marks the results stale.
+    pub(crate) layer_inputs: Inputs,
     /// The rules the permanents' static abilities change for each player
     /// ([`GameTable::player_rules`]), found with the layer results and current while they
     /// are: half of what [`State::rule_applies`] reads, the Effects store's own index
@@ -214,6 +219,8 @@ impl<L: Layout> std::hash::Hash for State<L> {
             budgets,
             listening,
             replacing,
+            // Found from the faces on the battlefield, which the hash covers.
+            layer_inputs: _,
             outcome,
             profile,
             flags,

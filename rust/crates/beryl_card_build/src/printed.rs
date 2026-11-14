@@ -160,14 +160,25 @@ fn flags(kind: &str, table: &[(&str, &str)], words: &[&str]) -> Option<String> {
     Some(found.fold(first, |all, next| format!("{all}.union({next})")))
 }
 
-/// A printed power or toughness: a number, or `*` where a characteristic-defining ability
-/// sets it, which is 0 in the definition. Nothing reads a creature card's power off the
-/// battlefield, and the ability applies on it in layer 7a
-/// ([CR 613.4a](https://yawgatog.com/resources/magic-rules/#R6134a)): "Effects from
-/// characteristic-defining abilities that define power and/or toughness are applied."
+/// A printed power or toughness: a number, or one with a star (`*`, `1+*`) where a
+/// characteristic-defining ability sets it ([CR 208.2]): "Rather than a fixed number, some
+/// creature cards have power and/or toughness that includes a star (*)." The star is 0 in the
+/// definition, so `1+*` is 1: what the creature has once it has lost the ability. Nothing reads
+/// a creature card's power off the battlefield, and the ability applies on it in layer 7a
+/// ([CR 613.4a]): "Effects from characteristic-defining abilities that define power and/or
+/// toughness are applied."
+///
+/// [CR 208.2]: https://yawgatog.com/resources/magic-rules/#R2082
+/// [CR 613.4a]: https://yawgatog.com/resources/magic-rules/#R6134a
 fn strength(value: &str) -> Option<i8> {
     if value == "*" {
         return Some(0);
+    }
+    if let Some(n) = value
+        .strip_suffix("+*")
+        .or_else(|| value.strip_prefix("*+"))
+    {
+        return n.parse().ok();
     }
     value.parse().ok()
 }

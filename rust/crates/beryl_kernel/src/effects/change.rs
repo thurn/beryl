@@ -77,6 +77,10 @@ pub enum LayerChange {
     /// Layer 4: "is a [subtype]", replacing its subtypes of the same kind. Last, so that the
     /// hashes of states saved before it was added keep their values.
     SetSubtype(Subtype),
+    /// Layer 7a: "power is equal to [amount] and toughness is equal to [amount]", the numbers
+    /// a characteristic-defining ability defines, read as the layer applies. Last, for the
+    /// same reason as [`LayerChange::SetSubtype`].
+    DefinedPt(i8, i8),
 }
 
 impl LayerChange {
@@ -103,7 +107,9 @@ impl LayerChange {
             Modification::SetBasePt(&Amount::Fixed(power), &Amount::Fixed(toughness)) => {
                 LayerChange::SetBasePt(saturate(power), saturate(toughness))
             }
-            Modification::SetPower(_) | Modification::SetBasePt(..) => return None,
+            Modification::SetPower(_) | Modification::SetPt(..) | Modification::SetBasePt(..) => {
+                return None;
+            }
             Modification::ModifyPt(power, toughness) => LayerChange::ModifyPt(power, toughness),
             Modification::SwitchPt => LayerChange::SwitchPt,
         })
@@ -127,7 +133,7 @@ impl LayerChange {
             | LayerChange::Grant(_)
             | LayerChange::LoseAllAbilities
             | LayerChange::LoseAbility(_) => Layer::Ability,
-            LayerChange::DefinedPower(_) => Layer::PtDefining,
+            LayerChange::DefinedPower(_) | LayerChange::DefinedPt(..) => Layer::PtDefining,
             LayerChange::SetBasePt(..) => Layer::PtSetting,
             LayerChange::ModifyPt(..) => Layer::PtModifying,
             LayerChange::SwitchPt => Layer::PtSwitching,
@@ -205,6 +211,7 @@ impl LayerChange {
                 Characteristics::REMOVES_ABILITIES
             }
             LayerChange::DefinedPower(_)
+            | LayerChange::DefinedPt(..)
             | LayerChange::SetBasePt(..)
             | LayerChange::ModifyPt(..)
             | LayerChange::SwitchPt
@@ -225,7 +232,7 @@ fn saturate(n: u8) -> i8 {
 #[inline]
 pub fn read_layer(modification: Modification) -> Layer {
     match modification {
-        Modification::SetPower(_) => Layer::PtDefining,
+        Modification::SetPower(_) | Modification::SetPt(..) => Layer::PtDefining,
         _ => Layer::PtSetting,
     }
 }

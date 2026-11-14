@@ -15,6 +15,7 @@ mod events;
 mod game;
 mod invariants;
 mod land_types;
+mod layer_inputs;
 mod layer_sets;
 mod library;
 mod life_costs;

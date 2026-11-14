@@ -19,6 +19,7 @@ use crate::object::Object;
 use crate::object::{AbilityMask, CombatRole};
 use crate::rule_changes::Rules;
 use crate::state::State;
+use crate::static_ability::Inputs;
 use crate::subtypes::GameSubtypes;
 use crate::table::{FaceFacts, GameTable};
 
@@ -187,6 +188,19 @@ impl<L: Layout> Copiable<L> {
             Listens::NONE
         } else {
             t.listens(self.card)
+        }
+    }
+
+    /// What the static abilities of its face read as the layers apply that no layer writes
+    /// ([`Inputs`]). A face-down permanent has no abilities ([CR 708.2a]), so none.
+    ///
+    /// [CR 708.2a]: https://yawgatog.com/resources/magic-rules/#R7082a
+    #[inline]
+    pub fn layer_inputs(self, t: &GameTable) -> Inputs {
+        if self.face == FaceIx::DOWN {
+            Inputs::NONE
+        } else {
+            t.facts(self.card, self.face).inputs
         }
     }
 

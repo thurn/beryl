@@ -45,6 +45,13 @@ pub enum Amount {
     /// "[n] for each ...": `n` times an amount, as "you lose 2 life for each card in your
     /// hand".
     Times(u8, &'static Amount),
+    /// "[amount] plus [n]", as "its toughness is equal to that number plus 1".
+    Plus(u8, &'static Amount),
+    /// "The number of card types among [objects]": each card type ([CR 300.1]) counted once,
+    /// however many of the cards have it. Tokens are not cards and count for nothing.
+    ///
+    /// [CR 300.1]: https://yawgatog.com/resources/magic-rules/#R3001
+    CardTypesAmong(&'static Objects),
     /// "Its power", or of several objects, their total power. A power below zero counts as it
     /// is until the result is used (CR 107.1b).
     Power(Objects),
@@ -90,8 +97,10 @@ impl Amount {
         match self {
             Amount::Fixed(_) => false,
             Amount::X | Amount::ThatMany | Amount::Carried | Amount::ThoseOf(_) => true,
-            Amount::Count(objects) => objects.needs_a_resolution(),
-            Amount::Times(_, amount) => amount.needs_a_resolution(),
+            Amount::Count(objects) | Amount::CardTypesAmong(objects) => {
+                objects.needs_a_resolution()
+            }
+            Amount::Times(_, amount) | Amount::Plus(_, amount) => amount.needs_a_resolution(),
             Amount::Life(players) | Amount::SpellsCast(players) | Amount::CardsDrawn(players) => {
                 players.needs_a_resolution()
             }
@@ -111,8 +120,8 @@ impl Amount {
     pub const fn names_paid(&self) -> bool {
         match self {
             Amount::Fixed(_) | Amount::X | Amount::ThatMany | Amount::Carried => false,
-            Amount::Count(objects) => objects.names_paid(),
-            Amount::Times(_, amount) => amount.names_paid(),
+            Amount::Count(objects) | Amount::CardTypesAmong(objects) => objects.names_paid(),
+            Amount::Times(_, amount) | Amount::Plus(_, amount) => amount.names_paid(),
             Amount::Life(players)
             | Amount::ThoseOf(players)
             | Amount::SpellsCast(players)

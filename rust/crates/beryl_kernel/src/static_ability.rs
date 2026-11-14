@@ -18,12 +18,116 @@
 //! whatever its text indicates."
 
 use beryl_card::{
-    Amount, Behavior, CardDef, Condition, CounterKind, Effect, Filter, LayerSpec, Modification,
-    Objects, Zone,
+    Amount, Behavior, CardDef, Condition, CounterKind, Effect, Face, Filter, LayerSpec,
+    Modification, Objects, Zone,
 };
 
 use crate::layout::Layout;
 use crate::state::State;
+use crate::table::GameTable;
+
+/// What a face's static abilities read as the layers apply that no layer writes, one bit
+/// each: the layer results are stale when one of these changes while a permanent on the
+/// battlefield reads it. The battlefield's own changes (what is on it, its faces, its
+/// statuses and the effects that apply) mark the results stale whatever the permanents read.
+/// The card table holds a set for each face ([`crate::table::FaceFacts::inputs`]), and the
+/// recompute stores the union of those of the permanents on the battlefield.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Inputs(u8);
+
+impl Inputs {
+    /// Nothing.
+    pub const NONE: Inputs = Inputs(0);
+    /// The counters of some kind on the permanent with the ability, which an "as long as"
+    /// compares ([`reads_counters`] says which kinds).
+    pub const COUNTERS: Inputs = Inputs(1);
+    /// The cards in graveyards, which an amount counts
+    /// ([`Amount::CardTypesAmong`]).
+    pub const GRAVEYARDS: Inputs = Inputs(2);
+
+    /// Both sets' inputs.
+    #[inline]
+    #[must_use]
+    pub const fn union(self, other: Inputs) -> Inputs {
+        Inputs(self.0 | other.0)
+    }
+
+    /// Whether every input of `other` is in this set.
+    #[inline]
+    pub const fn contains(self, other: Inputs) -> bool {
+        self.0 & other.0 == other.0
+    }
+
+    /// What the static abilities of `face` read that no layer writes.
+    pub fn of(face: &Face) -> Inputs {
+        let mut inputs = Inputs::NONE;
+        for spec in face.abilities.iter().filter_map(beryl_card::Ability::layer) {
+            if spec
+                .condition
+                .as_ref()
+                .is_some_and(|condition| counts(condition, &|_| true))
+            {
+                inputs = inputs.union(Inputs::COUNTERS);
+            }
+            let graveyards = spec.modifications.iter().any(|m| match *m {
+                Modification::SetPower(amount) => reads_graveyards(amount),
+                Modification::SetPt(power, toughness)
+                | Modification::SetBasePt(power, toughness) => {
+                    reads_graveyards(power) || reads_graveyards(toughness)
+                }
+                _ => false,
+            });
+            if graveyards {
+                inputs = inputs.union(Inputs::GRAVEYARDS);
+            }
+        }
+        inputs
+    }
+}
+
+/// Whether the layers' reading of `amount` counts cards in graveyards.
+fn reads_graveyards(amount: &Amount) -> bool {
+    match amount {
+        Amount::CardTypesAmong(Objects::All {
+            zone: Zone::Graveyard,
+            ..
+        }) => true,
+        Amount::Times(_, amount) | Amount::Plus(_, amount) => reads_graveyards(amount),
+        _ => false,
+    }
+}
+
+impl<L: Layout> State<L> {
+    /// Whether a change in the number of `kind` counters on the object in `slot` can change
+    /// a layer result, so that the counter mutators mark the results stale
+    /// ([`State::add_counters`]). Only +1/+1 and -1/-1 counters modify power and toughness
+    /// ([CR 613.4c]): "Effects and counters that modify power and/or toughness ... are
+    /// applied". Any other kind matters only to a static ability of its own permanent whose
+    /// "as long as" compares it, and only while some permanent's ability compares counters
+    /// ([`Inputs::COUNTERS`]): loyalty, which planeswalkers gain and lose every turn, never
+    /// does.
+    ///
+    /// [CR 613.4c]: https://yawgatog.com/resources/magic-rules/#R6134c
+    #[inline]
+    pub fn layers_read_counters(&self, t: &GameTable, slot: L::Slot, kind: CounterKind) -> bool {
+        matches!(kind, CounterKind::PlusOne | CounterKind::MinusOne)
+            || self.object(slot).zone() != Zone::Battlefield
+            || (self.layer_inputs.contains(Inputs::COUNTERS)
+                && self.copiable(slot).face(t).abilities.iter().any(|a| {
+                    a.layer()
+                        .and_then(|spec| spec.condition.as_ref())
+                        .is_some_and(|condition| reads_counters(condition, kind))
+                }))
+    }
+
+    /// Whether a card moving into or out of a graveyard can change a layer result: whether
+    /// a permanent on the battlefield counts the cards in graveyards
+    /// ([`Inputs::GRAVEYARDS`]).
+    #[inline]
+    pub(crate) fn layers_read_graveyards(&self) -> bool {
+        self.layer_inputs.contains(Inputs::GRAVEYARDS)
+    }
+}
 
 /// Why the layers cannot apply a static ability: the part of it no code reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -48,7 +152,8 @@ pub enum Unapplied {
     SetPower,
     /// A power or base power and toughness is an amount the layers do not read as they
     /// apply: anything but a number, a count of permanents by their characteristics and
-    /// controllers, and a multiple of one.
+    /// controllers, the number of card types among cards in all graveyards, and a multiple
+    /// of one or one plus a number.
     Amount,
     /// A static ability a card grants reads an amount as its layer applies: the layers read
     /// amounts by the ability's place on its permanent's face, and a granted one has none.
@@ -114,10 +219,13 @@ pub fn read_amounts(spec: &LayerSpec) -> Result<(), Unapplied> {
     for modification in spec.modifications {
         match *modification {
             Modification::SetPower(amount) => {
-                if !matches!(spec.affected, Objects::This) || spec.condition.is_some() {
-                    return Err(Unapplied::SetPower);
-                }
+                defines(spec)?;
                 read_as_the_layer_applies(amount)?;
+            }
+            Modification::SetPt(power, toughness) => {
+                defines(spec)?;
+                read_as_the_layer_applies(power)?;
+                read_as_the_layer_applies(toughness)?;
             }
             Modification::SetBasePt(power, toughness) => {
                 for amount in [power, toughness] {
@@ -132,9 +240,21 @@ pub fn read_amounts(spec: &LayerSpec) -> Result<(), Unapplied> {
     Ok(())
 }
 
+/// Refuses a "power is equal to" said by anything but a characteristic-defining ability: one
+/// of the permanent itself with no condition ([CR 604.3a]).
+///
+/// [CR 604.3a]: https://yawgatog.com/resources/magic-rules/#R6043a
+fn defines(spec: &LayerSpec) -> Result<(), Unapplied> {
+    if matches!(spec.affected, Objects::This) && spec.condition.is_none() {
+        Ok(())
+    } else {
+        Err(Unapplied::SetPower)
+    }
+}
+
 /// The amounts the part at `part` of a static ability's continuous effect reads as its
 /// layer applies: the power of a [`Modification::SetPower`], or the power and toughness of
-/// a [`Modification::SetBasePt`].
+/// a [`Modification::SetPt`] or a [`Modification::SetBasePt`].
 ///
 /// # Panics
 ///
@@ -142,7 +262,9 @@ pub fn read_amounts(spec: &LayerSpec) -> Result<(), Unapplied> {
 pub fn amounts_of(spec: &LayerSpec, part: u8) -> (&'static Amount, Option<&'static Amount>) {
     match spec.modifications[usize::from(part)] {
         Modification::SetPower(amount) => (amount, None),
-        Modification::SetBasePt(power, toughness) => (power, Some(toughness)),
+        Modification::SetPt(power, toughness) | Modification::SetBasePt(power, toughness) => {
+            (power, Some(toughness))
+        }
         _ => unreachable!("the layers read the amounts of a part that has some"),
     }
 }
@@ -165,15 +287,23 @@ fn is_its_mana_value(amount: &Amount) -> bool {
 }
 
 /// Refuses an amount the layers cannot read as they apply: they have each permanent's
-/// characteristics and controller as the layers before left them, and nothing else.
+/// characteristics and controller as the layers before left them, and the card types of the
+/// cards in graveyards, which no layer changes.
 fn read_as_the_layer_applies(amount: &Amount) -> Result<(), Unapplied> {
     match *amount {
-        Amount::Fixed(_) => Ok(()),
-        Amount::Times(_, amount) => read_as_the_layer_applies(amount),
+        Amount::Times(_, amount) | Amount::Plus(_, amount) => read_as_the_layer_applies(amount),
         Amount::Count(&Objects::All {
             zone: Zone::Battlefield,
             filter,
         }) if read_by_the_layers(filter) => Ok(()),
+        // Cards in graveyards have no layer results: their card types are their cards'.
+        // A move into or out of a graveyard marks the results stale while a permanent
+        // reads them ([`Inputs::GRAVEYARDS`]).
+        Amount::Fixed(_)
+        | Amount::CardTypesAmong(&Objects::All {
+            zone: Zone::Graveyard,
+            filter: Filter::Any,
+        }) => Ok(()),
         _ => Err(Unapplied::Amount),
     }
 }
@@ -207,7 +337,7 @@ fn sets_power(effect: &Effect) -> bool {
     effect.any(&|effect| match effect {
         Effect::Modify { modifications, .. } => modifications
             .iter()
-            .any(|m| matches!(m, Modification::SetPower(_))),
+            .any(|m| matches!(m, Modification::SetPower(_) | Modification::SetPt(..))),
         _ => false,
     })
 }
@@ -384,13 +514,18 @@ pub fn holds<L: Layout>(
 /// permanent with the ability, so that a change in it may change whether the ability
 /// applies.
 pub fn reads_counters(condition: &Condition, kind: CounterKind) -> bool {
-    let counts =
-        |amount: &Amount| matches!(counted(amount), Some(Counted::Counters(k)) if k == kind);
+    counts(condition, &|k| k == kind)
+}
+
+/// Whether `condition` compares the number of counters of a kind `of` accepts on the
+/// permanent with the ability.
+fn counts(condition: &Condition, of: &dyn Fn(CounterKind) -> bool) -> bool {
+    let compares = |amount: &Amount| matches!(counted(amount), Some(Counted::Counters(k)) if of(k));
     match condition {
-        Condition::Compare(left, _, right) => counts(left) || counts(right),
-        Condition::Not(condition) => reads_counters(condition, kind),
+        Condition::Compare(left, _, right) => compares(left) || compares(right),
+        Condition::Not(condition) => counts(condition, of),
         Condition::All(conditions) | Condition::Any(conditions) => {
-            conditions.iter().any(|c| reads_counters(c, kind))
+            conditions.iter().any(|c| counts(c, of))
         }
         Condition::Paid(_)
         | Condition::Did
@@ -543,6 +678,54 @@ mod tests {
                 "{condition:?}"
             );
         }
+    }
+
+    /// "Its power is equal to the number of card types among cards in all graveyards and its
+    /// toughness is equal to that number plus 1": a characteristic-defining ability whose
+    /// amounts read the graveyards, which the face declares as an input. Said of another
+    /// permanent, or with a condition, it is no characteristic-defining ability.
+    #[test]
+    fn a_defined_power_and_toughness_may_read_the_graveyards() {
+        const TYPES: Amount = Amount::CardTypesAmong(&Objects::All {
+            zone: Zone::Graveyard,
+            filter: Filter::Any,
+        });
+        const DEFINES: &[Modification] = &[Modification::SetPt(&TYPES, &Amount::Plus(1, &TYPES))];
+        static SPEC: LayerSpec = LayerSpec {
+            affected: Objects::This,
+            condition: None,
+            modifications: DEFINES,
+        };
+        static COUNTED: LayerSpec = LayerSpec {
+            affected: Objects::This,
+            condition: Some(HAS_A_TIME_COUNTER),
+            modifications: &[GAINS_FLYING],
+        };
+        static READS_GRAVEYARDS: &[beryl_card::Ability] =
+            &[beryl_card::Ability::static_ability(&SPEC)];
+        static READS_COUNTERS: &[beryl_card::Ability] =
+            &[beryl_card::Ability::static_ability(&COUNTED)];
+        let defines = |affected, condition| LayerSpec {
+            affected,
+            condition,
+            modifications: DEFINES,
+        };
+        assert_eq!(applied(&defines(Objects::This, None)), Ok(()));
+        assert_eq!(
+            applied(&defines(CREATURES_YOU_CONTROL, None)),
+            Err(Unapplied::SetPower)
+        );
+        assert_eq!(
+            applied(&defines(Objects::This, Some(HAS_A_TIME_COUNTER))),
+            Err(Unapplied::SetPower)
+        );
+        let face = |abilities| Face {
+            abilities,
+            ..Face::EMPTY
+        };
+        assert_eq!(Inputs::of(&face(READS_GRAVEYARDS)), Inputs::GRAVEYARDS);
+        assert_eq!(Inputs::of(&face(READS_COUNTERS)), Inputs::COUNTERS);
+        assert_eq!(Inputs::of(&face(&[])), Inputs::NONE);
     }
 
     #[test]

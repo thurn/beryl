@@ -4,7 +4,7 @@
 use beryl_kernel::derive::Rederive;
 use beryl_kernel::static_ability::{self, LayerResults, NoResults};
 
-use beryl_card::Amount;
+use beryl_card::{Amount, Modification};
 
 use crate::bitboard::Bitboard;
 use crate::card::Objects;
@@ -123,9 +123,15 @@ fn read<L: Layout>(
         unreachable!("a static ability's part names its ability and its controller");
     };
     let number = |amount| i8::try_from(defined(s, t, amount, you, member)).unwrap_or(i8::MAX);
-    match static_ability::amounts_of(spec, part) {
-        (power, None) => LayerChange::DefinedPower(number(power)),
-        (power, Some(toughness)) => LayerChange::SetBasePt(number(power), number(toughness)),
+    match spec.modifications[usize::from(part)] {
+        Modification::SetPower(power) => LayerChange::DefinedPower(number(power)),
+        Modification::SetPt(power, toughness) => {
+            LayerChange::DefinedPt(number(power), number(toughness))
+        }
+        Modification::SetBasePt(power, toughness) => {
+            LayerChange::SetBasePt(number(power), number(toughness))
+        }
+        _ => unreachable!("the layers read the amounts of a part that has some"),
     }
 }
 
@@ -373,9 +379,9 @@ fn modify<L: Layout>(
         // CR 613.4a: "Layer 7a: Effects from characteristic-defining abilities that define
         // power and/or toughness are applied."
         LayerChange::DefinedPower(power) => d.power = power,
-        // CR 613.4b: "Layer 7b: Effects that set power and/or toughness to a specific
-        // number or value are applied."
-        LayerChange::SetBasePt(power, toughness) => {
+        // The same in layer 7a, and CR 613.4b: "Layer 7b: Effects that set power and/or
+        // toughness to a specific number or value are applied."
+        LayerChange::DefinedPt(power, toughness) | LayerChange::SetBasePt(power, toughness) => {
             d.power = power;
             d.toughness = toughness;
         }
@@ -421,11 +427,38 @@ fn defined<L: Layout>(
             };
             usize::from(s.mana_value(t, member))
         }
+        Amount::Plus(n, amount) => {
+            defined(s, t, amount, you, member).saturating_add(usize::from(n))
+        }
         Amount::Count(&Objects::All { filter, .. }) => (0..s.battlefield().len())
             .filter(|&i| passes(s, t, filter, i, you))
             .count(),
+        Amount::CardTypesAmong(_) => card_types_in_graveyards(s, t),
         _ => unreachable!("the card table refuses an amount the layers cannot read"),
     }
+}
+
+/// The number of card types among the cards in all graveyards ([CR 300.1]): "The card types
+/// are artifact, battle, conspiracy, creature, dungeon, enchantment, instant, kindred, land,
+/// phenomenon, plane, planeswalker, scheme, sorcery, and vanguard." Each type counts once,
+/// however many cards have it. A token in a graveyard is not a card ([CR 108.2]) and counts
+/// for nothing in the moment before it ceases to exist ([CR 111.7]): "A token that's in a
+/// zone other than the battlefield ceases to exist." The player each graveyard belongs to is
+/// nothing to the count, so they are read in seat order.
+///
+/// [CR 300.1]: https://yawgatog.com/resources/magic-rules/#R3001
+/// [CR 108.2]: https://yawgatog.com/resources/magic-rules/#R1082
+/// [CR 111.7]: https://yawgatog.com/resources/magic-rules/#R1117
+fn card_types_in_graveyards<L: Layout>(s: &Rederive<'_, L>, t: &GameTable) -> usize {
+    let mut types = Types::NONE;
+    for player in s.players_in_seat_order(s.players()) {
+        for &slot in s.graveyard(player) {
+            if !s.object(slot).is_token() {
+                types = types.union(s.copiable(slot).face(t).types);
+            }
+        }
+    }
+    types.0.count_ones() as usize
 }
 
 /// Whether the permanent at battlefield position `i` passes `filter`, read for `you`: what
@@ -484,9 +517,12 @@ pub(super) fn filter_reads(filter: Filter) -> Characteristics {
 pub(super) fn amount_reads(spec: &beryl_card::LayerSpec, part: u8) -> Characteristics {
     fn of(amount: &Amount) -> Characteristics {
         match *amount {
-            // A number, or a permanent's mana value, which no layer changes.
-            Amount::Fixed(_) | Amount::ManaValue(Objects::Those) => Characteristics::NONE,
-            Amount::Times(_, amount) => of(amount),
+            // A number, a permanent's mana value, which no layer changes, or the cards in
+            // graveyards, which have no layer results.
+            Amount::Fixed(_) | Amount::ManaValue(Objects::Those) | Amount::CardTypesAmong(_) => {
+                Characteristics::NONE
+            }
+            Amount::Times(_, amount) | Amount::Plus(_, amount) => of(amount),
             Amount::Count(&Objects::All { filter, .. }) => filter_reads(filter),
             _ => Characteristics::FILTERED,
         }

@@ -214,7 +214,7 @@ impl Modification {
     fn walk(&self, visit: Visit) {
         match self {
             Modification::SetPower(amount) => amount.walk(visit),
-            Modification::SetBasePt(power, toughness) => {
+            Modification::SetPt(power, toughness) | Modification::SetBasePt(power, toughness) => {
                 power.walk(visit);
                 toughness.walk(visit);
             }
@@ -293,8 +293,8 @@ impl Amount {
         visit(Node::Amount(self));
         match self {
             Amount::Fixed(_) | Amount::X | Amount::ThatMany | Amount::Carried => {}
-            Amount::Count(objects) => objects.walk(visit),
-            Amount::Times(_, amount) => amount.walk(visit),
+            Amount::Count(objects) | Amount::CardTypesAmong(objects) => objects.walk(visit),
+            Amount::Times(_, amount) | Amount::Plus(_, amount) => amount.walk(visit),
             Amount::Life(players)
             | Amount::ThoseOf(players)
             | Amount::SpellsCast(players)

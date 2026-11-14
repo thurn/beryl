@@ -92,7 +92,10 @@ impl<L: Layout> State<L> {
                     library.insert(library.len().saturating_sub(usize::from(n)), slot)?;
                 }
             },
-            Zone::Graveyard => self.zones.graveyard[owner].push(slot)?,
+            Zone::Graveyard => {
+                self.zones.graveyard[owner].push(slot)?;
+                self.flags.derived_dirty |= self.layers_read_graveyards();
+            }
             Zone::Battlefield => {
                 self.enter_battlefield(slot)?;
                 // CR 302.6: a permanent that just arrived hasn't been under its controller's
@@ -312,7 +315,10 @@ fn leave<L: Layout>(s: &mut State<L>, slot: L::Slot) {
     let owner = o.owner.index();
     match o.zone {
         Zone::Library => remove_slot(&mut s.zones.library[owner], slot),
-        Zone::Graveyard => remove_slot(&mut s.zones.graveyard[owner], slot),
+        Zone::Graveyard => {
+            remove_slot(&mut s.zones.graveyard[owner], slot);
+            s.flags.derived_dirty |= s.layers_read_graveyards();
+        }
         Zone::Battlefield => {
             s.leave_battlefield(slot);
             s.flags.derived_dirty = true;

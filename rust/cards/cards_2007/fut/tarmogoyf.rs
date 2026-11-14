@@ -1,0 +1,117 @@
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Tarmogoyf {1}{G}
+//! Creature — Lhurgoyf, */1+*
+//!
+//! Tarmogoyf's power is equal to the number of card types among cards in all graveyards and its
+//! toughness is equal to that number plus 1.
+// End of the generated card header.
+
+use crate::prelude::*;
+
+/// "The number of card types among cards in all graveyards".
+const CARD_TYPES: Amount = Amount::CardTypesAmong(&Objects::All {
+    zone: Zone::Graveyard,
+    filter: Filter::Any,
+});
+
+/// A characteristic-defining ability ([CR 604.3a]): it "defines an object's ... power, or
+/// toughness", applied in layer 7a ([CR 613.4a]): "Effects from characteristic-defining
+/// abilities that define power and/or toughness are applied." The number is read each time the
+/// layers apply, so it changes as soon as a card enters or leaves a graveyard.
+///
+/// [CR 604.3a]: https://yawgatog.com/resources/magic-rules/#R6043a
+/// [CR 613.4a]: https://yawgatog.com/resources/magic-rules/#R6134a
+pub static CARD: CardDef = Printed::Tarmogoyf
+    .abilities(&[Ability::static_ability(&LayerSpec {
+        affected: Objects::This,
+        condition: None,
+        modifications: &[Modification::SetPt(
+            &CARD_TYPES,
+            &Amount::Plus(1, &CARD_TYPES),
+        )],
+    })])
+    .card();
+
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
+    use crate::prelude::*;
+
+    const GOYF: &str = Card::Tarmogoyf;
+    const BOLT: &str = Card::LightningBolt;
+
+    /// What P0 needs to bolt P1's Tarmogoyf in its main phase: a Mountain to cast it with,
+    /// and a land still to play, which keeps the game in that main phase.
+    const BOLTER: &[&str] = &[Card::Mountain];
+    const BOLTER_HAND: &[&str] = &[BOLT, Card::Mountain];
+
+    pub const SCENARIOS: &[Scenario] = &[
+        // With no card in any graveyard it is 0/1.
+        Scenario::new("Tarmogoyf with empty graveyards")
+            .battlefield(P0, &[GOYF])
+            .actions(&[ME.pt(GOYF, 0, 1)]),
+        // Both graveyards count. Gold Myr is an artifact and a creature; a second Gold Myr adds
+        // no card type, nor does a second creature card.
+        Scenario::new("Tarmogoyf counts card types, not cards")
+            .interaction(&[Card::GoldMyr])
+            .battlefield(P0, &[GOYF])
+            .graveyard(P0, &[Card::GoldMyr, Card::GoldMyr])
+            .graveyard(P1, &[Prop::Creature])
+            .actions(&[ME.pt(GOYF, 2, 3)]),
+        // A creature and a sorcery make it 2/3. Lightning Bolt is in its owner's graveyard by
+        // the time state-based actions look at the 3 damage, and as a third card type it makes
+        // Tarmogoyf 3/4, which survives.
+        Scenario::new("Tarmogoyf counts the instant that damaged it")
+            .interaction(&[BOLT])
+            .battlefield(P0, BOLTER)
+            .hand(P0, BOLTER_HAND)
+            .battlefield(P1, &[GOYF])
+            .graveyard(P1, &[Prop::Creature, Prop::Sorcery])
+            .actions(&[
+                THEM.pt(GOYF, 2, 3),
+                ME.casts(BOLT),
+                ME.targets(GOYF),
+                THEM.controls(GOYF, 1),
+                THEM.pt(GOYF, 3, 4),
+            ]),
+        // A creature and an instant make it 2/3, and Lightning Bolt adds no card type, so it
+        // dies.
+        Scenario::new("Tarmogoyf dies to damage that adds no card type")
+            .interaction(&[BOLT])
+            .battlefield(P0, BOLTER)
+            .hand(P0, BOLTER_HAND)
+            .battlefield(P1, &[GOYF])
+            .graveyard(P1, &[Prop::Creature, Prop::Instant])
+            .actions(&[
+                ME.casts(BOLT),
+                ME.targets(GOYF),
+                THEM.controls(GOYF, 0),
+                THEM.has(Zone::Graveyard, GOYF, 1),
+            ]),
+        // The same, but P1 sacrifices Strip Mine in response: a land in the graveyard makes
+        // Tarmogoyf 3/4 before Lightning Bolt resolves, and it survives the 3 damage. With
+        // nothing left to do, both players pass and the stack resolves.
+        Scenario::new("Tarmogoyf grows as a land is put into a graveyard in response")
+            .interaction(&[BOLT, Card::StripMine])
+            .battlefield(P0, BOLTER)
+            .hand(P0, BOLTER_HAND)
+            .battlefield(P1, &[GOYF, Card::StripMine])
+            .graveyard(P1, &[Prop::Creature, Prop::Instant])
+            .actions(&[
+                ME.casts(BOLT),
+                ME.targets(GOYF),
+                THEM.activates(Card::StripMine, 1), // {T}, Sacrifice
+                THEM.targets(Card::Mountain),
+                THEM.controls(GOYF, 1),
+                THEM.has(Zone::Graveyard, Card::StripMine, 1),
+                ME.has(Zone::Graveyard, BOLT, 1),
+                THEM.pt(GOYF, 3, 4),
+            ]),
+        // Dress Down's creatures lose all abilities in layer 6, before Tarmogoyf's ability would
+        // apply in layer 7a, so it has its printed */1+*: 0/1.
+        Scenario::new("Tarmogoyf under Dress Down")
+            .interaction(&[Card::DressDown])
+            .battlefield(P0, &[Card::DressDown, GOYF])
+            .graveyard(P0, &[Prop::Creature, Prop::Sorcery])
+            .actions(&[ME.pt(GOYF, 0, 1)]),
+    ];
+}

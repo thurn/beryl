@@ -13,7 +13,7 @@ use crate::listener::{self, Listener, Unmatched};
 use crate::payable::{self, Unpayable};
 use crate::replacement::{self, Unreplaced};
 use crate::rule_changes::{self, RuleChanges, RuleId, RuleKind, Rules, Unchecked};
-use crate::static_ability::{self, Unapplied};
+use crate::static_ability::{self, Inputs, Unapplied};
 use crate::subtypes::{GameSubtypes, SubtypeNumbers};
 use listeners::Indexed;
 
@@ -566,6 +566,8 @@ pub struct FaceFacts {
     /// The kinds of mana the intrinsic abilities of its basic land types make that its
     /// abilities do not write out, a bit per [`beryl_card::ManaColor`] ([`land_mana`]).
     pub land_mana: u8,
+    /// What its static abilities read as the layers apply that no layer writes.
+    pub inputs: Inputs,
     /// A bit per [`AbilityIx`] of its activated abilities.
     activated: u64,
 }
@@ -575,6 +577,7 @@ impl FaceFacts {
     const NONE: FaceFacts = FaceFacts {
         mana: ManaFace::Read,
         land_mana: 0,
+        inputs: Inputs::NONE,
         activated: 0,
     };
 
@@ -609,6 +612,7 @@ impl FaceFacts {
         let mut facts = FaceFacts {
             mana: ManaFace::of(face),
             land_mana: land_mana(face),
+            inputs: Inputs::of(face),
             activated: 0,
         };
         for (i, a) in face.abilities.iter().enumerate() {

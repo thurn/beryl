@@ -104,6 +104,14 @@ impl Ctx {
                     self.amount(*amount)
                 ));
             }
+            Modification::SetPt(power, toughness) => {
+                return Said::Clause(format!(
+                    "{} power becomes {} and its toughness becomes {}",
+                    possessive(who),
+                    self.amount(*power),
+                    self.amount(*toughness)
+                ));
+            }
             Modification::SwitchPt => {
                 return Said::Clause(format!("switch {} power and toughness", possessive(who)));
             }

@@ -438,6 +438,19 @@ impl Ctx {
                     self.amount(*amount)
                 ));
             }
+            Modification::SetPt(power, toughness) => {
+                // "Its toughness is equal to that number plus 1": a toughness said from the
+                // power names it as "that number".
+                let toughness = match *toughness {
+                    Amount::Plus(n, of) if of == power => format!("that number plus {n}"),
+                    other => self.amount(other),
+                };
+                return Part::Clause(format!(
+                    "{} power is equal to {} and its toughness is equal to {toughness}",
+                    possessive(who),
+                    self.amount(*power)
+                ));
+            }
             Modification::AddTypes(set) => {
                 format!("{is} {} in addition to its other types", a_types(set))
             }

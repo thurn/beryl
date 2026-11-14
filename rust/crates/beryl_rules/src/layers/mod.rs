@@ -24,13 +24,12 @@ use crate::fixed::Full;
 use crate::ids::CardId;
 use crate::layout::{Layout, PerSeat, Queue, index};
 use crate::state::{
-    AbilityMask, CounterKind, Derived, GrantRef, LayerChange, LockedIn, Permanents, Rules, State,
-    Zone, read_layer,
+    AbilityMask, Derived, GrantRef, LayerChange, LockedIn, Permanents, Rules, State, Zone,
+    read_layer,
 };
-use crate::static_ability;
+use crate::static_ability::{self, Inputs};
 use crate::table::Capability;
 use crate::table::GameTable;
-use crate::trigger::face;
 use granted::{GRANTED, Granted, GrantedTo, PASSES, granted_ability, granted_layer_effects, slice};
 
 /// What one continuous effect changes.
@@ -221,28 +220,6 @@ pub(crate) fn listening<L: Layout>(
     )
 }
 
-/// Whether a change in the number of `kind` counters on the object in `slot` can change its derived
-/// characteristics, so that the layers must run again. Only +1/+1 and -1/-1 counters modify power
-/// and toughness ([CR 613.4c]): "Effects and counters that modify power and/or toughness ... are
-/// applied". Any other kind matters only to a static ability of its own that applies while it has
-/// some: loyalty, which planeswalkers gain and lose every turn, never does.
-///
-/// [CR 613.4c]: https://yawgatog.com/resources/magic-rules/#R6134c
-pub(crate) fn counters_matter<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    slot: L::Slot,
-    kind: CounterKind,
-) -> bool {
-    matches!(kind, CounterKind::PlusOne | CounterKind::MinusOne)
-        || s.object(slot).zone() != Zone::Battlefield
-        || face(s, t, slot).abilities.iter().any(|a| {
-            a.layer()
-                .and_then(|spec| spec.condition.as_ref())
-                .is_some_and(|condition| static_ability::reads_counters(condition, kind))
-        })
-}
-
 /// Recomputes every permanent's characteristics from base ([CR 613.1]): "The values of an object's
 /// characteristics are determined by starting with the actual object. For a card, that means the
 /// values of the characteristics printed on that card. For a token or a copy of a spell or card,
@@ -307,7 +284,18 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable, trials: &mut u64) -> Re
     } else {
         [Rules::NONE; _]
     };
-    s.finish(listening, replacing, rules, removed, land_types);
+    // What the static abilities read that no layer writes, so that a mutator of one of
+    // them marks the results stale: in a game with no card that reads any, nothing. A
+    // permanent that lost its abilities keeps its inputs, which costs a recompute too many
+    // while it stays so and saves reading the results.
+    let inputs = if t.can(Capability::LayerInputs) {
+        (s.battlefield().iter()).fold(Inputs::NONE, |inputs, &slot| {
+            inputs.union(s.copiable(slot).layer_inputs(t))
+        })
+    } else {
+        Inputs::NONE
+    };
+    s.finish(listening, replacing, rules, inputs, removed, land_types);
     listed
 }
 

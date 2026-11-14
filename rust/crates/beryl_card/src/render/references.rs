@@ -186,7 +186,15 @@ impl Ctx {
         match objects {
             Objects::All { zone, filter } => {
                 let kind = Kind::of_zone(zone);
-                self.noun(filter, kind).plural(kind)
+                let noun = self.noun(filter, kind).plural(kind);
+                // "Cards in all graveyards": a zone each player has one of, with no player
+                // named by the filter.
+                match zone {
+                    Zone::Library | Zone::Hand | Zone::Graveyard if !mentions_owner(filter) => {
+                        format!("{noun} in all {}s", zone_name(zone))
+                    }
+                    _ => noun,
+                }
             }
             Objects::InZoneOf {
                 zone,
@@ -312,6 +320,11 @@ impl Ctx {
             }
             Amount::Count(objects) => format!("the number of {}", self.counted_objects(*objects)),
             Amount::Times(n, amount) => format!("{n} times {}", self.amount(*amount)),
+            Amount::Plus(n, amount) => format!("{} plus {n}", self.amount(*amount)),
+            Amount::CardTypesAmong(objects) => format!(
+                "the number of card types among {}",
+                self.counted_objects(*objects)
+            ),
             Amount::Power(objects) => format!("{} power", self.objects_possessive(objects)),
             Amount::Toughness(objects) => {
                 format!("{} toughness", self.objects_possessive(objects))

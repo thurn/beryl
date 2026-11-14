@@ -14,6 +14,7 @@ use crate::profile::Profile;
 use crate::rng::Rng;
 use crate::rule_changes::Rules;
 use crate::state::{Budgets, CounterTable, Effects, Flags, Memos, State, Trackers, Zones};
+use crate::static_ability::Inputs;
 use crate::store::Store;
 use crate::table::GameTable;
 use crate::turn::Turn;
@@ -108,6 +109,7 @@ impl<L: Layout> State<L> {
             derived: Table::filled(Derived::default()),
             listening: Listens::NONE,
             replacing: Replaces::NONE,
+            layer_inputs: Inputs::NONE,
             static_rules: Table::filled(Rules::NONE),
             zones: Zones {
                 members: Table::filled([Bitboard::EMPTY; Zone::OWNED]),

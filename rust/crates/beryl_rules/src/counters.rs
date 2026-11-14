@@ -5,7 +5,6 @@ use beryl_card::{Amount, Objects};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::interpret::{Outcome, Run};
-use crate::layers;
 use crate::layout::Layout;
 use crate::state::{CounterKind, ObjectRef};
 
@@ -22,7 +21,9 @@ pub fn add<L: Layout>(
     if !game.state.is_current(object) || amount == 0 {
         return Ok(());
     }
-    let layered = layers::counters_matter(game.state, game.table, object.slot, kind);
+    let layered = game
+        .state
+        .layers_read_counters(game.table, object.slot, kind);
     let e = game.state.add_counters(object, kind, amount, layered)?;
     game.settle(e)
 }
@@ -43,7 +44,9 @@ pub fn remove<L: Layout>(
     if amount == 0 {
         return Ok(());
     }
-    let layered = layers::counters_matter(game.state, game.table, object.slot, kind);
+    let layered = game
+        .state
+        .layers_read_counters(game.table, object.slot, kind);
     let e = game.state.remove_counters(object, kind, amount, layered);
     game.settle(e)
 }

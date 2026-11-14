@@ -979,6 +979,13 @@ fn amounts(amount: Amount) -> Neighbours<Amount> {
             }
             out
         }
+        Amount::Plus(n, of) => {
+            let mut out = vec![(format!("plus {}", n + 1), Amount::Plus(n + 1, of))];
+            if n > 0 {
+                out.push((format!("plus {}", n - 1), Amount::Plus(n - 1, of)));
+            }
+            out
+        }
         _ => Vec::new(),
     }
 }

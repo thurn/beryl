@@ -98,9 +98,12 @@ def unify_self_reference(text: str, context: Context) -> str:
     """Writes every way the card names itself as `~`. Oracle uses the card's name on older
     cards and on legendary ones, and "this creature" (by type) on cards since 2024; the renderer
     picks one by rule. "Exile Rift Wave." (on a card named Rift Wave) and "Exile this spell." both become "Exile ~." A
-    legendary card's short name counts too: "Ana" for "Ana, the Sky Sage"."""
+    legendary card's short name counts too: "Ana" for "Ana, the Sky Sage". So does the name's
+    possessive, as "this creature's" does: "Tarmogoyf's power" becomes "~'s power"."""
     names = "|".join(re.escape(n) for n in context.names)
-    pattern = rf"\b(?:{names})(?![\w'])|\b{SELF_WORDS}\b" if names else SELF_WORDS
+    pattern = (
+        rf"\b(?:{names})(?!\w)(?!'(?!s\b))|\b{SELF_WORDS}\b" if names else SELF_WORDS
+    )
     return re.sub(pattern, SELF, text, flags=re.IGNORECASE)
 
 

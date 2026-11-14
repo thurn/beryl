@@ -6,7 +6,7 @@
 //! nothing, so the same reader serves an ability as it triggers, where there is no
 //! resolution yet, and as it resolves.
 
-use beryl_card::{Amount, CastingKind, Condition, Objects, Players, SpecIx};
+use beryl_card::{Amount, CastingKind, Condition, Objects, Players, SpecIx, Types};
 
 use crate::PlayerSet;
 use crate::bitboard::Bitboard;
@@ -432,6 +432,22 @@ impl<L: Layout> Scene<'_, L> {
             }
             Amount::Count(objects) => self.objects(*objects).count().cast_signed(),
             Amount::Times(n, amount) => i32::from(n) * self.value(*amount),
+            Amount::Plus(n, amount) => self.value(*amount) + i32::from(n),
+            // CR 300.1: each card type once, among the cards: a token is none (CR 108.2).
+            // A permanent's types are the layers' results. A union of types, the same in
+            // any order the cards are read.
+            Amount::CardTypesAmong(objects) => {
+                let types = (self.s.in_candidate_order(self.objects(*objects)))
+                    .filter(|&slot| !self.s.object(slot).is_token())
+                    .fold(Types::NONE, |types, slot| {
+                        types.union(if self.s.object(slot).zone() == Zone::Battlefield {
+                            self.s.derived(slot).types
+                        } else {
+                            self.s.copiable(slot).face(self.t).types
+                        })
+                    });
+                types.0.count_ones().cast_signed()
+            }
             // CR 119.1: a player's life total, which may be below zero.
             Amount::Life(players) => {
                 let who = self.players(players);
