@@ -679,6 +679,7 @@ fn no_view_shows_an_identity_its_viewer_does_not_know() {
                         decision: Some(d.insert(open_decision(s, t))),
                     },
                     Status::Playing => Moment::Playing,
+                    Status::Free => unreachable!("engine games do not emit manual table views"),
                     // The end shows what the human knows by then; the game is over.
                     Status::Over { .. } | Status::Stopped => break,
                 };

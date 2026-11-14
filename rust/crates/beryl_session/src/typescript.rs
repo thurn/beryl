@@ -23,6 +23,10 @@ use crate::protocol::{
     SessionId, Side, StackItem, Stall, Status, Step, StopsSetting, TargetRef, TurnView, Why,
     ZoneName,
 };
+use crate::protocol::{
+    AssistsView, FaceName, LabelView, LogLine, NamedCounter, ProposalLine, ProposalView, RowName,
+    TablePhase, TablePrompt, TableView, ZoneRef,
+};
 use crate::script::{
     Act, Arrow, Fact, Mark, Notice, Reset, Script, Span, Step as ScriptStep, Stream, Subject,
     Tally, Verb,
@@ -50,6 +54,24 @@ fn prompt_decls(cfg: &Config) -> [String; 18] {
         Click::decl(cfg),
         ClickRequest::decl(cfg),
         ClickReply::decl(cfg),
+    ]
+}
+
+/// Types used by manual table views.
+fn table_decls(cfg: &Config) -> [String; 12] {
+    [
+        FaceName::decl(cfg),
+        RowName::decl(cfg),
+        NamedCounter::decl(cfg),
+        TableView::decl(cfg),
+        LogLine::decl(cfg),
+        ProposalView::decl(cfg),
+        ProposalLine::decl(cfg),
+        LabelView::decl(cfg),
+        AssistsView::decl(cfg),
+        TablePhase::decl(cfg),
+        ZoneRef::decl(cfg),
+        TablePrompt::decl(cfg),
     ]
 }
 
@@ -148,7 +170,8 @@ pub fn typescript() -> String {
         "// Generated from rust/crates/beryl_session by ts-rs; do not edit. Regenerate with\n\
          // `BERYL_UPDATE_TS=1 just test-rust -p beryl_session --test session typescript`.\n",
     );
-    for decl in decls.into_iter().chain(prompt_decls(&cfg)) {
+    let extra = table_decls(&cfg).into_iter().chain(prompt_decls(&cfg));
+    for decl in decls.into_iter().chain(extra) {
         out.push('\n');
         out.push_str("export ");
         out.push_str(&decl);

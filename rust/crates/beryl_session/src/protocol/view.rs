@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::{
-    CardType, Counter, DecisionView, Declaration, GameEvent, Keyword, OutcomeView, Step,
-    StopsSetting, ZoneName,
+    CardType, Counter, DecisionView, Declaration, FaceName, GameEvent, Keyword, NamedCounter,
+    OutcomeView, RowName, Step, StopsSetting, TableView, ZoneName,
 };
 
 /// An object on the wire: its public slot, the number a [`Subject::Object`](crate::script::Subject) and an
@@ -82,6 +82,10 @@ pub struct PlayerView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub script: Option<crate::script::Script>,
+    /// The manual table's controls and state for this viewer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub table: Option<TableView>,
 }
 
 /// Where the game stands for the viewer.
@@ -94,6 +98,8 @@ pub enum Status {
     },
     /// The opponent is deciding: the next view follows once they have.
     Thinking,
+    /// The manual table is live with no engine decision pending.
+    Free,
     /// A step of the turn began, and the game goes on through it without the viewer: the next
     /// view follows at once.
     Playing,
@@ -178,7 +184,8 @@ pub struct TurnView {
     pub own_number: u16,
     pub active: Side,
     pub step: Step,
-    pub priority: Side,
+    /// The side with engine priority, if the game uses priority.
+    pub priority: Option<Side>,
     /// Who takes the first turn (CR 103.1); none while the coin flip's winner chooses.
     pub starting: Option<Side>,
     /// Who won the coin flip that chose who chooses, in a game begun by one: the session's to
@@ -211,10 +218,13 @@ pub struct PlayerState {
     pub graveyard: Vec<ObjectId>,
     /// The emblems' names.
     pub emblems: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(optional, as = "Option<_>")]
+    pub named_counters: Vec<NamedCounter>,
 }
 
 /// Mana by type.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ManaPool {
     pub white: u8,
@@ -228,6 +238,10 @@ pub struct ManaPool {
 /// One object, with its identity only if the viewer knows it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag describes independent object state"
+)]
 pub struct ObjectView {
     pub slot: ObjectId,
     pub zone: ZoneName,
@@ -263,6 +277,22 @@ pub struct ObjectView {
     /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)).
     pub exiled_with: Option<ObjectId>,
     pub combat: Option<Combat>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub note: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub pinned: Option<RowName>,
+    /// Which face the manual table is showing. The engine uses `name` and `facing`.
+    #[serde(default, skip_serializing_if = "FaceName::is_front")]
+    #[ts(optional, as = "Option<_>")]
+    pub face: FaceName,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(optional, as = "Option<_>")]
+    pub named_counters: Vec<NamedCounter>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(optional, as = "Option<_>")]
+    pub doesnt_untap: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]

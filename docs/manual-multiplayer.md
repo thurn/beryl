@@ -501,8 +501,9 @@ engine game is drawn.
 - **A sideboard zone.**
 - **A field named `table`, empty in an engine game,** that holds what only a
   manual table shows: the log's lines, pending proposals and labels, the
-  viewer's assists, the phase, the state of the connection, and any prompt the
-  host is holding for the viewer.
+  viewer's assists, the phase, the number of seats, hidden zones the viewer can
+  use, and any prompt the host is holding for the viewer. Connection state
+  arrives separately on `table-link`.
 
 A view for the manual table sets the fields the engine fills from rules to
 neutral values: no priority, no legal plays, no pending decision. The phase and

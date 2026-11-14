@@ -267,24 +267,9 @@ impl Builder<'_> {
             owner
         };
         Some(ObjectView {
-            slot,
-            zone: to,
-            owner,
-            controller,
             name,
-            facing: Facing::Up,
             token: base.token,
-            tapped: false,
-            summoning_sick: false,
-            damage: 0,
-            counters: Vec::new(),
-            types: Vec::new(),
-            pt: None,
-            keywords: Vec::new(),
-            attached_to: None,
-            exiled_by: None,
-            exiled_with: None,
-            combat: None,
+            ..ObjectView::hidden(slot, to, controller, owner)
         })
     }
 

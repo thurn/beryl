@@ -27,6 +27,7 @@ fn shown(view: &PlayerView) -> impl PartialEq + '_ {
         events,
         undone,
         script: _,
+        table,
     } = view;
     (
         status,
@@ -40,5 +41,6 @@ fn shown(view: &PlayerView) -> impl PartialEq + '_ {
         stops,
         events,
         undone,
+        table,
     )
 }

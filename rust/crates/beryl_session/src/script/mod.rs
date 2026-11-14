@@ -134,7 +134,7 @@ mod follow;
 mod hear;
 mod mana;
 mod moves;
-mod replay;
+pub mod replay;
 mod settle;
 mod spans;
 mod stack;

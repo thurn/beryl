@@ -9,10 +9,12 @@ mod decide;
 mod decision;
 mod event;
 mod names;
+mod neutral;
 mod outcome;
 mod rules_text;
 mod shown;
 mod stops;
+mod table;
 mod view;
 
 pub use build::*;
@@ -23,6 +25,7 @@ pub use event::*;
 pub use names::*;
 pub use outcome::*;
 pub use stops::*;
+pub use table::*;
 pub use view::*;
 
 #[cfg(test)]

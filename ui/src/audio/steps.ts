@@ -27,6 +27,7 @@ const ARRIVING: Record<ZoneName, Sound | null> = {
   exile: "exile",
   hand: "slide",
   library: "fan",
+  sideboard: null,
   // A spell sounds by its cast, which comes with its move to the stack.
   stack: null,
   // A token ceasing to exist, once its move to a graveyard has sounded.

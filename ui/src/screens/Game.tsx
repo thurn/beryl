@@ -215,6 +215,7 @@ function Playing({ playback }: { playback: Playback }) {
   // Before the first turn the opening stays over the table, the opponent's decisions too.
   const opening =
     view.turn.number === 0 &&
+    status.kind !== "free" &&
     status.kind !== "over" &&
     status.kind !== "stopped";
   // A pick still planned answers the decision it waits for: the player has nothing to do.

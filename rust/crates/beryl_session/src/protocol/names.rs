@@ -58,9 +58,49 @@ mirror! {
     Declaration from MulliganStatus { Undeclared, WillMulligan, Kept }
 }
 
-mirror! {
-    /// A zone ([`Zone`]).
-    ZoneName from Zone { Library, Hand, Battlefield, Graveyard, Exile, Stack, Nowhere }
+/// A zone on the wire. Only manual tables show the sideboard during play.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ZoneName {
+    Library,
+    Hand,
+    Battlefield,
+    Graveyard,
+    Exile,
+    Stack,
+    Nowhere,
+    Sideboard,
+}
+
+impl From<Zone> for ZoneName {
+    fn from(zone: Zone) -> Self {
+        match zone {
+            Zone::Library => Self::Library,
+            Zone::Hand => Self::Hand,
+            Zone::Battlefield => Self::Battlefield,
+            Zone::Graveyard => Self::Graveyard,
+            Zone::Exile => Self::Exile,
+            Zone::Stack => Self::Stack,
+            Zone::Nowhere => Self::Nowhere,
+        }
+    }
+}
+
+impl TryFrom<ZoneName> for Zone {
+    type Error = &'static str;
+
+    fn try_from(zone: ZoneName) -> Result<Self, Self::Error> {
+        Ok(match zone {
+            ZoneName::Library => Self::Library,
+            ZoneName::Hand => Self::Hand,
+            ZoneName::Battlefield => Self::Battlefield,
+            ZoneName::Graveyard => Self::Graveyard,
+            ZoneName::Exile => Self::Exile,
+            ZoneName::Stack => Self::Stack,
+            ZoneName::Nowhere => Self::Nowhere,
+            ZoneName::Sideboard => return Err("the engine has no sideboard zone"),
+        })
+    }
 }
 
 mirror! {

@@ -204,9 +204,13 @@ undone: boolean,
  * ([`crate::script`]): every view a game in progress sends has one. A view built on its
  * own, and one recorded before scripts were, has none.
  */
-script?: Script, };
+script?: Script, 
+/**
+ * The manual table's controls and state for this viewer.
+ */
+table?: TableView, };
 
-export type Status = { "kind": "deciding", decision: DecisionView, } | { "kind": "thinking" } | { "kind": "playing" } | { "kind": "stopped" } | { "kind": "over", outcome: OutcomeView, };
+export type Status = { "kind": "deciding", decision: DecisionView, } | { "kind": "thinking" } | { "kind": "free" } | { "kind": "playing" } | { "kind": "stopped" } | { "kind": "over", outcome: OutcomeView, };
 
 export type CardHandling = { "zone": "library", side: Side, count: number | null, scry?: boolean, } | { "zone": "hand", side: Side, };
 
@@ -221,7 +225,11 @@ number: number,
  * The active player's own turn count, which is what players call "turn N": the starting
  * player's first turn and the other player's first turn are both 1. See [`own_number`].
  */
-ownNumber: number, active: Side, step: Step, priority: Side, 
+ownNumber: number, active: Side, step: Step, 
+/**
+ * The side with engine priority, if the game uses priority.
+ */
+priority: Side | null, 
 /**
  * Who takes the first turn (CR 103.1); none while the coin flip's winner chooses.
  */
@@ -254,7 +262,7 @@ graveyard: Array<ObjectId>,
 /**
  * The emblems' names.
  */
-emblems: Array<string>, };
+emblems: Array<string>, namedCounters?: Array<NamedCounter>, };
 
 export type Declaration = "undeclared" | "willMulligan" | "kept";
 
@@ -300,7 +308,11 @@ exiledBy: ObjectId | null,
  * find it among the cards "exiled with" it
  * ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)).
  */
-exiledWith: ObjectId | null, combat: Combat | null, };
+exiledWith: ObjectId | null, combat: Combat | null, note?: string, pinned?: RowName, 
+/**
+ * Which face the manual table is showing. The engine uses `name` and `facing`.
+ */
+face?: FaceName, namedCounters?: Array<NamedCounter>, doesntUntap?: boolean, };
 
 export type Facing = "up" | "down";
 
@@ -569,7 +581,7 @@ export type Kind = "priority" | "playOrDraw" | "keepOrMulligan" | "triggerOrder"
 
 export type Step = "untap" | "upkeep" | "draw" | "precombatMain" | "beginningOfCombat" | "declareAttackers" | "declareBlockers" | "firstStrikeDamage" | "combatDamage" | "endOfCombat" | "postcombatMain" | "end" | "cleanup";
 
-export type ZoneName = "library" | "hand" | "battlefield" | "graveyard" | "exile" | "stack" | "nowhere";
+export type ZoneName = "library" | "hand" | "battlefield" | "graveyard" | "exile" | "stack" | "nowhere" | "sideboard";
 
 export type Why = "play" | "draw" | "discard" | "destroy" | "sacrifice" | "stateBased" | "exile" | "created" | "return" | "effect" | "cast" | "counter" | "resolve";
 
@@ -637,6 +649,38 @@ export type Verb = "fly" | "appear" | "vanish" | "emerge" | "flip" | "tap" | "st
 export type Mark = "eligible" | "selected" | "suggested" | "paying" | "friendly-target" | "hostile-target";
 
 export type Arrow = "friendly-target" | "hostile-target" | "source" | "attack" | "block";
+
+export type FaceName = "front" | "back" | "down";
+
+export type RowName = "creatures" | "others" | "lands";
+
+export type NamedCounter = { name: string, count: number, };
+
+export type TableView = { log: Array<LogLine>, proposals: Array<ProposalView>, labels: Array<LabelView>, assists: AssistsView, phase: TablePhase, seats: number, 
+/**
+ * Hidden zones lent or revealed to this viewer.
+ */
+acting: Array<ZoneRef>, prompt?: TablePrompt, };
+
+export type LogLine = { n: number, 
+/**
+ * The actor's display name as seen by the viewer.
+ */
+by: string, text: string, struck: boolean, undoable: boolean, blockedBy: Array<number>, };
+
+export type ProposalView = { id: number, title: string, lines: Array<ProposalLine>, };
+
+export type ProposalLine = { text: string, whose: Side, on: boolean, };
+
+export type LabelView = { id: number, on: TargetRef, text: string, };
+
+export type AssistsView = { turnUpkeep: boolean, combat: boolean, stateNudges: boolean, libraryFlows: boolean, abilityMenus: boolean, };
+
+export type TablePhase = "untap" | "upkeep" | "draw" | "firstMain" | "beginningOfCombat" | "declareAttackers" | "declareBlockers" | "combatDamage" | "endOfCombat" | "secondMain" | "end";
+
+export type ZoneRef = { side: Side, zone: ZoneName, };
+
+export type TablePrompt = { "kind": "none" };
 
 export type PromptView = { 
 /**

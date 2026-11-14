@@ -22,3 +22,28 @@ fn costs_read_as_printed() {
     assert_eq!(mana_text(mana(0, [0; 6], 1)), "{X}");
     assert_eq!(mana_text(mana(2, [0, 2, 0, 0, 0, 0], 0)), "{2}{U}{U}");
 }
+
+#[test]
+fn a_neutral_view_round_trips_without_manual_defaults_on_the_wire() {
+    use super::{ObjectId, ObjectView, PlayerState, PlayerView, Side, Status, ZoneName};
+
+    let mut view = PlayerView::neutral(PlayerState::neutral(20), PlayerState::neutral(20));
+    view.objects.push(ObjectView::hidden(
+        ObjectId(1),
+        ZoneName::Sideboard,
+        Side::Opponent,
+        Side::Opponent,
+    ));
+    let wire = serde_json::to_value(&view).unwrap();
+    assert_eq!(wire["status"]["kind"], "free");
+    assert!(wire["turn"]["priority"].is_null());
+    assert!(wire.get("table").is_none());
+    assert!(wire["players"]["you"].get("namedCounters").is_none());
+    let object = &wire["objects"][0];
+    for key in ["note", "pinned", "face", "namedCounters", "doesntUntap"] {
+        assert!(object.get(key).is_none(), "{key} has a wire default");
+    }
+    let decoded: PlayerView = serde_json::from_value(wire).unwrap();
+    assert_eq!(decoded.status, Status::Free);
+    assert_eq!(decoded, view);
+}

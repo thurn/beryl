@@ -354,6 +354,7 @@ fn view_kind(view: &PlayerView) -> &'static str {
         Status::Deciding { .. } => "deciding",
         Status::Thinking => "thinking",
         Status::Playing => "playing",
+        Status::Free => "free",
         Status::Stopped => "stopped",
         Status::Over { .. } => "over",
     }

@@ -13,36 +13,12 @@ use beryl_session::script::{
 
 /// A card the viewer knows, lying in `zone`.
 fn card(slot: u16, name: &str, zone: ZoneName) -> ObjectView {
-    ObjectView {
-        slot: ObjectId(slot),
-        zone,
-        owner: Side::You,
-        controller: Side::You,
-        name: Some(name.to_owned()),
-        facing: Facing::Up,
-        token: false,
-        tapped: false,
-        summoning_sick: false,
-        damage: 0,
-        counters: Vec::new(),
-        types: Vec::new(),
-        pt: None,
-        keywords: Vec::new(),
-        attached_to: None,
-        exiled_by: None,
-        exiled_with: None,
-        combat: None,
-    }
+    ObjectView::card(ObjectId(slot), name, zone, Side::You, Side::You)
 }
 
 /// A card the viewer has not seen.
 fn hidden(slot: u16, zone: ZoneName) -> ObjectView {
-    ObjectView {
-        name: None,
-        owner: Side::Opponent,
-        controller: Side::Opponent,
-        ..card(slot, "", zone)
-    }
+    ObjectView::hidden(ObjectId(slot), zone, Side::Opponent, Side::Opponent)
 }
 
 fn creature(slot: u16, name: &str, power: i8, toughness: i8) -> ObjectView {

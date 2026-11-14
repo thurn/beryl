@@ -147,7 +147,7 @@ pub fn player_view<L: Layout>(
             own_number: own_number(turn.number()),
             active: side(obs, turn.active()),
             step: turn.step().into(),
-            priority: side(obs, turn.priority()),
+            priority: Some(side(obs, turn.priority())),
             starting: obs.starting_player().map(|p| side(obs, p)),
             flip_winner: None,
         },
@@ -159,6 +159,7 @@ pub fn player_view<L: Layout>(
         events: game_events(t, obs, events),
         undone: false,
         script: None,
+        table: None,
     }
 }
 
@@ -202,6 +203,7 @@ fn player_state<L: Layout>(t: &GameTable, obs: Observation<'_, L>, p: Seat) -> P
             .iter()
             .map(|&e| t.def(e).name.to_owned())
             .collect(),
+        named_counters: Vec::new(),
     }
 }
 
@@ -376,6 +378,11 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
             }),
             CombatRole::None => None,
         },
+        note: None,
+        pinned: None,
+        face: super::FaceName::Front,
+        named_counters: Vec::new(),
+        doesnt_untap: false,
     }
 }
 
