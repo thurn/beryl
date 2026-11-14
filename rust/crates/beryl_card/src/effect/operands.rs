@@ -225,6 +225,9 @@ impl Effect {
             Effect::DealDamage { to, amount } => match to {
                 Recipients::Players(players) => Operands::of_players(players).amount(amount),
                 Recipients::Permanents(objects) => Operands::of_objects(objects).amount(amount),
+                Recipients::Both(players, objects) => Operands::of_players(players)
+                    .objects(objects)
+                    .amount(amount),
             },
             Effect::CreateCopies {
                 player,

@@ -152,6 +152,10 @@ pub enum Recipients {
     Players(Players),
     /// "To target creature", "to each creature": the permanents among them.
     Permanents(Objects),
+    /// "To each creature and each player", or, with [`Players::Target`] and
+    /// [`Objects::Target`] of one spec, "to any target": the players and the permanents
+    /// together. [`Recipients::target`] makes the second.
+    Both(Players, Objects),
 }
 
 impl Recipients {
@@ -160,7 +164,14 @@ impl Recipients {
         match self {
             Recipients::Players(players) => players.names_paid(),
             Recipients::Permanents(objects) => objects.names_paid(),
+            Recipients::Both(players, objects) => players.names_paid() || objects.names_paid(),
         }
+    }
+
+    /// The target of the `spec`th instance of the word "target", which may be a player or a
+    /// permanent, as "any target" is ([`crate::TargetKind::PermanentOrPlayer`]).
+    pub const fn target(spec: SpecIx) -> Recipients {
+        Recipients::Both(Players::Target(spec), Objects::Target(spec))
     }
 }
 

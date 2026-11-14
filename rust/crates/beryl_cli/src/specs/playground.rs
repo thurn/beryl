@@ -448,7 +448,14 @@ fn choice_rich(def: &CardDef, mut board: Scenario, controller: View) -> Scenario
         .iter()
         .flat_map(|f| f.abilities)
         .flat_map(beryl_engine::card::Ability::targets)
-        .filter(|t| matches!(t.kind, TargetKind::Permanent | TargetKind::SpellOrPermanent))
+        .filter(|t| {
+            matches!(
+                t.kind,
+                TargetKind::Permanent
+                    | TargetKind::SpellOrPermanent
+                    | TargetKind::PermanentOrPlayer
+            )
+        })
     {
         let Ok((table, state)) = target_position(&board) else {
             continue;

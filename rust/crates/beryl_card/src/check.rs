@@ -654,7 +654,7 @@ impl Scope<'_> {
         match players {
             Players::You | Players::EachOpponent | Players::EachPlayer => Ok(()),
             Players::Target(target) => match self.target(*target) {
-                Some(TargetKind::Player) => Ok(()),
+                Some(TargetKind::Player | TargetKind::PermanentOrPlayer) => Ok(()),
                 _ => Err(Malformed::Target),
             },
             Players::ControllerOf(objects) | Players::OwnerOf(objects) => {

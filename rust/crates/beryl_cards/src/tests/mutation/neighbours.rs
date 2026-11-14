@@ -625,6 +625,11 @@ fn local(effect: &'static Effect) -> Neighbours<Effect> {
                     .into_iter()
                     .map(|(n, o)| (n, Recipients::Permanents(o)))
                     .collect(),
+                // Damage to only the players, or only the permanents, of the two.
+                Recipients::Both(p, o) => vec![
+                    ("only players".to_owned(), Recipients::Players(p)),
+                    ("only permanents".to_owned(), Recipients::Permanents(o)),
+                ],
             };
             for (name, to) in recipients {
                 add(name, Effect::DealDamage { to, amount });

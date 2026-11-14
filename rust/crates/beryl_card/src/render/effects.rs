@@ -229,6 +229,13 @@ impl Ctx {
                 let to = match to {
                     Recipients::Players(players) => self.player(players),
                     Recipients::Permanents(objects) => self.objects(objects),
+                    // "Any target": the one target, said once.
+                    Recipients::Both(Players::Target(a), Objects::Target(b)) if a == b => {
+                        self.objects(Objects::Target(b))
+                    }
+                    Recipients::Both(players, objects) => {
+                        format!("{} and {}", self.objects(objects), self.player(players))
+                    }
                 };
                 vec![format!("{} deals {damage} to {to}", self.this)]
             }

@@ -18,6 +18,9 @@ pub enum TargetKind {
     /// A player. The filter is [`Filter::Any`] for "target player" or [`Filter::Whose`], read
     /// for players, for "target opponent".
     Player,
+    /// A permanent or a player, such as "any target". The filter applies to the permanents
+    /// only: every player may be chosen.
+    PermanentOrPlayer,
 }
 
 /// How an effect takes what it targets from its controller, which a player is told as they
@@ -36,7 +39,7 @@ pub enum Takes {
 
 /// One instance of the word "target" in a spell or ability: what it may choose and how many
 /// ([CR 115.1](https://yawgatog.com/resources/magic-rules/#R1151)).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct TargetSpec {
     pub kind: TargetKind,
     pub filter: Filter,
@@ -82,6 +85,19 @@ impl TargetSpec {
     /// "Target opponent".
     pub const fn opponent() -> TargetSpec {
         TargetSpec::one(TargetKind::Player, Filter::Whose(&Players::EachOpponent))
+    }
+
+    /// "Any target" ([CR 115.4](https://yawgatog.com/resources/magic-rules/#R1154)): "These
+    /// targets may be creatures, players, planeswalkers, or battles."
+    pub const fn any_target() -> TargetSpec {
+        TargetSpec::one(
+            TargetKind::PermanentOrPlayer,
+            Filter::Types(
+                Types::CREATURE
+                    .union(Types::PLANESWALKER)
+                    .union(Types::BATTLE),
+            ),
+        )
     }
 
     /// "Target creature".

@@ -229,7 +229,7 @@ impl Effects {
             | Effect::Sacrifice(objects)
             | Effect::PutIntoLibrary { objects, .. }
             | Effect::DealDamage {
-                to: Recipients::Permanents(objects),
+                to: Recipients::Permanents(objects) | Recipients::Both(_, objects),
                 ..
             } => e.removal = removed(objects),
             Effect::Modify {

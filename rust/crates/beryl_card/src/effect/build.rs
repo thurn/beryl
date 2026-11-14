@@ -445,6 +445,15 @@ pub const fn deal_damage_to(player: Players, amount: u8) -> Effect {
     }
 }
 
+/// [`Effect::DealDamage`] to the first target, a player or a permanent: "this deals [amount]
+/// damage to any target", with [`crate::TargetSpec::any_target`].
+pub const fn deal_damage_to_any_target(amount: u8) -> Effect {
+    Effect::DealDamage {
+        to: Recipients::target(SpecIx::new(0)),
+        amount: Amount::Fixed(amount),
+    }
+}
+
 /// [`Effect::GainLife`]: "[player] gains [amount] life".
 pub const fn gain_life(player: Players, amount: u8) -> Effect {
     Effect::GainLife {

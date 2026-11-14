@@ -14,18 +14,29 @@ use crate::table::GameTable;
 use super::steps::{ability_event, advance, specs, top};
 use super::timing::entry_ability;
 
-/// The objects or players a target spec can choose.
+/// The objects and players a target spec can choose. A spec of most kinds chooses only one
+/// of the two, and the other is empty; "any target" chooses from both.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum TargetSet<L: Layout = Small> {
-    Objects(Bitboard<L::Slot>),
-    Players(PlayerSet),
+pub(crate) struct TargetSet<L: Layout = Small> {
+    pub objects: Bitboard<L::Slot>,
+    pub players: PlayerSet,
 }
 
-fn player_matches(filter: Filter, player: Seat, you: Seat) -> bool {
-    match filter {
-        Filter::Any => true,
-        Filter::Whose(players) => filter::is_for(players, player, you),
-        _ => unreachable!("a player filter is Any or Whose"),
+/// Whether a target spec can choose `player`: a spec for "target player" or "target opponent"
+/// asks its filter, and one for "any target" may choose every player, since its filter is
+/// for the permanents.
+fn player_matches(spec: &TargetSpec, player: Seat, you: Seat) -> bool {
+    match spec.kind {
+        TargetKind::Player => match spec.filter {
+            Filter::Any => true,
+            Filter::Whose(players) => filter::is_for(players, player, you),
+            _ => unreachable!("a player filter is Any or Whose"),
+        },
+        TargetKind::PermanentOrPlayer => true,
+        TargetKind::Permanent
+        | TargetKind::Spell
+        | TargetKind::SpellOrPermanent
+        | TargetKind::GraveyardCard => false,
     }
 }
 
@@ -54,15 +65,18 @@ pub(super) fn candidates<L: Layout>(
     x: u8,
     source: Option<L::Slot>,
 ) -> TargetSet<L> {
-    match domain(s, spec, you, itself, source) {
-        TargetSet::Objects(within) => {
-            TargetSet::Objects(spec.filter.select_x(s, t, within, you, x))
-        }
-        players @ TargetSet::Players(_) => players,
+    let TargetSet { objects, players } = domain(s, spec, you, itself, source);
+    TargetSet {
+        objects: if objects.is_empty() {
+            objects
+        } else {
+            spec.filter.select_x(s, t, objects, you, x)
+        },
+        players,
     }
 }
 
-/// What [`candidates`] chooses from: the players a spec can choose, or the objects its filter
+/// What [`candidates`] chooses from: the players a spec can choose, and the objects its filter
 /// is still to pass on.
 fn domain<L: Layout>(
     s: &State<L>,
@@ -71,12 +85,15 @@ fn domain<L: Layout>(
     itself: Option<L::Slot>,
     source: Option<L::Slot>,
 ) -> TargetSet<L> {
-    let mut within = match spec.kind {
-        TargetKind::Player => {
-            let players = s.players().filter(|p| player_matches(spec.filter, p, you));
-            return TargetSet::Players(players);
+    let players = match spec.kind {
+        TargetKind::Player | TargetKind::PermanentOrPlayer => {
+            s.players().filter(|p| player_matches(spec, p, you))
         }
-        TargetKind::Permanent => s.in_zone(Zone::Battlefield),
+        _ => PlayerSet::NOBODY,
+    };
+    let mut within = match spec.kind {
+        TargetKind::Player => Bitboard::EMPTY,
+        TargetKind::Permanent | TargetKind::PermanentOrPlayer => s.in_zone(Zone::Battlefield),
         TargetKind::Spell => spells(s),
         TargetKind::SpellOrPermanent => spells(s) | s.in_zone(Zone::Battlefield),
         TargetKind::GraveyardCard => s.in_zone(Zone::Graveyard),
@@ -87,7 +104,10 @@ fn domain<L: Layout>(
     if let Some(source) = source.filter(|_| spec.other) {
         within.remove(source);
     }
-    TargetSet::Objects(within)
+    TargetSet {
+        objects: within,
+        players,
+    }
 }
 
 /// Whether [`candidates`] holds at least `spec.count` targets, found without testing the
@@ -101,21 +121,16 @@ fn enough_candidates<L: Layout>(
     x: u8,
     source: Option<L::Slot>,
 ) -> bool {
-    let need = usize::from(spec.count);
-    match domain(s, spec, you, itself, source) {
-        TargetSet::Objects(within) => {
-            within.at_least(need, |slot| spec.filter.matches_x(s, t, slot, you, x))
-        }
-        TargetSet::Players(players) => players.count() as usize >= need,
-    }
+    let TargetSet { objects, players } = domain(s, spec, you, itself, source);
+    let Some(need) = usize::from(spec.count).checked_sub(players.count() as usize) else {
+        return true;
+    };
+    objects.at_least(need, |slot| spec.filter.matches_x(s, t, slot, you, x))
 }
 
 impl<L: Layout> TargetSet<L> {
     pub(super) fn count(self) -> u32 {
-        match self {
-            TargetSet::Objects(b) => b.count(),
-            TargetSet::Players(p) => p.count(),
-        }
+        self.objects.count() + self.players.count()
     }
 }
 
@@ -160,16 +175,13 @@ pub(crate) fn still_legal<L: Layout>(
     let Some(r) = target.as_object() else {
         return target
             .as_player()
-            .is_some_and(|p| player_matches(spec.filter, p, you));
+            .is_some_and(|p| player_matches(spec, p, you));
     };
     if !s.is_current(r) {
         return false;
     }
     let itself = entry.spell().map(|r| r.slot);
-    match candidates(s, t, spec, you, itself, entry.x, source_of(entry)) {
-        TargetSet::Objects(b) => b.contains(r.slot),
-        TargetSet::Players(_) => false,
-    }
+    (candidates(s, t, spec, you, itself, entry.x, source_of(entry)).objects).contains(r.slot)
 }
 
 /// Chooses the targets of the triggered ability just put on the stack, if it has any.
@@ -222,22 +234,14 @@ pub(super) fn target_options<L: Layout>(
     let entry = top(s);
     let spec = &specs(t, entry)[c.spec.index()];
     let itself = entry.spell().map(|r| r.slot);
-    match candidates(s, t, spec, c.player, itself, entry.x, source_of(entry)) {
-        TargetSet::Objects(mut b) => {
-            for target in entry.targets.iter().filter(|x| x.spec() == c.spec) {
-                if let Some(r) = target.as_object() {
-                    b.remove(r.slot);
-                }
-            }
-            TargetSet::Objects(b)
+    let mut set = candidates(s, t, spec, c.player, itself, entry.x, source_of(entry));
+    for target in entry.targets.iter().filter(|x| x.spec() == c.spec) {
+        if let Some(r) = target.as_object() {
+            set.objects.remove(r.slot);
         }
-        TargetSet::Players(mut p) => {
-            for target in entry.targets.iter().filter(|x| x.spec() == c.spec) {
-                if let Some(player) = target.as_player() {
-                    p.remove(player);
-                }
-            }
-            TargetSet::Players(p)
+        if let Some(player) = target.as_player() {
+            set.players.remove(player);
         }
     }
+    set
 }

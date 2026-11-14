@@ -10,8 +10,9 @@ use crate::continuous::{Governed, RuleChange, When};
 use crate::cost::{Cost, CostPart};
 use crate::definition::{CardDef, Face, card};
 use crate::effect::build::{
-    counter, deal_damage_to, destroy, dig, discard, draw, exile_until_this_leaves, flip_coin,
-    if_then, if_you_lose_the_flip, may_cast_free, put_back, sequence, target, this, those, you,
+    counter, deal_damage_to, deal_damage_to_any_target, destroy, dig, discard, draw,
+    exile_until_this_leaves, flip_coin, if_then, if_you_lose_the_flip, may_cast_free, put_back,
+    sequence, target, this, those, you,
 };
 use crate::effect::{Amount, Comparison, Condition, Effect, LibraryOrder, Players, Taken};
 use crate::filter::Filter;
@@ -188,5 +189,23 @@ fn a_discarded_card_is_named_once_it_would_be_ambiguous() {
         "Whenever Malcolm deals combat damage to a player, draw a card, then discard a card. If \
          there are four or more chorus counters on Malcolm, you may cast the discarded card \
          without paying its mana cost."
+    );
+}
+
+/// A target that is a permanent or a player: Lightning Bolt's "Lightning Bolt deals 3 damage
+/// to any target."
+#[test]
+fn any_target_is_said_without_the_word_target() {
+    static LIGHTNING_BOLT: CardDef = one_face(
+        "Lightning Bolt",
+        &[Face::EMPTY
+            .types(Types::INSTANT)
+            .abilities(&[Ability::spell()
+                .targeting(&[TargetSpec::any_target()])
+                .effect(&deal_damage_to_any_target(3))])],
+    );
+    assert_eq!(
+        render(&LIGHTNING_BOLT),
+        "Lightning Bolt deals 3 damage to any target."
     );
 }

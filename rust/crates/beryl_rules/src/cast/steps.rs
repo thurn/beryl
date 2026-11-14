@@ -380,19 +380,23 @@ pub(crate) fn decision<L: Layout>(
             options(DecisionKind::TargetCount, list, count)
         }
         // The targets of one spec are one prompt, which says how many are still to choose.
+        // A spec that can choose players lists them as options, by seat, which a `Choice`
+        // counts in, and then any objects it can also choose, in the candidate order.
         CastStep::Target { left } => match target_options(s, t, c) {
-            TargetSet::Objects(b) => Decision {
+            TargetSet { objects, players } if players.is_empty() => Decision {
                 player: c.player,
                 kind: DecisionKind::Target,
-                candidates: Candidates::Objects(collapse(s, b)),
+                candidates: Candidates::Objects(collapse(s, objects)),
                 prompt: Prompt::new(Purpose::Target).most(left),
                 about: Bitboard::EMPTY,
             },
-            TargetSet::Players(p) => {
+            TargetSet { objects, players } => {
                 let mut list: L::Queue<Opt<L>, 64> = Default::default();
-                // Candidates are listed by seat, which a `Choice` counts in.
-                for player in s.players_in_seat_order(p) {
+                for player in s.players_in_seat_order(players) {
                     list.push(Opt::Player(player))?;
+                }
+                for slot in s.in_candidate_order(collapse(s, objects)) {
+                    list.push(Opt::Object(slot))?;
                 }
                 options(
                     DecisionKind::Target,
@@ -447,7 +451,9 @@ pub(crate) fn perform<L: Layout>(
         CastStep::Target { left } => {
             let target = match (option, object) {
                 (Some(Opt::Player(player)), _) => Target::player(c.spec, player),
-                (_, Some(slot)) => Target::object(c.spec, s.object_ref(slot)),
+                (Some(Opt::Object(slot)), _) | (_, Some(slot)) => {
+                    Target::object(c.spec, s.object_ref(slot))
+                }
                 _ => unreachable!("a target"),
             };
             s.announce_target(target)?;

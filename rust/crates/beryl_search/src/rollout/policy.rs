@@ -388,7 +388,8 @@ impl<L: Layout> Policy<'_, L> {
         let min = match spec.kind {
             _ if friendly => 0,
             TargetKind::Spell => COUNTER_MIN,
-            TargetKind::Player => 0,
+            // Damage to an opponent is always worth something, as a player counts 0.
+            TargetKind::Player | TargetKind::PermanentOrPlayer => 0,
             _ => REMOVAL_MIN,
         };
         // The best target is worth `min` exactly when some target is.
@@ -424,7 +425,7 @@ impl<L: Layout> Policy<'_, L> {
         };
         let permanents = matches!(
             spec.kind,
-            TargetKind::Permanent | TargetKind::SpellOrPermanent
+            TargetKind::Permanent | TargetKind::SpellOrPermanent | TargetKind::PermanentOrPlayer
         );
         let spells = matches!(spec.kind, TargetKind::Spell | TargetKind::SpellOrPermanent);
         let graveyard = spec.kind == TargetKind::GraveyardCard;
@@ -449,7 +450,11 @@ impl<L: Layout> Policy<'_, L> {
         .iter()
         .filter(|&&slot| self.obs.matches(self.t, &spec.filter, slot))
         .map(|&slot| self.value(slot));
-        let player = (spec.kind == TargetKind::Player).then_some(0);
+        let player = matches!(
+            spec.kind,
+            TargetKind::Player | TargetKind::PermanentOrPlayer
+        )
+        .then_some(0);
         on_battlefield
             .chain(on_stack)
             .chain(graveyard)

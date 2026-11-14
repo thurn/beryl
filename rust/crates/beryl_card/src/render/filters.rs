@@ -173,12 +173,15 @@ impl Ctx {
     /// ([CR 115.1](https://yawgatog.com/resources/magic-rules/#R1151)).
     pub(super) fn target_phrase(&mut self, spec: TargetSpec) -> String {
         let (kind, prefix) = match spec.kind {
-            TargetKind::Permanent => (Kind::Permanent, ""),
+            TargetKind::Permanent | TargetKind::PermanentOrPlayer => (Kind::Permanent, ""),
             TargetKind::Spell => (Kind::Spell, ""),
             TargetKind::SpellOrPermanent => (Kind::Permanent, "spell or "),
             TargetKind::GraveyardCard => (Kind::Card(Some(Zone::Graveyard)), ""),
             TargetKind::Player => (Kind::Player, ""),
         };
+        if spec == TargetSpec::any_target() {
+            return "any target".to_owned();
+        }
         let noun = self.noun(spec.filter, kind);
         let several = spec.count > 1;
         let named = if several {
@@ -211,7 +214,9 @@ impl Ctx {
             TargetKind::Spell => Kind::Spell,
             TargetKind::GraveyardCard => Kind::Card(Some(Zone::Graveyard)),
             TargetKind::Player => Kind::Player,
-            TargetKind::Permanent | TargetKind::SpellOrPermanent => Kind::Permanent,
+            TargetKind::Permanent
+            | TargetKind::SpellOrPermanent
+            | TargetKind::PermanentOrPlayer => Kind::Permanent,
         };
         let noun = self.noun(spec.filter, kind);
         noun.singular(kind)

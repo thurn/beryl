@@ -125,6 +125,10 @@ fn targets<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Vec<Vec<T
                         .iter()
                         .filter_map(|o| match *o {
                             Opt::Player(p) => Some(TargetRef::Player { player: side(p) }),
+                            // "Any target" lists the permanents it can choose after the players.
+                            Opt::Object(slot) => Some(TargetRef::Object {
+                                slot: ObjectId(slot.num()),
+                            }),
                             _ => None,
                         })
                         .collect(),

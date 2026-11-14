@@ -85,7 +85,8 @@ fn lifelink<L: Layout>(game: &Game<'_, L>, source: ObjectRef<L>) -> Option<Seat>
 /// [`Effect::DealDamage`](beryl_card::Effect::DealDamage): "This deals [amount] damage to
 /// [recipients]": noncombat damage from the source of what is resolving
 /// ([CR 120.2b](https://yawgatog.com/resources/magic-rules/#R1202b)), to each of the players
-/// in turn order or each of the permanents in the order they entered the battlefield. The
+/// in turn order, then to each of the permanents in the order they entered the battlefield.
+/// For "any target" ([`Recipients::Both`] of one target) only one of the two is there. The
 /// outcome is the permanents dealt damage, and how much was dealt in all.
 ///
 /// # Panics
@@ -98,22 +99,25 @@ pub(crate) fn instruction<L: Layout>(
 ) -> Result<Outcome<L>, Full> {
     let amount = run.scene().amount(amount);
     let source = run.resolution().source();
+    let (players, permanents) = match to {
+        Recipients::Players(players) => (Some(players), None),
+        Recipients::Permanents(objects) => (None, Some(objects)),
+        Recipients::Both(players, objects) => (Some(players), Some(objects)),
+    };
     let (mut damaged, mut dealt) = (Bitboard::EMPTY, 0);
-    match to {
-        Recipients::Players(players) => {
-            for player in run.in_turn_order(players) {
-                deal(run.game(), source, Recipient::Player(player), amount, false)?;
-                dealt += u32::from(amount);
-            }
+    if let Some(players) = players {
+        for player in run.in_turn_order(players) {
+            deal(run.game(), source, Recipient::Player(player), amount, false)?;
+            dealt += u32::from(amount);
         }
-        Recipients::Permanents(objects) => {
-            damaged = run.permanents(objects);
-            let mut left = damaged;
-            while let Some(permanent) = run.next_permanent(&mut left) {
-                let to = Recipient::Permanent(permanent);
-                deal(run.game(), source, to, amount, false)?;
-                dealt += u32::from(amount);
-            }
+    }
+    if let Some(objects) = permanents {
+        damaged = run.permanents(objects);
+        let mut left = damaged;
+        while let Some(permanent) = run.next_permanent(&mut left) {
+            let to = Recipient::Permanent(permanent);
+            deal(run.game(), source, to, amount, false)?;
+            dealt += u32::from(amount);
         }
     }
     Ok(Outcome::of(damaged, dealt))

@@ -1,9 +1,10 @@
 use super::*;
 use crate::cost::CastingKind;
 use crate::effect::build::{
-    add_mana, counter_and_exile, deal_damage_to, delay, destroy, discard, draw, explore, fateseal,
-    for_each_player, get_emblem, if_then, may_cast_free, put_back, search, shuffle_into, target,
-    target_player, that_player, unless, unless_pays, untap_up_to, you,
+    add_mana, counter_and_exile, deal_damage_to, deal_damage_to_any_target, delay, destroy,
+    discard, draw, explore, fateseal, for_each_player, get_emblem, if_then, may_cast_free,
+    put_back, search, shuffle_into, target, target_player, that_player, unless, unless_pays,
+    untap_up_to, you,
 };
 use crate::effect::{Found, LibraryOrder, Taken};
 use crate::ids::TurnStep;
@@ -46,6 +47,24 @@ fn a_target_the_ability_does_not_have_is_refused() {
     assert_eq!(checked(A_PLAYER_DESTROYED), Err(Malformed::Target));
     assert_eq!(checked(A_CREATURE_DRAWS), Err(Malformed::Target));
     assert_eq!(checked(WELL_FORMED), Ok(()));
+}
+
+/// Damage to "any target" reads the one target as a player and as a permanent, which a spec
+/// for a permanent or a player allows and a spec for only one of the two does not.
+#[test]
+fn damage_to_any_target_needs_a_target_that_may_be_either() {
+    const ANY: &[Ability] = &[Ability::spell()
+        .targeting(&[TargetSpec::any_target()])
+        .effect(&deal_damage_to_any_target(3))];
+    const ONLY_A_CREATURE: &[Ability] = &[Ability::spell()
+        .targeting(&[A_CREATURE])
+        .effect(&deal_damage_to_any_target(3))];
+    const ONLY_A_PLAYER: &[Ability] = &[Ability::spell()
+        .targeting(&[A_PLAYER])
+        .effect(&deal_damage_to_any_target(3))];
+    assert_eq!(checked(ANY), Ok(()));
+    assert_eq!(checked(ONLY_A_CREATURE), Err(Malformed::Target));
+    assert_eq!(checked(ONLY_A_PLAYER), Err(Malformed::Target));
 }
 
 #[test]
