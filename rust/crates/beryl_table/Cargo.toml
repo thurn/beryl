@@ -1,0 +1,20 @@
+[package]
+name = "beryl_table"
+version = "0.1.0"
+description = "The state and actions of a manual Magic table"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+# Supplies printed card facts from the shared store for host-side actions.
+beryl_card_store = { path = "../beryl_card_store" }
+# Derives the action and state wire format in place of handwritten serializers.
+serde = { version = "1.0.229", features = ["derive"] }
+
+[dev-dependencies]
+# Exercises the JSON wire format without handwritten parsing in tests.
+serde_json = "1.0.154"
