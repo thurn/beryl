@@ -11,7 +11,8 @@ use super::words::{
 };
 use crate::ability::{Ability, AbilityKind, Behavior, Timing};
 use crate::continuous::{
-    ChosenKind, Draws, Governed, LayerSpec, Modification, Replaced, Replacement, Rewrite, RuleChange, When,
+    ChosenKind, Draws, Governed, LayerSpec, Modification, Replaced, Replacement, Rewrite,
+    RuleChange, When,
 };
 use crate::cost::{CastingKind, Chosen, Cost, CostAction, CostPart, Measure};
 use crate::effect::{Amount, Condition, Effect, Objects, Players};

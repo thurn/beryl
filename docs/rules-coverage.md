@@ -480,9 +480,9 @@ Built by by-bajq.3.4 (Chains of Mephistopheles, Notion Thief):
 - `Rewrite::Instead` of a draw may be any data body (`Instead::Instructions`),
   carried out as a resolution would, with "that player" the drawing player.
   `beryl_card`'s check allows `Players::ThatPlayer` in such a body. A card with
-  one adds `ReplacementKind::DrawInstructions`, which `replace::may_ask` reads:
-  its instructions may ask (a discard), so a step runs on the copy while one is
-  on the battlefield.
+  one adds `ReplacementKind::DrawInstructions`, which `replace::may_ask` reads
+  from the card table: its instructions may ask (a discard), so in a game with
+  such a card each resolution and step runs on the copy.
 - CR 614.5 is the sink's `applied` list: the replacements that have applied to
   the draw being made or to a draw that replaced it. A draw made by their
   instructions skips them and is offered to the others, so two Chains each apply
