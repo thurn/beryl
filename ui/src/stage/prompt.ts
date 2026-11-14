@@ -69,7 +69,7 @@ type Subject = Extract<Click, { kind: "on" }>["on"];
 /** The stage as a prompt uses it. */
 export type Prompted = Pick<
   ScriptStage,
-  "play" | "skip" | "shown" | "subscribe" | "trade"
+  "play" | "skip" | "shown" | "subscribe" | "trade" | "declare"
 >;
 
 /** Sends the session a click on the prompt of `decision` in its state `revision` (ipc.ts). */
@@ -694,6 +694,13 @@ export class Prompts {
     // session says one is drawn: the script draws the same once it is declared. None goes to
     // a player: Arena's attacker at the player has only its chevron (`IEXcjBn3BXk 22:16.53`).
     const state = prompt?.body;
+    // Each creature picked to attack wears its chevron at once, aimed or not (stage.ts
+    // `declare`).
+    this.#stage.declare(
+      state?.shape === "declare" && state.arrow === "attack"
+        ? [...state.pairs.map(({ from }) => from), ...state.aiming]
+        : [],
+    );
     const declared =
       state?.shape === "declare" && state.lined ? state : undefined;
     for (const { from, to } of declared?.pairs ?? []) {

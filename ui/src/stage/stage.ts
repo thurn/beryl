@@ -56,6 +56,7 @@ import type { Shown } from "./shown.ts";
 import { samePose, type Pose } from "./pose.ts";
 import { reachOfCard, reachOfLife, reachOfPool } from "./lines.ts";
 import type { Reach } from "./lines.ts";
+import type { Entry } from "./entry.ts";
 import { Overlay, type Surface } from "./overlay.ts";
 export type { Surface } from "./overlay.ts";
 import type { Line, Marked } from "./spans.ts";
@@ -84,20 +85,6 @@ import {
 export type { Edge, Playing } from "./beat.ts";
 export type { Counting, Shown } from "./shown.ts";
 export { SNAP, type Timing } from "./tracks.ts";
-
-interface Entry {
-  resting: Resting;
-  track?: Track;
-  /** Its pose is to be written at the tick's end. */
-  moved: boolean;
-  /** The `vanish` taking it from where `resting` still has it, until that step ends. */
-  leaving?: Run;
-  /** The `fly` taking it to a pile, until that step ends: the pile shows the top it had. */
-  landing?: Run;
-  /** What it is drawn as while it has yet to turn over on its way (`Track.turn`): as it
-   * rests, but for its back. */
-  covered?: Resting;
-}
 
 export class ScriptStage {
   readonly clock: StageClock;
@@ -194,6 +181,12 @@ export class ScriptStage {
       entry.moved = true;
     }
     this.#write(this.clock.now);
+  }
+
+  /** The creatures picked so far in the open declaration of attackers, which wear an
+   * attacker's chevron at once (overlay.ts `declare`). */
+  declare(picked: Iterable<Name>) {
+    if (this.#over.declare(picked)) this.#write(this.clock.now);
   }
 
   /** Takes every node off the surface it draws on (`surface`, if given): the model plays on. */

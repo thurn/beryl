@@ -82,6 +82,8 @@ export class Overlay {
   notices: Run[] = [];
   readonly #reach: Reaching;
   #fought: Fought = new Map();
+  /** The creatures picked in the open declaration of attackers (`declare`). */
+  #declared: ReadonlySet<Name> = new Set();
   /** Nothing has been drawn since the stage started over: what fights then has fought since
    * before it, and its mark does not pop. */
   #fresh = true;
@@ -144,11 +146,27 @@ export class Overlay {
     );
   }
 
+  /** Sets the creatures the player has picked so far in the open declaration of attackers,
+   * aimed or still to be aimed; none once it is answered or closed. Each is lit as an
+   * attacker from the moment it is picked, as Arena's chevron is (`0VsYGs88NXA 33:56.9`),
+   * before the view that has it attacking. Whether that changed what was picked. */
+  declare(picked: Iterable<Name>): boolean {
+    const next = new Set(picked);
+    const same =
+      next.size === this.#declared.size &&
+      [...next].every((name) => this.#declared.has(name));
+    this.#declared = next;
+    return !same;
+  }
+
   /** Everything lit at stage time `now` (light.ts): the `lines` held then, and the marks of
    * the creatures among `held` that attack or block, the streaks in flight and the bursts of
    * what has landed. A creature's mark begins as the stage
-   * first draws it in combat, which is when the view that says so is shown. */
+   * first draws it in combat, which is when the view that says so is shown, or for one
+   * picked in the open declaration of attackers (`declare`), as it is picked: it keeps its
+   * mark, not drawn again, as the view that has it attacking comes. */
   light(now: number, lines: readonly Line[], held: Held): Lit {
+    const declared = this.#declared;
     const lit = lines.flatMap((line): LitLine[] => {
       const [a, b] = [this.#reach(line.from, now), this.#reach(line.to, now)];
       const way =
@@ -160,12 +178,16 @@ export class Overlay {
     const fighters: Fighter[] = [];
     for (const [name, { resting }] of held) {
       const combat = resting.object?.combat;
-      if (!combat || resting.dress.zone !== "battlefield") continue;
+      const picked = !combat && declared.has(name);
+      if ((!combat && !picked) || resting.dress.zone !== "battlefield") {
+        continue;
+      }
       const before = this.#fought.get(name);
-      const fights = combat.kind === "attacking" ? "attacks" : "blocks";
+      const fights =
+        picked || combat?.kind === "attacking" ? "attacks" : "blocks";
       const since = before?.fights === fights ? before.since : first;
       const blocked =
-        combat.kind === "attacking" && combat.blocked
+        combat?.kind === "attacking" && combat.blocked
           ? (before?.blocked ?? first)
           : undefined;
       fought.set(name, { fights, since, blocked });

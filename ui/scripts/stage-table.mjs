@@ -151,7 +151,8 @@ export const row = {
  * of each line drawn, by its key (`lines`), how far each mark has come in, by `<node>
  * <mark>` (`marks`), and each line and mark made and taken away, in order (`spans`); the
  * path of each streak drawn, by its key (`streaks`), with each made and taken away, in order
- * (`streaked`); and how far through the announcement of each kind is (`notices`). */
+ * (`streaked`); how far through the announcement of each kind is (`notices`); and the
+ * light last painted, if any (`lit`). */
 export function recorder() {
     const log = [];
     const dressed = [];
@@ -183,6 +184,10 @@ export function recorder() {
         streaks,
         streaked,
         notices,
+        lit: undefined,
+        light(lit) {
+            this.lit = lit;
+        },
         streak(key, look, shape) {
             if (look === undefined) {
                 if (streaks.delete(key)) streaked.push(`- ${key}`);
