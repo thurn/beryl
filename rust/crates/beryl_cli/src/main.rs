@@ -19,7 +19,7 @@
 //!   ([`blunders`], `just blunders`).
 //! - `beryl_cli why ENTRY --a LABEL --b LABEL [--rollouts 2000]` compares the champion's
 //!   paired rollouts after two choices at a blunder-suite position ([`why`], `just why`).
-//! - `beryl_cli gate <challenger> --claims NAME,... [--vs NAME]` compares the suite's
+//! - `beryl_cli gate <challenger> --claims NAME,...|none [--vs NAME]` reports the suite's
 //!   results for two search families ([`gate`], `just gate`).
 //! - `beryl_cli screen <challenger> <match-dir> [--vs NAME] [--recheck N] [--work 3M]
 //!   [--games N]` replays the champion's match games, asks a challenger each of the
@@ -89,7 +89,7 @@ const USAGE: &str = "usage:
   beryl_cli screen <challenger> <match-dir> [--vs NAME] [--recheck N] [--work 3M] [--games N]
   beryl_cli blunders [agent] [--work 3M,30M] [--seeds 5] [--only NAME,...] [--json FILE]
   beryl_cli why ENTRY --a LABEL --b LABEL [--rollouts 2000]
-  beryl_cli gate <challenger> --claims NAME,... [--vs NAME]
+  beryl_cli gate <challenger> --claims NAME,...|none [--vs NAME]
   beryl_cli record-fixture <definitions.json> <out-dir> [name...]
   beryl_cli eval-fit [--games N] [--seed N]
   beryl_cli serve [--port N]
@@ -115,8 +115,7 @@ fn main() -> ExitCode {
         && command == "gate"
     {
         return match gate::main(rest) {
-            Ok(true) => ExitCode::SUCCESS,
-            Ok(false) => ExitCode::FAILURE,
+            Ok(()) => ExitCode::SUCCESS,
             Err(error) => {
                 eprintln!("beryl_cli: {error}");
                 ExitCode::from(2)

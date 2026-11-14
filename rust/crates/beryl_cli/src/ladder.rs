@@ -48,7 +48,7 @@ use crate::tournament::game_seed;
 mod report;
 mod sprt;
 
-pub use report::{Match, Report};
+pub use report::{Match, Report, dropped_row};
 pub use sprt::{Bar, Pairs, Sprt, Verdict};
 
 /// Games played at once, one thread each and one a hardware thread:

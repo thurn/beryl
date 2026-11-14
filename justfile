@@ -342,7 +342,7 @@ blunders *args:
 why *args:
     RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- why "$@"
 
-# Compare the champion's and challenger's blunder suites (<challenger> --claims NAME,... [--vs NAME])
+# Report both blunder suites and their totals without a verdict (<challenger> --claims NAME,...|none [--vs NAME])
 [group('agents')]
 [no-cd]
 gate *args:

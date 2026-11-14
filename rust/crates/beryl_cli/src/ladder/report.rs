@@ -194,6 +194,11 @@ pub const ROW_HEADER: &str = "| Date | Challenger | Champion | Budget | Games | 
                               | Verdict | Suite open / fixed | Human games |\n\
                               | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |";
 
+/// The row for a rung dropped before a match, with suite totals in champion-to-challenger order.
+pub fn dropped_row(date: &str, challenger: &str, champion: &str, suite: &str) -> String {
+    format!("| {date} | {challenger} | {champion} | - | - | - | - | dropped | {suite} | ? |")
+}
+
 /// An Elo figure with its sign, whole.
 fn signed(elo: f64) -> String {
     if elo.is_finite() {

@@ -255,14 +255,14 @@ fn build(t: &GameTable, name: &str, seed: u64) -> Result<Box<dyn Agent>, String>
 }
 
 /// Runs the suite's `entries` for `agent` (a family, played at each of `budgets`, or a
-/// registered agent or `family@budget`, played as named), from `seeds` seeds each starting
-/// at `first_seed`.
+/// registered agent or `family@budget`, played as named), from seed 0 through `seeds - 1`
+/// at each budget. An entry is fixed if it misses at most `allowed_misses` runs.
 pub fn run(
     entries: &[Entry],
     agent: &str,
     budgets: &[u64],
-    first_seed: u32,
     seeds: u32,
+    allowed_misses: usize,
     mut progress: impl FnMut(&str),
 ) -> Result<Report, String> {
     let names: Vec<(String, String)> =
@@ -299,7 +299,7 @@ pub fn run(
             }
             Ok(at) => {
                 for (name, budget) in &names {
-                    for k in first_seed..first_seed + seeds {
+                    for k in 0..seeds {
                         let mut agent = build(&at.t, name, run_seed(&e.name, k))?;
                         let chosen = play(e, &at, agent.as_mut());
                         let pass = passes(e, &chosen);
@@ -317,7 +317,7 @@ pub fn run(
                         });
                     }
                 }
-                if r.runs.iter().all(|run| run.pass) {
+                if r.runs.iter().filter(|run| !run.pass).count() <= allowed_misses {
                     report.fixed += 1;
                 } else {
                     r.state = Standing::Open;
@@ -402,7 +402,7 @@ pub fn main(args: &[String]) -> Result<(), String> {
         }
         entries.retain(|e| only.contains(&e.name));
     }
-    let report = run(&entries, &agent, &budgets, 0, seeds, |line| {
+    let report = run(&entries, &agent, &budgets, seeds, 0, |line| {
         eprintln!("{line}");
     })?;
     print!("{}", table(&report));
