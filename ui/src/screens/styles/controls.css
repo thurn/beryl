@@ -46,9 +46,13 @@
 /* The action dock (Controls.tsx' Dock): every action on the game screen, in the bottom-right
    corner. A column of buttons of one size, as wide as the widest (the turn button's width at
    the least), whose foot is where the turn button stands; the question it answers over them,
-   wrapped to the column; a caption or the priority pill under the foot. It rises in. */
+   wrapped to the column; a caption or the priority pill under the foot. It rises in. It is
+   drawn over the cards at rest and the tray's shade (840, stage.css `.stage-tray`), so that
+   the question is never read through a card, and under the cards that fly (900, pose.ts
+   ALOFT). */
 .dock {
   position: absolute;
+  z-index: 845;
   right: 39px;
   bottom: 87px;
   display: flex;
