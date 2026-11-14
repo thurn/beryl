@@ -1,12 +1,12 @@
 //! The Tauri shell: windows, IPC commands, the card-art cache and the smoke mode agents and CI
 //! launch the app in. Games run in `beryl_session` ([`games`]). The process journals to
-//! `~/Library/Logs/ca.thurn.beryl/beryl.jsonl` ([`beryl_session::journal`]); bug reports go
-//! where [`beryl_session::bugs::dir`] says.
+//! its log directory or the named [`profile`]'s data directory ([`beryl_session::journal`]).
 
 mod art;
 mod bug_reports;
 mod games;
 mod links;
+mod profile;
 mod snapshot;
 
 use std::path::PathBuf;
@@ -72,6 +72,7 @@ async fn app_info(app: tauri::AppHandle) -> AppInfo {
             .device
             .is_some_and(|device| device.simulator),
         wire: beryl_session::wire_hash(&[]),
+        profile: profile::name().map(str::to_owned),
     }
 }
 
@@ -307,23 +308,7 @@ pub fn run() {
             });
         })
         .setup(|app| {
-            // A phone's data directory has no fixed path: reports go in its own.
-            #[cfg(mobile)]
-            let bug_dir = {
-                let default = app.path().app_data_dir()?.join("bugs");
-                bugs::set_dir(default.clone());
-                std::env::var_os("BERYL_BUGS").map_or(default, PathBuf::from)
-            };
-            #[cfg(desktop)]
-            let bug_dir = bugs::dir();
-            match app.path().app_log_dir() {
-                Ok(dir) => {
-                    if let Err(e) = journal::open(&dir.join("beryl.jsonl")) {
-                        journal::warn("app", format!("no journal file: {e}"), json!(null));
-                    }
-                }
-                Err(e) => journal::warn("app", format!("no log directory: {e}"), json!(null)),
-            }
+            let bug_dir = profile::setup(app.handle())?;
             journal::info(
                 "app",
                 "started",

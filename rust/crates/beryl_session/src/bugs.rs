@@ -202,11 +202,10 @@ pub fn ui_log(request: UiLogRequest) {
     }
 }
 
-/// The folder a phone app keeps its reports in ([`set_dir`]).
+/// The app's default report folder when it chooses one at startup ([`set_dir`]).
 static DIR: OnceLock<PathBuf> = OnceLock::new();
 
-/// Sets where reports go when no `$BERYL_BUGS` says: a phone app's data directory has no
-/// fixed path, so the app sets it at startup from its own.
+/// Sets the default report folder for phones and named app profiles at startup.
 pub fn set_dir(dir: PathBuf) {
     let _ = DIR.set(dir);
 }

@@ -3,6 +3,7 @@ import { SoundPanel } from "../audio/SoundControls";
 import { cardEntry, useCardRecords } from "../cards";
 import { Button } from "../components/Controls";
 import type { DecisionId, GameUpdate, RelayedEvent } from "../ipc";
+import { key } from "../profile";
 import { API, post, specCards } from "./specApi";
 import "./testing.css";
 
@@ -686,7 +687,9 @@ function BugNote({
   onClose: () => void;
   onFiled: () => void;
 }) {
-  const draftKey = `beryl-bug-draft:${instance.split("/").slice(0, 3).join("/")}`;
+  const draftKey = key(
+    `beryl-bug-draft:${instance.split("/").slice(0, 3).join("/")}`,
+  );
   const [draft] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(draftKey) ?? "null") as {

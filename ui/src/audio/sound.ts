@@ -15,6 +15,7 @@
 // or key press resumes it.
 import { note } from "../diagnostics";
 import { appInfo, audioAvailable } from "../ipc";
+import { key } from "../profile";
 import manifest from "./manifest.json";
 import loops from "./loops.json";
 
@@ -70,7 +71,7 @@ const level = (v: unknown, fallback: number) =>
 function readSettings(): AudioSettings {
   try {
     const saved: unknown = JSON.parse(
-      localStorage.getItem(SETTINGS_KEY) ?? "{}",
+      localStorage.getItem(key(SETTINGS_KEY)) ?? "{}",
     );
     if (typeof saved !== "object" || saved === null) return DEFAULTS;
     const { music, sfx, muted } = saved as Record<string, unknown>;
@@ -84,7 +85,7 @@ function readSettings(): AudioSettings {
   }
 }
 
-let settings = readSettings();
+let settings = DEFAULTS;
 const listeners = new Set<() => void>();
 
 export const audioSettings = () => settings;
@@ -102,20 +103,12 @@ function settingsChanged() {
 export function setAudioSettings(change: Partial<AudioSettings>) {
   settings = { ...settings, ...change };
   try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    localStorage.setItem(key(SETTINGS_KEY), JSON.stringify(settings));
   } catch {
     // Storage may be blocked: the settings last until the page goes.
   }
   settingsChanged();
 }
-
-// Spec moments play in separate frames. Keep their gains and controls in sync with
-// the parent page, other frames, and full-size moments in other tabs.
-window.addEventListener("storage", (event) => {
-  if (event.key !== SETTINGS_KEY && event.key !== null) return;
-  settings = readSettings();
-  settingsChanged();
-});
 
 // ---- The log ----
 
@@ -282,7 +275,7 @@ function rotate(music: Music): number {
   let next = 0;
   try {
     const saved: unknown = JSON.parse(
-      localStorage.getItem(ROTATION_KEY) ?? "{}",
+      localStorage.getItem(key(ROTATION_KEY)) ?? "{}",
     );
     const at =
       typeof saved === "object" && saved !== null
@@ -290,7 +283,7 @@ function rotate(music: Music): number {
         : undefined;
     next = typeof at === "number" ? at % count : 0;
     localStorage.setItem(
-      ROTATION_KEY,
+      key(ROTATION_KEY),
       JSON.stringify({ ...(saved as object), [music]: (next + 1) % count }),
     );
   } catch {
@@ -384,6 +377,15 @@ const TICK_GAP = 60;
 function installListeners() {
   if (listening) return;
   listening = true;
+  settings = readSettings();
+  // Spec moments play in separate frames. Keep their gains and controls in sync with
+  // the parent page, other frames, and full-size moments in other tabs.
+  window.addEventListener("storage", (event) => {
+    if (event.key !== key(SETTINGS_KEY) && event.key !== null) return;
+    settings = readSettings();
+    settingsChanged();
+  });
+
   document.addEventListener("pointerdown", unlock, true);
   document.addEventListener("keydown", unlock, true);
   document.addEventListener("visibilitychange", () => {

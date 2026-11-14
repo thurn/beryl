@@ -10,11 +10,12 @@ import "./screens/styles";
 import { appInfo, isNativeApp } from "./ipc";
 import { installDiagnostics } from "./diagnostics";
 import { installAudio } from "./audio/sound";
+import { setProfile } from "./profile";
 
 installDiagnostics();
-void installAudio();
 
 function render() {
+  void installAudio();
   createRoot(document.getElementById("root") as HTMLElement).render(
     <StrictMode>
       <App />
@@ -22,9 +23,12 @@ function render() {
   );
 }
 
-// Native card art URLs need the platform before the first render of a resumed game.
+// A native app needs its profile before reading settings and its platform before drawing art.
 if (isNativeApp()) {
-  void appInfo().then(render, render);
+  void appInfo().then((info) => {
+    setProfile(info.profile);
+    render();
+  }, render);
 } else {
   render();
 }

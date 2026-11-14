@@ -54,6 +54,7 @@ await check(
                         platform: "linux",
                         simulator: false,
                         wire: "",
+                        profile: null,
                     },
                     list_agents: [],
                     report_bug: { id: "test" },

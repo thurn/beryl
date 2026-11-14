@@ -171,6 +171,7 @@ pub struct AppInfo {
     /// Running in the iOS Simulator or Android Emulator.
     pub simulator: bool,
     pub wire: String,
+    pub profile: Option<String>,
 }
 
 /// A recorded stream of the app's messages, which the UI's fixture transport replays.

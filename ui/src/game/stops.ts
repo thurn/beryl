@@ -3,6 +3,7 @@
 // icons about each life orb (Steps.tsx) as on Arena. The browser remembers them from game to
 // game.
 import type { Step, StopsSetting } from "../ipc";
+import { key } from "../profile";
 
 export function sameStops(a: StopsSetting, b: StopsSetting): boolean {
   const same = (x: Step[], y: Step[]) =>
@@ -20,7 +21,9 @@ const SAVED = "beryl.stops";
 /** The stops the player last chose here, if the browser kept them. */
 export function savedStops(): StopsSetting | undefined {
   try {
-    const saved: unknown = JSON.parse(localStorage.getItem(SAVED) ?? "null");
+    const saved: unknown = JSON.parse(
+      localStorage.getItem(key(SAVED)) ?? "null",
+    );
     if (typeof saved !== "object" || saved === null) return undefined;
     const { fullControl, yours, theirs } = saved as Record<string, unknown>;
     const steps = (x: unknown): x is Step[] =>
@@ -36,7 +39,7 @@ export function savedStops(): StopsSetting | undefined {
 
 export function saveStops(stops: StopsSetting) {
   try {
-    localStorage.setItem(SAVED, JSON.stringify(stops));
+    localStorage.setItem(key(SAVED), JSON.stringify(stops));
   } catch {
     // A browser that keeps nothing forgets them with the game.
   }

@@ -7,11 +7,13 @@ use beryl_session::ipc::{
 use beryl_session::prompt::{ClickReply, ClickRequest};
 use beryl_session::{AgentView, GameUpdate, SessionError, SessionId, Sessions, StartRequest, ipc};
 use serde_json::json;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, State};
+
+use crate::profile;
 
 /// The sessions, writing replays into the app's data directory and emitting views to the UI.
 pub fn sessions(app: &AppHandle) -> Sessions {
-    let data = app.path().app_data_dir().ok();
+    let data = profile::data_dir(app).ok();
     let replays = data.as_ref().map(|dir| dir.join("replays"));
     let app = app.clone();
     let sessions = Sessions::new(replays, move |update| {

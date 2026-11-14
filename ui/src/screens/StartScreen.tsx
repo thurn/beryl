@@ -12,6 +12,7 @@ import { SoundCorner } from "../audio/SoundControls";
 import { Stage } from "../game/Stage";
 import { usePhone } from "../mobile/phone";
 import { play } from "../audio/sound";
+import { key } from "../profile";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 
 /** The agent that plays on the true state, hidden cards included. */
@@ -24,7 +25,9 @@ const LAST_GAME = "beryl.lastGame";
 /** The opponent and seed of the last game started here, if the browser kept them. */
 function lastGame(): { agent?: string; seed?: string } {
   try {
-    const saved: unknown = JSON.parse(localStorage.getItem(LAST_GAME) ?? "{}");
+    const saved: unknown = JSON.parse(
+      localStorage.getItem(key(LAST_GAME)) ?? "{}",
+    );
     if (typeof saved !== "object" || saved === null) return {};
     const { agent, seed } = saved as Record<string, unknown>;
     return {
@@ -38,7 +41,7 @@ function lastGame(): { agent?: string; seed?: string } {
 
 function rememberGame(agent: string, seed: string) {
   try {
-    localStorage.setItem(LAST_GAME, JSON.stringify({ agent, seed }));
+    localStorage.setItem(key(LAST_GAME), JSON.stringify({ agent, seed }));
   } catch {
     // Storage may be blocked; the start screen then offers the defaults.
   }
