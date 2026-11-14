@@ -33,6 +33,7 @@ import shutil
 import subprocess
 import sys
 import time
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -58,6 +59,52 @@ MIN_AGE = timedelta(days=1)
 # stopped listing while it finishes.
 LOW_DISK = 60_000_000_000
 LOW_DISK_AGE = timedelta(hours=1)
+
+
+# How many files a profile's deps/ may hold before `tidy_target` prunes the target. A target
+# cloned from the shared cache holds about 11,000; each rebuild of an incremental unit on macOS
+# adds a new set of its codegen-unit objects beside the old ones (`warm.prune_objects`).
+CROWDED_DEPS = 50_000
+
+
+def crowded(target: Path) -> bool:
+    """Whether any profile's deps/ in `target` holds more than [`CROWDED_DEPS`] files. Counting
+    the entries of one folder takes milliseconds; pruning a target takes seconds."""
+    for deps in target.glob("*/deps"):
+        count = 0
+        with suppress(OSError), os.scandir(deps) as entries:
+            for _ in entries:
+                count += 1
+                if count > CROWDED_DEPS:
+                    return True
+    return False
+
+
+def tidy_target(checkout: Path) -> bool:
+    """Prunes the checkout's `rust/target` (warm.py, `prune`) when it is [`crowded`], unless a
+    cargo build holds its lock; whether it pruned.
+
+    `warm.prune` otherwise runs only when Enact removes a worktree, and a tree that is never
+    removed kept everything its builds left: on 2026-11-14 the merge queue's tree
+    (`.worktrees/.merge-queue`) held 597,465 stale object files in `target/debug/deps` and a
+    93 GB target. Every rustc invocation lists that folder to find the crates it depends on, so
+    after a change to `beryl_card_build`, which re-checks every card crate, the fast check's
+    clippy took 130 s wall and 329 s of system time there, against 12 s wall and 12 s of system
+    time in a fresh worktree on the same commit. Bisection trees are pruned only in low-disk
+    mode ([`prune_bisections`]) and are covered here too.
+    Cargo takes an exclusive lock on `<profile>/.cargo-lock` for a build (flock on Unix), so
+    holding it keeps a pruning from deleting files a build is writing or linking."""
+    target = checkout / "rust" / "target"
+    lock = target / "debug" / ".cargo-lock"
+    if not lock.parent.is_dir() or not crowded(target):
+        return False
+    try:
+        with system.file_lock(lock, timeout=0):
+            warm.prune(target)
+    except system.LockHeld:
+        warm.log(f"a cargo build holds {target}; left it crowded")
+        return False
+    return True
 
 
 @dataclass(frozen=True)

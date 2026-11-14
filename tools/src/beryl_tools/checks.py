@@ -52,6 +52,7 @@ from pathlib import Path
 from . import (
     board_door,
     build_paths,
+    caches,
     card_crates,
     card_diverge,
     card_files,
@@ -386,6 +387,8 @@ def run_all(
     steps = Steps(wall_limit=wall_limit, klass=klass)
     limits = hang.Limits(script)
     cold = bool(warm.ensure()) if any(lane.warm for lane in lanes) else False
+    if any(lane.warm for lane in lanes):
+        caches.tidy_target(paths.REPO)
     env = dict(os.environ)
     run = runlog.Run.start(script)
     run.chosen = chosen

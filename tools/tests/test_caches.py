@@ -194,3 +194,45 @@ def test_a_dry_run_lists_a_bisection_target_and_removes_nothing(
     assert caches.run(out, dry_run=True) == 0
     assert present(tree) == set(tree)
     assert "would remove 1 folders of bisect-0123456789ab's target" in out.getvalue()
+
+
+def crowded_checkout(root: Path, objects: int) -> Path:
+    """A checkout whose rust/target holds `objects` stale codegen-unit objects of one unit's
+    earlier build, beside the one object of its latest build."""
+    deps = root / "rust" / "target" / "debug" / "deps"
+    deps.mkdir(parents=True)
+    for n in range(objects):
+        (deps / f"unit-0123456789abcdef.cgu{n}.old.rcgu.o").write_bytes(b"")
+    latest = deps / "unit-0123456789abcdef.cgu0.new.rcgu.o"
+    latest.write_bytes(b"")
+    os.utime(latest, (time.time() + 60, time.time() + 60))
+    return root
+
+
+def test_a_crowded_target_loses_its_stale_objects(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(caches, "CROWDED_DEPS", 3)
+    checkout = crowded_checkout(tmp_path, 5)
+    assert caches.tidy_target(checkout)
+    deps = checkout / "rust" / "target" / "debug" / "deps"
+    assert [p.name for p in deps.iterdir()] == ["unit-0123456789abcdef.cgu0.new.rcgu.o"]
+
+
+def test_a_target_under_the_threshold_is_left_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(caches, "CROWDED_DEPS", 10)
+    checkout = crowded_checkout(tmp_path, 5)
+    assert not caches.tidy_target(checkout)
+    assert len(list((checkout / "rust" / "target" / "debug" / "deps").iterdir())) == 6
+
+
+def test_a_crowded_target_a_build_holds_is_left_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(caches, "CROWDED_DEPS", 3)
+    checkout = crowded_checkout(tmp_path, 5)
+    with system.file_lock(checkout / "rust" / "target" / "debug" / ".cargo-lock"):
+        assert not caches.tidy_target(checkout)
+    assert len(list((checkout / "rust" / "target" / "debug" / "deps").iterdir())) == 6
