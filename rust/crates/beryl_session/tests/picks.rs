@@ -8,14 +8,15 @@
 use crate::play;
 
 use beryl_cards::names::{
-    COUNTERSPELL, CURRENCY_CONVERTER, ISLAND, MANA_CRYPT, OUST, PLAINS, REPRIEVE, STOCK_UP, TUNDRA,
+    COUNTERSPELL, CURRENCY_CONVERTER, FLOODFARM_VERGE, ISLAND, MANA_CRYPT, OUST, PLAINS, REPRIEVE,
+    SEACHROME_COAST, SPARAS_HEADQUARTERS, STOCK_UP, STRIP_MINE, TEFERI_HERO_OF_DOMINARIA, TUNDRA,
 };
 use beryl_engine::card::{Prompt, Purpose, Shape};
 use beryl_engine::{Bitboard, Decision, DecisionKind, Seat, SlotId as _, TurnStep, Zone, ZoneKey};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_session::prompt::{ButtonId, Click, Clicked, Held, ShapeBody};
 use beryl_session::protocol::ObjectId;
-use beryl_session::protocol::{Candidate, Side, ZoneName};
+use beryl_session::protocol::{Candidate, Kind, Side, ZoneName};
 use beryl_session::script::{Mark, Subject};
 use play::{Play, asked, card, cards, position};
 
@@ -229,4 +230,62 @@ fn a_pick_of_cards_for_any_purpose_is_answered_by_clicks() {
             );
         }
     }
+}
+
+/// The human's turn with Teferi, Hero of Dominaria to +1 and seven lands with different
+/// names, all tapped: more than the five cards a choice in a graveyard or exile picks where
+/// they lie. (The engine offers interchangeable lands with one name once.)
+const TEFERI_UNTAPS_SEVEN: Scenario = Scenario::new("untap among seven lands")
+    .at(3, P0, TurnStep::PrecombatMain)
+    .hand(P0, &[COUNTERSPELL])
+    .permanents(
+        P0,
+        &[
+            Permanent::new(TEFERI_HERO_OF_DOMINARIA),
+            Permanent::new(PLAINS).tapped(),
+            Permanent::new(ISLAND).tapped(),
+            Permanent::new(TUNDRA).tapped(),
+            Permanent::new(FLOODFARM_VERGE).tapped(),
+            Permanent::new(SPARAS_HEADQUARTERS).tapped(),
+            Permanent::new(SEACHROME_COAST).tapped(),
+            Permanent::new(STRIP_MINE).tapped(),
+        ],
+    )
+    .library(P0, &[PLAINS; 6])
+    .library(P1, &[PLAINS; 6]);
+
+/// Teferi's untap among seven lands picks them on the battlefield, where they lie, as Arena
+/// does: no tray lays them out over the table, however many lands there are, and a click on a
+/// land picks it there.
+#[test]
+fn an_untap_among_many_lands_picks_them_where_they_lie() {
+    let mut play = Play::scenario(&TEFERI_UNTAPS_SEVEN);
+    play.choose(|c| matches!(c, Candidate::Activate { ability: 0, .. }));
+    while play.decision().kind == Kind::Priority {
+        play.choose(|c| *c == Candidate::Pass);
+    }
+    assert!(play.decision().prompt.is(Purpose::Untap));
+    let offered = (play.decision().candidates.iter())
+        .filter(|c| matches!(c.option, Candidate::Object { .. }))
+        .count();
+    assert_eq!(offered, 7, "each land is offered");
+    let ShapeBody::Pick { tray, picked, .. } = play.decision().prompt.body.clone() else {
+        panic!("an untap is a pick the session holds");
+    };
+    assert!(
+        tray.is_empty(),
+        "the lands are laid out in a tray: {tray:?}"
+    );
+    assert_eq!(picked.len(), 2);
+    // A land not picked is picked by a click once one picked is unpicked.
+    let lands = [PLAINS, ISLAND, TUNDRA, SEACHROME_COAST, STRIP_MINE]
+        .map(|name| play.named(name, ZoneName::Battlefield, Side::You)[0]);
+    let unpicked = *lands.iter().find(|&&l| !picked.contains(&card(l))).unwrap();
+    let Subject::Object { slot: first } = picked[0] else {
+        panic!("a land is a card: {picked:?}")
+    };
+    play.on(first);
+    let after = play.on(unpicked).unwrap();
+    assert!(!after.contains("tray"), "{after}");
+    assert!(after.contains(&format!("#{unpicked}")), "{after}");
 }

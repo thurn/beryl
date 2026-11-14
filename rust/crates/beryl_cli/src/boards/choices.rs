@@ -2,11 +2,11 @@
 
 use beryl_cards::names::{
     AANGS_ICEBERG, ABHORRENT_OCULUS, COUNTERSPELL, CURRENCY_CONVERTER, DAMN, ELITE_SPELLBINDER,
-    GET_LOST, ISLAND, JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY, MALCOLM_ALLURING_SCOUNDREL,
-    MANA_CRYPT, MANA_DRAIN, MANA_TITHE, OUST, PLAINS, REPRIEVE, SEACHROME_COAST, SINK_INTO_STUPOR,
-    SNAPCASTER_MAGE, STOCK_UP, SWIFT_RECONFIGURATION, TEFERI_HERO_OF_DOMINARIA,
-    TEFERI_TIME_RAVELER, THE_WANDERING_EMPEROR, THIRST_FOR_DISCOVERY, THUNDERTRAP_TRAINER,
-    TIME_SPIRAL, TRINKET_MAGE, WINDS_OF_ABANDON,
+    FLOODFARM_VERGE, GET_LOST, ISLAND, JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY,
+    MALCOLM_ALLURING_SCOUNDREL, MANA_CRYPT, MANA_DRAIN, MANA_TITHE, OUST, PLAINS, REPRIEVE,
+    SEACHROME_COAST, SINK_INTO_STUPOR, SNAPCASTER_MAGE, SPARAS_HEADQUARTERS, STOCK_UP, STRIP_MINE,
+    SWIFT_RECONFIGURATION, TEFERI_HERO_OF_DOMINARIA, TEFERI_TIME_RAVELER, THE_WANDERING_EMPEROR,
+    THIRST_FOR_DISCOVERY, THUNDERTRAP_TRAINER, TIME_SPIRAL, TRINKET_MAGE, TUNDRA, WINDS_OF_ABANDON,
 };
 use beryl_engine::{DecisionKind, TurnStep};
 use beryl_scenario::{Action, P0, P1, Permanent, Pick, Scenario};
@@ -202,6 +202,31 @@ pub(super) const CHOICES: &[Scenario] = &[
                 ISLAND_,
             ],
         )
+        .library(P0, LANDS)
+        .permanents(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[Action::activate(P0, TEFERI_HERO_OF_DOMINARIA, 0)]),
+    // Teferi, Hero of Dominaria's +1 untaps up to two lands at the end step, among nine lands
+    // of seven names: more than a choice in a graveyard or exile picks where they lie, which
+    // once laid the lands out in a tray over the table instead of picking them on it.
+    Scenario::new("choice-teferi-lands")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .permanents(
+            P0,
+            &[
+                Permanent::new(TEFERI_HERO_OF_DOMINARIA),
+                PLAINS_,
+                ISLAND_,
+                Permanent::new(TUNDRA).tapped(),
+                PLAINS_,
+                Permanent::new(FLOODFARM_VERGE).tapped(),
+                ISLAND_,
+                Permanent::new(SPARAS_HEADQUARTERS).tapped(),
+                Permanent::new(SEACHROME_COAST).tapped(),
+                Permanent::new(STRIP_MINE),
+            ],
+        )
+        .hand(P0, &[COUNTERSPELL])
         .library(P0, LANDS)
         .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)

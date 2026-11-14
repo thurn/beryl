@@ -23,8 +23,9 @@ use crate::protocol::ObjectId;
 use crate::protocol::{Candidate, DecisionView, ObjectView, Side, TargetRef, ZoneName};
 use crate::script::{Mark, Subject};
 
-/// The most cards a choice among cards picks where they lie: past it they are laid out in a
-/// tray.
+/// The most cards in a graveyard or exile that a choice among cards picks where they lie: past
+/// it they are laid out in a tray. Permanents and spells are always picked where they lie,
+/// however many there are, since the table shows each of them.
 const ON_THE_TABLE: usize = 5;
 
 /// The state of a prompt of the pick shape.
@@ -262,10 +263,12 @@ impl Objects {
     }
 
     /// A choice among cards and permanents for an effect or a rule: an untap of lands, the
-    /// legend to keep, a card. They are picked where they lie when they are few and every
-    /// player sees where ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002):
-    /// "Graveyard, battlefield, stack, exile, ante, and command are public zones"), and from
-    /// a tray otherwise.
+    /// legend to keep, a card. Permanents and spells are picked where they lie, as Arena picks
+    /// the lands of an untap on the battlefield however many there are. Cards in a graveyard
+    /// or exile, where the table shows only the top card, are picked where they lie only when
+    /// they are few; every player sees them there ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002):
+    /// "Graveyard, battlefield, stack, exile, ante, and command are public zones"). Anything
+    /// else is picked from a tray.
     fn on_table<L: Layout>(
         table: &Table<'_, L>,
         purpose: Purpose,
@@ -275,15 +278,12 @@ impl Objects {
         let offered = offered(decision);
         let ends = (decision.candidates.iter()).any(|c| c.option == Candidate::Done);
         let objects = &table.view.objects;
-        let public = |&slot: &ObjectId| {
-            object(objects, slot).is_some_and(|o| {
-                matches!(
-                    o.zone,
-                    ZoneName::Battlefield | ZoneName::Graveyard | ZoneName::Exile | ZoneName::Stack
-                )
-            })
-        };
-        let tray = if offered.len() <= ON_THE_TABLE && offered.iter().all(public) {
+        let zone = |&slot: &ObjectId| object(objects, slot).map(|o| o.zone);
+        let shown = |slot| matches!(zone(slot), Some(ZoneName::Battlefield | ZoneName::Stack));
+        let public =
+            |slot| shown(slot) || matches!(zone(slot), Some(ZoneName::Graveyard | ZoneName::Exile));
+        let few = offered.len() <= ON_THE_TABLE;
+        let tray = if offered.iter().all(shown) || (few && offered.iter().all(public)) {
             Vec::new()
         } else {
             offered.clone()

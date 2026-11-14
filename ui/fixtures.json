@@ -599,6 +599,12 @@
       "where": ["resolving Teferi, Hero of Dominaria"]
     },
     {
+      "name": "choice-teferi-lands",
+      "board": "choice-teferi-lands",
+      "until": "first chooseUpTo decision for seat 0",
+      "where": ["resolving Teferi, Hero of Dominaria"]
+    },
+    {
       "name": "emblems",
       "board": "emblems",
       "until": "first priority decision for seat 0",

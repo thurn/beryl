@@ -863,6 +863,12 @@
       "height": 900
     },
     {
+      "name": "game-untap-teferi-lands",
+      "route": "/?fixture=choice-teferi-lands#/game",
+      "width": 1512,
+      "height": 949
+    },
+    {
       "name": "game-emblems",
       "route": "/?fixture=emblems#/game",
       "width": 1600,
@@ -1261,6 +1267,12 @@
       "route": "/?phone&fixture=exiled-beneath#/game",
       "width": 375,
       "height": 647
+    },
+    {
+      "name": "phone-untap-teferi-lands",
+      "route": "/?phone&fixture=choice-teferi-lands#/game",
+      "width": 393,
+      "height": 759
     },
     {
       "name": "phone-exile-only",
