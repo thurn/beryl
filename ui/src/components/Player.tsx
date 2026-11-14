@@ -1,9 +1,16 @@
 // Player and zones: life orbs, mana pools, player badges, the library, the graveyard
 // and stacked lands.
 import { useEffect, useState, type ReactNode } from "react";
-import { CARD_ASPECT, Card, CardBack, type CardFace } from "./Card";
+import {
+  CARD_ASPECT,
+  Card,
+  CardBack,
+  NamedCounterBadge,
+  type CardFace,
+} from "./Card";
 import { Tip } from "./Controls";
 import { ManaSymbol } from "./Mana";
+import type { NamedCounter } from "../generated/protocol";
 
 // The life orb, drawn in docs/ui_mockups pixels about the orb's center: a dark oval with a gold
 // ring underlining it toward its player's edge of the table. The opponent's orb is yours mirrored
@@ -260,7 +267,15 @@ const PULSE_MS = 900;
 /** A player's unspent mana beside their life orb, one symbol per type with its amount when
  * more than one, shown only while there is any (CR 106.4). Each change of `pulse` (a pass that
  * ends the step and so loses it) makes it pulse, held on screen a moment though it empties. */
-export function ManaPool({ pool, pulse = 0 }: { pool: Pool; pulse?: number }) {
+export function ManaPool({
+  pool,
+  pulse = 0,
+  counters,
+}: {
+  pool: Pool;
+  pulse?: number;
+  counters?: NamedCounter[];
+}) {
   const [held, setHeld] = useState<{ pool: Pool; pulse: number }>();
   useEffect(() => {
     if (pulse === 0) return;
@@ -271,25 +286,35 @@ export function ManaPool({ pool, pulse = 0 }: { pool: Pool; pulse?: number }) {
     return () => clearTimeout(timer);
   }, [pulse]);
   const shown = floating(pool) ? pool : held?.pool;
-  if (!shown || !floating(shown)) return null;
-  const symbols = POOL_SYMBOLS.filter(([k]) => shown[k] > 0);
+  const symbols = shown ? POOL_SYMBOLS.filter(([k]) => shown[k] > 0) : [];
+  const mana =
+    shown && symbols.length > 0 ? (
+      <div
+        key={held?.pulse}
+        className={held ? "mana-pool mana-pool-pulse" : "mana-pool"}
+        role="img"
+        aria-label={`Unspent mana: ${symbols
+          .map(([k, s]) =>
+            shown[k] <= 255 ? `{${s}}`.repeat(shown[k]) : `${shown[k]} {${s}}`,
+          )
+          .join("")}`}
+        data-pool
+      >
+        {symbols.map(([k, s]) => (
+          <span key={k} className="mana-pool-entry">
+            <ManaSymbol symbol={s} />
+            {shown[k] > 1 && <b>{shown[k]}</b>}
+          </span>
+        ))}
+      </div>
+    ) : null;
+  const named = counters?.filter(({ count }) => count !== 0);
+  if (!named?.length) return mana;
   return (
-    <div
-      key={held?.pulse}
-      className={held ? "mana-pool mana-pool-pulse" : "mana-pool"}
-      role="img"
-      aria-label={`Unspent mana: ${symbols
-        .map(([k, s]) =>
-          shown[k] <= 255 ? `{${s}}`.repeat(shown[k]) : `${shown[k]} {${s}}`,
-        )
-        .join("")}`}
-      data-pool
-    >
-      {symbols.map(([k, s]) => (
-        <span key={k} className="mana-pool-entry">
-          <ManaSymbol symbol={s} />
-          {shown[k] > 1 && <b>{shown[k]}</b>}
-        </span>
+    <div className="manual-pool">
+      {mana}
+      {named.map((counter) => (
+        <NamedCounterBadge key={counter.name} {...counter} />
       ))}
     </div>
   );

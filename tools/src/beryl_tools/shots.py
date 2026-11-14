@@ -257,6 +257,7 @@ def ui_shots(args: argparse.Namespace) -> int:
 # last decision of every recording (kept-piles.mjs), and the fixtures it derives draw their
 # card records from them all (kept-harness.mjs `recordedCards`).
 KEPT_FIXTURES = [
+    "table-drawn",
     "greedy-turn-9",
     "opening-bottom",
     "opening-keep",

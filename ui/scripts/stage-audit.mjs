@@ -265,6 +265,8 @@ export function describe(act, names) {
                 ? `${act.amount} ${act.stream.color} mana from ${of(act.from)} to ${of(act.to)}`
                 : `${act.amount} damage from ${of(act.from)} to ${of(act.to)}`;
         case "count":
+            if (act.tally.kind === "playerCounters")
+                return `${act.tally.player} counters`;
             return act.tally.kind === "life"
                 ? `${act.tally.player} life ${act.tally.life}`
                 : act.tally.kind === "pool"

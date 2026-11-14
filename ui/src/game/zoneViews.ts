@@ -42,10 +42,9 @@ export function emblemObjects(view: PlayerView): ObjectView[] {
   );
 }
 
-/** The Auras and Equipment drawn behind the permanents they are attached to, whoever controls
- * them, by the permanent's slot: those attached to a permanent outside the land piles that is
- * not itself attached to another. Anything else attached (to a land in a pile, or to an
- * attachment) stands in its controller's row. */
+/** Attachments by host slot, whoever controls them. On a manual table, a whole chain
+ * follows the permanent at its root, including attachments to lands. Engine games use
+ * their existing rows for Auras on lands and for attachments to attachments. */
 export function attachments(view: PlayerView): Map<number, ObjectView[]> {
   const bySlot = new Map(view.objects.map((o) => [o.slot, o]));
   const out = new Map<number, ObjectView[]>();
@@ -56,14 +55,27 @@ export function attachments(view: PlayerView): Map<number, ObjectView[]> {
       !o ||
       !host ||
       host.zone !== "battlefield" ||
-      host.attachedTo !== null ||
-      isLand(host)
+      (!view.table && (host.attachedTo !== null || isLand(host)))
     ) {
       continue;
     }
     out.set(host.slot, [...(out.get(host.slot) ?? []), o]);
   }
-  return out;
+  if (!view.table) return out;
+  const tucked = new Map<number, ObjectView[]>();
+  for (const [slot, cards] of out) {
+    if (bySlot.get(slot)?.attachedTo != null) continue;
+    const chain = [];
+    const pending = [...cards].reverse();
+    while (pending.length) {
+      const card = pending.pop()!;
+      chain.push(card);
+      const children = out.get(card.slot);
+      if (children) pending.push(...[...children].reverse());
+    }
+    tucked.set(slot, chain);
+  }
+  return tucked;
 }
 
 /** The permanents linked to `slot` by attachment: what it is attached to, and what is attached

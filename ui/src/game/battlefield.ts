@@ -1,5 +1,5 @@
 // Where each side's permanents lie: its land piles, creatures' row and back row.
-import type { ObjectView, Side } from "../generated/protocol";
+import type { ObjectView, RowName, Side } from "../generated/protocol";
 import { CARD_ASPECT } from "../components/Card";
 import { cardEntry } from "../cards";
 import { twins } from "./decisions";
@@ -251,6 +251,10 @@ export function sideGroups(
 ): SideGroups {
   const plain = (o: ObjectView) =>
     o.facing === "up" &&
+    o.face !== "down" &&
+    !o.note &&
+    !o.doesntUntap &&
+    !o.namedCounters?.length &&
     o.counters.length === 0 &&
     o.damage === 0 &&
     !o.combat &&
@@ -275,7 +279,16 @@ export function sideGroups(
   // reads at a glance. Each name stands together, piled only once there are `LANDS_PILED`
   // lands: fewer read best one by one, a basic's frameless art hiding a pile's edges.
   const name = (o: ObjectView) => o.name ?? `#${o.slot}`;
-  const sources = objects.filter(isManaSource);
+  const rowFor = (o: ObjectView) =>
+    o.pinned ??
+    (isCreature(o) ? "creatures" : isManaSource(o) ? "lands" : "others");
+  const rows: Record<RowName, ObjectView[]> = {
+    creatures: [],
+    others: [],
+    lands: [],
+  };
+  for (const object of objects) rows[rowFor(object)].push(object);
+  const sources = rows.lands;
   const names = [...new Set(sources.map(name))];
   const order = (a: ObjectView, b: ObjectView) =>
     Number(isLand(b)) - Number(isLand(a)) ||
@@ -284,8 +297,8 @@ export function sideGroups(
     grouped(sources.filter((o) => o.tapped === tapped).sort(order), pileLands);
   const untapped = sourcePiles(false);
   return {
-    creatures: grouped(objects.filter(isCreature)),
-    others: grouped(objects.filter((o) => !isCreature(o) && !isManaSource(o))),
+    creatures: grouped(rows.creatures),
+    others: grouped(rows.others),
     landPiles: [...untapped, ...sourcePiles(true)],
     untapped: untapped.length,
   };
@@ -293,10 +306,15 @@ export function sideGroups(
 
 /** The mana piles' widths and the gaps before each, before scaling: each copy beneath a pile's
  * top card peeks out by a step of its frame's size. */
-function landRun({ landPiles, untapped }: SideGroups) {
+function landRun(
+  { landPiles, untapped }: SideGroups,
+  attached: Map<number, ObjectView[]>,
+) {
   const widths = landPiles.map((pile) => {
-    const { frame, span } = lying(LAND_WIDTH, pile[0]!.tapped);
-    return span + frame * LAND_STEP.x * (pile.length - 1);
+    const top = pile[pile.length - 1]!;
+    const { frame, span } = lying(LAND_WIDTH, top.tapped);
+    const peek = top.pinned === undefined ? 0 : peeking(pile, frame, attached);
+    return span + frame * LAND_STEP.x * (pile.length - 1) + peek;
   });
   const gaps = landPiles.map((_, p): number =>
     p === 0 ? 0 : p === untapped ? TAPPED_GAP : LAND_GAP,
@@ -355,7 +373,7 @@ export function battlefieldZoom(
   let zoom = 1;
   for (const [side, groups] of sides) {
     const rows = sideRows(side, logOpen);
-    const lands = landRun(groups).length;
+    const lands = landRun(groups, attached).length;
     if (lands > 0) {
       zoom = Math.min(
         zoom,
@@ -402,7 +420,7 @@ export function battlefieldPlacements(
   const rows = sideRows(side, logOpen);
   const out: Placement[] = [];
   const { landPiles } = groups;
-  const run = landRun(groups);
+  const run = landRun(groups, attached);
   const landFull = depthScale(rows.lands.y);
   const landScale = Math.min(
     landFull * zoom,
@@ -420,7 +438,7 @@ export function battlefieldPlacements(
       const depth = pile.length - 1 - i;
       const x = landX + i * frame * LAND_STEP.x * landScale;
       const y = landTop + depth * frame * LAND_STEP.y * landScale;
-      out.push({
+      const place: Placement = {
         slot: o.slot,
         zone: o.zone,
         look: "land",
@@ -431,7 +449,12 @@ export function battlefieldPlacements(
         count: depth === 0 && pile.length > 1 ? pile.length : undefined,
         pile: pileOf(pile),
         ...onTable(x, y, span, 0, landScale),
-      });
+      };
+      out.push(place);
+      // The manual table also tucks attachments under hosts in the land row.
+      if (o.pinned !== undefined) {
+        tuck(side, place, attached.get(o.slot), "attached", out);
+      }
     });
     landX += run.widths[p]! * landScale;
   });
@@ -498,9 +521,17 @@ function peeking(
   under: Map<number, ObjectView[]>,
 ) {
   const top = g[g.length - 1]!;
-  const n = under.get(top.slot)?.length ?? 0;
-  const narrower = (frameWidth - lying(frameWidth, top.tapped).span) / 2;
-  return n === 0 ? 0 : n * frameWidth * BENEATH_STEP.x + narrower;
+  const cards = under.get(top.slot);
+  const { span } = lying(frameWidth, top.tapped);
+  return cards
+    ? Math.max(
+        ...cards.map(
+          (card, i) =>
+            (i + 1) * frameWidth * BENEATH_STEP.x +
+            (tuckedSpan(frameWidth, card) - span) / 2,
+        ),
+      )
+    : 0;
 }
 
 /** One row of permanents' `groups` (each a pile of twins, bottom first, or a card alone), laid
@@ -605,7 +636,7 @@ function permanentRow(
       // Combat's creatures over their neighbors, so their marks show.
       const z = 40 + k * 8 + i + (o.combat ? 60 : 0);
       const { frame, span } = standing(o.tapped);
-      out.push({
+      const place: Placement = {
         slot: o.slot,
         zone: o.zone,
         look: "field",
@@ -616,46 +647,55 @@ function permanentRow(
         count: depth === 0 && group.length > 1 ? group.length : undefined,
         pile: pileOf(group),
         ...onTable(x, y, span, 0, scale),
-      });
-      // Untapped, each a step further to the left and toward its controller, or for what is
-      // attached to it up and to the right, centered on the permanent.
-      const center = x + (span * scale) / 2;
-      // An exiled card steps toward its controller: down for yours, up for the opponent's.
-      const controllerward = side === "you" ? -1 : 1;
-      const tuck = (
-        under: ObjectView[] | undefined,
-        look: "beneath" | "attached",
-        toward: -1 | 1,
-      ) =>
-        under?.forEach((e, j) => {
-          const n = j + 1;
-          const up = (look === "beneath" ? controllerward : 1) * n;
-          const at = (rise: number): Placement => ({
-            slot: e.slot,
-            zone: e.zone,
-            look,
-            width: frameWidth,
-            span: frameWidth,
-            opacity: 1,
-            z: z - n,
-            ...onTable(
-              center +
-                (toward * n * frameWidth * BENEATH_STEP.x - frameWidth / 2) *
-                  scale,
-              y,
-              frameWidth,
-              rise * height * BENEATH_STEP.y,
-              scale,
-            ),
-          });
-          // One that would rise into its side's piles in the corner peeks out sideways only.
-          const peek = at(up);
-          const box = footprint(peek);
-          out.push(pileBoxes(side).some((b) => meets(box, b)) ? at(0) : peek);
-        });
-      tuck(beneath.get(o.slot), "beneath", -1);
-      tuck(attached.get(o.slot), "attached", 1);
+      };
+      out.push(place);
+      tuck(side, place, beneath.get(o.slot), "beneath", out);
+      tuck(side, place, attached.get(o.slot), "attached", out);
     });
   });
   return out;
+}
+
+/** Manual attachments can be tapped independently of their host. */
+function tuckedSpan(width: number, card: ObjectView) {
+  return lying(width, card.pinned !== undefined && card.tapped).span;
+}
+
+/** Attachments peek up and right. Exiled cards peek left and toward their controller. */
+function tuck(
+  side: Side,
+  host: Placement,
+  cards: ObjectView[] | undefined,
+  look: "beneath" | "attached",
+  out: Placement[],
+) {
+  const { x, y, scale, span, width, z } = host;
+  const center = x + (span * scale) / 2;
+  const across = look === "beneath" ? -1 : 1;
+  const up = look === "beneath" && side === "you" ? -1 : 1;
+  cards?.forEach((card, j) => {
+    const n = j + 1;
+    const cardSpan = tuckedSpan(width, card);
+    const at = (rise: number): Placement => ({
+      slot: card.slot,
+      zone: card.zone,
+      look,
+      width,
+      span: cardSpan,
+      opacity: 1,
+      z: z - n,
+      ...onTable(
+        center + (across * n * width * BENEATH_STEP.x - cardSpan / 2) * scale,
+        y,
+        cardSpan,
+        rise * (width / CARD_ASPECT) * BENEATH_STEP.y,
+        scale,
+      ),
+    });
+    // Leave room for mana and counter badges above the land row.
+    const peek = at(host.look === "land" ? 0 : up * n);
+    out.push(
+      pileBoxes(side).some((b) => meets(footprint(peek), b)) ? at(0) : peek,
+    );
+  });
 }

@@ -36,13 +36,13 @@ export function Look({
   const under = place.look === "beneath" || place.look === "attached";
   // A face-down permanent shows its back to both players; its controller's hover still names
   // its card (CR 708.5). On the table it keeps a permanent's frame, its marks and its 2/2.
-  const down = object.facing === "down";
+  const down = object.facing === "down" || object.face === "down";
   const field =
     under ||
     place.look === "field" ||
     place.look === "land" ||
     (down && place.look === "shown" && object.zone === "battlefield");
-  if (down ? !field : object.name === null) {
+  if (object.face !== "down" && (down ? !field : object.name === null)) {
     return <CardBack width={place.width} />;
   }
   const combat = field ? object.combat?.kind : undefined;
@@ -53,6 +53,7 @@ export function Look({
     <Card
       card={down ? faceDownFace(object) : card}
       back={down}
+      note={object.note}
       combat={
         combat === "attacking"
           ? "attacker"
@@ -96,7 +97,7 @@ export function Look({
   // the fan (_IBqPx0gcag 12:00, uzg_P976qhc 17:20). Arena draws it in front of the next card,
   // whose frame, tilted in the fan, reaches up over this card's corner: on the stage it is
   // drawn in the element over the whole hand.
-  const cost = card.manaCost && (
+  const cost = !down && card.manaCost && (
     <div className="hand-over">
       <span className="hand-cost" style={{ fontSize: typeUnit(place.width) }}>
         <ManaCost cost={card.manaCost} />

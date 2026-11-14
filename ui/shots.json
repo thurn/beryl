@@ -169,6 +169,13 @@
       "keep": "Shows the command list with no matches."
     },
     {
+      "name": "table-drawn",
+      "route": "/?fixture=table-drawn#/game",
+      "width": 1600,
+      "height": 900,
+      "expect": ".stack-ability"
+    },
+    {
       "name": "game-first-target",
       "route": "/?fixture=first-target#/game",
       "width": 1600,

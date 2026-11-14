@@ -64,27 +64,32 @@ pub(crate) fn object(card: &Object, slot: Slot, slots: &Slots, viewer: Viewer) -
 }
 
 fn battlefield(object: &mut ObjectView, card: &Object, record: Option<&beryl_card_store::Record>) {
-    let mut row = Row3::Others;
     let mut printed_stats = None;
-    if card.face != Face::Down {
-        if let Card::Custom { types, stats, .. } = &card.card {
-            object.types = card_types(types);
-            row = row_of(types);
-            printed_stats = *stats;
-        } else if let Some(record) = record
-            && let Some(printed) = printed_face(record, card.face)
-        {
-            object.types = card_types(&printed.type_line);
-            row = if card.face == Face::Front {
-                facts::row(record)
-            } else {
-                row_of(&printed.type_line)
-            };
-            printed_stats = facts::printed_stats(printed);
-            let keywords = facts::printed_keywords(record, printed);
-            object.keywords = keywords.into_iter().filter_map(keyword).collect();
+    let row = if card.face == Face::Down {
+        Row3::Creatures
+    } else if let Card::Custom { types, stats, .. } = &card.card {
+        object.types = card_types(types);
+        printed_stats = *stats;
+        if types.trim().is_empty() {
+            Row3::Creatures
+        } else {
+            row_of(types)
         }
-    }
+    } else if let Some(record) = record
+        && let Some(printed) = printed_face(record, card.face)
+    {
+        object.types = card_types(&printed.type_line);
+        printed_stats = facts::printed_stats(printed);
+        let keywords = facts::printed_keywords(record, printed);
+        object.keywords = keywords.into_iter().filter_map(keyword).collect();
+        if card.face == Face::Front {
+            facts::row(record)
+        } else {
+            row_of(&printed.type_line)
+        }
+    } else {
+        Row3::Others
+    };
     object.pinned = Some(match card.row {
         Row::Creatures => RowName::Creatures,
         Row::Others => RowName::Others,

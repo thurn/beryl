@@ -220,6 +220,7 @@ export function Hud({
         <div key={side} className="hud" style={MANA_POOLS[side]}>
           <ManaPool
             pool={table.players[side].mana}
+            counters={table.players[side].namedCounters}
             pulse={side === "you" ? lost : 0}
           />
         </div>

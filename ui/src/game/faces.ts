@@ -25,6 +25,8 @@ import type {
   ObjectView,
 } from "../generated/protocol";
 
+import { counterName } from "./log";
+
 /** The keyword abilities a frame badges, in badge order: the keyword the view names, and the
  * printed text that has it, which tells a gained one from a printed one. */
 const ABILITIES: [Keyword, RegExp, AbilityIcon][] = [
@@ -108,12 +110,31 @@ const isBadged = (c: CounterView): c is { kind: CounterMark; count: number } =>
   BADGED.has(c.kind);
 
 /** What the battlefield draws on object `o` beyond its frame. */
-export const marksOf = (o: ObjectView): CardMarks => ({
-  counters: o.counters.filter(isBadged),
-  sick: o.summoningSick,
-  token: o.token,
-  stolen: o.owner !== o.controller,
-});
+export function marksOf(o: ObjectView): CardMarks {
+  // The table's adapter supplies the row on every manual permanent. Show its
+  // remaining standard counters by name when there is no dedicated badge.
+  const namedCounters =
+    o.pinned === undefined
+      ? o.namedCounters
+      : [
+          ...(o.namedCounters ?? []),
+          ...o.counters
+            .filter(
+              (c) =>
+                !isBadged(c) &&
+                (c.kind !== "loyalty" || o.pt !== null || o.face === "down"),
+            )
+            .map((c) => ({ name: counterName(c.kind), ...c })),
+        ];
+  return {
+    counters: o.counters.filter(isBadged),
+    namedCounters,
+    doesntUntap: o.doesntUntap,
+    sick: o.summoningSick,
+    token: o.token,
+    stolen: o.owner !== o.controller,
+  };
+}
 
 /** A card the data does not name (it should not happen): its name on a blank frame. */
 export const unknownFace = (name: string): FrameFace => ({
@@ -169,9 +190,14 @@ export const faceDownFace = (o: ObjectView): FrameFace => ({
  * large enough for the stack and the inspector on a Retina screen. */
 export const SCAN = "large";
 
+/** The scan of the face the view names, or the second face on a manual table. */
+export function useObjectArt(o: ObjectView): CardArt | undefined {
+  return useCardArt(o.name ?? "", o.face === "back" ? 1 : undefined, SCAN);
+}
+
 /** The frame for object `o`, as the game draws it. */
 export function useFace(o: ObjectView): FrameFace {
-  const art = useCardArt(o.name ?? "", undefined, SCAN);
+  const art = useObjectArt(o);
   const copyArt = useNamelessTokenArt(o);
   if (isNamelessToken(o)) return { ...namelessFace(o), art: copyArt };
   if (art) return frameFace(o, art);

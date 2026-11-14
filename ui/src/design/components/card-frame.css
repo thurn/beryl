@@ -308,7 +308,8 @@
 }
 /* A permanent's marks (Card.tsx): a dark badge along its foot, between the ability badge and
    the plaque, wrapping upward: a token's coin, then one per kind of counter. */
-.card-counters {
+.card-counters,
+.card-named-counters {
   position: absolute;
   left: 0.62em;
   right: 0.62em;
@@ -317,6 +318,10 @@
   flex-wrap: wrap-reverse;
   gap: 0.2em;
   pointer-events: none;
+}
+/* Free-form labels need the full width above the P/T and loyalty plaques. */
+.card-named-counters {
+  bottom: 3.9em;
 }
 .card-with-ability .card-counters {
   left: 3em;
@@ -475,4 +480,32 @@
 }
 .stack-item-scanned .ability-plate-text {
   padding: 0.3em 0.9em 1.7em;
+}
+
+.card-note {
+  position: absolute;
+  top: 3.1em;
+  left: 0.7em;
+  right: 0.7em;
+  padding: 0.18em 0.4em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 0.35em;
+  background: rgb(28 26 23 / 90%);
+  color: var(--type);
+  font: 700 0.9em/1.2 var(--font-sans);
+  pointer-events: none;
+}
+
+.card-untap-lock {
+  position: absolute;
+  top: 1.9em;
+  left: 0.62em;
+  pointer-events: none;
+}
+
+.named-counter {
+  gap: 0.35em;
+  white-space: pre;
 }

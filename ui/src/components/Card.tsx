@@ -13,6 +13,7 @@ import {
   type ReactNode,
 } from "react";
 import { useCardBack } from "../cards";
+import type { Counter, NamedCounter } from "../generated/protocol";
 import { useTextFit } from "./fit";
 import { AbilityBadge, type AbilityMark, ManaCost, RulesText } from "./Mana";
 
@@ -48,8 +49,12 @@ export type StatTone = "up" | "down";
 /** A kind of counter a permanent wears as a badge; loyalty is its plaque's. */
 export type CounterMark = "plusOne" | "minusOne" | "time" | "story" | "chorus";
 
+type NamedMark = NamedCounter & { kind?: Counter };
+
 /** What the battlefield draws on a permanent beyond its frame. */
 export interface CardMarks {
+  namedCounters?: NamedMark[];
+  doesntUntap?: boolean;
   counters: { kind: CounterMark; count: number }[];
   /** Its controller can't attack or tap with it yet (CR 302.6). */
   sick: boolean;
@@ -75,6 +80,7 @@ export interface CardProps {
   count?: number;
   /** Face down (CR 708.2): the back in place of its face, its marks and stats drawn over it. */
   back?: boolean;
+  note?: string;
   className?: string;
   /** Placement on the slot. */
   style?: CSSProperties;
@@ -269,6 +275,7 @@ const MARK_ICONS = {
   damage:
     "M8 0.5 L9.8 5.2 L15 4 L11.4 8 L15 12 L9.8 10.8 L8 15.5 L6.2 10.8 L1 12 L4.6 8 L1 4 L6.2 5.2 Z",
   sick: "M10.2 1.2 A7 7 0 1 0 14.8 11.4 A5.6 5.6 0 0 1 10.2 1.2 Z",
+  lock: "M4 7 V5 A4 4 0 0 1 12 5 V7 H14 V15 H2 V7 Z M6 7 H10 V5 A2 2 0 0 0 6 5 Z",
   token:
     "M8 1.2 A6.8 6.8 0 1 1 8 14.8 A6.8 6.8 0 1 1 8 1.2 Z M8 4.6 A3.4 3.4 0 1 0 8 11.4 A3.4 3.4 0 1 0 8 4.6 Z",
 } as const;
@@ -297,7 +304,10 @@ export function MarkBadge({
       aria-label={label}
     >
       <svg viewBox="0 0 16 16" aria-hidden>
-        <path d={MARK_ICONS[icon]} />
+        <path
+          d={MARK_ICONS[icon]}
+          fillRule={icon === "lock" ? "evenodd" : undefined}
+        />
       </svg>
       {count !== undefined && <b>{count}</b>}
     </span>
@@ -314,6 +324,7 @@ export function Card({
   marks,
   count,
   back = false,
+  note,
   className,
   style,
   children,
@@ -328,6 +339,9 @@ export function Card({
     marks?.counters.filter(
       (c) => c.kind !== "plusOne" && c.kind !== "minusOne",
     ) ?? [];
+  const namedCounters = marks?.namedCounters?.filter(
+    ({ count }) => count !== 0,
+  );
   const scan = back ? undefined : card.scan;
   const nameRef = useTextFit(card.name);
   const typeRef = useTextFit(card.typeLine);
@@ -443,6 +457,12 @@ export function Card({
             {Math.abs(ptCounters) > 1 && <b>×{Math.abs(ptCounters)}</b>}
           </span>
         )}
+        {note && <span className="card-note">{note}</span>}
+        {marks?.doesntUntap && (
+          <span className="card-untap-lock">
+            <MarkBadge icon="lock" label="Doesn’t untap" />
+          </span>
+        )}
         {marks && (otherCounters.length > 0 || marks.token) && (
           <span className="card-counters">
             {/* Marks that say what the frame and art also hint, apart from any art. */}
@@ -454,6 +474,13 @@ export function Card({
                 count={c.count}
                 label={`${c.count} ${c.kind} counters`}
               />
+            ))}
+          </span>
+        )}
+        {namedCounters && namedCounters.length > 0 && (
+          <span className="card-named-counters">
+            {namedCounters.map((counter) => (
+              <NamedCounterBadge key={counter.name} {...counter} />
             ))}
           </span>
         )}
@@ -520,6 +547,27 @@ function BlockArc() {
         fill="url(#block-gold)"
       />
     </svg>
+  );
+}
+
+/** A free-form counter's full name remains available when the badge has to shorten it. */
+export function NamedCounterBadge({ name, count, kind }: NamedMark) {
+  const characters = Array.from(name);
+  const label =
+    characters.length > 6 ? characters.slice(0, 5).join("") + "…" : name;
+  return (
+    <span
+      className={
+        kind
+          ? `mark-badge named-counter mark-${kind}`
+          : "mark-badge named-counter"
+      }
+      title={name}
+      aria-label={`${count} ${name} counter${count === 1 ? "" : "s"}`}
+      role="img"
+    >
+      {label} <b>{count}</b>
+    </span>
   );
 }
 

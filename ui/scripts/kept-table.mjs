@@ -579,3 +579,75 @@ await check(
         fixture: "exile-cast-click",
     },
 );
+
+const manualViews = await load("table-drawn");
+
+// Why no audit: geometry and motion audits can't tell which card face or text the
+// viewer sees, or whether hovering a card back discloses its identity.
+await check(
+    "table-drawn shows manual cards, their marks and just the known face-down preview",
+    async (page) => {
+        const { objects, stack } = manualViews.at(-1);
+        const node = (object) => page.locator(slotOf(object.slot));
+        const pinnedLand = objects.find(
+            (o) => o.pinned === "others" && o.types.includes("land"),
+        );
+        const back = objects.find((o) => o.face === "back");
+        const locked = objects.find((o) => o.doesntUntap);
+        const marked = objects.find((o) => o.namedCounters?.length);
+        const unknown = objects.find(
+            (o) => o.face === "down" && o.name === null,
+        );
+        const known = objects.find((o) => o.face === "down" && o.name);
+        const sideboard = objects.find((o) => o.zone === "sideboard");
+
+        const pinnedBox = await node(pinnedLand).boundingBox();
+        assert.equal(pinnedBox.y, (await node(back).boundingBox()).y);
+        assert.ok((await node(unknown).boundingBox()).y < pinnedBox.y);
+        for (const object of objects.filter((o) => o.attachedTo !== null)) {
+            assert.ok(
+                await node(object).evaluate((el) =>
+                    el.matches(".card-el-attached"),
+                ),
+            );
+        }
+        assert.equal(await node(sideboard).count(), 0);
+        await node(back).getByText(back.name, { exact: true }).waitFor();
+        await page.locator(".stack-ability").getByText(stack[0].text).waitFor();
+        await node(locked)
+            .getByRole("img", { name: "Doesn’t untap" })
+            .waitFor();
+
+        const note = node(back).locator(".card-note");
+        assert.equal(await note.textContent(), back.note);
+        assert.ok(await note.evaluate((el) => el.scrollWidth > el.clientWidth));
+        const badge = await node(marked)
+            .getByRole("img", { name: "12 experience counters" })
+            .textContent();
+        assert.equal(badge, "exper… 12");
+        const custom = await node(marked)
+            .getByRole("img", { name: "1 quest progress counter" })
+            .boundingBox();
+        const stats = await node(marked).locator(".card-pt").boundingBox();
+        assert.ok(!overlap(custom, stats));
+        const playerCounter = page.locator(
+            ".manual-pool [data-pool] + .named-counter",
+        );
+        assert.equal(
+            await playerCounter.getAttribute("aria-label"),
+            "3 Poison counters",
+        );
+
+        for (const object of [known, unknown]) {
+            await node(object).locator(".card-face-down").waitFor();
+            assert.equal(await node(object).locator(".card-name").count(), 0);
+        }
+        await node(back).hover();
+        await page.locator(".inspect-note").getByText(back.note).waitFor();
+        await node(known).hover();
+        await page.getByLabel(`${known.name}, inspected`).waitFor();
+        await node(unknown).hover();
+        assert.equal(await page.locator(".inspect").count(), 0);
+    },
+    { fixture: "table-drawn", at: manualViews.length, ready: ".stack-ability" },
+);

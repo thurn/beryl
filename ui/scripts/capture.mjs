@@ -357,7 +357,13 @@ export function cutText(page) {
                 style.display !== "inline" &&
                 el.scrollWidth > el.clientWidth + 1
             ) {
-                found.push(`"${text}" overflows its box`);
+                // Card notes intentionally show a single line. The inspector shows the full text.
+                if (
+                    !el.matches(".card-note") ||
+                    style.textOverflow !== "ellipsis"
+                ) {
+                    found.push(`"${text}" overflows its box`);
+                }
                 continue;
             }
             const range = document.createRange();

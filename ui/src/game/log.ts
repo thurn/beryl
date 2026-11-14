@@ -111,7 +111,7 @@ const COUNTERS: Partial<Record<Counter, string>> = {
 const NUMBERS = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven"];
 
 /** A kind's name in the rules: "time", "first strike", "+1/+2" (`plusOnePlusTwo`). */
-function counterName(kind: Counter): string {
+export function counterName(kind: Counter): string {
   const named = COUNTERS[kind];
   if (named) return named;
   const pt = /^(plus|minus)([A-Z][a-z]+)(Plus|Minus)([A-Z][a-z]+)$/.exec(kind);

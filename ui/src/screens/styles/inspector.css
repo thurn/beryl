@@ -123,3 +123,9 @@
 .inspect-pt .stat-down {
   color: var(--stat-down);
 }
+
+.inspect-note {
+  margin: 0.25em 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -122,3 +122,12 @@
     animation: none;
   }
 }
+
+.manual-pool {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  max-width: 240px;
+}

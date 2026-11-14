@@ -23,10 +23,10 @@ import {
   type MarkIcon,
 } from "../components/Card";
 import { Tip } from "../components/Controls";
-import { cardEntry, useCardArt, type CardFace } from "../cards";
+import { cardEntry, type CardFace } from "../cards";
 import { ManaSymbol } from "../components/Mana";
 import type { CardType, ObjectView, RefusalView } from "../generated/protocol";
-import { BLANK, printedFace, SCAN, tone, useFace } from "./faces";
+import { BLANK, printedFace, tone, useFace, useObjectArt } from "./faces";
 import { STAGE } from "./perspective";
 import { type Box } from "./placement";
 import { type ZonePile } from "./zoneViews";
@@ -368,13 +368,18 @@ export function Inspect({
   refusal?: { reason: RefusalView; by?: string };
 }) {
   const name = object?.name;
-  const scan = useCardArt(name ?? "", undefined, SCAN);
-  const face = useFace(object ?? BLANK);
+  const scan = useObjectArt(object ?? BLANK);
+  const face = useFace(
+    object?.face === "down"
+      ? { ...object, zone: "nowhere" }
+      : (object ?? BLANK),
+  );
   if (!object || !name) return null;
   const entry = cardEntry(name);
   const printed = cardTypes(face.typeLine);
   const changed =
     object.zone === "battlefield" &&
+    object.face !== "down" &&
     face.typeLine !== "" &&
     printed.join() !== object.types.join();
   return (
@@ -390,6 +395,7 @@ export function Inspect({
       )}
       {refusal && <InspectRefusal {...refusal} />}
       {entry && <p className="inspect-artist">Illustrated by {entry.artist}</p>}
+      {object.note && <p className="inspect-note">{object.note}</p>}
       {changed && (
         <p className="inspect-types" aria-label="Types now">
           <s>{printed.map(titled).join(" ")}</s>{" "}
@@ -479,7 +485,11 @@ function InspectAttached({ object }: { object: ObjectView }) {
   const face = useFace(object);
   return (
     <div data-attached={object.slot}>
-      <Card card={face} variant="field" width={INSPECT_ATTACHED} />
+      {object.face === "down" ? (
+        <CardBack width={INSPECT_ATTACHED} />
+      ) : (
+        <Card card={face} variant="field" width={INSPECT_ATTACHED} />
+      )}
     </div>
   );
 }
@@ -497,6 +507,7 @@ const MARK_NAMES: Record<MarkIcon, string> = {
   damage: "Damage",
   sick: "Summoning sick",
   token: "Token",
+  lock: "Doesn’t untap",
 };
 
 /** A permanent's marks, which the scan does not show: its owner when another player controls

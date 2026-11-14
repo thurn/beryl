@@ -498,8 +498,8 @@ engine game is drawn.
   of which describe an engine game.
 - **A counter with a free-form name and a count up to 999,** beside the closed
   list of counter kinds the engine has, whose counts stop at 255. A name the
-  engine's list has is sent as that kind, so the stage draws it as it does
-  today.
+  engine's list has is sent as that kind. The stage uses its dedicated badge
+  when it has one and a name badge for the remaining counters.
 - **A note, a pinned row and the back face on an object.**
 - **A sideboard zone.**
 - **A field named `table`, empty in an engine game,** that holds what only a

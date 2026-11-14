@@ -102,6 +102,179 @@
       }
     },
     {
+      "name": "table-drawn",
+      "table": {
+        "deck": "2026-10-17-PrinceJools-wu-control.txt",
+        "actions": [
+          {
+            "move": {
+              "objects": [55, 54],
+              "to": "battlefield",
+              "in": {
+                "hand": 0
+              }
+            }
+          },
+          {
+            "pin": {
+              "objects": [55],
+              "in": "battlefield",
+              "row": "others"
+            }
+          },
+          {
+            "draw": {
+              "seat": 0,
+              "count": 2
+            }
+          },
+          {
+            "move": {
+              "objects": [50, 56],
+              "to": "battlefield",
+              "in": {
+                "hand": 0
+              }
+            }
+          },
+          {
+            "move": {
+              "objects": [55],
+              "to": "battlefield",
+              "in": {
+                "hand": 0
+              },
+              "face": "down"
+            }
+          },
+          {
+            "tap": {
+              "objects": [52],
+              "in": "battlefield",
+              "tapped": true
+            }
+          },
+          {
+            "counter": {
+              "objects": [56],
+              "in": "battlefield",
+              "name": "+1/+1",
+              "add": 2
+            }
+          },
+          {
+            "note": {
+              "objects": [50],
+              "in": "battlefield",
+              "note": "Keep this permanent available for the next combat."
+            }
+          },
+          {
+            "attach": {
+              "objects": [54],
+              "in": {
+                "hand": 0
+              },
+              "host": {
+                "id": 56,
+                "in": "battlefield"
+              }
+            }
+          },
+          {
+            "token": {
+              "card": {
+                "named": "Bird Token"
+              },
+              "count": 1,
+              "attached_to": null,
+              "note": null
+            }
+          },
+          {
+            "face": {
+              "objects": [50],
+              "in": "battlefield",
+              "face": "back"
+            }
+          },
+          {
+            "counter": {
+              "objects": [56],
+              "in": "battlefield",
+              "name": "experience",
+              "add": 12
+            }
+          },
+          {
+            "counter": {
+              "objects": [56],
+              "in": "battlefield",
+              "name": "quest progress",
+              "add": 1
+            }
+          },
+          {
+            "flag": {
+              "objects": [52],
+              "in": "battlefield",
+              "doesnt_untap": true
+            }
+          },
+          {
+            "player_counter": {
+              "seat": 0,
+              "name": "U",
+              "set": 2
+            }
+          },
+          {
+            "player_counter": {
+              "seat": 0,
+              "name": "Poison",
+              "set": 3
+            }
+          },
+          {
+            "marker": {
+              "objects": [50],
+              "in": "battlefield",
+              "text": "Draw two cards."
+            }
+          },
+          {
+            "move": {
+              "objects": [18],
+              "in": {
+                "library": 0
+              },
+              "to": "battlefield",
+              "face": "down"
+            }
+          },
+          {
+            "attach": {
+              "objects": [51],
+              "in": {
+                "hand": 0
+              },
+              "host": {
+                "id": 52,
+                "in": "battlefield"
+              }
+            }
+          },
+          {
+            "tap": {
+              "objects": [56],
+              "in": "battlefield",
+              "tapped": true
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "table-stack",
       "table": {
         "deck": "2025-11-18-17lands-cb8d5d5f-wu-control.txt",

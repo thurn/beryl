@@ -118,7 +118,10 @@ const resting = (object: ObjectView, place: Placement): Resting => ({
     opacity: place.opacity,
     depth: place.z,
     face:
-      place.back || object.name === null || object.facing === "down"
+      place.back ||
+      object.name === null ||
+      object.facing === "down" ||
+      object.face === "down"
         ? "back"
         : "front",
   },

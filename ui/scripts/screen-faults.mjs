@@ -59,17 +59,21 @@ export async function screenFaults(page) {
             if (o.zone !== "battlefield") continue;
             const stats = text(e.querySelector(".card-pt, .card-loyalty b"));
             const loyalty = o.counters.find((c) => c.kind === "loyalty");
+            const namedLoyalty =
+                o.pinned !== undefined && (o.pt !== null || o.face === "down");
             // A phone draws a face-up creature's scan alone: its printed P/T stands.
             const printed = phone && o.facing === "up";
             const want =
                 o.pt && !printed
                     ? `${o.pt.power}/${Math.max(0, o.pt.toughness - o.damage)}`
-                    : loyalty && String(loyalty.count);
+                    : loyalty && !namedLoyalty
+                      ? String(loyalty.count)
+                      : undefined;
             if (want !== undefined && stats !== want) {
                 faults.push(`${what} shows ${stats} for ${want}`);
             }
             for (const c of o.counters) {
-                if (c.kind === "loyalty") continue;
+                if (c.kind === "loyalty" && !namedLoyalty) continue;
                 // +1/+1 and -1/-1 counters show as one pill naming the kind, with a count
                 // past one.
                 const pill = e.querySelector(".card-pt-counter");
@@ -85,6 +89,19 @@ export async function screenFaults(page) {
                 if (badge !== String(c.count)) {
                     faults.push(
                         `${what} shows ${badge} ${c.kind} counters for ${c.count}`,
+                    );
+                }
+            }
+            for (const { name, count } of phone
+                ? []
+                : (o.namedCounters ?? [])) {
+                const badge = [...e.querySelectorAll(".named-counter")].find(
+                    (mark) => mark.title === name,
+                );
+                const seen = text(badge?.querySelector("b"));
+                if (seen !== (count === 0 ? "nothing" : String(count))) {
+                    faults.push(
+                        `${what} shows ${seen} ${name} counters for ${count}`,
                     );
                 }
             }

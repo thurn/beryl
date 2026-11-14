@@ -284,12 +284,19 @@ restore the old behavior.
   manual shuffle, roll, phase, turn, rewind or game start. It reads Shuffled,
   Rolled 4 (d6), Heads, the phase name, the active player's name followed by 's
   turn, Rewound to 41, or Game 2. The banner fades on the stage's clock.
+- **Manual counters and untap flags.** Named counters use the existing counter
+  badges with shortened names. Player counters appear beside the mana pool. A
+  permanent marked as skipping untap shows a lock in its corner.
 
 ## Not seen in Arena
 
 Built from motions and shapes Beryl already has. Arena has these, but the
 recordings do not show them.
 
+- **Notes on manual cards.** A card shows its table note on one line, with an
+  ellipsis when it runs out of room. Its inspection panel shows the full note.
+- **Inspecting a face-down manual card.** The table shows a card back. Pointing
+  at the card opens a face preview only if the viewer knows the card's identity.
 - **Paying with permanents.** Waterbend, convoke, crew. Start with no payment
   highlights. Hover over Auto Pay on desktop or long-press it on mobile to see
   which permanents Beryl would use. Click or tap the button to accept. To pay
