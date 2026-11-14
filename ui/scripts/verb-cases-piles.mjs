@@ -99,11 +99,22 @@ export const CASES = {
             const was = before(piles, flight);
             assert.equal(was.zones[name], pile, what);
             if (flight.at.from) {
-                assert.deepEqual(
-                    where(flight.at.from.poses[name]),
-                    where(was.poses[name]),
-                    `${what}: it leaves from where it lay`,
-                );
+                const start = flight.at.from.poses[name];
+                const lay = was.poses[name];
+                // Priority has no motion step. A playable card can move from its pile into
+                // the hand fan after the preceding sample, before its cast begins.
+                if (start.width > lay.width * 2) {
+                    assert.ok(
+                        start.y >= lay.y,
+                        `${what}: it leaves the hand fan`,
+                    );
+                } else {
+                    assert.deepEqual(
+                        where(start),
+                        where(lay),
+                        `${what}: it leaves from where it lay`,
+                    );
+                }
             }
             assert.ok(
                 flight.at.middle.poses[name].depth >= ALOFT,

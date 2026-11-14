@@ -619,11 +619,14 @@ export const CASES = {
             room += 1;
             assert.equal(was.zones[name], to.zones[name], `${name} left`);
             assert.ok(half.depth < ALOFT, `${name} makes room at its depth`);
-            assert.notDeepEqual(
-                where(half),
-                where(end),
-                `${name} was at its new place at once`,
-            );
+            // The hand regroups in 170 ms, before a land's flight reaches its middle.
+            if (was.zones[name] !== "hand") {
+                assert.notDeepEqual(
+                    where(half),
+                    where(end),
+                    `${name} was at its new place at once`,
+                );
+            }
         }
         assert.ok(room > 0, "the land's row made room for it");
         if (reflows) return;
