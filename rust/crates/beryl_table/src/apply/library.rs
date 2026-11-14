@@ -38,7 +38,10 @@ pub(super) fn settle_handling(
             open(zone, Portion::All)
         }
         Action::CloseLook {} if before.is_some_and(|handling| handling.by == by) => None,
-        Action::NextTurn {} | Action::Start { .. } | Action::NextGame { .. } => None,
+        Action::NextTurn {}
+        | Action::Start { .. }
+        | Action::NextGame { .. }
+        | Action::Concede {} => None,
         _ => {
             if let Some(handling) = before
                 && let Some(index) = applied.changes.iter().position(|change| match change {
@@ -132,9 +135,9 @@ pub(super) fn mulligan(
     let shuffled = shuffle(&staged, seat, Portion::All, chance)?;
     perform(&mut staged, &shuffled, action);
     let mut applied = AppliedChanges::default();
-    applied.record(returned, None);
-    applied.record(shuffled, Some(Presentation::Shuffle { library }));
-    applied.record(draw(&staged, seat, count)?, None);
+    applied.record(returned, Some(Presentation::MulliganReturn));
+    applied.record(shuffled, Some(Presentation::MulliganShuffle { library }));
+    applied.record(draw(&staged, seat, count)?, Some(Presentation::Draw));
     Ok(applied)
 }
 

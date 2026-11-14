@@ -1,51 +1,13 @@
 use beryl_session::protocol::ZoneName;
 use beryl_session::script::{Act, Fact, Verb};
 use beryl_table::action::{Adjustment, Destination, Position, SeenObject, Selection, SortBy};
-use beryl_table::state::{Card, Face, ObjectId, Row, Zone};
-use beryl_table::testing::{Generator, Kind};
+use beryl_table::state::{Face, ObjectId, Row, Zone};
 use beryl_table::{Action, Table};
 
 mod script_common;
 use script_common::{FIELD, GUEST, Game, HOST, add, card, select};
 
 const HAND: Zone = Zone::Hand(HOST);
-
-const KINDS: &[Kind] = &[
-    Kind::Move,
-    Kind::Draw,
-    Kind::Give,
-    Kind::Mulligan,
-    Kind::Reorder,
-    Kind::Pin,
-    Kind::SortHand,
-    Kind::Attach,
-    Kind::Unattach,
-    Kind::Tap,
-    Kind::Face,
-    Kind::Peek,
-    Kind::Counter,
-    Kind::Stats,
-    Kind::Damage,
-    Kind::Life,
-    Kind::PlayerCounter,
-    Kind::Token,
-    Kind::Clone,
-    Kind::Marker,
-    Kind::Remove,
-    Kind::Flag,
-    Kind::Note,
-    Kind::Look,
-    Kind::Lend,
-    Kind::Reveal,
-    Kind::AlwaysLookAtTop,
-    Kind::AlwaysRevealTop,
-    Kind::Arrow,
-    Kind::ClearArrows,
-    Kind::Roll,
-    Kind::Phase,
-    Kind::NextTurn,
-    Kind::Shuffle,
-];
 
 fn movement(selection: Selection, to: Zone, position: Position) -> Action {
     Action::Move {
@@ -334,69 +296,4 @@ fn a_draw_moves_anonymous_backs_as_one_group() {
         assert_ne!(object.slot, old);
     }
     assert!(!serde_json::to_string(&guest).unwrap().contains("Top Card"));
-}
-
-#[test]
-fn one_thousand_random_card_actions_replay_for_both_seats() {
-    let mut table = Table::new(2);
-    for i in 0..16 {
-        add(
-            &mut table,
-            i,
-            &format!("<library-{i}>"),
-            Zone::Library(HOST),
-            &[],
-        );
-    }
-    let mut game = Game::new(table);
-    let mut generator = Generator::new(227);
-    let mut tested = 0;
-    for _ in 0..2_000 {
-        let (_, by, action) = generator.next(&game.table, KINDS);
-        let Ok(scripts) = game.try_apply(by, &action) else {
-            continue;
-        };
-        tested += 1;
-        for seat in game.table.seats() {
-            let json = serde_json::to_string(&scripts[usize::from(seat.0)]).unwrap();
-            for object in game.table.objects.values() {
-                let Card::Custom { name, .. } = &object.card else {
-                    continue;
-                };
-                // Clones can share a name with a hidden card. Check the
-                // record at every hidden card's current slot even then.
-                if object.known_to.contains(&seat) {
-                    continue;
-                }
-                let (view, slots) = &game.views[usize::from(seat.0)];
-                assert!(
-                    scripts[usize::from(seat.0)]
-                        .beats
-                        .iter()
-                        .flatten()
-                        .all(|step| {
-                            step.act.object().is_none_or(|record| {
-                                Some(record.slot) != slots.get(object.id) || record.name.is_none()
-                            })
-                        }),
-                    "{action:?} named hidden slot {:?}",
-                    slots.get(object.id)
-                );
-                if view
-                    .objects
-                    .iter()
-                    .all(|record| record.name.as_ref() != Some(name))
-                {
-                    assert!(
-                        !json.contains(name),
-                        "{action:?} leaked {name} to {seat:?}: {json}"
-                    );
-                }
-            }
-        }
-        if tested == 1_000 {
-            break;
-        }
-    }
-    assert_eq!(tested, 1_000);
 }

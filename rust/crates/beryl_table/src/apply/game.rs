@@ -349,6 +349,13 @@ pub(super) fn next_game(table: &Table, winner: Option<Seat>) -> Changes {
             after: false,
         },
     }));
+    let number = table.game_match.game_number;
+    changes.push(Change::SetTable(TableEdit::SetGameNumber {
+        edit: Edit {
+            before: number,
+            after: number.checked_add(1).ok_or(Refusal::INVALID)?,
+        },
+    }));
     changes.extend(edit(table.game_match.last_winner, winner, |edit| {
         Change::SetTable(TableEdit::SetLastWinner { edit })
     }));

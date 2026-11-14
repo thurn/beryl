@@ -216,9 +216,16 @@ pub struct Match {
     pub starting_life: i32,
     pub starting_hand_size: u16,
     pub in_game: bool,
+    /// The game to play next when the table is in the lobby.
+    #[serde(default = "first_game")]
+    pub game_number: u32,
     /// The latest game's result, used to offer the losing seat the next choice.
     #[serde(default)]
     pub last_winner: Option<Seat>,
+}
+
+const fn first_game() -> u32 {
+    1
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableAssist"))]
@@ -328,6 +335,7 @@ impl Table {
                 starting_life,
                 starting_hand_size: 7,
                 in_game: false,
+                game_number: first_game(),
                 last_winner: None,
             },
             proposals: Vec::new(),

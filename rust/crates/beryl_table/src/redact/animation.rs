@@ -57,6 +57,7 @@ pub enum AnimationEvent {
     Shuffle {
         library: Zone,
         order: Vec<ObjectId>,
+        announce: bool,
     },
     /// The acting seat sees the selected cards. Other seats get the count.
     Look {
@@ -72,10 +73,21 @@ pub enum AnimationEvent {
     /// The viewer learned an identity. A later batch member can hide it again.
     Learn(ShownCard),
     /// The adapter takes a fresh view of the table.
-    Reset,
+    Reset(ResetReason),
+    Draw,
+    MulliganReturn,
+    Peek(Vec<ObjectId>),
     Phase(Phase),
     /// Redacted edits, creations, removals and public rolls.
     Change(Change),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResetReason {
+    Rewind { to: u32 },
+    Game { number: u32 },
+    Lobby,
 }
 
 /// Projects the entry using the host table immediately before it. Each member
@@ -88,7 +100,7 @@ pub fn animation_seen_by(entry: &Entry, table_before: &Table, viewer: Seat) -> A
         table_before,
         |presentation, changes, before, after| {
             members.push(AnimationMember {
-                events: member_events(changes, presentation, entry.by, before, after, viewer),
+                events: member_events(changes, presentation, entry, before, after, viewer),
             });
         },
     );
@@ -110,7 +122,7 @@ pub fn visit_animation(
         entry,
         table_before,
         |presentation, changes, before, after| {
-            let events = member_events(changes, presentation, entry.by, before, after, viewer);
+            let events = member_events(changes, presentation, entry, before, after, viewer);
             visit(&events, super::seen_by(after, viewer));
         },
     );
@@ -119,13 +131,32 @@ pub fn visit_animation(
 fn member_events(
     changes: &[Change],
     presentation: Option<&Presentation>,
-    actor: Seat,
+    entry: &Entry,
     before: &Table,
     after: &Table,
     viewer: Seat,
 ) -> Vec<AnimationEvent> {
-    if matches!(presentation, Some(Presentation::Reset)) {
-        return vec![AnimationEvent::Reset];
+    let reset = match presentation {
+        Some(Presentation::Reset) => Some(ResetReason::Rewind {
+            to: match entry.action {
+                crate::Action::Rewind { to } => to,
+                _ => changes
+                    .iter()
+                    .find_map(|change| match change {
+                        Change::RestoreTable(edit) => Some(edit.after.entry_number),
+                        _ => None,
+                    })
+                    .expect("undo of a rewind restores a snapshot"),
+            },
+        }),
+        Some(Presentation::GameReset) => Some(ResetReason::Game {
+            number: after.game_match.game_number,
+        }),
+        Some(Presentation::LobbyReset) => Some(ResetReason::Lobby),
+        _ => None,
+    };
+    if let Some(reason) = reset {
+        return vec![AnimationEvent::Reset(reason)];
     }
 
     let mut names = HiddenNames::new(before, viewer);
@@ -133,18 +164,20 @@ fn member_events(
     let private_ids = forgotten_ids(changes, before, after, viewer);
     let replacements = Replacements::new(changes);
     let mut shuffle = match presentation {
-        Some(Presentation::Shuffle { library }) => Some(AnimationEvent::Shuffle {
-            library: *library,
-            order: after.zone(*library).expect("shuffled library").to_vec(),
-        }),
+        Some(Presentation::Shuffle { library } | Presentation::MulliganShuffle { library }) => {
+            Some(AnimationEvent::Shuffle {
+                library: *library,
+                order: after.zone(*library).expect("shuffled library").to_vec(),
+                announce: matches!(presentation, Some(Presentation::Shuffle { .. })),
+            })
+        }
         _ => None,
     };
+    let shuffling = shuffle.is_some();
     let mut events = Vec::new();
     for change in changes {
         match change {
-            Change::Move { id, from, to }
-                if !matches!(presentation, Some(Presentation::Shuffle { .. })) =>
-            {
+            Change::Move { id, from, to } if !shuffling => {
                 events.push(replacements.movement(
                     *id,
                     *from,
@@ -180,11 +213,14 @@ fn member_events(
             .collect()
     };
     match presentation {
+        Some(Presentation::Draw) => events.push(AnimationEvent::Draw),
+        Some(Presentation::MulliganReturn) => events.push(AnimationEvent::MulliganReturn),
+        Some(Presentation::Peek { ids }) => events.push(AnimationEvent::Peek(ids.clone())),
         Some(Presentation::Phase(phase)) => events.push(AnimationEvent::Phase(*phase)),
         Some(Presentation::Look { library, ids }) => events.push(AnimationEvent::Look {
             library: *library,
             count: ids.len(),
-            cards: if viewer == actor {
+            cards: if viewer == entry.by {
                 shown(ids)
             } else {
                 Vec::new()

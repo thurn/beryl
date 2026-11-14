@@ -121,6 +121,7 @@ fn a_shuffle_preserves_the_new_order_without_showing_how_the_cards_were_reordere
             [AnimationEvent::Shuffle {
                 library: LIBRARY,
                 order: table.zone(LIBRARY).unwrap().to_vec(),
+                announce: true,
             }]
         );
         let view = seen_by(&table, seat);

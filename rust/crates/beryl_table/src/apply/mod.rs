@@ -69,6 +69,16 @@ pub(crate) enum Presentation {
     },
     Phase(Phase),
     Reset,
+    GameReset,
+    LobbyReset,
+    Draw,
+    MulliganReturn,
+    MulliganShuffle {
+        library: Zone,
+    },
+    Peek {
+        ids: Vec<ObjectId>,
+    },
 }
 
 impl Entry {
@@ -395,6 +405,10 @@ fn valid_knowledge_change(
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one dispatch lists each table action"
+)]
 fn plan_action(
     table: &Table,
     by: Seat,
@@ -421,7 +435,14 @@ fn plan_action(
             selection,
             doesnt_untap,
         } => cards::flag(table, selection, *doesnt_untap),
-        Action::Peek { selection } => cards::peek(table, by, selection),
+        Action::Peek { selection } => {
+            return Ok(AppliedChanges::presented(
+                cards::peek(table, by, selection)?,
+                Presentation::Peek {
+                    ids: selection.objects.clone(),
+                },
+            ));
+        }
         Action::Counter {
             selection,
             name,
@@ -441,7 +462,12 @@ fn plan_action(
         } => cards::token(table, by, card, *count, *attached_to, note.as_deref()),
         Action::Marker { selection, text } => cards::marker(table, selection, text),
         Action::Remove { selection } => cards::remove(table, selection),
-        Action::Draw { seat, count } => library::draw(table, *seat, *count),
+        Action::Draw { seat, count } => {
+            return Ok(AppliedChanges::presented(
+                library::draw(table, *seat, *count)?,
+                Presentation::Draw,
+            ));
+        }
         Action::Mulligan { seat, count } => {
             return library::mulligan(table, *seat, *count, chance, action);
         }
@@ -480,16 +506,21 @@ fn plan_action(
         Action::Start { first } => {
             return Ok(AppliedChanges::presented(
                 game::start(table, *first, chance, action)?,
-                Presentation::Reset,
+                Presentation::GameReset,
             ));
         }
         Action::NextGame { winner } => {
             return Ok(AppliedChanges::presented(
                 game::next_game(table, *winner)?,
-                Presentation::Reset,
+                Presentation::GameReset,
             ));
         }
-        Action::Concede {} => game::concede(table, by),
+        Action::Concede {} => {
+            return Ok(AppliedChanges::presented(
+                game::concede(table, by)?,
+                Presentation::LobbyReset,
+            ));
+        }
         Action::CloseLook {} => Ok(Vec::new()),
         Action::SetAssist { assist, on } => Ok(game::set_assist(table, by, *assist, *on)),
         Action::Flow { .. } => library::flow(action),

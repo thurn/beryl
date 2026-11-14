@@ -134,13 +134,17 @@ fn animation_projects_nested_batch_members_using_their_own_visibility() {
                 vec![AnimationEvent::Shuffle {
                     library: LIBRARY,
                     order: shuffled.clone(),
+                    announce: true,
                 }],
-                vec![AnimationEvent::HandMove {
-                    owner_transfer: (viewer == HOST).then_some((ObjectId(45), drawn)),
-                    from: LIBRARY,
-                    to: HAND,
-                    hand_card: (viewer == HOST).then(|| card(drawn, "Drawn Name")),
-                }],
+                vec![
+                    AnimationEvent::HandMove {
+                        owner_transfer: (viewer == HOST).then_some((ObjectId(45), drawn)),
+                        from: LIBRARY,
+                        to: HAND,
+                        hand_card: (viewer == HOST).then(|| card(drawn, "Drawn Name")),
+                    },
+                    AnimationEvent::Draw
+                ],
                 first_look,
                 vec![look],
                 vec![AnimationEvent::Reveal {

@@ -58,6 +58,9 @@ pub enum TableEdit {
     SetInGame {
         edit: Edit<bool>,
     },
+    SetGameNumber {
+        edit: Edit<u32>,
+    },
     SetLastWinner {
         edit: Edit<Option<Seat>>,
     },
@@ -115,6 +118,7 @@ impl TableEdit {
             Self::SetInGame { edit } => {
                 table.game_match.in_game = edit.after;
             }
+            Self::SetGameNumber { edit } => table.game_match.game_number = edit.after,
             Self::SetLastWinner { edit } => table.game_match.last_winner = edit.after,
         }
     }
@@ -166,6 +170,9 @@ impl TableEdit {
                 edit: edit.inverse(),
             },
             Self::SetInGame { edit } => Self::SetInGame {
+                edit: edit.inverse(),
+            },
+            Self::SetGameNumber { edit } => Self::SetGameNumber {
                 edit: edit.inverse(),
             },
             Self::SetLastWinner { edit } => Self::SetLastWinner {

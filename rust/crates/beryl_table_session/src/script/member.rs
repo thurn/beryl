@@ -7,7 +7,7 @@ use beryl_session::script::{Act, Fact, Notice, Step, Subject, Tally};
 use beryl_table::change::{ObjectEdit, TableEdit};
 use beryl_table::redact::AnimationEvent;
 use beryl_table::state::{ObjectId, Zone};
-use beryl_table::{Action, Change, Entry, Table};
+use beryl_table::{Change, Table};
 
 use super::{Builder, spans};
 use crate::view::{Slots, Viewer, arrows, cards, handling, phase, piles, turn, zone};
@@ -15,19 +15,12 @@ use crate::view::{Slots, Viewer, arrows, cards, handling, phase, piles, turn, zo
 impl Builder {
     pub(super) fn member(
         &mut self,
-        entry: &Entry,
         events: &[AnimationEvent],
         table: &Table,
         viewer: Viewer,
         slots: &mut Slots,
         final_slots: &Slots,
-    ) -> bool {
-        if events
-            .iter()
-            .any(|event| matches!(event, AnimationEvent::Reset))
-        {
-            return true;
-        }
+    ) {
         let previous = slots.clone();
         let transfers: Vec<_> = events
             .iter()
@@ -38,28 +31,31 @@ impl Builder {
             .collect();
         if slots.between(table, &transfers, final_slots).is_none() {
             self.error = Some("ran out of stage slots".into());
-            return false;
+            return;
         }
         let member = Member {
             table,
             viewer,
             slots,
             previous: &previous,
-            action: &entry.action,
-            returning_hand: matches!(entry.action, Action::Mulligan { .. })
-                && events.iter().any(|event| {
-                    matches!(event, AnimationEvent::Move { from, .. } if matches!(from.zone, Zone::Hand(_)))
-                }),
+            draw: events
+                .iter()
+                .any(|event| matches!(event, AnimationEvent::Draw)),
+            returning_hand: events
+                .iter()
+                .any(|event| matches!(event, AnimationEvent::MulliganReturn)),
         };
         let beat = self.member_steps(&member, events);
-        let wanted = spans::wanted(handling(table, viewer), &arrows(table, slots, viewer));
+        let mut wanted = spans::wanted(handling(table, viewer), &arrows(table, slots, viewer));
+        wanted.extend(self.spans.iter().copied().filter(|span| {
+            matches!(span, beryl_session::script::Open::Mark { on: Subject::Object { slot }, .. } if self.stage.objects.contains_key(slot))
+        }));
         let new_look = events
             .iter()
             .any(|event| matches!(event, AnimationEvent::Look { .. }));
         self.end_spans(&wanted, &beat, new_look);
         self.finish(beat);
         self.begin_spans(&wanted);
-        false
     }
 
     fn member_steps(&mut self, member: &Member<'_>, events: &[AnimationEvent]) -> Vec<Step> {
@@ -72,6 +68,13 @@ impl Builder {
                 _ => None,
             })
             .collect();
+        let peek = events
+            .iter()
+            .find_map(|event| match event {
+                AnimationEvent::Peek(ids) => Some(ids.as_slice()),
+                _ => None,
+            })
+            .unwrap_or_default();
         for event in events {
             match event {
                 AnimationEvent::Move { id, from, to } => {
@@ -97,9 +100,13 @@ impl Builder {
                     let at = self.insertion(member, *id, *to);
                     self.fly_to(&mut beat, member, *id, *from, at, None);
                 }
-                AnimationEvent::Shuffle { library, order } => {
+                AnimationEvent::Shuffle {
+                    library,
+                    order,
+                    announce,
+                } => {
                     self.shuffled_library(&mut beat, member, *library, order);
-                    if !matches!(member.action, Action::Mulligan { .. }) {
+                    if *announce {
                         self.emit(
                             &mut beat,
                             Act::Announce {
@@ -129,7 +136,7 @@ impl Builder {
                     if let Some(object) = member.object(card.id)
                         && self.stage.objects.get(&object.slot) != Some(&object)
                     {
-                        let visual = if matches!(member.action, Action::Peek { .. }) {
+                        let visual = if peek.contains(&card.id) {
                             Act::Flip { object }
                         } else {
                             Act::Set {
@@ -145,23 +152,25 @@ impl Builder {
                 _ => {}
             }
         }
-        if let Action::Peek { selection } = member.action {
-            for &id in &selection.objects {
-                if let Some(object) = member.object(id)
-                    && !beat.iter().any(|step| {
-                        matches!(&step.act, Act::Flip { object: flipped } if flipped.slot == object.slot)
-                    })
-                {
-                    self.emit(&mut beat, Act::Flip { object });
-                }
-            }
-        }
+        self.finish_peek(&mut beat, member, peek);
         // A face edit can expose a card and change derived characteristics;
         // a changed slot can also leave a marker's source unavailable.
         self.settle_records(&mut beat, member);
         self.set_turn(&mut beat, member, events);
         self.set_library_top(&mut beat, member, events);
         beat
+    }
+
+    fn finish_peek(&mut self, beat: &mut Vec<Step>, member: &Member<'_>, peek: &[ObjectId]) {
+        for &id in peek {
+            if let Some(object) = member.object(id)
+                && !beat.iter().any(|step| {
+                    matches!(&step.act, Act::Flip { object: flipped } if flipped.slot == object.slot)
+                })
+            {
+                self.emit(beat, Act::Flip { object });
+            }
+        }
     }
 
     fn shuffled_library(
@@ -279,9 +288,7 @@ impl Builder {
         if let Some(object) = member.object(id) {
             let from = zone(from).0;
             let item = (object.zone == ZoneName::Stack).then(|| StackItem::spell(object.slot));
-            let why = if from == ZoneName::Library
-                && matches!(member.action, Action::Draw { .. } | Action::Mulligan { .. })
-            {
+            let why = if from == ZoneName::Library && member.draw {
                 Why::Draw
             } else {
                 Why::Effect
@@ -537,7 +544,7 @@ struct Member<'a> {
     viewer: Viewer,
     slots: &'a Slots,
     previous: &'a Slots,
-    action: &'a Action,
+    draw: bool,
     returning_hand: bool,
 }
 

@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::apply::{AppliedChanges, Presentation};
+use crate::change::TableEdit;
 use crate::log::UndoControl;
 use crate::state::Zone;
 use crate::{Action, Change, Entry, Log, Refusal, Seat, Table};
@@ -100,7 +101,19 @@ pub(crate) fn inverse(log: &Log, table: &Table, entry: &Entry) -> (AppliedChange
             }
         }
         let presentation = match presentation {
-            Some(Presentation::Shuffle { .. } | Presentation::Reset) => presentation.cloned(),
+            Some(
+                Presentation::Shuffle { .. }
+                | Presentation::MulliganShuffle { .. }
+                | Presentation::Reset
+                | Presentation::GameReset
+                | Presentation::LobbyReset,
+            ) => presentation.cloned(),
+            Some(Presentation::Phase(_)) => changes.iter().find_map(|change| match change {
+                Change::SetTable(TableEdit::SetPhase { edit }) => {
+                    Some(Presentation::Phase(edit.after))
+                }
+                _ => None,
+            }),
             _ => None,
         };
         applied.record(changes, presentation);

@@ -10,8 +10,8 @@ use crate::{Action, Change, Entry, Seat, Table};
 mod animation;
 
 pub use animation::{
-    AnimationEvent, AnimationMember, AnimationProjection, ShownCard, animation_seen_by,
-    visit_animation,
+    AnimationEvent, AnimationMember, AnimationProjection, ResetReason, ShownCard,
+    animation_seen_by, visit_animation,
 };
 
 /// Keep zone order and public object state while hiding identities the seat
@@ -332,7 +332,8 @@ fn redact_table_edit(edit: &TableEdit, seat: Seat) -> bool {
         | TableEdit::SetReady { .. }
         | TableEdit::SetWins { .. }
         | TableEdit::SetInGame { .. }
-        | TableEdit::SetLastWinner { .. } => true,
+        | TableEdit::SetLastWinner { .. }
+        | TableEdit::SetGameNumber { .. } => true,
     }
 }
 

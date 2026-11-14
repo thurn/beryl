@@ -50,6 +50,7 @@ fn draw_and_undo_animate_in_inverse_order_without_linking_ids() {
                     to: HAND,
                     hand_card: if owner { shown(0, "Brainstorm") } else { None }
                 },
+                AnimationEvent::Draw,
             ]
         );
         assert_eq!(
