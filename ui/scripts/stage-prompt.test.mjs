@@ -336,6 +336,81 @@ test("a card of the hand the prompt marks is carried out of it as a click on it"
     assert.deepEqual([made.pose(3).x, made.pose(3).y], [0, 500]);
 });
 
+test("what paying for a card would tap is outlined while the card is carried out of the hand", async () => {
+    const { made, surface, prompts, sent, reply } = prompted();
+    const asked = pick(marked("eligible", 3), {
+        previews: [{ card: 3, taps: [1, 2] }],
+    });
+    prompts.play(asking(asked));
+    made.clock.advance(0);
+    assert.deepEqual(drawn(surface), ["3 eligible"]);
+    // Picked up, the permanents its payment taps are outlined at once.
+    made.pointer.press(3, { x: 30, y: 540 });
+    made.pointer.move({ x: 130, y: 400 });
+    made.clock.advance(0);
+    assert.deepEqual(drawn(surface), [
+        "1 suggested",
+        "2 suggested",
+        "3 eligible",
+    ]);
+    // Put back over the hand, the outlines go with it.
+    made.pointer.release({ x: 130, y: 560 });
+    await new Promise(setImmediate);
+    made.clock.advance(0);
+    assert.equal(sent.length, 0);
+    assert.deepEqual(drawn(surface), ["3 eligible"]);
+    // Dropped on the table, they stay until the prompt the cast leads to replaces them.
+    made.pointer.press(3, { x: 30, y: 540 });
+    made.pointer.move({ x: 230, y: 240 });
+    made.pointer.release({ x: 230, y: 240 });
+    await new Promise(setImmediate);
+    made.clock.advance(0);
+    assert.deepEqual(sent[0].click, { kind: "on", on: card(3) });
+    assert.deepEqual(drawn(surface), [
+        "1 suggested",
+        "2 suggested",
+        "3 eligible",
+    ]);
+    const paying = pick(marked("suggested", 1), {
+        revision: 1,
+        purpose: "manaPayment",
+    });
+    await reply({ kind: "open", prompt: paying });
+    made.clock.advance(0);
+    assert.deepEqual(drawn(surface), ["1 suggested"]);
+});
+
+test("a card dropped to choose among its ways keeps its outlines while the choice is open", async () => {
+    const { made, surface, prompts, reply } = prompted();
+    const previews = [{ card: 3, taps: [1] }];
+    const asked = pick(marked("eligible", 3), { previews });
+    prompts.play(asking(asked));
+    made.clock.advance(0);
+    made.pointer.press(3, { x: 30, y: 540 });
+    made.pointer.move({ x: 230, y: 240 });
+    made.pointer.release({ x: 230, y: 240 });
+    await new Promise(setImmediate);
+    const ways = { ...pick([], { revision: 1, purpose: "act", previews }) };
+    await reply({ kind: "open", prompt: ways });
+    made.clock.advance(0);
+    assert.deepEqual(drawn(surface), ["1 suggested"]);
+    // Cancelled, the priority is back, and nothing is carried.
+    prompts.press({ kind: "decline" });
+    await reply({ kind: "open", prompt: { ...asked, revision: 2 } });
+    made.clock.advance(0);
+    assert.deepEqual(drawn(surface), ["3 eligible"]);
+});
+
+test("a card whose payment taps nothing outlines nothing when carried", () => {
+    const { made, surface, prompts } = prompted();
+    prompts.play(asking(pick(marked("eligible", 3), { previews: [] })));
+    made.clock.advance(0);
+    made.pointer.press(3, { x: 30, y: 540 });
+    made.pointer.move({ x: 130, y: 400 });
+    made.clock.advance(0);
+    assert.deepEqual(drawn(surface), ["3 eligible"]);
+});
+
 test("a card castable from a graveyard, waiting in the hand fan, is carried out of it like a hand card", async () => {
     const { made, prompts, sent } = prompted();
     made.release = { duration: 100, delay: 0, stagger: 0, ease: (p) => p };

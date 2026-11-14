@@ -42,6 +42,12 @@ pub struct PromptView {
     /// The mark on each card, ability and player that has one, at most one each, in no
     /// order.
     pub marks: Vec<Marked>,
+    /// For each card a click on would cast or play by paying mana, the permanents its
+    /// default payment taps, which the table outlines while the card is carried out of the
+    /// hand: Arena outlines them from the moment a spell is picked up until it is put back
+    /// (`iRr-GeSF0lI 20:34.4`). A card that needs no permanent tapped has none.
+    #[serde(default)]
+    pub previews: Vec<TapPreview>,
     /// The buttons, in the order they are laid out.
     pub buttons: Vec<PromptButton>,
     /// What the player has put together so far, by the prompt's shape; or that the session
@@ -168,6 +174,14 @@ pub struct Words {
     /// What each of `places` is called over its pile; or of an order, what its two ends are
     /// called, the last and then the first.
     pub piles: [String; 2],
+}
+
+/// The permanents that paying for one card taps, by the payment a click on it makes.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TapPreview {
+    pub card: ObjectId,
+    pub taps: Vec<ObjectId>,
 }
 
 /// A mark on one thing.

@@ -10,8 +10,8 @@ use crate::play;
 use beryl_cards::CARDS;
 use beryl_cards::names::{
     AANGS_ICEBERG, CURRENCY_CONVERTER, ELITE_SPELLBINDER, ISLAND, JACE_VRYNS_PRODIGY, MANA_CRYPT,
-    PLAINS, SNAPCASTER_MAGE, STAFF_OF_THE_STORYTELLER, SWIFT_RECONFIGURATION, THIEVING_SKYDIVER,
-    TRINKET_MAGE,
+    PLAINS, SNAPCASTER_MAGE, STAFF_OF_THE_STORYTELLER, STOCK_UP, SWIFT_RECONFIGURATION,
+    THIEVING_SKYDIVER, TRINKET_MAGE,
 };
 use beryl_cards::tokens::TREASURE_TOKEN;
 use beryl_engine::card::{Castings, Part, Purpose};
@@ -656,4 +656,66 @@ fn mana_is_paid_one_source_at_a_time_by_picking_them() {
         asked = next;
     }
     assert_eq!(state, direct);
+}
+
+/// Two Stock Ups, a Thieving Skydiver (kicker {X}) and a Mana Crypt in hand, with four
+/// Islands to pay with.
+const CARRIED: Scenario = Scenario::new("carried out of the hand")
+    .at(3, P0, TurnStep::PrecombatMain)
+    .hand(P0, &[STOCK_UP, STOCK_UP, THIEVING_SKYDIVER, MANA_CRYPT])
+    .permanents(P0, &[Permanent::new(ISLAND); 4])
+    .library(P0, &[PLAINS; 6])
+    .library(P1, &[PLAINS; 6]);
+
+/// A priority says, for each card a click would cast, what its default payment taps, which
+/// the table outlines while the card is carried out of the hand. Either of two identical
+/// cards has the taps of the one the engine offers for both; a card with several ways has
+/// those of the first, the Skydiver's cast without its kicker; a card that costs nothing has
+/// none.
+#[test]
+fn a_priority_previews_what_each_cards_payment_taps() {
+    let play = Play::scenario(&CARRIED);
+    let stock_ups = play.named(STOCK_UP, ZoneName::Hand, Side::You);
+    let skydiver = play.named(THIEVING_SKYDIVER, ZoneName::Hand, Side::You)[0];
+    let islands = play.named(ISLAND, ZoneName::Battlefield, Side::You);
+    let decision = play.decision();
+    let cast = |slot: ObjectId, kicked: bool| {
+        (decision.candidates.iter())
+            .find(|c| match c.option {
+                Candidate::Cast { slot: s, .. } => {
+                    s == slot && c.payments.iter().any(|p| p.x.is_some()) == kicked
+                }
+                _ => false,
+            })
+            .map(|c| c.payments[0].taps.clone())
+    };
+    let offered = (stock_ups.iter())
+        .find_map(|&slot| cast(slot, false))
+        .expect("one Stock Up is offered");
+    let unkicked = cast(skydiver, false).expect("the Skydiver is cast unkicked");
+    assert_eq!(offered.len(), 3);
+    assert_eq!(unkicked.len(), 2);
+    assert!(offered.iter().chain(&unkicked).all(|t| islands.contains(t)));
+    let previews = |slot: ObjectId| {
+        (decision.prompt.previews.iter())
+            .find(|p| p.card == slot)
+            .map(|p| p.taps.clone())
+    };
+    assert_eq!(previews(stock_ups[0]).as_ref(), Some(&offered));
+    assert_eq!(previews(stock_ups[1]).as_ref(), Some(&offered));
+    assert_eq!(previews(skydiver), Some(unkicked));
+    assert_eq!(
+        decision.prompt.previews.len(),
+        3,
+        "the Mana Crypt taps nothing"
+    );
+    let preview = previews(skydiver);
+    // A click on the Skydiver opens the choice between its casts, under which it keeps its
+    // preview alone.
+    let mut play = Play::scenario(&CARRIED);
+    play.on(skydiver).expect("the choice opens");
+    let ways = &play.decision().prompt;
+    assert!(ways.is(Purpose::Act));
+    assert_eq!(ways.previews.len(), 1);
+    assert_eq!(Some(ways.previews[0].taps.clone()), preview);
 }

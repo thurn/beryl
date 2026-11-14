@@ -681,6 +681,13 @@ from: Lies | null,
  */
 marks: Array<Marked>, 
 /**
+ * For each card a click on would cast or play by paying mana, the permanents its
+ * default payment taps, which the table outlines while the card is carried out of the
+ * hand: Arena outlines them from the moment a spell is picked up until it is put back
+ * (`iRr-GeSF0lI 20:34.4`). A card that needs no permanent tapped has none.
+ */
+previews: Array<TapPreview>, 
+/**
  * The buttons, in the order they are laid out.
  */
 buttons: Array<PromptButton>, 
@@ -730,6 +737,8 @@ cancel: string,
 piles: [string, string], };
 
 export type Marked = { on: Subject, mark: Mark, };
+
+export type TapPreview = { card: ObjectId, taps: Array<ObjectId>, };
 
 export type PromptButton = { id: ButtonId, label: string, 
 /**

@@ -8,7 +8,7 @@ use crate::prompt::held::{Clicked, Run, Step, Table};
 use crate::prompt::mode::{Chosen, Mode, Way};
 use crate::prompt::open::act_prompt;
 use crate::prompt::wording::{PassLeads, pass_words};
-use crate::prompt::{ButtonId, Click, Marked, PromptButton, PromptView, ShapeBody};
+use crate::prompt::{ButtonId, Click, Marked, PromptButton, PromptView, ShapeBody, TapPreview};
 use crate::protocol::ObjectId;
 use crate::protocol::{Candidate, DecisionView, PassTo, Side, own_activated};
 use crate::script::{Mark, Subject};
@@ -47,6 +47,9 @@ struct Used {
     /// activate an activated mana ability whenever they have priority"): every untapped
     /// source can, which no mark need say.
     plays: bool,
+    /// The permanents the payment a click on it makes taps: that of the first of its ways
+    /// that pays mana, at its least X, in the engine's default plan.
+    taps: Vec<ObjectId>,
 }
 
 /// The card a candidate of a priority uses, and whether it does more than make mana.
@@ -88,11 +91,13 @@ impl Priority {
                     name: name(slot),
                     ways: vec![Way::Offered(i)],
                     plays,
+                    taps: Vec::new(),
                 }),
             }
         }
         for card in &mut cards {
             card.ways = in_face_order(table, decision, card.slot, std::mem::take(&mut card.ways));
+            card.taps = default_taps(decision, &card.ways);
         }
         // Either of two interchangeable cards uses the one the engine offers for both.
         let offered: Vec<ObjectId> = cards.iter().map(|card| card.slot).collect();
@@ -189,6 +194,17 @@ impl Priority {
         }
     }
 
+    /// What paying for each card `of` takes taps, for those whose payment taps anything.
+    fn previews(&self, of: impl Fn(ObjectId) -> bool) -> Vec<TapPreview> {
+        (self.cards.iter())
+            .filter(|card| of(card.slot) && !card.taps.is_empty())
+            .map(|card| TapPreview {
+                card: card.slot,
+                taps: card.taps.clone(),
+            })
+            .collect()
+    }
+
     /// Writes into `view` the state of the choice among a card's ways while it is open, and
     /// the priority's own otherwise: one prompt lies over the other, and they count their
     /// states as one.
@@ -203,7 +219,11 @@ impl Priority {
                 ..prompt.clone()
             };
         }
-        if let Some((_, mode)) = &self.acting {
+        if let Some((prompt, mode)) = &self.acting {
+            // The card dropped stays outlined with what its first way taps while its ways are
+            // chosen among, as Arena keeps the lands lit under its Choose One
+            // (`iRr-GeSF0lI 21:26.0`).
+            view.previews = self.previews(|slot| prompt.about.contains(&slot));
             return mode.show(view);
         }
         view.marks = (self.cards.iter())
@@ -213,6 +233,7 @@ impl Priority {
                 mark: Mark::Eligible,
             })
             .collect();
+        view.previews = self.previews(|_| true);
         view.buttons.clone_from(&self.buttons);
         view.body = ShapeBody::Pick {
             tray: Vec::new(),
@@ -222,6 +243,22 @@ impl Priority {
             warned: Vec::new(),
         };
     }
+}
+
+/// The permanents that paying for a card with `ways` taps, by the engine's default plan at the
+/// least X. A card with one way is cast or played by a click. A card with several opens the
+/// choice among them, and its first way that taps anything stands for them: Arena outlines
+/// the lands of the default way while that choice is still to come (`iRr-GeSF0lI 21:25.25`).
+fn default_taps(decision: &DecisionView, ways: &[Way]) -> Vec<ObjectId> {
+    (ways.iter())
+        .filter_map(|way| match *way {
+            Way::Offered(i) => Some(&decision.candidates[usize::from(i)]),
+            Way::Unusable { .. } => None,
+        })
+        .filter_map(|candidate| candidate.payments.iter().min_by_key(|p| p.x.unwrap_or(0)))
+        .map(|payment| payment.taps.clone())
+        .find(|taps| !taps.is_empty())
+        .unwrap_or_default()
 }
 
 /// The ways to use the card in `slot` that the priority `decision` offers, `offered`, as the

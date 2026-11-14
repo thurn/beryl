@@ -50,6 +50,7 @@ fn each_purpose_is_a_literal_of_the_typescript_purpose_type() {
             about: Vec::new(),
             from: None,
             marks: Vec::new(),
+            previews: Vec::new(),
             buttons: Vec::new(),
             body: ShapeBody::Candidates,
         };

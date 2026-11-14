@@ -75,6 +75,7 @@ fn prompt(
         about: Vec::new(),
         from: None,
         marks,
+        previews: Vec::new(),
         buttons,
         body: shape,
     }

@@ -261,6 +261,11 @@ export class Prompts {
   #marking = false;
   /** A card waits where a drop left it for what its click did. */
   #carried = false;
+  /** The card the pointer carries out of the hand, whose payment's taps are outlined. */
+  #carrying: Name | undefined;
+  /** The card a drop sent a click on, whose payment's taps stay outlined while the prompt its
+   * click opened (the choice among its ways) is open: until another click or the next view. */
+  #cast: Name | undefined;
   /** The card in a hand the last click or drop sent was on, until the next view plays. */
   #handled: number | undefined;
   #shut = false;
@@ -274,7 +279,10 @@ export class Prompts {
     stage.pointer.holdable = (name) => this.#lifts(name);
     stage.pointer.listen({
       hover: (name) => this.#tell((to) => to.hover?.(name)),
-      lift: (name) => this.#tell((to) => to.lift?.(name)),
+      lift: (name) => {
+        this.#lifted(name);
+        this.#tell((to) => to.lift?.(name));
+      },
       click: (name, at) => this.#clicked(name, at),
       drop: (drop) => this.#dropped(drop),
     });
@@ -325,6 +333,7 @@ export class Prompts {
     const before = this.#stage.shown.view;
     const next = view.status.kind === "deciding" && view.status.decision;
     const again = next && sameDecision(next.id, this.#asked.decision?.id);
+    this.#cast = undefined;
     if (!script || script.reset) {
       // The stage starts over, with no span and nothing held up.
       this.#drawn.clear();
@@ -458,6 +467,18 @@ export class Prompts {
     );
   }
 
+  /** A card was picked up, or let go with none. The permanents its payment would tap are
+   * outlined while it is carried, as Arena outlines the lands a spell held out of the hand
+   * would tap (`iRr-GeSF0lI 20:34.4`). The pointer tells of a drop just after the card is let
+   * go: a drop taken keeps the outlines until the prompt it leads to replaces them, so they
+   * are put out only once it is known that none was taken. */
+  #lifted(name: Name | undefined) {
+    if (name === this.#carrying) return;
+    this.#carrying = name;
+    if (name !== undefined) this.#mark();
+    else queueMicrotask(() => this.#carried || this.#mark());
+  }
+
   #clicked(name: Name, at: Point) {
     const elsewhere = () => this.#tell((to) => to.click?.(name, at));
     // A face in the Revealed Cards pile is no prompt's: a click on it opens the pile.
@@ -485,6 +506,7 @@ export class Prompts {
       name,
       landed ? { kind: "drop", on, ...landed } : { kind: "on", on },
     );
+    if (this.#carried) this.#cast = name;
     return this.#carried;
   }
 
@@ -504,6 +526,7 @@ export class Prompts {
   #click(click: Click, unused?: () => void): boolean {
     const { decision, prompt, sending } = this.#asked;
     if (!decision || !prompt || sending) return false;
+    this.#cast = undefined;
     this.#set({ decision, prompt, sending: true, answered: false });
     const open = () => sameDecision(decision.id, this.#asked.decision?.id);
     this.#send(decision.id, prompt.revision, click).then(
@@ -560,6 +583,25 @@ export class Prompts {
         to: on,
       };
       wanted.set(keyOf(aimed), aimed);
+    }
+    // What paying for the card carried out of the hand would tap, or for the card dropped
+    // while the choice among its ways is open, where nothing else of the prompt marks it. A
+    // view recorded before the session sent previews (an old bug report's fixture) has none.
+    const outlined = this.#carrying ?? this.#cast;
+    const carried = prompt?.previews?.find(({ card }) => card === outlined);
+    for (const slot of carried?.taps ?? []) {
+      const on: Subject = { kind: "object", slot };
+      const claimed = prompt!.marks.some(
+        (marked) => namedBy(marked.on) === slot,
+      );
+      if (claimed) continue;
+      const marked: SpanAct = {
+        verb: "mark",
+        span: "begin",
+        mark: "suggested",
+        on,
+      };
+      wanted.set(keyOf(marked), marked);
     }
     // A declaration's line, from each attacker or blocker to what it is aimed at, where the
     // session says one is drawn: the script draws the same once it is declared. None goes to

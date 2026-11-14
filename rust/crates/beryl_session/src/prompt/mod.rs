@@ -90,5 +90,5 @@ pub use order::trigger_to_stack;
 pub(crate) use view::purpose_decl;
 pub use view::{
     ButtonId, Click, ClickReply, ClickRequest, Lies, Marked, Pair, PartName, Pile, PlaceName,
-    PromptButton, PromptView, ShapeBody, Share, Words, shape_name,
+    PromptButton, PromptView, ShapeBody, Share, TapPreview, Words, shape_name,
 };

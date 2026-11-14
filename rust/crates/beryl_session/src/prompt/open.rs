@@ -87,6 +87,7 @@ fn worded(prompt: &Prompt, zone: Option<Zone>, holes: &Holes) -> PromptView {
         about: Vec::new(),
         from: None,
         marks: Vec::new(),
+        previews: Vec::new(),
         buttons: Vec::new(),
         body: ShapeBody::Candidates,
     }

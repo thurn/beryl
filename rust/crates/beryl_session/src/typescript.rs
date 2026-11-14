@@ -13,7 +13,7 @@ use crate::ipc::{
 use crate::journal::Level;
 use crate::prompt::{
     ButtonId, Click, ClickReply, ClickRequest, Lies, Marked, ObjectId, Pair, PartName, Pile,
-    PlaceName, PromptButton, PromptView, ShapeBody, Share, Words, purpose_decl,
+    PlaceName, PromptButton, PromptView, ShapeBody, Share, TapPreview, Words, purpose_decl,
 };
 use crate::protocol::{
     AbilityClass, AbilityRef, Candidate, CandidateIndex, CandidateView, CardHandling, CardType,
@@ -30,7 +30,7 @@ use crate::script::{
 use crate::{AgentView, GameUpdate, SessionError, StartRequest};
 
 /// The prompt's types ([`crate::prompt`]).
-fn prompt_decls(cfg: &Config) -> [String; 17] {
+fn prompt_decls(cfg: &Config) -> [String; 18] {
     [
         PromptView::decl(cfg),
         purpose_decl(),
@@ -39,6 +39,7 @@ fn prompt_decls(cfg: &Config) -> [String; 17] {
         Lies::decl(cfg),
         Words::decl(cfg),
         Marked::decl(cfg),
+        TapPreview::decl(cfg),
         PromptButton::decl(cfg),
         ButtonId::decl(cfg),
         ShapeBody::decl(cfg),
