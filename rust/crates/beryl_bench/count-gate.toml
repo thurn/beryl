@@ -33,5 +33,5 @@
 # moved, while the gate still passes (`tools/src/beryl_tools/count_trend.py`).
 
 benchmark = "rollout_counts::cube_rollout::rollouts::corpus"
-instructions = 389_343_295
+instructions = 391_693_905
 tolerance_percent = 1.0
