@@ -275,6 +275,7 @@ impl Display for Act {
                 object,
                 at,
                 item,
+                ..
             }
             | Act::Appear {
                 from,
@@ -301,7 +302,7 @@ impl Display for Act {
             Act::Vanish {
                 subject, from, why, ..
             } => write!(f, "{verb} {subject} {}>gone {}", wire(from), wire(why)),
-            Act::Emerge { id, item } => write!(f, "{verb} a{id}{}", Lifted(item)),
+            Act::Emerge { id, item, .. } => write!(f, "{verb} a{id}{}", Lifted(item)),
             Act::Flip { object } | Act::Showcase { object } => {
                 write!(f, "{verb} {}", Named(object))
             }
@@ -396,6 +397,10 @@ impl Display for Fact {
             Fact::Object { object } => write!(f, "{} {}", Named(object), Status(object)),
             Fact::Library { player, order } => {
                 write!(f, "{} library {}", wire(player), order.len())
+            }
+            Fact::Forget { slots } => write!(f, "forget {} slots", slots.len()),
+            Fact::ShuffledLibrary { player, cards } => {
+                write!(f, "{} shuffled library {}", wire(player), cards.len())
             }
             Fact::Item { subject, item } => write!(f, "{subject}{}", Announced(item)),
         }

@@ -116,7 +116,7 @@ impl Builder<'_> {
         self.held.retain(|held| held.id != id);
         let item = self.announced(id, item);
         self.open = false;
-        self.emit(Act::Emerge { id, item }, cause);
+        self.emit(Act::Emerge { id, item, at: None }, cause);
         self.open = false;
     }
 

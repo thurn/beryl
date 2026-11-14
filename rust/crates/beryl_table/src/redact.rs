@@ -11,6 +11,7 @@ mod animation;
 
 pub use animation::{
     AnimationEvent, AnimationMember, AnimationProjection, ShownCard, animation_seen_by,
+    visit_animation,
 };
 
 /// Keep zone order and public object state while hiding identities the seat

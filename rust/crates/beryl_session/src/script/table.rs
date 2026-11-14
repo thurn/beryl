@@ -225,16 +225,13 @@ impl Table {
                 }
                 (subject, _) => Err(format!("{subject} cannot vanish so")),
             },
-            Act::Emerge { id, item } => {
+            Act::Emerge { id, item, at } => {
                 if let Some(marker) = item.marker_id()
                     && marker != *id
                 {
                     return Err(format!("emerge names marker a{marker} as a{id}"));
                 }
-                self.stack.push(Entry {
-                    item: item.clone(),
-                    id: Some(*id),
-                });
+                self.place_stack(item, Some(*id), *at)?;
                 Ok(())
             }
             Act::Flip { object }
@@ -304,6 +301,20 @@ impl Table {
             Fact::Library { player, order } => {
                 self.piles_mut(*player).library.clone_from(order);
             }
+            Fact::Forget { slots } => {
+                for &slot in slots {
+                    self.remove(slot)?;
+                }
+            }
+            Fact::ShuffledLibrary { player, cards } => {
+                let old = std::mem::take(&mut self.piles_mut(*player).library);
+                for slot in old {
+                    self.objects.remove(&slot);
+                }
+                for object in cards {
+                    self.place(object, None, None)?;
+                }
+            }
             Fact::Item { subject, item } => {
                 let entry = self
                     .stack
@@ -338,7 +349,7 @@ impl Table {
                 && !matches!(zone, ZoneName::Battlefield | ZoneName::Stack)
         });
         let item = match item {
-            _ if !moved || object.zone != ZoneName::Stack => None,
+            _ if (!moved && at.is_none()) || object.zone != ZoneName::Stack => None,
             Some(item) => Some(item),
             None => return Err(format!("#{slot} goes on the stack with no spell")),
         };
@@ -352,19 +363,36 @@ impl Table {
         }
         if moved || changed_pile || at.is_some() {
             if let Some((zone, side)) = was {
-                self.leave(slot, zone, side, moved);
+                self.leave(slot, zone, side, moved || item.is_some());
             }
             if let Some(order) = self.order_mut(object.zone, side) {
                 order.insert(at.map_or(order.len(), usize::from), slot);
             }
         }
         if let Some(item) = item {
-            self.stack.push(Entry {
-                item: item.clone(),
-                id: None,
-            });
+            self.place_stack(item, None, at)?;
         }
         self.objects.insert(slot, object.clone());
+        Ok(())
+    }
+
+    fn place_stack(
+        &mut self,
+        item: &StackItem,
+        id: Option<u32>,
+        at: Option<u16>,
+    ) -> Result<(), String> {
+        let index = at.map_or(self.stack.len(), usize::from);
+        if index > self.stack.len() {
+            return Err(format!("stack entry at {index} of {}", self.stack.len()));
+        }
+        self.stack.insert(
+            index,
+            Entry {
+                item: item.clone(),
+                id,
+            },
+        );
         Ok(())
     }
 

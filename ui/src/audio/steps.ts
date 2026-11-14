@@ -164,7 +164,9 @@ const CUES: Cues = {
         return at("start", attacks(fact.object, table) && "attack");
       // A library is shuffled.
       case "library":
+      case "shuffledLibrary":
         return at("start", "fan");
+      case "forget":
       case "item":
         return [];
     }

@@ -193,7 +193,9 @@ export function caseOf(
       return act.subject.kind === "player" ? "game's end" : undefined;
     case "set":
       if (act.fact.kind === "turn") return "step begins";
-      return act.fact.kind === "library" ? "library shuffled" : undefined;
+      return act.fact.kind === "library" || act.fact.kind === "shuffledLibrary"
+        ? "library shuffled"
+        : undefined;
     default:
       return undefined;
   }

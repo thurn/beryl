@@ -327,7 +327,17 @@ function enters(
       // drops from there into your hand; one of several goes the same way and passes that
       // place without stopping (Arena's: `vPdoSA5H5xU 17:46.2`, `WQiYBv23buw 29:14.2`).
       const card = placed(act.object.slot);
-      if (!card || !scene.moving || !drawsToRead(act)) return undefined;
+      if (!card) return undefined;
+      if (act.origin) {
+        const { side, zone } = act.origin;
+        const place =
+          zone === "library" || zone === "graveyard" || zone === "exile"
+            ? layout.anchors(scene.found).pile(side, zone)
+            : layout.anchors(scene.found).life(side).corner;
+        const start: Pose = { ...card.pose, ...place, face: "back" };
+        return { name: act.object.slot, track: own(glide(start, ease, true)) };
+      }
+      if (!scene.moving || !drawsToRead(act)) return undefined;
       const several = scene.beat.some((o) => o !== act && drawsToRead(o));
       const back = card.pose.face === "back";
       const way = several

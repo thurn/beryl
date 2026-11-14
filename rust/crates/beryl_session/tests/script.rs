@@ -93,6 +93,7 @@ fn a_script_reads_one_step_a_line_with_beats_joined() {
         object: card(slot, name, ZoneName::Hand),
         at: None,
         item: None,
+        origin: None,
     };
     let script = Script {
         reset: None,
@@ -104,6 +105,7 @@ fn a_script_reads_one_step_a_line_with_beats_joined() {
                     object: card(7, "Brainstorm", ZoneName::Stack),
                     at: None,
                     item: Some(spell(7, Vec::new())),
+                    origin: None,
                 },
                 you,
             )],
@@ -195,6 +197,7 @@ fn cards_fly_to_where_their_records_put_them() {
         object: card(9, "Fireball", ZoneName::Stack),
         at: None,
         item: Some(item),
+        origin: None,
     };
     assert_eq!(
         line(cast(bolt)),
@@ -216,6 +219,7 @@ fn cards_fly_to_where_their_records_put_them() {
         object,
         at,
         item: None,
+        origin: None,
     };
     // A card the viewer cannot see has no name; a library says where in it a card goes.
     assert_eq!(
@@ -324,6 +328,7 @@ fn abilities_emerge_and_cards_turn() {
         line(Act::Emerge {
             id: 3,
             item: from_source,
+            at: None,
         }),
         "emerge a3 (Mulldrifter, triggered) opponent from #12 at #5"
     );
@@ -334,7 +339,8 @@ fn abilities_emerge_and_cards_turn() {
     assert_eq!(
         line(Act::Emerge {
             id: 4,
-            item: emblem
+            item: emblem,
+            at: None,
         }),
         "emerge a4 (Teferi, Hero of Dominaria, activated) opponent"
     );

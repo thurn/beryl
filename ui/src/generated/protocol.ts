@@ -641,7 +641,15 @@ at?: number,
 /**
  * The spell it becomes, when it goes to the stack.
  */
-item?: StackItem, } | { "verb": "appear", from: ZoneName, why: Why, object: ObjectView, at?: number, item?: StackItem, } | { "verb": "vanish", subject: Subject, from: ZoneName, why: Why, object?: ObjectView, at?: number, } | { "verb": "emerge", id: number, item: StackItem, } | { "verb": "flip", object: ObjectView, } | { "verb": "tap", object: ObjectView, } | { "verb": "strike", source: ObjectId, to: Subject, amount: number, object?: ObjectView, } | { "verb": "streak", 
+item?: StackItem, 
+/**
+ * Where an anonymous flight starts when the old slot was forgotten.
+ */
+origin?: ZoneRef, } | { "verb": "appear", from: ZoneName, why: Why, object: ObjectView, at?: number, item?: StackItem, } | { "verb": "vanish", subject: Subject, from: ZoneName, why: Why, object?: ObjectView, at?: number, } | { "verb": "emerge", id: number, item: StackItem, 
+/**
+ * Bottom-first stack position on a manual table.
+ */
+at?: number, } | { "verb": "flip", object: ObjectView, } | { "verb": "tap", object: ObjectView, } | { "verb": "strike", source: ObjectId, to: Subject, amount: number, object?: ObjectView, } | { "verb": "streak", 
 /**
  * A player, for mana out of their pool. None when the source has no place on the
  * table.
@@ -652,7 +660,7 @@ export type Stream = { "kind": "mana", color: Mana, } | { "kind": "damage" };
 
 export type Tally = { "kind": "life", player: Side, life: number, } | { "kind": "pool", player: Side, mana: ManaPool, } | { "kind": "counters", counter: Counter, object: ObjectView, } | { "kind": "namedCounters", name: string, object: ObjectView, } | { "kind": "playerCounters", player: Side, counters: Array<NamedCounter>, } | { "kind": "damage", object: ObjectView, } | { "kind": "stats", object: ObjectView, };
 
-export type Fact = { "kind": "turn", number: number, ownNumber: number, active: Side, step: Step, } | { "kind": "object", object: ObjectView, } | { "kind": "library", player: Side, order: Array<ObjectId>, } | { "kind": "item", subject: Subject, item: StackItem, };
+export type Fact = { "kind": "turn", number: number, ownNumber: number, active: Side, step: Step, } | { "kind": "object", object: ObjectView, } | { "kind": "library", player: Side, order: Array<ObjectId>, } | { "kind": "forget", slots: Array<ObjectId>, } | { "kind": "shuffledLibrary", player: Side, cards: Array<ObjectView>, } | { "kind": "item", subject: Subject, item: StackItem, };
 
 export type Notice = { "kind": "turn", active: Side, } | { "kind": "scry", player: Side, top: number, bottom: number, } | { "kind": "topOrBottom", player: Side, top: boolean, } | { "kind": "coin", player: Side, won: boolean, source: ObjectId, } | { "kind": "roll", sides: number, outcomes: Array<number>, } | { "kind": "shuffle" } | { "kind": "rewind", to: number, } | { "kind": "phase", phase: TablePhase, } | { "kind": "tableTurn", name: string, } | { "kind": "game", number: number, };
 

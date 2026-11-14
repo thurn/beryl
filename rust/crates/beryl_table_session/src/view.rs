@@ -1,6 +1,6 @@
 //! Builds the stage's view and its matching action references for one seat.
 
-mod cards;
+pub(super) mod cards;
 mod slots;
 
 pub use slots::Slots;
@@ -83,10 +83,10 @@ pub fn view(
 }
 
 #[derive(Clone, Copy)]
-struct Viewer(Seat);
+pub(super) struct Viewer(pub Seat);
 
 impl Viewer {
-    fn side(self, seat: Seat) -> Side {
+    pub(super) fn side(self, seat: Seat) -> Side {
         if self.0 == seat {
             Side::You
         } else {
@@ -99,7 +99,7 @@ fn order(ids: &[ObjectId], slots: &Slots) -> Vec<Slot> {
     ids.iter().filter_map(|&id| slots.get(id)).collect()
 }
 
-fn piles(table: &Table, seat: Seat, slots: &Slots) -> (PlayerState, ManualPiles) {
+pub(super) fn piles(table: &Table, seat: Seat, slots: &Slots) -> (PlayerState, ManualPiles) {
     let index = usize::from(seat.0);
     let Some(player) = table.players.get(index) else {
         return (PlayerState::neutral(0), ManualPiles::default());

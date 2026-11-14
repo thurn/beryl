@@ -17,6 +17,17 @@ fn draw_and_undo_animate_in_inverse_order_without_linking_ids() {
             face: Face::Front,
         })
     };
+    let drawn_ids: Vec<_> = drawn
+        .changes
+        .iter()
+        .filter_map(|change| {
+            if let beryl_table::Change::ReplaceId { from, to } = change {
+                Some((*from, *to))
+            } else {
+                None
+            }
+        })
+        .collect();
     for viewer in [HOST, GUEST] {
         let owner = viewer == HOST;
         let events = |entry, before| {
@@ -28,11 +39,13 @@ fn draw_and_undo_animate_in_inverse_order_without_linking_ids() {
             events(&drawn, &before_draw),
             [
                 AnimationEvent::HandMove {
+                    owner_transfer: owner.then_some(drawn_ids[0]),
                     from: LIBRARY,
                     to: HAND,
                     hand_card: if owner { shown(1, "Island") } else { None }
                 },
                 AnimationEvent::HandMove {
+                    owner_transfer: owner.then_some(drawn_ids[1]),
                     from: LIBRARY,
                     to: HAND,
                     hand_card: if owner { shown(0, "Brainstorm") } else { None }
@@ -43,11 +56,13 @@ fn draw_and_undo_animate_in_inverse_order_without_linking_ids() {
             events(&undone, &before_undo),
             [
                 AnimationEvent::HandMove {
+                    owner_transfer: owner.then_some((drawn_ids[1].1, drawn_ids[1].0)),
                     from: HAND,
                     to: LIBRARY,
                     hand_card: if owner { shown(0, "Brainstorm") } else { None }
                 },
                 AnimationEvent::HandMove {
+                    owner_transfer: owner.then_some((drawn_ids[0].1, drawn_ids[0].0)),
                     from: HAND,
                     to: LIBRARY,
                     hand_card: if owner { shown(1, "Island") } else { None }

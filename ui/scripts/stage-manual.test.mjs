@@ -4,7 +4,7 @@ import { zoneCards } from "../src/game/zoneCards.ts";
 import { stepAnnouncement } from "../src/stage/notices.ts";
 import { apply, tableOf } from "../src/stage/table.ts";
 import { timingOf } from "../src/stage/timing.ts";
-import { object, stage, view } from "./stage-table.mjs";
+import { object, row, stage, view } from "./stage-table.mjs";
 
 test("manual numbers replay through count steps at full precision", () => {
     const before = view([1], [], { status: { kind: "free" } });
@@ -268,4 +268,48 @@ test("resetting with identical manual markers keeps their stage names", () => {
         `make a${second}`,
         `remove a${second}`,
     ]);
+});
+
+test("an anonymous draw flies from its pile with a fresh slot", () => {
+    const owner = "opponent";
+    const old = object(1, "library", { owner, controller: owner });
+    const back = object(2, "hand", { owner, controller: owner, name: null });
+    const empty = { hand: [], exile: [], sideboard: [] };
+    const initial = view([], [], {
+        objects: [old],
+        status: { kind: "free" },
+        table: { orders: { you: empty, opponent: empty } },
+    });
+    initial.players[owner].library = [old.slot];
+    const forget = { verb: "set", fact: { kind: "forget", slots: [old.slot] } };
+    const fly = {
+        verb: "fly",
+        why: "draw",
+        from: "library",
+        object: back,
+        origin: { zone: "library", side: owner },
+    };
+    const after = apply(apply(tableOf(initial), forget), fly).view;
+    assert.deepEqual(after.objects, [back]);
+    assert.deepEqual(after.players[owner].library, []);
+    assert.deepEqual(after.table.orders[owner].hand, [back.slot]);
+    const layout = {
+        ...row,
+        anchors: (table) => ({
+            ...row.anchors(table),
+            pile: () => ({ x: 3000, y: 500, width: 100 }),
+        }),
+    };
+    const { stage: made } = stage(
+        { fly: { duration: 100 } },
+        undefined,
+        layout,
+    );
+    made.play(initial);
+    made.play(after, { beats: [[{ act: forget }, { act: fly }]] });
+    made.clock.advance(50);
+    const pose = made.pose(back.slot);
+    assert.equal(pose.face, "back");
+    assert.ok(pose.x > 0 && pose.x < 3000);
+    assert.equal(made.pose(old.slot), null);
 });

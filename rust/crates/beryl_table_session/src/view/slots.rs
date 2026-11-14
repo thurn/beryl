@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet, btree_map};
 
 use beryl_session::protocol::ObjectId as Slot;
+use beryl_table::redact::AnimationEvent;
 use beryl_table::state::ObjectId;
 use beryl_table::{Change, Entry, Seat, Table};
 
@@ -30,6 +31,64 @@ impl Slots {
         for entry in &entries[first..] {
             Self::follow(&mut slots, &entry.changes, seat);
         }
+        self.install(table, slots, &mut used)?;
+        self.revision = Some(table.revision());
+        Some(())
+    }
+
+    pub(crate) fn assigned(&self) -> BTreeSet<Slot> {
+        self.by_id.values().copied().collect()
+    }
+
+    /// Keep the same slot before and after an owner-visible hand entry.
+    /// This also reserves slots for cards drawn immediately after a mulligan's shuffle.
+    pub(crate) fn reserve_owner_transfers(&mut self, events: &[AnimationEvent]) {
+        for event in events.iter().rev() {
+            if let AnimationEvent::HandMove {
+                owner_transfer: Some((from, to)),
+                ..
+            } = event
+                && let Some(slot) = self.get(*to)
+            {
+                self.by_id.insert(*from, slot);
+            }
+        }
+    }
+
+    /// Allocates slots for an intermediate redacted animation state. Hand
+    /// moves that retain their slot are installed before allocating new slots.
+    pub(crate) fn between(
+        &mut self,
+        table: &Table,
+        transfers: &[(ObjectId, ObjectId)],
+        reserved: &Self,
+    ) -> Option<()> {
+        let mut used = self
+            .by_id
+            .values()
+            .chain(reserved.by_id.values())
+            .copied()
+            .collect();
+        let mut slots = self.by_id.clone();
+        for &(from, to) in transfers {
+            if let Some(slot) = slots.remove(&from) {
+                slots.insert(to, slot);
+            }
+        }
+        for &id in table.objects.keys() {
+            if let Some(slot) = reserved.get(id) {
+                slots.insert(id, slot);
+            }
+        }
+        self.install(table, slots, &mut used)
+    }
+
+    fn install(
+        &mut self,
+        table: &Table,
+        mut slots: BTreeMap<ObjectId, Slot>,
+        used: &mut BTreeSet<Slot>,
+    ) -> Option<()> {
         slots.retain(|id, _| table.objects.contains_key(id));
         let mut next = self.next;
         for &id in table.objects.keys() {
@@ -44,7 +103,6 @@ impl Slots {
         }
         self.by_id = slots;
         self.next = next;
-        self.revision = Some(table.revision());
         Some(())
     }
 

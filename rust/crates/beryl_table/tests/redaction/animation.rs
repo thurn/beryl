@@ -124,6 +124,7 @@ fn animation_projects_nested_batch_members_using_their_own_visibility() {
             members,
             vec![
                 vec![AnimationEvent::HandMove {
+                    owner_transfer: (viewer == GUEST).then_some((before.battlefield[0], returned)),
                     from: Zone::Battlefield,
                     to: guest_hand,
                     hand_card: (viewer == GUEST).then(|| card(returned, "Public Return")),
@@ -133,6 +134,7 @@ fn animation_projects_nested_batch_members_using_their_own_visibility() {
                     order: shuffled.clone(),
                 }],
                 vec![AnimationEvent::HandMove {
+                    owner_transfer: (viewer == HOST).then_some((ObjectId(45), drawn)),
                     from: LIBRARY,
                     to: HAND,
                     hand_card: (viewer == HOST).then(|| card(drawn, "Drawn Name")),

@@ -165,6 +165,7 @@ fn two_abilities_of_one_source_each_emerge_as_their_own() {
                             nth,
                             ..
                         },
+                    ..
                 } => Some((*id, *source, *ability, *nth)),
                 _ => None,
             })

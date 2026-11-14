@@ -48,6 +48,9 @@ pub enum AnimationEvent {
         from: Zone,
         to: Zone,
         hand_card: Option<ShownCard>,
+        /// The slot may follow the id change only for the hand's owner.
+        #[serde(skip)]
+        owner_transfer: Option<(ObjectId, ObjectId)>,
     },
     /// The library order to install after the shuffle. The shuffled cards
     /// have fresh ids and the event carries no mapping from the old order.
@@ -87,6 +90,23 @@ pub fn animation_seen_by(entry: &Entry, table_before: &Table, viewer: Seat) -> A
         by: entry.by,
         members,
     }
+}
+
+/// Visits the animation events and the redacted result of each action member.
+pub fn visit_animation(
+    entry: &Entry,
+    table_before: &Table,
+    viewer: Seat,
+    mut visit: impl FnMut(&[AnimationEvent], Table),
+) {
+    visit_members(
+        entry,
+        table_before,
+        |presentation, changes, before, after| {
+            let events = member_events(changes, presentation, entry.by, before, after, viewer);
+            visit(&events, super::seen_by(after, viewer));
+        },
+    );
 }
 
 fn member_events(
@@ -204,18 +224,19 @@ impl Replacements {
         viewer: Seat,
         names: &HiddenNames,
     ) -> AnimationEvent {
-        let (owner, hand_id, state) = if let Zone::Hand(owner) = to.zone
+        let (owner, hand_id, state, transfer) = if let Zone::Hand(owner) = to.zone
             && let Some(&assigned) = self.by_old_id.get(&id)
         {
-            (owner, assigned, after)
+            (owner, assigned, after, (id, assigned))
         } else if let Zone::Hand(owner) = from.zone
             && let Some(&previous) = self.by_new_id.get(&id)
         {
-            (owner, previous, before)
+            (owner, previous, before, (previous, id))
         } else {
             return AnimationEvent::Move { id, from, to };
         };
         AnimationEvent::HandMove {
+            owner_transfer: (viewer == owner).then_some(transfer),
             from: from.zone,
             to: to.zone,
             hand_card: if viewer == owner {

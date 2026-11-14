@@ -185,6 +185,7 @@ fn manual_order_replays_without_renumbering_slots() {
             object: ordered_card(3, ZoneName::Hand),
             at: Some(0),
             item: None,
+            origin: None,
         },
         Act::Appear {
             from: ZoneName::Nowhere,
@@ -199,6 +200,7 @@ fn manual_order_replays_without_renumbering_slots() {
             object: moved_exile.clone(),
             at: None,
             item: None,
+            origin: None,
         },
         Act::Appear {
             from: ZoneName::Nowhere,

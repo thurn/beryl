@@ -474,8 +474,16 @@ export function apply(table: Table, act: Act, cause?: Subject): Table {
     case "emerge":
       return {
         ...table,
-        view: { ...view, stack: [...view.stack, act.item] },
-        abilities: [...table.abilities, act.id],
+        view: { ...view, stack: inserted(view.stack, act.item, act.at) },
+        abilities: inserted(
+          table.abilities,
+          act.id,
+          act.at === undefined
+            ? undefined
+            : view.stack
+                .slice(0, act.at)
+                .filter((item) => item.kind === "ability").length,
+        ),
       };
     case "flip":
     case "tap":
@@ -521,6 +529,38 @@ export function apply(table: Table, act: Act, cause?: Subject): Table {
           return put(table, fact.object);
         case "library":
           return player(fact.player, { library: fact.order });
+        case "forget": {
+          const forgotten = new Set(fact.slots);
+          let next = table;
+          for (const object of view.objects)
+            if (forgotten.has(object.slot))
+              next = taken(
+                next,
+                object.slot,
+                object.zone,
+                object.zoneSide ?? object.owner,
+              );
+          return {
+            ...next,
+            view: {
+              ...next.view,
+              objects: view.objects.filter(
+                (object) => !forgotten.has(object.slot),
+              ),
+            },
+          };
+        }
+        case "shuffledLibrary": {
+          const old = new Set(view.players[fact.player].library);
+          const next = player(fact.player, {
+            library: fact.cards.map((object) => object.slot),
+          });
+          const objects = [
+            ...view.objects.filter((object) => !old.has(object.slot)),
+            ...fact.cards,
+          ].sort((a, b) => a.slot - b.slot);
+          return { ...next, view: { ...next.view, objects } };
+        }
         default: {
           const index = stackIndex(table, fact.subject);
           const stack = view.stack.map((item, i) =>

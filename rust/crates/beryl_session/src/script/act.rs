@@ -7,7 +7,7 @@ use super::{Arrow, Mark, Span, Subject, Verb};
 use crate::protocol::ObjectId;
 use crate::protocol::{
     CardHandling, Counter, Mana, ManaPool, NamedCounter, ObjectView, Side, StackItem,
-    Step as TurnStep, TablePhase, Why, ZoneName,
+    Step as TurnStep, TablePhase, Why, ZoneName, ZoneRef,
 };
 
 /// A verb with what it is applied to. An `object` is always the object's whole record once
@@ -31,6 +31,10 @@ pub enum Act {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         item: Option<StackItem>,
+        /// Where an anonymous flight starts when the old slot was forgotten.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        origin: Option<ZoneRef>,
     },
     /// The object is at its place with no flight: a new one (a token, a copy) from
     /// [`ZoneName::Nowhere`], or a card from another zone. `at` and `item` are a `fly`'s.
@@ -65,6 +69,10 @@ pub enum Act {
     Emerge {
         id: u32,
         item: StackItem,
+        /// Bottom-first stack position on a manual table.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        at: Option<u16>,
     },
     /// The object turns over in place: its record's `facing`, or whether it has a name, says
     /// which way.
@@ -275,6 +283,14 @@ pub enum Fact {
     /// A library's order, bottom first, after a shuffle. Its cards' records change by steps
     /// of their own.
     Library { player: Side, order: Vec<ObjectId> },
+    /// Retire old slots when a hand entry or shuffle removes knowledge.
+    /// The list gives no correspondence to the slots that replace them.
+    Forget { slots: Vec<ObjectId> },
+    /// A shuffle installs the library's redacted card records in bottom-first order.
+    ShuffledLibrary {
+        player: Side,
+        cards: Vec<ObjectView>,
+    },
     /// A spell or ability on the stack as it now is, its targets changed.
     Item { subject: Subject, item: StackItem },
 }

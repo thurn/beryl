@@ -9,7 +9,7 @@ use beryl_table::state::{AbilityMarker, Card, Face, Object, ObjectId, Row};
 
 use super::{Slots, Viewer, zone};
 
-pub(super) fn object(card: &Object, slot: Slot, slots: &Slots, viewer: Viewer) -> ObjectView {
+pub(crate) fn object(card: &Object, slot: Slot, slots: &Slots, viewer: Viewer) -> ObjectView {
     let (zone, holder) = zone(card.zone);
     let owner = viewer.side(card.owner);
     let controller = viewer.side(card.controller);
@@ -158,7 +158,7 @@ fn face_for_preview(face: Face) -> Face {
     }
 }
 
-pub(super) fn marker(
+pub(crate) fn marker(
     id: ObjectId,
     marker: &AbilityMarker,
     slots: &Slots,
