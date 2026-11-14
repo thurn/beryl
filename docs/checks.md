@@ -300,13 +300,15 @@ processes are attributed.
   of the pool, and a check's heavy steps take an even share of it among the
   lanes with heavy steps still running, so ten lanes that start at once share
   the pool instead of the first taking most of it.
-- The classes, highest first, are the fast check of a push, a command an agent
-  runs by hand, and slow CI. Agents' commands and slow CI together hold at most
-  three quarters of the pool, so a push always finds free tokens. Slow CI may
-  take any of those tokens that nobody else holds. A class takes nothing while a
-  higher one waits. Work at utility QoS (tournaments, the nightly, the
-  justfile's `low`) takes no tokens, because macOS already gives every core to
-  normal-priority work first.
+- The classes, highest first, are the merge queue's fast check of a batch of
+  pushes, the fast check a push runs in its own worktree, a command an agent
+  runs by hand, and slow CI. Every push on the machine waits for the queue's
+  check, so it comes first: pushes' own checks together hold at most seven
+  eighths of the pool. Agents' commands and slow CI together hold at most three
+  quarters, so a push always finds free tokens. Slow CI may take any of those
+  tokens that nobody else holds. A class takes nothing while a higher one waits.
+  Work at utility QoS (tournaments, the nightly, the justfile's `low`) takes no
+  tokens, because macOS already gives every core to normal-priority work first.
 - A check step's wait for tokens does not count against its hang limit or the
   run's budget: the step's log line reports the wait apart from the step's own
   time. `just tokens` shows who holds and waits for tokens. `BERYL_CPU_POOL=0`

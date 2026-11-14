@@ -30,14 +30,14 @@ def once() -> bool:
 
 def test_lease_takes_what_is_free_and_releases(tmp_path: Path) -> None:
     pool = Pool(tmp_path, 8)
-    first = pool.acquire("push", 6, never)
+    first = pool.acquire("queue", 6, never)
     assert first is not None and first.size == 6
-    second = pool.acquire("push", 6, never)
+    second = pool.acquire("queue", 6, never)
     assert second is not None and second.size == 2
-    assert pool.acquire("push", 1, once) is None
+    assert pool.acquire("queue", 1, once) is None
     first.release()
     second.release()
-    third = pool.acquire("push", 8, never)
+    third = pool.acquire("queue", 8, never)
     assert third is not None and third.size == 8
 
 
@@ -48,8 +48,29 @@ def test_lower_classes_leave_room_for_higher(tmp_path: Path) -> None:
     assert ci is not None and ci.size == 6
     # Its tokens count against the agents' ceiling, so an agent waits for them.
     assert pool.acquire("agent", 1, once) is None
+    # A push may take all but an eighth of the pool, which leaves one token to the queue.
     push = pool.acquire("push", 8, never)
-    assert push is not None and push.size == 2
+    assert push is not None and push.size == 1
+    assert pool.acquire("push", 1, once) is None
+    queue = pool.acquire("queue", 8, never)
+    assert queue is not None and queue.size == 1
+
+
+def test_a_waiting_queue_check_holds_back_pushes(tmp_path: Path) -> None:
+    pool = Pool(tmp_path, 8)
+    (tmp_path / f"wait-{os.getpid()}-1-queue").write_text(f"{os.getpid()} queue")
+    assert pool.acquire("push", 1, once) is None
+    assert pool.acquire("queue", 8, never) is not None
+
+
+def test_the_merge_queue_s_check_takes_queue_tokens(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(tokens.paths, "REPO", tmp_path / tokens.QUEUE_TREE)
+    assert tokens.script_class("check") == "queue"
+    assert tokens.script_class("ci") == "ci"
+    monkeypatch.setattr(tokens.paths, "REPO", tmp_path / "some-branch")
+    assert tokens.script_class("check") == "push"
 
 
 def test_a_waiting_higher_class_holds_back_lower_ones(tmp_path: Path) -> None:
@@ -78,12 +99,12 @@ def test_tokens_of_an_exited_process_are_taken_back(tmp_path: Path) -> None:
 
 def test_waiters_of_one_class_share_what_frees_up(tmp_path: Path) -> None:
     pool: Pool = Pool(tmp_path, 8)
-    held = pool.acquire("push", 8, never)
+    held = pool.acquire("queue", 8, never)
     assert held is not None
     got: list[int] = []
 
     def wait() -> None:
-        lease = pool.acquire("push", 8, never)
+        lease = pool.acquire("queue", 8, never)
         assert lease is not None
         got.append(lease.size)
 

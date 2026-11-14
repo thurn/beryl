@@ -11,11 +11,18 @@ A token is a file in the pool directory, `<cache>/cpu-tokens/<n>`, holding the p
 the process that took it. The pool's lock file guards every change. A token whose holder has
 exited, such as a check step killed as hung, is taken back by the next process that looks.
 
-Each command has a class, highest first: `push` (the fast check of `enact push`), `agent` (a
-command a session runs by hand, such as `just test-rust`) and `ci` (slow CI). A class may take a
-token only while the tokens held by it and every lower class stay under its ceiling (`ceiling`),
-so a push always finds a quarter of the cores that only it can take. A class also takes nothing
-while a higher class waits. Slow CI once had a ceiling of half the pool as well, and its runs
+Each command has a class, highest first: `queue` (the fast check Enact's merge queue runs on a
+batch of pushes, in its tree `.worktrees/.merge-queue`), `push` (the fast check `enact push`
+runs in the branch's own worktree first), `agent` (a command a session runs by hand, such as
+`just test-rust`) and `ci` (slow CI). A class may take a token only while the tokens held by it
+and every lower class stay under its ceiling (`ceiling`), so a push always finds a quarter of the
+cores that agents and slow CI cannot take, and the queue an eighth that no push can. A class also
+takes nothing while a higher class waits.
+
+The queue's check comes first because every push on the machine waits for it, one batch at a
+time, while the pushes' own checks run side by side. With several sessions pushing at once, each
+push's check would otherwise take an equal share and leave the queue's check a fraction of the
+cores. Slow CI once had a ceiling of half the pool as well, and its runs
 timed out with half the cores idle: ten heavy steps shared nine tokens whether or not anything
 else wanted the rest. Now it may take any token an agent may, and the waiting rule alone puts
 pushes and agents first.
@@ -60,7 +67,11 @@ from pathlib import Path
 
 from . import paths, system
 
-CLASSES: tuple[str, ...] = ("push", "agent", "ci")
+CLASSES: tuple[str, ...] = ("queue", "push", "agent", "ci")
+
+# The name of the tree in which Enact's merge queue checks a batch of pushes (`QUEUE_TREE` in
+# enact.py), whose fast check takes tokens as `queue`.
+QUEUE_TREE = ".merge-queue"
 
 # Set in the environment of a command that holds a lease, to its size: a command it starts,
 # such as `by test-rust` under a check step, runs inside that lease instead of waiting for
@@ -104,10 +115,14 @@ def pool_size() -> int:
 
 
 def ceiling(klass: str, total: int) -> int:
-    """The most tokens `klass` and every class below it may hold together: every token for a
-    push, and three quarters of them for agents and slow CI, which leaves the rest to pushes.
-    """
-    return total if klass == "push" else max(1, total - total // 4)
+    """The most tokens `klass` and every class below it may hold together: every token for the
+    merge queue's check, all but an eighth for pushes, which leaves those to the queue, and three
+    quarters for agents and slow CI, which leaves the rest to pushes and the queue."""
+    if klass == "queue":
+        return total
+    if klass == "push":
+        return max(1, total - total // 8)
+    return max(1, total - total // 4)
 
 
 def largest(total: int) -> int:
@@ -320,8 +335,11 @@ def lease(klass: str, want: int, give_up: Callable[[], bool]) -> Lease | None:
 
 
 def script_class(script: str) -> str:
-    """The class of a check run's steps: `check` is the fast check of a push and `ci` is slow
-    CI; any other run is a session's own."""
+    """The class of a check run's steps: `check` is the fast check of a push, or of a batch of
+    them in the merge queue's tree, and `ci` is slow CI; any other run is a session's own.
+    """
+    if script == "check" and paths.REPO.name == QUEUE_TREE:
+        return "queue"
     return {"check": "push", "ci": "ci"}.get(script, "agent")
 
 
