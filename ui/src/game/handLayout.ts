@@ -2,6 +2,7 @@
 import type { ObjectView } from "../generated/protocol";
 import { CARD_ASPECT } from "../components/Card";
 import type { Box, Placement } from "./placement";
+import { onArc } from "./fanArc";
 import { BACK_WIDTH, FULL_WIDTH, HAND, RAISE, turned } from "./placement";
 import { stackPlace } from "./stackLayout";
 import { STAGE, STAGE_WIDTHS, fromMiddle } from "./perspective";
@@ -19,10 +20,10 @@ const heldRoom = () =>
 /** How far the hand sinks under a screen over the table (scry.png). */
 const HAND_TUCK = 67;
 
-/** The hand raised for a choice of its cards (a discard): the whole fan lifted into view,
- * larger and flatter, each card whole above your life orb (its top at y 625) and clear of the
- * action dock at the right (from x 1310): its middle `room` wide between the outer cards'
- * centers. */
+/** The hand raised for a choice of its cards (a discard): the whole fan lifted into view and
+ * larger, on the same circle as the held hand (`onArc`), each card whole above your life orb
+ * (its top at y 625) and clear of the action dock at the right (from x 1310): its middle `room`
+ * wide between the outer cards' centers. */
 export const RAISED_HAND = {
   top: 325,
   scale: 1.1,
@@ -32,8 +33,6 @@ export const RAISED_HAND = {
   get room() {
     return 940 + STAGE.width - STAGE_WIDTHS.base;
   },
-  sag: 2,
-  turn: 2,
 };
 
 /** How the hand is held: at the near edge; `tucked`, sunk out of the way under a screen over
@@ -44,8 +43,9 @@ export type HandHold = "held" | "tucked" | "away" | "raised";
 /** How far below the near edge the hand waits while held `away`. */
 const HAND_AWAY = 420;
 
-/** The hand fan, held at the near edge: the more cards, the closer they sit; tucked, the fan
- * sinks out of the way; raised, it rises whole into view. */
+/** The hand fan, held at the near edge: the more cards, the closer they sit, and each card's
+ * top center lies on one circle (`onArc`), so a crowded fan turns and sinks less at its ends
+ * than a spread one; tucked, the fan sinks out of the way; raised, it rises whole into view. */
 export function handPlacements(
   cards: ObjectView[],
   hold: HandHold,
@@ -58,10 +58,12 @@ export function handPlacements(
   const width = FULL_WIDTH * fan.scale;
   const spacing = n > 1 ? Math.min(fan.spacing, fan.room / (n - 1)) : 0;
   const places = cards.map((o, i): Placement => {
-    const left = STAGE.width / 2 + (i - mid) * spacing - width / 2;
+    const dx = (i - mid) * spacing;
+    const { sink, turn } = onArc(dx, width);
+    const left = STAGE.width / 2 + dx - width / 2;
     const top =
       (raised ? RAISED_HAND.top : HAND.top) +
-      (i - mid) ** 2 * fan.sag +
+      sink +
       (hold === "tucked" ? HAND_TUCK : hold === "away" ? HAND_AWAY : 0);
     return {
       slot: o.slot,
@@ -71,10 +73,7 @@ export function handPlacements(
       span: FULL_WIDTH,
       opacity: 1,
       z: 200 + i,
-      ...turned(left, top, (i - mid) * fan.turn + (raised ? 0 : HAND.bias), [
-        width / 2,
-        0,
-      ]),
+      ...turned(left, top, turn + (raised ? 0 : HAND.bias), [width / 2, 0]),
       scale: fan.scale,
     };
   });

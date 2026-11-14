@@ -387,6 +387,12 @@
       "height": 900
     },
     {
+      "name": "game-hand-ten",
+      "route": "/?fixture=hand-ten#/game",
+      "width": 1600,
+      "height": 900
+    },
+    {
       "name": "game-evoke-exile",
       "route": "/?fixture=cast-evoke#/game",
       "width": 1600,

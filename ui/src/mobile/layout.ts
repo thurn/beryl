@@ -13,6 +13,7 @@ import type {
 } from "../generated/protocol";
 import type { Phase } from "../components/Controls";
 import { referenced, twins } from "../game/decisions";
+import { onArc } from "../game/fanArc";
 import { emblemObjects } from "../game/zoneViews";
 import { creatureHeight } from "./sizing.ts";
 
@@ -281,25 +282,25 @@ function placeCreatures(
 }
 
 /** Your hand as a fan: cards `min(100, W/4)` wide, as close as `W` allows up to 4px apart,
- * centered; each turned `d` × 2.2° about its bottom center and dropped `d²` × 1.4px, `d` its
- * offset from the middle card, the later ones on top. Two thirds of each shows above the
- * bottom edge. */
+ * centered, the later ones on top; each card's top center lies on the desktop fan's circle
+ * (`onArc`), dropped and turned to lie along it. Two thirds of each shows above the bottom
+ * edge. */
 function placeHand(hand: ObjectView[], width: number, band: Band): Spot[] {
   const cw = handWidth(width);
   const n = hand.length;
   const step = n > 1 ? Math.min(cw + 4, (width - cw) / (n - 1)) : 0;
   const x0 = SIDE + (width - (cw + step * (n - 1))) / 2;
   return hand.map((o, i) => {
-    const d = i - (n - 1) / 2;
+    const { sink, turn } = onArc((i - (n - 1) / 2) * step, cw);
     return {
       slot: o.slot,
       zone: "hand",
       x: x0 + i * step,
-      y: band.top + 8 + d * d * 1.4,
+      y: band.top + 8 + sink,
       width: cw,
       tapped: false,
       z: 10000 + i,
-      rotate: d * 2.2,
+      rotate: turn,
     };
   });
 }

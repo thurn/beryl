@@ -16,14 +16,12 @@ export const LAND_STEP = { x: 0.103, y: 0.022 };
  * right on either side, so its name bar always shows. */
 export const BENEATH_STEP = { x: 0.3, y: 0.17 };
 
-/** The hand's cards: each card's top center lies on an arc over the near edge, and the fan
- * turns each a little more clockwise than the one on its left. */
+/** The hand's cards: each card's top center lies on one circle over the near edge (fanArc.ts `onArc`),
+ * and the whole fan leans `bias` degrees clockwise. */
 export const HAND = {
   width: 182,
   spacing: 172,
   top: 726.5,
-  sag: 6,
-  turn: 4,
   bias: 0.6,
 };
 

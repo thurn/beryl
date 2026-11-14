@@ -64,6 +64,29 @@ pub(super) const TABLE: &[Scenario] = &[
         .library(P0, LANDS)
         .hand(P1, &[ISLAND, PLAINS, ISLAND, PLAINS, ISLAND, PLAINS])
         .library(P1, LANDS),
+    // Ten cards in hand in the human's main phase, with lands to play them: the fan at its most
+    // crowded, which must keep every card's name in sight.
+    Scenario::new("hand-ten")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .permanents(P0, &[ISLAND_, ISLAND_, PLAINS_])
+        .hand(
+            P0,
+            &[
+                STOCK_UP,
+                THE_WANDERING_EMPEROR,
+                JACE_VRYNS_PRODIGY,
+                ISLAND,
+                TEFERI_TIME_RAVELER,
+                STAFF_OF_THE_STORYTELLER,
+                SEACHROME_COAST,
+                OUST,
+                REPRIEVE,
+                THIRST_FOR_DISCOVERY,
+            ],
+        )
+        .library(P0, LANDS)
+        .hand(P1, &[ISLAND, PLAINS, ISLAND])
+        .library(P1, LANDS),
     // Twins with one mark between them: +1/+1 counters, a story counter, and a Thieving
     // Skydiver just cast beside one that has been there.
     Scenario::new("marks")

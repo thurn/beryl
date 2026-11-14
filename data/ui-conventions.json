@@ -707,6 +707,44 @@
     },
     {
       "kind": "settled",
+      "name": "The hand's fan",
+      "rule": "Your hand's cards lie along one circle over the near edge, about 14 card widths across, on the desktop and the phone. A card's turn and how far it sinks follow its distance from the fan's middle, so a crowded hand lies nearly flat and a spread one curves, and no card turns or drops further than its neighbors (by-c4f4, by-kgn7, by-pic0).",
+      "arena": {
+        "does": "Measured from whole-table frames: a card's turn grows by about 0.0275° for each pixel it lies from the middle, with cards 180 pixels wide on a table 1920 wide, at 5, 6, 7, 8, 10 and 18 cards. Its outer cards turn about 11° at 8 cards and 14° to 15° at 10 and 18. Cards sit about one card's width apart until the hand reaches the turn button, then close up.",
+        "evidence": [
+          {
+            "recording": "nBj2ikeYCtk",
+            "time": "1:07.0"
+          },
+          {
+            "recording": "sybcO8S7x6A",
+            "time": "24:27.0"
+          },
+          {
+            "recording": "FGsR_FGChOU",
+            "time": "2:25.0"
+          },
+          {
+            "recording": "kvVLJ_cS_KE",
+            "time": "6:24.0"
+          },
+          {
+            "recording": "uzg_P976qhc",
+            "time": "17:20.0"
+          },
+          {
+            "recording": "_IBqPx0gcag",
+            "time": "12:00.0"
+          },
+          {
+            "recording": "sybcO8S7x6A",
+            "time": "51:04.0"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "settled",
       "name": "An arrow to the pointer",
       "rule": "While a target is chosen, an arrow runs from the spell or ability that asks to the mouse, thin and pale. On something that may be chosen it becomes the arrow the choice will draw, in that arrow's color and along its way, and the click draws the stage's own. It follows the pointer itself, with no lag: only the swing onto a target takes time. Nothing is drawn over a target already chosen, and a touch pulls none.",
       "reports": [

@@ -265,6 +265,11 @@
       "where": ["playable pair in hand"]
     },
     {
+      "name": "hand-ten",
+      "board": "hand-ten",
+      "until": "first priority decision for seat 0"
+    },
+    {
       "name": "cast-oculus",
       "board": "cast-oculus",
       "until": "first priority decision for seat 0",
