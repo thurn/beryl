@@ -187,14 +187,18 @@ function usePresses(
   };
 }
 
-/** What a prompt asks, and for a cost paid with permanents how much of it is still to pay
- * once a pick has paid part of it, or for a division how much is still to give out, as the
- * session wrote each. Before any pick the title already names the whole cost ("Pay {1}{W}."),
- * as Arena's does, and repeating it in parentheses says nothing more. */
-function Asks({ prompt: { title, body: state } }: { prompt: PromptView }) {
+/** What a prompt asks, and for a cost paid with permanents how much of it is still to pay,
+ * or for a division how much is still to give out, as the session wrote each. A mana
+ * payment's title already names the whole cost ("Pay {1}{W}."), so showing it twice before
+ * a pick says nothing more. Crew and Waterbend keep their payment amount beside the prompt. */
+function Asks({
+  prompt: { title, body: state, purpose },
+}: {
+  prompt: PromptView;
+}) {
   const left =
     state.shape === "pay"
-      ? state.left === state.cost
+      ? purpose === "mana" && state.left === state.cost
         ? undefined
         : state.left
       : state.shape === "divide"

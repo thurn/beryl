@@ -784,14 +784,17 @@
     {
       "name": "shape-pay",
       "board": "shape-pay",
+      "stops": { "fullControl": true },
       "until": "first priority decision for seat 0",
       "clicks": [
         "Thieving Skydiver",
         "press option 2",
         "Plains",
         "Island",
+        "press decline",
         "Swift Reconfiguration",
         "Jace, Vryn's Prodigy",
+        "press decline",
         "Jace, Vryn's Prodigy",
         "press option 2",
         "Trinket Mage",

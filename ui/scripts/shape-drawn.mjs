@@ -9,7 +9,7 @@
  * a pile's box by that box, and the triggers listed; how much of a cost it says is left; and
  * the lines of `arrow`, a declaration's, that the page and the model hold; and with
  * `blocks`, the combat damage it says is on its way to the player. */
-export function drawn({ dock, title, captions, arrow, blocks }) {
+export function drawn({ dock, title, captions, arrow, blocks, unorderedHand }) {
     // A label as the session wrote it: a mana symbol is drawn from its `{...}`.
     const words = (element) => {
         const copy = element.cloneNode(true);
@@ -93,7 +93,7 @@ export function drawn({ dock, title, captions, arrow, blocks }) {
     };
     const boxed = new Set();
     const piles = [...document.querySelectorAll(".stage-tray-pile")].map(
-        (pile) => {
+        (pile, index) => {
             const box = pile.getBoundingClientRect();
             const within = lifted.filter((node) => {
                 const { x, y } = middle(node);
@@ -107,7 +107,10 @@ export function drawn({ dock, title, captions, arrow, blocks }) {
             for (const node of within) boxed.add(node);
             return {
                 label: pile.textContent.trim(),
-                cards: within.sort(across(within)).map(slotOf),
+                cards: within
+                    .sort(across(within))
+                    .map(slotOf)
+                    .sort((a, b) => (unorderedHand && index === 1 ? a - b : 0)),
             };
         },
     );

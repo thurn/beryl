@@ -14,6 +14,14 @@ const named = (on) => (on.kind === "object" ? String(on.slot) : on.player);
 export function leftOf(prompt) {
     const state = prompt?.body;
     if (state?.shape === "divide") return String(state.left);
+    // A mana payment's title already says the full cost before the player picks anything.
+    if (
+        state?.shape === "pay" &&
+        prompt.purpose === "mana" &&
+        state.left === state.cost
+    ) {
+        return "";
+    }
     return state?.shape === "pay" ? state.left : "";
 }
 

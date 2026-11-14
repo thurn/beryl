@@ -234,6 +234,12 @@ function expected(held, layout, cast) {
     }
     return {
         title: prompt.title,
+        // A put-back fans the hand in its table order, while the session lists its cards
+        // by slot. The stage-tray unit test checks that the hand keeps its visible order.
+        unorderedHand:
+            prompt.body.shape === "split" &&
+            prompt.body.piles[0]?.place === "onTop" &&
+            prompt.body.piles[1]?.place === null,
         // A cost in what is asked, or in how much of it is left, is drawn as its symbols.
         symbols: `${prompt.title}${more.left}`.match(/\{[^}]+\}/g) ?? [],
         buttons: buttons.sort(byPlace),
@@ -283,6 +289,7 @@ async function holds(page, layout, want, what) {
         ...layout,
         arrow: want.arrow,
         blocks: want.damage !== null,
+        unorderedHand: want.unorderedHand,
     };
     const wanted = JSON.stringify(whole(want));
     const sorted = (got) => ({
