@@ -202,3 +202,39 @@ fn the_opponents_choice_of_top_or_bottom_is_announced() {
         assert_eq!(second, lines(false), "{name}");
     }
 }
+
+/// `lift` of the cards the opponent looks at while a look sends them away: Stock Up takes two
+/// of the top five to the hand and puts the other three on the bottom one by one. The
+/// opponent's five cards come off the library once and stay held until the look is over.
+/// The library takes its new order while they are held, the two for the hand fly from
+/// where they are held, and only then does the lift end, so the three left go from the lift
+/// to the bottom of the pile rather than dropping onto its top, lifting again and moving.
+#[test]
+fn a_look_lifts_its_cards_once_while_it_sends_them_away() {
+    let name = "Stock Up takes two of five and orders the rest on the bottom";
+    let theirs: String = common::scripts(names::STOCK_UP, name)
+        .into_iter()
+        .map(|[_, theirs]| theirs)
+        .collect();
+    let lines: Vec<&str> = theirs.lines().collect();
+    let begin = lines.iter().position(|l| l.starts_with("+lift")).unwrap();
+    let end = lines.iter().position(|l| l.starts_with("-lift")).unwrap();
+    assert_eq!(
+        lines[begin..=end],
+        [
+            "+lift opponent library 5",
+            "set opponent library 6",
+            "fly #9 library>hand effect <- #4",
+            "& fly #3 library>hand effect <- #4",
+            "-lift opponent library 5",
+        ],
+        "{theirs}"
+    );
+    let rest = &lines[end + 1..];
+    assert!(
+        !rest
+            .iter()
+            .any(|l| l.contains("lift ") || l.contains("set opponent library")),
+        "{theirs}"
+    );
+}

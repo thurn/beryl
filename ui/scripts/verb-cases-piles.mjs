@@ -27,6 +27,74 @@ const sideOf = (owner) => (owner === "you" ? "yours" : "theirs");
  * (src/stage/layout.ts `revealedName`). */
 const faceOf = (slot) => `r${slot}`;
 
+/** The `lift` case's part for the board verbs-dig, a Stock Up that takes two of the five
+ * cards it looks at to the hand and puts the other three on the bottom one choice at a time.
+ * Its controller's own look lifts nothing. The opponent sees the five come off the library
+ * once and stay off it until each leaves: the two for the hand fly there from where they
+ * are held, before the look ends, and the three left go back to the library only as it
+ * ends. None goes back to the pile and comes off it again on the way (a look that ended and
+ * began again at every choice did that: five came out, two went to the hand, three came out
+ * again, went back, and moved again). */
+export function dug(dig, seat) {
+    const lifts = dig.steps.filter((s) => s.verb === "lift");
+    if (seat === "yours") {
+        assert.deepEqual(lifts, [], "your own Stock Up lifts nothing");
+        return;
+    }
+    const [begins, ends] = ["begin", "end"].map((span) =>
+        lifts.filter((s) => s.act.span === span),
+    );
+    assert.equal(
+        begins.length,
+        1,
+        "the look's cards come off the library once",
+    );
+    assert.equal(ends.length, 1, "and go back once");
+    const [begin, end] = [begins[0], ends[0]];
+    const lay = before(dig, begin).poses;
+    const up = begin.at.to.poses;
+    const lifted = Object.keys(up).filter(
+        (name) =>
+            begin.at.from.zones[name] === "library" &&
+            lay[name] &&
+            !beside(up[name], lay[name]),
+    );
+    assert.equal(lifted.length, begin.act.handling.count, `lifted: ${lifted}`);
+    let taken = 0;
+    for (const name of lifted) {
+        const flight = dig.steps.find(
+            (s) =>
+                s.verb === "fly" &&
+                s.act.from === "library" &&
+                String(s.act.object.slot) === name,
+        );
+        if (flight) {
+            taken += 1;
+            assert.equal(flight.act.object.zone, "hand", name);
+            assert.ok(
+                flight.to <= end.from,
+                `${name} leaves before the look ends`,
+            );
+        }
+        const leaves = flight ? flight.from : end.from;
+        for (const sample of dig.samples) {
+            if (sample.at < begin.to || sample.at >= leaves) continue;
+            assert.ok(
+                !beside(sample.poses[name], lay[name]),
+                `${name} is back on the library at ${sample.at} ms, before it leaves`,
+            );
+        }
+        if (!flight) {
+            assert.equal(end.at.to.zones[name], "library", name);
+            assert.ok(
+                beside(end.at.to.poses[name], lay[name]),
+                `${name} is on the library as the look ends`,
+            );
+        }
+    }
+    assert.equal(taken, 2, "two of the five go to the hand");
+}
+
 export const CASES = {
     // Milled cards fly from the library to the graveyard face up, one after another, and
     // none is held up on the way (UI Conventions, not seen in Arena: "Milled cards"). A card

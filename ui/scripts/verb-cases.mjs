@@ -20,6 +20,7 @@ import {
     stepOf,
     where,
 } from "./verb-run.mjs";
+import { dug } from "./verb-cases-piles.mjs";
 
 /** What each verb's check asks of the moment as `seat` saw it: `whole`, a run of the fixture
  * that holds it in one view, and `cut`, one of the fixture that cuts it at each priority. */
@@ -545,7 +546,8 @@ export const CASES = {
     // search of a library, which counts no cards. The old board's checks of these watched a
     // page ("opponent hand stays parked during a private choice", "an opponent searching
     // keeps their library parked": by-w8gv.21.65).
-    lift({ scry, opening, reveal, seat }) {
+    lift({ scry, opening, reveal, dig, seat }) {
+        dug(dig, seat);
         const parked = { "look at their hand": 0, search: 0 };
         for (const run of [opening, reveal]) {
             for (const step of run.steps.filter((s) => s.verb === "lift")) {

@@ -175,6 +175,34 @@ pub(super) const VERBS: &[Scenario] = &[
     // The same scry left open: the first seat looks at its two cards and has yet to choose,
     // so a recording stops while the look lasts (the stepped capture's lift).
     scry("verbs-look").actions(&[Action::activate(P0, AANGS_ICEBERG, 1)]),
+    // A look that sends its cards away one choice at a time: the first seat's Stock Up takes
+    // Currency Converter and Counterspell of the top five to the hand, then puts Oust and
+    // the Plains on the bottom one by one, the Island under them last.
+    Scenario::new("verbs-dig")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .permanents(P0, &[ISLAND_, ISLAND_, ISLAND_])
+        .hand(P0, &[STOCK_UP])
+        .library(
+            P0,
+            &[
+                ISLAND,
+                PLAINS,
+                CURRENCY_CONVERTER,
+                COUNTERSPELL,
+                OUST,
+                ISLAND,
+                PLAINS,
+            ],
+        )
+        .permanents(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[
+            Action::cast(P0, STOCK_UP),
+            choose(P0, DecisionKind::ChooseObject, CURRENCY_CONVERTER),
+            choose(P0, DecisionKind::ChooseObject, COUNTERSPELL),
+            choose(P0, DecisionKind::ChooseObject, OUST),
+            choose(P0, DecisionKind::ChooseObject, PLAINS),
+        ]),
     // Combat damage every way, and what follows it: the first seat attacks with Trinket Mage,
     // which Beza blocks and kills, taking its damage; with Snapcaster Mage, which strikes the
     // player; and with Elite Spellbinder, which strikes The Wandering Emperor. In their turn

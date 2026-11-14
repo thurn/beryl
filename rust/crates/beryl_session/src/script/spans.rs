@@ -10,12 +10,34 @@
 
 use super::build::Builder;
 use super::table::{Entry, Table};
-use super::{Act, Arrow, Open, Span, Step, Subject};
+use super::{Act, Arrow, Fact, Open, Span, Step, Subject};
 use crate::protocol::ObjectId;
 use crate::protocol::{
     CardHandling, Combat, ObjectView, OutcomeView, PlayerView, Side, StackItem, Status, TargetRef,
     ZoneName,
 };
+
+/// Whether the opponent handling `now` goes on with the look whose lift holds `held`: the
+/// same player's same pile, and for a library no more of its cards. A look sends cards away
+/// one choice at a time (Stock Up's two to the hand, then the rest to the bottom one by one),
+/// and each view counts only the cards still held.
+fn continues(held: CardHandling, now: CardHandling) -> bool {
+    match (held, now) {
+        (
+            CardHandling::Library {
+                side,
+                count: Some(was),
+                scry,
+            },
+            CardHandling::Library {
+                side: next,
+                count: Some(is),
+                scry: still,
+            },
+        ) => side == next && scry == still && is <= was,
+        _ => held == now,
+    }
+}
 
 /// The arrows and lines `table` calls for, in the order they begin: each spell's and
 /// ability's from the bottom of the stack, then combat's in the order of the battlefield.
@@ -228,17 +250,74 @@ impl Builder<'_> {
     }
 
     /// The opponent's handling of cards is the view's: a lift that is over ends as the script
-    /// begins, before what the look did shows.
+    /// begins, before what the look did shows. A look that goes on with fewer of the same
+    /// pile's cards keeps its lift ([`continues`]), so the cards it sends away leave from
+    /// where they are held and the rest stay held, rather than all dropping onto the pile and
+    /// lifting again. When a look at the top of a library ends, the library first takes its new order,
+    /// and the lift ends only once the cards the look sends out of it have flown from where
+    /// they are held ([`Builder::drop_lift`]): the cards still held then go from the lift
+    /// straight to their places, the bottom of the pile for those put there, rather than
+    /// back onto its top first.
     pub(super) fn lower(&mut self, handling: Option<CardHandling>) {
-        let lifted =
-            self.spans.iter().copied().find(
-                |span| matches!(*span, Open::Lift { handling: held } if Some(held) != handling),
-            );
-        if let Some(span) = lifted {
+        let lifted = self.spans.iter().find_map(|span| match *span {
+            Open::Lift { handling: held } if !handling.is_some_and(|now| continues(held, now)) => {
+                Some(held)
+            }
+            _ => None,
+        });
+        let Some(held) = lifted else {
+            return;
+        };
+        // A search handles the whole library, which it shuffles after: its lift ends at once.
+        let CardHandling::Library {
+            side,
+            count: Some(_),
+            ..
+        } = held
+        else {
             self.open = false;
-            self.span(Span::End, span);
+            self.span(Span::End, Open::Lift { handling: held });
             self.open = false;
+            return;
+        };
+        let order = self.library_ahead(side);
+        if order != self.table.piles(side).library {
+            self.open = false;
+            let fact = Fact::Library {
+                player: side,
+                order,
+            };
+            self.emit(Act::Set { fact }, None);
         }
+        self.lowering = Some(Open::Lift { handling: held });
+    }
+
+    /// Ends the lift of a look that is over ([`Builder::lower`]), in a beat of its own, before
+    /// `act` unless `act` takes a card out of the library the lift holds cards of, by a
+    /// flight or straight to its place: the cards a look sends away leave from where they
+    /// are held. With no `act`, the script's steps are done and the lift ends now.
+    pub(super) fn drop_lift(&mut self, act: Option<&Act>) {
+        let Some(span) = self.lowering else {
+            return;
+        };
+        let Open::Lift {
+            handling: CardHandling::Library { side, .. },
+        } = span
+        else {
+            return;
+        };
+        let leaves = |act: &Act| {
+            matches!(act, Act::Fly { from: ZoneName::Library, object, .. }
+                | Act::Appear { from: ZoneName::Library, object, .. }
+                if self.table.piles(side).library.contains(&object.slot))
+        };
+        if act.is_some_and(leaves) {
+            return;
+        }
+        self.lowering = None;
+        self.open = false;
+        self.span(Span::End, span);
+        self.open = false;
     }
 
     /// Closes the script's spans, in a last beat: the arrows and lines its table calls for,
@@ -251,9 +330,11 @@ impl Builder<'_> {
         self.aimless = self.pending.to_vec();
         self.sync();
         if let Some(handling) = view.handling {
-            let span = Open::Lift { handling };
-            if !self.spans.contains(&span) {
-                self.span(Span::Begin, span);
+            let held = self.spans.iter().any(
+                |span| matches!(*span, Open::Lift { handling: held } if continues(held, handling)),
+            );
+            if !held {
+                self.span(Span::Begin, Open::Lift { handling });
             }
         }
         let stack: Vec<Subject> = self.table.stack.iter().map(Entry::subject).collect();

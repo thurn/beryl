@@ -16,6 +16,7 @@ impl Builder<'_> {
     /// Closes the script: one beat for what changed on the table and in its numbers, then one
     /// for the stack.
     pub(super) fn settle(&mut self) {
+        self.drop_lift(None);
         self.open = false;
         let after = self.after;
         let gone: Vec<(ObjectId, ZoneName)> = self

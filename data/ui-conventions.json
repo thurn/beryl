@@ -945,9 +945,10 @@
     {
       "kind": "not-seen",
       "name": "Cards a look returns",
-      "rule": "Cards a look puts back into a library fly straight to it. No look at several cards with the rest returned is filmed.",
+      "rule": "Cards a look puts back into a library fly straight to it. The opponent's look lifts its cards once: each card it takes leaves from where it is held, and the rest go back to the library only as the look ends, never lifting again between choices. No look at several cards with the rest returned is filmed.",
       "reports": [
-        "by-ubgt"
+        "by-ubgt",
+        "by-o5fn"
       ]
     },
     {

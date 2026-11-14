@@ -171,6 +171,17 @@
       "until": "first handling for seat 1"
     },
     {
+      "name": "verbs-dig",
+      "board": "verbs-dig",
+      "until": "first priority decision for seat 0 from turn 4"
+    },
+    {
+      "name": "verbs-dig-theirs",
+      "board": "verbs-dig",
+      "until": "first priority decision for seat 1 from turn 4",
+      "after": 1
+    },
+    {
       "name": "verbs-combat",
       "board": "verbs-combat",
       "until": "first priority decision for seat 0 from turn 5"

@@ -202,6 +202,9 @@ pub(super) struct Builder<'a> {
     empties: bool,
     /// Where the latest step that carries each object's record is: its beat and its place there.
     pub(super) touched: BTreeMap<ObjectId, (usize, usize)>,
+    /// The lift of a look that is over, held until the cards the look sends out of its
+    /// library have left from where they are held ([`Builder::lower`]).
+    pub(super) lowering: Option<Open>,
 }
 
 impl<'a> Builder<'a> {
@@ -240,6 +243,7 @@ impl<'a> Builder<'a> {
             drained: Vec::new(),
             empties: view.events.iter().any(begins),
             touched: BTreeMap::new(),
+            lowering: None,
         }
     }
 
@@ -261,6 +265,7 @@ impl<'a> Builder<'a> {
     /// (`spans.rs`). A step the table cannot take is left out: what it would have shown is
     /// then settled at the end.
     pub(super) fn emit(&mut self, act: Act, cause: Option<Subject>) {
+        self.drop_lift(Some(&act));
         let moving = check::moves(&act);
         let lands = check::lands(&self.table, &act);
         let zone = |table: &Table| match moving {
@@ -455,13 +460,19 @@ impl<'a> Builder<'a> {
     /// A library is shuffled: its order is the view's end's, with the cards that leave it
     /// meanwhile on top, where a draw takes them from.
     fn shuffle(&mut self, player: Side, cause: Option<Subject>) {
+        let order = self.library_ahead(player);
+        let fact = Fact::Library { player, order };
+        self.emit(Act::Set { fact }, cause);
+    }
+
+    /// `player`'s library in the view's end's order, with the cards that leave it meanwhile
+    /// on top, where a draw takes them from. A card that comes to it later is not in it yet.
+    pub(super) fn library_ahead(&self, player: Side) -> Vec<ObjectId> {
         let end = &self.after.piles(player).library;
         let now = &self.table.piles(player).library;
         let stay = end.iter().filter(|s| now.contains(s));
         let leave = now.iter().filter(|s| !end.contains(s));
-        let order = stay.chain(leave).copied().collect();
-        let fact = Fact::Library { player, order };
-        self.emit(Act::Set { fact }, cause);
+        stay.chain(leave).copied().collect()
     }
 
     /// The opponent's spell or ability, gone by the time the view shows, is left to be read,
