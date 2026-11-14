@@ -292,9 +292,9 @@ function sourceLine(run) {
 
 /** Each of the six marks, played from the script written by hand: on what it marks from the
  * step that begins it to the step that ends it, by one element; its light up by the end of
- * its beginning step; and drawn one way wherever it is, a card, a permanent or a player's
- * life total, and no two alike. What is picked to pay turns a quarter and turns back, and
- * nothing else on the table moves. */
+ * its beginning step; and drawn one way on each kind of subject, a card or a player's life
+ * total, with each mark and subject kind distinct. What is picked to pay turns a quarter and
+ * turns back, and nothing else on the table moves. */
 function marks(run) {
     const { written } = run;
     assert.ok(written, "no marks were written");
@@ -307,26 +307,25 @@ function marks(run) {
         for (const tick of up) {
             assert.equal(tick.shown, 1, `${key} at ${tick.at} ms`);
             assert.ok(tick.look, `${key} has no look`);
-            looks.set(
-                act.mark,
-                (looks.get(act.mark) ?? new Set()).add(tick.look),
-            );
+            const kind = `${act.mark} ${act.on.kind}`;
+            looks.set(kind, (looks.get(kind) ?? new Set()).add(tick.look));
         }
     }
     assert.deepEqual(
         [...looks.keys()].sort(),
         [
-            "eligible",
-            "friendly-target",
-            "hostile-target",
-            "paying",
-            "selected",
-            "suggested",
+            "eligible object",
+            "friendly-target player",
+            "hostile-target object",
+            "hostile-target player",
+            "paying object",
+            "selected object",
+            "suggested object",
         ],
         "the marks played",
     );
-    for (const [mark, drawnAs] of looks) {
-        assert.equal(drawnAs.size, 1, `${mark} has ${drawnAs.size} looks`);
+    for (const [kind, drawnAs] of looks) {
+        assert.equal(drawnAs.size, 1, `${kind} has ${drawnAs.size} looks`);
     }
     const each = [...looks.values()].map(([look]) => look);
     assert.equal(new Set(each).size, each.length, "two marks look alike");
