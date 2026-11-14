@@ -114,6 +114,66 @@ test("a held card's pose is the pointer's, and the stage's model returns it", ()
     });
 });
 
+test("a card let go over itself is not hovered until it is home", () => {
+    // Hovered on its way, a hand card would rise out of the fan as it rests there, upright
+    // and lifted, while it is still elsewhere, and drop back once the pointer left it: a kick.
+    const { made, told } = listening({ holdable: (name) => name === 3 });
+    made.release = LINEAR;
+    made.pointer.over(3);
+    made.pointer.press(3, { x: 30, y: 540 });
+    made.pointer.move({ x: 230, y: 340 });
+    made.pointer.release({ x: 230, y: 340 });
+    assert.equal(told.at(-1)[0], "drop");
+    assert.equal(made.pointer.hovered, undefined);
+    made.clock.advance(100);
+    assert.equal(made.pointer.hovered, undefined, "still on its way");
+    // Home, the stage asks its surface what the pointer is on, which says it is the card.
+    let asked = 0;
+    made.subscribe(() => (asked += 1));
+    made.clock.advance(100);
+    assert.ok(asked > 0, "those who draw the stage are told");
+    assert.equal(made.pointer.hovered, undefined);
+    made.pointer.over(3);
+    assert.deepEqual(told.at(-1), ["hover", 3], "home, it is hovered");
+});
+
+test("a card let go with nothing to travel may be hovered at once", () => {
+    const { made, told } = listening({ holdable: (name) => name === 3 });
+    made.pointer.over(3);
+    made.pointer.press(3, { x: 30, y: 540 });
+    made.pointer.move({ x: 230, y: 340 });
+    made.pointer.release({ x: 230, y: 340 });
+    assert.equal(made.pointer.hovered, undefined);
+    made.pointer.over(3);
+    assert.deepEqual(told.at(-1), ["hover", 3]);
+});
+
+test("a taken drop is not hovered while it waits, nor on its way home", () => {
+    const { made, told } = listening({ taken: true, timings: { fly: LINEAR } });
+    made.release = LINEAR;
+    made.pointer.over(3);
+    made.pointer.press(3, { x: 0, y: 500 });
+    made.pointer.move({ x: 1000, y: 100 });
+    made.pointer.release({ x: 1000, y: 100 });
+    made.clock.advance(5000);
+    assert.equal(
+        made.pointer.hovered,
+        undefined,
+        "waiting where it was let go",
+    );
+    // The play did nothing: the card goes home when the script is over.
+    made.play(view([2, 1], [3]), { beats: [[move(2, 0)]] });
+    made.clock.advance(300);
+    made.pointer.over(undefined);
+    made.pointer.over(3);
+    assert.equal(made.pointer.hovered, undefined, "on its way home");
+    made.clock.advance(100);
+    assert.equal(made.pointer.settling, undefined, "home");
+    made.pointer.over(undefined);
+    made.pointer.over(3);
+    assert.deepEqual(told.at(-1), ["hover", 3]);
+});
+
 test("a taken drop stays where it was let go, and its step starts from there", () => {
     const { made } = listening({ taken: true, timings: { fly: LINEAR } });
     made.release = LINEAR;

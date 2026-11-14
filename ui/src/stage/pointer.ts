@@ -34,7 +34,8 @@ export interface Drop {
  * last to `listen` says. */
 export interface PointerEvents {
   /** The pointer came onto the node `name`; with none, it left the one it was on. None is
-   * told while a card is held. */
+   * told while a card is held, and a card let go is not told to be under the pointer until
+   * it comes to rest (`Pointer.arrived`). */
   hover?(name: Name | undefined): void;
   /** A press let go where it began, on `name`. */
   click?(name: Name, at: Point): void;
@@ -97,6 +98,12 @@ export class Pointer {
   #over: Name | undefined;
   #press: { name: Name; start: Point; at: Point; moved: boolean } | undefined;
   #held: Held | undefined;
+  /** A card let go that has yet to come to rest: hovering it would raise it out of the fan
+   * as it rests there while it is still elsewhere (StageBoard.tsx), so it is not told to be
+   * hovered until it arrives. */
+  #settling: Name | undefined;
+  /** What `hover` was last told. */
+  #told: Name | undefined;
 
   constructor(holding: Holding) {
     this.#holding = holding;
@@ -118,14 +125,48 @@ export class Pointer {
 
   /** The node the pointer is on, as last told. */
   get hovered(): Name | undefined {
-    return this.#held ? undefined : this.#over;
+    return this.#told;
+  }
+
+  /** The card let go that has yet to come to rest, if one has. */
+  get settling(): Name | undefined {
+    return this.#settling;
   }
 
   /** The pointer is on the node `name` now, or on none. */
   over(name: Name | undefined) {
     if (name === this.#over) return;
     this.#over = name;
-    if (!this.#held) this.#listener.hover?.(name);
+    this.#tell();
+  }
+
+  /** Whether the card let go has come to rest now, as `moving` says it is not moving: if
+   * it has, it may be hovered from now on (`arrived`). */
+  settle(moving: (name: Name) => boolean): boolean {
+    const name = this.#settling;
+    if (name === undefined || moving(name)) return false;
+    this.arrived(name);
+    return true;
+  }
+
+  /** The card `name`, let go, is at rest: the pointer may hover it now. It moved from under
+   * the still pointer, which sends no event, so the pointer is not taken to be on it any
+   * more: whoever draws the stage says afresh what the pointer is on (dom.ts `repoint`). */
+  arrived(name: Name) {
+    if (this.#settling !== name) return;
+    this.#settling = undefined;
+    if (this.#over === name) this.#over = undefined;
+    this.#tell();
+  }
+
+  /** Tells the listener what the pointer hovers now, if that changed: nothing while a card is
+   * held, nor a card let go that has yet to come to rest. */
+  #tell() {
+    const over =
+      this.#held || this.#over === this.#settling ? undefined : this.#over;
+    if (over === this.#told) return;
+    this.#told = over;
+    this.#listener.hover?.(over);
   }
 
   /** A press began on `name`, at `at`. */
@@ -150,8 +191,9 @@ export class Pointer {
     press.moved = true;
     if (!this.holdable(name) || !this.#holding.pose(name)) return;
     // The card is in hand, not under the pointer: it is hovered no longer.
-    if (this.#over !== undefined) this.#listener.hover?.(undefined);
     this.#held = { name, start, at };
+    this.#settling = undefined;
+    this.#tell();
     this.#holding.lifted(name);
     this.#listener.lift?.(name);
   }
@@ -180,9 +222,17 @@ export class Pointer {
         pose,
         onto,
       }) === true;
-    this.#holding.dropped(held.name, pose, taken);
-    // The pointer may be on something else by now: what it is on is told afresh.
-    if (this.#over !== undefined) this.#listener.hover?.(this.#over);
+    this.#letGo(held.name, pose, taken);
+  }
+
+  /** The held card `name` was let go where `pose` has it. Taken or not, it is on its way
+   * somewhere (home, or where the play it made puts it), and it is not hovered until the
+   * stage says it is at rest; the pointer may be on something else by now, which is told
+   * afresh. */
+  #letGo(name: Name, pose: Pose | undefined, taken: boolean) {
+    this.#settling = name;
+    this.#holding.dropped(name, pose, taken);
+    this.#tell();
   }
 
   /** The press ended with no release (the browser took the pointer, the node went): a held
@@ -194,18 +244,14 @@ export class Pointer {
     const pose = this.#holding.pose(held.name) ?? undefined;
     this.#held = undefined;
     this.#listener.lift?.(undefined);
-    this.#holding.dropped(held.name, pose, false);
-    if (this.#over !== undefined) this.#listener.hover?.(this.#over);
+    this.#letGo(held.name, pose, false);
   }
 
   /** The node `name` is gone from the stage: it is neither hovered nor held any more. */
   gone(name: Name) {
-    if (this.#over === name) {
-      // Held, it was told to be hovered no longer as it was picked up.
-      const told = !this.#held;
-      this.#over = undefined;
-      if (told) this.#listener.hover?.(undefined);
-    }
+    if (this.#over === name) this.#over = undefined;
+    if (this.#settling === name) this.#settling = undefined;
     if (this.#press?.name === name) this.cancel();
+    this.#tell();
   }
 }

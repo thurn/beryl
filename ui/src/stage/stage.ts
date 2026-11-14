@@ -193,16 +193,13 @@ export class ScriptStage {
         const entry = this.#entries.get(name);
         if (!entry) return;
         if (pose && taken) {
-          entry.track = {
-            from: this.clock.now,
-            to: Infinity,
-            pose: () => pose,
-            stays: true,
-          };
+          const at = { from: this.clock.now, to: Infinity };
+          entry.track = { ...at, pose: () => pose, stays: true };
         } else if (pose) {
           entry.track = home(this.release, pose, this.clock.now);
         }
         this.#draw(name, entry);
+        if (!entry.track) this.#write(this.clock.now); // Home at once: it has arrived.
       },
     });
   }
@@ -731,6 +728,9 @@ export class ScriptStage {
       entry.moved = false;
       if (entry.track && now >= entry.track.to) entry.track = undefined;
     }
+    // A card let go came to rest: those who draw from `shown` say what the pointer is on now.
+    if (this.pointer.settle((name) => !!this.#entries.get(name)?.track))
+      this.#stale = true;
     this.#over.write(this.#surface, now, this.#prompt, this.#entries);
     const busy = this.#busy;
     if (!this.#stale && busy === this.#shown.busy) return;
