@@ -29,11 +29,16 @@ impl Creature {
     fn new(table: &Table, id: ObjectId) -> Option<Self> {
         let card = battlefield_card(table, id)?;
         let record = card_record(&card.card);
-        let (types, printed) = match &card.card {
-            Card::Custom { types, stats, .. } => (types.as_str(), *stats),
+        let (types, printed, printed_keywords) = match &card.card {
+            Card::Custom { types, stats, .. } => (types.as_str(), *stats, Vec::new()),
             Card::Named(_) => {
-                let face = printed_face(record.as_ref()?, card.face)?;
-                (face.type_line.as_str(), facts::printed_stats(face))
+                let record = record.as_ref()?;
+                let face = printed_face(record, card.face)?;
+                (
+                    face.type_line.as_str(),
+                    facts::printed_stats(face),
+                    facts::printed_keywords(record, face),
+                )
             }
             Card::Hidden => return None,
         };
@@ -46,8 +51,11 @@ impl Creature {
             counter(card, "+1/+1"),
             counter(card, "-1/-1"),
         )?;
-        let keywords = record.map_or_else(Vec::new, |record| record.keywords);
-        let keyword = |name| has_keyword(&keywords, name);
+        let keyword = |name: &str| {
+            printed_keywords
+                .iter()
+                .any(|key| key.eq_ignore_ascii_case(name))
+        };
 
         Some(Self {
             card: id,
@@ -60,7 +68,7 @@ impl Creature {
             } else {
                 Strike::Normal
             },
-            keywords,
+            keywords: printed_keywords.into_iter().map(str::to_owned).collect(),
             marked: card.damage,
             dead: false,
         })
@@ -77,7 +85,9 @@ impl Creature {
     }
 
     fn has(&self, name: &str) -> bool {
-        has_keyword(&self.keywords, name)
+        self.keywords
+            .iter()
+            .any(|keyword| keyword.eq_ignore_ascii_case(name))
     }
 
     fn lethal_on(&self, blocker: &Self) -> i32 {
@@ -237,8 +247,10 @@ impl<'a> Combat<'a> {
             }
         }
         for (id, creature) in &mut self.creatures {
-            if !creature.has("Indestructible")
-                && (creature.marked >= creature.toughness || touched_by_deathtouch.contains(id))
+            if creature.toughness <= 0
+                || (!creature.has("Indestructible")
+                    && (creature.marked >= creature.toughness
+                        || touched_by_deathtouch.contains(id)))
             {
                 creature.dead = true;
             }
@@ -340,12 +352,6 @@ fn valid_target(table: &Table, target: ArrowTarget) -> bool {
     }
 }
 
-fn has_keyword(keywords: &[String], name: &str) -> bool {
-    keywords
-        .iter()
-        .any(|keyword| keyword.eq_ignore_ascii_case(name))
-}
-
 fn name(card: &Object) -> &str {
     match &card.card {
         Card::Named(name) | Card::Custom { name, .. } => name,
@@ -392,7 +398,8 @@ fn life_line(seat: Seat, verb: &str, amount: i32, change: i32) -> Line {
 /// Deathtouch makes any nonzero assignment “lethal damage” ([CR 702.2c]) and
 /// can destroy a creature that’s “been dealt damage” by a deathtouch source
 /// ([CR 702.2b]). Indestructible
-/// permanents “aren't destroyed by lethal damage” ([CR 702.12b]). Trample
+/// permanents “aren't destroyed by lethal damage” ([CR 702.12b]). A creature
+/// with “toughness 0 or less” still goes to the graveyard ([CR 704.5f]). Trample
 /// gets “any excess damage” past the blockers ([CR 702.19b]). Lifelink causes
 /// the source's controller “to gain that much life” ([CR 702.15b]).
 ///
@@ -403,6 +410,7 @@ fn life_line(seat: Seat, verb: &str, amount: i32, change: i32) -> Line {
 /// [CR 702.12b]: https://yawgatog.com/resources/magic-rules/#R70212b
 /// [CR 702.15b]: https://yawgatog.com/resources/magic-rules/#R70215b
 /// [CR 702.19b]: https://yawgatog.com/resources/magic-rules/#R70219b
+/// [CR 704.5f]: https://yawgatog.com/resources/magic-rules/#R7045f
 #[must_use]
 pub fn proposal(table: &Table) -> Option<Proposal> {
     // Phase changes leave the arrows on the table until the next turn.
@@ -436,4 +444,65 @@ pub fn proposal(table: &Table) -> Option<Proposal> {
         assist: Assist::Combat,
         lines: combat.lines(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deathtouch_trample_assigns_one_to_each_blocker() {
+        let attacker = Creature {
+            card: ObjectId(1),
+            power: 5,
+            toughness: 5,
+            strike: Strike::Normal,
+            keywords: vec!["Deathtouch".into(), "Trample".into()],
+            marked: 0,
+            dead: false,
+        };
+        let blockers = [ObjectId(2), ObjectId(3)];
+        let mut creatures = BTreeMap::from([(attacker.card, attacker)]);
+        for card in blockers {
+            creatures.insert(
+                card,
+                Creature {
+                    card,
+                    power: 0,
+                    toughness: 4,
+                    strike: Strike::Normal,
+                    keywords: Vec::new(),
+                    marked: 0,
+                    dead: false,
+                },
+            );
+        }
+        let mut hits = Vec::new();
+        Attack {
+            attacker: ObjectId(1),
+            target: ArrowTarget::Player(Seat(1)),
+            blockers: blockers.to_vec(),
+        }
+        .assign(&creatures, false, &mut hits);
+        assert!(matches!(
+            hits.as_slice(),
+            [
+                Hit {
+                    recipient: Recipient::Creature(ObjectId(2)),
+                    amount: 1,
+                    ..
+                },
+                Hit {
+                    recipient: Recipient::Creature(ObjectId(3)),
+                    amount: 1,
+                    ..
+                },
+                Hit {
+                    recipient: Recipient::Attacked(ArrowTarget::Player(Seat(1))),
+                    amount: 3,
+                    ..
+                },
+            ]
+        ));
+    }
 }

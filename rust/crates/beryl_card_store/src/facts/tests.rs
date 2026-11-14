@@ -115,3 +115,20 @@ fn keywords_and_token_links_come_from_the_record() {
     );
     assert!(tokens_made(&nightmare).is_empty());
 }
+
+#[test]
+fn tapped_entry_must_describe_this_card_without_a_condition() {
+    for (name, tapped) in [
+        ("Amulet of Vigor", false),
+        ("Ghired, Conclave Exile", false),
+        ("Blood Crypt", false),
+        ("Eddymurk Crab", false),
+        ("Grimgrin, Corpse-Born", true),
+    ] {
+        assert_eq!(
+            enters_tapped(&STORE.card(name).unwrap().faces[0]),
+            tapped,
+            "{name}"
+        );
+    }
+}

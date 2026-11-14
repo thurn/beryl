@@ -266,3 +266,15 @@ fn flow_validation_requires_a_partition_of_the_cards_actually_seen() {
     );
     assert!(flow_result(Flow::Scry(3), &[a, b], &choice).is_ok());
 }
+
+#[test]
+fn charge_threshold_abilities_are_read_alongside_ordinary_abilities() {
+    let rows = abilities(&front("Adagia, Windswept Bastion"));
+    assert!(matches!(
+        rows.as_slice(),
+        [
+            AbilityRow::Activated { cost: mana, .. },
+            AbilityRow::Activated { cost: copy, text },
+        ] if mana == "{T}" && copy == "{3}{W}, {T}" && text.starts_with("Create a token")
+    ));
+}

@@ -193,20 +193,3 @@ fn exact_case_insensitive_lookup_resolves_card_face_aliases() {
     assert!(store.card_ignoring_case("él").is_none());
     assert_eq!(store.search("élan", 2), [card]);
 }
-
-#[test]
-#[ignore = "wall-clock measurement for a local debug build"]
-fn indexed_search_takes_under_five_milliseconds() {
-    use std::time::{Duration, Instant};
-
-    for query in ["a", "zz"] {
-        // Warm the lazy index before timing repeated searches.
-        assert_eq!(STORE.search(query, 20).len(), 20);
-        let start = Instant::now();
-        let found = STORE.search(query, 20);
-        let elapsed = start.elapsed();
-        eprintln!("search({query:?}, 20): {elapsed:?}");
-        assert_eq!(found.len(), 20);
-        assert!(elapsed < Duration::from_millis(5), "{query}: {elapsed:?}");
-    }
-}

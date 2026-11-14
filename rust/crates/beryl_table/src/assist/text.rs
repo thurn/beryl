@@ -66,7 +66,19 @@ fn loyalty_cost(cost: &str) -> Option<LoyaltyCost> {
 }
 
 fn activated_cost(prefix: &str) -> Option<&str> {
-    // An ability word or named ability may precede the cost with an em dash.
+    // A charge threshold, ability word or printed name may precede the cost.
+    let prefix = prefix
+        .split_once(" | ")
+        .map_or(prefix, |(threshold, cost)| {
+            if threshold
+                .strip_suffix('+')
+                .is_some_and(|n| n.parse::<u16>().is_ok())
+            {
+                cost
+            } else {
+                prefix
+            }
+        });
     let cost = prefix.split_once(" — ").map_or(prefix, |(_, cost)| cost);
     let first_word = cost.split_whitespace().next()?;
     (cost.starts_with('{')

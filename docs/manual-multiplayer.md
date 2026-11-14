@@ -1146,8 +1146,9 @@ for each round, for each creature dealing damage in it that is still alive:
         the remainder goes to the player or planeswalker attacked
     a blocker deals its power to the attacker it blocks
 after each round:
-    a creature dies if its damage is at least its toughness, or if a deathtouch
-        source damaged it, unless it has indestructible
+    a creature dies if its toughness is zero or less
+    a creature without indestructible also dies if its damage is at least its
+        toughness or a deathtouch source damaged it
     a lifelink source's controller gains the damage it dealt
 ```
 
@@ -1177,8 +1178,8 @@ COMBAT
 With this assist on, the table marks a card or player that meets one of four
 conditions with a small label on it. Clicking the label applies the fix.
 
-- **A creature with damage at least its toughness, or toughness zero or less:**
-  move it to the graveyard.
+- **A creature with toughness zero or less, or a creature without indestructible
+  with damage at least its toughness:** move it to the graveyard.
 - **A planeswalker with no loyalty counters:** move it to the graveyard.
 - **Two legendary permanents with the same name under one controller:** choose
   one to move to the graveyard.

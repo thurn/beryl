@@ -138,12 +138,42 @@ pub fn starting_counters(face: &Face) -> Option<(&'static str, u16)> {
         .find_map(|(name, printed)| Some((name, printed.as_deref()?.parse().ok()?)))
 }
 
-/// The manual table plays a face tapped when its Oracle text has an
-/// enters-tapped sentence without “unless.” Ignore parenthesized reminder text.
+/// The manual table plays a face tapped when a sentence says that the card
+/// itself enters tapped. Skip conditional sentences and reminder text.
 pub fn enters_tapped(face: &Face) -> bool {
-    let Some(text) = face.oracle_text.as_deref() else {
-        return false;
-    };
+    let rules = without_reminder_text(face.oracle_text.as_deref().unwrap_or_default());
+    let name = face.name.to_ascii_lowercase();
+    rules.split(['.', '!', '?', '\n']).any(|sentence| {
+        let Some((subject, rest)) = sentence.trim().split_once(" enters ") else {
+            return false;
+        };
+        let subject_is_card = matches!(
+            subject,
+            "this"
+                | "this card"
+                | "this land"
+                | "this artifact"
+                | "this creature"
+                | "this enchantment"
+                | "this permanent"
+                | "this planeswalker"
+                | "this battle"
+        ) || subject == name
+            || name
+                .split_once(',')
+                .is_some_and(|(short, _)| subject == short);
+        let arrival = rest.strip_prefix("the battlefield ").unwrap_or(rest);
+        subject_is_card
+            && arrival.split_whitespace().next() == Some("tapped")
+            && !rest.contains(" as long as ")
+            && !rest
+                .split(|character: char| !character.is_alphabetic())
+                .any(|word| matches!(word, "if" | "unless"))
+    })
+}
+
+/// Returns lowercase Oracle text with parenthesized reminder text removed.
+fn without_reminder_text(text: &str) -> String {
     let mut depth = 0_usize;
     let mut rules = String::new();
     for character in text.chars() {
@@ -159,17 +189,7 @@ pub fn enters_tapped(face: &Face) -> bool {
             _ => {}
         }
     }
-    rules.split(['.', '!', '?', '\n']).any(|sentence| {
-        let words: Vec<_> = sentence
-            .split(|character: char| !character.is_alphabetic())
-            .filter(|word| !word.is_empty())
-            .collect();
-        !words.contains(&"unless")
-            && (words.windows(2).any(|words| words == ["enters", "tapped"])
-                || words
-                    .windows(4)
-                    .any(|words| words == ["enters", "the", "battlefield", "tapped"]))
-    })
+    rules
 }
 
 /// The mana value of the cost printed on this face. [CR 202.3e] says “X is
@@ -206,6 +226,36 @@ pub fn has_keyword(record: &Record, name: &str) -> bool {
     keywords(record)
         .iter()
         .any(|keyword| keyword.to_lowercase() == lowercase)
+}
+
+/// Finds the keywords printed on this face. The record's keyword list can
+/// include its other faces and words the Oracle text merely mentions.
+pub fn printed_keywords<'a>(record: &'a Record, face: &Face) -> Vec<&'a str> {
+    let rules = without_reminder_text(face.oracle_text.as_deref().unwrap_or_default());
+    let keywords = keywords(record);
+    let mut printed = Vec::new();
+    for line in rules.lines() {
+        let mut parts = line.split([',', ';']).map(str::trim);
+        let Some(first) = parts.next().and_then(|part| find_keyword(keywords, part)) else {
+            continue;
+        };
+        printed.push(first);
+        printed.extend(parts.filter_map(|part| find_keyword(keywords, part)));
+    }
+    printed
+}
+
+fn find_keyword<'a>(keywords: &'a [String], text: &str) -> Option<&'a str> {
+    keywords.iter().find_map(|keyword| {
+        let name = keyword.to_ascii_lowercase();
+        let suffix = text.strip_prefix(name.as_str())?;
+        (suffix.is_empty()
+            || suffix.starts_with(" {")
+            || suffix.strip_prefix(' ').is_some_and(|number| {
+                number.starts_with(|character: char| character.is_ascii_digit())
+            }))
+        .then_some(keyword.as_str())
+    })
 }
 
 pub fn tokens_made(record: &Record) -> &[TokenLink] {

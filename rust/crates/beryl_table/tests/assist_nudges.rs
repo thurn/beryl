@@ -139,3 +139,16 @@ fn zero_life_concession_is_only_offered_to_the_seat_that_would_concede() {
     assert_eq!(table.game_match.last_winner, Some(HOST));
     assert!(labels(&table).is_empty());
 }
+
+#[test]
+fn lethal_damage_nudge_respects_indestructible_but_zero_toughness_still_applies() {
+    let mut table = Table::new(2);
+    add(&mut table, 1, named("Darksteel Myr"), HOST, |card| {
+        card.damage = 3;
+    });
+    add(&mut table, 2, named("Darksteel Myr"), GUEST, |card| {
+        card.stats = Some((0, 0));
+    });
+    enable(&mut table, HOST);
+    assert_eq!(ids(&table), [2]);
+}

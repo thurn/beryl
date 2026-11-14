@@ -242,3 +242,67 @@ fn either_seat_can_enable_the_proposal_and_unchecked_lines_are_skipped() {
     assert_eq!(combat.table.phase, Phase::EndOfCombat);
     assert_eq!(proposal(&combat.table), None);
 }
+
+#[test]
+fn double_strike_lifelink_counts_damage_in_both_rounds() {
+    let mut combat = CombatTable::new();
+    let attacker = combat.put(HOST, "Drogskol Reaver", None);
+    combat.arrow(HOST, attacker, Target::Player(GUEST));
+    combat.accept();
+
+    assert_eq!(combat.table.players[0].life, 26);
+    assert_eq!(combat.table.players[1].life, 14);
+}
+
+#[test]
+fn a_blocker_does_not_strike_after_its_attacker_dies() {
+    let mut combat = CombatTable::new();
+    let attacker = combat.put(HOST, "Grizzly Bears", None);
+    let first = combat.put(GUEST, "Akroma, Angel of Wrath", Some((2, 2)));
+    let late = combat.put(GUEST, "Vampire Nighthawk", None);
+    combat.arrow(HOST, attacker, Target::Player(GUEST));
+    combat.arrow(GUEST, first, Target::Object(attacker));
+    combat.arrow(GUEST, late, Target::Object(attacker));
+    combat.accept();
+
+    assert_eq!(combat.card(attacker).zone, Zone::Graveyard(HOST));
+    assert_eq!(combat.card(first).damage, 0);
+    assert_eq!(combat.table.players[1].life, 20);
+}
+
+#[test]
+fn combat_reads_the_active_faces_printed_keywords() {
+    let mut combat = CombatTable::new();
+    let attacker = combat.put(HOST, "Kruin Outlaw // Terror of Kruin Pass", None);
+    let blocker = combat.put(GUEST, "Grizzly Bears", Some((1, 4)));
+    combat.arrow(HOST, attacker, Target::Player(GUEST));
+    combat.arrow(GUEST, blocker, Target::Object(attacker));
+    combat.accept();
+
+    assert_eq!(combat.card(blocker).zone, Zone::Battlefield);
+    assert_eq!(combat.card(blocker).damage, 2);
+    assert_eq!(combat.card(attacker).damage, 1);
+}
+
+#[test]
+fn mentioned_keywords_do_not_grant_combat_abilities() {
+    let mut combat = CombatTable::new();
+    let attacker = combat.put(HOST, "Odric, Blood-Cursed", None);
+    combat.arrow(HOST, attacker, Target::Player(GUEST));
+    combat.accept();
+
+    assert_eq!(combat.table.players[0].life, 20);
+    assert_eq!(combat.table.players[1].life, 17);
+}
+
+#[test]
+fn indestructible_does_not_keep_a_zero_toughness_creature_alive() {
+    let mut combat = CombatTable::new();
+    let attacker = combat.put(HOST, "Grizzly Bears", None);
+    let blocker = combat.put(GUEST, "Darksteel Myr", Some((0, 0)));
+    combat.arrow(HOST, attacker, Target::Player(GUEST));
+    combat.arrow(GUEST, blocker, Target::Object(attacker));
+    combat.accept();
+
+    assert_eq!(combat.card(blocker).zone, Zone::Graveyard(GUEST));
+}

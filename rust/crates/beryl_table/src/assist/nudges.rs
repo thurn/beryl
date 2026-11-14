@@ -46,10 +46,13 @@ impl Label {
 /// cards. A concession is offered only to the seat that would concede.
 ///
 /// [CR 704.5f] covers creatures with “toughness 0 or less,” and [CR 704.5g]
-/// covers damage “greater than or equal to its toughness.” [CR 704.5i]
+/// covers damage “greater than or equal to its toughness,” except for
+/// indestructible permanents, which “aren't destroyed by lethal damage”
+/// ([CR 702.12b]). [CR 704.5i]
 /// covers a planeswalker with “loyalty 0.” [CR 704.5j] covers legendary
 /// permanents “with the same name” controlled by “the same player.”
 ///
+/// [CR 702.12b]: https://yawgatog.com/resources/magic-rules/#R70212b
 /// [CR 704.5f]: https://yawgatog.com/resources/magic-rules/#R7045f
 /// [CR 704.5g]: https://yawgatog.com/resources/magic-rules/#R7045g
 /// [CR 704.5i]: https://yawgatog.com/resources/magic-rules/#R7045i
@@ -73,19 +76,26 @@ pub fn labels(table: &Table) -> Vec<Label> {
         }
 
         let record;
-        let (name, types, printed) = match &card.card {
+        let (name, types, printed, indestructible) = match &card.card {
             Card::Custom {
                 name, types, stats, ..
-            } => (name, types, *stats),
+            } => (name, types, *stats, false),
             Card::Named(_) => {
                 record = card_record(&card.card);
-                let Some(face) = record
+                let Some((record, face)) = record
                     .as_ref()
-                    .and_then(|record| printed_face(record, card.face))
+                    .and_then(|record| Some((record, printed_face(record, card.face)?)))
                 else {
                     continue;
                 };
-                (&face.name, &face.type_line, facts::printed_stats(face))
+                (
+                    &face.name,
+                    &face.type_line,
+                    facts::printed_stats(face),
+                    facts::printed_keywords(record, face)
+                        .iter()
+                        .any(|keyword| keyword.eq_ignore_ascii_case("Indestructible")),
+                )
             }
             Card::Hidden => continue,
         };
@@ -96,7 +106,9 @@ pub fn labels(table: &Table) -> Vec<Label> {
             counter(card, "-1/-1"),
         );
         if facts::is_creature_type_line(types)
-            && shown.is_some_and(|(_, toughness)| toughness <= 0 || card.damage >= toughness)
+            && shown.is_some_and(|(_, toughness)| {
+                toughness <= 0 || (!indestructible && card.damage >= toughness)
+            })
         {
             labels.push(Label::graveyard(card, "Move to graveyard", &seats));
         }
