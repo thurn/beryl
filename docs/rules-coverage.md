@@ -114,7 +114,7 @@ interaction.
 | 4     | Underworld Breach        | An ability given to cards in a graveyard; a cost that exiles other cards; a long loop                               | Lion's Eye Diamond, Brain Freeze                           |
 | 5     | Phantasmal Image         | Entering as a copy; exceptions that become copiable values; a copy of a copy                                        | Quicksilver Gargantuan                                     |
 | 5     | Thespian's Stage         | Becoming a copy while keeping an ability; a state trigger; the legend rule                                          | Dark Depths                                                |
-| 5     | Fork                     | A copy of a spell with its choices, new targets and a changed color                                                 | Tendrils of Agony                                          |
+| 5     | Fork                     | A copy of a spell with its choices, new targets and a changed color                                                 | Tendrils of Agony, Braingeyser                             |
 | 6     | Trinisphere              | The whole order of CR 601.2f: alternative cost, increases, reductions, then a floor                                 | Thalia, Guardian of Thraben; Force of Will; Gurmag Angler  |
 | 6     | Pithing Needle           | A card named from an open-ended set; a "can't" keyed on the chosen name                                             |                                                            |
 | 6     | Cavern of Souls          | Mana that carries a restriction and a rider to the spell it pays for                                                |                                                            |
