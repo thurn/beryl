@@ -336,6 +336,29 @@ test("a card of the hand the prompt marks is carried out of it as a click on it"
     assert.deepEqual([made.pose(3).x, made.pose(3).y], [0, 500]);
 });
 
+test("a card castable from a graveyard, waiting in the hand fan, is carried out of it like a hand card", async () => {
+    const { made, prompts, sent } = prompted();
+    made.release = { duration: 100, delay: 0, stagger: 0, ease: (p) => p };
+    const asked = pick(marked("eligible", 4, 5));
+    const base = asking(asked);
+    prompts.play({
+        ...base,
+        objects: [
+            ...base.objects,
+            object(4, "graveyard", { fanned: true }),
+            object(5, "graveyard"),
+        ],
+    });
+    made.clock.advance(0);
+    // Slot 4 waits in the fan; slot 5 is merely a marked card of the graveyard, which rests nowhere.
+    assert.equal(made.pointer.holdable(4), true);
+    assert.equal(made.pointer.holdable(5), false);
+    made.pointer.press(4, { x: 430, y: 540 });
+    made.pointer.move({ x: 530, y: 240 });
+    made.pointer.release({ x: 530, y: 240 });
+    assert.deepEqual(sent[0].click, { kind: "on", on: card(4) });
+});
+
 test("an arrow runs from what asks to a target picked, and the script that casts at it takes it over", async () => {
     const { made, surface, prompts, reply, click } = prompted();
     const spell = { kind: "spell", slot: 3, targets: [] };

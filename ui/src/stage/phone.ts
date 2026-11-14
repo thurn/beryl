@@ -187,7 +187,7 @@ function rest(table: Table, viewport: Viewport, left?: ReadonlySet<Name>) {
     out.set(spot.slot, {
       object,
       pose: fanned(spot, DEPTH.hand + held++, faceOf(object)),
-      dress: dressed("hand", "hand", spot.width),
+      dress: dressed(object.zone, "hand", spot.width),
     });
   }
   const theirs = view.objects.filter(

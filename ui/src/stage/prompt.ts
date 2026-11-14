@@ -375,14 +375,19 @@ export class Prompts {
       : undefined;
   }
 
-  /** Whether a press may pick the node `name` up: a card the prompt marks, in a hand or in
-   * a tray of piles. */
+  /** Whether a press may pick the node `name` up: a card the prompt marks, in the hand fan or
+   * in a tray of piles. The fan also holds the cards castable from a graveyard or exile, whose
+   * zone is not the hand, so the fan is told by how the card is dressed, not by its zone. */
   #lifts(name: Name) {
     const { prompt, sending } = this.#asked;
     if (!prompt || sending) return false;
     const resting = this.#stage.shown.resting.get(name);
+    // A card the phone's tray shows in the hand's look is held up, not in the fan.
+    const fanned =
+      resting?.dress.look === "hand" &&
+      !this.#up?.piles.some((pile) => pile.cards.includes(name as number));
     return (
-      (resting?.dress.zone === "hand" || this.#piled(name) !== undefined) &&
+      (fanned || this.#piled(name) !== undefined) &&
       prompt.marks.some(({ on }) => namedBy(on) === name)
     );
   }

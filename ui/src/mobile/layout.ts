@@ -14,7 +14,7 @@ import type {
 import type { Phase } from "../components/Controls";
 import { referenced, twins } from "../game/decisions";
 import { onArc } from "../game/fanArc";
-import { emblemObjects } from "../game/zoneViews";
+import { emblemObjects, playableElsewhere } from "../game/zoneViews";
 import { creatureHeight } from "./sizing.ts";
 
 /** A card scan's width over its height. */
@@ -355,9 +355,12 @@ export function phoneLayout(view: PlayerView, viewport: Viewport): PhoneLayout {
   }
   const row = (groups: ObjectView[][], band: Band) =>
     placeRow(groups, band.height - 8, width, band.top, band.height);
-  const hand = view.objects.filter(
-    (o) => o.zone === "hand" && o.owner === "you",
-  );
+  // What you can play from outside your hand waits at the right of the fan, as on the desktop.
+  const bySlot = new Map(view.objects.map((o) => [o.slot, o]));
+  const hand = [
+    ...view.objects.filter((o) => o.zone === "hand" && o.owner === "you"),
+    ...playableElsewhere(view).flatMap((s) => bySlot.get(s) ?? []),
+  ];
   const cards = [
     ...row(opponent.lands, bands.opponentLands),
     ...row(opponent.other, bands.opponentOther),

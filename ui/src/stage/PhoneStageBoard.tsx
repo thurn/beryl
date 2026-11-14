@@ -133,7 +133,7 @@ export function PhoneStageBoard({
     prompts.clicks = (name) =>
       typeof name === "number" && name < 0
         ? false
-        : stage.shown.resting.get(name)?.dress.zone !== "hand";
+        : stage.shown.resting.get(name)?.dress.look !== "hand";
     return () => {
       prompts.clicks = () => true;
     };

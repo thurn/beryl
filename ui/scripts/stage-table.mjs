@@ -72,12 +72,15 @@ export const row = {
             out.set(slot, {
                 object,
                 pose: pose(x, y, slot, object.name === null ? "back" : "front"),
-                dress: dress(object.zone),
+                dress: {
+                    ...dress(object.zone),
+                    look: object.fanned ? "hand" : dress(object.zone).look,
+                },
             });
         };
         table.battlefield.forEach((slot, i) => place(slot, i * 400, 0));
         table.objects
-            .filter((o) => o.zone === "hand")
+            .filter((o) => o.zone === "hand" || o.fanned)
             .forEach((o, i) => place(o.slot, i * 400, 500));
         for (const side of ["you", "opponent"]) {
             for (const slot of table.players[side].library) {
