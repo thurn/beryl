@@ -516,6 +516,10 @@ enforces the ones that can be seen in source.
 - **No system fonts.** Text is laid out with the fonts bundled in the app
   (Cinzel, Crimson Pro, Open Sans and the mana symbol font), with system font
   fallback switched off, so a line breaks in the same place on every machine.
+  The web interface takes these fonts from npm packages, as WOFF2 files that the
+  Rust text crates cannot read. Beryl 3D commits the same families as TrueType
+  files, with their licences, in `rust/crates/beryl_scene/fonts`, and embeds
+  them in the client core at build time.
 - **Seeded effects.** A particle effect's randomness comes from a fixed
   generator seeded by the object's id and the step's index.
 
@@ -613,6 +617,35 @@ pub enum Input {
     Assets(AssetReady),                      // a texture or glyph page is ready
     Lifecycle(Lifecycle),                    // suspended, resumed, low memory
     Tier(Tier),                              // Baseline or Enhanced
+    Reply(Reply),                            // the session's answer to a command
+}
+
+/// What the client asks of the session: one variant for each function of
+/// `beryl_session::Sessions` that a player's action calls. Each carries that
+/// function's own argument types.
+pub enum SessionCommand {
+    Start(StartRequest),
+    Resume,
+    Choose(ChooseRequest),
+    Click(ClickRequest),
+    Cancel(DecisionId),
+    Undo(DecisionId),
+    PassOn(DecisionId),
+    SetStops(SessionId, StopsSetting),
+    Concede(SessionId),
+}
+
+/// The session's answer. `Sessions::click` returns the prompt's next state
+/// (`ClickReply`); every other function returns nothing or an error.
+pub enum Reply {
+    Click(Result<ClickReply, SessionError>),
+    Done(Result<(), SessionError>),
+}
+
+impl Client {
+    /// The next command for the session, if any. The host sends it to the
+    /// session thread and passes the answer back as `Input::Reply`.
+    pub fn next_command(&mut self) -> Option<SessionCommand>;
 }
 
 pub enum Request {
@@ -874,11 +907,17 @@ fn prompt_bar(prompt: &PromptView) -> Element {
         .children(prompt.buttons.iter().map(|button_view| {
             button(&button_view.label)
                 .enabled(button_view.enabled)
-                .on_press(SessionCommand::Click(button_view.id))
+                .on_press(Press::Button(button_view.id))
         }))
 }
 ```
 
+- **A press is a value, not a closure.** `on_press` takes a `Press`: a small
+  closed enum saying what the press means (a prompt's button, a setting, a
+  screen to open). The client turns a `Press` into a `SessionCommand`, adding
+  the open decision's id and revision, which a screen function does not know. A
+  value can be compared, so an unchanged element is recognised as unchanged, and
+  it can be printed in a test's failure.
 - **Layout is flexbox and grid**, computed by `taffy`. Style methods carry the
   CSS property names an agent already knows: `gap`, `padding`, `grow`,
   `align_items`, `grid_template_columns`.
@@ -1260,16 +1299,20 @@ Communication is by channels only:
 ```rust
 // Session thread to frame thread: typed values, no serialization.
 updates: Receiver<GameUpdate>,
-// Frame thread to session thread: commands, answered later by an update.
+// Frame thread to session thread: commands. The session thread calls the
+// function of `Sessions` each names and sends back its result as a `Reply`.
 commands: Sender<SessionCommand>,
+replies: Receiver<Reply>,
 // Workers to frame thread: finished textures and glyph pages.
 assets: Receiver<AssetReady>,
 ```
 
-- **A click is asynchronous.** The frame thread sends the command and draws the
-  next frame. The session's reply (new marks, button states) arrives as an
-  input. The session computes a reply to a click in microseconds, so in practice
-  it is drawn in the very next frame.
+- **A click is asynchronous.** The frame thread takes the command from
+  `Client::next_command`, sends it and draws the next frame. The session's reply
+  (new marks, button states) arrives as an `Input::Reply`. The frame thread
+  never calls a function of `Sessions` itself, because one can wait on a lock.
+  The session computes a reply to a click in microseconds, so in practice it is
+  drawn in the very next frame.
 - **A message wakes the frame thread.** A thread that sends an update or a
   finished asset also wakes the host's event loop, so a still table responds at
   once.
@@ -1851,6 +1894,10 @@ What these show:
 Beryl 3D plays the same sounds as the web interface, from the same list:
 one-shot sounds tied to script steps and looping ambience.
 
+- **The files and the list are the web interface's**: the M4A files under
+  `ui/public/audio`, listed in `ui/src/audio/manifest.json`, with
+  `ui/src/audio/steps.ts` saying which step plays which sound. Beryl 3D reads
+  the same manifest and ports the rule in `steps.ts`.
 - **Playback** uses `rodio` over `cpal`, on the audio device's own thread.
 - **Sounds are decoded at startup** into memory, so playing one is a message to
   the audio thread and never a file read.
