@@ -436,10 +436,26 @@ impl<L: Layout> State<L> {
     /// lost all of its face's ([CR 305.7]): "It loses all abilities generated from its rules
     /// text, its old land types".
     ///
+    /// With no effect removing abilities or changing land types, as most games go, those of
+    /// its face: the layers store that no row has lost an ability or gained a land type's
+    /// mana, so the results are not read.
+    ///
     /// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056
     /// [CR 305.7]: https://yawgatog.com/resources/magic-rules/#R3057
+    #[inline]
     pub fn intrinsic_mana(&self, t: &crate::table::GameTable, slot: L::Slot) -> u8 {
         let printed = self.copiable(slot).facts(t).land_mana;
+        if !self.flags.mana_changed {
+            return printed;
+        }
+        self.changed_intrinsic_mana(slot, printed)
+    }
+
+    /// [`State::intrinsic_mana`] when some effect removed abilities or changed land types,
+    /// `printed` being those of the object's face. Out of line: most games never come here.
+    #[cold]
+    #[inline(never)]
+    fn changed_intrinsic_mana(&self, slot: L::Slot, printed: u8) -> u8 {
         match self.battlefield_position(slot) {
             None => printed,
             Some(i) => {
