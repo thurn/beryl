@@ -5,15 +5,15 @@
 //!
 //! [CR 115.4]: https://yawgatog.com/resources/magic-rules/#R1154
 
-use beryl_card::TargetSpec;
-use beryl_card::effect::build::deal_damage_to_any_target;
+use beryl_card::effect::build::{deal_damage_to_any_target, sequence, that_many, you};
+use beryl_card::{Effect, TargetSpec};
 
 use super::LAND;
 use super::cast::{BEAR, Game, cast};
 use crate::card::{Ability, CardDef, Face, Types};
 use crate::event::{self, Reason};
 use crate::ids::Slot;
-use crate::state::Zone;
+use crate::state::{Continuous, Duration, Shield, Subject, Zone};
 use crate::{CardTable, DecisionKind, Decklist, Opt, Profile};
 
 /// "Test Bolt deals 3 damage to any target", for no mana.
@@ -29,8 +29,33 @@ static BOLT: CardDef = CardDef {
     }],
 };
 
-static CARDS: CardTable = CardTable::new(&[&LAND, &BEAR, &BOLT]);
-const DECK: &Decklist = &[(30, "Test Land"), (5, "Test Bear"), (5, "Test Bolt")];
+/// "Test Drain deals 3 damage to any target. You gain life equal to the damage dealt this
+/// way", for no mana.
+static DRAIN: CardDef = CardDef {
+    name: "Test Drain",
+    tokens: &[],
+    faces: &[Face {
+        types: Types::INSTANT,
+        abilities: &[Ability::spell()
+            .targeting(&[TargetSpec::any_target()])
+            .effect(&sequence(&[
+                deal_damage_to_any_target(3),
+                Effect::GainLife {
+                    player: you(),
+                    amount: that_many(),
+                },
+            ]))],
+        ..Face::EMPTY
+    }],
+};
+
+static CARDS: CardTable = CardTable::new(&[&LAND, &BEAR, &BOLT, &DRAIN]);
+const DECK: &Decklist = &[
+    (30, "Test Land"),
+    (4, "Test Bear"),
+    (3, "Test Bolt"),
+    (3, "Test Drain"),
+];
 
 /// A game where each player has a Test Bear and a Test Land on the battlefield, and the
 /// starting player has cast a Test Bolt and is choosing its target. Returns the game, the
@@ -111,4 +136,30 @@ fn a_target_that_left_makes_the_spell_do_nothing() {
     assert_eq!(g.s.object(bolt).zone(), Zone::Graveyard);
     assert_eq!(g.s.player(g.them).life(), 20);
     assert_eq!(g.s.player(g.me).life(), 20);
+}
+
+/// Damage a prevention shield prevents is not dealt ([CR 615.1]): prevention effects "apply to
+/// damage and modify how much damage, if any, is dealt". So "the damage dealt this way" counts
+/// only what got past the shield: 3 damage at a player with a shield of 2 is 1 dealt, and 1
+/// life gained.
+///
+/// [CR 615.1]: https://yawgatog.com/resources/magic-rules/#R6151
+#[test]
+fn damage_dealt_this_way_counts_none_that_was_prevented() {
+    let mut g = Game::with(&CARDS, DECK, Profile::EXACT);
+    let (me, them) = (g.me, g.them);
+    let drain = g.give(me, "Test Drain", Zone::Hand);
+    let card = g.s.copiable(drain).record(&g.t).0;
+    let shield = Shield {
+        left: Some(2),
+        from: None,
+    };
+    let prevent = Continuous::Prevent(Subject::Player(them), shield);
+    g.s.start_effect(card, prevent, Duration::EndOfTurn)
+        .unwrap();
+    g.pick(cast(drain));
+    g.pick(Opt::Player(them));
+    g.pass_both();
+    assert_eq!(g.s.player(them).life(), 19);
+    assert_eq!(g.s.player(me).life(), 21);
 }

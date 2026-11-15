@@ -6,6 +6,17 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- An instruction that deals damage counted the damage it proposed as dealt, so a
+  follow-up that reads "the damage dealt this way" (`Amount::ThatMany`,
+  `Condition::Did`) would have seen 3 damage when a prevention shield let only 1
+  through. `damage::deal` applied the replacement and prevention effects but
+  returned nothing, and `damage::instruction` added the amount it had asked for.
+  No card of the pool reads the outcome of damage yet, so no game was affected.
+  Fixed by having `deal` return the damage it dealt and summing that. Found in
+  review (commit c00e2222 introduced the damage proposal). Prevention: a
+  function that applies replacement effects to a proposal returns what actually
+  happened, and its callers report that, never the proposal.
+
 - Jace, Wielder of Mysteries' +1 aimed at its controller milled Life from the
   Loam, and the draw that followed in the same resolution was not offered dredge
   3\. `replace::may_ask`, read as a resolution or a step's turn-based actions

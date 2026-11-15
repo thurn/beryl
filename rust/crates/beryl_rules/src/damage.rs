@@ -34,6 +34,11 @@ use crate::{choices, continuous, life, replace};
 ///
 /// The damage is proposed first and its replacement and prevention effects applied
 /// ([`replace::damage`]); damage they prevent is not dealt, and no lifelink comes of it.
+/// Returns how much was dealt, after them ([CR 615.1]): prevention effects "apply to damage
+/// and modify how much damage, if any, is dealt", so "damage dealt this way" counts none
+/// that was prevented.
+///
+/// [CR 615.1]: https://yawgatog.com/resources/magic-rules/#R6151
 #[inline]
 pub fn deal<L: Layout>(
     game: &mut Game<'_, L>,
@@ -41,9 +46,9 @@ pub fn deal<L: Layout>(
     to: Recipient<L>,
     amount: u8,
     combat: bool,
-) -> Result<(), Full> {
+) -> Result<u8, Full> {
     if amount == 0 {
-        return Ok(());
+        return Ok(0);
     }
     let proposal = replace::Damage {
         source,
@@ -60,23 +65,23 @@ pub fn deal<L: Layout>(
         ..
     } = replace::damage(game, proposal)?;
     if amount == 0 {
-        return Ok(());
+        return Ok(0);
     }
     let e = match to {
         Recipient::Player(p) => game.state.damage_player(source, p, amount, combat),
         Recipient::Permanent(r) => {
             if !game.on_battlefield(r) {
-                return Ok(());
+                return Ok(0);
             }
             game.state.mark_damage(source, r, amount, combat)
         }
     };
     let lifelink = lifelink(game, source);
     game.settle(e)?;
-    match lifelink {
-        Some(controller) => life::gain(game, controller, amount),
-        None => Ok(()),
+    if let Some(controller) = lifelink {
+        life::gain(game, controller, amount)?;
     }
+    Ok(amount)
 }
 
 /// Who gains the life a source's damage gives for its lifelink, if it has lifelink
@@ -133,8 +138,13 @@ pub(crate) fn instruction<L: Layout>(
     let (mut damaged, mut dealt) = (Bitboard::EMPTY, 0);
     if let Some(players) = players {
         for player in run.in_turn_order(players) {
-            deal(run.game(), source, Recipient::Player(player), amount, false)?;
-            dealt += u32::from(amount);
+            dealt += u32::from(deal(
+                run.game(),
+                source,
+                Recipient::Player(player),
+                amount,
+                false,
+            )?);
         }
     }
     if let Some(objects) = permanents {
@@ -142,8 +152,7 @@ pub(crate) fn instruction<L: Layout>(
         let mut left = damaged;
         while let Some(permanent) = run.next_permanent(&mut left) {
             let to = Recipient::Permanent(permanent);
-            deal(run.game(), source, to, amount, false)?;
-            dealt += u32::from(amount);
+            dealt += u32::from(deal(run.game(), source, to, amount, false)?);
         }
     }
     Ok(Outcome::of(damaged, dealt))

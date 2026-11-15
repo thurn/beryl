@@ -33,6 +33,7 @@ mod picks;
 mod promotion;
 mod prompt;
 mod refused;
+mod replacement_saves;
 mod saves;
 mod script;
 mod script_build;

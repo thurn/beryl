@@ -440,7 +440,7 @@ class Unsupported(Exception):
 def cost_text(ability: Json, cost: Json, parts: list[Json]) -> str | None:
     """The start of an activated ability's text in XMage, from its cost: its keyword where the
     cost is a keyword's (cycling, crew, waterbend), else the mana, `{T}` and the other parts in
-    that order. A full cost ends with its colon; a part whose wording is XMage's own, as what a
+    that order, a payment of life as "Pay N life". A full cost ends with its colon; a part whose wording is XMage's own, as what a
     sacrifice names, ends the text before it is written out."""
     keyword = keyword_cost(ability, cost, parts)
     discards_this = [p["action"] for p in parts] == ["Discard"] and parts[0].get(
@@ -454,6 +454,10 @@ def cost_text(ability: Json, cost: Json, parts: list[Json]) -> str | None:
     if {"action": "Tap", "of": "This"} in parts:
         words.append("{T}")
     for part in parts:
+        if part["action"] == "Life":
+            # CR 119.4: paying life is a cost of its own, written "Pay N life".
+            words.append(f"Pay {part['amount']} life")
+            continue
         if part.get("of") != "This":
             return None
         action = part["action"]
