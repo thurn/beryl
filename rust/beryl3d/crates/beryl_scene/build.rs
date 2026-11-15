@@ -1,9 +1,8 @@
 //! Writes `data/beryl3d/space.json` as a string constant and its numbers as constants of the
 //! module `space`, and each number of the `audit` object of `data/beryl3d/gates.json` as an
 //! `f32` constant named for its key in upper case, to `OUT_DIR/data.rs`, which `src/data.rs`
-//! includes. In `space`, each verb or case under `verbs` is a module of `f32` constants, one per
-//! value, and each count under `catch_up` a `usize` constant. Under `frame_rate`, a whole
-//! number becomes a `usize` constant and any other number an `f32` one.
+//! includes. `write_space` describes the one rule that turns `space.json` into modules and
+//! constants.
 
 use std::fmt::Write;
 use std::fs;
@@ -48,64 +47,89 @@ fn main() {
     fs::write(dest, out).unwrap();
 }
 
-/// Writes the module `space`: a module of `f32` constants for each entry under `verbs`, and a
-/// `usize` constant for each count under `catch_up`.
+/// Writes the module `space` from `space.json` by one rule, whatever the keys are. An object
+/// becomes a `pub mod` named for its key. A number becomes a `pub const` named for its key in
+/// upper case: a `usize` when its dotted path is listed in the top-level `counts` array, and
+/// an `f32` otherwise. An array of two or three numbers becomes a `glam::Vec2` or `glam::Vec3`,
+/// and an array of such arrays a fixed-size array of them. `counts` itself is not written.
 fn write_space(json: &serde_json::Value, out: &mut String) {
+    let counts: Vec<&str> = json["counts"]
+        .as_array()
+        .map(|paths| paths.iter().filter_map(serde_json::Value::as_str).collect())
+        .unwrap_or_default();
     out.push_str("/// The numbers of `data/beryl3d/space.json`.\npub mod space {\n");
-    out.push_str(
-        "    /// Each verb's or case's spatial values, in millimetres.\n    pub mod verbs {\n",
-    );
-    for (verb, values) in json["verbs"]
-        .as_object()
-        .expect("space.json's `verbs` is an object")
-    {
-        let module: String = verb
-            .chars()
-            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-            .collect();
-        writeln!(
-            out,
-            "        /// `verbs.{verb}` in `data/beryl3d/space.json`.\n        pub mod {module} {{"
-        )
-        .unwrap();
-        for (key, value) in values.as_object().expect("a verb's values are an object") {
-            let number = value
-                .as_f64()
-                .unwrap_or_else(|| panic!("space.json's `verbs.{verb}.{key}` is a number"));
-            let name = key.to_uppercase();
-            writeln!(out, "            pub const {name}: f32 = {number:?}_f32;").unwrap();
+    let object = json.as_object().expect("space.json is an object");
+    write_members(object, "", 1, &counts, out);
+    out.push_str("}\n");
+}
+
+/// Writes the members of `object`, whose own dotted path is `path`, at `depth` levels of
+/// indentation.
+fn write_members(
+    object: &serde_json::Map<String, serde_json::Value>,
+    path: &str,
+    depth: usize,
+    counts: &[&str],
+    out: &mut String,
+) {
+    let indent = "    ".repeat(depth);
+    for (key, value) in object {
+        if path.is_empty() && key == "counts" {
+            continue;
         }
-        out.push_str("        }\n");
-    }
-    out.push_str("    }\n");
-    out.push_str("    /// How many updates must wait before the script clock runs faster.\n    pub mod catch_up {\n");
-    for (key, value) in json["catch_up"]
-        .as_object()
-        .expect("space.json's `catch_up` is an object")
-    {
-        let count = value
-            .as_u64()
-            .unwrap_or_else(|| panic!("space.json's `catch_up.{key}` is a count"));
-        let name = key.to_uppercase();
-        writeln!(out, "        /// `catch_up.{key}` in `data/beryl3d/space.json`.\n        pub const {name}: usize = {count};").unwrap();
-    }
-    out.push_str("    }\n");
-    out.push_str("    /// When the host steps its frame rate down or up (`beryl_host`'s `rate`).\n    pub mod frame_rate {\n");
-    for (key, value) in json["frame_rate"]
-        .as_object()
-        .expect("space.json's `frame_rate` is an object")
-    {
-        let name = key.to_uppercase();
-        let constant = match (value.as_u64(), value.as_f64()) {
-            (Some(count), _) => format!("pub const {name}: usize = {count};"),
-            (None, Some(number)) => format!("pub const {name}: f32 = {number:?}_f32;"),
-            _ => panic!("space.json's `frame_rate.{key}` is a number"),
+        let dotted = if path.is_empty() {
+            key.clone()
+        } else {
+            format!("{path}.{key}")
         };
-        writeln!(
-            out,
-            "        /// `frame_rate.{key}` in `data/beryl3d/space.json`.\n        {constant}"
-        )
-        .unwrap();
+        writeln!(out, "{indent}/// `{dotted}` in `data/beryl3d/space.json`.").unwrap();
+        if let Some(members) = value.as_object() {
+            let module: String = key
+                .chars()
+                .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+                .collect();
+            writeln!(out, "{indent}pub mod {module} {{").unwrap();
+            write_members(members, &dotted, depth + 1, counts, out);
+            writeln!(out, "{indent}}}").unwrap();
+        } else {
+            let name = key.to_uppercase();
+            let (kind, expression) = if counts.contains(&dotted.as_str()) {
+                let count = value
+                    .as_u64()
+                    .unwrap_or_else(|| panic!("space.json's `{dotted}` is a count"));
+                ("usize".to_string(), count.to_string())
+            } else {
+                value_expression(value)
+                    .unwrap_or_else(|| panic!("space.json's `{dotted}` is not a number or vector"))
+            };
+            writeln!(out, "{indent}pub const {name}: {kind} = {expression};").unwrap();
+        }
     }
-    out.push_str("    }\n}\n");
+}
+
+/// The type and the constant expression of a number, a vector or an array of vectors.
+fn value_expression(value: &serde_json::Value) -> Option<(String, String)> {
+    if let Some(number) = value.as_f64() {
+        return Some(("f32".to_string(), format!("{number:?}_f32")));
+    }
+    let items = value.as_array()?;
+    if items.iter().all(serde_json::Value::is_number) && matches!(items.len(), 2 | 3) {
+        let numbers: Vec<String> = items
+            .iter()
+            .map(|item| format!("{:?}_f32", item.as_f64().unwrap()))
+            .collect();
+        let kind = format!("glam::Vec{}", items.len());
+        return Some((kind.clone(), format!("{kind}::new({})", numbers.join(", "))));
+    }
+    let elements: Vec<(String, String)> =
+        items.iter().map(value_expression).collect::<Option<_>>()?;
+    let kind = &elements.first()?.0;
+    if kind == "f32" || elements.iter().any(|(other, _)| other != kind) {
+        return None;
+    }
+    let expressions: Vec<&str> = elements.iter().map(|(_, e)| e.as_str()).collect();
+    Some((
+        format!("[{kind}; {}]", elements.len()),
+        format!("[{}]", expressions.join(", ")),
+    ))
 }

@@ -19,13 +19,14 @@ pub use place::{Placement, ROWS, Rest, Scroll, place};
 pub(crate) use scene::SceneObject;
 pub use scene::{Motion, Table};
 
+use crate::data::space;
 use crate::input::{Insets, Size};
 
-/// A card's printed width and height.
-pub const CARD_WIDTH: f32 = 63.0;
-pub const CARD_HEIGHT: f32 = 88.0;
+/// A card's printed width and height (`card` in `space.json`).
+pub const CARD_WIDTH: f32 = space::card::WIDTH;
+pub const CARD_HEIGHT: f32 = space::card::HEIGHT;
 /// The height between two cards lying one on the other, in a pile or an overlapped row.
-pub const LAYER: f32 = 0.3;
+pub const LAYER: f32 = space::card::LAYER;
 
 /// The window the table is drawn in.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -102,52 +103,53 @@ pub struct Layout {
     pub opponent_hand: HandData,
 }
 
-/// The desktop layout. The camera is a first estimate fitted by eye to Arena's recordings:
-/// the far edge of Arena's table is about 0.85 times as wide on screen as the near edge.
+use space::layout::desktop;
+
+/// A `RowArea` from the object of the same name in `layout.desktop`.
+macro_rules! row_area {
+    ($name:ident) => {
+        RowArea {
+            y: desktop::$name::Y,
+            left: desktop::$name::LEFT,
+            right: desktop::$name::RIGHT,
+        }
+    };
+}
+
+/// A `HandData` from the object of the same name in `layout.desktop`.
+macro_rules! hand_data {
+    ($name:ident) => {
+        HandData {
+            depth: desktop::$name::DEPTH,
+            height: desktop::$name::HEIGHT,
+            y: desktop::$name::Y,
+            width: desktop::$name::WIDTH,
+            fan: desktop::$name::FAN,
+        }
+    };
+}
+
+/// The desktop layout, built from `layout.desktop` in `space.json`. The camera is a first
+/// estimate fitted by eye to Arena's recordings: the far edge of Arena's table is about 0.85
+/// times as wide on screen as the near edge.
 pub const DESKTOP: Layout = Layout {
     camera: CameraData {
-        pitch_degrees: 24.0,
-        fov_degrees: 30.0,
-        target: Vec3::new(0.0, -30.0, 0.0),
-        // Both players' rows and piles, and below them the strip the viewer's hand covers.
-        required: [Vec2::new(-470.0, -290.0), Vec2::new(470.0, 215.0)],
+        pitch_degrees: desktop::camera::PITCH_DEGREES,
+        fov_degrees: desktop::camera::FOV_DEGREES,
+        target: desktop::camera::TARGET,
+        required: desktop::camera::REQUIRED,
     },
-    strip: 24.0,
-    creatures: RowArea {
-        y: -62.0,
-        left: -400.0,
-        right: 320.0,
-    },
-    lands: RowArea {
-        y: -160.0,
-        left: -400.0,
-        right: -20.0,
-    },
-    others: RowArea {
-        y: -160.0,
-        left: 20.0,
-        right: 320.0,
-    },
-    gap: 4.0,
-    pile_step: Vec2::new(4.0, 4.0),
-    library: Vec2::new(-440.0, -160.0),
-    graveyard: Vec2::new(-440.0, -62.0),
-    // Above the graveyard: beside it, the opponent's fell off the right edge of the window.
-    exile: Vec2::new(-440.0, 36.0),
-    stack: Vec3::new(370.0, 0.0, 40.0),
-    stack_step: Vec3::new(-12.0, -16.0, 4.0),
-    hand: HandData {
-        depth: 300.0,
-        height: 0.24,
-        y: -0.88,
-        width: 1.3,
-        fan: 0.05,
-    },
-    opponent_hand: HandData {
-        depth: 320.0,
-        height: 0.16,
-        y: 1.02,
-        width: 0.5,
-        fan: 0.04,
-    },
+    strip: desktop::STRIP,
+    creatures: row_area!(creatures),
+    lands: row_area!(lands),
+    others: row_area!(others),
+    gap: desktop::GAP,
+    pile_step: desktop::PILE_STEP,
+    library: desktop::LIBRARY,
+    graveyard: desktop::GRAVEYARD,
+    exile: desktop::EXILE,
+    stack: desktop::STACK,
+    stack_step: desktop::STACK_STEP,
+    hand: hand_data!(hand),
+    opponent_hand: hand_data!(opponent_hand),
 };

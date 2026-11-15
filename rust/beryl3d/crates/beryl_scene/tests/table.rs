@@ -276,3 +276,12 @@ fn lands_stand_untapped_first_with_each_name_together_in_first_appearance_order(
     });
     assert_eq!(slots, [2, 1, 4, 0, 3]);
 }
+
+#[test]
+fn desktop_camera_is_the_data_in_space_json() {
+    let space: serde_json::Value = serde_json::from_str(beryl_scene::data::SPACE).unwrap();
+    let pitch = space["layout"]["desktop"]["camera"]["pitch_degrees"]
+        .as_f64()
+        .unwrap();
+    assert!((f64::from(DESKTOP.camera.pitch_degrees) - pitch).abs() < 1e-6);
+}
