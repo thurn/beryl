@@ -1,6 +1,6 @@
 use beryl_session::card_records::{CardRecordsRequest, card_records};
 use beryl_session::protocol::{
-    Counter, FaceName, RowName, Side, StackItem, Status, Step, TablePhase,
+    Counter, FaceName, PowerToughness, RowName, Side, StackItem, Status, Step, TablePhase,
 };
 use beryl_session::script::{Arrow, Subject};
 use beryl_table::action::{Destination, Portion, Position, Selection};
@@ -195,6 +195,104 @@ fn both_seats_get_ordered_piles_and_relative_table_state() {
             == Subject::Ability {
                 id: view.stack[1].marker_id().unwrap()
             }));
+    }
+}
+
+#[test]
+fn manual_commands_follow_the_visible_face_and_keep_exact_base_stats() {
+    let mut table = Table::new(2);
+    let known = &[HOST, GUEST];
+    let aura = add(&mut table, 1, "Skin Invasion", Zone::Battlefield, known);
+    let facedown = add(&mut table, 2, "Skin Invasion", Zone::Battlefield, &[HOST]);
+    table.objects.get_mut(&facedown).unwrap().face = Face::Down;
+    let transformed = add(&mut table, 3, "Skin Invasion", Zone::Battlefield, known);
+    let creature = table.objects.get_mut(&transformed).unwrap();
+    creature.face = Face::Back;
+    creature.stats = Some((i32::MAX, 3));
+    creature.counters = vec![("+1/+1".into(), 1)];
+    let saga = add(
+        &mut table,
+        4,
+        "Kumano Faces Kakkazan",
+        Zone::Battlefield,
+        known,
+    );
+    let custom = ObjectId(5);
+    Change::Create {
+        object: Object::new(
+            custom,
+            Card::Custom {
+                name: "Skin Invasion".into(),
+                types: "Token Creature — Insect".into(),
+                colors: vec![],
+                stats: Some((2, 3)),
+            },
+            HOST,
+            Zone::Battlefield,
+        ),
+        index: 0,
+    }
+    .perform(&mut table);
+    table.objects.get_mut(&custom).unwrap().known_to = known.to_vec();
+    let hand = add(&mut table, 6, "Skin Invasion", Zone::Hand(HOST), &[HOST]);
+    let log = Log::new(&table);
+
+    for seat in [HOST, GUEST] {
+        let publication = SeatPublication::new(&table, &log, seat).unwrap();
+        let view = publication.view();
+        let slot = |id| publication.slot(id).unwrap();
+        let object = |id| {
+            view.objects
+                .iter()
+                .find(|item| item.slot == slot(id))
+                .unwrap()
+        };
+        let card_commands = &view.table.as_ref().unwrap().card_commands;
+        let commands = |id| &card_commands[&slot(id)];
+
+        assert!(commands(aura).auto_attach);
+        assert_eq!(card_commands.contains_key(&slot(hand)), seat == HOST);
+        if seat == HOST {
+            assert!(commands(hand).auto_attach);
+        }
+        assert_eq!(object(facedown).name.is_some(), seat == HOST);
+        assert!(!commands(facedown).auto_attach);
+        assert_eq!(commands(facedown).base_stats, None);
+        assert_eq!(
+            commands(facedown).counter_names,
+            ["charge", "time", "counter"]
+        );
+
+        assert_eq!(object(transformed).name.as_deref(), Some("Skin Shedder"));
+        assert!(!commands(transformed).auto_attach);
+        assert_eq!(
+            commands(transformed).counter_names,
+            ["+1/+1", "-1/-1", "counter"]
+        );
+        assert_eq!(
+            object(transformed).pt,
+            Some(PowerToughness {
+                power: i32::MAX,
+                toughness: 4
+            })
+        );
+        assert_eq!(
+            commands(transformed).base_stats,
+            Some(PowerToughness {
+                power: i32::MAX,
+                toughness: 3
+            })
+        );
+
+        assert_eq!(commands(saga).counter_names, ["lore", "+1/+1", "counter"]);
+        assert!(!commands(custom).auto_attach);
+        assert_eq!(
+            commands(custom).base_stats,
+            Some(PowerToughness {
+                power: 2,
+                toughness: 3
+            })
+        );
     }
 }
 

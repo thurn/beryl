@@ -80,13 +80,79 @@ pub fn is_legendary_type_line(type_line: &str) -> bool {
 }
 
 pub fn is_attachment(record: &Record) -> bool {
-    type_line(record)
-        .split_once('—')
-        .is_some_and(|(_, subtypes)| {
-            subtypes
-                .split_whitespace()
-                .any(|word| matches!(word, "Aura" | "Equipment" | "Fortification"))
+    is_attachment_type_line(type_line(record))
+}
+
+pub fn is_attachment_type_line(type_line: &str) -> bool {
+    type_line.split_once('—').is_some_and(|(_, subtypes)| {
+        subtypes
+            .split_whitespace()
+            .any(|word| matches!(word, "Aura" | "Equipment" | "Fortification"))
+    })
+}
+
+/// Choose the quick counters in menu order. Keep the free-form counter in
+/// the third slot, even when the face mentions more than two names.
+pub fn quick_counter_names(type_line: &str, oracle_text: &str) -> [String; 3] {
+    if is_creature_type_line(type_line) {
+        return ["+1/+1", "-1/-1", "counter"].map(str::to_owned);
+    }
+    let text = oracle_text.to_ascii_lowercase().replace('−', "-");
+    let loyalty = is_planeswalker_type_line(type_line).then_some("loyalty");
+    let mut names = loyalty
+        .into_iter()
+        .chain(mentioned_counters(&text))
+        .chain(["charge", "time"]);
+    let first = names.next().expect("default counter names");
+    let second = names
+        .find(|name| *name != first)
+        .expect("two distinct defaults");
+    [first, second, "counter"].map(str::to_owned)
+}
+
+fn mentioned_counters(text: &str) -> impl Iterator<Item = &str> {
+    const UNNAMED: &[&str] = &[
+        "a", "an", "the", "each", "that", "those", "many", "one", "two", "three", "four", "five",
+        "six", "seven", "eight", "nine", "ten",
+    ];
+    text.match_indices(" counter")
+        .filter_map(|(start, phrase)| {
+            let after = &text[start + phrase.len()..];
+            let after = after.strip_prefix('s').unwrap_or(after);
+            if after.starts_with(word_character) {
+                return None;
+            }
+            let before = &text[..start];
+            let name = last_counter_word(before);
+            if signed_stat(name)
+                && let Some(prefix) = before[..before.len() - name.len()].strip_suffix('/')
+            {
+                let power = last_counter_word(prefix);
+                if signed_stat(power) {
+                    return Some(&before[prefix.len() - power.len()..]);
+                }
+            }
+            (!name.is_empty()
+                && name.bytes().all(|byte| byte.is_ascii_lowercase())
+                && !UNNAMED.contains(&name))
+            .then_some(name)
         })
+}
+
+fn last_counter_word(text: &str) -> &str {
+    text.rsplit(|c| !word_character(c) && !matches!(c, '+' | '-'))
+        .next()
+        .unwrap_or_default()
+}
+
+fn word_character(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_'
+}
+
+fn signed_stat(stat: &str) -> bool {
+    stat.strip_prefix(['+', '-']).is_some_and(|digits| {
+        !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit())
+    })
 }
 
 pub fn row(record: &Record) -> Row3 {

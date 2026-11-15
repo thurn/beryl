@@ -27,8 +27,8 @@ use crate::protocol::{
 };
 use crate::protocol::{
     AssistsView, FaceName, LabelView, LogLine, ManualAbility, ManualOrders, ManualPiles,
-    NamedCounter, ProposalLine, ProposalView, RowName, TableArrow, TableObjectAction,
-    TableObjectRef, TablePhase, TablePrompt, TableView, ZoneRef,
+    NamedCounter, ProposalLine, ProposalView, RowName, TableArrow, TableCardCommands,
+    TableObjectAction, TableObjectRef, TablePhase, TablePrompt, TableView, ZoneRef,
 };
 use crate::script::{
     Act, Arrow, Curve, Edge, Fact, Mark, Notice, OwnStep, OwnTiming, OwnTimings, Reset, Script,
@@ -61,7 +61,7 @@ fn prompt_decls(cfg: &Config) -> [String; 18] {
 }
 
 /// Types used by manual table views and their scripts.
-fn table_decls(cfg: &Config) -> [String; 18] {
+fn table_decls(cfg: &Config) -> [String; 19] {
     [
         FaceName::decl(cfg),
         ManualAbility::decl(cfg),
@@ -73,6 +73,7 @@ fn table_decls(cfg: &Config) -> [String; 18] {
         TableArrow::decl(cfg),
         TableObjectRef::decl(cfg),
         TableObjectAction::decl(cfg),
+        TableCardCommands::decl(cfg),
         LogLine::decl(cfg),
         ProposalView::decl(cfg),
         ProposalLine::decl(cfg),

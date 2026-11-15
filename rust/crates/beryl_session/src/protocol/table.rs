@@ -1,9 +1,11 @@
 //! Wire data for a manual table, projected for one viewer.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::{ObjectId, Side, TargetRef, ZoneName};
+use super::{ObjectId, PowerToughness, Side, TargetRef, ZoneName};
 use crate::script::{Arrow, Subject};
 
 mod actions;
@@ -32,6 +34,16 @@ pub struct TableObjectAction {
     pub subject: Subject,
     pub reference: TableObjectRef,
     pub zone: beryl_table::state::Zone,
+}
+
+/// The manual commands suggested by a slot's visible face.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TableCardCommands {
+    /// Editable power and toughness before counters are applied.
+    pub base_stats: Option<PowerToughness>,
+    pub counter_names: [String; 3],
+    pub auto_attach: bool,
 }
 
 /// A battlefield row explicitly chosen by a player.
@@ -236,6 +248,10 @@ pub struct TableView {
     pub lent_hand: bool,
     /// References for actionable objects and stack markers shown in this view.
     pub object_actions: Vec<TableObjectAction>,
+    /// Card command facts keyed by stage slot.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[ts(optional, as = "Option<_>")]
+    pub card_commands: BTreeMap<ObjectId, TableCardCommands>,
     /// The viewer's library has Keep top card revealed enabled.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     #[ts(optional, as = "Option<_>")]

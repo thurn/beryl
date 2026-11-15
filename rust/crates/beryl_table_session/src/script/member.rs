@@ -569,9 +569,9 @@ impl Member<'_> {
             hidden.card = beryl_table::state::Card::Hidden;
             hidden.note = None;
             hidden.counters.clear();
-            return Some(cards::object(&hidden, slot, self.slots, self.viewer));
+            return Some(cards::CardProjection::new(&hidden).object(slot, self.slots, self.viewer));
         }
-        Some(cards::object(card, slot, self.slots, self.viewer))
+        Some(cards::CardProjection::new(card).object(slot, self.slots, self.viewer))
     }
 
     fn zone_ref(&self, area: Zone) -> (ZoneName, Side) {

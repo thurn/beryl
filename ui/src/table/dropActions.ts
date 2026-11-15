@@ -1,4 +1,3 @@
-import { cardRecords } from "../cardRecords";
 import { battlefieldRow } from "../game/battlefield";
 import type { Point } from "../stage/layout";
 import type {
@@ -66,20 +65,6 @@ function collect(cards: readonly DragCard[]) {
   return groups;
 }
 
-function attaches({ object }: DragCard) {
-  if (object.face === "down" || !object.name) return false;
-  const known = cardRecords.find(object.name);
-  const line =
-    known?.card.faces[object.face === "back" ? 1 : known.face]?.type_line;
-  return !!line
-    ?.split("—")[1]
-    ?.trim()
-    .split(/\s+/)
-    .some((subtype) =>
-      ["Aura", "Equipment", "Fortification"].includes(subtype),
-    );
-}
-
 function placement(
   client: TableClient,
   cards: readonly DragCard[],
@@ -89,7 +74,11 @@ function placement(
 ) {
   const actions: TableAction[] = [];
   const host = to.card?.action;
-  const attach = !hidden && host ? cards.filter(attaches) : [];
+  const commands = client.view?.table?.cardCommands;
+  const attach =
+    !hidden && host
+      ? cards.filter(({ object }) => commands?.[object.slot]?.autoAttach)
+      : [];
   const remaining = cards.filter((card) => !attach.includes(card));
   const entering = remaining.filter(
     ({ action }) => action.zone !== "battlefield",

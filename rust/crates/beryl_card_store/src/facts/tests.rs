@@ -36,6 +36,35 @@ fn attachment_subtypes_come_from_the_front_type_line() {
 }
 
 #[test]
+fn quick_counters_follow_card_type_and_printed_order() {
+    for (types, text, names) in [
+        ("Creature", "a time counter", ["+1/+1", "-1/-1", "counter"]),
+        (
+            "Legendary Planeswalker",
+            "a loyalty counter and a lore counter",
+            ["loyalty", "lore", "counter"],
+        ),
+        (
+            "Artifact",
+            "a counter, two CHARGE counters, a charge counter, then a stun counter.",
+            ["charge", "stun", "counter"],
+        ),
+        (
+            "Enchantment",
+            "a −1/−1 counter and a lore counter",
+            ["-1/-1", "lore", "counter"],
+        ),
+        (
+            "Land",
+            "a spell countersigned",
+            ["charge", "time", "counter"],
+        ),
+    ] {
+        assert_eq!(quick_counter_names(types, text), names);
+    }
+}
+
+#[test]
 fn displayed_stats_apply_counters_to_printed_or_manual_values() {
     let nightmare = STORE.card("Nightmare").unwrap();
     let printed = printed_stats(&nightmare.faces[0]);

@@ -142,6 +142,39 @@ await check(
 );
 
 await check(
+    "manual table stats editor decrements a capped base stat by one",
+    async (page) => {
+        const max = 2147483647;
+        const subject = (view) =>
+            tableActionRef(view, { kind: "object", slot: view.battlefield[0] });
+        await startTable(page, "24 Llanowar Elves", [
+            moveHand,
+            (view) => ({ stats: { ...subject(view), stats: [max, 1] } }),
+            (view) => ({
+                counter: { ...subject(view), name: "+1/+1", add: 1 },
+            }),
+        ]);
+        const before = await tableView();
+        const [slot] = before.battlefield;
+        assert.equal(object(before, slot).pt.power, max);
+
+        const command = await mod(page);
+        await card(page, slot).click({ modifiers: [command] });
+        await page.keyboard.press(command + "+p");
+        const input = field(page, "Power and toughness");
+        await input.waitFor();
+        assert.equal(await input.inputValue(), `${max}/1`);
+        const edited = await enter(page, "Power and toughness", "-1/1");
+        assert.deepEqual(edited.table.cardCommands[slot].baseStats, {
+            power: max - 1,
+            toughness: 1,
+        });
+        assert.equal(object(edited, slot).pt.power, max);
+    },
+    tabletop,
+);
+
+await check(
     "manual table card state searches and repeats store and custom tokens",
     async (page) => {
         await startTable(page, "24 Academy Manufactor", [moveHand]);

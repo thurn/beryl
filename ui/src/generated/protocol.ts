@@ -879,6 +879,10 @@ lentHand?: boolean,
  */
 objectActions: Array<TableObjectAction>, 
 /**
+ * Card command facts keyed by stage slot.
+ */
+cardCommands?: { [key in ObjectId]: TableCardCommands }, 
+/**
  * The viewer's library has Keep top card revealed enabled.
  */
 topRevealed?: boolean, 
@@ -904,6 +908,12 @@ export type TableArrow = { arrow: Arrow, from: Subject, to: Subject, own: boolea
 export type TableObjectRef = { view: string, handle: number, afterMove?: boolean, };
 
 export type TableObjectAction = { subject: Subject, reference: TableObjectRef, zone: TableZone, };
+
+export type TableCardCommands = { 
+/**
+ * Editable power and toughness before counters are applied.
+ */
+baseStats: PowerToughness | null, counterNames: [string, string, string], autoAttach: boolean, };
 
 export type LogLine = { n: number, 
 /**

@@ -21,6 +21,7 @@ import { TablePalette } from "./TablePalette";
 import { commandActions, pileSlots } from "./commandActions";
 import {
   baseStats,
+  counterNames,
   counterSuggestions,
   counterValue,
   MAX_INT,
@@ -35,7 +36,6 @@ import { Menu } from "./Menu";
 import {
   actionReference,
   availableCommands,
-  counterNames,
   kindOf,
   menuRows,
   type MenuCommand,
@@ -532,10 +532,7 @@ export class TableCommands {
         : command.id.includes(".third_")
           ? 2
           : 0;
-      const name =
-        counterNames(object, object && context.printed?.get(object.slot))[
-          counterSlot
-        ] ?? "counter";
+      const name = counterNames(context.view, object?.slot)[counterSlot];
       const current = counter
         ? counterValue(object, name)
         : (life ?? playerValue);
@@ -574,7 +571,7 @@ export class TableCommands {
         onConfirm: (number) => confirm({ number }),
       });
     } else if (command.asks === "stats") {
-      const start = baseStats(object);
+      const start = baseStats(context.view, object?.slot);
       show({
         kind: "stats",
         start,

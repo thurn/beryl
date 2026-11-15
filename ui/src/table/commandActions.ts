@@ -2,6 +2,7 @@ import { counterName } from "../game/log";
 import type { TableAction, TableZone } from "../generated/protocol";
 import {
   baseStats,
+  counterNames,
   MIN_INT,
   statValue,
   storeToken,
@@ -13,7 +14,6 @@ import { advancePhase, untapPermanents } from "./turn";
 import {
   actionReference,
   checked,
-  counterNames,
   seatOf,
   type MenuCommand,
   type MenuContext,
@@ -174,7 +174,7 @@ export function commandActions(
   if (adjust)
     return cards.flatMap(({ object, action }) => {
       if (!action) return [];
-      const { power, toughness } = baseStats(object);
+      const { power, toughness } = baseStats(view, object?.slot);
       return [
         fill(template, {
           ...args,
@@ -196,8 +196,8 @@ export function commandActions(
     return cards.flatMap(({ object, action }) => {
       if (!action) return [];
       const [first_counter, second_counter, third_counter] = counterNames(
-        object,
-        object && context.printed?.get(object.slot),
+        view,
+        object?.slot,
       );
       return [
         fill(template, {

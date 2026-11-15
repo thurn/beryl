@@ -2,7 +2,6 @@ import type {
   CardEntry,
   CardTokenLink,
   LogLine,
-  ObjectView,
   PlayerView,
   Side,
   TableObjectAction,
@@ -14,7 +13,7 @@ import {
   type Assist,
   type Command,
 } from "./commands.ts";
-import { counterSlots, type TokenChoice } from "./cardState.ts";
+import { counterNames, type TokenChoice } from "./cardState.ts";
 import { uses } from "./fill.ts";
 import { manaColor } from "./players.ts";
 import type { Row } from "./Menu.tsx";
@@ -118,13 +117,6 @@ export function allowed(
   return table.seats === 2 || !uses(command.action, "other_seat");
 }
 
-export function counterNames(object?: ObjectView, printed?: PrintedCard) {
-  return counterSlots(
-    object?.types,
-    printed?.card.faces[printed.face]?.oracle_text,
-  );
-}
-
 function conditions({
   target,
   view,
@@ -220,9 +212,7 @@ export function availableCommands(
 ): MenuCommand[] {
   const { cards, target, view, tokens = [] } = context;
   const object = "name" in target ? target.object : undefined;
-  const firstCounter =
-    counterNames(object, object && context.printed?.get(object.slot))[0] ??
-    "charge";
+  const [firstCounter] = counterNames(view, object?.slot);
   return commandsFor(kind, {
     scope: "table",
     conditions: conditions(context),

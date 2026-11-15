@@ -5,7 +5,7 @@ mod slots;
 
 pub(super) use slots::Slots;
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 use beryl_card_store::{STORE, facts};
 use beryl_session::ipc::decks::CardTokenLink;
@@ -42,10 +42,14 @@ pub(super) fn project(
     let (opponent, theirs) = piles(&projected, Seat(1 - seat.0), slots);
     let mut view = PlayerView::neutral(you, opponent);
     let mut refs = TableActionRefs::new(table, seat);
+    let mut card_commands = BTreeMap::new();
     for (&id, object) in &projected.objects {
         let slot = slots.get(id).expect("slot assigned to each displayed card");
-        view.objects
-            .push(cards::object(object, slot, slots, viewer));
+        let card = cards::CardProjection::new(object);
+        view.objects.push(card.object(slot, slots, viewer));
+        if let Some(commands) = card.commands() {
+            card_commands.insert(slot, commands);
+        }
         refs.expose(table, Subject::Object { slot }, id);
     }
 
@@ -83,6 +87,7 @@ pub(super) fn project(
             .lent_zones
             .contains(&(Zone::Hand(Seat(1 - seat.0)), seat)),
         object_actions: refs.actions().to_vec(),
+        card_commands,
         top_revealed: projected.always_reveal_top.contains(&seat),
         top_known: projected.always_look_at_top.contains(&seat),
         manual_stats: projected

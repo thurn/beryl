@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use beryl_session::protocol::{
     AssistsView, Counter, CounterView, FaceName, ManaPool, ManualOrders, ManualPiles,
     MarkerPreview, NamedCounter, ObjectId, ObjectView, PlayerState, PlayerView, PowerToughness,
@@ -169,6 +171,7 @@ fn manual_view_with_ordered_zones() -> PlayerView {
         acting: vec![],
         lent_hand: false,
         object_actions: vec![],
+        card_commands: BTreeMap::new(),
         top_revealed: false,
         top_known: false,
         manual_stats: vec![],
