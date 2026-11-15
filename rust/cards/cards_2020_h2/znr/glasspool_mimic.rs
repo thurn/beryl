@@ -56,12 +56,30 @@ pub mod scenarios {
     use crate::prelude::*;
 
     const MIMIC: &str = Card::GlasspoolMimic;
+    const SHORE: &str = "Glasspool Shore";
     const DANDAN: &str = Card::Dandan;
     const MIND_BEND: &str = Card::MindBend;
     const ISLAND: TextWord = TextWord::LandType(Subtype::Island);
     const PLAINS: TextWord = TextWord::LandType(Subtype::Plains);
 
     pub const SCENARIOS: &[Scenario] = &[
+        Scenario::new("Glasspool Shore enters tapped and later pays for Glasspool Mimic")
+            .battlefield(P0, &[Card::Island, Card::Island])
+            .permanents(P0, &[Permanent::new(Card::Ornithopter).tapped()])
+            .hand(P0, &[MIMIC, MIMIC])
+            .library(P0, &[Card::Island])
+            .library(P1, &[Card::Island])
+            .actions(&[
+                ME.plays(MIMIC),
+                ME.tapped(SHORE, 1),
+                advance_to(3, TurnStep::PrecombatMain),
+                ME.tapped(SHORE, 0),
+                ME.casts(MIMIC),
+                ME.tapped(SHORE, 1),
+                Resolve,
+                ME.picks_up_to(Card::Ornithopter),
+                ME.controls(Card::Ornithopter, 2),
+            ]),
         // The Mimic enters as a copy of Dandan, a 4/1 Fish, and is a Shapeshifter Rogue as well.
         Scenario::new("the Mimic enters as a Shapeshifter Rogue copy")
             .interaction(&[DANDAN])

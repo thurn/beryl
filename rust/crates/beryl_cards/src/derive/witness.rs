@@ -16,7 +16,7 @@
 use beryl_card::{CostAction, CostPart, Filter, Node};
 use beryl_engine::Zone;
 use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Castings, Effect, FaceIx, Objects, Players,
+    Ability, AbilityKind, Behavior, CardDef, Castings, Effect, FaceIx, Objects, Players, Rewrite,
     TargetKind, Types,
 };
 use beryl_scenario::{Action, P0, Permanent};
@@ -143,7 +143,8 @@ fn targets_a_creature_card(ability: &Ability) -> bool {
 }
 
 /// The starting positions put creatures on the opponent's battlefield. A static
-/// effect on creatures its source's controller controls needs one on that side too.
+/// effect on creatures its source's controller controls needs one on that side too, as does
+/// an entering permanent that can copy one of its controller's creatures.
 const OWN_CREATURE: Witness = Witness {
     words: "with a creature of one's own",
     mine: &[Permanent::new(props::THIEF.card)],
@@ -196,6 +197,12 @@ fn affects_own_creatures(ability: &Ability) -> bool {
     creature && own
 }
 
+fn copies_as_it_enters(ability: &Ability) -> bool {
+    ability
+        .replacement()
+        .is_some_and(|replacement| matches!(replacement.rewrite, Rewrite::EnterAsCopy { .. }))
+}
+
 /// The witnesses of one instruction's own fields, its children aside.
 fn of(effect: &Effect) -> Vec<&'static Witness> {
     let mut out = Vec::new();
@@ -228,7 +235,10 @@ pub(super) fn witnesses(def: &'static CardDef) -> Vec<&'static Witness> {
         .faces
         .iter()
         .flat_map(|face| face.abilities.iter().chain(face.grants));
-    if abilities.clone().any(affects_own_creatures) {
+    if abilities
+        .clone()
+        .any(|ability| affects_own_creatures(ability) || copies_as_it_enters(ability))
+    {
         found.borrow_mut().push(&OWN_CREATURE);
     }
     let targets_abilities =
