@@ -23,7 +23,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import timing, tokens, windows
+from . import paths, timing, tokens, windows
 from .ingest import FileSource, LineSource, Row
 
 PROVIDER = "claude"
@@ -62,7 +62,7 @@ WANTED: tuple[bytes, ...] = (b'"usage"', b'"tool_result"', b'"user"')
 
 def project_name(path: Path) -> str:
     """The transcript folder Claude Code uses for the working directory `path`."""
-    return re.sub(r"[^A-Za-z0-9]", "-", str(path))
+    return paths.project_name(str(path))
 
 
 def transcript_of(path: Path) -> tuple[str, str | None]:
@@ -414,7 +414,7 @@ class Sessions(FileSource):
         if not isinstance(record, dict):
             raise TypeError("not an object")
         cwd = str(record.get("originCwd") or record.get("cwd") or "")
-        if cwd != self.checkout and not cwd.startswith(self.checkout + "/"):
+        if not paths.inside(cwd, self.checkout):
             return []
         session = text_field(record, "sessionId")
         title = record.get("title")

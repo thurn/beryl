@@ -95,6 +95,24 @@ store" and "Isolation" before changing anything here.
   descriptions the page shows on hover (`FIELDS`), and the text tables. A sum
   that a model with no price makes a lower bound is marked `+`; an unknown value
   prints as `-`.
+- `exchange.py`: moving rows between machines.
+  `just efficiency export --since <date> [--out FILE]` writes this host's rows
+  from every table with a `host` column as one gzip-compressed JSON-lines file
+  (a header line, then `{"table", "row"}` lines; `ingests` is left out).
+  `just efficiency import <file>` adds them in one transaction: a row already
+  present is left alone, so importing a file twice, or two overlapping exports,
+  changes nothing, except that `checks` and `lane_runs`, whose rows are growing
+  totals, take the newer row. Table and column names in a file are checked
+  against the schema, and a file from this host or a newer schema is refused. An
+  export holds commands and paths, so it is copied between your own machines
+  (`scp`, a USB drive) and never committed or published. `coverage` lists each
+  host's newest row's date and the CPU tables that hold nothing for it, because
+  Windows has no sampler or lease log.
+- Windows: `paths.py` finds the providers' directories from the home directory
+  (`%USERPROFILE%\.claude\projects`, `%USERPROFILE%\.codex\sessions`),
+  `paths.project_name` builds a provider's project folder from the checkout path
+  (every non-alphanumeric character becomes `-`), and `paths.inside` compares
+  working directories as text with either separator, so nothing assumes `/`.
 - `cli.py`: the command and its queries.
 - The page: `serve.py` is `just efficiency serve`, a standard-library server on
   127.0.0.1 that answers `GET` only. An address is a query

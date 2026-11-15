@@ -65,3 +65,22 @@ def codex_sessions() -> list[Path]:
     flat `archived_sessions/` that finished ones are moved to."""
     home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
     return [home / "sessions", home / "archived_sessions"]
+
+
+def project_name(path: str) -> str:
+    """The transcript folder Claude Code names for the working directory `path`: every
+    character that is not a letter or digit becomes `-`, so `/Users/a/beryl` is
+    `-Users-a-beryl` and `C:\\Users\\a\\beryl` is `C--Users-a-beryl` whichever separator
+    the platform uses."""
+    return "".join(c if c.isascii() and c.isalnum() else "-" for c in path)
+
+
+def inside(cwd: str, root: str) -> bool:
+    """Whether the working directory `cwd` is `root` or below it. Both are text as a provider
+    recorded them, so either separator may appear (Windows records `C:\\a\\b`), and a drive
+    letter's case is not significant."""
+    here = cwd.replace("\\", "/").rstrip("/")
+    top = root.replace("\\", "/").rstrip("/")
+    if len(top) > 1 and top[1] == ":":
+        here, top = here.lower(), top.lower()
+    return here == top or here.startswith(top + "/")

@@ -9,6 +9,7 @@ import argparse
 import json
 import sqlite3
 import sys
+from datetime import datetime
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
@@ -22,6 +23,7 @@ from . import (
     commits,
     codex,
     cpu,
+    exchange,
     facts,
     ingest,
     kinds,
@@ -126,6 +128,51 @@ def run_sql(args: argparse.Namespace) -> Result:
     )
 
 
+def run_export(args: argparse.Namespace) -> Result:
+    fresh(args)
+    host = paths.host()
+    since = parse_since(str(args.since)).since
+    today = datetime.now().strftime("%Y-%m-%d")
+    out = Path(args.out) if args.out else paths.folder() / f"export-{host}-{today}.gz"
+    db = reader()
+    try:
+        counts = exchange.export(db, host, since, out)
+    finally:
+        db.close()
+    return Result(
+        "export",
+        {"host": host, "since": since, "file": str(out), "rows": counts},
+        [
+            f"wrote {sum(counts.values())} rows of {host} to {out}",
+            "It holds commands and paths: copy it to your own machines only, never "
+            "commit or publish it.",
+        ],
+        [f"efficiency import {out}"],
+    )
+
+
+def run_import(args: argparse.Namespace) -> Result:
+    path = Path(args.file)
+    db = store.open_store(paths.store())
+    try:
+        with store.locked(paths.lock()):
+            try:
+                found = exchange.import_file(db, path, paths.host())
+            except exchange.ExchangeError as e:
+                raise SystemExit(f"efficiency: {e}") from e
+    finally:
+        db.close()
+    return Result(
+        "import",
+        {"host": found.host, "added": found.added, "seen": found.seen},
+        [
+            f"imported {sum(found.added.values())} new rows of {found.host} "
+            f"({sum(found.seen.values())} in the file) from {path}"
+        ],
+        ["efficiency coverage"],
+    )
+
+
 def unread(db: sqlite3.Connection, found: Sequence[ingest.Source]) -> dict[str, int]:
     """Files of lines that ingest has not read to their end: how many were never read, how
     many were read in part, and the bytes still to read. A file's last line still being
@@ -222,6 +269,42 @@ def unmatched(db: sqlite3.Connection, days: int = 7) -> dict[str, object]:
     }
 
 
+# The tables whose newest row says how fresh a host's data is, and those that a host may
+# legitimately lack (Windows has no CPU sampler or lease log).
+FRESHNESS: dict[str, str] = {
+    name: column
+    for name, column in exchange.TIME_COLUMNS.items()
+    if name in ("requests", "tool_calls", "windows", "cpu_minutes", "lane_runs")
+}
+OPTIONAL = ("cpu_minutes", "leases")
+
+
+def hosts(db: sqlite3.Connection) -> dict[str, dict[str, object]]:
+    """Per host, the date of its newest row and the CPU tables that hold nothing for it, so
+    that a stale import, or a host with no sampler, is visible."""
+    found: dict[str, dict[str, object]] = {}
+    for name, column in FRESHNESS.items():
+        for host, newest in db.execute(
+            f'SELECT host, max("{column}") FROM "{name}" GROUP BY host'
+        ):
+            entry = found.setdefault(str(host), {"newest": None})
+            if newest and (
+                entry["newest"] is None or str(newest) > str(entry["newest"])
+            ):
+                entry["newest"] = str(newest)
+    for entry in found.values():
+        entry["newest"] = str(entry["newest"])[:10] if entry["newest"] else None
+    for host, entry in found.items():
+        entry["no_rows"] = [
+            name
+            for name in OPTIONAL
+            if not db.execute(
+                f'SELECT 1 FROM "{name}" WHERE host = ? LIMIT 1', (host,)
+            ).fetchone()
+        ]
+    return dict(sorted(found.items()))
+
+
 def coverage(db: sqlite3.Connection, pending: dict[str, int] | None = None) -> Result:
     """What the store holds and what it is missing: rows per table, skipped lines per source,
     what attribution could not place, files not yet read, and the cost of the ingests, all of
@@ -270,6 +353,18 @@ def coverage(db: sqlite3.Connection, pending: dict[str, int] | None = None) -> R
         "no data   beads that ran on hosts with no data: "
         + (", ".join(f"{k} {v}" for k, v in elsewhere.items()) or "none"),
     ]
+    per_host = hosts(db)
+    lines.append(
+        "hosts     newest row: "
+        + (
+            ", ".join(
+                f"{h} {e['newest'] or '-'}"
+                + (f" (no {', '.join(e['no_rows'])})" if e["no_rows"] else "")  # type: ignore[attr-defined]
+                for h, e in per_host.items()
+            )
+            or "none"
+        )
+    )
     if pending is not None:
         lines.append(
             f"unread    files never read {pending['never_read']}, read in part "
@@ -324,6 +419,7 @@ def coverage(db: sqlite3.Connection, pending: dict[str, int] | None = None) -> R
             },
             "ingests": [dict(zip(columns, r)) for r in recent],
             **missing,
+            "hosts": per_host,
             "unread": pending,
             "unmatched": other,
             "unpriced": unpriced,
@@ -454,6 +550,11 @@ QUERIES: dict[str, tuple[str, Callable[[argparse.Namespace], Result]]] = {
         "changes made to save time or tokens, with medians before and after",
         run_changes,
     ),
+    "export": (
+        "write this host's rows to a compressed file for another machine",
+        run_export,
+    ),
+    "import": ("add the rows of another machine's export to the store", run_import),
     "ingest": ("update the store from the sources", run_ingest),
     "sql": ("run a read-only SQL query against the store", run_sql),
     "coverage": (
@@ -498,6 +599,13 @@ def parser() -> argparse.ArgumentParser:
                 action="store_true",
                 help="answer from the store as it is",
             )
+        if name == "export":
+            p.add_argument(
+                "--since", default="all", help="24h, 7d, all or a date (default all)"
+            )
+            p.add_argument("--out", help="the file to write (default: in the cache)")
+        if name == "import":
+            p.add_argument("file", metavar="<file>", help="an export from another host")
         if name == "sql":
             p.add_argument("query", metavar="'<query>'", help="a read-only SQL query")
         if name in ("epic", "bead", "session"):

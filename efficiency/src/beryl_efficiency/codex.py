@@ -30,7 +30,7 @@ import json
 import re
 from pathlib import Path
 
-from . import claude, timing, tokens, windows
+from . import claude, paths, timing, tokens, windows
 from .ingest import LineSource, Row
 
 PROVIDER = "codex"
@@ -139,7 +139,7 @@ class Rollouts(LineSource):
             thread_of(path)
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             return False
-        return cwd == self.checkout or cwd.startswith(self.checkout + "/")
+        return paths.inside(cwd, self.checkout)
 
     def files(self) -> list[Path]:
         found: list[Path] = []
