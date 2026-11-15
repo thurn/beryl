@@ -110,5 +110,40 @@
     "scenario": "Animate Dead on Worldgorger Dragon alone is a draw",
     "cr": "CR 104.4b (https://yawgatog.com/resources/magic-rules/#R1044b): \"If a game that's not using the limited range of influence option (including a two-player game) somehow enters a 'loop' of mandatory actions, repeating a sequence of events with no way to stop, the game is a draw. Loops that contain an optional action don't result in a draw.\"",
     "reason": "Forge has no rule that ends a loop of mandatory actions as a draw: it keeps returning the Dragon and Animate Dead until its step limit, where XMage (after its loop check) and Beryl end the game in a draw."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Containment Priest",
+    "scenario": "Containment Priest entering with another creature exiles neither",
+    "cr": "CR 614.12 (https://yawgatog.com/resources/magic-rules/#R61412): \"Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c-d.) Such effects may come from the permanent itself if they affect only that permanent (as opposed to a general subset of permanents that includes it). They may also come from other sources. To determine which replacement effects apply and how they apply, check the characteristics of the permanent as it would exist on the battlefield, taking into account replacement effects that have already modified how it enters the battlefield (see rule 616.1), continuous effects from the permanent's own static abilities that would apply to it once it's on the battlefield, and continuous effects that already exist and would apply to the permanent.\"",
+    "reason": "XMage exiles the other creature that enters in the same Show and Tell as Containment Priest, as if the Priest were already on the battlefield. The Priest isn't on the battlefield yet, so its replacement effect does not apply to creatures entering with it (and the card's ruling says so)."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Stifle",
+    "scenario": "Stifle counters a leaves trigger",
+    "cr": "CR 701.6a (https://yawgatog.com/resources/magic-rules/#R7016a): \"To counter a spell or ability means to cancel it, removing it from the stack. It doesn't resolve and none of its effects occur. A countered spell is put into its owner's graveyard.\"",
+    "reason": "The translated XMage test queues Stifle against any ability on the stack, so XMage counters Fiend Hunter's enters trigger instead of its leaves trigger and the creature is returned. Stifle on the leaves trigger keeps the creature exiled, as Beryl expects."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Animate Dead",
+    "scenario": "Stifle on the sacrifice trigger leaves the creature",
+    "cr": "CR 701.6a (https://yawgatog.com/resources/magic-rules/#R7016a): \"To counter a spell or ability means to cancel it, removing it from the stack. It doesn't resolve and none of its effects occur. A countered spell is put into its owner's graveyard.\"",
+    "reason": "The translated XMage test queues Stifle against any ability on the stack, so XMage counters Animate Dead's enters trigger instead of the sacrifice trigger, and the creature is later sacrificed. Countering the sacrifice trigger leaves the creature on the battlefield."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Chains of Mephistopheles",
+    "scenario": "an upkeep draw is replaced, the draw step's draw is not",
+    "cr": "CR 103.8a (https://yawgatog.com/resources/magic-rules/#R1038a): \"In a two-player game, the player who plays first skips the draw step (see rule 504, 'Draw Step') of their first turn.\"",
+    "reason": "The XMage translation plays this turn-3 scenario as XMage's turn 1, whose draw step XMage skips because the starting player doesn't draw in their first turn, so the draw step draw the scenario expects never happens."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Mindslaver",
+    "scenario": "the controller chooses the controlled player's cleanup discard",
+    "cr": "CR 724.5 (https://yawgatog.com/resources/magic-rules/#R7245): \"While controlling another player, a player makes all choices and decisions the controlled player is allowed to make or is told to make by the rules or by any objects. This includes choices and decisions about what to play, and choices and decisions called for by spells and abilities.\"",
+    "reason": "The scenario ends at the pending discard decision, which XMage's script cannot answer for the controlled player: XMage asks the controlled player's own test player at cleanup and fails for lack of a scripted choice. The rules give that decision to the controller."
   }
 ]

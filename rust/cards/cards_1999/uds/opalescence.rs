@@ -200,6 +200,9 @@ pub mod scenarios {
         Scenario::new("an enchantment is no creature without it")
             .interaction(&[Card::GloriousAnthem])
             .battlefield(P0, &[Card::GloriousAnthem])
-            .actions(&[ME.creature(Card::GloriousAnthem, false)]),
+            .actions(&[
+                ME.creature(Card::GloriousAnthem, false),
+                advance_to(2, TurnStep::Upkeep),
+            ]),
     ];
 }

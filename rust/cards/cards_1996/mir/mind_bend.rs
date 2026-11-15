@@ -116,8 +116,8 @@ pub mod scenarios {
                 ME.targets(Card::Forest),
                 ME.tapped(Card::Forest, 1),
             ]),
-        // Urborg's "Swamp" reads "Island": every land is an Island, so P0's Plains taps for {U}
-        // (CR 305.7) and pays for a second Mind Bend.
+        // Urborg's "Swamp" reads "Island": every land is an Island and no land is a Swamp, so
+        // each of P0's untapped lands taps for {U} (CR 305.7) and a second Mind Bend can be cast.
         Scenario::new("Mind Bend makes Urborg give every land the Island type")
             .interaction(&[Card::UrborgTombOfYawgmoth])
             .battlefield(
@@ -134,6 +134,7 @@ pub mod scenarios {
                 ME.has_subtype(Card::Plains, Subtype::Island, true),
                 ME.has_subtype(Card::Plains, Subtype::Swamp, false),
                 ME.casts(MIND_BEND),
+                ME.targets(Card::Island),
             ]),
         // [CR 400.7]: an object that changes zones becomes a new object with no memory of
         // its previous existence, so a text change on a Forest ends when Flickerwisp exiles it

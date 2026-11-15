@@ -200,16 +200,20 @@ pub mod scenarios {
         // copy is made, and Fork goes to the graveyard.
         Scenario::new("Fork does nothing when its target spell was countered")
             .interaction(&[BOLT])
-            .battlefield(P0, &[MOUNTAIN, MOUNTAIN, MOUNTAIN])
-            .hand(P0, &[BOLT, FORK])
+            .battlefield(P0, &[MOUNTAIN, MOUNTAIN, MOUNTAIN, MOUNTAIN])
+            .hand(P0, &[BOLT, BOLT, FORK])
             .battlefield(P1, &[ISLAND, ISLAND])
             .hand(P1, &[Card::Counterspell])
             .actions(&[
                 ME.casts(BOLT),
                 ME.targets_player(THEM),
                 ME.casts(FORK),
+                ME.passes(),
                 THEM.casts(Card::Counterspell),
                 THEM.targets(BOLT),
+                // The second Bolt in hand gives P0 priority after the Counterspell resolves, with
+                // Fork still on the stack, so a second Resolve resolves Fork.
+                Resolve,
                 Resolve,
                 THEM.life(20),
                 ME.has(Zone::Graveyard, FORK, 1),

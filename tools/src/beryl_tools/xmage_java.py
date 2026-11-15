@@ -114,6 +114,11 @@ def entering_counters(oracle: str, kind: str) -> int:
     return NUMBER_WORDS.get(found.group(1), 0) if found else 0
 
 
+def xmage_zone(zone: str) -> str:
+    """Beryl's zone as the name of XMage's `Zone` constant, which calls exile `EXILED`."""
+    return "EXILED" if zone == "Exile" else zone.upper()
+
+
 # Beryl's zones as the XMage assertion that counts the cards in one.
 ZONE_COUNTS: dict[str, str] = {
     "Hand": "assertHandCount",
@@ -266,11 +271,11 @@ def assertion_code(a: Json, who: str) -> str:
         kind = COUNTERS[cast(str, a["kind"])]
         return f"assertCountersOn({who}, {name}, CounterType.{kind}, {count})"
     if what == "Colors":
-        zone = cast(str, a["zone"]).upper()
+        zone = xmage_zone(cast(str, a["zone"]))
         colors = "".join(f", {java_string(c)}" for c in cast(list[str], a["colors"]))
         return f"assertColorsIn({who}, Zone.{zone}, {name}{colors})"
     if what == "PtIn":
-        zone = cast(str, a["zone"]).upper()
+        zone = xmage_zone(cast(str, a["zone"]))
         return f"assertPtIn({who}, Zone.{zone}, {name}, {a['power']}, {a['toughness']})"
     if what == "Stack":
         return f"assertStackSize({count})"
@@ -286,6 +291,7 @@ def assertion_code(a: Json, who: str) -> str:
 IMPORTS = """\
 import mage.constants.ManaType;
 import mage.constants.PhaseStep;
+import mage.constants.SubType;
 import mage.constants.Zone;
 import mage.counters.CounterType;
 import org.junit.Test;

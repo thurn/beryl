@@ -237,6 +237,7 @@ pub mod scenarios {
                 &[Permanent::new(Card::DarkDepths).counters(CounterKind::Ice, 0)],
             )
             .actions(&[
+                Resolve,
                 THEM.controls("Marit Lage", 1),
                 ME.casts(IMAGE),
                 Resolve,

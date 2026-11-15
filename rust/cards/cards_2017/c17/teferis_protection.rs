@@ -311,17 +311,22 @@ pub mod scenarios {
             ]),
         // A token that phases out does not cease to exist ([CR 702.26b] only treats it as
         // nonexistent; [CR 111.7] ends a token's existence only when it is in a zone other than
-        // the battlefield). It phases in at P0's next untap step.
+        // the battlefield). It phases in at P0's next untap step. P0's Treasure comes from Beza,
+        // who enters while P1 has more lands.
         //
         // [CR 111.7]: https://yawgatog.com/resources/magic-rules/#R1117
         Scenario::new("a token that phases out phases back in")
             .hand(P1, &[Card::Hullbreacher])
-            .permanents(P0, &[Permanent::token(crate::tokens::TREASURE_TOKEN)])
-            .battlefield(P0, &[Card::Plains, Card::Plains, Card::Plains])
-            .hand(P0, &[PROTECTION])
+            .battlefield(P0, &[Card::Plains; 7])
+            .battlefield(P1, &[Card::Plains; 8])
+            .hand(P0, &[Card::BezaTheBoundingSpring, PROTECTION])
             .library(P0, &[Card::Plains; 3])
             .library(P1, &[Card::Plains; 3])
             .actions(&[
+                ME.casts(Card::BezaTheBoundingSpring),
+                Resolve,
+                Resolve,
+                ME.controls(crate::tokens::TREASURE_TOKEN, 1),
                 ME.casts(PROTECTION),
                 Resolve,
                 ME.controls(crate::tokens::TREASURE_TOKEN, 0),

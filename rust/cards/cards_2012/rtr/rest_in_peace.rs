@@ -146,10 +146,16 @@ pub mod scenarios {
                     RIP,
                     Card::BloodArtist,
                     Card::ThaliaGuardianOfThraben,
-                    Card::ThaliaGuardianOfThraben,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
                 ],
             )
+            .hand(P0, &[Card::ThaliaGuardianOfThraben])
             .actions(&[
+                ME.casts(Card::ThaliaGuardianOfThraben),
+                Resolve,
+                ME.picks(Card::ThaliaGuardianOfThraben),
                 ME.has(Zone::Exile, Card::ThaliaGuardianOfThraben, 1),
                 ME.controls(Card::ThaliaGuardianOfThraben, 1),
                 ME.has_cards(Zone::Graveyard, 0),

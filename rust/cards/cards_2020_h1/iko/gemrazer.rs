@@ -455,9 +455,9 @@ pub mod scenarios {
             .hand(P0, &[Card::Gemrazer])
             .battlefield(P1, &[Prop::Vanilla])
             .library(P0, &[Card::Island])
-            // With no cast offered, P0 has nothing to do in the turn and the game reaches P1's
-            // first priority.
-            .actions(&[THEM.deciding(DecisionKind::Priority, 2)]),
+            // With no cast offered, P0 has nothing to do in the turn; the game goes on to P1's
+            // upkeep, before P1 draws.
+            .actions(&[advance_to(2, TurnStep::Upkeep)]),
         // CR 730.2 / CR 702.140b: the merged permanent is the same object as the target, so
         // +1/+1 counters and attached Equipment stay on it: over a 2/1 with two +1/+1 counters
         // wearing a +1/+1 Equipment, a 4/4 Gemrazer is 7/7.
