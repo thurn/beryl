@@ -1,5 +1,5 @@
 use beryl_session::protocol::ZoneName;
-use beryl_session::script::{Act, Fact, Verb};
+use beryl_session::script::{Act, Fact, Table as Stage, Tally, Verb, replay};
 use beryl_table::action::{Adjustment, Destination, Position, SeenObject, Selection, SortBy};
 use beryl_table::state::{Face, ObjectId, Row, Zone};
 use beryl_table::{Action, Table};
@@ -134,14 +134,6 @@ fn card_changes_use_the_expected_verbs_for_both_seats() {
             Action::PlayerCounter {
                 seat: HOST,
                 name: "U".into(),
-                adjustment: Adjustment::Set(1),
-            },
-            Verb::Count,
-        ),
-        (
-            Action::PlayerCounter {
-                seat: GUEST,
-                name: "energy".into(),
                 adjustment: Adjustment::Set(1),
             },
             Verb::Count,
@@ -296,4 +288,64 @@ fn a_draw_moves_anonymous_backs_as_one_group() {
         assert_ne!(object.slot, old);
     }
     assert!(!serde_json::to_string(&guest).unwrap().contains("Top Card"));
+}
+
+#[test]
+fn undo_of_bounce_restores_a_token_without_flying_it_from_hand() {
+    let mut table = Table::new(2);
+    add(&mut table, 1, "Card", FIELD, &[HOST, GUEST]);
+    add(&mut table, 2, "Token", FIELD, &[HOST, GUEST]);
+    table.objects.get_mut(&ObjectId(2)).unwrap().token = true;
+    let mut game = Game::new(table);
+    game.apply(HOST, &movement(select(FIELD, &[1, 2]), HAND, Position::Top));
+
+    let scripts = game.apply(HOST, &Action::Undo { entry: None });
+    for (index, script) in scripts.iter().enumerate() {
+        let slots = &game.views[index].1;
+        let card = slots.get(ObjectId(1)).unwrap();
+        let token = slots.get(ObjectId(2)).unwrap();
+        let arrivals = script
+            .beats
+            .iter()
+            .flatten()
+            .filter_map(|step| match &step.act {
+                Act::Fly { object, .. } | Act::Appear { object, .. } => {
+                    Some((step.act.verb(), object.slot))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(arrivals.len(), 2, "{script}");
+        assert!(arrivals.contains(&(Verb::Fly, card)), "{script}");
+        assert!(arrivals.contains(&(Verb::Appear, token)), "{script}");
+    }
+}
+
+#[test]
+fn player_counters_are_part_of_script_replay() {
+    let mut game = Game::new(Table::new(2));
+    let before = game.views.each_ref().map(|(view, _)| Stage::of(view));
+    let scripts = game.apply(
+        GUEST,
+        &Action::PlayerCounter {
+            seat: GUEST,
+            name: "energy".into(),
+            adjustment: Adjustment::Set(3),
+        },
+    );
+    for (index, mut script) in scripts.into_iter().enumerate() {
+        for beat in &mut script.beats {
+            beat.retain(|step| {
+                !matches!(
+                    step.act,
+                    Act::Count {
+                        tally: Tally::PlayerCounters { .. }
+                    }
+                )
+            });
+        }
+        script.beats.retain(|beat| !beat.is_empty());
+        let (after, _) = &game.views[index];
+        assert!(replay::failure(&before[index], &script, after).is_some());
+    }
 }

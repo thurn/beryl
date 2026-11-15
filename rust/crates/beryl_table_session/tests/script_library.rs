@@ -284,14 +284,19 @@ fn both_seats_get_roll_phase_and_shuffle_notices() {
             portion: Portion::All,
         },
     );
-    for script in game.apply(
+    let old_orders = [
+        game.views[0].0.players.you.library.clone(),
+        game.views[1].0.players.opponent.library.clone(),
+    ];
+    let scripts = game.apply(
         HOST,
         &Action::Shuffle {
             seat: HOST,
             portion: Portion::All,
         },
-    ) {
-        assert_eq!(notices(&script), [&Notice::Shuffle]);
+    );
+    for (script, old_order) in scripts.iter().zip(old_orders) {
+        assert_eq!(notices(script), [&Notice::Shuffle]);
         assert!(matches!(
             script.beats[0][0].act,
             Act::Lift {
@@ -299,13 +304,20 @@ fn both_seats_get_roll_phase_and_shuffle_notices() {
                 ..
             }
         ));
-        assert!(acts(&script).any(|act| matches!(
-            act,
-            Act::Set {
-                fact: Fact::ShuffledLibrary { .. }
-            }
-        )));
-        assert!(!serde_json::to_string(&script).unwrap().contains("Top 0"));
+        let shuffled = acts(script)
+            .find_map(|act| match act {
+                Act::Set {
+                    fact: Fact::ShuffledLibrary { cards, .. },
+                } => Some(cards),
+                _ => None,
+            })
+            .expect("the shuffle sets a new library order");
+        assert_eq!(shuffled.len(), old_order.len());
+        assert!(
+            shuffled
+                .iter()
+                .all(|card| card.name.is_none() && !old_order.contains(&card.slot))
+        );
     }
 }
 

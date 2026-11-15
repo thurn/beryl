@@ -261,11 +261,21 @@ impl Builder {
                 },
             );
         }
+        // Undo can restore a vanished token alongside cards returning from a hand.
+        // The token appears where it was removed, without a flight from the hand.
+        let created: BTreeSet<_> = events
+            .iter()
+            .filter_map(|event| match event {
+                AnimationEvent::Change(Change::Create { object, .. }) => Some(object.id),
+                _ => None,
+            })
+            .collect();
         for (from, to) in lanes {
             let (zone, side) = member.zone_ref(from);
             let origin = Some(ZoneRef { zone, side });
             for &id in member.table.zone(to).into_iter().flatten() {
                 if member.previous.get(id).is_none()
+                    && !created.contains(&id)
                     && let Some(slot) = member.slots.get(id)
                     && !self.stage.objects.contains_key(&slot)
                 {

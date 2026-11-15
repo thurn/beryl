@@ -12,7 +12,7 @@ pub const FIELD: Zone = Zone::Battlefield;
 
 pub struct Game {
     pub table: Table,
-    log: Log,
+    pub log: Log,
     chance: Chance,
     pub views: [(PlayerView, Slots); 2],
     spans: [Vec<Open>; 2],

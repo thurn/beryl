@@ -1,7 +1,7 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use beryl_session::protocol::{Why, ZoneName};
-use beryl_session::script::{Act, Mark, Notice, Span, Verb};
+use beryl_session::script::{Act, Mark, Notice, Script, Span, Verb};
 use beryl_table::action::{Destination, Position};
 use beryl_table::state::{Assist, Card, Face, Line, LineVisibility, ObjectId, Proposal, Zone};
 use beryl_table::testing::{ASSIST_AND_LOG, CORE, Generator, Kind};
@@ -14,7 +14,7 @@ use script_common::{FIELD, GUEST, Game, HOST, add, select};
 const LIBRARY: Zone = Zone::Library(HOST);
 const HAND: Zone = Zone::Hand(HOST);
 
-fn acts(script: &beryl_session::script::Script) -> impl Iterator<Item = &Act> {
+fn acts(script: &Script) -> impl Iterator<Item = &Act> {
     script.beats.iter().flatten().map(|step| &step.act)
 }
 
@@ -239,6 +239,7 @@ fn every_script_replays_and_names_nothing_hidden() {
     let kinds: Vec<_> = CORE.iter().chain(ASSIST_AND_LOG).copied().collect();
     let mut generator = Generator::new(227);
     let mut covered = BTreeSet::new();
+    let mut resets = BTreeMap::new();
     // Fresh logs bound the cost of rebuilding the history for both viewers.
     for round in 0..12 {
         let mut table = Table::new(2);
@@ -271,26 +272,17 @@ fn every_script_replays_and_names_nothing_hidden() {
                 Err(_) => continue,
             };
             covered.extend(kind);
-            match action {
-                Action::Start { .. } | Action::NextGame { .. } | Action::Rewind { .. } => {
-                    assert!(scripts.iter().all(|script| script.reset.is_some()));
-                }
-                Action::Concede {} => assert!(scripts.iter().all(|script| script.beats.is_empty())),
-                Action::LoadDeck { .. }
-                | Action::Sideboard { .. }
-                | Action::Ready { .. }
-                | Action::SetAssist { .. } => {
-                    assert!(
-                        scripts
-                            .iter()
-                            .all(|script| script.beats.is_empty() && script.reset.is_none())
-                    );
-                }
-                Action::Undo { .. } => {}
-                _ => assert!(
-                    scripts.iter().all(|script| script.reset.is_none()),
-                    "{action:?}"
-                ),
+            let entries = game.log.entries();
+            let entry = entries.last().unwrap();
+            let undone = entry.undoes.map(|target| {
+                &entries
+                    .iter()
+                    .find(|entry| entry.n == target)
+                    .unwrap()
+                    .action
+            });
+            if let Some(reason) = check_resets(&action, undone, &scripts) {
+                *resets.entry((undone.is_some(), reason)).or_insert(0) += scripts.len();
             }
             for seat in game.table.seats() {
                 let index = usize::from(seat.0);
@@ -337,4 +329,46 @@ fn every_script_replays_and_names_nothing_hidden() {
         .filter(|kind| !covered.contains(kind))
         .collect();
     assert!(missing.is_empty(), "seed missed {missing:?}");
+    eprintln!("Reset scripts by (is undo, action): {resets:?}");
+}
+
+fn check_resets(
+    action: &Action,
+    undone: Option<&Action>,
+    scripts: &[Script; 2],
+) -> Option<&'static str> {
+    let reason = match undone.unwrap_or(action) {
+        Action::Start { .. } => Some("start"),
+        Action::NextGame { .. } => Some("next game"),
+        Action::Rewind { .. } => Some("rewind"),
+        Action::Concede {} => Some("concede"),
+        _ => None,
+    };
+    for script in scripts {
+        assert_eq!(
+            script.reset.is_some(),
+            reason.is_some(),
+            "{action:?}, undo of {undone:?}"
+        );
+        if let Some(reason) = reason {
+            assert_eq!(
+                acts(script)
+                    .filter(|act| act.verb() == Verb::Announce)
+                    .count(),
+                usize::from(reason != "concede"),
+                "{action:?}, undo of {undone:?}",
+            );
+        }
+        if matches!(
+            action,
+            Action::Concede {}
+                | Action::LoadDeck { .. }
+                | Action::Sideboard { .. }
+                | Action::Ready { .. }
+                | Action::SetAssist { .. }
+        ) {
+            assert!(script.beats.is_empty(), "{action:?}");
+        }
+    }
+    reason
 }
