@@ -27,6 +27,13 @@ class Position:
     # How many creatures each seat controls.
     creatures: list[int]
 
+    def object_name(self, card: str) -> str:
+        """How XMage's test commands name the object `card` picks: a face-down permanent, which
+        has no name, as XMage's stand-in for one."""
+        if card in self.face_down:
+            return "[face_down_creature]"
+        return card
+
     @staticmethod
     def of(t: Json) -> Position:
         """The position one entry of the dump's trace records."""

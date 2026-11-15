@@ -350,14 +350,6 @@ class Exporter:
         text = java_string(f"{self.faces.mana_cost[card]}: Turn")
         self.emit(f"activateAbility({self.at(p)}, {who}, {text});")
 
-    @staticmethod
-    def object_name(card: str, p: Position) -> str:
-        """How XMage's test commands name the object `card` picks: a face-down permanent, which
-        has no name, as XMage's stand-in for one."""
-        if card in p.face_down:
-            return "[face_down_creature]"
-        return card
-
     def empty_search(self, p: Position) -> None:
         """After a spell or ability resolves whose search by each player who lost objects to it
         Beryl did not ask (`Cards.search_by_each_player`), the skip XMage's search with nothing
@@ -562,6 +554,9 @@ class Exporter:
             return
         who = self.player(action["player"])
         kind = cast(str, action["kind"])
+        pick = cast(Json, action["pick"])
+        what = cast(str, pick["pick"])
+        card = cast("str | None", pick.get("card"))
         # A forced answer says its own; a scripted one answers the decision open at `p`.
         bending = action.get("purpose", p.purpose) == "waterbend"
         source = cast(str, p.stack[-1]["name"]) if p.stack else None
@@ -571,12 +566,16 @@ class Exporter:
         # asked only when its controller has no more tapped lands than it untaps: no leaves
         # the choice to Beryl's picks.
         untaps = source is not None and self.cards.untaps_up_to(source)
-        if untaps and kind == "ChooseUpTo" and self.last_answer != (source, kind):
-            self.emit(f'setOptionalChoice({who}, {self.at(p)}, "No");')
+        if untaps and kind == "ChooseUpTo":
+            # XMage only offers tapped lands. A payment either player delegated may have
+            # left a land untapped that Beryl chose here.
+            if card is not None and self.payment_left_to_xmage:
+                raise Unsupported(
+                    "an untap choice after XMage chose a payment's sources"
+                )
+            if self.last_answer != (source, kind):
+                self.emit(f'setOptionalChoice({who}, {self.at(p)}, "No");')
         self.last_answer = (source, kind)
-        pick = cast(Json, action["pick"])
-        what = cast(str, pick["pick"])
-        card = cast("str | None", pick.get("card"))
         resolving = source or ""
         may_choose = self.cards.may_choose(resolving)
         if self.cards.takes(resolving) and kind == "ChooseObject" and card is not None:
@@ -617,7 +616,7 @@ class Exporter:
                 self.prepare(who, p)
                 self.emit(f"resolveTop({self.at(p)}, {who});")
         elif kind == "Target" and card is not None:
-            self.emit(f"addTarget({who}, {java_string(self.object_name(card, p))});")
+            self.emit(f"addTarget({who}, {java_string(p.object_name(card))});")
             # XMage asks for "up to N" targets until N are chosen or it is told to stop.
             if self.targets_short is not None:
                 self.targets_short -= 1
@@ -669,10 +668,10 @@ class Exporter:
         elif action.get("purpose", p.purpose) == "replace":
             # Dredge's yes or no (`chooseUse`); mandatory effects' order by source name.
             yes = "false" if card is None else "true"
-            name = java_string(self.object_name(card, p)) if card else yes
+            name = java_string(p.object_name(card)) if card else yes
             self.emit(f"setChoice({who}, {name if kind == 'ChooseObject' else yes});")
         elif (kind in CHOICE_KINDS or bending) and card is not None:
-            name = java_string(self.object_name(card, p))
+            name = java_string(p.object_name(card))
             self.emit(f"{self.choice_command(source, kind)}({who}, {name});")
         elif (kind == "ChooseUpTo" or bending) and what == "Done":
             if self.choice_command(source, kind) == "addTarget":
