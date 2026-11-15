@@ -77,11 +77,7 @@ impl Inputs {
             {
                 inputs = inputs.union(Inputs::COUNTERS);
             }
-            if spec
-                .condition
-                .as_ref()
-                .is_some_and(condition_reads_life)
-            {
+            if spec.condition.as_ref().is_some_and(condition_reads_life) {
                 inputs = inputs.union(Inputs::LIFE);
             }
             let graveyards = spec.modifications.iter().any(|m| match *m {
