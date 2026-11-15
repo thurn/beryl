@@ -61,68 +61,27 @@ def test_a_number_is_held_within_a_tick_or_a_share_of_its_value() -> None:
 # The capture: a step held to its verb's values.
 
 
-def test_each_step_of_the_slice_has_values_of_its_case() -> None:
-    cases = {v["name"]: set(v.get("cases", {})) for v in conventions.load()["verbs"]}
-    item = {"kind": "ability", "triggered": True}
-    steps: list[tuple[dict[str, Any], str]] = [
-        ({"verb": "fly", "from": "hand", "object": {"zone": "stack"}}, "yours"),
-        ({"verb": "fly", "from": "hand", "object": {"zone": "stack"}}, "theirs"),
-        ({"verb": "fly", "from": "stack", "object": {"zone": "battlefield"}}, "yours"),
-        ({"verb": "emerge", "id": 1, "item": item}, "yours"),
-        (
-            {"verb": "appear", "from": "nowhere", "object": {"zone": "battlefield"}},
-            "yours",
-        ),
-        (
-            {
-                "verb": "vanish",
-                "from": "stack",
-                "subject": {"kind": "ability", "id": 1},
-            },
-            "yours",
-        ),
-    ]
-    for act, seat in steps:
-        case = motion.case_of(act, seat)
-        assert case in cases[str(act["verb"])], (act, seat, case)
-
-
-def test_a_card_that_leaves_is_held_to_the_case_of_where_it_goes_or_why() -> None:
-    def leaves(zone: str, why: str) -> dict[str, Any]:
-        subject = {"kind": "object", "slot": 1}
-        return {
-            "verb": "vanish",
-            "subject": subject,
-            "why": why,
-            "object": {"zone": zone},
-        }
-
-    assert motion.case_of(leaves("graveyard", "destroy"), "yours") == "destroyed"
-    assert motion.case_of(leaves("graveyard", "counter"), "yours") == "countered"
-    assert motion.case_of(leaves("graveyard", "sacrifice"), "yours") == "sacrificed"
-    # A spell an effect returns to its hand is bounced, whatever the effect is called.
-    assert motion.case_of(leaves("hand", "effect"), "yours") == "bounced"
-    assert motion.case_of(leaves("exile", "effect"), "theirs") == "exiled"
-    # The opponent's spell is theirs from either seat's capture.
-    theirs = {"zone": "stack", "controller": "opponent"}
-    cast = {"verb": "fly", "from": "hand", "object": theirs}
-    assert motion.case_of(cast, "yours") == "opponent spell cast"
-    # A draw is held up only for the player who reads it; an effect's card is no draw.
-    hand = {"zone": "hand", "owner": "you", "name": "Island"}
-    drawn = {"verb": "fly", "from": "library", "why": "draw", "object": hand}
-    assert motion.case_of(drawn, "yours") == "draw"
-    unseen = {**drawn, "object": {"zone": "hand", "owner": "opponent", "name": None}}
-    assert motion.case_of(unseen, "theirs") == "opponent draw"
-    assert motion.case_of({**drawn, "why": "effect"}, "yours") is None
-
-
 def token_steps(second_from: int, second_to: int) -> dict[str, Any]:
     """The capture's record of two tokens made by one effect, the second played over
-    `second_from` to `second_to`."""
+    `second_from` to `second_to`, each with the case the session sent with it."""
     act = {"verb": "appear", "from": "nowhere", "object": {"zone": "battlefield"}}
     steps = [
-        {"n": 12, "verb": "appear", "act": act, "from": 2035, "to": 2068},
-        {"n": 13, "verb": "appear", "act": act, "from": second_from, "to": second_to},
+        {
+            "n": 12,
+            "verb": "appear",
+            "act": act,
+            "case": "token",
+            "from": 2035,
+            "to": 2068,
+        },
+        {
+            "n": 13,
+            "verb": "appear",
+            "act": act,
+            "case": "token",
+            "from": second_from,
+            "to": second_to,
+        },
     ]
     return {"seat": "yours", "tick": 1000 / 60, "steps": steps}
 
@@ -363,53 +322,6 @@ def test_a_card_that_comes_to_be_in_place_does_not_travel() -> None:
     frames = [absent] * 3 + [landed.frames[-1]] * 3
     clip = Clip(WIDTH, HEIGHT, landed.times[:6], frames, (WIDTH, HEIGHT))
     assert motion.seen(clip) == motion.Seen(travels=False)
-
-
-def test_a_change_in_place_is_held_to_its_case() -> None:
-    """A turn by which way it goes, a strike by what it lands on and a counter by its kind, as
-    the stage times them (ui/src/stage/timing.ts caseOf); a life total alone has no case.
-    """
-    tapped = {"verb": "tap", "object": {"tapped": True}}
-    assert motion.case_of(tapped, "yours") == "tap"
-    assert (
-        motion.case_of({"verb": "tap", "object": {"tapped": False}}, "yours") == "untap"
-    )
-    at_player = {"verb": "strike", "to": {"kind": "player", "player": "opponent"}}
-    assert motion.case_of(at_player, "yours") == "unblocked attacker"
-    at_blocker = {"verb": "strike", "to": {"kind": "object", "slot": 3}}
-    assert motion.case_of(at_blocker, "theirs") == "blocked attacker"
-
-    def counted(tally: dict[str, object]) -> str | None:
-        return motion.case_of({"verb": "count", "tally": tally}, "yours")
-
-    assert counted({"kind": "counters", "counter": "loyalty"}) == "loyalty"
-    assert counted({"kind": "counters", "counter": "plusOne"}) == "counter"
-    assert counted({"kind": "life", "player": "you", "life": 17}) is None
-
-
-def test_a_step_that_moves_no_card_is_held_to_its_case() -> None:
-    def case(act: dict[str, object]) -> str | None:
-        return motion.case_of(act, "yours")
-
-    assert case({"verb": "streak", "stream": {"kind": "mana"}}) == "mana"
-    assert case({"verb": "streak", "stream": {"kind": "damage"}}) == "damage"
-    assert case({"verb": "announce", "notice": {"kind": "turn"}}) == "turn banner"
-    assert case({"verb": "announce", "notice": {"kind": "scry"}}) == "scry pill"
-    assert case({"verb": "announce", "notice": {"kind": "coin"}}) == "coin"
-    assert case({"verb": "dwell", "subject": {"kind": "player"}}) == "game's end"
-    assert case({"verb": "dwell", "subject": {"kind": "object"}}) is None
-    assert case({"verb": "set", "fact": {"kind": "turn"}}) == "step begins"
-    assert case({"verb": "set", "fact": {"kind": "library"}}) == "library shuffled"
-    assert case({"verb": "set", "fact": {"kind": "object"}}) is None
-    # Each is a case its verb's values have.
-    verbs = {v["name"]: v for v in conventions.load()["verbs"]}
-    for verb, named in (
-        ("streak", ("mana", "damage")),
-        ("announce", ("turn banner", "scry pill", "coin")),
-        ("dwell", ("game's end",)),
-        ("set", ("step begins", "library shuffled")),
-    ):
-        assert set(named) <= set(verbs[verb]["cases"])
 
 
 def test_steps_alone_in_their_beats_are_held_to_no_stagger() -> None:

@@ -437,6 +437,7 @@ const browserFixture: Fixture = {
     },
     { kind: "response", command: "ui_ready", value: null },
     { kind: "response", command: "list_agents", value: [] },
+    { kind: "response", command: "stage_timings", value: { entries: [] } },
     { kind: "response", command: "current_game", value: null },
     { kind: "response", command: "resume_game", value: null },
     { kind: "response", command: "table_current", value: null },

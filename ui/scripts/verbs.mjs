@@ -216,13 +216,7 @@ async function walk({ tick, gap, answers, middle, whole, written }) {
             cues: window.berylStepSounds(edge),
         });
         if (edge.edge !== "start") return;
-        const { act } = edge.step;
-        const { duration } = stage.timings(
-            act,
-            edge.table.view,
-            undefined,
-            edge.beat.map((step) => step.act),
-        );
+        const { duration } = stage.timings(edge.step, edge.table.view);
         if (duration > 0) {
             wanted.add(edge.at + duration / 2).add(edge.at + duration);
         }

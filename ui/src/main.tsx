@@ -7,12 +7,20 @@ import "./design/fonts";
 import "./design/tokens.css";
 import "./design/components";
 import "./screens/styles";
-import { appInfo, isNativeApp } from "./ipc";
-import { installDiagnostics } from "./diagnostics";
+import { appInfo, isNativeApp, stageTimings } from "./ipc";
+import { installDiagnostics, note } from "./diagnostics";
+import { ownTimings } from "./stage/timing";
 import { installAudio } from "./audio/sound";
 import { setProfile } from "./profile";
 
 installDiagnostics();
+
+// The stage times the steps it makes itself while a prompt is open (its marks, arrows and
+// held cards) by a table the session gives once, which it has before the first view plays.
+// Without it they are over as they begin.
+const timed = stageTimings().then(ownTimings, (error: unknown) => {
+  note("warn", "stage", "no timing for the stage's own steps", String(error));
+});
 
 function render() {
   void installAudio();
@@ -25,10 +33,14 @@ function render() {
 
 // A native app needs its profile before reading settings and its platform before drawing art.
 if (isNativeApp()) {
-  void appInfo().then((info) => {
-    setProfile(info.profile);
-    render();
-  }, render);
+  void appInfo().then(
+    async (info) => {
+      setProfile(info.profile);
+      await timed;
+      render();
+    },
+    () => void timed.then(render),
+  );
 } else {
-  render();
+  void timed.then(render);
 }

@@ -187,13 +187,15 @@ export async function walk({ tick, longest }) {
     watching.unsubscribe();
     watching.unfollow();
     clock.release();
+    // Each step of the session's scripts by its act: the stage plays a copy of each step,
+    // with its timing attached (src/stage/timing.ts `timed`), but keeps its act as sent.
     const steps = new Map();
     const views = watching.views.map(({ view, at }, n) => {
         const script = view.script;
         const flat = (script?.beats ?? []).flatMap((beat, b) =>
             beat.map((step) => ({ step, beat: b })),
         );
-        flat.forEach(({ step }, index) => steps.set(step, [n, index]));
+        flat.forEach(({ step }, index) => steps.set(step.act, [n, index]));
         return {
             at,
             turn: `turn ${view.turn.number} ${view.turn.active} ${view.turn.step}`,
@@ -211,7 +213,7 @@ export async function walk({ tick, longest }) {
         views,
         // The steps of the session's scripts: a prompt's own marks are no view's.
         edges: watching.edges.flatMap(({ step, ...edge }) => {
-            const found = steps.get(step);
+            const found = steps.get(step.act);
             return found ? [{ ...edge, view: found[0], index: found[1] }] : [];
         }),
         unheard,

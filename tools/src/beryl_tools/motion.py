@@ -17,7 +17,7 @@ verb as its values say.
   its subject drawn alone, with a plate of the table with no node drawn, which the tracker
   finds the subject against: whole in every frame, however much of its path overlaps where it
   lay or rests (a card lifted off a pile and growing as it goes; by-w8gv.21.46). A step's
-  case is the page's (src/stage/timing.ts caseOf), read from the table the step found, as the stage times it. Each step is held to its verb's values (its case's, where the case has its own):
+  case is the one the session sent with it (`StepTiming.case`), read from the table the step found, as the stage times it. Each step is held to its verb's values (its case's, where the case has its own):
   how long it played and, in a batch of like steps, how far apart they began, by the step's own
   start and end in stage time; and for a step screenshotted, whether its subject travels and
   how its progress is eased, by what `by video measure` (video_measure.py) reads of its frames
@@ -114,7 +114,7 @@ MORE_ONLY: dict[str, str] = {
     for verb in ("lift", "strike", "count", "flip", "announce", "showcase")
 }
 # The verbs whose steps begin and end a span (an arrow, a line, a mark). The stage plays one
-# with the step that calls for it and staggers none (ui/src/stage/timing.ts), and an end's
+# with the step that calls for it and staggers none (beryl_session's script/timing.rs), and an end's
 # delay is how long its arrow has stood whole, so only how long each plays is held.
 SPANS: tuple[str, ...] = ("point", "mark")
 # The verbs whose steps are each alone in a beat (a step of the turn beginning, a wait, an
@@ -147,7 +147,7 @@ def entries(reference: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 def values_of(verb: dict[str, Any], case: str | None) -> dict[str, Any]:
     """What the stage plays a step of `verb`'s `case` with: the case's own values, each it
-    leaves null being the verb's (ui/src/stage/timing.ts)."""
+    leaves null being the verb's (beryl_session's script/timing.rs)."""
     whole: dict[str, Any] = verb.get("values", {})
     own = verb.get("cases", {}).get(case) if case is not None else None
     if own is None:
@@ -161,7 +161,7 @@ def values_of(verb: dict[str, Any], case: str | None) -> dict[str, Any]:
 def duration_of(act: dict[str, Any], values: dict[str, Any]) -> float:
     """How long the stage plays the step `act` with `values`: its duration, but for a look at
     several cards of a library, which lifts them one after another, each as long as one
-    alone (ui/src/stage/timing.ts `timingOf`)."""
+    alone (beryl_session's script/timing.rs `timing_of`)."""
     duration = float(values.get("duration") or 0)
     handling: dict[str, Any] = act.get("handling") or {}
     count = int(handling.get("count") or 0)
@@ -275,10 +275,9 @@ def timing_verdicts(
     its verb's duration and, where the next step is the same verb and case right after it in
     the script, how long after it that one began held to its stagger (`apart`), or to no time
     at all where the two are one fight's blows (`meets`). A value the data leaves null is
-    played as 0 (timing.ts), and held so."""
+    played as 0 (script/timing.rs), and held so."""
     verbs = {v["name"]: v for v in data.get("verbs", [])}
     tick = float(captured.get("tick") or TICK)
-    seat = captured["seat"]
     steps: list[dict[str, Any]] = captured["steps"]
     out: list[list[Verdict]] = []
     for step, after in zip(steps, [*steps[1:], None]):
@@ -286,7 +285,7 @@ def timing_verdicts(
         if not verb:
             out.append([])
             continue
-        case = case_in(step, seat)
+        case = case_in(step)
         values = values_of(verb, case)
         found = [
             held(
@@ -304,7 +303,7 @@ def timing_verdicts(
             and step["verb"] not in UNSTAGGERED
             and after["n"] == step["n"] + 1
             and after["verb"] == step["verb"]
-            and case_in(after, seat) == case
+            and case_in(after) == case
         ):
             found.append(
                 held(
@@ -351,83 +350,11 @@ def apart(step: dict[str, Any], values: dict[str, Any]) -> float:
 # The capture: what the tracker found of a step, and the case its verb's values are of.
 
 
-def case_in(step: dict[str, Any], seat: str) -> str | None:
-    """The case of a captured step: as the page told it, which reads it from the table the
-    step found (a life total's rise or fall), where the capture recorded it; else as
-    `case_of` reads the step's act alone."""
-    if "case" in step:
-        return step["case"]
-    return case_of(step["act"], seat)
-
-
-def case_of(act: dict[str, Any], seat: str) -> str | None:
-    """The case of the step `act`, as `seat` saw it, by the name its values and Arena's
-    instances have (ui/src/stage/timing.ts `caseOf` reads it the same); None for a case of
-    neither, which is held to its verb's values."""
-    verb = act.get("verb")
-    origin = act.get("from")
-    zone = (act.get("object") or {}).get("zone")
-    # Whose it is: its controller's, as the step's record says, or the seat that plays the
-    # capture's moment.
-    controller = (act.get("object") or {}).get("controller")
-    own = controller == "you" if controller else seat == "yours"
-    if verb == "fly":
-        cases = {
-            ("hand", "stack"): "own spell cast" if own else "opponent spell cast",
-            ("stack", "battlefield"): "permanent resolves",
-            ("hand", "battlefield"): "land played" if own else "opponent land played",
-            ("hand", "graveyard"): "discard",
-        }
-        if (origin, zone) == ("library", "hand"):
-            # A card an effect puts into a hand is no draw. A card no one reads flies face
-            # down. Whether a card read is drawn alone the act does not say: the page tells
-            # a capture so (`case_in`).
-            if act.get("why") != "draw":
-                return None
-            drawn: dict[str, Any] = act.get("object") or {}
-            read = drawn.get("owner") == "you" and drawn.get("name") is not None
-            return "draw" if read else "opponent draw"
-        return cases.get((origin, zone))
-    if verb == "emerge":
-        triggered = (act.get("item") or {}).get("triggered")
-        return "triggered ability" if triggered else "activated ability"
-    if verb == "appear" and origin == "nowhere":
-        return "token"
-    if verb == "vanish" and (act.get("subject") or {}).get("kind") == "ability":
-        return "ability finished"
-    if verb == "vanish":
-        # Where it goes says more than why: a spell an effect returns is bounced.
-        left = {"hand": "bounced", "exile": "exiled"}
-        why = {
-            "destroy": "destroyed",
-            "stateBased": "destroyed",
-            "counter": "countered",
-            "resolve": "resolved instant or sorcery",
-            "sacrifice": "sacrificed",
-        }
-        return left.get(str(zone)) or why.get(str(act.get("why")))
-    if verb == "tap":
-        return "tap" if (act.get("object") or {}).get("tapped") else "untap"
-    if verb == "strike":
-        struck = (act.get("to") or {}).get("kind")
-        return "unblocked attacker" if struck == "player" else "blocked attacker"
-    if verb == "count":
-        # A life total's case is whether it rose, which the table it finds says (the stage's
-        # timing.ts caseOf reads it there): a step alone is held to the verb's whole summary.
-        tally = act.get("tally") or {}
-        if tally.get("kind") == "counters":
-            return "loyalty" if tally.get("counter") == "loyalty" else "counter"
-    if verb == "streak":
-        return (act.get("stream") or {}).get("kind")
-    if verb == "announce":
-        kind = (act.get("notice") or {}).get("kind")
-        return {"turn": "turn banner", "scry": "scry pill", "coin": "coin"}.get(kind)
-    if verb == "dwell" and (act.get("subject") or {}).get("kind") == "player":
-        return "game's end"
-    if verb == "set":
-        fact = (act.get("fact") or {}).get("kind")
-        return {"turn": "step begins", "library": "library shuffled"}.get(fact)
-    return None
+def case_in(step: dict[str, Any]) -> str | None:
+    """The case of a captured step, as the page told it: the case the session sent with the
+    step (`StepTiming.case`), which it read from the table the step found (a life total's rise
+    or fall). None for a step of no case, which is held to its verb's values."""
+    return step.get("case")
 
 
 def curve_class(curve: str | None) -> str | None:
@@ -582,7 +509,7 @@ def measure_capture(
         for step, timed in zip(captured["steps"], timings):
             frames = steps_file.parent / step["folder"]
             name = f"{captured['layout']}/{steps_file.parent.name}/{step['folder']}"
-            case = case_in(step, captured["seat"])
+            case = case_in(step)
             if "rest" not in step:
                 why = step.get("unshot")
                 said = [Verdict(step["verb"], "frames", why, None, False, case)]

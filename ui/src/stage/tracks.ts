@@ -12,15 +12,14 @@ import { bowed, bowOf, type Bow } from "./bows.ts";
 import type { Table } from "./table.ts";
 import conventions from "../../../data/ui-conventions.json" with { type: "json" };
 
-/** The verb the data names `name`, with the numbers its timing rules read beside its values:
- * a strike's `phases`, and the `closes` and `stagger` of a case that a rule sets apart from
- * the case's measured values. */
-export const verbRules = (name: string) =>
+/** The verb the data names `name`, with the numbers the stage reads beside its values: a
+ * strike's `phases`, and the `closes` of a case that a rule sets apart from the case's
+ * measured values. */
+const verbRules = (name: string) =>
   conventions.verbs.find((verb) => verb.name === name) as
     | {
         phases?: { poise: number; hit: number };
         closes?: Record<string, number>;
-        stagger?: Record<string, number>;
       }
     | undefined;
 

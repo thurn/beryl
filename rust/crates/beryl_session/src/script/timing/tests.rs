@@ -1,5 +1,6 @@
-//! The timing rules on hand-built steps. `just timing-parity` holds them to the web
-//! interface's over every recording; these say what a case is made of where a reader looks.
+//! The cases of the timing rules on hand-built steps: which case each act is of, and what a
+//! case is made of where a reader looks. The rules that change a step's timing from its
+//! case's values are in `rules.rs`.
 
 use std::collections::BTreeSet;
 
@@ -13,21 +14,21 @@ use crate::script::{
     Act, Arrow, Entry, Fact, Mark, Notice, Script, Span, Step, Stream, Subject, Table, Tally,
 };
 
-fn card(slot: u16, zone: ZoneName, controller: Side) -> ObjectView {
+pub(super) fn card(slot: u16, zone: ZoneName, controller: Side) -> ObjectView {
     ObjectView::card(ObjectId(slot), "Card", zone, controller, controller)
 }
 
-fn object(slot: u16) -> Subject {
+pub(super) fn object(slot: u16) -> Subject {
     Subject::Object {
         slot: ObjectId(slot),
     }
 }
 
-fn player(player: Side) -> Subject {
+pub(super) fn player(player: Side) -> Subject {
     Subject::Player { player }
 }
 
-fn fly(from: ZoneName, why: Why, object: ObjectView) -> Act {
+pub(super) fn fly(from: ZoneName, why: Why, object: ObjectView) -> Act {
     Act::Fly {
         from,
         why,
@@ -38,7 +39,7 @@ fn fly(from: ZoneName, why: Why, object: ObjectView) -> Act {
     }
 }
 
-fn vanish(subject: Subject, why: Why, object: Option<ObjectView>) -> Act {
+pub(super) fn vanish(subject: Subject, why: Why, object: Option<ObjectView>) -> Act {
     Act::Vanish {
         subject,
         from: ZoneName::Battlefield,
@@ -65,7 +66,7 @@ fn ability(triggered: bool) -> StackItem {
     }
 }
 
-fn point(span: Span, arrow: Arrow, to: Subject) -> Act {
+pub(super) fn point(span: Span, arrow: Arrow, to: Subject) -> Act {
     Act::Point {
         span,
         arrow,
@@ -74,7 +75,7 @@ fn point(span: Span, arrow: Arrow, to: Subject) -> Act {
     }
 }
 
-fn mark(span: Span, mark: Mark) -> Act {
+pub(super) fn mark(span: Span, mark: Mark) -> Act {
     Act::Mark {
         span,
         mark,

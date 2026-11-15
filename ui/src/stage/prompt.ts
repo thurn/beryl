@@ -61,6 +61,7 @@ import {
   type Step,
   type Tray,
 } from "./table.ts";
+import { timed } from "./timing.ts";
 import { subjectOf as aboutOf } from "./tracks.ts";
 import type { Carried, Landing } from "./tray.ts";
 
@@ -400,7 +401,8 @@ export class Prompts {
    * marks ended first: but for the open decision shown again, as a change of stops shows
    * it, whose prompt stays as it is. */
   play(view: PlayerView, sent?: Script) {
-    let script = sent;
+    // Each step's timing goes on the step before the prompt's own steps are put among them.
+    let script = sent && timed(sent);
     // A script of marks alone is not waited out: the game's own steps begin now.
     if (this.#marking) this.#stage.skip();
     // Each card the player handled goes in place of its twin, before anything plays.

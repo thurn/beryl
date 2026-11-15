@@ -1,8 +1,8 @@
 //! How a step is played: the records the session sends beside a script so that both clients
 //! time it the same way, and the rules that fill them in. The records are the web interface's
-//! `Timing` and `Effect` records (`ui/src/stage/tracks.ts`) with the same meanings, and the
-//! rules are a port of `ui/src/stage/timing.ts`, which `just timing-parity` holds equal to it
-//! over every recording. Times are in milliseconds.
+//! `Timing` and `Effect` records (`ui/src/stage/tracks.ts`) with the same meanings. These
+//! rules are the only place a step's case, waits and effects are chosen: both clients play
+//! the timing they are sent. Times are in milliseconds.
 //!
 //! The rules read the design language's data (`data/ui-conventions.json`, `verbs` and
 //! `effects`): a verb's duration, delay and stagger and its curve, a case's own where the
@@ -10,6 +10,8 @@
 
 mod conventions;
 mod own;
+#[cfg(test)]
+mod rules;
 #[cfg(test)]
 mod tests;
 
@@ -120,9 +122,8 @@ pub enum Edge {
 /// Arena's name for the case the step `act` is of (`data/arena-motion.json`'s `case`): none
 /// for a case Arena's instances do not have, which is played with its verb's values. `found`
 /// is the table the step finds, which says whether a life total rises or falls, and `beside`
-/// the acts of its whole beat, which say whether a card is drawn alone. A port of `caseOf` in
-/// `ui/src/stage/timing.ts`, branch for branch.
-#[allow(clippy::too_many_lines)] // One branch for each verb, as `caseOf` has them.
+/// the acts of its whole beat, which say whether a card is drawn alone.
+#[allow(clippy::too_many_lines)] // One branch for each verb.
 pub fn case_of(act: &Act, found: &Table, beside: &[&Act]) -> Option<&'static str> {
     match act {
         Act::Tap { object } => Some(if object.tapped { "tap" } else { "untap" }),
@@ -297,8 +298,7 @@ pub fn case_of(act: &Act, found: &Table, beside: &[&Act]) -> Option<&'static str
 /// The data's timing of the step `act`, which finds the table `found`: its case's, or its
 /// verb's, changed by the rules below, and the case it is of. `before` is the act of the step
 /// before it in its beat, and `beside` the acts of the whole beat. Its effects are left empty:
-/// [`effects_of`] gives them. A port of `timingOf` in `ui/src/stage/timing.ts`, rule for rule
-/// and in the same order.
+/// [`effects_of`] gives them.
 pub fn timing_of(act: &Act, found: &Table, before: Option<&Act>, beside: &[&Act]) -> StepTiming {
     let case = case_of(act, found, beside);
     StepTiming {
@@ -308,7 +308,7 @@ pub fn timing_of(act: &Act, found: &Table, before: Option<&Act>, beside: &[&Act]
 }
 
 /// [`timing_of`] but for its case.
-#[allow(clippy::too_many_lines)] // One rule after another, as `timingOf` has them.
+#[allow(clippy::too_many_lines)] // One rule after another.
 fn motion(
     act: &Act,
     found: &Table,
@@ -518,8 +518,7 @@ fn motion(
 /// The effects the step `act` begins, which finds the table `found`: its verb's that fit it
 /// and do not leave its case out (`except`: a land played lands with no flash, as Arena's
 /// does), and only its case's own where the case has any (a card that leaves for exile is lost
-/// in light, and does not break up besides). A port of `effectsOf` in
-/// `ui/src/stage/timing.ts`.
+/// in light, and does not break up besides).
 pub fn effects_of(act: &Act, found: &Table) -> Vec<StepEffect> {
     let data = Conventions::get();
     let case = case_of(act, found, &[]);

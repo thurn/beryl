@@ -21,17 +21,17 @@ import { Feed } from "./feed.ts";
 import { timeFrames } from "./frames.ts";
 import { Prompts } from "./prompt.ts";
 import { ScriptStage } from "./stage.ts";
-import { caseOf, timingOf } from "./timing.ts";
+import { played } from "./timing.ts";
 
-/** The stage, for a test to step and read (`window.berylStage`, under a driven browser only,
- * only): `clock` (`now`, `advance`, `hold`, `release`), `idle`,
- * `settle`, `step`, `pose` and `shown`; what draws its prompts (`window.berylPrompts`), for a
- * capture of the stage's own motion to shut; and the case a step is of (`window.berylCase`),
- * for a capture to name its steps as the data does. */
+/** The stage, for a test to step and read (`window.berylStage`, under a driven browser only):
+ * `clock` (`now`, `advance`, `hold`, `release`), `idle`, `settle`, `step`, `pose` and
+ * `shown`; what draws its prompts (`window.berylPrompts`), for a capture of the stage's own
+ * motion to shut; and how a step is played (`window.berylPlayed`), whose case a capture
+ * names its steps by, as the data does. */
 type Hooked = Window & {
   berylStage?: ScriptStage;
   berylPrompts?: Prompts;
-  berylCase?: typeof caseOf;
+  berylPlayed?: typeof played;
   berylBehind?: boolean;
 };
 
@@ -52,7 +52,8 @@ export function pageStage() {
 export function createBoardStage(engine: boolean) {
   const stage = new ScriptStage({
     layout: desktop,
-    timings: timingOf,
+    timings: (step) => played(step).timing,
+    effects: (step) => played(step).effects,
     frames: animationFrames,
   });
   soundSteps(stage);
@@ -94,7 +95,7 @@ export function exposeBoardStage({ stage, prompts }: BoardStage) {
   if (!navigator.webdriver) return;
   (window as Hooked).berylStage = stage;
   (window as Hooked).berylPrompts = prompts;
-  (window as Hooked).berylCase = caseOf;
+  (window as Hooked).berylPlayed = played;
 }
 
 /** The game as the screen around the table draws it. */

@@ -235,7 +235,9 @@ export function recorder() {
 
 /** A stage on a held clock. `durations` gives the verbs that take time, or says of each act
  * how long it takes, given the table it finds and the act of the step before it in its beat;
- * `effects`, the effects each act begins; `layout`, where things rest (`row` by default). */
+ * `effects`, the effects each act begins, given the table it finds; `layout`, where things
+ * rest (`row` by default). The stage's own hooks are given whole steps (timing.ts `played`):
+ * these are given their acts. */
 export function stage(durations = {}, effects = undefined, layout = row) {
     const surface = recorder();
     const timed =
@@ -245,11 +247,11 @@ export function stage(durations = {}, effects = undefined, layout = row) {
     const made = new ScriptStage({
         layout,
         surface,
-        timings: (act, found, before) => ({
+        timings: (step, found, before) => ({
             ...SNAP,
-            ...timed(act, found, before),
+            ...timed(step.act, found, before?.act),
         }),
-        effects,
+        effects: effects && ((step, found) => effects(step.act, found)),
     });
     return { stage: made, surface };
 }

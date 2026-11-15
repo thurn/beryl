@@ -5,7 +5,7 @@ import { useReducedMotion } from "motion/react";
 import { DomSurface } from "./dom.ts";
 import type { PointerClient } from "./pointer.ts";
 import { SNAP, type ScriptStage } from "./stage.ts";
-import { effectsOf, RELEASE, snap, timingOf } from "./timing.ts";
+import { played, RELEASE, snap } from "./timing.ts";
 
 /** Mounts the stage on `layer` and attaches the board's pointer client while it is shown. */
 export function useSurface(
@@ -32,8 +32,8 @@ export function useSurface(
   // Reduced motion is durations of zero: every step is over in the tick that begins it, a
   // card let go is home at once, and no step begins an effect.
   useLayoutEffect(() => {
-    stage.timings = reduce ? snap : timingOf;
-    stage.effects = reduce ? () => [] : effectsOf;
+    stage.timings = reduce ? snap : (step) => played(step).timing;
+    stage.effects = reduce ? () => [] : (step) => played(step).effects;
     stage.release = reduce ? SNAP : RELEASE;
   }, [stage, reduce]);
   // What the stage shows changed with no motion of the pointer: it may be on another node.

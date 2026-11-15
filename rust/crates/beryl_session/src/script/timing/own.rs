@@ -78,9 +78,8 @@ pub struct OwnTimings {
     pub entries: Vec<OwnTiming>,
 }
 
-/// The timing of each [`OwnStep`]: what [`timing_of`] gives a step of that shape, which is
-/// what the web stage's `timingOf` gives the steps it makes. A tray is no act of a script, so
-/// its timing is its case's in the data.
+/// The timing of each [`OwnStep`]: what [`timing_of`] gives a step of that shape. A tray is no
+/// act of a script, so its timing is its case's in the data.
 pub fn own_timings() -> OwnTimings {
     // No step of a prompt's reads the table: its marks and arrows are on what it is about.
     let table = Table::empty(0);
@@ -133,8 +132,7 @@ pub fn own_timings() -> OwnTimings {
 }
 
 /// A tray's timing: its case's (`sort` for one that only moves cards within a tray already
-/// up, `tray` otherwise, its letting go too), as `caseOf` and `timingOf` in
-/// `ui/src/stage/timing.ts` give the web stage's own `lift`.
+/// up, `tray` otherwise, its letting go too).
 fn tray(step: OwnStep) -> StepTiming {
     let case = match step {
         OwnStep::TrayLifts { sorted: true } => "sort",

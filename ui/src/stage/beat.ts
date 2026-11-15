@@ -1,7 +1,7 @@
 // A beat laid out in time (script/mod.rs, Shape: "a beat is the steps that happen together,
 // in the order a stagger takes them"): when each of its steps begins and ends, from the stage
-// time the beat before it ended. The times are a function of the script and of the design
-// language's timings alone, worked out before any step of the beat plays, so a script's
+// time the beat before it ended. The times are a function of the script and of the timing
+// the session sent with it alone, worked out before any step of the beat plays, so a script's
 // timeline is the same however the clock reaches it (stage.ts).
 import type {
   PlayerView,
@@ -90,7 +90,8 @@ export function under<T>(
 
 /** The steps of `beat` as they play from stage time `at`, over the `table` the first of them
  * finds, `played` steps of their script having come before; and when the beat is over, which
- * is when its last motion is. Each step is timed by the table it will find. A step begins its
+ * is when its last motion is. Each step is timed by `timings`, as the session said to play it
+ * (timing.ts `played`), given the table it will find and the step before it. A step begins its
  * delay after its turn comes, and never before the step before it; the next step's turn is a
  * stagger after. One played `with` the step before it takes that step's turn, and one that is
  * drawn between things at rest (`Timing.after`) waits for the steps of the beat that move
@@ -103,18 +104,16 @@ export function under<T>(
  * everything that passes over the table now is over. The act of one that the table opens
  * for (`Timing.opens`) is applied as its delay begins, and the act of one that goes `ahead`
  * as the act of the step before it is, if that goes ahead too: the first of them begins
- * as its act is applied, and the hand makes room for every card of a draw at once. Each is
- * timed with the acts of its whole beat beside it. */
+ * as its act is applied, and the hand makes room for every card of a draw at once. */
 export function laid(
   beat: readonly ScriptStep[],
   played: number,
   at: number,
   table: Table,
   timings: (
-    act: Act,
+    step: ScriptStep,
     found?: PlayerView,
-    before?: Act,
-    beside?: readonly Act[],
+    before?: ScriptStep,
   ) => Timing,
   whole: (act: Act) => number | undefined,
   passed = at,
@@ -124,11 +123,10 @@ export function laid(
   let open = at;
   /** Whether the step before went ahead (`Timing.ahead`). */
   let led = false;
-  const beside = beat.map((step) => step.act);
   /** When each thing a step of the beat moves has come to rest. */
   const landed = new Map<Name, number>();
   const steps = beat.map((step, i): Run => {
-    const timing = timings(step.act, table.view, beat[i - 1]?.act, beside);
+    const timing = timings(step, table.view, beat[i - 1]);
     table = apply(table, step.act, step.cause);
     const own = timing.with ? last : turn;
     const held = timing.hold === undefined ? undefined : whole(step.act);

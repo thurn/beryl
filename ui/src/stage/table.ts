@@ -16,9 +16,12 @@ import type {
   Side,
   Span,
   StackItem,
+  StepTiming,
   Subject,
   ZoneName,
 } from "../generated/protocol";
+import type { Effect } from "./effects.ts";
+import type { Timing } from "./tracks.ts";
 import { zoneCards } from "../game/zoneCards.ts";
 
 /** The cards a prompt holds up off the table for its player to handle, in the piles it lays
@@ -73,20 +76,36 @@ export interface Hold {
 /** What a step does: an act the session sent, or the stage's own. */
 export type Act = Sent | Hold;
 
+/** How one step is played: the session's `StepTiming` in the stage's own terms (timing.ts
+ * `played`). */
+export interface Played {
+  /** The verb's case in data/ui-conventions.json, if it has one. */
+  case?: string;
+  timing: Timing;
+  /** The effects the step begins. */
+  effects: readonly Effect[];
+}
+
 /** One step of a script the stage plays. */
 export interface Step {
   act: Act;
   /** The spell, ability, permanent or player responsible; none for the rules of the game. */
   cause?: Subject;
+  /** How the session said to play it, attached as its script entered the stage (timing.ts
+   * `timed`); none for a step the stage made itself. */
+  played?: Played;
 }
 
 /** Whether `step` is one the session sent. */
 export const sent = (step: Step): step is SentStep => !("tray" in step.act);
 
-/** A script the stage plays: the session's, or one of the prompt's own steps. */
+/** A script the stage plays: the session's, or one of the prompt's own steps. A script
+ * the session sent carries one `timing` for each step until it enters the stage, which
+ * attaches each to its step (timing.ts `timed`). */
 export interface Script {
   reset?: Reset;
   beats: Step[][];
+  timing?: readonly StepTiming[];
 }
 
 /** A reset applies its spans immediately and plays its announcements on the clock. */

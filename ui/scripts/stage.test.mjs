@@ -430,7 +430,10 @@ test("those who draw from the stage hear of records and tables, never of motion"
 test("a surface mounted later finds every node where the model has it", () => {
     const made = new ScriptStage({
         layout: row,
-        timings: (act) => ({ ...SNAP, duration: act.verb === "fly" ? 600 : 0 }),
+        timings: ({ act }) => ({
+            ...SNAP,
+            duration: act.verb === "fly" ? 600 : 0,
+        }),
     });
     made.play(view([1, 2]));
     made.play(view([2, 1]), { beats: [[move(1, 1)]] });

@@ -154,10 +154,10 @@ async function walk({ tick, gap, answers, edge, shoot, whole, written }) {
             open.set(e.step, steps.length);
             const { act } = e.step;
             const subject = subjectOf(act, e.table.view);
-            // Its case as the stage times it (src/stage/timing.ts caseOf), from the table it
-            // finds: a life total's rise or fall is not told by the step alone.
-            const beside = e.beat.map((step) => step.act);
-            const found = window.berylCase(act, e.table.view, beside) ?? null;
+            // Its case as the session sent it (src/stage/timing.ts `played`), which it read
+            // from the table the step finds: a life total's rise or fall is not told by the
+            // step alone.
+            const found = window.berylPlayed(e.step).case ?? null;
             const turn = e.span.turn - origin;
             steps.push({ act, subject, case: found, turn, from: at, to: at });
         } else if (open.has(e.step)) {

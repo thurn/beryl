@@ -1,15 +1,14 @@
 // The stage's streaks, its announcements and its waits, with no browser (`npm test`): a
 // `streak` step draws a comet from where its source lay to where its target is, for as long as
 // it plays; an `announce` step that passes over the table holds up nothing and plays on to its
-// own end over the beats and scripts that follow; and the design language's timings give each
-// of the verbs that move no card its case. The same in a browser, from both seats and in both
-// layouts, is verbs.mjs (verb-cases-rest.mjs).
+// own end over the beats and scripts that follow. How each step is timed and which effects
+// it begins is the session's (beryl_session's script/timing.rs and its tests). The same in a
+// browser, from both seats and in both layouts, is verbs.mjs (verb-cases-rest.mjs).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { caseOf, effectsOf, timingOf } from "../src/stage/timing.ts";
 import { LIFT, lifts } from "../src/stage/lift.ts";
 import { bowed, bowOf } from "../src/stage/bows.ts";
-import { glide, STRIKE } from "../src/stage/tracks.ts";
+import { glide } from "../src/stage/tracks.ts";
 import { move, object, reach, stage, view } from "./stage-table.mjs";
 
 const card = (slot) => ({ kind: "object", slot });
@@ -197,73 +196,6 @@ test("a reset and a surface taken away leave no streak drawn", () => {
     assert.deepEqual(made.streaks(), []);
 });
 
-test("a creature's blow bursts on what it strikes and shakes the table", () => {
-    // Arena's camera jolts as each attacker lands (IEXcjBn3BXk 22:25.37, 35:35.40).
-    const act = {
-        verb: "strike",
-        source: 1,
-        to: { kind: "player", player: "opponent" },
-        amount: 2,
-    };
-    assert.deepEqual(
-        effectsOf(act).map(({ name, when, on, into }) => [
-            name,
-            when,
-            on,
-            into,
-        ]),
-        [
-            ["impact", "start", "opponent", STRIKE.hit],
-            ["shake", "start", "opponent", STRIKE.hit],
-            // And a trail of light behind the creature as it dashes (35:35.30).
-            ["trail", "start", 1, STRIKE.poise],
-        ],
-    );
-});
-
-test("what a streak lands on flashes as it lands, and its source glows as it leaves", () => {
-    const act = mana(card(1), card(2)).act;
-    assert.equal(caseOf(act), "mana");
-    assert.deepEqual(
-        effectsOf(act).map(({ name, when, on }) => [name, when, on]),
-        [
-            ["glow", "start", 1],
-            ["flash", "end", 2],
-        ],
-    );
-    const burn = {
-        ...act,
-        from: { kind: "ability", id: 1 },
-        to: { kind: "player", player: "opponent" },
-        stream: { kind: "damage" },
-    };
-    assert.equal(caseOf(burn), "damage");
-    assert.deepEqual(
-        effectsOf(burn).map(({ name, when, on }) => [name, when, on]),
-        [
-            ["glow", "start", "a1"],
-            ["impact", "end", "opponent"],
-        ],
-    );
-    // A pool is no card to glow, and mana from nowhere has no source.
-    const spent = { ...act, from: { kind: "player", player: "you" } };
-    assert.deepEqual(
-        [spent, mana(undefined, card(2)).act].map((a) =>
-            effectsOf(a).map((e) => e.name),
-        ),
-        [["flash"], ["flash"]],
-    );
-    // The life a streak of damage takes counts as the streak lands.
-    const count = {
-        verb: "count",
-        tally: { kind: "life", player: "opponent", life: 17 },
-    };
-    const table = view([]);
-    const landed = timingOf(count, table, burn);
-    assert.equal(landed.with, true);
-    assert.equal(landed.delay, timingOf(burn, table).duration);
-});
-
 test("an announcement that passes over the table holds up nothing", () => {
     const { stage: made, surface } = stage((act) =>
         act.verb === "announce"
@@ -399,79 +331,18 @@ test("a coin has the table to itself: it waits for the turn's banner to go", () 
         ["start", 2000, "announce"],
         ["end", 2300, "announce"],
     ]);
-    assert.equal(timingOf(coin.act, view([])).alone, true);
 });
 
-test("the design language says which announcements pass and how long each wait is", () => {
-    const table = view([]);
-    assert.equal(timingOf(banner.act, table).passes, true);
-    assert.equal(timingOf(coin.act, table).passes, false);
-    const scry = {
-        verb: "announce",
-        notice: { kind: "scry", player: "you", top: 1, bottom: 1 },
-    };
-    assert.equal(timingOf(scry, table).passes, true);
-    const end = {
-        verb: "announce",
-        notice: { kind: "topOrBottom", player: "opponent", top: false },
-    };
-    assert.equal(timingOf(end, table).passes, true);
-    assert.deepEqual(
-        [banner.act, scry, end, coin.act].map((act) => caseOf(act)),
-        ["turn banner", "scry pill", "scry pill", "coin"],
-    );
-    // A spell or ability left to be read, and the table as the game ends.
-    const read = { verb: "dwell", subject: card(1) };
-    const ended = { verb: "dwell", subject: { kind: "player", player: "you" } };
-    assert.equal(caseOf(read), undefined);
-    assert.equal(caseOf(ended), "game's end");
-    assert.ok(timingOf(ended, table).duration > timingOf(read, table).duration);
-    assert.ok(timingOf(read, table).duration > 0);
-    // What changes with no motion.
-    const turn = {
-        kind: "turn",
-        number: 2,
-        ownNumber: 1,
-        active: "you",
-        step: "untap",
-    };
-    const shuffled = { kind: "library", player: "you", order: [] };
-    assert.equal(caseOf({ verb: "set", fact: turn }), "step begins");
-    assert.equal(caseOf({ verb: "set", fact: shuffled }), "library shuffled");
-    assert.equal(
-        caseOf({ verb: "set", fact: { kind: "object", object: object(1) } }),
-        undefined,
-    );
-});
-
-test("a land played is quicker than a spell, lands with no flash, and the opponent's hooks round", () => {
+test("the opponent's land played hooks round, and the player's own glides straight", () => {
     const fly = (from, zone, controller) => ({
         verb: "fly",
         from,
         object: { ...object(1), zone, controller },
     });
-    const [mine, theirs, resolved] = [
+    const [mine, theirs] = [
         fly("hand", "battlefield", "you"),
         fly("hand", "battlefield", "opponent"),
-        fly("stack", "battlefield", "you"),
     ];
-    assert.deepEqual(
-        [mine, theirs, resolved].map((act) => caseOf(act)),
-        ["land played", "opponent land played", "permanent resolves"],
-    );
-    // Arena's own land is at rest 300 to 330 ms after it is let go, and the opponent's 600
-    // to 630 ms after it leaves their hand (data/arena-motion.json, fly).
-    assert.deepEqual(
-        [mine, theirs].map((act) => timingOf(act).duration),
-        [315, 615],
-    );
-    // Neither flashes where it lands, as a permanent that resolves does.
-    assert.deepEqual(
-        [mine, theirs, resolved].map((act) =>
-            effectsOf(act).map((effect) => effect.name),
-        ),
-        [[], [], ["settle"]],
-    );
     // The player's own land glides straight. The opponent's leaves the line: with their
     // hand at the top middle and their lands at the top left, it is farthest off the line
     // below it and to the right of where it left, the side away from where it is going.

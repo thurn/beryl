@@ -2,9 +2,9 @@
 // on a player's life total, a glow as a token appears, a flash as a card lands, a card
 // breaking up as it leaves, a veil over one that turns over, a burst where a blow lands, a
 // life total flaring as it changes. A step of a verb begins the effects the design language
-// gives it (data/ui-conventions.json, timing.ts `effectsOf`) as it starts, as it ends or part
-// of the way through, and each then plays on the stage's clock for its own time, whatever the
-// script goes on to do: an effect moves nothing, holds up no step and outlives the one that
+// gives it (data/ui-conventions.json), which the session sends with the step (timing.ts
+// `played`), as it starts, as it ends or part of the way through, and each then plays on the
+// stage's clock for its own time, whatever the script goes on to do: an effect moves nothing, holds up no step and outlives the one that
 // began it. Like a pose, how far through an effect is at a stage time is a function of that
 // time alone, and the surface only draws what the model says, once a tick. An effect goes
 // with its node: when the stage no longer holds what it is on, it is over.

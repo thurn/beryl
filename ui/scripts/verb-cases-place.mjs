@@ -60,7 +60,7 @@ export const CASES = {
     // where they now rest. Attackers tap together, lands as they pay, and all untap together.
     // A permanent that taps and then leaves (a Treasure, tapped and sacrificed for mana) has
     // done turning as it begins to go: the two are one beat, its payment being one event of
-    // the rules, and the departure waits in it for the turn (`timingOf`), beginning at the
+    // the rules, and the departure waits in it for the turn (the session's `timing_of`), beginning at the
     // stage time the turn ends, with no wait between (the old board held 450 ms there).
     tap({ combat, place }) {
         const seen = { tap: 0, untap: 0, placed: 0, waited: 0 };

@@ -3,7 +3,6 @@ import { test } from "node:test";
 import { zoneCards } from "../src/game/zoneCards.ts";
 import { stepAnnouncement } from "../src/stage/notices.ts";
 import { apply, tableOf } from "../src/stage/table.ts";
-import { timingOf } from "../src/stage/timing.ts";
 import { object, row, stage, view } from "./stage-table.mjs";
 
 test("manual numbers replay through count steps at full precision", () => {
@@ -77,9 +76,10 @@ test("manual notices play on the stage and read as banners without a card source
         [{ kind: "tableTurn", name: "Seat 2" }, "Seat 2's turn"],
         [{ kind: "rewind", to: 41 }, "Rewound to 41"],
     ]) {
-        const { stage: made, surface } = stage((act, found) =>
-            timingOf(act, found),
-        );
+        const [delay, duration] = [100, 1000];
+        const { stage: made, surface } = stage({
+            announce: { delay, duration, passes: true },
+        });
         const act = { verb: "announce", notice };
         const rewind = notice.kind === "rewind";
         const next = {
@@ -95,7 +95,6 @@ test("manual notices play on the stage and read as banners without a card source
             beats: [[{ act }]],
         });
         assert.equal(made.shown.table.players.you.life, next.players.you.life);
-        const { duration, delay } = timingOf(act, initial);
         made.clock.advance(delay + duration / 2);
         assert.equal(surface.notices.get(notice.kind), 0.5);
         assert.deepEqual(

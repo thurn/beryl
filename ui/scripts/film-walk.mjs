@@ -26,7 +26,7 @@ export const EDGE = 3;
  * for all of its `answers`: to the recording's end, which the view the stage then shows tells
  * (`shows`); and with `written`, the marks of the script written by hand after it. Before each tick whose number is in `shoot` it waits on
  * `window.berylShoot(number, time)`. Returns every step the stage told of, with its subject,
- * its stage times from the first tick and its case (src/stage/timing.ts `caseOf`), and each tick's time
+ * its stage times from the first tick and its case (the session's, src/stage/timing.ts `played`), and each tick's time
  * with what changed since the tick before: the box on the page and the pose as the stage has
  * it of each node drawn otherwise than it was, and the names of those no longer drawn (`reel`
  * reads them whole); and where each player's life total is drawn. Where everything lies at
@@ -121,12 +121,7 @@ export async function walk({
                 act,
                 subject: subjectOf(act, e.table.view),
                 ...endsOf(act),
-                case:
-                    window.berylCase(
-                        act,
-                        e.table.view,
-                        e.beat.map((step) => step.act),
-                    ) ?? null,
+                case: window.berylPlayed(e.step).case ?? null,
                 from: at,
                 to: at,
             });

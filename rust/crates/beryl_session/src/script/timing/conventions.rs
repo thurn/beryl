@@ -1,7 +1,6 @@
 //! The design language's timing data, `data/ui-conventions.json`, read once: each verb's
 //! duration, delay, stagger and curve, its cases' own, the effects its steps begin, and the
-//! few numbers the timing rules take from the data beside them. The web interface reads the
-//! same file (`ui/src/stage/timing.ts`).
+//! few numbers the timing rules take from the data beside them.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;

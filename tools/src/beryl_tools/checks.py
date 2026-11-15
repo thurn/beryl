@@ -76,7 +76,6 @@ from . import (
     speed,
     store_cards,
     system,
-    timing_parity,
     tokens,
     two_player,
     verdicts,
@@ -562,8 +561,6 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
 
     if not every and touched(motion.INPUTS) and not system.WINDOWS:
         lanes.append(motion.lane())
-    if touched(timing_parity.INPUTS):
-        lanes.append(timing_parity.lane())
     if (cards := changed_cards(None if every else rest)) is not None:
         lanes.append(card_oracle_lane(cards))
     if every or own:

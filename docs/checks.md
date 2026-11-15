@@ -45,13 +45,6 @@ The lanes:
   debug build it runs every card's spec moments from both seats and every UI
   fixture's recording, checking each animation script against its assertions.
   Each one is logged as a check named `script:<card>/<moment>/<seat>`.
-- `timing`: `just timing-parity`, when a file either side's step timing reads
-  changed (`timing_parity.INPUTS`). It records every UI fixture and every card
-  spec moment from both seats, and fails on any step where the timing the
-  session sent with it (from `beryl_session`'s `script::timing`) and the web
-  interface's own timing of it (`ui/src/stage/timing.ts`) differ by more than
-  0.001. It runs in the fast check only, until the web interface plays the
-  session's timing and its own rules are deleted.
 - `ui`: prettier, tsc and `npm test`.
 - `names`, which holds several source checks:
   - `card-names`: no card names in generic code, apart from the entries in

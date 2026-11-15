@@ -1,15 +1,15 @@
-// The stage: it holds the table, plays the scripts the session sends over it on its
-// own clock, and says where every object is at any stage time. One entry per game object, named
-// as scripts name it: a card by its slot, which it keeps through every zone, a token's being
-// used again only after the step that ended it, which removes its node; and an ability on the
-// stack by the number its `emerge` gave it (script/mod.rs, Names).
+// The stage: it holds the table, plays the scripts the session sends over it on its own clock,
+// and says where every object is at any stage time. One entry per game object, named as scripts
+// name it: a card by its slot, which it keeps through every zone, a token's being used again
+// only after the step that ended it, which removes its node; and an ability on the stack by the
+// number its `emerge` gave it (script/mod.rs, Names).
 //
 // An entry's pose is a function of stage time: its resting pose from the layout, or the track
 // of a step under way. Poses are data. `pose` reads the model, never the page, and the surface
 // only writes what the model computed, once a tick. No browser-timed animation runs here: no
-// CSS transition, no Web Animation left to play, no timer (the findings on by-w8gv.21.3). The
-// model outlives what it is drawn on: a surface is mounted and taken away as the page shows
-// and hides the table, and finds every node where the model has it.
+// CSS transition, no Web Animation left to play, no timer. The model outlives what it is drawn
+// on: a surface is mounted and taken away as the page shows and hides the table, and finds
+// every node where the model has it.
 //
 // How a step moves things: at its start its act is applied to the table and the table is laid
 // out again, and everything whose resting place that moved glides there for as long as the
@@ -62,7 +62,8 @@ export type { Surface } from "./overlay.ts";
 import type { Line, Marked } from "./spans.ts";
 import type { Streak } from "./streaks.ts";
 import { apply, resetSteps, tabled, tableOf, traded } from "./table.ts";
-import type { Act, Script, Table } from "./table.ts";
+import type { Script, Step, Table } from "./table.ts";
+import { timed } from "./timing.ts";
 import {
   carried,
   carries,
@@ -88,10 +89,10 @@ export { SNAP, type Timing } from "./tracks.ts";
 
 export class ScriptStage {
   readonly clock: StageClock;
-  /** How each step is played, given the table it finds. */
+  /** How each step is played, given the table it finds (timing.ts `played`). */
   timings: Parameters<typeof laid>[4];
   /** The effects each step begins on what it is about, given the table it finds. */
-  effects: (act: Act, found?: PlayerView) => readonly Effect[];
+  effects: (step: Step, found?: PlayerView) => readonly Effect[];
   /** What is drawn besides the nodes: effects, spans, streaks and announcements. */
   readonly #over = new Overlay(
     (on, at, pool) => this.reach(on, at, pool),
@@ -196,7 +197,8 @@ export class ScriptStage {
    * With no script, or one that resets (a seat's first view, an undone one), the stage starts
    * over from the view at once: whatever was playing or waiting is dropped, and nothing
    * moves. Announcements can still play over the reset table. */
-  play(view: PlayerView, script?: Script) {
+  play(view: PlayerView, sent?: Script) {
+    const script = sent && timed(sent);
     this.#idle.playing();
     if (script && !script.reset && this.#table) {
       if (!this.#busy) this.#at = this.clock.now;
@@ -329,9 +331,7 @@ export class ScriptStage {
   /** Calls `listener` whenever `shown` is replaced; returns how to stop. */
   readonly subscribe = (listener: () => void) => {
     this.#listeners.add(listener);
-    return () => {
-      this.#listeners.delete(listener);
-    };
+    return (): void => void this.#listeners.delete(listener);
   };
 
   /** Calls `follower` as each step begins and as it ends, inside the tick that finds it, in
@@ -339,9 +339,7 @@ export class ScriptStage {
    * begins; one dropped while it plays (a reset, a skip) is told no end. */
   readonly follow = (follower: (edge: Edge) => void) => {
     this.#following.add(follower);
-    return () => {
-      this.#following.delete(follower);
-    };
+    return (): void => void this.#following.delete(follower);
   };
 
   /** Lays the table out afresh, with no motion: the stage changed shape, or is `layout`'s
@@ -554,7 +552,7 @@ export class ScriptStage {
    * over (`skip`) begins none. */
   #affect(run: Run, edge: Edge["edge"]) {
     if (this.#skipping) return;
-    const begun = this.effects(run.step.act, run.found!.view);
+    const begun = this.effects(run.step, run.found!.view);
     this.#over.affect(run, edge, begun, (name) => this.#entries.has(name));
   }
 
