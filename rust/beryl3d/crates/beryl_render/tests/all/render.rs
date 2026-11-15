@@ -150,6 +150,45 @@ fn solid_rectangles_draw_their_colors() {
     }
 }
 
+/// Frames drawn back to back, each into its own target and read only after the last, each
+/// show their own color: on Metal the renderer writes each frame's records into one of a few
+/// buffers in turn, and must neither overwrite a buffer a submitted frame still reads nor
+/// write one that is not mapped again yet.
+#[test]
+fn frames_drawn_back_to_back_keep_their_own_records() {
+    for limits in BOTH {
+        let mut renderer = renderer(limits);
+        let colors: Vec<[u8; 3]> = (0..8_u8).map(|i| [20 + 25 * i, 200 - 20 * i, 90]).collect();
+        let targets: Vec<Target> = colors
+            .iter()
+            .map(|&color| {
+                let mut frame = Frame::with_capacity(0, 1, 0);
+                let mut builder = FrameBuilder::new(&mut frame);
+                builder.camera(overhead());
+                builder.draw(
+                    Band::Opaque,
+                    rectangle(Vec2::ZERO, Vec2::splat(400.0), 0.0, color),
+                );
+                let frame = builder.finish();
+                let mut target = Target::offscreen(&renderer, 200, 200);
+                renderer.render(frame, &mut target);
+                target
+            })
+            .collect();
+        for (index, (target, expected)) in targets.iter().zip(colors).enumerate() {
+            let picture = Picture {
+                pixels: renderer.read(target),
+                width: 200,
+            };
+            let found = picture.at(100, 100);
+            assert!(
+                close(found, expected),
+                "{limits:?}: frame {index} found {found:?}, expected {expected:?}"
+            );
+        }
+    }
+}
+
 #[test]
 fn the_nearer_card_covers_the_farther_whichever_is_drawn_first() {
     let low = card(Vec3::new(-15.0, 0.0, 1.0), 1, [255, 120, 120, 255]);

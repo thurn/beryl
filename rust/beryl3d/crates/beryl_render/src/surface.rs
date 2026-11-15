@@ -134,7 +134,9 @@ impl Renderer {
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("beryl_render"),
             // Card faces are compressed in the first format of these the GPU has.
-            required_features: adapter.features() & crate::faces::COMPRESSION,
+            // Frames write their buffers directly where that saves the driver's blit pool.
+            required_features: (adapter.features() & crate::faces::COMPRESSION)
+                | crate::slots::mapped_features(&adapter),
             required_limits: limits.using_resolution(adapter.limits()),
             ..Default::default()
         }))

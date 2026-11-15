@@ -17,6 +17,7 @@ use crate::faces::{
 use crate::mesh::meshes;
 use crate::pipeline::{DEPTH, RECORD, bind_group_layout, pipelines};
 use crate::runs::runs;
+use crate::slots::{Slots, mapped_features};
 use crate::target::Target;
 
 /// How many records the instance buffer holds: the most a frame of the engine's largest board
@@ -50,8 +51,8 @@ pub struct Renderer {
     pipelines: [wgpu::RenderPipeline; 3],
     layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
-    uniforms: wgpu::Buffer,
-    instances: wgpu::Buffer,
+    /// The buffers frames write their uniforms and records into, with their bind groups.
+    slots: Slots,
     vertices: wgpu::Buffer,
     indices: wgpu::Buffer,
     /// The index range of each mesh, by `Mesh` value.
@@ -62,8 +63,6 @@ pub struct Renderer {
     atlas: Atlas,
     /// Faces that arrived during play, waiting to be uploaded (`hold`).
     waiting: Waiting,
-    /// One bind group per texture array, by `TextureArray` value.
-    bind_groups: [wgpu::BindGroup; 3],
     depth: Option<(wgpu::TextureView, u32, u32)>,
     /// Present when the renderer counts the fragments each frame shades.
     counter: Option<FragmentCounter>,
@@ -91,13 +90,6 @@ impl Renderer {
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
-        let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("uniforms"),
-            size: UNIFORMS,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let instances = instance_buffer(&device, RECORDS);
         let meshes = meshes();
         let vertices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("meshes"),
@@ -111,7 +103,9 @@ impl Renderer {
         });
         let faces = empty_arrays(&device, &queue);
         let atlas = Atlas::new(&device, &queue);
-        let bind_groups = bind_groups(&device, &layout, &uniforms, &sampler, &faces, &atlas);
+        let slots = Slots::new(&device, UNIFORMS, RECORDS * RECORD, |uniforms| {
+            bind_groups(&device, &layout, uniforms, &sampler, &faces, &atlas)
+        });
         Self {
             device,
             queue,
@@ -119,15 +113,13 @@ impl Renderer {
             pipelines,
             layout,
             sampler,
-            uniforms,
-            instances,
+            slots,
             vertices,
             indices,
             ranges: meshes.ranges,
             faces,
             atlas,
             waiting: Waiting::default(),
-            bind_groups,
             depth: None,
             counter: None,
             adapter: "unknown".to_owned(),
@@ -164,13 +156,18 @@ impl Renderer {
         if !adapter.features().contains(features) {
             return Err(format!("the GPU adapter {name:?} lacks {features:?}"));
         }
-        let required_limits = match limits {
-            Limits::Default => wgpu::Limits::default(),
-            Limits::Downlevel => wgpu::Limits::downlevel_webgl2_defaults(),
+        // Under the floor's limits the device also leaves out the mapped frame buffers, which
+        // OpenGL ES lacks, so that the tests run the path the floor takes.
+        let (required_limits, mapped) = match limits {
+            Limits::Default => (wgpu::Limits::default(), mapped_features(&adapter)),
+            Limits::Downlevel => (
+                wgpu::Limits::downlevel_webgl2_defaults(),
+                wgpu::Features::empty(),
+            ),
         };
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("beryl_render"),
-            required_features: features | (adapter.features() & COMPRESSION),
+            required_features: features | mapped | (adapter.features() & COMPRESSION),
             required_limits,
             ..Default::default()
         }))
@@ -230,14 +227,10 @@ impl Renderer {
     pub fn set_faces(&mut self, names: &[&str], format: Format) {
         self.faces = face_arrays(&self.device, &self.queue, names, format);
         self.waiting = Waiting::default();
-        self.bind_groups = bind_groups(
-            &self.device,
-            &self.layout,
-            &self.uniforms,
-            &self.sampler,
-            &self.faces,
-            &self.atlas,
-        );
+        let (device, layout, sampler) = (&self.device, &self.layout, &self.sampler);
+        let (faces, atlas) = (&self.faces, &self.atlas);
+        self.slots
+            .rebind(|uniforms| bind_groups(device, layout, uniforms, sampler, faces, atlas));
     }
 
     /// Uploads a face's layer now, into the layer of the array its `AssetReady` names: for the
@@ -305,8 +298,6 @@ impl Renderer {
             frame.shake.x,
             frame.shake.y,
         ]);
-        self.queue
-            .write_buffer(&self.uniforms, 0, bytemuck::cast_slice(&uniforms));
         // A client made with `Config::LARGEST` never writes more records than the buffer holds.
         // Records past it are not drawn, rather than making a buffer during play.
         let kept = frame.draws.len().min(RECORDS as usize);
@@ -315,11 +306,17 @@ impl Renderer {
             frame.draws.len(),
             "a frame holds more than {RECORDS} records"
         );
-        let bytes: &[u8] = bytemuck::cast_slice(&frame.draws[..kept]);
-        if !bytes.is_empty() {
-            self.queue.write_buffer(&self.instances, 0, bytes);
-        }
+        let records: &[u8] = bytemuck::cast_slice(&frame.draws[..kept]);
         let depth = self.depth_view(width, height);
+        let Some(slot) = self.slots.write(
+            &self.device,
+            &self.queue,
+            bytemuck::cast_slice(&uniforms),
+            records,
+        ) else {
+            // The device was lost; the host makes a new renderer when it notices.
+            return Drawn::default();
+        };
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
@@ -363,7 +360,7 @@ impl Renderer {
                     debug_assert!(false, "a record names mesh {}", run.mesh);
                     continue;
                 };
-                let Some(bind_group) = self.bind_groups.get(usize::from(run.array)) else {
+                let Some(bind_group) = slot.bind_groups.get(usize::from(run.array)) else {
                     debug_assert!(false, "a record names texture array {}", run.array);
                     continue;
                 };
@@ -378,7 +375,7 @@ impl Renderer {
                 // instance 0: OpenGL ES 3.0 has no first instance.
                 let count = records.len() as u32;
                 let bytes = u64::from(records.start) * RECORD..u64::from(records.end) * RECORD;
-                pass.set_vertex_buffer(1, self.instances.slice(bytes));
+                pass.set_vertex_buffer(1, slot.instances.slice(bytes));
                 pass.draw_indexed(indices.clone(), 0, 0..count);
                 drawn.draw_calls += 1;
             }
@@ -389,7 +386,8 @@ impl Renderer {
         if let Some(counter) = &self.counter {
             counter.resolve(&mut encoder);
         }
-        self.queue.submit([encoder.finish()]);
+        let submission = self.queue.submit([encoder.finish()]);
+        self.slots.submitted(submission);
         drawn
     }
 
@@ -431,15 +429,6 @@ fn scissor(frame: &Frame, clip: u8, width: u32, height: u32) -> [u32; 4] {
     let right = ((rect.x + rect.width).max(0.0).ceil() as u32).clamp(x, width);
     let bottom = ((rect.y + rect.height).max(0.0).ceil() as u32).clamp(y, height);
     [x, y, right - x, bottom - y]
-}
-
-fn instance_buffer(device: &wgpu::Device, records: u64) -> wgpu::Buffer {
-    device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("records"),
-        size: records * RECORD,
-        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-    })
 }
 
 /// The index in `Renderer::faces` of the array for `size`.

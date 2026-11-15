@@ -2742,14 +2742,34 @@ ranked frames, in screens of 2880 by 1800 (Mesa's llvmpipe Vulkan driver in
 | Release executable, stripped         | 38.2 MB                              |       |
 | Memory once started, a game resumed  | 37 MB, of which 24 MB is the GPU's   | 57    |
 | Peak memory                          | 360 MB, of which 344 MB is the GPU's | 33-71 |
+| Memory while frames are drawn        | 257 MB, of which 199 MB is the GPU's | 24-28 |
 | Launch to the first frame, no window | 26 ms median (343, 43, 25, 26, 23)   | 33-71 |
 
 - **Most of the executable is the game.** Linking `beryl_session` brings the
   engine, the cards, the card store and the search.
-- **The app holds 344 MB of GPU memory for about its first 1.3 seconds** and
-  then 24 MB, which is within the 32 MB the doc allows for face textures ('Card
-  faces'). The peak is not explained yet, and on a 2 GB phone it would matter;
-  by-q44s.1.55 finds and removes it.
+- **The GPU memory is Apple's Metal driver's, not Beryl's.** Beryl's own buffers
+  and textures take under 10 MB. The driver allocates a fixed pool the first
+  time a process encodes each kind of command encoder, and frees it about a
+  second after the last encoder of that kind; `footprint` counts the pools as
+  "Owned physical footprint (unmapped) (graphics)". A bare Swift program shows
+  it: a first render pass costs about 185 MB whatever its size (16 by 16 or 1920
+  by 1080), and a first blit encoder about 112 MB more. The 344 MB peak is
+  mostly these two pools. The idle run above draws one frame, so the driver
+  frees both pools a second later, leaving 24 MB.
+- **Frames encode no blit, so only the render pass's pool stays while frames are
+  drawn.** `Queue::write_buffer` copies through a blit, and the renderer used it
+  every frame for the uniforms and the instance records, which kept the blit
+  pool for as long as frames were drawn. On Metal the renderer now writes them
+  into a ring of three buffers the CPU maps directly
+  (`MAPPABLE_PRIMARY_BUFFERS`, `beryl_render`'s `slots` module), and a blit
+  happens only when a glyph page or card face is uploaded. Elsewhere it still
+  uses `Queue::write_buffer`. Measured with `footprint --sample 0.25` on the
+  release build replaying `verbs-zones` with no window on the M5 Max, five runs
+  of each, the footprint while frames were drawn fell from 400 MB (344 MB the
+  GPU's) to 257 MB (199 MB the GPU's) in every run, with no late frames in
+  either. The first second still shows the blit pool, from the startup uploads.
+  A phone's driver may keep pools of other sizes; this was measured on the Mac
+  only.
 - **The game in these runs waited for the player.** The app resumes the newest
   unfinished game, and nothing answers for the player in a run with no window.
   The search threads were measured against the frame thread in whole games that

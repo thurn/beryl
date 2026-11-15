@@ -8,6 +8,7 @@ mod mesh;
 mod pipeline;
 mod renderer;
 mod runs;
+mod slots;
 mod surface;
 mod target;
 mod textures;
