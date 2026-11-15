@@ -63,6 +63,7 @@ from . import (
     system,
     verdicts,
 )
+from .beryl3d import paths as beryl3d_paths
 from .changes import changed_paths, master_base, run_git
 from .rust_tests import affected_packages
 
@@ -428,7 +429,9 @@ class Plan:
         if "rust" in self.whole or "rust" not in self.bases:
             return None
         changed = changed_paths(self.bases["rust"])
-        return None if changed is None else rust_packages(changed)
+        return (
+            None if changed is None else rust_packages(beryl3d_paths.split(changed)[1])
+        )
 
 
 def rust_packages(changed: list[str]) -> list[str] | None:
@@ -460,7 +463,8 @@ def choose(
         if reason:
             chosen.whole.add(lane)
         else:
-            found = changed or []
+            # Slow CI has no lane of Beryl 3D's, and its paths reach no other lane.
+            _, found = beryl3d_paths.split(changed or [])
             reason = lane_reason(lane, found, packages(found), script_inputs)
         if reason:
             chosen.why[lane] = reason

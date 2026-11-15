@@ -82,6 +82,8 @@ from . import (
     warm,
 )
 from . import budget as budget_beads
+from .beryl3d import lane as beryl3d_lane
+from .beryl3d import paths as beryl3d_paths
 from .changes import branch_base, changed_paths, git, narrow
 from .lanes import (
     BY,
@@ -500,10 +502,23 @@ def fast(args: argparse.Namespace) -> int:
 
 
 def fast_lanes(changed: list[str] | None) -> list[Lane]:
-    """The fast check's lanes for the paths changed since the branch base; None: every lane."""
+    """The fast check's lanes for the paths changed since the branch base; None: every lane.
+
+    Beryl 3D's paths (beryl3d/paths.py) select the `beryl3d` lane and, like any path, `repo`
+    and `names`. Every other lane is chosen from the rest of the paths alone, so a change to
+    Beryl 3D runs none of the main project's lanes and a change elsewhere never runs Beryl 3D's.
+    """
     every: bool = changed is None
+    own: list[str]
+    rest: list[str]
+    own, rest = beryl3d_paths.split(changed or [])
 
     def touched(pattern: str) -> bool:
+        """Whether a path outside Beryl 3D's matches `pattern`."""
+        return every or any(re.match(pattern, p) for p in rest)
+
+    def anywhere(pattern: str) -> bool:
+        """Whether any changed path matches `pattern`, Beryl 3D's among them."""
         return every or any(re.match(pattern, p) for p in changed or [])
 
     lanes = [repo_lane()]
@@ -513,7 +528,11 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
         lanes.append(scale_lane())  # The python lane runs these tests whole.
     if touched(r"^rust/") or touched(CARD_STORE):
         lanes.append(
-            rust_lane(True, affected_packages(changed), touched(card_text.INPUTS))
+            rust_lane(
+                True,
+                affected_packages(None if every else rest),
+                touched(card_text.INPUTS),
+            )
         )
     if touched(script_checks.inputs()) or touched(CARD_STORE):
         lanes.append(script_checks.lane())
@@ -530,7 +549,7 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
     if (
         cited
         or crates
-        or touched(r"^(tools|rust|ui)/|^data/card-names-allowlist\.json$")
+        or anywhere(r"^(tools|rust|ui)/|^data/card-names-allowlist\.json$")
     ):
         lanes.append(names_lane(cited, crates=crates))
     # The browser checks the change can break, as many as fit the budget; none on
@@ -541,8 +560,10 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
 
     if not every and touched(motion.INPUTS) and not system.WINDOWS:
         lanes.append(motion.lane())
-    if (cards := changed_cards(changed)) is not None:
+    if (cards := changed_cards(None if every else rest)) is not None:
         lanes.append(card_oracle_lane(cards))
+    if every or own:
+        lanes.append(beryl3d_lane.lane())
     return lanes
 
 

@@ -44,6 +44,7 @@ from . import (
     video,
     warm,
 )
+from .beryl3d import cli as beryl3d_cli
 
 
 def utf8_rerun(argv: list[str] | None) -> int | None:
@@ -69,6 +70,7 @@ MODULES: tuple[ModuleType, ...] = (
     app,
     audio,
     bench,
+    beryl3d_cli,
     bugs,
     caches,
     card,

@@ -51,6 +51,11 @@ smoke *args:
 proto3d *args:
     {{ by }} proto3d "$@"
 
+# Beryl 3D's commands (docs/beryl-3d.md): `just b3d` lists them, `just b3d <command> --help` explains one
+[group('app')]
+b3d *args:
+    @{{ by }} b3d "$@"
+
 # Install the phone apps' toolchains: Rust targets, CocoaPods, the iOS Simulator runtime, the Android SDK (idempotent)
 [group('app')]
 mobile-setup:

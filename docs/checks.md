@@ -216,6 +216,23 @@ check chooses by is measured nightly and after each passing sweep. A ui/src line
 changed since the coverage's commit is one the data cannot place. The record is
 in `$BERYL_CACHE/sweep`.
 
+## Beryl 3D
+
+Beryl 3D, the native client in its own Cargo workspace, has checks of its own
+(see [Checks and isolation](beryl-3d.md#checks-and-isolation)).
+
+- A change under `rust/beryl3d/` or `data/beryl3d/` runs the `beryl3d` lane of
+  the fast check, plus `repo` and `names`, and no other lane. Every other lane
+  is chosen from the rest of the change's paths
+  (`tools/src/beryl_tools/beryl3d/paths.py`), so a change elsewhere never runs
+  or builds Beryl 3D's code.
+- Slow CI has no `beryl3d` lane, and Beryl 3D's paths reach none of its lanes
+  but `repo` and `names`.
+- `just b3d lane` runs the lane by hand, and `just b3d` lists Beryl 3D's other
+  commands. Its steps are in `tools/src/beryl_tools/beryl3d/lane.py`.
+- A change to Beryl 3D's tools, under `tools/src/beryl_tools/beryl3d/`, runs the
+  python lane, as any change to `tools/` does, and not the `beryl3d` lane.
+
 ## Beads the checks file
 
 The checks file beads by themselves: `flaky-check`, `ci-cut` and `check-budget`

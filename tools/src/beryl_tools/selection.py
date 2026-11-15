@@ -41,6 +41,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import checks, deadline, paths, runlog, system, verdicts
+from .beryl3d import paths as beryl3d_paths
 from .suites import (
     SHAPE_CASES,
     SHAPE_PREFIX,
@@ -561,7 +562,9 @@ def choose(
 ) -> Choice:
     """A lane's choice from what changed since `base`: the `changed` paths, and `hunks_now`, the
     diff of ui/ from `base` to the working tree, against `found` coverage (None to fall back to
-    the records, saying why in `fallback`)."""
+    the records, saying why in `fallback`). Beryl 3D's paths are not the browser checks' to
+    answer for (beryl3d/paths.py), so they are left out of `changed`."""
+    _, changed = beryl3d_paths.split(changed)
     choice = Choice(universe, fallback)
     if any(matches(p, HARNESS[lane]) for p in changed):
         choice.add(universe, "harness")
