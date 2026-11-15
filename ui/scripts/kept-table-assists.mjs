@@ -53,28 +53,6 @@ function token(index) {
 const panel = (page) => page.getByRole("region", { name: "Turn upkeep" });
 const mark = (page) => page.locator(".stage-mark-suggested");
 
-async function showProposal(page, revision) {
-    await page.evaluate(
-        (expected) =>
-            new Promise((resolve) => {
-                const stage = window.berylStage;
-                const show = () => {
-                    stage.skip();
-                    if (
-                        stage.shown.view?.table.proposals[0]?.revision ===
-                        expected
-                    ) {
-                        stop();
-                        resolve();
-                    }
-                };
-                const stop = stage.subscribe(() => queueMicrotask(show));
-                show();
-            }),
-        revision,
-    );
-}
-
 async function audit(page) {
     assert.deepEqual(await screenFaults(page), []);
     assert.deepEqual(await stageFaults(page), []);
@@ -113,7 +91,7 @@ await check(
         assert.equal(await untouched.isChecked(), true);
         const changed = await clickAnswer(page, untouched, "proposalLine");
         assert.deepEqual(changed.table.log, before.table.log);
-        await showProposal(page, changed.table.proposals[0].revision);
+        await showTableView(page, changed, changed.table.proposals[0]);
         await panel(page).locator("input:not(:checked)").waitFor();
         await mark(page).waitFor({ state: "hidden" });
 

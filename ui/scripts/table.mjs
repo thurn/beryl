@@ -173,16 +173,25 @@ export function tableActionRef(view, subject) {
     return { objects: [action.reference], in: action.zone };
 }
 
-/** Waits for playback to receive a specific state, and plays it out on the paused clock.
- * The stage tells the check when data arrives even when the host or card cache is slow. */
-export async function showTableView(page, expected) {
+/** Plays the expected log position on the paused clock. A proposal switch can
+ * change the view at the same log position, so callers may also wait for its revision. */
+export async function showTableView(page, expected, proposal) {
     await page.evaluate(
-        (logLength) =>
+        ({ logLength, proposal }) =>
             new Promise((resolve) => {
                 const stage = window.berylStage;
                 const show = () => {
                     stage.skip();
-                    if (stage.shown.view?.table.log.length === logLength) {
+                    const table = stage.shown.view?.table;
+                    if (
+                        table?.log.length === logLength &&
+                        (!proposal ||
+                            table.proposals.some(
+                                ({ id, revision }) =>
+                                    id === proposal.id &&
+                                    revision === proposal.revision,
+                            ))
+                    ) {
                         stop();
                         resolve();
                     }
@@ -190,7 +199,7 @@ export async function showTableView(page, expected) {
                 const stop = stage.subscribe(() => queueMicrotask(show));
                 show();
             }),
-        expected.table.log.length,
+        { logLength: expected.table.log.length, proposal },
     );
 }
 
