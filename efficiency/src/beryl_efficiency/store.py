@@ -317,6 +317,48 @@ MIGRATIONS: tuple[str, ...] = (
         PRIMARY KEY (host, provider, transcript, time, kind)
     );
     """,
+    """
+    -- CPU accounting. `cpu` holds the sampler's rows, one per minute per owner, kind of work
+    -- and worktree (empty for none); `cpu_minutes` holds each minute's totals: its length,
+    -- the machine's cores, the CPU seconds of every owner and the busiest moment.
+    CREATE INDEX cpu_worktree ON cpu (worktree, time);
+    CREATE TABLE cpu_minutes (
+        host TEXT NOT NULL,
+        time TEXT NOT NULL,
+        seconds REAL NOT NULL,
+        cores INTEGER NOT NULL,
+        cpu_seconds REAL NOT NULL,
+        peak_cores REAL,
+        PRIMARY KEY (host, time)
+    );
+    -- One row per CPU lease, from the token pool's log: `time` is its release, and the
+    -- command waited from `wait_start` to `wait_end` for its tokens. `transcript` and `call`
+    -- name the tool call that was running in that worktree while it waited; `call` is empty
+    -- when none was found and null until ingest has looked.
+    DROP TABLE leases;
+    CREATE TABLE leases (
+        host TEXT NOT NULL,
+        time TEXT NOT NULL,
+        class TEXT NOT NULL,
+        worktree TEXT NOT NULL,
+        command TEXT NOT NULL,
+        cores INTEGER NOT NULL,
+        wanted INTEGER NOT NULL,
+        waited_seconds REAL NOT NULL,
+        held_seconds REAL NOT NULL,
+        wait_start TEXT NOT NULL,
+        wait_end TEXT NOT NULL,
+        provider TEXT,
+        transcript TEXT,
+        call TEXT,
+        PRIMARY KEY (host, time, class, worktree, command, waited_seconds, held_seconds)
+    );
+    CREATE INDEX leases_call ON leases (host, provider, transcript, call);
+    CREATE INDEX tool_calls_start ON tool_calls (host, start);
+    -- A tool call's queued seconds are worked out from the leases joined to it, which
+    -- survive the call's row being read again.
+    ALTER TABLE tool_calls DROP COLUMN queued_seconds;
+    """,
 )
 
 

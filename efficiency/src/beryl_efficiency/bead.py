@@ -73,6 +73,11 @@ class BeadReport:
     sessions: list[Worked]
 
 
+def core_minutes(facts: Facts, bead: str) -> float | None:
+    found = facts.core_minutes(bead)
+    return None if found is None else round(found, 1)
+
+
 def wall(w: Window) -> float:
     return minutes(sum(w.time.values()))
 
@@ -130,7 +135,7 @@ def report_from(
         None if no_data else minutes(whole.agent_seconds),
         None if no_data else minutes(whole.person_seconds),
         None if no_data else minutes(whole.idle_seconds),
-        None,
+        core_minutes(facts, bead),
         None if no_data else money(whole.dollars),
         bool(whole.unpriced),
         None,

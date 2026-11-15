@@ -53,6 +53,12 @@ store" and "Isolation" before changing anything here.
   request's context, tool calls' added tokens and carrying cost, and each
   window's dollars by class, source, purpose and model in `window_dollars`. All
   of it is derived again when the price table changes.
+- `cpu.py`: the CPU sampler's rows (`cpu`, `cpu_minutes`) and the CPU token
+  pool's log of leases (`leases`), each lease joined to the top-level tool call
+  running in its worktree while it waited, which `timing.py` counts as queued
+  for cores. It also gives each minute of a worktree's CPU to a bead.
+  `facts.Facts.core_minutes` uses it per bead, and `machine.py` is the `machine`
+  query and the CPU metrics.
 - The query layer: `scope.py` parses `--since` and the cohort filters into a
   `Scope`; `facts.py` loads beads and windows with their `window_time` and
   `window_dollars` rows, which every query adds up, so that a roll-up's lines

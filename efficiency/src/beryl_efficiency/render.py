@@ -37,10 +37,37 @@ FIELDS: dict[str, str] = {
     "agent_minutes": "wall-clock minutes a session worked: running tools, generating, "
     "queued for cores or waiting on background work. Per bead: the median over closed "
     "beads, with the 90th percentile and the median over the range before",
-    "core_minutes": "CPU minutes used in the bead's worktree; not measured yet",
+    "core_minutes": "CPU minutes used in the bead's worktree while the bead was open, from "
+    "the CPU sampler; null where the sampler was not running. Per bead: the median over "
+    "closed beads the sampler measured, with the 90th percentile and the median before",
     "dollars": "tokens times each model's published API price. Per bead: the median over "
     "closed beads, with the 90th percentile and the median over the range before",
     "rework": "dollars of later fixes the bead's commits caused; not measured yet",
+    "cores": "the machine's cores, from the CPU sampler",
+    "cores_in_use": "the cores in use on average over the sampled minutes, a minute "
+    "sampled over the machine's cores counting as all of them",
+    "over_cores": "sampled minutes whose CPU seconds exceed what the machine's cores can "
+    "do in a minute, which the sampler overcounted",
+    "peak_cores": "the cores in use on average in the busiest sampled minute. The "
+    "sampler's own peak between two samples is not used, because it can exceed the "
+    "machine's cores",
+    "saturation": "percent of the sampled minutes in which the cores in use were at least "
+    "90% of the machine's",
+    "queued_hours": "hours commands waited for CPU tokens, from the token pool's leases",
+    "queued_core_hours": "core hours held up waiting for CPU tokens: each lease's wait "
+    "times the tokens its command wanted",
+    "queued": "leases by class and command: how many, the hours they waited and the core "
+    "hours that held up",
+    "narrow": "leases that got fewer CPU tokens than they wanted, by class and command",
+    "core_hours": "CPU hours the sampler saw in the range",
+    "bead_core_hours": "CPU hours in beads' worktrees that belong to the beads",
+    "shared_core_hours": "CPU hours no bead claims, per day sampled and per bead closed",
+    "shared": "CPU hours no bead claims, by owner and kind of work, or by worktree for a "
+    "worktree's minutes outside its bead",
+    "own": "the tool's own CPU: the sampler's cores on average since it started and the "
+    "range's ingests' CPU seconds, each also as a percent of the machine",
+    "capacity": "the cohort's cores per session (core minutes over agent minutes) and how "
+    "many such sessions the machine's cores could run at once",
     "person_minutes": "minutes waiting on a person, beside agent minutes",
     "idle_minutes": "minutes idle after a turn ended, such as before a scheduled wake-up, "
     "beside agent minutes",

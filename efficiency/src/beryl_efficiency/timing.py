@@ -6,8 +6,9 @@ in this order wins:
 
 - `person`: a question to the user is unanswered (the `AskUserQuestion` tool), or the session
   ended its turn and the next prompt is one a person typed.
-- `queued`: a tool call is waiting for a CPU lease (its `queued_seconds`, filled by the CPU
-  accounting; zero until then).
+- `queued`: a tool call is waiting for a CPU lease: the time the leases joined to it waited
+  (`cpu.py` joins each lease from the token pool's log to the call running in its worktree).
+  Leases that waited at once, such as two lanes of one fast check, count once.
 - `tool`: a tool call is running, by kind of command. Seconds when several run at once are
   divided equally among them. A cargo command's seconds are split into `compile` and `run`
   parts by the share its `Finished` lines name.
@@ -85,13 +86,20 @@ def spans_of(
     key = (host, provider, transcript)
     found: list[Span] = []
     calls = db.execute(
-        """SELECT call, start, end, tool, coalesce(kind, ?), coalesce(compile_seconds, 0),
-            queued_seconds FROM tool_calls
+        """SELECT call, start, end, tool, coalesce(kind, ?), coalesce(compile_seconds, 0)
+        FROM tool_calls
         WHERE host = ? AND provider = ? AND transcript = ? AND end IS NOT NULL""",
         (kinds.OTHER, *key),
     ).fetchall()
+    waits: dict[str, list[tuple[float, float]]] = defaultdict(list)
+    for call, wait_start, wait_end in db.execute(
+        "SELECT call, wait_start, wait_end FROM leases WHERE host = ? AND provider = ? "
+        "AND transcript = ? AND call != ''",
+        key,
+    ):
+        waits[str(call)].append((seconds(str(wait_start)), seconds(str(wait_end))))
     kind_of: dict[str, str] = {}
-    for call, start, end, tool, kind, compiled, queued in calls:
+    for call, start, end, tool, kind, compiled in calls:
         kind_of[str(call)] = str(kind)
         low, high = seconds(str(start)), seconds(str(end))
         if high <= low:
@@ -105,7 +113,7 @@ def spans_of(
                 "question" if question else str(kind),
                 str(call),
                 float(compiled) if str(kind) in heavy else 0.0,
-                float(queued),
+                covered(waits.get(str(call), []), low, high),
             )
         )
     # Every record before a prompt, as (time, ends a turn).
@@ -152,6 +160,19 @@ def spans_of(
         named = kind_of.get(str(detail), str(detail)) if kind == "background" else ""
         found.append(Span(last[0], time, kind, named))
     return found
+
+
+def covered(stretches: list[tuple[float, float]], low: float, high: float) -> float:
+    """The seconds between `low` and `high` that any of `stretches` covers, each counted
+    once however many cover it."""
+    total = 0.0
+    reached = low
+    for start, end in sorted(stretches):
+        start, end = max(start, reached), min(end, high)
+        if end > start:
+            total += end - start
+            reached = end
+    return total
 
 
 def split(spans: list[Span], start: float, end: float) -> dict[Key, float]:

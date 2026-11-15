@@ -23,6 +23,7 @@ TABLES = {
     "commits",
     "checks",
     "cpu",
+    "cpu_minutes",
     "leases",
     "sources",
     "ingests",

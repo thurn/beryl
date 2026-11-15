@@ -162,6 +162,12 @@ def bead_figures(
     return agent, dollars, lower, missing
 
 
+def core_figures(facts: Facts, closed: list[Bead]) -> list[float]:
+    """The core minutes of each closed bead the sampler measured."""
+    found = (facts.core_minutes(b.id) for b in closed)
+    return [m for m in found if m is not None]
+
+
 def figure(
     values: list[float], before: list[float], digits: int, lower: bool
 ) -> Figure:
@@ -253,7 +259,7 @@ def summary(facts: Facts, scope: Scope) -> Result:
         round(len(closed) / days, 1) if days else None,
         missing,
         figure(agent, agent_before, 1, False),
-        UNMEASURED,
+        figure(core_figures(facts, closed), core_figures(facts, then), 1, False),
         figure(dollars, dollars_before, 2, lower),
         UNMEASURED,
         line("total", None, len(closed), whole),

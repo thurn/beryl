@@ -18,6 +18,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
+from . import cpu
 from .scope import Range, Scope
 from .timing import AGENT_CATEGORIES
 
@@ -123,6 +124,11 @@ def minutes(seconds: float) -> float:
     return round(seconds / 60, 1)
 
 
+def minutes_of(seconds: float) -> float:
+    """Minutes, unrounded, for figures that are summed or divided before they are shown."""
+    return seconds / 60
+
+
 def money(dollars: float) -> float:
     return round(dollars, 2)
 
@@ -145,15 +151,89 @@ def spread(values: Sequence[float], digits: int) -> dict[str, object]:
 
 
 class Facts:
-    """Every bead and every window in the store, loaded once per query."""
+    """Every bead and every window in the store, loaded once per query, and the store itself
+    for the CPU, which is read per worktree when a query asks for it."""
 
-    def __init__(self, beads: dict[str, Bead], windows: list[Window]) -> None:
+    def __init__(
+        self,
+        beads: dict[str, Bead],
+        windows: list[Window],
+        db: sqlite3.Connection | None = None,
+    ) -> None:
         self.beads = beads
         self.windows = windows
+        self.db = db
         self.children: dict[str, list[str]] = defaultdict(list)
         for b in beads.values():
             if b.parent:
                 self.children[b.parent].append(b.id)
+        self._worktrees: dict[str, list[Bead]] | None = None
+        self._spans: dict[str, list[tuple[str, str | None]]] = defaultdict(list)
+        self._cpu: dict[str, dict[str, float]] = {}
+        self._measured: dict[str, str] | None = None
+
+    def worktree(self, bead: Bead) -> str:
+        return cpu.worktree_name(bead.enact.get("enact_worktree"))
+
+    def claims(self, worktree: str) -> list[cpu.Claim]:
+        """The beads that may own CPU in `worktree`, with their windows."""
+        by_worktree = self._worktrees
+        if by_worktree is None:
+            by_worktree = defaultdict(list)
+            for b in self.beads.values():
+                name = self.worktree(b)
+                if name:
+                    by_worktree[name].append(b)
+            for w in self.windows:
+                if w.kind == "bead" and w.bead is not None:
+                    self._spans[w.bead].append((w.start, w.end))
+            self._worktrees = by_worktree
+        windows = self._spans
+        return [
+            cpu.Claim(
+                b.id,
+                b.ran_on(),
+                b.started or min((s for s, _ in windows[b.id]), default=None),
+                b.closed,
+                tuple(windows[b.id]),
+            )
+            for b in by_worktree.get(worktree, [])
+        ]
+
+    def core_minutes(self, bead: str) -> float | None:
+        """The CPU minutes of the bead's worktree that belong to it ("CPU accounting");
+        `None` when the bead names no worktree, or the sampler was not running on its host
+        when the bead started."""
+        found = self.beads.get(bead)
+        db = self.db
+        if found is None or db is None:
+            return None
+        name = self.worktree(found)
+        if not name:
+            return None
+        measured = self._measured
+        if measured is None:
+            measured = {
+                str(r[0]): str(r[1])
+                for r in db.execute(
+                    "SELECT host, min(time) FROM cpu_minutes GROUP BY host"
+                )
+            }
+            self._measured = measured
+        claims = self.claims(name)
+        mine = next(c for c in claims if c.bead == bead)
+        first = (
+            measured.get(mine.host)
+            if mine.host
+            else min(measured.values(), default=None)
+        )
+        if first is None or mine.started is None or mine.started < first:
+            return None
+        if name not in self._cpu:
+            since = min((c.started for c in claims if c.started), default=None)
+            minutes = cpu.worktree_minutes(db, name, since, None, None)
+            self._cpu[name] = cpu.attribute(minutes, claims)[0]
+        return minutes_of(self._cpu[name].get(bead, 0.0))
 
     def top_epic(self, bead: str | None) -> str | None:
         """The bead's topmost ancestor, or the bead itself when it is an epic with no
@@ -302,4 +382,4 @@ def load(db: sqlite3.Connection) -> Facts:
         w = windows.get((str(host), str(provider), str(transcript), str(start)))
         if w is not None:
             w.dollars[(str(split), str(name))] = (float(tokens), float(dollars))
-    return Facts(beads, list(windows.values()))
+    return Facts(beads, list(windows.values()), db)

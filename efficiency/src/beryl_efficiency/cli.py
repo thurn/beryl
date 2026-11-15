@@ -16,9 +16,11 @@ from . import (
     bead,
     claude,
     codex,
+    cpu,
     facts,
     ingest,
     kinds,
+    machine,
     metrics,
     paths,
     rollups,
@@ -35,7 +37,8 @@ MAX_AGE = 60.0
 
 def sources() -> list[ingest.Source]:
     """Every source, in the order ingest reads them: beads and session records first, since
-    deriving windows from transcripts reads both."""
+    deriving windows from transcripts reads both, and the CPU token pool's leases after the
+    transcripts, since they are joined to the transcripts' tool calls."""
     checkout = main_checkout(Path.cwd())
     host = paths.host()
     return [
@@ -43,6 +46,8 @@ def sources() -> list[ingest.Source]:
         claude.Sessions(paths.claude_sessions(), checkout, host),
         claude.Transcripts(paths.claude_projects(), checkout, host),
         codex.Rollouts(paths.codex_sessions(), checkout, host),
+        cpu.Samples(cpu.samples_path(paths.cache_root()), host),
+        cpu.Leases(cpu.leases_path(paths.cache_root()), host),
     ]
 
 
@@ -369,6 +374,10 @@ def run_dollars(args: argparse.Namespace) -> Result:
     return answer(args, lambda _, f, s: rollups.dollars_by(f, s, str(args.by)))
 
 
+def run_machine(args: argparse.Namespace) -> Result:
+    return answer(args, machine.report)
+
+
 def run_metrics(args: argparse.Namespace) -> Result:
     if args.name is None:
         return metrics.listing()
@@ -388,6 +397,10 @@ QUERIES: dict[str, tuple[str, Callable[[argparse.Namespace], Result]]] = {
         "dollars by class, source, purpose, model, tier, role, lane, epic or day",
         run_dollars,
     ),
+    "machine": (
+        "cores in use, saturation, time queued for cores, shared CPU, capacity",
+        run_machine,
+    ),
     "metrics": ("the named series, or one series by day", run_metrics),
     "ingest": ("update the store from the sources", run_ingest),
     "sql": ("run a read-only SQL query against the store", run_sql),
@@ -403,6 +416,7 @@ SCOPED: dict[str, str] = {
     "time": "7d",
     "dollars": "7d",
     "metrics": "7d",
+    "machine": "7d",
     "epic": "all",
     "bead": "all",
     "session": "all",
