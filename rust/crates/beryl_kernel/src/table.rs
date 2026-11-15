@@ -2,8 +2,8 @@
 //! decision D20).
 
 use beryl_card::{
-    Ability, AbilityIx, AbilityKind, CardDef, Condition, CostAction, CostPart, FACE_DOWN,
-    FACE_DOWN_COPY, Face, FaceIx, ManaRestriction, RuleChange, Words, Zone, ZoneSet,
+    Ability, AbilityIx, AbilityKind, BasicLandTypes, CardDef, Condition, CostAction, CostPart,
+    FACE_DOWN, FACE_DOWN_COPY, Face, FaceIx, ManaRestriction, RuleChange, Words, Zone, ZoneSet,
 };
 
 use crate::event::{Listens, Replaces};
@@ -727,12 +727,11 @@ impl ManaFace {
     }
 }
 
-/// The kinds of mana the intrinsic abilities of the basic land types of `face` make
-/// ([CR 305.6]), a bit per [`beryl_card::ManaColor`], less those its abilities write out: a
-/// card file may write out that ability, as Plains does, or not, as Dryad Arbor. Read through
-/// `words`, a Forest that reads "Island" makes {U}, and its written {G} ability is gone.
+/// The mana of the intrinsic abilities of `face`'s basic land types ([CR 305.6]), a bit per
+/// color, less what it writes out as Plains does, read through `words`: "Island" makes {U}.
 ///
 /// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056
+#[inline]
 pub fn land_mana(face: &Face, words: &Words) -> u8 {
     if !face.types.intersects(beryl_card::Types::LAND) {
         return 0;
@@ -742,10 +741,11 @@ pub fn land_mana(face: &Face, words: &Words) -> u8 {
         .iter()
         .filter(|a| is_simple(a) && a.produces().amount == 1)
         .fold(0, |k, a| k | a.produces().colors);
-    let printed = beryl_card::BasicLandTypes::of(face.subtypes.read(&Words::NONE));
-    let types = beryl_card::BasicLandTypes::of(face.subtypes.read(words));
-    // A written ability of a land type the face no longer has went with the type.
-    types.mana().intrinsic_mana() & !(written & !printed.minus(types).mana().intrinsic_mana())
+    if words.changes_subtypes() {
+        return crate::effects::text::changed_land_mana(face, words, written);
+    }
+    let printed = BasicLandTypes::of(face.subtypes.read(&Words::NONE));
+    printed.mana().intrinsic_mana() & !written
 }
 
 /// Whether a face has an ability other than those the solver taps for, which tapping it for

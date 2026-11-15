@@ -518,7 +518,8 @@ impl<L: Layout> State<L> {
     /// ([CR 405.2](https://yawgatog.com/resources/magic-rules/#R4052)): "Each time an object
     /// is put on the stack, it's put on top of all objects already there." A spell's card is
     /// in the stack zone already ([CR 601.2a](https://yawgatog.com/resources/magic-rules/#R6012a)).
-    #[inline]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub fn put_on_stack(
         &mut self,
         sink: &mut Sink<L>,
@@ -530,8 +531,9 @@ impl<L: Layout> State<L> {
                 .is_none_or(|spell| self.is_current(spell) && self.zones.stack.contains(spell.slot)),
             "a spell's entry without its card on the stack"
         );
-        self.settle_captured_words();
-        self.capture_words(&mut entry)?;
+        if self.keeps_words() {
+            self.words_on_stack(&mut entry)?;
+        }
         self.stack.push(entry)?;
         sink.arrived(|| {
             self.stack

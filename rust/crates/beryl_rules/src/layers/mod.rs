@@ -335,8 +335,6 @@ fn apply_layers<L: Layout>(
     // Made at the first effect that applies: most recomputes have none, and the list is big.
     let mut list: Option<Applying<L>> = None;
     let mut listed = Ok(());
-    let mut text = text::Changed::default();
-    let changes_text = s.changes_text();
     for i in 0..s.battlefield().len() {
         let slot = s.battlefield()[i];
         // Layer 1: the copiable values (CR 613.2a). A token copy's are those of what it
@@ -357,12 +355,6 @@ fn apply_layers<L: Layout>(
             granted: [None; 4],
             lost: Default::default(),
         };
-        if changes_text {
-            match text::type_line(s, t, i, f) {
-                Ok(changed) => text = text.and(changed),
-                Err(full) => listed = Err(full),
-            }
-        }
         for (n, ability) in f.abilities.iter().enumerate() {
             let Some(spec) = ability.layer() else {
                 continue;
@@ -390,6 +382,15 @@ fn apply_layers<L: Layout>(
         };
         listed = listed.and(list_static(s, &mut list, on, ability, spec));
     }
+    // Layer 3 for the type lines, after every permanent's layer 1 values: nothing listed
+    // above reads them (`apply::holds_from_base`).
+    let text = if s.changes_text() {
+        let (text, full) = text::type_lines(s, t);
+        listed = listed.and(full);
+        text
+    } else {
+        text::Changed::default()
+    };
     listed = listed.and(resolved_effects(s, &mut list));
     let mut applied = Applied {
         removed: text.removed,

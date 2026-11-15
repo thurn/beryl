@@ -73,7 +73,27 @@ pub(super) fn reader<L: Layout>(s: &Rederive<'_, L>, a: &Apply<L>) -> Option<app
 ///
 /// [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
 /// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056
-pub(super) fn type_line<L: Layout>(
+/// [`type_line`] for every permanent, with what they changed together and whether a mask of
+/// lost abilities ran out of room. Out of line: only a game with a text change comes here.
+#[cold]
+#[inline(never)]
+pub(super) fn type_lines<L: Layout>(
+    s: &mut Rederive<'_, L>,
+    t: &GameTable,
+) -> (Changed, Result<(), Full>) {
+    let mut text = Changed::default();
+    let mut listed = Ok(());
+    for i in 0..s.battlefield().len() {
+        let face = s.definition(s.battlefield()[i]).face(t);
+        match type_line(s, t, i, face) {
+            Ok(changed) => text = text.and(changed),
+            Err(full) => listed = Err(full),
+        }
+    }
+    (text, listed)
+}
+
+fn type_line<L: Layout>(
     s: &mut Rederive<'_, L>,
     t: &GameTable,
     i: usize,

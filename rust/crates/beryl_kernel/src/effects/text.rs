@@ -187,6 +187,27 @@ impl<L: Layout> State<L> {
         u8::try_from(at + 1).map_err(|_| Full)
     }
 
+    /// Whether a text change is in force or the stack's abilities keep a set of them: the
+    /// one test [`State::put_on_stack`] makes in a game without a text change.
+    #[inline]
+    pub(crate) fn keeps_words(&self) -> bool {
+        self.effects.kinds.0 & Kinds::TEXT != 0 || !self.captured_words.is_empty()
+    }
+
+    /// Settles the kept sets of text changes and notes in `entry` its source's words, as
+    /// `entry` goes on the stack ([`State::keeps_words`]). Out of line: only a game with a
+    /// text change comes here.
+    ///
+    /// # Errors
+    ///
+    /// When the abilities on the stack already keep [`crate::state::CAPTURED_WORDS`] other sets.
+    #[cold]
+    #[inline(never)]
+    pub(crate) fn words_on_stack(&mut self, entry: &mut StackEntry<L>) -> Result<(), Full> {
+        self.settle_captured_words();
+        self.capture_words(entry)
+    }
+
     /// Empties the sets of text changes the stack's abilities kept, once the stack is
     /// empty: no entry names one.
     #[inline]
@@ -195,4 +216,15 @@ impl<L: Layout> State<L> {
             self.captured_words.clear();
         }
     }
+}
+
+/// [`crate::table::land_mana`] when `words` changes a subtype word. Out of line: only a game with a
+/// text change comes here.
+#[cold]
+#[inline(never)]
+pub(crate) fn changed_land_mana(face: &beryl_card::Face, words: &Words, written: u8) -> u8 {
+    let printed = beryl_card::BasicLandTypes::of(face.subtypes.read(&Words::NONE));
+    let types = beryl_card::BasicLandTypes::of(face.subtypes.read(words));
+    // A written ability of a land type the face no longer has went with the type.
+    types.mana().intrinsic_mana() & !(written & !printed.minus(types).mana().intrinsic_mana())
 }
