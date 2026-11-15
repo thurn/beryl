@@ -154,21 +154,23 @@ impl Table {
             let moving = track.and_then(|(motion, track)| {
                 builder.segment();
                 let pose = track.pose_at(motion.t);
+                let under_way = track.moving(motion.t);
                 match motion.finals.get(slot).copied().flatten() {
-                    Some(object) => Some((object, motion.view, pose)),
-                    None => resting.map(|object| (object, view, pose)),
+                    Some(object) => Some((object, motion.view, pose, under_way)),
+                    None => resting.map(|object| (object, view, pose, under_way)),
                 }
             });
-            let (object, view) = match (moving, resting) {
-                (Some((object, view, pose)), _) => (
+            let (object, view, under_way) = match (moving, resting) {
+                (Some((object, view, pose, under_way)), _) => (
                     SceneObject {
                         pose,
                         visible: pose.opacity > 0.0,
                         ..object
                     },
                     view,
+                    under_way,
                 ),
-                (None, Some(object)) => (object, view),
+                (None, Some(object)) => (object, view, false),
                 (None, None) => continue,
             };
             if !object.visible {
@@ -185,6 +187,9 @@ impl Table {
             }
             if object.pose.turn > 0.5 {
                 state |= StateBits::FACE_DOWN;
+            }
+            if under_way {
+                state |= StateBits::MOVING;
             }
             builder.resolved(
                 name,

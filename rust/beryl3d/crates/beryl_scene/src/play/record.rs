@@ -32,7 +32,8 @@ pub struct StepRecord {
 }
 
 impl StepRecord {
-    /// How a fault names it: `step 2.1 (fly)`, numbered from 1 as `step:V.B.S` moments are.
+    /// How a fault names it: `step 2.1 (fly)`, the beat and the step numbered from 1. (A
+    /// `step:V.B.S` moment numbers them from 0.)
     #[must_use]
     pub fn describe(&self) -> String {
         format!(
@@ -134,6 +135,13 @@ impl ScriptRecord {
     #[must_use]
     pub fn real(&self, t: u64) -> Option<u64> {
         Some(self.start? + t.div_ceil(self.rate.max(1)))
+    }
+
+    /// When `step` began and ended in real time, in nanoseconds since the client started, once
+    /// the script has started.
+    #[must_use]
+    pub fn span(&self, step: &StepRecord) -> Option<(u64, u64)> {
+        Some((self.real(step.from)?, self.real(step.to)?))
     }
 
     /// The segments of the object in `slot`, sorted by start, those that start together in the

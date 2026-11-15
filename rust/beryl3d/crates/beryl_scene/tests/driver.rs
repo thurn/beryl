@@ -3,11 +3,13 @@
 use beryl_scene::agent::Layout;
 use beryl_scene::command::{Reply, SessionCommand};
 use beryl_scene::driver::{Action, Duration, Moment, Name, Page, Recording, Responses};
+use beryl_scene::frame::StateBits;
 use beryl_scene::input::{Input, KeyCode, PointerPhase, Size};
-use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
+use beryl_scene::testing::{ScriptBuilder, ViewBuilder, timing};
 use beryl_session::ipc::{ChooseRequest, FixtureMessage};
 use beryl_session::prompt::ClickReply;
-use beryl_session::protocol::{Side, Status, ZoneName};
+use beryl_session::protocol::{Side, Status, Why, ZoneName};
+use beryl_session::script::Act;
 use beryl_session::{CandidateIndex, DecisionId, SessionId};
 use glam::Vec2;
 
@@ -138,11 +140,87 @@ fn seeking_goes_to_a_moment_and_back() {
         .to_string();
     assert!(error.contains("no moment 'prompt:1'"), "{error}");
     assert!(error.contains("view:3"), "{error}");
+    // The views start the table over and play no steps.
     let error = page
         .seek(&"step:2.0.0".parse().unwrap())
         .unwrap_err()
         .to_string();
-    assert!(error.contains("script clock"), "{error}");
+    assert!(error.contains("no moment 'step:2.0.0'"), "{error}");
+}
+
+/// The sample table, then the viewer drawing Opt and then Ponder, in two beats of one script
+/// timed 400 ms and 300 ms.
+fn two_draws() -> Vec<ViewBuilder> {
+    let mut view = ViewBuilder::sample();
+    view.script(ScriptBuilder::reset().build());
+    let first = view.clone();
+    let opt = view.card(ZoneName::Hand, Side::You, "Opt").clone();
+    let ponder = view.card(ZoneName::Hand, Side::You, "Ponder").clone();
+    let draw = |object| Act::Fly {
+        from: ZoneName::Library,
+        why: Why::Draw,
+        object,
+        at: None,
+        item: None,
+        origin: None,
+    };
+    let mut script = ScriptBuilder::default()
+        .beat([draw(opt)])
+        .beat([draw(ponder)])
+        .build();
+    script.timing = vec![timing(400.0), timing(300.0)];
+    view.script(script);
+    vec![first, view]
+}
+
+#[test]
+fn step_moments_come_from_the_script_clock() {
+    let mut page = page(&two_draws());
+    let moments = page.moments();
+    // The second view arrives 400 ms after the first rests and its script starts then. Each
+    // step's moment is the middle of the span the script clock gave it.
+    let first = moments
+        .iter()
+        .find(|(name, _)| *name == Name::Step(2, 0, 0))
+        .map(|&(_, time)| time);
+    let second = moments
+        .iter()
+        .find(|(name, _)| *name == Name::Step(2, 1, 0))
+        .map(|&(_, time)| time);
+    assert_eq!(first, Some(ms(600)), "{moments:?}");
+    // The second beat starts when the first ends, at 800 ms, and lasts 300 ms.
+    assert_eq!(second, Some(ms(950)), "{moments:?}");
+    // The steps follow their view, and the end follows them.
+    let names: Vec<Name> = moments.iter().map(|&(name, _)| name).collect();
+    assert_eq!(
+        names,
+        vec![
+            Name::Start,
+            Name::View(1),
+            Name::View(2),
+            Name::Step(2, 0, 0),
+            Name::Step(2, 1, 0),
+            Name::End,
+        ]
+    );
+
+    page.seek(&"step:2.1.0".parse().unwrap()).unwrap();
+    assert_eq!(page.now(), ms(950).0);
+    let ponder = page.find("card \"Ponder\"");
+    assert!(ponder.states().has(StateBits::MOVING), "{}", page.tree());
+    // The cards already in the hand slide to make room; the stack stays still.
+    assert!(
+        !page
+            .find("card \"Lightning Bolt\"")
+            .states()
+            .has(StateBits::MOVING)
+    );
+    // Seeking back starts the recording over and lands in the first step.
+    page.seek(&"step:2.0.0".parse().unwrap()).unwrap();
+    assert_eq!(page.now(), ms(600).0);
+    assert!(page.find("card \"Opt\"").states().has(StateBits::MOVING));
+    page.still();
+    assert!(!page.find("card \"Ponder\"").states().has(StateBits::MOVING));
 }
 
 #[test]

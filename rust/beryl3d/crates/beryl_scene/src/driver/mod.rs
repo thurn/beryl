@@ -389,9 +389,10 @@ impl Page {
     }
 
     /// Every named moment of the recording with its time, as the recording plays on its own
-    /// clock with no action taken, in order. Views given together, because the game played on
-    /// without the viewer, share the moment the last of them comes to rest. Steps are not
-    /// listed: their times need the script clock, which the client does not have yet.
+    /// clock with no action taken. Views given together, because the game played on
+    /// without the viewer, share the moment the last of them comes to rest. Each view's steps
+    /// are listed after it, though they play before it rests, each at the middle of its span as
+    /// the client's script clock played it.
     pub fn moments(&mut self) -> Vec<(Name, Duration)> {
         self.named_moments()
             .iter()
@@ -423,12 +424,6 @@ impl Page {
             Moment::At(duration) => return Ok(duration.0),
             Moment::Named { name, offset } => (name, offset),
         };
-        if let Name::Step(..) = name {
-            return Err(DriverError(format!(
-                "'{moment}': step moments need the script clock, which the client does not have \
-                 yet; use a view, a prompt or a duration"
-            )));
-        }
         let moments = self.named_moments();
         let Some(&(_, time)) = moments.iter().find(|(known, _)| *known == name) else {
             let names: Vec<String> = moments.iter().map(|(name, _)| name.to_string()).collect();
@@ -626,7 +621,7 @@ impl Page {
 
     fn named_moments(&mut self) -> &[(Name, u64)] {
         if self.moments.is_none() {
-            let mut playing = self.fresh(false);
+            let mut playing = self.fresh(true);
             self.moments = Some(playing.play_through());
         }
         self.moments.as_deref().expect("just set")
@@ -659,7 +654,9 @@ impl Page {
         page
     }
 
-    /// Plays the recording to its end on its own clock, and returns each moment's time.
+    /// Plays the recording to its end on its own clock, and returns each moment's time. The
+    /// client must keep a record of its scripts (`fresh(true)`), whose spans give the steps'
+    /// times.
     fn play_through(&mut self) -> Vec<(Name, u64)> {
         let mut moments = vec![(Name::Start, 0)];
         let mut prompts = 0;
@@ -671,6 +668,7 @@ impl Page {
                     prompts += 1;
                     moments.push((Name::Prompt(prompts), self.now));
                 }
+                self.step_moments(view, &mut moments);
             }
             if self.released >= self.views.len() {
                 break;
@@ -680,6 +678,23 @@ impl Page {
         }
         moments.push((Name::End, self.now));
         moments
+    }
+
+    /// Adds a moment for each step of the script of `view` (counted from 0) at the middle of the
+    /// span the client played it over. The client is given one script with each view, in order,
+    /// and keeps a record of each from the start, so the view's index is its script's.
+    fn step_moments(&self, view: usize, moments: &mut Vec<(Name, u64)>) {
+        let Some(record) = self.client.history().get(view) else {
+            return;
+        };
+        let number = view as u32 + 1;
+        for step in &record.steps {
+            let Some((from, to)) = record.span(step) else {
+                continue;
+            };
+            let name = Name::Step(number, step.beat as u32, step.index as u32);
+            moments.push((name, from + (to - from) / 2));
+        }
     }
 }
 

@@ -249,6 +249,17 @@ impl Track {
         pose_at(self.segments(), t)
     }
 
+    /// Whether the object is moving at `t`: a segment under way at `t` changes its pose. A
+    /// segment that holds the object still does not count.
+    #[must_use]
+    pub fn moving(&self, t: u64) -> bool {
+        self.segments().iter().any(|segment| {
+            segment.start <= t
+                && t < segment.end()
+                && (segment.from != segment.to || segment.arc != 0.0)
+        })
+    }
+
     /// Adds `segment` after every segment that starts no later than it, so that of two that
     /// start together the one added last decides the pose. When the track is full it first
     /// drops the segments that ended by `now`, all but the latest of them: that one still
