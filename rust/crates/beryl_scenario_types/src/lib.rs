@@ -13,8 +13,8 @@
 //! The actions and assertions are the ones the engine's mechanics support so far.
 
 use beryl_card::{
-    Castings, Colors, CounterKind, DecisionKind, FaceIx, ManaColor, ObjectAbility, Seat, TurnStep,
-    Zone,
+    Castings, Colors, CounterKind, DecisionKind, FaceIx, ManaColor, ObjectAbility, Seat, Subtype,
+    TurnStep, Zone,
 };
 
 mod player;
@@ -399,6 +399,14 @@ pub enum Assertion {
         player: Seat,
         card: &'static str,
         creature: bool,
+    },
+    /// Whether some permanent named `card` that `player` controls has `subtype`. A copy has
+    /// its original's name, so a scenario about a copy can only ask about the pair.
+    Subtype {
+        player: Seat,
+        card: &'static str,
+        subtype: Subtype,
+        has: bool,
     },
     /// How many counters of `kind` the first permanent named `card` that `player` controls
     /// has.

@@ -23,6 +23,7 @@ import mage.choices.Choice;
 import mage.constants.Outcome;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
+import mage.constants.SubType;
 import mage.constants.Zone;
 import mage.counters.CounterType;
 import mage.game.Game;
@@ -497,6 +498,12 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
                 .filter(o -> o.getName().equals(name))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError(player.getName() + " has no " + name + " in " + zone));
+    }
+
+    protected void assertSubtype(Player controller, String name, SubType subtype, boolean has) {
+        Assert.assertFalse(controller.getName() + " controls no " + name, controlled(controller, name).isEmpty());
+        boolean found = controlled(controller, name).stream().anyMatch(p -> p.hasSubtype(subtype, currentGame));
+        Assert.assertEquals(name + " has subtype " + subtype, has, found);
     }
 
     protected void assertCountersOn(Player controller, String name, CounterType type, int count) {

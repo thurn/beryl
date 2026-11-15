@@ -619,6 +619,19 @@ impl Runner {
                 let is = d.types.contains(Types::CREATURE);
                 (is.to_string(), creature.to_string())
             }
+            Assertion::Subtype {
+                player,
+                card,
+                subtype,
+                has,
+            } => {
+                let mut named = self.permanents(player, card).peekable();
+                if named.peek().is_none() {
+                    return Err(format!("player {player} controls no {card}"));
+                }
+                let is = named.any(|slot| s.has_subtype(&self.t, slot, subtype));
+                (is.to_string(), has.to_string())
+            }
             Assertion::Counters {
                 player,
                 card,
@@ -702,6 +715,7 @@ impl Runner {
             | Assertion::Attacking { .. }
             | Assertion::Pt { .. }
             | Assertion::Creature { .. }
+            | Assertion::Subtype { .. }
             | Assertion::Counters { .. } => {
                 // Control and characteristics are layer results, up to date only at an open
                 // decision.

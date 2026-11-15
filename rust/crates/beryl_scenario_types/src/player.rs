@@ -3,7 +3,8 @@
 //! an `Action::answer(..)` or an `Action::assert(Assertion::..)` struct literal.
 
 use beryl_card::{
-    Castings, Colors, CounterKind, DecisionKind, FaceIx, ManaColor, Seat, TextWord, TurnStep, Zone,
+    Castings, Colors, CounterKind, DecisionKind, FaceIx, ManaColor, Seat, Subtype, TextWord,
+    TurnStep, Zone,
 };
 
 use crate::{Action, Assertion, Ending, Pick};
@@ -311,6 +312,16 @@ impl Player {
             player: self.0,
             card,
             creature,
+        })
+    }
+
+    /// Whether some permanent named `card` they control has `subtype`.
+    pub const fn has_subtype(self, card: &'static str, subtype: Subtype, has: bool) -> Action {
+        Action::assert(Assertion::Subtype {
+            player: self.0,
+            card,
+            subtype,
+            has,
         })
     }
 

@@ -7,7 +7,7 @@
 //! it reads every field it lists by name, and matches an enum's variants exhaustively.
 
 use crate::{Live, Position, facts, trace};
-use beryl_engine::card::{Castings, Colors, FaceIx, ManaColor, ObjectAbility, Purpose};
+use beryl_engine::card::{Castings, Colors, FaceIx, ManaColor, ObjectAbility, Purpose, Subtype};
 use beryl_engine::state::CounterKind;
 use beryl_engine::{CardTable, DecisionKind, Seat, TurnStep, Zone};
 use beryl_scenario_types::{
@@ -290,6 +290,14 @@ enum AssertionDef {
         player: Seat,
         card: &'static str,
         creature: bool,
+    },
+    Subtype {
+        #[serde(serialize_with = "seat")]
+        player: Seat,
+        card: &'static str,
+        #[serde(serialize_with = "variant")]
+        subtype: Subtype,
+        has: bool,
     },
     Counters {
         #[serde(serialize_with = "seat")]

@@ -248,6 +248,10 @@ def assertion_code(a: Json, who: str) -> str:
     if what == "Creature":
         creature = "true" if a["creature"] else "false"
         return f"assertCreature({who}, {name}, {creature})"
+    if what == "Subtype":
+        has = "true" if a["has"] else "false"
+        subtype = cast(str, a["subtype"]).upper()
+        return f"assertSubtype({who}, {name}, SubType.{subtype}, {has})"
     if what == "Counters":
         kind = COUNTERS[cast(str, a["kind"])]
         return f"assertCountersOn({who}, {name}, CounterType.{kind}, {count})"

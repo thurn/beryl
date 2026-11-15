@@ -979,6 +979,14 @@ public final class BerylForgeHarness {
                         expected = a.get("creature").getAsBoolean();
                         actual = first(player(a), a.get("card").getAsString(), null).isCreature();
                     }
+                    case "Subtype" -> {
+                        expected = a.get("has").getAsBoolean();
+                        first(player(a), a.get("card").getAsString(), null);
+                        actual = false;
+                        for (Card card : controlled(player(a), a.get("card").getAsString())) {
+                            actual = (Boolean) actual || card.getType().hasSubtype(a.get("subtype").getAsString());
+                        }
+                    }
                     case "Counters" -> {
                         expected = a.get("count").getAsInt();
                         CounterType type = CounterEnumType.valueOf(a.get("kind").getAsString());
