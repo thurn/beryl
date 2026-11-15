@@ -59,6 +59,12 @@ def hunk(path: str, old: int, new: int, removed: list[str], added: list[str]) ->
 def lane_files(root: Path) -> None:
     (root / "ui" / "scripts").mkdir(parents=True)
     (root / "ui" / "scripts" / "kept-table.mjs").write_text(KEPT_TABLE)
+    (root / selection.KEPT_SCRIPT).write_text(
+        'await import("./kept-table.mjs");\n'
+        'await import("./kept-screens.mjs");\n'
+        'await import("./kept-table-cardstate.mjs");\n'
+        'const { stopTableServer } = await import("./table.mjs");\n'
+    )
     shots = {"shots": [{"name": "attack", "route": "/a"}, {"name": "block"}]}
     (root / "ui" / "shots.json").write_text(json.dumps(shots))
 
@@ -447,6 +453,89 @@ def test_a_kept_parts_body_and_harness_choose(
     every = selection.every_check("ui-test", log, None)
     assert {kept[0], kept[2]} <= set(every)
     assert kept[1] not in every and "ui-test:gone" not in every
+
+
+CARD_STATE = "ui/scripts/kept-table-cardstate.mjs"
+TABLE_HELPER = "ui/scripts/table.mjs"
+STATS_TITLE = "ui-test:manual table card state edits stats counters and notes"
+TOKEN_TITLE = (
+    "ui-test:manual table card state searches and repeats store and custom tokens"
+)
+CARD_STATE_CHECKS = """\
+import {
+    startTable,
+} from "./table.mjs";
+
+function ready() {
+    const check = () => true;
+    check();
+}
+const live = { ready };
+
+await check("manual table card state edits stats counters and notes", async (page) => {
+    await startTable(page);
+    await editStats(page);
+}, live);
+
+await check("manual table card state searches and repeats store and custom tokens", async (page) => {
+    await startTable(page);
+    await findTokens(page);
+}, live);
+"""
+
+
+def test_a_late_imported_kept_check_chooses_only_its_edited_body(repo: Path) -> None:
+    before = "    await editStats(page);"
+    after = "    await editStats(page, 2);"
+    (repo / CARD_STATE).write_text(CARD_STATE_CHECKS.replace(before, after))
+    found = coverage_of(**{STATS_TITLE: {}, TOKEN_TITLE: {}})
+    universe = selection.lane_checks("ui-test", [], found)
+    line = CARD_STATE_CHECKS.splitlines().index(before) + 1
+    edit = {CARD_STATE: [hunk(CARD_STATE, line, line, [before], [after])]}
+    choice = selection.choose("ui-test", [CARD_STATE], edit, universe, found, "c0ffee")
+    assert choice.reasons == {STATS_TITLE: "body"}
+    assert not choice.fill
+    comment = {CARD_STATE: [hunk(CARD_STATE, line, line, ["// old"], ["// new"])]}
+    assert selection.choose(
+        "ui-test", [CARD_STATE], comment, universe, found, "c0ffee"
+    ).idle()
+
+
+def test_a_new_kept_title_is_chosen_before_coverage_records_it(repo: Path) -> None:
+    (repo / CARD_STATE).write_text(CARD_STATE_CHECKS)
+    found = coverage_of(**{STATS_TITLE: {}})
+    universe = selection.lane_checks("ui-test", [], found)
+    start = CARD_STATE_CHECKS.splitlines().index(
+        f'await check("{TOKEN_TITLE.removeprefix("ui-test:")}", async (page) => {{'
+    )
+    added = {
+        CARD_STATE: [
+            hunk(
+                CARD_STATE, start, start + 1, [], CARD_STATE_CHECKS.splitlines()[start:]
+            )
+        ]
+    }
+    choice = selection.choose("ui-test", [CARD_STATE], added, universe, found, "c0ffee")
+    assert choice.reasons == {TOKEN_TITLE: "body"}
+
+
+def test_the_table_helper_chooses_its_importing_checks(repo: Path) -> None:
+    (repo / CARD_STATE).write_text(CARD_STATE_CHECKS)
+    found = coverage_of(**{UNIVERSE[0]: {}})
+    universe = selection.lane_checks("ui-test", [], found)
+    code = {TABLE_HELPER: [hunk(TABLE_HELPER, 1, 1, ["before();"], ["after();"])]}
+    choice = selection.choose(
+        "ui-test", [TABLE_HELPER], code, universe, found, "c0ffee"
+    )
+    assert UNIVERSE[0] in universe
+    assert choice.reasons == dict.fromkeys(
+        (STATS_TITLE, TOKEN_TITLE), f"import:{TABLE_HELPER}"
+    )
+    assert not choice.fill
+    comment = {TABLE_HELPER: [hunk(TABLE_HELPER, 1, 1, ["// before"], ["// after"])]}
+    assert selection.choose(
+        "ui-test", [TABLE_HELPER], comment, universe, found, "c0ffee"
+    ).idle()
 
 
 SHAPES = {

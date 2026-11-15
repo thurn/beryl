@@ -15,8 +15,9 @@ A check is chosen, and its run-log record's `chosen` says why, when:
   (`verb:<verb>/<seat>/<layout>`, ui/scripts/verbs.mjs), that script or its list, ui/verbs.json;
   for a shape check (`shape:<shape>/<seat>/<layout>`, ui/scripts/shapes.mjs), that script or its
   list, ui/shapes.json;
-- `import:<file>`: code changed in a ui/src file a kept file imports into Node, which no
-  coverage sees: as if each line of that file that uses one of its names had changed;
+- `import:<file>`: code changed in a file a kept file imports into Node, which no
+  coverage sees. For ui/src imports, each use of an imported name counts as changed.
+  For table.mjs, the checks in each importing module run;
 - `fixture:<name>`: a Rust or fixture change changed the recording of a fixture it loads, as the
   step recorded it against the recording the coverage run made;
 - `harness`: the harness changed (capture.mjs, audit.mjs, Vite's config, a data file the UI
@@ -42,6 +43,14 @@ from pathlib import Path
 
 from . import checks, deadline, paths, runlog, system, verdicts
 from .beryl3d import paths as beryl3d_paths
+from .kept_checks import (
+    COMMENT,
+    KEPT_SCRIPT,
+    check_sources,
+    kept_titles,
+    regions,
+    statements,
+)
 from .suites import (
     SHAPE_CASES,
     SHAPE_PREFIX,
@@ -93,30 +102,10 @@ HARNESS: dict[str, tuple[str, ...]] = {
     "ui-test": COMMON_HARNESS,
     "shots": (*COMMON_HARNESS, "ui/scripts/shots.mjs"),
 }
-# The kept checks, whose ids are `ui-test:<title>`: the script `ui-test` runs, its harness and
-# its parts. In each file a line in no check is the harness.
-KEPT_SCRIPT = "ui/scripts/kept.mjs"
-KEPT_PARTS: tuple[str, ...] = tuple(
-    f"ui/scripts/kept-{part}.mjs"
-    for part in (
-        "screens",
-        "table",
-        "table-click",
-        "crowded",
-        "piles",
-        "pointer",
-        "play",
-        "opening",
-    )
-)
-CHECK_SOURCES: tuple[str, ...] = (
-    KEPT_SCRIPT,
-    "ui/scripts/kept-harness.mjs",
-    *KEPT_PARTS,
-)
+TABLE_IMPORT = "./table.mjs"
+TABLE_HELPER = f"ui/scripts/{TABLE_IMPORT.removeprefix('./')}"
 SHOTS = "ui/shots.json"
 FIXTURES = "ui/fixtures.json"
-COMMENT = ("//", "/*", "*")
 
 
 # What changed.
@@ -271,91 +260,6 @@ def stale(found: Coverage | None, now: datetime) -> str:
 # Where each check's body is.
 
 
-@dataclass
-class Region:
-    """A `check(...)` call's lines in a kept file and the titles it can give: a pattern,
-    None when its title is computed where this cannot follow, and the title itself when it is
-    spelled out."""
-
-    first: int
-    last: int
-    title: re.Pattern[str] | None
-    literal: str | None = None
-
-
-CALL: re.Pattern[str] = re.compile(r"^(\s*)(?:await\s+)?check\((.*)$")
-TITLE: re.Pattern[str] = re.compile(
-    r'^\s*(?:"((?:[^"\\]|\\.)*)"|`([^`]*)`|([A-Za-z_]\w*))'
-)
-
-
-def title_pattern(text: str, source: str) -> tuple[re.Pattern[str] | None, str | None]:
-    """The titles a call's first argument `text` gives, and the title when it is one string: a
-    string, a template whose `${...}` parts match anything, or a constant defined as either last
-    in `source` (the file up to the call)."""
-    m = TITLE.match(text)
-    if not m:
-        return None, None
-    if text[m.end() :].lstrip().startswith("+"):
-        # A concatenation: what follows the first part matches anything.
-        first, _ = title_pattern(text[: m.end()], source)
-        return (re.compile(first.pattern + ".*") if first else None), None
-    if m[1] is not None:
-        title = str(json.loads(f'"{m[1]}"'))
-        return re.compile(re.escape(title)), title
-    if m[2] is not None:
-        parts = re.split(r"\$\{[^}]*\}", m[2])
-        literal = m[2] if len(parts) == 1 else None
-        return re.compile(".+".join(re.escape(p) for p in parts)), literal
-    defined = re.findall(rf"^\s*const {m[3]}\s*=\s*([\"`].*)", source, re.M)
-    return title_pattern(defined[-1], "") if defined else (None, None)
-
-
-def regions(source: str) -> list[Region]:
-    """The `check(...)` calls of a kept file, 1-based. Prettier formats the file, so a call
-    closes on the first line at its own indentation that ends `);`."""
-    lines = source.splitlines()
-    found: list[Region] = []
-    for n, line in enumerate(lines):
-        m = CALL.match(line)
-        if not m:
-            continue
-        indent = m[1]
-        argument = m[2] or (lines[n + 1] if n + 1 < len(lines) else "")
-        last = n
-        if not line.rstrip().endswith(");"):
-            for k in range(n + 1, len(lines)):
-                text = lines[k]
-                if (
-                    text.startswith(indent)
-                    and not text[len(indent) :].startswith((" ", "\t"))
-                    and text.rstrip().endswith(");")
-                ):
-                    last = k
-                    break
-        above = "\n".join(lines[:n])
-        found.append(Region(n + 1, last + 1, *title_pattern(argument, above)))
-    return found
-
-
-def statements(source: str) -> list[tuple[int, int]]:
-    """The file's top-level statements, 1-based: each from a line at column 0 to the line before
-    the next, comments joining the statement after them."""
-    lines = source.splitlines()
-    starts = [
-        n
-        for n, line in enumerate(lines)
-        if line
-        and not line[0].isspace()
-        and line[0] not in "})]"
-        and not (n and lines[n - 1].startswith(COMMENT))
-    ]
-    return [
-        (s + 1, (starts[i + 1] if i + 1 < len(starts) else len(lines)))
-        for i, s in enumerate(starts)
-    ]
-
-
 def body_reasons(
     source: str, changed: list[Hunk], universe: Iterable[str]
 ) -> tuple[set[str], bool]:
@@ -385,8 +289,8 @@ def body_reasons(
     return chosen, harness
 
 
-NODE_IMPORT: re.Pattern[str] = re.compile(
-    r'^import\s*\{([^}]*)\}\s*from\s*"\.\./(src/[^"]+)";', re.M
+NAMED_IMPORT: re.Pattern[str] = re.compile(
+    r'^import\s*\{([^}]*)\}\s*from\s*"(\.{1,2}/[^"]+)";', re.M
 )
 
 
@@ -401,8 +305,8 @@ def import_reasons(
         return set(), False
     names: list[str] = []
     imports: set[int] = set()
-    for m in NODE_IMPORT.finditer(source):
-        if f"ui/{m[2]}" != path:
+    for m in NAMED_IMPORT.finditer(source):
+        if m[2] != f"../{path.removeprefix('ui/')}":
             continue
         first = source.count("\n", 0, m.start()) + 1
         imports |= set(range(first, first + m[0].count("\n") + 1))
@@ -419,14 +323,6 @@ def import_reasons(
         if n not in imports and use.search(text)
     ]
     return body_reasons(source, uses, universe)
-
-
-def kept_titles(source: str) -> tuple[list[str], list[re.Pattern[str]]]:
-    """The checks a kept file has: the titles it spells out, and the patterns of all of
-    them (a computed title it cannot follow matches anything)."""
-    found = regions(source)
-    patterns = [r.title if r.title is not None else re.compile(".*") for r in found]
-    return [f"ui-test:{r.literal}" for r in found if r.literal is not None], patterns
 
 
 # The exit of a check script whose filters reached none of its checks: `by ui-test` fails only
@@ -570,13 +466,13 @@ def choose(
     choice = Choice(universe, fallback)
     if any(matches(p, HARNESS[lane]) for p in changed):
         choice.add(universe, "harness")
-    for script in CHECK_SOURCES if lane == "ui-test" else ():
-        if script not in changed or not (paths.REPO / script).exists():
+    scripts = check_sources() if lane == "ui-test" else {}
+    for script, source in scripts.items():
+        if script not in changed:
             continue
         if script not in hunks_now:  # A file git does not track yet: all of it is new.
             choice.add(universe, "harness")
             continue
-        source = (paths.REPO / script).read_text()
         bodies, harness = body_reasons(source, hunks_now[script], universe)
         choice.add(sorted(bodies), "body")
         if harness:
@@ -605,15 +501,26 @@ def choose(
         choice.fill = True
     elif sources and found is not None:
         coverage_reasons(choice, sources, found, base)
-    for script, path in (
-        ((c, p) for c in CHECK_SOURCES for p in sources) if lane == "ui-test" else ()
-    ):
-        if (paths.REPO / script).exists():
-            source = (paths.REPO / script).read_text()
-            bodies, harness = import_reasons(source, path, sources[path], universe)
+    table_changed = rewritten(TABLE_HELPER, changed, hunks_now)
+    for source in scripts.values():
+        for path, changed_source in sources.items():
+            bodies, harness = import_reasons(source, path, changed_source, universe)
             choice.add(sorted(bodies), f"import:{path}")
             if harness:
                 choice.add(universe, "harness")
+        if table_changed and any(
+            m[2] == TABLE_IMPORT for m in NAMED_IMPORT.finditer(source)
+        ):
+            patterns = [r.title for r in regions(source) if r.title is not None]
+            choice.add(
+                (
+                    c
+                    for c in universe
+                    if c.startswith("ui-test:")
+                    and any(p.fullmatch(c.removeprefix("ui-test:")) for p in patterns)
+                ),
+                f"import:{TABLE_HELPER}",
+            )
     return choice
 
 
@@ -676,9 +583,7 @@ def every_check(
     prefix = f"{lane}:"
     if lane == "shots":
         return [f"{prefix}{n}" for n in shot_entries((paths.REPO / SHOTS).read_text())]
-    sources = [
-        (paths.REPO / s).read_text() for s in CHECK_SOURCES if (paths.REPO / s).exists()
-    ]
+    sources = check_sources().values()
     literal: list[str] = []
     patterns: list[re.Pattern[str]] = []
     for source in sources:
