@@ -21,6 +21,8 @@ pub fn table_keys(
 #[cfg(desktop)]
 #[tauri::command]
 pub async fn table_quit(app: tauri::AppHandle) -> Result<(), beryl_session::SessionError> {
+    use beryl_table_session::connections::TableConnections;
+    use tauri::Manager;
     use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 
     tauri::async_runtime::spawn_blocking(move || {
@@ -33,6 +35,7 @@ pub async fn table_quit(app: tauri::AppHandle) -> Result<(), beryl_session::Sess
             ))
             .blocking_show()
         {
+            app.state::<TableConnections>().leave();
             app.exit(0);
         }
     })

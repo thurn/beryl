@@ -219,7 +219,7 @@ function conditions({
   return result;
 }
 
-function assists(view: PlayerView): ReadonlySet<Assist> {
+export function assists(view: PlayerView): ReadonlySet<Assist> {
   const a = view.table?.assists;
   const result = new Set<Assist>();
   if (a?.turnUpkeep) result.add("turn_upkeep");

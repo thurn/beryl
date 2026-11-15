@@ -3,23 +3,27 @@ import { Button } from "../components/Controls";
 import { Stage } from "../game/Stage";
 import {
   appInfo,
+  isNativeApp,
   onGameUpdate,
   onTableLobby,
   tableLeave,
   tableLobby,
+  tableQuit,
   type DeckImportReply,
   type LobbyChange,
   type LobbyUpdate,
 } from "../ipc";
 import { usePhone } from "../mobile/phone";
 import { LinkBanner } from "../table/LinkBanner";
-import { useTableLink } from "../table/link";
+import { useLobbyLinkDetails, useTableLink } from "../table/link";
 import { Bindings } from "../table/bindings";
 import { AssistSwitches } from "../table/lobby/AssistSwitches";
 import { DeckPicker, type DeckPanel } from "../table/lobby/DeckPicker";
-import { GameSettings } from "../table/lobby/GameSettings";
+import { GameSettings, GameSettingsSummary } from "../table/lobby/GameSettings";
 import { SideboardSwap } from "../table/lobby/SideboardSwap";
 import { resolve } from "../table/shortcuts";
+import { LobbySummary } from "../table/lobby/LobbySummary";
+import { openNativeTableKeys } from "../table/keyboard";
 import "../table/lobby/lobby.css";
 
 export function Lobby() {
@@ -32,6 +36,7 @@ export function Lobby() {
   const busy = useRef(false);
   const [error, setError] = useState<string>();
   const {
+    link,
     kind,
     peer,
     frozen,
@@ -41,6 +46,11 @@ export function Lobby() {
   } = useTableLink();
   const view = update?.view;
   const own = view?.seats.find((seat) => seat.seat === view.you);
+  useLobbyLinkDetails(link.kind === "connected", { current, read });
+  useEffect(
+    () => openNativeTableKeys(() => setError("Could not set table shortcuts.")),
+    [],
+  );
   useEffect(() => {
     let mounted = true;
     let heard = false;
@@ -144,13 +154,23 @@ export function Lobby() {
   const keyboard =
     useRef<(event: KeyboardEvent, bindings: Bindings) => void>(undefined);
   keyboard.current = (event, bindings) => {
-    if (frozen || event.defaultPrevented || event.repeat || pending) return;
+    if (event.defaultPrevented || event.repeat || event.isComposing) return;
+    if (resolve(event, "table", bindings) === "table.leave") {
+      event.preventDefault();
+      if (isNativeApp())
+        void tableQuit().catch(() => setError("Could not quit."));
+      else if (window.confirm("Leave table?")) leave();
+      return;
+    }
+    if (frozen || pending) return;
     const id = resolve(event, "lobby", bindings);
     if (id === "lobby.paste_deck") setPicker("paste");
     else if (id === "lobby.change_deck" && !phone) setPicker("file");
     else if (id === "lobby.unload_deck" && own?.loaded) unload();
     else if (id === "lobby.sideboard" && own?.loaded)
       setSideboard((open) => !open);
+    else if (id === "lobby.ready" && view?.you !== 0 && own?.loaded)
+      run({ kind: "ready", ready: !own.ready });
     else return;
     event.preventDefault();
   };
@@ -188,12 +208,7 @@ export function Lobby() {
         </header>
         {view && own ? (
           <>
-            {view.invite && (
-              <label className="lobby-invite">
-                Invite code
-                <input readOnly value={view.invite} />
-              </label>
-            )}
+            <LobbySummary view={view} link={link} />
             <section className="lobby-section" aria-label="Deck">
               <div className="lobby-deck">
                 <div>
@@ -265,18 +280,29 @@ export function Lobby() {
             <AssistSwitches
               assists={view.assists}
               disabled={pending}
-              change={run}
+              onToggle={(assist, on) => run({ kind: "set_assist", assist, on })}
             />
-            {view.you === 0 && (
+            {view.you === 0 ? (
               <GameSettings view={view} pending={pending} change={change} />
+            ) : (
+              <GameSettingsSummary view={view} />
             )}
-            {view.seats.length === 1 && (
+            {view.you === 0 ? (
               <Button
                 className="lobby-start"
                 disabled={!view.canStart || pending}
                 onClick={() => run({ kind: "start" })}
               >
                 Start
+              </Button>
+            ) : (
+              <Button
+                className="lobby-start"
+                disabled={!own.loaded || pending}
+                aria-pressed={own.ready}
+                onClick={() => run({ kind: "ready", ready: !own.ready })}
+              >
+                Ready
               </Button>
             )}
           </>

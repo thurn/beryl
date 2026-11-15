@@ -368,6 +368,15 @@ pub(super) fn next_game(table: &Table, winner: Option<Seat>) -> Changes {
     changes.extend(edit(table.game_match.last_winner, winner, |edit| {
         Change::SetTable(TableEdit::SetLastWinner { edit })
     }));
+    let settings = table.game_match.settings();
+    changes.extend(edit(
+        settings,
+        crate::state::LobbySettings {
+            first: None,
+            ..settings
+        },
+        |edit| Change::SetTable(TableEdit::SetGameSettings { edit }),
+    ));
     for seat in table.seats() {
         let old = &table.game_match.seats[usize::from(seat.0)];
         changes.extend(edit(old.ready, false, |edit| {

@@ -76,9 +76,9 @@ export type LobbySettings = { startingLife: number, startingHandSize: number, fi
 
 export type LobbySeat = { seat: TableSeat, name: string | null, loaded: boolean, mainCount: number, sideCount: number, ready: boolean, wins: number, };
 
-export type LobbyView = { you: TableSeat, seats: Array<LobbySeat>, main: Array<[string, number]>, side: Array<[string, number]>, unknown: Array<string>, assists: Array<TableAssist>, settings: LobbySettings, gameNumber: number, invite: string | null, canStart: boolean, };
+export type LobbyView = { you: TableSeat, seats: Array<LobbySeat>, main: Array<[string, number]>, side: Array<[string, number]>, unknown: Array<string>, assists: Array<TableAssist>, settings: LobbySettings, gameNumber: number, lastWinner: TableSeat | null, invite: string | null, canStart: boolean, };
 
-export type LobbyUpdate = { view: LobbyView | null, };
+export type LobbyUpdate = { view: LobbyView | null, game?: LobbyView, };
 
 export type LobbyChange = { "kind": "view" } | { "kind": "solo" } | { "kind": "load_deck", main: Array<[string, number]>, side: Array<[string, number]>, } | { "kind": "sideboard", intoMain: Array<[string, number]>, intoSide: Array<[string, number]>, } | { "kind": "ready", ready: boolean, } | { "kind": "set_assist", assist: TableAssist, on: boolean, } | { "kind": "settings", settings: LobbySettings, } | { "kind": "start" };
 

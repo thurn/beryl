@@ -81,6 +81,7 @@ await check(
             4,
         );
         await page.keyboard.press("F2");
+        await page.getByRole("button", { name: "Confirm Concede" }).click();
         await lobby.getByText("12 main · 1 sideboard").waitFor();
         assert.equal(
             await lobby.getByLabel("Starting life").inputValue(),

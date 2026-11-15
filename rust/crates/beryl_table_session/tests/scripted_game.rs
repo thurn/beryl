@@ -442,7 +442,10 @@ fn an_interrupted_action_wakes_its_caller_and_lobby_payloads_pass_through() {
         view: view.view().clone(),
     };
     update.view.table.as_mut().unwrap().link = link_state;
-    let lobby = LobbyUpdate { view: None };
+    let lobby = LobbyUpdate {
+        view: None,
+        game: None,
+    };
     for message in [
         Message::Welcome {
             seat: GUEST.0,

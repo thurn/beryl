@@ -1,4 +1,4 @@
-import type { LobbyChange, TableAssist } from "../../ipc";
+import type { TableAssist } from "../../ipc";
 
 const names: Record<TableAssist, string> = {
   turn_upkeep: "Turn upkeep",
@@ -11,11 +11,11 @@ const names: Record<TableAssist, string> = {
 export function AssistSwitches({
   assists,
   disabled,
-  change,
+  onToggle,
 }: {
   assists: TableAssist[];
   disabled: boolean;
-  change(change: LobbyChange): void;
+  onToggle(assist: TableAssist, on: boolean): void;
 }) {
   return (
     <fieldset className="lobby-section lobby-assists" disabled={disabled}>
@@ -26,9 +26,7 @@ export function AssistSwitches({
             role="switch"
             type="checkbox"
             checked={assists.includes(assist)}
-            onChange={(event) =>
-              change({ kind: "set_assist", assist, on: event.target.checked })
-            }
+            onChange={(event) => onToggle(assist, event.target.checked)}
           />
           {names[assist]}
         </label>

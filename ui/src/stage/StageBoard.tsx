@@ -1,3 +1,4 @@
+import type { MatchPanel } from "../table/lobby/MatchDialog";
 import { TablePromptView } from "../table/TablePromptView";
 import { DropTargets } from "../table/DropTargets";
 import { desktopDropAreas } from "../table/dropZones";
@@ -72,6 +73,7 @@ export function StageBoard({
   setStops,
   onLeave,
   onShortcuts,
+  onMatchPanel,
   onNextPhase,
   onConcede,
   dimmed,
@@ -95,6 +97,7 @@ export function StageBoard({
   setStops?(stops: StopsSetting): void;
   onLeave(): void;
   onShortcuts?: () => void;
+  onMatchPanel?: (panel: MatchPanel) => void;
   onNextPhase?: () => void;
   /** Concedes the game; none once it is over. */
   onConcede?: () => void;
@@ -362,6 +365,7 @@ export function StageBoard({
           setStops={setStops}
           onLeave={onLeave}
           onShortcuts={onShortcuts}
+          onMatchPanel={onMatchPanel}
           onConcede={onConcede}
         />
       </div>

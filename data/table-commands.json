@@ -2609,7 +2609,7 @@
     "applies_to": "table",
     "scope": "table",
     "asks": "none",
-    "action": { "concede": {} },
+    "client": "confirm_concede",
     "key": { "mac": "F2", "other": "F2" },
     "menu": { "group": "Game", "order": 30 },
     "group": "Setup"

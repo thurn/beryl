@@ -1,3 +1,4 @@
+import type { MatchPanel } from "../table/lobby/MatchDialog";
 // The phone's chrome over the stage's cards beyond its strips and dock (mobile/chrome.tsx):
 // what the desktop's board shows around its table, composed for a phone from the same
 // components. The menu holds the settings, the log and
@@ -187,6 +188,7 @@ export function Menu({
   setStops,
   onLeave,
   onShortcuts,
+  onMatchPanel,
   onConcede,
   onLog,
   onClose,
@@ -195,6 +197,7 @@ export function Menu({
   setStops?(stops: StopsSetting): void;
   onLeave(): void;
   onShortcuts?: () => void;
+  onMatchPanel?: (panel: MatchPanel) => void;
   onConcede?: () => void;
   onLog(): void;
   onClose(): void;
@@ -223,6 +226,13 @@ export function Menu({
         stops={stops}
         setStops={setStops}
         onLeave={onLeave}
+        onMatchPanel={
+          onMatchPanel &&
+          ((panel) => {
+            onClose();
+            onMatchPanel(panel);
+          })
+        }
         onShortcuts={
           onShortcuts &&
           (() => {

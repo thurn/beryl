@@ -15,15 +15,16 @@ export function linkBlocks(kind?: LinkState["kind"]) {
 }
 
 export function useTableLink(setFrozen?: (frozen: boolean) => void) {
-  const [kind, setKind] = useState<LinkState["kind"]>("alone");
+  const [link, setLink] = useState<LinkState>({ kind: "alone" });
+  const { kind } = link;
   const [peer, setPeer] = useState<string>();
   const [error, setError] = useState<string>();
   const drops = useRef(0);
   const change = useCallback(
-    (next: LinkState["kind"]) => {
-      setFrozen?.(linkBlocks(next));
-      setKind(next);
-      if (next === "connected") setError(undefined);
+    (next: LinkState) => {
+      setFrozen?.(linkBlocks(next.kind));
+      setLink(next);
+      if (next.kind === "connected") setError(undefined);
     },
     [setFrozen],
   );
@@ -31,7 +32,7 @@ export function useTableLink(setFrozen?: (frozen: boolean) => void) {
     (view: PlayerView, freshLink = true) => {
       if (!view.table) return;
       setPeer(view.table.peerName);
-      if (freshLink) change(view.table.link?.kind ?? "alone");
+      if (freshLink) change(view.table.link ?? { kind: "alone" });
     },
     [change],
   );
@@ -44,7 +45,9 @@ export function useTableLink(setFrozen?: (frozen: boolean) => void) {
       if (event.kind === "error") setError(event.reason);
       else if (linkBlocks(event.kind)) {
         drops.current++;
-        change(event.kind);
+        change(event);
+      } else if (event.kind === "connected") {
+        setLink((previous) => (linkBlocks(previous.kind) ? previous : event));
       }
     });
     return () => {
@@ -63,5 +66,31 @@ export function useTableLink(setFrozen?: (frozen: boolean) => void) {
     // link state must not unlock the table when that snapshot finally arrives.
     return { update, freshLink: before === drops.current };
   }, []);
-  return { kind, peer, error, frozen: linkBlocks(kind), read, current };
+  return { link, kind, peer, error, frozen: linkBlocks(kind), read, current };
+}
+
+/** Heartbeats update the snapshot even if neither player has made an action. */
+export function useLobbyLinkDetails(
+  enabled: boolean,
+  { current, read }: Pick<ReturnType<typeof useTableLink>, "current" | "read">,
+) {
+  useEffect(() => {
+    if (!enabled) return;
+    let active = true;
+    let pending = false;
+    const timer = window.setInterval(() => {
+      if (pending) return;
+      pending = true;
+      void current()
+        .then(({ update, freshLink }) => {
+          if (active && freshLink && update) read(update.view);
+        })
+        .catch(() => {})
+        .finally(() => (pending = false));
+    }, 2000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [enabled, current, read]);
 }

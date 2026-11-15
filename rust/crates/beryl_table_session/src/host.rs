@@ -381,7 +381,7 @@ fn seat_names(save: &Save) -> Vec<Option<String>> {
     ]
 }
 
-fn connected(peer: &PeerInfo) -> LinkState {
+pub(super) fn connected(peer: &PeerInfo) -> LinkState {
     LinkState::Connected {
         direct: peer.route != Route::Relayed,
         round_trip_ms: peer

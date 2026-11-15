@@ -1,3 +1,4 @@
+import type { MatchPanel } from "../table/lobby/MatchDialog";
 import { TablePromptView } from "../table/TablePromptView";
 import { DropTargets } from "../table/DropTargets";
 import { phoneDropAreas } from "../table/dropZones";
@@ -82,6 +83,7 @@ export function PhoneStageBoard({
   cancel,
   onLeave,
   onShortcuts,
+  onMatchPanel,
   log,
   tableLog,
   undo,
@@ -101,6 +103,7 @@ export function PhoneStageBoard({
   cancel?(): void;
   onLeave(): void;
   onShortcuts?: () => void;
+  onMatchPanel?: (panel: MatchPanel) => void;
   log: LogEntry[];
   tableLog?: TableLogControls;
   /** Takes back the player's latest answer. */
@@ -423,6 +426,7 @@ export function PhoneStageBoard({
           setStops={setStops}
           onLeave={onLeave}
           onShortcuts={onShortcuts}
+          onMatchPanel={onMatchPanel}
           onConcede={onConcede}
           onLog={() => setSheet("log")}
           onClose={() => setSheet(undefined)}

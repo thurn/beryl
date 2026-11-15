@@ -14,6 +14,7 @@ import {
   tableLeave,
   tableLobby,
   tableQuit,
+  type LobbyView,
 } from "../ipc";
 import {
   createBoardStage,
@@ -36,7 +37,7 @@ import { registerPlayers } from "../table/players";
 import { registerTurn } from "../table/turn";
 import type { AppInfo } from "../generated/protocol";
 import { LinkBanner } from "../table/LinkBanner";
-import { linkBlocks, useTableLink } from "../table/link";
+import { linkBlocks, useLobbyLinkDetails, useTableLink } from "../table/link";
 import { TableDrag } from "../table/drag";
 import { TableViewers } from "../table/viewers";
 import { registerSelection } from "../table/select";
@@ -44,6 +45,7 @@ import { GameBoard } from "./Board";
 import { Button } from "../components/Controls";
 import { usePhone } from "../mobile/phone";
 import { Stage } from "../game/Stage";
+import { MatchDialog, type MatchPanel } from "../table/lobby/MatchDialog";
 
 export function TableScreen() {
   const [platform, setPlatform] = useState<AppInfo["platform"]>();
@@ -61,8 +63,10 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
   const [error, setError] = useState<string>();
   const [ready, setReady] = useState(false);
   const [overlay, setOverlay] = useState<TableOverlay>();
+  const [panel, setPanel] = useState<MatchPanel>();
+  const [lobby, setLobby] = useState<LobbyView>();
   const [blocked, showBlockers] = useState<readonly number[]>();
-  const [{ board, client, commands, leave }] = useState(() => {
+  const [{ board, client, commands, leave, openMatch }] = useState(() => {
     const board = createBoardStage(false);
     const client = new TableClient(board.stage.pointer);
     const bindings = new Bindings(platform);
@@ -93,13 +97,22 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
     registerClicks(client, commands);
     registerPlayers(client, commands);
     client.viewers.register(commands);
-    return { board, client, commands, leave };
+    const openMatch = (panel: MatchPanel) => {
+      commands.close();
+      setPanel(panel);
+    };
+    commands.clients.set("open_lobby", () => openMatch("lobby"));
+    commands.clients.set("open_next_game", () => openMatch("nextGame"));
+    commands.clients.set("confirm_concede", () => openMatch("concede"));
+    commands.clients.set("open_assists", () => openMatch("assists"));
+    return { board, client, commands, leave, openMatch };
   });
   const setFrozen = useCallback(
     (frozen: boolean) => {
       client.setFrozen(frozen);
       if (frozen) {
         commands.close();
+        setPanel(undefined);
         board.feed.skip();
       }
     },
@@ -108,11 +121,16 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
   const {
     read,
     current,
+    link,
     kind,
     peer,
     frozen,
     error: linkError,
   } = useTableLink(setFrozen);
+  useLobbyLinkDetails(panel === "lobby" && link.kind === "connected", {
+    current,
+    read,
+  });
   const { stage, feed } = board;
   const { shown, log } = useSyncExternalStore(feed.subscribe, feed.fed);
 
@@ -169,17 +187,22 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
     let mounted = true;
     let heard = false;
     let played = false;
-    const listening = onTableLobby(({ view }) => {
+    const listening = onTableLobby(({ view, game }) => {
       if (!mounted) return;
       heard = true;
-      if (view === null) played = true;
-      else if (played) window.location.hash = "#/lobby";
+      if (view === null) {
+        played = true;
+        setLobby(game);
+      } else if (played) window.location.hash = "#/lobby";
     });
     void listening
       .then(async () => {
         if (heard) return;
         const update = await tableLobby({ kind: "view" });
-        if (mounted && !heard) played = update?.view === null;
+        if (mounted && !heard) {
+          played = update?.view === null;
+          setLobby(update?.game ?? update?.view ?? undefined);
+        }
       })
       .catch(() => {});
     return () => {
@@ -254,11 +277,23 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
       stops={shown.view.stops}
       onLeave={leave}
       onShortcuts={commands.openShortcuts}
+      onMatchPanel={canStartTable() ? openMatch : undefined}
       onNextPhase={() => {
         if (!commands.overlayOpen && !client.overlayOpen)
           void commands.shortcut("phase.next").catch(commands.reportError);
       }}
     >
+      {panel && (
+        <MatchDialog
+          key={panel}
+          panel={panel}
+          client={client}
+          view={shown.view}
+          lobby={lobby}
+          link={link}
+          close={() => setPanel(undefined)}
+        />
+      )}
       <TableMenu
         commands={commands}
         overlay={overlay}

@@ -333,7 +333,11 @@ await check(
                 request.url().endsWith("/invoke/table_act"),
             );
             await page.keyboard.press(shortcut);
-            if (field) {
+            if (shortcut === "F2") {
+                await page
+                    .getByRole("button", { name: "Confirm Concede" })
+                    .click();
+            } else if (field) {
                 await textbox(page, field).fill(value);
                 await page.keyboard.press("Enter");
             }

@@ -7,6 +7,8 @@ import { BugIcon, requestBugReport } from "../components/BugReport";
 import { Button, Tip } from "../components/Controls";
 import type { StopsSetting } from "../generated/protocol";
 
+import type { MatchPanel } from "../table/lobby/MatchDialog";
+
 /** The gear's column at the top right: the bug report, which stays over any screen, and the
  * gear with the settings it opens. Undo, under them, is its own (`UndoButton`). */
 export function Corner({
@@ -17,6 +19,7 @@ export function Corner({
   onLeave,
   onShortcuts,
   onConcede,
+  onMatchPanel,
 }: {
   /** The settings are open: the table's, since a press anywhere on it closes them. */
   open: boolean;
@@ -27,6 +30,7 @@ export function Corner({
   onShortcuts?: () => void;
   /** Concedes the game; none once it is over. */
   onConcede?: () => void;
+  onMatchPanel?: (panel: MatchPanel) => void;
 }) {
   return (
     <>
@@ -55,6 +59,13 @@ export function Corner({
             stops={stops}
             setStops={setStops}
             onLeave={onLeave}
+            onMatchPanel={
+              onMatchPanel &&
+              ((panel) => {
+                setOpen(false);
+                onMatchPanel(panel);
+              })
+            }
             onShortcuts={
               onShortcuts &&
               (() => {
@@ -84,12 +95,14 @@ export function Settings({
   onLeave,
   onShortcuts,
   onConcede,
+  onMatchPanel,
 }: {
   stops: StopsSetting;
   setStops?(stops: StopsSetting): void;
   onLeave(): void;
   onShortcuts?: () => void;
   onConcede?: () => void;
+  onMatchPanel?: (panel: MatchPanel) => void;
 }) {
   return (
     <>
@@ -109,14 +122,47 @@ export function Settings({
           </span>
         </label>
       )}
-      {onConcede && <ConcedeButton onConcede={onConcede} />}
+      {onMatchPanel ? (
+        <>
+          <Button
+            variant="secondary"
+            size="small"
+            onClick={() => onMatchPanel("lobby")}
+          >
+            Lobby
+          </Button>
+          <Button
+            variant="secondary"
+            size="small"
+            onClick={() => onMatchPanel("nextGame")}
+          >
+            Next game
+          </Button>
+          <Button
+            variant="secondary"
+            size="small"
+            onClick={() => onMatchPanel("concede")}
+          >
+            Concede
+          </Button>
+          <Button
+            variant="secondary"
+            size="small"
+            onClick={() => onMatchPanel("assists")}
+          >
+            Assists
+          </Button>
+        </>
+      ) : (
+        onConcede && <ConcedeButton onConcede={onConcede} />
+      )}
       {onShortcuts && (
         <Button variant="secondary" size="small" onClick={onShortcuts}>
           Shortcuts
         </Button>
       )}
       <Button variant="secondary" size="small" onClick={onLeave}>
-        Leave Game
+        {onMatchPanel ? "Leave table" : "Leave Game"}
       </Button>
     </>
   );

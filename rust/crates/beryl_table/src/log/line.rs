@@ -392,7 +392,7 @@ fn game(action: &Action, summary: &Summary, names: &Cards<'_>) -> String {
         Action::NextGame {
             winner: Some(winner),
         } => format!("Ended the game. {} won", player(*winner)),
-        Action::NextGame { winner: None } => "Ended the game".into(),
+        Action::NextGame { winner: None } => "Ended the game. No result".into(),
         Action::Concede {} => "Conceded".into(),
         Action::SetAssist { on: true, .. } => "Enabled an assist".into(),
         Action::SetAssist { on: false, .. } => "Disabled an assist".into(),

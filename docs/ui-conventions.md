@@ -292,8 +292,13 @@ restore the old behavior.
   cards opens the ordering tray before the cards are moved.
 - **Lobby.** Host a table, Join a table and Solo table open a manual table
   lobby. Phones can join or play solo. Each player chooses a deck, can change
-  its sideboard and sets their own assists. The host or solo player sets
-  starting life, starting hand size and who plays first.
+  its sideboard and sets their own assists. The host shares an invite code. Both
+  players see the connection, deck counts and match score. The host sets
+  starting life, starting hand size and who plays first, and can start when both
+  decks are loaded and the guest is ready. The gear menu opens the lobby as
+  read-only information and lets either player record a result or confirm a
+  concession. Both players return to the lobby with their decks ready for
+  sideboarding.
 - **Manual table connection.** A dropped connection freezes input on both seats
   under the existing step banner, which names the other player. The guest
   redials automatically and the returning view appears at once. A table that the

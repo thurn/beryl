@@ -119,7 +119,15 @@ impl GuestSession {
     }
 
     pub(super) fn current(&self) -> Option<GameUpdate> {
-        self.0.lock().current.clone()
+        let state = self.0.lock();
+        let mut update = state.current.clone()?;
+        if matches!(state.link, Some(LinkState::Connected { .. }))
+            && let Some(peer) = state.guest.as_ref().and_then(Guest::peer)
+            && let Some(table) = &mut update.view.table
+        {
+            table.link = super::host::connected(&peer);
+        }
+        Some(update)
     }
 
     pub(super) fn local_action(&self) -> impl FnOnce(Request) -> Result<(), Refusal> + use<> {

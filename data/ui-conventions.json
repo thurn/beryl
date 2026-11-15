@@ -920,7 +920,7 @@
     {
       "kind": "no-equivalent",
       "name": "Lobby",
-      "rule": "Host a table, Join a table and Solo table open a manual table lobby. Phones can join or play solo. Each player chooses a deck, can change its sideboard and sets their own assists. The host or solo player sets starting life, starting hand size and who plays first."
+      "rule": "Host a table, Join a table and Solo table open a manual table lobby. Phones can join or play solo. Each player chooses a deck, can change its sideboard and sets their own assists. The host shares an invite code. Both players see the connection, deck counts and match score. The host sets starting life, starting hand size and who plays first, and can start when both decks are loaded and the guest is ready. The gear menu opens the lobby as read-only information and lets either player record a result or confirm a concession. Both players return to the lobby with their decks ready for sideboarding."
     },
     {
       "kind": "no-equivalent",

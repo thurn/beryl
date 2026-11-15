@@ -2,6 +2,37 @@ import { useState } from "react";
 import { Button } from "../../components/Controls";
 import type { LobbyChange, LobbySettings, LobbyView } from "../../ipc";
 
+const defaultFirst = (view: LobbyView) =>
+  view.lastWinner != null ? "Loser chooses" : "Roll";
+
+export function GameSettingsSummary({ view }: { view: LobbyView }) {
+  const { startingLife, startingHandSize, first } = view.settings;
+  return (
+    <fieldset className="lobby-section">
+      <legend>Game</legend>
+      <dl className="lobby-settings-summary">
+        <div>
+          <dt>Starting life</dt>
+          <dd>{startingLife}</dd>
+        </div>
+        <div>
+          <dt>Starting hand size</dt>
+          <dd>{startingHandSize}</dd>
+        </div>
+        <div>
+          <dt>First</dt>
+          <dd>
+            {first == null
+              ? defaultFirst(view)
+              : (view.seats.find(({ seat }) => seat === first)?.name ??
+                "Guest")}
+          </dd>
+        </div>
+      </dl>
+    </fieldset>
+  );
+}
+
 export function GameSettings({
   view,
   pending,
@@ -70,7 +101,7 @@ export function GameSettings({
               });
             }}
           >
-            <option value="">Roll</option>
+            <option value="">{defaultFirst(view)}</option>
             {view.seats.map(({ seat, name }) => (
               <option key={seat} value={seat}>
                 {name ?? "Guest"}

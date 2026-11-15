@@ -32,8 +32,17 @@ pub(super) fn project(
     names: &[Option<String>],
     invite: Option<&str>,
 ) -> LobbyUpdate {
-    LobbyUpdate {
-        view: (!table.game_match.in_game).then(|| view(table, you, names, invite)),
+    let lobby = view(table, you, names, invite);
+    if table.game_match.in_game {
+        LobbyUpdate {
+            view: None,
+            game: Some(Box::new(lobby)),
+        }
+    } else {
+        LobbyUpdate {
+            view: Some(lobby),
+            game: None,
+        }
     }
 }
 
@@ -76,6 +85,7 @@ fn view(table: &Table, you: Seat, names: &[Option<String>], invite: Option<&str>
         assists: table.assists[index].clone(),
         settings: table.game_match.settings(),
         game_number: table.game_match.game_number,
+        last_winner: table.game_match.last_winner,
         invite: invite.filter(|_| you == HOST).map(str::to_owned),
         can_start: can_start(table, you),
     }
@@ -103,16 +113,23 @@ pub(super) fn action(
         LobbyChange::SetAssist { assist, on } => Action::SetAssist { assist, on },
         LobbyChange::Settings { settings } if seat == HOST => Action::GameSettings { settings },
         LobbyChange::Start if can_start(table, seat) => {
-            let first = table.game_match.first.unwrap_or_else(|| {
-                // A solo table always has the first turn. A hosted table has two seats.
-                if table.players.len() == 1 {
-                    HOST
-                } else {
-                    Seat(u8::from(
-                        !RandomState::new().hash_one(0_u8).is_multiple_of(2),
-                    ))
-                }
-            });
+            let first = table
+                .game_match
+                .first
+                .or_else(|| {
+                    let winner = table.game_match.last_winner?;
+                    table.seats().find(|&seat| seat != winner)
+                })
+                .unwrap_or_else(|| {
+                    // A solo table always has the first turn. A hosted table has two seats.
+                    if table.players.len() == 1 {
+                        HOST
+                    } else {
+                        Seat(u8::from(
+                            !RandomState::new().hash_one(0_u8).is_multiple_of(2),
+                        ))
+                    }
+                });
             Action::Start { first }
         }
         LobbyChange::Start if seat == HOST => return Err(Refusal::INVALID),

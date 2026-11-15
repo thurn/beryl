@@ -43,23 +43,29 @@ export function currentTarget(client: TableClient) {
 
 let nativeKeys = Promise.resolve();
 
-export function listenTableKeys(commands: TableCommands) {
-  const { client, bindings } = commands;
+export function openNativeTableKeys(report: (error: unknown) => void) {
   const setNativeKeys = (on: boolean) => {
     if (isNativeApp())
       nativeKeys = nativeKeys
         .then(async () => {
           await tableKeys(on);
         })
-        .catch(commands.reportError);
+        .catch(report);
   };
-  setBugReportTableOpen(true, true);
   setNativeKeys(true);
+  return () => setNativeKeys(false);
+}
+
+export function listenTableKeys(commands: TableCommands) {
+  const { client, bindings } = commands;
+  const restoreNativeKeys = openNativeTableKeys(commands.reportError);
+  setBugReportTableOpen(true, true);
   const keydown = (event: KeyboardEvent) => {
     if (
       client.frozen ||
       event.defaultPrevented ||
       event.isComposing ||
+      document.querySelector(".table-match-dialog[open]") ||
       document.documentElement.classList.contains("page-frozen")
     )
       return;
@@ -118,6 +124,6 @@ export function listenTableKeys(commands: TableCommands) {
     window.removeEventListener("keydown", keydown, true);
     window.removeEventListener("keydown", client.key);
     setBugReportTableOpen(false);
-    setNativeKeys(false);
+    restoreNativeKeys();
   };
 }

@@ -106,6 +106,7 @@ pub struct LobbyView {
     pub assists: Vec<Assist>,
     pub settings: LobbySettings,
     pub game_number: u32,
+    pub last_winner: Option<Seat>,
     pub invite: Option<String>,
     pub can_start: bool,
 }
@@ -114,6 +115,10 @@ pub struct LobbyView {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct LobbyUpdate {
     pub view: Option<LobbyView>,
+    // The lobby shown as information while the game is in progress.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub game: Option<Box<LobbyView>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]

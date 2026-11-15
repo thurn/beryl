@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "../../components/Controls";
 import {
+  appInfo,
   CommandError,
   isNativeApp,
   tableHost,
@@ -10,6 +11,8 @@ import {
   tableSaved,
   type SavedTable,
 } from "../../ipc";
+import { Bindings } from "../bindings";
+import { resolve } from "../shortcuts";
 import "./lobby.css";
 
 export function TableEntries({
@@ -25,6 +28,7 @@ export function TableEntries({
 }) {
   const [mode, setMode] = useState<"host" | "join">();
   const [name, setName] = useState("");
+  const [bindings, setBindings] = useState<Bindings>();
   const [invite, setInvite] = useState("");
   const [local, setLocal] = useState(!isNativeApp());
   const [error, setError] = useState<string>();
@@ -46,6 +50,33 @@ export function TableEntries({
     };
   }, [phone]);
   const blocked = disabled || pending;
+  useEffect(() => {
+    if (phone) return;
+    let active = true;
+    void appInfo()
+      .then(({ platform }) => {
+        if (active) setBindings(new Bindings(platform));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [phone]);
+  useEffect(() => {
+    if (phone || blocked || !bindings) return;
+    const key = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.repeat ||
+        resolve(event, "lobby", bindings) !== "lobby.host"
+      )
+        return;
+      event.preventDefault();
+      setMode("host");
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [bindings, blocked, phone]);
   const open = async (operation: () => Promise<unknown>) => {
     setError(undefined);
     setPending(true);
