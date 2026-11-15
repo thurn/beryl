@@ -8,6 +8,8 @@ type BoardProps = Omit<ComponentProps<typeof StageBoard>, "dimmed"> & {
   opening?: boolean;
   dimmed?: boolean;
   children?: ReactNode;
+  freeze?: boolean;
+  notice?: ReactNode;
 };
 
 /** The table uses the desktop stage frame or the phone's viewport, with screens over it. */
@@ -15,20 +17,32 @@ export function GameBoard({
   opening = false,
   dimmed = opening,
   children,
+  freeze,
+  notice,
   ...props
 }: BoardProps) {
-  if (usePhone()) {
-    return (
+  const phone = usePhone();
+  const board = phone ? (
+    <PhoneStageBoard {...props} opening={opening} />
+  ) : (
+    <StageBoard {...props} dimmed={dimmed} />
+  );
+  const underlay = (
+    <>
+      {board}
+      {children}
+    </>
+  );
+  const screen =
+    freeze === undefined ? (
+      underlay
+    ) : (
       <>
-        <PhoneStageBoard {...props} opening={opening} />
-        {children}
+        <div className="table-link-underlay" inert={freeze}>
+          {underlay}
+        </div>
+        {notice}
       </>
     );
-  }
-  return (
-    <Stage>
-      <StageBoard {...props} dimmed={dimmed} />
-      {children}
-    </Stage>
-  );
+  return phone ? screen : <Stage>{screen}</Stage>;
 }

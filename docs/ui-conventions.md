@@ -294,6 +294,12 @@ restore the old behavior.
   lobby. Phones can join or play solo. Each player chooses a deck, can change
   its sideboard and sets their own assists. The host or solo player sets
   starting life, starting hand size and who plays first.
+- **Manual table connection.** A dropped connection freezes input on both seats
+  under the existing step banner, which names the other player. The guest
+  redials automatically and the returning view appears at once. A table that the
+  other player left offers Lobby. The start screen offers Resume table for saved
+  hosted tables. Join failures appear on the join form, and a version mismatch
+  appears for both players.
 - **Manual table prompts.** Numbers, text and power/toughness are entered in the
   lower-right action dock. The field starts selected, and numeric entries have a
   step down and a step up. A sign changes the current value where one exists.

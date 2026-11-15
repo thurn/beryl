@@ -60,7 +60,7 @@ function Dialog({
   const root = useRef<HTMLDivElement>(null);
 
   function send(answer: Answer) {
-    if (pending.current) return;
+    if (client.frozen || pending.current) return;
     pending.current = true;
     setSending(true);
     setError(undefined);

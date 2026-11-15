@@ -357,4 +357,7 @@ pub struct TableView {
     #[serde(default, skip_serializing_if = "LinkState::is_alone")]
     #[ts(optional, as = "Option<_>")]
     pub link: LinkState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub peer_name: Option<String>,
 }

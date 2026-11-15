@@ -77,6 +77,7 @@ pub(super) fn project(
         phase,
         seats: projected.players.len() as u8,
         link: LinkState::Alone,
+        peer_name: None,
         seat: (seat.0 != 0).then_some(seat.0),
         orders: ManualOrders {
             you: yours,

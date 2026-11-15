@@ -160,20 +160,54 @@ impl TableConnections {
     }
 
     pub fn join(&self, request: TableJoinRequest) -> Result<SessionId, TableConnectionError> {
+        self.join_with_wire(request, beryl_session::WIRE_HASH)
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn join_mismatched_for_test(
+        &self,
+        request: TableJoinRequest,
+    ) -> Result<SessionId, TableConnectionError> {
+        self.join_with_wire(request, "different test wire")
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn cut_host_for_test(&self) {
         let mut listener = self.listener.lock().unwrap_or_else(PoisonError::into_inner);
-        let invite = ConnectionInvite::parse(request.invite.trim())?;
+        // Close admission before cutting the connection so the guest cannot redial
+        // until the host resumes the saved table.
+        *listener = None;
+        self.tables.cut_host_for_test();
+    }
+
+    fn join_with_wire(
+        &self,
+        request: TableJoinRequest,
+        wire: &str,
+    ) -> Result<SessionId, TableConnectionError> {
+        let mut listener = self.listener.lock().unwrap_or_else(PoisonError::into_inner);
+        let invite = ConnectionInvite::parse(request.invite.trim())
+            .map_err(|_| error("Invalid invite code."))?;
         let session = match invite {
             ConnectionInvite::Link(ref invite @ Invite::Local { ref secret, .. }) => {
                 let invite = invite.clone();
                 let secret = secret.clone();
-                self.tables
-                    .join_checked(move || TcpLink::connect(&invite), request.name, secret)
+                self.tables.join_checked_with_wire(
+                    move || TcpLink::connect(&invite),
+                    request.name,
+                    secret,
+                    wire,
+                )
             }
             ConnectionInvite::Memory(invite) => {
                 let registry = self.memory()?.clone();
                 let secret = invite.secret().to_owned();
-                self.tables
-                    .join_checked(move || registry.connect(&invite), request.name, secret)
+                self.tables.join_checked_with_wire(
+                    move || registry.connect(&invite),
+                    request.name,
+                    secret,
+                    wire,
+                )
             }
             ConnectionInvite::Link(invite @ Invite::Remote(_)) => {
                 self.check_internet()?;
@@ -181,7 +215,8 @@ impl TableConnections {
                 {
                     let secret = remote::secret(&invite).map_err(error)?;
                     let connect = remote::connector(&self.data_dir, invite).map_err(error)?;
-                    self.tables.join_checked(connect, request.name, secret)
+                    self.tables
+                        .join_checked_with_wire(connect, request.name, secret, wire)
                 }
                 #[cfg(not(feature = "iroh"))]
                 {

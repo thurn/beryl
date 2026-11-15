@@ -980,7 +980,7 @@ lastDraw?: number,
 /**
  * The viewer's deck tokens, in deck list order, for the ten numbered shortcuts.
  */
-deckTokens?: Array<CardTokenLink>, prompt?: TablePrompt, arrows?: Array<TableArrow>, link?: LinkState, };
+deckTokens?: Array<CardTokenLink>, prompt?: TablePrompt, arrows?: Array<TableArrow>, link?: LinkState, peerName?: string, };
 
 export type TableArrow = { arrow: Arrow, from: Subject, to: Subject, own: boolean, };
 

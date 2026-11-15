@@ -5,6 +5,7 @@ import {
   type ObjectView,
   type PlayerView,
   type Side,
+  type TableActReply,
   type TableAction,
   type TableObjectAction,
 } from "../ipc";
@@ -94,6 +95,7 @@ export const sameZone = (
 ) => a === b || JSON.stringify(a) === JSON.stringify(b);
 
 export class TableClient {
+  #frozen = false;
   #selection: ReadonlySet<Name> = new Set();
   #selectionBox?: Box;
   readonly #selectionListeners = new Set<() => void>();
@@ -116,6 +118,20 @@ export class TableClient {
   readonly #objects = new Map<number, ObjectView>();
 
   constructor(private readonly pointer: Pointer) {}
+
+  get frozen() {
+    return this.#frozen;
+  }
+
+  setFrozen(frozen: boolean) {
+    if (this.#frozen === frozen) return;
+    this.#frozen = frozen;
+    if (frozen) {
+      this.pointer.cancel();
+      this.#drag?.viewChanged?.();
+      this.#aim?.cancel();
+    }
+  }
 
   setView(view: PlayerView) {
     if (view === this.view) return;
@@ -256,7 +272,7 @@ export class TableClient {
   }
 
   readonly key = (event: KeyboardEvent) => {
-    if (event.defaultPrevented || event.isComposing) return;
+    if (this.frozen || event.defaultPrevented || event.isComposing) return;
     if (event.key === "Escape" && this.overlayOpen) {
       event.preventDefault();
       this.closeTop();
@@ -315,6 +331,7 @@ export class TableClient {
     keys: PointerKeys,
     element?: HTMLElement,
   ): boolean {
+    if (this.frozen) return true;
     if (this.#aim?.pick(target)) return true;
     if ("name" in target && this.#cardClick?.(target, keys)) return true;
     const handler = this.#clicks.get(target.kind);
@@ -323,7 +340,7 @@ export class TableClient {
   }
 
   secondary(target: TableTarget | undefined, at: Point, element?: HTMLElement) {
-    if (this.#aim?.picking()) return;
+    if (this.frozen || this.#aim?.picking()) return;
     for (const handler of this.#secondaries) {
       if (handler(target, at, element)) break;
     }
@@ -335,8 +352,9 @@ export class TableClient {
 
   readonly gestures: PointerClient = {
     dragSource: (element, keys, at) =>
-      this.#drag?.dragSource?.(element, keys, at),
+      this.frozen ? undefined : this.#drag?.dragSource?.(element, keys, at),
     holdable: (name) =>
+      !this.frozen &&
       !this.#aim?.picking() &&
       !!this.#drop &&
       (this.#drag?.canHold?.() ?? true) &&
@@ -351,24 +369,35 @@ export class TableClient {
     playerClick: (side, _at, keys) => this.click({ kind: "life", side }, keys),
     secondary: (under, at) => this.secondary(this.#under(under), at),
     drop: (drop) => {
+      if (this.frozen) return;
       const from = this.card(drop.name, true);
       return from && this.#drop?.(drop, from, this.#under(drop.onto));
     },
     aim: (name, at, over, done) => {
+      if (this.frozen) return;
       const from = this.card(name);
       if (from) this.#aim?.drag(from, at, this.#under(over), done);
     },
     cancelAim: () => this.#aim?.cancel(),
     sweep: (from, to, done) => {
-      if (!this.#aim?.picking()) this.#sweep?.(from, to, done);
+      if (!this.frozen && !this.#aim?.picking()) this.#sweep?.(from, to, done);
     },
     cancelSweep: () => this.#cancelSweep?.(),
   };
 
-  async send(action: TableAction, source?: Name | HTMLElement) {
+  async send(
+    action: TableAction,
+    source?: Name | HTMLElement,
+  ): Promise<TableActReply> {
+    if (this.frozen) return { refused: "stale" };
     const view = this.view;
     const reply = await tableAct(action);
-    if ("refused" in reply && view === this.view && this.#surface) {
+    if (
+      !this.frozen &&
+      "refused" in reply &&
+      view === this.view &&
+      this.#surface
+    ) {
       const element =
         typeof source === "number" || typeof source === "string"
           ? this.#surface.node(source)

@@ -3,6 +3,7 @@ import { Button } from "../components/Controls";
 import { Stage } from "../game/Stage";
 import {
   appInfo,
+  onGameUpdate,
   onTableLobby,
   tableLeave,
   tableLobby,
@@ -11,6 +12,8 @@ import {
   type LobbyUpdate,
 } from "../ipc";
 import { usePhone } from "../mobile/phone";
+import { LinkBanner } from "../table/LinkBanner";
+import { useTableLink } from "../table/link";
 import { Bindings } from "../table/bindings";
 import { AssistSwitches } from "../table/lobby/AssistSwitches";
 import { DeckPicker, type DeckPanel } from "../table/lobby/DeckPicker";
@@ -28,6 +31,14 @@ export function Lobby() {
   const [pending, setPending] = useState(false);
   const busy = useRef(false);
   const [error, setError] = useState<string>();
+  const {
+    kind,
+    peer,
+    frozen,
+    read,
+    current,
+    error: linkError,
+  } = useTableLink();
   const view = update?.view;
   const own = view?.seats.find((seat) => seat.seat === view.you);
   useEffect(() => {
@@ -57,11 +68,34 @@ export function Lobby() {
     };
   }, []);
   useEffect(() => {
+    let mounted = true;
+    let heard = false;
+    const listening = onGameUpdate(({ view }) => {
+      if (!mounted || !view.table) return;
+      heard = true;
+      read(view);
+    });
+    void listening
+      .then(() => (heard ? undefined : current()))
+      .then((snapshot) => {
+        if (mounted && !heard && snapshot?.update)
+          read(snapshot.update.view, snapshot.freshLink);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+      void listening.then(
+        (stop) => stop(),
+        () => {},
+      );
+    };
+  }, [current, read]);
+  useEffect(() => {
     if (update && !update.view) window.location.hash = "#/table";
   }, [update]);
 
   const send = async (action: LobbyChange) => {
-    if (busy.current) throw new Error("A lobby action is pending.");
+    if (frozen || busy.current) throw new Error("The lobby is unavailable.");
     busy.current = true;
     setPending(true);
     setError(undefined);
@@ -110,7 +144,7 @@ export function Lobby() {
   const keyboard =
     useRef<(event: KeyboardEvent, bindings: Bindings) => void>(undefined);
   keyboard.current = (event, bindings) => {
-    if (event.defaultPrevented || event.repeat || pending) return;
+    if (frozen || event.defaultPrevented || event.repeat || pending) return;
     const id = resolve(event, "lobby", bindings);
     if (id === "lobby.paste_deck") setPicker("paste");
     else if (id === "lobby.change_deck" && !phone) setPicker("file");
@@ -141,7 +175,11 @@ export function Lobby() {
 
   const screen = (
     <div className="table start-screen lobby-screen">
-      <main className="start-panel lobby-panel" aria-label="Table lobby">
+      <main
+        className="start-panel lobby-panel"
+        aria-label="Table lobby"
+        inert={frozen}
+      >
         <header className="lobby-heading">
           <h1 className="start-title">Table</h1>
           <Button variant="secondary" disabled={pending} onClick={leave}>
@@ -251,6 +289,12 @@ export function Lobby() {
           </p>
         )}
       </main>
+      <LinkBanner kind={kind} peer={peer} onLobby={leave} />
+      {linkError && (
+        <p className="game-error game-toast" role="alert">
+          {linkError}
+        </p>
+      )}
     </div>
   );
   return phone ? screen : <Stage>{screen}</Stage>;

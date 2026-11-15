@@ -924,6 +924,11 @@
     },
     {
       "kind": "no-equivalent",
+      "name": "Manual table connection",
+      "rule": "A dropped connection freezes input on both seats under the existing step banner, which names the other player. The guest redials automatically and the returning view appears at once. A table that the other player left offers Lobby. The start screen offers Resume table for saved hosted tables. Join failures appear on the join form, and a version mismatch appears for both players."
+    },
+    {
+      "kind": "no-equivalent",
       "name": "Manual table prompts",
       "rule": "Numbers, text and power/toughness are entered in the lower-right action dock. The field starts selected, and numeric entries have a step down and a step up. A sign changes the current value where one exists. The button says what it will do, such as Draw 3. Return confirms and Escape cancels."
     },

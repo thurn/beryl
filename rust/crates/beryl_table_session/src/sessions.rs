@@ -210,7 +210,7 @@ impl TableSessions {
         name: impl Into<String>,
         secret: impl Into<String>,
     ) -> SessionId {
-        let (guest, events) = dial_guest(connect, name.into(), secret.into());
+        let (guest, events) = dial_guest(connect, name.into(), secret.into(), WIRE_HASH);
         self.open_guest(guest, events, None)
     }
 
@@ -222,7 +222,17 @@ impl TableSessions {
         name: String,
         secret: String,
     ) -> Result<SessionId, LinkError> {
-        let (guest, events) = dial_guest(connect, name, secret);
+        self.join_checked_with_wire(connect, name, secret, WIRE_HASH)
+    }
+
+    pub(super) fn join_checked_with_wire<L: Link + 'static>(
+        &self,
+        connect: impl FnMut() -> Result<L, LinkError> + Send + 'static,
+        name: String,
+        secret: String,
+        wire: &str,
+    ) -> Result<SessionId, LinkError> {
+        let (guest, events) = dial_guest(connect, name, secret, wire);
         let first = match events.recv() {
             Ok(event @ (Event::Joined { .. } | Event::Resumed { .. })) => event,
             Ok(Event::Mismatch(reason)) => {
@@ -442,6 +452,15 @@ impl TableSessions {
         })
     }
 
+    #[cfg(debug_assertions)]
+    pub(super) fn cut_host_for_test(&self) {
+        let mut current = self.lock();
+        if let Some(Current::Hosted(host)) = current.as_ref() {
+            host.cut_link_for_test();
+            current.take();
+        }
+    }
+
     pub fn leave(&self) {
         let sender = {
             let mut current = self.lock();
@@ -466,9 +485,10 @@ fn dial_guest<L: Link + 'static>(
     connect: impl FnMut() -> Result<L, LinkError> + Send + 'static,
     name: String,
     secret: String,
+    wire: &str,
 ) -> (Guest, Receiver<Event>) {
     let hello = Hello {
-        wire: WIRE_HASH.into(),
+        wire: wire.into(),
         name,
         secret,
     };

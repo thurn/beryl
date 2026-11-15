@@ -141,6 +141,15 @@ fn handle(mut stream: TcpStream, seats: &[BrowserSeat; 2]) -> Result<(), String>
                     tables.host(Platform::current(), r)
                 }),
                 ipc::TABLE_JOIN => table_command(args, |r: TableJoinRequest| tables.join(r)),
+                #[cfg(debug_assertions)]
+                "test_join_table_mismatch" => table_command(args, |r: TableJoinRequest| {
+                    tables.join_mismatched_for_test(r)
+                }),
+                #[cfg(debug_assertions)]
+                "test_cut_table_link" => {
+                    tables.cut_host_for_test();
+                    answer::<_, ()>(Ok(()))
+                }
                 ipc::TABLE_RESUME => table_command(args, |r: TableResumeRequest| {
                     tables.resume(Platform::current(), &r)
                 }),

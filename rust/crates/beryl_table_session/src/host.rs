@@ -129,6 +129,15 @@ impl HostSession {
         self.0.lock().link_state()
     }
 
+    #[cfg(debug_assertions)]
+    pub(super) fn cut_link_for_test(&self) {
+        let mut table = self.0.lock();
+        if let Some(sender) = table.sender.take() {
+            sender.disconnect();
+            table.link_changed(LinkState::Reconnecting);
+        }
+    }
+
     pub(super) fn stop(&self) -> Option<Sender> {
         let mut table = self.0.lock();
         table.stopped = true;
@@ -224,7 +233,13 @@ impl HostedTable {
             .expect("hosted seat")
             .view()
             .clone();
-        view.table.as_mut().expect("manual table").link = link;
+        let table = view.table.as_mut().expect("manual table");
+        table.link = link;
+        table.peer_name = if seat == LOCAL {
+            self.save.metadata.guest.clone()
+        } else {
+            Some(self.save.metadata.settings.name.clone())
+        };
         if !show_script {
             view.script = None;
         }

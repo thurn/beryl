@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useState,
@@ -10,7 +11,6 @@ import {
   isNativeApp,
   onGameUpdate,
   onTableLobby,
-  tableCurrent,
   tableLeave,
   tableLobby,
   tableQuit,
@@ -35,6 +35,8 @@ import { listenTableKeys } from "../table/keyboard";
 import { registerPlayers } from "../table/players";
 import { registerTurn } from "../table/turn";
 import type { AppInfo } from "../generated/protocol";
+import { LinkBanner } from "../table/LinkBanner";
+import { linkBlocks, useTableLink } from "../table/link";
 import { TableDrag } from "../table/drag";
 import { TableViewers } from "../table/viewers";
 import { registerSelection } from "../table/select";
@@ -93,6 +95,24 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
     client.viewers.register(commands);
     return { board, client, commands, leave };
   });
+  const setFrozen = useCallback(
+    (frozen: boolean) => {
+      client.setFrozen(frozen);
+      if (frozen) {
+        commands.close();
+        board.feed.skip();
+      }
+    },
+    [board, client, commands],
+  );
+  const {
+    read,
+    current,
+    kind,
+    peer,
+    frozen,
+    error: linkError,
+  } = useTableLink(setFrozen);
   const { stage, feed } = board;
   const { shown, log } = useSyncExternalStore(feed.subscribe, feed.fed);
 
@@ -117,13 +137,19 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
       if (!mounted || !update.view.table) return;
       heard = true;
       client.drag?.arriving();
-      feed.arrive(update, past);
+      const link = update.view.table.link?.kind;
+      if (linkBlocks(link)) read(update.view);
+      feed.arrive(update, past || linkBlocks(link) || client.frozen);
+      if (!linkBlocks(link)) read(update.view);
     });
     void unlisten
-      .then(() => (heard ? undefined : tableCurrent()))
-      .then((update) => {
+      .then(() => (heard ? undefined : current()))
+      .then((snapshot) => {
         if (!mounted) return;
-        if (update && !heard) feed.arrive(update, true);
+        if (snapshot?.update && !heard) {
+          read(snapshot.update.view, snapshot.freshLink);
+          feed.arrive(snapshot.update, true);
+        }
         setReady(true);
       })
       .catch((failure: unknown) => {
@@ -136,7 +162,7 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
         () => {},
       );
     };
-  }, [client, feed]);
+  }, [client, current, feed, read]);
 
   useEffect(() => {
     if (!canStartTable()) return;
@@ -213,6 +239,17 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
       undo={() =>
         void commands.shortcut("table.undo").catch(commands.reportError)
       }
+      freeze={frozen}
+      notice={
+        <>
+          <LinkBanner kind={kind} peer={peer} onLobby={leave} />
+          {(linkError ?? error) && (
+            <p className="game-error game-toast" role="alert">
+              {linkError ?? error}
+            </p>
+          )}
+        </>
+      }
       waiting={false}
       stops={shown.view.stops}
       onLeave={leave}
@@ -228,11 +265,6 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
         view={shown.view}
         phone={phone}
       />
-      {error && (
-        <p className="game-error game-toast" role="alert">
-          {error}
-        </p>
-      )}
     </GameBoard>
   );
 }

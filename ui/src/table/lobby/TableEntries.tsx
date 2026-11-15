@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "../../components/Controls";
 import {
   CommandError,
@@ -6,6 +6,9 @@ import {
   tableHost,
   tableJoin,
   tableLobby,
+  tableResume,
+  tableSaved,
+  type SavedTable,
 } from "../../ipc";
 import "./lobby.css";
 
@@ -25,6 +28,23 @@ export function TableEntries({
   const [invite, setInvite] = useState("");
   const [local, setLocal] = useState(!isNativeApp());
   const [error, setError] = useState<string>();
+  const [saved, setSaved] = useState<SavedTable[]>([]);
+  const [savedError, setSavedError] = useState(false);
+  useEffect(() => {
+    if (phone) return;
+    let mounted = true;
+    void tableSaved().then(
+      (tables) => {
+        if (mounted) setSaved(tables);
+      },
+      () => {
+        if (mounted) setSavedError(true);
+      },
+    );
+    return () => {
+      mounted = false;
+    };
+  }, [phone]);
   const blocked = disabled || pending;
   const open = async (operation: () => Promise<unknown>) => {
     setError(undefined);
@@ -131,7 +151,30 @@ export function TableEntries({
           </Button>
         </form>
       )}
-      {error && <p role="alert">{error}</p>}
+      {!phone && saved.length > 0 && (
+        <ul className="lobby-saved" aria-label="Saved tables">
+          {saved.map(({ id, host, guest }) => (
+            <li key={id}>
+              <span>{guest ? `${host} · ${guest}` : host}</span>
+              <Button
+                variant="secondary"
+                disabled={blocked}
+                onClick={() => void open(() => tableResume(id))}
+              >
+                Resume table
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!phone && savedError && (
+        <p role="status">Could not load saved tables.</p>
+      )}
+      {error && (
+        <p className="game-error" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

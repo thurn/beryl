@@ -340,7 +340,7 @@ export class TableCommands {
 
   async run(entry: MenuCommand, context: MenuContext, shift = false) {
     const { client } = this;
-    if (context.view !== client.view) return;
+    if (client.frozen || context.view !== client.view) return;
     const { command, token } = entry;
     const { target } = context;
     const source = "name" in target ? target : undefined;

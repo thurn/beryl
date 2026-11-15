@@ -57,6 +57,7 @@ export function listenTableKeys(commands: TableCommands) {
   setNativeKeys(true);
   const keydown = (event: KeyboardEvent) => {
     if (
+      client.frozen ||
       event.defaultPrevented ||
       event.isComposing ||
       document.documentElement.classList.contains("page-frozen")

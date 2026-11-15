@@ -159,6 +159,7 @@ fn manual_view_with_ordered_zones() -> PlayerView {
         phase: TablePhase::FirstMain,
         seats: 2,
         link: LinkState::Alone,
+        peer_name: None,
         seat: None,
         orders: ManualOrders {
             you: ManualPiles {
