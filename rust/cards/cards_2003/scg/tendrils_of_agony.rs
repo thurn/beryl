@@ -108,7 +108,6 @@ pub mod scenarios {
                 Resolve,
                 ME.casts(TENDRILS),
                 ME.targets_player(THEM),
-                stack(2),
                 THEM.casts(Card::Counterspell),
                 ME.has(Zone::Graveyard, TENDRILS, 1),
                 stack(1),

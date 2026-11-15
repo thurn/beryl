@@ -158,6 +158,12 @@ class Exporter:
         if starts and not p.stack:
             self.waiting.add("playerB" if who == "playerA" else "playerA")
 
+    def topmost_spell(self, p: Position) -> str | None:
+        for item in reversed(p.stack):
+            if cast(bool, item["spell"]):
+                return cast(str, item["name"])
+        return None
+
     def spell_on_top(self, p: Position) -> str | None:
         if p.stack and cast(bool, p.stack[-1]["spell"]):
             return cast(str, p.stack[-1]["name"])
@@ -377,7 +383,9 @@ class Exporter:
             name, costs = f"{card} with overload", 0
         self.prepare(who, p, starts=True)
         self.pay(who, p, None)
-        spell = self.spell_on_top(p)
+        # XMage's stack clause asks for a spell anywhere on the stack, so a cast in response to
+        # an ability above a spell (a storm trigger above its spell) waits for that spell too.
+        spell = self.topmost_spell(p)
         targets = "TestPlayer.NO_TARGET"
         if self.cards.targets_in_cast(card):
             targets = java_string("^".join(self.take_targets(action["player"])))

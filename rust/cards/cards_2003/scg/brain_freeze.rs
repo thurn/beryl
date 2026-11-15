@@ -112,7 +112,6 @@ pub mod scenarios {
                 Resolve,
                 ME.casts(FREEZE),
                 ME.targets_player(THEM),
-                stack(2),
                 THEM.casts(Card::Counterspell),
                 ME.has(Zone::Graveyard, FREEZE, 1),
                 stack(1),
