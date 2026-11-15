@@ -15,6 +15,7 @@ from pathlib import Path
 from . import (
     bead,
     cards,
+    changes,
     ci,
     cilog,
     claude,
@@ -33,7 +34,7 @@ from . import (
 )
 from .beads import Beads, main_checkout
 from .render import Result, table, text
-from .scope import Scope, add_arguments, from_arguments
+from .scope import Scope, add_arguments, from_arguments, parse_since
 
 # How old the store may be before a query ingests first, in seconds.
 MAX_AGE = 60.0
@@ -399,7 +400,28 @@ def run_ci(args: argparse.Namespace) -> Result:
 def run_metrics(args: argparse.Namespace) -> Result:
     if args.name is None:
         return metrics.listing()
-    return answer(args, lambda db, f, s: metrics.series(db, f, s, str(args.name)))
+    name: str = str(args.name)
+
+    def query(db: sqlite3.Connection, f: facts.Facts, s: Scope) -> Result:
+        added = changes.introduced(changes.file_versions(main_checkout(Path.cwd())))
+        marks = changes.marks(db, f, changes.load(), added, name)
+        return metrics.series(db, f, s, name, marks)
+
+    return answer(args, query)
+
+
+def run_changes(args: argparse.Namespace) -> Result:
+    """Each change's own metric spec chooses its cohort, so the query takes only `--since`,
+    which chooses changes by when they reached staging."""
+    fresh(args)
+    db = reader()
+    try:
+        added = changes.introduced(changes.file_versions(main_checkout(Path.cwd())))
+        return changes.report(
+            db, facts.load(db), parse_since(str(args.since)), changes.load(), added
+        )
+    finally:
+        db.close()
 
 
 QUERIES: dict[str, tuple[str, Callable[[argparse.Namespace], Result]]] = {
@@ -428,6 +450,10 @@ QUERIES: dict[str, tuple[str, Callable[[argparse.Namespace], Result]]] = {
         run_ci,
     ),
     "metrics": ("the named series, or one series by day", run_metrics),
+    "changes": (
+        "changes made to save time or tokens, with medians before and after",
+        run_changes,
+    ),
     "ingest": ("update the store from the sources", run_ingest),
     "sql": ("run a read-only SQL query against the store", run_sql),
     "coverage": (
@@ -496,6 +522,12 @@ def parser() -> argparse.ArgumentParser:
             )
             p.add_argument("--lane", help="only this check lane, by family")
             p.add_argument("--family", help="only this family, by check")
+        if name == "changes":
+            p.add_argument(
+                "--since",
+                default="all",
+                help="changes that reached staging since: 24h, 7d, all or a date",
+            )
         if name == "metrics":
             p.add_argument("name", nargs="?", metavar="<name>", help="a metric's name")
         if name in SCOPED:

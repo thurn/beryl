@@ -104,6 +104,12 @@ FIELDS: dict[str, str] = {
     "later one",
     "rows": "the session's requests and tool calls in order",
     "series": "the metric's values by day: count, median and 90th percentile",
+    "marks": "efficiency changes made to the metric: when the commit reached staging, "
+    "and the median and sample count over the seven days before and after it",
+    "changes": "each change made to save time or tokens, from "
+    "data/efficiency-changes.json, with its metric's median over the seven days before "
+    "and after its commit reached staging. A sample is dated by when its unit began. With "
+    "fewer than five samples on a side the verdict is too few samples",
 }
 
 

@@ -357,8 +357,9 @@ def bead_core_minutes(_: sqlite3.Connection, facts: Facts, scope: Scope) -> Poin
     found: Points = []
     for b in facts.closed(scope):
         core = facts.core_minutes(b.id)
-        if b.closed and core is not None:
-            found.append((b.closed, core))
+        began = b.began()
+        if began and core is not None:
+            found.append((began, core))
     return found
 
 

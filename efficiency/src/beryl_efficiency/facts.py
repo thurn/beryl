@@ -46,6 +46,12 @@ class Bead:
         found = sorted(l for l in self.labels if l.startswith(f"{key}:"))
         return found[0].split(":", 1)[1] if found else None
 
+    def began(self) -> str | None:
+        """When the bead's work began, which dates its samples in a metric
+        (docs/efficiency-dashboard.md, "Efficiency changes"): its start, else its creation,
+        else its close."""
+        return self.started or self.created or self.closed
+
     def ran_on(self) -> str | None:
         host = self.enact.get("enact_spawn_host") or self.enact.get(
             "enact_worktree_host"

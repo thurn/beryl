@@ -1,6 +1,9 @@
 """`just efficiency metrics [<name>]`: named series of values over time, which trends and the
 page draw. A metric is a function from the store, its facts and a scope to points, each a
-UTC time and a value. Later parts of the dashboard add their metrics with `register`."""
+UTC time and a value. A point is dated by when its unit began: a bead by its start, a run by
+its start, a per-day figure by its day. Later parts of the dashboard add their metrics with
+`register`. A series carries a mark for each efficiency change made to its metric, which
+`changes.py` computes."""
 
 from __future__ import annotations
 
@@ -40,15 +43,17 @@ def per_bead(
     measure: Callable[[float, float], float],
 ) -> Callable[[sqlite3.Connection, Facts, Scope], Points]:
     """Points at each bead closed in the scope that has windows in the store, valued by
-    `measure(agent seconds, dollars)` over all its windows."""
+    `measure(agent seconds, dollars)` over all its windows and dated by when it began.
+    """
 
     def points(_: sqlite3.Connection, facts: Facts, scope: Scope) -> Points:
         windows = facts.bead_windows(scope)
         found: Points = []
         for b in facts.closed(scope):
-            if b.closed and windows.get(b.id):
+            began = b.began()
+            if began and windows.get(b.id):
                 t = total(windows[b.id])
-                found.append((b.closed, measure(t.agent_seconds, t.dollars)))
+                found.append((began, measure(t.agent_seconds, t.dollars)))
         return found
 
     return points
@@ -111,6 +116,23 @@ class Day:
 
 
 @dataclass
+class Mark:
+    """An efficiency change on a metric's trend: the moment its commit reached `staging`,
+    and the metric's median over the seven days before and after it."""
+
+    label: str
+    metric: str
+    commit: str | None
+    time: str | None
+    expect: str
+    before: float | None
+    after: float | None
+    before_count: int
+    after_count: int
+    verdict: str
+
+
+@dataclass
 class Series:
     metric: str
     description: str
@@ -122,6 +144,7 @@ class Series:
     median: float | None
     p90: float | None
     series: list[Day]
+    marks: list[Mark]
 
 
 def listing() -> Result:
@@ -144,7 +167,14 @@ def number(value: object) -> float | None:
     return None if value is None else float(value)
 
 
-def series(db: sqlite3.Connection, facts: Facts, scope: Scope, name: str) -> Result:
+def series(
+    db: sqlite3.Connection,
+    facts: Facts,
+    scope: Scope,
+    name: str,
+    marks: list[Mark] | None = None,
+) -> Result:
+    """The metric `name` by day, with `marks`, the efficiency changes made to it."""
     metric = METRICS.get(name)
     if metric is None:
         raise KeyError(f"no metric {name}; `efficiency metrics` lists them")
@@ -170,6 +200,7 @@ def series(db: sqlite3.Connection, facts: Facts, scope: Scope, name: str) -> Res
         number(overall["median"]),
         number(overall["p90"]),
         days,
+        marks or [],
     )
     return Result(
         "metrics",
@@ -185,11 +216,34 @@ def series(db: sqlite3.Connection, facts: Facts, scope: Scope, name: str) -> Res
                 ["day", "count", "median", "p90"],
                 [[d.day, d.count, d.median, d.p90] for d in days],
             ),
+            *mark_lines(result.marks, metric.digits),
         ],
-        ["efficiency metrics"],
-        describe("since", "series"),
+        ["efficiency metrics", "efficiency changes"],
+        describe("since", "series", "marks"),
     )
 
 
 def fmt(value: float | None, digits: int) -> str:
     return "-" if value is None else f"{value:.{digits}f}"
+
+
+def mark_lines(marks: list[Mark], digits: int) -> list[str]:
+    if not marks:
+        return []
+    return [
+        "",
+        "efficiency changes",
+        *table(
+            ["reached staging", "change", "before", "after", "verdict"],
+            [
+                [
+                    day_of(m.time) if m.time else "-",
+                    m.label,
+                    f"{fmt(m.before, digits)} ({m.before_count})",
+                    f"{fmt(m.after, digits)} ({m.after_count})",
+                    m.verdict,
+                ]
+                for m in marks
+            ],
+        ),
+    ]

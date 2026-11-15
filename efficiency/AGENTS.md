@@ -75,6 +75,13 @@ store" and "Isolation" before changing anything here.
   rework is a share of another bead's direct dollars, so it is shown beside
   direct cost and never summed into it. `cards.py` is the `cards` query and the
   card, rework and lead-time metrics.
+- `changes.py`: the efficiency changes in `data/efficiency-changes.json`, each
+  entry's commit (its `commit`, else the commit that added it, from the file's
+  history on `staging`), the `changes` query, and the marks that `metrics`
+  series carry: each metric's median over the seven days before and after the
+  commit reached `staging`. Metrics date a sample by when its unit began, a bead
+  by its start, so that a bead open across a change counts as before it. Its
+  test also validates the file.
 - The query layer: `scope.py` parses `--since` and the cohort filters into a
   `Scope`; `facts.py` loads beads and windows with their `window_time` and
   `window_dollars` rows, which every query adds up, so that a roll-up's lines

@@ -322,6 +322,8 @@ possible, pixel for pixel, use the `arena-pixel-match` skill.
   in a skill, and a rule that a check already explains when it fails needs one
   line at most.
 - Never commit logs, screenshots or other output from a run.
+- A change made to save time or tokens adds its entry to
+  `data/efficiency-changes.json` in the same commit.
 - When you fix a rules engine bug, including one in your own code from the same
   session, add an entry to `docs/bugs.md`: a short description of the bug and
   how similar bugs could be prevented in future (for example, through the type

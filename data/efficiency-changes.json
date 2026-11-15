@@ -1,0 +1,62 @@
+[
+  {
+    "label": "Slow CI reuses one worktree and keeps its build tree between runs",
+    "metric": "slow-ci.cpu-seconds-per-run",
+    "expect": "down",
+    "commit": "c16d98af08c4c01dca915b1fd072e85919c8ab5b"
+  },
+  {
+    "label": "The fast check fits its lanes into 60 s and stops a step at 180 s",
+    "metric": "fast-check.cpu-seconds",
+    "expect": "down",
+    "commit": "0be21c96104c306764dab02a7c749a1d485ba11c"
+  },
+  {
+    "label": "Heavy commands take CPU tokens from one pool shared by the whole machine",
+    "metric": "machine.saturation",
+    "expect": "down",
+    "commit": "253920faafd81d56e6a74cb0d38eb0f35e044bcf"
+  },
+  {
+    "label": "The Rust tests step takes CPU tokens freed after it starts",
+    "metric": "bead.agent-minutes",
+    "expect": "down",
+    "commit": "3f08d7afb95ddba213313e90caf9447014e51308"
+  },
+  {
+    "label": "Slow-CI runs start at least five minutes apart",
+    "metric": "slow-ci.runs-per-day",
+    "expect": "down",
+    "commit": "aedba2ce7bc86d158d3f1f3823506b47bb78f9e8"
+  },
+  {
+    "label": "The fast Rust lane checks only the crates a change reaches",
+    "metric": "fast-check.cpu-seconds",
+    "expect": "down",
+    "commit": "15da9f6ee138d5f9c4263daaddec682ec7ae6e76"
+  },
+  {
+    "label": "Rust tests build at opt-level 1",
+    "metric": "fast-check.cpu-seconds",
+    "expect": "down",
+    "commit": "92578c1a1e12bcb4ce1676e770874a24d31180ce"
+  },
+  {
+    "label": "New worktrees keep cargo's view of unchanged files",
+    "metric": "fast-check.cpu-seconds",
+    "expect": "down",
+    "commit": "6c8a21bf593753234fdeab6f430c33178c3ec095"
+  },
+  {
+    "label": "Full browser sweeps move from slow CI to a run every three hours",
+    "metric": "slow-ci.cpu-seconds-per-run",
+    "expect": "down",
+    "commit": "c021caf86f8c96be1476442cc4cba4c10e78ebd7"
+  },
+  {
+    "label": "The oracle lane plays only scenarios new to the oracles",
+    "metric": "slow-ci.cpu-seconds-per-run",
+    "expect": "down",
+    "commit": "fc50cb18df2dc426e13052a3c0d53077167a8066"
+  }
+]

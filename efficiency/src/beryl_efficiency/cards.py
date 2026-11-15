@@ -177,10 +177,11 @@ def per_card(dollars: bool) -> Metric:
         windows = facts.bead_windows(scope)
         found: Points = []
         for b, cards in card_beads(facts, scope):
-            if b.closed and windows.get(b.id):
+            began = b.began()
+            if began and windows.get(b.id):
                 t = total(windows[b.id])
                 value = t.dollars if dollars else t.agent_seconds / 60
-                found.append((b.closed, value / len(cards)))
+                found.append((began, value / len(cards)))
         return found
 
     if dollars:
@@ -204,8 +205,9 @@ def rework_share(_: sqlite3.Connection, facts: Facts, scope: Scope) -> Points:
     found: Points = []
     for b in facts.closed(scope):
         direct = total(windows.get(b.id, [])).dollars
-        if b.closed and direct > 0:
-            found.append((b.closed, 100 * rework.dollars(b.id) / direct))
+        began = b.began()
+        if began and direct > 0:
+            found.append((began, 100 * rework.dollars(b.id) / direct))
     return found
 
 
@@ -214,8 +216,9 @@ def lead_minutes(_: sqlite3.Connection, facts: Facts, scope: Scope) -> Points:
     found: Points = []
     for b in facts.closed(scope):
         whole = facts.lead(b.id).whole
-        if b.closed and whole is not None:
-            found.append((b.closed, whole))
+        began = b.began()
+        if began and whole is not None:
+            found.append((began, whole))
     return found
 
 

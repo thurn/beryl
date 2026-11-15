@@ -75,6 +75,15 @@ The files named `data/efficiency-*.json` are read only by the efficiency
 dashboard in `efficiency/` (`docs/efficiency-dashboard.md`). A change to one
 runs only the `efficiency` check lane and `repo`.
 
+- `efficiency-changes.json`: each change made to save time or tokens, with a
+  one-sentence `label`, the `metric` it was meant to move (a name that
+  `just efficiency metrics` lists, optionally with a cohort filter such as
+  `bead.dollars[tier=sonnet]`) and `expect`, `up` or `down`. Add the entry in
+  the commit that makes the change: that commit is found from the file's
+  history, so the entry needs no hash. An entry for a change made before the
+  file existed names it in `commit`, a full hash on `staging`.
+  `just efficiency changes` shows each metric's median over the seven days
+  before and after the commit reached `staging`.
 - `efficiency-command-kinds.json`: the ordered table that gives each shell
   command an agent ran a kind, such as `rust tests` or `push`, for the time
   split. Each entry has a unique `kind`, a Python regular expression `pattern`

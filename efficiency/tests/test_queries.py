@@ -382,10 +382,9 @@ def test_metrics_lists_and_draws_its_series(
     _, series = run(capsys, "metrics", "bead.dollars", "--since", "all")
     days = series["series"]
     assert isinstance(days, list)
-    assert [(d["day"], d["count"]) for d in days] == [
-        ("2026-11-01", 1),
-        ("2026-11-15", 2),
-    ]
+    # A bead is dated by when it began; these beads have no start, so by their creation.
+    assert [(d["day"], d["count"]) for d in days] == [("2026-11-01", 3)]
+    assert series["marks"] == []
     assert cli.main(["metrics", "no.such", "--no-ingest"]) == 1
 
 
