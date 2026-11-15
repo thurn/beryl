@@ -5,6 +5,8 @@ pub mod agent;
 mod client;
 pub mod command;
 pub mod data;
+#[cfg(feature = "driver")]
+pub mod driver;
 pub mod frame;
 pub mod input;
 pub mod pose;

@@ -1693,7 +1693,7 @@ let mut page = Page::fixture("pay-default", Side::You, Layout::Desktop);
 page.still();
 page.press("button \"Auto Pay\"");
 page.still();
-assert_eq!(page.find("card \"Counterspell\"").zone(), Zone::Stack);
+assert_eq!(page.find("card \"Counterspell\"").zone(), Some(ZoneName::Stack));
 page.check();
 
 // Several cards share a name: narrow the locator.
@@ -1712,6 +1712,23 @@ page.hover("card \"Island\" #8");
   the failure.
 - **A tick** is one step of a test's clock, a sixtieth of a second unless the
   test says otherwise.
+- **Where an action lands.** `press`, `hover`, `drag` and `type_text` act at the
+  centre of the element's largest uncovered rectangle. A press is a pointer down
+  and up at one point. A drag is a down, eight moves evenly spaced along the
+  straight line with a 16 millisecond `step` after each, and an up.
+- **The recording answers itself unless the test answers first.** 400
+  milliseconds after the table comes to rest, the clock gives the next recorded
+  view, as `step` and `seek` run. A press that sends a command is answered from
+  the recording's responses by the web interface's fixture rule: each command
+  has a queue of responses, the first answers it and is used up unless it is the
+  last, and one recorded with its request answers that request alone. A
+  `choose`, or a `click` whose reply says it answered, plays the recording on.
+  The driver does not rewind a recording, so `undo` and `cancel` fail.
+- **Moments.** `page.moments()` lists the recording's named moments with their
+  times, and `page.seek(moment)` goes to one, starting over when it lies in the
+  past. Views that the game plays on through (thinking or playing) arrive
+  together and share one moment. `step:` moments need the script clock and fail
+  until the client has it.
 - **`check()`** runs every interface check on the current frame.
 - **Where it lives.** `Page` is in `beryl_scene`, behind a Cargo feature named
   `driver` that the app does not enable. `Page::new` takes a recording, so

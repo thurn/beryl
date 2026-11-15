@@ -282,6 +282,7 @@ dependencies = [
  "bytemuck",
  "glam",
  "parley",
+ "serde",
  "serde_json",
  "taffy",
 ]

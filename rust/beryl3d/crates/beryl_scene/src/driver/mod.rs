@@ -1,0 +1,637 @@
+//! The test driver: a recording played through the client inside the test process, driven with
+//! locators and actions in the manner of Playwright (docs/beryl-3d.md, "The test driver").
+//!
+//! The test owns the clock, so nothing waits by itself: an action happens at the clock's
+//! present time, and the clock moves only in `step`, `still` and `seek`. A recording plays on
+//! a clock of its own: each recorded reply is given 400 milliseconds after the table comes to
+//! rest in the view it answers, so every moment has the same time on every run. A test that
+//! acts first answers the view itself, from the recording's responses.
+//!
+//! Only a driver of the client needs this (the `driver` feature); the app does not enable it.
+
+mod action;
+mod moment;
+mod recording;
+
+use std::fmt::{self, Write};
+
+use beryl_session::GameUpdate;
+use beryl_session::protocol::{Side, Status, ZoneName};
+use glam::Vec2;
+
+pub use action::{Action, key_code};
+pub use moment::{Duration, Moment, Name, Offset, ParseError};
+pub use recording::{Answer, Recording, Responses, plays_on};
+
+use crate::agent::{self, Context, Fault, Layout, TreeOptions, locate, uncovered};
+use crate::frame::{Frame, Place, Role, StateBits, Wake};
+use crate::input::{
+    Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
+    Rect, Size, TextChange,
+};
+use crate::{Client, Config};
+
+/// How long after the table comes to rest a recorded reply is given.
+pub const REPLY_DELAY: Duration = Duration::from_millis(400);
+/// A tick of the test's clock unless the test sets another: a sixtieth of a second.
+pub const TICK: Duration = Duration(16_666_667);
+/// How long `still` runs the clock before it gives up on the table coming to rest.
+const STILL_LIMIT: Duration = Duration::from_millis(600_000);
+/// How many moves a drag makes between its press and its release, and the step after each.
+const DRAG_MOVES: u32 = 8;
+const DRAG_STEP: Duration = Duration::from_millis(16);
+
+/// Why the driver could not do what it was asked.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DriverError(pub String);
+
+impl fmt::Display for DriverError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for DriverError {}
+
+/// An element as `find` found it in the present frame.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Element {
+    /// Its index in the frame's resolved elements.
+    pub index: u32,
+    pub role: Role,
+    pub name: String,
+    pub place: Place,
+    pub rect: Rect,
+    pub interactive: bool,
+    pub state: StateBits,
+}
+
+impl Element {
+    /// The zone a card is in; `None` for an element of the flat layer.
+    #[must_use]
+    pub fn zone(&self) -> Option<ZoneName> {
+        match self.place {
+            Place::Card { zone, .. } => Some(zone),
+            Place::Layer => None,
+        }
+    }
+
+    /// Its bounding box on screen, in logical points.
+    #[must_use]
+    pub fn rect(&self) -> Rect {
+        self.rect
+    }
+
+    #[must_use]
+    pub fn states(&self) -> StateBits {
+        self.state
+    }
+}
+
+/// A recording played through a client, for one seat in one window.
+pub struct Page {
+    recording: Recording,
+    views: Vec<GameUpdate>,
+    responses: Responses,
+    name: String,
+    seat: Side,
+    layout: Layout,
+    size: Size,
+    tick: Duration,
+    client: Client,
+    /// The clock, in nanoseconds since the recording's start.
+    now: u64,
+    /// How many views the client has been given.
+    released: usize,
+    /// The index of the first view of the latest batch given together.
+    batch: usize,
+    /// Since when the client has been at rest with nothing left to do, if it is.
+    rest_since: Option<u64>,
+    /// Every input handed to the client, in order.
+    inputs: Vec<Input>,
+    /// Each named moment of the recording, with its time, once asked for.
+    moments: Option<Vec<(Name, u64)>>,
+}
+
+impl Page {
+    /// The recording at its start, as `seat` sees it in a window of `size` logical points.
+    ///
+    /// # Errors
+    ///
+    /// When a view in the recording cannot be read.
+    pub fn new(
+        recording: &Recording,
+        seat: Side,
+        layout: Layout,
+        size: Size,
+    ) -> Result<Self, DriverError> {
+        let views = recording.views().map_err(DriverError)?;
+        let mut page = Self {
+            recording: recording.clone(),
+            responses: Responses::new(recording),
+            views,
+            name: "recording".to_owned(),
+            seat,
+            layout,
+            size,
+            tick: TICK,
+            client: client(),
+            now: 0,
+            released: 0,
+            batch: 0,
+            rest_since: None,
+            inputs: Vec::new(),
+            moments: None,
+        };
+        page.begin();
+        Ok(page)
+    }
+
+    /// The same page, naming its recording `name` in faults and errors.
+    #[must_use]
+    pub fn named(mut self, name: &str) -> Self {
+        name.clone_into(&mut self.name);
+        self
+    }
+
+    /// Sets the length of a tick of the clock.
+    pub fn set_tick(&mut self, tick: Duration) {
+        assert!(tick.0 > 0, "a tick has a length");
+        self.tick = tick;
+    }
+
+    /// The clock, in nanoseconds since the recording's start.
+    #[must_use]
+    pub fn now(&self) -> u64 {
+        self.now
+    }
+
+    /// Every input handed to the client so far, in order.
+    #[must_use]
+    pub fn inputs(&self) -> &[Input] {
+        &self.inputs
+    }
+
+    /// The frame at the present time.
+    pub fn frame(&mut self) -> &Frame {
+        self.render();
+        self.client.frame(self.now)
+    }
+
+    /// The tree printout of the present frame.
+    pub fn tree(&mut self) -> String {
+        let frame = self.frame();
+        agent::tree(frame, &TreeOptions::default()).expect("the whole tree needs no locator")
+    }
+
+    /// The element `locator` names in the present frame.
+    ///
+    /// # Panics
+    ///
+    /// When the locator names no element or several, with the nearest names and the clock's
+    /// state.
+    pub fn find(&mut self, locator: &str) -> Element {
+        self.try_find(locator)
+            .unwrap_or_else(|error| panic!("{error}"))
+    }
+
+    /// The element `locator` names in the present frame.
+    ///
+    /// # Errors
+    ///
+    /// When the locator names no element or several; the message ends with the clock's state.
+    pub fn try_find(&mut self, locator: &str) -> Result<Element, DriverError> {
+        let frame = self.frame();
+        match locate(frame, locator) {
+            Ok(index) => {
+                let element = &frame.resolved[index as usize];
+                Ok(Element {
+                    index,
+                    role: element.role,
+                    name: frame.name(element.name).to_owned(),
+                    place: element.place,
+                    rect: agent::hit::bounds(element),
+                    interactive: element.interactive,
+                    state: element.state,
+                })
+            }
+            Err(error) => Err(self.error(&error.to_string())),
+        }
+    }
+
+    /// The faults every interface check finds in the present frame.
+    pub fn faults(&mut self) -> Vec<Fault> {
+        let context = self.context();
+        agent::check(self.frame(), &context)
+    }
+
+    /// Runs every interface check on the present frame.
+    ///
+    /// # Panics
+    ///
+    /// When a check finds a fault, with every fault and the clock's state.
+    pub fn check(&mut self) {
+        let faults = self.faults();
+        if faults.is_empty() {
+            return;
+        }
+        let context = self.context();
+        let printed: Vec<String> = faults.iter().map(|fault| fault.print(&context)).collect();
+        panic!("{}", self.error(&printed.join("\n")));
+    }
+
+    /// Presses and releases the primary button where `locator`'s element is uncovered.
+    pub fn press(&mut self, locator: &str) {
+        let point = self.point(locator);
+        self.pointer(PointerPhase::Down, point, Button::Primary);
+        self.pointer(PointerPhase::Up, point, Button::Primary);
+        self.render();
+    }
+
+    /// Moves the pointer to where `locator`'s element is uncovered.
+    pub fn hover(&mut self, locator: &str) {
+        let point = self.point(locator);
+        self.pointer(PointerPhase::Move, point, Button::None);
+        self.render();
+    }
+
+    /// Presses on `from`'s element, moves in eight even steps along the straight line to `to`'s
+    /// element with a 16 ms step after each, and releases there.
+    pub fn drag(&mut self, from: &str, to: &str) {
+        let start = self.point(from);
+        let end = self.point(to);
+        self.pointer(PointerPhase::Down, start, Button::Primary);
+        for move_number in 1..=DRAG_MOVES {
+            let point = start.lerp(end, move_number as f32 / DRAG_MOVES as f32);
+            self.pointer(PointerPhase::Move, point, Button::Primary);
+            self.step(DRAG_STEP);
+        }
+        self.pointer(PointerPhase::Up, end, Button::Primary);
+        self.render();
+    }
+
+    /// Presses the field `locator` names and gives it `text` as its whole new contents.
+    pub fn type_text(&mut self, locator: &str, text: &str) {
+        self.press(locator);
+        self.give(Input::Text(TextChange(text.to_owned())));
+        self.render();
+    }
+
+    /// Presses and releases a key.
+    pub fn key(&mut self, code: KeyCode) {
+        for phase in [KeyPhase::Down, KeyPhase::Up] {
+            self.give(Input::Key(Key {
+                code,
+                phase,
+                modifiers: Modifiers::default(),
+            }));
+        }
+        self.render();
+    }
+
+    /// Moves the pointer to `point`, in logical points.
+    pub fn move_to(&mut self, point: Vec2) {
+        self.pointer(PointerPhase::Move, point, Button::None);
+        self.render();
+    }
+
+    /// Runs the clock for `duration`, giving each recorded reply when it is due.
+    pub fn step(&mut self, duration: Duration) {
+        self.advance_to(self.now + duration.0);
+    }
+
+    /// Runs the clock until nothing on the table moves.
+    ///
+    /// # Panics
+    ///
+    /// When the table is still moving after ten minutes of the clock.
+    pub fn still(&mut self) {
+        let limit = self.now + STILL_LIMIT.0;
+        self.render();
+        loop {
+            let next = match self.client.wake() {
+                Wake::Never => return,
+                Wake::Now => self.now + self.tick.0,
+                Wake::At(time) => time.max(self.now + 1),
+            };
+            if next > limit {
+                let message = format!("still() ran for {STILL_LIMIT} and the table never rested");
+                panic!("{}", self.error(&message));
+            }
+            self.now = next;
+            self.render();
+        }
+    }
+
+    /// Plays `script`, one action a line, through the same methods. Blank lines and lines that
+    /// start with `#` are skipped.
+    ///
+    /// # Panics
+    ///
+    /// When a line is not an action, or when an action fails.
+    pub fn run(&mut self, script: &str) {
+        for line in script.lines().map(str::trim) {
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let action: Action = line.parse().unwrap_or_else(|error| panic!("{error}"));
+            self.act(&action);
+        }
+    }
+
+    /// Does one action.
+    pub fn act(&mut self, action: &Action) {
+        match action {
+            Action::Press(locator) => self.press(locator),
+            Action::Hover(locator) => self.hover(locator),
+            Action::Drag(from, to) => self.drag(from, to),
+            Action::Type(locator, text) => self.type_text(locator, text),
+            Action::Key(code) => self.key(*code),
+            Action::Move(point) => self.move_to(*point),
+            Action::Step(duration) => self.step(*duration),
+            Action::Still => self.still(),
+        }
+    }
+
+    /// Every named moment of the recording with its time, as the recording plays on its own
+    /// clock with no action taken, in order. Views given together, because the game played on
+    /// without the viewer, share the moment the last of them comes to rest. Steps are not
+    /// listed: their times need the script clock, which the client does not have yet.
+    pub fn moments(&mut self) -> Vec<(Name, Duration)> {
+        self.named_moments()
+            .iter()
+            .map(|&(name, time)| (name, Duration(time)))
+            .collect()
+    }
+
+    /// Goes to `moment`, starting the recording over first when it lies in the past.
+    ///
+    /// # Errors
+    ///
+    /// When the recording has no such moment.
+    pub fn seek(&mut self, moment: &Moment) -> Result<(), DriverError> {
+        let time = self.time_of(moment)?;
+        if time < self.now {
+            self.restart();
+        }
+        self.advance_to(time);
+        Ok(())
+    }
+
+    /// The time of `moment`, in nanoseconds since the recording's start.
+    ///
+    /// # Errors
+    ///
+    /// When the recording has no such moment.
+    pub fn time_of(&mut self, moment: &Moment) -> Result<u64, DriverError> {
+        let (name, offset) = match *moment {
+            Moment::At(duration) => return Ok(duration.0),
+            Moment::Named { name, offset } => (name, offset),
+        };
+        if let Name::Step(..) = name {
+            return Err(DriverError(format!(
+                "'{moment}': step moments need the script clock, which the client does not have \
+                 yet; use a view, a prompt or a duration"
+            )));
+        }
+        let moments = self.named_moments();
+        let Some(&(_, time)) = moments.iter().find(|(known, _)| *known == name) else {
+            let names: Vec<String> = moments.iter().map(|(name, _)| name.to_string()).collect();
+            return Err(DriverError(format!(
+                "the recording has no moment '{name}'; it has {}",
+                names.join(", ")
+            )));
+        };
+        Ok(if offset.before {
+            time.saturating_sub(offset.length.0)
+        } else {
+            time + offset.length.0
+        })
+    }
+
+    /// The clock's state, which ends every failure's message: the time, the view, and whether
+    /// anything is moving.
+    pub fn clock(&mut self) -> String {
+        self.render();
+        let mut out = format!(
+            "t={} view {} of {}",
+            Duration(self.now),
+            self.released,
+            self.views.len()
+        );
+        if self.client.wake() == Wake::Never {
+            out.push_str(", at rest");
+            return out;
+        }
+        let frame = self.client.frame(self.now);
+        let moving: Vec<String> = (0..frame.resolved.len() as u32)
+            .filter(|&index| frame.resolved[index as usize].state.has(StateBits::MOVING))
+            .take(3)
+            .map(|index| agent::tree::locator_of(frame, index))
+            .collect();
+        out.push_str(", animating");
+        if !moving.is_empty() {
+            let _ = write!(out, " ({})", moving.join(", "));
+        }
+        out.push_str(": call still() first?");
+        out
+    }
+
+    fn error(&mut self, message: &str) -> DriverError {
+        DriverError(format!("{message}\n{}", self.clock()))
+    }
+
+    fn context(&self) -> Context {
+        Context {
+            recording: self.name.clone(),
+            seat: self.seat,
+            layout: self.layout,
+            size: self.size,
+            safe_area: Insets::default(),
+            at: self.now,
+        }
+    }
+
+    /// Where an action on `locator`'s element happens: the centre of its largest uncovered
+    /// rectangle.
+    fn point(&mut self, locator: &str) -> Vec2 {
+        let element = self.find(locator);
+        let frame = self.frame();
+        let Some(rect) = uncovered(frame, element.index) else {
+            let message = format!("no part of '{locator}' can be pressed: it is covered");
+            panic!("{}", self.error(&message));
+        };
+        Vec2::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0)
+    }
+
+    fn pointer(&mut self, phase: PointerPhase, position: Vec2, button: Button) {
+        self.give(Input::Pointer(Pointer {
+            id: 0,
+            kind: PointerKind::Mouse,
+            phase,
+            position,
+            button,
+            wheel: Vec2::ZERO,
+            modifiers: Modifiers::default(),
+        }));
+    }
+
+    fn give(&mut self, input: Input) {
+        self.inputs.push(input.clone());
+        self.client.handle(input);
+    }
+
+    /// Sets the client up and gives it the recording's first views.
+    fn begin(&mut self) {
+        self.give(Input::Surface {
+            size: self.size,
+            scale: 1.0,
+            safe_area: Insets::default(),
+        });
+        self.release();
+        self.render();
+    }
+
+    fn restart(&mut self) {
+        self.client = client();
+        self.responses = Responses::new(&self.recording);
+        self.now = 0;
+        self.released = 0;
+        self.batch = 0;
+        self.rest_since = None;
+        self.inputs.clear();
+        self.begin();
+    }
+
+    /// Gives the client the next view, and every view after it that follows unasked.
+    fn release(&mut self) {
+        self.batch = self.released;
+        while let Some(update) = self.views.get(self.released) {
+            let update = update.clone();
+            self.released += 1;
+            let unasked = plays_on(&update);
+            self.give(Input::Update(Box::new(update)));
+            if !unasked {
+                break;
+            }
+        }
+        self.rest_since = None;
+    }
+
+    /// Computes the frame at the present time, and answers every command it sends from the
+    /// recording, until it sends none.
+    fn render(&mut self) {
+        loop {
+            self.client.frame(self.now);
+            let mut answered = false;
+            while let Some(command) = self.client.next_command() {
+                let answer = match self.responses.answer(&command) {
+                    Ok(answer) => answer,
+                    Err(message) => panic!("{}", self.error(&message)),
+                };
+                self.give(Input::Reply(answer.reply));
+                if answer.plays_on {
+                    self.release();
+                }
+                answered = true;
+            }
+            if !answered {
+                break;
+            }
+        }
+        if self.client.wake() == Wake::Never {
+            self.rest_since.get_or_insert(self.now);
+        } else {
+            self.rest_since = None;
+        }
+    }
+
+    /// When the recorded reply to the present view is due, if one is.
+    fn reply_due(&self) -> Option<u64> {
+        if self.released >= self.views.len() {
+            return None;
+        }
+        self.rest_since.map(|rest| rest + REPLY_DELAY.0)
+    }
+
+    /// Runs the clock to `target`, giving each recorded reply when it is due.
+    fn advance_to(&mut self, target: u64) {
+        self.render();
+        loop {
+            if let Some(due) = self.reply_due()
+                && due <= self.now
+            {
+                self.release();
+                self.render();
+                continue;
+            }
+            if self.now >= target {
+                return;
+            }
+            let wake = match self.client.wake() {
+                Wake::Now => self.now + self.tick.0,
+                Wake::At(time) => time.max(self.now + 1),
+                Wake::Never => u64::MAX,
+            };
+            self.now = wake.min(self.reply_due().unwrap_or(u64::MAX)).min(target);
+            self.render();
+        }
+    }
+
+    fn named_moments(&mut self) -> &[(Name, u64)] {
+        if self.moments.is_none() {
+            let mut playing = Self {
+                recording: self.recording.clone(),
+                views: self.views.clone(),
+                responses: Responses::new(&self.recording),
+                name: self.name.clone(),
+                seat: self.seat,
+                layout: self.layout,
+                size: self.size,
+                tick: self.tick,
+                client: client(),
+                now: 0,
+                released: 0,
+                batch: 0,
+                rest_since: None,
+                inputs: Vec::new(),
+                moments: Some(Vec::new()),
+            };
+            playing.begin();
+            self.moments = Some(playing.play_through());
+        }
+        self.moments.as_deref().expect("just set")
+    }
+
+    /// Plays the recording to its end on its own clock, and returns each moment's time.
+    fn play_through(&mut self) -> Vec<(Name, u64)> {
+        let mut moments = vec![(Name::Start, 0)];
+        let mut prompts = 0;
+        loop {
+            self.still();
+            for view in self.batch..self.released {
+                moments.push((Name::View(view as u32 + 1), self.now));
+                if matches!(self.views[view].view.status, Status::Deciding { .. }) {
+                    prompts += 1;
+                    moments.push((Name::Prompt(prompts), self.now));
+                }
+            }
+            if self.released >= self.views.len() {
+                break;
+            }
+            let due = self.now + REPLY_DELAY.0;
+            self.advance_to(due);
+        }
+        moments.push((Name::End, self.now));
+        moments
+    }
+}
+
+/// A client sized for the largest board the engine holds.
+fn client() -> Client {
+    Client::new(Config {
+        elements: 4096,
+        draws: 8192,
+        name_bytes: 1 << 17,
+    })
+}

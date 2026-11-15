@@ -1,0 +1,331 @@
+//! The `Page` test driver, on recordings built by hand.
+
+use beryl_scene::agent::Layout;
+use beryl_scene::command::{Reply, SessionCommand};
+use beryl_scene::driver::{Action, Duration, Moment, Name, Page, Recording, Responses};
+use beryl_scene::input::{Input, KeyCode, PointerPhase, Size};
+use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
+use beryl_session::ipc::{ChooseRequest, FixtureMessage};
+use beryl_session::prompt::ClickReply;
+use beryl_session::protocol::{Side, Status, ZoneName};
+use beryl_session::{CandidateIndex, DecisionId, SessionId};
+use glam::Vec2;
+
+fn ms(milliseconds: u64) -> Duration {
+    Duration::from_millis(milliseconds)
+}
+
+/// The sample table, then the same table with one more card in the viewer's hand, then with
+/// another: three views, each answered by a recorded reply.
+fn three_views() -> Vec<ViewBuilder> {
+    let mut view = ViewBuilder::sample();
+    view.script(ScriptBuilder::reset().build());
+    let first = view.clone();
+    view.card(ZoneName::Hand, Side::You, "Opt");
+    let second = view.clone();
+    view.card(ZoneName::Hand, Side::You, "Ponder");
+    vec![first, second, view]
+}
+
+fn recording(views: &[ViewBuilder]) -> Recording {
+    Recording(
+        views
+            .iter()
+            .map(|view| FixtureMessage::game_update(&view.update()))
+            .collect(),
+    )
+}
+
+fn page(views: &[ViewBuilder]) -> Page {
+    Page::new(
+        &recording(views),
+        Side::You,
+        Layout::Desktop,
+        Size {
+            width: 1600.0,
+            height: 900.0,
+        },
+    )
+    .unwrap()
+}
+
+#[test]
+fn durations_parse_and_print_milliseconds() {
+    assert_eq!("850ms".parse(), Ok(ms(850)));
+    assert_eq!("1.25s".parse(), Ok(ms(1250)));
+    assert_eq!("2s".parse::<Duration>().unwrap().to_string(), "2000ms");
+    assert_eq!(Duration(1_500_000).to_string(), "1.5ms");
+    for wrong in ["85", "ms", "-3s", "1.2.3s", "fast"] {
+        let error = wrong.parse::<Duration>().unwrap_err().to_string();
+        assert!(error.contains("850ms or 1.25s"), "{error}");
+        assert!(error.contains(wrong), "{error}");
+    }
+}
+
+#[test]
+fn moments_parse_and_print_as_written() {
+    for text in [
+        "start",
+        "end",
+        "view:12",
+        "prompt:1",
+        "step:12.0.1",
+        "view:12+250ms",
+        "prompt:2-100ms",
+        "850ms",
+    ] {
+        let moment: Moment = text.parse().unwrap();
+        assert_eq!(moment.to_string(), text);
+    }
+    assert_eq!(
+        "view:3+1.25s".parse(),
+        Ok(Moment::Named {
+            name: Name::View(3),
+            offset: beryl_scene::driver::Offset {
+                before: false,
+                length: ms(1250),
+            },
+        })
+    );
+    for (wrong, says) in [
+        ("view:0", "counted from 1"),
+        ("step:1.2", "a view, a beat and a step"),
+        ("frame:3", "not a moment's name"),
+        ("view:x", "not a whole number"),
+        ("view:2+soon", "850ms or 1.25s"),
+    ] {
+        let error = wrong.parse::<Moment>().unwrap_err().to_string();
+        assert!(error.contains(says), "{wrong}: {error}");
+        assert!(error.contains("view:12+250ms"), "{wrong}: {error}");
+    }
+}
+
+#[test]
+fn a_recording_plays_on_its_own_clock() {
+    let mut page = page(&three_views());
+    let moments = page.moments();
+    assert_eq!(
+        moments,
+        vec![
+            (Name::Start, ms(0)),
+            (Name::View(1), ms(0)),
+            (Name::View(2), ms(400)),
+            (Name::View(3), ms(800)),
+            (Name::End, ms(800)),
+        ]
+    );
+    // Stepping the clock gives each reply when it is due, as the moments say.
+    page.step(ms(399));
+    assert!(page.try_find("card \"Opt\"").is_err());
+    page.step(ms(1));
+    assert_eq!(page.find("card \"Opt\"").zone(), Some(ZoneName::Hand));
+}
+
+#[test]
+fn seeking_goes_to_a_moment_and_back() {
+    let mut page = page(&three_views());
+    page.seek(&"view:3".parse().unwrap()).unwrap();
+    assert_eq!(page.now(), ms(800).0);
+    page.find("card \"Ponder\"");
+    page.seek(&"view:2+50ms".parse().unwrap()).unwrap();
+    assert_eq!(page.now(), ms(450).0);
+    page.find("card \"Opt\"");
+    assert!(page.try_find("card \"Ponder\"").is_err());
+
+    let error = page
+        .seek(&"prompt:1".parse().unwrap())
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("no moment 'prompt:1'"), "{error}");
+    assert!(error.contains("view:3"), "{error}");
+    let error = page
+        .seek(&"step:2.0.0".parse().unwrap())
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("script clock"), "{error}");
+}
+
+#[test]
+fn views_the_game_plays_on_through_arrive_together() {
+    let views = three_views();
+    let mut recording = recording(&views);
+    let mut update = views[1].update();
+    update.view.status = Status::Playing;
+    recording.0[1] = FixtureMessage::game_update(&update);
+    let size = Size {
+        width: 1600.0,
+        height: 900.0,
+    };
+    let mut page = Page::new(&recording, Side::You, Layout::Desktop, size).unwrap();
+    let moments = page.moments();
+    assert!(moments.contains(&(Name::View(2), ms(400))), "{moments:?}");
+    assert!(moments.contains(&(Name::View(3), ms(400))), "{moments:?}");
+    assert_eq!(moments.last(), Some(&(Name::End, ms(400))));
+}
+
+#[test]
+fn a_script_of_actions_makes_the_same_inputs_as_the_methods() {
+    let views = three_views();
+    let mut by_methods = page(&views);
+    by_methods.press("card \"Counterspell\"");
+    by_methods.hover("card \"Memory Lapse\"");
+    by_methods.drag("card \"Counterspell\"", "card \"Lightning Bolt\"");
+    by_methods.key(KeyCode::Enter);
+    by_methods.move_to(Vec2::new(400.0, 300.0));
+
+    let mut by_script = page(&views);
+    by_script.run(
+        "press card \"Counterspell\"\n\
+         hover card \"Memory Lapse\"\n\
+         # A comment, and a blank line, are skipped.\n\
+         \n\
+         drag card \"Counterspell\" to card \"Lightning Bolt\"\n\
+         key Enter\n\
+         move 400,300",
+    );
+    assert_eq!(by_script.inputs(), by_methods.inputs());
+    assert_eq!(by_script.now(), by_methods.now());
+    // The drag stepped the clock 16 ms after each of its eight moves.
+    assert_eq!(by_methods.now(), ms(8 * 16).0);
+}
+
+#[test]
+fn every_action_name_is_a_line_run_accepts() {
+    for (line, action) in [
+        (
+            "press button \"Auto Pay\"",
+            Action::Press("button \"Auto Pay\"".to_owned()),
+        ),
+        ("hover card #8", Action::Hover("card #8".to_owned())),
+        (
+            "drag card \"Go to Sleep\" to region \"stack\"",
+            Action::Drag(
+                "card \"Go to Sleep\"".to_owned(),
+                "region \"stack\"".to_owned(),
+            ),
+        ),
+        (
+            "type field \"Deck name\" \"WU \\\"Control\\\"\"",
+            Action::Type(
+                "field \"Deck name\"".to_owned(),
+                "WU \"Control\"".to_owned(),
+            ),
+        ),
+        ("key escape", Action::Key(KeyCode::Escape)),
+        ("key Q", Action::Key(KeyCode::Q)),
+        ("move 400,300", Action::Move(Vec2::new(400.0, 300.0))),
+        ("step 1.25s", Action::Step(ms(1250))),
+        ("still", Action::Still),
+    ] {
+        assert_eq!(line.parse(), Ok(action), "{line}");
+    }
+    assert_eq!(
+        "type field \"Deck name\" \"WU Control\"".parse(),
+        Ok(Action::Type(
+            "field \"Deck name\"".to_owned(),
+            "WU Control".to_owned()
+        ))
+    );
+    let error = "jump card #3".parse::<Action>().unwrap_err().to_string();
+    assert!(error.contains("press <locator>"), "{error}");
+    let error = "key F13".parse::<Action>().unwrap_err().to_string();
+    assert!(error.contains("not a key's name"), "{error}");
+}
+
+#[test]
+fn a_press_lands_inside_the_uncovered_part_of_its_element() {
+    let mut page = page(&three_views());
+    let element = page.find("card \"Counterspell\"");
+    let frame = page.frame().clone();
+    let rect = beryl_scene::agent::uncovered(&frame, element.index).unwrap();
+    page.press("card \"Counterspell\"");
+    let presses: Vec<Vec2> = page
+        .inputs()
+        .iter()
+        .filter_map(|input| match input {
+            Input::Pointer(pointer) if pointer.phase == PointerPhase::Down => {
+                Some(pointer.position)
+            }
+            _ => None,
+        })
+        .collect();
+    let [point] = presses.as_slice() else {
+        panic!("one press: {presses:?}");
+    };
+    assert!(
+        point.x > rect.x
+            && point.x < rect.x + rect.width
+            && point.y > rect.y
+            && point.y < rect.y + rect.height,
+        "{point} outside {rect:?}"
+    );
+    assert_eq!(beryl_scene::agent::hit(&frame, *point), Some(element.index));
+}
+
+#[test]
+fn a_failed_find_names_the_nearest_elements_and_the_clock() {
+    let mut page = page(&three_views());
+    let error = page
+        .try_find("card \"Counterspel\"")
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("card \"Counterspell\" #"), "{error}");
+    assert!(error.ends_with("t=0ms view 1 of 3, at rest"), "{error}");
+}
+
+fn decision() -> DecisionId {
+    DecisionId {
+        session: SessionId(1),
+        seq: 7,
+    }
+}
+
+#[test]
+fn commands_are_answered_from_the_recorded_responses() {
+    let request = |index| ChooseRequest {
+        decision: decision(),
+        index: CandidateIndex(index),
+        continuation: None,
+    };
+    let recording = Recording(vec![
+        FixtureMessage::asked("choose", &request(1), &()),
+        FixtureMessage::response("click", &ClickReply::Answered),
+    ]);
+    let mut responses = Responses::new(&recording);
+    let answer = responses
+        .answer(&SessionCommand::Choose(request(1)))
+        .unwrap();
+    assert_eq!(answer.reply, Reply::Done(Ok(())));
+    assert!(answer.plays_on);
+    // The last response for a command stays to answer it again, but only for its request.
+    let error = responses
+        .answer(&SessionCommand::Choose(request(2)))
+        .unwrap_err();
+    assert!(error.contains("recorded for"), "{error}");
+    let error = responses
+        .answer(&SessionCommand::PassOn(decision()))
+        .unwrap_err();
+    assert!(error.contains("`pass_on`"), "{error}");
+    let error = responses
+        .answer(&SessionCommand::Undo(decision()))
+        .unwrap_err();
+    assert!(error.contains("`undo`"), "{error}");
+}
+
+/// The app builds `beryl_scene` without the `driver` feature, so it has no `Page`.
+#[test]
+fn the_driver_is_only_in_a_build_with_its_feature() {
+    let lib = include_str!("../src/lib.rs");
+    let lines: Vec<&str> = lib.lines().collect();
+    let at = lines
+        .iter()
+        .position(|line| *line == "pub mod driver;")
+        .expect("lib.rs declares the driver");
+    assert_eq!(lines[at - 1], "#[cfg(feature = \"driver\")]");
+    let manifest = include_str!("../Cargo.toml");
+    assert!(manifest.contains("driver = [\"dep:serde\", \"dep:serde_json\"]"));
+    assert!(
+        !manifest.contains("default ="),
+        "the driver is never on by default"
+    );
+}
