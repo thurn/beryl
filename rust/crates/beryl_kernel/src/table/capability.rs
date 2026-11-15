@@ -88,11 +88,17 @@ pub enum Capability {
     /// ability waits or is on the stack keeps what a copy of it takes
     /// ([`crate::last_known::DepartedSpell`]).
     CopiesItself,
+    /// A card has a mana ability activated only as an instant ([`crate::table::is_instant_mana`]),
+    /// so a priority decision looks for one to offer on its own.
+    InstantMana,
 }
+
+// The game keeps its capabilities in a `u32`.
+const _: () = assert!((Capability::InstantMana as u32) < u32::BITS);
 
 impl Capability {
     /// The capabilities a face gives a game that can contain it.
-    pub(super) fn of(face: &Face) -> u16 {
+    pub(super) fn of(face: &Face) -> u32 {
         let mut found = 0;
         if face.keywords.contains(beryl_card::Keywords::DELVE) {
             found |= Capability::Delve.bit();
@@ -157,6 +163,9 @@ impl Capability {
             if a.cost().is_loyalty() {
                 found |= Capability::LoyaltyActivated.bit();
             }
+            if crate::table::is_instant_mana(a) {
+                found |= Capability::InstantMana.bit();
+            }
             // Wherever the ability holds the amount or condition that reads it: its own
             // condition, one its effect reads, its continuous effect's.
             a.walk(&mut |node| {
@@ -179,8 +188,8 @@ impl Capability {
     }
 
     #[inline]
-    pub(super) const fn bit(self) -> u16 {
-        1 << (self as u16)
+    pub(super) const fn bit(self) -> u32 {
+        1 << (self as u32)
     }
 }
 

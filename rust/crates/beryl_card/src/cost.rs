@@ -39,6 +39,8 @@ mod kinds {
     pub(super) const CHOSEN: u8 = 1 << 5;
     /// A payment of life or a choice of costs.
     pub(super) const OTHER: u8 = 1 << 6;
+    /// Discarding the whole hand.
+    pub(super) const HAND: u8 = 1 << 7;
 }
 
 /// One part of a cost that is not mana: what is done, and to what.
@@ -64,6 +66,11 @@ pub enum CostPart {
     /// ([CR 701.61a](https://yawgatog.com/resources/magic-rules/#R70161a)): "To forage means
     /// 'Exile three cards from your graveyard or sacrifice a Food.'"
     OneOf(&'static [Cost]),
+    /// "Discard your hand": every card in the hand of the player paying, each moved as
+    /// discarding moves a card ([CR 701.9a](https://yawgatog.com/resources/magic-rules/#R7019a)):
+    /// "To discard a card, move it from its owner's hand to that player's graveyard." No card
+    /// is chosen, and an empty hand pays it.
+    DiscardHand,
 }
 
 /// What paying a cost part does to an object.
@@ -294,6 +301,7 @@ impl Cost {
                 CostPart::Loyalty(_) => kinds::LOYALTY,
                 CostPart::Chosen(..) => kinds::CHOSEN,
                 CostPart::Life(_) | CostPart::OneOf(_) => kinds::OTHER,
+                CostPart::DiscardHand => kinds::HAND,
             };
             i += 1;
         }
@@ -351,6 +359,12 @@ impl Cost {
     #[inline]
     pub const fn pays_life_or_chooses(&self) -> bool {
         self.kinds & kinds::OTHER != 0
+    }
+
+    /// Whether paying it discards the hand of the player paying ([`CostPart::DiscardHand`]).
+    #[inline]
+    pub const fn discards_hand(&self) -> bool {
+        self.kinds & kinds::HAND != 0
     }
 
     /// The loyalty counters it puts on or removes, if it is a loyalty ability's (CR 606.4).

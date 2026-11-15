@@ -1,7 +1,7 @@
 //! The engine's open decision and the legal actions it can offer.
 
 use crate::bitboard::Bitboard;
-use crate::card::{FaceIx, Prompt, Purpose, Types};
+use crate::card::{ChosenKind, FaceIx, Prompt, Purpose, Types};
 use crate::decision::{Candidates, Decision, DecisionKind, Opt, Refusal};
 use crate::event::Sink;
 use crate::fixed::Full;
@@ -85,6 +85,13 @@ pub(crate) fn decision<L: Layout>(
             Prompt::new(Purpose::PayLife).count(life),
         )?
         .about(Bitboard::single(slot))),
+        // The question is about the permanent whose mana ability is being activated.
+        Pending::ManaColor { slot, .. } => chosen::decision(
+            t,
+            s.controller(slot),
+            ChosenKind::Color,
+            Bitboard::single(slot),
+        ),
         // The question is about the land entering.
         Pending::EnterChoosing { slot, kind, .. } => {
             chosen::decision(t, s.object(slot).owner(), kind, Bitboard::single(slot))
@@ -152,6 +159,7 @@ fn priority_decision<L: Layout>(s: &State<L>, t: &GameTable) -> Result<Decision<
         }
     }
     cast::priority_options(s, t, player, list)?;
+    mana::instant_options(s, t, player, list)?;
     face_down::face_up_options(s, t, player, list)?;
     // Last, as the options a full list leaves out: tapping ahead is never needed, the payment
     // taps for itself.

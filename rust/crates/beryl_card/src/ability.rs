@@ -47,6 +47,16 @@ pub enum Timing {
     /// Only during its controller's main phase while the stack is empty
     /// ([CR 307.1](https://yawgatog.com/resources/magic-rules/#R3071)).
     Sorcery,
+    /// A mana ability's "Activate only as an instant": only while its controller has
+    /// priority, as an instant is cast ([CR 117.1a]): "A player may cast an instant spell
+    /// any time they have priority." Not while a cost is paid, where any other mana ability
+    /// may be activated ([CR 605.3a]): "A player may activate an activated mana ability
+    /// whenever they have priority, whenever they are casting a spell or activating an
+    /// ability that requires a mana payment".
+    ///
+    /// [CR 117.1a]: https://yawgatog.com/resources/magic-rules/#R1171a
+    /// [CR 605.3a]: https://yawgatog.com/resources/magic-rules/#R6053a
+    AsInstant,
 }
 
 /// What an ability does as it resolves: effect data, or a Rust function where the
@@ -587,6 +597,19 @@ impl Ability {
         );
         Ability {
             timing: Timing::Sorcery,
+            ..self
+        }
+    }
+
+    /// "Activate only as an instant", of a mana ability ([`Timing::AsInstant`]).
+    #[must_use]
+    pub const fn as_an_instant(self) -> Ability {
+        assert!(
+            matches!(self.kind, AbilityKind::Mana),
+            "only a mana ability says it is activated as an instant"
+        );
+        Ability {
+            timing: Timing::AsInstant,
             ..self
         }
     }

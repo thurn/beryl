@@ -349,6 +349,10 @@ impl<L: Layout> Relayout for Pending<L> {
                 kind,
                 pay_life,
             },
+            &Pending::ManaColor { slot: s, ability } => Pending::ManaColor {
+                slot: slot(s),
+                ability,
+            },
             &Pending::DeclareAttackers { attacker } => Pending::DeclareAttackers {
                 attacker: attacker.map(slot),
             },

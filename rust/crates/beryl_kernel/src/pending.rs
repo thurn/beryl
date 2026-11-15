@@ -221,6 +221,14 @@ pub enum Pending<L: Layout = Small> {
         kind: beryl_card::ChosenKind,
         pay_life: bool,
     },
+    /// The controller of the permanent in `slot` activates its mana ability `ability`, one
+    /// activated only as an instant that makes one mana of any color, and chooses the color
+    /// before it is activated. Last among the variants, so the others keep the discriminants
+    /// a state's hash reads.
+    ManaColor {
+        slot: L::Slot,
+        ability: beryl_card::ObjectAbility,
+    },
 }
 
 impl Copy for Pending<Small> {}

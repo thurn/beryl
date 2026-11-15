@@ -14,6 +14,9 @@ use crate::scratch::assert_sound;
 pub use crate::scratch::{Counts, Scratch};
 use crate::state::{Pending, State, TurnStep, Zone};
 use crate::table::GameTable;
+use crate::card::{ChosenKind, ManaColor};
+use crate::chosen;
+use beryl_kernel::chosen::ChosenValue;
 use crate::{cast, combat, entered, face_down, layers, mana, resolve, sba, start, trigger, turn};
 
 mod collapse;
@@ -503,6 +506,18 @@ fn perform_machine<L: Layout>(
             x.events.leave();
             done
         }
+        Pending::ManaColor { slot, .. } => {
+            s.settle_question();
+            let ChosenValue::Color(colors) = chosen::value(ChosenKind::Color, d.candidates.option(c))
+            else {
+                unreachable!("a color among a color's candidates");
+            };
+            let color = ManaColor::ALL[colors.0.trailing_zeros() as usize];
+            act(s, &mut x.events, d.player, None);
+            let done = mana::activate(s, t, &mut x.events, slot, color);
+            x.events.leave();
+            done
+        }
         Pending::EnterChoosing { slot, pay_life, .. } => {
             s.settle_question();
             act(s, &mut x.events, d.player, None);
@@ -582,6 +597,13 @@ fn take_action<L: Layout>(
         Opt::PlayLand(slot) => play_land(s, t, &mut x.events, player, slot),
         cast_option @ Opt::Cast { .. } => {
             cast::begin_cast(s, t, &mut x.events, player, cast_option, None)
+        }
+        Opt::Activate { slot, ability } if mana::is_instant(s, t, slot, ability) => {
+            mana::begin_instant(s, t, &mut x.events, slot, ability)?;
+            // CR 117.3c: "If a player has priority when they ... activate an ability ...,
+            // that player receives priority afterward."
+            s.reset_passes();
+            Ok(())
         }
         Opt::Activate { slot, ability } => {
             cast::begin_activate(s, t, &mut x.events, player, slot, ability)

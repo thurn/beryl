@@ -149,6 +149,15 @@ impl ManaSet {
         }
     }
 
+    /// `amount` mana of any one color, as "Add three mana of any one color." says: the
+    /// five colors, not colorless.
+    pub const fn any_color(amount: u8) -> ManaSet {
+        ManaSet {
+            colors: 0b1_1111,
+            amount,
+        }
+    }
+
     pub fn includes(self, color: ManaColor) -> bool {
         self.colors & (1 << color as u8) != 0
     }

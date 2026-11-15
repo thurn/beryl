@@ -238,7 +238,10 @@ impl Ability {
 impl CostPart {
     fn walk(&self, visit: Visit) {
         match self {
-            CostPart::This(_) | CostPart::Loyalty(_) | CostPart::Life(_) => {}
+            CostPart::This(_)
+            | CostPart::Loyalty(_)
+            | CostPart::Life(_)
+            | CostPart::DiscardHand => {}
             CostPart::Chosen(_, chosen) => chosen.filter.walk(visit),
             CostPart::OneOf(costs) => {
                 for part in costs.iter().flat_map(Cost::parts) {

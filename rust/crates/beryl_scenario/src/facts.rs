@@ -500,6 +500,10 @@ fn part_facts(part: &CostPart) -> PartFacts {
             amount: Some(i16::from(n)),
             ..PartFacts::default()
         },
+        CostPart::DiscardHand => PartFacts {
+            action: "DiscardHand".to_owned(),
+            ..PartFacts::default()
+        },
         CostPart::OneOf(costs) => PartFacts {
             action: "OneOf".to_owned(),
             one_of: costs

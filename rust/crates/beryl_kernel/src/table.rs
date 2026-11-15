@@ -159,7 +159,7 @@ pub struct GameTable {
     /// ([`beryl_card::Ability::needs`]), so that no other game pays to check.
     needy: bool,
     /// A bit per [`Capability`] a card of the game has.
-    capabilities: u16,
+    capabilities: u32,
     /// The rule changes the cards of the game name, numbered.
     rule_changes: RuleChanges,
     /// The mana restrictions the cards of the game name, numbered ([`crate::mana_memory`]).
@@ -784,6 +784,31 @@ pub fn is_sacrificed(a: &Ability) -> bool {
             ]
         )
 }
+
+/// Whether an ability is a mana ability activated only while its controller has priority
+/// ([`Timing::AsInstant`](beryl_card::Timing::AsInstant)), with no mana in its cost and parts
+/// the engine pays as it activates it: tapping or sacrificing its source and discarding the
+/// hand, as "Discard your hand, Sacrifice this artifact: Add three mana of any one color.
+/// Activate only as an instant." It makes one kind of mana, or any one color, which its
+/// controller chooses as they activate it. The mana solver never activates one: priority
+/// offers it as an activation of its own.
+#[inline]
+pub fn is_instant_mana(a: &Ability) -> bool {
+    let kinds = a.produces().colors;
+    a.kind() == AbilityKind::Mana
+        && a.timing() == beryl_card::Timing::AsInstant
+        && (kinds.count_ones() == 1 || kinds == ANY_COLOR)
+        && a.cost().mana.is_zero()
+        && a.cost().parts().iter().all(|part| {
+            matches!(
+                part,
+                CostPart::This(CostAction::Tap | CostAction::Sacrifice) | CostPart::DiscardHand
+            )
+        })
+}
+
+/// The five colors as a [`beryl_card::ManaSet`]'s bits: "any color" (no colorless).
+pub const ANY_COLOR: u8 = 0b1_1111;
 
 #[cfg(test)]
 mod tests;

@@ -378,7 +378,9 @@ pub(super) fn pay<L: Layout>(
                 let player = top(s).controller();
                 life::lose(&mut Game::new(s, t, sink), player, n)?;
             }
-            CostPart::OneOf(_) => {
+            // Only a mana ability activated as an instant discards its controller's hand,
+            // and it never goes on the stack (`mana::activate` pays it).
+            CostPart::OneOf(_) | CostPart::DiscardHand => {
                 unreachable!("the card table refuses a cost the engine cannot pay")
             }
         }

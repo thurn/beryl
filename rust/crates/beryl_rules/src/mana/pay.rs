@@ -9,8 +9,8 @@ use crate::event::{self, Sink};
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
-use crate::state::{AbilityRef, PendingTrigger, State, TriggeredAbility, Zone};
-use crate::table::{GameTable, is_sacrificed, is_simple};
+use crate::state::{AbilityRef, Pending, PendingTrigger, State, TriggeredAbility, Zone, ZoneKey};
+use crate::table::{Capability, GameTable, is_instant_mana, is_sacrificed, is_simple};
 
 use super::pool::{helps, pay_unit};
 use super::remembered::{self, Paying};
@@ -378,7 +378,7 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
     let printed = s.abilities(t, slot).find_map(|(ability, a)| match ability {
         ObjectAbility::Own(i)
             if !restricted
-                && (is_simple(a) || is_sacrificed(a))
+                && (is_simple(a) || is_sacrificed(a) || is_instant_mana(a))
                 && a.produces().includes(color)
                 && allowed(s, t, a, s.controller(slot), &s.words_of(slot)) =>
         {
@@ -410,8 +410,19 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
     // The costs come first ([CR 602.2b](https://yawgatog.com/resources/magic-rules/#R6022b)):
     // activating follows casting's steps, among them
     // [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
-    // total cost."
-    event::set_tapped(s, t, sink, source, true)?;
+    // total cost." The hand is discarded before the source is sacrificed: the player pays a
+    // cost's parts in any order, and the order changes nothing here.
+    if ability.cost().does(CostAction::Tap) {
+        event::set_tapped(s, t, sink, source, true)?;
+    }
+    if ability.cost().discards_hand() {
+        let hand = s.zone(ZoneKey::Of(controller, Zone::Hand));
+        if !hand.is_empty() {
+            let entry = event::Entry::default();
+            let reason = event::Reason::Discard;
+            event::move_batch(s, t, sink, hand, Zone::Graveyard, reason, entry)?;
+        }
+    }
     if ability.cost().does(CostAction::Sacrifice) {
         event::move_one(s, t, sink, slot, Zone::Graveyard, event::Reason::Sacrifice)?;
     }
@@ -568,6 +579,93 @@ pub(crate) fn standalone_options<L: Layout>(
         .collect();
     let sources = crate::engine::collapse(s, sources);
     add_activations(s, t, player, out, sources);
+}
+
+/// The mana abilities `player` may activate only while they have priority
+/// ([`is_instant_mana`]), one option for each, for each set of interchangeable permanents
+/// (§7.2). The mana solver never activates such an ability, so it is offered here whatever
+/// the profile: "Activate only as an instant" lets it be activated at priority alone
+/// ([CR 117.1a]): "A player may cast an instant spell any time they have priority." A game
+/// whose cards have none pays one test of the table.
+///
+/// [CR 117.1a]: https://yawgatog.com/resources/magic-rules/#R1171a
+pub(crate) fn instant_options<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    out: &mut L::Queue<Opt<L>, 64>,
+) -> Result<(), Full> {
+    if !t.can(Capability::InstantMana) {
+        return Ok(());
+    }
+    list_instant_options(s, t, player, out)
+}
+
+/// [`instant_options`] in a game whose cards have such an ability. Out of line.
+#[inline(never)]
+fn list_instant_options<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    out: &mut L::Queue<Opt<L>, 64>,
+) -> Result<(), Full> {
+    let instant = |slot: L::Slot| {
+        let words = s.words_of(slot);
+        s.abilities(t, slot).filter(move |&(ability, a)| {
+            matches!(ability, ObjectAbility::Own(_))
+                && is_instant_mana(a)
+                && !(a.cost().does(CostAction::Tap) && s.object(slot).is_tapped())
+                && allowed(s, t, a, player, &words)
+        })
+    };
+    let objects: Bitboard<L::Slot> = (s.battlefield().iter().copied())
+        .filter(|&slot| s.controller(slot) == player && instant(slot).next().is_some())
+        .collect();
+    // Candidates are listed in the candidate order, which a `Choice` counts in.
+    for slot in s.in_candidate_order(crate::engine::collapse(s, objects)) {
+        for (ability, _) in instant(slot) {
+            out.push(Opt::Activate { slot, ability })?;
+        }
+    }
+    Ok(())
+}
+
+/// Activates the mana ability `ability` of the permanent in `slot`, one activated only as an
+/// instant ([`is_instant_mana`]): at once if it makes one kind of mana, or once its
+/// controller has chosen the color of "any one color" ([`Pending::ManaColor`]). That color
+/// is chosen as the ability resolves, after its costs are paid, but here it is asked before
+/// anything is paid: what paying shows changes none of the colors the player may choose.
+pub(crate) fn begin_instant<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
+    ability: ObjectAbility,
+) -> Result<(), Full> {
+    let kinds = s
+        .abilities(t, slot)
+        .find(|&(a, _)| a == ability)
+        .map(|(_, a)| a.produces().colors)
+        .expect("an ability offered");
+    if kinds.count_ones() == 1 {
+        let color = ManaColor::ALL[kinds.trailing_zeros() as usize];
+        return activate(s, t, sink, slot, color);
+    }
+    s.ask(Pending::ManaColor { slot, ability });
+    Ok(())
+}
+
+/// Whether `ability` of the permanent in `slot` is a mana ability activated only as an
+/// instant, which [`begin_instant`] activates rather than the casting steps.
+pub(crate) fn is_instant<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    ability: ObjectAbility,
+) -> bool {
+    t.can(Capability::InstantMana)
+        && s.abilities(t, slot)
+            .any(|(a, printed)| a == ability && is_instant_mana(printed))
 }
 
 /// Exact sources the human can activate before paying Waterbend, even when a twin

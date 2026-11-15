@@ -69,6 +69,9 @@ impl Ctx {
                     text.push(' ');
                     text.push_str(&self.spend_only(restriction));
                 }
+                if ability.timing() == Timing::AsInstant {
+                    text.push_str(" Activate only as an instant.");
+                }
                 return text;
             }
             AbilityKind::Triggered => self.triggered(ability),
@@ -302,6 +305,7 @@ impl Ctx {
             CostPart::Chosen(action, chosen) => return self.chosen(action, chosen),
             CostPart::Loyalty(_) => return None,
             CostPart::Life(n) => format!("pay {n} life"),
+            CostPart::DiscardHand => "discard your hand".to_owned(),
             CostPart::OneOf(costs) => {
                 let each: Vec<String> = costs.iter().map(|c| self.cost_text(c)).collect();
                 list(&each, "or")
