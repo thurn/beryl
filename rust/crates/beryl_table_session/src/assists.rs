@@ -56,6 +56,13 @@ pub(super) struct Assists {
 }
 
 impl Assists {
+    pub(super) fn without_suggestions(&self) -> Self {
+        Self {
+            last_id: self.last_id,
+            ..Self::default()
+        }
+    }
+
     pub(super) fn refresh(&self, table: &Table, seat: Seat, suggestions: &Suggestions) -> Self {
         let turn = Turn {
             game: table.game_match.game_number,
@@ -99,9 +106,10 @@ impl Assists {
                     line_ids.push(next.issue_id());
                 }
             }
-            let revision = old
-                .filter(|pending| pending.line_ids == line_ids)
-                .map_or_else(|| next.issue_id(), |pending| pending.revision);
+            // Relative actions can have the same text and apply to a different
+            // state. For example, an unblocked attack still offers the same
+            // life loss when the other seat applies it without advancing the phase.
+            let revision = next.issue_id();
             next.proposals.push(Pending {
                 id,
                 revision,

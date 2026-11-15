@@ -1191,8 +1191,9 @@ rounds = [first strikers and double strikers], then [everything else and
 for each round, for each creature dealing damage in it that is still alive:
     an unblocked attacker deals its power to the player or planeswalker attacked
     a blocked attacker assigns lethal damage to its blockers in the order their
-        arrows were drawn (1 is lethal from a deathtouch source); with trample,
-        the remainder goes to the player or planeswalker attacked
+        arrows were drawn (1 is lethal from a deathtouch source)
+    any excess goes to the player or planeswalker attacked if the attacker has
+        trample, or to its last living blocker otherwise
     a blocker deals its power to the attacker it blocks
 after each round:
     a creature dies if its toughness is zero or less

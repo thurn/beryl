@@ -133,9 +133,9 @@ fn double_strike_deals_damage_twice_and_blocks_stay_in_effect() {
 }
 
 #[test]
-fn deathtouch_destroys_after_damage_and_lifelink_counts_only_damage_dealt() {
+fn blocked_lifelink_attacker_deals_its_full_power_to_its_blocker() {
     let mut combat = CombatTable::new();
-    let attacker = combat.put(HOST, "Vampire Nighthawk", Some((1, 2)));
+    let attacker = combat.put(HOST, "Vampire Nighthawk", Some((4, 2)));
     let blocker = combat.put(GUEST, "Grizzly Bears", Some((2, 5)));
     combat.arrow(HOST, attacker, Target::Player(GUEST));
     combat.arrow(GUEST, blocker, Target::Object(attacker));
@@ -144,13 +144,13 @@ fn deathtouch_destroys_after_damage_and_lifelink_counts_only_damage_dealt() {
             .offer()
             .lines
             .iter()
-            .any(|line| line.text == "Seat 1 gains 1")
+            .any(|line| line.text == "Seat 1 gains 4")
     );
     combat.accept();
 
     assert_eq!(combat.card(attacker).zone, Zone::Graveyard(HOST));
     assert_eq!(combat.card(blocker).zone, Zone::Graveyard(GUEST));
-    assert_eq!(combat.table.players[0].life, 21);
+    assert_eq!(combat.table.players[0].life, 24);
     assert_eq!(combat.table.players[1].life, 20);
 }
 
@@ -170,12 +170,12 @@ fn indestructible_survives_lethal_damage_and_deathtouch_with_damage_marked() {
     combat.arrow(GUEST, blocker, Target::Object(attacker));
 
     let offered = combat.offer();
-    assert_eq!(offered.lines[0].text, "Darksteel Myr takes 1");
+    assert_eq!(offered.lines[0].text, "Darksteel Myr takes 2");
     assert_eq!(offered.lines[0].whose, GUEST);
     combat.accept();
 
     assert_eq!(combat.card(blocker).zone, Zone::Battlefield);
-    assert_eq!(combat.card(blocker).damage, 2);
+    assert_eq!(combat.card(blocker).damage, 3);
 }
 
 #[test]

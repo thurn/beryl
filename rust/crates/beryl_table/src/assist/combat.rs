@@ -113,15 +113,24 @@ impl Attack {
         let attacker = &creatures[&self.attacker];
         if attacker.strikes(first) {
             let mut remaining = attacker.power;
-            for blocker in self.blockers.iter().map(|id| &creatures[id]) {
-                if !blocker.dead {
-                    let assigned = remaining.min(attacker.lethal_on(blocker));
-                    Hit::push(hits, attacker, Recipient::Creature(blocker.card), assigned);
-                    remaining -= assigned;
-                }
+            let trample = attacker.has("Trample");
+            let mut blockers = self
+                .blockers
+                .iter()
+                .map(|id| &creatures[id])
+                .filter(|blocker| !blocker.dead)
+                .peekable();
+            while let Some(blocker) = blockers.next() {
+                let assigned = if !trample && blockers.peek().is_none() {
+                    remaining
+                } else {
+                    remaining.min(attacker.lethal_on(blocker))
+                };
+                Hit::push(hits, attacker, Recipient::Creature(blocker.card), assigned);
+                remaining -= assigned;
             }
             // A creature stays blocked when its blockers die in the first round.
-            if self.blockers.is_empty() || attacker.has("Trample") {
+            if self.blockers.is_empty() || trample {
                 Hit::push(hits, attacker, Recipient::Attacked(self.target), remaining);
             }
         }
@@ -400,7 +409,9 @@ fn life_line(seat: Seat, verb: &str, amount: i32, change: i32) -> Line {
 }
 
 /// Computes the manual combat preview for seats that have enabled the assist.
-/// Damage is assigned in arrow order and capped at lethal on each blocker.
+/// For a blocked attacker with no trample, [CR 510.1c] says it “assigns all its
+/// combat damage” to its sole blocker or divides it among multiple blockers.
+/// The assist uses arrow order and gives the last living blocker the excess.
 /// Each round deals its assignments together ([CR 510.2], “dealt simultaneously”).
 /// First and double strike add “a second combat damage step” ([CR 510.4]).
 /// Deathtouch makes any nonzero assignment “lethal damage” ([CR 702.2c]) and
@@ -411,6 +422,7 @@ fn life_line(seat: Seat, verb: &str, amount: i32, change: i32) -> Line {
 /// gets “any excess damage” past the blockers ([CR 702.19b]). Lifelink causes
 /// the source's controller “to gain that much life” ([CR 702.15b]).
 ///
+/// [CR 510.1c]: https://yawgatog.com/resources/magic-rules/#R5101c
 /// [CR 510.2]: https://yawgatog.com/resources/magic-rules/#R5102
 /// [CR 510.4]: https://yawgatog.com/resources/magic-rules/#R5104
 /// [CR 702.2b]: https://yawgatog.com/resources/magic-rules/#R7022b

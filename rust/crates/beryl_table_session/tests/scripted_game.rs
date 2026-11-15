@@ -157,6 +157,11 @@ impl Game {
                 assert!(view.proposals.is_empty());
                 assert!(view.proposal_marks.is_none());
                 assert!(view.labels.is_empty());
+                assert!(
+                    view.card_commands
+                        .values()
+                        .all(|commands| commands.flows.is_empty() && commands.abilities.is_empty())
+                );
                 assert_eq!(
                     view.assists,
                     beryl_session::protocol::AssistsView::default()
@@ -454,6 +459,8 @@ fn a_host_and_guest_play_a_scripted_game_with_assists_off() {
         guest_events,
     } = connection;
     game.opening();
+    game.accept(HOST, Action::NextTurn {});
+    game.accept(GUEST, Action::NextTurn {});
     game.combat();
 
     let lose_life = game.check_blocked_undo();

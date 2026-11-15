@@ -145,6 +145,66 @@ fn assert_combat_batch_and_undo(game: &mut Game, proposed: &ProposalView) {
 }
 
 #[test]
+fn queued_combat_apply_is_stale_after_another_seat_applies_or_restores() {
+    let (mut game, _connection) = start_linked_game(false);
+    game.opening();
+    for seat in [HOST, GUEST] {
+        game.accept(
+            seat,
+            Action::SetAssist {
+                assist: Assist::Combat,
+                on: true,
+            },
+        );
+    }
+    game.accept(
+        HOST,
+        Action::Phase {
+            phase: Phase::DeclareAttackers,
+        },
+    );
+    game.arrow(HOST, "Grizzly Bears", Target::Player(GUEST));
+    let restore_point = game.table_view(HOST).log.last().unwrap().n;
+    let host = game.proposal(HOST).clone();
+    let advance = host.lines.last().unwrap();
+    game.answer(
+        HOST,
+        Answer::ProposalLine {
+            id: host.id,
+            line: advance.id,
+            on: false,
+        },
+        false,
+    );
+    let apply = |proposal: &ProposalView| Answer::ApplyProposal {
+        id: proposal.id,
+        revision: proposal.revision,
+    };
+
+    let guest = game.proposal(GUEST).clone();
+    let host_apply = apply(game.proposal(HOST));
+    game.answer(HOST, host_apply, true);
+    assert_eq!(game.proposal(GUEST).lines, guest.lines);
+    assert_eq!(game.guest.answer(apply(&guest)), Err(Refusal::Stale));
+    let (table, log) = replay(&game.path);
+    assert_eq!(table.players[usize::from(GUEST.0)].life, 18);
+
+    let after_apply = apply(game.proposal(GUEST));
+    game.accept(
+        GUEST,
+        Action::Undo {
+            entry: Some(log.entries().last().unwrap().n),
+        },
+    );
+    assert_eq!(game.guest.answer(after_apply), Err(Refusal::Stale));
+
+    let guest = game.proposal(GUEST).clone();
+    game.accept(HOST, Action::Rewind { to: restore_point });
+    assert_ne!(game.proposal(GUEST).id, guest.id);
+    assert_eq!(game.guest.answer(apply(&guest)), Err(Refusal::Stale));
+}
+
+#[test]
 fn only_the_eligible_seat_can_click_a_concession_nudge() {
     let (mut game, _connection) = start_linked_game(false);
     game.opening();

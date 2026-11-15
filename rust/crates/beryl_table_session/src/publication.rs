@@ -2,7 +2,7 @@
 
 use beryl_session::protocol::{Answer, ObjectId as Slot, PlayerView, TableAction, TableActionRefs};
 use beryl_table::state::{ObjectId, Proposal};
-use beryl_table::{Action, Chance, Entry, Log, Refusal, Seat, Table};
+use beryl_table::{Action, Chance, Change, Entry, Log, Refusal, Seat, Table};
 
 use crate::assists::{Assists, Suggestions};
 use crate::prompt::{Completion, OpenPrompt, Progress, PromptState};
@@ -168,7 +168,18 @@ impl SeatPublication {
             self.seat,
             self.slots.clone(),
         )?;
-        next.set_assists(self.assists.refresh(staged, self.seat, suggestions));
+        let assists = if entry
+            .changes
+            .iter()
+            .any(|change| matches!(change, Change::RestoreTable(_)))
+        {
+            self.assists
+                .without_suggestions()
+                .refresh(staged, self.seat, suggestions)
+        } else {
+            self.assists.refresh(staged, self.seat, suggestions)
+        };
+        next.set_assists(assists);
         Self::project_prompts(&mut next.view, next.seat, &next.slots, staged, prompts);
         let before = self.marks();
         let after = next.marks();
@@ -260,7 +271,7 @@ impl PublishedTable {
             seat,
             Slots::default(),
             &self.names,
-            &publication.assists,
+            &publication.assists.without_suggestions(),
         )?;
         SeatPublication::project_prompts(
             &mut reset.view,
