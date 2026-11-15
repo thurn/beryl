@@ -1,6 +1,6 @@
 //! The table at rest: the camera's fit, and where each zone's cards are placed.
 
-use beryl_protocol::protocol::{CardType, PlayerView, RowName, Side, ZoneName};
+use beryl_protocol::protocol::{CardType, ObjectId, PlayerView, RowName, Side, ZoneName};
 use beryl_scene::frame::{Frame, Place, Role};
 use beryl_scene::input::{Input, Insets, Size};
 use beryl_scene::table::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Window, place};
@@ -250,4 +250,29 @@ fn resizing_keeps_the_required_rectangle_in_view() {
             );
         }
     }
+}
+
+#[test]
+fn lands_stand_untapped_first_with_each_name_together_in_first_appearance_order() {
+    let mut builder = ViewBuilder::new();
+    for (name, tapped) in [
+        ("Island", true),
+        ("Plains", false),
+        ("Island", false),
+        ("Swamp", true),
+        ("Plains", false),
+    ] {
+        let land = builder.card(ZoneName::Battlefield, Side::You, name);
+        land.types = vec![CardType::Land];
+        land.tapped = tapped;
+    }
+    let view = builder.build();
+    let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
+    let placement = place(&view, &DESKTOP, &camera, &Default::default());
+    let mut slots: Vec<u16> = view.objects.iter().map(|object| object.slot.0).collect();
+    slots.sort_by(|&a, &b| {
+        let x = |slot: u16| placement.get(ObjectId(slot)).unwrap().pose.position.x;
+        x(a).total_cmp(&x(b))
+    });
+    assert_eq!(slots, [2, 1, 4, 0, 3]);
 }

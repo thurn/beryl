@@ -25,10 +25,10 @@
       "worst_frame_draw_calls": 1,
       "worst_frame_upload_bytes": 20480,
       "worst_frame_blended_area": 0.0,
-      "handle_allocations": 46846,
+      "handle_allocations": 36569,
       "frame_allocations": 0,
-      "worst_frame_instructions": 118248648,
-      "total_instructions": 169784440,
+      "worst_frame_instructions": 28304611,
+      "total_instructions": 78416643,
       "tolerance_percent": 1.0
     },
     "stress-1024": {
@@ -45,10 +45,10 @@
       "worst_frame_draw_calls": 1,
       "worst_frame_upload_bytes": 82000,
       "worst_frame_blended_area": 0.0,
-      "handle_allocations": 178729,
+      "handle_allocations": 135385,
       "frame_allocations": 0,
-      "worst_frame_instructions": 1975914996,
-      "total_instructions": 2205003868,
+      "worst_frame_instructions": 111561447,
+      "total_instructions": 299572268,
       "tolerance_percent": 1.0
     }
   },

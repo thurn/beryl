@@ -7,7 +7,7 @@ use beryl_protocol::protocol::{
 };
 use glam::{Quat, Vec2, Vec3};
 
-use super::rows::{Laid, RowRules, face_up, lay_row};
+use super::rows::{Laid, RowRules, by_name, face_up, lay_row};
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, HandData, LAYER, Layout};
 use crate::frame::Place;
 use crate::pose::Pose;
@@ -261,14 +261,7 @@ fn battlefield(
             .filter(|object| row_of(object) == *row)
             .collect();
         if *row == RowName::Lands {
-            let names: Vec<Option<&str>> = cards.iter().map(|o| o.name.as_deref()).collect();
-            let first = |object: &ObjectView| {
-                names
-                    .iter()
-                    .position(|name| *name == object.name.as_deref())
-                    .unwrap_or(0)
-            };
-            cards.sort_by_key(|object| (object.tapped, first(object)));
+            cards = lands_in_order(&cards);
         }
         let y = match side {
             Side::You => area.y,
@@ -301,6 +294,21 @@ fn battlefield(
             );
         }
     }
+}
+
+/// A lands row's cards in the order they stand: untapped first, and each name together, in the
+/// order the names first appear in `cards`. Otherwise the order of `cards` is kept.
+fn lands_in_order<'a>(cards: &[&'a ObjectView]) -> Vec<&'a ObjectView> {
+    // The index of the first card with each card's name.
+    let mut first = vec![0; cards.len()];
+    for run in by_name(cards).chunk_by(|&a, &b| cards[a].name == cards[b].name) {
+        for &index in run {
+            first[index] = run[0];
+        }
+    }
+    let mut order: Vec<usize> = (0..cards.len()).collect();
+    order.sort_by_key(|&index| (cards[index].tapped, first[index]));
+    order.into_iter().map(|index| cards[index]).collect()
 }
 
 /// The stack, raised above the table at its right: the bottom item first, each one above it

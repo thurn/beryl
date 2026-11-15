@@ -34,9 +34,8 @@ pub(super) fn lay_row<'a>(
     rules: &RowRules,
 ) -> Vec<Laid<'a>> {
     let room = area.right - area.left;
-    let alone: Vec<Vec<&ObjectView>> = cards.iter().map(|&card| vec![card]).collect();
-    let groups = if fits_overlapped(&alone, room, rules) {
-        alone
+    let groups = if fits_overlapped(cards, room, rules) {
+        cards.iter().map(|&card| vec![card]).collect()
     } else {
         piles(cards)
     };
@@ -75,11 +74,11 @@ pub(super) fn lay_row<'a>(
 }
 
 /// Whether every card, alone, fits the row with at least the least strip of each uncovered.
-fn fits_overlapped(groups: &[Vec<&ObjectView>], room: f32, rules: &RowRules) -> bool {
-    let Some(last) = groups.last() else {
+fn fits_overlapped(cards: &[&ObjectView], room: f32, rules: &RowRules) -> bool {
+    let Some(&last) = cards.last() else {
         return true;
     };
-    gaps(groups.len()) * rules.strip + group_width(last, rules) <= room
+    gaps(cards.len()) * rules.strip + card_width(last) <= room
 }
 
 /// The number of spaces between `count` things in a line.
@@ -146,21 +145,50 @@ pub(super) fn face_up(object: &ObjectView) -> bool {
 /// `cards` with identical permanents gathered into piles, each pile where its first card was.
 /// The pile's first card is the one with the lowest slot, which lies on top: the engine offers
 /// the lowest slot of interchangeable objects, so what a choice takes leaves from the top.
+///
+/// Only cards with the same name can be twins, so each card is compared only with the piles of
+/// its own name. A row of a thousand different names would otherwise compare every card with
+/// every pile.
 fn piles<'a>(cards: &[&'a ObjectView]) -> Vec<Vec<&'a ObjectView>> {
+    // The index in `cards` of the first card of each card's pile.
+    let mut tops: Vec<usize> = (0..cards.len()).collect();
+    let mut leaders: Vec<usize> = Vec::new();
+    for run in by_name(cards).chunk_by(|&a, &b| cards[a].name == cards[b].name) {
+        leaders.clear();
+        for &index in run {
+            let card = cards[index];
+            if !plain(card) {
+                continue;
+            }
+            match leaders.iter().find(|&&top| twins(cards[top], card)) {
+                Some(&top) => tops[index] = top,
+                None => leaders.push(index),
+            }
+        }
+    }
+    // Where each pile is in the returned list, by the index of its first card.
+    let mut position = vec![0; cards.len()];
     let mut groups: Vec<Vec<&ObjectView>> = Vec::new();
-    for &card in cards {
-        match groups
-            .iter_mut()
-            .find(|group| plain(card) && plain(group[0]) && twins(group[0], card))
-        {
-            Some(group) => group.push(card),
-            None => groups.push(vec![card]),
+    for (index, &card) in cards.iter().enumerate() {
+        if tops[index] == index {
+            position[index] = groups.len();
+            groups.push(vec![card]);
+        } else {
+            groups[position[tops[index]]].push(card);
         }
     }
     for group in &mut groups {
         group.sort_by_key(|object| object.slot.0);
     }
     groups
+}
+
+/// The indices of `cards` ordered by name, and within a name in the order of `cards`, so that
+/// each run of one name starts at that name's first card.
+pub(super) fn by_name(cards: &[&ObjectView]) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..cards.len()).collect();
+    order.sort_by(|&a, &b| cards[a].name.cmp(&cards[b].name));
+    order
 }
 
 /// Whether a permanent may share a pile: nothing on it or about it that a pile would hide.
