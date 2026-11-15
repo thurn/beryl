@@ -157,6 +157,12 @@ fn pays_otherwise<L: Layout>(
 /// [CR 601.3](https://yawgatog.com/resources/magic-rules/#R6013): "A player can begin to cast
 /// a spell only if a rule or effect allows that player to cast it and no rule or effect
 /// prohibits that player from casting it."
+#[expect(
+    clippy::inline_always,
+    reason = "with the escape casts a second caller, the compiler called it out of line from \
+              the priority decision's casts, which cost the rollout benchmark 0.25%"
+)]
+#[inline(always)]
 fn refused<L: Layout, const TARGETS: bool>(
     s: &State<L>,
     t: &GameTable,
@@ -273,6 +279,7 @@ pub(crate) fn refusal<L: Layout>(
 /// The cards `player` can cast at priority: their hand, the cards a permission names, and
 /// the cards in their graveyard that have escape. Their graveyard is looked at only while an
 /// effect reaches cards off the battlefield, which a game without one tests once.
+#[inline]
 fn cast_sources<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboard<L::Slot> {
     let mut cards = s.zone(ZoneKey::Of(player, Zone::Hand));
     for p in s.cast_permissions() {
@@ -281,11 +288,18 @@ fn cast_sources<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboar
         }
     }
     if s.reaches_elsewhere() {
-        cards |= s
-            .zone(ZoneKey::Of(player, Zone::Graveyard))
-            .filter(|slot| s.escapes(t, slot));
+        cards |= escaping(s, t, player);
     }
     cards
+}
+
+/// The cards in `player`'s graveyard that have escape. Out of line: only while an effect
+/// reaches cards off the battlefield.
+#[cold]
+#[inline(never)]
+fn escaping<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboard<L::Slot> {
+    s.zone(ZoneKey::Of(player, Zone::Graveyard))
+        .filter(|slot| s.escapes(t, slot))
 }
 
 /// How `player` may cast one card now, apart from its face's own options: for free during a
@@ -313,13 +327,14 @@ impl Ways {
             },
             From::Priority => {
                 let permission = casting::permission(s, player, slot);
-                let o = s.object(slot);
                 // CR 702.138a: escape "functions while the card with escape is in a player's
                 // graveyard", and lets its owner cast it from there.
-                let escape =
-                    o.zone() == Zone::Graveyard && o.owner() == player && s.escapes(t, slot);
+                let escape = s.reaches_elsewhere() && {
+                    let o = s.object(slot);
+                    o.zone() == Zone::Graveyard && o.owner() == player && s.escapes(t, slot)
+                };
                 Ways {
-                    plain: !escape || permission.is_some() || o.zone() == Zone::Hand,
+                    plain: !escape || permission.is_some() || s.object(slot).zone() == Zone::Hand,
                     alternative: permission.is_some_and(|p| p.terms.is_flashback()),
                     escape,
                 }
@@ -375,15 +390,43 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool>(
             if face.transformed {
                 continue;
             }
-            for costs in ways.option_sets(face) {
-                if refused(s, t, now, slot, f, costs, from).is_none() {
-                    out.push(Opt::Cast {
-                        slot,
-                        face: f,
-                        costs,
-                    })?;
+            if ways.plain {
+                for costs in option_sets(face, ways.alternative) {
+                    if refused(s, t, now, slot, f, costs, from).is_none() {
+                        out.push(Opt::Cast {
+                            slot,
+                            face: f,
+                            costs,
+                        })?;
+                    }
                 }
             }
+            if ways.escape {
+                escape_options(s, t, now, slot, f, from, out)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Appends the casts of face `face` of the card in `slot` with the escape an effect grants it
+/// ([`Castings::ESCAPE`]), with each set of the face's own options that pays none of its
+/// alternative costs. Out of line: only a card that has escape comes here.
+#[cold]
+#[inline(never)]
+fn escape_options<L: Layout, const TARGETS: bool>(
+    s: &State<L>,
+    t: &GameTable,
+    now: &Situation<L, TARGETS>,
+    slot: L::Slot,
+    face: FaceIx,
+    from: From,
+    out: &mut L::Queue<Opt<L>, 64>,
+) -> Result<(), Full> {
+    let def_face = s.copiable(slot).turned(face).face(t);
+    for costs in option_sets(def_face, true).map(Castings::with_escape) {
+        if refused(s, t, now, slot, face, costs, from).is_none() {
+            out.push(Opt::Cast { slot, face, costs })?;
         }
     }
     Ok(())
