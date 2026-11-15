@@ -67,6 +67,10 @@ pub fn deal<L: Layout>(
     if amount == 0 {
         return Ok(0);
     }
+    // Read before the damage: a player's lower life total may make a static ability's layer
+    // results stale (`Inputs::LIFE`), and lifelink uses the source as it was when it dealt the
+    // damage.
+    let lifelink = lifelink(game, source);
     let e = match to {
         Recipient::Player(p) => game.state.damage_player(source, p, amount, combat),
         Recipient::Permanent(r) => {
@@ -76,7 +80,6 @@ pub fn deal<L: Layout>(
             game.state.mark_damage(source, r, amount, combat)
         }
     };
-    let lifelink = lifelink(game, source);
     game.settle(e)?;
     if let Some(controller) = lifelink {
         life::gain(game, controller, amount)?;

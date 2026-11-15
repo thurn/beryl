@@ -10,6 +10,7 @@ use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::object::ObjectRef;
 use crate::state::State;
+use crate::static_ability::Inputs;
 
 /// Where a player is in the London mulligan (CR 103.5).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -150,7 +151,17 @@ impl<L: Layout> State<L> {
     #[must_use]
     pub fn gain_life(&mut self, player: Seat, amount: u8) -> Event<L> {
         self.player_mut(player).life += i16::from(amount);
+        self.life_changed();
         Event::LifeGain { player, amount }
+    }
+
+    /// Marks the layer results stale while a static ability on the battlefield compares a
+    /// life total ([`Inputs::LIFE`]).
+    #[inline]
+    pub(crate) fn life_changed(&mut self) {
+        if self.layer_inputs.contains(Inputs::LIFE) {
+            self.flags.derived_dirty = true;
+        }
     }
 
     /// Whether `player` can pay `amount` life
@@ -172,6 +183,7 @@ impl<L: Layout> State<L> {
     #[must_use]
     pub fn lose_life(&mut self, player: Seat, amount: u8) -> Event<L> {
         self.player_mut(player).life -= i16::from(amount);
+        self.life_changed();
         Event::LifeLoss { player, amount }
     }
 
@@ -189,6 +201,7 @@ impl<L: Layout> State<L> {
         combat: bool,
     ) -> Event<L> {
         self.player_mut(player).life -= i16::from(amount);
+        self.life_changed();
         Event::Damage {
             source,
             to: Recipient::Player(player),

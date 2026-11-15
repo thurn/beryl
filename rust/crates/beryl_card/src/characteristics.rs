@@ -119,6 +119,12 @@ bitset! {
         /// [CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a): "'Flash' means
         /// 'You may play this card any time you could cast an instant.'"
         FLASH = 1,
+        /// [CR 702.10b](https://yawgatog.com/resources/magic-rules/#R70210b): "If a creature
+        /// has haste, it can attack even if it hasn't been controlled by its controller
+        /// continuously since their most recent turn began."
+        /// [CR 702.10c](https://yawgatog.com/resources/magic-rules/#R70210c) says the same of
+        /// its activated abilities whose cost includes the tap symbol or the untap symbol.
+        HASTE = 2,
         /// [CR 702.19b](https://yawgatog.com/resources/magic-rules/#R70219b): "The
         /// controller of an attacking creature with trample first assigns damage to the
         /// creature(s) blocking it. Once all those blocking creatures are assigned lethal

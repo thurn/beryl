@@ -8,7 +8,7 @@
 //!   of each mana symbol to a unit of mana from the pool or a mana ability read off the cards.
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityKind, CostAction, CostPart, ManaCost, Types};
+use crate::card::{AbilityKind, CostAction, CostPart, Keywords, ManaCost, Types};
 use crate::event::Sink;
 use crate::filter::Evaluate;
 use crate::fixed::Fixed;
@@ -198,7 +198,10 @@ fn reference_units<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Opti
         if d.controller != player || o.is_tapped() {
             continue;
         }
-        if d.types.intersects(Types::CREATURE) && o.is_summoning_sick() {
+        if d.types.intersects(Types::CREATURE)
+            && o.is_summoning_sick()
+            && !d.keywords.contains(Keywords::HASTE)
+        {
             continue;
         }
         // The intrinsic mana abilities of its basic land types make one mana each (CR 305.6).

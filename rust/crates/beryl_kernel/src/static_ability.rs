@@ -19,8 +19,10 @@
 
 use beryl_card::{
     Amount, Behavior, CardDef, Condition, CounterKind, Effect, Face, Filter, LayerSpec,
-    Modification, Objects, Zone,
+    Modification, Objects, Players, Zone,
 };
+
+use crate::player_set::PlayerSet;
 
 use crate::layout::Layout;
 use crate::state::State;
@@ -47,6 +49,9 @@ impl Inputs {
     /// Whether a permanent is tapped, which a filter or an "as long as" asks
     /// ([`Filter::Tapped`]): "untapped creatures you control get +0/+2".
     pub const TAPPED: Inputs = Inputs(4);
+    /// A player's life total, which an "as long as" compares ([`Amount::Life`]): "as long
+    /// as an opponent has 10 or less life".
+    pub const LIFE: Inputs = Inputs(8);
 
     /// Both sets' inputs.
     #[inline]
@@ -71,6 +76,13 @@ impl Inputs {
                 .is_some_and(|condition| counts(condition, &|_| true))
             {
                 inputs = inputs.union(Inputs::COUNTERS);
+            }
+            if spec
+                .condition
+                .as_ref()
+                .is_some_and(|condition| condition_reads_life(condition))
+            {
+                inputs = inputs.union(Inputs::LIFE);
             }
             let graveyards = spec.modifications.iter().any(|m| match *m {
                 Modification::SetPower(amount) => reads_graveyards(amount),
@@ -125,6 +137,25 @@ fn condition_reads_tapped(condition: &Condition) -> bool {
         Condition::Paid(_)
         | Condition::Did
         | Condition::WonFlip
+        | Condition::EnteredThisTurn(_)
+        | Condition::DrewInDrawStep(_)
+        | Condition::Token(_) => false,
+    }
+}
+
+/// Whether `condition` compares a player's life total.
+fn condition_reads_life(condition: &Condition) -> bool {
+    let life = |amount: &Amount| matches!(counted(amount), Some(Counted::Life(_)));
+    match condition {
+        Condition::Compare(left, _, right) => life(left) || life(right),
+        Condition::Not(condition) => condition_reads_life(condition),
+        Condition::All(conditions) | Condition::Any(conditions) => {
+            conditions.iter().any(condition_reads_life)
+        }
+        Condition::Paid(_)
+        | Condition::Did
+        | Condition::WonFlip
+        | Condition::Is(..)
         | Condition::EnteredThisTurn(_)
         | Condition::DrewInDrawStep(_)
         | Condition::Token(_) => false,
@@ -475,6 +506,10 @@ enum Counted {
     /// The number of permanents the filter accepts, read for the controller of the
     /// permanent with the ability.
     Permanents(Filter),
+    /// The life total of the controller of the permanent with the ability ("you"), or the
+    /// total of their opponents' ("each opponent", which in a two-player game is the one
+    /// opponent's).
+    Life(Players),
 }
 
 /// `amount` as a static ability's condition may compare it, or `None` for any other amount.
@@ -486,6 +521,9 @@ fn counted(amount: &Amount) -> Option<Counted> {
             zone: Zone::Battlefield,
             filter,
         }) if read_by_the_layers(*filter) => Some(Counted::Permanents(*filter)),
+        Amount::Life(players @ (Players::You | Players::EachOpponent)) => {
+            Some(Counted::Life(*players))
+        }
         _ => None,
     }
 }
@@ -533,6 +571,20 @@ pub fn holds<L: Layout>(
         Some(Counted::Counters(kind)) => i32::from(s.counters_of(slot, kind)),
         Some(Counted::Permanents(filter)) => {
             i32::try_from(results.count(filter)).unwrap_or(i32::MAX)
+        }
+        // CR 119.1: a player's life total, read from the state as the layers apply.
+        Some(Counted::Life(players)) => {
+            // The layers have not run yet, so this is the controller before layer 2: a
+            // permanent whose control another effect changes reads its "you" as its owner's
+            // side until then.
+            let controller = s.base_controller(slot);
+            let who = match players {
+                Players::You => PlayerSet::only(controller),
+                _ => s.opponents_of(controller),
+            };
+            s.players_in_seat_order(who)
+                .map(|p| i32::from(s.player(p).life()))
+                .sum()
         }
         None => unreachable!("the card table refuses a static ability that compares this"),
     };

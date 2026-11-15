@@ -16,6 +16,21 @@ const CUSTOM: &[&str] = &[];
 /// a generated scenario exercises fails too, so the list stays current.
 const UNREACHED: &[(&str, &str)] = &[
     (
+        "Bloodghast: ability 0 (Static)",
+        "it stops the card blocking, and a generated scenario casts the card and never has an \
+         opponent attack; the card's hand-written scenarios have one attack into it",
+    ),
+    (
+        "Bloodghast: ability 1 (Static)",
+        "it gives haste while an opponent has 10 or less life, and a generated scenario leaves \
+         every life total at 20; the card's hand-written scenarios lower it and attack",
+    ),
+    (
+        "Bloodghast: ability 2 (Triggered)",
+        "it works only in a graveyard, and a generated scenario casts the card from a hand; \
+         the card's hand-written scenarios play a land with it in a graveyard",
+    ),
+    (
         "Life from the Loam: ability 1 (Replacement)",
         "dredge works from a graveyard, and a generated scenario casts the card from a hand and \
          draws nothing after; the card's hand-written scenarios dredge in the draw step and \

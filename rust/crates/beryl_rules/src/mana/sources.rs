@@ -2,7 +2,7 @@
 //! interchangeable permanents.
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, Face, Types, Words};
+use crate::card::{Ability, Face, Keywords, Types, Words};
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::state::{Derived, State};
@@ -111,7 +111,11 @@ pub(super) fn source<L: Layout>(
     }
     // CR 302.6: a creature's {T} abilities need it under its controller's control since their
     // most recent turn began.
-    if d.types.intersects(Types::CREATURE) && o.is_summoning_sick() {
+    // CR 702.10c: haste lifts that.
+    if d.types.intersects(Types::CREATURE)
+        && o.is_summoning_sick()
+        && !d.keywords.contains(Keywords::HASTE)
+    {
         return None;
     }
     if let ManaFace::Plain {

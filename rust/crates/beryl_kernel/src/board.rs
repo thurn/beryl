@@ -369,6 +369,7 @@ impl<L: Layout> Board<'_, L> {
 
     pub fn set_life(&mut self, player: Seat, life: i16) {
         self.0.player_mut(player).life = life;
+        self.0.life_changed();
     }
 
     /// Puts `pool` in a player's mana pool as its unspent mana (CR 106.4).

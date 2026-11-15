@@ -65,13 +65,16 @@ fn blockers_of<L: Layout>(s: &State<L>, attacker: L::Slot) -> Bitboard<L::Slot> 
 /// [CR 508.1a](https://yawgatog.com/resources/magic-rules/#R5081a): "The active player chooses
 /// which creatures that they control, if any, will attack. The chosen creatures must be untapped,
 /// they can't also be battles, and each one must either have haste or have been controlled by the
-/// active player continuously since the turn began." None of the cards has haste.
+/// active player continuously since the turn began."
+/// [CR 702.10b](https://yawgatog.com/resources/magic-rules/#R70210b): "If a creature has haste,
+/// it can attack even if it hasn't been controlled by its controller continuously since their
+/// most recent turn began."
 fn may_attack<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
     let o = s.object(slot);
     s.controller(slot) == s.turn().active()
         && is_creature(s, slot)
         && !o.is_tapped()
-        && !o.is_summoning_sick()
+        && (!o.is_summoning_sick() || has(s, slot, Keywords::HASTE))
         && !o.is_attacking()
 }
 

@@ -5,7 +5,8 @@ use std::cell::{Cell, OnceCell};
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, Castings, CostAction, Face, FaceIx, ObjectAbility, Timing, Types,
+    Ability, AbilityKind, Castings, CostAction, Face, FaceIx, Keywords, ObjectAbility, Timing,
+    Types,
 };
 use crate::casting;
 use crate::decision::{Opt, Refusal};
@@ -332,7 +333,9 @@ fn activatable<L: Layout, const TARGETS: bool>(
         // cost can't be activated unless the creature has been under its controller's control
         // since the start of their most recent turn."
         if o.is_tapped()
-            || (s.derived(slot).types.intersects(Types::CREATURE) && o.is_summoning_sick())
+            || (s.derived(slot).types.intersects(Types::CREATURE)
+                && o.is_summoning_sick()
+                && !s.derived(slot).keywords.contains(Keywords::HASTE))
         {
             return false;
         }
