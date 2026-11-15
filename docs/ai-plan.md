@@ -35,11 +35,11 @@ Two numbers measure progress, and each has a target:
 
 | Measure      | How it is counted                                                                 | Now          | Target       |
 | ------------ | --------------------------------------------------------------------------------- | ------------ | ------------ |
-| Blunder rate | Suite runs passed, of 400 (20 entries, 3M and 30M, 10 seeds each)                 | 315 of 400   | 380 of 400   |
+| Blunder rate | Suite runs passed, of 400 (20 entries, 3M and 30M, 10 seeds each)                 | 351 of 400   | 380 of 400   |
 |              | New suite entries per human game, from the app's games ledger                     | 0 in 9 games | under 1 in 5 |
 | Strength     | Elo against the reference agent (§3) at 10M steps, over 400 games (`--bar audit`) | 0            | +50          |
 
-The suite total comes from the rung 1 comparison in [the ladder](ladder.md).
+The suite total comes from the rung 2 comparison in [the ladder](ladder.md).
 Nine human games are too few to say the second target is met. No entries in nine
 games is still consistent with one game in four.
 
@@ -108,10 +108,10 @@ Twelve rungs were tried ([ladder.md](ladder.md)). Three reached a match:
   was scored as the average of 11 follow-up plays, among them a pass rated 0.48.
   An attack is overrated for the same reason: it hands the opponent a wide
   choice of blocks, most of them bad.
-- **The override test cannot see that bias.** `guarded` lets the search overrule
-  the default on a lead of 0.02 and two standard errors across the trees. The
-  bias is the same in every tree, so it passes. That is why the expert alone
-  gets 18 entries right and the search anchored to the expert gets 8.
+- **Comparing means across trees misses that bias.** The old override test let
+  the search overrule the default on a lead of 0.02 and two standard errors
+  across the trees. The bias was the same in every tree, so it passed. The
+  expert alone got 18 entries right and the search anchored to the expert got 8.
 - **`order` could not help.** It changes which child is tried first, which does
   not matter when every child ends up visited equally.
 
@@ -151,17 +151,17 @@ Twelve rungs were tried ([ladder.md](ladder.md)). Three reached a match:
 
 The **champion** is the app's Deep Searcher (`beryl_search::DEEP_SEARCHER`), and
 a promotion is a change to it. Today it is
-`pimc72/hidden/rollout/tuned/anchor+guard+hold+combat+sure@30M`:
+`pimc72/hidden/rollout/tuned/anchor+guard+hold+combat+sure+paired@30M`:
 
-| Axis      | Setting                                                                                                       |
-| --------- | ------------------------------------------------------------------------------------------------------------- |
-| Method    | PIMC, 72 worlds dealt from what it can see, a tree each                                                       |
-| Sight     | Hidden                                                                                                        |
-| Leaf      | Softmax rollout to the end of the game, temperature 10                                                        |
-| Knowledge | Hand-tuned card values (`Knowledge::Tuned`)                                                                   |
-| Options   | `anchor+guard` checks overrides, `hold` delays plays, `combat` plans combat, and `sure` answers free choices. |
-| Scores    | Turn discount 0.98: win sooner, lose later                                                                    |
-| Budget    | 30M engine steps a decision, on every core                                                                    |
+| Axis      | Setting                                                                                                                                   |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Method    | PIMC, 72 worlds dealt from what it can see, a tree each                                                                                   |
+| Sight     | Hidden                                                                                                                                    |
+| Leaf      | Softmax rollout to the end of the game, temperature 10                                                                                    |
+| Knowledge | Hand-tuned card values (`Knowledge::Tuned`)                                                                                               |
+| Options   | `anchor+guard+paired` checks overrides with paired rollouts. `hold` delays plays, `combat` plans combat, and `sure` answers free choices. |
+| Scores    | Turn discount 0.98: win sooner, lose later                                                                                                |
+| Budget    | 30M engine steps a decision, on every core                                                                                                |
 
 Every change is a named part of the family's name, so any past champion can be
 played again from the current build.
@@ -307,7 +307,7 @@ A ledger of every blunder a human has caught: `data/blunders.json`.
   a board (`data/blunders/*.json`) or retired with a note. The suite fails on it
   until then.
 
-The champion column shows runs passed of 20 in the rung 1 comparison. The best
+The champion column shows runs passed of 20 in the rung 2 comparison. The best
 measured column records pass counts out of 10 from the gates of 2026-11-12 and
 2026-11-13. The Policy column shows one run per entry with
 `greedy+hold+waste+combat`. The last column names the rungs of §6 that claim
@@ -322,18 +322,18 @@ each entry.
 | `decline-second-teferi-untap`      | right  | right  | 20/20    |                 | `sure` pins it    |
 | `snapcaster-sorcery-speed`         | wrong  | right  | 20/20    | 10 with `hold`  | `hold`            |
 | `evoke-subtlety-no-target`         | wrong  | right  | 17/20    | 10 with `waste` | `waste`           |
-| `staff-in-upkeep`                  | wrong  | right  | 18/20    | 10 with `hold`  | `hold`            |
-| `staff-before-combat-damage`       | wrong  | right  | 19/20    | 9 with `hold`   | `hold`            |
+| `staff-in-upkeep`                  | wrong  | right  | 20/20    | 10 with `hold`  | `hold`            |
+| `staff-before-combat-damage`       | wrong  | right  | 20/20    | 9 with `hold`   | `hold`            |
 | `subtlety-before-own-draw`         | wrong  | right  | 20/20    | 10 with `hold`  | `hold`            |
-| `jace-loots-before-draw`           | wrong  | right  | 19/20    | 9 with `hold`   | `hold`            |
+| `jace-loots-before-draw`           | wrong  | right  | 20/20    | 9 with `hold`   | `hold`            |
 | `discard-emperor-over-spare-crypt` | right  | right  | 20/20    | 10 with `hold`  | `hold`, `paired`  |
 | `evoke-subtlety-empty-stack-hunt`  | right  | right  | 20/20    | 10 with `hold`  | `hold`, `waste`   |
-| `beza-trinket-into-blockers`       | wrong  | right  | 14/20    | 8 with `combat` | `combat`          |
+| `beza-trinket-into-blockers`       | wrong  | right  | 20/20    | 8 with `combat` | `combat`          |
 | `manifest-into-samurai`            | right  | right  | 20/20    | 8 with `combat` | `combat`          |
-| `subtlety-main-phase-empty-stack`  | right  | right  | 10/20    | 4               | `paired`          |
-| `spirits-stay-home`                | right  | right  | 9/20     | 5 with `hold`   | `paired`, `first` |
+| `subtlety-main-phase-empty-stack`  | right  | right  | 13/20    | 4               | `paired`          |
+| `spirits-stay-home`                | right  | right  | 20/20    | 5 with `hold`   | `paired`, `first` |
 | `skip-teferi-plus-one`             | right  | right  | 1/20     | 4 with `turn72` | `first`           |
-| `samurai-into-jace`                | wrong  | right  | 8/20     | 4 with `hold`   | `hold`, `paired`  |
+| `samurai-into-jace`                | wrong  | right  | 20/20    | 4 with `hold`   | `hold`, `paired`  |
 | `spare-jace-wielder`               | wrong  | wrong  | 0/20     | 4 with `hold`   | `walker`          |
 
 ## 6. The rungs
@@ -410,9 +410,9 @@ both players.
 
 ### 6.3 Rung 2: `paired`, the override decided by paired rollouts
 
-Today an anchored search spends the last quarter of its work on its own choice
-and the default, inside the trees, and compares their means (`check`,
-`AnchorCheck`). With `paired` set, that quarter is spent outside the trees:
+The original anchor spends the last quarter of its work on its own choice and
+the default inside the trees and compares their means (`check`, `AnchorCheck`).
+The champion uses that quarter to play pairs outside the trees.
 
 1. Deal a world from what the player sees, as a tree's root does.
 2. On two copies of it, play the search's choice on one and the default on the

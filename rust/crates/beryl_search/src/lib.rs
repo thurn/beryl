@@ -376,7 +376,7 @@ const DEEP_SEER: Family = Family {
     },
 };
 
-/// `pimc72/hidden/rollout/tuned/anchor+guard+hold+combat+sure@30M`.
+/// `pimc72/hidden/rollout/tuned/anchor+guard+hold+combat+sure+paired@30M`.
 /// It deals 72 worlds using the searcher's visible information and spends up to 30M engine
 /// steps a decision across all cores, regardless of the caller's `budget`.
 ///
@@ -388,8 +388,9 @@ fn deep_searcher(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent
 
 /// The Deep Searcher's family, the ladder's champion, which `beryl_cli ladder` plays at the
 /// proxy budget unless told otherwise.
-/// The previous champion added `guard` after scoring 52.4% over 574 games at 3M steps.
-/// This family added `sure`, `hold` and `combat` after scoring 53.3% over 430 games at 3M steps.
+/// The ladder added `guard` after a score of 52.4% over 574 games at 3M steps.
+/// It added `sure`, `hold` and `combat` after a score of 53.3% over 430 games at 3M steps.
+/// This family added `paired` after scoring 55.0% over 318 games at 3M steps.
 pub const DEEP_SEARCHER: Family = Family {
     method: Method::Pimc { worlds: 72 },
     sight: Sight::Hidden,
@@ -406,7 +407,7 @@ pub const DEEP_SEARCHER: Family = Family {
         combat: true,
         order: false,
         sure: true,
-        paired: false,
+        paired: true,
         first: false,
         walker: false,
         prior: false,
