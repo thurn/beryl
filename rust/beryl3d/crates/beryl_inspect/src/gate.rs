@@ -4,26 +4,35 @@
 //! `Client::frame`, and the instruction-count gate sends the frames `rank` picks through
 //! Callgrind.
 //!
-//! A board is played as a host would play it at 60 frames a second: the first view and
-//! `REST_FRAMES` frames at rest, then the next view, with frames until its script has played
-//! out. Nothing reads a clock, so every playback makes the same calls and gets the same frames.
+//! A board is played as a host would play it at 60 frames a second. Its first view is handed
+//! over before the first frame. Each later view waits until `REST_FRAMES` frames have passed
+//! since the one before and the client has nothing left to animate, so a stress board's second
+//! view comes 30 frames after its first, and a recorded game's views each play out before the
+//! next arrives. A recorded view that the session follows unasked (`plays_on`) arrives with the
+//! views after it, as the test driver hands them over. Nothing reads a clock, so every playback
+//! makes the same calls and gets the same frames.
 
 use beryl_protocol::GameUpdate;
 use beryl_protocol::card_records::CardRecords;
-use beryl_protocol::protocol::SessionId;
+use beryl_protocol::protocol::{SessionId, Side};
+use beryl_scene::driver::plays_on;
 use beryl_scene::frame::{Frame, Wake, Work};
 use beryl_scene::input::{AssetReady, Input, Insets, Size};
 use beryl_scene::{Client, Config};
 
+use crate::pages::recording;
 use crate::stress::stress;
 
-/// The boards the frame gates hold, in the order they are played.
-pub const BOARDS: [&str; 2] = ["stress-255", "stress-1024"];
+/// The boards the frame gates hold, in the order they are played: the two stress boards, and
+/// two recorded games from the first seat. `verbs-zones` moves cards between every zone, and
+/// `pay-default` opens prompts, so that its worst frame includes one in which `handle` lays out
+/// a prompt bar and its text.
+pub const BOARDS: [&str; 4] = ["stress-255", "stress-1024", "verbs-zones", "pay-default"];
 
 /// The time between two frames, in nanoseconds: 60 frames a second.
 pub const FRAME_NANOS: u64 = 16_666_667;
 
-/// How many frames a board is drawn at rest before its next view arrives.
+/// How many frames after a view the next one may arrive, at the soonest.
 pub const REST_FRAMES: usize = 30;
 
 /// The most frames a board's script may take to play out. A script that takes longer has
@@ -33,11 +42,12 @@ const MOST_FRAMES: usize = 1200;
 /// How many frames `rank` returns.
 pub const RANKED: usize = 8;
 
-/// The frames whose instructions the instruction-count gate counts one by one to check that
-/// `rank` picks the most expensive (docs/beryl-3d.md, "Finding the worst frame"): the last frames
-/// at rest, the first frames of the flight, which the work counters rank highest, and the flight
-/// frames after them.
-pub const STRETCH: std::ops::Range<usize> = REST_FRAMES - 4..REST_FRAMES + RANKED + 4;
+/// How many frames the instruction-count gate counts one by one, in `stretch`, to check that
+/// `rank` picks the most expensive.
+pub const STRETCH_FRAMES: usize = RANKED + 8;
+
+/// How many frames before the top-ranked one its stretch starts.
+const STRETCH_BEFORE: usize = 4;
 
 /// The window the boards are drawn in: a 1440 by 900 point desktop window on a display of two
 /// pixels per point.
@@ -56,9 +66,9 @@ pub const TARGET: [u32; 2] = [
 /// What a frame was doing, for naming it in a gate's report.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Phase {
-    /// The board at rest, before its next view.
+    /// The board at rest, waiting for its next view.
     Rest,
-    /// From the frame that takes the next view until its script has played out.
+    /// A frame that takes a view, or one drawn while a script plays.
     Flight,
 }
 
@@ -85,8 +95,9 @@ pub struct Moment {
 /// A gated board being played: a client and the inputs it is handed before each frame.
 pub struct Playback {
     client: Client,
-    /// The views still to hand over, each with the frame before which it is handed.
-    views: Vec<(usize, GameUpdate)>,
+    /// The views still to hand over, each group handed over before one frame, last group
+    /// first.
+    views: Vec<Vec<GameUpdate>>,
     /// The index of the next frame.
     next: usize,
     /// The frame before which the latest view was handed over.
@@ -96,32 +107,51 @@ pub struct Playback {
 impl Playback {
     /// Starts playing the gated board called `name`, or returns `None` for a name that is not
     /// one of `BOARDS`.
+    ///
+    /// # Panics
+    ///
+    /// When a recorded board cannot be read from the recordings pack.
     #[must_use]
     pub fn new(name: &str) -> Option<Self> {
-        let board = stress(name)?;
-        let mut views: Vec<(usize, GameUpdate)> = board
-            .views
-            .into_iter()
-            .enumerate()
-            .map(|(index, view)| {
-                (
-                    index * REST_FRAMES,
-                    GameUpdate {
-                        session: SessionId(1),
-                        view,
-                    },
-                )
-            })
-            .collect();
-        // The stress boards' permanents have names of their own, which no card in the store
-        // has, so their records hold only the card back and the nameless token's art.
-        let records = CardRecords::none();
+        Self::in_window(name, WINDOW, SCALE)
+    }
+
+    /// `new`, in a window of `window` points at `scale` pixels per point instead of the gates'
+    /// own, for timing frames at another size.
+    ///
+    /// # Panics
+    ///
+    /// When a recorded board cannot be read from the recordings pack.
+    #[must_use]
+    pub fn in_window(name: &str, window: Size, scale: f32) -> Option<Self> {
+        if !BOARDS.contains(&name) {
+            return None;
+        }
+        let (mut views, records) = match stress(name) {
+            Some(board) => {
+                let views = board
+                    .views
+                    .into_iter()
+                    .map(|view| {
+                        vec![GameUpdate {
+                            session: SessionId(1),
+                            view,
+                        }]
+                    })
+                    .collect();
+                // The stress boards' permanents have names of their own, which no card in the
+                // store has, so their records hold only the card back and the nameless token's
+                // art.
+                (views, CardRecords::none())
+            }
+            None => recorded(name),
+        };
         // Handed over from the back, so that taking one never moves the rest.
         views.reverse();
         let mut client = Client::new(Config::LARGEST);
         client.handle(Input::Surface {
-            size: WINDOW,
-            scale: SCALE,
+            size: window,
+            scale,
             safe_area: Insets::default(),
         });
         // As a host whose asset workers had every face ready before the first frame, so that
@@ -139,19 +169,30 @@ impl Playback {
         })
     }
 
+    /// Whether the next group of views is handed over before the next frame: the first at
+    /// once, and each later one when `REST_FRAMES` frames have passed since the one before and
+    /// the client has nothing left to animate.
+    fn due(&self) -> bool {
+        if self.views.is_empty() {
+            return false;
+        }
+        match self.last_view {
+            None => true,
+            Some(last) => self.next >= last + REST_FRAMES && self.client.wake() == Wake::Never,
+        }
+    }
+
     /// The moment of the next frame, or `None` when every view has been handed over and the
     /// client has nothing left to animate.
     ///
     /// # Panics
     ///
-    /// When the playback has gone `MOST_FRAMES` frames past its last view without its script
+    /// When the playback has gone `MOST_FRAMES` frames past its latest view without its script
     /// ending.
     #[must_use]
     pub fn moment(&self) -> Option<Moment> {
-        if self.views.is_empty()
-            && let Some(last) = self.last_view
-        {
-            if self.next > last && self.client.wake() == Wake::Never {
+        if let Some(last) = self.last_view {
+            if self.views.is_empty() && self.next > last && self.client.wake() == Wake::Never {
                 return None;
             }
             assert!(
@@ -159,10 +200,10 @@ impl Playback {
                 "the script had not played out after {MOST_FRAMES} frames"
             );
         }
-        let phase = if self.next < REST_FRAMES {
-            Phase::Rest
-        } else {
+        let phase = if self.due() || self.client.wake() != Wake::Never {
             Phase::Flight
+        } else {
+            Phase::Rest
         };
         Some(Moment {
             frame: self.next,
@@ -174,11 +215,12 @@ impl Playback {
     /// Hands the client the inputs due before the next frame. This and `frame` together are one
     /// frame of a host's work.
     pub fn handle(&mut self) {
-        while let Some((at, _)) = self.views.last()
-            && *at <= self.next
-        {
-            let (at, update) = self.views.pop().expect("a view is waiting");
-            self.last_view = Some(at);
+        if !self.due() {
+            return;
+        }
+        let group = self.views.pop().expect("a view is waiting");
+        self.last_view = Some(self.next);
+        for update in group {
             self.client.handle(Input::Update(Box::new(update)));
         }
     }
@@ -189,6 +231,31 @@ impl Playback {
         self.next += 1;
         self.client.frame(now)
     }
+}
+
+/// The recorded game `name`'s views from the first seat, in groups of those handed over
+/// together, and the card records it starts with.
+///
+/// # Panics
+///
+/// When the recording cannot be read, as `recording` says why.
+fn recorded(name: &str) -> (Vec<Vec<GameUpdate>>, CardRecords) {
+    let played = recording(name, Side::You).unwrap_or_else(|why| panic!("{name}: {why}"));
+    let records = played
+        .card_records()
+        .unwrap_or_else(|why| panic!("{name}: {why}"))
+        .unwrap_or_else(CardRecords::none);
+    let mut groups: Vec<Vec<GameUpdate>> = Vec::new();
+    let mut open = false;
+    for update in played.views().unwrap_or_else(|why| panic!("{name}: {why}")) {
+        let follows = plays_on(&update);
+        match groups.last_mut() {
+            Some(group) if open => group.push(update),
+            _ => groups.push(vec![update]),
+        }
+        open = follows;
+    }
+    (groups, records)
 }
 
 /// Makes one frame of `playback`'s host work: hands over the inputs due and draws the frame.
@@ -294,6 +361,18 @@ pub fn rank(name: &str) -> Option<[usize; RANKED]> {
         *place = frame;
     }
     Some(ranked)
+}
+
+/// The frames of the board called `name` whose instructions the instruction-count gate counts
+/// one by one, to check that `rank` picks the most expensive (docs/beryl-3d.md, "Finding the
+/// worst frame"): `STRETCH_FRAMES` frames from a few before the frame `rank` puts first. On a
+/// stress board these are the last frames at rest, the first frames of the flight, which the
+/// work counters rank highest, and the flight frames after them. Returns `None` for a name that
+/// is not one of `BOARDS`.
+#[must_use]
+pub fn stretch(name: &str) -> Option<std::ops::Range<usize>> {
+    let start = rank(name)?[0].saturating_sub(STRETCH_BEFORE);
+    Some(start..start + STRETCH_FRAMES)
 }
 
 /// The sum of a frame's work counters.

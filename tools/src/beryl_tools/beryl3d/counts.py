@@ -18,7 +18,8 @@ hand, when the work itself changed or a compiler or dependency upgrade moved the
 old and new numbers in the commit body (rust/beryl3d/AGENTS.md).
 
 The machine mounts only the main checkout, and the sweep checks out its commit elsewhere, so
-the sources the benchmark needs are sent into the machine (`source.py`).
+the sources the benchmark needs are sent into the machine (`source.py`), with the recordings
+pack the recorded boards are read from.
 """
 
 from __future__ import annotations
@@ -182,7 +183,7 @@ def script(boards: list[str], runner: str) -> str:
         *filters,
     ]
     work = f"""{source.take_in_script()}cd {source.SOURCE}/rust/beryl3d
-CARGO_TARGET_DIR={TARGET} GUNGRAUN_HOME={HOME} {shlex.join(cargo)}
+CARGO_TARGET_DIR={TARGET} GUNGRAUN_HOME={HOME} BERYL_CACHE="$HOME/{source.VM_CACHE}" {shlex.join(cargo)}
 """
     return vm.provision_script(bench.toolchain(), runner) + bench.locked(work)
 
@@ -200,6 +201,9 @@ def measure(boards: list[str]) -> str | None:
     runner = vm.runner_version()
     if runner is None:
         bench.log("no gungraun in rust/beryl3d/Cargo.lock")
+        return None
+    if not source.send_pack():
+        bench.log("the recordings pack could not be built or sent into the machine")
         return None
     run = source.run_with_sources(script(boards, runner))
     if run is None or run.returncode != 0:

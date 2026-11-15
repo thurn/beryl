@@ -14,7 +14,7 @@ import os
 import subprocess
 
 from .. import paths as repo_paths
-from . import vm
+from . import paths, vm
 
 # What the builds read, relative to the checkout.
 SOURCES: tuple[str, ...] = (
@@ -27,6 +27,9 @@ SOURCES: tuple[str, ...] = (
 # In the machine: where the sources arrive, and the copy the gates build from.
 INCOMING = "$HOME/b3d-incoming"
 SOURCE = "$HOME/b3d-source"
+# Where in the machine's home the recordings pack arrives (`send_pack`), as `BERYL_CACHE` for
+# the programs that read it.
+VM_CACHE = "b3d-cache"
 
 
 def sources() -> list[str]:
@@ -121,3 +124,41 @@ def run_with_sources(script: str) -> subprocess.CompletedProcess[str] | None:
     if tar.returncode != 0:
         return None
     return run
+
+
+def send_pack() -> bool:
+    """Builds the recordings pack for the present sources on this machine, where the engine
+    that plays them builds, and copies it into the VM's `BERYL_CACHE`, [`VM_CACHE`]. Building it
+    in the VM would compile the engine, which exceeds the machine's 4 GiB. The pack is named for
+    a hash of the sources, not of the checkout's path, so a program built in the VM from the
+    sources [`run_with_sources`] sends finds it."""
+    from .cli import (
+        program,
+        shared_build,
+    )  # cli imports gate, which imports this module.
+
+    if shared_build() != 0:
+        return False
+    built = subprocess.run(
+        [str(program("record"))],
+        cwd=paths.WORKSPACE,
+        check=False,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    lines = built.stdout.split()
+    if built.returncode != 0 or not lines:
+        return False
+    directory = f"{VM_CACHE}/b3d"
+    make = [
+        "limactl",
+        "shell",
+        "--workdir",
+        "/",
+        vm.NAME,
+        "bash",
+        "-c",
+        f'mkdir -p "$HOME/{directory}"',
+    ]
+    copy = ["limactl", "copy", lines[-1], f"{vm.NAME}:{directory}/"]
+    return all(subprocess.run(cmd, check=False).returncode == 0 for cmd in (make, copy))

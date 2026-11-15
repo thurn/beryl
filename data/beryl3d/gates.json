@@ -50,13 +50,55 @@
       "worst_frame_instructions": 13282629,
       "total_instructions": 200453170,
       "tolerance_percent": 1.0
+    },
+    "verbs-zones": {
+      "worst_frame_elements": 516,
+      "total_elements": 426281,
+      "worst_frame_segments": 22,
+      "total_segments": 15007,
+      "worst_frame_records": 48,
+      "total_records": 48690,
+      "worst_frame_layout_nodes": 5,
+      "total_layout_nodes": 35,
+      "worst_frame_text_runs": 2,
+      "total_text_runs": 12,
+      "worst_frame_draw_calls": 2,
+      "worst_frame_upload_bytes": 3840,
+      "worst_frame_blended_area": 0.0415,
+      "handle_allocations": 11508,
+      "frame_allocations": 0,
+      "worst_frame_instructions": 955192,
+      "total_instructions": 101327683,
+      "tolerance_percent": 1.0
+    },
+    "pay-default": {
+      "worst_frame_elements": 269,
+      "total_elements": 22428,
+      "worst_frame_segments": 2,
+      "total_segments": 92,
+      "worst_frame_records": 27,
+      "total_records": 2093,
+      "worst_frame_layout_nodes": 4,
+      "total_layout_nodes": 12,
+      "worst_frame_text_runs": 2,
+      "total_text_runs": 5,
+      "worst_frame_draw_calls": 2,
+      "worst_frame_upload_bytes": 2160,
+      "worst_frame_blended_area": 0.0287,
+      "handle_allocations": 862,
+      "frame_allocations": 0,
+      "worst_frame_instructions": 357443,
+      "total_instructions": 4629334,
+      "tolerance_percent": 1.0
     }
   },
   "tiers": {
     "baseline": {
       "fragments": {
         "stress-255": 1.0,
-        "stress-1024": 1.0
+        "stress-1024": 1.0,
+        "verbs-zones": 1.0,
+        "pay-default": 1.028667
       }
     }
   },

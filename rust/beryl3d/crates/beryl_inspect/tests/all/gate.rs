@@ -1,6 +1,7 @@
 //! The frames `rank` picks for the instruction-count gate, and a playback's shape.
 
-use beryl_inspect::gate::{BOARDS, Counted, Phase, REST_FRAMES, STRETCH, play, rank};
+use beryl_inspect::gate::{BOARDS, Counted, Phase, REST_FRAMES, play, rank, stretch};
+use beryl_inspect::stress::NAMES;
 
 #[test]
 fn rank_picks_the_frames_with_the_most_work() {
@@ -14,8 +15,8 @@ fn rank_picks_the_frames_with_the_most_work() {
 }
 
 #[test]
-fn a_board_rests_then_flies_until_its_script_ends() {
-    for name in BOARDS {
+fn a_stress_board_rests_then_flies_until_its_script_ends() {
+    for name in NAMES {
         let mut phases = Vec::new();
         assert!(play(name, |moment, frame| {
             phases.push(moment.phase);
@@ -23,7 +24,13 @@ fn a_board_rests_then_flies_until_its_script_ends() {
                 assert_eq!(frame.work.segments, 0, "{name} frame {}", moment.frame);
             }
         }));
-        assert_eq!(phases[..REST_FRAMES], [Phase::Rest; REST_FRAMES], "{name}");
+        // The first view is a reset, which the first frame takes and shows at once.
+        assert_eq!(phases[0], Phase::Flight, "{name}");
+        assert_eq!(
+            phases[1..REST_FRAMES],
+            [Phase::Rest; REST_FRAMES - 1],
+            "{name}"
+        );
         // The 40 flights take 39 staggers of 30 ms and one flight of 420 ms: 1,590 ms, or 96
         // frames at 60 a second, and the frame that shows the board at rest after them.
         assert_eq!(phases.len() - REST_FRAMES, 97, "{name}");
@@ -31,20 +38,49 @@ fn a_board_rests_then_flies_until_its_script_ends() {
 }
 
 #[test]
-fn the_stretch_holds_the_ranked_frames_and_frames_on_either_side() {
+fn the_stretch_holds_the_top_ranked_frame_and_frames_on_either_side() {
     // The instruction-count gate checks the ranking by counting every frame of the stretch, so
-    // the stretch must reach past the ranked frames on both sides to catch a frame they missed.
+    // the stretch must reach past the frame the counters rank highest on both sides to catch a
+    // frame they missed.
     for name in BOARDS {
+        let top = rank(name).expect("a gated board")[0];
+        let frames = stretch(name).expect("a gated board");
+        assert!(frames.contains(&top), "{name}: {frames:?} holds {top}");
+        assert!(frames.start < top || top == 0, "{name}: {frames:?} {top}");
+        assert!(top + 1 < frames.end, "{name}: {frames:?} {top}");
+        let mut played = 0;
+        play(name, |_, _| played += 1);
+        assert!(
+            frames.end <= played,
+            "{name}: {frames:?} of {played} frames"
+        );
+    }
+    // On a stress board, every ranked frame is in it: the first frames of the flight.
+    for name in NAMES {
+        let frames = stretch(name).expect("a gated board");
         let ranked = rank(name).expect("a gated board");
-        let (first, last) = (ranked.iter().min(), ranked.iter().max());
-        assert!(first.is_some_and(|&f| f > STRETCH.start), "{name}");
-        assert!(last.is_some_and(|&f| f + 1 < STRETCH.end), "{name}");
+        assert!(ranked.iter().all(|f| frames.contains(f)), "{name}");
     }
 }
 
 #[test]
+fn a_recorded_board_plays_every_view() {
+    // `pay-default` opens prompts, so some of its frames lay out text.
+    let mut texts = 0;
+    let mut frames = 0;
+    assert!(play("pay-default", |_, frame| {
+        frames += 1;
+        texts += frame.work.text_runs;
+    }));
+    // Its views each wait 30 frames for the one before, and there are more than two.
+    assert!(frames > 2 * REST_FRAMES, "{frames} frames");
+    assert!(texts > 0, "no frame of pay-default laid out text");
+}
+
+#[test]
 fn a_counted_playback_stops_after_its_frame() {
-    let playback = Counted::frame("stress-255", STRETCH.start).play();
+    let start = stretch("stress-255").expect("a gated board").start;
+    let playback = Counted::frame("stress-255", start).play();
     let next = playback.moment().expect("the board goes on");
-    assert_eq!(next.frame, STRETCH.start + 1);
+    assert_eq!(next.frame, start + 1);
 }
