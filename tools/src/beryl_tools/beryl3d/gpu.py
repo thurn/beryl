@@ -28,7 +28,7 @@ from typing import Any
 
 from .. import bench
 from .. import paths as repo_paths
-from . import paths, vm
+from . import paths, source, vm
 
 # The Baseline tier's target: no gated frame shades more than this many screens.
 TARGET_SCREENS = 1.75
@@ -174,14 +174,14 @@ def shader_cost() -> tuple[int, str]:
 
 
 def fragments_script(names: list[str]) -> str:
-    """The script that builds the `fragments` example in the machine and runs it twice, after
-    building the recordings pack it reads with the `record` program if the machine has none. It
-    holds the machine's lock so that it takes turns with the frame counts (counts.py): two
-    builds at once exceed the machine's 4 GiB."""
+    """The script that takes in the sources (`source.py`), builds the `fragments` example from
+    the machine's copy and runs it twice, after building the recordings pack it reads with the
+    `record` program. It holds the machine's lock so that it takes turns with the frame counts
+    (counts.py): two builds at once exceed the machine's 4 GiB."""
     boards = " ".join(f"--board {shlex.quote(n)}" for n in names)
     return bench.locked(f""". "$HOME/.cargo/env"
 set -e
-cd beryl3d
+{source.take_in_script()}cd {source.SOURCE}/rust/beryl3d
 export CARGO_TARGET_DIR="{VM_TARGET}"
 cargo run --locked -q -p beryl_record --bin record
 cargo build --locked -q -p beryl_render --example fragments
@@ -196,12 +196,9 @@ def count_fragments(names: list[str]) -> list[BoardCount]:
     code = vm.ensure()
     if code != 0:
         raise SystemExit(code)
-    done = subprocess.run(
-        bench.vm_command(fragments_script(names), vm.NAME),
-        check=False,
-        stdout=subprocess.PIPE,
-        text=True,
-    )
+    done = source.run_with_sources(fragments_script(names))
+    if done is None:
+        raise SystemExit(1)
     if done.returncode != 0:
         raise SystemExit(done.returncode)
     runs = [line for line in done.stdout.splitlines() if line.startswith("{")]

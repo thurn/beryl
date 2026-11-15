@@ -18,39 +18,24 @@ hand, when the work itself changed or a compiler or dependency upgrade moved the
 old and new numbers in the commit body (rust/beryl3d/AGENTS.md).
 
 The machine mounts only the main checkout, and the sweep checks out its commit elsewhere, so
-the sources the benchmark needs are sent into the machine ([`SOURCES`]) and copied over its own
-copy with `rsync --checksum`: a file whose content did not change keeps its time, so Cargo
-rebuilds only what changed.
+the sources the benchmark needs are sent into the machine (`source.py`).
 """
 
 from __future__ import annotations
 
 import json
-import os
 import platform
 import shlex
 import shutil
-import subprocess
 import sys
 from dataclasses import dataclass
 from typing import Any
 
 from .. import bench
 from .. import paths as repo_paths
-from . import gate, vm
+from . import gate, source, vm
 
-# What the benchmark's build reads, relative to the checkout.
-SOURCES: tuple[str, ...] = (
-    "rust",
-    "data",
-    "docs/sample-decks",
-    "ui/src/generated",
-    "ui/fixtures.json",
-)
-# In the machine: where the sources arrive, the copy they are built from, and the build
-# directory and Gungraun home the gate keeps warm between runs.
-INCOMING = "$HOME/b3d-incoming"
-SOURCE = "$HOME/b3d-source"
+# In the machine: the build directory and Gungraun home the gate keeps warm between runs.
 TARGET = "$HOME/targets/b3d-gate"
 HOME = "$HOME/gungraun/b3d-gate"
 # One compiler at a time: two of the main workspace's crates built at once pass the machine's
@@ -177,20 +162,6 @@ def lowered(name: str, counts: Counted, limits: dict[str, Any]) -> dict[str, Any
     return updated
 
 
-def sources() -> list[str]:
-    """The files of [`SOURCES`] in this checkout, tracked or not, less those git ignores."""
-    listing = subprocess.run(
-        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--"]
-        + list(SOURCES),
-        cwd=repo_paths.REPO,
-        capture_output=True,
-        check=True,
-    ).stdout.decode()
-    return sorted(
-        {f for f in listing.split("\0") if f and (repo_paths.REPO / f).is_file()}
-    )
-
-
 def script(boards: list[str], runner: str) -> str:
     """Provisions the machine, takes in the sources from stdin, and builds and runs the
     benchmark for `boards`, printing Gungraun's JSON lines."""
@@ -210,10 +181,7 @@ def script(boards: list[str], runner: str) -> str:
         "--output-format=json",
         *filters,
     ]
-    work = f"""rm -rf {INCOMING} && mkdir -p {INCOMING} {SOURCE}
-tar -x -C {INCOMING}
-rsync -r --checksum --delete {INCOMING}/ {SOURCE}/
-cd {SOURCE}/rust/beryl3d
+    work = f"""{source.take_in_script()}cd {source.SOURCE}/rust/beryl3d
 CARGO_TARGET_DIR={TARGET} GUNGRAUN_HOME={HOME} {shlex.join(cargo)}
 """
     return vm.provision_script(bench.toolchain(), runner) + bench.locked(work)
@@ -233,41 +201,8 @@ def measure(boards: list[str]) -> str | None:
     if runner is None:
         bench.log("no gungraun in rust/beryl3d/Cargo.lock")
         return None
-    files = sources()
-    tar = subprocess.Popen(
-        # macOS's tar would add an AppleDouble `._` file for each file with extended
-        # attributes, which the card crates' build scripts would read as sources.
-        [
-            "tar",
-            "-c",
-            "-f",
-            "-",
-            "--no-xattrs",
-            "--no-mac-metadata",
-            "--null",
-            "-T",
-            "-",
-        ],
-        cwd=repo_paths.REPO,
-        env={**os.environ, "COPYFILE_DISABLE": "1"},
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-    )
-    stdin = tar.stdin
-    assert stdin is not None
-    stdin.write("\0".join(files).encode() + b"\0")
-    stdin.close()
-    # From the machine's root, since this checkout's path may not be mounted there.
-    run = subprocess.run(
-        ["limactl", "shell", "--workdir", "/", vm.NAME, "bash", "-lc"]
-        + [script(boards, runner)],
-        stdin=tar.stdout,
-        stdout=subprocess.PIPE,
-        text=True,
-        check=False,
-    )
-    tar.wait()
-    if run.returncode != 0 or tar.returncode != 0:
+    run = source.run_with_sources(script(boards, runner))
+    if run is None or run.returncode != 0:
         return None
     return run.stdout
 
