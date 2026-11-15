@@ -43,17 +43,32 @@ def sources() -> list[str]:
     )
 
 
+# The file descriptor on which a script run by [`run_with_sources`] finds the tar stream.
+STREAM_FD = 3
+
+
 def take_in_script() -> str:
-    """The script lines that read the tar stream from stdin into [`SOURCE`]."""
+    """The script lines that read the tar stream into [`SOURCE`]. GNU tar stops at the archive's
+    end marker, so `cat` reads whatever padding follows it. The machine must read the whole
+    stream, or the Mac's tar waits on the pipe for ever."""
     return f"""rm -rf {INCOMING} && mkdir -p {INCOMING} {SOURCE}
-tar -x -C {INCOMING}
+tar -x -C {INCOMING} <&{STREAM_FD}
+cat <&{STREAM_FD} >/dev/null
+exec {STREAM_FD}<&-
 rsync -r --checksum --delete {INCOMING}/ {SOURCE}/
 """
 
 
+def stream_script(script: str) -> str:
+    """`script` with the tar stream moved from stdin to [`STREAM_FD`] and stdin made empty, so
+    that only [`take_in_script`]'s lines read the stream. Any other command that reads stdin (an
+    installer run while provisioning, say) would otherwise eat part of the archive."""
+    return f"exec {STREAM_FD}<&0 </dev/null\n{script}"
+
+
 def run_with_sources(script: str) -> subprocess.CompletedProcess[str] | None:
-    """Runs `script` in the machine with the sources on its stdin, so it must begin with
-    [`take_in_script`]. Its result, or `None` if the tar stream failed too."""
+    """Runs `script` in the machine with the sources as a tar stream, which it reads with
+    [`take_in_script`]. Its result, or `None` if only the tar stream failed."""
     files = sources()
     tar = subprocess.Popen(
         # macOS's tar would add an AppleDouble `._` file for each file with extended
@@ -79,14 +94,30 @@ def run_with_sources(script: str) -> subprocess.CompletedProcess[str] | None:
     stdin.write("\0".join(files).encode() + b"\0")
     stdin.close()
     # From the machine's root, since this checkout's path may not be mounted there.
-    run = subprocess.run(
-        ["limactl", "shell", "--workdir", "/", vm.NAME, "bash", "-lc", script],
-        stdin=tar.stdout,
-        stdout=subprocess.PIPE,
-        text=True,
-        check=False,
+    command = [
+        "limactl",
+        "shell",
+        "--workdir",
+        "/",
+        vm.NAME,
+        "bash",
+        "-lc",
+        stream_script(script),
+    ]
+    shell = subprocess.Popen(
+        command, stdin=tar.stdout, stdout=subprocess.PIPE, text=True
     )
+    # Only the shell may hold the pipe's read end. If this process kept it open too, a script
+    # that stopped before reading the whole stream would leave tar blocked on a full pipe, and
+    # `tar.wait()` would never return. Closed here, tar gets SIGPIPE and exits instead.
+    assert tar.stdout is not None
+    tar.stdout.close()
+    out, _ = shell.communicate()
     tar.wait()
+    run = subprocess.CompletedProcess(command, shell.returncode, out)
+    # A failed script is the cause to report, and it alone explains a tar killed by SIGPIPE.
+    if run.returncode != 0:
+        return run
     if tar.returncode != 0:
         return None
     return run

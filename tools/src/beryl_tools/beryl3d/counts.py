@@ -163,7 +163,7 @@ def lowered(name: str, counts: Counted, limits: dict[str, Any]) -> dict[str, Any
 
 
 def script(boards: list[str], runner: str) -> str:
-    """Provisions the machine, takes in the sources from stdin, and builds and runs the
+    """Provisions the machine, takes in the sources (`source.take_in_script`), and builds and runs the
     benchmark for `boards`, printing Gungraun's JSON lines."""
     # Gungraun takes one filter, so several boards run every benchmark.
     filters = [f"{GROUP}::*::{id_name(boards[0])}*"] if len(boards) == 1 else []
