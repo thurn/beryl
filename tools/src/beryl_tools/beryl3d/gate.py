@@ -218,14 +218,14 @@ def summary(board: Board) -> str:
 
 def play(names: list[str]) -> list[Board]:
     """Plays the boards called `names` (every gated board for none) with the `gate` binary."""
-    from .cli import record, warm_target  # cli imports this module.
+    from .cli import program, record  # cli imports this module.
 
-    warm_target()
-    # The gated recorded boards are read from the pack, which only `record` builds.
+    # The gated recorded boards are read from the pack, which only `record` builds. It builds
+    # `gate` too, in the build the tests share.
     recorded = record()
     if recorded != 0:
         raise SystemExit(recorded)
-    command = ["cargo", "run", "-q", "-p", "beryl_inspect", "--bin", "gate", "--"]
+    command = [str(program("gate"))]
     for name in names:
         command += ["--board", name]
     done = subprocess.run(

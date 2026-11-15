@@ -196,8 +196,12 @@ def send_pack() -> bool:
     that plays them builds, and copies it into the VM's `BERYL_CACHE`. The pack is named for a
     hash of the sources, not of the checkout's path, so the example in the VM finds it.
     """
+    from .cli import program, shared_build  # cli imports this module.
+
+    if shared_build() != 0:
+        return False
     built = subprocess.run(
-        ["cargo", "run", "-q", "-p", "beryl_record", "--bin", "record"],
+        [str(program("record"))],
         cwd=paths.WORKSPACE,
         check=False,
         stdout=subprocess.PIPE,

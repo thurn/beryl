@@ -44,7 +44,7 @@ def test_a_missing_pack_is_recorded_and_the_command_run_again(
 ) -> None:
     ran: list[list[str]] = []
     monkeypatch.setattr(cli, "cargo", lambda arguments: ran.append(arguments) or 0)
-    codes: Iterator[int] = iter([cli.MISSING_PACK, 0])
+    codes: Iterator[int] = iter([cli.MISSING_PACK, 0, 0])
 
     def program(
         command: list[str], **_kwargs: object
@@ -54,11 +54,13 @@ def test_a_missing_pack_is_recorded_and_the_command_run_again(
 
     monkeypatch.setattr(cli.subprocess, "run", program)
     monkeypatch.setattr(cli, "linked", lambda name: Path("/linked") / name)
+    monkeypatch.setattr(cli, "program", lambda name: Path("/built") / name)
     assert cli.main(["list"]) == 0
     assert ran == [
         ["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"],
         ["/linked/b3d", "list"],
-        ["run", "-q", "-p", "beryl_record", "--bin", "record"],
+        cli.SHARED_BUILD,
+        ["/built/record"],
         ["/linked/b3d", "list"],
     ]
 

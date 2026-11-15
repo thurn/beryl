@@ -99,6 +99,28 @@ def run_cargo_test(args: argparse.Namespace) -> int:
     return cargo(test_command(args.package, args.filter, nextest))
 
 
+# The one build that the tests, `record` and `gate` share: every target that `cargo nextest run
+# --workspace` builds, in cargo's `test` profile, and each program built as a program. Cargo
+# resolves features for the packages a command names, so `cargo run -p beryl_record` and
+# `cargo run -p beryl_inspect` each built `beryl_scene`, `beryl_inspect` and the engine with
+# other features than the tests do, and the lane compiled them three times after an edit to
+# `beryl_scene`. With this build the tests that follow it compile nothing more.
+SHARED_BUILD: list[str] = [
+    *["build", "-q", "--workspace", "--profile", "test"],
+    *["--tests", "--bins", "--examples"],
+]
+
+
+def shared_build() -> int:
+    return cargo(SHARED_BUILD)
+
+
+def program(name: str) -> Path:
+    """The program `name` that `shared_build` built. The `test` profile builds into
+    `target/debug`, as `dev` does."""
+    return system.exe(paths.WORKSPACE / "target" / "debug" / name)
+
+
 # The status `b3d` and `b3d-render` exit with when the recordings pack for the present sources
 # is missing (`beryl_inspect::recordings::MISSING_STATUS`).
 MISSING_PACK = 3
@@ -107,8 +129,15 @@ MISSING_PACK = 3
 def record() -> int:
     """Builds the recordings pack for the present sources with the `record` program of
     `beryl_record` if it is missing. `b3d` does not link the engine that records, so that it
-    links and starts fast after an edit (docs/beryl-3d.md, 'Edit-to-output time')."""
-    return cargo(["run", "-q", "-p", "beryl_record", "--bin", "record"])
+    links and starts fast after an edit (docs/beryl-3d.md, 'Edit-to-output time'). It prints
+    the pack's path."""
+    built = shared_build()
+    if built != 0:
+        return built
+    line = [str(program("record"))]
+    return subprocess.run(
+        line, cwd=paths.WORKSPACE, env=os.environ, check=False
+    ).returncode
 
 
 def run_record(_args: argparse.Namespace) -> int:
