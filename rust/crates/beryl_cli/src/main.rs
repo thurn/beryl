@@ -4,9 +4,11 @@
 //!   of the WU Control mirror, the first agent in the first seat, and writes its transcript
 //!   to `FILE`, or to standard output.
 //! - `beryl_cli tournament <agent>... [--games N] [--seed N] [--json FILE] [--check]
-//!   [budget]` plays a round robin, N games per pairing (an agent alone plays itself), and
-//!   prints the table; `--json` also writes the results, `--check` checks the invariants at
-//!   every decision. Games run in parallel, one thread each.
+//!   [--family NAME] [budget]` plays a round robin, N games per pairing (an agent alone plays
+//!   itself), and prints the table; `--json` also writes the results, `--check` checks the
+//!   invariants at every decision, and `--family` deals each game two fuzz decks of one
+//!   keystone family's cards (`beryl_cards::decks::KEYSTONE_FAMILIES`) in place of the WU
+//!   Control mirror. Games run in parallel, one thread each.
 //! - `beryl_cli ladder <challenger> [--vs NAME] [--work 3M] [--bar stronger|plausible|audit]
 //!   [--cap N] [--seed N] [--positions DIR] [--out DIR]` plays a paired match against the
 //!   champion up to the cap, with a sequential test for stronger and plausible, and prints a
@@ -60,7 +62,7 @@ use beryl_search::Budget;
 const USAGE: &str = "usage:
   beryl_cli play <agent> <agent> [--seed N] [--out FILE] [--iterations N] [--trees K]
   beryl_cli tournament <agent>... [--games N] [--seed N] [--json FILE] [--check]
-      [--paired] [--iterations N] [--trees K]
+      [--paired] [--family NAME] [--iterations N] [--trees K]
       (an agent is a registered one or a long-think entrant, family@budget)
   beryl_cli ladder <challenger> [--vs NAME] [--work 3M] [--bar stronger|plausible|audit]
       [--cap N] [--seed N] [--positions DIR] [--out DIR]
@@ -172,6 +174,7 @@ struct Flags {
     json: Option<String>,
     check: bool,
     paired: bool,
+    family: Option<String>,
     budget: Budget,
 }
 
@@ -192,6 +195,7 @@ impl Flags {
                 "--json" => f.json = Some(value()?),
                 "--check" => f.check = true,
                 "--paired" => f.paired = true,
+                "--family" => f.family = Some(value()?),
                 "--iterations" => f.budget.iterations = number(arg, &value()?)?,
                 "--trees" => f.budget.trees = number(arg, &value()?)?,
                 flag if flag.starts_with("--") => {
@@ -236,6 +240,7 @@ fn tournament(f: &Flags) -> Result<(), String> {
         f.budget,
         f.check,
         f.paired,
+        f.family.as_deref(),
     )?;
     print!("{}", tournament::table(&results));
     if let Some(path) = &f.json {

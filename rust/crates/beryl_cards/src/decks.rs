@@ -86,6 +86,122 @@ pub const VINTAGE_WU_CONTROL: &Decklist = &[
     (1, names::TIMETWISTER),
 ];
 
+/// The rules keystones (`docs/rules-coverage.md`, "The keystone cards") by family, each a name
+/// and the keystones and partners played together in it. The names are those of the
+/// present-cost benchmark's families (`beryl_bench::family`), with `decisions` for the decision
+/// protocol's cards, which have no present-cost family. Random and agent games deal fuzz decks
+/// from one family's cards and the basic lands ([`fuzz_deck_from`]), so that the cards of a
+/// family meet each other far more often than in decks drawn from every card.
+pub const KEYSTONE_FAMILIES: &[(&str, &[&str])] = &[
+    (
+        "attachments",
+        &[names::SWIFT_RECONFIGURATION, names::LEONIN_SCIMITAR],
+    ),
+    (
+        "layers",
+        &[
+            names::BLOOD_MOON,
+            names::URBORG_TOMB_OF_YAWGMOTH,
+            names::DRYAD_ARBOR,
+            names::GLORIOUS_ANTHEM,
+            names::HUMILITY,
+            names::TARMOGOYF,
+            names::DRESS_DOWN,
+            names::OPALESCENCE,
+            names::OKO_THIEF_OF_CROWNS,
+            names::LEONIN_SCIMITAR,
+        ],
+    ),
+    (
+        "replacement",
+        &[
+            names::CHAINS_OF_MEPHISTOPHELES,
+            names::NOTION_THIEF,
+            names::GRISELBRAND,
+            names::LIFE_FROM_THE_LOAM,
+            names::REST_IN_PEACE,
+            names::TARMOGOYF,
+            names::CONTAINMENT_PRIEST,
+            names::FLICKERWISP,
+            names::MOTHER_OF_RUNES,
+            names::CIRCLE_OF_PROTECTION_RED,
+            names::FURNACE_OF_RATH,
+            names::LIGHTNING_BOLT,
+        ],
+    ),
+    (
+        "zones-and-text",
+        &[
+            names::PAINTERS_SERVANT,
+            names::FORCE_OF_WILL,
+            names::CIRCLE_OF_PROTECTION_RED,
+            names::MIND_BEND,
+            names::DANDAN,
+            names::CRYSTAL_SPRAY,
+            names::LORD_OF_ATLANTIS,
+            names::UNDERWORLD_BREACH,
+            names::LIONS_EYE_DIAMOND,
+            names::BRAIN_FREEZE,
+        ],
+    ),
+    (
+        "copies",
+        &[
+            names::PHANTASMAL_IMAGE,
+            names::QUICKSILVER_GARGANTUAN,
+            names::THESPIANS_STAGE,
+            names::DARK_DEPTHS,
+            names::FORK,
+            names::TENDRILS_OF_AGONY,
+            names::BRAINGEYSER,
+        ],
+    ),
+    (
+        "costs",
+        &[
+            names::TRINISPHERE,
+            names::THALIA_GUARDIAN_OF_THRABEN,
+            names::FORCE_OF_WILL,
+            names::GURMAG_ANGLER,
+            names::PITHING_NEEDLE,
+            names::CAVERN_OF_SOULS,
+        ],
+    ),
+    (
+        "identity",
+        &[
+            names::STIFLE,
+            names::ANIMATE_DEAD,
+            names::WORLDGORGER_DRAGON,
+            names::GEMRAZER,
+            names::TEFERIS_PROTECTION,
+        ],
+    ),
+    (
+        "decisions",
+        &[names::SHOW_AND_TELL, names::GRISELBRAND, names::MINDSLAVER],
+    ),
+];
+
+/// The cards of the keystone family called `name` ([`KEYSTONE_FAMILIES`]), with every basic
+/// land, as [`fuzz_deck_from`] takes them. A family's card may be one complete from the card
+/// store with no file, which [`CardTable::cards`](beryl_engine::CardTable::cards) does not walk.
+#[must_use]
+pub fn keystone_family(name: &str) -> Option<Vec<&'static CardDef>> {
+    let &(_, cards) = KEYSTONE_FAMILIES.iter().find(|(n, _)| *n == name)?;
+    let basics = CARDS
+        .cards()
+        .iter()
+        .copied()
+        .filter(|c| c.front().supertypes.contains(Supertypes::BASIC));
+    let family = cards.iter().map(|&card| {
+        CARDS
+            .get(card)
+            .expect("a keystone family names implemented cards")
+    });
+    Some(basics.chain(family).collect())
+}
+
 /// The size of a fuzz deck: the minimum for limited play
 /// ([CR 100.2b](https://yawgatog.com/resources/magic-rules/#R1002b)): "each deck has a
 /// minimum deck size of 40 cards."
@@ -166,6 +282,20 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Each keystone family's cards are dealt from: every card it names, which a fuzz deck holds
+    /// whole, since no family names more than a deck's nonbasic cards.
+    #[test]
+    fn keystone_family_decks_hold_every_card_of_the_family() {
+        for &(name, cards) in KEYSTONE_FAMILIES {
+            let pool = keystone_family(name).unwrap();
+            let deck = fuzz_deck_from(0, &pool);
+            for card in cards {
+                assert!(deck.contains(&(1, card)), "{name}: {card}");
+            }
+        }
+        assert!(keystone_family("no such family").is_none());
     }
 
     #[test]

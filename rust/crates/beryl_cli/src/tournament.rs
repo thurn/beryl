@@ -9,8 +9,11 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 
+use beryl_cards::CARDS;
+use beryl_cards::decks::{KEYSTONE_FAMILIES, fuzz_deck_from, keystone_family};
+use beryl_engine::card::CardDef;
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::{Outcome, Seat};
+use beryl_engine::{GameTable, Outcome, Seat, StallReason};
 use beryl_search::Budget;
 use serde::Serialize;
 
@@ -26,6 +29,10 @@ pub struct Pairing {
     pub b_wins: u32,
     pub draws: u32,
     pub stalls: u32,
+    /// The stalls by their reason (`StallReason`). A `Capacity` stall is a game that ran
+    /// out of room in `Small`, which the app's games go on from in `Large`.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub stall_reasons: BTreeMap<String, u32>,
     /// `a`'s share of the games won, and its Wilson 95% interval.
     pub a_win_rate: f64,
     pub a_win_interval: [f64; 2],
@@ -64,6 +71,14 @@ pub fn game_seed(seed: u64, pairing: usize, game: u32) -> u64 {
     SplitMix64::new(base ^ ((pairing as u64) << 32) ^ u64::from(game)).next_u64()
 }
 
+impl Pairing {
+    /// Counts a game that stalled for `reason`.
+    fn stalled(&mut self, reason: StallReason) {
+        self.stalls += 1;
+        *self.stall_reasons.entry(format!("{reason:?}")).or_default() += 1;
+    }
+}
+
 /// Every pairing of distinct agents, or an agent against itself when only one is named.
 fn pairings(agents: &[String]) -> Vec<(usize, usize)> {
     if agents.len() == 1 {
@@ -79,8 +94,9 @@ fn pairings(agents: &[String]) -> Vec<(usize, usize)> {
 }
 
 /// Plays the tournament, searching agents with `budget`'s iterations and trees. With `paired`,
-/// games come in pairs on one seed, seats swapped. The first
-/// invariant violation fails it.
+/// games come in pairs on one seed, seats swapped. With `family`, each game deals two fuzz
+/// decks from that keystone family's cards ([`family_table`]) in place of the WU Control
+/// mirror. The first invariant violation fails it.
 pub fn run(
     agents: &[String],
     games: u32,
@@ -88,13 +104,15 @@ pub fn run(
     budget: Budget,
     check: bool,
     paired: bool,
+    family: Option<&str>,
 ) -> Result<Results, String> {
+    let cards = family.map(family_cards).transpose()?;
     // Games run in parallel, one thread each, so a search grows its trees one after another.
     let budget = Budget {
         parallel: false,
         ..budget
     };
-    let t = mirror();
+    let mirror = mirror();
     let pairs = pairings(agents);
     let jobs: Vec<(usize, u32)> = (0..pairs.len())
         .flat_map(|p| (0..games).map(move |g| (p, g)))
@@ -115,7 +133,10 @@ pub fn run(
                         [agents[b].as_str(), agents[a].as_str()]
                     };
                     let on = if paired { g / 2 } else { g };
-                    match play(&t, game_seed(seed, p, on), names, budget, check, None) {
+                    let game = game_seed(seed, p, on);
+                    let dealt = cards.as_deref().map(|cards| family_table(cards, game));
+                    let t = dealt.as_ref().unwrap_or(&mirror);
+                    match play(t, game, names, budget, check, None) {
                         Ok(played) => results.lock().unwrap().push((p, g, played)),
                         Err(e) => {
                             failure.lock().unwrap().get_or_insert(e);
@@ -160,8 +181,8 @@ pub fn run(
                 tally.draws += 1;
                 1
             }
-            Outcome::Stalled(_) => {
-                tally.stalls += 1;
+            Outcome::Stalled(reason) => {
+                tally.stalled(reason);
                 1
             }
         };
@@ -184,6 +205,27 @@ pub fn run(
         games_per_pairing: games,
         pairings: tallies,
     })
+}
+
+/// The cards of the keystone family called `name`, which its games' decks are dealt from.
+fn family_cards(name: &str) -> Result<Vec<&'static CardDef>, String> {
+    keystone_family(name).ok_or_else(|| {
+        let known: Vec<&str> = KEYSTONE_FAMILIES.iter().map(|(n, _)| *n).collect();
+        format!(
+            "no keystone family is named {name:?} (families: {})",
+            known.join(", ")
+        )
+    })
+}
+
+/// The table of game `seed` in a family's tournament: two fuzz decks from `cards`, each
+/// player's drawn from its own seed.
+fn family_table(cards: &[&CardDef], seed: u64) -> GameTable {
+    let decks = [
+        fuzz_deck_from(seed, cards),
+        fuzz_deck_from(seed.wrapping_add(1 << 32), cards),
+    ];
+    GameTable::new(&CARDS, [decks[0].as_slice(), decks[1].as_slice()]).expect("a fuzz deck's table")
 }
 
 /// Each pairing's seeds, by `a`'s score over both seats in half points (4 swept, 0 swept by
@@ -277,6 +319,9 @@ pub fn table(r: &Results) -> String {
                 q.a_swept, p.a, q.split, q.b_swept, p.b, q.p
             );
         }
+        if !p.stall_reasons.is_empty() {
+            let _ = writeln!(out, "  stalls by reason: {:?}", p.stall_reasons);
+        }
     }
     out
 }
@@ -318,7 +363,7 @@ mod tests {
     #[test]
     fn wins_go_to_the_agent_not_the_seat() {
         let agents = ["greedy".to_owned(), "random".to_owned()];
-        let r = run(&agents, 8, 3, Budget::DEFAULT, false, false).unwrap();
+        let r = run(&agents, 8, 3, Budget::DEFAULT, false, false, None).unwrap();
         let p = &r.pairings[0];
         assert_eq!(
             (p.a.as_str(), p.b.as_str(), p.games),
@@ -339,12 +384,12 @@ mod tests {
     #[test]
     fn paired_games_share_a_seed_from_both_seats() {
         let agents = ["greedy".to_owned(), "random".to_owned()];
-        let r = run(&agents, 6, 5, Budget::DEFAULT, false, true).unwrap();
+        let r = run(&agents, 6, 5, Budget::DEFAULT, false, true, None).unwrap();
         let q = r.pairings[0].paired.expect("paired seeds");
         assert_eq!(q.a_swept + q.split + q.b_swept, 3);
         assert!(q.a_swept >= 2, "{q:?}");
         assert!(r.pairings[0].paired.is_some());
-        let unpaired = run(&agents, 2, 5, Budget::DEFAULT, false, false).unwrap();
+        let unpaired = run(&agents, 2, 5, Budget::DEFAULT, false, false, None).unwrap();
         assert!(unpaired.pairings[0].paired.is_none());
     }
 

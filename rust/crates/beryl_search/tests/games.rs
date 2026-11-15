@@ -21,18 +21,24 @@ use beryl_engine::{
     Small, StallReason, State, Step, Zone, ZoneKey, apply, next, observe,
 };
 use beryl_search::{Agent, AgentDecision, GreedyAgent, RandomAgent};
+use common::widening::play_widening;
 use common::{agents, fingerprint, fixed_game, game, games, mirror, play};
 
 /// Every fourth game is played in the [`Large`] layout from its start, so the layout a game
-/// outgrowing [`Small`](beryl_engine::Small) goes on in is fuzzed too. No capacity may run out
-/// in any deck; how often games stall otherwise depends on the cards dealt, so the stall-rate
-/// target is held on the fixed decks (`mirror_games_rarely_stall`) and only reported here.
-/// The nightly's `just fuzz` plays it at length; no check runs it.
+/// outgrowing [`Small`](beryl_engine::Small) goes on in is fuzzed too. The others start in
+/// `Small` and go on in `Large` from the engine call that ran out of a capacity, as the app's
+/// games do: a card that exiles every other permanent its controller has, keeping a memo for
+/// each, can outgrow `Small`'s lists in a long game. No capacity may
+/// run out in `Large`. How often games stall otherwise depends on the cards dealt, so the
+/// stall-rate target is held on the fixed decks (`mirror_games_rarely_stall`) and only reported
+/// here, as are the games that left `Small`. The nightly's `just fuzz` plays it at length; no
+/// check runs it.
 #[test]
 #[ignore = "40 random games, about 40 CPU seconds in a debug build: `just fuzz` plays it"]
 fn random_games_keep_the_invariants() {
     let n = games(40);
     let mut stalls = Vec::new();
+    let mut widened = Vec::new();
     let mut kinds: HashMap<String, u64> = HashMap::new();
     coverage::start();
     for seed in 0..n {
@@ -40,7 +46,9 @@ fn random_games_keep_the_invariants() {
         let outcome = if seed % 4 == 3 {
             fuzz(&t, s.widen(), seed, &mut kinds)
         } else {
-            fuzz(&t, s, seed, &mut kinds)
+            let played = play_widening(&t, s, seed, &mut kinds);
+            widened.extend(played.filled.map(|list| (seed, list)));
+            played.outcome
         };
         match outcome {
             Outcome::Stalled(StallReason::Capacity) => panic!("seed {seed}: a capacity ran out"),
@@ -52,6 +60,7 @@ fn random_games_keep_the_invariants() {
     if std::env::var_os("BERYL_FUZZ_GAMES").is_some() {
         report(n, &kinds, &hits);
         println!("{} of {n} games stalled: {stalls:?}", stalls.len());
+        println!("{} games left Small: {widened:?}", widened.len());
     }
 }
 

@@ -13,6 +13,8 @@ use beryl_engine::{
 };
 use beryl_search::{Agent, AgentDecision, RandomAgent};
 
+pub mod widening;
+
 /// A game between two fuzz decks drawn from `seed`, under the exact profile on even seeds and
 /// smart stops on odd ones.
 pub fn game(seed: u64) -> (GameTable, State) {
