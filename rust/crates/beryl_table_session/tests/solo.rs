@@ -4,11 +4,11 @@ use beryl_session::ipc::{TableActReply, TableRefusalReason, TableRefused};
 use beryl_session::protocol::{PlayerView, TableObjectRef};
 use beryl_session::script::{Subject, Table as Stage, failure};
 use beryl_session::{GameUpdate, SessionIds, Sessions};
-use beryl_table::action::{ComputedDestination, Destination, Position, Selection};
+use beryl_table::action::{Adjustment, ComputedDestination, Destination, Position, Selection};
 use beryl_table::deck::parse_text;
 use beryl_table::state::Zone;
 use beryl_table::{Action, Refusal, Seat};
-use beryl_table_session::TableSessions;
+use beryl_table_session::{TableSessions, refusal};
 
 const SOLO: Seat = Seat(0);
 
@@ -159,18 +159,42 @@ fn replacement_and_leave_retire_the_old_view() {
 
 #[test]
 fn a_refusal_preserves_blocking_entry_numbers_in_the_reply() {
-    let refused = TableActReply::from(Err(Refusal::Invalid {
-        blocking: vec![3, 7],
-    }));
+    let (tables, updates) = receiving_tables();
+    tables.solo_seeded(parse_text("10 Island"), 0).unwrap();
+    updates.try_recv().unwrap();
+
+    let life_edit = Action::Life {
+        seat: SOLO,
+        adjustment: Adjustment::Add(-1),
+    };
+    // The log offers undo by entry number for a batch.
+    tables
+        .act(Action::Batch {
+            actions: vec![life_edit.clone()],
+        })
+        .unwrap();
+    let batch = updates.try_recv().unwrap();
+    let entry = batch.view.table.unwrap().log.last().unwrap().n;
+    for _ in 0..2 {
+        tables.act(life_edit.clone()).unwrap();
+        updates.try_recv().unwrap();
+    }
+
+    let local = tables.act(Action::Undo { entry: Some(entry) });
+    let blockers = vec![entry + 1, entry + 2];
+    let wire = refusal::to_wire(local.clone().unwrap_err());
+    let linked = refusal::reply_from_wire(wire);
+    assert_eq!(linked, TableActReply::from(local));
     assert_eq!(
-        refused,
+        linked,
         TableActReply::Refused(TableRefused {
             refused: TableRefusalReason::Invalid,
-            blocked_by: Some(vec![3, 7]),
+            blocked_by: Some(blockers.clone()),
         }),
     );
     assert_eq!(
-        serde_json::to_value(refused).unwrap(),
-        serde_json::json!({ "refused": "invalid", "blocked_by": [3, 7] }),
+        serde_json::to_value(linked).unwrap(),
+        serde_json::json!({ "refused": "invalid", "blocked_by": blockers }),
     );
+    assert!(updates.try_recv().is_err());
 }

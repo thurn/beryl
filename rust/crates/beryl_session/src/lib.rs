@@ -46,7 +46,8 @@ pub use replay::ReplayFile;
 pub use session::THREAD as SESSION_THREAD;
 pub use sessions::{SessionIds, Sessions, StartRequest};
 
-/// A 64-bit FNV-1a hash of the generated TypeScript protocol, in lowercase hexadecimal.
+/// A 64-bit FNV-1a hash of the generated TypeScript protocol and link envelope definitions.
+/// The hash is represented in lowercase hexadecimal.
 pub const WIRE_HASH: &str = env!("BERYL_WIRE_HASH");
 
 /// The wire fingerprint extended with additional definitions in order.

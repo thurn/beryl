@@ -14,6 +14,7 @@ pub trait Hosted {
     fn seat_for(&mut self, name: &str) -> Option<u8>;
 
     /// Apply the action and send both seats their updates before returning.
+    /// A refused action emits no updates.
     /// Local actions should hold the same mutex for the same sequence of work.
     fn act(&mut self, seat: u8, action: Value) -> Result<(), RefusalReason>;
 

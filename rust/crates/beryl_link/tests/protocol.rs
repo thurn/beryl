@@ -42,11 +42,16 @@ impl Hosted for Counter {
 
     fn act(&mut self, seat: u8, action: Value) -> Result<(), RefusalReason> {
         assert_eq!(seat, 1);
-        if action == json!("increment") {
-            self.increment();
-            Ok(())
-        } else {
-            Err(RefusalReason::Permission)
+        match action.as_str() {
+            Some("increment") => {
+                self.increment();
+                Ok(())
+            }
+            Some("stale") => Err(RefusalReason::Stale),
+            Some("undo") => Err(RefusalReason::Invalid {
+                blocking: vec![7, 3],
+            }),
+            _ => Err(RefusalReason::Permission),
         }
     }
 
@@ -128,6 +133,15 @@ fn wire_uses_the_documented_json_envelopes() {
                 reason: RefusalReason::Stale,
             },
             json!({"refused": {"n": 118, "reason": "stale"}}),
+        ),
+        (
+            Message::Refused {
+                n: 118,
+                reason: RefusalReason::Invalid {
+                    blocking: vec![7, 3],
+                },
+            },
+            json!({"refused": {"n": 118, "reason": {"invalid": {"blocking": [7, 3]}}}}),
         ),
         (
             Message::Update(json!({"view": {}, "script": {}})),
@@ -218,7 +232,7 @@ fn peer_once(peer: &mut Option<MemoryLink>) -> MemoryLink {
 }
 
 #[test]
-fn acts_and_host_updates_share_one_order_and_a_refusal_keeps_its_number() {
+fn acts_updates_and_refusals_share_one_order() {
     let (link, peer) = memory::pair();
     let mut peer = Some(peer);
     let mut guest = join(
@@ -230,6 +244,7 @@ fn acts_and_host_updates_share_one_order_and_a_refusal_keeps_its_number() {
     let events = guest.take_events().unwrap();
     let table = Mutex::new(Counter::default());
     thread::scope(|scope| {
+        let guest = guest;
         let server = scope.spawn(|| serve(link, &mut host(), &table, PING_INTERVAL));
         verify_connected(&events, &Event::Joined { seat: 1 }, 0);
         assert_eq!(guest.peer().unwrap().name, "Derek");
@@ -238,7 +253,9 @@ fn acts_and_host_updates_share_one_order_and_a_refusal_keeps_its_number() {
 
         let first = guest.act(json!("increment")).unwrap();
         let second = guest.act(json!("increment")).unwrap();
-        let refused = guest.act(json!("decrement")).unwrap();
+        let permission = guest.act(json!("decrement")).unwrap();
+        let stale = guest.act(json!("stale")).unwrap();
+        let invalid = guest.act(json!("undo")).unwrap();
         assert_eq!(events.recv().unwrap(), Event::Update(json!({"count": 1})));
         assert_eq!(events.recv().unwrap(), Event::Update(json!({"count": 2})));
         assert_eq!(events.recv().unwrap(), Event::Done { n: first });
@@ -247,9 +264,38 @@ fn acts_and_host_updates_share_one_order_and_a_refusal_keeps_its_number() {
         assert_eq!(
             events.recv().unwrap(),
             Event::Refused {
-                n: refused,
-                reason: RefusalReason::Permission
+                n: permission,
+                reason: RefusalReason::Permission,
             }
+        );
+        assert_eq!(
+            events.recv().unwrap(),
+            Event::Refused {
+                n: stale,
+                reason: RefusalReason::Stale,
+            }
+        );
+        assert_eq!(
+            events.recv().unwrap(),
+            Event::Refused {
+                n: invalid,
+                reason: RefusalReason::Invalid {
+                    blocking: vec![7, 3],
+                },
+            }
+        );
+        // A later message on the same stream also detects updates emitted after a refusal.
+        table
+            .lock()
+            .unwrap()
+            .sender
+            .as_ref()
+            .unwrap()
+            .lobby(json!({"ready": false}))
+            .unwrap();
+        assert_eq!(
+            events.recv().unwrap(),
+            Event::Lobby(json!({"ready": false}))
         );
 
         guest.leave();
