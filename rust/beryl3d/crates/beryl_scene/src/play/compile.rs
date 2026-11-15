@@ -2,20 +2,22 @@
 //! own clock, before the script starts, so that where each object is at any moment of the script
 //! is a function of the time alone (docs/beryl-3d.md, "Determinism").
 //!
-//! The script is played over a copy of the table it starts from: after each step, every object's
-//! resting place is worked out again for the table as it now stands, and the step's verb carries
-//! its object there. An object no step names whose resting place the step changed (the rest of a
-//! hand) slides there over the step, or over the time the step leaves for what it opened or
-//! closed.
+//! The script is played over a copy of the table it starts from: after each step, the resting
+//! places of the parts of the table its act changed are worked out again, and the step's verb
+//! carries its object there. An object no step names whose resting place the step changed (the
+//! rest of a hand) slides there over the step, or over the time the step leaves for what it
+//! opened or closed.
 
-use beryl_protocol::protocol::PlayerView;
-use beryl_protocol::script::{Script, Step, StepTiming, Subject, Table as Played, Verb, mover_of};
+use beryl_protocol::protocol::{ObjectId, PlayerView};
+use beryl_protocol::script::{
+    Act, Script, Step, StepTiming, Subject, Table as Played, Verb, mover_of,
+};
 
 use super::record::{Cause, MoveKey, Plant, SegmentRecord, StepRecord};
 use crate::beat::{Laid, beat};
 use crate::motion::Track;
 use crate::pose::{Curve, Pose, Segment};
-use crate::table::{Placement, SceneObject, Table};
+use crate::table::{Group, Placement, Rest, SceneObject, Table, Zones};
 use crate::verbs::{self, Interval};
 
 /// A script laid out in time, ready to start.
@@ -193,10 +195,25 @@ fn nanoseconds(milliseconds: f64) -> u64 {
 struct Motion<'a> {
     table: &'a Table,
     played: Played,
-    /// The view the table shows as it now stands, rewritten after each step.
-    view: PlayerView,
     /// Every object's resting place as the table now stands.
     rests: Placement,
+    /// The slots each group placed when it was last placed, by `Group::index`.
+    members: Vec<Vec<ObjectId>>,
+    /// The group each slot was last placed in, by `Group::index`, indexed by slot.
+    groups: Vec<Option<usize>>,
+    /// Whether the next step places every group, not only the ones its act changed. The first
+    /// step does: `rests` then holds the view the script starts from, whose hands are listed in
+    /// that view's order, not by slot as the table played over lists them. So does the step
+    /// after one the table could not take, which may have changed part of it.
+    whole: bool,
+    /// The resting places of the groups a step placed again, until it makes them the table's
+    /// own. Kept between steps, empty, so that a step need not allocate it.
+    fresh: Placement,
+    /// The slots each group a step placed again placed, by `Group::index`, until the step makes
+    /// them its `members`.
+    next: Vec<Vec<ObjectId>>,
+    /// The slots the step's act named.
+    touched: Vec<ObjectId>,
     tracks: Vec<Track>,
     /// Every segment added to `tracks`, in order, with why, if it keeps `records`.
     segments: Vec<SegmentRecord>,
@@ -208,11 +225,137 @@ impl<'a> Motion<'a> {
         Self {
             table,
             played: Played::of(before),
-            view: before.clone(),
             rests: table.placement(before),
+            members: vec![Vec::new(); Group::ALL.len()],
+            groups: Vec::new(),
+            whole: true,
+            fresh: Placement::default(),
+            next: vec![Vec::new(); Group::ALL.len()],
+            touched: Vec::new(),
             tracks: Vec::new(),
             segments: Vec::new(),
             records,
+        }
+    }
+
+    /// Applies `act` to the table and places again every group whose resting places it may
+    /// have changed: the groups that held or now hold an object the act named, and the stack,
+    /// whose abilities an act may add or take away without naming an object. Their resting
+    /// places go to `fresh` and their slots to `next`; `rests` is left as it was. Returns which
+    /// groups it placed, or none if the table could not take the act.
+    fn place(&mut self, act: &Act) -> Option<[bool; Group::ALL.len()]> {
+        let touched = &mut self.touched;
+        touched.clear();
+        if self
+            .played
+            .apply_noting(act, &mut |slot| touched.push(slot))
+            .is_err()
+        {
+            self.whole = true;
+            return None;
+        }
+        let zones = Zones::of_table(&self.played);
+        let mut dirty = [self.whole; Group::ALL.len()];
+        dirty[Group::Stack.index()] = true;
+        for &slot in &self.touched {
+            if let Some(group) = self.groups.get(usize::from(slot.0)).copied().flatten() {
+                dirty[group] = true;
+            }
+            if let Some(group) = zones.get(slot).and_then(Group::of) {
+                dirty[group.index()] = true;
+            }
+        }
+        for (group, next) in Group::ALL.into_iter().zip(&mut self.next) {
+            if dirty[group.index()] {
+                self.table.place_group(&zones, group, &mut self.fresh, next);
+            }
+        }
+        Some(dirty)
+    }
+
+    /// Where the object in `slot` rests after the step, given the groups `dirty` it placed again.
+    fn now(&self, slot: usize, dirty: &[bool]) -> Option<Rest> {
+        let id = ObjectId(u16::try_from(slot).expect("a slot fits an object id"));
+        if let Some(rest) = self.fresh.get(id) {
+            return Some(*rest);
+        }
+        let left = self.whole
+            || self
+                .groups
+                .get(slot)
+                .copied()
+                .flatten()
+                .is_some_and(|group| dirty[group]);
+        if left {
+            None
+        } else {
+            self.rests.get(id).copied()
+        }
+    }
+
+    /// The slots whose resting place the step may have changed, given the groups `dirty` it
+    /// placed again, and the step's own object, in order.
+    fn affected(&self, dirty: &[bool], subject: Option<usize>) -> Vec<usize> {
+        let mut affected: Vec<usize> = if self.whole {
+            (0..self.rests.rests.len().max(self.fresh.rests.len())).collect()
+        } else {
+            dirty
+                .iter()
+                .enumerate()
+                .filter(|(_, dirty)| **dirty)
+                .flat_map(|(group, _)| self.members[group].iter().chain(&self.next[group]))
+                .map(|slot| usize::from(slot.0))
+                .collect()
+        };
+        affected.extend(subject);
+        affected.sort_unstable();
+        affected.dedup();
+        affected
+    }
+
+    /// Makes the resting places the step placed again the table's own, and empties `fresh` for
+    /// the next step.
+    fn commit(&mut self, dirty: &[bool]) {
+        if self.whole {
+            self.rests.rests.clear();
+            self.groups.clear();
+        }
+        for (group, members) in self.members.iter().enumerate() {
+            if dirty[group] {
+                for &slot in members {
+                    self.rests.unset(slot);
+                    self.groups[usize::from(slot.0)] = None;
+                }
+            }
+        }
+        let placed = dirty.iter().enumerate().filter(|(_, dirty)| **dirty);
+        for (group, _) in placed {
+            for &slot in &self.next[group] {
+                let index = usize::from(slot.0);
+                let rest = *self
+                    .fresh
+                    .get(slot)
+                    .expect("a group places each of its slots");
+                self.rests.set(slot, rest);
+                if self.groups.len() <= index {
+                    self.groups.resize(index + 1, None);
+                }
+                self.groups[index] = Some(group);
+                self.fresh.unset(slot);
+            }
+            std::mem::swap(&mut self.members[group], &mut self.next[group]);
+        }
+        self.whole = false;
+        // Checked where the interface checks keep records, so that the allocations the frame gate
+        // counts in a debug build are a running game's.
+        if cfg!(debug_assertions) && self.records {
+            assert!(
+                same(
+                    &self.rests,
+                    &self.table.placement_of(&Zones::of_table(&self.played))
+                ),
+                "placing only the groups a step changed gives what placing every group does"
+            );
         }
     }
 
@@ -221,11 +364,9 @@ impl<'a> Motion<'a> {
     fn step(&mut self, number: usize, step: &Step, timing: &StepTiming, laid: &Laid) {
         // A step the table cannot take changes nothing; the table takes the view as it stands
         // when the script ends, whatever the steps did.
-        if self.played.apply(&step.act).is_err() {
+        let Some(dirty) = self.place(&step.act) else {
             return;
-        }
-        write(&self.played, &mut self.view);
-        let next = self.table.placement(&self.view);
+        };
         let own = Interval {
             from: nanoseconds(laid.from),
             to: nanoseconds(laid.to),
@@ -245,10 +386,9 @@ impl<'a> Motion<'a> {
             (None, None) => own,
         };
         let subject = subject_of(step);
-        let slots = self.rests.rests.len().max(next.rests.len());
-        for slot in 0..slots {
+        for slot in self.affected(&dirty, subject) {
             let was = self.rests.rests.get(slot).copied().flatten();
-            let now = next.rests.get(slot).copied().flatten();
+            let now = self.now(slot, &dirty);
             let segment = if Some(slot) == subject {
                 let verb = step.act.verb();
                 let from = self.pose(slot, own.from);
@@ -312,7 +452,7 @@ impl<'a> Motion<'a> {
                 self.push(slot, segment, cause);
             }
         }
-        self.rests = next;
+        self.commit(&dirty);
     }
 
     /// Sends every segment of the object in `slot` that lands at `was` and has not ended by
@@ -404,23 +544,8 @@ fn add(tracks: &mut Vec<Track>, slot: usize, segment: Segment) {
     }
 }
 
-/// Writes the parts of `played` that placement reads into `view`: its objects, battlefield,
-/// stack and each player's library and graveyard. The rest of `view` is chrome, which no resting
-/// place depends on.
-fn write(played: &Played, view: &mut PlayerView) {
-    view.objects.clear();
-    view.objects.extend(played.objects.values().cloned());
-    view.battlefield.clone_from(&played.battlefield);
-    view.stack.clear();
-    view.stack
-        .extend(played.stack.iter().map(|entry| entry.item.clone()));
-    for (player, piles) in [
-        (&mut view.players.you, &played.you),
-        (&mut view.players.opponent, &played.opponent),
-    ] {
-        player.library.clone_from(&piles.library);
-        player.graveyard.clone_from(&piles.graveyard);
-        player.life = piles.life;
-        player.mana = piles.mana;
-    }
+/// Whether `a` and `b` give every slot the same resting place.
+fn same(a: &Placement, b: &Placement) -> bool {
+    (0..a.rests.len().max(b.rests.len()))
+        .all(|slot| a.rests.get(slot).copied().flatten() == b.rests.get(slot).copied().flatten())
 }

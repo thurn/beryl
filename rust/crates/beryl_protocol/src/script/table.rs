@@ -226,13 +226,26 @@ impl Table {
     /// Does what `act` says. An act that names what the table does not have, or leaves out
     /// what the table needs, is an error that says so: the script is wrong.
     pub fn apply(&mut self, act: &Act) -> Result<(), String> {
+        self.apply_noting(act, &mut |_| {})
+    }
+
+    /// [`Table::apply`], calling `note` with every slot whose object the act replaces or removes
+    /// or whose place in a library's order it changes. An object it does not name keeps its
+    /// record, though its place in an order may shift as another object joins or leaves it.
+    /// A client that works out where objects rest after each step re-places only the parts of
+    /// the table that hold the noted objects.
+    pub fn apply_noting(
+        &mut self,
+        act: &Act,
+        note: &mut dyn FnMut(ObjectId),
+    ) -> Result<(), String> {
         match act {
             Act::Fly {
                 object, at, item, ..
             }
             | Act::Appear {
                 object, at, item, ..
-            } => self.place(object, *at, item.as_ref()),
+            } => self.place(object, *at, item.as_ref(), note),
             Act::Vanish {
                 subject,
                 object,
@@ -240,9 +253,9 @@ impl Table {
                 ..
             } => match (*subject, object) {
                 (Subject::Object { slot }, Some(object)) if slot == object.slot => {
-                    self.place(object, *at, None)
+                    self.place(object, *at, None, note)
                 }
-                (Subject::Object { slot }, None) => self.remove(slot),
+                (Subject::Object { slot }, None) => self.remove(slot, note),
                 (Subject::Ability { id }, None) => {
                     let at = self
                         .stack
@@ -280,7 +293,7 @@ impl Table {
             | Act::Streak {
                 object: Some(object),
                 ..
-            } => self.place(object, None, None),
+            } => self.place(object, None, None, note),
             Act::Count {
                 tally: Tally::Life { player, life },
             } => {
@@ -299,7 +312,7 @@ impl Table {
                 self.piles_mut(*player).named_counters.clone_from(counters);
                 Ok(())
             }
-            Act::Set { fact } => self.set(fact),
+            Act::Set { fact } => self.set(fact, note),
             Act::Strike { object: None, .. }
             | Act::Streak { object: None, .. }
             | Act::Dwell { .. }
@@ -311,7 +324,7 @@ impl Table {
     }
 
     /// A part of the table is as `fact` says.
-    fn set(&mut self, fact: &Fact) -> Result<(), String> {
+    fn set(&mut self, fact: &Fact, note: &mut dyn FnMut(ObjectId)) -> Result<(), String> {
         match fact {
             &Fact::Turn {
                 number,
@@ -326,22 +339,25 @@ impl Table {
                     step,
                 };
             }
-            Fact::Object { object } => self.place(object, None, None)?,
+            Fact::Object { object } => self.place(object, None, None, note)?,
             Fact::Library { player, order } => {
-                self.piles_mut(*player).library.clone_from(order);
+                let library = &mut self.piles_mut(*player).library;
+                library.iter().chain(order).for_each(|&slot| note(slot));
+                library.clone_from(order);
             }
             Fact::Forget { slots } => {
                 for &slot in slots {
-                    self.remove(slot)?;
+                    self.remove(slot, note)?;
                 }
             }
             Fact::ShuffledLibrary { player, cards } => {
                 let old = std::mem::take(&mut self.piles_mut(*player).library);
                 for slot in old {
                     self.objects.remove(&slot);
+                    note(slot);
                 }
                 for object in cards {
-                    self.place(object, None, None)?;
+                    self.place(object, None, None, note)?;
                 }
             }
             Fact::Item { subject, item } => {
@@ -364,6 +380,7 @@ impl Table {
         object: &ObjectView,
         at: Option<u16>,
         item: Option<&StackItem>,
+        note: &mut dyn FnMut(ObjectId),
     ) -> Result<(), String> {
         let slot = object.slot;
         let side = object.zone_side.unwrap_or(object.owner);
@@ -402,6 +419,7 @@ impl Table {
             self.place_stack(item, None, at)?;
         }
         self.objects.insert(slot, object.clone());
+        note(slot);
         Ok(())
     }
 
@@ -437,7 +455,8 @@ impl Table {
     }
 
     /// The object in `slot` is no more.
-    fn remove(&mut self, slot: ObjectId) -> Result<(), String> {
+    fn remove(&mut self, slot: ObjectId, note: &mut dyn FnMut(ObjectId)) -> Result<(), String> {
+        note(slot);
         let object = self
             .objects
             .remove(&slot)

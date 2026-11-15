@@ -1,10 +1,10 @@
 //! The table's scene objects: one per game object, keyed by the object's slot in the view and
 //! kept across updates, so that a card moving between zones is one object throughout.
 
-use beryl_protocol::protocol::PlayerView;
+use beryl_protocol::protocol::{ObjectId, PlayerView};
 use glam::{Affine3A, Vec2, Vec3};
 
-use super::place::{Placement, Scroll};
+use super::place::{Group, Placement, Scroll, Zones, place_group, place_zones};
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, Window, place};
 use crate::faces::{CARD_BACK, Faces};
 use crate::frame::{Band, Draw, ElementId, FrameBuilder, Place, Resolved, Role, StateBits};
@@ -97,6 +97,29 @@ impl Table {
     #[must_use]
     pub fn placement(&self, view: &PlayerView) -> Placement {
         place(view, &self.layout, &self.camera, &self.scroll)
+    }
+
+    /// Every object's resting place in `zones`, for this window.
+    pub(crate) fn placement_of(&self, zones: &Zones) -> Placement {
+        place_zones(zones, &self.layout, &self.camera, &self.scroll)
+    }
+
+    /// Places the objects of `group` in `zones` into `placement` for this window, and leaves the
+    /// slots it placed in `placed`.
+    pub(crate) fn place_group(
+        &self,
+        zones: &Zones,
+        group: Group,
+        placement: &mut Placement,
+        placed: &mut Vec<ObjectId>,
+    ) {
+        place_group(
+            zones,
+            group,
+            (&self.layout, &self.camera, &self.scroll),
+            placement,
+            placed,
+        );
     }
 
     /// Puts every object of `view` at its resting place, and forgets the objects it no longer
