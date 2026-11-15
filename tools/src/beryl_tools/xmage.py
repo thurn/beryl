@@ -289,6 +289,9 @@ class Exporter:
             self.emit(f"setChoice({who}, {java_string(ANOTHER_CARD)});")
         elif self.cards.chooses_as_it_enters(name, "color", "creature type"):
             self.emit(f'setChoice({who}, "[choice_skip]");')
+        elif self.cards.enters_as_copy(name):
+            # The scenario starts with the printed card already on the battlefield.
+            self.emit(f"setChoice({who}, false);")
         counters = cast("Json | None", permanent["counters"])
         if counters is None:
             return
