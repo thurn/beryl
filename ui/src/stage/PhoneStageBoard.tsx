@@ -90,6 +90,7 @@ export function PhoneStageBoard({
   cancel,
   onLeave,
   onShortcuts,
+  onCommandList,
   onMatchPanel,
   log,
   tableLog,
@@ -111,6 +112,7 @@ export function PhoneStageBoard({
   cancel?(): void;
   onLeave(): void;
   onShortcuts?: () => void;
+  onCommandList?: () => void;
   onMatchPanel?: (panel: MatchPanel) => void;
   log: LogEntry[];
   tableLog?: TableLogControls;
@@ -326,6 +328,27 @@ export function PhoneStageBoard({
                     <div className="phone-thinking">
                       <Thinking />
                     </div>
+                  )}
+                  {onCommandList && (
+                    <button
+                      type="button"
+                      className="icon-button phone-table-search"
+                      aria-label="Search commands"
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={onCommandList}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        aria-hidden="true"
+                      >
+                        <circle cx="10.5" cy="10.5" r="6" />
+                        <path d="m15 15 5 5" />
+                      </svg>
+                    </button>
                   )}
                   <MenuButton
                     onLeave={onLeave}

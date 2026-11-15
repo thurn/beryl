@@ -2009,7 +2009,15 @@
     "asks": "none",
     "client": "select_all",
     "key": { "mac": "Cmd+A", "other": "Ctrl+A" },
-    "group": "Selection"
+    "group": "Selection",
+    "also_applies_to": {
+      "permanent": false,
+      "their_permanent": false,
+      "hand_card": false,
+      "stack_entry": false,
+      "viewer_card": false,
+      "pile_card": false
+    }
   },
   {
     "id": "selection.row",

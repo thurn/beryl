@@ -15,7 +15,7 @@ import {
     tableView,
 } from "./table.mjs";
 
-const phone = {
+export const phone = {
     route: (page) => tableRoute(page, true),
     ready: ".start-panel",
     serial: true,
@@ -30,8 +30,8 @@ const phone = {
     },
 };
 
-const deck = "24 Forest";
-const moveLand = (view) => ({
+export const deck = "24 Forest";
+export const moveLand = (view) => ({
     move: {
         to: "battlefield",
         ...tableActionRef(view, {
@@ -40,16 +40,16 @@ const moveLand = (view) => ({
         }),
     },
 });
-const card = (page, slot) =>
+export const card = (page, slot) =>
     page.locator(`.card-layer > [data-slot="${slot}"]`);
 const field = (view) =>
     view.objects.filter(({ zone }) => zone === "battlefield");
-const sheet = (page) =>
+export const sheet = (page) =>
     page.locator('[data-presentation="sheet"]').getByRole("menu");
-const row = (page, name) =>
+export const row = (page, name) =>
     sheet(page).getByRole("menuitem", { name, exact: true });
 
-async function hold(page, target) {
+export async function pressTouch(target) {
     const point = center(await target.boundingBox());
     const touch = {
         pointerId: 100,
@@ -60,6 +60,11 @@ async function hold(page, target) {
         clientY: point.y,
     };
     await target.dispatchEvent("pointerdown", { ...touch, buttons: 1 });
+    return touch;
+}
+
+export async function hold(page, target) {
+    const touch = await pressTouch(target);
     await page.clock.runFor(500);
     await target.dispatchEvent("pointerup", touch);
     await sheet(page).waitFor();

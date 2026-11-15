@@ -232,9 +232,8 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
     return stage.subscribe(update);
   }, [stage, client]);
 
-  useEffect(() => listenTableKeys(commands), [commands]);
-
   const phone = usePhone();
+  useEffect(() => listenTableKeys(commands, phone), [commands, phone]);
 
   if (!shown) {
     const status = (
@@ -291,7 +290,8 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
       waiting={false}
       stops={shown.view.stops}
       onLeave={leave}
-      onShortcuts={commands.openShortcuts}
+      onShortcuts={phone ? undefined : commands.openShortcuts}
+      onCommandList={() => commands.openList()}
       onMatchPanel={canStartTable() ? openMatch : undefined}
       onNextPhase={() => {
         if (!commands.overlayOpen && !client.overlayOpen)

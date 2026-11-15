@@ -11,6 +11,7 @@ interface Entry<T> {
   onCancel: () => void;
   fieldLabel?: string;
   autoFocus?: boolean;
+  phone?: boolean;
   suggestions?: readonly string[];
 }
 
@@ -86,6 +87,7 @@ function AskEntry<T>({
   onCancel,
   fieldLabel,
   autoFocus = true,
+  phone,
   suggestions,
   read,
   format,
@@ -138,7 +140,7 @@ function AskEntry<T>({
     );
   };
   return (
-    <Dock>
+    <Dock className={phone ? "phone-table-ask" : undefined}>
       <form
         ref={form}
         className="table-ask-form"

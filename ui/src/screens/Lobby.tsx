@@ -13,6 +13,7 @@ import {
   type LobbyChange,
   type LobbyUpdate,
 } from "../ipc";
+import { useKeyboardInset } from "../mobile/keyboardInset";
 import { usePhone } from "../mobile/phone";
 import { LinkBanner } from "../table/LinkBanner";
 import { useLobbyLinkDetails, useTableLink } from "../table/link";
@@ -28,6 +29,7 @@ import "../table/lobby/lobby.css";
 
 export function Lobby() {
   const phone = usePhone();
+  const keyboardStyle = useKeyboardInset(phone);
   const [update, setUpdate] = useState<LobbyUpdate | null>();
   const [picker, setPicker] = useState<DeckPanel>();
   const [deckName, setDeckName] = useState<string>();
@@ -48,8 +50,11 @@ export function Lobby() {
   const own = view?.seats.find((seat) => seat.seat === view.you);
   useLobbyLinkDetails(link.kind === "connected", { current, read });
   useEffect(
-    () => openNativeTableKeys(() => setError("Could not set table shortcuts.")),
-    [],
+    () =>
+      phone
+        ? undefined
+        : openNativeTableKeys(() => setError("Could not set table shortcuts.")),
+    [phone],
   );
   useEffect(() => {
     let mounted = true;
@@ -165,7 +170,7 @@ export function Lobby() {
     if (frozen || pending) return;
     const id = resolve(event, "lobby", bindings);
     if (id === "lobby.paste_deck") setPicker("paste");
-    else if (id === "lobby.change_deck" && !phone) setPicker("file");
+    else if (id === "lobby.change_deck") setPicker("file");
     else if (id === "lobby.unload_deck" && own?.loaded) unload();
     else if (id === "lobby.sideboard" && own?.loaded)
       setSideboard((open) => !open);
@@ -175,6 +180,7 @@ export function Lobby() {
     event.preventDefault();
   };
   useEffect(() => {
+    if (phone) return;
     let mounted = true;
     let bindings: Bindings | undefined;
     void appInfo().then(
@@ -191,10 +197,10 @@ export function Lobby() {
       mounted = false;
       window.removeEventListener("keydown", key);
     };
-  }, []);
+  }, [phone]);
 
   const screen = (
-    <div className="table start-screen lobby-screen">
+    <div className="table start-screen lobby-screen" style={keyboardStyle}>
       <main
         className="start-panel lobby-panel"
         aria-label="Table lobby"

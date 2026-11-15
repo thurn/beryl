@@ -36,6 +36,7 @@
 .table-link .step-banner-title {
   width: 100%;
   overflow: hidden;
+  font-size: 20px;
   text-align: center;
   text-transform: none;
   text-overflow: ellipsis;
@@ -45,11 +46,10 @@
   pointer-events: auto;
 }
 
-body.phone /* Player names can span the space the step banner uses for its side ornaments. */
-.table-link .step-banner :is(.step-banner-rule, .step-banner-diamond, .step-banner-dot) {
-  display: none;
+body.phone .table-link {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
 }
 
-.table-link .step-banner-title {
-  font-size: 20px;
+body.phone .table-link-notice {
+  min-height: 48px;
 }

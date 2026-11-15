@@ -5,6 +5,8 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
+import { Button } from "../components/Controls";
+import { useKeyboardInset } from "../mobile/keyboardInset";
 import { match } from "./filter";
 import "./commandList.css";
 
@@ -70,6 +72,8 @@ export function CommandList({
   const groups = groupCommands(
     externalSearch ? commands : match(query, commands),
   );
+  const fullscreen = presentation === "fullscreen";
+  const keyboardStyle = useKeyboardInset(fullscreen);
   const name = externalSearch?.label ?? "Search commands";
   // Keyboard movement follows the displayed rows after matches are grouped.
   const rows = groups.flatMap(([, commands]) => commands);
@@ -96,8 +100,8 @@ export function CommandList({
 
   useLayoutEffect(() => {
     if (capturing) keyCapture.current?.focus();
-    else search.current?.focus();
-  }, [capturing]);
+    else if (!fullscreen) search.current?.focus();
+  }, [capturing, fullscreen]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDialogElement>) => {
     event.stopPropagation();
@@ -126,10 +130,11 @@ export function CommandList({
         break;
       }
       case "Enter":
+        if (fullscreen && event.target !== search.current) return;
         event.preventDefault();
         if (!active || (externalSearch?.busy && !selected)) return;
         if (!event.altKey) onRun(active.id, event.shiftKey);
-        else if (bindable?.(active.id) !== false) {
+        else if (!fullscreen && bindable?.(active.id) !== false) {
           if (captureBinding) setCapturing(active.id);
           else onBind?.(active.id);
         }
@@ -143,12 +148,22 @@ export function CommandList({
       className="command-list"
       aria-label={externalSearch ? name : "Command list"}
       data-presentation={presentation}
+      style={keyboardStyle}
       onKeyDown={onKeyDown}
       onCancel={(event) => {
         event.preventDefault();
         onClose();
       }}
     >
+      {fullscreen && (
+        <Button
+          className="command-list-close"
+          variant="secondary"
+          onClick={onClose}
+        >
+          Close
+        </Button>
+      )}
       <div className="command-list-field">
         <input
           ref={search}
@@ -203,7 +218,7 @@ export function CommandList({
                 >
                   <span>{command.label}</span>
                   {command.detail && <small>{command.detail}</small>}
-                  {command.key && <kbd>{command.key}</kbd>}
+                  {!fullscreen && command.key && <kbd>{command.key}</kbd>}
                 </div>
               );
             })}
@@ -226,11 +241,13 @@ export function CommandList({
         </button>
       )}
       {notice && <div role="status">{notice}</div>}
-      <footer className="command-list-hints">
-        <span>{externalSearch ? "↵ choose" : "↵ run"}</span>
-        {!externalSearch && <span>⌥↵ bind a key</span>}
-        <span>Esc close</span>
-      </footer>
+      {!fullscreen && (
+        <footer className="command-list-hints">
+          <span>{externalSearch ? "↵ choose" : "↵ run"}</span>
+          {!externalSearch && <span>⌥↵ bind a key</span>}
+          <span>Esc close</span>
+        </footer>
+      )}
     </dialog>
   );
 }

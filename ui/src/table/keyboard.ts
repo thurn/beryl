@@ -56,8 +56,11 @@ export function openNativeTableKeys(report: (error: unknown) => void) {
   return () => setNativeKeys(false);
 }
 
-export function listenTableKeys(commands: TableCommands) {
+export function listenTableKeys(commands: TableCommands, phone: boolean) {
   const { client, bindings } = commands;
+  window.addEventListener("keydown", client.key);
+  if (phone) return () => window.removeEventListener("keydown", client.key);
+
   const restoreNativeKeys = openNativeTableKeys(commands.reportError);
   setBugReportTableOpen(true, true);
   const keydown = (event: KeyboardEvent) => {
@@ -119,7 +122,6 @@ export function listenTableKeys(commands: TableCommands) {
     }
   };
   window.addEventListener("keydown", keydown, true);
-  window.addEventListener("keydown", client.key);
   return () => {
     window.removeEventListener("keydown", keydown, true);
     window.removeEventListener("keydown", client.key);

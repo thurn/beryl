@@ -20,3 +20,31 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
 }
+
+.dock.phone-table-ask {
+  position: fixed;
+  inset: max(12px, env(safe-area-inset-top)) 12px auto;
+  width: auto;
+  margin-inline: auto;
+}
+
+.phone-table-ask .table-ask-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-flow: dense;
+  padding: 8px;
+  border: 1px solid var(--metal);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.phone-table-ask :is(.prompt-stepper, .table-ask-suggestions) {
+  grid-column: 1 / -1;
+}
+
+.phone-table-ask .table-ask-suggestions {
+  grid-row: 2;
+}
+
+.phone-table-ask .prompt-stepper {
+  grid-row: 1;
+}

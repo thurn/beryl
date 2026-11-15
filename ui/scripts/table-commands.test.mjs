@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { commands, commandsFor } from "../src/table/commands.ts";
+import {
+    commandListDefaults,
+    commands,
+    commandsFor,
+} from "../src/table/commands.ts";
 
 const appendix = new URL(
     "../../docs/manual-multiplayer-cockatrice.md",
@@ -112,6 +116,39 @@ test("default keys cover the appendix in the intended scope", () => {
     assert.equal(lobby.get("Cmd+Shift+B"), "lobby.sideboard");
     assert.equal(table.get("Escape"), "viewer.close");
     assert.equal(table.get("Cmd+K"), "table.command_list");
+});
+
+test("each keyed command has a touch route or is desktop-only lobby hosting", () => {
+    const directControls = new Set([
+        "table.command_list",
+        "lobby.game_settings",
+        "lobby.change_deck",
+        "lobby.paste_deck",
+        "lobby.unload_deck",
+        "lobby.sideboard",
+        "lobby.ready",
+    ]);
+    const everyAction = commands.find(({ id }) => id === "table.every_action");
+    assert.ok(everyAction?.menu);
+    const targets = new Set([
+        "table",
+        ...commandListDefaults,
+        everyAction.applies_to,
+        ...Object.keys(everyAction.also_applies_to),
+    ]);
+    for (const command of commands) {
+        if (!command.key || command.id === "lobby.host") continue;
+        if (directControls.has(command.id)) continue;
+        assert.equal(command.scope, "table", command.id);
+        assert.notEqual(command.client, "open_command_list", command.id);
+        assert.ok(
+            [
+                command.applies_to,
+                ...Object.keys(command.also_applies_to ?? {}),
+            ].some((target) => targets.has(target)),
+            command.id,
+        );
+    }
 });
 
 function firstRows(target, count) {

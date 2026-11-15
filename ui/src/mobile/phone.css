@@ -103,8 +103,12 @@ body.phone::before {
   width: 20px;
   height: 20px;
 }
-.phone-menu {
+.phone-menu,
+.phone-table-search {
   margin-left: auto;
+}
+.phone-table-search + .phone-menu {
+  margin-left: 4px;
 }
 
 /* The middle: the phase icon on the gold line, glowing while it is your turn; left of the

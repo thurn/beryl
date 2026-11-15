@@ -36,10 +36,12 @@ export function TablePalette({
           : undefined;
       return {
         id: entry.id,
-        label: entry.label,
+        label: phone && entry.id === "library.draw" ? "Draw card" : entry.label,
         detail,
         group: entry.command.group,
-        key: describe(bindings.get(entry.command.id), bindings.platform),
+        key: phone
+          ? undefined
+          : describe(bindings.get(entry.command.id), bindings.platform),
       };
     },
   );

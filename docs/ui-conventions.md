@@ -337,7 +337,9 @@ restore the old behavior.
   whose it is. It lists commands as plain labeled rows with key hints, check
   marks for active switches and at most one submenu level. A command that needs
   a number opens a prompt when chosen. On a phone, a long press opens a bottom
-  sheet with the full card above the actions. Submenus replace the rows and
+  sheet with the full card above the actions. A short hold before moving starts
+  a drag. Dropping on the lower half of a library puts the card on the bottom.
+  Draw arrow waits for a tap on the destination. Submenus replace the rows and
   offer Back. Select opens a bar with the count, Actions and Done while taps
   toggle cards. Play face down is available on the card, and Bottom card makes
   the next drag from that pile take its bottom card.
@@ -346,7 +348,9 @@ restore the old behavior.
   and show their shortcuts. Up and Down move between results, Return runs the
   selected command, Option+Return captures a new shortcut. The list reports when
   another command loses the key. Escape closes the list, and Shortcuts in the
-  settings menu offers Reset shortcuts.
+  settings menu offers Reset shortcuts. On a phone, the search button opens the
+  list full screen with a Close button and without key hints. Typed table
+  prompts open at the top so the keyboard leaves the field visible.
 - **Quitting from a manual table.** On the desktop, the Quit shortcut asks
   whether to leave the table and quit Beryl. Cancel keeps the table open.
 - **Manual table turn controls.** The step track lights the current step beside

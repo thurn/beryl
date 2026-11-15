@@ -13,7 +13,11 @@ import { desktopDropAreas } from "./dropZones";
 import { AskPrompt, type AskPromptProps } from "./AskPrompt";
 import type { Bindings } from "./bindings";
 import type { TableClient, TableTarget } from "./client";
-import { commands as registry, type Command } from "./commands";
+import {
+  commandListDefaults,
+  commands as registry,
+  type Command,
+} from "./commands";
 import { currentTarget } from "./keyboard";
 import { selectAt } from "./select";
 import { playerCounterValue } from "./players";
@@ -66,15 +70,10 @@ export type TableOverlay =
     };
 
 const table: TableTarget = { kind: "table" };
-const defaults: readonly TableTarget[] = [
-  { kind: "library", side: "you" },
-  { kind: "hand", side: "you" },
-  { kind: "life", side: "you" },
-  { kind: "player", side: "you" },
-  { kind: "graveyard", side: "you" },
-  { kind: "exile", side: "you" },
-  { kind: "sideboard", side: "you" },
-];
+const defaults: readonly TableTarget[] = commandListDefaults.map((kind) => ({
+  kind,
+  side: "you",
+}));
 
 const applies = (command: Command, target: TableTarget) => {
   const kind = kindOf(target);
@@ -185,7 +184,9 @@ export class TableCommands {
           viewer.zone === "library" && canUseZone(view, viewer.side, "library"),
       },
       pointed: this.client.surface?.pointed(),
-      key: (id) => describe(this.bindings.get(id), this.bindings.platform),
+      key: isPhone()
+        ? undefined
+        : (id) => describe(this.bindings.get(id), this.bindings.platform),
     };
   }
 
@@ -204,6 +205,11 @@ export class TableCommands {
     if (element && element.tabIndex >= 0)
       element.focus({ preventScroll: true });
     context.element = element;
+    if (isPhone())
+      context.pointed =
+        element?.closest("[data-viewer-slot], [data-stage]") ??
+        ("name" in target ? this.client.surface?.node(target.name) : null) ??
+        document.elementFromPoint(at.x, at.y);
     this.#showWithTokens({ kind: "menu", context, at });
   }
 
@@ -287,7 +293,11 @@ export class TableCommands {
         .filter(
           (entry) =>
             this.#supports(entry) &&
-            entry.command.client !== "open_command_list",
+            entry.command.client !== "open_command_list" &&
+            (!isPhone() || entry.command.client !== "open_shortcuts") &&
+            (!isPhone() ||
+              entry.id !== "selection.all" ||
+              context.pointed != null),
         )
         .map((entry) => ({ entry, context })),
     );
@@ -406,14 +416,21 @@ export class TableCommands {
     }
     switch (command.client) {
       case "select_all":
-        selectAt(client, "selection.all", context.pointed);
-        return;
       case "select_row":
-        selectAt(client, "selection.row", context.pointed);
+      case "select_column": {
+        const selection =
+          command.client === "select_all"
+            ? "selection.all"
+            : command.client === "select_row"
+              ? "selection.row"
+              : "selection.column";
+        if (selectAt(client, selection, context.pointed) && isPhone()) {
+          const cards = client.selection;
+          client.setSelecting(true);
+          client.setSelection(cards);
+        }
         return;
-      case "select_column":
-        selectAt(client, "selection.column", context.pointed);
-        return;
+      }
       case "report_bug":
         requestBugReport();
         return;
@@ -657,6 +674,7 @@ export function TableMenu({
     return (
       <AskPrompt
         {...overlay.prompt}
+        phone={phone}
         key={overlay.step ?? overlay.prompt.kind}
       />
     );

@@ -17,6 +17,17 @@ export type AppliesTo =
   | "lobby"
   | "viewer_card";
 
+/** The search button offers these targets even when no card is selected. */
+export const commandListDefaults = [
+  "library",
+  "hand",
+  "life",
+  "player",
+  "graveyard",
+  "exile",
+  "sideboard",
+] as const;
+
 export type Scope = "table" | "lobby";
 export type Assist =
   "turn_upkeep" | "combat" | "state_nudges" | "library_flows" | "ability_menus";

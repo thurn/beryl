@@ -10,6 +10,7 @@ type BoardProps = Omit<ComponentProps<typeof StageBoard>, "dimmed"> & {
   children?: ReactNode;
   freeze?: boolean;
   notice?: ReactNode;
+  onCommandList?: () => void;
   onSelectionActions?: (element: HTMLElement) => void;
 };
 
@@ -20,6 +21,7 @@ export function GameBoard({
   children,
   freeze,
   notice,
+  onCommandList,
   onSelectionActions,
   ...props
 }: BoardProps) {
@@ -28,6 +30,7 @@ export function GameBoard({
     <PhoneStageBoard
       {...props}
       opening={opening}
+      onCommandList={onCommandList}
       onSelectionActions={onSelectionActions}
     />
   ) : (

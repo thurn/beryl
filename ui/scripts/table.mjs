@@ -94,11 +94,12 @@ async function openTable(page) {
 export async function pair(
     host,
     link = "local",
-    { fromStart = false, hostName = "Host" } = {},
+    { fromStart = false, hostName = "Host", guestViewport } = {},
 ) {
     const guest = await host.context().newPage();
     try {
-        const route = await tableRoute(guest, false, "guest");
+        if (guestViewport) await guest.setViewportSize(guestViewport);
+        const route = await tableRoute(guest, !!guestViewport, "guest");
         const guestUrl = new URL(route, host.url());
         if (fromStart) {
             await guest.goto(guestUrl.href);
