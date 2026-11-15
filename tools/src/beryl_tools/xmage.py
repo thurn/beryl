@@ -412,10 +412,16 @@ class Exporter:
         questions = self.cards.cast_answers(card)
         if costs >> len(questions):
             raise Unsupported(f"casting option {costs:#b} of {card}")
+        alternative = None
         for bit, (paid, unpaid) in enumerate(questions):
             answer = paid if costs >> bit & 1 else unpaid
-            if answer:
+            if unpaid == "Cast with no":
+                if alternative is None or costs >> bit & 1:
+                    alternative = answer
+            elif answer:
                 self.emit(f"setChoice({who}, {java_string(answer)});")
+        if alternative is not None:
+            self.emit(f"setCastCost({who}, {java_string(alternative)});")
         if self.cards.unless_pays(card):
             self.unless_pays[card] = self.target_controller(action["player"], card)
         if self.cards.takes(card) is not None:

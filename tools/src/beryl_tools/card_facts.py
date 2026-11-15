@@ -247,10 +247,9 @@ class Cards:
 
     def cast_answers(self, card: str) -> list[tuple[str, str | None]]:
         """For each casting option XMage asks about when the spell is cast, by `costs` bit,
-        XMage's answer for paying it and for not paying it (None where it may not ask). An
-        alternative cost is a choice among the ways to cast the spell, offered only when it
-        can be paid: always for mana, while some card could pay for another cost. An
-        additional cost, as kicker or offspring, is a yes or no."""
+        XMage's answer for paying it and for not paying it. Alternative costs share one menu,
+        which XMage may omit if none is available. Additional costs such as kicker and
+        offspring are yes or no. Overload has a separate cast command."""
         answers: list[tuple[str, str | None]] = []
         for option in self.casting(card):
             keyword = cast(str, option["keyword"])
@@ -261,9 +260,7 @@ class Cards:
             elif keyword == "Alternative":
                 # An alternative cost no keyword names, as Force of Will's: XMage names it by
                 # its costs, "Cast with alternative cost: Pay 1 life and ...".
-                answers.append(("Cast with alternative cost", None))
-            elif cast(Json, option["cost"]).get("parts"):
-                answers.append((f"Cast with {keyword}", None))
+                answers.append(("Cast with alternative cost", "Cast with no"))
             else:
                 answers.append((f"Cast with {keyword}", "Cast with no"))
         return answers

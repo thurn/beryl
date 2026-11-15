@@ -141,7 +141,7 @@ def test_casting_options_are_asked_by_their_kind_and_cost() -> None:
     cards = gadget(casting=[kicker, evoke, impending])
     assert cards.cast_answers("Gadget") == [
         ("Cast with Impending", "Cast with no"),
-        ("Cast with Evoke", None),
+        ("Cast with Evoke", "Cast with no"),
         ("Yes", "No"),
     ]
     assert cards.overload_bit("Gadget") is None

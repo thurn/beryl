@@ -17,6 +17,7 @@ import mage.abilities.Ability;
 import mage.abilities.mana.ActivatedManaAbilityImpl;
 import mage.cards.Card;
 import mage.cards.Cards;
+import mage.choices.Choice;
 import mage.constants.Outcome;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
@@ -49,6 +50,17 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
     private static final String RESOLVE = "beryl:resolve";
     private static final String OPTIONAL = "beryl:optional:";
     private static final String TAP = "beryl:tap:";
+    private static final String NORMAL_COST = "Cast with no";
+
+    /** The answer to an alternative-cost menu belongs to the cast that can open it. */
+    private static final class CastWithCost extends PlayerAction {
+        private final String cost;
+
+        CastWithCost(PlayerAction cast, String cost) {
+            super(cast.getActionName(), cast.getTurnNum(), cast.getStep(), cast.getAction());
+            this.cost = cost;
+        }
+    }
 
     /**
      * A test player that also takes `passPriority`, `resolveTop` and `setOptionalChoice`. XMage runs a command
@@ -59,6 +71,7 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
      * answered it if not.
      */
     private static final class BerylTestPlayer extends TestPlayer {
+        private String castCost;
 
         BerylTestPlayer(TestComputerPlayer computerPlayer) {
             super(computerPlayer);
@@ -158,6 +171,23 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
                     () -> super.choose(outcome, cards, target, source, game));
         }
 
+        @Override
+        public boolean choose(Outcome outcome, Choice choice, Game game) {
+            if (castCost != null && choice.isKeyChoice()
+                    && (choice.getMessage().equals("You may choose an alternative cost")
+                        || choice.getMessage().equals("Choose an alternative cost"))) {
+                for (Map.Entry<String, String> item : choice.getKeyChoices().entrySet()) {
+                    if (item.getValue().startsWith(castCost)) {
+                        castCost = null;
+                        choice.setChoiceByKey(item.getKey(), false);
+                        return true;
+                    }
+                }
+                Assert.fail("Cast cost " + castCost + " is missing from " + choice.getKeyChoices().values());
+            }
+            return super.choose(outcome, choice, game);
+        }
+
         /**
          * Which of several replacement effects applies first (CR 616.1). Beryl names the card
          * whose effect it chose, which the queue answers as XMage does. It asks nothing where
@@ -255,6 +285,20 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
                     tap(action.getAction().substring(TAP.length()), game);
                     return true;
                 }
+                if (action instanceof CastWithCost) {
+                    CastWithCost cast = (CastWithCost) action;
+                    castCost = cast.cost;
+                    try {
+                        boolean result = super.priority(game);
+                        if (!getActions().contains(cast)) {
+                            Assert.assertTrue("XMage did not offer " + castCost,
+                                    castCost == null || NORMAL_COST.equals(castCost));
+                        }
+                        return result;
+                    } finally {
+                        castCost = null;
+                    }
+                }
                 break;
             }
             return super.priority(game);
@@ -291,6 +335,13 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
     /** `choice` answers `player`'s next question, if it comes by the end of `step`. */
     protected void setOptionalChoice(TestPlayer player, int turn, PhaseStep step, String choice) {
         player.addChoice(OPTIONAL + turn + ":" + step.name() + ":" + choice);
+    }
+
+    /** Answers the last scheduled cast's alternative-cost menu if XMage opens it. */
+    protected void setCastCost(TestPlayer player, String cost) {
+        List<PlayerAction> actions = player.getActions();
+        int last = actions.size() - 1;
+        actions.set(last, new CastWithCost(actions.get(last), cost));
     }
 
     /**
