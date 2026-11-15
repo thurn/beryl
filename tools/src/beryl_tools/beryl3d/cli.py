@@ -130,7 +130,6 @@ COMMANDS: tuple[Command, ...] = (
         run_cargo_test,
         test_arguments,
     ),
-    ),
     Command(
         "clippy",
         "runs clippy over every target of the workspace, with warnings as errors",
