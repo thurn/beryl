@@ -131,7 +131,7 @@ pub fn place_from_word(word: &str) -> Option<Place> {
     Some(Place::Card { zone, side, row })
 }
 
-const ZONES: [ZoneName; 8] = [
+const ZONES: [ZoneName; 9] = [
     ZoneName::Library,
     ZoneName::Hand,
     ZoneName::Battlefield,
@@ -140,6 +140,7 @@ const ZONES: [ZoneName; 8] = [
     ZoneName::Stack,
     ZoneName::Nowhere,
     ZoneName::Sideboard,
+    ZoneName::Merged,
 ];
 
 fn zone_word(zone: ZoneName) -> &'static str {
@@ -152,6 +153,7 @@ fn zone_word(zone: ZoneName) -> &'static str {
         ZoneName::Stack => "stack",
         ZoneName::Nowhere => "nowhere",
         ZoneName::Sideboard => "sideboard",
+        ZoneName::Merged => "merged",
     }
 }
 

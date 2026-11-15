@@ -9,6 +9,7 @@ use beryl_protocol::prompt::{
 use beryl_protocol::protocol::{
     DecisionId, DecisionView, Kind, SessionId, Side, Status, Why, ZoneName,
 };
+use beryl_protocol::script::Act;
 use beryl_scene::agent::checks::text_fits;
 use beryl_scene::agent::{Context, Layout, Rule};
 use beryl_scene::command::{Reply, SessionCommand};
@@ -25,7 +26,6 @@ use beryl_scene::text::Text;
 use beryl_scene::text::fonts::Font;
 use beryl_scene::tokens::{space, type_style};
 use beryl_scene::{Client, Config};
-use beryl_protocol::script::Act;
 use glam::Vec2;
 
 const WIDTH: f32 = 1440.0;

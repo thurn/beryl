@@ -75,7 +75,11 @@ impl ViewBuilder {
                 x: 0,
                 paid: Vec::new(),
             }),
-            ZoneName::Hand | ZoneName::Exile | ZoneName::Nowhere | ZoneName::Sideboard => {}
+            ZoneName::Hand
+            | ZoneName::Exile
+            | ZoneName::Nowhere
+            | ZoneName::Sideboard
+            | ZoneName::Merged => {}
         }
         let hidden =
             zone == ZoneName::Library || (zone == ZoneName::Hand && side == Side::Opponent);
