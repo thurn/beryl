@@ -8,7 +8,7 @@ use beryl_card::prompt::Purpose;
 use beryl_card::{Draws, Prompt};
 
 use super::{MOST, answer};
-use crate::card::{Ability, AbilityIx, FaceAbility, Replaced, Replacement};
+use crate::card::{Ability, AbilityIx, FaceAbility, FaceIx, ObjectAbility, Replaced, Replacement};
 use crate::decision::{Decision, DecisionKind, Opt};
 #[cfg(doc)]
 use crate::event::Sink;
@@ -23,12 +23,13 @@ use crate::state::{Count, ObjectRef, State, TurnStep};
 use crate::table::GameTable;
 
 /// A replacement of draws by a static ability of a permanent ([`Replaced::Draw`]) that applies
-/// to a draw: the permanent, the index of the ability on its face, the ability and the
-/// permanent's controller, for whom the players it names are read (CR 109.5).
+/// to a draw: the permanent, the ability's place among the permanent's abilities (one of a card
+/// under a merged permanent among them), the ability and the permanent's controller, for whom
+/// the players it names are read (CR 109.5).
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct DrawReplacement<L: Layout> {
     pub permanent: L::Slot,
-    pub index: AbilityIx,
+    pub index: ObjectAbility,
     pub ability: &'static crate::card::Ability,
     pub controller: Seat,
 }
@@ -42,18 +43,36 @@ impl<L: Layout> DrawReplacement<L> {
     }
 
     /// What the rules record as having applied ([`Sink::applied`]).
-    pub fn applied(&self, s: &State<L>) -> (ObjectRef<L>, u8) {
-        (s.object_ref(self.permanent), self.index.index() as u8)
+    pub fn applied(&self, s: &State<L>) -> (ObjectRef<L>, ObjectAbility) {
+        (s.object_ref(self.permanent), self.index)
     }
 
-    /// Who caused what happens instead, should it end the game.
-    pub fn cause(&self, s: &State<L>, t: &GameTable) -> LossCause<L> {
+    /// The card whose ability it is, that card's face and the ability's index on it: the
+    /// permanent's face that is up, or, for an ability of a card under a merged permanent,
+    /// that card ([CR 702.140e]): "A mutated permanent has all abilities of each card and token
+    /// that represents it."
+    ///
+    /// [CR 702.140e]: https://yawgatog.com/resources/magic-rules/#R702140e
+    pub fn card(&self, s: &State<L>, t: &GameTable) -> (L::Card, FaceIx, AbilityIx) {
+        if let Some((card, face, index, _)) = s.merged_ability(t, self.permanent, self.index) {
+            return (card, face, index);
+        }
+        let ObjectAbility::Own(index) = self.index else {
+            unreachable!("the card table refuses a granted replacement of draws");
+        };
         let (card, face) = s.definition(self.permanent).record(t);
+        (card, face, index)
+    }
+
+    /// Who caused what happens instead, should it end the game: the permanent, and the card
+    /// whose ability it is ([`DrawReplacement::card`]).
+    pub fn cause(&self, s: &State<L>, t: &GameTable) -> LossCause<L> {
+        let (card, face, index) = self.card(s, t);
         LossCause::Effect {
             source: Some(s.object_ref(self.permanent)),
             card,
             face,
-            ability: Some(FaceAbility::Own(self.index)),
+            ability: Some(FaceAbility::Own(index)),
         }
     }
 }
@@ -81,11 +100,7 @@ pub(crate) fn draw<L: Layout>(
     let (s, t) = (&*game.state, game.table);
     let mut found: Fixed<Option<DrawReplacement<L>>, MOST> = Fixed::new();
     for &permanent in s.battlefield() {
-        if !s
-            .copiable(permanent)
-            .may_replace(t)
-            .replaces(ReplacementKind::Draw)
-        {
+        if !super::may_replace(s, t, permanent, ReplacementKind::Draw) {
             continue;
         }
         let controller = s.controller(permanent);
@@ -106,7 +121,7 @@ pub(crate) fn draw<L: Layout>(
                 .sink
                 .applied
                 .as_slice()
-                .contains(&(s.object_ref(permanent), index.index() as u8));
+                .contains(&(s.object_ref(permanent), index));
             if applies {
                 found.push(Some(DrawReplacement {
                     permanent,

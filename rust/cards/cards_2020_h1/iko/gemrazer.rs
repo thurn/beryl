@@ -40,6 +40,7 @@ pub static CARD: CardDef = Printed::Gemrazer
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
     use crate::prelude::*;
+    use crate::tokens::TREASURE_TOKEN;
 
     /// The cast for the mutate cost, its first option.
     const MUTATE: Action = Action::Cast {
@@ -373,6 +374,60 @@ pub mod scenarios {
                 THEM.targets_player(ME),
                 THEM.has(Zone::Graveyard, Card::LightningBolt, 1),
                 ME.life(20),
+            ]),
+        // Over Hullbreacher, the merged creature is a Gemrazer with the Hullbreacher's
+        // replacement of an opponent's draws, from under it (CR 702.140e, CR 614.1a): the draw
+        // of P1's Twisted Image makes P0 a Treasure instead. The Forest left in hand keeps
+        // P0's main phase a decision once the Twisted Image has resolved.
+        Scenario::new("Gemrazer over Hullbreacher: P1's draw is a Treasure for P0")
+            .interaction(&[Card::Hullbreacher, Card::TwistedImage])
+            .battlefield(
+                P0,
+                &[Card::Forest, Card::Forest, Card::Forest, Card::Hullbreacher],
+            )
+            .hand(P0, &[Card::Gemrazer, Card::Forest])
+            .battlefield(P1, &[Card::Island, Card::LeoninScimitar])
+            .hand(P1, &[Card::TwistedImage])
+            .library(P1, &[Card::Island])
+            .actions(&[
+                MUTATE,
+                Resolve,
+                ME.yes(),
+                Resolve,
+                ME.controls(Card::Hullbreacher, 0),
+                ME.passes(),
+                THEM.casts(Card::TwistedImage),
+                ME.controls(TREASURE_TOKEN, 1),
+                THEM.has_cards(Zone::Hand, 0),
+                THEM.library_top(&[Card::Island]),
+            ]),
+        // Over Bloodghast, the merged creature is a Gemrazer with the Bloodghast's "This
+        // creature can't block", a rule change of its own from under it (CR 702.140e,
+        // CR 509.1a): P0 is never asked to block, and P1's 2/1 deals its damage.
+        Scenario::new("Gemrazer over Bloodghast: the merged creature can't block")
+            .interaction(&[Card::Bloodghast])
+            .battlefield(
+                P0,
+                &[Card::Forest, Card::Forest, Card::Forest, Card::Bloodghast],
+            )
+            .hand(P0, &[Card::Gemrazer])
+            .battlefield(P1, &[Card::LeoninScimitar, Prop::Vanilla])
+            .library(P0, &[Card::Island, Card::Island])
+            .library(P1, &[Card::Island, Card::Island])
+            .actions(&[
+                MUTATE,
+                Resolve,
+                ME.yes(),
+                Resolve,
+                ME.controls(Card::Bloodghast, 0),
+                advance_to(1, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                ME.done_attacking(),
+                advance_to(2, TurnStep::BeginningOfCombat),
+                THEM.passes(),
+                THEM.attacks_with(Prop::Vanilla),
+                advance_to(2, TurnStep::EndOfCombat),
+                ME.life(18),
             ]),
     ];
 }

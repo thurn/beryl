@@ -99,6 +99,11 @@ const UNREACHED: &[(&str, &str)] = &[
          card's hand-written scenarios have the opponent loot under it",
     ),
     (
+        "Hullbreacher: ability 0 (Replacement)",
+        "a generated scenario casts the card and no opponent draws after it resolves; the \
+         card's hand-written scenarios have the opponent loot under it",
+    ),
+    (
         "Furnace of Rath: ability 0 (Replacement)",
         "casting it deals no damage, and a generated position has nothing that deals damage \
          after; the card's hand-written scenarios double Lightning Bolt's and combat damage",

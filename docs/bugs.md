@@ -6,6 +6,25 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A merged permanent lost the replacement abilities and object rule changes of
+  the cards under it.** Gemrazer cast for its mutate cost over Hullbreacher made
+  no Treasure when an opponent drew an extra card, and over Bloodghast the
+  merged creature could still block, though a mutated permanent has every
+  ability of each card that represents it (CR 702.140e). `replace::statics`
+  dropped every ability other than `ObjectAbility::Own`, the per-permanent "may
+  replace" tests read only the top face's mask, and the object rule change
+  readers in `rule_change.rs` read only the top face's rules
+  (`Definition::rules`), because each kept an `AbilityIx` on the permanent's own
+  face as an ability's identity. Fixed: a replacement's source
+  (`Source::Ability`, `Key::Ability`, `DrawReplacement::index`, `Sink::applied`)
+  and a rule change's maker (`maker_of`) are named by `ObjectAbility`,
+  `replace::may_replace` and `rule_change::object_rules` add the faces under a
+  merged permanent (`State::merged_faces_now`), and `static_condition_holds`
+  reads a merged ability's condition as its own card's. Prevention: an ability's
+  identity is `ObjectAbility`, never an `AbilityIx`; a reader that narrows it to
+  `Own` with a `let ... else` should say in a comment which other kinds the card
+  table refuses.
+
 - **A merged permanent lost the activated, mana and static abilities of the
   cards under it.** Gemrazer cast for its mutate cost over Drudge Skeletons
   could not regenerate, over Gold Myr could not tap for {W}, and over Lord of
@@ -44,8 +63,6 @@ fixed in the same session. Newest first.
   a list position must be sized by the list's capacity in every layout, or
   stored in the list itself (a flag beside each entry), so that a `Large` list
   cannot outgrow it.
-
-||||||| parent of 22b17783e (feat: abilities from under a merged permanent)
 
 - **A save with a copy replayed a different attack once its cards were in other
   slots.** A Phantasmal Image copying Grizzly Bears and a real Grizzly Bears,

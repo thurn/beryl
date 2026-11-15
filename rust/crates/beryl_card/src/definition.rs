@@ -466,3 +466,9 @@ impl ObjectAbility {
         ObjectAbility::Own(AbilityIx::new(index))
     }
 }
+
+impl Default for ObjectAbility {
+    fn default() -> ObjectAbility {
+        ObjectAbility::own(0)
+    }
+}

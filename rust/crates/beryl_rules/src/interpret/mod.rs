@@ -11,7 +11,7 @@ mod scene;
 use beryl_card::{Amount, Condition, Effect, Objects, Players, Zone};
 
 use crate::bodies::Bodies;
-use crate::card::{Ability, AbilityIx, Behavior, Flow, ManaColor, Stop};
+use crate::card::{Ability, Behavior, Flow, ManaColor, ObjectAbility, Stop};
 use crate::event::Sink;
 use crate::filter::Filter;
 use crate::fixed::Full;
@@ -155,22 +155,47 @@ pub(crate) fn intervening_if<L: Layout>(
 
 /// Whether the condition of a static or replacement ability of the permanent in `slot`
 /// holds, or it has none: its "as long as" or "while", read for the permanent as "this"
-/// and its controller as "you". `index` is the ability's place on the face that is up.
+/// and its controller as "you". `ability` names it among the permanent's abilities
+/// ([`crate::state::State::abilities`]): one of the face that is up, or one of a card under a
+/// merged permanent, which is read as that card's ability, as its triggered abilities are
+/// ([CR 702.140e]): "A mutated permanent has all abilities of each card and token that
+/// represents it."
+///
+/// # Panics
+///
+/// For a granted ability: the card table refuses a card that grants a replacement effect or
+/// a rule change (`TableError::Granted`), the only abilities asked here.
+///
+/// [CR 702.140e]: https://yawgatog.com/resources/magic-rules/#R702140e
 #[inline]
 pub(crate) fn static_condition_holds<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     slot: L::Slot,
-    index: AbilityIx,
-    ability: &Ability,
+    ability: ObjectAbility,
+    a: &Ability,
 ) -> bool {
-    let Some(condition) = ability.condition() else {
+    let Some(condition) = a.condition() else {
         return true;
     };
     if let Some(holds) = without_a_scene(s, slot, condition) {
         return holds;
     }
-    let (card, face) = s.definition(slot).record(t);
+    let (card, face, index) = match ability {
+        ObjectAbility::Own(index) => {
+            let (card, face) = s.definition(slot).record(t);
+            (card, face, index)
+        }
+        ObjectAbility::Merged(..) => {
+            let Some((card, face, index, _)) = s.merged_ability(t, slot, ability) else {
+                return false;
+            };
+            (card, face, index)
+        }
+        ObjectAbility::Granted(_) => {
+            unreachable!("the card table refuses a granted replacement or rule change")
+        }
+    };
     let subject = PendingTrigger {
         of: AbilityRef {
             source: Some(s.object_ref(slot)),
@@ -181,7 +206,7 @@ pub(crate) fn static_condition_holds<L: Layout>(
         },
         info: TriggerInfo::default(),
     };
-    condition_holds(s, t, &subject, ability)
+    condition_holds(s, t, &subject, a)
 }
 
 /// Whether `objects` names nothing, read for the object in `slot` as "this" and its

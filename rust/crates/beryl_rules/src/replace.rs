@@ -99,8 +99,8 @@ pub(crate) fn moving<L: Layout>(
 enum Source<S> {
     /// An entry of the Effects store on the moving object.
     Effect(MoveReplacement),
-    /// A static ability of a permanent.
-    Ability(S, AbilityIx),
+    /// A static ability of a permanent, which may be one of a card under it.
+    Ability(S, ObjectAbility),
 }
 
 /// The most replacements one move can meet: the scratch lists of [`destination`] hold this
@@ -215,25 +215,60 @@ fn effect_destination(r: MoveReplacement, to: Zone) -> Option<Zone> {
 }
 
 /// The replacement abilities the permanent in `p` has now ([`State::abilities`]) that `pick`
-/// accepts, each with what `pick` read of its replacement, its index on the face and the
-/// ability, in the order of the permanent's abilities. `pick` is asked first and the ability's
-/// condition only of one it accepts ([`interpret::static_condition_holds`]), so the cheap tests
-/// go in `pick`.
+/// accepts, each with what `pick` read of its replacement, its place among the permanent's
+/// abilities and the ability, in the order of the permanent's abilities. `pick` is asked first
+/// and the ability's condition only of one it accepts ([`interpret::static_condition_holds`]),
+/// so the cheap tests go in `pick`.
 ///
-/// The card table refuses a card that grants a replacement effect (`TableError::Granted`), so
-/// every one found is the permanent's own, at its index on the face.
+/// Those of the face that is up come first, then those of the cards under a merged permanent
+/// ([CR 702.140e]): "A mutated permanent has all abilities of each card and token that
+/// represents it." The card table refuses a card that grants a replacement effect
+/// (`TableError::Granted`), so none is granted.
+///
+/// [CR 702.140e]: https://yawgatog.com/resources/magic-rules/#R702140e
 pub(crate) fn statics<'a, L: Layout, T>(
     s: &'a State<L>,
     t: &'a GameTable,
     p: L::Slot,
     mut pick: impl FnMut(&'static Ability, &'static Replacement) -> Option<T> + 'a,
-) -> impl Iterator<Item = (AbilityIx, &'static Ability, T)> + 'a {
+) -> impl Iterator<Item = (ObjectAbility, &'static Ability, T)> + 'a {
     s.abilities(t, p).filter_map(move |(ability, a)| {
-        let ObjectAbility::Own(index) = ability else {
+        if matches!(ability, ObjectAbility::Granted(_)) {
             return None;
-        };
+        }
         let picked = pick(a, a.replacement()?)?;
-        interpret::static_condition_holds(s, t, p, index, a).then_some((index, a, picked))
+        interpret::static_condition_holds(s, t, p, ability, a).then_some((ability, a, picked))
+    })
+}
+
+/// Whether the permanent in `p` may have a replacement ability of `kind`: one of the face that
+/// is up, or, of a merged permanent, of a card under it ([`statics`]). The faces under it are
+/// read only in a game with a card that merges.
+#[inline]
+pub(crate) fn may_replace<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    p: L::Slot,
+    kind: ReplacementKind,
+) -> bool {
+    s.definition(p).may_replace(t).replaces(kind)
+        || (t.can(Capability::Merges) && merged_may_replace(s, t, p, kind))
+}
+
+/// [`may_replace`] for the cards under a merged permanent. Out of line: only a game with a
+/// card that merges comes here.
+#[cold]
+#[inline(never)]
+fn merged_may_replace<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    p: L::Slot,
+    kind: ReplacementKind,
+) -> bool {
+    s.merged_faces_now(t, p).any(|(card, face)| {
+        crate::definition::Definition::<L>::of_face(card, face)
+            .may_replace(t)
+            .replaces(kind)
     })
 }
 
@@ -246,14 +281,10 @@ fn static_destinations<'a, L: Layout>(
     t: &'a GameTable,
     slot: L::Slot,
     to: Zone,
-) -> impl Iterator<Item = (L::Slot, AbilityIx, Zone)> + 'a {
+) -> impl Iterator<Item = (L::Slot, ObjectAbility, Zone)> + 'a {
     s.battlefield()
         .iter()
-        .filter(move |&&p| {
-            s.definition(p)
-                .may_replace(t)
-                .replaces(ReplacementKind::Move)
-        })
+        .filter(move |&&p| may_replace(s, t, p, ReplacementKind::Move))
         .flat_map(move |&p| {
             let controller = s.controller(p);
             let words = s.words_of(p);
@@ -298,11 +329,7 @@ fn entering_destinations<L: Layout>(
         slot, entry, cast, ..
     } = *proposal;
     for &p in s.battlefield() {
-        if !s
-            .definition(p)
-            .may_replace(t)
-            .replaces(ReplacementKind::Move)
-        {
+        if !may_replace(s, t, p, ReplacementKind::Move) {
             continue;
         }
         let controller = s.controller(p);

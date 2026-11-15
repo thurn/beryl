@@ -129,6 +129,21 @@ impl<L: Layout> State<L> {
         Some((card, face, index, a))
     }
 
+    /// The cards and faces under the merged permanent in `slot` whose abilities it has now
+    /// ([`Copiable::merged_faces`]), from the top of the pile down: none for an object that is
+    /// not a merged permanent, or one that lost all its abilities. In a game with no card that
+    /// merges, one test of the game's capability.
+    #[inline]
+    pub fn merged_faces_now<'s>(
+        &'s self,
+        t: &'s GameTable,
+        slot: L::Slot,
+    ) -> impl Iterator<Item = (L::Card, FaceIx)> + 's {
+        self.merged_values(t, slot)
+            .into_iter()
+            .flat_map(move |values| values.merged_faces(t))
+    }
+
     /// The abilities granted to the object in `slot`: none off the battlefield.
     fn granted_to(&self, slot: L::Slot) -> [Option<GrantRef<L>>; GRANTS] {
         if self.object(slot).on_battlefield() {

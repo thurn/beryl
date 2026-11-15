@@ -15,13 +15,13 @@ use beryl_card::{Governed, ManaCost, PlayerRules, RuleChange, SpellCost};
 use beryl_kernel::chosen::ChosenValue;
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, AbilityIx, AbilityKind, Face, ObjectAbility, Words};
+use crate::card::{Ability, AbilityKind, Face, ObjectAbility, Words};
 use crate::filter::{self, Evaluate, Filter};
 use crate::ids::Seat;
 use crate::interpret;
 use crate::layout::Layout;
 use crate::state::{RuleId, RuleKind, Rules, State};
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
 
 /// Whether a rule change in force has `player` cast the spell `face` would be only when
 /// they could cast a sorcery, as a static ability "Each opponent can cast spells only any
@@ -248,7 +248,7 @@ fn named_by_a_maker<L: Layout>(
         let Some(ChosenValue::Name(Some(card))) = s.chosen(maker) else {
             return false;
         };
-        let made = s.definition(maker).player_rules(t).common(rules);
+        let made = player_rules_of(s, t, maker).common(rules);
         t.def(card).name == name
             && made.iter().any(|id| {
                 filter::is_for(&t.rule(id).players, player, d.controller)
@@ -318,7 +318,7 @@ fn attack_forbidden<L: Layout>(
     defending: Seat,
     of_kind: Rules,
 ) -> bool {
-    let own = s.definition(slot).rules(t).common(of_kind);
+    let own = object_rules(s, t, slot).common(of_kind);
     own.iter().any(|id| {
         let Governed::Attack {
             unless_defender_controls,
@@ -408,8 +408,47 @@ fn own_rule_holds<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot, kind: R
         (s.effect_rules_on(s.object_ref(slot)).common(of_kind)).is_empty(),
         "an effect that changes a rule asked of a permanent"
     );
-    let own = s.definition(slot).rules(t).common(of_kind);
+    let own = object_rules(s, t, slot).common(of_kind);
     own.iter().any(|id| own_condition_holds(s, t, slot, id))
+}
+
+/// The rule changes the static abilities of the permanent in `slot` make: those of the face
+/// that is up and, of a merged permanent, those of the cards under it ([CR 702.140e]): "A
+/// mutated permanent has all abilities of each card and token that represents it." The faces
+/// under it are read only in a game with a card that merges.
+///
+/// [CR 702.140e]: https://yawgatog.com/resources/magic-rules/#R702140e
+#[inline]
+fn object_rules<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Rules {
+    let own = s.definition(slot).rules(t);
+    if t.can(Capability::Merges) {
+        own.union(merged_rules(s, t, slot))
+    } else {
+        own
+    }
+}
+
+/// The rule changes the static abilities of the cards under the merged permanent in `slot`
+/// make, if it is one and has their abilities ([`object_rules`]). Out of line: only a game with
+/// a card that merges comes here.
+#[cold]
+#[inline(never)]
+fn merged_rules<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Rules {
+    s.merged_faces_now(t, slot)
+        .map(|(card, face)| crate::definition::Definition::<L>::of_face(card, face).rules(t))
+        .fold(Rules::NONE, Rules::union)
+}
+
+/// The rule changes for players among those the static abilities of the permanent in `slot`
+/// make ([`object_rules`]).
+#[inline]
+fn player_rules_of<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Rules {
+    let own = s.definition(slot).player_rules(t);
+    if t.can(Capability::Merges) {
+        own.union(merged_rules(s, t, slot).common(t.player_rules()))
+    } else {
+        own
+    }
 }
 
 /// Whether the condition of the static ability of the permanent in `slot` that makes the
@@ -517,21 +556,20 @@ fn changed_cost<L: Layout>(
 }
 
 /// The static ability of the permanent in `slot` that makes the rule change `id`, and its
-/// place on the face that is up.
+/// place among the permanent's abilities: one of the face that is up, or of a card under a
+/// merged permanent ([`State::abilities`]).
 fn maker_of<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     slot: L::Slot,
     id: RuleId,
-) -> Option<(AbilityIx, &'static Ability)> {
+) -> Option<(ObjectAbility, &'static Ability)> {
     let rule = t.rule(id);
     // The card table refuses a card that grants a rule change (`TableError::Granted`), so
-    // the maker is one of the permanent's own abilities.
+    // the maker is not a granted ability.
     s.abilities(t, slot).find_map(|(index, ability)| {
-        let ObjectAbility::Own(index) = index else {
-            return None;
-        };
-        let makes = ability.kind() == AbilityKind::Static
+        let makes = !matches!(index, ObjectAbility::Granted(_))
+            && ability.kind() == AbilityKind::Static
             && ability
                 .rule()
                 .is_some_and(|named| std::ptr::eq(named, rule));
@@ -566,7 +604,7 @@ pub(crate) fn maker<L: Layout>(
     // in the battlefield list.
     s.permanents()
         .find(|&(slot, d)| {
-            let made = s.definition(slot).player_rules(t).common(of_kind);
+            let made = player_rules_of(s, t, slot).common(of_kind);
             made.iter().any(|id| {
                 let rule = t.rule(id);
                 filter::is_for(&rule.players, player, d.controller)

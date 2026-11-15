@@ -163,13 +163,15 @@ fn instructions<L: Layout>(
 ) -> Result<(), Full> {
     let s = &*game.state;
     let source = s.object_ref(replacement.permanent);
-    let (card, face) = s.definition(replacement.permanent).record(game.table);
+    // An ability of a card under a merged permanent is that card's, as its triggered
+    // abilities are.
+    let (card, face, index) = replacement.card(s, game.table);
     let of = PendingTrigger {
         of: AbilityRef {
             source: Some(source),
             card,
             face,
-            ability: TriggeredAbility::own(replacement.index),
+            ability: TriggeredAbility::own(index),
             controller: replacement.controller,
         },
         info: TriggerInfo::default(),

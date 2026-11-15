@@ -208,6 +208,13 @@
       "Notion Thief: if an opponent would draw a card except the first one they draw in each of their draw steps , [-instead that player skips that draw and-] you draw a card {+instead+} ."
     ]
   },
+  "Hullbreacher": {
+    "reason": "wording",
+    "note": "The renderer puts \"instead\" after what happens in place of the draw, where Oracle puts it before: \"you create a Treasure token instead\" is \"instead you create a Treasure token\".",
+    "diff": [
+      "Hullbreacher: if an opponent would draw a card except the first one they draw in each of their draw steps , [-instead-] you create a Treasure token {+instead+} ."
+    ]
+  },
   "Fiend Hunter": {
     "reason": "wording",
     "note": "Oracle says \"return the exiled card ... under its owner's control\"; the renderer says \"the cards exiled with this creature ... under their owners' control\". Both mean the cards the enters ability exiled, linked to this Fiend Hunter, each returned under its own owner's control.",

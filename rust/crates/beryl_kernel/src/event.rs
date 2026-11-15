@@ -4,7 +4,9 @@
 //! (replacements, the layer refresh, trigger matching) is the rules', in `beryl_engine`'s `event`
 //! module.
 
-use beryl_card::{Castings, CounterKind, FaceAbility, FaceIx, ManaColor, TurnStep, Zone};
+use beryl_card::{
+    Castings, CounterKind, FaceAbility, FaceIx, ManaColor, ObjectAbility, TurnStep, Zone,
+};
 
 use crate::asking::Asking;
 use crate::bitboard::Bitboard;
@@ -416,14 +418,15 @@ pub struct Sink<L: Layout = Small> {
     /// [CR 707.5]: https://yawgatog.com/resources/magic-rules/#R7075
     pub copies: L::Queue<(L::Slot, Copiable<L>), 4>,
     /// The replacement effects of permanents that have applied to the draw being made, or to
-    /// a draw that replaced it, each as its permanent and the index of its ability: a draw
+    /// a draw that replaced it, each as its permanent and its ability, which may be one of a
+    /// card under a merged permanent ([`ObjectAbility::Merged`]): a draw
     /// made by their instructions is a modified event, which they do not apply to again
     /// ([CR 614.5]): "A replacement effect doesn't invoke itself repeatedly; it gets only one
     /// opportunity to affect an event or any modified events that may replace that event."
     /// Empty between draws.
     ///
     /// [CR 614.5]: https://yawgatog.com/resources/magic-rules/#R6145
-    pub applied: L::Queue<(ObjectRef<L>, u8), 8>,
+    pub applied: L::Queue<(ObjectRef<L>, ObjectAbility), 8>,
 }
 
 /// The scopes a sink had open, which [`Sink::save_scopes`] took.

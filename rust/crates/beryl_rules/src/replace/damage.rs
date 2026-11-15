@@ -4,7 +4,7 @@
 //!
 //! [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
 
-use crate::card::{Ability, AbilityIx, AbilityKind, Effect, Replaced, Replacement, Rewrite};
+use crate::card::{Ability, AbilityKind, Effect, ObjectAbility, Replaced, Replacement, Rewrite};
 use crate::decision::{Decision, DecisionKind, Opt};
 use crate::event::{Recipient, ReplacementKind};
 use crate::filter::Evaluate;
@@ -93,8 +93,8 @@ enum Key<S> {
     Protection,
     /// A shield of the Effects store, by its timestamp.
     Shield(u16),
-    /// A static ability of a permanent.
-    Ability(S, AbilityIx),
+    /// A static ability of a permanent, which may be one of a card under it.
+    Ability(S, ObjectAbility),
 }
 
 /// What an effect that applies does to the damage.
@@ -217,11 +217,7 @@ fn candidates<L: Layout>(
         .is_some_and(|r| r.replaces(ReplacementKind::Damage))
     {
         for &slot in s.battlefield() {
-            if !s
-                .copiable(slot)
-                .may_replace(t)
-                .replaces(ReplacementKind::Damage)
-            {
+            if !super::may_replace(s, t, slot, ReplacementKind::Damage) {
                 continue;
             }
             let multiplies = |a: &Ability, r: &Replacement| match *r {
