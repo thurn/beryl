@@ -2752,14 +2752,16 @@ checked by the rest of the project's checks:
 Beryl 3D plays the same sounds as the web interface, from the same list:
 one-shot sounds tied to script steps and looping ambience.
 
-- **The files and the list are the web interface's**: the M4A files under
-  `ui/public/audio`, listed in `ui/src/audio/manifest.json`, with
+- **The files and the list are the web interface's**: the files under
+  `ui/public/audio` (music as AAC in M4A files under `music/`, effects as WAV
+  files under `sfx/`), listed in `ui/src/audio/manifest.json`, with
   `ui/src/audio/steps.ts` saying which step plays which sound. Beryl 3D reads
   the same manifest and ports the rule in `steps.ts`.
 - **Playback** uses `rodio` 0.23.0 over `cpal`, on the audio device's own
-  thread, with rodio's default features off and `playback` and `mp4`
-  (Symphonia's MP4 container and AAC decoder) on. On Android, `rodio` is built
-  without `playback`, as described below.
+  thread, with rodio's default features off and `playback`, a WAV decoder, and
+  Symphonia's MP4 container and AAC decoder on, by the feature names rodio's
+  manifest gives them. On Android, `rodio` is built without `playback`, as
+  described below.
 - **Sounds are decoded at startup** into memory, so playing one is a message to
   the audio thread and never a file read.
 - **A sound is triggered by the client core**, which emits a sound request when
@@ -2805,8 +2807,10 @@ change there and a small change in each client.
 - **Fixtures, card specs and the list of sounds.**
 - **The image download queue and disk cache**, moved out of the Tauri shell into
   `beryl_art`, a crate of the main workspace.
-- **Bug report storage, profiles and settings**, moved out of the Tauri shell
-  into a crate both shells use.
+- **Bug report storage, profiles and resuming the newest game**, moved out of
+  the Tauri shell into a crate both shells use. Settings are not shared: the web
+  interface keeps its settings in the browser's storage, and Beryl 3D in a file
+  of its own in the same data folder.
 
 What they do not share is placement. The web interface draws the table on a 1600
 by 900 surface and imitates perspective by shrinking and tilting each card.
