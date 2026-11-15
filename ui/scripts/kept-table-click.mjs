@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { check, committed } from "./kept-harness.mjs";
 import {
     clickTable,
+    clickTableResult,
     startTable,
     showTableView,
     tableActionRef,
@@ -40,7 +41,20 @@ await check(
         assert.equal(before.table.seats, 1);
         assert.equal(hand(before).length, 7);
         assert.equal(before.players.you.library.length, 33);
-        const after = await clickTable(page, pile(page, "library"));
+        const library = pile(page, "library");
+        await library.hover();
+        await page.mouse.down();
+        assert.equal(
+            await library.evaluate(
+                (node) => getComputedStyle(node).backgroundColor,
+            ),
+            "rgba(0, 0, 0, 0.18)",
+        );
+        assert.deepEqual(await tableView(), before);
+        const [after] = await Promise.all([
+            clickTableResult(page),
+            page.mouse.up(),
+        ]);
         assert.equal(hand(after).length, 8);
         assert.equal(
             after.players.you.library.length,
@@ -162,6 +176,15 @@ await check(
         await card(page, unknown.slot).hover();
         await committed(page);
         assert.equal(await page.locator(".stage .inspect").count(), 0);
+        await page.mouse.down();
+        assert.equal(
+            await card(page, unknown.slot)
+                .locator(".card-slot")
+                .evaluate((node) => getComputedStyle(node).filter),
+            "brightness(0.85)",
+        );
+        await page.mouse.move(1, 1);
+        await page.mouse.up();
         const view = await clickTable(page, card(page, known.slot), {
             modifiers: ["Shift"],
         });

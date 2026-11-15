@@ -145,13 +145,11 @@ export async function showTableView(page, expected) {
     );
 }
 
-export async function clickTable(page, target, { tap, ...options } = {}) {
-    const [response] = await Promise.all([
-        page.waitForResponse((result) =>
-            result.url().endsWith("/invoke/table_act"),
-        ),
-        tap ? target.tap(options) : target.click(options),
-    ]);
+/** Wait for the action sent by the page and, on success, finish drawing its update. */
+export async function clickTableResult(page) {
+    const response = await page.waitForResponse((result) =>
+        result.url().endsWith("/invoke/table_act"),
+    );
     const { ok } = await response.json();
     if (ok.ok) {
         const view = await tableView();
@@ -159,4 +157,12 @@ export async function clickTable(page, target, { tap, ...options } = {}) {
         return view;
     }
     return ok;
+}
+
+export async function clickTable(page, target, { tap, ...options } = {}) {
+    const [result] = await Promise.all([
+        clickTableResult(page),
+        tap ? target.tap(options) : target.click(options),
+    ]);
+    return result;
 }

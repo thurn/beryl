@@ -544,8 +544,12 @@
 }
 
 [data-manual-table] .card-el:active .card-slot,
+[data-manual-table] .card-el:active > .card-back,
 [data-manual-table] .stack-ability.stage-node:active,
-[data-manual-table]
-  :is(.pile-button, .zone-viewer-card, .phone-sheet-card):active {
+[data-manual-table] :is(.zone-viewer-card, .phone-sheet-card):active {
   filter: brightness(0.85);
+}
+
+[data-manual-table] :is(.pile-button, .phone-pile-button):active {
+  background-color: rgb(0 0 0 / 18%);
 }
