@@ -116,6 +116,9 @@ class SweepStep:
 OWN: tuple[SweepStep, ...] = (
     # The app starts with no window and shows its first frame.
     SweepStep("smoke", (*BY, "b3d", "smoke")),
+    # Every interface test with the checks applied on every tick: the exhaustive form of the
+    # lane's `test` step.
+    SweepStep("every-tick", (*BY, "b3d", "test", "--every-tick")),
     # The GPU's work: shader cost, and the fragments shaded counted in the beryl3d-bench
     # machine. Only this Mac's machine has been shown to count fragments repeatably.
     SweepStep("gpu", (*BY, "b3d", "gate", "--gpu"), (MAC,), SLOW),

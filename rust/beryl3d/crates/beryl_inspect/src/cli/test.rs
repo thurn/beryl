@@ -78,10 +78,9 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
         Mode::AtCheckTimes => Some(Limits::read().map_err(Usage)?),
         Mode::EveryTick => None,
     };
-    let mut listed = match mode {
-        Mode::AtCheckTimes => Some(Listed::read().map_err(Usage)?),
-        Mode::EveryTick => None,
-    };
+    // Both modes are held to the one list: the differential test requires that the check times
+    // find every fault the every-tick run finds.
+    let mut listed = Some(Listed::read().map_err(Usage)?);
     let started = Instant::now();
     let outcomes = runner::run(&tests, mode);
     let seconds = started.elapsed().as_secs_f64();

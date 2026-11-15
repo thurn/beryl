@@ -157,7 +157,16 @@ def linked(name: str) -> Path:
     found = [p for p in (debug / "deps").glob(f"{stem}-*") if pattern.fullmatch(p.name)]
     if not found:
         return debug / name
-    return max(found, key=lambda p: p.stat().st_mtime)
+    # A test harness built for the same crate (`cargo test`) has the same file name pattern
+    # and may be newer. Cargo records the program's build as `bin-<name>` in its
+    # fingerprint directory and a harness's as `test-bin-<name>`.
+    fingerprints = debug / ".fingerprint"
+    program = [
+        p
+        for p in found
+        if any(fingerprints.glob(f"*-{p.name.rsplit('-', 1)[1]}/bin-{name}"))
+    ]
+    return max(program or found, key=lambda p: p.stat().st_mtime)
 
 
 def run_program(name: str, arguments: list[str]) -> int:

@@ -2251,6 +2251,8 @@ a wrong texture, a blending mistake or a missing glyph.
 
 Interface checks are only worth what they catch before a change lands. This
 section specifies how Beryl 3D runs all of them before every push, in seconds.
+The `beryl3d` lane's `test` step (`just b3d test`) and the sweep's `every-tick`
+step (`just b3d test --every-tick`) run them.
 
 ### What a test is
 
@@ -2377,9 +2379,10 @@ drawn and sampled, but the frame checks do not run on them.
 Checking every tick remains, as the second line:
 
 - **In the sweep**, after a push, the same tests run again with the checks
-  applied on every tick. This is the exhaustive form. It is not part of slow CI,
-  whose budget of CPU time it would spend several times over (see
-  [Checks and isolation](#checks-and-isolation)).
+  applied on every tick (its `every-tick` step, `just b3d test --every-tick`),
+  held to the same `data/beryl3d/test-faults.json`. This is the exhaustive form.
+  It is not part of slow CI, whose budget of CPU time it would spend several
+  times over (see [Checks and isolation](#checks-and-isolation)).
 - **A differential test** holds the two together
   (`beryl_inspect/tests/all/differential.rs`). On a fixed sample of 200 tests,
   drawn with a fixed seed from every test but the stress boards', it plants each

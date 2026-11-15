@@ -21,6 +21,9 @@ def steps() -> list[Step]:
         Step("clippy", [*cargo, "clippy"], paths.REPO),
         Step("cargo-test", [*cargo, "cargo-test"], paths.REPO),
         Step("gate", [*cargo, "gate"], paths.REPO),
+        # Every interface test, with the checks applied at the check times (docs/beryl-3d.md,
+        # "Test speed"). The sweep's `every-tick` step is its exhaustive form.
+        Step("test", [*cargo, "test"], paths.REPO),
         Step("scene-purity", [*PURITY, "scene-purity"], paths.REPO),
         Step("lints-match", [*PURITY, "lints-match"], paths.REPO),
         Step("data-names", [*PURITY, "data-names"], paths.REPO),

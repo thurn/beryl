@@ -84,6 +84,26 @@ def test_the_linkers_newest_binary_is_run(
     assert cli.linked("b3d-render") == render
 
 
+def test_a_newer_test_harness_of_the_crate_is_not_run_as_the_program(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(cli.paths, "WORKSPACE", tmp_path)
+    debug = tmp_path / "target" / "debug"
+    deps = debug / "deps"
+    deps.mkdir(parents=True)
+    program, harness = deps / "b3d-0000000000000000", deps / "b3d-1111111111111111"
+    for path in (program, harness):
+        path.write_text("")
+    os.utime(program, (1, 1))
+    os.utime(harness, (2, 2))
+    for hash_, kind in (("0000000000000000", "bin"), ("1111111111111111", "test-bin")):
+        (debug / ".fingerprint" / f"beryl_inspect-{hash_}").mkdir(parents=True)
+        (debug / ".fingerprint" / f"beryl_inspect-{hash_}" / f"{kind}-b3d").write_text(
+            ""
+        )
+    assert cli.linked("b3d") == program
+
+
 def test_the_listing_names_every_text_command() -> None:
     listed = cli.listing()
     for name in ("list", "info", "tree", "diff", "check", "test", "png", "film"):

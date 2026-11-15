@@ -195,8 +195,8 @@ project, and selects the main lanes.
   the commit that makes it. `just b3d test --update` lowers entries and removes
   those at zero, and changes nothing when nothing improved. It raises or adds an
   entry only with `--raise` beside it, and the commit that does so says which
-  bead owns the fault. The list is held at the check times only, not with
-  `--every-tick`.
+  bead owns the fault. `--every-tick` is held to the same list, and `--update`
+  does not go with it.
 
 A break caused by a change to the main workspace (a renamed `beryl_session`
 item, say) is fixed in the Beryl 3D change that meets it, not by holding the
