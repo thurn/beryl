@@ -54,6 +54,7 @@ pub mod scenarios {
         // its "whenever this creature mutates" triggers and destroys P1's Scimitar. Gemrazer's
         // card is on the battlefield as part of it, and no creature entered.
         Scenario::new("Gemrazer under a creature: the creature's values, Gemrazer's abilities")
+            .interaction(&[Card::BloodArtist])
             .battlefield(
                 P0,
                 &[Card::Forest, Card::Forest, Card::Forest, Card::BloodArtist],
@@ -76,6 +77,7 @@ pub mod scenarios {
             ]),
         // Over, it is a 4/4 Gemrazer, and its trigger is Gemrazer's own.
         Scenario::new("Gemrazer over a creature: a 4/4 Gemrazer that mutated")
+            .interaction(&[Card::BloodArtist])
             .battlefield(
                 P0,
                 &[Card::Forest, Card::Forest, Card::Forest, Card::BloodArtist],
@@ -93,10 +95,32 @@ pub mod scenarios {
                 ME.pt(Card::Gemrazer, 4, 4),
                 ME.controls(Card::BloodArtist, 0),
             ]),
+        // Death Ward sets up a regeneration shield before the mutate trigger resolves.
+        Scenario::new("Gemrazer's mutate trigger allows its target to regenerate")
+            .battlefield(
+                P0,
+                &[Card::Forest, Card::Forest, Card::Forest, Prop::Vanilla],
+            )
+            .hand(P0, &[Card::Gemrazer])
+            .battlefield(P1, &[Card::Plains, Card::Plains, Card::Ornithopter])
+            .hand(P1, &[Prop::Regeneration, Prop::Regeneration])
+            .library(P1, &[Card::Island])
+            .actions(&[
+                MUTATE,
+                Resolve,
+                ME.yes(),
+                THEM.casts(Prop::Regeneration),
+                THEM.targets(Card::Ornithopter),
+                Resolve,
+                Resolve,
+                THEM.controls(Card::Ornithopter, 1),
+                THEM.tapped(Card::Ornithopter, 1),
+            ]),
         // The merged creature dies: one creature died, so Blood Artist's "whenever this creature
         // or another creature dies", from under Gemrazer, triggers once (CR 731.3), and both
         // cards go to P0's graveyard.
         Scenario::new("Gemrazer's merged creature dies: both cards go, a dies trigger once")
+            .interaction(&[Card::BloodArtist, Card::GetLost])
             .battlefield(
                 P0,
                 &[Card::Forest, Card::Forest, Card::Forest, Card::BloodArtist],
@@ -123,6 +147,7 @@ pub mod scenarios {
             ]),
         // Bounced, the merged creature's cards both go to P0's hand.
         Scenario::new("Gemrazer's merged creature bounced: both cards to hand")
+            .interaction(&[Card::BloodArtist])
             .battlefield(
                 P0,
                 &[Card::Forest, Card::Forest, Card::Forest, Card::BloodArtist],
@@ -153,6 +178,7 @@ pub mod scenarios {
         // The target dies in response: the spell is no longer a mutating creature spell and
         // enters as a 4/4 Gemrazer (CR 702.140b), which did not mutate, so no trigger.
         Scenario::new("Gemrazer's target gone: it enters as a creature and does not mutate")
+            .interaction(&[Card::BloodArtist, Card::GetLost])
             .battlefield(
                 P0,
                 &[Card::Forest, Card::Forest, Card::Forest, Card::BloodArtist],
@@ -173,14 +199,13 @@ pub mod scenarios {
                 THEM.controls(Card::LeoninScimitar, 1),
                 stack(0),
             ]),
-        // Phantasmal Image copies the merged creature: its copiable values are Gemrazer's with
+        // Glasspool Mimic copies the merged creature: its copiable values are Gemrazer's with
         // every ability of Blood Artist (CR 731.2a, CR 707.2), so the copy has Blood Artist's
-        // ability too. When the merged creature dies, both Blood Artist abilities trigger:
-        // the one under the merged creature and the copy's.
+        // ability too. When a third creature dies, the merged creature and the copy both trigger.
         Scenario::new(
-            "Phantasmal Image copying Gemrazer's merged creature has both cards' abilities",
+            "Glasspool Mimic copying Gemrazer's merged creature has both cards' abilities",
         )
-        .interaction(&[Card::PhantasmalImage])
+        .interaction(&[Card::BloodArtist, Card::GetLost, Card::GlasspoolMimic])
         .battlefield(
             P0,
             &[
@@ -189,11 +214,20 @@ pub mod scenarios {
                 Card::Forest,
                 Card::Island,
                 Card::Island,
+                Card::Island,
                 Card::BloodArtist,
             ],
         )
-        .hand(P0, &[Card::Gemrazer, Card::PhantasmalImage])
-        .battlefield(P1, &[Card::Plains, Card::Plains, Card::LeoninScimitar])
+        .hand(P0, &[Card::Gemrazer, Card::GlasspoolMimic])
+        .battlefield(
+            P1,
+            &[
+                Card::Plains,
+                Card::Plains,
+                Card::LeoninScimitar,
+                Prop::Flier,
+            ],
+        )
         .hand(P1, &[Card::GetLost])
         .library(P1, &[Card::Island])
         .actions(&[
@@ -201,19 +235,19 @@ pub mod scenarios {
             Resolve,
             ME.yes(),
             Resolve,
-            ME.casts(Card::PhantasmalImage),
+            ME.casts(Card::GlasspoolMimic),
             Resolve,
             ME.picks_up_to(Card::Gemrazer),
             ME.controls(Card::Gemrazer, 2),
             THEM.casts(Card::GetLost),
-            THEM.targets(Card::Gemrazer),
-            Resolve,
+            THEM.targets(Prop::Flier),
             ME.chooses(DecisionKind::TriggerOrder, Card::Gemrazer),
             ME.targets_player(THEM),
             ME.targets_player(THEM),
             Resolve,
             Resolve,
-            ME.controls(Card::Gemrazer, 1),
+            ME.controls(Card::Gemrazer, 2),
+            THEM.controls(Prop::Flier, 0),
             THEM.life(18),
             ME.life(22),
         ]),
