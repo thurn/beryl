@@ -28,6 +28,11 @@ pub struct StepIn<'a> {
     pub timing: &'a StepTiming,
     /// The step's index in its script.
     pub number: usize,
+    /// The steps of the step's beat, the steps played together, for a verb whose motion
+    /// depends on the others (two creatures that strike each other meet half way).
+    pub beat: &'a [Step],
+    /// The step's index in `beat`.
+    pub index: usize,
     /// When the step plays, on the script's clock.
     pub own: Interval,
     /// `Curve::named(timing.curve)`.
@@ -383,10 +388,17 @@ impl<'a> Motion<'a> {
         }
     }
 
-    /// Plays one step, the `number`th of the script: applies its act, has its verb play it
+    /// Plays one step, the `index`th of `beat` and the `number`th of the script: applies its act, has its verb play it
     /// (`verbs::play`), and gives every other object whose resting place changed a segment to
     /// the new place.
-    pub(crate) fn step(&mut self, number: usize, step: &Step, timing: &StepTiming, laid: &Laid) {
+    pub(crate) fn step(
+        &mut self,
+        number: usize,
+        (beat, index): (&[Step], usize),
+        timing: &StepTiming,
+        laid: &Laid,
+    ) {
+        let step = &beat[index];
         let mover = mover_of(&step.act);
         let was = match mover {
             Some(Subject::Object { slot }) => self.played.objects.get(&slot).cloned(),
@@ -422,7 +434,7 @@ impl<'a> Motion<'a> {
                 let poses = (Some(from), to);
                 self.play(
                     number,
-                    step,
+                    (beat, index),
                     timing,
                     own,
                     (mover, was.as_ref()),
@@ -449,7 +461,7 @@ impl<'a> Motion<'a> {
             };
             self.play(
                 number,
-                step,
+                (beat, index),
                 timing,
                 own,
                 (mover, was.as_ref()),
@@ -537,7 +549,7 @@ impl<'a> Motion<'a> {
         }
     }
 
-    /// Has the verb of `step`, the `number`th, play it over `own`, given its subject and that
+    /// Has the verb of the step `index` of `beat`, the `number`th, play it over `own`, given its subject and that
     /// subject's record before the act, and its poses as the step begins and once it is done.
     /// Adds the segments the verb wrote to the tracks, and keeps what else it wrote.
     #[expect(
@@ -547,13 +559,14 @@ impl<'a> Motion<'a> {
     fn play(
         &mut self,
         number: usize,
-        step: &Step,
+        (beat, index): (&[Step], usize),
         timing: &StepTiming,
         own: Interval,
         (subject, was): (Option<Subject>, Option<&ObjectView>),
         (from, to): (Option<Pose>, Option<Pose>),
         dirty: &[bool],
     ) {
+        let step = &beat[index];
         let mut written = std::mem::take(&mut self.written);
         let places = Places {
             motion: self,
@@ -564,6 +577,8 @@ impl<'a> Motion<'a> {
             cause: step.cause,
             timing,
             number,
+            beat,
+            index,
             own,
             curve: Curve::named(timing.curve),
             subject,

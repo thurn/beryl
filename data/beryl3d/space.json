@@ -2,6 +2,15 @@
   "verbs": {
     "fly": {
       "arc": 55
+    },
+    "strike": {
+      "wind": 0.08,
+      "stay": 0.48,
+      "rear": 0.6,
+      "lift": 0.1,
+      "lean": 15,
+      "near": 2,
+      "least": 0.3
     }
   },
   "pointer": {},

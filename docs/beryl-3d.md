@@ -1067,7 +1067,8 @@ flight start exactly where the card was.
 Each of the 16 verbs has one implementation in the client core, which turns a
 script step into segments on the scene objects it concerns. Each verb is a file
 of `beryl_scene`'s `verbs` module with one function, `play`, which is given the
-step (`StepIn`) and writes segments, spans, streaks and notices (`StepOut`).
+step (`StepIn`, with the other steps of its beat) and writes segments, spans,
+streaks and notices (`StepOut`).
 
 - **Timing comes from data, through the session.** A verb's duration, delay,
   easing curve and **stagger** (the delay between successive objects when one

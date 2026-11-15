@@ -8,7 +8,7 @@
 //! sample of the step's subject from each frame evaluated while the step plays.
 
 use beryl_protocol::script::Verb;
-use glam::Vec2;
+use glam::{Quat, Vec2};
 
 use super::fault::Rule;
 use super::hit::{bounds, covered};
@@ -447,10 +447,19 @@ fn same(a: Pose, b: Pose) -> bool {
         return true;
     }
     a.position.distance(b.position) < SAME_MILLIMETRES
-        && a.rotation.angle_between(b.rotation) < SAME_FRACTION
+        && turned(a.rotation, b.rotation) < SAME_FRACTION
         && (a.scale - b.scale).abs() < SAME_FRACTION
         && (a.opacity - b.opacity).abs() < SAME_FRACTION
         && (a.turn - b.turn).abs() < SAME_FRACTION
+}
+
+/// The angle between two rotations, in radians. `Quat::angle_between` takes the arc cosine of a
+/// dot product near 1, which reads two equal rotations as about a thousandth of a radian apart
+/// in `f32`; the sine of half the angle, the length of the vector part of the rotation from one
+/// to the other, keeps its precision for small angles.
+fn turned(a: Quat, b: Quat) -> f32 {
+    let half = (b * a.inverse()).xyz().length().min(1.0);
+    2.0 * half.asin()
 }
 
 /// Whether a pose can be seen at all.

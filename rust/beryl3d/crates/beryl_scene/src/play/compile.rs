@@ -180,7 +180,7 @@ pub(crate) fn compile<'a>(
         &mut compiled.unbuilt,
         |(beat, index), step, timing, laid| {
             let closed = motion.as_mut().and_then(|motion| {
-                motion.step(number, step, timing, laid);
+                motion.step(number, (&script.beats[beat], index), timing, laid);
                 motion.take_closed()
             });
             effects_of(number, step, timing, laid, effects);
