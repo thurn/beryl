@@ -60,18 +60,14 @@ struct AppFeed {
     log_dir: PathBuf,
     /// When the frame log is finished.
     finish: Finish,
-    /// Whether a replayed recording has ended.
+    /// Whether the source has ended: a replayed recording has played to its end, or a view of
+    /// the live game has said the game is over.
     ended: bool,
     /// The run as known before the host opened; the host fills in the display and adapter.
     run: Run,
     /// Whether the latest view says the AI is searching.
     searching: bool,
     shown_first: bool,
-    /// Whether the run ends when the game is over: with `--agent`, which plays a whole game
-    /// with nobody at the table.
-    end_at_game_over: bool,
-    /// Whether a view has said the game is over.
-    game_over: bool,
 }
 
 /// When the frame log is finished and its summary written.
@@ -81,6 +77,9 @@ enum Finish {
     AtExit,
     /// When a replayed recording ends: on a phone, whose app never exits by itself.
     AtFixtureEnd,
+    /// When the run ends, which is when the game is over: with `--agent`, which plays a whole
+    /// game with nobody at the table.
+    GameOver,
 }
 
 /// The frame log, or why there is none.
@@ -133,8 +132,10 @@ impl Feed for AppFeed {
     fn input(&mut self, input: &Input) {
         if let Input::Update(update) = input {
             self.searching = matches!(update.view.status, Status::Thinking);
-            if !self.game_over && matches!(update.view.status, Status::Over { .. }) {
-                self.game_over = true;
+            // A replayed recording ends when its last script has played, not at its game's end.
+            let live = matches!(self.source, Some(Source::Live(_)));
+            if live && !self.ended && matches!(update.view.status, Status::Over { .. }) {
+                self.ended = true;
                 println!("{GAME_OVER}");
             }
         }
@@ -204,7 +205,7 @@ impl Feed for AppFeed {
     }
 
     fn ended(&self) -> bool {
-        self.end_at_game_over && self.game_over
+        self.finish == Finish::GameOver && self.ended
     }
 }
 
@@ -234,8 +235,6 @@ pub(crate) fn phone_feed(name: &str, fixture: Fixture, log_dir: PathBuf) -> Box<
         },
         searching: false,
         shown_first: false,
-        end_at_game_over: false,
-        game_over: false,
     })
 }
 
@@ -283,13 +282,15 @@ pub fn run(options: &Options) -> Result<Finished, String> {
         source: None,
         log: Rc::clone(&log),
         log_dir: frames_dir(),
-        finish: Finish::AtExit,
+        finish: if options.agent.is_some() {
+            Finish::GameOver
+        } else {
+            Finish::AtExit
+        },
         ended: false,
         run: run.clone(),
         searching: false,
         shown_first: false,
-        end_at_game_over: options.agent.is_some(),
-        game_over: false,
     };
     let client = Client::new(Config::LARGEST);
     let hosted = match options.window {
