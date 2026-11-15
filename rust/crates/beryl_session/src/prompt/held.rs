@@ -562,9 +562,10 @@ pub(crate) fn named<L: Layout>(d: &Decision<L>, options: &[Opt<L>], on: Subject)
             | Opt::Defender(Some(slot)),
             Subject::Object { slot: wanted },
         ) => ObjectId(slot.num()) == wanted,
-        // The player deciding is the viewer.
+        // The player answering is the viewer: in a turn they control for another player
+        // (CR 724.5), not the player the decision belongs to.
         (Opt::Player(player), Subject::Player { player: wanted }) => {
-            (player == d.player) == (wanted == Side::You)
+            (player == d.decider) == (wanted == Side::You)
         }
         // The defending player is not the one declaring the attack.
         (Opt::Defender(None), Subject::Player { player }) => player == Side::Opponent,
@@ -596,5 +597,37 @@ pub(crate) fn button(id: ButtonId, label: &str, enabled: bool, primary: bool) ->
         caption: String::new(),
         enabled,
         primary,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use beryl_engine::card::{Prompt, Purpose};
+    use beryl_engine::layout::Queue as _;
+    use beryl_engine::{Decision, DecisionKind, Opt, Seat, Small};
+
+    use super::named;
+    use crate::protocol::Side;
+    use crate::script::Subject;
+
+    /// A click on a player names the player the viewer sees there. The viewer is the player
+    /// answering, who in a turn they control for another player (CR 724.5) is not the player
+    /// the decision belongs to: P0, aiming P1's spell, clicks themself to aim it at P0.
+    #[test]
+    fn a_click_on_a_player_names_them_as_the_controller_sees_them() {
+        let mut list = <Small as beryl_engine::Layout>::Queue::<Opt<Small>, 64>::default();
+        list.push_bounded(Opt::Player(Seat::P0));
+        list.push_bounded(Opt::Player(Seat::P1));
+        let mut d = Decision::<Small>::options(
+            Seat::P1,
+            DecisionKind::Target,
+            list,
+            Prompt::new(Purpose::Target),
+        );
+        d.decider = Seat::P0;
+        let options = [Opt::Player(Seat::P0), Opt::Player(Seat::P1)];
+        let click = |player| named(&d, &options, Subject::Player { player });
+        assert_eq!(click(Side::You), Some(0));
+        assert_eq!(click(Side::Opponent), Some(1));
     }
 }

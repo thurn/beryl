@@ -21,6 +21,7 @@ mod copy_saves;
 mod corpus;
 mod cost_replay;
 mod counters;
+mod decider_saves;
 mod declarations;
 mod divisions;
 mod face_down;

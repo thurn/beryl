@@ -22,8 +22,14 @@ pub(super) fn opening<L: Layout>(
     eligible: &[Subject],
     most: usize,
 ) -> Vec<Subject> {
+    // The untapping player's permanents, as the viewer's view names them: the viewer may be
+    // controlling that player's turn (CR 724.5).
+    let player = match table.d {
+        Some(d) if d.player != d.decider => Side::Opponent,
+        _ => Side::You,
+    };
     let controls = |slot: ObjectId| {
-        (table.view.objects.iter()).any(|o| o.slot == slot && o.controller == Side::You)
+        (table.view.objects.iter()).any(|o| o.slot == slot && o.controller == player)
     };
     let mut own: Vec<ObjectId> = (eligible.iter())
         .filter_map(|on| match *on {

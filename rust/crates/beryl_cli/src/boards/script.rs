@@ -211,7 +211,7 @@ impl Scripted {
             ..
         }) = next.filter(|_| due)
             && !matches!(d.kind, DecisionKind::YesNo | DecisionKind::Priority)
-            && d.player == self.seat
+            && d.decider == self.seat
         {
             let done = beryl_scenario::answer(
                 &self.table,
@@ -234,7 +234,7 @@ impl Scripted {
             ..
         }) = next.filter(|_| due)
             && d.kind == DecisionKind::Priority
-            && d.player == self.seat
+            && d.decider == self.seat
         {
             self.take();
             return self.answer(obs, d);

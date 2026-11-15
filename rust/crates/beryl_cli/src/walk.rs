@@ -123,7 +123,7 @@ impl Walk {
                 entry => break entry,
             }
         };
-        if matches!(entry, Some(Entry::Choice(_))) && d.player == self.human {
+        if matches!(entry, Some(Entry::Choice(_))) && d.decider == self.human {
             self.keep(&before);
         }
         let c = match entry {

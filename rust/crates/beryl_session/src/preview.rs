@@ -94,7 +94,7 @@ fn targets<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Vec<Vec<T
         return vec![Vec::new(); d.len()];
     };
     let side = |p: Seat| {
-        if p == d.player {
+        if p == d.decider {
             Side::You
         } else {
             Side::Opponent
