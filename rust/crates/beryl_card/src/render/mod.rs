@@ -29,6 +29,7 @@ mod filters;
 mod modify;
 mod prevention;
 mod references;
+mod rules;
 mod words;
 
 #[cfg(test)]

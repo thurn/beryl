@@ -612,14 +612,13 @@ Built by by-bajq.3.10:
   itself that it applies last. A static cost change is a rule change the game
   numbers, so with none in force the check is the one AND the rule sets already
   give. Delve pays generic mana while the cost is paid, so it can pay a floor.
-- **Prohibitions.** `Governed::ActivateAbilities` is activating the abilities
-  of the sources a `Named` names, with or without mana abilities, under
+- **Prohibitions.** `Governed::ActivateAbilities` is activating the abilities of
+  the sources a `Named` names, with or without mana abilities, under
   `When::Never` (built for Pithing Needle). A filter has no permanent to read a
   memo from, so the sources are `Named::Chosen`, not a filter: the name the
-  permanent that makes the rule chose. The check
-  (`rule_change::cant_activate`, last in `cast::legal::activatable`) finds the
-  makers only once the kind is in force, and compares each one's chosen name
-  with the source's copiable name.
+  permanent that makes the rule chose. The check (`rule_change::cant_activate`,
+  last in `cast::legal::activatable`) finds the makers only once the kind is in
+  force, and compares each one's chosen name with the source's copiable name.
 - **A chosen value** is a memo of the permanent: a name, a color, a creature
   type. It is chosen as the permanent enters, through the replacement pipeline,
   in the `Catalog` prompt shape (built by by-bajq.3.3: `Rewrite::Choose`,

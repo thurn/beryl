@@ -1,4 +1,4 @@
-"""XMage's vocabulary for the XMage exporter (`xmage.py`): its steps, counters and mana types,
+"""XMage's vocabulary for the XMage exporter (`xmage.py`): its steps, counters, mana types and choices,
 the faces of cards in the store it needs, the assertions it states Beryl's in, and the Java
 test classes the exports are written as."""
 
@@ -17,6 +17,17 @@ from .card_facts import Json, Unsupported
 
 PACKAGE = "org.mage.test.beryl"
 BASE: Path = Path(__file__).parent / "BerylScenarioTest.java"
+
+# The answers XMage takes from the choice queue, by Beryl decision kind: with these, a
+# waterbend's permanents, which Beryl asks as a payment whose purpose says so.
+CHOICE_KINDS = ("ChooseUpTo", "ChooseObject", "TriggerOrder")
+YES_NO_KINDS = ("YesNo", "CastOffer")
+# The colors by the number Beryl gives each, in the order of CR 105.1 ("white, blue, black,
+# red, and green"), as XMage's color choice names them.
+COLORS = ("White", "Blue", "Black", "Red", "Green")
+# The name XMage chooses for Beryl's "another card", which stands for every name no card of the
+# game has: a real card that no scenario uses.
+ANOTHER_CARD = "Black Lotus"
 
 # Beryl's TurnStep names to XMage's PhaseStep, in turn order.
 STEPS: dict[str, str] = {

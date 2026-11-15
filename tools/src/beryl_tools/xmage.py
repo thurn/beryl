@@ -39,6 +39,10 @@ from typing import cast
 from .card_facts import Cards, Json, Unsupported, payment_taps
 from .xmage_trace import Position
 from .xmage_java import (
+    ANOTHER_CARD,
+    CHOICE_KINDS,
+    COLORS,
+    YES_NO_KINDS,
     EVERY_TURN,
     ORDER,
     STEPS,
@@ -62,17 +66,6 @@ FORCED_CHOICES = ("ChooseObject", "ChooseUpTo")
 # What the prompts are for whose cards XMage asks as targets even when they are identical, as
 # Brainstorm's cards to put back from a hand of Islands: their answers go in the target queue.
 FORCED_TARGETS = ("put-back",)
-
-# The answers XMage takes from the choice queue, by Beryl decision kind: with these, a
-# waterbend's permanents, which Beryl asks as a payment whose purpose says so.
-CHOICE_KINDS = ("ChooseUpTo", "ChooseObject", "TriggerOrder")
-YES_NO_KINDS = ("YesNo", "CastOffer")
-# The colors by the number Beryl gives each, in the order of CR 105.1 ("white, blue, black,
-# red, and green"), as XMage's color choice names them.
-COLORS = ("White", "Blue", "Black", "Red", "Green")
-# The name XMage chooses for Beryl's "another card", which stands for every name no card of the
-# game has: a real card that no scenario uses.
-ANOTHER_CARD = "Black Lotus"
 
 
 class Exporter:
@@ -667,8 +660,7 @@ class Exporter:
             text = java_string(cast(str, self.cards.first_trigger_text(card)))
             self.emit(f"setChoice({who}, {text});")
         elif action.get("purpose", p.purpose) == "card-name":
-            # XMage asks for the name (`ChooseACardNameEffect`); Beryl offers the game's names
-            # by number, and one number for every other name.
+            # XMage asks for a name (`ChooseACardNameEffect`); Beryl numbers the game's names.
             self.emit(f"setChoice({who}, {java_string(card or ANOTHER_CARD)});")
         elif action.get("purpose", p.purpose) == "color" and what == "Number":
             # XMage names the color (`ChoiceColor`); Beryl numbers it as CR 105.1 does.

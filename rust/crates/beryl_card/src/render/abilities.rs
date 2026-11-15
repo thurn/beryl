@@ -1,6 +1,6 @@
 //! The templates of an ability's parts: its cost ([`Cost`]), its trigger ([`Trigger`]),
-//! what a static ability does ([`LayerSpec`], [`RuleChange`]), a replacement
-//! ([`Replacement`]), and the whole ability as one paragraph.
+//! what a static ability does to objects ([`LayerSpec`]), a replacement ([`Replacement`]),
+//! and the whole ability as one paragraph. A rule change's template is in `rules.rs`.
 
 use super::Ctx;
 use super::effects::says_nothing;
@@ -11,8 +11,7 @@ use super::words::{
 };
 use crate::ability::{Ability, AbilityKind, Behavior, Timing};
 use crate::continuous::{
-    ChosenKind, Draws, Governed, LayerSpec, Modification, Named, Replaced, Replacement, Rewrite,
-    RuleChange, When,
+    ChosenKind, Draws, LayerSpec, Modification, Replaced, Replacement, Rewrite,
 };
 use crate::cost::{CastingKind, Chosen, Cost, CostAction, CostPart, Measure};
 use crate::effect::{Amount, Condition, Effect, Objects, Players};
@@ -560,60 +559,6 @@ impl Ctx {
         let text = self.paragraph(ability);
         (self.targets, self.mentioned, self.trigger) = saved;
         format!("\"{text}\"")
-    }
-
-    /// A change to a rule of the game, such as "each opponent can cast spells only any time
-    /// they could cast a sorcery" or "you may cast sorcery spells as though they had flash"
-    /// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311)).
-    pub(super) fn rule_change(&mut self, rule: &RuleChange) -> String {
-        let who = self.player(rule.players);
-        let they = if rule.players == Players::You {
-            "you"
-        } else {
-            "they"
-        };
-        let what = match rule.what {
-            Governed::CastSpells(filter) => {
-                let spells = self.noun(filter, Kind::Spell).plural(Kind::Spell);
-                format!("cast {spells}")
-            }
-            Governed::ActivateLoyaltyAbilities(objects) => {
-                let whose = self.objects_possessive(objects);
-                format!("activate {whose} loyalty abilities")
-            }
-            // "This creature can't block": of the creatures, not of who declares blocks.
-            Governed::Block(objects) => {
-                let creatures = self.objects(objects);
-                return match rule.when {
-                    When::Never => format!("{creatures} can't block"),
-                    _ => format!("{creatures} can block only at a changed time"),
-                };
-            }
-            // Of the abilities, not of who would activate them.
-            Governed::ActivateAbilities {
-                sources: Named::Chosen,
-                mana_abilities,
-            } => {
-                let sources = "activated abilities of sources with the chosen name";
-                return match (rule.when, mana_abilities) {
-                    (When::Never, false) => {
-                        format!("{sources} can't be activated unless they're mana abilities")
-                    }
-                    (When::Never, true) => format!("{sources} can't be activated"),
-                    _ => format!("{sources} can be activated only at a changed time"),
-                };
-            }
-        };
-        match (rule.when, rule.what) {
-            (When::Never, _) => format!("{who} can't {what}"),
-            (When::OnlyAsSorcery, _) => {
-                format!("{who} can {what} only any time {they} could cast a sorcery")
-            }
-            (When::AsInstant, Governed::ActivateLoyaltyAbilities(_)) => {
-                format!("{who} may {what} any time {they} could cast an instant")
-            }
-            (When::AsInstant, _) => format!("{who} may {what} as though they had flash"),
-        }
     }
 
     /// A replacement effect's clauses, such as "this land enters tapped" or "if you would
