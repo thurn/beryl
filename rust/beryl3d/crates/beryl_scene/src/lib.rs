@@ -7,5 +7,8 @@ pub mod data;
 pub mod frame;
 pub mod input;
 pub mod pose;
+pub mod table;
+#[cfg(feature = "driver")]
+pub mod testing;
 
 pub use client::{Client, Config};

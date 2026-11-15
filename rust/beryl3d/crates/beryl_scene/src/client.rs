@@ -7,7 +7,10 @@ use std::collections::VecDeque;
 
 use crate::command::{Request, SessionCommand};
 use crate::frame::{Frame, FrameBuilder, Wake};
+use beryl_session::GameUpdate;
+
 use crate::input::{GlyphKey, Input};
+use crate::table::{Table, Window};
 
 /// The sizes the client sets at startup.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,8 +26,13 @@ pub struct Config {
 /// The client core.
 pub struct Client {
     frame: Frame,
-    /// Inputs `handle` has stored and the next `frame` has not taken yet.
+    /// Inputs `handle` has stored and the next `frame` has not taken yet: those no part of the
+    /// client acts on yet.
     inputs: Vec<Input>,
+    /// The latest view from the session.
+    update: Option<Box<GameUpdate>>,
+    window: Window,
+    table: Table,
     wake: Wake,
     requests: VecDeque<Request>,
     commands: VecDeque<SessionCommand>,
@@ -37,6 +45,9 @@ impl Client {
         Self {
             frame: Frame::with_capacity(config.elements, config.draws, config.name_bytes),
             inputs: Vec::new(),
+            update: None,
+            window: Window::default(),
+            table: Table::default(),
             wake: Wake::Never,
             requests: VecDeque::new(),
             commands: VecDeque::new(),
@@ -47,7 +58,26 @@ impl Client {
     /// Takes a session update, a pointer or key event, a new surface or another input. An
     /// input has no time of its own: what it starts begins at the `now` of the next `frame`.
     pub fn handle(&mut self, input: Input) {
-        self.inputs.push(input);
+        match input {
+            Input::Update(update) => {
+                self.table.apply(&update.view);
+                self.update = Some(update);
+            }
+            Input::Surface {
+                size,
+                scale,
+                safe_area,
+            } => {
+                self.window = Window {
+                    size,
+                    scale,
+                    safe_area,
+                };
+                let view = self.update.as_ref().map(|update| &update.view);
+                self.table.resize(self.window, view);
+            }
+            input => self.inputs.push(input),
+        }
         self.wake = Wake::Now;
     }
 
@@ -55,7 +85,17 @@ impl Client {
     pub fn frame(&mut self, _now: u64) -> &Frame {
         self.inputs.clear();
         self.wake = Wake::Never;
-        FrameBuilder::new(&mut self.frame).finish()
+        let mut builder = FrameBuilder::new(&mut self.frame);
+        if let Some(update) = &self.update {
+            self.table.write(&update.view, &mut builder);
+        }
+        builder.finish()
+    }
+
+    /// The table, for tests and tools that read the camera.
+    #[must_use]
+    pub fn table(&self) -> &Table {
+        &self.table
     }
 
     /// When the next frame is needed: as of the last call to `frame`, or `Now` once an input

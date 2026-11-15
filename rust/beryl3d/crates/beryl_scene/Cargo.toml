@@ -23,6 +23,10 @@ taffy = "0.15.1"
 # Shapes and breaks lines of text, in place of hand-written text layout.
 parley = "0.13.0"
 
+[dev-dependencies]
+# The crate itself with the `driver` feature, for the `testing` builders its tests use.
+beryl_scene = { path = ".", features = ["driver"] }
+
 [build-dependencies]
 # Reads data/beryl3d/space.json and gates.json at build time, in place of a hand-written parser.
 serde_json = "1.0.154"

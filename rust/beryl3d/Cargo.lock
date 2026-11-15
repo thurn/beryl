@@ -276,6 +276,7 @@ dependencies = [
 name = "beryl_scene"
 version = "0.1.0"
 dependencies = [
+ "beryl_scene",
  "beryl_session",
  "glam",
  "parley",

@@ -3,7 +3,9 @@
 //! adding a step to the pose of the previous frame, so a late frame shows a later pose and any
 //! moment can be drawn directly.
 
-use glam::{Quat, Vec3};
+use std::f32::consts::PI;
+
+use glam::{Affine3A, Quat, Vec3};
 
 /// Where one object is and how it is turned, in the table's space.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -28,6 +30,19 @@ impl Default for Pose {
             opacity: 1.0,
             turn: 0.0,
         }
+    }
+}
+
+impl Pose {
+    /// The transform from a card mesh's space into the table's: scaled, turned over by `turn`
+    /// about the card's long axis, rotated, then moved to `position`.
+    #[must_use]
+    pub fn transform(&self) -> Affine3A {
+        Affine3A::from_scale_rotation_translation(
+            Vec3::splat(self.scale),
+            self.rotation * Quat::from_rotation_y(PI * self.turn),
+            self.position,
+        )
     }
 }
 
