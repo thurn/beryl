@@ -128,5 +128,38 @@ pub mod scenarios {
                 ME.controls(Card::Island, 3),
                 ME.has(Zone::Graveyard, Card::Stifle, 1),
             ]),
+        // Storm is a triggered ability that makes the copies as it resolves
+        // ([CR 702.40a](https://yawgatog.com/resources/magic-rules/#R70240a)): "When you cast
+        // this spell, copy it for each other spell that was cast before it this turn." P0
+        // casts an artifact and then Tendrils of Agony, and P1 Stifles the storm trigger: no
+        // copy is made, and Tendrils of Agony alone drains 2. (Stifle countering Dark Depths'
+        // state trigger, which then triggers again, is a scenario of Dark Depths.)
+        Scenario::new("Stifle counters a storm trigger")
+            .interaction(&[Card::TendrilsOfAgony])
+            .battlefield(
+                P0,
+                &[
+                    Card::Swamp,
+                    Card::Swamp,
+                    Card::Swamp,
+                    Card::Swamp,
+                    Card::Plains,
+                ],
+            )
+            .hand(P0, &[Prop::Equipment, Card::TendrilsOfAgony])
+            .battlefield(P1, &[Card::Island])
+            .hand(P1, &[Card::Stifle])
+            .actions(&[
+                ME.casts(Prop::Equipment),
+                Resolve,
+                ME.casts(Card::TendrilsOfAgony),
+                ME.targets_player(THEM),
+                THEM.casts(Card::Stifle),
+                Resolve,
+                stack(0),
+                THEM.life(18),
+                ME.life(22),
+                THEM.has(Zone::Graveyard, Card::Stifle, 1),
+            ]),
     ];
 }
