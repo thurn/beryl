@@ -224,11 +224,9 @@
 //! of 56 bytes, with its length, takes 904 of them. It was 20,184 when ability removal
 //! began (128 bytes that no change reported came between), and is 20,336 since each of the
 //! 128 [`state::Derived`] rows holds a mask of the abilities its permanent lost, packed to
-//! two-byte alignment, and 20,344 since a value chosen as a permanent enters. That leaves
-//! 136 bytes, less than the planned growth of the work that follows (the effects that reach
-//! other zones, captured word changes for abilities on the stack, copy exceptions in
-//! last-known information, mana that remembers, a bitboard of phased-out permanents, the
-//! loop count and hash), so that work first needs room found elsewhere in the state.
+//! two-byte alignment, and 20,344 since a value chosen as a permanent enters. It is 19,840
+//! since [`state::Object`] is aligned to two bytes and 22 bytes long, where it was 24: 504
+//! fewer, the 510 of the 255 slots less 6 of padding.
 //! The limit is 20,480. Each bead may change the size at its
 //! own push by at most its allotment, whatever landed before it, and reports the size as it
 //! reports the count:
@@ -246,11 +244,18 @@
 //! | by-bajq.1.1 | +16 (landed: +16) | the listener mask grows from 16 to 64 bits, beside a 64-bit mask of what static abilities replace |
 //! | by-bajq.1.4 | +8 (landed: +8) | three counts for each of two players, padded |
 //! | by-bajq.1.2 | 0 or lower (landed: -56) | last-known information leaves every trigger record for a table of 16 rows |
+//! | by-bajq.4.3 | -300 or lower (landed: -504) | each object is 22 bytes, where alignment made it 24 |
+//! | by-bajq.5.1 | +48 | up to four effects that reach other zones, beside the layer results |
+//! | by-bajq.5.3 | +136 | a byte in each of the 64 stack entries naming its captured text changes, and the table of four captured sets |
+//! | by-bajq.6.1 | +72 | two copy exceptions in each `Copiable`, which each of the 16 last-known rows holds |
+//! | by-bajq.7.4 | +48 | up to four entries of mana that remembers in each player's pool |
+//! | by-bajq.8.3 | +16 | the count of mandatory resolutions in a row and the hash it compares, padded |
+//! | by-bajq.8.4 | +32 | a set of the phased-out permanents' slots |
 //!
-//! With every bead but by-w8gv.7.4 landed the size is at most 20,448, so any order holds
-//! the limit; the target with all landed was at most 20,256, and the milestone ends at
-//! 20,176. [`state::Object`] is 24 bytes: its flags are a byte now, but it is aligned to
-//! four bytes, so the bytes they freed went to padding.
+//! The allotments of groups 4 to 8 sum to 352, so with all of them landed the size is at
+//! most 20,192 and any order holds the limit. Past them the room left is 288 bytes. The
+//! next room is in [`state::CombatRole`], five bytes in each of the 255 objects, and in
+//! moving a structure only a rare game fills to [`Large`] alone.
 //!
 //! ### Affected sides and payloads
 //!

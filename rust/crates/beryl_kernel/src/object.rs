@@ -303,10 +303,13 @@ impl<L: Layout> CombatRole<L> {
 /// The fields are `pub(crate)`: other crates read an object through its getters, and only
 /// the kernel can write one, since no `&mut Object` leaves the crate.
 ///
-/// Aligned to 4 bytes, so a `Small` object is 24 bytes rather than 22: the rollout
-/// benchmark counts about 118,000 fewer instructions indexing a table of 24-byte objects.
+/// Aligned to 2 bytes, so a `Small` object is 22 bytes, its fields with no padding. It was
+/// once aligned to 4 bytes and 24 bytes long, when the rollout benchmark counted about
+/// 118,000 fewer instructions indexing a table of 24-byte objects; measured again with the
+/// engine as it is now, 22-byte objects count 0.01% fewer, and the 255 slots take 510 bytes
+/// fewer of a [`State<Small>`](crate::state::State).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(align(4))]
+#[repr(align(2))]
 pub struct Object<L: Layout = Small> {
     /// Index into the game table: the definition its values are read from. The kernel's
     /// own: others ask a query ([`crate::query`]) or [`crate::Observation::card`].
@@ -561,7 +564,7 @@ impl<L: Layout> Object<L> {
 }
 
 const _: () = assert!(size_of::<Option<Slot>>() == 1 && size_of::<Option<CardIx>>() == 1);
-const _: () = assert!(size_of::<Object<Small>>() == 24);
+const _: () = assert!(size_of::<Object<Small>>() == 22);
 
 /// Every field but the battlefield index, a cache of the battlefield list's order, in
 /// declaration order, as a derived `Hash` would: so a hash of a state is a hash of the game.
