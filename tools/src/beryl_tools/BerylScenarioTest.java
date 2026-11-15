@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 
 import mage.MageItem;
 import mage.MageObject;
+import mage.ObjectColor;
 import mage.abilities.Ability;
 import mage.abilities.mana.ActivatedManaAbilityImpl;
 import mage.cards.Card;
@@ -24,6 +25,7 @@ import mage.counters.CounterType;
 import mage.game.Game;
 import mage.game.permanent.Permanent;
 import mage.game.permanent.PermanentToken;
+import mage.game.stack.Spell;
 import mage.player.ai.PossibleTargetsSelector;
 import mage.players.Player;
 import mage.target.Target;
@@ -352,6 +354,62 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
 
     protected void assertCreature(Player controller, String name, boolean creature) {
         Assert.assertEquals(name + " is a creature", creature, first(controller, name).isCreature(currentGame));
+    }
+
+    /**
+     * The first object named `name` in `zone` has exactly the colors `colors`, white first: a
+     * permanent `player` controls, a spell they control on the stack, or a card they own anywhere
+     * else.
+     */
+    protected void assertColorsIn(Player player, Zone zone, String name, String... colors) {
+        ObjectColor color = objectIn(player, zone, name).getColor(currentGame);
+        List<String> names = new ArrayList<>();
+        if (color.isWhite()) {
+            names.add("White");
+        }
+        if (color.isBlue()) {
+            names.add("Blue");
+        }
+        if (color.isBlack()) {
+            names.add("Black");
+        }
+        if (color.isRed()) {
+            names.add("Red");
+        }
+        if (color.isGreen()) {
+            names.add("Green");
+        }
+        Assert.assertEquals("colors of " + name + " in " + zone, Arrays.asList(colors), names);
+    }
+
+    private MageObject objectIn(Player player, Zone zone, String name) {
+        List<? extends MageObject> found;
+        switch (zone) {
+            case BATTLEFIELD:
+                return first(player, name);
+            case STACK:
+                found = currentGame.getStack().stream()
+                        .filter(o -> o instanceof Spell && o.isControlledBy(player.getId()))
+                        .collect(Collectors.toList());
+                break;
+            case HAND:
+                found = new ArrayList<>(player.getHand().getCards(currentGame));
+                break;
+            case GRAVEYARD:
+                found = new ArrayList<>(player.getGraveyard().getCards(currentGame));
+                break;
+            case LIBRARY:
+                found = player.getLibrary().getCards(currentGame);
+                break;
+            default:
+                found = currentGame.getExile().getAllCards(currentGame).stream()
+                        .filter(c -> c.isOwnedBy(player.getId()))
+                        .collect(Collectors.toList());
+        }
+        return found.stream()
+                .filter(o -> o.getName().equals(name))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(player.getName() + " has no " + name + " in " + zone));
     }
 
     protected void assertCountersOn(Player controller, String name, CounterType type, int count) {

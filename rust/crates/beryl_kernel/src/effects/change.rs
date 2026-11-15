@@ -111,15 +111,17 @@ impl LayerChange {
             Modification::SetBasePt(&Amount::Fixed(power), &Amount::Fixed(toughness)) => {
                 LayerChange::SetBasePt(saturate(power), saturate(toughness))
             }
-            Modification::SetPower(_) | Modification::SetPt(..) | Modification::SetBasePt(..) => {
-                return None;
-            }
+            // Read as the layers apply or list the ability: an amount, or a chosen color.
+            Modification::SetPower(_)
+            | Modification::SetPt(..)
+            | Modification::SetBasePt(..)
+            | Modification::AddProtection(Protection::ChosenColor)
+            | Modification::AddChosenColor => return None,
             Modification::ModifyPt(power, toughness) => LayerChange::ModifyPt(power, toughness),
             Modification::SwitchPt => LayerChange::SwitchPt,
             Modification::AddProtection(Protection::ColorWords(colors)) => {
                 LayerChange::AddProtection(colors.read(words))
             }
-            Modification::AddProtection(Protection::ChosenColor) => return None,
         })
     }
 
@@ -240,11 +242,13 @@ fn saturate(n: u8) -> i8 {
 
 /// The layer a modification applies in, for a static ability's part whose amount the
 /// layers read ([`LayerChange::Read`]): 7a for a characteristic-defining power, 7b for a
-/// base power and toughness.
+/// base power and toughness, and 5 for the chosen color, which the layers read as they list
+/// the ability.
 #[inline]
 pub fn read_layer(modification: Modification) -> Layer {
     match modification {
         Modification::SetPower(_) | Modification::SetPt(..) => Layer::PtDefining,
+        Modification::AddChosenColor => Layer::Color,
         _ => Layer::PtSetting,
     }
 }

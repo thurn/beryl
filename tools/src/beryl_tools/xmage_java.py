@@ -203,6 +203,10 @@ def assertion_code(a: Json, who: str) -> str:
     if what == "Counters":
         kind = COUNTERS[cast(str, a["kind"])]
         return f"assertCountersOn({who}, {name}, CounterType.{kind}, {count})"
+    if what == "Colors":
+        zone = cast(str, a["zone"]).upper()
+        colors = "".join(f", {java_string(c)}" for c in cast(list[str], a["colors"]))
+        return f"assertColorsIn({who}, Zone.{zone}, {name}{colors})"
     if what == "Stack":
         return f"assertStackSize({count})"
     if what == "Library":

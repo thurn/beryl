@@ -3,6 +3,7 @@
 
 mod apply;
 mod dependency;
+mod elsewhere;
 pub(crate) mod entering;
 mod granted;
 mod together;
@@ -401,6 +402,8 @@ fn apply_layers<L: Layout>(
         }
         None => counters(s),
     }
+    let applying = list.as_ref().map_or(&[][..], |l| l.as_slice());
+    listed = listed.and(elsewhere::reach(s, t, applying));
     (listed, applied)
 }
 
@@ -505,7 +508,7 @@ fn list_static<L: Layout>(
         debug_assert_ne!(modification, Modification::Control);
         // An amount read as its layer applies is named by the ability that says it. The card
         // table refuses a granted ability with one (`Unapplied::GrantedAmount`).
-        let change = LayerChange::resolve(modification, you, &words).unwrap_or_else(|| {
+        let change = elsewhere::resolve(s, slot, modification, you, &words).unwrap_or_else(|| {
             debug_assert_eq!(on.order & GRANTED, 0);
             LayerChange::Read {
                 layer: read_layer(modification),

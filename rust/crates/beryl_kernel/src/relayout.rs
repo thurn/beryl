@@ -527,6 +527,7 @@ impl<L: Layout> Relayout for State<L> {
             budgets,
             flags,
             outcome,
+            elsewhere,
         } = self;
         State {
             objects: self::objects::<L, M>(objects),
@@ -562,6 +563,7 @@ impl<L: Layout> Relayout for State<L> {
             budgets: *budgets,
             flags: *flags,
             outcome: *outcome,
+            elsewhere: queue(elsewhere.as_slice(), crate::elsewhere::Reach::relayout),
         }
     }
 }

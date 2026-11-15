@@ -282,6 +282,7 @@ impl Layout for Large {
             budgets,
             flags,
             outcome,
+            elsewhere,
         } = state;
         State {
             objects: objects.clone(),
@@ -310,6 +311,7 @@ impl Layout for Large {
             budgets: *budgets,
             flags: *flags,
             outcome: *outcome,
+            elsewhere: elsewhere.clone(),
         }
     }
 

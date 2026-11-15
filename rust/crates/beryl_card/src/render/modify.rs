@@ -182,6 +182,7 @@ impl Ctx {
                 verb("becomes", "become"),
                 list(&colors(set.read(&self.words)), "and")
             ),
+            Modification::AddChosenColor => chosen_color(verb("becomes", "become"), plural),
             Modification::SetBasePt(power, toughness) => {
                 format!(
                     "{} {}",
@@ -216,4 +217,11 @@ fn part_of_becoming(modification: Modification) -> bool {
             | Modification::SetSubtypeWord(_)
             | Modification::SetBasePt(..)
     )
+}
+
+/// "Is the chosen color in addition to its other colors", with `verb` for "is" and the
+/// possessive for one object or several.
+pub(super) fn chosen_color(verb: &str, plural: bool) -> String {
+    let its = if plural { "their" } else { "its" };
+    format!("{verb} the chosen color in addition to {its} other colors")
 }

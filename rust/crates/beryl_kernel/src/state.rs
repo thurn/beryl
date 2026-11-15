@@ -203,6 +203,10 @@ pub struct State<L: Layout = Small> {
     /// [`State::add_counters`] and [`State::remove_counters`] write it, and the zone move
     /// ends an object's rows.
     pub(crate) counters: CounterTable<L>,
+    /// The continuous effects that reach objects off the battlefield, in the order they
+    /// apply, as the layers last applied ([`crate::elsewhere`]): stored with the layer
+    /// results, and empty in most games.
+    pub(crate) elsewhere: crate::elsewhere::Reaching<L>,
 }
 
 const _: () = assert!(size_of::<State<Small>>() <= 20 * 1024);
@@ -241,6 +245,8 @@ impl<L: Layout> std::hash::Hash for State<L> {
             memos,
             trackers,
             counters,
+            // Found from the faces on the battlefield and the memos, which the hash covers.
+            elsewhere: _,
         } = self;
         objects.hash(h);
         battlefield.hash(h);

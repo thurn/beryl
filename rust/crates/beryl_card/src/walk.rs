@@ -279,7 +279,7 @@ impl Objects {
             | Objects::TriggeredOnIn(_)
             | Objects::Carried
             | Objects::ExiledWithThis => {}
-            Objects::All { filter, .. } => filter.walk(visit),
+            Objects::All { filter, .. } | Objects::Everywhere(filter) => filter.walk(visit),
             Objects::InZoneOf {
                 players, filter, ..
             } => {

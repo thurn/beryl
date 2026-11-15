@@ -173,6 +173,7 @@ impl<L: Layout> Scene<'_, L> {
             | Objects::All { .. }
             | Objects::InZoneOf { .. }
             | Objects::CardsIn { .. }
+            | Objects::Everywhere(_)
             | Objects::Paid(_)
             | Objects::Other(_) => None,
         };
@@ -273,6 +274,15 @@ impl<L: Layout> Scene<'_, L> {
                     Zone::Stack => cast::spells(s),
                     _ => s.in_zone(zone),
                 };
+                filter.select_x(s, self.t, within, self.you(), &self.words(), self.x)
+            }
+            // CR 611.3b: the cards in every zone, the spells and the permanents.
+            Objects::Everywhere(filter) => {
+                let mut within: Bitboard<L::Slot> = s.battlefield().iter().copied().collect();
+                within |= cast::spells(s);
+                for zone in [Zone::Library, Zone::Hand, Zone::Graveyard, Zone::Exile] {
+                    within |= s.in_zone(zone);
+                }
                 filter.select_x(s, self.t, within, self.you(), &self.words(), self.x)
             }
             // "Each other creature": the set without the ability's source. A source that has
@@ -443,17 +453,12 @@ impl<L: Layout> Scene<'_, L> {
             Amount::Times(n, amount) => i32::from(n) * self.value(*amount),
             Amount::Plus(n, amount) => self.value(*amount) + i32::from(n),
             // CR 300.1: each card type once, among the cards: a token is none (CR 108.2).
-            // A permanent's types are the layers' results. A union of types, the same in
-            // any order the cards are read.
+            // A union of types, the same in any order the cards are read.
             Amount::CardTypesAmong(objects) => {
                 let types = (self.s.in_candidate_order(self.objects(*objects)))
                     .filter(|&slot| !self.s.object(slot).is_token())
                     .fold(Types::NONE, |types, slot| {
-                        types.union(if self.s.object(slot).zone() == Zone::Battlefield {
-                            self.s.derived(slot).types
-                        } else {
-                            self.s.copiable(slot).face(self.t).types
-                        })
+                        types.union(self.s.types(self.t, slot))
                     });
                 types.0.count_ones().cast_signed()
             }

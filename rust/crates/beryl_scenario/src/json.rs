@@ -7,7 +7,7 @@
 //! it reads every field it lists by name, and matches an enum's variants exhaustively.
 
 use crate::{Live, Position, facts, trace};
-use beryl_engine::card::{Castings, FaceIx, ManaColor, ObjectAbility, Purpose};
+use beryl_engine::card::{Castings, Colors, FaceIx, ManaColor, ObjectAbility, Purpose};
 use beryl_engine::state::CounterKind;
 use beryl_engine::{CardTable, DecisionKind, Seat, TurnStep, Zone};
 use beryl_scenario_types::{
@@ -213,6 +213,16 @@ enum PickDef {
     },
 }
 
+/// Colors as the names of each, white first ([`Colors::NAMES`]).
+#[allow(clippy::trivially_copy_pass_by_ref)] // the signature `serialize_with` calls
+fn color_names<S: Serializer>(colors: &Colors, s: S) -> Result<S::Ok, S::Error> {
+    let each = Colors::EACH.iter().zip(Colors::NAMES);
+    s.collect_seq(
+        each.filter(|(c, _)| colors.intersects(**c))
+            .map(|(_, name)| name),
+    )
+}
+
 #[derive(Serialize)]
 #[serde(remote = "Assertion", tag = "assert")]
 enum AssertionDef {
@@ -285,6 +295,15 @@ enum AssertionDef {
         #[serde(serialize_with = "variant")]
         kind: CounterKind,
         count: u8,
+    },
+    Colors {
+        #[serde(serialize_with = "seat")]
+        player: Seat,
+        #[serde(serialize_with = "variant")]
+        zone: Zone,
+        card: &'static str,
+        #[serde(serialize_with = "color_names")]
+        colors: Colors,
     },
     Stack {
         count: u8,

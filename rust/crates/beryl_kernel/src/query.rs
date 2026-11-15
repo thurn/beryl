@@ -9,7 +9,9 @@
 //! [`crate::Observation::card`] is the other door, for a player's view: nothing when the
 //! viewer does not know the card.
 
-use beryl_card::{AbilityIx, CardDef, Colors, Face, FaceIx, Words, Zone};
+use beryl_card::{
+    AbilityIx, CardDef, Colors, Face, FaceIx, Keywords, Subtype, Supertypes, Types, Words, Zone,
+};
 
 use crate::bitboard::Bitboard;
 use crate::event::{Listens, Replaces};
@@ -535,8 +537,9 @@ impl<L: Layout> State<L> {
     }
 
     /// The colors of the object in `slot` ([CR 105.2]): "An object can be one or more of the
-    /// five colors, or it can be no color at all." A permanent's are its layer results, and
-    /// elsewhere those of the face it has there.
+    /// five colors, or it can be no color at all." A permanent's are its layer results.
+    /// Elsewhere they are those of the face it has there, then the continuous effects that
+    /// reach other zones ([`crate::elsewhere`]), read with one test while there are none.
     ///
     /// [CR 105.2]: https://yawgatog.com/resources/magic-rules/#R1052
     #[inline]
@@ -544,8 +547,75 @@ impl<L: Layout> State<L> {
         let o = self.object(slot);
         if o.zone == Zone::Battlefield {
             self.derived(slot).colors
-        } else {
+        } else if !self.reaches_elsewhere() {
             Copiable::of_object(o).face(t).colors
+        } else {
+            self.elsewhere(t, slot).colors
+        }
+    }
+
+    /// The card types of the object in `slot` ([CR 205.2a]): "The card types are artifact,
+    /// battle, conspiracy, creature, dungeon, enchantment, instant, kindred, land, phenomenon,
+    /// plane, planeswalker, scheme, sorcery, and vanguard." Read as [`State::colors`] is.
+    ///
+    /// [CR 205.2a]: https://yawgatog.com/resources/magic-rules/#R2052a
+    #[inline]
+    pub fn types(&self, t: &GameTable, slot: L::Slot) -> Types {
+        let o = self.object(slot);
+        if o.zone == Zone::Battlefield {
+            self.derived(slot).types
+        } else if !self.reaches_elsewhere() {
+            Copiable::of_object(o).face(t).types
+        } else {
+            self.elsewhere(t, slot).types
+        }
+    }
+
+    /// The supertypes of the object in `slot` ([CR 205.4a]): "An object can have one or more
+    /// supertypes." Read as [`State::colors`] is.
+    ///
+    /// [CR 205.4a]: https://yawgatog.com/resources/magic-rules/#R2054a
+    #[inline]
+    pub fn supertypes(&self, t: &GameTable, slot: L::Slot) -> Supertypes {
+        let o = self.object(slot);
+        if o.zone == Zone::Battlefield {
+            self.derived(slot).supertypes
+        } else if !self.reaches_elsewhere() {
+            Copiable::of_object(o).face(t).supertypes
+        } else {
+            self.elsewhere(t, slot).supertypes
+        }
+    }
+
+    /// Whether the object in `slot` has the subtype `subtype` ([CR 205.3a]): "A card can have
+    /// one or more subtypes printed on its type line." Read as [`State::colors`] is.
+    ///
+    /// [CR 205.3a]: https://yawgatog.com/resources/magic-rules/#R2053a
+    #[inline]
+    pub fn has_subtype(&self, t: &GameTable, slot: L::Slot, subtype: Subtype) -> bool {
+        let o = self.object(slot);
+        if o.zone == Zone::Battlefield {
+            self.derived(slot).subtypes.contains(t.subtypes(), subtype)
+        } else if !self.reaches_elsewhere() {
+            let printed = Copiable::of_object(o).face(t).subtypes;
+            printed.read(&self.words_of(slot)).contains(subtype)
+        } else {
+            (self.elsewhere(t, slot).subtypes).contains(t.subtypes(), subtype)
+        }
+    }
+
+    /// The keyword abilities of the object in `slot` that [`Keywords`] names: a permanent's
+    /// after continuous effects ([CR 613.1f]), and elsewhere those of the face it has there,
+    /// which no effect of the cards changes off the battlefield.
+    ///
+    /// [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
+    #[inline]
+    pub fn keywords(&self, t: &GameTable, slot: L::Slot) -> Keywords {
+        let o = self.object(slot);
+        if o.zone == Zone::Battlefield {
+            self.derived(slot).keywords
+        } else {
+            Copiable::of_object(o).face(t).keywords
         }
     }
 

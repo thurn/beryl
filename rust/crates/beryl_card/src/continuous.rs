@@ -505,6 +505,13 @@ pub enum Modification {
     SetColorWords(ColorWords),
     /// Layer 5: "is [colors] in addition to its other colors".
     AddColorWords(ColorWords),
+    /// Layer 5: "is the chosen color in addition to its other colors": the color chosen as
+    /// the permanent with the ability entered ([`Replacement::choose_as_enters`]), read as
+    /// the layers list the ability ([CR 613.1e]): "Layer 5: Color-changing effects are
+    /// applied." With no color chosen, it adds none.
+    ///
+    /// [CR 613.1e]: https://yawgatog.com/resources/magic-rules/#R6131e
+    AddChosenColor,
     /// Layer 7b: "has base power and toughness [power]/[toughness]" ([CR 613.4b]): "Effects
     /// that set power and/or toughness to a specific number or value are applied." A
     /// resolving spell or ability settles each amount as its effect begins ([CR 608.2h]); a

@@ -5,6 +5,7 @@ pub use beryl_card::Filter;
 use beryl_card::{CardDef, Players, Words};
 
 use crate::bitboard::Bitboard;
+use crate::elsewhere::SoFar;
 use crate::ids::Seat;
 use crate::layout::Layout;
 use crate::state::{Flag, State, Zone};
@@ -87,27 +88,39 @@ impl Evaluate for Filter {
         let o = s.object(slot);
         let face = || s.copiable(slot).face(t);
         let derived = || (o.zone == Zone::Battlefield).then(|| s.derived(slot));
-        // A permanent's characteristics are the layers' results; its face is read only for
-        // an object that is none.
+        // A permanent's characteristics are the layers' results. Anything else's are its
+        // face's while no effect reaches other zones, and the kernel's reads of them
+        // otherwise ([`crate::elsewhere`]), out of line.
+        let elsewhere = || s.reaches_elsewhere().then(|| s.elsewhere(t, slot));
         match *self {
             Filter::Any => true,
-            Filter::Types(types) => derived()
-                .map_or_else(|| face().types, |d| d.types)
-                .intersects(types),
-            Filter::Supertypes(supertypes) => derived()
-                .map_or_else(|| face().supertypes, |d| d.supertypes)
-                .intersects(supertypes),
+            Filter::Types(types) => match derived() {
+                Some(d) => d.types,
+                None => elsewhere().map_or_else(|| face().types, |c| c.types),
+            }
+            .intersects(types),
+            Filter::Supertypes(supertypes) => match derived() {
+                Some(d) => d.supertypes,
+                None => elsewhere().map_or_else(|| face().supertypes, |c| c.supertypes),
+            }
+            .intersects(supertypes),
             Filter::SubtypeWord(word) => {
                 let subtype = word.read(words);
                 match derived() {
                     Some(d) => d.subtypes.contains(t.subtypes(), subtype),
-                    // The candidate's type line is its own text, read through its own words.
-                    None => face().subtypes.read(&s.words_of(slot)).contains(subtype),
+                    None => match elsewhere() {
+                        Some(c) => c.subtypes.contains(t.subtypes(), subtype),
+                        // The candidate's type line is its own text, read through its own
+                        // words.
+                        None => face().subtypes.read(&s.words_of(slot)).contains(subtype),
+                    },
                 }
             }
-            Filter::ColorWords(colors) => derived()
-                .map_or_else(|| face().colors, |d| d.colors)
-                .intersects(colors.read(words)),
+            Filter::ColorWords(colors) => match derived() {
+                Some(d) => d.colors,
+                None => elsewhere().map_or_else(|| face().colors, |c| c.colors),
+            }
+            .intersects(colors.read(words)),
             // CR 108.4a: a card that is no permanent or spell has no controller, and "its
             // owner" is used instead, which is what the query answers.
             Filter::Whose(players) => is_for(players, s.controller(slot), you),
@@ -120,6 +133,43 @@ impl Evaluate for Filter {
             Filter::All(fs) => fs.iter().all(|f| f.matches_x(s, t, slot, you, words, x)),
             Filter::AnyOf(fs) => fs.iter().any(|f| f.matches_x(s, t, slot, you, words, x)),
         }
+    }
+}
+
+/// Whether the object in `slot`, which is not a permanent, passes `filter` read for `you`
+/// through `words`, its characteristics being `so_far`: what the effects that reach other
+/// zones applied before the one whose filter this is made of it ([`crate::elsewhere`]). A
+/// filter that reads a characteristic an earlier effect changed sees the change, as the
+/// layers find a static ability's set against the layers before it (CR 613.1). Out of line,
+/// apart from [`Evaluate::matches_x`]: only a game with such an effect comes here.
+#[cold]
+#[inline(never)]
+pub(crate) fn passes_so_far<L: Layout>(
+    filter: &Filter,
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    you: Seat,
+    words: &Words,
+    so_far: &SoFar,
+) -> bool {
+    let passes = |f: &Filter| passes_so_far(f, s, t, slot, you, words, so_far);
+    match *filter {
+        Filter::Types(types) => so_far.types.intersects(types),
+        Filter::Supertypes(supertypes) => so_far.supertypes.intersects(supertypes),
+        Filter::SubtypeWord(word) => so_far.subtypes.contains(t.subtypes(), word.read(words)),
+        Filter::ColorWords(colors) => so_far.colors.intersects(colors.read(words)),
+        Filter::Not(f) => !passes(f),
+        Filter::All(fs) => fs.iter().all(passes),
+        Filter::AnyOf(fs) => fs.iter().any(passes),
+        // The rest read no characteristic an effect here changes.
+        Filter::Any
+        | Filter::Whose(_)
+        | Filter::Tapped
+        | Filter::Token
+        | Filter::ManaValueAtMost(_)
+        | Filter::ManaValueAtMostX
+        | Filter::PowerAtMost(_) => filter.matches(s, t, slot, you, words),
     }
 }
 

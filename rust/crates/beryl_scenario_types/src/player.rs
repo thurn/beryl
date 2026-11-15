@@ -246,6 +246,17 @@ impl Player {
         })
     }
 
+    /// The first object named `card` in `zone` has exactly the colors `colors`: a permanent
+    /// they control, a spell they control on the stack, or a card they own elsewhere.
+    pub const fn colored(self, zone: Zone, card: &'static str, colors: Colors) -> Action {
+        Action::assert(Assertion::Colors {
+            player: self.0,
+            zone,
+            card,
+            colors,
+        })
+    }
+
     /// Whether the first permanent named `card` they control is a creature.
     pub const fn creature(self, card: &'static str, creature: bool) -> Action {
         Action::assert(Assertion::Creature {

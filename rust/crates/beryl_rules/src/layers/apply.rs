@@ -194,7 +194,7 @@ pub(super) fn static_members<L: Layout>(
             .attached_to()
             .filter(|&a| s.battlefield_position(a).is_some())
             .map_or(Bitboard::EMPTY, Bitboard::single),
-        Objects::All { filter, .. } => so_far.select(filter),
+        Objects::All { filter, .. } | Objects::Everywhere(filter) => so_far.select(filter),
         // "Each other": never the permanent with the ability, whatever it has become.
         Objects::Other(&Objects::All { filter, .. }) => {
             let mut members = so_far.select(filter);
@@ -536,8 +536,9 @@ pub(super) fn filter_reads(filter: Filter) -> Characteristics {
 /// disagree.
 pub(super) fn existence_reads(spec: &beryl_card::LayerSpec) -> Characteristics {
     let mut reads = Characteristics::REMOVES_ABILITIES;
-    if let Objects::All { filter, .. } | Objects::Other(&Objects::All { filter, .. }) =
-        spec.affected
+    if let Objects::All { filter, .. }
+    | Objects::Everywhere(filter)
+    | Objects::Other(&Objects::All { filter, .. }) = spec.affected
     {
         reads = reads.union(filter_reads(filter));
     }

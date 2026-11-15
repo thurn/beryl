@@ -55,6 +55,10 @@ pub enum Capability {
     /// choice that may come up wherever a permanent enters, so every resolution runs where it
     /// can pause for it (`beryl_rules`' `resolve`).
     ChoosesAsEnters,
+    /// A card's static ability affects objects in every zone
+    /// ([`beryl_card::Objects::Everywhere`]), so the recompute lists such effects for the
+    /// reads of characteristics off the battlefield ([`crate::elsewhere`]).
+    ReachesElsewhere,
 }
 
 impl Capability {
@@ -89,6 +93,11 @@ impl Capability {
             }) = a.replacement()
             {
                 found |= Capability::ChoosesAsEnters.bit();
+            }
+            if let Some(spec) = a.layer()
+                && matches!(spec.affected, beryl_card::Objects::Everywhere(_))
+            {
+                found |= Capability::ReachesElsewhere.bit();
             }
             if a.cost().is_loyalty() {
                 found |= Capability::LoyaltyActivated.bit();

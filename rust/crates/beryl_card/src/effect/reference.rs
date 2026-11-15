@@ -83,6 +83,19 @@ pub enum Objects {
         players: &'static Players,
         zones: &'static [Zone],
     },
+    /// Every card that isn't on the battlefield, every spell and every permanent that passes
+    /// a filter, read for the ability's controller: "all cards that aren't on the
+    /// battlefield, spells, and permanents", in every zone at once. Only a static ability's
+    /// continuous effect says it ([`crate::LayerSpec::affected`]), and that effect applies
+    /// to an object wherever it is ([CR 611.3b]): "The effect applies at all times that the
+    /// permanent generating it is on the battlefield or the object generating it is in the
+    /// appropriate zone." The filter reads "you control" of a card that isn't a permanent or
+    /// spell as "you own" ([CR 108.4a]): "If anything asks for the controller of a card that
+    /// doesn't have one (because it's not a permanent or spell), use its owner instead."
+    ///
+    /// [CR 611.3b]: https://yawgatog.com/resources/magic-rules/#R6113b
+    /// [CR 108.4a]: https://yawgatog.com/resources/magic-rules/#R1084a
+    Everywhere(Filter),
     /// What paying the cost of the spell or ability did this to: "the sacrificed creature",
     /// "the exiled card", "the revealed card"
     /// ([CR 608.2k](https://yawgatog.com/resources/magic-rules/#R6082k)): "If an ability's
@@ -209,7 +222,9 @@ impl Objects {
             | Objects::TriggeredOn
             | Objects::TriggeredOnIn(_)
             | Objects::Carried => true,
-            Objects::All { filter, .. } => filter.needs_a_resolution(),
+            Objects::All { filter, .. } | Objects::Everywhere(filter) => {
+                filter.needs_a_resolution()
+            }
             Objects::InZoneOf {
                 players, filter, ..
             } => players.needs_a_resolution() || filter.needs_a_resolution(),

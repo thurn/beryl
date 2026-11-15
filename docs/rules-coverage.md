@@ -524,27 +524,37 @@ Built by by-bajq.3.10:
 
 ### 4. Characteristics in every zone, and text
 
-- **Reading.** `query.rs` answers colors, types, keywords and "has this ability"
-  for any object. For a permanent the answer is its layer result. For anything
-  else it is the copiable values, then the continuous effects that reach other
-  zones. The recompute lists those effects, in the order they apply, in a short
-  list beside the layer results. Most games never have one, and then a read off
-  the battlefield tests the list's length. A filter over a hand or a graveyard
-  uses the per-slot attribute bitboards unless the list is non-empty.
-- **What reads characteristics today** (Mason audit, 2026-11-14).
-  `State::colors`, `power` and `toughness` already answer for any zone. Types,
-  subtypes and keywords have no query: the kernel's filter evaluation
-  (`beryl_kernel/src/filter.rs`), `combat.rs` (five reads), lifelink in
-  `damage.rs`, `cast/legal.rs`, `actions/destroy.rs` and `interpret/scene.rs`
-  each take a permanent's layer result and anything else's face. Those are the
-  readers to move onto the one query.
+- **Reading** (built). `query.rs` answers colors, card types, supertypes,
+  subtypes, keywords, power and toughness for any object. For a permanent the
+  answer is its layer result. For anything else it is the copiable values, then
+  the continuous effects that reach other zones
+  (`beryl_kernel/src/elsewhere.rs`). Such an effect is a static ability whose
+  affected set is `Objects::Everywhere(filter)` ("all cards that aren't on the
+  battlefield, spells, and permanents"), with parts in layers 4 and 5 only and
+  no "as long as" (the card table refuses others, and refuses granting one). The
+  recompute lists each such part, in the order the layers apply it, as three
+  bytes (the source's slot, the ability and the part) in a list of at most four
+  beside the layer results; a fifth is `Full`. A read off the battlefield tests
+  the list's length and walks it only when it is not empty, resolving each part
+  from the source's face and its chosen color as it applies. There are no
+  per-slot attribute bitboards: a filter over a hand or a graveyard asks the
+  query for each object, which is the face read and one length test while the
+  list is empty.
+- **What still reads a layer result directly.** Readers that walk the
+  battlefield (state-based actions, combat, the mana solver, the session's
+  views) take a permanent's layer result, which is the query's answer for a
+  permanent. Lifelink and `Amount::CardTypesAmong`, which read objects in any
+  zone, ask the query. A rule change's filter over a spell not yet cast
+  (`rule_change::accepts`) reads the card's face: no effect of the cards reaches
+  a card being cast through it yet.
 - **Which abilities an object has** is answered by one kernel query that yields
   its face's abilities it has not lost and those granted to it (by-bajq.4.2), so
   a grant to a card in a graveyard (Underworld Breach) is one more source of
   that query, not a change to each reader.
 - **Characteristic-defining abilities** (CR 604.3) work in every zone and are
   read the same way: Tarmogoyf's power in a graveyard is its amount, computed
-  when asked.
+  when asked. Not built yet: the kernel cannot evaluate an amount, so
+  `State::power` off the battlefield is still the copiable value.
 - **Words.** A color word, a basic land type and a creature type inside an
   ability become values of private types. The only way to the value takes the
   word changes of the object the ability is printed on. Filters, parameterized

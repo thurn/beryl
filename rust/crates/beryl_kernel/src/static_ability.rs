@@ -93,7 +93,8 @@ impl Inputs {
             }
             let affected_reads_tapped = matches!(
                 spec.affected,
-                Objects::All { filter, .. } if mentions_tapped(filter)
+                Objects::All { filter, .. } | Objects::Everywhere(filter)
+                    if mentions_tapped(filter)
             ) || matches!(
                 spec.affected,
                 Objects::Other(&Objects::All { filter, .. }) if mentions_tapped(filter)
@@ -255,10 +256,13 @@ pub fn applied(spec: &LayerSpec) -> Result<(), Unapplied> {
 fn found_by_the_layers(affected: Objects) -> bool {
     match affected {
         Objects::This | Objects::AttachedTo => true,
+        // Everywhere: every permanent the filter accepts. The objects off the battlefield
+        // it reaches are the kernel's to read (`crate::elsewhere`).
         Objects::All {
             zone: Zone::Battlefield,
             filter,
-        } => read_by_the_layers(filter),
+        }
+        | Objects::Everywhere(filter) => read_by_the_layers(filter),
         Objects::Other(&objects) => {
             matches!(objects, Objects::All { .. }) && found_by_the_layers(objects)
         }

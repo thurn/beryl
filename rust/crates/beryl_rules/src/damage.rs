@@ -106,12 +106,7 @@ fn lifelink<L: Layout>(game: &Game<'_, L>, source: ObjectRef<L>) -> Option<Seat>
     if !s.is_current(source) {
         return None;
     }
-    let keywords = if game.on_battlefield(source) {
-        s.derived(source.slot).keywords
-    } else {
-        s.copiable(source.slot).face(game.table()).keywords
-    };
-    keywords
+    s.keywords(game.table(), source.slot)
         .contains(Keywords::LIFELINK)
         .then(|| s.controller(source.slot))
 }

@@ -13,7 +13,8 @@
 //! The actions and assertions are the ones the engine's mechanics support so far.
 
 use beryl_card::{
-    Castings, CounterKind, DecisionKind, FaceIx, ManaColor, ObjectAbility, Seat, TurnStep, Zone,
+    Castings, Colors, CounterKind, DecisionKind, FaceIx, ManaColor, ObjectAbility, Seat, TurnStep,
+    Zone,
 };
 
 mod player;
@@ -400,6 +401,15 @@ pub enum Assertion {
         card: &'static str,
         kind: CounterKind,
         count: u8,
+    },
+    /// The colors of the first object named `card` in `zone`: a permanent `player` controls
+    /// on the battlefield, a spell they control on the stack, or a card they own anywhere
+    /// else.
+    Colors {
+        player: Seat,
+        zone: Zone,
+        card: &'static str,
+        colors: Colors,
     },
     /// How many spells and abilities are on the stack.
     Stack {

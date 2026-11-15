@@ -45,6 +45,22 @@ pub mod scenarios {
     const BOLTER_HAND: &[&str] = &[BOLT, Card::Mountain];
 
     pub const SCENARIOS: &[Scenario] = &[
+        // Under Rest in Peace nothing reaches a graveyard: the Lightning Bolt P0 casts at P1 is
+        // exiled as it resolves, and Tarmogoyf stays 0/1 where the instant would have made it
+        // 1/2.
+        Scenario::new("Tarmogoyf under Rest in Peace stays 0/1")
+            .interaction(&[BOLT, Card::RestInPeace])
+            .battlefield(P0, &[Card::Mountain, Card::RestInPeace])
+            .hand(P0, BOLTER_HAND)
+            .battlefield(P1, &[GOYF])
+            .actions(&[
+                ME.casts(BOLT),
+                ME.targets_player(THEM),
+                Resolve,
+                ME.has(Zone::Exile, BOLT, 1),
+                THEM.life(17),
+                THEM.pt(GOYF, 0, 1),
+            ]),
         // With no card in any graveyard it is 0/1.
         Scenario::new("Tarmogoyf with empty graveyards")
             .battlefield(P0, &[GOYF])

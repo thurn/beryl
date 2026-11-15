@@ -512,6 +512,7 @@ impl Ctx {
                 "{is} {} in addition to its other colors",
                 list(&colors(set.read(&self.words)), "and")
             ),
+            Modification::AddChosenColor => super::modify::chosen_color(is, plural),
             Modification::SetBasePt(power, toughness) => {
                 format!("{has} {}", self.base_pt(*power, *toughness))
             }

@@ -786,6 +786,43 @@ public final class BerylForgeHarness {
             throw new StepFailed("p" + seat(player) + " controls no " + (Boolean.TRUE.equals(token) ? "token " : "") + name);
         }
 
+        /** The first object named `name` in `zone`: a permanent `player` controls, a spell they control, or a card they own elsewhere. */
+        Card in(Player player, String zone, String name) {
+            ZoneType type = ZoneType.valueOf(zone);
+            if (type == ZoneType.Battlefield) {
+                return first(player, name, null);
+            }
+            for (Card card : game.getCardsIn(type)) {
+                Player who = type == ZoneType.Stack ? card.getController() : card.getOwner();
+                if (who == player && named(card, name)) {
+                    return card;
+                }
+            }
+            throw new StepFailed("p" + seat(player) + " has no " + name + " in " + zone);
+        }
+
+        /** A card's colors by name, white first. */
+        static List<String> colorNames(Card card) {
+            forge.card.ColorSet set = card.getColor();
+            List<String> names = new ArrayList<>();
+            if (set.hasWhite()) {
+                names.add("White");
+            }
+            if (set.hasBlue()) {
+                names.add("Blue");
+            }
+            if (set.hasBlack()) {
+                names.add("Black");
+            }
+            if (set.hasRed()) {
+                names.add("Red");
+            }
+            if (set.hasGreen()) {
+                names.add("Green");
+            }
+            return names;
+        }
+
         void check(JsonObject step) {
             JsonObject a = step.getAsJsonObject("assertion");
             String kind = a.get("assert").getAsString();
@@ -857,6 +894,14 @@ public final class BerylForgeHarness {
                         expected = a.get("count").getAsInt();
                         CounterType type = CounterEnumType.valueOf(a.get("kind").getAsString());
                         actual = first(player(a), a.get("card").getAsString(), null).getCounters(type);
+                    }
+                    case "Colors" -> {
+                        List<String> colors = new ArrayList<>();
+                        for (JsonElement color : a.getAsJsonArray("colors")) {
+                            colors.add(color.getAsString());
+                        }
+                        expected = colors;
+                        actual = colorNames(in(player(a), a.get("zone").getAsString(), a.get("card").getAsString()));
                     }
                     case "Stack" -> {
                         expected = a.get("count").getAsInt();
@@ -1163,6 +1208,23 @@ public final class BerylForgeHarness {
                 return null;
             }
             return pick.has("card") ? pick.get("card").getAsString() : ANOTHER_CARD;
+        }
+
+        /**
+         * Beryl's answer to a choice of a color (its purpose "color") where Forge asks for a set,
+         * as "As this creature enters, choose a color" does: the one color it names.
+         */
+        @Override
+        public forge.card.ColorSet chooseColors(String message, SpellAbility sa, int min, int max, forge.card.ColorSet options) {
+            JsonObject pick = run.takeFollowingFor(player, "color");
+            if (pick == null) {
+                return super.chooseColors(message, sa, min, max, options);
+            }
+            forge.card.ColorSet chosen = forge.card.ColorSet.fromNames(COLORS[pick.get("n").getAsInt()]);
+            if (!options.hasAllColors(chosen.getColor())) {
+                throw new StepFailed("color " + chosen + " among " + options);
+            }
+            return chosen;
         }
 
         @Override

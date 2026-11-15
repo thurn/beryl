@@ -170,8 +170,15 @@ pub fn found_where_it_works(ability: &Ability) -> bool {
 pub fn read_when_granted(ability: &Ability) -> bool {
     match ability.kind() {
         AbilityKind::Activated => true,
+        // A granted effect on objects in every zone would leave the battlefield's layers for
+        // reads the kernel makes from the face of the permanent with it (`crate::elsewhere`),
+        // and the granted one is on no face.
         AbilityKind::Static => {
-            ability.layer().is_some() && ability.rule().is_none() && ability.replacement().is_none()
+            ability
+                .layer()
+                .is_some_and(|spec| !matches!(spec.affected, beryl_card::Objects::Everywhere(_)))
+                && ability.rule().is_none()
+                && ability.replacement().is_none()
         }
         AbilityKind::Spell
         | AbilityKind::Mana

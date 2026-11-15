@@ -226,7 +226,9 @@
 //! 128 [`state::Derived`] rows holds a mask of the abilities its permanent lost, packed to
 //! two-byte alignment, and 20,344 since a value chosen as a permanent enters. It is 19,840
 //! since [`state::Object`] is aligned to two bytes and 22 bytes long, where it was 24: 504
-//! fewer, the 510 of the 255 slots less 6 of padding.
+//! fewer, the 510 of the 255 slots less 6 of padding. It is 19,856 since the list of
+//! effects that reach other zones ([`elsewhere`]): four entries of 3 bytes and the list's
+//! length, 16 with padding.
 //! The limit is 20,480. Each bead may change the size at its
 //! own push by at most its allotment, whatever landed before it, and reports the size as it
 //! reports the count:
@@ -245,7 +247,7 @@
 //! | by-bajq.1.4 | +8 (landed: +8) | three counts for each of two players, padded |
 //! | by-bajq.1.2 | 0 or lower (landed: -56) | last-known information leaves every trigger record for a table of 16 rows |
 //! | by-bajq.4.3 | -300 or lower (landed: -504) | each object is 22 bytes, where alignment made it 24 |
-//! | by-bajq.5.1 | +48 | up to four effects that reach other zones, beside the layer results |
+//! | by-bajq.5.1 | +48 (landed: +16) | up to four effects that reach other zones, beside the layer results |
 //! | by-bajq.5.3 | +136 | a byte in each of the 64 stack entries naming its captured text changes, and the table of four captured sets |
 //! | by-bajq.6.1 | +72 | two copy exceptions in each `Copiable`, which each of the 16 last-known rows holds |
 //! | by-bajq.7.4 | +48 | up to four entries of mana that remembers in each player's pool |
@@ -382,6 +384,7 @@
 //! | forgetting last-known information as a player would receive priority ([`State::forget_last_known`]) | one test of the table's length | out of line, a pass over the waiting triggers, delayed triggers and stack for each row |
 //! | state triggers (the rules' `trigger::match_states`, at each state-based check) | one AND of [`event::EventKind::State`] with the kinds any card listens to | as the match of an event, then for each such ability a pass over the waiting triggers and the stack for the same source and ability, so nothing is stored to say it triggered |
 //! | the layers' search for the rules static abilities change for players | one AND of the replacement mask the pass has just folded from the permanents ([`event::Replaces::PLAYER_RULE_CHANGE`]): no read of its own | a second pass over the permanents, out of line, in a recompute with such a permanent on the battlefield |
+//! | the characteristics of an object off the battlefield ([`State::colors`], [`State::types`] and the rest) | one test of the length of the list of effects that reach other zones ([`elsewhere`]) | out of line, the copiable values and then each effect in the list whose filter accepts the object |
 //! | a permanent's protection, read by damage, targets, blocks and attachments ([`State::protection`]) | one AND of the state's replacement mask ([`event::Replaces::PROTECTION`]), which the layers set when an effect that gives protection applied | the permanent's layer result read, and the source's colors |
 //! | a tracker or a count ([`State::track`], [`State::tracked`], [`State::count`], [`State::counted`]) | one AND of the table's capabilities where the rules would write it; a read finds an empty set or zero | a bit set or tested, or a byte written or read |
 //! | a count of counters ([`State::counters_of`]) | of a kind the object keeps in a field, one read; of any other, one bit test of the keyed slots | one pass over the table's rows, at most 32 of 3 bytes |
@@ -575,16 +578,19 @@
 //! | its mana value: a spell's with its X (CR 202.3e), a transformed permanent's front face's and a copied back face's 0 (CR 712.6d) | [`State::mana_value`] |
 //! | who controls it: a permanent's layer result, a spell's caster, elsewhere the owner (CR 108.4a) | [`State::controller`] |
 //! | its power and toughness: the layer results on the battlefield, the copiable values elsewhere | [`State::power`], [`State::toughness`] |
-//! | its colors, the same way | [`State::colors`] |
+//! | its colors, card types, supertypes and subtypes: the layer results on the battlefield, elsewhere the copiable values and then the continuous effects that reach other zones ([`elsewhere`]) | [`State::colors`], [`State::types`], [`State::supertypes`], [`State::has_subtype`] |
+//! | its keywords: the layer results on the battlefield, the copiable values elsewhere | [`State::keywords`] |
 //! | whether it has an ability of its face: a permanent may have lost it (CR 613.1f); elsewhere it has them all | [`State::has_ability`], [`State::has_every_ability`] |
 //! | the mana its basic land types make (CR 305.6, 305.7) | [`State::intrinsic_mana`] |
 //! | the colors a permanent has protection from | [`State::protection`] |
 //! | what an object that left was as it last existed (CR 603.10a) | [`State::last_known`] |
 //! | what the color words and subtypes its text names read as after text changes (CR 612.1); every reader of such a word ([`beryl_card::words`]) takes them | [`State::words_of`] |
 //!
-//! Its card types, subtypes and keywords have no query yet: a reader takes the layer result
-//! of a permanent ([`State::derived`]) and the copiable values of anything else, and so does
-//! the kernel's filter evaluation. An ability granted by another permanent's effect is a
+//! The kernel's filter evaluation and every reader of an object that may be off the
+//! battlefield ask these. A reader that holds a permanent in a walk of the battlefield (the
+//! state-based actions, combat, the mana solver) may take its layer result
+//! ([`State::derived`]) instead, which is the same answer. An ability granted by another
+//! permanent's effect is a
 //! [`state::Derived`] `granted` entry that [`State::has_ability`] does not answer for, and
 //! trigger matching reads no granted ability.
 //! | the objects another record of the state names, which no twin stands in for (architecture §7.2) | [`State::named`] |
@@ -709,6 +715,7 @@ pub mod counters;
 pub mod decision;
 pub mod derive;
 pub mod effects;
+pub mod elsewhere;
 pub mod event;
 pub mod filter;
 mod fit;

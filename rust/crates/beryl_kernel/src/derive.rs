@@ -69,6 +69,21 @@ impl<L: Layout> Rederive<'_, L> {
         !{ self.rows()[i].lost }.contains(ability)
     }
 
+    /// Sets the effects that reach objects off the battlefield ([`crate::elsewhere`]) to
+    /// `reaching`, in the order they apply. [`Full`] past [`crate::elsewhere::ELSEWHERE`] in
+    /// a fixed layout, with the list holding those that fit.
+    ///
+    /// [`Full`]: crate::fixed::Full
+    pub fn reach(
+        &mut self,
+        reaching: impl IntoIterator<Item = crate::elsewhere::Reach<L>>,
+    ) -> Result<(), crate::fixed::Full> {
+        self.0.elsewhere.clear();
+        reaching
+            .into_iter()
+            .try_for_each(|reach| self.0.elsewhere.push(reach))
+    }
+
     /// The layer results to write, one for each permanent, in battlefield order.
     #[inline]
     pub fn results(&mut self) -> &mut [Derived<L>] {

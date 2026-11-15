@@ -491,6 +491,21 @@ impl Runner {
             .ok_or_else(|| format!("player {player} controls no {card}"))
     }
 
+    /// The first object named `card` in `zone`: a permanent `player` controls, a spell they
+    /// control, or a card they own elsewhere.
+    fn object_in(&self, player: Seat, zone: Zone, card: &str) -> Result<Slot, String> {
+        let s = &self.s;
+        let found = match zone {
+            Zone::Battlefield => return self.permanent(player, card),
+            Zone::Stack => (s.stack().iter())
+                .filter_map(|entry| entry.spell().map(|spell| spell.slot))
+                .find(|&slot| s.controller(slot) == player && self.name(slot) == card),
+            _ => (s.in_candidate_order(s.zone(ZoneKey::Of(player, zone))))
+                .find(|&slot| self.name(slot) == card),
+        };
+        found.ok_or_else(|| format!("player {player} has no {card} in {zone:?}"))
+    }
+
     fn describe(&self, d: &Decision) -> String {
         describe(&self.t, &self.s, d)
     }
@@ -613,6 +628,21 @@ impl Runner {
                     return Err(format!("no permanents to read: the game is over ({o:?})"));
                 }
                 self.permanent_fact(assertion)?
+            }
+            Assertion::Colors {
+                player,
+                zone,
+                card,
+                colors,
+            } => {
+                if let Step::Over(o) = position {
+                    return Err(format!("no colors to read: the game is over ({o:?})"));
+                }
+                let slot = self.object_in(player, zone, card)?;
+                (
+                    format!("{:?}", s.colors(&self.t, slot)),
+                    format!("{colors:?}"),
+                )
             }
             Assertion::Stack { count } => (s.stack().len().to_string(), count.to_string()),
             Assertion::Library { player, top } => {

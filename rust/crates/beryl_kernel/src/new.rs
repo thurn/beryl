@@ -137,6 +137,7 @@ impl<L: Layout> State<L> {
             keyed: Bitboard::EMPTY,
             memos: Memos::empty(),
             counters: CounterTable::empty(),
+            elsewhere: Default::default(),
             trackers: Trackers::empty(),
             pending: Pending::None,
             knowledge: Table::filled(Bitboard::EMPTY),

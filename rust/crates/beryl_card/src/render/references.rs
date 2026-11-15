@@ -127,6 +127,13 @@ impl Ctx {
                 format!("{owner} {}", list(&names, "and"))
             }
             Objects::Paid(action) => paid(action).to_owned(),
+            Objects::Everywhere(filter) => {
+                let card = Kind::Card(None);
+                let cards = self.noun(filter, card).plural(card);
+                let spells = self.noun(filter, Kind::Spell).plural(Kind::Spell);
+                let permanents = self.noun(filter, Kind::Permanent).plural(Kind::Permanent);
+                format!("all {cards} that aren't on the battlefield, {spells}, and {permanents}")
+            }
             // "Each other creature": one at a time, so the verb after it is singular.
             Objects::Other(&Objects::All { zone, filter }) => {
                 let kind = Kind::of_zone(zone);
@@ -170,6 +177,7 @@ impl Ctx {
                 format!("another {}", self.noun(filter, kind).singular(kind))
             }
             Objects::Other(_)
+            | Objects::Everywhere(_)
             | Objects::This
             | Objects::Target(_)
             | Objects::AttachedTo
@@ -240,6 +248,7 @@ impl Ctx {
             Objects::All { .. }
             | Objects::InZoneOf { .. }
             | Objects::CardsIn { .. }
+            | Objects::Everywhere(_)
             | Objects::ExiledWithThis => true,
             // "Each other creature is": one at a time.
             Objects::This
