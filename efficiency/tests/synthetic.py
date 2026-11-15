@@ -111,9 +111,16 @@ class Transcript:
             )
         return self
 
-    def bash(self, time: str, message: str, call: str, command: str) -> Transcript:
+    def bash(
+        self,
+        time: str,
+        message: str,
+        call: str,
+        command: str,
+        model: str = "claude-test",
+    ) -> Transcript:
         return self.request(
-            time, message, tools=((call, "Bash", {"command": command}),)
+            time, message, tools=((call, "Bash", {"command": command}),), model=model
         )
 
     def prompt(

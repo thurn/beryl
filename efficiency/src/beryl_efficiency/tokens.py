@@ -18,7 +18,8 @@ costs to carry (docs/efficiency-dashboard.md, "Token accounting").
 
 Each window's dollars are stored in `window_dollars` three ways, each summing to the window's
 dollars: by class, by source (fixed prefix, new and carried content by who added it, output)
-and by purpose (wake-up requests, whose every tool call is a wait, against working ones).
+by purpose (wake-up requests, whose every tool call is a wait, against working ones) and by
+model.
 """
 
 from __future__ import annotations
@@ -39,7 +40,7 @@ WAIT_KINDS: frozenset[str] = frozenset({"orchestration wait", "slow CI wait"})
 COMPACTION = 0.5
 # Raised whenever a change to this file changes stored figures, so that the next ingest
 # accounts every transcript again, as it does when the price table changes.
-VERSION = 1
+VERSION = 2
 MILLION = 1_000_000.0
 
 
@@ -301,6 +302,7 @@ def account_transcript(
             waits = [kind_of.get(c) in WAIT_KINDS for c in r.calls]
             purpose = "wake-up" if waits and all(waits) else "working"
             add(totals, "purpose", purpose, r.context + r.output, dollars)
+            add(totals, "model", str(r.model), r.context + r.output, dollars)
         for name, tokens in sources.items():
             pool[name] += tokens
         pool["model output"] += r.output

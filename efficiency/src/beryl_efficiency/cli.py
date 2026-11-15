@@ -12,9 +12,21 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from . import bead, claude, ingest, kinds, paths, store
+from . import (
+    bead,
+    claude,
+    facts,
+    ingest,
+    kinds,
+    metrics,
+    paths,
+    rollups,
+    session,
+    store,
+)
 from .beads import Beads, main_checkout
 from .render import Result, table, text
+from .scope import Scope, add_arguments, from_arguments
 
 # How old the store may be before a query ingests first, in seconds.
 MAX_AGE = 60.0
@@ -307,23 +319,83 @@ def run_coverage(args: argparse.Namespace) -> Result:
         db.close()
 
 
-def run_bead(args: argparse.Namespace) -> Result:
+def answer(
+    args: argparse.Namespace,
+    query: Callable[[sqlite3.Connection, facts.Facts, Scope], Result],
+) -> Result:
+    """Ingests if the store is stale, then answers `query` over the store's facts in the
+    scope the arguments give."""
     fresh(args)
     db = reader()
     try:
-        return bead.report(db, str(args.bead))
+        return query(db, facts.load(db), from_arguments(args))
     finally:
         db.close()
 
 
+def run_summary(args: argparse.Namespace) -> Result:
+    return answer(args, lambda _, f, s: rollups.summary(f, s))
+
+
+def run_epic(args: argparse.Namespace) -> Result:
+    return answer(args, lambda _, f, s: rollups.epic(f, s, str(args.id)))
+
+
+def run_bead(args: argparse.Namespace) -> Result:
+    return answer(args, lambda db, f, s: bead.report_from(db, f, s, str(args.id)))
+
+
+def run_session(args: argparse.Namespace) -> Result:
+    return answer(
+        args, lambda db, f, s: session.report(db, f, s, str(args.id), args.bead)
+    )
+
+
+def run_time(args: argparse.Namespace) -> Result:
+    return answer(args, lambda _, f, s: rollups.time_by(f, s, str(args.by)))
+
+
+def run_dollars(args: argparse.Namespace) -> Result:
+    return answer(args, lambda _, f, s: rollups.dollars_by(f, s, str(args.by)))
+
+
+def run_metrics(args: argparse.Namespace) -> Result:
+    if args.name is None:
+        return metrics.listing()
+    return answer(args, lambda db, f, s: metrics.series(db, f, s, str(args.name)))
+
+
 QUERIES: dict[str, tuple[str, Callable[[argparse.Namespace], Result]]] = {
+    "summary": (
+        "beads closed, per-bead medians, where time and dollars went, epics",
+        run_summary,
+    ),
+    "epic": ("one epic's beads with their minutes and dollars", run_epic),
+    "bead": ("one bead's minutes, dollars, requests and sessions", run_bead),
+    "session": ("one session's requests and tool calls in order", run_session),
+    "time": ("agent minutes by kind, model, tier, role, lane, epic or day", run_time),
+    "dollars": (
+        "dollars by class, source, purpose, model, tier, role, lane, epic or day",
+        run_dollars,
+    ),
+    "metrics": ("the named series, or one series by day", run_metrics),
     "ingest": ("update the store from the sources", run_ingest),
     "sql": ("run a read-only SQL query against the store", run_sql),
     "coverage": (
         "what the store holds and misses, and ingest's own cost",
         run_coverage,
     ),
-    "bead": ("one bead's requests, tokens, minutes and sessions", run_bead),
+}
+# The queries that take `--since` and cohort filters, with their default range: roll-ups
+# look at the last week, drill-downs at everything.
+SCOPED: dict[str, str] = {
+    "summary": "7d",
+    "time": "7d",
+    "dollars": "7d",
+    "metrics": "7d",
+    "epic": "all",
+    "bead": "all",
+    "session": "all",
 }
 
 
@@ -350,8 +422,18 @@ def parser() -> argparse.ArgumentParser:
             )
         if name == "sql":
             p.add_argument("query", metavar="'<query>'", help="a read-only SQL query")
-        if name == "bead":
-            p.add_argument("bead", metavar="<id>", help="the bead's id")
+        if name in ("epic", "bead", "session"):
+            p.add_argument("id", metavar="<id>", help=f"the {name}'s id")
+        if name == "session":
+            p.add_argument("--bead", help="only the rows of this bead")
+        if name == "time":
+            p.add_argument("--by", choices=rollups.TIME_BY, default="kind")
+        if name == "dollars":
+            p.add_argument("--by", choices=rollups.DOLLARS_BY, default="source")
+        if name == "metrics":
+            p.add_argument("name", nargs="?", metavar="<name>", help="a metric's name")
+        if name in SCOPED:
+            add_arguments(p, SCOPED[name])
     return top
 
 
@@ -365,8 +447,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     try:
         result = QUERIES[str(args.command)][1](args)
-    except sqlite3.Error as e:
-        print(f"efficiency: {e}", file=sys.stderr)
+    except (sqlite3.Error, KeyError) as e:
+        print(f"efficiency: {e.args[0] if e.args else e}", file=sys.stderr)
         return 1
     print(json.dumps(result.json(), indent=1) if args.json else text(result))
     return 0

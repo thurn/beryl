@@ -38,23 +38,39 @@ store" and "Isolation" before changing anything here.
 - `claude.py`: Claude Code transcripts (requests, tool calls, their results and
   the Enact commands a session ran) and the desktop app's session records.
   `windows.py` derives bead windows from those commands and sets the `bead` of
-  each request and tool call; `bead.py` is the `bead <id>` query.
+  each request and tool call.
 - `kinds.py`: command kinds from `data/efficiency-command-kinds.json`.
   `timing.py` splits each window's seconds into the categories of "Time
   accounting" and stores them in `window_time`. Kinds and splits are derived
   again for every transcript when the kinds table changes.
 - `tokens.py`: dollars from `data/efficiency-prices.json`, the parts of each
   request's context, tool calls' added tokens and carrying cost, and each
-  window's dollars by class, source and purpose in `window_dollars`. All of it
-  is derived again when the price table changes.
-- `cli.py`: the queries `just efficiency` runs; `render.py`: results and their
-  text tables.
+  window's dollars by class, source, purpose and model in `window_dollars`. All
+  of it is derived again when the price table changes.
+- The query layer: `scope.py` parses `--since` and the cohort filters into a
+  `Scope`; `facts.py` loads beads and windows with their `window_time` and
+  `window_dollars` rows, which every query adds up, so that a roll-up's lines
+  (epics, "(no bead)", "orchestration") sum to its total. `rollups.py` holds
+  `summary`, `epic`, `time --by` and `dollars --by`; `bead.py`, `session.py`
+  and `metrics.py` (the registry of named series, which later queries extend
+  with `register`) hold the others.
+- A query returns a typed dataclass whose numbers are already rounded; its
+  renderer only formats them, and `--json` prints the same dataclass, so the
+  text and the JSON cannot disagree. `render.py` has the `Result`, the field
+  descriptions the page shows on hover (`FIELDS`), and the text tables. A sum
+  that a model with no price makes a lower bound is marked `+`; an unknown
+  value prints as `-`.
+- `cli.py`: the command and its queries.
 
 ## Running and checking
 
-- `just efficiency` lists the queries. `just efficiency ingest`,
-  `just efficiency sql '<query>'`, `just efficiency coverage` and
-  `just efficiency bead <id>` take `--json`. A query ingests first when the
+- `just efficiency` lists the queries, and every query takes `--json`. The
+  queries that report figures take `--since` (`24h`, `7d`, `all` or a date;
+  roll-ups default to `7d`, drill-downs to `all`) and the cohort filters
+  `--where key=value` (the label `key:value`), `--epic`, `--role`, `--tier`,
+  `--host` and `--provider`. A window counts when it starts in the range, a
+  request or tool call when it happened in it, and a bead when it closed in it;
+  a closed bead's per-bead figures count all its windows. A query ingests first when the
   store's last ingest is over a minute old, unless given `--no-ingest`. The
   store is `$BERYL_CACHE/efficiency/store.sqlite`.
 - The `efficiency` check lane (`tools/src/beryl_tools/efficiency.py`) runs

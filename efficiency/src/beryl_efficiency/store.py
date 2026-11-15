@@ -290,6 +290,12 @@ MIGRATIONS: tuple[str, ...] = (
     -- Transcripts are read again from the start for the 1-hour cache writes.
     DELETE FROM sources WHERE source = 'claude';
     """,
+    """
+    -- `window_dollars` gains the split `model`: each window's priced dollars by the model
+    -- that made the requests. Token accounting writes it when it next accounts every
+    -- transcript, which a change to its version makes happen.
+    SELECT 1;
+    """,
 )
 
 
