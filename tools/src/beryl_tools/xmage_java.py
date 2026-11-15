@@ -332,3 +332,22 @@ def setup_cards(entry: Json) -> Iterable[str]:
             yield from cast(list[str], setup[zone])
         for permanent in cast(list[Json], setup["battlefield"]):
             yield cast(str, permanent["card"])
+
+
+def counters_to_add(faces: Faces, name: str, counters: Json | None) -> tuple[str, int]:
+    """The kind and number of counters to add to the permanent `name` that a scenario starts
+    with `counters`, beyond those XMage's `addCard` puts on it: a planeswalker's printed
+    loyalty, and the counters a permanent enters with ("enters with ten ice counters").
+    """
+    kind = cast(str, counters["kind"]) if counters else "Loyalty"
+    count = cast(int, counters["count"]) if counters else 0
+    oracle = faces.oracle.get(name, "")
+    if counters is None:
+        entered = max((entering_counters(oracle, k) for k in COUNTERS), default=0)
+    elif kind == "Loyalty":
+        entered = faces.loyalty.get(name, 0)
+    else:
+        entered = entering_counters(oracle, kind)
+    if count < entered:
+        raise Unsupported(f"{name} starts with fewer counters than it enters with")
+    return kind, count - entered

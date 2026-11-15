@@ -764,44 +764,6 @@ impl Effect {
     }
 }
 
-impl Effect {
-    /// Whether it reads what a cost of its spell or ability took ([`Objects::Paid`]), which
-    /// the engine does not keep: a card table refuses the definition.
-    pub const fn names_paid(&self) -> bool {
-        if self.operands().names_paid() {
-            return true;
-        }
-        match self {
-            Effect::Sequence(effects) => {
-                let mut i = 0;
-                while i < effects.len() {
-                    if effects[i].names_paid() {
-                        return true;
-                    }
-                    i += 1;
-                }
-                false
-            }
-            Effect::If {
-                condition,
-                then,
-                otherwise,
-            } => {
-                condition.names_paid()
-                    || then.names_paid()
-                    || match otherwise {
-                        Some(otherwise) => otherwise.names_paid(),
-                        None => false,
-                    }
-            }
-            Effect::May { effect, .. }
-            | Effect::Unless { effect, .. }
-            | Effect::ForEachPlayer { effect, .. } => effect.names_paid(),
-            _ => false,
-        }
-    }
-}
-
 /// Whether `objects` is what was chosen for the `target`th instance of the word "target".
 const fn is_target(objects: Objects, target: SpecIx) -> bool {
     matches!(objects, Objects::Target(n) if n.get() == target.get())

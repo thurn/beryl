@@ -606,8 +606,10 @@ impl Ctx {
             } else {
                 format!(" with {}", super::words::list(&keywords, "and"))
             };
-            let supertypes = super::words::supertypes(face.supertypes);
-            let supertypes: String = supertypes.iter().map(|s| format!("{s} ")).collect();
+            let mut supertypes = super::words::supertypes(face.supertypes).join(" ");
+            if !supertypes.is_empty() {
+                supertypes.push(' ');
+            }
             let named = format!(
                 "{supertypes}{power}/{toughness} {colors} {} {types}",
                 subtypes.join(" ")

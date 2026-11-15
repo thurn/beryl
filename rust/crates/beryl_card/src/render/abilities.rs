@@ -9,12 +9,9 @@ use super::words::{
     sentence, types, with_article,
 };
 use crate::ability::{Ability, AbilityKind, Behavior, Timing};
-use crate::continuous::{
-    ChosenKind, Draws, LayerSpec, Modification, Replaced, Replacement, Rewrite,
-};
+use crate::continuous::{LayerSpec, Modification, Replacement, Rewrite};
 use crate::cost::{CastingKind, Chosen, Cost, CostAction, CostPart, ESCAPE_EXILES, Measure};
 use crate::effect::{Amount, Comparison, Condition, Effect, Objects, Players};
-use crate::filter::Filter;
 use crate::ids::{TurnStep, Zone, ZoneSet};
 use crate::index::GrantIx;
 use crate::trigger::{Subject, Trigger, TriggerEvent};
@@ -611,113 +608,6 @@ impl Ctx {
         let text = self.paragraph(ability);
         (self.targets, self.mentioned, self.trigger, self.ability) = saved;
         format!("\"{text}\"")
-    }
-
-    /// A replacement effect's clauses, such as "this land enters tapped" or "if you would
-    /// draw a card while your library has no cards in it, you win the game instead"
-    /// ([CR 614.1](https://yawgatog.com/resources/magic-rules/#R6141)).
-    fn replacement(&mut self, ability: &Ability) -> Vec<String> {
-        let this = self.this.clone();
-        let &Replacement { replaces, rewrite } =
-            ability.replacement().unwrap_or(&Replacement::NONE);
-        let mut clauses = match (replaces, rewrite) {
-            (_, Rewrite::EntersTapped) => vec![format!("{this} enters tapped")],
-            (_, Rewrite::EntersTappedUnlessFewLands(n)) => vec![format!(
-                "{this} enters tapped unless you control {} or fewer other lands",
-                number(n)
-            )],
-            (_, Rewrite::EntersWithCounters(kind, n)) => vec![format!(
-                "{this} enters with {} {} counter{} on it",
-                number(n),
-                kind.name(),
-                if n == 1 { "" } else { "s" }
-            )],
-            (_, Rewrite::EntersTappedUnlessPayLife(n)) => vec![
-                format!("as {this} enters, you may pay {n} life"),
-                "if you don't, it enters tapped".to_owned(),
-            ],
-            (_, Rewrite::Choose(kind)) => vec![format!(
-                "as {this} enters, choose {}",
-                match kind {
-                    ChosenKind::Color => "a color",
-                    ChosenKind::CreatureType => "a creature type",
-                    ChosenKind::CardName => "a card name",
-                    ChosenKind::Word => "a color word or a basic land type",
-                }
-            )],
-            (_, Rewrite::EnterAsCopy { of, except }) => vec![self.enter_as_copy(*of, except)],
-            (Replaced::PutInto(&objects, zone), Rewrite::ToZone(instead)) => {
-                let what = if objects == Filter::Any {
-                    "a card or token".to_owned()
-                } else {
-                    let kind = Kind::Card(None);
-                    with_article(&self.noun(objects, kind).singular(kind))
-                };
-                let place = match zone {
-                    Zone::Exile => "exile".to_owned(),
-                    zone => with_article(zone_name(zone)),
-                };
-                let instead = match instead {
-                    Zone::Exile => "exile it instead".to_owned(),
-                    zone => format!("put it into its owner's {} instead", zone_name(zone)),
-                };
-                vec![format!(
-                    "if {what} would be put into {place} from anywhere, {instead}"
-                )]
-            }
-            (Replaced::Enters { objects, not_cast }, Rewrite::ToZone(instead)) => {
-                let what = with_article(
-                    &self
-                        .noun(*objects, Kind::Permanent)
-                        .singular(Kind::Permanent),
-                );
-                let cast = if not_cast { " and it wasn't cast" } else { "" };
-                let instead = match instead {
-                    Zone::Exile => "exile it instead".to_owned(),
-                    zone => format!("put it into its owner's {} instead", zone_name(zone)),
-                };
-                vec![format!("if {what} would enter{cast}, {instead}")]
-            }
-            (Replaced::Draw(players, draws), Rewrite::Instead) => {
-                let except = match draws {
-                    Draws::Each => "",
-                    Draws::ExceptFirstInDrawStep => {
-                        " except the first one they draw in each of their draw steps"
-                    }
-                };
-                let condition = ability
-                    .condition()
-                    .map(|&c| format!(" while {}", self.condition(c)))
-                    .unwrap_or_default();
-                // One player at a time would draw: "a player", "an opponent".
-                let who = match players {
-                    Players::EachPlayer => "a player".to_owned(),
-                    Players::EachOpponent => "an opponent".to_owned(),
-                    players => self.player(players),
-                };
-                let mut instead = self.body(ability.body());
-                if let Some(first) = instead.first_mut() {
-                    let you = if first.starts_with("you ") || first.starts_with("that player ") {
-                        ""
-                    } else {
-                        "you "
-                    };
-                    *first = format!(
-                        "if {who} would draw a card{except}{condition}, {you}{first} instead"
-                    );
-                }
-                return instead;
-            }
-            (Replaced::Damage, Rewrite::Multiply(n)) => vec![super::prevention::multiplied(n)],
-            _ => self.body(ability.body()),
-        };
-        if let Some(&condition) = ability.condition() {
-            let condition = self.condition(condition);
-            if let Some(first) = clauses.first_mut() {
-                *first = format!("if {condition}, {first}");
-            }
-        }
-        clauses
     }
 }
 
