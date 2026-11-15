@@ -26,5 +26,10 @@ def steps() -> list[Step]:
     ]
 
 
+# Slow CI has no `beryl3d` lane, so a step the fast check cuts off at its hard limit is the
+# sweep's to run (sweep.py).
+DEFERRED_TO = "the Beryl 3D sweep (`just b3d sweep`), not slow CI"
+
+
 def lane() -> Lane:
-    return Lane(NAME, steps=steps())
+    return Lane(NAME, steps=steps(), deferred_to=DEFERRED_TO)

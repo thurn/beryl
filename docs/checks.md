@@ -242,13 +242,43 @@ Beryl 3D, the native client in its own Cargo workspace, has checks of its own
   commands. Its steps are in `tools/src/beryl_tools/beryl3d/lane.py`.
 - A change to Beryl 3D's tools, under `tools/src/beryl_tools/beryl3d/`, runs the
   python lane, as any change to `tools/` does, and not the `beryl3d` lane.
+- A step of the `beryl3d` lane that the fast check cuts off at its 180 s hard
+  limit is left to the Beryl 3D sweep, not to slow CI.
+
+### The Beryl 3D sweep
+
+`just b3d sweep` (`tools/src/beryl_tools/beryl3d/sweep.py`) finds what isolation
+hides: a change to the session, the fixture recorder, the image cache or a data
+file Beryl 3D reads can land without Beryl 3D's checks and leave it broken.
+
+- Slow CI starts it in the background after each run, on both machines, when
+  staging holds a commit since the last sweep that changes a Beryl 3D path, its
+  tools, `rust/Cargo.toml`, `beryl_session`, `beryl_cli` or `beryl_art` (with
+  every crate they depend on by path), `data/ui-conventions.json`,
+  `data/card-store.tsv` or `ui/fixtures.json`. It skips when the load is over 8
+  times the cores or another sweep runs.
+- In a detached worktree of the staging tip it runs every step of the `beryl3d`
+  lane in full, then the sweep's own steps, each as a lane of its own
+  (`b3d-<step>`), at utility priority. Its checks are logged under the script
+  `b3d-sweep`, which slow CI's CPU budget does not count.
+- A failed step is bisected over the commits since the last sweep that passed,
+  for at most 15 minutes, and filed as a P1 `b3d-sweep` bead under Beryl 3D's
+  epic. A check an open sweep bead already names gets a comment. Nothing holds
+  `master`.
+- After its build passes, it saves the workspace's build directory to
+  `$BERYL_CACHE/b3d/target`, which `just b3d` clones into new worktrees.
+- `--step <name>` runs one step, `--commit` sweeps another commit, and
+  `--dry-run` prints the beads it would file instead of filing them. The record
+  is in `$BERYL_CACHE/b3d/sweep`: `log.jsonl` and `last-output.txt`.
 
 ## Beads the checks file
 
 The checks file beads by themselves: `flaky-check`, `ci-cut` and `check-budget`
 (below), `sweep-failure` (above), `nightly-failure`, and the P0 `role:steward`
 bead for a failed slow-CI run. `just beads` leaves them all out, and the `cifix`
-skill works them as one Enact run, grouped by shared cause.
+skill works them as one Enact run, grouped by shared cause. The Beryl 3D sweep's
+`b3d-sweep` beads are not among them: they are Beryl 3D's own work, filed under
+its epic.
 
 ## Flaky checks
 

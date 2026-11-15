@@ -46,6 +46,9 @@ class Lane:
     # Whether it builds, so needs warm caches; Markdown and Python lanes skip the clone.
     warm: bool = False
     steps: list[Step] = field(default_factory=list)
+    # What runs the steps the fast check cuts off at its hard limit (deadline.py), for its
+    # message: slow CI for every lane it also runs.
+    deferred_to: str = "slow CI"
 
     def step(
         self,

@@ -17,8 +17,8 @@ import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from .. import warm
-from . import lane, paths
+from .. import system, warm
+from . import lane, paths, sweep
 
 # Exit code for a command line `just b3d` cannot run, as argparse uses.
 USAGE = 2
@@ -47,8 +47,11 @@ def warm_target() -> None:
     workspace's `target` when the cache holds one and the workspace has none."""
     target = paths.WORKSPACE / "target"
     cached = paths.cache() / "target"
-    if not target.exists() and cached.is_dir():
-        warm.clone_into(cached, target)
+    if target.exists():
+        return
+    with system.file_lock(paths.target_lock()):
+        if cached.is_dir():
+            warm.clone_into(cached, target)
 
 
 def cargo(arguments: list[str]) -> int:
@@ -106,6 +109,32 @@ COMMANDS: tuple[Command, ...] = (
             ),
         ),
         run_lane,
+    ),
+    Command(
+        "sweep",
+        "Beryl 3D's checks on origin/staging when its code or inputs changed, filing failures",
+        (
+            ("just b3d sweep", "sweep the staging tip if one is due"),
+            (
+                "just b3d sweep --dry-run --commit HEAD --step cargo-test",
+                "run one step at HEAD and print the bead it would file",
+            ),
+        ),
+        sweep.sweep_command,
+        sweep.sweep_arguments,
+    ),
+    Command(
+        "sweep-run",
+        "runs the sweep's steps at HEAD, bisecting and filing failures (the sweep's tree)",
+        (
+            ("just b3d sweep-run --dry-run", "every step, printing what it would file"),
+            (
+                "just b3d sweep-run --step clippy --since origin/master",
+                "one step, bisecting a failure from master",
+            ),
+        ),
+        sweep.sweep_run,
+        sweep.sweep_run_arguments,
     ),
     Command(
         "cargo",

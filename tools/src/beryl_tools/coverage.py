@@ -356,11 +356,19 @@ def in_tree(
     command: list[str],
     out: IO[str] | None = None,
     env: dict[str, str] | None = None,
+    place: Path | None = None,
+    warm_rust: bool = True,
 ) -> int:
     """Runs `command` in a detached worktree of `commit`, removed after, with that commit's own
     tools on the Python path (`by` is `python -m beryl_tools.cli`), in `env` (this process's if
-    None), its output to `out` (this process's if None)."""
-    with system.file_lock(folder() / ".lock"):
+    None), its output to `out` (this process's if None).
+
+    The tree goes under `place` (coverage's folder if None), whose lock it holds for the whole
+    run: a caller with a folder of its own does not wait for coverage or the browser sweep.
+    With `warm_rust`, the tree gets a clone of the main workspace's warm build directory.
+    """
+    place = place or folder()
+    with system.file_lock(place / ".lock"):
         if commit.startswith("origin/"):
             subprocess.run(
                 ["git", "fetch", "--quiet", "origin", commit.removeprefix("origin/")],
@@ -368,11 +376,12 @@ def in_tree(
                 check=False,
             )
         sha = git("rev-parse", "--verify", f"{commit}^{{commit}}")
-        tree = folder() / "trees" / sha[:12]
+        tree = place / "trees" / sha[:12]
         remove_tree(tree)
         git("worktree", "add", "--detach", "--quiet", str(tree), sha)
         try:
-            warm.ensure(tree)
+            if warm_rust:
+                warm.ensure(tree)
             env = {**(env or os.environ), "PYTHONPATH": str(tree / "tools" / "src")}
             return subprocess.run(
                 command,

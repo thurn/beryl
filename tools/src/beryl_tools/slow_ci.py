@@ -66,6 +66,7 @@ from . import (
     verdicts,
 )
 from .beryl3d import paths as beryl3d_paths
+from .beryl3d import sweep as b3d_sweep
 from .changes import changed_paths, master_base, run_git
 from .rust_tests import affected_packages
 
@@ -596,8 +597,24 @@ def slow(args: argparse.Namespace) -> int:
         lanes, budget, started, "all" if every else "affected", passed
     )
     if not args.lanes and commit:
-        try:
-            print(f"ci: {sweep.start_background()}")
-        except Exception as e:  # Starting the sweep never fails slow CI.
-            runlog.warn(e)
+        for line in start_sweeps():
+            print(f"ci: {line}")
     return code
+
+
+def start_sweeps(
+    starts: tuple[Callable[[], str], ...] = (
+        sweep.start_background,
+        b3d_sweep.start_background,
+    ),
+) -> list[str]:
+    """Starts the browser sweep and Beryl 3D's sweep in the background when each is due, and
+    returns a line for each. Neither can fail slow CI: each runs in a session of its own, so
+    its outcome never reaches this run's, and an error starting one is only a line."""
+    lines: list[str] = []
+    for start in starts:
+        try:
+            lines.append(start())
+        except Exception as e:
+            lines.append(f"a sweep was not started: {e}")
+    return lines

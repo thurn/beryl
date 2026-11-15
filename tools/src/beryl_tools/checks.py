@@ -317,10 +317,11 @@ def lane_steps(
         t, flakes = now(), len(flaky)
         code, records, output = attempt(step, step.cmd)
         if code is None and steps.walled() and script == "check":
-            # The fast check's hard limit (deadline.py): what it did not finish is slow CI's.
+            # The fast check's hard limit (deadline.py): what it did not finish is left to
+            # whatever runs the lane after the push (`Lane.deferred_to`).
             deferred = [s.name for s in lane.steps[n:]]
             log.append(
-                f"{script} {lane.name}: deferred to slow CI at the"
+                f"{script} {lane.name}: deferred to {lane.deferred_to} at the"
                 f" {deadline.HARD_LIMIT:.0f} s hard limit: {', '.join(deferred)}"
             )
             timings.append(f"{step.name} deferred")

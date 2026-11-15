@@ -28,6 +28,12 @@ def cache() -> Path:
     return path
 
 
+def target_lock() -> Path:
+    """The lock under which the cache's build directory is cloned into a worktree or replaced
+    by the sweep, so a clone never reads a directory the sweep is swapping out."""
+    return cache() / ".target.lock"
+
+
 def split(changed: Iterable[str]) -> tuple[list[str], list[str]]:
     """The `changed` paths that are Beryl 3D's, and the rest."""
     own: list[str] = []
