@@ -5,6 +5,7 @@ use beryl_card::{
     Replacement, Rewrite, Subtype, Words,
 };
 
+use crate::event::Listens;
 use crate::static_ability::Inputs;
 
 /// Something a game's cards may make the stores keep (architecture §6.4, the crate's
@@ -216,5 +217,18 @@ fn copies_itself(effect: &Effect) -> bool {
         | Effect::Unless { effect, .. }
         | Effect::ForEachPlayer { effect, .. } => copies_itself(effect),
         _ => false,
+    }
+}
+
+/// The event kinds trigger matching looks for away from the faces of the battlefield's
+/// definitions: `away`, and in a game with mutate (`capabilities` has
+/// [`Capability::Merges`]) every kind a permanent's ability listens to, `here`. A card of any
+/// face may be under a merged permanent, where the table's listeners of the permanent's
+/// definition do not find its triggered abilities, so trigger matching looks for them apart.
+pub(super) fn merged_listen_away(capabilities: u32, away: Listens, here: Listens) -> Listens {
+    if capabilities & Capability::Merges.bit() == 0 {
+        away
+    } else {
+        away | here
     }
 }

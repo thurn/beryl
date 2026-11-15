@@ -7,6 +7,8 @@
 //! combat flags with the combat reference, a face with its timestamp and who knows it,
 //! `derived_dirty` where the layers read the field.
 
+mod merge;
+
 use beryl_card::{CounterKind, FaceIx, Types, Zone};
 
 use crate::additions::Addition;
