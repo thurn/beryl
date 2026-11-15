@@ -42,7 +42,7 @@ import type { Surface } from "./stage.ts";
 const OVER_HAND = 50;
 
 /** The name a node's `data-stage` says. */
-const named = (said: string): Name =>
+export const named = (said: string): Name =>
   /^-?\d/.test(said) ? Number(said) : (said as Name);
 
 export class DomSurface implements Surface {
@@ -84,6 +84,24 @@ export class DomSurface implements Surface {
   /** The node of what the stage names `name`, which its face is drawn into. */
   node(name: Name): HTMLElement | undefined {
     return this.#nodes.get(name);
+  }
+
+  /** The painted bounds of an element in stage coordinates. */
+  bounds(element: HTMLElement) {
+    const box = element.getBoundingClientRect();
+    const layer = this.#layer.getBoundingClientRect();
+    const scale = layer.width / this.#layer.offsetWidth || 1;
+    return {
+      left: (box.left - layer.left) / scale,
+      right: (box.right - layer.left) / scale,
+      top: (box.top - layer.top) / scale,
+      bottom: (box.bottom - layer.top) / scale,
+    };
+  }
+
+  pointed(): Element | null {
+    const at = this.#pointer;
+    return at ? this.#layer.ownerDocument.elementFromPoint(at.x, at.y) : null;
   }
 
   /** An element of the node `name`'s own, posed as the node is but drawn over every card of
@@ -540,7 +558,7 @@ export class DomSurface implements Surface {
     const node = this.#on(on);
     if (!node) return;
     const drawn = node.querySelector<HTMLElement>(
-      `:scope > .stage-mark-${mark}`,
+      `:scope > .stage-mark-${mark}:not([data-local-mark])`,
     );
     if (shown === undefined) {
       drawn?.remove();

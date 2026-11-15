@@ -1,3 +1,4 @@
+import type { Box } from "../game/placement";
 import type { Step } from "../generated/protocol";
 import {
   tableAct,
@@ -22,7 +23,7 @@ type ObjectKind =
   "permanent" | "their_permanent" | "hand_card" | "stack_entry" | "viewer_card";
 type PileKind = "library" | "graveyard" | "exile";
 
-interface CardTarget {
+export interface CardTarget {
   kind: ObjectKind;
   name: Name;
   object?: ObjectView;
@@ -72,8 +73,18 @@ type DropHandler = (
   onto: TableTarget | undefined,
 ) => boolean | void;
 
+// Table zones with a seat are single-field tagged objects from the same protocol.
+export const sameZone = (
+  a: TableObjectAction["zone"],
+  b: TableObjectAction["zone"],
+) => a === b || JSON.stringify(a) === JSON.stringify(b);
+
 export class TableClient {
-  readonly selection = new Set<Name>();
+  #selection: ReadonlySet<Name> = new Set();
+  #selectionBox?: Box;
+  readonly #selectionListeners = new Set<() => void>();
+  readonly #open: Array<{ close: () => void }> = [];
+  #cardClick?: (target: CardTarget, keys: PointerKeys) => boolean;
   view?: PlayerView;
   #surface?: DomSurface;
   readonly #clicks = new Map<TableTarget["kind"], Click>();
@@ -81,6 +92,7 @@ export class TableClient {
   #drop?: DropHandler;
   #aim?: Aim;
   #sweep?: Sweep;
+  #cancelSweep?: () => void;
   readonly #keys = new Set<(event: KeyboardEvent) => void>();
   readonly #actions = new Map<Name, TableObjectAction>();
   readonly #objects = new Map<number, ObjectView>();
@@ -89,10 +101,10 @@ export class TableClient {
 
   setView(view: PlayerView) {
     if (view === this.view) return;
-    // A view's references expire together. A slot can also have a different occupant in
-    // the next view, so a held press or selection cannot carry its slot into that view.
+    const selected = [...this.#selection].map(
+      (name) => [name, this.#actions.get(name)] as const,
+    );
     this.view = view;
-    this.selection.clear();
     this.#actions.clear();
     this.#objects.clear();
     for (const object of view.objects) this.#objects.set(object.slot, object);
@@ -102,7 +114,72 @@ export class TableClient {
       else if (subject.kind === "ability")
         this.#actions.set(`a${subject.id}`, action);
     }
+    // The adapter reserves the old view's slots while assigning new ones. A surviving
+    // slot still identifies the same card, but a move can keep the slot and change its zone.
+    if (selected.length)
+      this.setSelection(
+        selected.flatMap(([name, previous]) => {
+          const current = this.#actions.get(name);
+          return previous && current && sameZone(previous.zone, current.zone)
+            ? [name]
+            : [];
+        }),
+      );
+    // References expire with the view. A held press cannot acquire new ones on release.
     this.pointer.cancel();
+  }
+
+  get surface() {
+    return this.#surface;
+  }
+
+  get selection() {
+    return this.#selection;
+  }
+
+  readonly selectionSnapshot = () => this.#selection;
+  readonly sweepSnapshot = () => this.#selectionBox;
+  readonly subscribeSelection = (listener: () => void) => {
+    this.#selectionListeners.add(listener);
+    return () => this.#selectionListeners.delete(listener);
+  };
+
+  setSelection(names: Iterable<Name>) {
+    const selection = new Set(names);
+    if (
+      selection.size === this.#selection.size &&
+      [...selection].every((name) => this.#selection.has(name))
+    )
+      return;
+    this.#selection = selection;
+    this.#announceSelection();
+  }
+
+  setSelectionBox(box?: Box) {
+    this.#selectionBox = box;
+    this.#announceSelection();
+  }
+
+  #announceSelection() {
+    for (const listener of this.#selectionListeners) listener();
+  }
+
+  /** Close callbacks run in reverse opening order. Dispose on unmount or ordinary close. */
+  readonly pushOpen = (close: () => void) => {
+    const entry = { close };
+    this.#open.push(entry);
+    return () => {
+      const index = this.#open.indexOf(entry);
+      if (index !== -1) this.#open.splice(index, 1);
+    };
+  };
+
+  get overlayOpen() {
+    return this.#open.length !== 0;
+  }
+
+  onCardClick(handler: (target: CardTarget, keys: PointerKeys) => boolean) {
+    this.#cardClick = handler;
   }
 
   readonly setSurface = (surface: DomSurface | undefined) => {
@@ -135,8 +212,9 @@ export class TableClient {
     this.#aim = handler;
   }
 
-  onSweep(handler: Sweep) {
+  onSweep(handler: Sweep, cancel?: () => void) {
     this.#sweep = handler;
+    this.#cancelSweep = cancel;
   }
 
   onKey(handler: (event: KeyboardEvent) => void) {
@@ -144,6 +222,12 @@ export class TableClient {
   }
 
   readonly key = (event: KeyboardEvent) => {
+    if (event.defaultPrevented || event.isComposing) return;
+    if (event.key === "Escape" && this.overlayOpen) {
+      event.preventDefault();
+      this.#open.at(-1)?.close();
+      return;
+    }
     for (const handler of this.#keys) {
       if (event.defaultPrevented) break;
       handler(event);
@@ -186,6 +270,7 @@ export class TableClient {
     keys: PointerKeys,
     element?: HTMLElement,
   ): boolean {
+    if ("name" in target && this.#cardClick?.(target, keys)) return true;
     const handler = this.#clicks.get(target.kind);
     handler?.(target, keys, element);
     return handler !== undefined;
@@ -195,6 +280,10 @@ export class TableClient {
     for (const handler of this.#secondaries) {
       if (handler(target, at, element)) break;
     }
+  }
+
+  cancelGesture() {
+    this.pointer.cancel();
   }
 
   readonly gestures: PointerClient = {
@@ -214,6 +303,7 @@ export class TableClient {
       if (from) this.#aim?.(from, at, this.#under(over), done);
     },
     sweep: (from, to, done) => this.#sweep?.(from, to, done),
+    cancelSweep: () => this.#cancelSweep?.(),
   };
 
   async send(action: TableAction, source?: Name | HTMLElement) {

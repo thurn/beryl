@@ -253,6 +253,10 @@ restore the old behavior.
   exile viewer. Shift-click plays face down. Click a mana symbol or a player
   counter to add one, or right-click to remove one. The press shows immediately.
   A refused action shakes what was clicked.
+- **Selection rectangle.** On a manual table, dragging from empty felt selects
+  the cards the rectangle touches. Selected cards wear the gold selection mark.
+  A summary beside the selected permanents gives their count, total power and
+  total toughness.
 - **Undo.** Every answer can be undone, across turns and prompts, the cast and
   its payment together (by-2ml, by-96t, by-pwe).
 - **Chrome.** Round icon buttons; the log toggle top left; the bug button above

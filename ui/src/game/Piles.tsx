@@ -32,6 +32,8 @@ import { STAGE } from "./perspective";
 import { type Box } from "./placement";
 import { type ZonePile } from "./zoneViews";
 import { useReducedMotion } from "motion/react";
+import { SelectionMark, useTableSelection } from "../table/Selection";
+import type { TableClient } from "../table/client";
 
 /** What a pile is called: "Your graveyard", "Opponent's exile". */
 export function pileName({ side, zone }: Pick<ZonePile, "side" | "zone">) {
@@ -109,6 +111,7 @@ export function ZoneViewer({
   title,
   onPlay,
   onClose,
+  client,
 }: {
   /** A zone's pile, or cards that lie in no one zone, which `title` names. */
   pile: ZonePile | { cards: ObjectView[] };
@@ -117,8 +120,10 @@ export function ZoneViewer({
   title?: string;
   onPlay?(object: ObjectView, event: MouseEvent<HTMLElement>): void;
   onClose(): void;
+  client?: TableClient;
 }) {
   useOpenSound();
+  const selected = useTableSelection(client);
   const [inspector, inspect] = useHoverInspect();
   const cards = [...pile.cards].reverse();
   const columns = Math.min(VIEWER_COLUMNS, Math.max(1, cards.length));
@@ -145,11 +150,15 @@ export function ZoneViewer({
     );
     return () => cancelAnimationFrame(rise);
   }, [reduce]);
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  useLayoutEffect(() => client?.pushOpen(() => closeRef.current()), [client]);
   useEffect(() => {
+    if (client) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [close]);
+  }, [client, close]);
   return (
     <>
       <div className="viewer-scrim" onPointerDown={close} />
@@ -158,6 +167,7 @@ export function ZoneViewer({
         className={closing ? "zone-viewer zone-viewer-going" : "zone-viewer"}
         role="dialog"
         aria-label={name}
+        data-selection-viewer={!!client || undefined}
         data-pile={zone?.zone}
         data-side={zone?.side}
       >
@@ -195,6 +205,7 @@ export function ZoneViewer({
                 key={o.slot}
                 object={o}
                 closing={closing}
+                selected={selected.has(o.slot)}
                 hover={inspect(o)}
                 onPlay={onPlay}
               />
@@ -258,11 +269,13 @@ function useOwned(
 function ViewerCard({
   object,
   closing,
+  selected,
   hover,
   onPlay,
 }: {
   object: ObjectView;
   closing: boolean;
+  selected: boolean;
   hover: HoverHandlers;
   onPlay?(object: ObjectView, event: MouseEvent<HTMLElement>): void;
 }) {
@@ -296,6 +309,7 @@ function ViewerCard({
       ) : (
         <CardBack width={VIEWER_CARD} />
       )}
+      {selected && <SelectionMark frame={VIEWER_CARD} />}
     </div>
   );
 }

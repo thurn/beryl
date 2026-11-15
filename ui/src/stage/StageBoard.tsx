@@ -36,6 +36,7 @@ import type { LogEntry } from "../game/log";
 import { DESKTOP_REVEALED, desktopTray, desktopWith } from "./desktop.ts";
 import { DESKTOP, Faces } from "./Faces.tsx";
 import { useSurface } from "./mount.ts";
+import { Selection } from "../table/Selection";
 import type { TableClient } from "../table/client";
 import { type BoardStage, pageStage } from "./playback.ts";
 import {
@@ -180,8 +181,6 @@ export function StageBoard({
     // A key the prompt took has done its one thing: the answer it sent may already have
     // views playing, which the same press must not end.
     if (e.defaultPrevented) return;
-    client?.key(e);
-    if (e.defaultPrevented) return;
     if (e.key === "Escape") {
       if (settings) setSettings(false);
     } else if (
@@ -239,7 +238,11 @@ export function StageBoard({
             <PlayerTarget prompts={prompts} asked={asked} side={side} />
           )}
         />
-        <div className="card-layer" ref={layer} />
+        <div className="card-layer" ref={layer}>
+          {client && surface && (
+            <Selection client={client} stage={stage} surface={surface} />
+          )}
+        </div>
         {surface && (
           <Faces
             stage={stage}

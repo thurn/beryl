@@ -48,6 +48,7 @@ import {
   PileSheet,
   type PhonePile,
 } from "./PhoneChrome.tsx";
+import { Selection } from "../table/Selection";
 import type { TableClient } from "../table/client";
 import { counterControls, pickPile, pickViewerCard } from "../table/controls";
 import { type BoardStage, pageStage } from "./playback.ts";
@@ -293,7 +294,11 @@ export function PhoneStageBoard({
           />
         </>
       )}
-      <div className="card-layer phone-cards" ref={layer} />
+      <div className="card-layer phone-cards" ref={layer}>
+        {client && surface && (
+          <Selection client={client} stage={stage} surface={surface} />
+        )}
+      </div>
       {surface && <Faces stage={stage} surface={surface} skin={PHONE} />}
       {surface && table && viewport && (
         <TrayUnder
@@ -385,6 +390,7 @@ export function PhoneStageBoard({
       {pile && (
         <PileSheet
           pile={pile}
+          client={client}
           onInspect={setInspecting}
           onPlay={
             client && ((object, event) => pickViewerCard(client, object, event))

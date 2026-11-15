@@ -846,6 +846,11 @@
     },
     {
       "kind": "no-equivalent",
+      "name": "Selection rectangle",
+      "rule": "On a manual table, dragging from empty felt selects the cards the rectangle touches. Selected cards wear the gold selection mark. A summary beside the selected permanents gives their count, total power and total toughness."
+    },
+    {
+      "kind": "no-equivalent",
       "name": "Undo",
       "rule": "Every answer can be undone, across turns and prompts, the cast and its payment together.",
       "reports": [

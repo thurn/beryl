@@ -68,6 +68,7 @@ export interface PointerClient {
   aim?(from: Name, at: Point, over: Under | undefined, done: boolean): void;
   /** A primary drag from empty table, with `done` on release. */
   sweep?(from: Point, to: Point, done: boolean): void;
+  cancelSweep?(): void;
   /** The drop target and pointer position while a card is held. */
   over?(target: Under | undefined, at: Point): void;
   /** A card was picked up, or with none the held one was let go or dropped. */
@@ -440,7 +441,14 @@ export class Pointer {
   /** The press ended with no release (the browser took the pointer, the node went): a held
    * card goes back to where it rests, and nothing is clicked or dropped. */
   cancel() {
-    this.#endPress();
+    const press = this.#endPress();
+    if (
+      press?.kind === "primary" &&
+      press.moved &&
+      !press.player &&
+      press.name === undefined
+    )
+      this.#client?.cancelSweep?.();
     const held = this.#held;
     if (!held) return;
     const pose = this.#holding.pose(held.name) ?? undefined;

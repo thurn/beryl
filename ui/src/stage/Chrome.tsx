@@ -469,6 +469,7 @@ export function Controls({
       {viewed && !dimmed && (
         <ZoneViewer
           key={viewedKey}
+          client={client}
           pile={viewed}
           title={viewedTitle}
           onPlay={

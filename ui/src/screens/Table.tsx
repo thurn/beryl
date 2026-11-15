@@ -12,6 +12,7 @@ import {
 } from "../stage/playback";
 import { registerClicks } from "../table/click";
 import { TableClient } from "../table/client";
+import { registerSelection } from "../table/select";
 import { GameBoard } from "./Board";
 import { Button } from "../components/Controls";
 import { usePhone } from "../mobile/phone";
@@ -23,6 +24,7 @@ export function TableScreen() {
   const [{ board, client }] = useState(() => {
     const board = createBoardStage(false);
     const client = new TableClient(board.stage.pointer);
+    registerSelection(client);
     registerClicks(client, (failure) => setError(String(failure)));
     return { board, client };
   });
@@ -69,6 +71,11 @@ export function TableScreen() {
     update();
     return stage.subscribe(update);
   }, [stage, client]);
+
+  useEffect(() => {
+    window.addEventListener("keydown", client.key);
+    return () => window.removeEventListener("keydown", client.key);
+  }, [client]);
 
   const phone = usePhone();
   const leave = () => {

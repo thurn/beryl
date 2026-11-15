@@ -279,15 +279,12 @@ export function sideGroups(
   // reads at a glance. Each name stands together, piled only once there are `LANDS_PILED`
   // lands: fewer read best one by one, a basic's frameless art hiding a pile's edges.
   const name = (o: ObjectView) => o.name ?? `#${o.slot}`;
-  const rowFor = (o: ObjectView) =>
-    o.pinned ??
-    (isCreature(o) ? "creatures" : isManaSource(o) ? "lands" : "others");
   const rows: Record<RowName, ObjectView[]> = {
     creatures: [],
     others: [],
     lands: [],
   };
-  for (const object of objects) rows[rowFor(object)].push(object);
+  for (const object of objects) rows[battlefieldRow(object)].push(object);
   const sources = rows.lands;
   const names = [...new Set(sources.map(name))];
   const order = (a: ObjectView, b: ObjectView) =>
@@ -303,6 +300,10 @@ export function sideGroups(
     untapped: untapped.length,
   };
 }
+
+export const battlefieldRow = (o: ObjectView): RowName =>
+  o.pinned ??
+  (isCreature(o) ? "creatures" : isManaSource(o) ? "lands" : "others");
 
 /** The mana piles' widths and the gaps before each, before scaling: each copy beneath a pile's
  * top card peeks out by a step of its frame's size. */

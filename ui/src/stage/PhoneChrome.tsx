@@ -5,6 +5,7 @@
 // and full control's mark stand at the end of the middle band; announcements pass over the
 // table for as long as their steps play.
 import {
+  useLayoutEffect,
   useRef,
   type MouseEvent,
   type CSSProperties,
@@ -39,6 +40,8 @@ import {
   type BandName,
   type Viewport,
 } from "../mobile/layout";
+import { SelectionMark, useTableSelection } from "../table/Selection";
+import type { TableClient } from "../table/client";
 import type { Name, Resting } from "./layout.ts";
 import { announced, endWords, scryWords, stepAnnouncement } from "./notices.ts";
 import type { ScriptStage } from "./stage.ts";
@@ -240,6 +243,7 @@ export function PileSheet({
   onInspect,
   onPlay,
   onClose,
+  client,
 }: {
   /** A zone's pile, or cards that lie in no one zone, which `title` names. */
   pile: PhonePile | { cards: readonly ObjectView[] };
@@ -247,16 +251,26 @@ export function PileSheet({
   onInspect(slot: number | undefined): void;
   onPlay?(object: ObjectView, event: MouseEvent<HTMLElement>): void;
   onClose(): void;
+  client?: TableClient;
 }) {
   const pressed = useRef<ObjectView>(undefined);
+  const selected = useTableSelection(client);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useLayoutEffect(() => client?.pushOpen(() => closeRef.current()), [client]);
   const name = title ?? ("zone" in pile ? pileTitle(pile) : "");
   const section = (cards: readonly ObjectView[]) => (
-    <div className="phone-sheet-cards" onClick={() => onInspect(undefined)}>
+    <div
+      className="phone-sheet-cards"
+      data-selection-viewer={!!client || undefined}
+      onClick={() => onInspect(undefined)}
+    >
       {[...cards].reverse().map((object) => (
         <button
           key={object.slot}
           type="button"
           className="phone-sheet-card"
+          data-viewer-slot={client ? object.slot : undefined}
           aria-label={object.name ?? "A card"}
           onPointerDown={
             onPlay &&
@@ -277,6 +291,7 @@ export function PileSheet({
           }}
         >
           <CardScan object={object} width={LISTED} field={false} />
+          {selected.has(object.slot) && <SelectionMark frame={LISTED} />}
         </button>
       ))}
     </div>

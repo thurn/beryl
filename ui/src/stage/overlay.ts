@@ -6,6 +6,7 @@
 // on, which the stage says (`reach`); nothing here is a node, moves one or holds up a step.
 // The lines, and the marks of the creatures in combat, are drawn as light where the surface
 // can paint it (light.ts): the scene of it is worked out here, each tick.
+import type { Box } from "../game/placement.ts";
 import type { Arrow } from "../generated/protocol";
 import type { Edge, Run } from "./beat.ts";
 import {
@@ -21,7 +22,7 @@ import {
   type LitFlare,
   type LitStreak,
 } from "./flare.ts";
-import type { Name, Resting } from "./layout.ts";
+import type { Name, Point, Resting } from "./layout.ts";
 import type { Pose } from "./pose.ts";
 import { lightOf, type Fighter, type Lit, type LitLine } from "./light.ts";
 import { shapeOf, wayOf, type Reach } from "./lines.ts";
@@ -36,6 +37,14 @@ import {
 import { Streaks, type Streak, type StreakSurface } from "./streaks.ts";
 import type { Act } from "./table.ts";
 import { litBy, SNAP } from "./tracks.ts";
+
+/** The bounds of a drag on the stage, in either direction. */
+export const sweepBox = (from: Point, to: Point): Box => ({
+  left: Math.min(from.x, to.x),
+  right: Math.max(from.x, to.x),
+  top: Math.min(from.y, to.y),
+  bottom: Math.max(from.y, to.y),
+});
 
 /** Where the stage draws: one node a name, made and removed only as the stage says, and
  * written only with what the model computed. */
