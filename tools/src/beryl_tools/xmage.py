@@ -288,7 +288,7 @@ class Exporter:
         self.emit(f"addCard(Zone.BATTLEFIELD, {who}, {quoted}, 1, {tapped});")
         if self.cards.chooses_as_it_enters(name, "card name"):
             self.emit(f"setChoice({who}, {java_string(ANOTHER_CARD)});")
-        elif self.cards.chooses_as_it_enters(name, "color"):
+        elif self.cards.chooses_as_it_enters(name, "color", "creature type"):
             self.emit(f'setChoice({who}, "[choice_skip]");')
         counters = cast("Json | None", permanent["counters"])
         if counters is None:

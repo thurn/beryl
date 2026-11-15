@@ -347,11 +347,13 @@ class Cards:
             ):
                 raise Unsupported(f"ordering the replacement effects of two {name}")
 
-    def chooses_as_it_enters(self, card: str, choice: str) -> bool:
-        """Whether `card` makes the given choice as it enters (CR 614.12a). XMage asks it
+    def chooses_as_it_enters(self, card: str, *choices: str) -> bool:
+        """Whether `card` makes one of the given choices as it enters (CR 614.12a). XMage asks it
         when adding the permanent during setup. Beryl puts it in play with no choice.
-        The XMage exporter skips the setup color prompt so no color is recorded."""
-        return f"enters, choose a {choice}" in self.oracle.get(card, "")
+        The XMage exporter skips the setup color or creature type prompt, as Painter's
+        Servant's or Cavern of Souls', so nothing is recorded."""
+        text = self.oracle.get(card, "")
+        return any(f"enters, choose a {choice}" in text for choice in choices)
 
     def scries(self, card: str) -> bool:
         """Whether resolving `card` scries. Beryl chooses the cards for the bottom one at a

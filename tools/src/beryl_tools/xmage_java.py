@@ -286,9 +286,11 @@ def write(exports: Sequence[Export], directory: Path) -> list[str]:
 
 def xmage_cards(checkout: Path) -> set[str]:
     """The card names XMage implements: every set file lists its cards as
-    `new SetCardInfo("Name", ...`."""
+    `new SetCardInfo("Name", ...`. A set lists a card XMage has not implemented
+    on a commented-out line (`//cards.add(new SetCardInfo("Mind Bend", ...`),
+    which does not count."""
     names: set[str] = set()
-    pattern = re.compile(r'new SetCardInfo\("((?:[^"\\]|\\.)*)"')
+    pattern = re.compile(r'^\s*cards\.add\(new SetCardInfo\("((?:[^"\\]|\\.)*)"', re.M)
     for path in (checkout / "Mage.Sets" / "src" / "mage" / "sets").glob("*.java"):
         names.update(
             m.group(1) for m in pattern.finditer(path.read_text(errors="replace"))

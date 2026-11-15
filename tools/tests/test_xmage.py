@@ -420,7 +420,11 @@ def test_a_blocked_trampler_queues_lethal_damage_for_its_lone_blocker() -> None:
 
 @pytest.mark.parametrize(
     ("card", "answer"),
-    [("Pithing Needle", "Black Lotus"), ("Painter's Servant", "[choice_skip]")],
+    [
+        ("Pithing Needle", "Black Lotus"),
+        ("Painter's Servant", "[choice_skip]"),
+        ("Cavern of Souls", "[choice_skip]"),
+    ],
 )
 def test_setup_answers_as_enters_choices_without_changing_the_game(
     card: str, answer: str
@@ -443,3 +447,15 @@ def test_setup_answers_as_enters_choices_without_changing_the_game(
         f'addCard(Zone.BATTLEFIELD, playerB, "{card}", 1, false);',
         f'setChoice(playerB, "{answer}");',
     ]
+
+
+def test_xmage_cards_skips_set_entries_that_are_commented_out(tmp_path: Path) -> None:
+    # XMage's set files list unimplemented cards on commented-out lines. Counting them
+    # exported scenarios naming Mind Bend, which XMage then could not find.
+    sets = tmp_path / "Mage.Sets" / "src" / "mage" / "sets"
+    sets.mkdir(parents=True)
+    (sets / "Mirage.java").write_text(
+        '        cards.add(new SetCardInfo("Mind Stone", 1, Rarity.COMMON, X.class));\n'
+        '//        cards.add(new SetCardInfo("Mind Bend", 77, Rarity.UNCOMMON, Y.class));\n'
+    )
+    assert xmage_java.xmage_cards(tmp_path) == {"Mind Stone"}
