@@ -195,6 +195,22 @@ the client they describe, and later sections refer to them by number.
   Slower, exhaustive checking runs after the push. Interface checks are half of
   the project's check time today, and the full set runs only every three hours.
 
+- **C15. Default to good performance.** Where a choice trades smoothness for
+  something else, the faster choice is the default and the other is opt-in. The
+  desktop app therefore starts fullscreen, where macOS and Windows can show its
+  surface without composing it with other windows, and a key leaves fullscreen.
+  The prototype's one fullscreen run under load had fewer late frames than its
+  windowed runs, and Arena also starts fullscreen. The frame log records the
+  window mode, so the choice keeps being tested and is reversed if windowed play
+  proves no worse.
+
+- **C16. An agent measures frame delivery without a person.** Every number a
+  person was needed for in the prototype can be produced by a run an agent
+  starts: input comes from a script played on the display's clock, load from a
+  load generator, and results go to a frame log file an agent reads. Before
+  this, finding why a window dropped frames took the project's owner moving the
+  pointer and pasting terminal output back, several times.
+
 ## What does not change
 
 Beryl 3D is a second player of scripts the session already writes. Nothing in
