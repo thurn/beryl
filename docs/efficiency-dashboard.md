@@ -289,11 +289,14 @@ working one bead. Ingest finds windows from the session's own shell commands.
 - A window for a bead opens at the first tool call that runs
   `enact start <bead>` or `enact claim <bead>`. A later `start` or `claim` of
   the same bead inside its open window changes nothing.
-- A window closes at `enact close <bead>`, at the opening of another bead's
-  window, or at the end of the transcript, whichever comes first.
+- A window closes when `enact close <bead>` returns, at the opening of another
+  bead's window, or at the end of the transcript, whichever comes first.
 - `enact close <bead> --continue` closes that bead and claims the next bead in
   its lane. Enact prints the claimed bead's id in the command's result, and the
   next window opens at that result.
+- When that result names no bead, because the session cut its output short, the
+  next bead the session closes or creates a worktree for opens its window at the
+  close.
 - Requests and tool calls before the first window in a transcript belong to that
   first window, since they are the session reading its instructions for it.
 - Activity after a window closes and before another opens belongs to "(no

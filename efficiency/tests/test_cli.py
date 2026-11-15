@@ -11,8 +11,9 @@ from beryl_efficiency import cli, ingest, paths, store
 from beryl_efficiency.beads import Beads
 from tests.synthetic import bead, listing
 
-# The tables "The store" in docs/efficiency-dashboard.md lists, and the two that serve them:
-# labels for the beads table, ingests for the tool's own cost.
+# The tables "The store" in docs/efficiency-dashboard.md lists, and those that serve them:
+# labels for the beads table, ingests for the tool's own cost, and the four that bead
+# windows are derived from.
 TABLES = {
     "requests",
     "tool_calls",
@@ -25,6 +26,10 @@ TABLES = {
     "leases",
     "sources",
     "ingests",
+    "sessions",
+    "transcripts",
+    "enact_events",
+    "tool_results",
 }
 
 

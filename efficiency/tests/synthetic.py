@@ -41,3 +41,92 @@ class Lines(LineSource):
     def parse(self, path: Path, line: bytes) -> list[Row]:
         record = json.loads(line)
         return [("beads", {"id": str(record["id"]), "priority": int(record["n"])})]
+
+
+# The main checkout the Claude tests pretend to work in, and its transcript folder's name.
+CHECKOUT = Path("/work/beryl")
+PROJECT = "-work-beryl"
+
+
+class Transcript:
+    """A synthetic Claude Code transcript, written as the real ones are: an assistant message
+    with several content blocks takes one line per block, each with the same id and usage.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.lines: list[str] = []
+
+    def request(
+        self,
+        time: str,
+        message: str,
+        usage: tuple[int, int, int, int] = (1, 10, 100, 5),
+        tools: tuple[tuple[str, str, Mapping[str, object]], ...] = (),
+    ) -> Transcript:
+        """A request at `time` with `usage` as (input, cache write, cache read, output), a
+        text block and a `tool_use` block for each of `tools`, given as (id, name, input).
+        """
+        counts = dict(
+            zip(
+                [
+                    "input_tokens",
+                    "cache_creation_input_tokens",
+                    "cache_read_input_tokens",
+                    "output_tokens",
+                ],
+                usage,
+            )
+        )
+        blocks: list[dict[str, object]] = [{"type": "text", "text": "thinking aloud"}]
+        for call, name, given in tools:
+            use: dict[str, object] = {"type": "tool_use", "id": call, "name": name}
+            use["input"] = dict(given)
+            blocks.append(use)
+        for block in blocks:
+            self.lines.append(
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "timestamp": time,
+                        "message": {
+                            "id": message,
+                            "model": "claude-test",
+                            "usage": counts,
+                            "content": [block],
+                        },
+                    }
+                )
+            )
+        return self
+
+    def bash(self, time: str, message: str, call: str, command: str) -> Transcript:
+        return self.request(
+            time, message, tools=((call, "Bash", {"command": command}),)
+        )
+
+    def result(self, time: str, call: str, stdout: str = "ok") -> Transcript:
+        self.lines.append(
+            json.dumps(
+                {
+                    "type": "user",
+                    "timestamp": time,
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": call,
+                                "content": stdout,
+                            }
+                        ]
+                    },
+                    "toolUseResult": {"stdout": stdout, "stderr": ""},
+                }
+            )
+        )
+        return self
+
+    def save(self) -> Path:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text("".join(line + "\n" for line in self.lines))
+        return self.path

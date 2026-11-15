@@ -44,3 +44,17 @@ def host() -> str:
     """This machine's name as every row records it: the node name without a domain, in lower
     case."""
     return platform.node().split(".")[0].lower() or "unknown"
+
+
+def claude_projects() -> Path:
+    """Where Claude Code keeps its transcripts, one folder per working directory."""
+    return Path.home() / ".claude" / "projects"
+
+
+def claude_sessions() -> Path:
+    """Where the Claude desktop app keeps its session records."""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming")
+    else:
+        base = Path.home() / "Library" / "Application Support"
+    return base / "Claude" / "claude-code-sessions"

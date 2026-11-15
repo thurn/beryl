@@ -12,8 +12,8 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from . import ingest, paths, store
-from .beads import Beads
+from . import bead, claude, ingest, paths, store
+from .beads import Beads, main_checkout
 from .render import Result, table, text
 
 # How old the store may be before a query ingests first, in seconds.
@@ -21,8 +21,15 @@ MAX_AGE = 60.0
 
 
 def sources() -> list[ingest.Source]:
-    """Every source, in the order ingest reads them."""
-    return [Beads.here(Path.cwd())]
+    """Every source, in the order ingest reads them: beads and session records first, since
+    deriving windows from transcripts reads both."""
+    checkout = main_checkout(Path.cwd())
+    host = paths.host()
+    return [
+        Beads.here(checkout),
+        claude.Sessions(paths.claude_sessions(), checkout, host),
+        claude.Transcripts(paths.claude_projects(), checkout, host),
+    ]
 
 
 def update(rebuild: bool = False) -> ingest.Summary:
@@ -92,9 +99,66 @@ def run_sql(args: argparse.Namespace) -> Result:
     )
 
 
-def coverage(db: sqlite3.Connection) -> Result:
+def unread(db: sqlite3.Connection, found: Sequence[ingest.Source]) -> dict[str, int]:
+    """Files of lines that ingest has not read to their end: how many were never read, how
+    many were read in part, and the bytes still to read. A file's last line still being
+    written counts as unread."""
+    counts = {"never_read": 0, "partly_read": 0, "bytes": 0}
+    for source in found:
+        if not isinstance(source, ingest.LineSource):
+            continue
+        for path in source.files():
+            try:
+                size = path.stat().st_size
+            except OSError:
+                continue
+            offset, recorded = ingest.position(db, source.name, str(path))
+            if not recorded:
+                counts["never_read"] += 1
+            elif size > offset:
+                counts["partly_read"] += 1
+            counts["bytes"] += max(size - offset, 0)
+    return counts
+
+
+def gaps(db: sqlite3.Connection) -> dict[str, object]:
+    """What attribution could not place: top-level transcripts with no bead window (by the
+    kind of their one window), closes with no open window, and beads that ran on a host the
+    store has no data from, by host."""
+    without = {
+        str(r[0]): int(r[1])
+        for r in db.execute(
+            """SELECT w.kind, count(DISTINCT w.transcript) FROM windows AS w
+            WHERE NOT EXISTS (SELECT 1 FROM windows AS b WHERE b.host = w.host
+                AND b.provider = w.provider AND b.transcript = w.transcript
+                AND b.kind = 'bead')
+            GROUP BY w.kind ORDER BY w.kind"""
+        )
+    }
+    stray = int(
+        db.execute("SELECT coalesce(sum(stray_closes), 0) FROM transcripts").fetchone()[
+            0
+        ]
+    )
+    elsewhere = {
+        str(r[0]): int(r[1])
+        for r in db.execute("""SELECT h, count(*) FROM (SELECT coalesce(
+                json_extract(enact, '$.enact_spawn_host'),
+                json_extract(enact, '$.enact_worktree_host')) AS h FROM beads)
+            WHERE h IS NOT NULL AND h NOT IN (SELECT DISTINCT host FROM transcripts)
+            GROUP BY h ORDER BY h""")
+    }
+    return {
+        "sessions_without_window": without,
+        "stray_closes": stray,
+        "beads_no_data": elsewhere,
+    }
+
+
+def coverage(db: sqlite3.Connection, pending: dict[str, int] | None = None) -> Result:
     """What the store holds and what it is missing: rows per table, skipped lines per source,
-    and the cost of the ingests, all of them and the recent ones."""
+    what attribution could not place, files not yet read, and the cost of the ingests, all of
+    them and the recent ones."""
     counts = {
         name: int(db.execute(f'SELECT count(*) FROM "{name}"').fetchone()[0])
         for name in store.tables(db)
@@ -125,12 +189,28 @@ def coverage(db: sqlite3.Connection) -> Result:
     since = str(found[3]) if found[3] else None
     columns = ["started", "host", "wall_seconds", "cpu_seconds", "bytes_read", "rows"]
     columns.append("skipped")
+    missing = gaps(db)
+    without = missing["sessions_without_window"]
+    elsewhere = missing["beads_no_data"]
+    assert isinstance(without, dict) and isinstance(elsewhere, dict)
     lines = [
         "rows      " + " | ".join(f"{k} {v}" for k, v in counts.items()),
         "skipped   "
         + (" | ".join(f"{k} {v}" for k, v in skipped.items()) or "no source read yet"),
-        f"ingests   {count} since {since or '-'}: wall {wall:.2f} s  cpu {cpu:.2f} s",
+        "no bead   sessions with no bead window: "
+        + (", ".join(f"{k} {v}" for k, v in without.items()) or "none")
+        + f" | closes with no open window {missing['stray_closes']}",
+        "no data   beads that ran on hosts with no data: "
+        + (", ".join(f"{k} {v}" for k, v in elsewhere.items()) or "none"),
     ]
+    if pending is not None:
+        lines.append(
+            f"unread    files never read {pending['never_read']}, read in part "
+            f"{pending['partly_read']}, bytes to read {pending['bytes']}"
+        )
+    lines.append(
+        f"ingests   {count} since {since or '-'}: wall {wall:.2f} s  cpu {cpu:.2f} s"
+    )
     if recent:
         lines += ["", "recent ingests", *table(columns, recent)]
     return Result(
@@ -145,6 +225,8 @@ def coverage(db: sqlite3.Connection) -> Result:
                 "since": since,
             },
             "ingests": [dict(zip(columns, r)) for r in recent],
+            **missing,
+            "unread": pending,
         },
         lines,
         ["efficiency sql 'select * from sources'"],
@@ -155,7 +237,16 @@ def run_coverage(args: argparse.Namespace) -> Result:
     fresh(args)
     db = reader()
     try:
-        return coverage(db)
+        return coverage(db, unread(db, sources()))
+    finally:
+        db.close()
+
+
+def run_bead(args: argparse.Namespace) -> Result:
+    fresh(args)
+    db = reader()
+    try:
+        return bead.report(db, str(args.bead))
     finally:
         db.close()
 
@@ -167,6 +258,7 @@ QUERIES: dict[str, tuple[str, Callable[[argparse.Namespace], Result]]] = {
         "what the store holds and misses, and ingest's own cost",
         run_coverage,
     ),
+    "bead": ("one bead's requests, tokens, minutes and sessions", run_bead),
 }
 
 
@@ -193,6 +285,8 @@ def parser() -> argparse.ArgumentParser:
             )
         if name == "sql":
             p.add_argument("query", metavar="'<query>'", help="a read-only SQL query")
+        if name == "bead":
+            p.add_argument("bead", metavar="<id>", help="the bead's id")
     return top
 
 

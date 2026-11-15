@@ -1,7 +1,7 @@
 """Ingest: reads what was added to each source since the last ingest into the store
 (docs/efficiency-dashboard.md, "The store").
 
-A source is one of two kinds:
+A source is one of three kinds:
 
 - A `LineSource` is a set of files of lines, such as transcripts or the run log. Each file is
   read from the byte offset recorded in the `sources` table. A file whose first bytes no longer
@@ -9,8 +9,10 @@ A source is one of two kinds:
   with no newline is left for the next ingest.
 - A `SnapshotSource` is a command's whole output, such as `bd list`. It is read whole every
   time, and when its digest matches the last one it writes nothing and counts no bytes read.
+- A `FileSource` is a set of small files that are rewritten in place, such as the desktop
+  app's session records. A file is read whole when its size or modification time changed.
 
-Either kind turns its input into rows, `(table, {column: value})`, written with
+Each kind turns its input into rows, `(table, {column: value})`, written with
 `INSERT OR REPLACE` so that reading the same bytes twice changes nothing. A malformed line or
 record is skipped and counted, and never stops an ingest.
 """
@@ -33,6 +35,9 @@ from . import store
 Row = tuple[str, dict[str, object]]
 # How many leading bytes of a file its fingerprint covers.
 FINGERPRINT_BYTES = 256
+# How many rows a `LineSource` writes per transaction. A transcript can be hundreds of
+# megabytes, so its rows are written, and its offset recorded, in batches as it is read.
+BATCH_ROWS = 20_000
 # A line or record that raises one of these is malformed: skipped and counted.
 MALFORMED: tuple[type[Exception], ...] = (ValueError, KeyError, TypeError)
 
@@ -82,6 +87,26 @@ class LineSource(ABC):
         """The rows of one complete line of `path`, without its newline. Raises one of
         `MALFORMED` for a line it cannot read."""
 
+    def finish(self, db: sqlite3.Connection, changed: list[Path]) -> int:
+        """Runs after an ingest read new lines from the files `changed`, to derive rows that
+        depend on more than one line. Returns how many rows it wrote."""
+        return 0
+
+
+class FileSource(ABC):
+    """Small files rewritten in place, each read whole when its size or modification time
+    changed."""
+
+    name: str = ""
+
+    @abstractmethod
+    def files(self) -> list[Path]:
+        """The files to read, as they are now."""
+
+    @abstractmethod
+    def parse(self, path: Path, data: bytes) -> list[Row]:
+        """The rows of one file. Raises one of `MALFORMED` for a file it cannot read."""
+
 
 class SnapshotSource(ABC):
     """A command's output, read whole and written whole when it changed."""
@@ -100,7 +125,7 @@ class SnapshotSource(ABC):
         """The rows of the output, and how many records in it were malformed."""
 
 
-Source = LineSource | SnapshotSource
+Source = LineSource | FileSource | SnapshotSource
 
 
 def now() -> str:
@@ -176,41 +201,90 @@ def write(db: sqlite3.Connection, rows: Iterable[Row]) -> int:
 
 
 def read_lines(db: sqlite3.Connection, source: LineSource, tally: Tally) -> None:
+    changed: list[Path] = []
+    for path in source.files():
+        try:
+            if read_file_lines(db, source, path, tally):
+                changed.append(path)
+        except OSError as e:
+            tally.error = tally.error or f"{path}: {e}"
+    if changed:
+        with db:
+            tally.rows += source.finish(db, changed)
+
+
+def read_file_lines(
+    db: sqlite3.Connection, source: LineSource, path: Path, tally: Tally
+) -> bool:
+    """Reads the complete lines `path` gained since its recorded offset, a batch of rows at a
+    time, so that no file is held in memory whole. Returns whether it read any."""
+    key = str(path)
+    offset, recorded = position(db, source.name, key)
+    size = path.stat().st_size
+    if offset and (size < offset or not same_file(path, recorded)):
+        offset = 0  # Replaced: read it again from the start.
+    if offset == size:
+        return False
+    start = offset
+    with open(path, "rb") as handle:
+        print_ = fingerprint(handle.read(FINGERPRINT_BYTES))
+        handle.seek(offset)
+        rows: list[Row] = []
+        skipped = 0
+        while True:
+            line = handle.readline()
+            if not line.endswith(b"\n"):
+                break  # The end, or a last line still being written.
+            offset += len(line)
+            if line.strip():
+                try:
+                    rows += source.parse(path, line.rstrip(b"\r\n"))
+                except MALFORMED:
+                    skipped += 1
+            if len(rows) >= BATCH_ROWS:
+                save_batch(db, source.name, key, offset, print_, rows, skipped, tally)
+                rows, skipped = [], 0
+        save_batch(db, source.name, key, offset, print_, rows, skipped, tally)
+    tally.bytes_read += offset - start
+    return offset > start
+
+
+def save_batch(
+    db: sqlite3.Connection,
+    source: str,
+    key: str,
+    offset: int,
+    print_: str,
+    rows: list[Row],
+    skipped: int,
+    tally: Tally,
+) -> None:
+    with db:
+        tally.rows += write(db, rows)
+        record_position(db, source, key, offset, print_, skipped)
+    tally.skipped += skipped
+
+
+def read_files(db: sqlite3.Connection, source: FileSource, tally: Tally) -> None:
     for path in source.files():
         key = str(path)
-        offset, recorded = position(db, source.name, key)
         try:
-            size = path.stat().st_size
-            if offset and (size < offset or not same_file(path, recorded)):
-                offset = 0  # Replaced: read it again from the start.
-            with open(path, "rb") as handle:
-                head = handle.read(FINGERPRINT_BYTES)
-                handle.seek(offset)
-                added = handle.read()
+            status = path.stat()
+            stamp = f"{status.st_size}:{status.st_mtime_ns}"
+            if stamp == position(db, source.name, key)[1]:
+                continue
+            data = path.read_bytes()
         except OSError as e:
             tally.error = tally.error or f"{path}: {e}"
             continue
-        complete = added[: added.rfind(b"\n") + 1]
-        rows: list[Row] = []
-        skipped = 0
-        for line in complete.splitlines():
-            if not line.strip():
-                continue
-            try:
-                rows += source.parse(path, line)
-            except MALFORMED:
-                skipped += 1
+        try:
+            rows, skipped = source.parse(path, data), 0
+        except MALFORMED:
+            rows, skipped = [], 1
         with db:
             tally.rows += write(db, rows)
-            record_position(
-                db,
-                source.name,
-                key,
-                offset + len(complete),
-                fingerprint(head),
-                skipped,
-            )
-        tally.bytes_read += len(complete)
+            record_position(db, source.name, key, len(data), stamp, skipped, True)
+        tally.bytes_read += len(data)
         tally.skipped += skipped
 
 
@@ -242,6 +316,8 @@ def ingest(db: sqlite3.Connection, sources: Sequence[Source], host: str) -> Summ
         tally = summary.sources.setdefault(source.name, Tally())
         if isinstance(source, LineSource):
             read_lines(db, source, tally)
+        elif isinstance(source, FileSource):
+            read_files(db, source, tally)
         else:
             read_snapshot(db, source, tally)
     summary.wall_seconds = time.monotonic() - wall

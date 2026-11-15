@@ -154,6 +154,69 @@ MIGRATIONS: tuple[str, ...] = (
         skipped INTEGER NOT NULL
     );
     """,
+    """
+    -- A window's `kind` is `bead` (a stretch spent on the bead `bead`), `orchestration` (a
+    -- whole orchestrator session, with its epic as `bead`) or `none` (no bead; `label` holds
+    -- the worktree the session created, if any). A top-level transcript's windows cover it
+    -- from its first record to its last with no gap and no overlap.
+    ALTER TABLE windows ADD COLUMN kind TEXT NOT NULL DEFAULT 'bead';
+    ALTER TABLE windows ADD COLUMN label TEXT;
+    CREATE INDEX windows_bead ON windows (bead);
+    CREATE INDEX requests_bead ON requests (bead);
+    CREATE INDEX tool_calls_bead ON tool_calls (bead);
+    -- Which session each transcript belongs to: a desktop session (`local_<uuid>`) has one
+    -- transcript at a time, and a new one each time it is cleared. `left_at` is when the
+    -- session left an earlier transcript.
+    CREATE TABLE sessions (
+        host TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        transcript TEXT NOT NULL,
+        session TEXT NOT NULL,
+        title TEXT,
+        model TEXT,
+        spawned_from TEXT,
+        left_at TEXT,
+        PRIMARY KEY (host, provider, transcript)
+    );
+    -- One row per transcript read: its session (the transcript itself when no record names
+    -- it), the transcript that started it for a subagent, its first and last record, and how
+    -- many `enact close` commands it ran with no open window for their bead.
+    CREATE TABLE transcripts (
+        host TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        transcript TEXT NOT NULL,
+        parent TEXT,
+        session TEXT NOT NULL,
+        first TEXT,
+        last TEXT,
+        stray_closes INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (host, provider, transcript)
+    );
+    -- Enact commands a session ran, from which windows are found. `verb` is `open`
+    -- (`enact start` or `enact claim`), `close`, `next` (the bead `enact close --continue`
+    -- claimed, at its result) or `worktree` (`enact worktree create <name>`).
+    CREATE TABLE enact_events (
+        host TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        transcript TEXT NOT NULL,
+        call TEXT NOT NULL,
+        verb TEXT NOT NULL,
+        bead TEXT NOT NULL,
+        time TEXT NOT NULL,
+        PRIMARY KEY (host, provider, transcript, call, verb, bead)
+    );
+    -- When each tool call ended and its output's size. A result is on a later line than its
+    -- call, so ingest keeps it here and copies it into `tool_calls`.
+    CREATE TABLE tool_results (
+        host TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        transcript TEXT NOT NULL,
+        call TEXT NOT NULL,
+        end TEXT NOT NULL,
+        result_bytes INTEGER,
+        PRIMARY KEY (host, provider, transcript, call)
+    );
+    """,
 )
 
 
