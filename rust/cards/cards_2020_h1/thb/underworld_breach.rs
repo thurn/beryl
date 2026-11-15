@@ -191,7 +191,10 @@ pub mod scenarios {
         // its mana cost, {1}{U}, and the three other cards in the graveyard, which are exiled.
         Scenario::new("a creature card escapes and enters the battlefield")
             .battlefield(P0, &[BREACH, Card::Island, Card::Island])
-            .graveyard(P0, &[Prop::Vanilla, Card::Plains, Card::Plains, Card::Plains])
+            .graveyard(
+                P0,
+                &[Prop::Vanilla, Card::Plains, Card::Plains, Card::Plains],
+            )
             .actions(&[
                 ME.escapes(Prop::Vanilla),
                 Resolve,
@@ -208,7 +211,13 @@ pub mod scenarios {
             .battlefield(P0, &[BREACH, Card::Plains])
             .graveyard(
                 P0,
-                &[Prop::Sorcery, Card::Island, Card::Island, Card::Plains, Card::Swamp],
+                &[
+                    Prop::Sorcery,
+                    Card::Island,
+                    Card::Island,
+                    Card::Plains,
+                    Card::Swamp,
+                ],
             )
             .battlefield(P1, &[Prop::Vanilla])
             .library(P1, &[Card::Island, Card::Island])
@@ -233,7 +242,13 @@ pub mod scenarios {
             .graveyard(P0, &[Prop::Vanilla, Card::Plains, Card::Plains])
             .graveyard(
                 P1,
-                &[Prop::Flier, Card::Plains, Card::Plains, Card::Plains, Card::Plains],
+                &[
+                    Prop::Flier,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                ],
             )
             .actions(&[ME.deciding(DecisionKind::Priority, 2)]),
         // Ruling: "Escape's permission doesn't change when you may cast the spell from your
@@ -295,7 +310,17 @@ pub mod scenarios {
         Scenario::new("escape is the one alternative cost")
             .interaction(&[Card::ForceOfWill])
             .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(P0, &[BREACH, Card::Island, Card::Island, Card::Island, Card::Island, Card::Island])
+            .battlefield(
+                P0,
+                &[
+                    BREACH,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                ],
+            )
             .hand(P0, &[Card::Counterspell])
             .graveyard(
                 P0,
@@ -318,7 +343,13 @@ pub mod scenarios {
             .interaction(&[Card::Trinisphere, LED])
             .battlefield(
                 P0,
-                &[BREACH, Card::Trinisphere, Card::Island, Card::Island, Card::Island],
+                &[
+                    BREACH,
+                    Card::Trinisphere,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                ],
             )
             .graveyard(P0, &[LED, Card::Plains, Card::Plains, Card::Plains])
             .actions(&[

@@ -756,8 +756,8 @@ Built by by-bajq.3.10:
   (layer 6, `LayerChange::GrantEscape`, which changes nothing of a permanent).
   The layers list it in group 4's list, and `State::escapes` answers whether a
   card there has it. `cast_sources` adds the caster's graveyard cards with
-  escape while that list is not empty. A cast for escape carries a reserved
-  bit, `Castings::ESCAPE` (so a face lists at most seven options), and
+  escape while that list is not empty. A cast for escape carries a reserved bit,
+  `Castings::ESCAPE` (so a face lists at most seven options), and
   `Castings::paid` yields `CastingOption::Escape`: the face's mana cost and
   `ESCAPE_EXILES` ("exile three other cards from your graveyard"; Breach is the
   only card that grants escape, so the count is fixed). The total cost, X, the

@@ -29,6 +29,7 @@ mod copies;
 mod effects;
 mod filters;
 mod modify;
+mod paid;
 mod prevention;
 mod references;
 mod rules;

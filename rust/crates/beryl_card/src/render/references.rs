@@ -4,7 +4,7 @@
 use super::filters::{Kind, zone_name};
 use super::words::{counted, list, number, plural};
 use super::{Attached, Ctx};
-use crate::cost::{CastingKind, CostAction};
+use crate::cost::CostAction;
 use crate::effect::{Amount, Comparison, Condition, Objects, Players};
 use crate::filter::Filter;
 use crate::ids::Zone;
@@ -562,41 +562,6 @@ impl Ctx {
                 format!("it's not true that {}", self.condition(condition))
             }
         }
-    }
-
-    /// "It was kicked", "its impending cost was paid" (CR 702.33d).
-    fn paid_condition(&mut self, kind: CastingKind, paid: bool) -> String {
-        let it = if self.this_is_it || self.trigger.is_some() {
-            "it".to_owned()
-        } else {
-            self.this.clone()
-        };
-        let name = match kind {
-            CastingKind::Kicker => {
-                return format!("{it} {} kicked", if paid { "was" } else { "wasn't" });
-            }
-            CastingKind::Offspring => "offspring",
-            CastingKind::Impending => "impending",
-            CastingKind::Overload => "overload",
-            CastingKind::Evoke => "evoke",
-            CastingKind::Alternative => "alternative",
-            CastingKind::Escape => {
-                return if paid {
-                    format!("{it} escaped")
-                } else {
-                    format!("{it} didn't escape")
-                };
-            }
-        };
-        let whose = if it == "it" {
-            "its".to_owned()
-        } else {
-            format!("{it}'s")
-        };
-        format!(
-            "{whose} {name} cost {} paid",
-            if paid { "was" } else { "wasn't" }
-        )
     }
 
     /// One amount held against another, in the words a card uses for the common shapes.

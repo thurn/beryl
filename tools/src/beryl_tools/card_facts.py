@@ -12,6 +12,7 @@ card.
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Iterable, Sequence
 from typing import cast
@@ -57,17 +58,6 @@ TRIGGER_START: re.Pattern[str] = re.compile(r"^(When|Whenever|At) (this \w+|.+?)
 # The bit of a Cast's `costs` for a cast with the escape an effect grants a card in a
 # graveyard: Beryl's `Castings::ESCAPE`, the last of the eight.
 ESCAPE = 1 << 7
-
-
-def escape_spell(card: str, costs: int) -> tuple[str, int]:
-    """The spell XMage casts for a Cast of `card` paying `costs`, and the options left: with
-    the escape an effect grants, its EscapeAbility, the spell ability "<card> with Escape".
-    """
-    if not costs & ESCAPE:
-        return card, costs
-    if costs != ESCAPE:
-        raise Unsupported(f"escape with another casting option of {card}")
-    return f"{card} with Escape", 0
 
 
 class Cards:
@@ -124,6 +114,23 @@ class Cards:
             granted = self.grants[0]
             return granted[index] if index < len(granted) else None
         return None
+
+    @staticmethod
+    def escape_spell(card: str, costs: int) -> tuple[str, int]:
+        """The spell XMage casts for a Cast of `card` paying `costs`, and the options left:
+        with the escape an effect grants, its EscapeAbility, "<card> with Escape"."""
+        if not costs & ESCAPE:
+            return card, costs
+        if costs != ESCAPE:
+            raise Unsupported(f"escape with another casting option of {card}")
+        return f"{card} with Escape", 0
+
+    @staticmethod
+    def tap_source(at: str, who: str, card: str, text: str) -> str:
+        """The XMage statement that has `who` activate the mana ability of the permanent
+        `card` whose text starts with `text` (`BerylScenarioTest.tapSource`)."""
+        quoted = [json.dumps(t, ensure_ascii=False) for t in (card, text)]
+        return f"tapSource({at}, {who}, {quoted[0]}, {quoted[1]});"
 
     def instant_mana_text(self, card: str, how: str, index: int) -> str | None:
         """The start of a mana ability's text in XMage where the ability is activated only at

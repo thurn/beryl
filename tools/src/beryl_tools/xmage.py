@@ -34,7 +34,6 @@ from __future__ import annotations
 from typing import cast
 
 from .card_facts import CONTROLLED_TURN, Cards, Json, Unsupported, payment_taps
-from .card_facts import escape_spell
 from .xmage_trace import (
     FORCED_ASKED,
     FORCED_CHOICES,
@@ -56,7 +55,6 @@ from .xmage_java import (
     Faces,
     assertion_code,
     java_string,
-    tap_source,
     trample_amount,
 )
 
@@ -380,7 +378,7 @@ class Exporter:
             paid = payment_taps(self.actions, [t.taps for t in self.trace], self.index)
             self.cards.delve_reachable(self.setup, action["player"], paid)
         costs = cast(int, action["costs"])
-        name, costs = escape_spell(card, costs)
+        name, costs = self.cards.escape_spell(card, costs)
         if name == card and card in p.flashback:
             self.flashback(action, p)
             return
@@ -491,7 +489,7 @@ class Exporter:
                         "a payment tapping a source by name after one XMage chose the "
                         "sources of"
                     )
-                self.emit(tap_source(self.at(p), who, name, text))
+                self.emit(self.cards.tap_source(self.at(p), who, name, text))
 
     def cast_targets(self) -> list[Json]:
         """The Target answers of the cast at hand: those that follow it, or else those Beryl
@@ -548,7 +546,7 @@ class Exporter:
         ((how, index),) = ability.items()
         if mana := self.cards.instant_mana_text(card, how, cast(int, index)):
             self.prepare(who, p, starts=True)  # off the stack (CR 605.3b)
-            return self.emit(tap_source(self.at(p), who, card, mana))
+            return self.emit(self.cards.tap_source(self.at(p), who, card, mana))
         text = self.cards.ability_text(card, how, cast(int, index))
         if text is None:
             raise Unsupported(f"{card}'s ability {how} {index}")
