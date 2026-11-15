@@ -1526,6 +1526,16 @@ public final class BerylForgeHarness {
             return picked != null ? new CardCollection(picked) : super.chooseCardsForCost(options, sa, cpl, amount, isOptional, prompt);
         }
 
+        /**
+         * The cards delve exiles for the spell's generic mana (CR 702.66a), which Forge asks before
+         * any mana is paid. The script's picks answer it; with none, Forge's AI chooses.
+         */
+        @Override
+        public CardCollectionView chooseCardsToDelve(int genericAmount, CardCollection grave) {
+            List<Card> picked = pickMany(List.copyOf(grave), 0, genericAmount, "delve");
+            return picked != null ? new CardCollection(picked) : super.chooseCardsToDelve(genericAmount, grave);
+        }
+
         /** Card picks until Done or `max`, or null if the script has none here. */
         <T> List<T> pickMany(List<T> options, int min, int max, String question) {
             if (options.size() == min && min == max) {

@@ -148,11 +148,6 @@ class Cards:
             for p in self.oracle.get(cast(str, face["name"]), "").split("\n")
         ]
 
-    def delves(self, card: str) -> bool:
-        """Whether `card` has delve (CR 702.66a), whose keyword the faces' facts leave out:
-        a paragraph of its Oracle text that starts with the keyword."""
-        return any(p.startswith("Delve") for p in self.paragraphs(card))
-
     def mana_text(self, source: str) -> str | None:
         """The text of a mana source's one mana ability, `{T}: Add` and what it makes, where
         that is all it can tap for. XMage taps its own choice of sources for a payment, so a
@@ -452,8 +447,9 @@ def named_cards(entries: Iterable[Json]) -> list[str]:
 
 
 # The kinds of answer a player gives while casting a spell or activating an ability, before
-# paying for it (601.2b-601.2c): an X and the targets.
-CAST_CHOICES = ("X", "Target", "TargetCount")
+# paying for it (601.2b-601.2c): an X, the targets and the cards delve exiles (CR 702.66a, which
+# applies once the total cost is known, before the mana is paid).
+CAST_CHOICES = ("X", "Target", "TargetCount", "ChooseUpTo")
 
 
 def payment_taps(
@@ -470,8 +466,17 @@ def payment_taps(
     while (
         after < len(actions)
         and after + 1 < len(taps)
-        and actions[after]["action"] == "Answer"
-        and actions[after]["kind"] in CAST_CHOICES
+        and (
+            # A scenario's assertion that a choice is open, which has no taps either.
+            (
+                actions[after]["action"] == "Assert"
+                and actions[after]["assertion"]["assert"] == "Decision"
+            )
+            or (
+                actions[after]["action"] == "Answer"
+                and actions[after]["kind"] in CAST_CHOICES
+            )
+        )
         and not taps[after]
     ):
         after += 1
