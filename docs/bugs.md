@@ -686,14 +686,14 @@ fixed in the same session. Newest first.
   disagree. Prevention: derive a set from the one predicate that defines it,
   never from a second list of variants.
 
-- **A turn-start checkpoint with a merged permanent claimed to be complete.**
-  A checkpoint records each permanent by its own card, and `State::off_board`
-  says what a rebuild from it would lose. A mutated permanent's other cards
-  (CR 731.2) sit in `Zone::Merged`, which no checkpoint lists, but `off_board`
-  did not mention them, so the save offered a board that could not be rebuilt
-  with Gemrazer's card under its creature: the rebuild lost the card or failed
-  on the library's count. Fixed: `off_board` reports a battlefield permanent
-  with a non-empty pile, as it already reported a phased-out one. Prevention: a
-  new zone or a new store entry that outlasts a turn needs a line in `off_board`
-  or in the checkpoint; a check that every scenario's turn-start checkpoint
-  either rebuilds to the same board or says why not would find the next one.
+- **A turn-start checkpoint with a merged permanent claimed to be complete.** A
+  checkpoint records each permanent by its own card, and `State::off_board` says
+  what a rebuild from it would lose. A mutated permanent's other cards (CR
+  731.2) sit in `Zone::Merged`, which no checkpoint lists, but `off_board` did
+  not mention them, so the save offered a board that could not be rebuilt with
+  Gemrazer's card under its creature: the rebuild lost the card or failed on the
+  library's count. Fixed: `off_board` reports a battlefield permanent with a
+  non-empty pile, as it already reported a phased-out one. Prevention: a new
+  zone or a new store entry that outlasts a turn needs a line in `off_board` or
+  in the checkpoint; a check that every scenario's turn-start checkpoint either
+  rebuilds to the same board or says why not would find the next one.
