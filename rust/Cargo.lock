@@ -231,6 +231,7 @@ name = "beryl_app"
 version = "0.1.0"
 dependencies = [
  "beryl-mobile",
+ "beryl_art",
  "beryl_link_iroh",
  "beryl_search",
  "beryl_session",
@@ -247,9 +248,15 @@ dependencies = [
  "tauri-plugin-dialog",
  "tempfile",
  "tokio",
- "ureq",
  "webview2-com",
  "windows",
+]
+
+[[package]]
+name = "beryl_art"
+version = "0.1.0"
+dependencies = [
+ "ureq",
 ]
 
 [[package]]

@@ -23,8 +23,8 @@ use serde_json::json;
 use tauri::Manager;
 use tauri::http::{Response, StatusCode};
 
-use crate::art::ArtCache;
 use crate::snapshot::Snapshots;
+use beryl_art::ArtCache;
 
 /// Set by `just smoke`: run without a visible window or Dock icon and exit once the UI reports
 /// that it loaded. The number of seconds is only a hang limit: the app exits with an error if
@@ -323,7 +323,7 @@ pub fn run() {
                 }
                 // `setup` manages the cache before the window's page can ask for art.
                 let response = match app.try_state::<ArtCache>() {
-                    Some(cache) => cache.respond(&path),
+                    Some(cache) => art::respond(&cache, &path),
                     None => Response::builder()
                         .status(StatusCode::SERVICE_UNAVAILABLE)
                         .body(Vec::new())
@@ -352,7 +352,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     app.manage(Snapshots::default());
     app.manage(BugDirectory(bug_dir));
     let dir = app.path().app_cache_dir()?.join("art");
-    app.manage(ArtCache::new(dir, art::SCRYFALL));
+    app.manage(ArtCache::new(dir, beryl_art::SCRYFALL));
     // The iOS Simulator needs the webview shown even in smoke mode to load the UI.
     // Showing it there does not open a window on the Mac desktop.
     let smoke = smoke_seconds();
