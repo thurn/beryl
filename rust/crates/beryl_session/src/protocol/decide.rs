@@ -60,9 +60,9 @@ pub(super) fn decision_view<L: Layout>(
         candidates,
         prompt: Box::new(prompt_view(t, obs, d, asker)),
         resolving: item,
-        pass_to: (d.kind == DecisionKind::Priority).then(|| pass_to(t, obs, stops).into()),
+        pass_to: (d.kind == DecisionKind::Priority).then(|| wire_pass_to(pass_to(t, obs, stops))),
         pass_on: if d.kind == DecisionKind::Priority {
-            pass_on(t, obs, stops).map(Into::into)
+            pass_on(t, obs, stops).map(wire_pass_to)
         } else {
             None
         },
@@ -122,7 +122,7 @@ pub(super) fn halt_view<L: Layout>(
         }],
         resolving: None,
         prompt: Box::new(halt_prompt()),
-        pass_to: Some(pass_to(t, obs, stops).into()),
+        pass_to: Some(wire_pass_to(pass_to(t, obs, stops))),
         pass_on: None,
         source: None,
         halt: true,
@@ -186,14 +186,13 @@ fn skip_idle_blocks<L: Layout>(
     }
 }
 
-impl From<NextStop> for PassTo {
-    fn from(next: NextStop) -> PassTo {
-        match next {
-            NextStop::Resolve => PassTo::Resolve,
-            NextStop::CombatDamage => PassTo::CombatDamage,
-            NextStop::Step(step) => PassTo::Step { step: step.into() },
-            NextStop::NextTurn => PassTo::NextTurn,
-        }
+/// Where passing priority takes the viewer, as the wire names it.
+fn wire_pass_to(next: NextStop) -> PassTo {
+    match next {
+        NextStop::Resolve => PassTo::Resolve,
+        NextStop::CombatDamage => PassTo::CombatDamage,
+        NextStop::Step(step) => PassTo::Step { step: step.into() },
+        NextStop::NextTurn => PassTo::NextTurn,
     }
 }
 

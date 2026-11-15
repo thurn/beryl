@@ -17,6 +17,8 @@ beryl_card = { path = "../beryl_card" }
 beryl_card_store = { path = "../beryl_card_store" }
 beryl_cards = { path = "../beryl_cards" }
 beryl_engine = { path = "../beryl_engine" }
+# The wire types this crate builds and re-exports at the same paths.
+beryl_protocol = { path = "../beryl_protocol" }
 beryl_search = { path = "../beryl_search" }
 # Generates viewer table commands from the action schema shared with the host log.
 beryl_table = { path = "../beryl_table", features = ["ts"] }

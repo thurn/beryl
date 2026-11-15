@@ -10,9 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use beryl_cards::CARDS;
 use beryl_search::Budget;
-use serde::{Deserialize, Serialize};
 use serde_json::json;
-use ts_rs::TS;
 
 use crate::ai::{self, AgentMove, AgentMoves};
 use crate::fair::{self, Fairness};
@@ -23,31 +21,18 @@ use crate::prompt::{ClickReply, ClickRequest};
 use crate::protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, StopsSetting};
 use crate::replay::ReplayFile;
 use crate::session::GameSession;
-use crate::{GameUpdate, Prepared, Seat, SessionError, StartGame, bugs, journal};
+use crate::{GameUpdate, Prepared, Seat, SessionError, StartGame, StartRequest, bugs, journal};
 
-/// The UI's request for a game: the default deck's mirror against `agent`, the human in seat 0
-/// under the smart stops.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct StartRequest {
-    pub agent: String,
-    /// The game's seed; none picks one from the clock.
-    pub seed: Option<u32>,
-    /// Deal the game the AI judges fairest of many, searched from the seed ([`crate::fair`]).
-    #[serde(default)]
-    pub fair: bool,
-}
-
-impl StartRequest {
-    pub fn game(&self) -> StartGame {
-        let deck = beryl_cards::decks::default_deck();
-        StartGame {
-            seed: self.seed.map_or_else(clock_seed, u64::from),
-            decks: [deck.clone(), deck],
-            human: Seat::P0,
-            opponent: self.agent.clone(),
-            stops: StopsSetting::SMART,
-        }
+/// The game the UI's request starts: the default deck's mirror against the agent it names,
+/// the human in seat 0 under the smart stops.
+fn requested_game(request: &StartRequest) -> StartGame {
+    let deck = beryl_cards::decks::default_deck();
+    StartGame {
+        seed: request.seed.map_or_else(clock_seed, u64::from),
+        decks: [deck.clone(), deck],
+        human: Seat::P0,
+        opponent: request.agent.clone(),
+        stops: StopsSetting::SMART,
     }
 }
 
@@ -150,7 +135,7 @@ impl Sessions {
     /// A fair deal is searched for before the game in progress is replaced, which takes up to
     /// about 6 s on the Mac.
     pub fn start(&self, request: &StartRequest) -> Result<SessionId, SessionError> {
-        let mut start = request.game();
+        let mut start = requested_game(request);
         if request.fair {
             start.seed = fair::fair_seed(&start, Fairness::THIS_DEVICE)?;
         }

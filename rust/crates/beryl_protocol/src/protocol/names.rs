@@ -1,9 +1,9 @@
 //! The engine's enums mirrored under the protocol's wire names.
 
-use beryl_engine::card::{Keywords, ManaColor, Types, counter_kinds};
-use beryl_engine::event::Reason;
-use beryl_engine::state::{CounterKind, MulliganStatus, TurnStep};
-use beryl_engine::{DecisionKind, StallReason, Zone};
+use beryl_card::{CounterKind, DecisionKind, Keywords, ManaColor, TurnStep, Types, Zone, counter_kinds};
+use beryl_kernel::decision::StallReason;
+use beryl_kernel::event::Reason;
+use beryl_kernel::state::MulliganStatus;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -169,7 +169,7 @@ pub enum Keyword {
 }
 
 impl Keyword {
-    pub(super) const ALL: [(Keywords, Keyword); 4] = [
+    pub const ALL: [(Keywords, Keyword); 4] = [
         (Keywords::FIRST_STRIKE, Keyword::FirstStrike),
         (Keywords::FLYING, Keyword::Flying),
         (Keywords::REACH, Keyword::Reach),
@@ -178,7 +178,7 @@ impl Keyword {
 }
 
 impl CardType {
-    pub(super) const ALL: [(Types, CardType); 7] = [
+    pub const ALL: [(Types, CardType); 7] = [
         (Types::ARTIFACT, CardType::Artifact),
         (Types::CREATURE, CardType::Creature),
         (Types::ENCHANTMENT, CardType::Enchantment),

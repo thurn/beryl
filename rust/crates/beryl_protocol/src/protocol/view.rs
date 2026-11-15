@@ -1,6 +1,6 @@
 //! The view types: what the UI draws of the game, relative to the viewer.
 
-use beryl_engine::SlotId;
+use beryl_kernel::SlotId;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 

@@ -9,7 +9,7 @@
 //! screen holds between scripts are always its table's.
 
 use super::build::Builder;
-use super::table::{Entry, Table};
+use super::{Entry, Table};
 use super::{Act, Arrow, Fact, Open, Span, Step, Subject};
 use crate::protocol::ObjectId;
 use crate::protocol::{

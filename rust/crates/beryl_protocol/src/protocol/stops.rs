@@ -1,7 +1,7 @@
 //! Where the player's own stops are set.
 
-use beryl_engine::state::TurnStep;
-use beryl_engine::{StepStops, Stops};
+use beryl_card::TurnStep;
+use beryl_kernel::profile::{StepStops, Stops};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 

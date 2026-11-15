@@ -80,7 +80,7 @@ pub struct CardTokenLink {
     pub scryfall_id: String,
 }
 
-pub(crate) fn typescript_decls(cfg: &ts_rs::Config) -> [String; 9] {
+pub fn typescript_decls(cfg: &ts_rs::Config) -> [String; 9] {
     [
         DeckImportRequest::decl(cfg),
         DeckImportReply::decl(cfg),

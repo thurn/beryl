@@ -16,7 +16,8 @@ use beryl_card_store::STORE;
 use beryl_engine::card::{FaceAbility, FaceIx, Words};
 use beryl_engine::{CardId, GameTable};
 
-use super::outcome::{AbilityClass, AbilityRef, ability_ref};
+use super::outcome::ability_ref;
+use super::{AbilityClass, AbilityRef};
 
 /// The rules text of ability `a` of face `face` of `card`, when the printed text the UI reads
 /// for that face has no paragraph for it; none when the UI should find the printed one.

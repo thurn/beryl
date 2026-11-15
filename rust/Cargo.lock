@@ -418,6 +418,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "beryl_protocol"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_kernel",
+ "beryl_table",
+ "serde",
+ "serde_json",
+ "ts-rs",
+ "uuid",
+]
+
+[[package]]
 name = "beryl_rules"
 version = "0.1.0"
 dependencies = [
@@ -462,6 +475,7 @@ dependencies = [
  "beryl_card_store",
  "beryl_cards",
  "beryl_engine",
+ "beryl_protocol",
  "beryl_scenario",
  "beryl_search",
  "beryl_table",

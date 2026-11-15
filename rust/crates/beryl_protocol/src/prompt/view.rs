@@ -1,6 +1,6 @@
 //! The wire types: a prompt as its seat is sent it, and the click command.
 
-use beryl_engine::card::{Part, Place, Purpose, Shape};
+use beryl_card::{Part, Place, Purpose, Shape};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -11,7 +11,7 @@ use crate::script::{Arrow, Mark, Subject};
 /// the screen shows for it. The session makes one when a decision opens a prompt and a new one
 /// after each click.
 ///
-/// It is the decision's [`Prompt`](beryl_engine::card::Prompt) by public slot and relative to
+/// It is the decision's [`Prompt`](beryl_card::Prompt) by public slot and relative to
 /// the viewer, in words, with the prompt's state where the session holds it. No field is for
 /// one card's question: a card that asks a known purpose changes nothing here.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -85,7 +85,7 @@ pub fn shape_name(shape: Shape) -> &'static str {
 
 /// A [`Purpose`] on the wire: its name.
 mod purpose_name {
-    use beryl_engine::card::Purpose;
+    use beryl_card::Purpose;
     use serde::de::Error as _;
     use serde::{Deserialize as _, Deserializer, Serializer};
 
@@ -106,7 +106,7 @@ mod purpose_name {
 }
 
 /// The TypeScript type of a [`Purpose`]: the union of every purpose's name.
-pub(crate) fn purpose_decl() -> String {
+pub fn purpose_decl() -> String {
     let names: Vec<String> = (Purpose::ALL.iter())
         .map(|purpose| format!("\"{}\"", purpose.name()))
         .collect();

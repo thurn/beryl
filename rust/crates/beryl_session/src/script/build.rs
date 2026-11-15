@@ -13,7 +13,7 @@ use super::moves::{counted, set_counters};
 use super::spans;
 use super::stack::Held;
 use super::staging::{self, Told};
-use super::table::Table;
+use super::Table;
 use super::{Act, Fact, Notice, Open, Reset, Script, Step, Stream, Subject, Tally, check};
 use crate::protocol::ObjectId;
 use crate::protocol::{
@@ -331,7 +331,7 @@ impl<'a> Builder<'a> {
         for (_, leaves) in moves {
             self.stack_move(leaves);
         }
-        if making && let Some(top) = self.table.stack.last().map(super::table::Entry::subject) {
+        if making && let Some(top) = self.table.stack.last().map(super::Entry::subject) {
             self.drain(Side::You, top, Some(Subject::Player { player: Side::You }));
         }
     }

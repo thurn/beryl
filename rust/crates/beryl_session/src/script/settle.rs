@@ -7,7 +7,7 @@
 
 use super::build::Builder;
 use super::moves::{COUNTERS, counted, set_counters};
-use super::table::Table;
+use super::Table;
 use super::{Act, Fact, Subject, Tally};
 use crate::protocol::ObjectId;
 use crate::protocol::{ObjectView, Side, StackItem, Why, ZoneName};

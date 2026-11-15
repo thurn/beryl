@@ -24,7 +24,7 @@ pub fn replay(mut before: Table, script: &Script) -> Result<Table, String> {
 }
 
 /// Gives the abilities on `table`'s stack the numbers a reset lists, bottom first.
-pub(super) fn number(table: &mut Table, reset: &Reset) -> Result<(), String> {
+pub fn number(table: &mut Table, reset: &Reset) -> Result<(), String> {
     let mut ids = reset.abilities.iter();
     for entry in &mut table.stack {
         if matches!(entry.item, StackItem::Ability { .. }) {
@@ -51,7 +51,7 @@ pub fn failure(before: &Table, script: &Script, view: &PlayerView) -> Option<Str
 }
 
 /// [`failure`], from the tables themselves.
-pub(super) fn check(before: Table, script: &Script, after: &Table) -> Option<String> {
+pub fn check(before: Table, script: &Script, after: &Table) -> Option<String> {
     let start = if script.reset.is_some() {
         after.clone()
     } else {
@@ -66,7 +66,7 @@ pub(super) fn check(before: Table, script: &Script, after: &Table) -> Option<Str
 }
 
 /// The first part of `replayed` that differs from `view`'s, by its path in the table.
-pub(super) fn difference(replayed: &Table, view: &Table) -> String {
+pub fn difference(replayed: &Table, view: &Table) -> String {
     let value = |table| serde_json::to_value(table).expect("a table is plain data");
     first_difference(&value(replayed), &value(view), "table").map_or_else(
         || "the tables are the same".to_owned(),

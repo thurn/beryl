@@ -62,7 +62,7 @@
 //!
 //! # Text
 //!
-//! A [`PromptView`] prints as a few lines of text (`text.rs`), for the hand-written
+//! A [`PromptView`] prints as a few lines of text (`beryl_protocol::prompt`'s `text.rs`), for the hand-written
 //! expectations of tests.
 
 mod ahead;
@@ -77,18 +77,11 @@ mod order;
 mod pay;
 mod pick;
 mod split;
-mod text;
-mod view;
 mod wording;
 mod yes_no;
 
-pub use crate::protocol::ObjectId;
+pub use beryl_protocol::prompt::*;
 pub(crate) use ahead::forced;
 pub use held::{Clicked, Held, Run, add_opening_state};
 pub(crate) use open::{halt_prompt, prompt_view};
 pub use order::trigger_to_stack;
-pub(crate) use view::purpose_decl;
-pub use view::{
-    ButtonId, Click, ClickReply, ClickRequest, Lies, Marked, Pair, PartName, Pile, PlaceName,
-    PromptButton, PromptView, ShapeBody, Share, TapPreview, Words, shape_name,
-};

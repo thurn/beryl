@@ -173,7 +173,7 @@ impl Act {
         }
     }
 
-    pub(super) fn object_mut(&mut self) -> Option<&mut ObjectView> {
+    pub fn object_mut(&mut self) -> Option<&mut ObjectView> {
         match self {
             Act::Fly { object, .. }
             | Act::Appear { object, .. }

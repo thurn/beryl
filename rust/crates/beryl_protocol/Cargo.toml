@@ -1,0 +1,26 @@
+[package]
+name = "beryl_protocol"
+version = "0.1.0"
+description = "The wire types the interfaces read: PlayerView, scripts, prompts and IPC messages, with no rules or cards"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+# Seats, zones, steps, prompt purposes and the other enums the protocol mirrors.
+beryl_card = { path = "../beryl_card" }
+# The engine's state enums the protocol mirrors (counters, mulligans, zone-change reasons) and
+# the stops it sets. The kernel holds no rules and no cards.
+beryl_kernel = { path = "../beryl_kernel" }
+# The manual table's actions and state, which manual views carry.
+beryl_table = { path = "../beryl_table", features = ["ts"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+# A prompt's purpose is written by its name (`purpose_name`), with its TypeScript type
+# given by hand: ts-rs would warn that it cannot read that serde attribute.
+ts-rs = { version = "12.0.1", features = ["no-serde-warnings"] }
+# Names each manual table view so a stale action is refused, in place of a hand-written id.
+uuid = { version = "1", features = ["v4"] }
