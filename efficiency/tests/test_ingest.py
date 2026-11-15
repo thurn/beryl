@@ -131,9 +131,25 @@ def test_rebuild_recreates_the_store(tmp_path: Path) -> None:
     lock = tmp_path / "ingest.lock"
     source = Beads(lambda: listing(bead("by-a"), bead("by-b")))
     ingest.run(path, lock, [source], "host")
-    assert ingest.run(path, lock, [source], "host").total().bytes_read == 0
+    again = ingest.run(path, lock, [source], "host")
+    assert again is not None and again.total().bytes_read == 0
     rebuilt = ingest.run(path, lock, [source], "host", rebuild=True)
+    assert rebuilt is not None
     assert rebuilt.total().rows == 2 and rebuilt.total().bytes_read > 0
+
+
+def test_an_ingest_that_need_not_wait_leaves_a_held_store_alone(tmp_path: Path) -> None:
+    """A query's ingest does not wait behind another ingest, such as the page server's: it
+    answers from the store as it is."""
+    path = tmp_path / "store.sqlite"
+    lock = tmp_path / "ingest.lock"
+    source = Beads(lambda: listing(bead("by-a")))
+    with store.locked(lock) as held:
+        assert held
+        assert ingest.run(path, lock, [source], "host", wait=False) is None
+    assert not path.exists()
+    done = ingest.run(path, lock, [source], "host", wait=False)
+    assert done is not None and done.total().rows == 1
 
 
 def test_a_snapshot_counts_its_malformed_records_once(tmp_path: Path) -> None:

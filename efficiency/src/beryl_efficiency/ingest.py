@@ -427,10 +427,14 @@ def run(
     sources: Sequence[Source],
     host: str,
     rebuild: bool = False,
-) -> Summary:
+    wait: bool = True,
+) -> Summary | None:
     """One ingest under the lock: a second one waits for the first and then finds nothing
-    new. `rebuild` recreates the store from the sources first."""
-    with store.locked(lock_path):
+    new, or with `wait` false returns None at once, leaving the store to the first.
+    `rebuild` recreates the store from the sources first."""
+    with store.locked(lock_path, wait) as held:
+        if not held:
+            return None
         if rebuild:
             store.remove(store_path)
         db = store.open_store(store_path)

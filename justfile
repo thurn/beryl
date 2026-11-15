@@ -188,10 +188,10 @@ speed *args:
 cpu *args:
     {{ by }} cpu "$@"
 
-# Where agent time, CPU and tokens go, per bead (ingest [--rebuild], sql '<query>', coverage; --json, --no-ingest)
+# Where agent time, CPU and tokens go, per bead (ingest [--rebuild], sql '<query>', coverage; --json, --no-ingest; serve runs at normal priority)
 [group('bench')]
 efficiency *args:
-    @{{ low }} uv run --quiet --no-dev --project efficiency beryl-efficiency "$@"
+    @{{ if args =~ '^serve( |$)' { "" } else { low } }} uv run --quiet --no-dev --project efficiency beryl-efficiency "$@"
 
 # Who holds and waits for the machine's CPU tokens
 [group('bench')]

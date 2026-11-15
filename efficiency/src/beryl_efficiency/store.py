@@ -500,9 +500,10 @@ def tables(db: sqlite3.Connection) -> list[str]:
 
 
 @contextlib.contextmanager
-def locked(path: Path) -> Iterator[None]:
-    """Holds the ingest lock at `path`, waiting for any ingest that holds it. The operating
-    system releases it if the process dies."""
+def locked(path: Path, wait: bool = True) -> Iterator[bool]:
+    """Holds the ingest lock at `path`, waiting for any ingest that holds it, and yields
+    True. With `wait` false it does not wait: it yields False at once when another ingest
+    holds the lock. The operating system releases it if the process dies."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a+b") as handle:
         if sys.platform == "win32":
@@ -514,18 +515,27 @@ def locked(path: Path) -> Iterator[None]:
                     msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
                     break
                 except OSError:
+                    if not wait:
+                        yield False
+                        return
                     time.sleep(0.2)
             try:
-                yield
+                yield True
             finally:
                 handle.seek(0)
                 msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
         else:
             import fcntl
 
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
             try:
-                yield
+                fcntl.flock(
+                    handle.fileno(), fcntl.LOCK_EX | (0 if wait else fcntl.LOCK_NB)
+                )
+            except BlockingIOError:
+                yield False
+                return
+            try:
+                yield True
             finally:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 

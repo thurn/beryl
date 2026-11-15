@@ -2,8 +2,13 @@
 page"). The server listens on 127.0.0.1 only and answers `GET` only. Each address is a query:
 `/bead/by-x.1?since=7d` is `efficiency bead by-x.1 --since 7d`, the same address with `.json`
 appended is its JSON, and `section=1` returns the section alone, as the page's script fetches
-it. `/` is the summary. It changes nothing but the store, through the ingest every query runs
-when the store is stale.
+it. `/` is the summary.
+
+A request never waits for an ingest. The server answers from the store as it is, keeps each
+answer until the next ingest, and refreshes the store beside the requests by running
+`efficiency ingest` as a separate process at background priority whenever the store is over
+five minutes old while the page is open. `/status.json` says when the store was last
+updated and whether an ingest is running, which the page shows in its header.
 
 `shot` renders one address to a PNG in the cache with the headless browser the UI's capture
 scripts use, taking one of the machine's shared browser slots. It is a development aid and is
@@ -19,14 +24,16 @@ import sqlite3
 import subprocess
 import sys
 import threading
-from collections.abc import Sequence
+import time
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
 
-from . import ci_views, cli, page, paths, views  # noqa: F401, they add pages to page
+from . import cli, ingest, page, paths, store
+from . import ci_views, views  # noqa: F401, it adds pages to page
 from .beads import main_checkout
 
 HOST = "127.0.0.1"
@@ -51,6 +58,15 @@ FLAGS: frozenset[str] = frozenset(
 )
 # The queries an address may name: every query that only reads the store.
 ADDRESSABLE: frozenset[str] = frozenset(cli.QUERIES) - {"ingest", "sql"}
+# How often the server looks at the store's age, in seconds.
+POLL_SECONDS = 5.0
+# How old the store may grow while the page is open before the server ingests, in seconds.
+# Longer than a query's `cli.MAX_AGE`: each ingest and the answers it makes old cost CPU on
+# a machine that is short of it.
+REFRESH_SECONDS = 300.0
+# How long after its last request the page counts as open, in seconds. Its script asks for
+# `/status.json` every few seconds while it is open.
+VIEWED_SECONDS = 60.0
 # Host headers the server answers, so that a page on another site cannot read it through a
 # name that resolves to this machine.
 LOCAL_NAMES: tuple[str, ...] = ("127.0.0.1", "localhost")
@@ -99,11 +115,47 @@ def command_of(argv: Sequence[str]) -> str:
     return "just efficiency " + " ".join(shown)
 
 
-def respond(path: str, query: str, no_ingest: bool) -> Answer:
-    """The page, section or JSON for an address."""
+def version() -> int | None:
+    """The id of the store's last ingest: an answer computed at one version stays right
+    until the next. None when the store is missing or has no ingest yet."""
+    path = paths.store()
+    if not path.exists():
+        return None
+    try:
+        db = store.open_read_only(path)
+        try:
+            found = db.execute("SELECT max(id) FROM ingests").fetchone()
+        finally:
+            db.close()
+    except sqlite3.Error:
+        return None
+    return int(found[0]) if found and found[0] is not None else None
+
+
+def status(updating: bool) -> Answer:
+    """When the store was last updated and whether an ingest is running, for the page's
+    header."""
+    updated: str | None = None
+    path = paths.store()
+    if path.exists():
+        try:
+            db = store.open_read_only(path)
+            try:
+                last = ingest.last_ingest(db)
+            finally:
+                db.close()
+            updated = last.isoformat() if last else None
+        except sqlite3.Error:
+            updated = None
+    body = {"version": version(), "updated": updated, "updating": updating}
+    return Answer(HTTPStatus.OK, "application/json", json.dumps(body).encode())
+
+
+def respond(path: str, query: str) -> Answer:
+    """The page, section or JSON for an address, from the store as it is."""
     argv, as_json, section = argv_of(path, query)
     try:
-        args = cli.parser().parse_args([*argv, *(["--no-ingest"] if no_ingest else [])])
+        args = cli.parser().parse_args([*argv, "--no-ingest"])
     except SystemExit:
         raise Refused(HTTPStatus.BAD_REQUEST, f"bad query: {' '.join(argv)}")
     try:
@@ -131,12 +183,117 @@ def respond(path: str, query: str, no_ingest: bool) -> Answer:
             shown,
             " ".join(argv[:2]),
             command,
+            version(),
         )
     return Answer(HTTPStatus.OK, "text/html; charset=utf-8", shown.encode())
 
 
+def low_priority() -> tuple[list[str], int]:
+    """The command prefix and process creation flags that run a command at background
+    priority, as the justfile's `low` does: `taskpolicy -c utility` on macOS, below-normal
+    priority on Windows, and `nice` elsewhere."""
+    if sys.platform == "win32":
+        return [], int(getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0))
+    if sys.platform == "darwin":
+        return ["taskpolicy", "-c", "utility"], 0
+    return ["nice", "-n", "10"], 0
+
+
+class Answers:
+    """Each address's answer, kept until the store's next ingest. When an ingest lands,
+    `warm` computes again the last `WARM` addresses asked for, so a page that was open
+    answers at once after the update too."""
+
+    WARM = 16
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.version: int | None = None
+        self.warmed: int | None = None
+        self.found: dict[tuple[str, str], Answer] = {}
+        # The addresses asked for, oldest first, as an ordered set.
+        self.asked: dict[tuple[str, str], None] = {}
+
+    def get(self, key: tuple[str, str], compute: Callable[[], Answer]) -> Answer:
+        now = version()
+        with self.lock:
+            if now != self.version:
+                self.version = now
+                self.found = {}
+            kept = self.found.get(key)
+        if kept is not None:
+            return kept
+        answer = compute()
+        if answer.status == HTTPStatus.OK:
+            with self.lock:
+                self.asked.pop(key, None)
+                self.asked[key] = None
+                while len(self.asked) > self.WARM:
+                    del self.asked[next(iter(self.asked))]
+                if self.version == now:
+                    self.found[key] = answer
+        return answer
+
+    def warm(self) -> None:
+        now = version()
+        with self.lock:
+            if now == self.warmed:
+                return
+            self.warmed = now
+            asked = list(self.asked)
+        for key in reversed(asked):
+            self.get(key, lambda key=key: answer_of(*key))
+
+
+def answer_of(path: str, query: str) -> Answer:
+    try:
+        return respond(path, query)
+    except Refused as e:
+        return Answer(e.status, "text/plain; charset=utf-8", str(e).encode())
+
+
+class Refresher:
+    """Runs `efficiency ingest` as a separate process at background priority whenever the
+    page is open and the store is over `REFRESH_SECONDS` old, at most once per
+    `REFRESH_SECONDS`, so a failing ingest is not started again at once."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.process: subprocess.Popen[bytes] | None = None
+        self.started: float | None = None
+        self.seen: float = time.monotonic()
+
+    def viewed(self) -> None:
+        self.seen = time.monotonic()
+
+    def updating(self) -> bool:
+        with self.lock:
+            return self.process is not None and self.process.poll() is None
+
+    def tick(self) -> None:
+        with self.lock:
+            if self.process is not None and self.process.poll() is None:
+                return
+            self.process = None
+            now = time.monotonic()
+            started = self.started
+            recent = started is not None and now - started < REFRESH_SECONDS
+            unviewed = now - self.seen > VIEWED_SECONDS
+            if recent or unviewed or not ingest.stale(paths.store(), REFRESH_SECONDS):
+                return
+            prefix, flags = low_priority()
+            self.started = time.monotonic()
+            self.process = subprocess.Popen(
+                [*prefix, sys.executable, "-m", "beryl_efficiency", "ingest"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=flags,
+            )
+
+
 class Handler(BaseHTTPRequestHandler):
-    no_ingest: bool = False
+    answers: Answers = Answers()
+    refresher: Refresher | None = None
 
     def send(self, answer: Answer) -> None:
         self.send_response(answer.status)
@@ -152,11 +309,14 @@ class Handler(BaseHTTPRequestHandler):
             self.send(Answer(HTTPStatus.FORBIDDEN, "text/plain", b"local only"))
             return
         found = urlsplit(self.path)
-        try:
-            answer = respond(found.path, found.query, self.no_ingest)
-        except Refused as e:
-            answer = Answer(e.status, "text/plain; charset=utf-8", str(e).encode())
-        self.send(answer)
+        refresher = self.refresher
+        if refresher is not None:
+            refresher.viewed()
+        if found.path == "/status.json":
+            self.send(status(refresher is not None and refresher.updating()))
+            return
+        key = (found.path, found.query)
+        self.send(self.answers.get(key, lambda: answer_of(*key)))
 
     def refuse(self) -> None:
         self.send_response(HTTPStatus.METHOD_NOT_ALLOWED)
@@ -190,12 +350,27 @@ def server(port: int, no_ingest: bool = False) -> HTTPServer:
     """A server on 127.0.0.1 at `port` (0 for any free port). It answers each connection on
     its own thread: a browser opens connections it sends nothing on until it needs them, and
     a server that answered one connection at a time would wait on such a connection while the
-    page's own requests, such as its trends, waited behind it."""
+    page's own requests, such as its trends, waited behind it. Unless `no_ingest`, a thread
+    beside it keeps the store fresh (`Refresher`) and computes again the answers an ingest
+    made old (`Answers.warm`)."""
 
     class Bound(Handler):
         pass
 
-    Bound.no_ingest = no_ingest
+    Bound.answers = Answers()
+    Bound.refresher = None if no_ingest else Refresher()
+    refresher: Refresher | None = Bound.refresher
+    answers: Answers = Bound.answers
+    if refresher is not None:
+        running: Refresher = refresher
+
+        def keep_fresh() -> None:
+            while True:
+                running.tick()
+                answers.warm()
+                time.sleep(POLL_SECONDS)
+
+        threading.Thread(target=keep_fresh, daemon=True).start()
     return ThreadingHTTPServer((HOST, port), Bound)
 
 

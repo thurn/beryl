@@ -99,7 +99,7 @@ def marked(root: Path) -> Path:
 
 def get(path: str) -> serve.Answer:
     path, _, query = path.partition("?")
-    return serve.respond(path, query, no_ingest=True)
+    return serve.respond(path, query)
 
 
 ADDRESSES: list[str] = [
@@ -309,3 +309,39 @@ def test_every_view_leads_to_the_sections_it_opens(marked: Path) -> None:
     ci = get("/ci?since=all").body.decode()
     assert 'data-src="/pushes?since=all&amp;section=1"' in ci
     assert 'data-src="/failures?since=all&amp;section=1"' in ci
+
+
+def test_an_answer_is_kept_until_the_next_ingest(root: Path) -> None:
+    """The server computes an address once per ingest: asking again answers from memory,
+    and an ingest landing makes `warm` compute every address asked for again."""
+    answers = serve.Answers()
+    computed: list[str] = []
+
+    def compute() -> serve.Answer:
+        computed.append("/")
+        return serve.answer_of("/", "")
+
+    first = answers.get(("/", ""), compute)
+    assert answers.get(("/", ""), compute) is first and computed == ["/"]
+    answers.warm()  # Nothing new: nothing computed.
+    assert computed == ["/"]
+    db = store.open_store(paths.store())
+    db.execute(
+        "INSERT INTO ingests (started, host, wall_seconds, cpu_seconds, bytes_read, "
+        "rows, skipped) VALUES ('2026-11-15T20:00:00+00:00', 'here', 1, 1, 0, 0, 0)"
+    )
+    db.commit()
+    db.close()
+    answers.warm()
+    assert len(answers.found) == 1 and answers.found[("/", "")] is not first
+    assert answers.get(("/", ""), compute) is answers.found[("/", "")]
+
+
+def test_the_status_says_when_the_store_was_updated(running: serve.HTTPServer) -> None:
+    status, body = fetch(running, "GET", "/status.json")
+    found = json.loads(body)
+    assert status == 200 and found["updating"] is False
+    page_version = fetch(running, "GET", "/")[1].decode()
+    assert f'data-version="{"" if found["version"] is None else found["version"]}"' in (
+        page_version
+    )

@@ -145,7 +145,13 @@ store" and "Isolation" before changing anything here.
   efficiency change on its metric, and the summary's figures carry the marks of
   the metrics in `rollups.FIGURE_METRICS`. `time` and `dollars` answer `.json`
   only. The server answers each connection on its own thread, because a browser
-  holds connections open that it sends nothing on.
+  holds connections open that it sends nothing on. A request never waits for an
+  ingest: the server answers from the store as it is and keeps each answer until
+  the next ingest. While the page is open, a thread runs `efficiency ingest` as
+  a separate background-priority process whenever the store is over five minutes
+  old, then computes the recently asked answers again. `/status.json` feeds the
+  header's "updated" or "updating" note, which offers a reload once new data is
+  in. `just efficiency serve` alone runs at normal priority.
 - `just efficiency shot <address> [--dark] [--width N]` renders an address to a
   PNG under `$BERYL_CACHE/efficiency/shots/` with `shot.mjs`, which uses the
   main checkout's `ui/node_modules` Playwright and takes one of the machine's
@@ -162,8 +168,9 @@ store" and "Isolation" before changing anything here.
   `--host` and `--provider`. A window counts when it starts in the range, a
   request or tool call when it happened in it, and a bead when it closed in it;
   a closed bead's per-bead figures count all its windows. A query ingests first
-  when the store's last ingest is over a minute old, unless given `--no-ingest`.
-  The store is `$BERYL_CACHE/efficiency/store.sqlite`.
+  when the store's last ingest is over a minute old, unless given `--no-ingest`
+  or another ingest is already running, in which case it answers from the store
+  as it is. The store is `$BERYL_CACHE/efficiency/store.sqlite`.
 - The `efficiency` check lane (`tools/src/beryl_tools/efficiency.py`) runs
   black, pyre and pytest here. Only a change under `efficiency/` or to
   `data/efficiency-*.json` selects it, and such a change selects no other lane

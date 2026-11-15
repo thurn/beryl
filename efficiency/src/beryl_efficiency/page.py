@@ -620,9 +620,18 @@ RANGES: tuple[tuple[str, str], ...] = (
 )
 
 
-def page(path: str, since: str | None, body: str, title: str, command: str) -> str:
+def page(
+    path: str,
+    since: str | None,
+    body: str,
+    title: str,
+    command: str,
+    version: int | None = None,
+) -> str:
     """A whole page around a section: the range control, the control that copies the
-    section's command, and the stylesheet and script."""
+    section's command, the store's status, and the stylesheet and script. `version` is the
+    store's last ingest when the page was made; the script compares it with the server's
+    `/status.json` to offer a reload once newer data is in."""
     choices = "".join(
         f'<a href="{escape(address(path, {"since": value}))}"'
         + (' class="on"' if value == since else "")
@@ -642,7 +651,9 @@ def page(path: str, since: str | None, body: str, title: str, command: str) -> s
         f"<title>{escape(title)}</title><style>{STYLE}{''.join(STYLES)}</style></head>"
         f'<body><header><a class="home" href="/">efficiency</a>'
         f'<nav class="views">{views}</nav>'
-        f'<nav class="range">{choices}</nav>{copy(command)}</header>'
+        f'<nav class="range">{choices}</nav>'
+        f'<span class="status" data-version="{"" if version is None else version}"></span>'
+        f"{copy(command)}</header>"
         f"<main>{body}</main><script>{SCRIPT}</script></body></html>"
     )
 
@@ -674,6 +685,21 @@ section{min-width:0}
 .top h2{margin:0;font-size:15px;font-weight:600;min-width:0;flex:1;
 overflow-wrap:anywhere}
 .top h2 .t{font-weight:400;color:var(--dim)}
+.status{margin-left:auto;font-size:12px;color:var(--dim);white-space:nowrap}
+.status a{color:var(--fg);text-decoration:underline}
+.status+.copy{margin-left:0}
+.loading{color:var(--dim);font-size:12px;padding:4px 0}
+.loading::after{content:"";display:inline-block;width:10px;height:10px;margin-left:6px;
+border:2px solid var(--line);border-top-color:var(--dim);border-radius:50%;
+animation:spin .8s linear infinite;vertical-align:-1px}
+@keyframes spin{to{transform:rotate(360deg)}}
+body::before{content:"";position:fixed;top:0;left:0;height:2px;width:0;
+background:var(--model);z-index:1}
+body.busy::before{animation:busy 8s cubic-bezier(.1,.7,.3,1) forwards}
+body.busy main{opacity:.55;transition:opacity .2s .15s}
+@keyframes busy{to{width:92%}}
+@media (prefers-reduced-motion:reduce){.loading::after,body.busy::before{animation:none}
+body.busy::before{width:100%}}
 .copy{margin-left:auto;font:inherit;font-size:12px;color:var(--dim);background:none;
 border:1px solid var(--line);border-radius:6px;padding:1px 8px;cursor:pointer}
 .copy:hover{color:var(--fg)}
@@ -738,15 +764,34 @@ td,th{padding-left:4px;padding-right:4px}
 """
 
 # Opens a section's content the first time its line opens (a line open from the start, such
-# as a trend, at once), copies a section's command, and hides a bar part's label where it
-# does not fit.
+# as a trend, at once), showing that it is loading meanwhile; dims the page and runs a bar
+# along its top while a link's page loads; shows how old the store is and offers a reload
+# once an ingest has landed; copies a section's command; and hides a bar part's label where
+# it does not fit.
 SCRIPT = """
 function fit(root){for(const i of root.querySelectorAll('.seg i')){
 i.classList.remove('hide');if(i.scrollWidth>i.parentElement.clientWidth)
 i.classList.add('hide');}}
 async function load(d){if(!d.dataset||!d.dataset.src||d.dataset.loaded)return;
-d.dataset.loaded='1';const r=await fetch(d.dataset.src);const box=d.querySelector('.open');
-box.innerHTML=r.ok?await r.text():'-';fit(box);opened(box);}
+d.dataset.loaded='1';const box=d.querySelector('.open');
+box.innerHTML='<div class="loading">loading</div>';
+let shown='-';try{const r=await fetch(d.dataset.src);
+shown=r.ok?await r.text():'-';}catch(e){d.dataset.loaded='';}
+box.innerHTML=shown;fit(box);opened(box);}
+document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest('a[href]');
+if(!a||e.defaultPrevented||e.button||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;
+if(a.origin===location.origin&&!a.closest('.status'))document.body.classList.add('busy');});
+addEventListener('pageshow',()=>document.body.classList.remove('busy'));
+function ago(t){const m=Math.round((Date.now()-Date.parse(t))/60000);
+return m<1?'just now':m<60?m+' min ago':Math.round(m/60)+' h ago';}
+async function status(){const s=document.querySelector('.status');if(!s)return;
+try{const r=await fetch('/status.json');const j=await r.json();
+const mine=s.dataset.version;const newer=j.version!==null&&String(j.version)!==mine;
+if(newer&&mine===''){location.reload();return;}
+s.innerHTML=newer?'<a href="">new data, reload</a>':j.updating?'updating':
+j.updated?'updated '+ago(j.updated):'no data yet';
+if(!j.updated&&!newer&&j.updating)s.innerHTML='reading logs, first time';}catch(e){}}
+status();setInterval(status,5000);
 function opened(root){for(const d of root.querySelectorAll('details[open][data-src]'))
 load(d);}
 document.addEventListener('toggle',e=>{if(e.target.open)load(e.target);},true);

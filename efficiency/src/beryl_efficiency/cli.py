@@ -73,13 +73,17 @@ def update(rebuild: bool = False) -> ingest.Summary:
             "older than the providers' retention are lost",
             file=sys.stderr,
         )
-    return ingest.run(paths.store(), paths.lock(), sources(), paths.host(), rebuild)
+    summary = ingest.run(paths.store(), paths.lock(), sources(), paths.host(), rebuild)
+    assert summary is not None  # It waited for the lock.
+    return summary
 
 
 def fresh(args: argparse.Namespace) -> None:
-    """Ingests first when the store is older than `MAX_AGE`, unless `--no-ingest`."""
+    """Ingests first when the store is older than `MAX_AGE`, unless `--no-ingest`. When
+    another ingest is already running, such as the page server's, the query answers from
+    the store as it is rather than waiting for it."""
     if not args.no_ingest and ingest.stale(paths.store(), MAX_AGE):
-        update()
+        ingest.run(paths.store(), paths.lock(), sources(), paths.host(), wait=False)
 
 
 def reader() -> sqlite3.Connection:
