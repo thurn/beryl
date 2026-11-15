@@ -80,7 +80,7 @@ impl Inputs {
             if spec
                 .condition
                 .as_ref()
-                .is_some_and(|condition| condition_reads_life(condition))
+                .is_some_and(condition_reads_life)
             {
                 inputs = inputs.union(Inputs::LIFE);
             }
