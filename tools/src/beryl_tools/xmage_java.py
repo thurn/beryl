@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -190,8 +191,17 @@ def trample_amount(faces: Faces, attacker: str, blocker: str) -> int | None:
     return toughness
 
 
+def xmage_spelling(text: str) -> str:
+    """`text` as XMage spells it: accents dropped and Æ written Ae, so `Dandân` is `Dandan`
+    (XMage's set files and card classes are ASCII). Other characters stay."""
+    folded = unicodedata.normalize("NFKD", text.replace("Æ", "Ae").replace("æ", "ae"))
+    return "".join(c for c in folded if not unicodedata.combining(c))
+
+
 def java_string(text: str) -> str:
-    return json.dumps(text, ensure_ascii=False)
+    """`text` as a Java string literal, in XMage's spelling: every name the exporter writes
+    goes through here, so an accented card is found by XMage."""
+    return json.dumps(xmage_spelling(text), ensure_ascii=False)
 
 
 def class_name(card: str) -> str:

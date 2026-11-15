@@ -114,6 +114,23 @@ def test_payments_are_left_to_xmage_where_land_types_change() -> None:
     assert repeated.unsupported == "a payment after one XMage chose the sources of"
 
 
+def test_an_accented_card_is_exported_in_xmages_spelling() -> None:
+    # XMage lists Dandân as "Dandan", so a scenario naming it is neither unsupported nor
+    # written into the Java with the accent.
+    name = "Get Lost on a creature gives two Maps; one explores a land into hand"
+    dump = json.loads(FIXTURE.read_text())
+    entry = json.loads(json.dumps(next(e for e in dump if e["name"] == name)))
+    entry = json.loads(json.dumps(entry).replace("Island", "Islând"))
+    faces = xmage_java.Faces.load(card_store.STORE)
+    export = xmage_export.export_one(entry, 1, faces, XMAGE_CARDS)
+    assert export.unsupported is None, export.unsupported
+    java = "\n".join(export.body)
+    assert '"Island"' in java
+    assert "â" not in java
+    assert xmage_java.xmage_spelling("Dandân") == "Dandan"
+    assert xmage_java.xmage_spelling("Æther Vial") == "Aether Vial"
+
+
 def test_tapped_assertions_are_skipped_after_xmage_chose_a_payments_sources() -> None:
     # Beryl paid Get Lost with Urborg and a Plains where XMage may tap two Plains, so whether
     # Urborg is tapped afterwards depends on XMage's choice, not on the rules.

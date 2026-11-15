@@ -8,7 +8,7 @@ from typing import cast
 
 from .card_facts import Json, Unsupported
 from .xmage import Exporter
-from .xmage_java import Export, Faces, method_name, setup_cards
+from .xmage_java import Export, Faces, method_name, setup_cards, xmage_spelling
 
 
 def export_one(entry: Json, index: int, faces: Faces, cards: set[str]) -> Export:
@@ -20,7 +20,10 @@ def export_one(entry: Json, index: int, faces: Faces, cards: set[str]) -> Export
     if "failure" in entry:
         export.unsupported = f"Beryl fails it: {entry['failure']}"
         return export
-    missing = sorted(set(setup_cards(entry)) - cards)
+    known = {xmage_spelling(c) for c in cards}
+    missing = sorted(
+        c for c in set(setup_cards(entry)) if xmage_spelling(c) not in known
+    )
     if missing:
         export.unsupported = f"XMage lacks {', '.join(missing)}"
         return export
