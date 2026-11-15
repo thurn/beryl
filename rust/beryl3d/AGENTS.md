@@ -131,10 +131,13 @@ project, and selects the main lanes.
   `just b3d gate --counts` (a step of the sweep, `benches/frame_counts.rs` in
   `beryl_inspect`), and `--counts --update` lowers them. A count may pass its
   limit by the tolerance, 1%, which absorbs inlining and layout shifts from
-  unrelated changes; the work counters' limits have none. A limit rises only
-  when the work itself changed (a new verb, a new element on every screen) or a
-  compiler or dependency upgrade moved the count with no change to Beryl's code,
-  and the commit that raises it gives the old and new numbers. It needs nobody's
+  unrelated changes; the work counters' limits have none. A count below its
+  limit (past the tolerance, for instructions) fails too: a change that cuts the
+  work lowers the limit in the same commit, so that no room is left for a later
+  change to add work back unseen. A limit rises only when the work itself
+  changed (a new verb, a new element on every screen) or a compiler or
+  dependency upgrade moved the count with no change to Beryl's code, and the
+  commit that raises it gives the old and new numbers. It needs nobody's
   approval.
 
   Under `materials.<name>` are the most texture samples and naga expressions

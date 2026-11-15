@@ -27,8 +27,8 @@
       "worst_frame_blended_area": 0.0,
       "handle_allocations": 1822,
       "frame_allocations": 0,
-      "worst_frame_instructions": 3437301,
-      "total_instructions": 53367887,
+      "worst_frame_instructions": 3087871,
+      "total_instructions": 37895200,
       "tolerance_percent": 1.0
     },
     "stress-1024": {
@@ -47,8 +47,8 @@
       "worst_frame_blended_area": 0.0,
       "handle_allocations": 5164,
       "frame_allocations": 0,
-      "worst_frame_instructions": 13282629,
-      "total_instructions": 200453170,
+      "worst_frame_instructions": 11282982,
+      "total_instructions": 79338353,
       "tolerance_percent": 1.0
     },
     "verbs-zones": {
@@ -67,8 +67,8 @@
       "worst_frame_blended_area": 0.0415,
       "handle_allocations": 7676,
       "frame_allocations": 0,
-      "worst_frame_instructions": 955192,
-      "total_instructions": 101327683,
+      "worst_frame_instructions": 878544,
+      "total_instructions": 100867962,
       "tolerance_percent": 1.0
     },
     "pay-default": {
@@ -87,8 +87,8 @@
       "worst_frame_blended_area": 0.0287,
       "handle_allocations": 702,
       "frame_allocations": 0,
-      "worst_frame_instructions": 357443,
-      "total_instructions": 4629334,
+      "worst_frame_instructions": 346973,
+      "total_instructions": 4624808,
       "tolerance_percent": 1.0
     }
   },

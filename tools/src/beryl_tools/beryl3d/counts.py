@@ -6,9 +6,10 @@ limits in `data/beryl3d/gates.json` under `frames.<board>`:
 - `worst_frame_instructions`: the most instructions in one frame (its `handle` calls and its
   `frame` call), the largest of the counts of the frames `rank` picks from the work counters.
 - `total_instructions`: the whole playback's.
-- `tolerance_percent`: how far a count may pass its limit. Counts are exact, so this is not for
-  noise: it absorbs the small shifts when an unrelated change alters how the compiler inlines
-  and lays out this code, as the engine's count gate does.
+- `tolerance_percent`: how far a count may pass its limit, or fall below it. Counts are exact,
+  so this is not for noise: it absorbs the small shifts when an unrelated change alters how the
+  compiler inlines and lays out this code, as the engine's count gate does. A count further
+  below its limit fails too, until `--update` lowers the limit.
 
 It also checks the ranking: of the frames of the board's stretch, each counted on its own, the
 one with the most instructions must be among the ranked frames.
@@ -134,7 +135,12 @@ def judge(
         if change > tolerance:
             failed.append(f"{line}, over the tolerance of {tolerance}%")
         elif change < -tolerance:
-            said.append(f"{line}; `just b3d gate --counts --update` lowers it")
+            # Room under a limit is room a later change could fill unseen, so a change that
+            # cut the work lowers the limit in the same commit.
+            failed.append(
+                f"{line}, under it by more than the tolerance of {tolerance}%;"
+                " `just b3d gate --counts --update` lowers it"
+            )
         else:
             said.append(line)
     top = max(counts.stretch, key=lambda f: (counts.stretch[f], -f))

@@ -121,3 +121,12 @@ def test_the_gate_binary_names_the_frames_to_count() -> None:
     (board,) = gate.parse(text)
     assert board.ranked == (30, 31)
     assert board.stretch == (29, 33)
+
+
+def test_a_count_below_its_limit_past_the_tolerance_fails() -> None:
+    # Room left under a limit lets a later change add the work back without failing.
+    limits = {"worst_frame_instructions": 80, "total_instructions": 1000}
+    failed, _ = counts.judge("stress-255", measured([50, 70], [10, 50, 70, 20]), limits)
+    assert len(failed) == 1
+    assert "worst_frame_instructions 70, -12.50% against the limit 80" in failed[0]
+    assert "--counts --update" in failed[0]
