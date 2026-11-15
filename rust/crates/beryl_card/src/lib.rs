@@ -55,12 +55,12 @@ pub use definition::{
     CardDef, FACE_DOWN, FACE_DOWN_COPY, Face, FaceAbility, FaceIx, ObjectAbility, card,
 };
 pub use effect::{
-    Amount, CastTerms, Comparison, Condition, CopyException, Effect, Found, LibraryOrder,
-    LibraryPosition, Objects, Players, Prevention, Recipients, Regeneration, Taken,
+    Amount, CastTerms, Comparison, Condition, CopyChange, CopyException, Effect, Found,
+    LibraryOrder, LibraryPosition, Objects, Players, Prevention, Recipients, Regeneration, Taken,
 };
 pub use filter::Filter;
 pub use ids::{Seat, TurnStep, Zone, ZoneSet};
-pub use index::{AbilityIx, CastingIx, GrantIx, ModeIx, SpecIx};
+pub use index::{AbilityIx, CastingIx, ExceptIx, GrantIx, ModeIx, SpecIx};
 pub use mana::{INTRINSIC_MANA, ManaColor, ManaCost, ManaSet, mana};
 pub use prompt::{Part, Place, Prompt, Purpose, Shape};
 pub use target::{Takes, TargetKind, TargetSpec};
@@ -74,11 +74,11 @@ pub mod prelude {
     pub use crate::effect::build::*;
     pub use crate::{
         Ability, Amount, BasicLandTypes, CardDef, CastTerms, CastingKind, CastingOption, Castings,
-        ChosenKind, Colors, Comparison, Condition, Cost, CostAction, CostPart, CounterKind,
-        Duration, Effect, Face, FaceIx, Filter, Found, Governed, Keywords, LayerSpec, LibraryOrder,
-        LibraryPosition, ManaColor, ManaCost, ManaSet, Modification, Named, Objects, Place,
-        Players, Prevention, Prompt, Protection, Purpose, Recipients, Replacement, RuleChange,
-        Subtype, Subtypes, Supertypes, Taken, TargetKind, TargetSpec, Trigger, TriggerEvent,
-        TurnStep, Types, When, Zone, card, mana,
+        ChosenKind, Colors, Comparison, Condition, CopyChange, CopyException, Cost, CostAction,
+        CostPart, CounterKind, Duration, Effect, Face, FaceIx, Filter, Found, Governed, Keywords,
+        LayerSpec, LibraryOrder, LibraryPosition, ManaColor, ManaCost, ManaSet, Modification,
+        Named, Objects, Place, Players, Prevention, Prompt, Protection, Purpose, Recipients,
+        Replacement, RuleChange, Subtype, Subtypes, Supertypes, Taken, TargetKind, TargetSpec,
+        Trigger, TriggerEvent, TurnStep, Types, When, Zone, card, mana,
     };
 }

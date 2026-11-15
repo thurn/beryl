@@ -132,8 +132,6 @@ pub struct Permanent {
     pub controller: u8,
     #[serde(default)]
     pub token: bool,
-    #[serde(default)]
-    pub one_one: bool,
     /// 0 front, 1 back, 255 face down.
     #[serde(default)]
     pub face: u8,

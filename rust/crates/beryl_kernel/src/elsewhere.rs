@@ -126,7 +126,7 @@ impl<L: Layout> State<L> {
     /// The filter of the effect `reach` names and the change its part makes: the part as the
     /// layers resolve it for the source's controller, the chosen color read from the source.
     fn reach_change(&self, t: &GameTable, reach: Reach<L>) -> (Filter, LayerChange) {
-        let ability = &self.copiable(reach.source).face(t).abilities[usize::from(reach.ability)];
+        let ability = &self.definition(reach.source).face(t).abilities[usize::from(reach.ability)];
         let Some(spec) = ability.layer() else {
             unreachable!("the layers list only static abilities with a continuous effect");
         };

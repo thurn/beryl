@@ -9,9 +9,9 @@ use crate::fixed::Full;
 pub use beryl_card::{
     Ability, AbilityIx, AbilityKind, Amount, BasicLandTypes, Behavior, CardDef, CastingIx,
     CastingKind, CastingKinds, CastingOption, Castings, Chosen, ChosenKind, Colors, Condition,
-    Cost, CostAction, CostPart, Custom, Effect, FACE_DOWN, FACE_DOWN_COPY, Face, FaceAbility,
-    FaceIx, GrantIx, INTRINSIC_MANA, Keywords, Layer, LayerSpec, ManaColor, ManaCost, ManaSet,
-    Measure, Modification, ObjectAbility, Objects, Part, Place, Players, Prompt, Purpose,
+    Cost, CostAction, CostPart, Custom, Effect, ExceptIx, FACE_DOWN, FACE_DOWN_COPY, Face,
+    FaceAbility, FaceIx, GrantIx, INTRINSIC_MANA, Keywords, Layer, LayerSpec, ManaColor, ManaCost,
+    ManaSet, Measure, Modification, ObjectAbility, Objects, Part, Place, Players, Prompt, Purpose,
     Recipients, Replaced, Replacement, Rewrite, RuleChange, Says, Shape, SpecIx, Subject, Subtype,
     SubtypeWords, Subtypes, Supertypes, Taken, Takes, TargetKind, TargetSpec, Timing, Trigger,
     TriggerEvent, Types, Words, counter_kinds, mana,

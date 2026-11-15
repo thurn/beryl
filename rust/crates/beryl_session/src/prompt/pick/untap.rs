@@ -81,7 +81,7 @@ fn colors<L: Layout>(table: &Table<'_, L>, slot: ObjectId) -> u8 {
     let Some(slot) = L::Slot::from_num(slot.0) else {
         return 0;
     };
-    let face = table.shown.copiable(slot).face(table.t);
+    let face = table.shown.definition(slot).face(table.t);
     (face.abilities.iter())
         .filter(|a| a.kind() == AbilityKind::Mana)
         .fold(0, |kinds, a| kinds | a.produces().colors)

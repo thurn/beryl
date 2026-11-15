@@ -8,6 +8,7 @@ use crate::effect::build::{
 };
 use crate::effect::{Found, LibraryOrder, Taken};
 use crate::ids::TurnStep;
+use crate::index::ExceptIx;
 use crate::mana::mana;
 use crate::mana::{ManaColor, ManaSet};
 use crate::target::TargetSpec;
@@ -101,13 +102,14 @@ fn a_grant_the_face_does_not_list_is_refused() {
 }
 
 #[test]
-fn a_copy_that_is_not_one_one_is_refused() {
-    const COPY: &[Ability] = &[Ability::spell().effect(&Effect::CreateCopies {
+fn a_copy_with_an_exception_its_face_does_not_list_is_refused() {
+    const EXCEPTED: Effect = Effect::CreateCopies {
         player: you(),
         of: Objects::This,
         count: Amount::Fixed(1),
-        except: CopyException::PowerToughness(2, 2),
-    })];
+        except: Some(ExceptIx::new(0)),
+    };
+    const COPY: &[Ability] = &[Ability::spell().effect(&EXCEPTED)];
     assert_eq!(checked(COPY), Err(Malformed::Copy));
 }
 

@@ -238,8 +238,8 @@ pub mod zones;
 // kernel from the kernel, or from the facade. What the rules do export of it stands beside
 // items of their own, in `layout`, `profile` and `event`.
 pub(crate) use beryl_kernel::{
-    PlayerSet, bitboard, chance, decision, filter, fixed, ids, invariants, observation, query,
-    replacement, state, static_ability, table, zone,
+    PlayerSet, additions, bitboard, chance, decision, definition, filter, fixed, ids, invariants,
+    observation, query, replacement, state, static_ability, table, zone,
 };
 
 /// The kernel's storage layouts.

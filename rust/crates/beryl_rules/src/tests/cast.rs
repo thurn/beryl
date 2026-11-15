@@ -5,7 +5,9 @@ use beryl_card::effect::build::{
     change_rule, counter, counter_and_exile, destroy as destroy_it, discard, draw, gain_flashback,
     its_controller, permit_cast, return_to_hand, sequence, target, unless_pays, you,
 };
-use beryl_card::{CastTerms, Condition, Effect, Governed, Objects, RuleChange, Says, Takes, When};
+use beryl_card::{
+    CastTerms, Condition, CopyException, Effect, Governed, Objects, RuleChange, Says, Takes, When,
+};
 
 use crate::actions::destroy::destroy;
 use crate::bitboard::Bitboard;
@@ -369,6 +371,7 @@ pub(crate) static TRAINER: CardDef = CardDef {
         power: Some(1),
         toughness: Some(2),
         casting: &[CastingOption::Offspring(ManaCost::generic(1))],
+        excepts: &[CopyException::ONE_ONE],
         ..Face::EMPTY
     }],
 };

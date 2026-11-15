@@ -52,7 +52,7 @@ fn commutes(a: LayerChange, b: LayerChange) -> bool {
 pub(crate) fn order_may_matter<L: Layout>(s: &State<L>, t: &GameTable, slots: &[L::Slot]) -> bool {
     slots.iter().enumerate().any(|(i, &a)| {
         slots[i + 1..].iter().any(|&b| {
-            s.copiable(a).record(t) != s.copiable(b).record(t)
+            s.definition(a).record(t) != s.definition(b).record(t)
                 && parts(s, t, a).any(|x| parts(s, t, b).any(|y| x.interacts(y)))
         })
     })
@@ -70,7 +70,7 @@ fn parts<'a, L: Layout>(
     t: &'a GameTable,
     slot: L::Slot,
 ) -> impl Iterator<Item = Part> + 'a {
-    let what = s.copiable(slot);
+    let what = s.definition(slot);
     let face = what.face(t);
     let (_, face_ix) = what.record(t);
     let you = s.controller(slot);

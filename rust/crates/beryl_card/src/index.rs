@@ -100,6 +100,14 @@ index! {
 }
 
 index! {
+    /// Which of a face's copy exceptions: an index into [`crate::Face::excepts`], as
+    /// [`crate::Effect::CreateCopies`] names the exception its copies are made with
+    /// ([CR 707.9](https://yawgatog.com/resources/magic-rules/#R7079)): "Copy effects may
+    /// include modifications or exceptions to the copying process."
+    ExceptIx
+}
+
+index! {
     /// Which mode of a modal spell or ability
     /// ([CR 700.2](https://yawgatog.com/resources/magic-rules/#R7002)): "A spell or ability
     /// is modal if it has two or more options in a bulleted list preceded by instructions for

@@ -2,6 +2,7 @@
 //! (CR 307.1, CR 117.1a), and the ability a stack entry resolves.
 
 use crate::card::{Ability, Face, FaceAbility, Keywords, ObjectAbility, Types};
+use crate::definition::Definition;
 use crate::ids::Seat;
 use crate::layout::Layout;
 use crate::rule_change;
@@ -38,15 +39,15 @@ pub(super) fn activated<L: Layout>(
     s: &State<L>,
     slot: L::Slot,
     ability: ObjectAbility,
-) -> Option<(crate::query::Copiable<L>, FaceAbility)> {
+) -> Option<(Definition<L>, FaceAbility)> {
     match ability {
-        ObjectAbility::Own(i) => Some((s.copiable(slot), FaceAbility::Own(i))),
+        ObjectAbility::Own(i) => Some((s.definition(slot), FaceAbility::Own(i))),
         ObjectAbility::Granted(k) => {
             if s.object(slot).zone() != Zone::Battlefield {
                 return None;
             }
             let grant = s.derived(slot).granted[usize::from(k)]?;
-            let granter = crate::query::Copiable::of_card(grant.card);
+            let granter = Definition::of_card(grant.card);
             Some((granter, FaceAbility::Grant(grant.grant)))
         }
     }

@@ -194,7 +194,7 @@ pub(crate) fn listening_of_all<L: Layout>(s: &State<L>, t: &GameTable) -> (Liste
     s.battlefield()
         .iter()
         .fold((Listens::NONE, Replaces::NONE), |(l, r), &slot| {
-            let what = s.copiable(slot);
+            let what = s.definition(slot);
             (l | what.may_listen(t), r | what.may_replace(t))
         })
 }
@@ -215,7 +215,7 @@ pub(crate) fn listening<L: Layout>(
             if { row.lost } == L::AbilityMask::ALL {
                 return (l, r);
             }
-            let what = s.copiable(slot);
+            let what = s.definition(slot);
             (l | what.may_listen(t), r | what.may_replace(t))
         },
     )
@@ -299,7 +299,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable, trials: &mut u64) -> Re
     // while it stays so and saves reading the results.
     let inputs = if t.can(Capability::LayerInputs) {
         (s.battlefield().iter()).fold(Inputs::NONE, |inputs, &slot| {
-            inputs.union(s.copiable(slot).layer_inputs(t))
+            inputs.union(s.definition(slot).layer_inputs(t))
         })
     } else {
         Inputs::NONE
@@ -335,12 +335,13 @@ fn apply_layers<L: Layout>(
     for i in 0..s.battlefield().len() {
         let slot = s.battlefield()[i];
         // Layer 1: the copiable values (CR 613.2a). A token copy's are those of what it
-        // copies, with the 1/1 exception of CR 707.9b.
-        let what = s.copiable(slot);
+        // copies, with the exceptions it was made with (CR 707.9b).
+        let what = s.definition(slot);
         let f = what.face(t);
+        let (power, toughness) = s.copiable_pt(t, slot);
         s.results()[i] = Derived {
-            power: what.power(t),
-            toughness: what.toughness(t),
+            power,
+            toughness,
             types: f.types,
             supertypes: f.supertypes,
             colors: f.colors,
@@ -428,7 +429,7 @@ fn static_ability_of<L: Layout>(
     if a.order & GRANTED != 0 {
         &t.def(a.source).front().grants[usize::from(a.order & !GRANTED)]
     } else {
-        &s.copiable(s.battlefield()[position::<L>(from)])
+        &s.definition(s.battlefield()[position::<L>(from)])
             .face(t)
             .abilities[usize::from(a.order)]
     }
@@ -764,7 +765,7 @@ fn resolved_effects<L: Layout>(
 fn player_rules<L: Layout>(s: &mut Rederive<'_, L>, t: &GameTable) -> PerSeat<Rules> {
     let mut rules = [Rules::NONE; _];
     for i in 0..s.battlefield().len() {
-        let what = s.copiable(s.battlefield()[i]);
+        let what = s.definition(s.battlefield()[i]);
         let made = what.player_rules(t);
         if made.is_empty() {
             continue;

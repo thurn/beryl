@@ -164,7 +164,7 @@
 //! | `EXILED_UNTIL`, `EXILED_WITH`, `Object::linked`, `State::link`, `zone::forget_exiled_with` | Memos: a memo of the exiled card naming the slot of what exiled it ([`memos::Memo::ExiledWith`], [`memos::Memo::ExiledUntil`]; "Duration and expiry" says how the first outlives that object), read by [`State::exiled_with`] and [`State::exiled_until`] | by-w8gv.7.7, built |
 //! | `LOYALTY_ACTIVATED`, `ENTERED_THIS_TURN` | Trackers, keyed by permanent: a kind of [`trackers::Tracker`] each, noted with [`State::track`] and read with [`State::tracked`] | by-w8gv.7.8, built |
 //! | [`state::Counters`]' long-tail pair (`other_kind`, `other`) | the counters table ([`counters::CounterTable`]), a row for each kind on each object, beside the three kinds the rules themselves read, which stay fields of the object. The kinds are the vocabulary's list (`beryl_card::counter_kinds`), and [`State::add_counters`], [`State::remove_counters`] and [`State::counters_of`] take any of them | by-w8gv.7.9, built |
-//! | `Flag::OneOne` | stays a field. It is a copy's exception (CR 707.9b), part of the copiable values the rules give a token, and survives its zone changes as `TOKEN` does. That a flag holds exactly one exception is the copy effects' to widen (`docs/rules-coverage.md` §4), not a store's | none |
+//! | `Flag::OneOne` | Effects: a copy effect on the token ([`effects::Payload::Copy`]) holding its copiable values with their exceptions ([`additions::Addition`], CR 707.9b), behind [`state::Flag::Copy`] so that [`State::copiable`] of any other object is one bit test. The zone move carries a token's copy effect to its next incarnation ([`effects::copy`]) | by-bajq.6.1, built |
 //!
 //! A fact about a permanent that ends with the turn (a loyalty ability was activated, it
 //! entered this turn) is a tracker keyed by object, not a memo with an expiry. A memo is
@@ -228,7 +228,8 @@
 //! since [`state::Object`] is aligned to two bytes and 22 bytes long, where it was 24: 504
 //! fewer, the 510 of the 255 slots less 6 of padding. It is 19,856 since the list of
 //! effects that reach other zones ([`elsewhere`]): four entries of 3 bytes and the list's
-//! length, 16 with padding.
+//! length, 16 with padding. It is 19,888 since a [`query::Copiable`] holds two copy
+//! exceptions: each of the 16 last-known rows is 60 bytes, 2 more.
 //! The limit is 20,480. Each bead may change the size at its
 //! own push by at most its allotment, whatever landed before it, and reports the size as it
 //! reports the count:
@@ -249,7 +250,7 @@
 //! | by-bajq.4.3 | -300 or lower (landed: -504) | each object is 22 bytes, where alignment made it 24 |
 //! | by-bajq.5.1 | +48 (landed: +16) | up to four effects that reach other zones, beside the layer results |
 //! | by-bajq.5.3 | +136 | a byte in each of the 64 stack entries naming its captured text changes, and the table of four captured sets |
-//! | by-bajq.6.1 | +72 | two copy exceptions in each `Copiable`, which each of the 16 last-known rows holds |
+//! | by-bajq.6.1 | +72 (landed: +32) | two copy exceptions in each `Copiable`, which each of the 16 last-known rows holds |
 //! | by-bajq.7.4 | +48 | up to four entries of mana that remembers in each player's pool |
 //! | by-bajq.8.3 | +16 | the count of mandatory resolutions in a row and the hash it compares, padded |
 //! | by-bajq.8.4 | +32 | a set of the phased-out permanents' slots |
@@ -575,6 +576,7 @@
 //! | --- | --- |
 //! | the card that represents an object: nothing for a token (CR 111.1, 111.6) | [`State::card_behind`] |
 //! | what it is before any other effect, and what a copy of it would be (CR 707.2) | [`State::copiable`], a [`Copiable`] |
+//! | the definition and face it has the values of, for what the card table keeps per definition and no copy exception changes | [`State::definition`], a [`definition::Definition`]; its power and toughness before the other layers, [`State::copiable_pt`] |
 //! | its mana value: a spell's with its X (CR 202.3e), a transformed permanent's front face's and a copied back face's 0 (CR 712.6d) | [`State::mana_value`] |
 //! | who controls it: a permanent's layer result, a spell's caster, elsewhere the owner (CR 108.4a) | [`State::controller`] |
 //! | its power and toughness: the layer results on the battlefield, the copiable values elsewhere | [`State::power`], [`State::toughness`] |
@@ -596,8 +598,11 @@
 //! | the objects another record of the state names, which no twin stands in for (architecture §7.2) | [`State::named`] |
 //! | every ability it has now: its face's own it has not lost, then those granted to it (CR 613.1f) | [`State::abilities`], [`State::has`] |
 //!
-//! A [`Copiable`] is a definition, the face of it that is up and a copy effect's exception
-//! (CR 707.9b). It answers with the face's characteristics ([`Copiable::face`], the blank
+//! A [`Copiable`] is a definition, the face of it that is up and the exceptions of the copy
+//! effects that made it ([`additions::Addition`], CR 707.9b): two in `Small`, a third
+//! [`fixed::Full`]. An addition names an exception by the card whose face lists it and its
+//! place in that list ([`beryl_card::Face::excepts`]), so copying takes the exceptions with
+//! the rest and appends the copier's own, and no reader walks a chain of copies. It answers with the face's characteristics ([`Copiable::face`], the blank
 //! ones of CR 708.2 for a face-down permanent), the table's facts about that face, its name,
 //! and its power and toughness. It never hands out the index it holds:
 //!
@@ -705,14 +710,17 @@
 //! [CR 101.2]: https://yawgatog.com/resources/magic-rules/#R1012
 
 pub mod abilities;
+pub mod additions;
 pub mod asking;
 pub mod bitboard;
 pub mod board;
 pub mod cause;
 pub mod chance;
 pub mod chosen;
+mod copiable;
 pub mod counters;
 pub mod decision;
+pub mod definition;
 pub mod derive;
 pub mod effects;
 pub mod elsewhere;

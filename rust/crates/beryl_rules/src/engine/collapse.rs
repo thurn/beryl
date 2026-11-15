@@ -67,7 +67,7 @@ fn collapse_ordered<L: Layout>(
     for slot in slots {
         // The signature holds the card, so objects of other cards are told apart without
         // building theirs.
-        let of_card = |k: L::Slot| s.copiable(k).key() == s.copiable(slot).key();
+        let of_card = |k: L::Slot| s.definition(k).key() == s.definition(slot).key();
         if s.object(slot).face() == FaceIx::DOWN || !kept.any(of_card) {
             kept.insert(slot);
             continue;

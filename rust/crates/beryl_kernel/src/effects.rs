@@ -23,12 +23,14 @@ use crate::ids::{CardId, Seat};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::object::ObjectRef;
 use crate::observation::Observation;
+use crate::query::Copiable;
 use crate::rule_changes::{RuleId, Rules};
 use crate::state::State;
 use crate::store::{Duration, Ended};
 use crate::table::GameTable;
 
 mod change;
+pub mod copy;
 pub mod prevention;
 pub mod regeneration;
 mod sets;
@@ -78,6 +80,16 @@ pub enum Continuous<L: Layout = Small> {
     Regeneration(ObjectRef<L>),
     /// A prevention shield on a player or a permanent ([`prevention`]).
     Prevent(Subject<L>, Shield<L>),
+    /// A copy effect: the object has these copiable values ([CR 707.2]): "When copying an
+    /// object, the copy acquires the copiable values of the original object's
+    /// characteristics". It applies in layer 1 ([CR 613.1a]): "Rules and effects that modify
+    /// copiable values are applied."
+    /// The object's own fields name the definition and face ([`crate::state::Flag::Copy`]),
+    /// and the entry keeps the exceptions ([`copy`]).
+    ///
+    /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
+    /// [CR 613.1a]: https://yawgatog.com/resources/magic-rules/#R6131a
+    Copy(ObjectRef<L>, Copiable<L>),
 }
 
 impl<L: Layout> Continuous<L> {
@@ -89,7 +101,8 @@ impl<L: Layout> Continuous<L> {
             | Continuous::Move(object, _)
             | Continuous::Cast(object, _)
             | Continuous::Cost(object, _)
-            | Continuous::Regeneration(object) => Subject::Object(object),
+            | Continuous::Regeneration(object)
+            | Continuous::Copy(object, _) => Subject::Object(object),
             Continuous::Rule(subject, _) | Continuous::Prevent(subject, _) => subject,
         }
     }
@@ -105,6 +118,7 @@ impl<L: Layout> Continuous<L> {
             Continuous::Cost(_, change) => Payload::Cost(change),
             Continuous::Regeneration(_) => Payload::Regeneration,
             Continuous::Prevent(_, shield) => Payload::Prevent(shield),
+            Continuous::Copy(_, values) => Payload::Copy(values),
         }
     }
 }
@@ -279,6 +293,8 @@ pub enum Payload<L: Layout = Small> {
     Regeneration,
     /// Prevents damage to the affected player or permanent ([`prevention`]).
     Prevent(Shield<L>),
+    /// Gives the affected object these copiable values ([`copy`]).
+    Copy(Copiable<L>),
 }
 
 impl<L: Layout> Payload<L> {
@@ -293,6 +309,7 @@ impl<L: Layout> Payload<L> {
             Payload::Cost(_) => Kinds::COST,
             Payload::Regeneration => Kinds::REGENERATION,
             Payload::Prevent(_) => Kinds::PREVENTION,
+            Payload::Copy(_) => Kinds::COPY,
         }
     }
 }
@@ -310,6 +327,7 @@ impl Kinds {
     const COST: u16 = 1 << 4;
     const REGENERATION: u16 = 1 << 5;
     const PREVENTION: u16 = 1 << 6;
+    const COPY: u16 = 1 << 7;
 }
 
 /// A continuous effect from a resolved spell or ability
@@ -417,7 +435,7 @@ impl<L: Layout> Effects<L> {
                 }
             } else {
                 done.any = true;
-                done.layer_input |= matches!(e.payload, Payload::Layer(_));
+                done.layer_input |= matches!(e.payload, Payload::Layer(_) | Payload::Copy(_));
             }
             kept
         });
@@ -614,6 +632,11 @@ impl<L: Layout> State<L> {
                     debug_assert!(self.is_current(object));
                     self.keyed.insert(object.slot);
                 }
+                Continuous::Copy(object, values) => {
+                    debug_assert!(self.is_current(object));
+                    self.keyed.insert(object.slot);
+                    self.take_copied_values(object, values);
+                }
             }
         }
         if matches!(effect, Continuous::Layer(..)) {
@@ -726,7 +749,7 @@ impl<L: Layout> State<L> {
         match to {
             Subject::Player(player) => self.rules_for(player).contains(rule),
             Subject::Object(object) => {
-                let own = self.copiable(object.slot).rules(t);
+                let own = self.definition(object.slot).rules(t);
                 own.without(t.player_rules())
                     .union(self.effect_rules_on(object))
                     .contains(rule)

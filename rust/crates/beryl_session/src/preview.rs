@@ -289,7 +289,7 @@ pub(crate) fn tapped<L: Layout>(
         o.zone() == Zone::Battlefield && !o.is_tapped()
     };
     let sacrifices_for_mana = |slot: L::Slot| {
-        let face = before.copiable(slot).face(t);
+        let face = before.definition(slot).face(t);
         face.abilities
             .iter()
             .any(|a| a.kind() == AbilityKind::Mana && a.cost().does(CostAction::Sacrifice))

@@ -86,7 +86,7 @@ impl Evaluate for Filter {
         x: u8,
     ) -> bool {
         let o = s.object(slot);
-        let face = || s.copiable(slot).face(t);
+        let face = || s.definition(slot).face(t);
         let derived = || (o.zone == Zone::Battlefield).then(|| s.derived(slot));
         // A permanent's characteristics are the layers' results. Anything else's are its
         // face's while no effect reaches other zones, and the kernel's reads of them

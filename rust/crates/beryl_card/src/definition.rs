@@ -4,6 +4,7 @@
 use crate::ability::{Ability, AbilityKind};
 use crate::characteristics::{Colors, Keywords, Subtypes, Supertypes, Types};
 use crate::cost::{CastingOption, Castings, CostPart};
+use crate::effect::CopyException;
 use crate::index::{AbilityIx, GrantIx};
 use crate::mana::ManaCost;
 use crate::words::SubtypeWords;
@@ -119,6 +120,14 @@ pub struct Face {
     /// ability of Swift Reconfiguration's "Enchanted permanent is a Vehicle artifact with crew
     /// 5". [`Modification::Grant`] names one by its index here.
     pub grants: &'static [Ability],
+    /// The exceptions the copies its abilities make are made with, such as offspring's
+    /// "except it's 1/1". [`Effect::CreateCopies`](crate::Effect::CreateCopies) names one by
+    /// its index here, and a copy keeps that index and this card as an addition to its
+    /// copiable values, so the exception itself is copied with them
+    /// ([CR 707.9b](https://yawgatog.com/resources/magic-rules/#R7079b)): "Some copy effects
+    /// modify a characteristic as part of the copying process. The final set of values for
+    /// that characteristic becomes part of the copiable values of the copy."
+    pub excepts: &'static [CopyException],
 }
 
 impl Face {
@@ -351,6 +360,12 @@ impl Face {
         Face { grants, ..self }
     }
 
+    /// The exceptions its copies are made with ([`Face::excepts`]).
+    #[must_use]
+    pub const fn excepts(self, excepts: &'static [CopyException]) -> Face {
+        Face { excepts, ..self }
+    }
+
     /// The back face of a transforming double-faced card ([`Face::transformed`]).
     #[must_use]
     pub const fn transformed(self) -> Face {
@@ -379,6 +394,7 @@ impl Face {
         transformed: false,
         additional_cost: &[],
         grants: &[],
+        excepts: &[],
     };
 
     /// One of this face's own abilities or of those it grants.

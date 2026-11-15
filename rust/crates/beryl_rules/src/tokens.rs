@@ -2,9 +2,10 @@
 //!
 //! [CR 111]: https://yawgatog.com/resources/magic-rules/#R111
 
-use beryl_card::{Amount, CopyException, Objects, Players};
+use beryl_card::{Amount, ExceptIx, Objects, Players};
 
 use crate::PlayerSet;
+use crate::additions::Addition;
 use crate::bitboard::Bitboard;
 use crate::card::{CardDef, FaceIx, Part, Prompt, Purpose, Stop};
 use crate::choices;
@@ -14,7 +15,7 @@ use crate::event::{self, Entry, Event, Reason};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::{Seat, SlotId};
-use crate::interpret::{Outcome, Run, no_primitive};
+use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
 use crate::query::Copiable;
 use crate::resolution::Resolution;
@@ -73,7 +74,7 @@ pub fn create<L: Layout>(
     // Each token is made in its own slot, with no event; they enter together below, in the
     // batch's order.
     for slot in s.in_candidate_order(tokens) {
-        face = s.make_token(t, slot, controller, what);
+        face = s.make_token(t, slot, controller, what)?;
     }
     let entry = Entry {
         tapped: how.tapped,
@@ -191,14 +192,16 @@ pub(crate) fn create_copies_instruction<L: Layout>(
     players: Players,
     of: Objects,
     count: Amount,
-    except: CopyException,
+    except: Option<ExceptIx>,
 ) -> Result<Outcome<L>, Full> {
     // CR 707.9b: "The final set of values for that characteristic becomes part of the
-    // copiable values of the copy."
-    let excepted = |what: Copiable<L>| match except {
-        CopyException::None => what,
-        CopyException::PowerToughness(1, 1) => what.except_one_one(),
-        CopyException::PowerToughness(..) => no_primitive(&except),
+    // copiable values of the copy." The exception is one the ability's own face lists, and
+    // the copy takes it after those of what it copies (CR 707.9b).
+    let entry = &run.resolution().entry;
+    let addition = except.map(|ix| Addition::new(entry.card(), entry.face(), ix));
+    let excepted = |what: Copiable<L>| match addition {
+        Some(addition) => what.with_addition(addition),
+        None => Ok(what),
     };
     let count = run.scene().amount(count);
     if count == 0 {
@@ -209,7 +212,7 @@ pub(crate) fn create_copies_instruction<L: Layout>(
     let mut copy = |game: &mut Game<'_, L>, what: Copiable<L>| -> Result<(), Full> {
         for player in game.state.players_in_turn_order(who) {
             let how = TokenEntry::default();
-            created |= create(game, player, excepted(what), count, how)?;
+            created |= create(game, player, excepted(what)?, count, how)?;
         }
         Ok(())
     };

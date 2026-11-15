@@ -13,7 +13,7 @@ const FORECAST_TURNS: i32 = 5;
 const WIN_PREMIUM: i32 = 200;
 
 pub(super) fn value<L: Layout>(t: &GameTable, s: &State<L>, slot: L::Slot) -> i32 {
-    let face = s.copiable(slot).face(t);
+    let face = s.definition(slot).face(t);
     let abilities = (0u8..)
         .zip(face.abilities)
         .filter(|&(index, a)| {

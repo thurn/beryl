@@ -11,7 +11,7 @@ use crate::characteristics::Types;
 use crate::continuous::Duration;
 use crate::definition::CardDef;
 use crate::effect::{
-    Amount, CopyException, Effect, Found, LibraryOrder, LibraryPosition, Objects, Players,
+    Amount, CopyChange, Effect, Found, LibraryOrder, LibraryPosition, Objects, Players,
     Regeneration, Taken,
 };
 use crate::filter::Filter;
@@ -293,14 +293,22 @@ impl Ctx {
                 except,
             } => vec![self.clause(player, ("create", "creates"), |c| {
                 let of = c.objects(of);
-                match (except, count) {
-                    (CopyException::PowerToughness(p, t), _) => {
+                let changes = except
+                    .and_then(|ix| c.face?.excepts.get(ix.index()))
+                    .map_or(&[][..], |exception| exception.0);
+                // The power and toughness the last change sets (CR 707.9b): "The final set of
+                // values for that characteristic becomes part of the copiable values".
+                let pt = changes.last().map(|change| match *change {
+                    CopyChange::PowerToughness(p, t) => (p, t),
+                });
+                match (pt, count) {
+                    (Some((p, t)), _) => {
                         format!("{} token copy of {of}", with_article(&format!("{p}/{t}")))
                     }
-                    (CopyException::None, Amount::Fixed(1)) => {
+                    (None, Amount::Fixed(1)) => {
                         format!("a token that's a copy of {of}")
                     }
-                    (CopyException::None, count) => {
+                    (None, count) => {
                         let tokens = c.count_of(count, "token", "tokens");
                         format!("{tokens} that are copies of {of}")
                     }

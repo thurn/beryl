@@ -9,10 +9,12 @@
 
 use beryl_card::FaceIx;
 
+use crate::additions::Addition;
 use crate::event::Sink;
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
+use crate::query::Copiable;
 use crate::stack::StackItem;
 use crate::state::{
     Count, CounterKind, Flag, ManaPool, Memo, MulliganStatus, Pending, State, Tracker, TurnStep,
@@ -174,7 +176,9 @@ impl<L: Layout> Board<'_, L> {
 
     /// Creates a token of the game-table card `card` on the battlefield, owned and controlled by
     /// `owner` ([CR 111.2]: "The player who creates a token is its owner"), with face `face` up
-    /// and, for a copy that is 1/1 by exception, `one_one` ([CR 707.9b]). No ability triggers: it
+    /// and, for a copy made with exceptions, those exceptions as `additions` ([CR 707.9b]): "The
+    /// final set of values for that characteristic becomes part of the copiable values of the
+    /// copy." No ability triggers: it
     /// is already there. Like [`Board::place`], it has been there since its controller's turn
     /// began.
     ///
@@ -185,12 +189,16 @@ impl<L: Layout> Board<'_, L> {
         owner: Seat,
         card: L::Card,
         face: FaceIx,
-        one_one: bool,
+        additions: &[Addition<L::Card>],
     ) -> Result<L::Slot, Full> {
         let slot = L::Slot::pool()
             .find(|&slot| self.0.object(slot).zone == Zone::Nowhere)
             .ok_or(Full)?;
-        self.0.ready_token(slot, owner, card, one_one);
+        let mut values = Copiable::of_card(card);
+        for &addition in additions {
+            values = values.with_addition(addition)?;
+        }
+        self.0.ready_token(slot, owner, values)?;
         self.place(slot, Zone::Battlefield)?;
         if face != FaceIx::FRONT {
             self.set_face(slot, face);

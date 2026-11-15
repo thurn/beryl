@@ -9,6 +9,8 @@
 
 use beryl_card::{CounterKind, FaceIx, Types, Zone};
 
+use crate::additions::Addition;
+use crate::effects::Continuous;
 use crate::event::{Event, Recipient};
 use crate::fixed::Full;
 use crate::ids::Seat;
@@ -17,6 +19,7 @@ use crate::object::{AttackTarget, CombatRole, Flag, ObjectFlags, ObjectRef, Slot
 use crate::query::Copiable;
 use crate::state::State;
 use crate::static_ability::Inputs;
+use crate::store::Duration;
 use crate::table::GameTable;
 
 /// How a permanent enters the battlefield, as the rules decided once its replacement effects
@@ -230,37 +233,61 @@ impl<L: Layout> State<L> {
     /// ([CR 707.8a]): "If the token is a copy of a double-faced permanent with its back face up,
     /// the token enters the battlefield with its back face up."
     ///
+    /// Values with exceptions are a copy effect on the token ([`Continuous::Copy`]), which
+    /// lasts as long as it exists, so the exceptions are part of its copiable values
+    /// ([CR 707.9b]): "The final set of values for that characteristic becomes part of the
+    /// copiable values of the copy." [`Full`] if the Effects store has no room for it.
+    ///
     /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
     /// [CR 111.2]: https://yawgatog.com/resources/magic-rules/#R1112
     /// [CR 707.8a]: https://yawgatog.com/resources/magic-rules/#R7078a
+    /// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
     #[inline]
-    #[must_use]
     pub fn make_token(
         &mut self,
         t: &GameTable,
         slot: L::Slot,
         owner: Seat,
         what: Copiable<L>,
-    ) -> FaceIx {
-        let (card, face) = what.record(t);
-        self.ready_token(slot, owner, card, what.is_one_one());
-        face
+    ) -> Result<FaceIx, Full> {
+        let (_, face) = what.record(t);
+        self.ready_token(slot, owner, what.recorded(t))?;
+        Ok(face)
     }
 
-    /// [`State::make_token`] of the definition at `card`, `one_one` for a copy that is 1/1 by
-    /// exception ([CR 707.9b]).
-    ///
-    /// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
+    /// [`State::make_token`] of values already as a record keeps them
+    /// ([`Copiable::recorded`]).
     #[inline]
-    pub(crate) fn ready_token(&mut self, slot: L::Slot, owner: Seat, card: L::Card, one_one: bool) {
+    pub(crate) fn ready_token(
+        &mut self,
+        slot: L::Slot,
+        owner: Seat,
+        values: Copiable<L>,
+    ) -> Result<(), Full> {
         debug_assert_eq!(self.object(slot).zone, Zone::Nowhere);
         let o = self.object_mut(slot);
-        o.card = card;
+        o.card = values.card();
         o.owner = owner;
         o.base_controller = owner;
         o.flags = ObjectFlags::NONE;
         o.flags.set(Flag::Token, true);
-        o.flags.set(Flag::OneOne, one_one);
+        if values.is_excepted() {
+            self.start_token_copy(slot, values)?;
+        }
+        Ok(())
+    }
+
+    /// Starts the copy effect a token copy made with exceptions is created with. Its source
+    /// is the card whose exception was added last: the card whose ability made the copy.
+    #[cold]
+    #[inline(never)]
+    fn start_token_copy(&mut self, slot: L::Slot, values: Copiable<L>) -> Result<(), Full> {
+        let source = values
+            .additions()
+            .last()
+            .map_or(values.card(), Addition::card);
+        let copy = Continuous::Copy(self.object_ref(slot), values);
+        self.start_effect(source, copy, Duration::Indefinite)
     }
 
     /// Gives the permanent that just entered in `slot` the status it enters with. Part of

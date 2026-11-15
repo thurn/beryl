@@ -44,7 +44,7 @@ impl<L: Layout> Funds<L> {
                 slots.insert(slot);
                 units.add(kinds, u16::from(amount));
                 // Sources a plan consumes are a class per card.
-                let card = consumed.then(|| s.copiable(slot).key());
+                let card = consumed.then(|| s.definition(slot).key());
                 let class = (kinds, amount, other, card);
                 if other || !classes.iter().any(|&c| c == class) {
                     classes.push(class)?;

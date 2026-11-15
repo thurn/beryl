@@ -162,7 +162,7 @@ fn instructions<L: Layout>(
 ) -> Result<(), Full> {
     let s = &*game.state;
     let source = s.object_ref(replacement.permanent);
-    let (card, face) = s.copiable(replacement.permanent).record(game.table);
+    let (card, face) = s.definition(replacement.permanent).record(game.table);
     let of = PendingTrigger {
         of: AbilityRef {
             source: Some(source),

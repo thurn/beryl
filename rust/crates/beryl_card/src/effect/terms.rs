@@ -81,15 +81,26 @@ impl CastTerms {
 
 /// How a copy differs from what it copies
 /// ([CR 707.9](https://yawgatog.com/resources/magic-rules/#R7079)): "Copy effects may include
-/// modifications or exceptions to the copying process."
+/// modifications or exceptions to the copying process." Its changes, applied in order, set
+/// values that become part of the copy's copiable values
+/// ([CR 707.9b](https://yawgatog.com/resources/magic-rules/#R7079b)): "Some copy effects
+/// modify a characteristic as part of the copying process. The final set of values for that
+/// characteristic becomes part of the copiable values of the copy." A face lists its
+/// exceptions ([`crate::Face::excepts`]), and an effect names one by its index.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum CopyException {
-    /// An exact copy.
-    None,
-    /// "Except it's [power]/[toughness]"
-    /// ([CR 707.9b](https://yawgatog.com/resources/magic-rules/#R7079b)): "Some copy effects
-    /// modify a characteristic as part of the copying process. The final set of values for
-    /// that characteristic becomes part of the copiable values of the copy."
+pub struct CopyException(pub &'static [CopyChange]);
+
+impl CopyException {
+    /// "Except it's 1/1", as offspring's copy is made
+    /// ([CR 702.175a](https://yawgatog.com/resources/magic-rules/#R702175a)): "create a token
+    /// that's a copy of it, except it's 1/1."
+    pub const ONE_ONE: CopyException = CopyException(&[CopyChange::PowerToughness(1, 1)]);
+}
+
+/// One change a [`CopyException`] makes to the values a copy takes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CopyChange {
+    /// "Except it's [power]/[toughness]" (CR 707.9b).
     PowerToughness(i8, i8),
 }
 

@@ -426,7 +426,7 @@ fn activation_options<L: Layout, const TARGETS: bool>(
     // Most objects have no activated ability; leaving them out before collapsing saves
     // comparing them. Whether one has is part of what collapsing compares (its card, face
     // and granted abilities), so the result is the same.
-    let facts = |slot: L::Slot| s.copiable(slot).facts(t);
+    let facts = |slot: L::Slot| s.definition(slot).facts(t);
     let granted_any = t.can(Capability::Grants);
     let objects = objects.filter(|slot| {
         facts(slot).activates() || (granted_any && s.has(slot, ObjectAbility::Granted(0)))

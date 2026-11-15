@@ -715,7 +715,7 @@ impl AbilityRef {
     fn of<L: Layout>(t: &GameTable, s: &State<L>, slot: L::Slot, ability: ObjectAbility) -> Self {
         match ability {
             ObjectAbility::Own(i) => {
-                let face = s.copiable(slot).face(t);
+                let face = s.definition(slot).face(t);
                 let before = face.abilities[..i.index()]
                     .iter()
                     .filter(|a| matches!(a.kind(), AbilityKind::Activated | AbilityKind::Mana))

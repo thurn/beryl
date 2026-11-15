@@ -6,7 +6,7 @@ use crate::{
     ability::Ability,
     continuous::{MODIFY_PARTS, Modification},
     definition::Face,
-    effect::{Amount, Condition, CopyException, Effect, Objects, Players},
+    effect::{Amount, Condition, Effect, Objects, Players},
     filter::Filter,
 };
 
@@ -33,7 +33,8 @@ pub enum Malformed {
     NoModification,
     /// A resolving continuous effect of more parts than [`MODIFY_PARTS`].
     Parts,
-    /// [`CopyException::PowerToughness`] other than 1/1, which is all the engine's copy makes.
+    /// An [`Effect::CreateCopies`] naming a copy exception its face does not list
+    /// ([`Face::excepts`]).
     Copy,
     /// [`Effect::AddMana`] outside a mana ability, whose activator chooses the kind
     /// ([CR 605.1a](https://yawgatog.com/resources/magic-rules/#R6051a)): any other ability

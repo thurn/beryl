@@ -23,12 +23,12 @@ use crate::cost::Cost;
 use crate::counter::CounterKind;
 use crate::definition::CardDef;
 use crate::effect::{
-    Amount, CastTerms, Comparison, Condition, CopyException, Effect, Found, LibraryOrder,
-    LibraryPosition, Objects, Players, Prevention, Recipients, Regeneration, Taken,
+    Amount, CastTerms, Comparison, Condition, Effect, Found, LibraryOrder, LibraryPosition,
+    Objects, Players, Prevention, Recipients, Regeneration, Taken,
 };
 use crate::filter::Filter;
 use crate::ids::Zone;
-use crate::index::{AbilityIx, SpecIx};
+use crate::index::{AbilityIx, ExceptIx, SpecIx};
 use crate::mana::{ManaColor, ManaCost, ManaSet};
 use crate::prompt::Prompt;
 
@@ -538,7 +538,18 @@ pub const fn create_copy(player: Players, of: Objects) -> Effect {
         player,
         of,
         count: Amount::Fixed(1),
-        except: CopyException::None,
+        except: None,
+    }
+}
+
+/// [`Effect::CreateCopies`] of one copy made with the exception at `except` among those the
+/// ability's face lists: "[player] creates a token that's a copy of [object], except ...".
+pub const fn create_copy_except(player: Players, of: Objects, except: ExceptIx) -> Effect {
+    Effect::CreateCopies {
+        player,
+        of,
+        count: Amount::Fixed(1),
+        except: Some(except),
     }
 }
 

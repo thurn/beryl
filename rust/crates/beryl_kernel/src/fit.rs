@@ -169,6 +169,9 @@ impl<L: Layout> State<L> {
             self.last_known.len(),
             capacity(|s: &State<M>| &s.last_known),
         )?;
+        for row in self.last_known.iter() {
+            row.copiable.fits::<M>()?;
+        }
         self.stores_fit::<M>()?;
         for player in self.players.iter() {
             room(

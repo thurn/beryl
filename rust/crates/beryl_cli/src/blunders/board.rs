@@ -81,7 +81,7 @@ pub fn arrange(t: &GameTable, b: &Board) -> Result<State, String> {
             let card: CardIx = t
                 .index_named(&m.card)
                 .ok_or_else(|| format!("no card makes a {}", m.card))?;
-            let token = s.board().place_token(owner, card, face, m.one_one);
+            let token = s.board().place_token(owner, card, face, &[]);
             token.map_err(full)?
         } else {
             let slot = from_library(&s, owner, &m.card)?;

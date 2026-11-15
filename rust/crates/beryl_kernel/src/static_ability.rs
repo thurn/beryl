@@ -187,7 +187,7 @@ impl<L: Layout> State<L> {
         matches!(kind, CounterKind::PlusOne | CounterKind::MinusOne)
             || self.object(slot).zone() != Zone::Battlefield
             || (self.layer_inputs.contains(Inputs::COUNTERS)
-                && self.copiable(slot).face(t).abilities.iter().any(|a| {
+                && self.definition(slot).face(t).abilities.iter().any(|a| {
                     a.layer()
                         .and_then(|spec| spec.condition.as_ref())
                         .is_some_and(|condition| reads_counters(condition, kind))

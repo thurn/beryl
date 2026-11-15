@@ -41,7 +41,7 @@ impl<L: Layout> State<L> {
     /// results are stale.
     #[inline]
     pub fn abilities<'s>(&'s self, t: &'s GameTable, slot: L::Slot) -> Abilities<'s, L> {
-        let face = self.copiable(slot).face(t).abilities;
+        let face = self.definition(slot).face(t).abilities;
         // In a game where nothing grants an ability, the granted part starts past its end.
         let (granted, next_grant) = if t.can(Capability::Grants) {
             (self.granted_to(slot), 0)

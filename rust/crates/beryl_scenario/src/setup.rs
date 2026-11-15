@@ -98,7 +98,7 @@ fn arrange(t: &GameTable, scenario: &Scenario, slots: Slots) -> Result<State, St
         for b in player.all_permanents() {
             let slot = if b.token {
                 s.board()
-                    .place_token(p, token_index(t, b.card)?, b.face, false)
+                    .place_token(p, token_index(t, b.card)?, b.face, &[])
                     .map_err(full)?
             } else {
                 let slot = library_slot(&s, t, p, b.card);

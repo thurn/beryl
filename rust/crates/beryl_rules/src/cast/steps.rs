@@ -46,7 +46,7 @@ pub(crate) fn begin_cast<L: Layout>(
     };
     let permission = casting::permission(s, player, slot);
     event::move_one(s, t, sink, slot, Zone::Stack, Reason::Cast)?;
-    let (card, _) = s.copiable(slot).record(t);
+    let (card, _) = s.definition(slot).record(t);
     s.become_spell(slot, face, player);
     s.put_on_stack(
         sink,

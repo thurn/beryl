@@ -49,7 +49,7 @@ pub fn return_transformed<L: Layout>(
         return Ok(());
     }
     let owner = game.state.object(card.slot).owner();
-    let (def, _) = game.state.copiable(card.slot).record(game.table);
+    let (def, _) = game.state.definition(card.slot).record(game.table);
     if game.table.def(def).faces.len() < 2 {
         return Ok(());
     }

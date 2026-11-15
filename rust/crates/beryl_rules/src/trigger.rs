@@ -51,7 +51,7 @@ pub(crate) fn away<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::Slot> 
         };
     }
     candidates.filter(|slot| {
-        let (card, _) = s.copiable(slot).record(t);
+        let (card, _) = s.definition(slot).record(t);
         t.works_away(card).contains(s.object(slot).zone())
     })
 }
@@ -92,7 +92,7 @@ pub(crate) fn match_event<L: Layout>(
         if listening.intersects(mask) {
             for i in 0..s.battlefield().len() {
                 let slot = s.battlefield()[i];
-                let what = s.copiable(slot);
+                let what = s.definition(slot);
                 if !what.may_listen(t).intersects(mask) {
                     continue;
                 }
@@ -152,7 +152,7 @@ fn match_away<L: Layout>(
         let zone = s.object(slot).zone();
         let source = s.object_ref(slot);
         let controller = s.controller(slot);
-        let (card, face) = s.copiable(slot).record(t);
+        let (card, face) = s.definition(slot).record(t);
         for l in t.away_listeners(card, face, k) {
             if !l.zones.contains(zone) || !s.has_ability(slot, l.ability) {
                 continue;
@@ -359,7 +359,7 @@ pub(crate) fn match_look_back<L: Layout>(
         let waiting = s.triggers().len();
         for i in 0..s.battlefield().len() {
             let slot = s.battlefield()[i];
-            let what = s.copiable(slot);
+            let what = s.definition(slot);
             let listens = what.may_listen(t);
             if !listens.intersects(mask) {
                 continue;
@@ -428,7 +428,7 @@ fn look_back_away<L: Layout>(
             let source = s.object_ref(slot);
             let controller = s.controller(slot);
             let words = s.words_of(slot);
-            let (card, face) = s.copiable(slot).record(t);
+            let (card, face) = s.definition(slot).record(t);
             let info = TriggerInfo {
                 object: Some(object),
                 player: s.controller(left),
@@ -496,7 +496,7 @@ fn match_states_out_of_line<L: Layout>(s: &mut State<L>, t: &GameTable) -> Resul
     if t.listens_any().hears(kind) && s.listening().unwrap_or(t.listens_any()).hears(kind) {
         for i in 0..s.battlefield().len() {
             let slot = s.battlefield()[i];
-            let what = s.copiable(slot);
+            let what = s.definition(slot);
             if !what.may_listen(t).hears(kind) {
                 continue;
             }
@@ -511,7 +511,7 @@ fn match_states_out_of_line<L: Layout>(s: &mut State<L>, t: &GameTable) -> Resul
     if t.listens_away().hears(kind) {
         for slot in s.in_candidate_order(away(s, t)) {
             let zone = s.object(slot).zone();
-            let (card, face) = s.copiable(slot).record(t);
+            let (card, face) = s.definition(slot).record(t);
             for l in t.away_listeners(card, face, kind) {
                 if l.zones.contains(zone) && s.has_ability(slot, l.ability) {
                     state_trigger(s, t, slot, card, face, l.ability, l.trigger)?;

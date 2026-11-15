@@ -213,7 +213,7 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
         hand.push_bounded(slot); // Their own cards: no more than a fixed layout's deck.
     }
     hand.as_mut_slice()
-        .sort_by_key(|&slot| s.copiable(slot).key());
+        .sort_by_key(|&slot| s.definition(slot).key());
     for card in hand.iter().filter_map(|&slot| s.card_behind(slot)) {
         let def = t.def(card);
         for f in def.face_ixs() {

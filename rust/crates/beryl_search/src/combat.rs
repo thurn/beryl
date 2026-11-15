@@ -747,7 +747,7 @@ fn offered<L: Layout>(
 fn like<L: Layout>(s: &State<L>, a: L::Slot, b: L::Slot) -> bool {
     a == b
         || (s.controller(a) == s.controller(b)
-            && s.copiable(a).key() == s.copiable(b).key()
+            && s.definition(a).key() == s.definition(b).key()
             && s.derived(a).power == s.derived(b).power
             && s.derived(a).toughness == s.derived(b).toughness
             && s.object(a).is_tapped() == s.object(b).is_tapped())

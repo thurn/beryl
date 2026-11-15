@@ -624,7 +624,7 @@ fn offered(s: &State, d: &Decision, pick: impl Fn(Opt) -> Option<Slot>) -> Vec<S
 fn like(s: &State, a: Slot, b: Slot) -> bool {
     a == b
         || (s.controller(a) == s.controller(b)
-            && s.copiable(a).key() == s.copiable(b).key()
+            && s.definition(a).key() == s.definition(b).key()
             && s.derived(a).power == s.derived(b).power
             && s.derived(a).toughness == s.derived(b).toughness
             && s.object(a).is_tapped() == s.object(b).is_tapped())

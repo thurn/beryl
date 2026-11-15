@@ -111,8 +111,8 @@ fn pay_whole<L: Layout>(
 fn by_card<L: Layout>(s: &State<L>, c: &Class<L>, n: u8) -> Result<L::Queue<L::Slot, 64>, Full> {
     let mut v: L::Queue<L::Slot, 64> = Default::default();
     let first = s.in_candidate_order(c.members).next();
-    let first = first.map(|m| s.copiable(m).key());
-    if c.members.all(|m| Some(s.copiable(m).key()) == first) {
+    let first = first.map(|m| s.definition(m).key());
+    if c.members.all(|m| Some(s.definition(m).key()) == first) {
         for slot in s.in_candidate_order(c.members).take(usize::from(n)) {
             v.push(slot)?;
         }
@@ -121,7 +121,8 @@ fn by_card<L: Layout>(s: &State<L>, c: &Class<L>, n: u8) -> Result<L::Queue<L::S
     for slot in s.in_candidate_order(c.members) {
         v.push(slot)?;
     }
-    v.as_mut_slice().sort_by_key(|&slot| s.copiable(slot).key());
+    v.as_mut_slice()
+        .sort_by_key(|&slot| s.definition(slot).key());
     while v.len() > usize::from(n) {
         v.pop();
     }
@@ -230,7 +231,7 @@ pub(crate) fn activate<L: Layout>(
     slot: L::Slot,
     color: ManaColor,
 ) -> Result<(), Full> {
-    let (card, face) = s.copiable(slot).record(t);
+    let (card, face) = s.definition(slot).record(t);
     // The card table refuses a card that grants a mana ability (`TableError::Granted`), so
     // the one found is the permanent's own.
     let printed = s.abilities(t, slot).find_map(|(ability, a)| match ability {

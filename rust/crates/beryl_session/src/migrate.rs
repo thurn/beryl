@@ -36,6 +36,7 @@ pub type Step = fn(Value, &'static CardTable) -> Result<Value, SessionError>;
 /// [`FORMAT_VERSION`] less one.
 pub const CHAIN: [Step; FORMAT_VERSION as usize - 1] = [
     v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6, v6_to_v7, v7_to_v8, v8_to_v9, v9_to_v10,
+    v10_to_v11,
 ];
 
 /// `file`, a replay file of any version this build knows, in the format it writes. `cards`
@@ -259,6 +260,32 @@ fn v9_to_v10(mut file: Value, _: &'static CardTable) -> Result<Value, SessionErr
         }
     }
     set_version(&mut file, 10)?;
+    Ok(file)
+}
+
+/// Version 10 to 11: version 10 said a token copy that is 1/1 by exception as `"oneOne": true`,
+/// and version 11 names each exception a copy was made with, by the card whose face lists it
+/// and its place there. Offspring made every such copy, a copy of the card with the ability,
+/// which lists the 1/1 exception first: so a permanent with `oneOne` has its own card's
+/// first exception.
+fn v10_to_v11(mut file: Value, _: &'static CardTable) -> Result<Value, SessionError> {
+    fn rewrite(value: &mut Value) {
+        match value {
+            Value::Object(fields) => {
+                if fields.remove("oneOne") == Some(Value::Bool(true))
+                    && let Some(card) = fields.get("card").cloned()
+                {
+                    let except = serde_json::json!([{ "card": card, "except": 0 }]);
+                    fields.insert("excepts".to_owned(), except);
+                }
+                fields.values_mut().for_each(rewrite);
+            }
+            Value::Array(items) => items.iter_mut().for_each(rewrite),
+            _ => {}
+        }
+    }
+    rewrite(&mut file);
+    set_version(&mut file, 11)?;
     Ok(file)
 }
 
@@ -513,6 +540,31 @@ mod tests {
             assert_eq!(what.before_v10.map(KindBeforeV10::now), Some(what.kind));
         }
         assert_eq!(read(&v10, 1).what.unwrap().before_v10, None);
+    }
+
+    #[test]
+    fn version_10_to_11_names_the_exception_of_a_one_one_copy() {
+        let permanent = |extra: Value| {
+            let mut p = json!({ "card": "Thundertrap Trainer", "owner": 1, "controller": 1,
+                "token": true });
+            p.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            p
+        };
+        let board = |p: Value| json!({ "checkpoint": { "turn": 3, "battlefield": [p] } });
+        let v10 = json!({ "formatVersion": 10, "seed": 1, "log": [
+            board(permanent(json!({ "oneOne": true }))),
+            board(permanent(json!({}))),
+        ] });
+        let v11 = v10_to_v11(v10, &CARDS).unwrap();
+        let excepted = permanent(json!({ "excepts": [{ "card": "Thundertrap Trainer",
+            "except": 0 }] }));
+        let expected = json!({ "formatVersion": 11, "seed": 1, "log": [
+            board(excepted),
+            board(permanent(json!({}))),
+        ] });
+        assert_eq!(v11, expected);
     }
 
     #[test]

@@ -281,7 +281,7 @@ pub(super) fn apply<L: Layout>(
 ) -> Result<(), Full> {
     match change {
         LayerChange::LoseAllAbilities | LayerChange::SetLandTypes(_)
-            if s.copiable(s.battlefield()[i]).face(t).abilities.len() > L::AbilityMask::WIDTH =>
+            if s.definition(s.battlefield()[i]).face(t).abilities.len() > L::AbilityMask::WIDTH =>
         {
             return Err(Full);
         }
@@ -466,7 +466,7 @@ fn card_types_in_graveyards<L: Layout>(s: &Rederive<'_, L>, t: &GameTable) -> us
     for player in s.players_in_seat_order(s.players()) {
         for &slot in s.graveyard(player) {
             if !s.object(slot).is_token() {
-                types = types.union(s.copiable(slot).face(t).types);
+                types = types.union(s.definition(slot).face(t).types);
             }
         }
     }

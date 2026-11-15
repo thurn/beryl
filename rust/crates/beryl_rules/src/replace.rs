@@ -245,7 +245,11 @@ fn static_destinations<'a, L: Layout>(
 ) -> impl Iterator<Item = (L::Slot, AbilityIx, Zone)> + 'a {
     s.battlefield()
         .iter()
-        .filter(move |&&p| s.copiable(p).may_replace(t).replaces(ReplacementKind::Move))
+        .filter(move |&&p| {
+            s.definition(p)
+                .may_replace(t)
+                .replaces(ReplacementKind::Move)
+        })
         .flat_map(move |&p| {
             let controller = s.controller(p);
             let words = s.words_of(p);
@@ -290,7 +294,11 @@ fn entering_destinations<L: Layout>(
         slot, entry, cast, ..
     } = *proposal;
     for &p in s.battlefield() {
-        if !s.copiable(p).may_replace(t).replaces(ReplacementKind::Move) {
+        if !s
+            .definition(p)
+            .may_replace(t)
+            .replaces(ReplacementKind::Move)
+        {
             continue;
         }
         let controller = s.controller(p);

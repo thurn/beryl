@@ -36,13 +36,16 @@ pub enum Flag {
     ///
     /// [CR 111.1]: https://yawgatog.com/resources/magic-rules/#R1111
     Token = 1 << 3,
-    /// A copy whose copiable values are 1/1 by exception, such as an offspring token
-    /// ([CR 707.9b]): "Some copy effects modify a characteristic as part of the copying
-    /// process. The final set of values for that characteristic becomes part of the copiable
-    /// values of the copy."
+    /// A copy effect is on the object, an entry of the Effects store
+    /// ([`crate::effects::Continuous::Copy`]): the object's definition and face are the values
+    /// it copied, and the entry holds the exceptions it was made with ([CR 707.9b]): "Some copy
+    /// effects modify a characteristic as part of the copying process. The final set of values
+    /// for that characteristic becomes part of the copiable values of the copy." An object
+    /// without it has no copy effect to look for, so reading its copiable values is one bit
+    /// test ([`State::copiable`](crate::State::copiable)).
     ///
     /// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
-    OneOne = 1 << 4,
+    Copy = 1 << 4,
 }
 
 /// An object's statuses, one bit per [`Flag`]. Combat is no flag: it is the object's
@@ -67,14 +70,15 @@ impl ObjectFlags {
         }
     }
 
-    /// The flags an object keeps as it changes zones: being a token, and a copy's 1/1
-    /// exception. A token stays a token wherever it goes, until it ceases to exist
-    /// ([CR 111.7]).
+    /// The flags an object keeps as it changes zones: being a token, and a token's copy
+    /// effect, which the zone move carries over ([`State::move_object`]). A token stays a token
+    /// wherever it goes, until it ceases to exist ([CR 111.7]).
     ///
     /// [CR 111.7]: https://yawgatog.com/resources/magic-rules/#R1117
+    /// [`State::move_object`]: crate::State::move_object
     #[inline]
     pub(crate) fn kept_across_zones(self) -> ObjectFlags {
-        ObjectFlags(self.0 & (Flag::Token as u8 | Flag::OneOne as u8))
+        ObjectFlags(self.0 & (Flag::Token as u8 | Flag::Copy as u8))
     }
 }
 
@@ -412,14 +416,6 @@ impl<L: Layout> Object<L> {
     #[inline]
     pub fn is_token(&self) -> bool {
         self.flags.has(Flag::Token)
-    }
-
-    /// A copy whose copiable values are 1/1 by exception ([CR 707.9b]).
-    ///
-    /// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
-    #[inline]
-    pub fn is_one_one(&self) -> bool {
-        self.flags.has(Flag::OneOne)
     }
 
     /// What it is doing in combat.

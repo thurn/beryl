@@ -9,6 +9,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::ops::{Index, IndexMut};
 
+use crate::additions::{Addition, AdditionList};
 use crate::bitboard::Bitboard;
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardId, CardIx, LargeCardIx, LargeSlot, Seat, Slot, SlotId};
@@ -168,6 +169,9 @@ pub trait Layout: Copy + Debug + Default + Eq + Hash + Send + Sync + 'static {
     /// The abilities of a face a permanent has lost ([`crate::object::Derived::lost`]): how
     /// many of a face's abilities an effect can remove one by one.
     type AbilityMask: crate::object::AbilityMask;
+    /// The copy exceptions an object's copiable values carry ([`crate::query::Copiable`]):
+    /// how many copies of copies, each made with an exception, a game can hold.
+    type Additions: AdditionList<Self::Card>;
 
     /// The slots of the shared pool for tokens and spell copies, after every deck's
     /// ([`SlotId::pool`]).
@@ -201,6 +205,7 @@ impl Layout for Small {
     type Deck<T: Item + Default> = Fixed<T, { Slot::DECK_SLOTS }>;
     type PerPlayer<T: Item> = PerSeat<T>;
     type AbilityMask = u16;
+    type Additions = [Option<Addition<CardIx>>; 2];
 
     const TOKEN_POOL: Bitboard =
         Bitboard([0, !0 << (Slot::POOL - 64), !0, !0 >> (256 - Slot::COUNT)]);
@@ -242,6 +247,7 @@ impl Layout for Large {
     type Deck<T: Item + Default> = Vec<T>;
     type PerPlayer<T: Item> = PerSeat<T>;
     type AbilityMask = u64;
+    type Additions = [Option<Addition<LargeCardIx>>; 8];
 
     const TOKEN_POOL: Bitboard<LargeSlot> = {
         assert!(LargeSlot::POOL.is_multiple_of(64) && LargeSlot::COUNT == 16 * 64);

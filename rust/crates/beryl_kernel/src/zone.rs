@@ -67,6 +67,11 @@ impl<L: Layout> State<L> {
             }
         }
         let from = o.zone;
+        let carried = if o.flags.has(Flag::Copy) {
+            self.carried_copy(slot)
+        } else {
+            None
+        };
         leave(self, slot);
         self.forget_stored(slot);
         let o = self.object_mut(slot);
@@ -111,6 +116,9 @@ impl<L: Layout> State<L> {
         }
         if (to as usize) < Zone::OWNED {
             self.zones.members[owner][to as usize].insert(slot);
+        }
+        if let Some(carried) = carried {
+            self.carry_copy(slot, carried)?;
         }
         if matches!(to, Zone::Battlefield | Zone::Nowhere) {
             self.forget_exiled_with(slot);

@@ -52,7 +52,7 @@ pub fn features<L: Layout>(s: &State<L>, values: &CardValues, p: Seat) -> Featur
     f[0] = f64::from(s.player(p).life().clamp(-10, 40));
     let hand = s.zone(ZoneKey::Of(p, Zone::Hand));
     f[1] = f64::from(hand.count());
-    f[2] = hand.sum(|slot| f64::from(values.of(s.copiable(slot).key()).value));
+    f[2] = hand.sum(|slot| f64::from(values.of(s.definition(slot).key()).value));
     for &slot in s.battlefield() {
         if s.controller(slot) != p {
             continue;
@@ -62,7 +62,7 @@ pub fn features<L: Layout>(s: &State<L>, values: &CardValues, p: Seat) -> Featur
             f[3] += 1.0;
             continue;
         }
-        f[4] += f64::from(values.of(s.copiable(slot).key()).value);
+        f[4] += f64::from(values.of(s.definition(slot).key()).value);
         if d.types.intersects(Types::CREATURE) {
             f[5] += f64::from(d.power.max(0));
         }

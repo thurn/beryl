@@ -246,6 +246,7 @@ fn with(face: &Face, abilities: &'static [Ability], grants: &'static [Ability]) 
         transformed: face.transformed,
         additional_cost: face.additional_cost,
         grants,
+        excepts: face.excepts,
     }
 }
 

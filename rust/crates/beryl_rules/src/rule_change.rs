@@ -189,7 +189,7 @@ fn named_by_a_maker<L: Layout>(
     player: Seat,
     slot: L::Slot,
 ) -> bool {
-    let name = s.copiable(slot).name(t);
+    let name = s.definition(slot).name(t);
     if name.is_empty() {
         return false;
     }
@@ -197,7 +197,7 @@ fn named_by_a_maker<L: Layout>(
         let Some(ChosenValue::Name(Some(card))) = s.chosen(maker) else {
             return false;
         };
-        let made = s.copiable(maker).player_rules(t).common(rules);
+        let made = s.definition(maker).player_rules(t).common(rules);
         t.def(card).name == name
             && made.iter().any(|id| {
                 filter::is_for(&t.rule(id).players, player, d.controller)
@@ -249,7 +249,7 @@ fn own_rule_holds<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot, kind: R
         (s.effect_rules_on(s.object_ref(slot)).common(of_kind)).is_empty(),
         "an effect that changes a rule asked of a permanent"
     );
-    let own = s.copiable(slot).rules(t).common(of_kind);
+    let own = s.definition(slot).rules(t).common(of_kind);
     own.iter().any(|id| {
         // Most conditions are read of the permanent, by the rule change's number; any
         // other is read in a scene, for the ability that has it.
@@ -316,7 +316,7 @@ pub(crate) fn maker<L: Layout>(
     // in the battlefield list.
     s.permanents()
         .find(|&(slot, d)| {
-            let made = s.copiable(slot).player_rules(t).common(of_kind);
+            let made = s.definition(slot).player_rules(t).common(of_kind);
             made.iter().any(|id| {
                 let rule = t.rule(id);
                 filter::is_for(&rule.players, player, d.controller)

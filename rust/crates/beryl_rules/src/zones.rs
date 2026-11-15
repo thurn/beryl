@@ -118,7 +118,7 @@ pub(crate) fn return_instruction<L: Layout>(
     let cards = run.elsewhere_than(cards, Zone::Battlefield);
     let game = run.game();
     let cards = cards.filter(|slot| {
-        let (def, face) = game.state.copiable(slot).record(game.table);
+        let (def, face) = game.state.definition(slot).record(game.table);
         let types = game.table.def(def).face(face).types;
         !types.intersects(Types::INSTANT.union(Types::SORCERY))
     });

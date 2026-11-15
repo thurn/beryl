@@ -311,7 +311,7 @@ fn list(items: &[String]) -> String {
 fn name(t: &GameTable, s: &State, slot: Slot) -> String {
     match s.object(slot).face() {
         FaceIx::DOWN => format!("face-down {}", s.definition_name(t, slot)),
-        _ => match s.copiable(slot).name(t) {
+        _ => match s.definition(slot).name(t) {
             "" => "nameless token".to_owned(),
             name => name.to_owned(),
         },
@@ -392,7 +392,7 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
         }
         Opt::Activate { slot, ability } => match ability {
             ObjectAbility::Own(i) => {
-                let a = &s.copiable(slot).face(t).abilities[i.index()];
+                let a = &s.definition(slot).face(t).abilities[i.index()];
                 match a.cost().loyalty_change() {
                     Some(l) => format!("{} {l:+}", named(slot)),
                     None => format!("activate {} #{i}", named(slot)),

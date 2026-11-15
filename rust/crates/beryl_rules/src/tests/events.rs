@@ -7,9 +7,10 @@ use beryl_card::effect::build::{
     flip_coin, for_each_player, gain_life, get_emblem, if_then, if_you_lose_the_flip, lose_life,
     modify, sequence, target, that_player, this, you,
 };
-use beryl_card::{Amount, Comparison, Effect};
+use beryl_card::{Amount, Comparison, CopyException, Effect, ExceptIx};
 
 use crate::actions::destroy::destroy;
+use crate::additions::Addition;
 use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityKind, CardDef, CastingOption, Castings, Condition, Cost, Face, FaceIx,
@@ -208,6 +209,7 @@ static TRAINER: CardDef = CardDef {
         power: Some(3),
         toughness: Some(3),
         abilities: &[Ability::triggered(&Trigger::ENTERS).effect(&gain_life(you(), 1))],
+        excepts: &[CopyException::ONE_ONE],
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -1773,7 +1775,12 @@ fn a_one_one_token_copy_has_the_cards_abilities() {
     let trainer = put(&t, &mut s, &mut x, p, "Test Trainer");
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.player(p).life(), 21);
-    let values = s.copiable(trainer).except_one_one();
+    let one_one = Addition::new(
+        t.index_named("Test Trainer").unwrap(),
+        FaceIx::FRONT,
+        ExceptIx::new(0),
+    );
+    let values = s.copiable(trainer).with_addition(one_one).unwrap();
     let mut token = Bitboard::EMPTY;
     with_game(&t, &mut s, &mut x, trainer, |game, resolution| {
         token = tokens::create(

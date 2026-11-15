@@ -71,6 +71,11 @@ impl<L: Layout> Store<L> for Effects<L> {
             self.entries.len(),
             <M::Queue<ContinuousEffect<M>, EFFECTS> as Queue<_>>::CAPACITY,
         )?;
+        for e in self.entries.iter() {
+            if let Payload::Copy(values) = e.payload {
+                values.fits::<M>()?;
+            }
+        }
         self.sets.fits::<M>()
     }
 
@@ -144,6 +149,7 @@ impl<L: Layout> Store<L> for Effects<L> {
             "the kinds of effect disagree with the effects",
             None,
         )?;
+        super::copy::check_copies(self, s)?;
         check(
             rules == self.rules,
             "the players' rules disagree with the effects",
@@ -159,7 +165,10 @@ impl<L: Layout> Store<L> for Effects<L> {
         let name = |slot: L::Slot| t.def(s.card(slot)).name;
         let on_objects = self.entries.iter().find_map(|e| {
             let on = match (e.affected, e.payload) {
-                (Affects::Object { .. }, Payload::Cast(_)) | (Affects::Player(_), _) => {
+                // A save says a copy by its permanent's exceptions, and a permission by its
+                // player and card.
+                (Affects::Object { .. }, Payload::Cast(_) | Payload::Copy(_))
+                | (Affects::Player(_), _) => {
                     return None;
                 }
                 (Affects::Object { slot, .. }, _) => name(slot).to_owned(),

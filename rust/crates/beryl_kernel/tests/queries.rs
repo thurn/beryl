@@ -2,16 +2,17 @@
 //! face-down permanent and a double-faced one.
 
 use beryl_card::{
-    CardDef, Castings, FACE_DOWN, Face, FaceIx, ManaCost, Types,
+    CardDef, Castings, CopyException, ExceptIx, FACE_DOWN, Face, FaceIx, ManaCost, Types,
     Zone::{self, Battlefield, Graveyard, Hand, Nowhere, Stack},
 };
+use beryl_kernel::additions::Addition;
 use beryl_kernel::event::Sink;
 use beryl_kernel::mutate::Arrival;
 use beryl_kernel::profile::Profile;
 use beryl_kernel::state::{Derived, StackEntry, StackItem};
 use beryl_kernel::table::CardTable;
 use beryl_kernel::zone::Place;
-use beryl_kernel::{Copiable, GameTable, Observation, Seat, Slot, SlotId, State};
+use beryl_kernel::{CardIx, Copiable, GameTable, Observation, Seat, Slot, SlotId, State};
 
 static SOLDIER: CardDef = CardDef {
     name: "Test Soldier",
@@ -31,6 +32,7 @@ static BEAR: CardDef = CardDef {
         types: Types::CREATURE,
         power: Some(2),
         toughness: Some(3),
+        excepts: &[CopyException::ONE_ONE],
         ..Face::EMPTY
     }],
     tokens: &[&SOLDIER],
@@ -102,7 +104,7 @@ fn token(t: &GameTable, s: &mut State, owner: Seat, what: Copiable) -> Slot {
     let slot = Slot::pool()
         .find(|&slot| s.object(slot).zone() == Nowhere)
         .unwrap();
-    let face = s.make_token(t, slot, owner, what);
+    let face = s.make_token(t, slot, owner, what).unwrap();
     s.move_object(&mut Sink::off(), slot, Battlefield, Place::Top)
         .unwrap();
     s.arrive(
@@ -120,11 +122,21 @@ fn token(t: &GameTable, s: &mut State, owner: Seat, what: Copiable) -> Slot {
     slot
 }
 
-/// A token copy of the permanent in `of`, 1/1 by exception if `one_one` (CR 707.9b).
+/// A token copy of the permanent in `of`, 1/1 by the exception Test Bear lists if `one_one`
+/// (CR 707.9b).
 fn copy_of(t: &GameTable, s: &mut State, owner: Seat, of: Slot, one_one: bool) -> Slot {
     let what = s.copiable(of);
-    let what = if one_one { what.except_one_one() } else { what };
+    let what = if one_one {
+        what.with_addition(one_one_addition(t)).unwrap()
+    } else {
+        what
+    };
     token(t, s, owner, what)
+}
+
+/// Test Bear's "except it's 1/1".
+fn one_one_addition(t: &GameTable) -> Addition<CardIx> {
+    Addition::new(t.index_of(&BEAR).unwrap(), FaceIx::FRONT, ExceptIx::new(0))
 }
 
 /// Stores layer results with no continuous effect but `boost`, which adds to every power.
@@ -240,6 +252,20 @@ fn a_copy_has_the_copiable_values_and_never_a_hidden_card() {
         assert_eq!((values.power(&t), values.toughness(&t)), (1, 1));
         assert_eq!(values.name(&t), "Test Bear");
     }
+    // The copy of the copy has the one exception it took, not one of its own.
+    assert_eq!(s.copiable(smaller).additions().count(), 1);
+    // A token copy has its values wherever it goes (CR 111.3), until it ceases to exist.
+    s.move_object(&mut Sink::off(), small, Graveyard, Place::Top)
+        .unwrap();
+    assert_eq!(s.copiable(small).power(&t), 1);
+    derive(&t, &mut s, 0);
+    s.check_invariants(&t).unwrap();
+    // A Small game holds two exceptions in copiable values; a third stalls it into Large.
+    let twice = s
+        .copiable(smaller)
+        .with_addition(one_one_addition(&t))
+        .unwrap();
+    assert!(twice.with_addition(one_one_addition(&t)).is_err());
 
     // CR 707.8a: a copy of a double-faced permanent has the same face up.
     let telepath = copy_of(&t, &mut s, Seat::P1, prodigy, false);

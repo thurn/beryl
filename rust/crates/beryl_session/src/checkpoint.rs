@@ -13,7 +13,8 @@
 //! turn, a delayed trigger, a permission to cast) is not recorded: a checkpoint names the first
 //! such thing ([`State::off_board`]), and no game is rebuilt from it.
 
-use beryl_engine::card::{CastingKind, CastingKinds, FaceIx, Types};
+use beryl_engine::additions::Addition;
+use beryl_engine::card::{CastingKind, CastingKinds, ExceptIx, FaceIx, Types};
 use beryl_engine::layout::Queue;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{CounterKind, Memo};
@@ -105,10 +106,11 @@ pub struct Permanent {
     pub face: Face,
     #[serde(default, skip_serializing_if = "is_default")]
     pub token: bool,
-    /// A copy that is 1/1 by exception, such as an offspring token
-    /// ([CR 707.9b](https://yawgatog.com/resources/magic-rules/#R7079b)).
-    #[serde(default, skip_serializing_if = "is_default")]
-    pub one_one: bool,
+    /// The exceptions a token copy was made with, such as offspring's "except it's 1/1"
+    /// ([CR 707.9b](https://yawgatog.com/resources/magic-rules/#R7079b)), in the order they
+    /// were made.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub excepts: Vec<Exception>,
     #[serde(default, skip_serializing_if = "is_default")]
     pub tapped: bool,
     /// Not under its controller's control continuously since their most recent turn began
@@ -133,6 +135,45 @@ pub struct Permanent {
 
 fn is_default<T: Default + PartialEq>(value: &T) -> bool {
     *value == T::default()
+}
+
+/// A copy exception: the one at `except` among the copy exceptions of the face `face` of the
+/// card named `card`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Exception {
+    pub card: String,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub face: Face,
+    pub except: u8,
+}
+
+impl Exception {
+    /// The exceptions of the copiable values of the object in `slot`.
+    fn of<L: Layout>(t: &GameTable, s: &State<L>, slot: L::Slot) -> Vec<Exception> {
+        s.copiable(slot)
+            .additions()
+            .map(|a| Exception {
+                card: t.def(a.card()).name.to_owned(),
+                face: Face::of(a.face()),
+                except: a.except().get(),
+            })
+            .collect()
+    }
+
+    /// The addition this names in the game of table `t`.
+    fn addition(&self, t: &GameTable) -> Result<Addition<CardIx>, String> {
+        let card = game_index(t, &self.card)?;
+        let face = self.face.ix();
+        let lists = t.def(card).faces.get(usize::from(face.get()));
+        if lists.is_none_or(|f| usize::from(self.except) >= f.excepts.len()) {
+            return Err(format!(
+                "{} lists no copy exception {}",
+                self.card, self.except
+            ));
+        }
+        Ok(Addition::new(card, face, ExceptIx::new(self.except)))
+    }
 }
 
 /// Which face of a permanent is up.
@@ -277,9 +318,14 @@ impl Checkpoint {
         let mut slots = Vec::with_capacity(self.battlefield.len());
         for b in &self.battlefield {
             let owner = seat(b.owner)?;
+            let additions = b
+                .excepts
+                .iter()
+                .map(|e| e.addition(t))
+                .collect::<Result<Vec<_>, _>>()?;
             let slot = if b.token {
                 s.board()
-                    .place_token(owner, game_index(t, &b.card)?, b.face.ix(), b.one_one)
+                    .place_token(owner, game_index(t, &b.card)?, b.face.ix(), &additions)
                     .map_err(full)?
             } else {
                 let slot = from_library(t, s, owner, &b.card)?;
@@ -522,7 +568,7 @@ fn permanent<L: Layout>(
         controller: s.base_controller(slot).get(),
         face,
         token: o.is_token(),
-        one_one: o.is_one_one(),
+        excepts: Exception::of(t, s, slot),
         tapped: o.is_tapped(),
         sick: o.is_summoning_sick(),
         counters: Counter::on(s, slot),

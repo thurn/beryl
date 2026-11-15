@@ -87,7 +87,7 @@ impl<L: Layout> State<L> {
             derived: *self.derived(slot),
             counters: o.counters,
             token: o.is_token(),
-            copiable: Copiable::of_object(o),
+            copiable: self.copiable(slot),
             attached_to: o.attached_to.map(|to| self.object_ref(to)),
         };
         self.last_known.push(row)

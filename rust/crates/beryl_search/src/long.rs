@@ -1727,7 +1727,7 @@ fn keys<L: Layout>(
         d.kind.hash(&mut h);
         let named = |slot: L::Slot, shows: bool| -> (Option<L::Slot>, u8) {
             if !known.contains(slot) && (shows || world.knows(viewer, slot)) {
-                (None, world.copiable(slot).key().index() as u8)
+                (None, world.definition(slot).key().index() as u8)
             } else {
                 (Some(slot), 0)
             }

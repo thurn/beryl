@@ -169,7 +169,7 @@ pub(crate) fn static_condition_holds<L: Layout>(
     if let Some(holds) = without_a_scene(s, slot, condition) {
         return holds;
     }
-    let (card, face) = s.copiable(slot).record(t);
+    let (card, face) = s.definition(slot).record(t);
     let subject = PendingTrigger {
         of: AbilityRef {
             source: Some(s.object_ref(slot)),
@@ -197,7 +197,7 @@ pub(crate) fn names_nothing<L: Layout>(
     if objects == Objects::ExiledWithThis {
         return s.exiled_with(slot).is_empty();
     }
-    let (card, face) = s.copiable(slot).record(t);
+    let (card, face) = s.definition(slot).record(t);
     let subject = PendingTrigger {
         of: AbilityRef {
             source: Some(s.object_ref(slot)),

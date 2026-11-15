@@ -32,7 +32,7 @@ fn tokens<L: Layout>(s: &mut State<L>, owner: Seat, card: L::Card, count: usize)
     (0..count)
         .map(|_| {
             s.board()
-                .place_token(owner, card, FaceIx::FRONT, false)
+                .place_token(owner, card, FaceIx::FRONT, &[])
                 .unwrap()
         })
         .collect()

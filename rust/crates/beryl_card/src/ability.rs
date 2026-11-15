@@ -8,10 +8,11 @@ use crate::characteristics::Types;
 use crate::continuous::{Duration, LayerSpec, Modification, Replacement, RuleChange};
 use crate::cost::{CastingKind, Cost, CostPart};
 use crate::counter::CounterKind;
-use crate::effect::{Amount, Comparison, Condition, CopyException, Effect, Objects, Players};
+use crate::effect::build::create_copy_except;
+use crate::effect::{Amount, Comparison, Condition, Effect, Objects, Players};
 use crate::filter::Filter;
 use crate::ids::{TurnStep, ZoneSet};
-use crate::index::SpecIx;
+use crate::index::{ExceptIx, SpecIx};
 use crate::mana::{ManaCost, ManaSet};
 use crate::target::{Takes, TargetKind, TargetSpec};
 use crate::trigger::Trigger;
@@ -402,16 +403,13 @@ impl Ability {
     /// Offspring's triggered ability
     /// ([CR 702.175a](https://yawgatog.com/resources/magic-rules/#R702175a)): "When this
     /// permanent enters, if its offspring cost was paid, create a token that's a copy of it,
-    /// except it's 1/1." The face lists [`CastingOption::Offspring`] too.
+    /// except it's 1/1." The face lists [`CastingOption::Offspring`] too, and first among its
+    /// copy exceptions ([`crate::Face::excepts`]) the 1/1 one the copy is made with.
     pub const fn offspring() -> Ability {
+        const COPY: Effect = create_copy_except(Players::You, Objects::This, ExceptIx::new(0));
         Ability::triggered(&Trigger::ENTERS)
             .only_if(&Condition::Paid(CastingKind::Offspring))
-            .effect(&Effect::CreateCopies {
-                player: Players::You,
-                of: Objects::This,
-                count: Amount::Fixed(1),
-                except: CopyException::PowerToughness(1, 1),
-            })
+            .effect(&COPY)
     }
 
     /// Impending's static ability (CR 702.176a): "As long as this permanent's impending cost

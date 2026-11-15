@@ -32,6 +32,7 @@ pub static CARD: CardDef = Printed::ThundertrapTrainer
         )),
     ])
     .casting(&[CastingOption::Offspring(ManaCost::generic(4))])
+    .excepts(&[CopyException::ONE_ONE])
     .card();
 
 #[cfg(feature = "scenarios")]

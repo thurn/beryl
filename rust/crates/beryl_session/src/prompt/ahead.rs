@@ -50,7 +50,7 @@ pub(crate) fn castable<L: Layout>(table: &Table<'_, L>, viewer: Seat, then: &Sta
     (shown.in_candidate_order(held))
         .filter(|&slot| {
             after.contains(slot)
-                && !shown.copiable(slot).face(t).types.intersects(Types::LAND)
+                && !shown.definition(slot).face(t).types.intersects(Types::LAND)
                 && matches!(refusal(obs, t, slot), None | Some(Refusal::Target))
         })
         .count()

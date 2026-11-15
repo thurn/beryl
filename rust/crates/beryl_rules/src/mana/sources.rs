@@ -94,8 +94,8 @@ pub(super) fn source<L: Layout>(
 ) -> Option<(u8, u8, bool, bool)> {
     let o = s.object(slot);
     // Looked up only past the table's facts, which most permanents stop at.
-    let face = || s.copiable(slot).face(t);
-    let mana = s.copiable(slot).facts(t).mana;
+    let face = || s.definition(slot).face(t);
+    let mana = s.definition(slot).facts(t).mana;
     // The table's facts stand in for reading the face, for a permanent that makes its card's
     // mana: they must say what reading it would. One that lost an ability, or whose land
     // types an effect changed, is read ability by ability (CR 613.1f, CR 305.7).
@@ -215,12 +215,13 @@ impl<L: Layout> Sources<L> {
                     rank: CONSUMED_RANK,
                     members: Bitboard::single(slot),
                     consumed: true,
-                    least: s.copiable(slot).key(),
+                    least: s.definition(slot).key(),
                 };
                 // Only permanents of one card are interchangeable when spending one: the
                 // payment sacrifices whichever comes first.
-                let same =
-                    |c: &Class<L>| c.consumed && c.has_room() && c.least == s.copiable(slot).key();
+                let same = |c: &Class<L>| {
+                    c.consumed && c.has_room() && c.least == s.definition(slot).key()
+                };
                 if let Some(i) = classes.iter().position(same) {
                     classes.as_mut_slice()[i].members.insert(slot);
                 } else {
@@ -241,7 +242,7 @@ impl<L: Layout> Sources<L> {
             }) {
                 let c = &mut classes.as_mut_slice()[i];
                 c.members.insert(slot);
-                c.least = c.least.min(s.copiable(slot).key());
+                c.least = c.least.min(s.definition(slot).key());
             } else {
                 let mut members = Bitboard::EMPTY;
                 members.insert(slot);
@@ -251,7 +252,7 @@ impl<L: Layout> Sources<L> {
                     rank,
                     members,
                     consumed: false,
-                    least: s.copiable(slot).key(),
+                    least: s.definition(slot).key(),
                 })?;
             }
         }

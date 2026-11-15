@@ -48,7 +48,7 @@ impl<L: Layout> DrawReplacement<L> {
 
     /// Who caused what happens instead, should it end the game.
     pub fn cause(&self, s: &State<L>, t: &GameTable) -> LossCause<L> {
-        let (card, face) = s.copiable(self.permanent).record(t);
+        let (card, face) = s.definition(self.permanent).record(t);
         LossCause::Effect {
             source: Some(s.object_ref(self.permanent)),
             card,

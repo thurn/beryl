@@ -12,7 +12,7 @@ use crate::ability::{Ability, AbilityKind, Behavior};
 use crate::continuous::{Duration, LayerSpec, MODIFY_PARTS, Modification};
 use crate::cost::{Chosen, Cost, CostAction, CostPart, Measure};
 use crate::definition::{CardDef, Face};
-use crate::effect::{Amount, Condition, CopyException, Effect, Objects, Operands, Players};
+use crate::effect::{Amount, Condition, Effect, Objects, Operands, Players};
 use crate::filter::Filter;
 use crate::ids::Zone;
 use crate::index::SpecIx;
@@ -407,10 +407,9 @@ impl Scope<'_> {
                 Zone::Exile => Ok(()),
                 _ => Err(Malformed::Countered),
             },
-            Effect::CreateCopies { except, .. } => match except {
-                CopyException::None | CopyException::PowerToughness(1, 1) => Ok(()),
-                CopyException::PowerToughness(..) => Err(Malformed::Copy),
-            },
+            Effect::CreateCopies {
+                except: Some(ix), ..
+            } if ix.index() >= self.face.excepts.len() => Err(Malformed::Copy),
             Effect::AddMana { .. } if !matches!(self.ability.kind(), AbilityKind::Mana) => {
                 Err(Malformed::AddMana)
             }

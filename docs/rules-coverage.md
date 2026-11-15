@@ -619,6 +619,16 @@ Built by by-bajq.3.10:
   the copy's duration are a layer 1 entry of the Effects store. The copy
   mutators keep the fields equal to what layer 1 gives, and an invariant checks
   it. `Flag::OneOne` becomes an addition.
+- **As built** (by-bajq.6.1, 2026-11-15). An addition is a card and an index
+  into its face's `Face::excepts`; a `CopyException` is a list of `CopyChange`s,
+  of which only power and toughness exist so far: each later change (a type, a
+  color, "has this ability", every ability of a face) comes with the card that
+  needs it, as does applying it in the layers. A token copy made with an
+  exception is a copy effect on the token (`Payload::Copy` of the Effects store,
+  lasting indefinitely), behind `Flag::Copy`, and the zone move carries it to
+  the token's next incarnation. `Memo::Really`, a card under a copy effect and
+  the copy mutators that end one come with the first card that becomes a copy
+  (by-bajq.6.2, 6.3).
 - **Entering as a copy** is a replacement of the class CR 616.1c names. The
   choice is not a target. The other replacements of entering are then found
   against the copy.

@@ -40,7 +40,7 @@ pub use condition::{Comparison, Condition};
 pub use operands::Operands;
 pub use reference::{Objects, Players, Recipients};
 pub use terms::{
-    CastTerms, CopyException, Found, LibraryOrder, LibraryPosition, Prevention, Taken,
+    CastTerms, CopyChange, CopyException, Found, LibraryOrder, LibraryPosition, Prevention, Taken,
 };
 
 use crate::continuous::{Duration, Modification, RuleChange};
@@ -49,7 +49,7 @@ use crate::counter::CounterKind;
 use crate::definition::CardDef;
 use crate::filter::Filter;
 use crate::ids::Zone;
-use crate::index::{AbilityIx, SpecIx};
+use crate::index::{AbilityIx, ExceptIx, SpecIx};
 use crate::mana::{ManaColor, ManaSet};
 use crate::prompt::Prompt;
 use crate::target::Takes;
@@ -376,7 +376,9 @@ pub enum Effect {
         player: Players,
         of: Objects,
         count: Amount,
-        except: CopyException,
+        /// The exception of the ability's own face the copies are made with
+        /// ([`crate::Face::excepts`]), or none for exact copies.
+        except: Option<ExceptIx>,
     },
     /// "Put [count] [kind] counters on [objects]"
     /// ([CR 122.1](https://yawgatog.com/resources/magic-rules/#R1221)): "A counter is a

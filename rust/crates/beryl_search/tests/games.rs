@@ -356,7 +356,7 @@ fn a_game_past_small_does_not_narrow() {
     );
     let token = |s: &mut State<Large>| {
         s.board()
-            .place_token(Seat::P0, LargeCardIx::FIRST, FaceIx::FRONT, false)
+            .place_token(Seat::P0, LargeCardIx::FIRST, FaceIx::FRONT, &[])
             .unwrap();
     };
     for _ in 0..129 {
