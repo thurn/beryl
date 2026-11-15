@@ -168,7 +168,19 @@ pub fn run(options: &Options) -> Result<Finished, String> {
         load: load(),
         fixture: options.fixture.clone(),
         pause_at_ms: pause_at.map(|at| at as f64 / 1e6),
+        drive: options.drive.clone(),
+        load_threads: options
+            .load
+            .map(|(threads, class)| format!("{threads}:{}", class.word())),
+        slow_gpu_ms: options.slow_gpu.map(|slow| slow.as_secs_f64() * 1e3),
     };
+    // Started before the host, from the main thread, and stopped when the run ends.
+    let _load = options
+        .load
+        .map(|(threads, class)| crate::load::start(threads, class));
+    #[cfg(feature = "tools")]
+    let drive = options.drive.as_deref().map(drive).transpose()?;
+    let slow_gpu = options.slow_gpu.unwrap_or_default();
     let log = Rc::new(RefCell::new(None));
     let mut feed = AppFeed {
         source: None,
@@ -186,7 +198,10 @@ pub fn run(options: &Options) -> Result<Finished, String> {
                 hz: WINDOWLESS_HZ,
                 pause_at,
                 end_after: options.run_for,
+                slow_gpu,
             });
+            #[cfg(feature = "tools")]
+            let host = host.driven(drive);
             feed.source = Some(source(options, host.inbox())?);
             host.run(client, Box::new(feed), |_| {})
         }
@@ -202,16 +217,23 @@ pub fn run(options: &Options) -> Result<Finished, String> {
                 size: (f64::from(SIZE.width), f64::from(SIZE.height)),
                 pause_at,
                 end_after: options.run_for,
+                slow_gpu,
             })?;
+            #[cfg(feature = "tools")]
+            let host = host.driven(drive);
             feed.source = Some(source(options, host.inbox())?);
             host.run(client, Box::new(feed), |_| {})
         }
     };
-    hosted?;
-    let log = log
-        .borrow_mut()
-        .take()
-        .ok_or("the host ended before it opened")??;
+    let log = log.borrow_mut().take();
+    if let Err(error) = hosted {
+        // The log still gets its summary, so that the frames before the error can be read.
+        if let Some(Ok(log)) = log {
+            let _ = log.finish();
+        }
+        return Err(error);
+    }
+    let log = log.ok_or("the host ended before it opened")??;
     let path = log.path().to_owned();
     let summary = log
         .finish()
@@ -236,6 +258,37 @@ fn source(options: &Options, inbox: Inbox) -> Result<Source, String> {
         },
         inbox,
     )))
+}
+
+/// The drive script `name` names: a file in `rust/beryl3d/drive` named `<name>.drive`, or a
+/// path.
+#[cfg(feature = "tools")]
+fn drive(name: &str) -> Result<beryl_host::Drive, String> {
+    let scripts = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../drive");
+    let path = if name.contains(['/', '\\']) {
+        PathBuf::from(name)
+    } else {
+        scripts.join(format!("{name}.drive"))
+    };
+    if !path.exists() && !name.contains(['/', '\\']) {
+        let known: Vec<String> = std::fs::read_dir(&scripts)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|entry| {
+                let path = entry.path();
+                if path.extension()? != "drive" {
+                    return None;
+                }
+                Some(path.file_stem()?.to_string_lossy().into_owned())
+            })
+            .collect();
+        return Err(format!(
+            "--drive {name}: no such script; the scripts are {}",
+            known.join(", ")
+        ));
+    }
+    beryl_host::Drive::load(&path)
 }
 
 /// Where `--pause-at` stops the clock, in nanoseconds.

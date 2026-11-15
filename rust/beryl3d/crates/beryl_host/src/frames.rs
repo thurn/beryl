@@ -108,6 +108,9 @@ pub struct FrameLoop<T> {
     input_since: bool,
     /// When the last frame was drawn, while the ticks have run since.
     last: Option<u64>,
+    /// The drive script being played, if any (`--drive`).
+    #[cfg(feature = "drive")]
+    drive: Option<crate::drive::Drive>,
 }
 
 impl<T: Ticks> FrameLoop<T> {
@@ -120,7 +123,31 @@ impl<T: Ticks> FrameLoop<T> {
             drawn_at_pause: false,
             input_since: false,
             last: None,
+            #[cfg(feature = "drive")]
+            drive: None,
         }
+    }
+
+    /// The same loop playing `drive` on the display's clock.
+    #[cfg(feature = "drive")]
+    #[must_use]
+    pub fn driven(mut self, drive: Option<crate::drive::Drive>) -> Self {
+        self.drive = drive;
+        self
+    }
+
+    /// Whether the drive script has given its last action, with the error that stopped it
+    /// early if one did. `None` while it plays, and always when there is none. The host ends
+    /// the run when it is `Some`.
+    #[must_use]
+    pub fn driven_to_end(&self) -> Option<Result<(), String>> {
+        #[cfg(feature = "drive")]
+        if let Some(drive) = &self.drive
+            && drive.finished()
+        {
+            return Some(drive.error().map_or(Ok(()), |error| Err(error.to_owned())));
+        }
+        None
     }
 
     /// The same loop with `feed` added.
@@ -153,6 +180,14 @@ impl<T: Ticks> FrameLoop<T> {
             return None;
         }
         let clock = self.clock(now);
+        #[cfg(feature = "drive")]
+        if let Some(drive) = &mut self.drive {
+            let mut inputs = Vec::new();
+            drive.due(now, clock, &mut self.client, &mut inputs);
+            for input in inputs {
+                self.handle(input);
+            }
+        }
         self.feed.before(&mut self.client, clock);
         let started = Instant::now();
         let frame = self.client.frame(clock);
@@ -206,23 +241,30 @@ impl<T: Ticks> FrameLoop<T> {
         self.pause.is_some_and(|pause| now >= pause)
     }
 
-    /// When the next frame is wanted, from the client's wake and the feed's, with the clock
-    /// stopped at the pause.
+    /// When the next frame is wanted, from the client's wake, the feed's and the drive
+    /// script's, with the clock stopped at the pause.
     fn wake(&self, now: u64) -> Wake {
-        if self.is_paused(now) {
-            return if self.drawn_at_pause && !self.input_since {
+        let wake = if self.is_paused(now) {
+            if self.drawn_at_pause && !self.input_since {
                 Wake::Never
             } else {
                 Wake::Now
-            };
+            }
+        } else {
+            let wake = earlier(self.client.wake(), self.feed.wake());
+            match (wake, self.pause) {
+                // The clock stops at the pause, so a wait past it ends there.
+                (Wake::At(at), Some(pause)) if at > pause => Wake::At(pause),
+                (Wake::Never, Some(pause)) if !self.drawn_at_pause => Wake::At(pause),
+                _ => wake,
+            }
+        };
+        // A drive script plays on the display's clock, which runs on through a pause.
+        #[cfg(feature = "drive")]
+        if let Some(drive) = &self.drive {
+            return earlier(wake, drive.wake(self.client.wake()));
         }
-        let wake = earlier(self.client.wake(), self.feed.wake());
-        match (wake, self.pause) {
-            // The clock stops at the pause, so a wait past it ends there.
-            (Wake::At(at), Some(pause)) if at > pause => Wake::At(pause),
-            (Wake::Never, Some(pause)) if !self.drawn_at_pause => Wake::At(pause),
-            _ => wake,
-        }
+        wake
     }
 
     /// Whether a frame is wanted at `now`.

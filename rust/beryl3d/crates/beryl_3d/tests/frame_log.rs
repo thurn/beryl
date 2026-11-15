@@ -39,6 +39,9 @@ fn what_the_writer_writes_the_reader_reads() {
         load: Some([20.0, 30.0, 40.0]),
         fixture: Some("verbs-zones".to_owned()),
         pause_at_ms: Some(100.0),
+        drive: Some("hover-hand".to_owned()),
+        load_threads: Some("16:utility".to_owned()),
+        slow_gpu_ms: Some(5.0),
     };
     let dir = dir("frame-log");
     let mut log = FrameLog::create(&dir, &run).expect("the log is made");
@@ -71,5 +74,51 @@ fn what_the_writer_writes_the_reader_reads() {
     assert_eq!(read.late[0].verbs, ["fly", "set"]);
     assert!(read.late[0].searching && read.late[0].held_to_60);
     assert!(!read.late[1].held_to_60);
+    let printed = summary.print(&read.run);
+    assert!(
+        printed.contains("drive hover-hand, load threads 16:utility, slow GPU 5 ms"),
+        "{printed}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_summary_gives_the_median_and_95th_percentile_wait_for_a_drawable() {
+    let run = Run {
+        checkout: "/checkout".to_owned(),
+        pid: 43,
+        started_ms: 2_000,
+        window: "none".to_owned(),
+        display_hz: 60.0,
+        adapter: "a GPU".to_owned(),
+        load: None,
+        fixture: None,
+        pause_at_ms: None,
+        drive: None,
+        load_threads: None,
+        slow_gpu_ms: None,
+    };
+    let dir = dir("waits");
+    let mut log = FrameLog::create(&dir, &run).expect("the log is made");
+    // Twenty frames that waited 1, 2, ..., 20 ms, in a shuffled order.
+    for (index, wait) in [
+        7, 20, 1, 13, 4, 18, 10, 2, 16, 5, 11, 19, 3, 14, 8, 17, 6, 12, 9, 15,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut frame = ticked(index as u64 * 16, None, true);
+        frame.shown = Some(Shown {
+            waited: wait * MS,
+            encoded: 0,
+        });
+        log.frame(&frame, &[], false);
+    }
+    let summary = log.finish().expect("the log is finished");
+    // Waits are counted to a tenth of a millisecond, each at the top of its tenth.
+    let near = |value: f64, expected: f64| (value - expected).abs() < 0.11;
+    assert!(near(summary.median_wait_ms, 10.0), "{summary:?}");
+    assert!(near(summary.p95_wait_ms, 19.0), "{summary:?}");
+    assert!(near(summary.worst_wait_ms, 20.0), "{summary:?}");
     let _ = std::fs::remove_dir_all(&dir);
 }

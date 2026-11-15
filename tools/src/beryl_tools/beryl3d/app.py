@@ -4,7 +4,8 @@
 
 The app is built with cargo's `test` profile, as the workspace's tests are: optimized enough to
 measure frames, it shares the dependencies `just b3d cargo-test` built, and the `tools` feature
-gives it `--fixture` and `--pause-at`, which a release build leaves off.
+gives it `--fixture`, `--pause-at`, `--drive`, `--load` and `--slow-gpu`, which a release build
+leaves off.
 """
 
 from __future__ import annotations
@@ -61,6 +62,16 @@ def app_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--pause-at", help="stop the clock at this moment (1500ms)")
     parser.add_argument("--for", dest="run_for", help="end the run after this long")
     parser.add_argument(
+        "--drive",
+        help="play this script of actions (a name in rust/beryl3d/drive), then end",
+    )
+    parser.add_argument(
+        "--load", help="start busy threads: <threads>[:default|utility|interactive]"
+    )
+    parser.add_argument(
+        "--slow-gpu", help="hold each finished frame back this long (5ms)"
+    )
+    parser.add_argument(
         "--window",
         choices=WINDOWS,
         help="none for an agent and fullscreen for a person, unless given",
@@ -81,6 +92,9 @@ def run_app(args: argparse.Namespace) -> int:
         ("--fixture", args.fixture),
         ("--pause-at", args.pause_at),
         ("--for", args.run_for),
+        ("--drive", args.drive),
+        ("--load", args.load),
+        ("--slow-gpu", args.slow_gpu),
     ):
         if value is not None:
             command += [option, value]
@@ -159,6 +173,17 @@ def report(path: Path) -> str:
         f"run: {run['window']} window, {run['display_hz']} Hz, {run['adapter']},"
         f" load {run['load']}, fixture {run['fixture']}",
     ]
+    conditions = [
+        f"{label} {run[key]}"
+        for key, label in (
+            ("drive", "drive"),
+            ("load_threads", "load threads"),
+            ("slow_gpu_ms", "slow GPU ms"),
+        )
+        if run.get(key) is not None
+    ]
+    if conditions:
+        out.append("made to imitate: " + ", ".join(conditions))
     if summary is None:
         out.append("no summary: the run ended before it wrote one")
     else:
@@ -167,8 +192,10 @@ def report(path: Path) -> str:
             f" first shown at {summary['first_shown_ms']} ms",
             f"late: {summary['late']} ({summary['held_to_60']} held to 60 Hz,"
             f" {summary['missed_60']} missed 60 Hz); worst gap {summary['worst_gap_ms']:.1f} ms",
-            f"waited for a drawable: {summary['total_wait_ms']:.1f} ms in all,"
-            f" {summary['worst_wait_ms']:.1f} ms at most; {summary['skipped']} frames found none",
+            f"waited for a drawable: median {summary.get('median_wait_ms', 0.0):.1f} ms,"
+            f" 95th percentile {summary.get('p95_wait_ms', 0.0):.1f} ms,"
+            f" worst {summary['worst_wait_ms']:.1f} ms; {summary['total_wait_ms']:.1f} ms in all;"
+            f" {summary['skipped']} frames found none",
         ]
         if run.get("pause_at_ms") is not None:
             out.append(

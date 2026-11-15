@@ -27,6 +27,9 @@ pub struct WindowlessOptions {
     pub pause_at: Option<u64>,
     /// How long it runs before it ends by itself, if it does.
     pub end_after: Option<Duration>,
+    /// How long each finished frame is held back before it counts as shown, to imitate a
+    /// slow GPU (`--slow-gpu`). Zero holds none back.
+    pub slow_gpu: Duration,
 }
 
 /// The windowless host before it runs.
@@ -34,6 +37,8 @@ pub struct Windowless {
     options: WindowlessOptions,
     sender: Sender<Input>,
     receiver: Receiver<Input>,
+    #[cfg(feature = "drive")]
+    drive: Option<crate::drive::Drive>,
 }
 
 impl Windowless {
@@ -44,7 +49,18 @@ impl Windowless {
             options,
             sender,
             receiver,
+            #[cfg(feature = "drive")]
+            drive: None,
         }
+    }
+
+    /// The same host playing `drive` on the display's clock, ending the run after its last
+    /// action.
+    #[cfg(feature = "drive")]
+    #[must_use]
+    pub fn driven(mut self, drive: Option<crate::drive::Drive>) -> Self {
+        self.drive = drive;
+        self
     }
 
     /// A handle other threads use to send inputs. The host waits on the same channel, so
@@ -53,12 +69,12 @@ impl Windowless {
         Inbox::new(self.sender.clone(), || true)
     }
 
-    /// Runs `client` with `feed` added to its frame loop until `end_after` has passed, or for
-    /// ever when it is not given. `setup` prepares the renderer before the first frame.
+    /// Runs `client` with `feed` added to its frame loop until `end_after` has passed or the
+    /// drive script has given its last action, or for ever when neither is given. `setup` prepares the renderer before the first frame.
     ///
     /// # Errors
     ///
-    /// When there is no GPU adapter or device.
+    /// When there is no GPU adapter or device, or a drive script's locator found nothing.
     pub fn run(
         self,
         client: Client,
@@ -76,15 +92,22 @@ impl Windowless {
             adapter: renderer.adapter().to_owned(),
         });
         crate::threads::interactive_thread();
-        let mut frames = FrameLoop::new(client, Timer::default())
+        let frames = FrameLoop::new(client, Timer::default())
             .with_feed(feed)
             .paused_at(options.pause_at);
+        #[cfg(feature = "drive")]
+        let frames = frames.driven(self.drive);
+        let mut frames = frames;
         frames.handle(Input::Surface {
             size: options.size,
             scale: options.scale,
             safe_area: Insets::default(),
         });
-        let mut screen = Offscreen { renderer, target };
+        let mut screen = Offscreen {
+            renderer,
+            target,
+            slow_gpu: options.slow_gpu,
+        };
         let interval = Duration::from_secs_f64(1.0 / f64::from(options.hz.max(1.0)));
         let started = Instant::now();
         let end = options.end_after.map(|end| started + end);
@@ -95,6 +118,9 @@ impl Windowless {
             let now = Instant::now();
             if end.is_some_and(|end| now >= end) {
                 return Ok(());
+            }
+            if let Some(driven) = frames.driven_to_end() {
+                return driven;
             }
             let since = |at: Instant| at.duration_since(started).as_nanos() as u64;
             let sleep = frames.schedule(since(now));
@@ -163,12 +189,16 @@ impl Ticks for Timer {
 struct Offscreen {
     renderer: Renderer,
     target: Target,
+    slow_gpu: Duration,
 }
 
 impl Draw for Offscreen {
     fn draw(&mut self, frame: &Frame) -> Option<Shown> {
         let started = Instant::now();
         self.renderer.render(frame, &mut self.target);
+        if !self.slow_gpu.is_zero() {
+            std::thread::sleep(self.slow_gpu);
+        }
         Some(Shown {
             waited: 0,
             encoded: started.elapsed().as_nanos() as u64,

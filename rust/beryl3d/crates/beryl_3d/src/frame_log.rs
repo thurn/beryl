@@ -25,6 +25,11 @@ use serde::{Deserialize, Serialize};
 const SIXTIETH: f64 = 1e9 / 60.0;
 /// How many intervals may pass between two frames before the second is late.
 const LATE: f64 = 1.5;
+/// The width of one bucket of the waits for a drawable, in nanoseconds: a tenth of a
+/// millisecond.
+const WAIT_BUCKET: u64 = 100_000;
+/// How many buckets the waits are counted in. The last holds every wait of 100 ms or more.
+const WAIT_BUCKETS: usize = 1001;
 
 /// The first line: what the run was.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -46,6 +51,15 @@ pub struct Run {
     pub fixture: Option<String>,
     /// Where the clock stopped, in milliseconds, if it did.
     pub pause_at_ms: Option<f64>,
+    /// The drive script played, if one was (`--drive`).
+    #[serde(default)]
+    pub drive: Option<String>,
+    /// The busy threads the app started, as `--load` wrote them (`16:default`), if it did.
+    #[serde(default)]
+    pub load_threads: Option<String>,
+    /// How long each finished frame was held back, in milliseconds, if it was (`--slow-gpu`).
+    #[serde(default)]
+    pub slow_gpu_ms: Option<f64>,
 }
 
 /// A late frame. Times are in milliseconds.
@@ -92,6 +106,12 @@ pub struct Summary {
     /// The longest and the total wait for a drawable, in milliseconds.
     pub worst_wait_ms: f64,
     pub total_wait_ms: f64,
+    /// The median wait for a drawable over the frames shown, and the 95th percentile, in
+    /// milliseconds, to a tenth of a millisecond.
+    #[serde(default)]
+    pub median_wait_ms: f64,
+    #[serde(default)]
+    pub p95_wait_ms: f64,
     /// Frames drawn after the one at the pause, when the clock stopped.
     pub after_pause: u64,
     /// The verbs the client played as instant changes because they are not built yet.
@@ -130,6 +150,9 @@ pub struct FrameLog {
     summary: Summary,
     /// Whether a frame has been drawn at or after the pause.
     reached_pause: bool,
+    /// How many shown frames waited for a drawable for each tenth of a millisecond, made once
+    /// so that counting a frame allocates nothing.
+    waits: Box<[u32; WAIT_BUCKETS]>,
 }
 
 impl FrameLog {
@@ -165,6 +188,7 @@ impl FrameLog {
             pause_at: run.pause_at_ms.map(|ms| (ms * 1e6) as u64),
             summary: Summary::default(),
             reached_pause: false,
+            waits: Box::new([0; WAIT_BUCKETS]),
         })
     }
 
@@ -191,6 +215,8 @@ impl FrameLog {
         };
         summary.first_shown_ms.get_or_insert(ms(ticked.tick));
         let waited = ms(shown.waited);
+        let bucket = usize::try_from(shown.waited / WAIT_BUCKET).unwrap_or(usize::MAX);
+        self.waits[bucket.min(WAIT_BUCKETS - 1)] += 1;
         summary.worst_wait_ms = summary.worst_wait_ms.max(waited);
         summary.total_wait_ms += waited;
         let Some(gap) = ticked.since_last else {
@@ -234,6 +260,9 @@ impl FrameLog {
     /// When a line could not be written.
     pub fn finish(mut self) -> io::Result<Summary> {
         self.summary.seconds = self.created.elapsed().as_secs_f64();
+        let worst = self.summary.worst_wait_ms;
+        self.summary.median_wait_ms = percentile(&self.waits[..], 0.5).min(worst);
+        self.summary.p95_wait_ms = percentile(&self.waits[..], 0.95).min(worst);
         let summary = self.summary;
         let _ = self.lines.send(Line::Summary(summary.clone()));
         drop(self.lines);
@@ -242,6 +271,24 @@ impl FrameLog {
             .map_err(|_| io::Error::other("the frame log's writer panicked"))??;
         Ok(summary)
     }
+}
+
+/// The wait, in milliseconds, that a share `q` of the counted frames waited no longer than: the
+/// top of the bucket the frame at that rank falls in. Zero when no frame was counted.
+fn percentile(waits: &[u32], q: f64) -> f64 {
+    let total: u64 = waits.iter().map(|&count| u64::from(count)).sum();
+    if total == 0 {
+        return 0.0;
+    }
+    let rank = ((total as f64 * q).ceil() as u64).max(1);
+    let mut seen = 0;
+    for (bucket, &count) in waits.iter().enumerate() {
+        seen += u64::from(count);
+        if seen >= rank {
+            return ms((bucket as u64 + 1) * WAIT_BUCKET);
+        }
+    }
+    ms(waits.len() as u64 * WAIT_BUCKET)
 }
 
 fn write(file: &mut BufWriter<File>, line: &Line) -> io::Result<()> {
@@ -286,6 +333,29 @@ pub fn read(path: &Path) -> Result<Log, String> {
     Ok(log)
 }
 
+impl Run {
+    /// The machine's load as the run started and what the run was made to imitate, one line:
+    /// its drive script, its busy threads and its slowed frames. `None` when there is nothing to
+    /// say.
+    #[must_use]
+    pub fn conditions(&self) -> Option<String> {
+        let mut parts = Vec::new();
+        if let Some([one, five, fifteen]) = self.load {
+            parts.push(format!("load average {one:.1} {five:.1} {fifteen:.1}"));
+        }
+        if let Some(drive) = &self.drive {
+            parts.push(format!("drive {drive}"));
+        }
+        if let Some(load) = &self.load_threads {
+            parts.push(format!("load threads {load}"));
+        }
+        if let Some(slow) = self.slow_gpu_ms {
+            parts.push(format!("slow GPU {slow} ms"));
+        }
+        (!parts.is_empty()).then(|| parts.join(", "))
+    }
+}
+
 impl Summary {
     /// The summary as `just b3d frames` prints it, a few lines.
     #[must_use]
@@ -300,10 +370,18 @@ impl Summary {
                 self.late, self.held_to_60, self.missed_60, self.worst_gap_ms
             ),
             format!(
-                "waited for a drawable: {:.1} ms in all, {:.1} ms at most; {} frames found none",
-                self.total_wait_ms, self.worst_wait_ms, self.skipped
+                "waited for a drawable: median {:.1} ms, 95th percentile {:.1} ms, worst {:.1} ms; \
+                 {:.1} ms in all; {} frames found none",
+                self.median_wait_ms,
+                self.p95_wait_ms,
+                self.worst_wait_ms,
+                self.total_wait_ms,
+                self.skipped
             ),
         ];
+        if let Some(conditions) = run.conditions() {
+            lines.insert(1, conditions);
+        }
         if let Some(pause) = run.pause_at_ms {
             lines.push(format!(
                 "paused at {pause} ms: {} frames drawn after the pause",

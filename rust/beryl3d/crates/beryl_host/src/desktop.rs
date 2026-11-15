@@ -49,6 +49,9 @@ pub struct Options {
     pub pause_at: Option<u64>,
     /// How long the host runs before it ends by itself, if it does.
     pub end_after: Option<Duration>,
+    /// How long each finished frame is held back before it is shown, to imitate a slow GPU
+    /// (`--slow-gpu`). Zero shows it at once.
+    pub slow_gpu: Duration,
 }
 
 /// What other threads and the display link send the event loop.
@@ -67,6 +70,8 @@ pub struct Desktop {
     options: Options,
     sender: Sender<Input>,
     receiver: Receiver<Input>,
+    #[cfg(feature = "drive")]
+    drive: Option<crate::drive::Drive>,
 }
 
 impl Desktop {
@@ -90,7 +95,18 @@ impl Desktop {
             options,
             sender,
             receiver,
+            #[cfg(feature = "drive")]
+            drive: None,
         })
+    }
+
+    /// The same host playing `drive` on the display's clock, ending the run after its last
+    /// action.
+    #[cfg(feature = "drive")]
+    #[must_use]
+    pub fn driven(mut self, drive: Option<crate::drive::Drive>) -> Self {
+        self.drive = drive;
+        self
     }
 
     /// A handle other threads use to send inputs.
@@ -116,6 +132,8 @@ impl Desktop {
             proxy: self.event_loop.create_proxy(),
             inbox: self.receiver,
             client: Some((client, feed)),
+            #[cfg(feature = "drive")]
+            drive: self.drive,
             setup: Some(setup),
             running: None,
             started: Instant::now(),
@@ -146,6 +164,9 @@ struct App<S> {
     inbox: Receiver<Input>,
     /// The client and the app's feed until the window opens, when they move into `running`.
     client: Option<(Client, Box<dyn Feed>)>,
+    /// The drive script until the window opens, when it moves into the frame loop.
+    #[cfg(feature = "drive")]
+    drive: Option<crate::drive::Drive>,
     setup: Option<S>,
     running: Option<Running>,
     /// The client's time 0.
@@ -166,16 +187,22 @@ struct Screen {
     renderer: Renderer,
     surface: Surface,
     window: Arc<Window>,
+    /// How long each finished frame is held back before it is shown (`Options::slow_gpu`).
+    slow_gpu: Duration,
 }
 
 impl Draw for Screen {
     fn draw(&mut self, frame: &Frame) -> Option<Shown> {
         let window = &self.window;
+        let slow_gpu = self.slow_gpu;
         let started = Instant::now();
-        match self
-            .renderer
-            .present(frame, &mut self.surface, || window.pre_present_notify())
-        {
+        let present = || {
+            if !slow_gpu.is_zero() {
+                std::thread::sleep(slow_gpu);
+            }
+            window.pre_present_notify();
+        };
+        match self.renderer.present(frame, &mut self.surface, present) {
             Presented::Shown { waited, .. } => {
                 let waited = waited.as_nanos() as u64;
                 let total = started.elapsed().as_nanos() as u64;
@@ -250,9 +277,12 @@ impl<S: FnOnce(&mut Renderer)> App<S> {
             adapter: renderer.adapter().to_owned(),
         });
         let pacer = self.pacer(&window, display_hz);
-        let mut frames = FrameLoop::new(client, pacer)
+        let frames = FrameLoop::new(client, pacer)
             .with_feed(feed)
             .paused_at(self.options.pause_at);
+        #[cfg(feature = "drive")]
+        let frames = frames.driven(self.drive.take());
+        let mut frames = frames;
         frames.handle(translator.surface());
         Ok(Running {
             frames,
@@ -260,6 +290,7 @@ impl<S: FnOnce(&mut Renderer)> App<S> {
                 renderer,
                 surface,
                 window: Arc::clone(&window),
+                slow_gpu: self.options.slow_gpu,
             },
             translator,
             window,
@@ -434,6 +465,11 @@ impl<S: FnOnce(&mut Renderer)> ApplicationHandler<UserEvent> for App<S> {
         let Some(running) = &mut self.running else {
             return;
         };
+        if let Some(driven) = running.frames.driven_to_end() {
+            self.error = driven.err();
+            event_loop.exit();
+            return;
+        }
         let wait = match running.frames.schedule(now) {
             Sleep::UntilEvent => None,
             Sleep::Until(at) => Some(self.started + Duration::from_nanos(at)),

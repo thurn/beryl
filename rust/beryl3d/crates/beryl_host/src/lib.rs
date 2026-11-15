@@ -2,9 +2,12 @@
 //! (docs/beryl-3d.md, "Hosts"). `frames` is the loop every host runs, apart from any window;
 //! `desktop` is the winit host for macOS and Windows, and `windowless` draws into an offscreen
 //! target on a timer, for runs with no window, and `headless` (behind its feature) draws the
-//! frames of a recording at moments an agent asks for.
+//! frames of a recording at moments an agent asks for. `drive` (behind its feature) plays a
+//! script of actions on the display's clock.
 
 mod desktop;
+#[cfg(feature = "drive")]
+mod drive;
 mod events;
 mod frames;
 #[cfg(feature = "headless")]
@@ -16,10 +19,12 @@ mod threads;
 mod windowless;
 
 pub use desktop::{Desktop, Options, WindowMode, is_fullscreen_key};
+#[cfg(feature = "drive")]
+pub use drive::Drive;
 pub use events::{LINE_POINTS, Translator, modifiers_from};
 pub use frames::{Draw, Feed, FrameLoop, NoFeed, Opened, Shown, Sleep, Ticked, Ticks};
 #[cfg(feature = "headless")]
 pub use headless::Headless;
 pub use inbox::Inbox;
-pub use threads::{interactive_thread, utility_thread};
+pub use threads::{Class, current_class, interactive_thread, set_class, utility_thread};
 pub use windowless::{Windowless, WindowlessOptions};

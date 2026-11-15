@@ -13,6 +13,9 @@ workspace = true
 # `Headless`, which plays a recording through the test driver and draws its frames offscreen.
 # The app leaves it off, so that the driver is not in its build.
 headless = ["beryl_scene/driver"]
+# `--drive`, which plays a script of actions through the frame loop. Only a debug build of the
+# app has it.
+drive = ["beryl_scene/driver"]
 
 [dependencies]
 beryl_render = { path = "../beryl_render" }

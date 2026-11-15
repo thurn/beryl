@@ -28,6 +28,9 @@ def log(folder: Path, started: int, checkout: str, frames: int) -> Path:
         "load": [1.0, 2.0, 3.0],
         "fixture": "verbs-zones",
         "pause_at_ms": 1500.0,
+        "drive": "hover-hand",
+        "load_threads": "16:default",
+        "slow_gpu_ms": None,
     }
     late = [
         {
@@ -57,6 +60,8 @@ def log(folder: Path, started: int, checkout: str, frames: int) -> Path:
             "worst_gap_ms": 31.0,
             "worst_wait_ms": 1.0,
             "total_wait_ms": 12.0,
+            "median_wait_ms": 0.9,
+            "p95_wait_ms": 1.0,
             "after_pause": 0,
             "unbuilt": [],
         }
@@ -79,6 +84,11 @@ def test_a_report_gives_the_summary_and_the_ten_worst_frames(tmp_path: Path) -> 
     printed = app.report(log(tmp_path, 2000, "/here", 10)).splitlines()
     assert any("10 frames in 3.0 s" in line for line in printed)
     assert any("0 frames drawn after the pause" in line for line in printed)
+    assert "made to imitate: drive hover-hand, load threads 16:default" in printed
+    assert any(
+        "median 0.9 ms, 95th percentile 1.0 ms, worst 1.0 ms" in line
+        for line in printed
+    )
     worst = [line for line in printed if line.startswith("  at ")]
     assert len(worst) == app.WORST
     assert "gap 31.0" in worst[0] and "gap 22.0" in worst[-1]

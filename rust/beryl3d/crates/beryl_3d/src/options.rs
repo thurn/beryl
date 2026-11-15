@@ -3,6 +3,8 @@
 
 use std::time::Duration;
 
+use beryl_host::Class;
+
 /// What the app opens.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Window {
@@ -50,14 +52,21 @@ pub struct Options {
     /// How long the run lasts before the app ends it.
     pub run_for: Option<Duration>,
     pub window: Window,
+    /// The drive script to play: a name in `rust/beryl3d/drive`, or a path.
+    pub drive: Option<String>,
+    /// Busy threads to start, and their class (`--load`).
+    pub load: Option<(usize, Class)>,
+    /// How long each finished frame is held back before it is shown (`--slow-gpu`).
+    pub slow_gpu: Option<Duration>,
 }
 
-/// Whether this build has the options only a debug build has (`--fixture` and `--pause-at`).
+/// Whether this build has the options only a debug build has (`--fixture`, `--pause-at`,
+/// `--drive`, `--load` and `--slow-gpu`).
 pub const TOOLS: bool = cfg!(feature = "tools");
 
 impl Options {
     /// Reads `arguments`, the command line after the program's name. With `tools` false, as in
-    /// a release build, `--fixture` and `--pause-at` are not options.
+    /// a release build, the options of `TOOLS` are not options.
     ///
     /// # Errors
     ///
@@ -68,6 +77,9 @@ impl Options {
             pause_at: None,
             run_for: None,
             window: Window::Fullscreen,
+            drive: None,
+            load: None,
+            slow_gpu: None,
         };
         let mut rest = arguments.iter();
         while let Some(option) = rest.next() {
@@ -79,6 +91,9 @@ impl Options {
             match option.as_str() {
                 "--fixture" if tools => options.fixture = Some(value()?),
                 "--pause-at" if tools => options.pause_at = Some(value()?),
+                "--drive" if tools => options.drive = Some(value()?),
+                "--load" if tools => options.load = Some(crate::load::parse(&value()?)?),
+                "--slow-gpu" if tools => options.slow_gpu = Some(duration(&value()?)?),
                 "--for" => options.run_for = Some(duration(&value()?)?),
                 "--window" => {
                     let word = value()?;
@@ -107,6 +122,15 @@ pub fn usage(tools: bool) -> String {
     if tools {
         lines.push("  --fixture <recording>                            replay a recording");
         lines.push("  --pause-at <moment>                              stop the clock there");
+        lines.push(
+            "  --drive <script>                                 play a script of actions, then end",
+        );
+        lines.push(
+            "  --load <threads>[:<class>]                       busy threads (class default)",
+        );
+        lines.push(
+            "  --slow-gpu <duration>                            hold each frame back this long",
+        );
     }
     lines.join("\n")
 }

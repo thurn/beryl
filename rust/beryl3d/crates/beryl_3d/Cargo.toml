@@ -22,9 +22,9 @@ required-features = ["tools"]
 
 [features]
 # What only a debug build has: `--fixture`, which replays a recording from the recordings pack
-# instead of playing a game, and `--pause-at`. A release build leaves it off, and with it the
+# instead of playing a game, `--pause-at`, `--drive`, `--load` and `--slow-gpu`. A release build leaves it off, and with it the
 # pack.
-tools = ["dep:beryl_inspect", "beryl_host/headless"]
+tools = ["dep:beryl_inspect", "beryl_host/drive", "beryl_host/headless"]
 
 [dependencies]
 beryl_assets = { path = "../beryl_assets" }

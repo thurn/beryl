@@ -1874,11 +1874,23 @@ just b3d smoke
   person gets when they give no `--window` (decision C15). A run that an agent
   starts must give `--for`, so that it always ends: a windowless run has no
   window to close.
+- **A drive script** is a file of actions, one a line, in `rust/beryl3d/drive`
+  and named `<name>.drive`; `--drive` takes the name or a path. A line may begin
+  `at <duration>`, the time since the host started at which it is given; without
+  one it follows the line before it. `step` waits, `still` waits until nothing
+  moves, and lines beginning `#` are comments. The host gives each action's
+  inputs on the first display tick at or after its time, through the frame loop
+  as it gives a person's, finds a locator in that tick's frame, and ends the run
+  after the last action. A locator that finds nothing ends the run with an error
+  that names the line. `hover-hand` sweeps the pointer across the hand for 20
+  seconds.
 - **Every run writes a frame log of its own** and prints the log's path with a
   summary: frames drawn, late frames, frames held to 60 Hz on a faster display,
-  and how long frames waited for a drawable. `just b3d frames [path]` prints a
-  log's summary and its worst frames. With no path it reads the newest log of a
-  run started from the same checkout.
+  and how long frames waited for a drawable (the median, the 95th percentile,
+  the worst and the total). Its first line records the window, the display's
+  rate, the load average and any drive script, busy threads and slowed frames.
+  `just b3d frames [path]` prints a log's summary and its worst frames. With no
+  path it reads the newest log of a run started from the same checkout.
 - **`live`** speaks to a running debug build over a local socket named for that
   process: `live tree`, `live png` and `live do '<action>'`. When several apps
   are running it takes `--app <process id>`.
@@ -2423,6 +2435,30 @@ What these show:
   search threads' class explicitly rather than rely on where they are started.
 - **The floor's limits.** Every board drew on a device created with
   `wgpu::Limits::downlevel_webgl2_defaults()` with no validation error.
+
+Frame delivery was then measured by Beryl 3D itself, on 2026-11-15, by an agent
+with no person at the window (decision C16): the `hover-hand` drive script over
+`verbs-zones` for 20 seconds, on the same Mac's 120 Hz display, at a machine
+load average of 51 to 56 from other sessions' builds and tests. `--load 16`
+added 16 busy threads in the default class. Waits are for a drawable, in
+milliseconds.
+
+| Window     | Busy threads | Frames | Late (held to 60 Hz / missed 60 Hz) | Worst gap | Wait: median, 95th, worst |
+| ---------- | -----------: | -----: | ----------------------------------- | --------: | ------------------------- |
+| background |            0 |  1,246 | 8 (3 / 5)                           |  154.3 ms | 0.1, 0.6, 153.9           |
+| background |           16 |  1,302 | 0                                   |    8.6 ms | 0.1, 0.1, 1.8             |
+| fullscreen |           16 |  1,126 | 94 (93 / 1)                         |   46.4 ms | 0.1, 8.0, 45.9            |
+
+- **The late frames are the window server's, not the app's.** In every run the
+  client took under 0.1 ms and the encode under 1 ms in each late frame. The
+  background window's worst gap was one wait of 154 ms for a drawable, in the
+  run with no added load, so a single run does not show that the added threads
+  matter.
+- **Fullscreen held frames to 60 Hz.** 93 of its 94 late frames came within one
+  and a half sixtieths of a second, and its 95th percentile wait was 8 ms: the
+  system often showed the fullscreen surface at 60 Hz, which the background
+  window, composed with the others, did not do. Neither the frame log nor these
+  runs say why.
 
 | Measure                                   | Result                          |
 | ----------------------------------------- | ------------------------------- |
