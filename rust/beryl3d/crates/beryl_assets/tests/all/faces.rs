@@ -13,8 +13,20 @@ use beryl_assets::{
     CacheKey, Config, ENCODER_VERSION, Format, Full, Layer, Prepared, Preparer, Source, Upload,
     decklist_faces, faces_built_on_this_thread,
 };
-use beryl_cards::decks::WU_CONTROL;
 use beryl_scene::input::{AssetReady, FaceId, FaceSize};
+
+/// The main deck of the WU Control sample list, the Milestone 1 mirror, as `(count, name)`
+/// lines: read from the file rather than from `beryl_cards`, so that these tests link no cards.
+fn wu_control() -> Vec<(u8, &'static str)> {
+    include_str!("../../../../../../docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt")
+        .lines()
+        .take_while(|line| !line.trim().is_empty())
+        .map(|line| {
+            let (count, name) = line.split_once(' ').expect("a line is a count and a name");
+            (count.parse().expect("a count is a number"), name.trim())
+        })
+        .collect()
+}
 
 /// Nothing listens here, so a download fails at once.
 const NOWHERE: Origins<'static> = Origins {
@@ -66,7 +78,7 @@ fn scan() -> Vec<u8> {
 /// Puts a scan in `dir`'s scan cache for every face of the WU Control list.
 fn cache_every_scan(dir: &Path) {
     let bytes = scan();
-    let faces = beryl_assets::MatchFaces::list(&[WU_CONTROL]);
+    let faces = beryl_assets::MatchFaces::list(&[&wu_control()]);
     for face in &faces.faces {
         let file = dir.join("art").join(&face.scan[1..]);
         fs::create_dir_all(file.parent().unwrap()).unwrap();
@@ -108,7 +120,7 @@ fn the_cache_key_changes_with_the_encoder_version() {
 fn a_second_match_reads_every_face_from_the_cache_on_worker_threads() {
     let scratch = Scratch::new("second");
     cache_every_scan(&scratch.0);
-    let faces = decklist_faces(&[WU_CONTROL, WU_CONTROL]);
+    let faces = decklist_faces(&[&wu_control(), &wu_control()]);
     let formats = [Format::Etc2Rgba8];
 
     let mut first = preparer(&scratch.0);
@@ -147,7 +159,7 @@ fn a_second_match_reads_every_face_from_the_cache_on_worker_threads() {
 fn a_face_with_no_scan_is_a_placeholder_and_is_not_cached() {
     let scratch = Scratch::new("placeholder");
     let mut assets = preparer(&scratch.0);
-    let results = assets.prepare_match(&decklist_faces(&[WU_CONTROL]), &[Format::Etc2Rgba8]);
+    let results = assets.prepare_match(&decklist_faces(&[&wu_control()]), &[Format::Etc2Rgba8]);
     let count = assets.faces().unwrap().faces.len();
     let prepared = receive(&results, count);
     for prepared in &prepared {
@@ -167,7 +179,7 @@ fn a_face_with_no_scan_is_a_placeholder_and_is_not_cached() {
 fn the_seventeenth_full_size_face_drops_the_least_recently_used() {
     let scratch = Scratch::new("full");
     let mut assets = preparer(&scratch.0);
-    let results = assets.prepare_match(&decklist_faces(&[WU_CONTROL]), &[Format::Etc2Rgba8]);
+    let results = assets.prepare_match(&decklist_faces(&[&wu_control()]), &[Format::Etc2Rgba8]);
     let board = assets.faces().unwrap().faces.len();
     assert!(board > 17);
     for face in 1..=16 {

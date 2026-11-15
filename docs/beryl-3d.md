@@ -283,11 +283,15 @@ job, and each depends only on crates below it in this list.
 
 The seven crates are a Cargo workspace of their own, `rust/beryl3d`, with its
 own lock file and build directory (decision C17). They reach the game through
-path dependencies on four crates of the main workspace: `beryl_protocol`, the
+path dependencies on five crates of the main workspace: `beryl_protocol`, the
 wire types (views, scripts, prompts and fixture messages) with no rules or
-cards; `beryl_session`, which plays a game and builds those types; the fixture
-recorder in `beryl_cli`; and `beryl_art`, the image download queue and disk
-cache that the Tauri shell also uses.
+cards; `beryl_card_records`, which builds the card records those types name from
+the card store, with no engine or cards; `beryl_session`, which plays a game and
+builds those types; the fixture recorder in `beryl_cli`; and `beryl_art`, the
+image download queue and disk cache that the Tauri shell also uses. Only
+`beryl_3d` and `beryl_record` depend on `beryl_session` or a card crate, so an
+edit to the engine rebuilds no other crate or test binary (`scene-purity` checks
+their manifests).
 
 - **`beryl_3d`**, the app. It connects the session, the client core, the
   renderer, the background workers and audio. It is built as an executable on
@@ -301,8 +305,8 @@ cache that the Tauri shell also uses.
 - **`beryl_assets`**, everything prepared off the drawing thread: decoding the
   card images that `beryl_art` downloads, composing card faces, compressing
   textures and rasterizing glyphs. Listing a match's faces from its decklists
-  needs the card records of `beryl_session`, so that function is behind the
-  `decklists` feature, which `beryl_pictures` leaves off.
+  needs the card store, through `beryl_card_records`, so that function is behind
+  the `decklists` feature, which `beryl_pictures` leaves off.
 - **`beryl_record`**, the `record` program, which plays the engine through
   `beryl_cli`'s fixture and spec recorders to build the file of recordings when
   it is missing. It is the only crate of the workspace that plays the engine

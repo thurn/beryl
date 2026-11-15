@@ -1,6 +1,7 @@
 //! Card faces: the client lists the match's faces from the card records it is given, and draws
 //! each card from its face's layer once the face has arrived (docs/beryl-3d.md, "Card faces").
 
+use beryl_card_records::{CardRecords, TokenMakers, card_records_among};
 use beryl_scene::agent::checks::blank_cards;
 use beryl_scene::agent::{Context, Layout, Rule};
 use beryl_scene::faces::{CARD_BACK, FaceList};
@@ -8,7 +9,6 @@ use beryl_scene::frame::{Frame, Material, Role};
 use beryl_scene::input::{AssetReady, FaceId, FaceSize, Input, Insets, Size};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
 use beryl_scene::{Client, Config};
-use beryl_session::card_records::{CardRecords, card_records_among};
 
 const SIZE: Size = Size {
     width: 1440.0,
@@ -20,7 +20,8 @@ fn sample() -> (ViewBuilder, CardRecords) {
     let mut builder = ViewBuilder::sample();
     builder.script(ScriptBuilder::reset().build());
     let view = builder.build();
-    let records = card_records_among(view.objects.iter().filter_map(|o| o.name.as_deref()));
+    let names = view.objects.iter().filter_map(|o| o.name.as_deref());
+    let records = card_records_among(names, TokenMakers::NONE);
     (builder, records)
 }
 

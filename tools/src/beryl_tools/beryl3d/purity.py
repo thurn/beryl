@@ -73,6 +73,17 @@ GPU_CALL: re.Pattern[str] = re.compile(r"\bwgpu::")
 RECORDER_CRATE = "beryl_cli"
 RECORD = "beryl_record"
 RECORDER_FILE = f"rust/beryl3d/crates/{RECORD}/src/recorder.rs"
+# The main workspace's crates that bring the engine, the rules or the cards. Only the app and
+# the recorder may depend on them: every other crate, and each of its test binaries, then builds
+# without them, so an edit to the engine rebuilds only those two (docs/beryl-3d.md,
+# "Edit-to-output time"). Card records come from `beryl_card_records`, which links none of them.
+ENGINE_CRATES: tuple[str, ...] = (
+    "beryl_session",
+    "beryl_cards",
+    "beryl_engine",
+    "beryl_rules",
+)
+ENGINE_USERS: frozenset[str] = frozenset({"beryl_3d", RECORD})
 
 
 def crates(root: Path) -> Path:
@@ -100,6 +111,7 @@ def scene_purity(root: Path) -> list[str]:
         return found
     for crate in sorted(p for p in base.iterdir() if p.is_dir()):
         found.extend(recorder_use(root, crate))
+        found.extend(engine_use(root, crate))
         if crate.name == SCENE:
             found.extend(scene_dependencies(root, crate))
         for path in sorted((crate / "src").rglob("*.rs")):
@@ -193,6 +205,22 @@ def scene_dependencies(root: Path, crate: Path) -> list[str]:
         "there once it is known to read no clock, start no thread and touch no file"
         for name in sorted(named.get("dependencies", {}))
         if name not in SCENE_DEPENDENCIES
+    ]
+
+
+def engine_use(root: Path, crate: Path) -> list[str]:
+    """A line for each engine crate that `crate`'s manifest depends on, in any table, unless
+    `crate` is one of `ENGINE_USERS`."""
+    manifest = crate / "Cargo.toml"
+    if crate.name in ENGINE_USERS or not manifest.is_file():
+        return []
+    named = tomllib.loads(manifest.read_text())
+    tables = ("dependencies", "dev-dependencies", "build-dependencies")
+    return [
+        f"{manifest.relative_to(root).as_posix()}: {crate.name} depends on {name}; only "
+        "beryl_3d and beryl_record link the engine (card records: beryl_card_records)"
+        for name in ENGINE_CRATES
+        if any(name in named.get(table, {}) for table in tables)
     ]
 
 

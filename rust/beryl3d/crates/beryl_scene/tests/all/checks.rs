@@ -3,6 +3,7 @@
 //! script clock's tests, played by the test driver.
 
 use crate::common::{MS, before, three_beats};
+use beryl_card_records::{TokenMakers, fixture_message};
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::{Side, Why, ZoneName};
 use beryl_protocol::script::Verb;
@@ -12,7 +13,6 @@ use beryl_scene::driver::{Checked, Mode, Page, Recording};
 use beryl_scene::input::{Insets, Size};
 use beryl_scene::play::record::{Cause, MoveKey, Planted, ScriptRecord, SegmentRecord, StepRecord};
 use beryl_scene::pose::{Curve, Pose, Segment};
-use beryl_session::card_records;
 use glam::Vec3;
 
 const SIZE: Size = Size {
@@ -36,7 +36,7 @@ fn page() -> Page {
         FixtureMessage::game_update(&start),
         FixtureMessage::game_update(&after),
     ];
-    messages.insert(0, card_records::fixture_message(&messages));
+    messages.insert(0, fixture_message(&messages, TokenMakers::NONE));
     let recording = Recording(messages);
     Page::new(recording.into(), Side::You, Layout::Desktop, SIZE)
         .expect("the views can be read")

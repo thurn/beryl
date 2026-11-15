@@ -109,3 +109,14 @@ def test_the_scene_depends_only_on_listed_crates(tmp_path: Path) -> None:
     write(tmp_path, manifest, '[dependencies]\nglam = "0.34"\nrand = "0.9"\n')
     (found,) = purity.scene_purity(tmp_path)
     assert found.startswith(f"{manifest}: beryl_scene depends on rand")
+
+
+def test_only_the_app_and_the_recorder_depend_on_the_engine(tmp_path: Path) -> None:
+    session = '[dependencies]\nberyl_session = { path = "x" }\n'
+    write(tmp_path, f"{CRATES}/beryl_3d/Cargo.toml", session)
+    write(tmp_path, f"{CRATES}/beryl_record/Cargo.toml", session)
+    assert purity.scene_purity(tmp_path) == []
+    cards = '[dev-dependencies]\nberyl_cards = { path = "x" }\n'
+    write(tmp_path, f"{CRATES}/beryl_assets/Cargo.toml", cards)
+    (found,) = purity.scene_purity(tmp_path)
+    assert "beryl_assets depends on beryl_cards" in found

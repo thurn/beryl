@@ -63,5 +63,10 @@
     "label": "Beryl 3D's tests, record and gate share one test-profile build, with one integration-test binary per crate",
     "metric": "fast-check.cpu-seconds",
     "expect": "down"
+  },
+  {
+    "label": "Only beryl_3d and beryl_record link the engine, so an engine edit rebuilds no other Beryl 3D test",
+    "metric": "fast-check.cpu-seconds",
+    "expect": "down"
   }
 ]

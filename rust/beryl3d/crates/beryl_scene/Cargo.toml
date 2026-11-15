@@ -35,7 +35,8 @@ serde_json = { version = "1.0.154", optional = true }
 # The crate itself with the `driver` feature, for the `testing` builders its tests use.
 beryl_scene = { path = ".", features = ["driver"] }
 # The card store's records for the cards a test's views name, which the scene draws faces from.
-beryl_session = { path = "../../../crates/beryl_session" }
+# It links no engine or cards.
+beryl_card_records = { path = "../../../crates/beryl_card_records" }
 
 [build-dependencies]
 # Reads data/beryl3d/space.json and gates.json at build time, in place of a hand-written parser.

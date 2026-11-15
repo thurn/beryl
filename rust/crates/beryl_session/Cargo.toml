@@ -15,6 +15,8 @@ workspace = true
 # The renderer (`beryl_card::render`) writes an ability's rules text where its card prints none.
 beryl_card = { path = "../beryl_card" }
 beryl_card_store = { path = "../beryl_card_store" }
+# The card records the UI draws, which this crate serves with the engine's token makers.
+beryl_card_records = { path = "../beryl_card_records" }
 beryl_cards = { path = "../beryl_cards" }
 beryl_engine = { path = "../beryl_engine" }
 # The wire types this crate builds and re-exports at the same paths.

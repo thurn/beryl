@@ -160,9 +160,8 @@ version = "0.1.0"
 dependencies = [
  "beryl_art",
  "beryl_assets",
- "beryl_cards",
+ "beryl_card_records",
  "beryl_scene",
- "beryl_session",
  "ctt",
  "image",
  "swash",
@@ -180,6 +179,15 @@ name = "beryl_card_build"
 version = "0.1.0"
 dependencies = [
  "beryl_card_store",
+ "serde_json",
+]
+
+[[package]]
+name = "beryl_card_records"
+version = "0.1.0"
+dependencies = [
+ "beryl_card_store",
+ "beryl_protocol",
  "serde_json",
 ]
 
@@ -412,9 +420,9 @@ dependencies = [
 name = "beryl_scene"
 version = "0.1.0"
 dependencies = [
+ "beryl_card_records",
  "beryl_protocol",
  "beryl_scene",
- "beryl_session",
  "bytemuck",
  "glam",
  "parley",
@@ -437,6 +445,7 @@ name = "beryl_session"
 version = "0.1.0"
 dependencies = [
  "beryl_card",
+ "beryl_card_records",
  "beryl_card_store",
  "beryl_cards",
  "beryl_engine",

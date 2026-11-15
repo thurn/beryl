@@ -1,0 +1,17 @@
+[package]
+name = "beryl_card_records"
+version = "0.1.0"
+description = "The card store's records shaped as the clients draw them, with no engine or cards"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+beryl_card_store = { path = "../beryl_card_store" }
+# The record types the clients draw (`CardRecords`) and the fixture message that carries them.
+beryl_protocol = { path = "../beryl_protocol" }
+# Walks a fixture message's payload for the names it shows, in place of a hand-written reader.
+serde_json = "1.0.154"
