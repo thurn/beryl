@@ -16,7 +16,7 @@ use beryl_scene::table::Table;
 use beryl_scene::testing::ViewBuilder;
 use beryl_scene::text::Text;
 use beryl_scene::text::fonts::Font;
-use beryl_scene::tokens::type_style;
+use beryl_scene::tokens::{space, type_style};
 use beryl_scene::{Client, Config};
 use beryl_session::GameUpdate;
 use beryl_session::prompt::{
@@ -216,6 +216,34 @@ fn the_prompt_bar_shows_its_title_and_buttons_in_the_dock() {
         .count();
     assert_eq!(panels, 3);
     assert!(frame.work.layout_nodes > 0 && frame.work.text_runs > 0);
+}
+
+#[test]
+fn a_prompt_with_no_title_shows_only_its_buttons() {
+    let mut client = client();
+    client.handle(deciding(prompt("")));
+    let frame = client.frame(0);
+    let bar = find(frame, Role::Region, "prompt");
+    assert!(
+        !frame
+            .resolved
+            .iter()
+            .any(|element| element.role == Role::Text),
+        "no text for an empty title"
+    );
+    // The bar holds its padding, the two buttons and one gap between them, and nothing else.
+    let auto = edges(frame, find(frame, Role::Button, "Auto Pay"));
+    let cancel = edges(frame, find(frame, Role::Button, "Cancel"));
+    let (bar_left, _, bar_right, _) = edges(frame, bar);
+    let padding = space::L;
+    assert!(
+        (auto.0 - bar_left - padding).abs() < 0.01,
+        "{auto:?} in {bar_left}"
+    );
+    assert!(
+        (bar_right - cancel.2 - padding).abs() < 0.01,
+        "{cancel:?} in {bar_right}"
+    );
 }
 
 #[test]

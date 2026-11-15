@@ -1,16 +1,18 @@
 //! Recorded fixtures played from end to end through the client, with the timings the session
-//! sent: `verbs-zones`, whose scripts move cards between every zone, and the stress boards.
+//! sent: `verbs-zones`, whose scripts move cards between every zone, `pay-default`, whose
+//! prompts are answered by pressing the flat layer's buttons, and the stress boards.
 
 use std::time::Instant;
 
 use beryl_inspect::pages::{Recorded, check_recording, recording};
 use beryl_inspect::stress;
 use beryl_scene::agent::Layout;
-use beryl_scene::driver::Page;
+use beryl_scene::driver::{Page, TICK};
 use beryl_scene::frame::{Frame, FrameBuilder, Wake};
-use beryl_scene::input::{Insets, Size};
+use beryl_scene::input::{Input, Insets, Size};
 use beryl_scene::play::Show;
 use beryl_scene::table::{DESKTOP, Table, Window};
+use beryl_scene::{Client, Config};
 use beryl_session::protocol::Side;
 use beryl_session::script::Verb;
 
@@ -124,6 +126,132 @@ fn verbs_zones_passes_every_check_on_every_tick() {
         started.elapsed().as_millis()
     );
     assert_eq!(checked.plays, 8, "both seats in four windows");
+}
+
+#[test]
+fn pay_default_plays_to_its_end_from_both_seats_by_pressing_its_buttons() {
+    for seat in SEATS {
+        let mut page = Page::fixture("pay-default", seat, Layout::Desktop);
+        let mut pressed = Vec::new();
+        // How many views had been given when a button was last pressed: each view's prompt is
+        // answered once, as soon as the table rests in it.
+        let mut answered = 0;
+        loop {
+            page.check();
+            if page.ended() {
+                break;
+            }
+            let (given, _, moving) = page.position();
+            if !moving
+                && given > answered
+                && let Some(button) = first_button(&page.tree())
+            {
+                page.press(&button);
+                pressed.push(button);
+                answered = given;
+                continue;
+            }
+            page.step(TICK);
+        }
+        let names: Vec<&str> = pressed
+            .iter()
+            .map(|locator| locator.split('"').nth(1).unwrap_or_default())
+            .collect();
+        // The viewer answers a priority stop, where the recording's stand-in cast a spell, and
+        // then pays its cost automatically; the recording ends at the next priority stop. The
+        // opponent decides nothing in it.
+        let expected: &[&str] = match seat {
+            Side::You => &["Next", "Auto Pay"],
+            Side::Opponent => &[],
+        };
+        assert_eq!(names, expected, "{seat:?}: the buttons pressed");
+    }
+}
+
+#[test]
+fn pay_default_shows_each_prompt_in_the_prompt_bar() {
+    let mut page = Page::fixture("pay-default", Side::You, Layout::Desktop);
+    for (moment, lines) in [
+        ("prompt:1", &["button \"Next\""][..]),
+        (
+            "prompt:2",
+            &["text \"Pay {1}{W}.\"", "button \"Auto Pay\""][..],
+        ),
+        (
+            "prompt:3",
+            &["button \"Resolve\"", "button \"To Main 2\""][..],
+        ),
+    ] {
+        page.seek(&moment.parse().expect("a moment"))
+            .expect("the recording has the moment");
+        let tree = page.tree();
+        let bar: Vec<&str> = tree
+            .lines()
+            .skip_while(|line| !line.trim().starts_with("region \"prompt\""))
+            .skip(1)
+            .map(str::trim)
+            .collect();
+        assert_eq!(bar.len(), lines.len(), "{moment}: the bar holds\n{tree}");
+        for (line, start) in bar.iter().zip(lines) {
+            assert!(line.starts_with(start), "{moment}: {line:?} is {start}");
+            assert_eq!(
+                line.split_whitespace().any(|word| word == "interactive"),
+                line.starts_with("button "),
+                "{moment}: each button, and only a button, can be pressed: {line:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_repeated_pay_default_view_lays_out_and_shapes_nothing() {
+    for seat in SEATS {
+        let views = recording("pay-default", seat)
+            .and_then(|recording| recording.views())
+            .unwrap_or_else(|why| panic!("{why}"));
+        let mut client = Client::new(Config::LARGEST);
+        client.handle(Input::Surface {
+            size: Size {
+                width: 1600.0,
+                height: 900.0,
+            },
+            scale: 1.0,
+            safe_area: Insets::default(),
+        });
+        let mut now = 0;
+        for (index, update) in views.iter().enumerate() {
+            client.handle(Input::Update(Box::new(update.clone())));
+            client.frame(now);
+            now += TICK.0;
+            client.handle(Input::Update(Box::new(update.clone())));
+            let work = client.frame(now).work;
+            assert_eq!(
+                (work.layout_nodes, work.text_runs),
+                (0, 0),
+                "{seat:?} view {}: the same view again",
+                index + 1
+            );
+            now += TICK.0;
+            let work = client.frame(now).work;
+            assert_eq!(
+                (work.layout_nodes, work.text_runs),
+                (0, 0),
+                "{seat:?} view {}: a frame with no input",
+                index + 1
+            );
+        }
+    }
+}
+
+/// The locator of the first button that can be pressed in a tree printout, as its role, name
+/// and id.
+fn first_button(tree: &str) -> Option<String> {
+    let line = tree.lines().map(str::trim).find(|line| {
+        line.starts_with("button \"") && line.split_whitespace().any(|word| word == "interactive")
+    })?;
+    let id = line.find(" #")? + 2;
+    let end = line[id..].find(' ').map_or(line.len(), |at| id + at);
+    Some(line[..end].to_owned())
 }
 
 #[test]

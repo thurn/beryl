@@ -7,9 +7,9 @@ use beryl_scene::frame::StateBits;
 use beryl_scene::input::{Input, KeyCode, PointerPhase, Size};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, timing};
 use beryl_session::ipc::{ChooseRequest, FixtureMessage};
-use beryl_session::prompt::ClickReply;
+use beryl_session::prompt::{ButtonId, Click, ClickReply, ClickRequest};
 use beryl_session::protocol::{Side, Status, Why, ZoneName};
-use beryl_session::script::Act;
+use beryl_session::script::{Act, Subject};
 use beryl_session::{CandidateIndex, DecisionId, SessionId};
 use glam::Vec2;
 
@@ -388,6 +388,52 @@ fn commands_are_answered_from_the_recorded_responses() {
         .answer(&SessionCommand::Undo(decision()))
         .unwrap_err();
     assert!(error.contains("`undo`"), "{error}");
+}
+
+#[test]
+fn a_button_press_takes_the_recorded_answer_of_a_recording_without_clicks() {
+    let recording = Recording(vec![FixtureMessage::response("choose", &())]);
+    let press = |button| {
+        SessionCommand::Click(ClickRequest {
+            decision: decision(),
+            revision: 0,
+            click: Click::Button { button },
+        })
+    };
+    let mut responses = Responses::new(&recording);
+    let answer = responses.answer(&press(ButtonId::Decline)).unwrap();
+    assert_eq!(answer.reply, Reply::Click(Ok(ClickReply::Answered)));
+    assert!(answer.plays_on);
+    // A click on a card is not an answer the recording can stand for.
+    let on_card = SessionCommand::Click(ClickRequest {
+        decision: decision(),
+        revision: 0,
+        click: Click::On {
+            on: Subject::Object {
+                slot: beryl_session::protocol::ObjectId(3),
+            },
+        },
+    });
+    let error = responses.answer(&on_card).unwrap_err();
+    assert!(error.contains("`click`"), "{error}");
+    // A recording that holds clicks answers a press only from them.
+    let recording = Recording(vec![
+        FixtureMessage::response("choose", &()),
+        FixtureMessage::asked(
+            "click",
+            &ClickRequest {
+                decision: decision(),
+                revision: 0,
+                click: Click::Button {
+                    button: ButtonId::Auto,
+                },
+            },
+            &ClickReply::Answered,
+        ),
+    ]);
+    let mut responses = Responses::new(&recording);
+    let error = responses.answer(&press(ButtonId::Decline)).unwrap_err();
+    assert!(error.contains("recorded for"), "{error}");
 }
 
 /// The app builds `beryl_scene` without the `driver` feature, so it has no `Page`.

@@ -8,13 +8,14 @@
 
 use std::collections::{BTreeMap, VecDeque};
 
+use beryl_session::CandidateIndex;
 use beryl_session::GameUpdate;
 use beryl_session::card_records::CardRecords;
 use beryl_session::ipc::{
-    self, CancelRequest, ConcedeRequest, FixtureMessage, PassOnRequest, SetStopsRequest,
-    UndoRequest,
+    self, CancelRequest, ChooseRequest, ConcedeRequest, FixtureMessage, PassOnRequest,
+    SetStopsRequest, UndoRequest,
 };
-use beryl_session::prompt::ClickReply;
+use beryl_session::prompt::{Click, ClickReply};
 use beryl_session::protocol::Status;
 use serde::Serialize;
 use serde_json::Value;
@@ -124,6 +125,25 @@ impl Responses {
                 "the recording cannot replay `{name}`: the test driver does not rewind a \
                  recording"
             ));
+        }
+        if let SessionCommand::Click(click) = command
+            && matches!(click.click, Click::Button { .. })
+            && !self.queues.contains_key(ipc::CLICK)
+            && self.queues.contains_key(ipc::CHOOSE)
+        {
+            // A recording made without clicks (`pay-default`) holds the stand-in's answer to
+            // each prompt as a `choose`, and the views that answer led to. A press on one of
+            // the prompt's buttons answers the prompt, so it takes the recorded answer and
+            // plays on to those views, as any candidate's `choose` would.
+            self.answer(&SessionCommand::Choose(ChooseRequest {
+                decision: click.decision,
+                index: CandidateIndex(0),
+                continuation: None,
+            }))?;
+            return Ok(Answer {
+                reply: Reply::Click(Ok(ClickReply::Answered)),
+                plays_on: true,
+            });
         }
         let queue = self
             .queues

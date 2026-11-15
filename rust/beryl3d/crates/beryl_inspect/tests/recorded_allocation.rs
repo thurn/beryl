@@ -50,11 +50,26 @@ unsafe impl GlobalAlloc for Counting {
 #[global_allocator]
 static GLOBAL: Counting = Counting;
 
-/// Plays `verbs-zones` as the test driver does, giving each view 400 milliseconds after the
-/// table rests in the one before, and counts what every frame allocates.
+/// Plays `verbs-zones`, whose scripts move cards between every zone, and `pay-default`, whose
+/// prompts fill the flat layer, as the test driver does, giving each view 400 milliseconds
+/// after the table rests in the one before, and counts what every frame allocates.
 #[test]
-fn frames_allocate_nothing_across_verbs_zones() {
-    let views = recording("verbs-zones", Side::You)
+fn frames_allocate_nothing_across_recorded_games() {
+    for name in ["verbs-zones", "pay-default"] {
+        let (frames, allocated) = play(name);
+        assert!(frames > 20, "{name}: the game played: {frames} frames");
+        assert_eq!(
+            allocated,
+            [],
+            "{name}: frames that allocated, as (milliseconds, allocations)"
+        );
+    }
+}
+
+/// Plays `name` from the first seat, and returns how many frames it took and the frames that
+/// allocated, as (milliseconds, allocations).
+fn play(name: &str) -> (usize, Vec<(u64, usize)>) {
+    let views = recording(name, Side::You)
         .and_then(|recording| recording.views())
         .unwrap_or_else(|why| panic!("{why}"));
     let mut client = Client::new(Config::LARGEST);
@@ -100,10 +115,5 @@ fn frames_allocate_nothing_across_verbs_zones() {
         }
         now += REPLY_DELAY.0;
     }
-    assert!(frames > 100, "the game played: {frames} frames");
-    assert_eq!(
-        allocated,
-        [],
-        "frames that allocated, as (milliseconds, allocations)"
-    );
+    (frames, allocated)
 }
