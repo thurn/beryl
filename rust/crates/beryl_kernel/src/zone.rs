@@ -144,6 +144,9 @@ impl<L: Layout> State<L> {
         // card there: a draw, or a return from a library.
         if to == Zone::Hand {
             self.knowledge[owner].insert(slot);
+            if let Some(sharer) = self.sharer(Seat::BOTH[owner]) {
+                self.knowledge[sharer.index()].insert(slot);
+            }
         }
         if from == Zone::Hand && to == Zone::Library {
             forget_hand(self, Seat::BOTH[owner], slot);
@@ -319,8 +322,10 @@ impl<L: Layout> State<L> {
 /// [CR 402.3]: https://yawgatog.com/resources/magic-rules/#R4023
 fn forget_hand<L: Layout>(s: &mut State<L>, owner: Seat, moved: L::Slot) {
     let hand = s.zones.members[owner.index()][Zone::Hand as usize];
+    // The player controlling the owner sees the hand as the owner does (CR 724.4).
+    let sharer = s.sharer(owner);
     for p in Seat::BOTH {
-        if p != owner {
+        if p != owner && Some(p) != sharer {
             let k = &mut s.knowledge[p.index()];
             k.remove(moved);
             *k &= !hand;

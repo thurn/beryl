@@ -253,7 +253,7 @@ impl Runner {
                             turn: turn.number(),
                             step: turn.step(),
                             purpose: d.prompt.purpose,
-                            answer: Action::answer(d.player, d.kind, pick),
+                            answer: Action::answer(d.decider, d.kind, pick),
                         });
                     }
                     apply(&mut self.s, &self.t, &mut self.x, &mut Replay, Choice(0));
@@ -362,10 +362,12 @@ impl Runner {
         Ok(())
     }
 
-    /// The open decision, which must be `player`'s and of `kind`.
+    /// The open decision, which `player` must answer and of `kind`: a scenario's actions are
+    /// those of the player who answers, who controls the player it belongs to while one
+    /// player controls another (CR 724.5), as in `XMage`'s tests.
     fn expect(&mut self, player: Seat, kind: DecisionKind) -> Result<Decision, String> {
         let d = self.decision()?;
-        if d.player == player && d.kind == kind {
+        if d.decider == player && d.kind == kind {
             Ok(d)
         } else {
             Err(format!(
@@ -415,7 +417,7 @@ impl Runner {
             })
             .collect();
         let (decider, kind, purpose) = match *step {
-            Step::Decide(d) => (Some(d.player), Some(d.kind), Some(d.prompt.purpose)),
+            Step::Decide(d) => (Some(d.decider), Some(d.kind), Some(d.prompt.purpose)),
             Step::Over(_) => (None, None, None),
         };
         let flashback = self
@@ -448,6 +450,7 @@ impl Runner {
             step: turn.step(),
             active: turn.active(),
             decider,
+            controller: turn.controller(),
             kind,
             purpose,
             stack,
@@ -694,7 +697,7 @@ impl Runner {
                     Step::Over(o) => format!("the game over ({o:?})"),
                 };
                 let matches = matches!(position, Step::Decide(d)
-                    if d.player == player && d.kind == kind && d.len() == usize::from(candidates));
+                    if d.decider == player && d.kind == kind && d.len() == usize::from(candidates));
                 if matches {
                     return Ok(());
                 }

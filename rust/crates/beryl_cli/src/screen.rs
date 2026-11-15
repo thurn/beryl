@@ -122,7 +122,7 @@ fn screen_game(
             {
                 synced = true;
             }
-            let answer = agent.choose(observe(&s, t, &mut x, d.player), &d, asked);
+            let answer = agent.choose(observe(&s, t, &mut x, d.decider), &d, asked);
             asked = asked.next();
             if line.search.is_some() {
                 out.searched += 1;

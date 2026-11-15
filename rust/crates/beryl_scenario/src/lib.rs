@@ -64,9 +64,16 @@ pub struct Position {
     pub step: TurnStep,
     #[serde(serialize_with = "json::seat")]
     pub active: Seat,
-    /// Who decides at the open decision, and what; both `None` once the game is over.
+    /// Who answers the open decision, and what; both `None` once the game is over.
     #[serde(serialize_with = "json::optional_seat")]
     pub decider: Option<Seat>,
+    /// The player controlling the active player this turn, if another player does
+    /// (CR 724.1): the exporters do not play such a turn yet.
+    #[serde(
+        serialize_with = "json::optional_seat",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub controller: Option<Seat>,
     #[serde(serialize_with = "json::optional_variant")]
     pub kind: Option<DecisionKind>,
     /// What the open decision's prompt is for, by its name ([`Purpose::name`]): a kind says

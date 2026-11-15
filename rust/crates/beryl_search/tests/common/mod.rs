@@ -69,8 +69,8 @@ pub fn play<L: Layout>(
             Step::Decide(d) => {
                 watch(s, &d);
                 // A paused resolution is seen where its body stopped (§7.3).
-                let i = d.player.index();
-                let c = agents[i].choose(observe(s, t, x, d.player), &d, asked[i].take());
+                let i = d.decider.index();
+                let c = agents[i].choose(observe(s, t, x, d.decider), &d, asked[i].take());
                 apply(s, t, x, &mut Replay, c);
             }
         }

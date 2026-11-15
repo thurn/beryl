@@ -364,6 +364,7 @@ pub(crate) fn decision<L: Layout>(
 ) -> Result<Decision<L>, Full> {
     let options = |kind: DecisionKind, list: L::Queue<Opt<L>, 64>, prompt: Prompt| Decision {
         player: c.player,
+        decider: c.player,
         kind,
         candidates: Candidates::Options(list),
         prompt,
@@ -399,6 +400,7 @@ pub(crate) fn decision<L: Layout>(
                 abilities: 0,
             } if players.is_empty() => Decision {
                 player: c.player,
+                decider: c.player,
                 kind: DecisionKind::Target,
                 candidates: Candidates::Objects(collapse(s, objects)),
                 prompt: Prompt::new(Purpose::Target).most(left),

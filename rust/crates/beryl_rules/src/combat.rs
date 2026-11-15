@@ -125,6 +125,7 @@ pub(crate) fn attack_decision<L: Layout>(
     };
     Ok(Decision {
         player,
+        decider: player,
         kind,
         candidates: Candidates::Options(list),
         // The creature just chosen is the one being aimed.
@@ -368,6 +369,7 @@ pub(crate) fn block_decision<L: Layout>(
             .collect();
         return Ok(Decision {
             player,
+            decider: player,
             kind: DecisionKind::BlockTarget,
             candidates: Candidates::Objects(collapse(s, attackers)),
             // The creature just chosen is the one being aimed.
@@ -389,6 +391,7 @@ pub(crate) fn block_decision<L: Layout>(
     }
     Ok(Decision {
         player,
+        decider: player,
         kind: DecisionKind::Blocker,
         candidates: Candidates::Options(list),
         prompt: Prompt::new(Purpose::Block),

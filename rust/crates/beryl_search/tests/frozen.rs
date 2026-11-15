@@ -34,8 +34,8 @@ fn moves() -> u64 {
             match next(&mut s, &t, x, &mut Replay) {
                 Step::Over(outcome) => break outcome,
                 Step::Decide(d) => {
-                    let i = d.player.index();
-                    let c = agents[i].choose(observe(&s, &t, x, d.player), &d, asked[i].take());
+                    let i = d.decider.index();
+                    let c = agents[i].choose(observe(&s, &t, x, d.decider), &d, asked[i].take());
                     h = fnv(h, u8::try_from(c.0).expect("a choice of a Small game"));
                     apply(&mut s, &t, x, &mut Replay, c);
                 }

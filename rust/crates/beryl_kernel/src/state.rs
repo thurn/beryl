@@ -395,7 +395,9 @@ impl<L: Layout> State<L> {
         &self.pending
     }
 
-    /// Whether `player` knows the identity of the object in `slot`.
+    /// Whether `player` knows the identity of the object in `slot`. A player controlling the
+    /// active player this turn knows what that player knows, which they learn as that player
+    /// does ([`State::sharer`]).
     pub fn knows(&self, player: Seat, slot: L::Slot) -> bool {
         self.knowledge[player.index()].contains(slot)
     }

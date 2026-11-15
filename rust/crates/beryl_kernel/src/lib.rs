@@ -105,7 +105,10 @@
 //! the kernel stores it and gives it back whole: [`state::StackEntry`],
 //! [`state::PendingTrigger`], [`state::Target`], [`state::TriggerInfo`],
 //! [`state::Casting`] and the other payloads of [`state::Pending`], and a
-//! [`decision::Decision`] with its parts. [`state::Derived`] is one going the other way: the
+//! [`decision::Decision`] with its parts. A decision names its player and who answers it,
+//! who differ only while one player controls another (CR 724): the rules build it for its
+//! player, and `next` sets the answerer from [`State::decider`]. [`state::Derived`] is one
+//! going the other way: the
 //! layers compute it, `rederive` stores it, everyone reads it. No invariant ties a record's
 //! fields to the rest of the state except the references it holds, which
 //! [`State::is_current`] checks; where a record is filed is the mutator's to keep. One field
@@ -233,7 +236,10 @@
 //! player's pool holds up to four entries of mana that remembers ([`mana_memory`]), four bytes
 //! each with the queue's length. It is 20,008 since the table of four sets of text changes
 //! that abilities on the stack keep (88 bytes); the byte naming one in each stack entry fits
-//! the entry's padding.
+//! the entry's padding. It is 20,016 since a decision names the player who answers it
+//! ([`decision::Decision::decider`]): the question a paused resolution keeps is 8 bytes
+//! longer, the decision having no spare byte; [`state::Turn::controller`] fits the turn's
+//! padding.
 //! The limit is 20,480. Each bead may change the size at its
 //! own push by at most its allotment, whatever landed before it, and reports the size as it
 //! reports the count:
@@ -305,9 +311,10 @@
 //! names.
 //!
 //! Its payload ([`effects::Payload`]) is a layer change, a zone-change replacement or a
-//! rule change, a permission to cast, a cost change, a regeneration shield or a prevention
-//! shield (built). A prevention shield is the one payload on a player besides a rule change, and
-//! names the source of damage chosen for it, if any, by an [`object::ObjectRef`] that stops
+//! rule change, a permission to cast, a cost change, a regeneration shield, a prevention
+//! shield or a player-controlling effect (built; [`effects::control`] says how a turn is
+//! controlled). A prevention shield is a payload on a player besides a rule change and
+//! control, and names the source of damage chosen for it, if any, by an [`object::ObjectRef`] that stops
 //! matching once that source changes zones. A payload is a
 //! resolved kernel type: every word of the card that needed the resolving ability to
 //! settle it is settled, as [`store::Duration`] names the player "your next turn" means. A
@@ -325,7 +332,8 @@
 //! - **A duration ends.** [`State::expire`] ends everything, in every store, that lasts for
 //!   the [`store::Duration`] it is given. The rules call it as that moment comes, since the
 //!   kernel moves the turn and holds none of its rules: with `UntilYourNextTurn` of the
-//!   active player as a turn begins and `EndOfTurn` in the cleanup step.
+//!   active player as a turn begins and `EndOfTurn` in the cleanup step. A
+//!   player-controlling effect is `Indefinite`: the turn it waits for takes it (CR 724.1b).
 //! - **An object ends.** "While the card stays in its zone" is no duration: whatever is
 //!   stored about an object ends with it
 //!   ([CR 400.7]), inside the three

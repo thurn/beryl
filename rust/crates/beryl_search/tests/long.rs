@@ -40,7 +40,7 @@ fn settings(family: &str, work: u64, threads: u32) -> Settings {
 fn search(t: &GameTable, settings: Settings, seed: u64, s: &State, d: &Decision) -> Search {
     let mut agent = LongSearch::new(t, settings, seed);
     let mut x = Scratch::new();
-    agent.choose(observe(s, t, &mut x, d.player), d, AgentDecision(0));
+    agent.choose(observe(s, t, &mut x, d.decider), d, AgentDecision(0));
     agent.last_search().expect("a search").clone()
 }
 
@@ -74,7 +74,7 @@ fn the_hidden_searches_decide_the_same_on_a_redeterminized_state() {
     let mut rng = SplitMix64::new(11);
     let mut omniscient_differs = false;
     for (i, (s, d)) in positions(&t, &[23, 12, 5]).iter().enumerate() {
-        let det = observe(s, &t, &mut Scratch::new(), d.player).determinize(&t, &mut rng);
+        let det = observe(s, &t, &mut Scratch::new(), d.decider).determinize(&t, &mut rng);
         assert!(Slot::all().any(|slot| det.card_behind(slot) != s.card_behind(slot)));
         for family in ["ismcts2/hidden/rollout/tuned", "pimc2/hidden/cut1/estimate"] {
             let set = settings(family, 4_000, 1);
@@ -98,7 +98,7 @@ fn the_hidden_searches_decide_the_same_on_a_redeterminized_state() {
 fn the_hands_sight_keeps_the_hands_and_deals_the_libraries() {
     let t = mirror();
     let (s, d) = positions(&t, &[10])[0];
-    let obs = Observation::new(&s, d.player);
+    let obs = Observation::new(&s, d.decider);
     let mut libraries_differ = false;
     for seed in 0..4 {
         let det = obs.determinize_libraries(&t, &mut SplitMix64::new(seed));
@@ -180,7 +180,7 @@ fn expert_anchored_search_replays_a_game_from_its_seed() {
     let mut checked = 0;
     let mut own = AgentDecision(0);
     while let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) {
-        let obs = observe(&s, &t, &mut x, d.player);
+        let obs = observe(&s, &t, &mut x, d.decider);
         let choice = if d.player == Seat::BOTH[0] {
             let at = own.take();
             let choice = first.choose(obs, &d, at);
@@ -223,7 +223,7 @@ fn neither_search_thinks_about_the_order_of_cards_for_the_library_bottom() {
     assert!(!orders.is_empty(), "no game asked for a bottom order");
     let mut x = Scratch::new();
     for (s, d) in &orders {
-        let obs = observe(s, &t, &mut x, d.player);
+        let obs = observe(s, &t, &mut x, d.decider);
         let mut long = LongSearch::new(&t, settings("pimc2/hidden/rollout/tuned", 3_000, 1), 1);
         assert_eq!(long.choose(obs, d, AgentDecision(0)), Choice(0));
         assert_eq!(long.last_search(), None);

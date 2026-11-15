@@ -518,11 +518,11 @@ fn collect(
                 clock.start.elapsed().as_secs()
             );
         }
-        let seat = d.player.index();
+        let seat = d.decider.index();
         let at = asked[seat].take();
-        let chosen = players[seat].choose(observe(&s, t, &mut x, d.player), &d, at);
-        let greedy = policy.choose(t, observe(&s, t, &mut x, d.player), &d);
-        let expert = experts[seat].choose(observe(&s, t, &mut x, d.player), &d, at);
+        let chosen = players[seat].choose(observe(&s, t, &mut x, d.decider), &d, at);
+        let greedy = policy.choose(t, observe(&s, t, &mut x, d.decider), &d);
+        let expert = experts[seat].choose(observe(&s, t, &mut x, d.decider), &d, at);
         let state = *view(&s, t, &mut x);
         let events = x.events.drain().collect::<Vec<_>>();
         tr.note(&format!("decision {}", history.len()));

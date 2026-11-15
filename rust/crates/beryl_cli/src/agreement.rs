@@ -97,7 +97,7 @@ fn agreement(dir: &Path, entrant: &str, n: usize, budget: Option<u64>) -> Result
             let picks = SEEDS.map(|seed| {
                 let mut search = LongSearch::new(&t, settings, seed);
                 let c = search.choose(
-                    observe(&p.state, &t, &mut x, p.decision.player),
+                    observe(&p.state, &t, &mut x, p.decision.decider),
                     &p.decision,
                     AgentDecision(0),
                 );

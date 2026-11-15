@@ -96,6 +96,7 @@ fn option<L: Layout>(
     }
     let d = Decision {
         player,
+        decider: player,
         kind,
         candidates: Candidates::Options(list),
         prompt,
@@ -197,6 +198,7 @@ fn pick_about<L: Layout>(
     );
     let d = Decision {
         player,
+        decider: player,
         kind: DecisionKind::ChooseObject,
         candidates: Candidates::Objects(crate::engine::collapse(game.state, candidates)),
         prompt,

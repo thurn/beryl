@@ -61,7 +61,7 @@ fn at_decisions(scenario: &Scenario) -> Vec<Vec<Seen>> {
     let mut all = Vec::new();
     beryl_scenario::visit(&CARDS, scenario, |t, s, d| {
         if d.player == P0 {
-            let obs = Observation::new(s, d.player);
+            let obs = Observation::new(s, d.decider);
             let v = player_view(
                 t,
                 obs,

@@ -37,6 +37,8 @@ class Position:
     face_down: list[str]
     # How many creatures each seat controls.
     creatures: list[int]
+    # The seat controlling the active player this turn (CR 724.1), if another seat does.
+    controller: int | None = None
 
     def object_name(self, card: str) -> str:
         """How XMage's test commands name the object `card` picks: a face-down permanent, which
@@ -63,6 +65,7 @@ class Position:
             turn=cast(int, t["turn"]),
             step=cast(str, t["step"]),
             decider=cast("int | None", t["decider"]),
+            controller=cast("int | None", t.get("controller")),
             kind=cast("str | None", t["kind"]),
             purpose=cast("str | None", t.get("purpose")),
             stack=cast(list[Json], t["stack"]),

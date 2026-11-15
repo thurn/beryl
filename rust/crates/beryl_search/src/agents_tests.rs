@@ -120,8 +120,8 @@ fn play(t: &GameTable, mut agents: [Box<dyn GameAgent + Send>; 2]) -> Outcome {
             Step::Over(outcome) => return outcome,
             Step::Decide(d) => {
                 let d: Decision<Small> = d;
-                let i = d.player.index();
-                let c = agents[i].choose(observe(&s, t, &mut x, d.player), &d, asked[i].take());
+                let i = d.decider.index();
+                let c = agents[i].choose(observe(&s, t, &mut x, d.decider), &d, asked[i].take());
                 apply(&mut s, t, &mut x, &mut Replay, c);
             }
         }

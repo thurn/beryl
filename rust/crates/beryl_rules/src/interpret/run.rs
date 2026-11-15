@@ -293,6 +293,9 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::ChangeRule { rule, duration } => {
                 continuous::change_rule_instruction(self, rule, duration)?
             }
+            Effect::ControlPlayer(players) => {
+                continuous::control_player_instruction(self, players)?
+            }
             Effect::GainFlashback(cards) => flashback::instruction(self, cards)?,
             Effect::PermitCast {
                 player,

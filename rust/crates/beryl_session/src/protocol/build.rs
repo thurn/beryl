@@ -119,7 +119,7 @@ pub fn player_view<L: Layout>(
     objects.sort_by_key(|o| o.slot);
     let status = match moment {
         Moment::Deciding(id, d, resolving) => {
-            debug_assert_eq!(d.player, viewer, "a view shows only its viewer's decision");
+            debug_assert_eq!(d.decider, viewer, "a view shows only its viewer's decision");
             Status::Deciding {
                 decision: decision_view(t, obs, id, d, resolving, stops),
             }
@@ -137,7 +137,7 @@ pub fn player_view<L: Layout>(
     let handling = match moment {
         Moment::Thinking {
             decision: Some(d), ..
-        } if d.player != viewer => card_handling(obs, d),
+        } if d.decider != viewer => card_handling(obs, d),
         _ => None,
     };
     PlayerView {

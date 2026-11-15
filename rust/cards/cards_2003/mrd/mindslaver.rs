@@ -1,0 +1,163 @@
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Mindslaver {6}
+//! Legendary Artifact
+//!
+//! {4}, {T}, Sacrifice Mindslaver: You control target player during that player's next turn. (You
+//! see all cards that player could see and make all decisions for them.)
+// End of the generated card header.
+
+use crate::prelude::*;
+
+/// "{4}, {T}, Sacrifice Mindslaver: You control target player during that player's next turn."
+/// As [CR 724.1] says, "Some cards allow a player to control another player during that player's next
+/// turn. This effect applies to the next turn that the affected player actually takes." The
+/// controller makes every decision of the controlled player that turn ([CR 724.5]: "While
+/// controlling another player, a player makes all choices and decisions the controlled player
+/// is allowed to make or is told to make by the rules or by any objects."), paying with that
+/// player's resources ([CR 724.5a]), and keeps making their own ([CR 724.8]).
+///
+/// [CR 724.1]: https://yawgatog.com/resources/magic-rules/#R7241
+/// [CR 724.5]: https://yawgatog.com/resources/magic-rules/#R7245
+/// [CR 724.5a]: https://yawgatog.com/resources/magic-rules/#R7245a
+/// [CR 724.8]: https://yawgatog.com/resources/magic-rules/#R7248
+pub static CARD: CardDef = Printed::Mindslaver
+    .abilities(&[Ability::activated(Cost::of(
+        ManaCost::generic(4),
+        &[CostPart::TAP, CostPart::SACRIFICE],
+    ))
+    .target(&TargetSpec::player())
+    .effect(&control_player(target_player()))])
+    .card();
+
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
+    use crate::prelude::*;
+
+    const MINDSLAVER: &str = Card::Mindslaver;
+
+    /// P0 after combat, with Mindslaver and the four Islands to activate it; P1 with Oust and a
+    /// Plains to cast it, a creature of each player's to target, and libraries for three draws.
+    const fn slaving(name: &'static str) -> Scenario {
+        Scenario::new(name)
+            .at(1, P0, TurnStep::PostcombatMain)
+            .battlefield(
+                P0,
+                &[
+                    MINDSLAVER,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Prop::SmallCreature,
+                ],
+            )
+            .battlefield(P1, &[Card::Plains, Prop::Creature])
+            .hand(P1, &[Prop::Sorcery])
+            .library(P0, &[Card::Island, Card::Island])
+            .library(P1, &[Card::Island, Card::Island])
+    }
+
+    pub const SCENARIOS: &[Scenario] = &[
+        // CR 724.5 and 724.5a: in P1's next turn P0 casts P1's Oust, paid with P1's Plains, at
+        // P1's own creature; P1 is its controller and gains the 3 life.
+        slaving("the controller casts the opponent's spell at the opponent's creature").actions(&[
+            ME.activates(MINDSLAVER, 0),
+            ME.targets_player(THEM),
+            Resolve,
+            ME.has(Zone::Graveyard, MINDSLAVER, 1),
+            advance_to(2, TurnStep::PrecombatMain),
+            ME.casts(Prop::Sorcery),
+            ME.targets(Prop::Creature),
+            Resolve,
+            THEM.has(Zone::Library, Prop::Creature, 1),
+            THEM.tapped(Card::Plains, 1),
+            THEM.life(23),
+            ME.controls(Prop::SmallCreature, 1),
+        ]),
+        // CR 724.5 and 724.8: P0 declares P1's attack into its own blocker, and as the
+        // defending player declares that block for itself. Each creature dies.
+        slaving("the controller attacks into their own blocker")
+            .battlefield(
+                P0,
+                &[
+                    MINDSLAVER,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Prop::Creature,
+                ],
+            )
+            .battlefield(P1, &[Card::Plains, Prop::SmallCreature])
+            .actions(&[
+                ME.activates(MINDSLAVER, 0),
+                ME.targets_player(THEM),
+                Resolve,
+                advance_to(2, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                ME.attacks_with(Prop::SmallCreature),
+                ME.chooses(DecisionKind::Blocker, Prop::Creature),
+                advance_to(2, TurnStep::EndOfCombat),
+                THEM.has(Zone::Graveyard, Prop::SmallCreature, 1),
+                ME.has(Zone::Graveyard, Prop::Creature, 1),
+                ME.life(20),
+            ]),
+        // CR 724.1: "The affected player is controlled during the entire turn; the effect
+        // doesn't end until the beginning of the next turn." P1 decides for themself again in
+        // their turn after.
+        slaving("the control ends with the turn").actions(&[
+            ME.activates(MINDSLAVER, 0),
+            ME.targets_player(THEM),
+            Resolve,
+            advance_to(2, TurnStep::PrecombatMain),
+            // Passing, playing P1's Island, or casting P1's Oust.
+            ME.deciding(DecisionKind::Priority, 3),
+            advance_to(2, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.done_attacking(),
+            // In their own turn P0 decides for themself, as ever.
+            advance_to(3, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.done_attacking(),
+            advance_to(4, TurnStep::PrecombatMain),
+            THEM.casts(Prop::Sorcery),
+            THEM.targets(Prop::SmallCreature),
+            Resolve,
+            ME.has(Zone::Library, Prop::SmallCreature, 1),
+            ME.life(23),
+        ]),
+        // CR 724.1a: "Multiple player-controlling effects that affect the same player
+        // overwrite each other. The last one to be created is the one that works." P1 answers
+        // P0's Mindslaver with their own, on themself: in their turn they decide for themself
+        // (CR 724.9).
+        slaving("the last player-controlling effect works")
+            .battlefield(
+                P1,
+                &[
+                    MINDSLAVER,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Plains,
+                    Prop::Creature,
+                ],
+            )
+            .actions(&[
+                ME.activates(MINDSLAVER, 0),
+                ME.targets_player(THEM),
+                Resolve,
+                ME.passes(),
+                THEM.activates(MINDSLAVER, 0),
+                THEM.targets_player(THEM),
+                // Their own ability alone on the stack, P1 is not asked to pass, and P0
+                // passes silently with nothing to do.
+                stack(0),
+                advance_to(2, TurnStep::PrecombatMain),
+                THEM.casts(Prop::Sorcery),
+                THEM.targets(Prop::SmallCreature),
+                Resolve,
+                ME.has(Zone::Library, Prop::SmallCreature, 1),
+            ]),
+    ];
+}

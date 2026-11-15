@@ -51,11 +51,12 @@ impl Game {
                 .next_in_step(&self.table, self.seen, &mut self.chance);
             self.log_chance();
             // Once a cast is complete, or another player decides, it can no longer be taken back.
-            if !matches!(&step, Some(Step::Decide(d)) if d.player == self.human && self.casting()) {
+            if !matches!(&step, Some(Step::Decide(d)) if d.decider == self.human && self.casting())
+            {
                 self.before_cast = None;
             }
             // Only the human's decisions that follow their answer at once are its prompt's.
-            if !matches!(&step, Some(Step::Decide(d)) if d.player == self.human || self.reviewing())
+            if !matches!(&step, Some(Step::Decide(d)) if d.decider == self.human || self.reviewing())
             {
                 self.run = None;
             }
@@ -84,7 +85,7 @@ impl Game {
                     cause: None,
                     hurt_by: None,
                 },
-                Some(Step::Decide(d)) if d.player == self.human || self.reviewing() => {
+                Some(Step::Decide(d)) if d.decider == self.human || self.reviewing() => {
                     if let Some(choice) = self.pick_in_run(&d) {
                         self.seq += 1;
                         let id = self.decision_id();
@@ -265,7 +266,7 @@ impl Game {
             return false;
         }
         match self.board.ahead(&self.table, self.seen, &self.chance) {
-            Some(Step::Decide(d)) => d.player != self.human,
+            Some(Step::Decide(d)) => d.decider != self.human,
             Some(Step::Over(_)) => false,
             None => true,
         }

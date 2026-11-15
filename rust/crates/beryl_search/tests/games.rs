@@ -111,10 +111,10 @@ fn widened_plays_on((t, mut small): (GameTable, State), seed: u64) -> u32 {
         );
         assert!(small.widen() == large, "seed {seed}, decision {decisions}");
         let Step::Decide(d) = step else { break };
-        let c = agents[d.player.index()].choose(
-            Observation::new(&small, d.player),
+        let c = agents[d.decider.index()].choose(
+            Observation::new(&small, d.decider),
             &d,
-            asked[d.player.index()].take(),
+            asked[d.decider.index()].take(),
         );
         apply(&mut small, &t, &mut xs, &mut Replay, c);
         apply(&mut large, &t, &mut xl, &mut Replay, c);
@@ -275,7 +275,8 @@ fn a_table_past_255_cards_is_refused_by_small_and_plays_in_large() {
             decisions += 1;
             // A determinization deals the hidden cards again by their wide indices.
             if decisions % 64 == 0 {
-                let det = Observation::new(s, d.player).determinize(&t, &mut SplitMix64::new(seed));
+                let det =
+                    Observation::new(s, d.decider).determinize(&t, &mut SplitMix64::new(seed));
                 check(&det);
             }
             // A wide card where every rule reads it: the battlefield, the stack.
@@ -332,10 +333,10 @@ fn a_sixty_card_game_round_trips_between_the_layouts() {
                 break;
             };
             assert_eq!(d.relayout::<Large>().relayout::<Small>(), d, "seed {seed}");
-            let c = agents[d.player.index()].choose(
-                Observation::new(&small, d.player),
+            let c = agents[d.decider.index()].choose(
+                Observation::new(&small, d.decider),
                 &d,
-                asked[d.player.index()].take(),
+                asked[d.decider.index()].take(),
             );
             apply(&mut small, &t, &mut x, &mut Replay, c);
             decisions += 1;
@@ -412,10 +413,10 @@ fn record((t, mut s): (GameTable, State), seed: u64) -> (Vec<Choice>, Vec<u64>) 
             Step::Over(_) => return (choices, hashes),
             Step::Decide(d) => {
                 hashes.push(fingerprint(&s));
-                let c = agents[d.player.index()].choose(
-                    Observation::new(&s, d.player),
+                let c = agents[d.decider.index()].choose(
+                    Observation::new(&s, d.decider),
                     &d,
-                    asked[d.player.index()].take(),
+                    asked[d.decider.index()].take(),
                 );
                 choices.push(c);
                 apply(&mut s, &t, &mut x, &mut Replay, c);
@@ -490,7 +491,7 @@ fn agents_decide_the_same_on_a_redeterminized_state() {
             &mut Scratch::new(),
             &mut agents(seed),
             |s, d| {
-                let viewer = d.player;
+                let viewer = d.decider;
                 let mut det = Observation::new(s, viewer).determinize(&t, &mut rng);
                 det.check_invariants(&t).unwrap();
                 for slot in Slot::all() {
@@ -524,7 +525,7 @@ fn agents_decide_the_same_on_a_redeterminized_state() {
 fn determinization_keeps_the_size_of_every_hidden_group() {
     let (t, mut s) = game(3);
     play(&t, &mut s, &mut Scratch::new(), &mut agents(3), |s, d| {
-        let det = Observation::new(s, d.player).determinize(&t, &mut SplitMix64::new(1));
+        let det = Observation::new(s, d.decider).determinize(&t, &mut SplitMix64::new(1));
         for p in Seat::BOTH {
             let cards = |s: &State| {
                 let mut v: Vec<CardIx> = Slot::all()

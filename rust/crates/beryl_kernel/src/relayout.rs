@@ -450,6 +450,7 @@ impl<L: Layout> Relayout for Decision<L> {
     fn relayout<M: Layout>(&self) -> Decision<M> {
         Decision {
             player: self.player,
+            decider: self.decider,
             kind: self.kind,
             candidates: self.candidates.relayout(),
             // The prompt has no slot in it: it is the same in every layout.

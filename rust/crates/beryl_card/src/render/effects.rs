@@ -473,6 +473,10 @@ impl Ctx {
             Effect::LoseGame(player) => {
                 vec![self.stated(player, ("lose", "loses"), |_| "the game".to_owned())]
             }
+            Effect::ControlPlayer(player) => vec![format!(
+                "you control {} during that player's next turn",
+                self.player(player)
+            )],
         }
     }
 

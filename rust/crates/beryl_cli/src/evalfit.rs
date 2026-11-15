@@ -42,8 +42,8 @@ fn positions(seed: u64, names: [&str; 2]) -> Result<Vec<Sample>, String> {
                     }
                     at_turns.push(diff);
                 }
-                let i = d.player.index();
-                let c = agents[i].choose(observe(&s, &t, &mut x, d.player), &d, asked[i].take());
+                let i = d.decider.index();
+                let c = agents[i].choose(observe(&s, &t, &mut x, d.decider), &d, asked[i].take());
                 apply(&mut s, &t, &mut x, &mut Replay, c);
             }
         }

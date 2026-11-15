@@ -235,6 +235,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::Attach { .. }
         | Effect::ChangeRule { .. }
         | Effect::GainFlashback(_)
+        | Effect::ControlPlayer(_)
         | Effect::Delay { .. } => Some(Players::You),
     }
 }

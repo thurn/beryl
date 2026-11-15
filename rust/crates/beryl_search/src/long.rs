@@ -1154,12 +1154,12 @@ impl<L: Layout> Tree<L> {
         let mut rng = SplitMix64::new(seed);
         let truth = obs.unmasked_root().clone();
         let mut tree = Tree {
-            nodes: vec![Node::new(0, d.player)],
+            nodes: vec![Node::new(0, d.decider)],
             root: 0,
             decision: d.clone(),
             root_keys: Vec::new(),
             state: truth,
-            viewer: d.player,
+            viewer: d.decider,
             family,
             resample,
             known,
@@ -1264,7 +1264,7 @@ impl<L: Layout> Tree<L> {
             if next(&mut s, t, &mut self.x, &mut Replay) != Step::Decide(d.clone()) {
                 return false;
             }
-            if !shows_the_same(observe(&s, t, &mut self.x, d.player), obs)
+            if !shows_the_same(observe(&s, t, &mut self.x, d.decider), obs)
                 || !self.keeps_to(&s, obs.unmasked_root())
             {
                 return false;
@@ -1371,17 +1371,17 @@ impl<L: Layout> Tree<L> {
                     t,
                     policy,
                     &mut self.x,
-                    d.player,
-                    &mut plans[d.player.index()],
+                    d.decider,
+                    &mut plans[d.decider.index()],
                 )
                 .choose(&s, &d);
-                (self.only(node, keys[usize::from(c.0)], d.player), c)
+                (self.only(node, keys[usize::from(c.0)], d.decider), c)
             } else if policy_only {
-                let c = policy.choose(t, Observation::new(&s, d.player), &d);
-                (self.only(node, keys[usize::from(c.0)], d.player), c)
+                let c = policy.choose(t, Observation::new(&s, d.decider), &d);
+                (self.only(node, keys[usize::from(c.0)], d.decider), c)
             } else {
-                self.select(node, &keys, d.player, |x| {
-                    policy.scores(t, observe(&s, t, x, d.player), &d)
+                self.select(node, &keys, d.decider, |x| {
+                    policy.scores(t, observe(&s, t, x, d.decider), &d)
                 })
             };
             if at_root {
@@ -1413,7 +1413,7 @@ impl<L: Layout> Tree<L> {
             }
         };
         if let Some(trace) = self.trace.as_mut() {
-            trace.score(if self.decision.player == Seat::P0 {
+            trace.score(if self.decision.decider == Seat::P0 {
                 value
             } else {
                 1.0 - value
@@ -1835,7 +1835,7 @@ mod tests {
                     Step::Over(_) => break,
                     Step::Decide(d) => d,
                 };
-                let obs = observe(&s, &t, &mut x, d.player);
+                let obs = observe(&s, &t, &mut x, d.decider);
                 let known: Bitboard = Slot::all().filter(|&q| obs.knows(q)).collect();
                 let world = |i| obs.determinize(&t, &mut SplitMix64::new(i));
                 let first = keys(&world(0), &d, known, d.player);
@@ -2080,7 +2080,7 @@ mod tests {
             if d.kind == DecisionKind::Priority && acts {
                 out.push((s, d));
             }
-            let c = policy.choose(t, observe(&s, t, &mut x, d.player), &d);
+            let c = policy.choose(t, observe(&s, t, &mut x, d.decider), &d);
             apply(&mut s, t, &mut x, &mut Replay, c);
         }
         out
@@ -2094,11 +2094,11 @@ mod tests {
         let (s, d, greedy) = positions(&t, 1)
             .into_iter()
             .find_map(|(s, d)| {
-                let greedy = policy.choose(&t, observe(&s, &t, &mut x, d.player), &d);
+                let greedy = policy.choose(&t, observe(&s, &t, &mut x, d.decider), &d);
                 (greedy != Choice(0)).then_some((s, d, greedy))
             })
             .expect("a priority decision where greedy plays an action");
-        let obs = observe(&s, &t, &mut x, d.player);
+        let obs = observe(&s, &t, &mut x, d.decider);
         let known = Slot::all().filter(|&slot| obs.knows(slot)).collect();
         let ordered = family(Options {
             order: true,
@@ -2131,7 +2131,7 @@ mod tests {
         });
         let mut answered = 0;
         for (s, d) in positions(&t, 1).into_iter().take(10) {
-            let obs = observe(&s, &t, &mut x, d.player);
+            let obs = observe(&s, &t, &mut x, d.decider);
             let known: Bitboard = Slot::all().filter(|&q| obs.knows(q)).collect();
             let mut tree = Tree::new(&t, mid, obs, &d, known, false, 7);
             tree.grow_to(&t, &policy, 10_000);
@@ -2208,7 +2208,7 @@ mod tests {
         let (mut searched, mut checked) = (0, 0);
         // Where the guard can act: greedy passes, and a spell it would hold is on offer.
         let holds = |s: &State, d: &Decision, x: &mut Scratch| {
-            let obs = observe(s, &t, x, d.player);
+            let obs = observe(s, &t, x, d.decider);
             let g = policy.choose(&t, obs, d);
             (0..d.len()).any(|i| guarded(&t, &policy, obs, d, g, Choice(i as u16), anchor))
         };
@@ -2219,7 +2219,7 @@ mod tests {
             .take(16)
             .collect();
         for (i, (s, d)) in chosen.into_iter().enumerate() {
-            let obs = observe(&s, &t, &mut x, d.player);
+            let obs = observe(&s, &t, &mut x, d.decider);
             let mut anchored = LongSearch::<Small>::new(&t, settings(anchor), i as u64);
             let mut plain = LongSearch::<Small>::new(&t, settings(Options::default()), i as u64);
             let c = anchored.choose(obs, &d, AgentDecision(0));
@@ -2286,7 +2286,7 @@ mod tests {
                     Step::Over(_) => break,
                     Step::Decide(d) => d,
                 };
-                let obs = observe(&s, &t, &mut x, d.player);
+                let obs = observe(&s, &t, &mut x, d.decider);
                 let g = policy.choose(&t, obs, &d);
                 if d.kind == DecisionKind::Priority && d.candidates.option(g) == Some(Opt::Pass) {
                     for i in 0..d.len() {
@@ -2338,7 +2338,7 @@ mod tests {
             panic!("the game should ask for an opening decision");
         };
         assert!(opening.len() >= 2);
-        let obs = observe(&state, &t, &mut scratch, opening.player);
+        let obs = observe(&state, &t, &mut scratch, opening.decider);
         let options = Options {
             anchor: true,
             paired: true,
@@ -2390,7 +2390,7 @@ mod tests {
                 Step::Over(_) => break,
                 Step::Decide(d) => d,
             };
-            let g = policy.choose(t, observe(&s, t, &mut x, d.player), &d);
+            let g = policy.choose(t, observe(&s, t, &mut x, d.decider), &d);
             out.push((s, d, g));
             apply(&mut s, t, &mut x, &mut Replay, g);
         }
@@ -2422,7 +2422,7 @@ mod tests {
         ]);
         for seed in 0..60 {
             for (s, d, g) in greedy_decisions(&t, seed) {
-                let obs = observe(&s, &t, &mut x, d.player);
+                let obs = observe(&s, &t, &mut x, d.decider);
                 let view = policy.view(&t, obs, d.player, false);
                 let hand = obs.zone(ZoneKey::Of(d.player, Zone::Hand));
                 assert!(!guarded(&t, &policy, obs, &d, g, g, options));
@@ -2512,7 +2512,7 @@ mod tests {
             .collect();
         let mut checked = 0;
         for (i, (s, d, greedy)) in chosen.into_iter().enumerate() {
-            let obs = observe(&s, &t, &mut x, d.player);
+            let obs = observe(&s, &t, &mut x, d.decider);
             let mut guarded_search = LongSearch::<Small>::new(&t, settings, i as u64);
             let c = guarded_search.choose(obs, &d, AgentDecision(0));
             let search = guarded_search.last_search().expect("searched");
@@ -2549,7 +2549,7 @@ mod tests {
             if d.len() < 2 || matches!(d.kind, DecisionKind::Priority | DecisionKind::Attacker) {
                 continue;
             }
-            let obs = observe(&s, &t, &mut x, d.player);
+            let obs = observe(&s, &t, &mut x, d.decider);
             let expert = ExpertAgent::new(&t, 5).choose(obs, &d, AgentDecision(0));
             if expert == greedy {
                 continue;

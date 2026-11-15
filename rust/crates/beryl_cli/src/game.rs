@@ -128,8 +128,8 @@ pub fn play(
                 }
                 let happened: Vec<Event> = x.events.drain().collect();
                 // A paused resolution is seen where its body stopped (§7.3).
-                let i = d.player.index();
-                let c = agents[i].choose(observe(&s, t, &mut x, d.player), &d, asked[i].take());
+                let i = d.decider.index();
+                let c = agents[i].choose(observe(&s, t, &mut x, d.decider), &d, asked[i].take());
                 if let Some(tr) = transcript.as_deref_mut() {
                     tr.decision(t, view(&s, t, &mut x), &d, c, &happened);
                 }

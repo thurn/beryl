@@ -551,6 +551,12 @@ pub enum Effect {
     /// ([CR 104.3e](https://yawgatog.com/resources/magic-rules/#R1043e)): "An effect may
     /// state that a player loses the game."
     LoseGame(Players),
+    /// "You control [player] during that player's next turn"
+    /// ([CR 724.1](https://yawgatog.com/resources/magic-rules/#R7241)): "Some cards allow a
+    /// player to control another player during that player's next turn. This effect applies
+    /// to the next turn that the affected player actually takes." "You" is the controller of
+    /// what is resolving.
+    ControlPlayer(Players),
 }
 
 impl Effect {
@@ -658,7 +664,8 @@ impl Effect {
             | Effect::Delay { .. }
             | Effect::GetEmblem { .. }
             | Effect::WinGame(_)
-            | Effect::LoseGame(_) => false,
+            | Effect::LoseGame(_)
+            | Effect::ControlPlayer(_) => false,
         }
     }
 

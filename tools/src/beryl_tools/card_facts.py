@@ -471,6 +471,14 @@ class Unsupported(Exception):
     """A scenario, or a part of one, outside what the exporter can say in XMage's terms."""
 
 
+# A turn in which one player controls another (CR 724.1). Both harnesses look a player's
+# actions up among that player's own cards and permanents, so neither can yet play the
+# controller's actions with the controlled player's resources.
+CONTROLLED_TURN: str = (
+    "a turn one player controls for another (CR 724), which the harness does not play"
+)
+
+
 def cost_text(ability: Json, cost: Json, parts: list[Json]) -> str | None:
     """The start of an activated ability's text in XMage, from its cost: its keyword where the
     cost is a keyword's (cycling, crew, waterbend), else the mana, `{T}` and the other parts in

@@ -22,8 +22,8 @@ mod questions;
 
 pub use collapse::interchangeable;
 pub(crate) use collapse::{collapse, collapse_in_order};
-pub(crate) use questions::decision;
 pub use questions::refusal;
+pub(crate) use questions::{controlled, decision};
 use questions::{land_face, only_idle};
 
 /// The position a player sees the open decision in. That is the state itself, except while
@@ -290,10 +290,13 @@ fn advance<L: Layout>(
             settled = handed_over(s, passes);
             continue;
         }
-        let Ok(d) = decision(s, t, &mut x.events) else {
+        let Ok(mut d) = decision(s, t, &mut x.events) else {
             stall(s, StallReason::Capacity);
             continue;
         };
+        if s.turn().controller().is_some() {
+            controlled(s, &mut d);
+        }
         debug_assert!(!d.is_empty());
         let priority = d.kind == DecisionKind::Priority;
         let forced = (d.len() == 1 || only_idle(s, t, &d))
@@ -383,7 +386,10 @@ pub fn apply_decided<L: Layout>(
     {
         assert_sound(s, t, x);
         let work = x.events.work;
-        let built = decision(s, t, &mut x.events);
+        let built = decision(s, t, &mut x.events).map(|mut built| {
+            controlled(s, &mut built);
+            built
+        });
         x.events.work = work;
         debug_assert_eq!(built.as_ref(), Ok(d), "a decision other than the open one");
     }

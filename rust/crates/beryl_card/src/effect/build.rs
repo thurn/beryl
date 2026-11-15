@@ -690,6 +690,11 @@ pub const fn get_emblem(player: Players, emblem: &'static CardDef) -> Effect {
     Effect::GetEmblem { player, emblem }
 }
 
+/// [`Effect::ControlPlayer`]: "you control [player] during that player's next turn".
+pub const fn control_player(player: Players) -> Effect {
+    Effect::ControlPlayer(player)
+}
+
 /// [`Effect::WinGame`]: "[player] wins the game".
 pub const fn win_game(player: Players) -> Effect {
     Effect::WinGame(player)

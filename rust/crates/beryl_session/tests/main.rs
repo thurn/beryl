@@ -16,6 +16,7 @@ mod chance;
 mod checkpoints;
 mod chosen_values;
 mod clicks;
+mod controlled;
 mod corpus;
 mod cost_replay;
 mod counters;

@@ -156,7 +156,7 @@ pub fn duel(
 ) -> beryl_search::AnchorCheck {
     let mut x = Scratch::new();
     let search = LongSearch::new(t, settings, seed);
-    search.duel(observe(s, t, &mut x, d.player), d, a, b)
+    search.duel(observe(s, t, &mut x, d.decider), d, a, b)
 }
 
 /// The fields of a game log's line this reads.
@@ -234,7 +234,7 @@ fn replay(
     let played = walk(dir, entrant, |game, s, d, choice, search, names| {
         searched += 1;
         let mut x = Scratch::new();
-        let obs = observe(s, &t, &mut x, d.player);
+        let obs = observe(s, &t, &mut x, d.decider);
         let greedy = policy.choose(&t, obs, d);
         let counted =
             !only_guarded || guarded(&t, &policy, obs, d, greedy, Choice(choice), family.options);

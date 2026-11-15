@@ -22,7 +22,7 @@ pub fn script<L: Layout>(
     d: &Decision<L>,
     c: Choice,
 ) -> Option<Action> {
-    let player = d.player;
+    let player = d.decider;
     if d.kind != DecisionKind::Priority {
         return pick(t, s, d, c).map(|pick| Action::answer(player, d.kind, pick));
     }

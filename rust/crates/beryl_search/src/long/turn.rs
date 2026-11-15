@@ -71,7 +71,7 @@ fn search<L: Layout>(
     let mut search = TurnSearch {
         table: &agent.table,
         policy: &agent.policy,
-        viewer: d.player,
+        viewer: d.decider,
         turn: obs.turn().number(),
         known: L::Slot::all().filter(|&slot| obs.knows(slot)).collect(),
         scratch: Scratch::unchecked(),
@@ -467,7 +467,7 @@ impl<L: Layout> TurnSearch<'_, L> {
     /// player's observation, even when a proposed world has extra information.
     fn passes(&self, line: &Line<L>, d: &Decision<L>) -> bool {
         d.kind == DecisionKind::Priority
-            && (d.player != self.viewer
+            && (d.decider != self.viewer
                 || line
                     .state
                     .stack()
@@ -483,7 +483,7 @@ impl<L: Layout> TurnSearch<'_, L> {
             if !self.room(limit, WORLD_STEPS + 1) {
                 return None;
             }
-            let obs = Observation::new(&line.state, d.player);
+            let obs = Observation::new(&line.state, d.decider);
             let mut rng = SplitMix64::new(u64::from(self.turn));
             let world = obs.determinize(self.table, &mut rng);
             self.scratch.counts.copied();
@@ -498,7 +498,7 @@ impl<L: Layout> TurnSearch<'_, L> {
             )
             .choose_within(&world, d, limit);
         }
-        let obs = observe(&line.state, self.table, &mut self.scratch, d.player);
+        let obs = observe(&line.state, self.table, &mut self.scratch, d.decider);
         Some(self.policy.choose(self.table, obs, d))
     }
 
@@ -546,7 +546,7 @@ impl<L: Layout> TurnSearch<'_, L> {
         if !self.room(limit, 4) {
             return;
         }
-        if d.player != self.viewer || combat::handles(d.kind) || self.passes(&line, d) {
+        if d.decider != self.viewer || combat::handles(d.kind) || self.passes(&line, d) {
             if let Some(c) = self.forced(&mut line, d, limit)
                 && self.room(limit, 2)
             {
@@ -555,7 +555,7 @@ impl<L: Layout> TurnSearch<'_, L> {
             }
             return;
         }
-        let shown = observe(&line.state, self.table, &mut self.scratch, d.player);
+        let shown = observe(&line.state, self.table, &mut self.scratch, d.decider);
         let actions = Self::actions(self.known, shown, d);
         let obs = observation_key(shown, d, &actions);
         let scores = self.policy.scores(self.table, shown, d);
@@ -634,9 +634,9 @@ impl<L: Layout> TurnSearch<'_, L> {
                 return false;
             }
             let ours =
-                d.player == self.viewer && !combat::handles(d.kind) && !self.passes(line, &d);
+                d.decider == self.viewer && !combat::handles(d.kind) && !self.passes(line, &d);
             let seen = (ours && (proposing || policy.is_some())).then(|| {
-                let obs = observe(&line.state, self.table, &mut self.scratch, d.player);
+                let obs = observe(&line.state, self.table, &mut self.scratch, d.decider);
                 let actions = Self::actions(self.known, obs, &d);
                 let key = observation_key(obs, &d, &actions);
                 let scores = proposing.then(|| self.policy.scores(self.table, obs, &d));

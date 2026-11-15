@@ -35,6 +35,9 @@ impl<L: Layout> State<L> {
     pub fn look(&mut self, sink: &mut Sink<L>, player: Seat, cards: Bitboard<L::Slot>) {
         chance::settle_all(self, sink, cards);
         self.knowledge[player.index()] |= cards;
+        if let Some(sharer) = self.sharer(player) {
+            self.knowledge[sharer.index()] |= cards;
+        }
     }
 
     /// `player` no longer knows the card in `slot`, as when a permanent they knew enters

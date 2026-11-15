@@ -161,7 +161,7 @@ pub fn play(e: &Entry, at: &Reached, agent: &mut dyn Agent) -> Vec<String> {
     let mut own = AgentDecision(0);
     loop {
         let shown = labels(t, view(&s, t, &mut x), &d);
-        let c = agent.choose(observe(&s, t, &mut x, d.player), &d, own.take());
+        let c = agent.choose(observe(&s, t, &mut x, d.decider), &d, own.take());
         chosen.push(shown[usize::from(c.0)].clone());
         apply(&mut s, t, &mut x, &mut Replay, c);
         match next(&mut s, t, &mut x, &mut Replay) {
@@ -478,7 +478,7 @@ mod tests {
     fn sure_still_searches_other_decisions() {
         let at = reach(&entry("skip-teferi-plus-one")).unwrap();
         let mut scratch = Scratch::new();
-        let obs = observe(&at.s, &at.t, &mut scratch, at.d.player);
+        let obs = observe(&at.s, &at.t, &mut scratch, at.d.decider);
         let mut family = beryl_search::DEEP_SEARCHER;
         assert!(!family.options.sure);
         let mut run = |sure| {
@@ -557,7 +557,7 @@ mod tests {
     fn paired_checks_are_budgeted_and_thread_independent() {
         let at = reach(&entry("beza-trinket-into-blockers")).unwrap();
         let mut scratch = Scratch::new();
-        let obs = observe(&at.s, &at.t, &mut scratch, at.d.player);
+        let obs = observe(&at.s, &at.t, &mut scratch, at.d.decider);
         let policy = DEEP_SEARCHER.rollout_policy(&at.t);
         let pairs = beryl_search::PairedRollouts::new(&at.t, &policy, obs, DEEP_SEARCHER.sight, 0);
         let [a, b] = [beryl_engine::Choice(0), beryl_engine::Choice(1)];
@@ -713,7 +713,7 @@ mod tests {
             let seed = run_seed(name, 0);
             let family = "pimc2/hidden/rollout/tuned/anchor+combat".parse().unwrap();
             let mut scratch = Scratch::new();
-            let obs = observe(&at.s, &at.t, &mut scratch, at.d.player);
+            let obs = observe(&at.s, &at.t, &mut scratch, at.d.decider);
             let shown = labels(&at.t, view(&at.s, &at.t, &mut Scratch::new()), &at.d);
             let settings = |work| beryl_search::Settings {
                 family,

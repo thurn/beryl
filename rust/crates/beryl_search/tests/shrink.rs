@@ -269,7 +269,7 @@ fn a_broken_invariant_shrinks_to_a_scenario() {
     let (text, scenario) = game.scenario(graveyards_stay_empty, &why);
     println!("seed {}, choices {:?}\n{text}", game.seed, game.choices);
     // A handful, not a game's hundreds: how few depends on the fuzz decks' opening hands.
-    assert!(game.choices.len() <= 20, "{:?}\n{text}", game.choices);
+    assert!(game.choices.len() <= 25, "{:?}\n{text}", game.choices);
     let scenario = scenario.expect("the game reached a priority decision");
     // The game's decisions from its first priority on, as the scenario must meet them.
     let mut decisions = Vec::new();

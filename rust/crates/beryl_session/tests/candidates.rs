@@ -35,7 +35,7 @@ fn candidates(card: &str) -> Vec<(CandidateView, Option<String>)> {
             };
             let v = player_view(
                 t,
-                Observation::new(view(s, t, &mut x), d.player),
+                Observation::new(view(s, t, &mut x), d.decider),
                 Moment::Deciding(id, d, resolving),
                 StopsSetting::SMART,
                 &[],

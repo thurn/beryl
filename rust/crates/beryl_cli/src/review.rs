@@ -123,7 +123,7 @@ fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result
                     break;
                 }
                 let (t, s, x) = (&walk.t, &walk.s, &mut walk.x);
-                let at = if d.player == bot {
+                let at = if d.decider == bot {
                     Some(own.take())
                 } else {
                     None

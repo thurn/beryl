@@ -2,7 +2,9 @@
 //! resolving spell or ability creates: each is an entry of the Effects store
 //! (`beryl_kernel`'s contract, "Stores"), which the layers and the rules read by kind.
 
-use beryl_card::{Amount, ChosenKind, MODIFY_PARTS, Modification, Objects, Protection, RuleChange};
+use beryl_card::{
+    Amount, ChosenKind, MODIFY_PARTS, Modification, Objects, Players, Protection, RuleChange,
+};
 use beryl_kernel::chosen::ChosenValue;
 
 use crate::bitboard::Bitboard;
@@ -239,6 +241,34 @@ pub(crate) fn lasting(duration: beryl_card::Duration, you: Seat) -> Duration {
         beryl_card::Duration::UntilYourNextTurn => Duration::UntilYourNextTurn(you),
         beryl_card::Duration::Indefinite => Duration::Indefinite,
     }
+}
+
+/// [`Effect::ControlPlayer`](beryl_card::Effect::ControlPlayer): "You control [player]
+/// during that player's next turn" ([CR 724.1]): an effect on each player named, which waits
+/// for that player's next turn ([`State::begin_turn`](crate::state::State::begin_turn)). The
+/// outcome is how many players it is on.
+///
+/// [CR 724.1]: https://yawgatog.com/resources/magic-rules/#R7241
+pub(crate) fn control_player_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    players: Players,
+) -> Result<Outcome<L>, Full> {
+    let controller = run.resolution().entry.controller();
+    let named = run.scene().players(players);
+    let (game, resolution) = run.resolving();
+    let mut count = 0;
+    for controlled in game.state.players_in_turn_order(named) {
+        let control = Continuous::Control {
+            controlled,
+            controller,
+        };
+        // It lasts until the turn it waits for begins, which ends it (CR 724.1b: "If a turn
+        // is skipped, any pending player-controlling effects wait until the player who would
+        // be affected actually takes a turn.").
+        start(game, resolution, control, Duration::Indefinite)?;
+        count += 1;
+    }
+    Ok(Outcome::of(Bitboard::EMPTY, count))
 }
 
 /// [`Effect::ChangeRule`](beryl_card::Effect::ChangeRule): "[Rule change] [duration]"

@@ -292,8 +292,8 @@ fn cut(t: &GameTable, family: &InTable, seed: u64, out: &mut Vec<State>) {
             kept += 1;
             next_turn = s.turn().number() + EVERY;
         }
-        let i = d.player.index();
-        let c = agents[i].choose(observe(&s, t, &mut x, d.player), &d, asked[i].take());
+        let i = d.decider.index();
+        let c = agents[i].choose(observe(&s, t, &mut x, d.decider), &d, asked[i].take());
         apply(&mut s, t, &mut x, &mut Replay, c);
     }
 }
@@ -439,7 +439,7 @@ pub fn roll_paired(w: &FamilyWorkload) -> Pairing {
         let mut before = x.counts.layer_recomputes;
         let mut copies = x.counts.state_copies;
         while let Step::Decide(d) = step {
-            let c = w.policy.choose(t, Observation::new(&s, d.player), &d);
+            let c = w.policy.choose(t, Observation::new(&s, d.decider), &d);
             let paired = control(&s, t, &w.in_table)
                 .is_some_and(|mut sc| pair(w, &s, &d, c, &mut sc, &mut xc, &mut a));
             if paired {

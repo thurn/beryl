@@ -92,7 +92,7 @@ fn asked(card: &str) -> Vec<(DecisionView, Prompt)> {
             };
             let v = player_view(
                 t,
-                Observation::new(view(s, t, &mut x), d.player),
+                Observation::new(view(s, t, &mut x), d.decider),
                 Moment::Deciding(id, d, resolving),
                 StopsSetting::SMART,
                 &[],
@@ -150,7 +150,7 @@ fn a_token_awaiting_its_attack_target_is_public_from_both_seats() {
         };
         let controller = player_view(
             t,
-            Observation::new(shown, d.player),
+            Observation::new(shown, d.decider),
             Moment::Deciding(id, d, resolving),
             StopsSetting::SMART,
             &[],
@@ -211,7 +211,7 @@ fn stock_up_observer_sees_the_group_size_without_seeing_its_cards_or_choices() {
         };
         let controller = player_view(
             t,
-            Observation::new(shown, d.player),
+            Observation::new(shown, d.decider),
             Moment::Deciding(id, d, resolving),
             StopsSetting::SMART,
             &[],

@@ -125,7 +125,7 @@ fn play_within<L: Layout>(
             Step::Over(outcome) => return Some(RolloutEnd::Outcome(outcome)),
             Step::Decide(_) if s.turn().number() >= turn => return Some(RolloutEnd::Cutoff),
             Step::Decide(d) => {
-                let c = inline.choose(Observation::new(s, d.player), &d);
+                let c = inline.choose(Observation::new(s, d.decider), &d);
                 // An inline answer does not need a transactional copy.
                 apply_decided(s, t, x, inline, &d, c);
             }
@@ -193,7 +193,7 @@ fn play_out<A: Answers<L>, L: Layout>(
             Step::Over(outcome) => return Some(outcome),
             Step::Decide(_) if s.turn().number() >= turn => return None,
             Step::Decide(d) => {
-                let c = choose(answers, Observation::new(s, d.player), &d);
+                let c = choose(answers, Observation::new(s, d.decider), &d);
                 apply_decided(s, t, x, answers, &d, c);
             }
         }

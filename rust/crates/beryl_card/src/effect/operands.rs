@@ -125,7 +125,8 @@ impl Effect {
             | Effect::ManifestDread(player)
             | Effect::FlipCoin(player)
             | Effect::WinGame(player)
-            | Effect::LoseGame(player) => Operands::of_players(player),
+            | Effect::LoseGame(player)
+            | Effect::ControlPlayer(player) => Operands::of_players(player),
             Effect::Unless { player, cost, .. } => {
                 Operands::of_players(player).filter(chosen_for(cost))
             }

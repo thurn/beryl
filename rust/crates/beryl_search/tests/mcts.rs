@@ -45,7 +45,7 @@ fn visits(
     d: &Decision,
 ) -> Vec<u32> {
     let mut x = Scratch::new();
-    Mcts::new(t, sight, budget, seed).visits(observe(s, t, &mut x, d.player), d)
+    Mcts::new(t, sight, budget, seed).visits(observe(s, t, &mut x, d.decider), d)
 }
 
 #[test]
@@ -83,7 +83,7 @@ fn the_hidden_search_decides_the_same_on_a_redeterminized_state() {
     // The first position is one where what the omniscient search reads changes its rollouts'
     // results.
     for (i, (s, d)) in positions(&t, [24, 5]).iter().enumerate() {
-        let det = observe(s, &t, &mut Scratch::new(), d.player).determinize(&t, &mut rng);
+        let det = observe(s, &t, &mut Scratch::new(), d.decider).determinize(&t, &mut rng);
         assert!(
             Slot::all().any(|slot| det.card_behind(slot) != s.card_behind(slot)),
             "position {i}: hidden cards were dealt anew"
@@ -171,7 +171,7 @@ fn exact_stop_chooses_as_the_full_budget(iterations: u32, count: usize, from_end
     let mut x = Scratch::new();
     let mut spent = 0;
     for (i, (s, d)) in searched_positions(&t, count, from_end).iter().enumerate() {
-        let obs = observe(s, &t, &mut x, d.player);
+        let obs = observe(s, &t, &mut x, d.decider);
         let mut agent = Mcts::new(&t, Sight::Hidden, budget, i as u64);
         let full = agent.visits(obs, d);
         let mut most = 0;
@@ -242,7 +242,7 @@ fn searched_game(t: &GameTable, seed: u64, from_end: usize) -> (Vec<Asked>, Vec<
         let Step::Decide(d) = next(&mut s, t, &mut x, &mut Replay) else {
             break;
         };
-        let obs = observe(&s, t, &mut x, d.player);
+        let obs = observe(&s, t, &mut x, d.decider);
         let c = if d.player == Seat::P0 {
             let resume_point = search.resume_point().expect("a search resumes");
             let c = search.choose(obs, &d, own.take());

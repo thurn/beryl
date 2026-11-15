@@ -15,7 +15,9 @@ use crate::{cast, chosen, combat, entered, face_down, mana, sba, start, trigger,
 use super::collapse;
 
 /// The open decision, a pure function of the state, so `apply` recomputes rather than
-/// remembers it. The sink only counts the payment solver's runs.
+/// remembers it. The sink only counts the payment solver's runs. It is built as its own
+/// player's to answer: `next` gives it to the player controlling them, if one does
+/// ([`controlled`]).
 pub(crate) fn decision<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -132,6 +134,7 @@ fn priority_decision<L: Layout>(s: &State<L>, t: &GameTable) -> Result<Decision<
     // Built in place: the list is most of a decision's size.
     let mut d: Decision<L> = Decision {
         player,
+        decider: player,
         kind: DecisionKind::Priority,
         candidates: Candidates::Options(Default::default()),
         prompt: Prompt::new(Purpose::Priority),
@@ -217,4 +220,17 @@ pub fn refusal<L: Layout>(
     };
     // A full capacity leaves the reason unknown.
     cast::refusal(s, t, player, slot, land).ok().flatten()
+}
+
+/// Gives `d`, built for the player it belongs to, to the player controlling them this turn, if
+/// one does ([`State::decider`]; [CR 724.5]): "While controlling another player, a player
+/// makes all choices and decisions the controlled player is allowed to make or is told to
+/// make by the rules or by any objects." Set on the decision `next` holds rather than where
+/// each is built, so that no decision is moved once more in a game no one controls.
+///
+/// [CR 724.5]: https://yawgatog.com/resources/magic-rules/#R7245
+#[cold]
+#[inline(never)]
+pub(crate) fn controlled<L: Layout>(s: &State<L>, d: &mut Decision<L>) {
+    d.decider = s.decider(d.player);
 }

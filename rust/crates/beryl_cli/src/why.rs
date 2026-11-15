@@ -120,7 +120,7 @@ type Event = (u8, String, String);
 fn compare(at: &Reached, choices: [Choice; 2], family: Family, rollouts: u32) -> String {
     let policy = family.rollout_policy(&at.t);
     let mut view_scratch = Scratch::new();
-    let obs = observe(&at.s, &at.t, &mut view_scratch, at.d.player);
+    let obs = observe(&at.s, &at.t, &mut view_scratch, at.d.decider);
     let paired = PairedRollouts::new(&at.t, &policy, obs, family.sight, 0);
     let mut scratch = Scratch::unchecked();
     let mut summary = RolloutSummary::default();
@@ -243,7 +243,7 @@ fn write_tree(
     };
     let mut scratch = Scratch::new();
     let report = LongSearch::new(&at.t, settings, run_seed(entry, seed)).choose_with_tree(
-        observe(&at.s, &at.t, &mut scratch, at.d.player),
+        observe(&at.s, &at.t, &mut scratch, at.d.decider),
         &at.d,
         choices,
         labels,
@@ -426,7 +426,7 @@ mod tests {
             .unwrap();
         let at = reach(&entry).unwrap();
         let mut scratch = Scratch::new();
-        let obs = observe(&at.s, &at.t, &mut scratch, at.d.player);
+        let obs = observe(&at.s, &at.t, &mut scratch, at.d.decider);
         let candidates = labels(&at.t, &at.s, &at.d);
         let [attack, hold] = ["attack with Beza, the Bounding Spring", "done"]
             .map(|name| candidates.iter().position(|label| label == name).unwrap());
@@ -458,7 +458,7 @@ mod tests {
             .unwrap();
         let at = reach(&entry).unwrap();
         let mut scratch = Scratch::new();
-        let obs = observe(&at.s, &at.t, &mut scratch, at.d.player);
+        let obs = observe(&at.s, &at.t, &mut scratch, at.d.decider);
         let candidates = labels(&at.t, &at.s, &at.d);
         let choices = ["cast Oust", "pass"]
             .map(|name| Choice(candidates.iter().position(|label| label == name).unwrap() as u16));

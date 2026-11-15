@@ -43,7 +43,7 @@ fn turn_choice_is_independent_of_hidden_cards() {
     let Step::Decide(d) = next(&mut state, &t, &mut Scratch::new(), &mut Replay) else {
         panic!("priority in main");
     };
-    let obs = Observation::new(&state, d.player);
+    let obs = Observation::new(&state, d.decider);
     let swapped = obs.determinize(&t, &mut SplitMix64::new(3));
     assert!(
         beryl_engine::Slot::all().any(|slot| swapped.card_behind(slot) != state.card_behind(slot))
@@ -53,7 +53,7 @@ fn turn_choice_is_independent_of_hidden_cards() {
     let choice = first.choose(obs, &d, AgentDecision(0));
     assert_eq!(
         choice,
-        second.choose(Observation::new(&swapped, d.player), &d, AgentDecision(0))
+        second.choose(Observation::new(&swapped, d.decider), &d, AgentDecision(0))
     );
     assert_eq!(first.last_search(), second.last_search());
     let report = first.last_search().unwrap();
@@ -78,7 +78,7 @@ fn a_small_budget_falls_back_and_each_priority_uses_its_own_position() {
             panic!("priority in main");
         };
         assert_eq!(d.player, P0);
-        let obs = Observation::new(&state, d.player);
+        let obs = Observation::new(&state, d.decider);
         let expected = player.policy.choose(&t, obs, &d);
         let choice = player.choose(obs, &d, AgentDecision(index));
         assert_eq!(choice, expected);
@@ -104,7 +104,7 @@ fn opponent_turn_priority_uses_the_same_search_as_pimc() {
         panic!("priority on the opponent's turn");
     };
     assert_eq!(d.player, P0);
-    let obs = Observation::new(&state, d.player);
+    let obs = Observation::new(&state, d.decider);
     let mut turn = agent(&t, 20_000, FAMILY);
     let mut pimc = agent(&t, 20_000, "pimc72/hidden/rollout/tuned/anchor+guard");
     assert_eq!(

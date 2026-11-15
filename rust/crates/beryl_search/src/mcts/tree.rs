@@ -68,7 +68,7 @@ impl<L: Layout> Tree<L> {
             Sight::Hands => obs.determinize_libraries(t, &mut rng),
         };
         let mut tree = Tree {
-            nodes: vec![Node::new(d.player)],
+            nodes: vec![Node::new(d.decider)],
             root: 0,
             state,
             rng,
@@ -126,7 +126,7 @@ impl<L: Layout> Tree<L> {
         if next(&mut s, t, &mut self.x, &mut Replay) != Step::Decide(d.clone()) {
             return false;
         }
-        if !shows_the_same(observe(&s, t, &mut self.x, d.player), obs) {
+        if !shows_the_same(observe(&s, t, &mut self.x, d.decider), obs) {
             return false;
         }
         self.state = s;
@@ -176,7 +176,8 @@ impl<L: Layout> Tree<L> {
     /// Gives `node` one child per candidate of its decision `d`.
     fn expand(&mut self, node: u32, d: &Decision<L>) {
         let first = self.nodes.len() as u32;
-        self.nodes.extend((0..d.len()).map(|_| Node::new(d.player)));
+        self.nodes
+            .extend((0..d.len()).map(|_| Node::new(d.decider)));
         let n = &mut self.nodes[node as usize];
         n.first = first;
         n.children = d.len() as u8;

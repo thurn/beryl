@@ -33,11 +33,17 @@ pub struct Chosen {
     pub what: Option<Described>,
 }
 
-/// What an answer does: who answered what kind of decision, when, and the candidate they
-/// took.
+/// What an answer does: whose decision of what kind it was and who answered it, when, and the
+/// candidate they took.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Described {
+    /// The player the decision belonged to.
     pub player: u8,
+    /// The player who answered it, where that was another player controlling `player`
+    /// ([CR 724.5](https://yawgatog.com/resources/magic-rules/#R7245)), since version 12; none
+    /// where `player` answered, as every answer before version 12 did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decider: Option<u8>,
     pub turn: u16,
     pub step: StepName,
     pub kind: Kind,
@@ -67,6 +73,8 @@ enum ChosenFile {
         #[serde(default, skip_serializing_if = "is_false")]
         continuation: bool,
         player: u8,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        decider: Option<u8>,
         turn: u16,
         step: StepName,
         kind: KindFile,
@@ -94,6 +102,7 @@ impl From<ChosenFile> for Chosen {
                 index,
                 continuation,
                 player,
+                decider,
                 turn,
                 step,
                 kind,
@@ -105,6 +114,7 @@ impl From<ChosenFile> for Chosen {
                 continuation,
                 what: Some(Described {
                     player,
+                    decider,
                     turn,
                     step,
                     kind: kind.now(),
@@ -123,6 +133,7 @@ impl From<Chosen> for ChosenFile {
             None => ChosenFile::Index(chosen.index),
             Some(Described {
                 player,
+                decider,
                 turn,
                 step,
                 kind,
@@ -133,6 +144,7 @@ impl From<Chosen> for ChosenFile {
                 index: chosen.index,
                 continuation: chosen.continuation,
                 player,
+                decider,
                 turn,
                 step,
                 kind: KindFile::Now(kind),
@@ -160,6 +172,7 @@ impl Chosen {
             continuation: false,
             what: Some(Described {
                 player: d.player.get(),
+                decider: (d.decider != d.player).then(|| d.decider.get()),
                 turn: s.turn().number(),
                 step: s.turn().step().into(),
                 kind: d.kind.into(),
@@ -180,6 +193,7 @@ impl Chosen {
             return listed.get(usize::from(self.index)).copied();
         };
         if what.player != d.player.get()
+            || what.decider.unwrap_or(what.player) != d.decider.get()
             || Some(when(s)) != self.when()
             || what.kind != Kind::from(d.kind)
         {

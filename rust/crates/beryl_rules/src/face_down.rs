@@ -156,6 +156,7 @@ pub(crate) fn decision<L: Layout>(
     };
     Ok(Decision {
         player,
+        decider: player,
         kind,
         candidates: Candidates::Options(list),
         prompt: Prompt::new(Purpose::Mana).cost(remaining).part(part),

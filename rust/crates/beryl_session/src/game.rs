@@ -444,7 +444,7 @@ impl Game {
                 let started = Instant::now();
                 let kind = d.kind.into();
                 let (c, candidates) = on_board!(&mut self.board, b => {
-                    let obs = observe(&b.state, &self.table, &mut b.scratch, d.player);
+                    let obs = observe(&b.state, &self.table, &mut b.scratch, d.decider);
                     let d = d.relayout();
                     let labels = crate::protocol::candidate_labels(&self.table, obs, &d);
                     (self.agent.choose(obs, &d, self.agent_next), labels)

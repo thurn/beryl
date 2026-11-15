@@ -68,7 +68,7 @@ mod tests {
         else {
             panic!("the game starts with a decision");
         };
-        let obs = Observation::new(&state, decision.player);
+        let obs = Observation::new(&state, decision.decider);
         let visits = |prior| {
             let mut family = crate::DEEP_SEARCHER;
             family.options.prior = prior;
@@ -85,7 +85,7 @@ mod tests {
             let scores = [Some(-60), None, Some(0)];
             for visit in 0..60 {
                 let (child, choice) =
-                    tree.select(tree.root, &keys, decision.player, |_| scores.to_vec());
+                    tree.select(tree.root, &keys, decision.decider, |_| scores.to_vec());
                 if prior && visit < 3 {
                     assert_eq!(choice, Choice([2, 1, 0][visit]));
                 }

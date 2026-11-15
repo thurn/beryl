@@ -484,6 +484,7 @@ pub(super) fn decision<L: Layout>(
         // Each object pays one generic mana, or the rest is paid with mana.
         Measure::ForGeneric(_) => Decision {
             player: c.player,
+            decider: c.player,
             kind: DecisionKind::ManaPayment,
             candidates: Candidates::Options(substitute_options(s, t, c)?),
             prompt: Prompt::new(purpose).cost(total_cost(s, t, entry, c)),
@@ -492,6 +493,7 @@ pub(super) fn decision<L: Layout>(
         // The total the part asks for, and what of it is still to pay.
         Measure::TotalPower(n) => Decision {
             player: c.player,
+            decider: c.player,
             kind: DecisionKind::ChooseObject,
             candidates: Candidates::Objects(choices(s, t, entry, c)),
             prompt: Prompt::new(purpose).count(n).most(left),
@@ -500,6 +502,7 @@ pub(super) fn decision<L: Layout>(
         // The cards lie in the zone the part takes them from, the hand or the graveyard.
         Measure::Count(_) => Decision {
             player: c.player,
+            decider: c.player,
             kind: DecisionKind::ChooseObject,
             candidates: Candidates::Objects(choices(s, t, entry, c)),
             prompt: Prompt::new(purpose).most(left),

@@ -755,12 +755,20 @@ Built by by-bajq.3.10:
 
 ### 8. The decision protocol
 
-- **Who answers** (CR 724). `Decision` gains `decider`. The state knows whether
-  a player's turn is controlled, and `State::ask` is the one place that sets
-  both players. The rollout loop and every agent are called for the decider with
-  an `Observation` that joins what both players know. A search node belongs to
-  the decider, so its value is the decider's. A save records both players, with
-  a migration for older saves.
+- **Who answers** (CR 724). `Decision` gains `decider` (built: 320 bytes, no
+  spare byte in the 312). A player-controlling effect is an Effects entry on the
+  controlled player that `State::begin_turn` takes as that player's turn begins,
+  setting `Turn::controller`. Every decision is built for its own player, and
+  `beryl_engine`'s decision function, with the two places an inline answer
+  source is asked mid-resolution, sets the decider from `State::decider`: no
+  question builder knows of control. `State::knows` answers for the controller
+  what the active player knows, and the next turn's beginning keeps it known, so
+  every `Observation` for the decider joins both. The rollout loop and every
+  agent are called for the decider. A search node belongs to the decider, so its
+  value is the decider's; the greedy policy, deciding for another player, picks
+  what it ranks lowest for them. A scenario's actions are the decider's, as in
+  XMage's tests. A save records the decider of an answer where it is not the
+  player (version 11), and older answers are their player's.
 - **Hidden picks** (CR 101.4a). When a player picks a card from a zone the other
   player cannot see, the slot is public and the card is not. The record of the
   pick notes the filter it had to pass. Determinization for the other player

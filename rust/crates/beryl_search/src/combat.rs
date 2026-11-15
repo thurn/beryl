@@ -571,7 +571,7 @@ impl<'a, L: Layout, J: Judgments<L>> Sim<'a, L, J> {
                 }
                 _ => self
                     .policy
-                    .choose(self.t, Observation::new(&s, d.player), &d),
+                    .choose(self.t, Observation::new(&s, d.decider), &d),
             };
             if !self.room(2) {
                 return None;

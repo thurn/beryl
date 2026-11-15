@@ -149,6 +149,7 @@ pub(crate) fn division_decision<L: Layout>(
     }
     Ok(Decision {
         player: s.turn().active(),
+        decider: s.turn().active(),
         kind: DecisionKind::DamageDivision,
         candidates: Candidates::Options(list),
         prompt: Prompt::new(Purpose::CombatDamage),

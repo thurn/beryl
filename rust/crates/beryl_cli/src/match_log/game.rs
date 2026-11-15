@@ -285,7 +285,7 @@ pub fn play(
             Step::Over(outcome) => break outcome,
             Step::Decide(d) => d,
         };
-        let seat = d.player.index();
+        let seat = d.decider.index();
         let logged = logged.get(i.0);
         if let Some(l) = logged
             && (usize::from(l.seat) != seat || usize::from(l.choice) >= d.len())
@@ -303,7 +303,7 @@ pub fn play(
         let (line, new) = match logged {
             Some(l) if player.replays() => (l.clone(), false),
             Some(l) => {
-                let now = player.ask(observe(&s, t, &mut x, d.player), &d).choice;
+                let now = player.ask(observe(&s, t, &mut x, d.decider), &d).choice;
                 if now != l.choice {
                     return Err(Stop::Differs {
                         decision: i,
@@ -324,7 +324,7 @@ pub fn play(
             }
             None => {
                 asking(i, view(&s, t, &mut x), &d)?;
-                (player.ask(observe(&s, t, &mut x, d.player), &d), true)
+                (player.ask(observe(&s, t, &mut x, d.decider), &d), true)
             }
         };
         let c = Choice(line.choice);

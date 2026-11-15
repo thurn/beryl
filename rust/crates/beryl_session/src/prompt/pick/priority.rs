@@ -301,7 +301,7 @@ fn in_face_order<L: Layout>(
     let mut scratch = Scratch::new();
     let abilities = own_activated(
         table.t,
-        observe(table.shown, table.t, &mut scratch, d.player),
+        observe(table.shown, table.t, &mut scratch, d.decider),
         object,
     );
     if abilities.len() < 2 {

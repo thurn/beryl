@@ -355,7 +355,8 @@ pub enum Assertion {
         card: &'static str,
         count: u8,
     },
-    /// The open decision: who decides, what, and among how many candidates.
+    /// The open decision: who answers it (the player it belongs to, or the player controlling
+    /// them), what, and among how many candidates.
     Decision {
         player: Seat,
         kind: DecisionKind,

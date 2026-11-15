@@ -110,7 +110,7 @@ impl Game {
             let events: Vec<Event<_>> = self.events.iter().map(|e| e.event.relayout()).collect();
             let moment = match (&self.at, &decision) {
                 (At::Playing, _) => Moment::Playing,
-                (At::Human(id, Open::Decision(_)), Some(d)) if d.player == viewer => {
+                (At::Human(id, Open::Decision(_)), Some(d)) if d.decider == viewer => {
                     Moment::Deciding(*id, d, resolving.as_ref())
                 }
                 (At::Human(id, Open::Halt), _) if viewer == self.human => Moment::Halted(*id),
@@ -152,7 +152,7 @@ impl Game {
             }
             let heard = heard(&self.table, obs, &events, &self.said, names);
             if let Some(d) = &decision
-                && d.player == viewer
+                && d.decider == viewer
             {
                 preview::add_previews(&mut view, &b.state, &self.table, d);
             }
@@ -161,7 +161,7 @@ impl Game {
             {
                 decision.pass_on = None;
             }
-            let asked = decision.as_ref().filter(|d| d.player == viewer);
+            let asked = decision.as_ref().filter(|d| d.decider == viewer);
             super::prompts::hold(&mut self.prompt, &mut view, &b.state, shown, &self.table, asked);
             (view, heard)
         });

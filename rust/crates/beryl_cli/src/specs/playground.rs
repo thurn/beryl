@@ -583,7 +583,7 @@ fn prepare(variant: &Variant) -> Result<(beryl_engine::GameTable, beryl_engine::
         boards::lock(&progress).turn = state.turn().number();
         let ready = boards::lock(&progress).done()
             && moment.play.first().is_none_or(|a| {
-                actor(a).is_none_or(|seat| seat == decision.player)
+                actor(a).is_none_or(|seat| seat == decision.decider)
                     && match a {
                         Action::AdvanceTo { .. } => true,
                         Action::Answer { kind, .. } => {
@@ -600,10 +600,10 @@ fn prepare(variant: &Variant) -> Result<(beryl_engine::GameTable, beryl_engine::
             state.set_profile(beryl_engine::Profile::EXACT);
             return Ok((table, state));
         }
-        let choice = agents[decision.player.index()].choose(
-            beryl_engine::observe(&state, &table, &mut scratch, decision.player),
+        let choice = agents[decision.decider.index()].choose(
+            beryl_engine::observe(&state, &table, &mut scratch, decision.decider),
             &decision,
-            asked[decision.player.index()].take(),
+            asked[decision.decider.index()].take(),
         );
         beryl_engine::apply(
             &mut state,

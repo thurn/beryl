@@ -144,7 +144,9 @@ impl RolloutPolicy {
         }
     }
 
-    /// The policy's answer to `d`, seen by `d.player` in `obs`.
+    /// The policy's answer to `d`, seen by `d.decider` in `obs`. A decider who is not the
+    /// player the decision belongs to, controlling them this turn, gets the answer the policy
+    /// ranks lowest for that player ([`RolloutPolicy::worst`]).
     pub fn choose<L: Layout>(
         &self,
         t: &GameTable,
@@ -162,9 +164,38 @@ impl RolloutPolicy {
         obs: Observation<'_, L>,
         d: &Decision<L>,
     ) -> Vec<Option<i32>> {
-        let mut scores = Vec::with_capacity(d.len());
+        let mut scores = ScoreList::new();
         self.decide_by(t, obs, d, false, &mut Pick::Scores(&mut scores));
-        scores
+        scores.as_slice().to_vec()
+    }
+
+    /// The candidate of `d` the policy ranks lowest for `d.player`, the first of equals,
+    /// which a player controlling them answers with ([CR 724.5]: the controller "makes all
+    /// choices and decisions the controlled player is allowed to make"): legal, and with no
+    /// claim to strength. A candidate the policy scores `None` is chosen only if all are.
+    /// Out of line, so a game no player controls pays for the test alone.
+    ///
+    /// [CR 724.5]: https://yawgatog.com/resources/magic-rules/#R7245
+    #[cold]
+    #[inline(never)]
+    fn worst<L: Layout>(
+        &self,
+        t: &GameTable,
+        obs: Observation<'_, L>,
+        d: &Decision<L>,
+        expert: bool,
+    ) -> Choice {
+        let mut scores = ScoreList::new();
+        self.decide_by(t, obs, d, expert, &mut Pick::Scores(&mut scores));
+        let mut bottom = (0, i32::MAX);
+        for (i, &s) in scores.as_slice().iter().enumerate() {
+            if let Some(s) = s
+                && s < bottom.1
+            {
+                bottom = (i, s);
+            }
+        }
+        Choice(bottom.0 as u16)
     }
 
     /// The policy's answer to `d`, with `expert`, valuing permanents as the expert does.
@@ -201,6 +232,9 @@ impl RolloutPolicy {
         expert: bool,
         pick: &mut Pick<'_, '_>,
     ) -> Choice {
+        if d.decider != d.player && !matches!(pick, Pick::Scores(_)) {
+            return self.worst(t, obs, d, expert);
+        }
         let p = self.view(t, obs, d.player, expert);
         match d.kind {
             DecisionKind::Priority | DecisionKind::CastOffer => {
@@ -335,7 +369,34 @@ enum Pick<'s, 'r> {
     /// A draw by the scores ([`Softmax`]).
     Soft(&'s mut Softmax<'r>),
     /// Collects the greedy scores in candidate order.
-    Scores(&'s mut Vec<Option<i32>>),
+    Scores(&'s mut ScoreList),
+}
+
+/// A decision's scores in candidate order, on the stack: a decision has at most 256
+/// candidates, and collecting them allocates nothing.
+pub(crate) struct ScoreList {
+    list: [Option<i32>; 256],
+    len: usize,
+}
+
+impl ScoreList {
+    fn new() -> ScoreList {
+        ScoreList {
+            list: [None; 256],
+            len: 0,
+        }
+    }
+
+    fn push(&mut self, score: Option<i32>) {
+        if let Some(place) = self.list.get_mut(self.len) {
+            *place = score;
+            self.len += 1;
+        }
+    }
+
+    fn as_slice(&self) -> &[Option<i32>] {
+        &self.list[..self.len]
+    }
 }
 
 impl Pick<'_, '_> {
@@ -357,7 +418,9 @@ impl Pick<'_, '_> {
 
     fn fixed<L: Layout>(&mut self, d: &Decision<L>, choice: Choice) -> Choice {
         if let Pick::Scores(scores) = self {
-            scores.extend((0..d.len()).map(|i| Some(i32::from(i == usize::from(choice.0)))));
+            for i in 0..d.len() {
+                scores.push(Some(i32::from(i == usize::from(choice.0))));
+            }
         }
         choice
     }
@@ -469,7 +532,7 @@ mod tests {
             if d.len() >= n {
                 return d;
             }
-            let c = policy.choose(&t, observe(&s, &t, &mut x, d.player), &d);
+            let c = policy.choose(&t, observe(&s, &t, &mut x, d.decider), &d);
             apply(&mut s, &t, &mut x, &mut Replay, c);
         }
     }
@@ -546,7 +609,7 @@ mod tests {
         for seed in 0..60 {
             let mut s = State::new(&t, seed, Profile::SMART).unwrap();
             while let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) {
-                let obs = observe(&s, &t, &mut x, d.player);
+                let obs = observe(&s, &t, &mut x, d.decider);
                 let target = obs.battlefield().iter().any(|&slot| {
                     obs.controller(slot) != d.player
                         && obs.matches(&t, &hole.filter, slot, &beryl_engine::card::Words::NONE)

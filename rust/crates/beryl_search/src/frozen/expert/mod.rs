@@ -209,7 +209,7 @@ impl Agent for ExpertAgent {
                     apply(&mut s, t, x, &mut inline, Choice(u16::from(i)));
                     let after = Expert::new(self.policy.view(
                         t,
-                        Observation::new(&s, d.player),
+                        Observation::new(&s, d.decider),
                         d.player,
                         true,
                     ));

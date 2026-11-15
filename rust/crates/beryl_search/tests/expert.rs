@@ -479,7 +479,7 @@ fn play_turn(t: &GameTable, s: &mut State, turn: u16) -> Option<Outcome> {
         };
         let shown = *view(s, t, &mut x);
         let i = usize::from(d.player == P1);
-        let c = experts[i].choose(Observation::new(&shown, d.player), &d, asked[i].take());
+        let c = experts[i].choose(Observation::new(&shown, d.decider), &d, asked[i].take());
         apply(s, t, &mut x, &mut Replay, c);
     }
 }

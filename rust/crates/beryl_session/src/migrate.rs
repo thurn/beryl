@@ -36,7 +36,7 @@ pub type Step = fn(Value, &'static CardTable) -> Result<Value, SessionError>;
 /// [`FORMAT_VERSION`] less one.
 pub const CHAIN: [Step; FORMAT_VERSION as usize - 1] = [
     v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6, v6_to_v7, v7_to_v8, v8_to_v9, v9_to_v10,
-    v10_to_v11,
+    v10_to_v11, v11_to_v12,
 ];
 
 /// `file`, a replay file of any version this build knows, in the format it writes. `cards`
@@ -289,6 +289,15 @@ fn v10_to_v11(mut file: Value, _: &'static CardTable) -> Result<Value, SessionEr
     Ok(file)
 }
 
+/// Version 12 records who answered each decision where another player than its own did, one
+/// player controlling another ([`crate::save::Described::decider`]; CR 724.5). Every answer
+/// before it was its own player's, which an answer with no decider means: the file is
+/// unchanged but for its version.
+fn v11_to_v12(mut file: Value, _: &'static CardTable) -> Result<Value, SessionError> {
+    set_version(&mut file, 12)?;
+    Ok(file)
+}
+
 /// Marks each object `file`'s answers name, what has a zone and a controller, with `field`.
 fn mark_objects(file: &mut Value, field: &str) {
     fn mark(value: &mut Value, field: &str) {
@@ -396,6 +405,8 @@ mod tests {
     use beryl_cards::CARDS;
     use serde_json::json;
 
+    use crate::save::Chosen;
+
     use super::*;
 
     /// A synthetic version 1 to 2 for the chain's own test: `name` renamed `title`.
@@ -455,6 +466,33 @@ mod tests {
         let mut expected = v3;
         expected["formatVersion"] = 4.into();
         assert_eq!(v4, expected);
+    }
+
+    /// An answer of a version 11 file is its own player's; one of version 12 may name
+    /// another player who answered it, and is written back the same.
+    #[test]
+    fn version_11_to_12_reads_every_old_answer_as_its_own_players() {
+        let answer = json!({ "index": 0, "player": 1, "turn": 0, "step": "untap",
+            "kind": "playOrDraw", "act": { "act": "play" } });
+        let v11 = json!({ "formatVersion": 11, "seed": 1, "log": [{ "choice": answer }] });
+        let v12 = v11_to_v12(v11.clone(), &CARDS).unwrap();
+        let mut expected = v11;
+        expected["formatVersion"] = 12.into();
+        assert_eq!(v12, expected);
+
+        let old: Chosen = serde_json::from_value(answer.clone()).unwrap();
+        assert_eq!(
+            old.what.as_ref().map(|w| (w.player, w.decider)),
+            Some((1, None))
+        );
+        let mut controlled = answer;
+        controlled["decider"] = 0.into();
+        let new: Chosen = serde_json::from_value(controlled.clone()).unwrap();
+        assert_eq!(
+            new.what.as_ref().map(|w| (w.player, w.decider)),
+            Some((1, Some(0)))
+        );
+        assert_eq!(serde_json::to_value(new).unwrap(), controlled);
     }
 
     #[test]

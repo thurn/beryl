@@ -92,7 +92,8 @@ impl Effect {
             | Effect::Delay { .. }
             | Effect::GetEmblem { .. }
             | Effect::WinGame(_)
-            | Effect::LoseGame(_) => false,
+            | Effect::LoseGame(_)
+            | Effect::ControlPlayer(_) => false,
         }
     }
 }

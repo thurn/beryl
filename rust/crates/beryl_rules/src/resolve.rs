@@ -143,9 +143,29 @@ pub(crate) fn answer_inline<L: Layout>(
         return None;
     }
     s.count_decision();
-    let c = a.answer(Observation::new(paused, question.player), question);
+    // A body builds its questions for the player each belongs to; the player controlling
+    // them answers (CR 724.5, `engine::controlled`).
+    let c = if s.turn().controller().is_some() {
+        answer_controlled(s, paused, a, question)
+    } else {
+        a.answer(Observation::new(paused, question.player), question)
+    };
     debug_assert!(c.is_some(), "an inline answer source declined to answer");
     Some(index::<L>(usize::from(c.unwrap_or(Choice(0)).0)))
+}
+
+/// `a`'s answer to `question`, asked of the player controlling its player this turn.
+#[cold]
+#[inline(never)]
+pub(crate) fn answer_controlled<L: Layout>(
+    s: &State<L>,
+    paused: &State<L>,
+    a: &mut dyn Answers<L>,
+    question: &Decision<L>,
+) -> Option<Choice> {
+    let mut asked = question.clone();
+    crate::engine::controlled(s, &mut asked);
+    a.answer(Observation::new(paused, asked.decider), &asked)
 }
 
 /// The answers a [`run`] starts from, and whether a question past them stops it

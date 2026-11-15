@@ -28,9 +28,22 @@ impl Copy for Step<Small> {}
 pub struct Choice(pub u16);
 
 /// One factored single pick for one player.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+///
+/// A decision has two players: the one it belongs to, whose choice the rules or a card ask
+/// for, and the one who answers it. They differ only while one player controls another
+/// ([CR 724.5]): "While controlling another player, a player makes all choices and decisions
+/// the controlled player is allowed to make or is told to make by the rules or by any
+/// objects."
+///
+/// [CR 724.5]: https://yawgatog.com/resources/magic-rules/#R7245
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Decision<L: Layout = Small> {
+    /// The player the decision belongs to: whose resources it spends, whose turn's choice it
+    /// is, what a card's "you" or "that player" means for it.
     pub player: Seat,
+    /// The player who answers it: `player` itself, or the player controlling `player` this
+    /// turn ([`State::decider`]). Every agent and the session are asked for this player.
+    pub decider: Seat,
     pub kind: DecisionKind,
     pub candidates: Candidates<L>,
     /// The prompt this pick belongs to, said once where the rules or a card's code asks it,
@@ -46,9 +59,31 @@ pub struct Decision<L: Layout = Small> {
 
 impl Copy for Decision<Small> {}
 
+/// Every field, but the decider only where it is not the player: a decision its own player
+/// answers hashes as it did before decisions had a decider, so the states the benchmark
+/// corpora pin by their hashes still hash the same.
+impl<L: Layout> std::hash::Hash for Decision<L> {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        let Decision {
+            player,
+            decider,
+            kind,
+            candidates,
+            prompt,
+            about,
+        } = self;
+        player.hash(h);
+        if decider != player {
+            decider.hash(h);
+        }
+        (kind, candidates, prompt, about).hash(h);
+    }
+}
+
 // A decision is copied with the state: the prompt and its object set take the bytes the
-// question each card once had its own variant for took, and no more.
-const _: () = assert!(size_of::<Decision<Small>>() == 312);
+// question each card once had its own variant for took, and no more. The second player, the
+// decider, found no spare byte in the 312 there were before it, so it costs a word.
+const _: () = assert!(size_of::<Decision<Small>>() == 320);
 
 impl<L: Layout> Decision<L> {
     /// A pick of `prompt` among the objects `candidates`.
@@ -60,6 +95,7 @@ impl<L: Layout> Decision<L> {
     ) -> Decision<L> {
         Decision {
             player,
+            decider: player,
             kind,
             candidates: Candidates::Objects(candidates),
             prompt,
@@ -76,6 +112,7 @@ impl<L: Layout> Decision<L> {
     ) -> Decision<L> {
         Decision {
             player,
+            decider: player,
             kind,
             candidates: Candidates::Options(list),
             prompt,
@@ -305,7 +342,7 @@ pub trait Answers<L: Layout = Small> {
         false
     }
 
-    /// Answers `d`, observed by `d.player`. Asked only of an inline source, which must
+    /// Answers `d`, observed by `d.decider`. Asked only of an inline source, which must
     /// answer.
     fn answer(&mut self, obs: Observation<'_, L>, d: &Decision<L>) -> Option<Choice>;
 }

@@ -30,7 +30,7 @@ fn check_choice(scenario: &Scenario, setup: &[Action], card: &str, play: bool) {
     };
     assert_eq!((d.player, d.kind), (P0, DecisionKind::Priority));
     let t = live.table();
-    let obs = Observation::new(live.state(), d.player);
+    let obs = Observation::new(live.state(), d.decider);
     assert_eq!(obs.turn().step(), scenario.setup.step);
     let plain = RolloutPolicy::new(t).choose(t, obs, &d);
     assert_eq!(live.name_of(&d, plain), Some(card), "{}", scenario.name);
@@ -165,7 +165,7 @@ fn hold_mirror_casts_at_the_opponents_end_step() {
     for seed in 0..50 {
         let mut s = State::new(&t, seed, Profile::SMART).unwrap();
         while let Step::Decide(d) = next(&mut s, &t, &mut scratch, &mut Replay) {
-            let obs = observe(&s, &t, &mut scratch, d.player);
+            let obs = observe(&s, &t, &mut scratch, d.decider);
             let c = policy.choose(&t, obs, &d);
             if obs.turn().step() == TurnStep::End
                 && obs.turn().active() != d.player

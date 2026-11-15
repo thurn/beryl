@@ -273,8 +273,8 @@ fn cut_game(t: &GameTable, b: &Build, g: u32) -> Result<GameCuts, String> {
             }
             Some(Step::Over(_)) => break,
             Some(Step::Decide(d)) => {
-                let i = d.player.index();
-                let c = agents[i].choose(observe(&s, t, &mut x, d.player), &d, asked[i].take());
+                let i = d.decider.index();
+                let c = agents[i].choose(observe(&s, t, &mut x, d.decider), &d, asked[i].take());
                 apply(&mut s, t, &mut x, &mut Replay, c);
             }
         }
@@ -302,8 +302,8 @@ fn estimates(
         let Step::Decide(d) = next(&mut s, t, &mut x, &mut Replay) else {
             return Ok(None);
         };
-        let seat = d.player.index();
-        let c = searches[seat].choose(observe(&s, t, &mut x, d.player), &d, asked[seat].take());
+        let seat = d.decider.index();
+        let c = searches[seat].choose(observe(&s, t, &mut x, d.decider), &d, asked[seat].take());
         if found[seat].is_none()
             && d.len() > 1
             && let Some(search) = Agent::last_search(&searches[seat])
@@ -389,7 +389,7 @@ pub fn sample(dir: &Path, count: usize) -> Result<String, String> {
         let mut greedy = (info.new)(&t, p.seed, beryl_search::Budget::DEFAULT);
         let c: Choice = Agent::<beryl_engine::Small>::choose(
             &mut greedy,
-            observe(&s, &t, &mut x, d.player),
+            observe(&s, &t, &mut x, d.decider),
             &d,
             AgentDecision(0),
         );

@@ -160,8 +160,8 @@ fn cut(t: &GameTable, seed: u64, agents: &mut [Box<dyn Agent>; 2], out: &mut Vec
             out.push(s);
             cuts.next();
         }
-        let i = d.player.index();
-        let c = agents[i].choose(observe(&s, t, &mut x, d.player), &d, asked[i].take());
+        let i = d.decider.index();
+        let c = agents[i].choose(observe(&s, t, &mut x, d.decider), &d, asked[i].take());
         apply(&mut s, t, &mut x, &mut Replay, c);
     }
 }
@@ -239,7 +239,7 @@ pub fn record(
                         samples.push((s, d));
                     }
                     summary.decisions += 1;
-                    let c = policy.choose(t, Observation::new(&s, d.player), &d);
+                    let c = policy.choose(t, Observation::new(&s, d.decider), &d);
                     a.answers.push(c);
                     apply_decided(&mut s, t, &mut x, &mut a, &d, c);
                 }
@@ -317,7 +317,7 @@ pub fn replay(t: &GameTable, scripts: &[Script], s: &mut State, x: &mut Scratch)
 pub fn decide(t: &GameTable, samples: &[(State, Decision)], policy: &RolloutPolicy) -> u64 {
     samples
         .iter()
-        .map(|(s, d)| u64::from(policy.choose(t, Observation::new(s, d.player), d).0))
+        .map(|(s, d)| u64::from(policy.choose(t, Observation::new(s, d.decider), d).0))
         .sum()
 }
 

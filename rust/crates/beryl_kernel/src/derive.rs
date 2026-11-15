@@ -121,7 +121,11 @@ impl<L: Layout> Rederive<'_, L> {
         for i in 0..s.battlefield.len() {
             let slot = s.battlefield.as_slice()[i];
             if s.object(slot).face == FaceIx::DOWN {
-                s.knowledge[s.derived[i].controller.index()].insert(slot);
+                let controller = s.derived[i].controller;
+                s.knowledge[controller.index()].insert(slot);
+                if let Some(sharer) = s.sharer(controller) {
+                    s.knowledge[sharer.index()].insert(slot);
+                }
             }
         }
         s.flags.abilities_lost = removed;

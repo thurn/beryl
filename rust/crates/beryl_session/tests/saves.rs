@@ -334,6 +334,7 @@ fn a_recorded_pass_where_no_priority_is_open_is_skipped() {
         continuation: false,
         what: Some(Described {
             player: 0,
+            decider: None,
             turn,
             step,
             kind: Kind::Priority,

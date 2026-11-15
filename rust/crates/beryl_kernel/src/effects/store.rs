@@ -100,8 +100,11 @@ impl<L: Layout> Store<L> for Effects<L> {
                 }
                 Affects::Player(player) => {
                     check(
-                        matches!(e.payload, Payload::Rule(_) | Payload::Prevent(_)),
-                        "an effect on a player that is no rule change or shield",
+                        matches!(
+                            e.payload,
+                            Payload::Rule(_) | Payload::Prevent(_) | Payload::Control(_)
+                        ),
+                        "an effect on a player that is no rule change, shield or control",
                         Some(At::Player(player)),
                     )?;
                     None

@@ -60,7 +60,7 @@ fn main() {
         COUNTING.store(true, Ordering::Relaxed);
         let outcome = play(&t, &mut s, &mut x, &mut agents, |s, d| {
             decisions += 1;
-            let det = Observation::new(s, d.player).determinize(&t, &mut rng);
+            let det = Observation::new(s, d.decider).determinize(&t, &mut rng);
             assert!(det.check_invariants(&t).is_ok());
         });
         COUNTING.store(false, Ordering::Relaxed);

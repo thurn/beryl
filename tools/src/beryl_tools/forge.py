@@ -22,6 +22,7 @@ from typing import cast
 
 from . import card_store, cards, paths
 from .card_facts import (
+    CONTROLLED_TURN,
     Cards,
     Unsupported,
     cost_text,
@@ -367,6 +368,8 @@ def export(
             actions = cast(list[JsonObject], entry["actions"])
             trace = cast(list[JsonObject], entry.get("trace", []))
             for i, action in enumerate(actions):
+                if i < len(trace) and trace[i].get("controller") is not None:
+                    raise Unsupported(CONTROLLED_TURN)
                 # Include answers Beryl chose silently. Forge can offer more targets or
                 # choose a different X, and needs the final Done for each damage division.
                 if i < len(trace):

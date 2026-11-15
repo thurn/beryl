@@ -95,7 +95,7 @@ fn waste_declines_opposing_permanents_in_softmax_mirrors() {
             rng: &mut rng,
             temperature: ROLLOUT_TEMPERATURE,
         };
-        let choice = policy.choose_soft(&t, Observation::new(&s, d.player), &d, &mut soft);
+        let choice = policy.choose_soft(&t, Observation::new(&s, d.decider), &d, &mut soft);
         soft_rollout_after(
             &mut s,
             &t,

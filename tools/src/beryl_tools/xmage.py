@@ -34,7 +34,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import cast
 
-from .card_facts import Cards, Json, Unsupported, payment_taps
+from .card_facts import CONTROLLED_TURN, Cards, Json, Unsupported, payment_taps
 from .xmage_trace import (
     FORCED_ASKED,
     FORCED_CHOICES,
@@ -307,6 +307,8 @@ class Exporter:
             )
 
     def act(self, action: Json, p: Position) -> None:
+        if p.controller is not None:
+            raise Unsupported(CONTROLLED_TURN)
         kind = cast(str, action["action"])
         if kind == "Assert":
             self.check(cast(Json, action["assertion"]), p)

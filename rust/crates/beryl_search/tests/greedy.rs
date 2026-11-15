@@ -59,8 +59,8 @@ fn registered_greedy_matches_the_original_rollout_policy() {
         let mut x = Scratch::new();
         let mut asked = [AgentDecision(0); 2];
         while let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) {
-            let obs = observe(&s, &t, &mut x, d.player);
-            let c = agent.choose(obs, &d, asked[d.player.index()].take());
+            let obs = observe(&s, &t, &mut x, d.decider);
+            let c = agent.choose(obs, &d, asked[d.decider.index()].take());
             assert_eq!(c, policy.choose(&t, obs, &d));
             apply(&mut s, &t, &mut x, &mut Replay, c);
         }
@@ -157,7 +157,7 @@ fn inline_answers_replay_to_the_same_game() {
                 Step::Over(outcome) => break outcome,
                 Step::Decide(d) => {
                     asked += 1;
-                    let c = policy.choose(&t, Observation::new(&s, d.player), &d);
+                    let c = policy.choose(&t, Observation::new(&s, d.decider), &d);
                     rec.answers.push(c);
                     apply(&mut s, &t, &mut x, &mut rec, c);
                 }
@@ -245,7 +245,7 @@ fn a_rollout_scry_keeps_the_card_worth_drawing() {
                 activated = true;
                 Choice(i as u16)
             }
-            _ => policy.choose(&t, Observation::new(&s, d.player), &d),
+            _ => policy.choose(&t, Observation::new(&s, d.decider), &d),
         };
         apply(&mut s, &t, &mut x, &mut inline, c);
     }
@@ -270,7 +270,7 @@ fn answer_for(scenario: &Scenario, purpose: Purpose) -> (Option<&'static str>, O
     };
     assert_eq!(d.prompt.purpose, purpose, "{d:?}");
     let policy = RolloutPolicy::new(live.table());
-    let c = policy.choose(live.table(), Observation::new(live.state(), d.player), &d);
+    let c = policy.choose(live.table(), Observation::new(live.state(), d.decider), &d);
     (live.name_of(&d, c), d.candidates.option(c))
 }
 

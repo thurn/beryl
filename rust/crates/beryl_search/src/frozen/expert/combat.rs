@@ -434,7 +434,7 @@ impl Sim<'_> {
                 }
                 _ => self
                     .policy
-                    .choose(self.t, Observation::new(&s, d.player), &d),
+                    .choose(self.t, Observation::new(&s, d.decider), &d),
             };
             apply(&mut s, self.t, self.x, &mut inline, c);
         }

@@ -320,7 +320,7 @@ impl Player {
         })
     }
 
-    /// The open decision is theirs, of `kind`, among `candidates` candidates.
+    /// The open decision is theirs to answer, of `kind`, among `candidates` candidates.
     pub const fn deciding(self, kind: DecisionKind, candidates: u8) -> Action {
         Action::assert(Assertion::Decision {
             player: self.0,

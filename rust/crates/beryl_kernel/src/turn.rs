@@ -20,7 +20,7 @@ use crate::state::{Budgets, State};
 ///
 /// Written only by [`State`]'s mutators: nothing outside the crate reaches one to write. The
 /// fields are `pub(crate)`: other crates read them through the getters.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Turn {
     /// 0 before the first turn.
     pub(crate) number: u16,
@@ -38,6 +38,36 @@ pub struct Turn {
     /// damage steps happen even if none is attacking any more
     /// ([CR 508.8](https://yawgatog.com/resources/magic-rules/#R5088)).
     pub(crate) attacked: bool,
+    /// The player controlling the active player this turn, if another player does
+    /// ([CR 724.1]): "The affected player is controlled during the entire turn; the effect
+    /// doesn't end until the beginning of the next turn." [`State::begin_turn`] sets it.
+    ///
+    /// [CR 724.1]: https://yawgatog.com/resources/magic-rules/#R7241
+    pub(crate) controller: Option<Seat>,
+}
+
+/// Every field, but the controller only where there is one: a turn no player controls hashes
+/// as it did before turns could be controlled, so the benchmark corpora pinned by their
+/// hashes still name the same positions.
+impl std::hash::Hash for Turn {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        let Turn {
+            number,
+            active,
+            starting_player,
+            step,
+            priority,
+            passes,
+            cleanup_check,
+            attacked,
+            controller,
+        } = *self;
+        (number, active, starting_player, step, priority).hash(h);
+        (passes, cleanup_check, attacked).hash(h);
+        if let Some(controller) = controller {
+            controller.hash(h);
+        }
+    }
 }
 
 impl Turn {
@@ -96,6 +126,19 @@ impl Turn {
     pub fn attacked(self) -> bool {
         self.attacked
     }
+
+    /// The player controlling the active player this turn, if another player does
+    /// ([CR 724.1]): "Some cards allow a player to control another player during that
+    /// player's next turn." The active player is still the active player
+    /// ([CR 724.3]): "A player who's being controlled during their turn is still the active
+    /// player."
+    ///
+    /// [CR 724.1]: https://yawgatog.com/resources/magic-rules/#R7241
+    /// [CR 724.3]: https://yawgatog.com/resources/magic-rules/#R7243
+    #[inline]
+    pub fn controller(self) -> Option<Seat> {
+        self.controller
+    }
 }
 
 impl<L: Layout> State<L> {
@@ -114,6 +157,14 @@ impl<L: Layout> State<L> {
     /// decisions offered, the lands each player has played
     /// ([CR 305.2](https://yawgatog.com/resources/magic-rules/#R3052)), and what the
     /// Trackers store noted of the turn before ([`crate::trackers`]).
+    ///
+    /// A player-controlling effect waiting for the new active player's turn makes its
+    /// controller the turn's controller ([`Turn::controller`]), and the control of the turn
+    /// before ends ([CR 724.1]): "This effect applies to the next turn that the affected
+    /// player actually takes. The affected player is controlled during the entire turn; the
+    /// effect doesn't end until the beginning of the next turn."
+    ///
+    /// [CR 724.1]: https://yawgatog.com/resources/magic-rules/#R7241
     #[inline]
     pub fn begin_turn(&mut self) -> Seat {
         self.turn.active = if self.turn.number == 0 {
@@ -121,6 +172,13 @@ impl<L: Layout> State<L> {
         } else {
             self.next_player(self.turn.active)
         };
+        self.turn.controller = self.effects.take_control(self.turn.active);
+        // CR 724.4: the controller sees what the controlled player sees, from the turn's
+        // start; what they learn during it, they learn as that player does (`sharer`).
+        if let Some(controller) = self.turn.controller {
+            let seen = self.knowledge[self.turn.active.index()];
+            self.knowledge[controller.index()] |= seen;
+        }
         self.turn.number += 1;
         self.budgets.decisions = 0;
         for p in self.players.as_mut_slice() {
@@ -128,6 +186,36 @@ impl<L: Layout> State<L> {
         }
         self.trackers.begin_turn();
         self.turn.active
+    }
+
+    /// The player who learns what `player` learns, besides them: the player controlling them
+    /// this turn, if one does ([CR 724.4]): "If information about an object in the game would
+    /// be visible to the player being controlled, it's visible to both that player and the
+    /// controller of the player." Each mutator by which a player comes to know a card tells
+    /// this player too, so that [`State::knows`] stays one bit test, and what the controller
+    /// learned stays known after the turn.
+    ///
+    /// [CR 724.4]: https://yawgatog.com/resources/magic-rules/#R7244
+    #[inline]
+    pub(crate) fn sharer(&self, player: Seat) -> Option<Seat> {
+        self.turn.controller.filter(|_| player == self.turn.active)
+    }
+
+    /// The player who answers a decision that belongs to `player`: the player controlling
+    /// them this turn, or `player` themselves ([CR 724.5]): "While controlling another
+    /// player, a player makes all choices and decisions the controlled player is allowed to
+    /// make or is told to make by the rules or by any objects." Only the active player is
+    /// ever controlled ([`Turn::controller`]), and a controller still makes their own
+    /// decisions ([CR 724.8]).
+    ///
+    /// [CR 724.5]: https://yawgatog.com/resources/magic-rules/#R7245
+    /// [CR 724.8]: https://yawgatog.com/resources/magic-rules/#R7248
+    #[inline]
+    pub fn decider(&self, player: Seat) -> Seat {
+        match self.turn.controller {
+            Some(controller) if player == self.turn.active => controller,
+            _ => player,
+        }
     }
 
     /// Begins a step or phase, the active player to receive priority in it

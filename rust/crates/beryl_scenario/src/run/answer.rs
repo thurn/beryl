@@ -131,9 +131,14 @@ pub fn describe<L: Layout>(t: &GameTable, s: &State<L>, d: &Decision<L>) -> Stri
         })
         .collect();
     let turn = s.turn();
+    let whose = if d.decider == d.player {
+        String::new()
+    } else {
+        format!(" for player {}", d.player)
+    };
     format!(
-        "player {} {:?} ({}) in turn {} {:?}, among [{}]",
-        d.player,
+        "player {}{whose} {:?} ({}) in turn {} {:?}, among [{}]",
+        d.decider,
         d.kind,
         d.prompt.purpose.name(),
         turn.number(),

@@ -334,6 +334,7 @@ mod tests {
         let [known, first, second] = [0, 1, 2].map(Slot::from_index);
         let question = Decision {
             player: Seat::P0,
+            decider: Seat::P0,
             kind: DecisionKind::Priority,
             candidates: Candidates::Objects(Bitboard::EMPTY),
             prompt: Prompt::new(Purpose::ALL[0]),
