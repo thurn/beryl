@@ -52,6 +52,9 @@ struct State {
     paused_at: Option<Instant>,
     paused_total: Duration,
     refresh_hz: f64,
+    /// Whether to wait for the GPU after each frame and report how long it took.
+    gpu_wait: bool,
+    last_gpu_ms: Option<f64>,
     /// When the last frame was presented, and whether the core asked for another at once.
     last_frame: Option<(Instant, bool)>,
     counters: Counters,
@@ -124,6 +127,17 @@ impl State {
         let encode_ns = t1.elapsed().as_nanos() as f64;
         self.window.pre_present_notify();
         self.renderer.queue.present(frame);
+        // With BERYL3D_GPU_WAIT set, the frame thread waits for the GPU to finish each frame
+        // and the late-frame lines say how long that took. If the GPU finishes quickly while
+        // the wait for a drawable stays long, the compositor is what holds the frames back;
+        // if the GPU itself is slow, other work on the GPU is.
+        let gpu_ms = if self.gpu_wait {
+            self.renderer.wait_idle();
+            Some(t1.elapsed().as_secs_f64() * 1e3)
+        } else {
+            None
+        };
+        let previous_gpu_ms = std::mem::replace(&mut self.last_gpu_ms, gpu_ms);
         let animating = shown.animating(now);
         // Whether the core wants the next frame straight away. Only then is a long gap before
         // the next frame late: after a still table, the first frame that an input such as the
@@ -139,9 +153,15 @@ impl State {
                 // Late even for a 60 Hz display: a frame was really dropped. One line each,
                 // saying where its time went.
                 self.counters.late += 1;
+                let gpu = match (previous_gpu_ms, gpu_ms) {
+                    (Some(before), Some(now)) => {
+                        format!("; GPU done {before:.2} ms after submit before, {now:.2} ms now")
+                    }
+                    _ => String::new(),
+                };
                 eprintln!(
                     "late frame {}: {:.1} ms since the last; waited {:.2} ms for the drawable, \
-                     core {:.3} ms, encode and submit {:.3} ms; {} updates waiting; load {:.1}",
+                     core {:.3} ms, encode and submit {:.3} ms; {} updates waiting; load {:.1}{gpu}",
                     self.counters.late,
                     interval * 1e3,
                     acquire_ns / 1e6,
@@ -326,6 +346,8 @@ impl ApplicationHandler<()> for App {
             paused_total: Duration::ZERO,
             refresh_hz,
             last_frame: None,
+            gpu_wait: std::env::var_os("BERYL3D_GPU_WAIT").is_some(),
+            last_gpu_ms: None,
             counters: Counters::default(),
             title_at: Instant::now(),
         });
