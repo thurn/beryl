@@ -374,14 +374,15 @@ impl Policy<'_> {
         let mut v = i32::from(info.value);
         for option in costs.paid(f) {
             v += match option {
-                CastingOption::Kicker { .. } | CastingOption::Offspring(_) => 10,
+                // Escape: a card back from the graveyard, for three others there.
+                CastingOption::Kicker { .. }
+                | CastingOption::Offspring(_)
+                | CastingOption::Escape { .. } => 10,
                 CastingOption::Impending { .. } | CastingOption::Overload { .. } => -10,
                 // A card from hand and the permanent itself, for its enters ability alone.
                 CastingOption::Evoke { .. } => -30,
                 // What it costs besides mana, as a card from hand.
                 CastingOption::Alternative { .. } => -20,
-                // A card back from the graveyard, for three others there.
-                CastingOption::Escape { .. } => 10,
             };
         }
         // Overloaded, a spell hits each permanent its first target's filter accepts

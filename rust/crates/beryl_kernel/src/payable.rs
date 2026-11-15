@@ -122,7 +122,7 @@ pub fn is_instant_mana(a: &Ability) -> bool {
     let kinds = a.produces().colors;
     a.kind() == AbilityKind::Mana
         && a.timing() == beryl_card::Timing::AsInstant
-        && (kinds.count_ones() == 1 || kinds == ANY_COLOR)
+        && (kinds.is_power_of_two() || kinds == ANY_COLOR)
         && a.cost().mana.is_zero()
         && a.cost().parts().iter().all(|part| {
             matches!(

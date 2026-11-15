@@ -63,7 +63,9 @@ impl Ctx {
     /// Adds what `filter` says to `noun`: each entry's template.
     fn add(&mut self, noun: &mut Noun, filter: Filter, kind: Kind) {
         match filter {
-            Filter::Any => {}
+            // The zone of `Filter::InZone` is the noun's own ("card in your graveyard"), which
+            // `Filter::Whose` says.
+            Filter::Any | Filter::InZone(_) => {}
             Filter::Types(set) => noun.kind_or_adjective(types(set)),
             Filter::Supertypes(set) => noun.adjectives.extend(supertypes(set)),
             Filter::SubtypeWord(word) => {
@@ -99,8 +101,6 @@ impl Ctx {
             }
             Filter::ManaValueAtMostX => noun.suffixes.push("with mana value X or less".to_owned()),
             Filter::PowerAtMost(n) => noun.suffixes.push(format!("with power {n} or less")),
-            // The zone is the noun's own ("card in your graveyard"), which `Filter::Whose` says.
-            Filter::InZone(_) => {}
             Filter::Not(inner) => self.add_not(noun, *inner, kind),
             Filter::All(filters) => {
                 for &each in filters {

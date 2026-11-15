@@ -651,7 +651,7 @@ pub(crate) fn begin_instant<L: Layout>(
     // CR 117.3c: "If a player has priority when they ... activate an ability ..., that player
     // receives priority afterward."
     s.reset_passes();
-    if kinds.count_ones() == 1 {
+    if kinds.is_power_of_two() {
         let color = ManaColor::ALL[kinds.trailing_zeros() as usize];
         return activate(s, t, sink, slot, color);
     }

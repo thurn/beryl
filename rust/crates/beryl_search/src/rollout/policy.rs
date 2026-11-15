@@ -253,7 +253,10 @@ impl<L: Layout> Policy<'_, L> {
         let mut evoked = false;
         for option in costs.paid(f) {
             v += match option {
-                CastingOption::Kicker { .. } | CastingOption::Offspring(_) => 10,
+                // Escape: a card back from the graveyard, for three others there.
+                CastingOption::Kicker { .. }
+                | CastingOption::Offspring(_)
+                | CastingOption::Escape { .. } => 10,
                 CastingOption::Impending { .. } | CastingOption::Overload { .. } => -10,
                 // Evoke trades the permanent for its enters ability
                 // ([CR 702.74a](https://yawgatog.com/resources/magic-rules/#R70274a)):
@@ -265,8 +268,6 @@ impl<L: Layout> Policy<'_, L> {
                 }
                 // What it costs besides mana, as Force of Will's card from hand and life.
                 CastingOption::Alternative { .. } => -20,
-                // A card back from the graveyard, for three others there.
-                CastingOption::Escape { .. } => 10,
             };
         }
         // Overloaded, a spell hits each permanent its first target's filter accepts
