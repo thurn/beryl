@@ -1,5 +1,7 @@
 //! Constructors for views that have no rules engine behind them.
 
+use crate::script::Script;
+
 use super::{
     Declaration, FaceName, Facing, ManaPool, ManualAbility, ObjectId, ObjectView, PlayerState,
     PlayerView, Players, Side, StackItem, Status, Step, StepSet, StopsSetting, TurnView, ZoneName,
@@ -57,6 +59,14 @@ impl PlayerState {
 }
 
 impl ObjectView {
+    /// A face-up, nameless card in `zone` that `side` owns and controls, with nothing on it.
+    ///
+    /// Tests and tools outside the main workspace build views with `..ObjectView::neutral(..)`
+    /// instead of naming every field, so a new field with a default never breaks them.
+    pub fn neutral(slot: ObjectId, zone: ZoneName, side: Side) -> Self {
+        Self::hidden(slot, zone, side, side)
+    }
+
     /// A card whose identity this viewer knows.
     pub fn card(
         slot: ObjectId,
@@ -107,6 +117,17 @@ impl ObjectView {
             named_counters: Vec::new(),
             doesnt_untap: false,
             hidden_pick: false,
+        }
+    }
+}
+
+impl Script {
+    /// A script with no reset, no beats and no timing.
+    pub fn empty() -> Self {
+        Self {
+            reset: None,
+            beats: Vec::new(),
+            timing: Vec::new(),
         }
     }
 }

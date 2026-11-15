@@ -3,8 +3,8 @@
 
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{
-    CardType, Declaration, FaceName, Facing, ManaPool, ObjectId, ObjectView, PlayerState,
-    PlayerView, SessionId, Side, StackItem, ZoneName,
+    CardType, Declaration, ManaPool, ObjectId, ObjectView, PlayerState, PlayerView, SessionId,
+    Side, StackItem, ZoneName,
 };
 use beryl_protocol::script::{Act, Curve, Reset, Room, Script, Step, StepTiming};
 
@@ -123,8 +123,7 @@ impl ScriptBuilder {
         Self {
             script: Script {
                 reset: Some(Reset::default()),
-                beats: Vec::new(),
-                timing: Vec::new(),
+                ..Script::empty()
             },
         }
     }
@@ -163,40 +162,22 @@ fn player() -> PlayerState {
 /// A plain face-up card with nothing on it.
 #[must_use]
 pub fn object(slot: ObjectId, zone: ZoneName, side: Side, name: Option<&str>) -> ObjectView {
+    // Every other field comes from `ObjectView::neutral`, so a field added to the protocol with
+    // a default compiles here unchanged.
     ObjectView {
-        slot,
-        zone,
-        owner: side,
-        zone_side: None,
-        controller: side,
         name: name.map(str::to_owned),
-        facing: Facing::Up,
-        token: false,
-        tapped: false,
-        summoning_sick: false,
-        damage: 0,
-        counters: Vec::new(),
-        types: Vec::new(),
-        pt: None,
-        keywords: Vec::new(),
-        attached_to: None,
-        exiled_by: None,
-        exiled_with: None,
-        phased_out: false,
-        part_of: None,
-        really: None,
-        chosen: None,
-        text: None,
-        type_line: None,
-        combat: None,
-        note: None,
-        pinned: None,
-        face: FaceName::Front,
-        named_counters: Vec::new(),
-        doesnt_untap: false,
-        hidden_pick: false,
-        custom_colors: None,
-        token_printing: None,
+        ..ObjectView::neutral(slot, zone, side)
+    }
+}
+
+/// A script with these beats and timing, and no reset unless `reset` is given.
+#[must_use]
+pub fn script(reset: Option<Reset>, beats: Vec<Vec<Step>>, timing: Vec<StepTiming>) -> Script {
+    Script {
+        reset,
+        beats,
+        timing,
+        ..Script::empty()
     }
 }
 

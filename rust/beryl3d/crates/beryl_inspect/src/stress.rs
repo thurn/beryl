@@ -8,7 +8,8 @@ use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{
     CardType, ObjectId, ObjectView, PlayerState, PowerToughness, Side, Why, ZoneName,
 };
-use beryl_protocol::script::{Act, Curve, Reset, Room, Script, Step, StepTiming};
+use beryl_protocol::script::{Act, Curve, Reset, Room, Step, StepTiming};
+use beryl_scene::testing;
 
 /// How many permanents move in a stress board's second view.
 const FLIGHTS: usize = 40;
@@ -50,11 +51,11 @@ fn board(count: u16) -> Stress {
     let mut first = PlayerView::neutral(PlayerState::neutral(20), PlayerState::neutral(20));
     first.objects = (0..count).map(permanent).collect();
     first.battlefield = first.objects.iter().map(|object| object.slot).collect();
-    first.script = Some(Script {
-        reset: Some(Reset::default()),
-        beats: Vec::new(),
-        timing: Vec::new(),
-    });
+    first.script = Some(testing::script(
+        Some(Reset::default()),
+        Vec::new(),
+        Vec::new(),
+    ));
 
     // Each moved permanent joins the end of the battlefield, after the ones that stay.
     let mut second = first.clone();
@@ -77,11 +78,7 @@ fn board(count: u16) -> Stress {
         })
         .collect();
     let timings: Vec<StepTiming> = beat.iter().map(|_| flight_timing()).collect();
-    second.script = Some(Script {
-        reset: None,
-        beats: vec![beat],
-        timing: timings.clone(),
-    });
+    second.script = Some(testing::script(None, vec![beat], timings.clone()));
 
     Stress {
         views: vec![first, second],

@@ -2770,6 +2770,11 @@ What keeps the two apart:
   two that check formatting and source rules (`repo` and `names`). A test in the
   tools holds both directions: a list of Beryl 3D paths selects no other lane,
   and a list with none of them never selects `beryl3d`.
+- **One change in the main workspace.** `beryl_protocol`'s `neutral.rs` has
+  `ObjectView::neutral` and `Script::empty`. Beryl 3D builds every test view as
+  `..ObjectView::neutral(..)` or `..Script::empty()`, in `beryl_scene::testing`,
+  so a field added to those types with a default does not break its build. They
+  change no wire type.
 - **Tools of its own.** Everything behind `just b3d` is one Python package,
   which the main tools import in one place. Adding a check to Beryl 3D edits
   that package and nothing else, so no other lane's record of its own tools
