@@ -2790,6 +2790,57 @@ average of 50 to 62, with the rate rule of decision C18 in place.
   41.7 MB, 185 MB of memory, 24 threads, a 546-second build). Those were the
   numbers that chose `wgpu`; this prototype's replace their frame times.
 
+**The search threads against the frame thread** (decision C9, the budget in
+[Threads](#threads)), measured 2026-11-15 by Beryl 3D itself on the same Mac,
+from a release build with `tools`: `beryl3d --window none --agent expert`. Each
+run is one whole game, the WU Control mirror from seed 20261114 between the
+`mcts-hidden` opponent, at the web app's budget, and the `expert` agent
+answering for the viewer, ended when the game is over. Every run played the same
+game: 124 searched decisions, 408,036 rollouts and 157.5 million engine steps.
+`--search-class` put the session thread and the search threads in utility, as
+Beryl 3D does, or in default, the class the web app's session runs its search
+in. `--load 16:default` added 16 busy threads. Five rounds ran each of the four
+configurations once, in a rotated order, at machine load averages of 41 to 77
+from other sessions' builds and tests. Rates are the opponent's rollouts per
+second of decision time, from its own search counters; the windowless host
+ticked at 60 Hz. Each figure is the median of five runs, with the worst beside
+it.
+
+| Search class          | Busy threads | Rollouts/s      | Frames while searching | Late among them | Worst client | Worst encode | Worst gap   |
+| --------------------- | -----------: | --------------- | ---------------------: | --------------- | ------------ | ------------ | ----------- |
+| default (the web app) |            0 | 17,437 (12,180) |                    772 | 7 (12)          | 10.4 (43.5)  | 6.1 (13.9)   | 44.4 (55.2) |
+| utility (Beryl 3D)    |            0 | 13,879 (10,910) |                    800 | 6 (11)          | 12.3 (53.7)  | 9.3 (20.6)   | 46.6 (54.1) |
+| default               |           16 | 16,587 (13,467) |                    807 | 4 (6)           | 4.3 (77.2)   | 7.4 (19.0)   | 36.0 (82.9) |
+| utility               |           16 | 14,367 (11,028) |                    852 | 6 (10)          | 12.3 (31.0)  | 10.4 (18.1)  | 43.9 (49.2) |
+
+Times are in milliseconds: the worst `Client::frame` and encode of a frame drawn
+while the AI searched, and the longest gap between two frames in the run.
+
+- **The throughput budget is not met.** Paired by round, utility's rate was a
+  median 0.88 of default's (0.56 to 1.14 over the ten pairs), and lower in 8 of
+  the 10. The machine's load moved the rates more than the class did, from
+  10,910 to 27,948 rollouts a second across runs, so the pairing is what shows
+  the class's cost. On a busy machine, threads in the utility class yield to
+  every default-class process, which is what the other sessions run in.
+  by-q44s.1.60 chooses another class for the search threads and measures again.
+- **Utility bought drawing nothing measurable.** Late frames while the AI
+  searched were as many with utility as with default, with and without the busy
+  threads. Every run had some, so the "no late frame while the AI thinks" half
+  of the budget is not met either, at these loads, whatever the class.
+- **The late frames are the frame thread waiting, not working.** Of the 117 late
+  frames drawn while the AI searched, the client took under 0.3 ms in all but
+  those of three runs, and the encode under 1 ms in 98; the gaps were 25 to 83
+  ms. The worst client times of 30 to 77 ms were most likely frames the system
+  interrupted, since that work takes under a millisecond in most frames. The
+  machine ran three to four times as many busy threads as its 18 cores, and the
+  frame thread's user-interactive class did not keep it from waiting. The rate
+  rule stepped the windowless host down to 30 Hz in 14 of the 20 runs.
+- **A live game first crashed the client.** Before these runs could finish, a
+  script naming an ability by its number panicked the client core, which builds
+  its own table from each view and so knows no ability's number. It now places
+  such a step whole; by-q44s.1.59 keeps the table across scripts so that the
+  step animates.
+
 **Card face preparation**, measured 2026-11-15 on the same machine at a load
 average of 55 to 57, by `beryl_assets` itself in a release build. The faces are
 real Scryfall scans at 672 by 936. The 127 faces are those of the implemented
