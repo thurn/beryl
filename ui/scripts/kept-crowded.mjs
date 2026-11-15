@@ -463,11 +463,13 @@ for (const [title, run] of [
             const badge = (await badges.count())
                 ? await badges.last().boundingBox()
                 : undefined;
-            for (const pile of await page
-                .locator(".has-tip:has([aria-label^=Library]), [data-side=you]")
-                .all()) {
+            const piles = await page
+                .locator("button[data-pile][data-side=you]")
+                .all();
+            assert.ok(piles.length > 0, "your pile buttons are present");
+            for (const pile of piles) {
                 const box = await pile.boundingBox();
-                if (!box || box.y < 450) continue;
+                assert.ok(box, "the pile button shows");
                 await page.mouse.move(box.x + box.width / 2, box.y + 20);
                 await page.clock.runFor(300);
                 const tip = page.locator(".tip").filter({ visible: true });
