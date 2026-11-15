@@ -145,6 +145,12 @@ impl Widen for ExpertAgent<Small> {
 impl<L: Layout> Agent<L> for ExpertAgent<L> {
     fn choose(&mut self, obs: Observation<'_, L>, d: &Decision<L>, at: AgentDecision) -> Choice {
         let t = &self.table;
+        // A decision of a player whose turn the agent's player controls (CR 724) is the
+        // policy's, which picks what it ranks lowest for that player: every rule below plays
+        // for the decision's player.
+        if d.decider != d.player {
+            return self.policy.decide(t, obs, d, true);
+        }
         let mut rng = at.rng(self.seed);
         let e = Expert::new(self.policy.view(t, obs, d.player, true));
         match d.kind {
