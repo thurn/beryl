@@ -436,3 +436,28 @@ fn a_later_script_finds_the_ability_an_earlier_script_numbered() {
     }
     at_rest(&show, &resolved, 1_000 * MS);
 }
+
+#[test]
+fn a_fading_card_is_drawn_with_the_blended_records() {
+    // The opaque pass neither blends nor shows what lies behind, so a card drawn there while
+    // it fades in would darken from black and hide the cards under it (docs/beryl-3d.md,
+    // "Opaque first, nearest first").
+    let (mut show, _, cards) = three_beat_show();
+    let drawn = frame(&mut show, &mut empty_frame(), 570 * MS);
+    let token = show.pose(usize::from(cards.token.0), 570 * MS);
+    assert!(
+        token.is_some_and(|pose| pose.opacity < 1.0),
+        "the token fades in"
+    );
+    let card = beryl_scene::frame::Material::Card as u8;
+    let (opaque, blended) = drawn.draws.split_at(drawn.opaque as usize);
+    assert!(opaque.iter().all(|draw| draw.tint[3] == 255));
+    assert_eq!(
+        blended
+            .iter()
+            .filter(|draw| draw.material == card && draw.tint[3] < 255)
+            .count(),
+        1,
+        "the fading token is among the blended records"
+    );
+}

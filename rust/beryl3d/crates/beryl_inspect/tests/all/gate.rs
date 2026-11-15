@@ -84,3 +84,28 @@ fn a_counted_playback_stops_after_its_frame() {
     let next = playback.moment().expect("the board goes on");
     assert_eq!(next.frame, start + 1);
 }
+
+#[test]
+fn a_flight_draws_only_the_cards_the_rows_show() {
+    // A battlefield row too long for the window shows a window of its cards, and the rest rest
+    // undrawn at its end, above the last card shown. While the 40 permanents fly, the cards
+    // that stay slide along their rows; one out of view before and after the flight must stay
+    // undrawn, or it covers the row's last card and the frame draws the whole battlefield.
+    for name in NAMES {
+        let mut at_rest = 0;
+        let mut most_in_flight = 0;
+        assert!(play(name, |moment, frame| match moment.phase {
+            Phase::Rest => at_rest = at_rest.max(frame.work.records),
+            Phase::Flight if moment.frame >= REST_FRAMES => {
+                most_in_flight = most_in_flight.max(frame.work.records);
+            }
+            Phase::Flight => {}
+        }));
+        // The flying cards, which were all shown before they took off, are the only ones a
+        // flight may add.
+        assert!(
+            most_in_flight <= at_rest + 40,
+            "{name}: {most_in_flight} records in flight, {at_rest} at rest"
+        );
+    }
+}

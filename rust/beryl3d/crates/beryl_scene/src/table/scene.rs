@@ -215,16 +215,24 @@ impl Table {
                 builder.segment();
                 let pose = track.pose_at(motion.t);
                 let under_way = track.moving(motion.t);
-                match motion.finals.get(slot).copied().flatten() {
-                    Some(object) => Some((object, motion.view, pose, under_way)),
-                    None => resting.map(|object| (object, view, pose, under_way)),
+                let last = motion.finals.get(slot).copied().flatten();
+                // A card a row has scrolled out of view rests undrawn at the row's end, above
+                // the last card shown. One that is out of view both before the script and after
+                // it stays undrawn while it slides, or it would cover that card.
+                let seen = [resting, last]
+                    .iter()
+                    .flatten()
+                    .any(|object| object.visible);
+                match last {
+                    Some(object) => Some((object, motion.view, pose, under_way, seen)),
+                    None => resting.map(|object| (object, view, pose, under_way, seen)),
                 }
             });
             let (object, view, under_way) = match (moving, resting) {
-                (Some((object, view, pose, under_way)), _) => (
+                (Some((object, view, pose, under_way, seen)), _) => (
                     SceneObject {
                         pose,
-                        visible: pose.opacity > 0.0,
+                        visible: seen && pose.opacity > 0.0,
                         ..object
                     },
                     view,
@@ -274,8 +282,16 @@ impl Table {
                 },
             );
             let opacity = (object.pose.opacity.clamp(0.0, 1.0) * 255.0).round() as u8;
+            // A card fading in or out is partly transparent. The opaque pass neither blends nor
+            // leaves what is behind it to be seen, so such a card would darken toward black
+            // and hide the cards beneath it: it is drawn with the blended records, after them.
+            let band = if opacity == 255 {
+                Band::Opaque
+            } else {
+                Band::TableMarks
+            };
             builder.draw(
-                Band::Opaque,
+                band,
                 Draw::card(
                     transform,
                     [255, 255, 255, opacity],
