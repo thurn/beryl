@@ -683,6 +683,23 @@ Built by by-bajq.3.10:
   effects is not found.
 - **Becoming a copy** is an instruction with a duration and the copier's
   exception.
+- **As built** (by-bajq.6.3, 2026-11-15). `Effect::BecomeCopy` names the
+  permanents that become copies, what they copy and an exception of the
+  ability's face, and no duration: no card of the pool has a copy effect that
+  ends, so ending one and restoring the values under it is not built. The
+  permanent takes the copiable values of the first permanent `of` names, with
+  the exception after them (`State::become_copy`): its definition and face
+  change, a card remembers what it really is (`Memo::Really`), and a copy effect
+  already on it is ended, since the new one replaces every value it gave.
+  Becoming a copy is not entering, so the copy keeps its counters and status,
+  and a Thespian's Stage that copies Dark Depths has no ice counters and its
+  state trigger triggers at once. "Except it has this ability" is
+  `CopyChange::Has` of an activated ability: layer 1 puts it with the abilities
+  granted to the permanent (`State::copy_grants`), where activation and every
+  reader of abilities find it, and an effect that sets a land's type (Blood
+  Moon, CR 305.7) or removes abilities removes it. "Enters with N counters" is
+  `Rewrite::EntersWithCounters`. Gaps: a copy effect with a duration; an
+  exception giving a static ability.
 - **Copies of spells** (CR 707.10). A copy takes a slot of the token pool on the
   stack and the original's modes, targets, X and costs paid. It is not cast.
   Where the effect allows, each target may be chosen again through the casting

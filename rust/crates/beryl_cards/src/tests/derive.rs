@@ -28,6 +28,12 @@ const UNREACHED: &[(&str, &str)] = &[
          creatures, instants, sorceries and an artifact",
     ),
     (
+        "Dark Depths: ability 2 (Triggered)",
+        "it triggers once Dark Depths has no ice counters, and a generated position starts it \
+         with the ten it enters with, which ten activations would remove; the card's \
+         hand-written scenarios start it with one or two",
+    ),
+    (
         "Cavern of Souls: ability 2 (Mana)",
         "its mana pays only for a creature spell of the type the land chose as it entered, and a \
          generated position puts the land onto the battlefield having chosen none; the card's \

@@ -570,6 +570,16 @@ pub const fn create_copy_except(player: Players, of: Objects, except: ExceptIx) 
     }
 }
 
+/// [`Effect::BecomeCopy`] with the exception at `except` among those the ability's face lists:
+/// "[objects] becomes a copy of [object], except ...".
+pub const fn become_copy_except(objects: Objects, of: Objects, except: ExceptIx) -> Effect {
+    Effect::BecomeCopy {
+        objects,
+        of,
+        except: Some(except),
+    }
+}
+
 /// [`Effect::CopySpell`] of one copy made with the exception at `except` among those the
 /// ability's face lists, for which its controller may choose new targets: "Copy [spell], except
 /// .... You may choose new targets for the copy."

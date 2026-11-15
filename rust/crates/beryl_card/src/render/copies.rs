@@ -6,7 +6,7 @@ use super::filters::Kind;
 use super::words::with_article;
 use crate::effect::{Amount, CopyChange, Objects, Players};
 use crate::filter::Filter;
-use crate::index::ExceptIx;
+use crate::index::{ExceptIx, GrantIx};
 
 impl Ctx {
     /// "[Player] creates a token that's a copy of [object]", or "a 1/1 token copy of ...".
@@ -100,8 +100,45 @@ impl Ctx {
                 let words = super::words::colors(colors);
                 format!("it's {}", super::words::list(&words, "and"))
             }
+            CopyChange::Has(ix) if self.is_this_ability(ix) => "it has this ability".to_owned(),
             CopyChange::Has(ix) => format!("it has {}", self.granted(ix)),
         }
+    }
+
+    /// Whether the ability at `ix` of the face's grants is the ability being written, as
+    /// Thespian's Stage's copy keeps the ability that made it one: "except it has this
+    /// ability". Abilities are data with no identity, so the two are compared by what they
+    /// say.
+    fn is_this_ability(&self, ix: GrantIx) -> bool {
+        let granted = self.face.and_then(|face| face.grants.get(ix.index()));
+        match (granted, self.ability) {
+            (Some(granted), Some(this)) => format!("{granted:?}") == format!("{this:?}"),
+            _ => false,
+        }
+    }
+
+    /// "[Objects] become a copy of [of], except ..." (CR 707.2, CR 707.9).
+    pub(super) fn become_copy(
+        &mut self,
+        objects: Objects,
+        of: Objects,
+        except: Option<ExceptIx>,
+    ) -> String {
+        let plural = self.is_plural(objects);
+        let subject = self.objects(objects);
+        let of = self.objects(of);
+        let changes = except
+            .and_then(|ix| self.face?.excepts.get(ix.index()))
+            .map_or(&[][..], |exception| exception.0);
+        let excepted: Vec<String> = changes.iter().map(|&c| self.copy_change(c)).collect();
+        let except = if excepted.is_empty() {
+            String::new()
+        } else {
+            format!(", except {}", excepted.join(" and "))
+        };
+        let verb = if plural { "become" } else { "becomes" };
+        self.plural = plural;
+        format!("{subject} {verb} a copy of {of}{except}")
     }
 
     /// "You may have this creature enter as a copy of any creature on the battlefield,

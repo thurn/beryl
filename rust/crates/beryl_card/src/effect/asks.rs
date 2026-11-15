@@ -82,6 +82,7 @@ impl Effect {
             | Effect::LoseLife { .. }
             | Effect::CreateTokens { .. }
             | Effect::CreateCopies { .. }
+            | Effect::BecomeCopy { .. }
             | Effect::AddCounters { .. }
             | Effect::RemoveCounters { .. }
             | Effect::AddMana { .. }

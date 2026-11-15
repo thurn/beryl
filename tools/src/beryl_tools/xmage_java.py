@@ -75,6 +75,7 @@ COUNTERS: dict[str, str] = {
     "Loyalty": "LOYALTY",
     "Time": "TIME",
     "Story": "STORY",
+    "Ice": "ICE",
     "Chorus": "CHORUS",
 }
 MANA: dict[str, str] = {
@@ -85,6 +86,32 @@ MANA: dict[str, str] = {
     "Green": "GREEN",
     "Colorless": "COLORLESS",
 }
+
+# Number words as Oracle text writes a count of counters.
+NUMBER_WORDS: dict[str, int] = {
+    "a": 1,
+    "an": 1,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+}
+
+
+def entering_counters(oracle: str, kind: str) -> int:
+    """How many counters of Beryl's kind `kind` a permanent with this Oracle text enters with
+    ("Dark Depths enters with ten ice counters on it"), which XMage's `addCard` puts on it.
+    """
+    word = COUNTERS[kind].lower()
+    found = re.search(rf"enters with (\w+) {re.escape(word)} counters? on it", oracle)
+    return NUMBER_WORDS.get(found.group(1), 0) if found else 0
+
 
 # Beryl's zones as the XMage assertion that counts the cards in one.
 ZONE_COUNTS: dict[str, str] = {

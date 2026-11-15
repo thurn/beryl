@@ -3,7 +3,8 @@
 
 use beryl_engine::TurnStep;
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Cost, Face, FaceIx, ManaColor, Players, TriggerEvent, Types,
+    Ability, AbilityKind, CardDef, Cost, Face, FaceIx, ManaColor, Players, Rewrite, TriggerEvent,
+    Types,
 };
 use beryl_engine::state::CounterKind;
 use beryl_scenario::{Action, P0, P1, Permanent, PlayerSetup, Scenario};
@@ -162,7 +163,8 @@ pub(super) fn early(def: &'static CardDef, place: Place) -> bool {
 }
 
 /// The card as a permanent with face `f` up: a planeswalker with the loyalty its costliest
-/// ability takes, and a permanent whose ability removes a counter with one of that kind.
+/// ability takes, a permanent that enters with counters with those, and one whose ability
+/// removes a counter with one of that kind.
 fn permanent(def: &'static CardDef, f: FaceIx) -> Permanent {
     let face = def.face(f);
     let mut permanent = Permanent::new(def.name);
@@ -179,7 +181,17 @@ fn permanent(def: &'static CardDef, f: FaceIx) -> Permanent {
     {
         permanent = permanent.counters(CounterKind::Loyalty, most as u8);
     }
-    if let Some(kind) = costs().find_map(Cost::removes) {
+    // The counters it enters with, as a permanent that entered has them ("enters with ten
+    // ice counters on it").
+    let enters_with = (face.abilities.iter())
+        .filter_map(Ability::replacement)
+        .find_map(|r| match r.rewrite {
+            Rewrite::EntersWithCounters(kind, n) => Some((kind, n)),
+            _ => None,
+        });
+    if let Some((kind, n)) = enters_with {
+        permanent = permanent.counters(kind, n);
+    } else if let Some(kind) = costs().find_map(Cost::removes) {
         permanent = permanent.counters(kind, 1);
     }
     permanent

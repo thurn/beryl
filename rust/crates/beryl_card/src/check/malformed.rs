@@ -36,7 +36,7 @@ pub enum Malformed {
     NoModification,
     /// A resolving continuous effect of more parts than [`MODIFY_PARTS`].
     Parts,
-    /// An [`Effect::CreateCopies`], an [`Effect::CopySpell`] or an enter-as-a-copy
+    /// An [`Effect::CreateCopies`], an [`Effect::BecomeCopy`], an [`Effect::CopySpell`] or an enter-as-a-copy
     /// replacement naming a copy exception its face does not list ([`Face::excepts`]), or an
     /// exception giving an ability the face does not list in [`Face::grants`].
     Copy,

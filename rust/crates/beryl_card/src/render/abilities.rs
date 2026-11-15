@@ -13,7 +13,7 @@ use crate::continuous::{
     ChosenKind, Draws, LayerSpec, Modification, Replaced, Replacement, Rewrite,
 };
 use crate::cost::{CastingKind, Chosen, Cost, CostAction, CostPart, ESCAPE_EXILES, Measure};
-use crate::effect::{Amount, Condition, Effect, Objects, Players};
+use crate::effect::{Amount, Comparison, Condition, Effect, Objects, Players};
 use crate::filter::Filter;
 use crate::ids::{TurnStep, Zone, ZoneSet};
 use crate::index::GrantIx;
@@ -36,6 +36,7 @@ impl Ctx {
 
     fn paragraph_here(&mut self, ability: &Ability) -> String {
         self.begin(ability.targets(), ability.trigger());
+        self.ability = Some(*ability);
         if let Some(keyword) = Ctx::keyword_line(ability) {
             return keyword;
         }
@@ -107,7 +108,14 @@ impl Ctx {
             lead.push_str(", if ");
             lead.push_str(&condition);
         }
+        // A state trigger about the object names it, so its instructions say "it": "When
+        // Dark Depths has no ice counters on it, sacrifice it."
+        self.this_is_it = matches!(
+            trigger.event,
+            TriggerEvent::State(&Condition::Compare(Amount::Counters(Objects::This, _), ..))
+        );
         let mut clauses = self.body(ability.body());
+        self.this_is_it = false;
         match clauses.first_mut() {
             Some(first) => *first = format!("{lead}, {}", super::words::uncapitalized(first)),
             None => clauses.push(lead),
@@ -194,6 +202,12 @@ impl Ctx {
             }
             TriggerEvent::Discards => format!("whenever {} a card", player_verb("discard")),
             TriggerEvent::Draws => format!("whenever {} a card", player_verb("draw")),
+            // "When Dark Depths has no ice counters on it": the object is the subject.
+            TriggerEvent::State(&Condition::Compare(
+                Amount::Counters(Objects::This, kind),
+                Comparison::Equal | Comparison::AtMost,
+                Amount::Fixed(0),
+            )) => format!("when {} has no {} counters on it", self.this, kind.name()),
             TriggerEvent::State(&condition) => format!("when {}", self.condition(condition)),
         }
     }
@@ -592,9 +606,10 @@ impl Ctx {
             self.targets,
             std::mem::take(&mut self.mentioned),
             self.trigger,
+            self.ability,
         );
         let text = self.paragraph(ability);
-        (self.targets, self.mentioned, self.trigger) = saved;
+        (self.targets, self.mentioned, self.trigger, self.ability) = saved;
         format!("\"{text}\"")
     }
 
@@ -610,6 +625,12 @@ impl Ctx {
             (_, Rewrite::EntersTappedUnlessFewLands(n)) => vec![format!(
                 "{this} enters tapped unless you control {} or fewer other lands",
                 number(n)
+            )],
+            (_, Rewrite::EntersWithCounters(kind, n)) => vec![format!(
+                "{this} enters with {} {} counter{} on it",
+                number(n),
+                kind.name(),
+                if n == 1 { "" } else { "s" }
             )],
             (_, Rewrite::EntersTappedUnlessPayLife(n)) => vec![
                 format!("as {this} enters, you may pay {n} life"),

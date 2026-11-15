@@ -135,6 +135,43 @@ impl<L: Layout> State<L> {
         Ok(())
     }
 
+    /// Makes the permanent `object` become a copy with the copiable values `values`, by an
+    /// effect of the card `source` ([CR 707.2]): "When copying an object, the copy acquires
+    /// the copiable values of the original object's characteristics". It is not entering: its
+    /// counters, status and memos stay. Its face up is the one it copied. The effect lasts
+    /// until the permanent leaves the battlefield, and ends with what the stores hold about it
+    /// then; a card is then the card it really is again ([`Memo::Really`]).
+    ///
+    /// A copy effect already on the permanent is ended first: it lasts as long, and the new
+    /// effect, applied after it in layer 1, replaces every value it gives ([CR 613.2a]):
+    /// "Layer 1a: Copiable effects are applied." The new values were read with it applied, so
+    /// they keep what it gave that a copy of this permanent copies. [`Full`] if the stores
+    /// had no room.
+    ///
+    /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
+    /// [CR 613.2a]: https://yawgatog.com/resources/magic-rules/#R6132a
+    #[cold]
+    #[inline(never)]
+    pub fn become_copy(
+        &mut self,
+        source: L::Card,
+        object: ObjectRef<L>,
+        values: Copiable<L>,
+    ) -> Result<(), Full> {
+        debug_assert!(self.is_current(object));
+        debug_assert_eq!(self.object(object.slot).zone, beryl_card::Zone::Battlefield);
+        let slot = object.slot;
+        let ended = self.effects.end(|e| {
+            !(matches!(e.payload, Payload::Copy(_))
+                && matches!(e.affected, Affects::Object { slot: s, .. } if s == slot))
+        });
+        debug_assert_eq!(ended.any, self.object(slot).flags.has(Flag::Copy));
+        self.object_mut(slot).face = values.face_up();
+        self.flags.derived_dirty = true;
+        let copy = Continuous::Copy(object, values);
+        self.start_effect(source, copy, Duration::Indefinite)
+    }
+
     /// The card a card under a copy effect really is, which the zone move makes it again as
     /// the effect ends ([`Memo::Really`]): read before the move ends the memo.
     #[cold]

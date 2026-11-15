@@ -78,6 +78,7 @@ pub(crate) fn check(def: &CardDef) -> Result<Replaces, Unreplaced> {
                 Rewrite::EntersTapped
                 | Rewrite::EntersTappedUnlessFewLands(_)
                 | Rewrite::EntersTappedUnlessPayLife(_)
+                | Rewrite::EntersWithCounters(..)
                 | Rewrite::Choose(_)
                 | Rewrite::EnterAsCopy { .. },
             ) => {}

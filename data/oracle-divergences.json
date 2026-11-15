@@ -96,5 +96,12 @@
     "scenario": "Animate Dead under Containment Priest",
     "cr": "CR 603.7a (https://yawgatog.com/resources/magic-rules/#R6037a): \"Delayed triggered abilities are created during the resolution of spells or abilities, as the result of a replacement effect being applied, or as a result of a static ability that allows a player to take an action. A delayed triggered ability won't trigger until it has actually been created, even if its trigger event occurred just beforehand. Other events that happen earlier may make the trigger event impossible.\"",
     "reason": "XMage creates Animate Dead's leaves-the-battlefield ability only once a creature has returned, so when Containment Priest exiles the card instead, nothing triggers as Animate Dead goes to the graveyard; the enters ability's resolution creates the delayed ability whatever it returned"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Thespian's Stage",
+    "scenario": "it copies a basic land and can copy again",
+    "cr": "CR 707.9a (https://yawgatog.com/resources/magic-rules/#R7079a): \"Some copy effects cause the copy to gain an ability as part of the copying process. This ability becomes part of the copiable values for the copy, along with any other abilities that were copied.\"",
+    "reason": "XMage adds the copy's 'except it has this ability' with a one-shot addAbility after copyPermanent, outside its layer system, so the copy no longer has the ability once continuous effects are reapplied and it can't copy again. The ability is part of the copy's copiable values (CR 707.9a)."
   }
 ]

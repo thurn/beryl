@@ -414,6 +414,13 @@ impl<L: Layout> Copiable<L> {
         self.card
     }
 
+    /// The face these are read from, which a permanent that becomes a copy has up
+    /// ([`State::become_copy`](crate::State::become_copy)).
+    #[inline]
+    pub(crate) fn face_up(self) -> FaceIx {
+        self.face
+    }
+
     /// Which definition these are read from, to compare and to order by.
     #[inline]
     pub const fn key(self) -> DefinitionKey<L::Card> {

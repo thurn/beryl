@@ -408,6 +408,25 @@ pub enum Effect {
         /// ([`crate::Face::excepts`]), or none for exact copies.
         except: Option<ExceptIx>,
     },
+    /// "[Objects] become a copy of [of]": each permanent takes the copiable values of the one
+    /// it copies, with the exception at `except` of the ability's own face
+    /// ([`crate::Face::excepts`]) after them ([CR 707.2]): "When copying an object, the copy
+    /// acquires the copiable values of the original object's characteristics". Those values
+    /// are what is printed on it, as other copy effects modify them, not what other effects
+    /// make it ([CR 707.2]). Becoming a copy is not entering the battlefield: the permanent
+    /// keeps its counters, its status and what it remembers, and nothing that happens as an
+    /// object enters applies (a permanent that becomes a copy of Dark Depths has no ice
+    /// counters). The copy effect lasts until the permanent leaves the battlefield or a later
+    /// copy effect overrides it ([CR 613.2a]), as a copy effect without a duration does.
+    /// Nothing happens if what it copies has left the battlefield.
+    ///
+    /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
+    /// [CR 613.2a]: https://yawgatog.com/resources/magic-rules/#R6132a
+    BecomeCopy {
+        objects: Objects,
+        of: Objects,
+        except: Option<ExceptIx>,
+    },
     /// "Put [count] [kind] counters on [objects]"
     /// ([CR 122.1](https://yawgatog.com/resources/magic-rules/#R1221)): "A counter is a
     /// marker placed on an object or player that modifies its characteristics and/or
@@ -670,6 +689,7 @@ impl Effect {
             | Effect::LoseLife { .. }
             | Effect::CreateTokens { .. }
             | Effect::CreateCopies { .. }
+            | Effect::BecomeCopy { .. }
             | Effect::AddCounters { .. }
             | Effect::RemoveCounters { .. }
             | Effect::AddMana { .. }

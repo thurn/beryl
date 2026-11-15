@@ -3,10 +3,12 @@
 //! (`beryl_kernel`'s contract, "Stores"), which the layers and the rules read by kind.
 
 use beryl_card::{
-    Amount, ChosenKind, MODIFY_PARTS, Modification, Objects, Players, Protection, RuleChange,
+    Amount, ChosenKind, ExceptIx, MODIFY_PARTS, Modification, Objects, Players, Protection,
+    RuleChange,
 };
 use beryl_kernel::chosen::ChosenValue;
 
+use crate::additions::Addition;
 use crate::bitboard::Bitboard;
 use crate::card::Stop;
 use crate::choices;
@@ -282,4 +284,41 @@ pub(crate) fn change_rule_instruction<L: Layout>(
     let (game, resolution) = run.resolving();
     change_rule(game, resolution, rule, duration)?;
     Ok(Outcome::of(Bitboard::EMPTY, 1))
+}
+
+/// [`Effect::BecomeCopy`](beryl_card::Effect::BecomeCopy): "[objects] become a copy of [of],
+/// except ..." ([CR 707.2]): "When copying an object, the copy acquires the copiable values of
+/// the original object’s characteristics ... Other effects (including type-changing and
+/// text-changing effects), status, counters, and stickers are not copied." What it copies is the first permanent `of` names; with none left, nothing happens. The
+/// exception at `except` of the resolving ability's face goes after the values it copies
+/// ([CR 707.9b]), so a copy of the copy has it too. The outcome is the permanents that became
+/// copies.
+///
+/// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
+/// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
+pub(crate) fn become_copy_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    objects: Objects,
+    of: Objects,
+    except: Option<ExceptIx>,
+) -> Result<Outcome<L>, Full> {
+    let mut originals = run.permanents(of);
+    let Some(original) = run.next_permanent(&mut originals) else {
+        return Ok(Outcome::NOTHING);
+    };
+    let entry = &run.resolution().entry;
+    let source = entry.card();
+    let mut values = run.state().copiable(original.slot);
+    if let Some(ix) = except {
+        values = values.with_addition(Addition::new(source, entry.face(), ix))?;
+    }
+    let mut copies = run.permanents(objects);
+    let mut became = Bitboard::EMPTY;
+    while let Some(copy) = run.next_permanent(&mut copies) {
+        run.game().state.become_copy(source, copy, values)?;
+        became.insert(copy.slot);
+    }
+    let game = run.game();
+    layers::refresh(game.state, game.table, game.sink)?;
+    Ok(Outcome::acted_on(became))
 }

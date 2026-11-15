@@ -268,6 +268,11 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 count,
                 except,
             } => tokens::create_copies_instruction(self, player, of, count, except)?,
+            Effect::BecomeCopy {
+                objects,
+                of,
+                except,
+            } => continuous::become_copy_instruction(self, objects, of, except)?,
             Effect::AddCounters {
                 objects,
                 kind,

@@ -262,6 +262,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::Modify { .. }
         | Effect::ChangeText { .. }
         | Effect::ExchangeControl(..)
+        | Effect::BecomeCopy { .. }
         | Effect::Attach { .. }
         | Effect::ChangeRule { .. }
         | Effect::GainFlashback(_)

@@ -68,6 +68,7 @@ COUNTERS: Mapping[str, str] = {
     "Loyalty": "LOYALTY",
     "Time": "TIME",
     "Story": "STORY",
+    "Ice": "ICE",
     "Chorus": "CHORUS",
 }
 
@@ -224,10 +225,16 @@ def ability_selector(cards: Cards, card: str, how: str, index: int) -> str:
     text = cost_text(ability, cost, parts)
     if text is None:
         raise Unsupported("an activated ability of a cost the exporter cannot write")
-    written = [p for p in cards.paragraphs(card) if p.startswith(text)]
+    written = [
+        p for p in cards.paragraphs(cards.written_on(card, how)) if p.startswith(text)
+    ]
     if len(written) != 1:
         raise Unsupported("an activated ability not found by its cost in Oracle text")
     effect = written[0].partition(": ")[2]
+    if effect.startswith("This "):
+        # Forge writes the card's name where the effect starts "This land becomes ...", and
+        # its description starts with the cost, which only this paragraph has.
+        return text
     words = EFFECT_END.split(effect, maxsplit=1)[0].split()[:EFFECT_WORDS]
     if not words:
         raise Unsupported("an activated ability whose effect starts with its card")

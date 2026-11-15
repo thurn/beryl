@@ -104,6 +104,19 @@ def test_a_granted_ability_is_found_on_the_one_card_that_grants() -> None:
     assert both.ability_text("Gadget", "Granted", 0) is None
 
 
+def test_a_granted_abilitys_text_is_read_on_the_card_that_grants_it() -> None:
+    # A copy of an Island keeps the copier's ability, written on the copier.
+    cost = {"mana": "{2}", "parts": [TAP]}
+    grant: Json = {"index": "Grant 0", "kind": "Activated", "cost": cost}
+    stage = {"faces": [{"name": "Stage", "abilities": [], "grants": [grant]}]}
+    oracle = "{T}: Add {C}.\n{2}, {T}: This land becomes a copy of target land."
+    cards = Cards({"Island": card(), "Stage": stage}, {"Stage": oracle})
+    assert cards.written_on("Island", "Granted") == "Stage"
+    assert cards.written_on("Island", "Own") == "Island"
+    # XMage writes the card's name where the text says "This land": the cost alone.
+    assert cards.ability_text("Island", "Granted", 0) == "{2}, {T}:"
+
+
 def test_a_source_with_one_mana_ability_taps_by_its_text() -> None:
     assert (
         gadget(mana(0, "Colorless", amount=2)).mana_text("Gadget") == "{T}: Add {C}{C}"

@@ -918,6 +918,23 @@ fn local(effect: &'static Effect) -> Neighbours<Effect> {
                 );
             }
         }
+        Effect::BecomeCopy {
+            objects: which,
+            of,
+            except,
+        } => {
+            let copy = |objects, of| Effect::BecomeCopy {
+                objects,
+                of,
+                except,
+            };
+            for (name, which) in objects(which) {
+                add(name, copy(which, of));
+            }
+            for (name, of) in objects(of) {
+                add(format!("of: {name}"), copy(which, of));
+            }
+        }
         Effect::Attach { objects: which, to } => {
             for (name, which) in objects(which) {
                 add(name, Effect::Attach { objects: which, to });

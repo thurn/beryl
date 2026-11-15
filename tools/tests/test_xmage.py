@@ -511,3 +511,12 @@ def test_xmage_cards_skips_set_entries_that_are_commented_out(tmp_path: Path) ->
         '//        cards.add(new SetCardInfo("Mind Bend", 77, Rarity.UNCOMMON, Y.class));\n'
     )
     assert xmage_java.xmage_cards(tmp_path) == {"Mind Stone"}
+
+
+def test_a_permanent_enters_with_the_counters_its_text_says() -> None:
+    oracle = (
+        "Dark Depths enters with ten ice counters on it.\n{3}: Remove an ice counter."
+    )
+    assert xmage_java.entering_counters(oracle, "Ice") == 10
+    assert xmage_java.entering_counters(oracle, "Time") == 0
+    assert xmage_java.entering_counters("Draw a card.", "Ice") == 0

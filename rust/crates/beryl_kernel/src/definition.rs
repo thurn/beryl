@@ -14,11 +14,11 @@
 //!
 //! [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
 
-use beryl_card::{Colors, Face, FaceIx};
+use beryl_card::{AbilityKind, Colors, Face, FaceIx};
 
 use crate::event::{Listens, Replaces};
 use crate::layout::{Layout, Small};
-use crate::object::Flag;
+use crate::object::{Flag, GrantRef};
 use crate::query::{Copiable, DefinitionKey};
 use crate::rule_changes::Rules;
 use crate::state::State;
@@ -171,6 +171,35 @@ impl<L: Layout> State<L> {
     #[inline(never)]
     pub fn copy_subtypes(&self, t: &GameTable, slot: L::Slot) -> GameSubtypes {
         self.copiable(slot).excepted_subtypes(t)
+    }
+
+    /// The abilities layer 1 gives the object in `slot`, a copy ([`Flag::Copy`]), that its
+    /// exceptions give and that are activated, such as Thespian's Stage's "except it has
+    /// this ability" ([CR 707.9a]): "This ability becomes part of the copiable values for the
+    /// copy, along with any other abilities that were copied." They are kept with the
+    /// abilities granted to it ([`crate::object::Derived::granted`]), which every reader of
+    /// its abilities asks ([`State::abilities`]), as they would be had it been granted them
+    /// first of all; an ability-removing effect removes them as it does the face's. A given
+    /// triggered ability is matched apart ([`Copiable::given_abilities`]).
+    ///
+    /// [CR 707.9a]: https://yawgatog.com/resources/magic-rules/#R7079a
+    #[cold]
+    #[inline(never)]
+    pub fn copy_grants(&self, t: &GameTable, slot: L::Slot) -> [Option<GrantRef<L>>; 4] {
+        let mut granted = [None; 4];
+        let given = self.copiable(slot).given_abilities(t);
+        let activated = given.filter(|&(card, face, grant)| {
+            // A granted ability is printed on its card's front face (§9).
+            debug_assert_eq!(face, FaceIx::FRONT);
+            matches!(
+                t.def(card).front().grants[grant.index()].kind(),
+                AbilityKind::Activated | AbilityKind::Mana
+            )
+        });
+        for ((card, _, grant), place) in activated.zip(&mut granted) {
+            *place = Some(GrantRef { card, grant });
+        }
+        granted
     }
 
     /// [`State::copiable_pt`] of an object with a copy effect on it.

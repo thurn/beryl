@@ -352,8 +352,10 @@ fn modify<L: Layout>(
         // from its rules text, its old land types, and any copiable effects affecting that
         // land, and it gains the appropriate mana ability for each new basic land type." Its
         // other subtypes, a land creature's creature types, stay. In layer 4 no effect has
-        // granted it anything yet, so all it has is its rules text's.
+        // granted it anything yet, so all it has is its rules text's and what a copy effect's
+        // exception gave it in layer 1, kept with the granted ones (`State::copy_grants`).
         LayerChange::SetLandTypes(types) => {
+            d.granted = [None; 4];
             let mut subtypes = d
                 .subtypes
                 .of_types(t.subtypes(), d.types.minus(Types::LAND));

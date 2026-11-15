@@ -121,6 +121,11 @@ impl Ctx {
                 let host = self.objects(to);
                 vec![self.acts(("attach", "attaches"), objects, &format!(" to {host}"))]
             }
+            Effect::BecomeCopy {
+                objects,
+                of,
+                except,
+            } => vec![self.become_copy(objects, of, except)],
             Effect::ExchangeControl(first, second) => {
                 let (first, second) = (self.objects(first), self.objects(second));
                 vec![format!("exchange control of {first} and {second}")]
@@ -601,10 +606,22 @@ impl Ctx {
             } else {
                 format!(" with {}", super::words::list(&keywords, "and"))
             };
+            let supertypes = super::words::supertypes(face.supertypes);
+            let supertypes: String = supertypes.iter().map(|s| format!("{s} ")).collect();
             let named = format!(
-                "{power}/{toughness} {colors} {} {types}",
+                "{supertypes}{power}/{toughness} {colors} {} {types}",
                 subtypes.join(" ")
             );
+            // A token the effect names, as "create Marit Lage, a legendary 20/20 black Avatar
+            // creature token" does. One the effect doesn't name is named by its subtypes and
+            // the word "Token" (CR 111.4), which the text doesn't say.
+            if token.name != format!("{} Token", subtypes.join(" ")) && count == Amount::Fixed(1) {
+                return format!(
+                    "{}, {}",
+                    token.name,
+                    with_article(&format!("{named} token{with}"))
+                );
+            }
             (
                 format!("{named} token{with}"),
                 format!("{named} tokens{with}"),

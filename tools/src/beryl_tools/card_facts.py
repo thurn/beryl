@@ -41,8 +41,9 @@ CHOICES_AS_TARGETS = ("Search", "PutBack", "Fateseal")
 EFFECT_WORDS = 3
 
 # A card's reference to itself, which XMage writes as the card's name: the text that names an
-# ability stops before it, as "{B}: Regenerate this creature." does after "Regenerate".
-SELF_REFERENCE: re.Pattern[str] = re.compile(r" this \w+")
+# ability stops before it, as "{B}: Regenerate this creature." does after "Regenerate", and
+# "{2}, {T}: This land becomes ..." does after the cost.
+SELF_REFERENCE: re.Pattern[str] = re.compile(r" [Tt]his \w+")
 
 # The triggered abilities casting keywords give a permanent, by keyword, as the one thing each
 # does: CR 702.74a, evoke: "When this permanent enters, if its evoke cost was paid, its
@@ -69,7 +70,8 @@ class Cards:
         # The card each face belongs to, and whether it is a modal card's back face: one
         # that is cast or played as itself, not transformed into.
         self.modal_back: set[str] = set()
-        self.grants: list[list[Json]] = []
+        # The abilities each card that grants any grants, with the card's name.
+        self.grants: list[tuple[str, list[Json]]] = []
         for name, card in sorted(described.items()):
             faces = cast(list[Json], cast(Json, card)["faces"])
             self.faces[name] = faces
@@ -80,7 +82,7 @@ class Cards:
                     self.modal_back.add(face_name)
             granted = [g for f in faces for g in cast(list[Json], f.get("grants", []))]
             if granted:
-                self.grants.append(granted)
+                self.grants.append((name, granted))
         # Each face's Oracle text by face name, from the card store.
         self.oracle: dict[str, str] = oracle or {}
 
@@ -111,7 +113,7 @@ class Cards:
             wanted = f"Own {index}"
             return next((a for a in self.abilities(card) if a["index"] == wanted), None)
         if how == "Granted" and len(self.grants) == 1:
-            granted = self.grants[0]
+            granted = self.grants[0][1]
             return granted[index] if index < len(granted) else None
         return None
 
@@ -146,6 +148,14 @@ class Cards:
             return None
         return "Discard your hand"
 
+    def written_on(self, card: str, how: str) -> str:
+        """The card whose Oracle text has the ability a scenario activates of `card` as
+        `{how: index}`: `card` itself for its own, or the one card that grants abilities for a
+        granted one, as Thespian's Stage's copy of an Island has the Stage's ability."""
+        if how == "Granted" and len(self.grants) == 1:
+            return self.grants[0][0]
+        return card
+
     def ability_text(self, card: str, how: str, index: int) -> str | None:
         """The start of an activated or loyalty ability's text in XMage, which its
         `activateAbility` matches, or None where the exporter cannot say it."""
@@ -171,7 +181,11 @@ class Cards:
         # would match too, as a land's "{T}: Add" does an ability "{T}: Draw", or Teferi's
         # "+1:" does Jace's. XMage's rule text goes on as the ability's Oracle text does:
         # its first words tell them apart.
-        written = [p for p in self.paragraphs(card) if p.startswith(f"{oracle} ")]
+        written = [
+            p
+            for p in self.paragraphs(self.written_on(card, how))
+            if p.startswith(f"{oracle} ")
+        ]
         if len(written) != 1:
             return None
         effect = SELF_REFERENCE.split(written[0][len(oracle) :], maxsplit=1)[0]

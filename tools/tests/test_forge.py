@@ -220,6 +220,16 @@ def test_an_activated_ability_is_picked_by_its_effect_in_oracle_text() -> None:
     assert selector(6) == "You gain 2"
 
 
+def test_an_effect_that_starts_with_its_card_is_picked_by_its_cost() -> None:
+    # Forge writes the card's name for "This artifact", and its description starts with the
+    # cost, which only this paragraph has.
+    oracle = {
+        "Made-Up Relic": ORACLE["Made-Up Relic"].replace("Draw a card", "This artifact")
+    }
+    cards = Cards(SAMPLE, oracle)
+    assert forge.ability_selector(cards, "Made-Up Relic", "Own", 1) == "{2}, {T}:"
+
+
 def test_an_ability_without_a_paragraph_is_unsupported() -> None:
     with pytest.raises(Unsupported):
         forge.ability_selector(Cards(SAMPLE, {}), "Made-Up Relic", "Own", 1)

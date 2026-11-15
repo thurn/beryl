@@ -2,6 +2,7 @@
 //! and layered modifications cards create.
 
 use crate::characteristics::{BasicLandTypes, Colors, Keywords, Subtype, Types};
+use crate::counter::CounterKind;
 use crate::effect::{Amount, Condition, Objects, Players};
 use crate::filter::Filter;
 use crate::ids::Zone;
@@ -55,6 +56,16 @@ impl Replacement {
     /// Springs)
     pub const fn enters_tapped_unless_pay_life(n: u8) -> Replacement {
         Replacement::this_enters(Rewrite::EntersTappedUnlessPayLife(n))
+    }
+
+    /// "This enters with N [kind] counters on it" (Dark Depths), a replacement effect
+    /// ([CR 614.1c]): "Effects that read '[This permanent] enters with . . . ,' 'As [this
+    /// permanent] enters . . . ,' or '[This permanent] enters as . . . ' are replacement
+    /// effects." A permanent that becomes a copy of it without entering does not get them.
+    ///
+    /// [CR 614.1c]: https://yawgatog.com/resources/magic-rules/#R6141c
+    pub const fn enters_with_counters(kind: CounterKind, n: u8) -> Replacement {
+        Replacement::this_enters(Rewrite::EntersWithCounters(kind, n))
     }
 
     /// "As this enters, choose a color" (or a creature type, or a card name)
@@ -230,6 +241,8 @@ pub enum Rewrite {
     /// Its controller may pay N life as it enters; if they don't, it enters tapped. Whoever
     /// puts it onto the battlefield asks its controller first.
     EntersTappedUnlessPayLife(u8),
+    /// It enters with N counters of a kind on it ([`Replacement::enters_with_counters`]).
+    EntersWithCounters(CounterKind, u8),
     /// The ability's [`body`](crate::Ability::body) happens instead.
     Instead,
     /// Dredge N ([`Replacement::dredge`]): its owner may mill N cards instead of drawing, if

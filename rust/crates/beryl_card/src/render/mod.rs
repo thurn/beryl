@@ -98,6 +98,9 @@ struct Ctx {
     /// The text changes the color words and subtypes are read through
     /// ([`crate::words`]). A rendering of a definition reads its printed text.
     words: Words,
+    /// The ability being written, so that a copy exception giving that same ability says
+    /// "it has this ability" ([`crate::CopyChange::Has`]).
+    ability: Option<crate::Ability>,
 }
 
 /// What "enchanted" or "equipped" names.
@@ -166,6 +169,7 @@ impl Ctx {
             those_named: None,
             in_graveyard: false,
             words: Words::NONE,
+            ability: None,
         }
     }
 

@@ -357,6 +357,7 @@ fn apply_layers<L: Layout>(
         };
         if s.object(slot).flags().has(Flag::Copy) {
             s.results()[i].subtypes = s.copy_subtypes(t, slot);
+            s.results()[i].granted = s.copy_grants(t, slot);
         }
         for (n, ability) in f.abilities.iter().enumerate() {
             let Some(spec) = ability.layer() else {

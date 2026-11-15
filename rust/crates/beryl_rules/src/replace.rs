@@ -405,6 +405,9 @@ fn entering<L: Layout>(
                     entry.tapped = true;
                 }
             }
+            // CR 614.1c: "Effects that read '[This permanent] enters with . . . ,' ... are
+            // replacement effects."
+            Rewrite::EntersWithCounters(kind, n) => entry.counters = Some((kind, n)),
             Rewrite::Choose(kind) => {
                 let value = choose_value(s, t, sink, slot, controller, kind)?;
                 sink.chosen.push((slot, value))?;

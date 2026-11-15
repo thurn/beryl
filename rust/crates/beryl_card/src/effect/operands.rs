@@ -156,7 +156,11 @@ impl Effect {
                 others: under.as_ref(),
                 ..Operands::of_objects(objects)
             },
-            Effect::Attach { objects, to } | Effect::ExchangeControl(objects, to) => Operands {
+            Effect::Attach { objects, to }
+            | Effect::ExchangeControl(objects, to)
+            | Effect::BecomeCopy {
+                objects, of: to, ..
+            } => Operands {
                 to: Some(to),
                 ..Operands::of_objects(objects)
             },

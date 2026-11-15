@@ -44,6 +44,7 @@ from .xmage_trace import (
 from .xmage_java import (
     ANOTHER_CARD,
     creature_type,
+    entering_counters,
     CHOICE_KINDS,
     COLORS,
     YES_NO_KINDS,
@@ -294,12 +295,22 @@ class Exporter:
             self.emit(f"setChoice({who}, false);")
         counters = cast("Json | None", permanent["counters"])
         if counters is None:
+            # XMage would still give it the counters it enters with.
+            if any(
+                entering_counters(self.faces.oracle.get(name, ""), k) for k in COUNTERS
+            ):
+                raise Unsupported(
+                    f"{name} starts with fewer counters than it enters with"
+                )
             return
         kind = cast(str, counters["kind"])
         count = cast(int, counters["count"])
         if kind == "Loyalty":
             # XMage puts a planeswalker onto the battlefield with its printed loyalty.
             count -= self.faces.loyalty.get(name, 0)
+        else:
+            # And a permanent with the counters it enters with.
+            count -= entering_counters(self.faces.oracle.get(name, ""), kind)
         if count < 0:
             raise Unsupported(f"{name} starts with fewer counters than it enters with")
         if count:

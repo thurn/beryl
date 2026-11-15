@@ -465,6 +465,9 @@ impl Scope<'_> {
             Effect::CreateCopies {
                 except: Some(ix), ..
             }
+            | Effect::BecomeCopy {
+                except: Some(ix), ..
+            }
             | Effect::CopySpell {
                 except: Some(ix), ..
             } if ix.index() >= self.face.excepts.len() => Err(Malformed::Copy),
