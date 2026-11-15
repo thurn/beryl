@@ -142,6 +142,7 @@ mod stack;
 mod staging;
 mod table;
 mod text;
+mod timing;
 mod verb;
 
 use serde::{Deserialize, Serialize};
@@ -157,6 +158,7 @@ pub use hear::{Cause, Heard, Move, Names, Said};
 pub use replay::{failure, replay};
 pub use table::{Entry, Piles, Table, Turn};
 pub(crate) use text::wire;
+pub use timing::{Curve, Edge, StepEffect, StepTiming};
 pub use verb::{Arrow, Mark, Span, Verb};
 
 #[cfg(doc)]
