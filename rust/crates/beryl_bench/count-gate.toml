@@ -54,3 +54,6 @@ ratio = 1.25
 
 [family.costs]
 ratio = 1.25
+
+[family.zones-and-text]
+ratio = 1.25

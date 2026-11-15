@@ -80,6 +80,11 @@ fn family_corpora_never_change() {
                 vec![2, 5, 8, 13, 16, 19, 2, 5, 8, 11, 14, 17],
                 16_420_930_836_580_429_720
             ),
+            (
+                "zones-and-text",
+                vec![3, 6, 9, 5, 8, 11, 2, 5, 8, 5, 13, 16],
+                15_506_361_981_812_984_104
+            ),
         ]
     );
 }
@@ -143,6 +148,16 @@ fn families_pair_their_steps() {
                     capacity_stalls: 0,
                     layer_recomputes: 1_278,
                     transactions: 2_901
+                }
+            ),
+            (
+                "zones-and-text",
+                Pairing {
+                    paired: 2_662,
+                    skipped: 13,
+                    capacity_stalls: 0,
+                    layer_recomputes: 1_097,
+                    transactions: 2_515
                 }
             ),
         ]

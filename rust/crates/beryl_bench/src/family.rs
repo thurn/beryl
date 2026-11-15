@@ -107,6 +107,20 @@ pub const FAMILIES: &[Family] = &[
             (2, names::CAVERN_OF_SOULS, names::PLAINS),
         ],
     },
+    // The every-zone and text family: Painter's Servant (a color added to every card in
+    // every zone, CR 613.1e), Mind Bend and Crystal Spray (a text-changing effect on a
+    // permanent or spell, CR 612) and Underworld Breach (casting from the graveyard, with
+    // an escape cost). Mountains stand in for Plains so Breach can be cast.
+    Family {
+        name: "zones-and-text",
+        swaps: &[
+            (1, names::PAINTERS_SERVANT, names::CURRENCY_CONVERTER),
+            (1, names::MIND_BEND, names::STAFF_OF_THE_STORYTELLER),
+            (1, names::CRYSTAL_SPRAY, names::THIRST_FOR_DISCOVERY),
+            (1, names::UNDERWORLD_BREACH, names::WINDS_OF_ABANDON),
+            (2, names::MOUNTAIN, names::PLAINS),
+        ],
+    },
 ];
 
 /// The family called `name`.

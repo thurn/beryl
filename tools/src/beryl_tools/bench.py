@@ -533,8 +533,9 @@ def load_families(text: str) -> list[FamilyBar]:
 
 
 def family_benchmark(side: str, name: str) -> str:
-    """The family's benchmark on one side, `present` or `control`, as Gungraun names it."""
-    return f"{FAMILY_BENCH}::{FAMILY_GROUP}::{side}::{name}"
+    """The family's benchmark on one side, `present` or `control`, as Gungraun names it.
+    A benchmark id is a Rust identifier, so a family's hyphens become underscores."""
+    return f"{FAMILY_BENCH}::{FAMILY_GROUP}::{side}::{name.replace('-', '_')}"
 
 
 def family_cargo(names: list[str]) -> list[list[str]]:

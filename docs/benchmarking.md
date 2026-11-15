@@ -111,7 +111,10 @@ it is in play. The present-cost gate measures what it costs while one is:
   Peace, Chains of Mephistopheles, Containment Priest and Furnace of Rath, the
   replacement pipeline's cards. `costs` swaps in Trinisphere, Thalia, Pithing
   Needle and Cavern of Souls, the cost rules read at every priority for every
-  card in hand.
+  card in hand. `zones-and-text` swaps in Painter's Servant, Mind Bend, Crystal
+  Spray and Underworld Breach (and Mountains, so Breach can be cast): a color
+  added in every zone, text-changing effects and casting from the graveyard.
+  Gungraun ids cannot hold hyphens, so its benchmarks are `zones_and_text`.
 - **Its corpus** is cut from seeded games between greedy agents playing the
   family's deck in both seats: the first decision with a card of the family on
   the battlefield, on the stack or the source of an effect in force, which is
