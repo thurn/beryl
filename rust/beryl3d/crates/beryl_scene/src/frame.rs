@@ -5,7 +5,7 @@
 mod draw;
 
 use beryl_session::protocol::{RowName, Side, ZoneName};
-use glam::Vec2;
+use glam::{Mat4, Vec2};
 
 pub use draw::{Draw, Material, Mesh, Sprite, TextureArray};
 
@@ -228,6 +228,12 @@ pub struct Frame {
     pub draws: Vec<Draw>,
     /// `draws[..opaque]` are the opaque records.
     pub opaque: u32,
+    /// `draws[layer..]` are the flat layer's records, drawn with no depth test and not shaken.
+    pub layer: u32,
+    /// The camera's view and projection: from the table's space to the renderer's clip space,
+    /// with depth from 0 at the near plane to 1 at the far one. It serves every record,
+    /// because a flat-layer record is placed on a plane just in front of the camera.
+    pub view_projection: Mat4,
     /// Clip rectangles in physical pixels; entry 0 is not used.
     pub clips: [Rect; CLIPS],
     /// How far the whole picture is shaken, in physical pixels.
@@ -249,6 +255,8 @@ impl Frame {
             names: String::with_capacity(name_bytes),
             draws: Vec::with_capacity(draws),
             opaque: 0,
+            layer: 0,
+            view_projection: Mat4::IDENTITY,
             clips: [Rect::default(); CLIPS],
             shake: Vec2::ZERO,
             sounds: Vec::new(),
@@ -271,6 +279,8 @@ pub struct FrameBuilder<'a> {
     clips: u8,
     /// Whether every record pushed so far is opaque.
     opaque_run: bool,
+    /// Whether a record of the flat layer has been pushed.
+    in_layer: bool,
 }
 
 impl<'a> FrameBuilder<'a> {
@@ -279,6 +289,8 @@ impl<'a> FrameBuilder<'a> {
         frame.names.clear();
         frame.draws.clear();
         frame.opaque = 0;
+        frame.layer = 0;
+        frame.view_projection = Mat4::IDENTITY;
         frame.clips = [Rect::default(); CLIPS];
         frame.shake = Vec2::ZERO;
         frame.sounds.clear();
@@ -288,6 +300,7 @@ impl<'a> FrameBuilder<'a> {
             frame,
             clips: 0,
             opaque_run: true,
+            in_layer: false,
         }
     }
 
@@ -303,12 +316,22 @@ impl<'a> FrameBuilder<'a> {
         index(self.frame.resolved.len() - 1)
     }
 
+    /// Sets the camera's view and projection, `Frame::view_projection`.
+    pub fn camera(&mut self, view_projection: Mat4) {
+        self.frame.view_projection = view_projection;
+    }
+
     /// Adds a record to `band`. The records stay in the order they were pushed, so `opaque`
-    /// counts only the opaque records pushed before any blended one.
+    /// counts only the opaque records pushed before any blended one, and `layer` is where the
+    /// first record of the flat layer's bands was pushed.
     pub fn draw(&mut self, band: Band, draw: Draw) {
         self.opaque_run &= band == Band::Opaque;
         if self.opaque_run {
             self.frame.opaque += 1;
+        }
+        if !self.in_layer && band >= Band::Layer {
+            self.in_layer = true;
+            self.frame.layer = index(self.frame.draws.len());
         }
         self.frame.draws.push(draw);
         self.frame.work.records += 1;
@@ -327,6 +350,9 @@ impl<'a> FrameBuilder<'a> {
     }
 
     pub fn finish(self) -> &'a Frame {
+        if !self.in_layer {
+            self.frame.layer = index(self.frame.draws.len());
+        }
         self.frame
     }
 }

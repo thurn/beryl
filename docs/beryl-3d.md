@@ -378,6 +378,9 @@ pub struct Frame {
     pub names: String,            // every resolved element's name, end to end
     pub draws: Vec<Draw>,         // in drawing order
     pub opaque: u32,              // draws[..opaque] are the opaque records
+    pub layer: u32,               // draws[layer..] are the flat layer's
+                                  // records: no depth test, not shaken
+    pub view_projection: Mat4,    // the camera, for every record
     pub clips: [Rect; 16],        // physical pixels; entry 0 is not used
     pub shake: Vec2,              // physical pixels, see Effects
     pub sounds: Vec<SoundId>,     // the sounds that begin in this frame
@@ -1180,14 +1183,24 @@ as many pixels opaque as it can.
   card edges, marks, glows and the flat layer. Colors are premultiplied by their
   opacity, so ordinary and additive shapes share one blend setting.
 - **Two pipelines and three meshes.** One opaque pipeline and one blended, each
-  a single shader that picks its branch from the record's `material`. The card
-  mesh, its edge strip and a unit quad are the only meshes. The 80-byte records
-  are uploaded as the instance buffer unchanged.
+  a single shader that picks its branch from the record's `material`. A
+  pipeline's depth test is fixed when it is created, so the blended pipeline is
+  made twice, tested against the depth buffer for the table's bands and untested
+  for the flat layer's, with the same shader: three pipeline objects, all made
+  at startup. The card mesh, its edge strip and a unit quad are the only meshes.
+  The 80-byte records are uploaded as the instance buffer unchanged. Each run of
+  records is bound from its offset in that buffer and drawn from instance 0,
+  because OpenGL ES 3.0 has no first instance and no base vertex.
+- **Colors are blended as stored.** Faces, tints and the target hold sRGB
+  values, and the shader and blending work on those values directly, as a
+  browser blends CSS colors. The target format is therefore not an sRGB one.
 - **The edge strip is widened in the vertex shader.** Each vertex of the strip
   carries the outward direction of the card's outline at that point. The vertex
   shader projects the inner ring as the card's outline and moves the outer ring
   one physical pixel outward on screen, using the target's size in pixels, which
-  is a uniform. The strip is then one pixel wide at any distance and any tilt.
+  is a uniform. The strip is then one pixel wide at any distance and any tilt. A
+  card's strip is a second record, `Draw::edge` of the card's record, in the
+  band of soft edges.
 - **Clips are scissor rectangles.** A run of records that share a clip (bits 4
   to 7 of `flags`) is drawn with the scissor set to that entry of the frame's
   `clips`. A clip therefore ends a draw call, and a scrolling list adds two

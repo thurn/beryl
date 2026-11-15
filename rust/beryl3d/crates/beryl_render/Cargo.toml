@@ -19,3 +19,7 @@ image = { version = "0.25.10", default-features = false, features = ["png"] }
 pollster = "1.0.1"
 # The GPU API (Metal on this Mac).
 wgpu = "30.0.2"
+
+[dev-dependencies]
+# Builds the test scenes' transforms and camera.
+glam = "0.34.3"

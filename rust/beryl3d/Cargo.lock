@@ -259,6 +259,7 @@ version = "0.1.0"
 dependencies = [
  "beryl_scene",
  "bytemuck",
+ "glam",
  "image",
  "pollster",
  "wgpu",
@@ -278,6 +279,7 @@ version = "0.1.0"
 dependencies = [
  "beryl_scene",
  "beryl_session",
+ "bytemuck",
  "glam",
  "parley",
  "serde_json",

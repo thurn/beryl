@@ -95,6 +95,7 @@ impl Table {
     /// Writes a resolved element and a draw record for every visible card, and one draw record
     /// for the cloth, which comes last among the opaque records.
     pub fn write(&self, view: &PlayerView, builder: &mut FrameBuilder) {
+        builder.camera(self.camera.view_projection);
         for (slot, object) in self.objects.iter().enumerate() {
             let Some(object) = object.filter(|object| object.visible) else {
                 continue;

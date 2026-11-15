@@ -16,6 +16,8 @@ driver = []
 [dependencies]
 # The game state the scene shows: PlayerView and the table commands.
 beryl_session = { path = "../../../crates/beryl_session" }
+# Lets the renderer upload draw records as bytes with no unsafe cast of its own.
+bytemuck = { version = "1.25.2", features = ["derive"] }
 # Vector and matrix math for poses and the camera, in place of hand-written math.
 glam = "0.34.3"
 # Lays out text and 2D regions as flexbox and grid, in place of hand-written layout.

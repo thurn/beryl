@@ -10,7 +10,7 @@ use crate::input::FaceSize;
 
 /// One shape to draw. 80 bytes, laid out as the renderer's instance buffer expects.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Draw {
     /// A 3 by 4 transform into the table's space, row by row: each row is three numbers of the
     /// rotation and scale and then one of the translation.
@@ -79,6 +79,8 @@ pub struct Sprite {
     pub rect: [u16; 4],
 }
 
+const MESH_SHIFT: u8 = 2;
+const MESH_BITS: u8 = 0b1100;
 const CLIP_SHIFT: u8 = 4;
 
 impl Draw {
@@ -206,6 +208,20 @@ impl Draw {
         draw
     }
 
+    /// The strip that softens the edge of this card, drawn with the blended records: the same
+    /// card drawn with the edge strip mesh, which fades from the card's outline to one pixel
+    /// outside it.
+    #[must_use]
+    pub fn edge(mut self) -> Self {
+        debug_assert_eq!(
+            self.material,
+            Material::Card as u8,
+            "only a card has an edge strip"
+        );
+        self.flags = (self.flags & !MESH_BITS) | ((Mesh::CardEdge as u8) << MESH_SHIFT);
+        self
+    }
+
     /// The same record, clipped to entry `clip` (1 to 15) of the frame's clips, or unclipped
     /// for 0.
     #[must_use]
@@ -240,7 +256,7 @@ impl Draw {
             uv: [0; 4],
             layer: 0,
             material: material as u8,
-            flags: (array as u8) | ((mesh as u8) << 2),
+            flags: (array as u8) | ((mesh as u8) << MESH_SHIFT),
             tint,
             params: [0.0; 4],
         }
