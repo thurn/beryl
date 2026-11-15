@@ -11,7 +11,7 @@ use beryl_engine::{Layout, Seat, SlotId as _};
 
 use super::Subject;
 use crate::protocol::ObjectId;
-use crate::protocol::{Side, StackItem};
+use crate::protocol::{ObjectView, Side, StackItem};
 
 /// What an event came from, as the engine's tag says it
 /// ([`beryl_engine::event::Cause`]), with the spell or ability it names by the name scripts
@@ -102,6 +102,20 @@ pub struct Heard {
     /// The name of each entry of the view's stack, bottom first, and then of the spell or
     /// ability whose resolution asks the viewer, which their view's stack leaves out.
     pub stack: Vec<Subject>,
+    /// The copies of spells put on the stack, in order, each with how many of the view's
+    /// events came before its arrival there. A copy has no card, so once it has ceased to
+    /// exist no view has a record of it: a copy that resolves before the view would have
+    /// no record to go on the stack with.
+    pub copies: Vec<(usize, Copied)>,
+}
+
+/// A copy of a spell as it arrived on the stack
+/// ([CR 707.10](https://yawgatog.com/resources/magic-rules/#R70710)): "To copy a spell,
+/// activated ability, or triggered ability means to put a copy of it onto the stack".
+#[derive(Clone, Debug, PartialEq)]
+pub struct Copied {
+    pub record: ObjectView,
+    pub item: StackItem,
 }
 
 /// What [`Names`] says of one engine event: its cause with the entry named, and the entry

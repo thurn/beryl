@@ -2,6 +2,7 @@
 //! as it arrives, and its place in the pile it lands on.
 
 use super::build::Builder;
+use super::hear::Copied;
 use super::{Act, Subject};
 use crate::protocol::ObjectId;
 use crate::protocol::{
@@ -243,6 +244,12 @@ impl Builder<'_> {
         {
             return Some(rewound(end.clone(), later));
         }
+        if to == ZoneName::Stack
+            && was.is_none()
+            && let Some(copy) = self.copy(i, slot)
+        {
+            return Some(copy.record.clone());
+        }
         let base = was.or(end)?;
         let owner = base.owner;
         // A library gives a slot another card when it is shuffled: what the view's end
@@ -291,8 +298,18 @@ impl Builder<'_> {
         (at < others).then(|| u16::try_from(at).ok()).flatten()
     }
 
+    /// The copy of a spell that event `i` puts on the stack in `slot`, as it arrived there:
+    /// the first such arrival after the event.
+    fn copy(&self, i: usize, slot: ObjectId) -> Option<&Copied> {
+        self.copies
+            .iter()
+            .find(|(before, copy)| *before > i && copy.record.slot == slot)
+            .map(|(_, copy)| copy)
+    }
+
     /// The spell the card in `slot` becomes as event `i` puts it on the stack: as its cast
-    /// goes on to announce it, or as the view's stack has it, or with nothing chosen yet.
+    /// goes on to announce it, as a copy arrived, or as the view's stack has it, or with
+    /// nothing chosen yet.
     fn spell(&self, i: usize, slot: ObjectId) -> StackItem {
         let announced = self.events[i + 1..].iter().find_map(|e| match e {
             GameEvent::Cast { slot: s, item, .. } if *s == slot => Some(item),
@@ -304,7 +321,9 @@ impl Builder<'_> {
             .iter()
             .map(|e| &e.item)
             .find(|item| matches!(item, StackItem::Spell { slot: s, .. } if *s == slot));
+        let copied = self.copy(i, slot).map(|copy| &copy.item);
         announced
+            .or(copied)
             .or(shown)
             .cloned()
             .unwrap_or_else(|| StackItem::Spell {

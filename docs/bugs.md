@@ -549,3 +549,17 @@ fixed in the same session. Newest first.
   past it. Prevention: a new kind of choice gets a card in the fuzz pool in the
   change that adds it, so the allocation test plays it; and lists on the event
   sink are fixed-capacity queues, as the kernel's other lists are.
+
+- **A copy of a spell that resolved before the next view was never put on the
+  stack in the script.** `beryl_cli script-check` failed every Fork and Brain
+  Freeze moment: the copy's effects named it as their cause, but no step put it
+  on the stack. The script builder takes the record of an object moving to a
+  zone from the view, or from the table before it. A copy has no card, so once
+  it has ceased to exist neither one has a record of it, and the builder left
+  out its arrival on the stack and, with that, its departure. Fixed: the session
+  records each copy's record and stack item from the engine's stack arrival
+  (`Heard::copies`), and the builder uses it when no view has the copy.
+  Prevention: any object that can come and go within one view (copies, tokens)
+  needs a record from the event that makes it, not from the view after it; the
+  script checks catch the gap only when a spec moment plays it, so a new kind of
+  object gets a spec moment in the change that adds it.

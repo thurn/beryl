@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use super::hear::{Cause, Heard, Move};
+use super::hear::{Cause, Copied, Heard, Move};
 use super::moves::{counted, set_counters};
 use super::spans;
 use super::stack::Held;
@@ -173,6 +173,8 @@ pub(super) struct Builder<'a> {
     /// What the engine said each event came from, in step with them.
     pub(super) causes: Vec<Cause>,
     pub(super) moves: &'a [(usize, Move)],
+    /// The copies of spells put on the stack ([`Heard::copies`]).
+    pub(super) copies: &'a [(usize, Copied)],
     pub(super) beats: Vec<Vec<Step>>,
     /// For each beat, the spans that end in a beat of their own before it.
     pub(super) ends: Vec<Vec<Step>>,
@@ -228,6 +230,7 @@ impl<'a> Builder<'a> {
             events: &view.events,
             causes,
             moves: &heard.moves,
+            copies: &heard.copies,
             beats: Vec::new(),
             ends: Vec::new(),
             open: false,

@@ -2,15 +2,15 @@
 
 use beryl_engine::event::{Event, Recipient};
 use beryl_engine::state::{self, StackEntry};
-use beryl_engine::{GameTable, Layout, Observation, SlotId};
+use beryl_engine::{GameTable, Layout, Observation, Place, SlotId};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::{
-    Counter, Mana, ObjectId, Side, StackItem, Step, TargetRef, Why, ZoneName, side, slots,
-    stack_item, stack_item_cast,
+    Counter, Mana, ObjectId, ObjectView, Side, StackItem, Step, TargetRef, Why, ZoneName, side,
+    slots, stack_item, stack_item_cast,
 };
-use crate::script::{Heard, Move, Said, Subject};
+use crate::script::{Copied, Heard, Move, Said, Subject};
 
 /// One thing that happened (architecture §8.1), by public slot and relative to the viewer.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -405,6 +405,13 @@ pub fn heard<L: Layout>(
             (Event::StackDeparture { .. }, Some(Subject::Ability { id })) => {
                 heard.moves.push((before, Move::Departure { id, cause }));
             }
+            (Event::StackArrival { entry }, Some(Subject::Object { .. }))
+                if entry
+                    .spell()
+                    .is_some_and(|spell| matches!(spell.slot.place(), Place::Pool(_))) =>
+            {
+                heard.copies.push((before, copied(t, obs, entry)));
+            }
             // A view's draw says its cards, and a spell arrives and leaves as its card moves.
             (
                 Event::DrawCard { .. } | Event::StackArrival { .. } | Event::StackDeparture { .. },
@@ -418,6 +425,27 @@ pub fn heard<L: Layout>(
         }
     }
     heard
+}
+
+/// The copy of a spell that `entry` puts on the stack, as every player sees it there: a copy
+/// in a slot of the shared pool, owned and controlled by the player who put it on the stack,
+/// with the name of the card it copies
+/// ([CR 707.10](https://yawgatog.com/resources/magic-rules/#R70710)): "A copy of a spell is
+/// owned by the player under whose control it was put on the stack."
+fn copied<L: Layout>(t: &GameTable, obs: Observation<'_, L>, entry: &StackEntry<L>) -> Copied {
+    let item = stack_item(t, obs, entry);
+    let StackItem::Spell { slot, .. } = item else {
+        unreachable!("a copy of a spell is a spell");
+    };
+    let player = side(obs, entry.controller());
+    Copied {
+        record: ObjectView {
+            name: Some(t.def(entry.card()).face_name(entry.face()).to_owned()),
+            token: true,
+            ..ObjectView::hidden(slot, ZoneName::Stack, player, player)
+        },
+        item,
+    }
 }
 
 /// An engine event as the viewer of `obs` is told it. Engine events name objects by slot and

@@ -154,7 +154,7 @@ pub(crate) use build::PLANTED;
 pub use build::Screen;
 pub use check::{Open, carried};
 pub use follow::Follow;
-pub use hear::{Cause, Heard, Move, Names, Said};
+pub use hear::{Cause, Copied, Heard, Move, Names, Said};
 pub use replay::{failure, replay};
 pub use table::{Entry, Piles, Table, Turn};
 pub(crate) use text::wire;
