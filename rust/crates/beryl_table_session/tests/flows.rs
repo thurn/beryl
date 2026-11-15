@@ -67,8 +67,7 @@ fn verify_result(flow: Flow, pile: PileName, line: &str) {
     game.guest.act(request(flow, 5)).unwrap();
     let (observer, player) = game.updates();
     let original = observer.view.players.opponent.library.clone();
-    let observed = observer.view.table.as_ref().unwrap();
-    assert!(observed.prompt.is_none());
+    assert!(observer.view.table.as_ref().unwrap().prompt.is_none());
     assert_lift(&observer, Span::Begin);
     assert!(!serde_json::to_string(&observer).unwrap().contains(PRIVATE));
     let manual = player.view.table.unwrap();

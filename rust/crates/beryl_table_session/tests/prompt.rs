@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::BufReader;
+use std::path::Path;
 
 use beryl_session::protocol::{
     Answer, CardHandling, ObjectId as Slot, PileName, Side, TablePrompt, ZoneName,
@@ -10,7 +11,7 @@ use beryl_table::action::{Adjustment, Flow};
 use beryl_table::assist::text::{Flow as Effect, flow_result};
 use beryl_table::deck::Deck;
 use beryl_table::state::Zone;
-use beryl_table::{Action, Refusal, save};
+use beryl_table::{Action, Log, Refusal, Table, save};
 use beryl_table_session::TableSessions;
 use beryl_table_session::prompt::PromptState;
 
@@ -50,31 +51,38 @@ fn has_lift(update: &GameUpdate, span: Span) -> bool {
         })
 }
 
-#[test]
-fn guest_sorts_privately_and_done_records_one_undoable_batch() {
-    let dir = tempfile::tempdir().unwrap();
-    let Linked {
-        host,
-        guest,
-        host_views,
-        guest_views,
-    } = Linked::new(dir.path(), PRIVATE, 12);
-    let open = || {
-        host.open_library_prompt(GUEST, "Scry".into(), Flow::Scry, 3, |prompt| {
+fn open_guest_scry(game: &Linked) -> GameUpdate {
+    game.host
+        .open_library_prompt(GUEST, "Scry".into(), Flow::Scry, 3, |prompt| {
             let PromptState::Sort(sort) = prompt else {
                 panic!("expected a sort")
             };
             flow_result(Effect::Scry(3), sort.cards(), &sort.choice())
         })
         .unwrap();
-        let observer = host_views.recv().unwrap();
-        assert!(has_lift(&observer, Span::Begin));
-        assert!(!serde_json::to_string(&observer).unwrap().contains(PRIVATE));
-        assert!(observer.view.table.unwrap().prompt.is_none());
-        guest_views.recv().unwrap()
-    };
+    let (observer, opening) = game.updates();
+    assert!(has_lift(&observer, Span::Begin));
+    assert!(!serde_json::to_string(&observer).unwrap().contains(PRIVATE));
+    assert!(observer.view.table.unwrap().prompt.is_none());
+    opening
+}
 
-    let opening = open();
+fn replay_save(directory: &Path, id: &str) -> (Table, Log) {
+    let path = directory.join("tables").join(format!("{id}.jsonl"));
+    save::open(BufReader::new(File::open(path).unwrap())).unwrap()
+}
+
+#[test]
+fn guest_sorts_privately_and_done_records_one_undoable_batch() {
+    let dir = tempfile::tempdir().unwrap();
+    let game = Linked::new(dir.path(), PRIVATE, 12);
+    let opening = open_guest_scry(&game);
+    let Linked {
+        host,
+        guest,
+        host_views,
+        guest_views,
+    } = &game;
     let (cards, placed) = sort(&opening);
     assert_eq!(placed, &[vec![], cards.to_vec()]);
     assert!(serde_json::to_string(&opening).unwrap().contains(PRIVATE));
@@ -107,8 +115,7 @@ fn guest_sorts_privately_and_done_records_one_undoable_batch() {
     );
 
     let id = &host.list_saved().unwrap()[0].id;
-    let saved_path = dir.path().join("tables").join(format!("{id}.jsonl"));
-    let replay = || save::open(BufReader::new(File::open(&saved_path).unwrap())).unwrap();
+    let replay = || replay_save(dir.path(), id);
     let (before, before_log) = replay();
     let library = before.zone(Zone::Library(GUEST)).unwrap();
 
@@ -139,16 +146,22 @@ fn guest_sorts_privately_and_done_records_one_undoable_batch() {
             entry: Some(log.entries().last().unwrap().n),
         })
         .unwrap();
-    host_views.recv().unwrap();
-    guest_views.recv().unwrap();
+    game.updates();
     assert_eq!(replay().0.zone(Zone::Library(GUEST)).unwrap(), library);
+}
 
-    let opening = open();
+#[test]
+fn guest_can_cancel_scry_without_changing_the_table() {
+    let dir = tempfile::tempdir().unwrap();
+    let game = Linked::new(dir.path(), PRIVATE, 12);
+    let opening = open_guest_scry(&game);
     let log_len = opening.view.table.unwrap().log.len();
+    let id = &game.host.list_saved().unwrap()[0].id;
+    let replay = || replay_save(dir.path(), id);
     let (before_cancel, _) = replay();
-    guest.answer(Answer::Cancel).unwrap();
-    assert!(has_lift(&host_views.recv().unwrap(), Span::End));
-    let cancelled = guest_views.recv().unwrap();
+    game.guest.answer(Answer::Cancel).unwrap();
+    let (observer, cancelled) = game.updates();
+    assert!(has_lift(&observer, Span::End));
     let manual = cancelled.view.table.as_ref().unwrap();
     assert!(manual.prompt.is_none());
     assert_eq!(manual.log.len(), log_len);
