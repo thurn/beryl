@@ -49,6 +49,7 @@ struct State {
     paused_at: Option<Instant>,
     paused_total: Duration,
     refresh_hz: f64,
+    /// When the last frame was presented, and whether the core asked for another at once.
     last_frame: Option<(Instant, bool)>,
     counters: Counters,
     title_at: Instant,
@@ -121,9 +122,13 @@ impl State {
         self.window.pre_present_notify();
         self.renderer.queue.present(frame);
         let animating = shown.animating(now);
+        // Whether the core wants the next frame straight away. Only then is a long gap before
+        // the next frame late: after a still table, the first frame that an input such as the
+        // pointer starts is not, however long the table was still.
+        let continues = shown.wake(self.now(self.current)) == Wake::Now;
         let at = Instant::now();
-        if let Some((previous, was_animating)) = self.last_frame
-            && was_animating
+        if let Some((previous, expected)) = self.last_frame
+            && expected
             && animating
             && at.duration_since(previous).as_secs_f64() > 1.5 / self.refresh_hz
         {
@@ -144,7 +149,7 @@ impl State {
                 measure::load_average(),
             );
         }
-        self.last_frame = Some((at, animating));
+        self.last_frame = Some((at, continues));
         let c = &mut self.counters;
         c.frames += 1;
         c.core_total += core_ns;
