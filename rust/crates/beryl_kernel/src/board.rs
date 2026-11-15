@@ -49,7 +49,8 @@ impl<L: Layout> State<L> {
 
     /// What of the game, beyond what a turn-start checkpoint records of its board, rebuilding
     /// from that board before this turn began would lose, in words, if anything: an effect
-    /// lasting past the turn's beginning, a delayed trigger waiting, a permission to cast. Call
+    /// lasting past the turn's beginning, a delayed trigger waiting, a permission to cast, a
+    /// phased-out permanent or the cards of a merged permanent. Call
     /// it as a turn begins, once the active player's permanents have untapped. The abilities
     /// the turn's beginning triggered are no loss: beginning the turn again triggers them
     /// again. Nothing else on [`State`] outlasts a turn: the stack is empty between turns,
@@ -84,6 +85,16 @@ impl<L: Layout> State<L> {
         if let Some(slot) = self.phased_out.iter().next() {
             let name = t.def(self.object(slot).card).name;
             return Some(format!("{name} phased out"));
+        }
+        // The board records a merged permanent's own card only, not the cards under or over
+        // it (CR 731.2), which are in no zone a checkpoint lists.
+        let merged = self.battlefield.as_slice().iter();
+        if let Some(&slot) = merged
+            .into_iter()
+            .find(|&&slot| self.pile(slot).next().is_some())
+        {
+            let name = t.def(self.object(slot).card).name;
+            return Some(format!("{name} merged with other cards"));
         }
         self.stores_lingering(t)
     }

@@ -27,7 +27,11 @@ pub fn exile_until_leaves<L: Layout>(
     object: ObjectRef<L>,
     until: ObjectRef<L>,
 ) -> Result<(), Full> {
-    if !game.on_battlefield(until) || !game.on_battlefield(object) {
+    // A phased-out `until` has not left the battlefield (CR 702.26d), so the event has not
+    // occurred; a phased-out `object` can't be exiled (CR 702.26b).
+    let until_stays =
+        game.state.is_current(until) && game.state.object(until.slot).zone() == Zone::Battlefield;
+    if !until_stays || !game.on_battlefield(object) {
         return Ok(());
     }
     zones::move_to(game, object, Zone::Exile, Reason::Exile)?;

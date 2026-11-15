@@ -62,6 +62,9 @@ pub mod scenarios {
     const PROTECTION: &str = Card::TeferisProtection;
     const BOLT: &str = Card::LightningBolt;
     const SCIMITAR: &str = Prop::Equipment;
+    const IMAGE: &str = Card::PhantasmalImage;
+    const HOLY: &str = Card::HolyStrength;
+    const SKYDIVER: &str = Card::ThievingSkydiver;
 
     // `Prop::Flier` is a white 3/1 flier, `Prop::Vanilla` a blue 2/1 without flying.
 
@@ -83,6 +86,131 @@ pub mod scenarios {
     }
 
     pub const SCENARIOS: &[Scenario] = &[
+        // [CR 702.26b]: "a phased-out permanent is treated as though it does not exist. It can’t
+        // affect or be affected by anything else in the game." P0's Phantasmal Image, a copy of
+        // P1's blue 2/1, becomes the target of P0's equip ability, and its "sacrifice it" trigger
+        // goes on the stack. Teferi's Protection phases the Image out in response, so the trigger
+        // sacrifices nothing and the equip ability's one target is illegal. The Image phases in
+        // at P0's next untap step, still a 2/1 and not equipped.
+        //
+        // [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
+        // [CR 702.26i]: "An Aura, Equipment, or Fortification that phased out directly will phase
+        // in attached to the object or player it was attached to when it phased out, if that
+        // object is still in the same zone or that player is still in the game. If not, that
+        // Aura, Equipment, or Fortification phases in unattached." P0's Holy Strength on P1's
+        // blue 2/1 phases out alone, so the 2/1 loses its bonus. P1 then destroys the 2/1 with
+        // Lightning Bolt; at P0's untap step Holy Strength phases in attached to nothing and is
+        // put into the graveyard ([CR 704.5m]).
+        //
+        // [CR 702.26i]: https://yawgatog.com/resources/magic-rules/#R70226i
+        // [CR 704.5m]: https://yawgatog.com/resources/magic-rules/#R7045m
+        Scenario::new("an Aura that phased out alone phases in attached to nothing")
+            .interaction(&[HOLY, BOLT])
+            .battlefield(P0, &[Card::Plains; 4])
+            .hand(P0, &[HOLY, PROTECTION])
+            .battlefield(P1, &[Card::Mountain, Prop::Vanilla])
+            .hand(P1, &[BOLT])
+            .library(P0, &[Card::Plains; 3])
+            .library(P1, &[Card::Plains; 3])
+            .actions(&[
+                ME.casts(HOLY),
+                Resolve,
+                THEM.pt(Prop::Vanilla, 3, 3),
+                ME.casts(PROTECTION),
+                Resolve,
+                ME.has(Zone::Battlefield, HOLY, 0),
+                THEM.pt(Prop::Vanilla, 2, 1),
+                ME.passes(),
+                THEM.casts(BOLT),
+                THEM.targets(Prop::Vanilla),
+                THEM.has(Zone::Graveyard, Prop::Vanilla, 1),
+                advance_to(3, TurnStep::Upkeep),
+                ME.has(Zone::Battlefield, HOLY, 0),
+                ME.has(Zone::Graveyard, HOLY, 1),
+            ]),
+        // [CR 502.1]: "all phased-out permanents that the active player controlled when they
+        // phased out phase in." P0's kicked Thieving Skydiver takes P1's Portable Hole; Teferi's
+        // Protection phases the Hole out under P0's control. It stays out through P1's untap step
+        // and phases in at P0's, still P0's, without its enters ability triggering
+        // ([CR 702.26d]).
+        //
+        // [CR 502.1]: https://yawgatog.com/resources/magic-rules/#R5021
+        // [CR 702.26d]: https://yawgatog.com/resources/magic-rules/#R70226d
+        Scenario::new("a stolen artifact phases in at its thief's untap step")
+            .interaction(&[SKYDIVER])
+            .battlefield(
+                P0,
+                &[
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                ],
+            )
+            .hand(P0, &[SKYDIVER, PROTECTION])
+            .battlefield(P1, &[Prop::Artifact])
+            .library(P0, &[Card::Plains; 3])
+            .library(P1, &[Card::Plains; 3])
+            .actions(&[
+                Action::Cast {
+                    player: P0,
+                    card: SKYDIVER,
+                    face: FaceIx::FRONT,
+                    costs: Castings::only(0),
+                },
+                ME.x(1),
+                Resolve,
+                Resolve,
+                ME.controls(Prop::Artifact, 1),
+                ME.casts(PROTECTION),
+                Resolve,
+                ME.controls(Prop::Artifact, 0),
+                advance_to(2, TurnStep::Upkeep),
+                ME.controls(Prop::Artifact, 0),
+                THEM.controls(Prop::Artifact, 0),
+                advance_to(3, TurnStep::Upkeep),
+                ME.controls(Prop::Artifact, 1),
+                stack(0),
+            ]),
+        Scenario::new("a phased-out Phantasmal Image is not sacrificed")
+            .interaction(&[IMAGE])
+            .battlefield(
+                P0,
+                &[
+                    Card::Island,
+                    Card::Island,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    SCIMITAR,
+                ],
+            )
+            .hand(P0, &[IMAGE, PROTECTION])
+            .battlefield(P1, &[Prop::Vanilla])
+            .library(P0, &[Card::Plains; 3])
+            .library(P1, &[Card::Plains; 3])
+            .actions(&[
+                ME.casts(IMAGE),
+                Resolve,
+                ME.picks_up_to(Prop::Vanilla),
+                ME.controls(Prop::Vanilla, 1),
+                ME.activates(SCIMITAR, 1), // Equip {1}, targeting the Image
+                ME.casts(PROTECTION),
+                Resolve,
+                Resolve,
+                Resolve,
+                ME.has(Zone::Graveyard, IMAGE, 0),
+                ME.controls(Prop::Vanilla, 0),
+                advance_to(2, TurnStep::BeginningOfCombat),
+                THEM.passes(),
+                THEM.done_attacking(),
+                advance_to(3, TurnStep::Upkeep),
+                ME.controls(Prop::Vanilla, 1),
+                ME.pt(Prop::Vanilla, 2, 1),
+            ]),
         // [CR 702.26g]: "When a permanent phases out, any Auras, Equipment, or Fortifications
         // attached to that permanent phase out at the same time." Phased out, the 2/1, its
         // Equipment and the lands are on no battlefield; Teferi's Protection is exiled. At P0's

@@ -9,9 +9,11 @@ use crate::bitboard::Bitboard;
 use crate::event::Sink;
 use crate::ids::{CardId, CardIx};
 use crate::profile::Profile;
-use crate::state::{Continuous, Duration, LayerChange, State, Zone, ZoneKey};
+use crate::state::{Continuous, Duration, LayerChange, State, TurnStep, Zone, ZoneKey};
 use crate::table::GameTable;
+
 use crate::zone::Place;
+use beryl_card::FaceIx;
 
 /// Brings the layer results up to date and checks every invariant of the state.
 fn settled(g: &mut Game) {
@@ -125,4 +127,35 @@ fn a_permanent_phases_in_for_who_controlled_it_as_it_phased_out() {
     settled(&mut g);
     assert_eq!(g.s.controller(bear), g.them);
     assert!(g.s.memos(bear).iter().next().is_none());
+}
+
+/// A turn-start checkpoint records each permanent by its own card, its counters and what it is
+/// attached to, so a board with a phased-out permanent, or with a merged permanent whose other
+/// cards are in no zone the checkpoint lists ([CR 731.2]): "That permanent becomes a merged
+/// permanent represented by the card or copy that represented that object in addition to any
+/// other components that were representing it", is reported as one no game may be rebuilt
+/// from ([`State::off_board`]).
+///
+/// [CR 731.2]: https://yawgatog.com/resources/magic-rules/#R7312
+#[test]
+fn a_board_with_a_phased_out_or_merged_permanent_is_not_rebuilt() {
+    let mut g = Game::new(Profile::EXACT);
+    let bear = g.give(g.me, "Test Bear", Zone::Battlefield);
+    let other = g.give(g.me, "Test Bear", Zone::Hand);
+    settled(&mut g);
+    g.s.board().set_step(TurnStep::Upkeep);
+    assert_eq!(g.s.off_board(&g.t), None);
+
+    let (card, onto) = (g.s.object_ref(other), g.s.object_ref(bear));
+    g.s.merge(&mut Sink::off(), card, FaceIx::FRONT, onto, true)
+        .unwrap();
+    settled(&mut g);
+    assert_eq!(
+        g.s.off_board(&g.t).as_deref(),
+        Some("Test Bear merged with other cards")
+    );
+
+    g.s.phase_out(Bitboard::single(bear)).unwrap();
+    settled(&mut g);
+    assert_eq!(g.s.off_board(&g.t).as_deref(), Some("Test Bear phased out"));
 }

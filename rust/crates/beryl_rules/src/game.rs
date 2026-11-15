@@ -4,7 +4,7 @@
 use crate::event::{self, Event, Sink};
 use crate::fixed::Full;
 use crate::layout::{Layout, Small};
-use crate::state::{ObjectRef, State, Zone};
+use crate::state::{ObjectRef, State};
 use crate::table::GameTable;
 
 /// A game as the rules act on it: the state, the tables its cards are read from, and the
@@ -51,12 +51,18 @@ impl<'a, L: Layout> Game<'a, L> {
         event::settle(self.state, self.table, self.sink, e)
     }
 
-    /// Whether `object` is a permanent still: the object it was, on the battlefield
+    /// Whether `object` is a permanent still: the object it was
     /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)): "An object that moves
     /// from one zone to another becomes a new object with no memory of, or relation to, its
-    /// previous existence."
+    /// previous existence." And phased in ([`Object::on_battlefield`]): a phased-out permanent
+    /// is still in the battlefield zone, but no effect can destroy, damage, sacrifice or take
+    /// control of it ([CR 702.26b](https://yawgatog.com/resources/magic-rules/#R70226b)): "a
+    /// phased-out permanent is treated as though it does not exist. It can’t affect or be
+    /// affected by anything else in the game."
+    ///
+    /// [`Object::on_battlefield`]: crate::state::Object::on_battlefield
     #[inline]
     pub(crate) fn on_battlefield(&self, object: ObjectRef<L>) -> bool {
-        self.state.is_current(object) && self.state.object(object.slot).zone() == Zone::Battlefield
+        self.state.is_current(object) && self.state.object(object.slot).on_battlefield()
     }
 }
