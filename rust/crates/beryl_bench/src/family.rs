@@ -23,7 +23,7 @@ use std::hint::black_box;
 use beryl_cards::CARDS;
 use beryl_cards::decks::WU_CONTROL;
 use beryl_cards::names;
-use beryl_engine::card::{AbilityKind, CardDef, Face, Keywords};
+use beryl_engine::card::{Ability, AbilityIx, AbilityKind, CardDef, CastingOption, Face, Keywords};
 use beryl_engine::{
     CardIx, Choice, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch,
     StallReason, State, Step, Stops, Zone, apply, apply_decided, next, observe, rederive,
@@ -135,6 +135,25 @@ pub const FAMILIES: &[Family] = &[
             (1, names::FORK, names::NO_MORE_LIES),
         ],
     },
+    // The stack and identity family: Animate Dead (an Aura that enters from a graveyard and
+    // reanimates), Gemrazer (a creature that mutates onto another, making a merged permanent,
+    // CR 729 and 730), Teferi's Protection (phases out every permanent its controller has,
+    // CR 702.26) and Stifle (a counterspell for an ability on the stack, an object that is not
+    // a spell). Swamps and Forests stand in for basics so Animate Dead and Gemrazer can be cast.
+    // Its positions also keep a merged permanent or a phased-out permanent (`in_play`), which
+    // the control cannot undo and so leaves as they are.
+    Family {
+        name: "identity",
+        swaps: &[
+            (1, names::ANIMATE_DEAD, names::REPRIEVE),
+            (1, names::ANIMATE_DEAD, names::OUST),
+            (1, names::GEMRAZER, names::PORTABLE_HOLE),
+            (1, names::TEFERIS_PROTECTION, names::CURRENCY_CONVERTER),
+            (1, names::STIFLE, names::NO_MORE_LIES),
+            (2, names::SWAMP, names::PLAINS),
+            (2, names::FOREST, names::ISLAND),
+        ],
+    },
 ];
 
 /// The family called `name`.
@@ -204,20 +223,41 @@ pub fn stand_in(def: &'static CardDef) -> &'static CardDef {
         .faces
         .iter()
         .map(|face| {
-            let abilities: Vec<_> = face
-                .abilities
+            let kept = |a: &&Ability| {
+                !matches!(
+                    a.kind(),
+                    AbilityKind::Static | AbilityKind::Replacement | AbilityKind::Triggered
+                )
+            };
+            // A casting option (overload, mutate) names the face's ability it adds by index,
+            // and dropping abilities moves that index: count the kept ones before it.
+            let moved = |ability: AbilityIx| {
+                let before = face.abilities[..ability.index()]
+                    .iter()
+                    .filter(kept)
+                    .count();
+                AbilityIx::new(u8::try_from(before).expect("a face has few abilities"))
+            };
+            let casting: Vec<CastingOption> = face
+                .casting
                 .iter()
-                .filter(|a| {
-                    !matches!(
-                        a.kind(),
-                        AbilityKind::Static | AbilityKind::Replacement | AbilityKind::Triggered
-                    )
+                .map(|&option| match option {
+                    CastingOption::Overload { cost, ability } => CastingOption::Overload {
+                        cost,
+                        ability: moved(ability),
+                    },
+                    CastingOption::Mutate { cost, ability } => CastingOption::Mutate {
+                        cost,
+                        ability: moved(ability),
+                    },
+                    other => other,
                 })
-                .copied()
                 .collect();
+            let abilities: Vec<_> = face.abilities.iter().filter(kept).copied().collect();
             Face {
                 keywords: Keywords::NONE,
                 abilities: abilities.leak(),
+                casting: casting.leak(),
                 ..*face
             }
         })
@@ -233,6 +273,8 @@ pub fn stand_in(def: &'static CardDef) -> &'static CardDef {
 #[derive(Clone, Debug)]
 pub struct InTable {
     pub pairs: Vec<(CardIx, CardIx)>,
+    /// Whether merged and phased-out permanents make a position (the identity family).
+    pub identity: bool,
 }
 
 impl InTable {
@@ -253,7 +295,13 @@ impl InTable {
                 )
             })
             .collect();
-        (t, InTable { pairs })
+        (
+            t,
+            InTable {
+                pairs,
+                identity: family.name == "identity",
+            },
+        )
     }
 
     fn stand_in_of(&self, card: CardIx) -> Option<CardIx> {
@@ -289,9 +337,14 @@ impl InTable {
     }
 
     /// Whether a card of the family is in play in `s`: a permanent, a spell, or the source of
-    /// an effect in force.
+    /// an effect in force. For the identity family a merged permanent (one with cards under it)
+    /// or a phased-out permanent counts too: they are what its cards make.
     pub fn in_play(&self, s: &State) -> bool {
         !self.objects(s).is_empty()
+            || (self.identity
+                && (!s.phased_out().is_empty()
+                    || s.permanents()
+                        .any(|(slot, _)| s.pile(slot).next().is_some())))
             || s.effects()
                 .iter()
                 .any(|e| self.stand_in_of(e.source).is_some())

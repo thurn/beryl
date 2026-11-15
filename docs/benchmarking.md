@@ -119,6 +119,11 @@ it is in play. The present-cost gate measures what it costs while one is:
   and Fork. In its control a permanent that was a copy by a card of the family
   is the card it really is again, then its stand-in; a step at a legend-rule
   question is left out when such a copy was in the group.
+  `identity` swaps in Animate Dead, Gemrazer, Teferi's Protection and Stifle (and
+  Swamps and Forests, so the first two can be cast). Its positions also count a
+  merged permanent or a phased-out permanent as the family being in play, which
+  its control leaves as they are: it swaps cards for their stand-ins and cannot
+  un-merge or phase in.
 - **Its corpus** is cut from seeded games between greedy agents playing the
   family's deck in both seats: the first decision with a card of the family on
   the battlefield, on the stack or the source of an effect in force, which is

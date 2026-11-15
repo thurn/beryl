@@ -90,6 +90,11 @@ fn family_corpora_never_change() {
                 vec![14, 11, 14, 17, 4, 7, 10, 13, 16, 19, 13, 16],
                 12_023_806_982_777_273_383
             ),
+            (
+                "identity",
+                vec![2, 5, 8, 3, 6, 9, 2, 5, 8, 2, 5, 9],
+                17_934_802_237_751_081_370
+            ),
         ]
     );
 }
@@ -173,6 +178,16 @@ fn families_pair_their_steps() {
                     capacity_stalls: 0,
                     layer_recomputes: 1_252,
                     transactions: 3_771
+                }
+            ),
+            (
+                "identity",
+                Pairing {
+                    paired: 2_862,
+                    skipped: 99,
+                    capacity_stalls: 0,
+                    layer_recomputes: 1_341,
+                    transactions: 2_874
                 }
             ),
         ]

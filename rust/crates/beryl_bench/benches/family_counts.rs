@@ -33,6 +33,7 @@ use {
 #[bench::costs(FamilyWorkload::new("costs"))]
 #[bench::zones_and_text(FamilyWorkload::new("zones-and-text"))]
 #[bench::copies(FamilyWorkload::new("copies"))]
+#[bench::identity(FamilyWorkload::new("identity"))]
 fn present(w: FamilyWorkload) -> u64 {
     black_box(family::roll_paired(black_box(&w)).paired)
 }
@@ -52,6 +53,7 @@ fn present(w: FamilyWorkload) -> u64 {
 #[bench::costs(FamilyWorkload::new("costs"))]
 #[bench::zones_and_text(FamilyWorkload::new("zones-and-text"))]
 #[bench::copies(FamilyWorkload::new("copies"))]
+#[bench::identity(FamilyWorkload::new("identity"))]
 fn control(w: FamilyWorkload) -> u64 {
     black_box(family::roll_paired(black_box(&w)).paired)
 }

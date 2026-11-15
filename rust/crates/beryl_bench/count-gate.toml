@@ -60,3 +60,6 @@ ratio = 1.25
 
 [family.copies]
 ratio = 1.25
+
+[family.identity]
+ratio = 1.25
