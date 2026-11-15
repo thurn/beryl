@@ -40,7 +40,7 @@ impl Recording {
             .enumerate()
             .filter_map(|(at, message)| match message {
                 FixtureMessage::Event { event, payload } if event == ipc::GAME_UPDATE => Some(
-                    serde_json::from_value(payload.clone())
+                    GameUpdate::deserialize(payload)
                         .map_err(|error| format!("message {at} is not a view: {error}")),
                 ),
                 _ => None,
@@ -65,7 +65,7 @@ impl Recording {
         }) else {
             return Ok(None);
         };
-        serde_json::from_value(value.clone())
+        CardRecords::deserialize(value)
             .map(Some)
             .map_err(|error| format!("the recorded `card_records` answer is not one: {error}"))
     }

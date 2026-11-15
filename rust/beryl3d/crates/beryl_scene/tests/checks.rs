@@ -40,7 +40,7 @@ fn page() -> Page {
     ];
     messages.insert(0, card_records::fixture_message(&messages));
     let recording = Recording(messages);
-    Page::new(&recording, Side::You, Layout::Desktop, SIZE)
+    Page::new(recording.into(), Side::You, Layout::Desktop, SIZE)
         .expect("the views can be read")
         .named("three-beats")
 }

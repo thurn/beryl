@@ -176,7 +176,8 @@ fn length(entry: &Entry) -> Option<u64> {
     let recording = Recording(messages);
     // A recording the client cannot play has no length; its tests say why.
     std::panic::catch_unwind(|| {
-        let mut page = Page::new(&recording, Side::You, Layout::Desktop, LENGTH_WINDOW).ok()?;
+        let mut page =
+            Page::new(recording.into(), Side::You, Layout::Desktop, LENGTH_WINDOW).ok()?;
         page.moments().last().map(|(_, at)| at.0 / 1_000_000)
     })
     .ok()

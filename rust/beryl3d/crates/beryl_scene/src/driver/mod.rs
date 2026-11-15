@@ -142,14 +142,13 @@ impl Page {
     ///
     /// When a view in the recording cannot be read.
     pub fn new(
-        recording: &Recording,
+        recording: Arc<Recording>,
         seat: Side,
         layout: Layout,
         size: Size,
     ) -> Result<Self, DriverError> {
         let views = recording.views().map_err(DriverError)?.into();
         let cards = recording.card_records().map_err(DriverError)?.map(Arc::new);
-        let recording = Arc::new(recording.clone());
         let mut page = Self {
             responses: Responses::shared(Arc::clone(&recording)),
             recording,

@@ -72,7 +72,7 @@ impl Recorded for Page {
 /// When there is no such recording for `seat`, or it cannot be read.
 pub fn page(name: &str, seat: Side, layout: Layout, size: Size) -> Result<Page, String> {
     let recording = recording(name, seat)?;
-    Page::new(&recording, seat, layout, size)
+    Page::new(recording.into(), seat, layout, size)
         .map(|page| page.named(name))
         .map_err(|error| format!("{name}: {error}"))
 }
