@@ -40,6 +40,12 @@ const WINDOW: Size = Size {
 };
 const SCALE: f32 = 2.0;
 
+/// The size in physical pixels of the target the boards are drawn into: the window at its scale.
+pub const TARGET: [u32; 2] = [
+    (WINDOW.width * SCALE) as u32,
+    (WINDOW.height * SCALE) as u32,
+];
+
 /// What a frame was doing, for naming it in a gate's report.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Phase {

@@ -187,8 +187,8 @@ COMMANDS: tuple[Command, ...] = (
         (
             ("just b3d gate", "hold every gated board to data/beryl3d/gates.json"),
             (
-                "just b3d gate --board stress-255 --update",
-                "lower one board's limits to what it measured",
+                "just b3d gate --gpu",
+                "count shader cost and, in beryl3d-bench, fragments shaded",
             ),
         ),
         gate.run_gate,

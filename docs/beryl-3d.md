@@ -1254,16 +1254,27 @@ as many pixels opaque as it can.
   place a shadow at the height of what lies under it, which placement knows.
 - **No per-pixel lighting.** A face's color is its texture times a tint.
 
-What that buys, as an estimate for a typical board, in screens of pixels shaded
-per frame:
+What that buys, measured on 2026-11-15 by `just b3d gate --gpu`'s fragment count
+(Mesa 26.0.8's llvmpipe Vulkan driver in `beryl3d-bench`, the same on every
+run), in screens of pixels shaded per frame. The recorded board is the
+`verbs-zones` fixture from the first seat in a 1920 by 1080 window, 47 and 48
+records with 45 of them opaque; it has no flat layer, card faces, marks or glows
+yet. "All blended" is the same draw list with every record of the table drawn
+blended from back to front and nothing writing the depth buffer (beryl_render's
+`fragments` example, `--recorded verbs-zones --at <ms>`).
 
-| Drawn                        | All blended | Opaque with depth |
-| ---------------------------- | ----------- | ----------------- |
-| Table                        | 1.00        | 0.65              |
-| Cards, with overlaps         | 0.45        | 0.35              |
-| Shadows, edges, marks, glows | 0.15        | 0.15              |
-| Flat layer                   | 0.30        | 0.30              |
-| Total                        | 1.90        | 1.45              |
+| Frame                       | All blended | Opaque with depth |
+| --------------------------- | ----------- | ----------------- |
+| `verbs-zones` at 1,500 ms   | 1.429       | 1.018             |
+| `verbs-zones` at 3,000 ms   | 1.419       | 1.016             |
+| `stress-255`, `stress-1024` | not counted | 1.000             |
+
+The fragments counted are 2,962,738 and 2,111,552 at 1,500 ms, and 2,942,928 and
+2,106,496 at 3,000 ms, of 2,073,600 pixels. The stress boards' 8 ranked frames
+each shade exactly one screen at 2880 by 1800 (5,184,000 fragments): every
+record is opaque and drawn nearest first, so the depth test rejects every hidden
+pixel before it is shaded. The design's estimate for a typical board was 1.90
+screens all blended and 1.45 with depth, of which the flat layer was 0.30.
 
 The limits the Baseline tier is held to on every gated fixture. **Fragments**
 are pixels actually shaded, counted as the
@@ -2088,6 +2099,16 @@ quad of 4,096 pixels drawn in front of one of 16,384, with a depth buffer, gave
 three runs out of three, with default limits and with
 `Limits::downlevel_webgl2_defaults()`. So the count is repeatable and leaves out
 the fragments the depth buffer rejects, and the gate reads it from the driver.
+
+`just b3d gate --gpu` runs both GPU counts
+(`tools/src/beryl_tools/beryl3d/gpu.py`) and is a step of the sweep.
+beryl_render's `shader_cost` test counts each material and holds it to
+`materials.<name>` in `data/beryl3d/gates.json`; it needs no GPU, so the lane's
+tests run it too. beryl_render's `fragments` example draws the 8 frames of each
+gated board that `rank` picks in the virtual machine, twice, and the gate fails
+if the two counts differ or the worst frame's count, in screens, is over
+`tiers.baseline.fragments.<board>`. Only Vulkan and DirectX 12 offer the
+pipeline statistics query in `wgpu`, so the count cannot be taken on Metal.
 
 ### What it is held to
 

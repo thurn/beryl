@@ -1,6 +1,7 @@
 //! Beryl 3D's renderer: draws a frame's draw list with wgpu, in the Baseline tier
 //! (docs/beryl-3d.md, "Rendering"). It is the only crate that names `wgpu`.
 
+mod count;
 mod mesh;
 mod pipeline;
 mod renderer;

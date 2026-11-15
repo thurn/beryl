@@ -7,6 +7,7 @@
 use beryl_scene::frame::{Frame, TextureArray};
 use wgpu::util::DeviceExt;
 
+use crate::count::FragmentCounter;
 use crate::mesh::meshes;
 use crate::pipeline::{DEPTH, RECORD, bind_group_layout, pipelines};
 use crate::runs::runs;
@@ -53,6 +54,8 @@ pub struct Renderer {
     /// One bind group per texture array, by `TextureArray` value.
     bind_groups: [wgpu::BindGroup; 3],
     depth: Option<(wgpu::TextureView, u32, u32)>,
+    /// Present when the renderer counts the fragments each frame shades.
+    counter: Option<FragmentCounter>,
 }
 
 impl Renderer {
@@ -109,31 +112,73 @@ impl Renderer {
             arrays,
             bind_groups,
             depth: None,
+            counter: None,
         }
     }
 
     /// A renderer on the default GPU adapter with no window or surface, drawing into offscreen
     /// targets of RGBA bytes.
     pub fn headless(limits: Limits) -> Result<Self, String> {
+        Self::headless_with(limits, wgpu::Features::empty()).map(|(renderer, _)| renderer)
+    }
+
+    /// A headless renderer that counts the fragments each frame shades, read with `fragments`
+    /// (docs/beryl-3d.md, "What is counted"). It needs an adapter with pipeline statistics
+    /// queries: Vulkan or DirectX 12, not Metal. The gate counts on Mesa's software Vulkan
+    /// driver, whose count is exact and repeatable.
+    pub fn counting(limits: Limits) -> Result<Self, String> {
+        let (mut renderer, adapter) =
+            Self::headless_with(limits, wgpu::Features::PIPELINE_STATISTICS_QUERY)?;
+        renderer.counter = Some(FragmentCounter::new(&renderer.device, adapter));
+        Ok(renderer)
+    }
+
+    /// A headless renderer with `features`, and its adapter's name.
+    fn headless_with(limits: Limits, features: wgpu::Features) -> Result<(Self, String), String> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             ..Default::default()
         }))
         .map_err(|error| format!("no GPU adapter: {error}"))?;
+        let name = adapter.get_info().name;
+        if !adapter.features().contains(features) {
+            return Err(format!("the GPU adapter {name:?} lacks {features:?}"));
+        }
         let required_limits = match limits {
             Limits::Default => wgpu::Limits::default(),
             Limits::Downlevel => wgpu::Limits::downlevel_webgl2_defaults(),
         };
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("beryl_render"),
-            required_features: wgpu::Features::empty(),
+            required_features: features,
             required_limits,
             ..Default::default()
         }))
         .map_err(|error| format!("no GPU device: {error}"))?;
         // Stored as sRGB values and blended as they are, as a browser blends colors.
-        Ok(Self::new(device, queue, wgpu::TextureFormat::Rgba8Unorm))
+        Ok((
+            Self::new(device, queue, wgpu::TextureFormat::Rgba8Unorm),
+            name,
+        ))
+    }
+
+    /// The name of the GPU adapter that counts fragments, or `None` for a renderer not made by
+    /// `counting`.
+    #[must_use]
+    pub fn counting_adapter(&self) -> Option<&str> {
+        self.counter
+            .as_ref()
+            .map(|counter| counter.adapter.as_str())
+    }
+
+    /// Waits for the GPU and returns how many times the fragment shader ran for the last frame
+    /// drawn, or `None` for a renderer not made by `counting`.
+    #[must_use]
+    pub fn fragments(&self) -> Option<u64> {
+        self.counter
+            .as_ref()
+            .map(|counter| counter.read(&self.device))
     }
 
     /// Fills both card face arrays with placeholder faces: the back in layer 0 and one face per
@@ -217,6 +262,9 @@ impl Renderer {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+            if let Some(counter) = &self.counter {
+                pass.begin_pipeline_statistics_query(&counter.set, 0);
+            }
             pass.set_vertex_buffer(0, self.vertices.slice(..));
             pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint16);
             let mut state = None;
@@ -244,6 +292,12 @@ impl Renderer {
                 pass.draw_indexed(indices.clone(), 0, 0..run.records.len() as u32);
                 drawn.draw_calls += 1;
             }
+            if self.counter.is_some() {
+                pass.end_pipeline_statistics_query();
+            }
+        }
+        if let Some(counter) = &self.counter {
+            counter.resolve(&mut encoder);
         }
         self.queue.submit([encoder.finish()]);
         drawn

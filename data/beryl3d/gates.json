@@ -46,7 +46,31 @@
       "frame_allocations": 0
     }
   },
-  "tiers": {},
-  "materials": {},
+  "tiers": {
+    "baseline": {
+      "fragments": {
+        "stress-255": 1.0,
+        "stress-1024": 1.0
+      }
+    }
+  },
+  "materials": {
+    "card": {
+      "samples": 1,
+      "expressions": 63
+    },
+    "contact_shadow": {
+      "samples": 1,
+      "expressions": 77
+    },
+    "glow": {
+      "samples": 1,
+      "expressions": 63
+    },
+    "table": {
+      "samples": 1,
+      "expressions": 55
+    }
+  },
   "tests": {}
 }

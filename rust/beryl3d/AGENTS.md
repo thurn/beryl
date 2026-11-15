@@ -70,6 +70,14 @@ project, and selects the main lanes.
   Beryl's code, and the commit that raises it gives the old and new numbers. It
   needs nobody's approval.
 
+  Under `materials.<name>` are the most texture samples and naga expressions
+  each material's `shade_` function in `beryl_render`'s shader may take per
+  fragment (the `shader_cost` test), and under
+  `tiers.baseline.fragments.<board>` the most fragments, in screens, any of a
+  gated board's ranked frames may shade, counted in the `beryl3d-bench` machine.
+  `just b3d gate --gpu` holds both, and its `--update` lowers them. They rise by
+  the same rule as the frame limits.
+
 A break caused by a change to the main workspace (a renamed `beryl_session`
 item, say) is fixed in the Beryl 3D change that meets it, not by holding the
 main change back.

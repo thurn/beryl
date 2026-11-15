@@ -21,5 +21,14 @@ pollster = "1.0.1"
 wgpu = "30.0.2"
 
 [dev-dependencies]
+# Plays the gated boards and recordings whose frames the `fragments` example counts.
+beryl_inspect = { path = "../beryl_inspect" }
+# The seat a recording is seen from.
+beryl_session = { path = "../../../crates/beryl_session" }
+# Parses the shader to count each material's texture samples and expressions, in place of Arm's
+# offline compiler, whose installer needs a person. The release wgpu 30.0.2 compiles with.
+naga = { version = "30.0.2", features = ["wgsl-in"] }
+# Reads the material limits in data/beryl3d/gates.json and prints the counts.
+serde_json = "1.0.154"
 # Builds the test scenes' transforms and camera.
 glam = "0.34.3"

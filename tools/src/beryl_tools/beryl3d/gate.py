@@ -15,6 +15,9 @@ Every count is exact and the same on every run, so a count over its limit by one
 `--update` lowers each limit to what was measured and never raises one. A limit rises only by
 hand, when the work itself changed or a compiler or dependency upgrade moved the count, with the
 old and new numbers in the commit body (rust/beryl3d/AGENTS.md).
+
+`--gpu` counts the GPU's work instead, the shader cost and fragments under `materials` and
+`tiers.baseline` (gpu.py).
 """
 
 from __future__ import annotations
@@ -30,7 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import paths as repo_paths
-from . import paths
+from . import gpu, paths
 
 GATES: Path = repo_paths.REPO / "data" / "beryl3d" / "gates.json"
 # The client core's work counters (`beryl_scene::frame::Work`).
@@ -225,8 +228,10 @@ def play(names: list[str]) -> list[Board]:
 
 
 def run_gate(args: argparse.Namespace) -> int:
-    boards = play(list(args.board))
     data = json.loads(GATES.read_text())
+    if args.gpu:
+        return gpu.run_gpu(list(args.board), args.update, data)
+    boards = play(list(args.board))
     if args.update:
         data["frames"] = lowered(boards, data.get("frames", {}))
         GATES.write_text(json.dumps(data, indent=2) + "\n")
@@ -250,4 +255,10 @@ def gate_arguments(parser: argparse.ArgumentParser) -> None:
         "--update",
         action="store_true",
         help="lower each limit to what was measured; never raises one",
+    )
+    parser.add_argument(
+        "--gpu",
+        action="store_true",
+        help="count the GPU's work instead: each material's shader cost, and the fragments"
+        " each board shades, drawn in the beryl3d-bench machine (gpu.py)",
     )

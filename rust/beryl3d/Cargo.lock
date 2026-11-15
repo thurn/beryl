@@ -297,11 +297,15 @@ dependencies = [
 name = "beryl_render"
 version = "0.1.0"
 dependencies = [
+ "beryl_inspect",
  "beryl_scene",
+ "beryl_session",
  "bytemuck",
  "glam",
  "image",
+ "naga",
  "pollster",
+ "serde_json",
  "wgpu",
 ]
 

@@ -59,7 +59,7 @@ from .. import (
 )
 from .. import paths as repo_paths
 from ..changes import git, run_git
-from ..lanes import Lane, Step
+from ..lanes import BY, Lane, Step
 from ..reruns import whole
 from . import lane, paths
 
@@ -98,7 +98,11 @@ class SweepStep:
 # The sweep's own steps, run after the lane's. A check that only the sweep runs (every
 # interface test on every tick, the counts in the virtual machine, the phone builds) is
 # appended here.
-OWN: tuple[SweepStep, ...] = ()
+OWN: tuple[SweepStep, ...] = (
+    # The GPU's work: shader cost, and the fragments shaded counted in the beryl3d-bench
+    # machine. Only this Mac's machine has been shown to count fragments repeatably.
+    SweepStep("gpu", (*BY, "b3d", "gate", "--gpu"), (MAC,)),
+)
 
 
 def steps() -> list[SweepStep]:
