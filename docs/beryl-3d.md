@@ -2142,6 +2142,45 @@ seconds at the 90th percentile, and the existing check of the session's scripts
 for one card spec moment, which is plain Rust, takes 14 milliseconds in an
 unoptimized build.
 
+### Measured
+
+`just b3d test` ran 7,552 tests on 2026-11-15: each recording from each seat it
+is recorded for (1,888 pairs), in the four desktop windows. The first and last
+rows are the median of five runs of the whole set on the 18-core Mac at the load
+shown, and the rows between them single runs, all with the debug build
+`just b3d` uses.
+
+| Build                                                                                            | CPU time |  Clock | Load       |
+| ------------------------------------------------------------------------------------------------ | -------: | -----: | ---------- |
+| Before                                                                                           |  5,200 s | 29 min | 30 to 60   |
+| Reachable check and fault dedupe sub-quadratic, `beryl_scene` and `beryl_inspect` at opt-level 1 |    270 s |   44 s | 40         |
+| The above at opt-level 2                                                                         |    114 s |   17 s | 50         |
+| Recordings shared between plays, clear cards skip the grid                                       |     91 s |   18 s | 55         |
+| Pages opened without copying the recording or its views                                          |     75 s |   16 s | 300 to 330 |
+
+Before, the four `stress-1024` tests took about 1,740 s each on the clock, three
+fifths of all the time, because the "reachable" check measured each card against
+every element of the frame and the faults were deduplicated by scanning a list.
+They now take about 3.2 s each. With the check change alone, in the unoptimized
+build, one `stress-255` test went from 14 s of CPU time to 1.4 s and one
+`stress-1024` test from 1,740 s to 10 s on the clock.
+
+A test now takes about 10 ms of CPU time on average, five times the 2 ms target.
+A profile of the last row puts the rest in three places, none of them the
+checks:
+
+- About two fifths opening the page: inflating and parsing the recording's JSON,
+  once for all its windows, and reading its views into the protocol's types,
+  once for each of its four windows.
+- About a quarter in the client handling each view: compiling its script and
+  laying out the flat layer, whose text shaping alone is about an eighth.
+- About a tenth building the draw list of each frame (`order::finish`,
+  `Table::write`), which the checks do not read.
+
+Skipping the frames between check times while something moves found the same
+faults and saved nothing, so the cost is in the frames at the check times
+themselves, about 100 a test.
+
 ### How a test costs a millisecond
 
 Four things make a test this cheap. The first is the largest.
