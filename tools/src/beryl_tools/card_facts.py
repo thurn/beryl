@@ -148,6 +148,27 @@ class Cards:
             for p in self.oracle.get(cast(str, face["name"]), "").split("\n")
         ]
 
+    def delve_reachable(
+        self, setup: Json, seat: object, taps: list[str] | None
+    ) -> None:
+        """Raises `Unsupported` unless XMage's AI would delve as Beryl did. It pays with mana
+        sources first and delves only for what they cannot pay, so a delve is replayable only
+        when every untapped mana source of the caster `seat` on the setup's battlefield is
+        among the `taps` of the cast."""
+        battlefield = cast(
+            list[Json],
+            cast(list[Json], setup["players"])[cast(int, seat)]["battlefield"],
+        )
+        sources = [
+            b
+            for b in battlefield
+            if not b["tapped"] and self.mana_text(cast(str, b["card"])) is not None
+        ]
+        if len(sources) > len(taps or []):
+            raise Unsupported(
+                "a delve with mana sources left untapped, which XMage's AI taps first"
+            )
+
     def mana_text(self, source: str) -> str | None:
         """The text of a mana source's one mana ability, `{T}: Add` and what it makes, where
         that is all it can tap for. XMage taps its own choice of sources for a payment, so a

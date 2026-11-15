@@ -15,7 +15,7 @@ from .xmage_java import java_string
 # targets (with none to choose too) and X, whose limit XMage leaves to the payment; by what the
 # prompt is for (the trace's `purpose`), the permanents to tap or cards to exile for a cost.
 FORCED_ASKED = ("Target", "TargetCount", "X")
-FORCED_COSTS = ("crew", "waterbend", "exile-cost")
+FORCED_COSTS = ("crew", "waterbend", "exile-cost", "delve")
 # Others XMage asks when the one answer stands for several identical cards.
 FORCED_CHOICES = ("ChooseObject", "ChooseUpTo")
 # What the prompts are for whose cards XMage asks as targets even when they are identical, as
@@ -87,6 +87,16 @@ class Position:
         if abilities != [source]:
             raise Unsupported("a target among several abilities on the stack")
         return "stack ability ("
+
+    @staticmethod
+    def delves_next(trace: list[Position], index: int) -> bool:
+        """Whether the position after `trace[index]` is a choice of the cards delve exiles, or
+        Beryl made those choices unasked."""
+        after = trace[index + 1 : index + 2]
+        return bool(after) and (
+            after[0].purpose == "delve"
+            or any(f.get("purpose") == "delve" for f in after[0].forced)
+        )
 
     @staticmethod
     def of(t: Json) -> Position:

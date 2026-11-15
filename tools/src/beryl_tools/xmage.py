@@ -216,14 +216,6 @@ class Exporter:
             self.answer(answer, p)
             return
         pick = cast(Json, answer["pick"])
-        if answer.get("purpose") == "delve" and "card" in pick:
-            # XMage's delve special action asks for each card the AI pays with in turn, once
-            # the mana already in the pool is spent.
-            self.emit(
-                f"setChoice({self.player(answer['player'])}, "
-                f"{java_string(cast(str, pick['card']))});"
-            )
-            return
         if (
             kind in FORCED_CHOICES
             and "card" in pick
@@ -382,7 +374,9 @@ class Exporter:
         card = cast(str, action["card"])
         if action["face"]:
             raise Unsupported(f"casting {card}'s back face")
-        self.check_delve_reachable(action, p)
+        if Position.delves_next(self.trace, self.index):
+            paid = payment_taps(self.actions, [t.taps for t in self.trace], self.index)
+            self.cards.delve_reachable(self.setup, action["player"], paid)
         costs = cast(int, action["costs"])
         if card in p.flashback:
             self.flashback(action, p)
@@ -438,36 +432,6 @@ class Exporter:
             self.unless_pays[card] = self.target_controller(action["player"], card)
         if self.cards.takes(card) is not None:
             self.take_pending = card
-
-    def check_delve_reachable(self, action: Json, p: Position) -> None:
-        """XMage's AI pays with mana sources first and delves only for what they cannot pay, so a
-        delve is replayable only when the caster has no untapped mana source Beryl did not
-        tap for the cast. Judged from the scenario's setup battlefield."""
-        following = self.trace[self.index + 1 :][:1]
-        delving = bool(following) and any(
-            f.get("purpose") == "delve" for f in following[0].forced
-        )
-        delving = delving or (
-            self.index + 1 < len(self.trace)
-            and self.trace[self.index + 1].purpose == "delve"
-        )
-        if not delving:
-            return
-        seat = cast(int, action["player"])
-        battlefield = cast(
-            list[Json], cast(list[Json], self.setup["players"])[seat]["battlefield"]
-        )
-        sources = [
-            b
-            for b in battlefield
-            if not b["tapped"]
-            and self.cards.mana_text(cast(str, b["card"])) is not None
-        ]
-        taps = payment_taps(self.actions, [t.taps for t in self.trace], self.index)
-        if len(sources) > len(taps or []):
-            raise Unsupported(
-                "a delve with mana sources left untapped, which XMage's AI taps before it delves"
-            )
 
     def flashback(self, action: Json, p: Position) -> None:
         """Casts a card with flashback for its mana cost (Snapcaster Mage) from its owner's
@@ -740,9 +704,7 @@ class Exporter:
             name = java_string(p.object_name(card))
             self.emit(f"{self.choice_command(source, kind)}({who}, {name});")
         elif action.get("purpose", p.purpose) == "delve" and what == "Done":
-            # XMage's delve asks for as many cards as there is generic mana left to pay and
-            # ends when it has them, so there is no answer to queue.
-            pass
+            pass  # XMage's delve ends once it has as many cards as generic mana left to pay
         elif (kind == "ChooseUpTo" or bending) and what == "Done":
             if self.choice_command(source, kind) == "addTarget":
                 self.emit(f"addTarget({who}, TestPlayer.TARGET_SKIP);")
