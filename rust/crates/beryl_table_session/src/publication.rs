@@ -4,6 +4,7 @@ use beryl_session::protocol::{Answer, ObjectId as Slot, PlayerView, TableAction,
 use beryl_table::state::{ObjectId, Proposal};
 use beryl_table::{Action, Chance, Entry, Log, Refusal, Seat, Table};
 
+use crate::assists::{Assists, Suggestions};
 use crate::prompt::{Completion, OpenPrompt, Progress, PromptState};
 
 #[path = "flow.rs"]
@@ -18,18 +19,26 @@ pub struct SeatPublication {
     view: PlayerView,
     slots: Slots,
     refs: TableActionRefs,
+    assists: Assists,
 }
 
 impl SeatPublication {
     /// Projects a fresh snapshot, such as the first view on joining a table.
     pub fn new(table: &Table, log: &Log, seat: Seat) -> Result<Self, Refusal> {
-        Self::snapshot(table, log, seat, Slots::default(), &[])
+        Self::snapshot(table, log, seat, Slots::default(), &[], &Assists::default())
     }
 
     /// Updates this viewer's snapshot while preserving their existing slots.
     /// Use the same table and log throughout this publication's lifetime.
     pub fn refresh(&mut self, table: &Table, log: &Log) -> Result<(), Refusal> {
-        *self = Self::snapshot(table, log, self.seat, self.slots.clone(), &[])?;
+        *self = Self::snapshot(
+            table,
+            log,
+            self.seat,
+            self.slots.clone(),
+            &[],
+            &self.assists,
+        )?;
         Ok(())
     }
 
@@ -39,8 +48,10 @@ impl SeatPublication {
         seat: Seat,
         slots: Slots,
         names: &[Option<String>],
+        assists: &Assists,
     ) -> Result<Self, Refusal> {
         let mut published = Self::project(table, log.entries(), seat, slots)?;
+        published.set_assists(assists.refresh(table, seat, &Suggestions::new(table)));
         published.attach_history(log, table, names);
         Ok(published)
     }
@@ -57,6 +68,7 @@ impl SeatPublication {
             view,
             slots,
             refs,
+            assists: Assists::default(),
         })
     }
 
@@ -71,6 +83,37 @@ impl SeatPublication {
     /// Returns the marks for proposals already redacted for this viewer.
     pub fn proposal_marks(&self, proposals: &[Proposal]) -> Vec<Slot> {
         proposal_marks(proposals, &self.view, &self.slots)
+    }
+
+    fn set_assists(&mut self, assists: Assists) {
+        assists.project(&mut self.view, self.seat, &self.slots);
+        self.assists = assists;
+    }
+
+    fn marks(&self) -> &[Slot] {
+        marks_in(&self.view)
+    }
+
+    fn toggle_line(&mut self, id: u32, line: u32, on: bool) -> Result<(), Refusal> {
+        let mut assists = self.assists.clone();
+        assists.toggle(id, line, on)?;
+        let mut view = self.view.clone();
+        assists.project(&mut view, self.seat, &self.slots);
+        view.script = Some(script_with_proposal_marks(
+            &self.view,
+            None,
+            &view,
+            self.seat,
+            &self.slots,
+            &self.slots,
+            ProposalMarks {
+                before: self.marks(),
+                after: marks_in(&view),
+            },
+        )?);
+        self.view = view;
+        self.assists = assists;
+        Ok(())
     }
 
     fn attach_history(&mut self, log: &Log, table: &Table, names: &[Option<String>]) {
@@ -111,7 +154,8 @@ impl SeatPublication {
         table_before: &Table,
         staged: &Table,
         entry: &Entry,
-        marks: ProposalMarks<'_>,
+        marks: Option<ProposalMarks<'_>>,
+        suggestions: &Suggestions,
         prompts: &[Option<OpenPrompt>],
     ) -> Result<Self, Refusal> {
         let mut next = Self::project(
@@ -120,7 +164,10 @@ impl SeatPublication {
             self.seat,
             self.slots.clone(),
         )?;
+        next.set_assists(self.assists.refresh(staged, self.seat, suggestions));
         Self::project_prompts(&mut next.view, next.seat, &next.slots, staged, prompts);
+        let before = self.marks();
+        let after = next.marks();
         next.view.script = Some(script_with_proposal_marks(
             &self.view,
             Some((entry, table_before)),
@@ -128,10 +175,17 @@ impl SeatPublication {
             self.seat,
             &self.slots,
             &next.slots,
-            marks,
+            marks.unwrap_or(ProposalMarks { before, after }),
         )?);
         Ok(next)
     }
+}
+
+fn marks_in(view: &PlayerView) -> &[Slot] {
+    view.table
+        .as_ref()
+        .and_then(|table| table.proposal_marks.as_deref())
+        .unwrap_or_default()
 }
 
 /// The authoritative table and the latest publications for all of its seats.
@@ -196,8 +250,14 @@ impl PublishedTable {
             .seats
             .get_mut(usize::from(seat.0))
             .ok_or(Refusal::Stale)?;
-        let mut reset =
-            SeatPublication::snapshot(&self.table, &self.log, seat, Slots::default(), &self.names)?;
+        let mut reset = SeatPublication::snapshot(
+            &self.table,
+            &self.log,
+            seat,
+            Slots::default(),
+            &self.names,
+            &publication.assists,
+        )?;
         SeatPublication::project_prompts(
             &mut reset.view,
             seat,
@@ -205,7 +265,7 @@ impl PublishedTable {
             &self.table,
             &self.prompts,
         );
-        reset.view.script = Some(snapshot(&reset.view));
+        reset.view.script = Some(snapshot(&reset.view, reset.marks()));
         *publication = reset;
         Ok(())
     }
@@ -230,13 +290,8 @@ impl PublishedTable {
             complete: Completion::Action(Box::new(on_done)),
         });
         let result = if let Some(action) = peek {
-            self.apply(
-                seat,
-                Request::Host(&action),
-                |_| ProposalMarks::default(),
-                save,
-            )
-            .map(|_| ())
+            self.apply(seat, Request::Host(&action), |_| None, save)
+                .map(|_| ())
         } else {
             self.republish_prompts(Some(seat))
         };
@@ -254,6 +309,25 @@ impl PublishedTable {
         save: impl FnOnce(&Entry) -> Result<(), Refusal>,
     ) -> Result<bool, Refusal> {
         let index = usize::from(seat.0);
+        let publication = self.seats.get_mut(index).ok_or(Refusal::Stale)?;
+        let action = match answer {
+            Answer::ProposalLine { id, line, on } => {
+                publication.toggle_line(id, line, on)?;
+                return Ok(false);
+            }
+            Answer::ApplyProposal { id, revision } => {
+                Some(publication.assists.apply(id, revision)?)
+            }
+            Answer::ApplyLabel { id } => Some(publication.assists.label_action(
+                id,
+                publication.view.table.as_ref().expect("manual publication"),
+            )?),
+            _ => None,
+        };
+        if let Some(action) = action {
+            self.apply(seat, Request::Host(&action), |_| None, save)?;
+            return Ok(true);
+        }
         let current = self
             .prompts
             .get(index)
@@ -305,12 +379,7 @@ impl PublishedTable {
     ) -> Result<(), Refusal> {
         let index = usize::from(seat.0);
         let previous = self.prompts[index].take();
-        if let Err(error) = self.apply(
-            seat,
-            Request::Host(action),
-            |_| ProposalMarks::default(),
-            save,
-        ) {
+        if let Err(error) = self.apply(seat, Request::Host(action), |_| None, save) {
             self.prompts[index] = previous;
             return Err(error);
         }
@@ -327,6 +396,7 @@ impl PublishedTable {
             let seat = publication.seat;
             let mut view = publication.view.clone();
             SeatPublication::project_prompts(&mut view, seat, slots, &self.table, &self.prompts);
+            let marks = publication.marks();
             view.script = Some(script_with_proposal_marks(
                 &publication.view,
                 None,
@@ -334,7 +404,10 @@ impl PublishedTable {
                 seat,
                 slots,
                 slots,
-                ProposalMarks::default(),
+                ProposalMarks {
+                    before: marks,
+                    after: marks,
+                },
             )?);
             prepared.push((index, view));
         }
@@ -355,17 +428,12 @@ impl PublishedTable {
         action: TableAction,
         save: impl FnOnce(&Entry) -> Result<(), Refusal>,
     ) -> Result<&Entry, Refusal> {
-        self.apply(
-            seat,
-            Request::Client(action),
-            |_| ProposalMarks::default(),
-            save,
-        )
+        self.apply(seat, Request::Client(action), |_| None, save)
     }
 
     /// Applies an action generated by the host with authoritative object IDs.
     pub fn apply_host(&mut self, seat: Seat, action: &Action) -> Result<&Entry, Refusal> {
-        self.apply_host_with_marks(seat, action, |_| ProposalMarks::default())
+        self.apply(seat, Request::Host(action), |_| None, |_| Ok(()))
     }
 
     /// As above, with the before and after proposal marks for each viewer.
@@ -375,25 +443,32 @@ impl PublishedTable {
         action: &Action,
         marks: impl Fn(Seat) -> ProposalMarks<'a>,
     ) -> Result<&Entry, Refusal> {
-        self.apply(seat, Request::Host(action), marks, |_| Ok(()))
+        self.apply(
+            seat,
+            Request::Host(action),
+            |seat| Some(marks(seat)),
+            |_| Ok(()),
+        )
     }
 
     fn apply<'a>(
         &mut self,
         seat: Seat,
         action: Request<'_>,
-        marks: impl Fn(Seat) -> ProposalMarks<'a>,
+        marks: impl Fn(Seat) -> Option<ProposalMarks<'a>>,
         save: impl FnOnce(&Entry) -> Result<(), Refusal>,
     ) -> Result<&Entry, Refusal> {
         let actor = self.seats.get(usize::from(seat.0)).ok_or(Refusal::Stale)?;
         let mut prepared = Vec::with_capacity(self.seats.len());
         let check = |before: &Table, staged: &Table, entry: &Entry| {
+            let suggestions = Suggestions::new(staged);
             for publication in &self.seats {
                 prepared.push(publication.advance(
                     before,
                     staged,
                     entry,
                     marks(publication.seat),
+                    &suggestions,
                     &self.prompts,
                 )?);
             }

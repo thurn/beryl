@@ -1,4 +1,3 @@
-use std::convert::Infallible;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
@@ -9,14 +8,15 @@ use beryl_link::memory;
 use beryl_link::wire::{Hello, Message, TableStatus, VERSION_MISMATCH, decode, encode};
 use beryl_link::{Link, LinkError, PING_INTERVAL};
 use beryl_session::ipc::LobbyUpdate;
-use beryl_session::protocol::{LinkState, TableAction, TableObjectRef, ZoneName};
+use beryl_session::protocol::{
+    Answer, LinkState, ProposalView, TableAction, TableObjectRef, TableView, ZoneName,
+};
 use beryl_session::script::{Act, Span, Subject, Table as Stage, failure};
 use beryl_session::{GameUpdate, SessionId, SessionIds};
 use beryl_table::action::{
     Adjustment, ComputedDestination, Destination, Position, SeenObject, Selection, Target,
 };
-use beryl_table::assist::{apply_proposal, combat};
-use beryl_table::state::{ArrowKind, Assist, Phase, Zone};
+use beryl_table::state::{ArrowKind, Phase, Zone};
 use beryl_table::{Action, Log, Refusal, Seat, Table, save};
 use beryl_table_session::publication::SeatPublication;
 use beryl_table_session::{HostSettings, TableEvent, TableSessions};
@@ -87,6 +87,8 @@ struct Game {
     updates: [Receiver<GameUpdate>; 2],
     views: [GameUpdate; 2],
     path: PathBuf,
+    assists_off: bool,
+    _directory: tempfile::TempDir,
 }
 
 impl Game {
@@ -104,10 +106,41 @@ impl Game {
         }
     }
 
+    fn table_view(&self, seat: Seat) -> &TableView {
+        self.views[usize::from(seat.0)].view.table.as_ref().unwrap()
+    }
+
+    fn proposal(&self, seat: Seat) -> &ProposalView {
+        let proposals = &self.table_view(seat).proposals;
+        assert_eq!(proposals.len(), 1);
+        &proposals[0]
+    }
+
+    fn answer(&mut self, actor: Seat, answer: Answer, broadcast: bool) {
+        let index = usize::from(actor.0);
+        [&self.host, &self.guest][index].answer(answer).unwrap();
+        if broadcast {
+            self.check_published_action();
+        } else {
+            let update = self.updates[index].recv().unwrap();
+            check_update(Some(&self.views[index]), &update);
+            assert_eq!(
+                update.view.table.as_ref().unwrap().log,
+                self.table_view(actor).log
+            );
+            self.views[index] = update;
+            assert!(self.updates[1 - index].try_recv().is_err());
+        }
+    }
+
     fn accept(&mut self, actor: Seat, action: TableAction) {
         [&self.host, &self.guest][usize::from(actor.0)]
             .act(action)
             .unwrap();
+        self.check_published_action();
+    }
+
+    fn check_published_action(&mut self) {
         let next = self
             .updates
             .each_ref()
@@ -118,6 +151,18 @@ impl Game {
         }
         self.views = next;
         self.check_privacy();
+        if self.assists_off {
+            for seat in [HOST, GUEST] {
+                let view = self.table_view(seat);
+                assert!(view.proposals.is_empty());
+                assert!(view.proposal_marks.is_none());
+                assert!(view.labels.is_empty());
+                assert_eq!(
+                    view.assists,
+                    beryl_session::protocol::AssistsView::default()
+                );
+            }
+        }
     }
 
     fn move_card(
@@ -200,13 +245,6 @@ impl Game {
     fn combat(&mut self) {
         self.accept(
             HOST,
-            Action::SetAssist {
-                assist: Assist::Combat,
-                on: true,
-            },
-        );
-        self.accept(
-            HOST,
             Action::Phase {
                 phase: Phase::DeclareAttackers,
             },
@@ -237,18 +275,23 @@ impl Game {
                 .collect::<Vec<_>>(),
             [ArrowKind::Attack, ArrowKind::Block]
         );
-        let proposal = combat::proposal(&table).unwrap();
-        let action = apply_proposal(&proposal)
-            .try_map_objects(&mut |id, zone| {
-                assert_eq!(zone, Zone::Battlefield);
-                Ok::<_, Infallible>(reference(
-                    &self.views[1],
-                    table.objects[&id].card.name().unwrap(),
-                    ZoneName::Battlefield,
-                ))
+        let actions = [(HOST, "Grizzly Bears"), (GUEST, "Runeclaw Bear")]
+            .into_iter()
+            .map(|(owner, name)| Action::Move {
+                selection: Selection {
+                    objects: vec![reference(&self.views[1], name, ZoneName::Battlefield)],
+                    zone: Zone::Battlefield,
+                },
+                to: Destination::Zone(Zone::Graveyard(owner)),
+                position: Position::Top,
+                face: None,
+                tapped: None,
             })
-            .unwrap();
-        self.accept(GUEST, action);
+            .chain([Action::Phase {
+                phase: Phase::EndOfCombat,
+            }])
+            .collect();
+        self.accept(GUEST, Action::Batch { actions });
         let (after, log) = replay(&self.path);
         assert_eq!(after.phase, Phase::EndOfCombat);
         for seat in [HOST, GUEST] {
@@ -322,8 +365,15 @@ impl Game {
     }
 }
 
-#[test]
-fn a_host_and_guest_play_a_scripted_game() {
+struct Connection {
+    sever: Box<dyn beryl_link::LinkSender>,
+    guest_id: SessionId,
+    links: std::sync::mpsc::SyncSender<beryl_link::memory::MemoryLink>,
+    dial: std::sync::mpsc::SyncSender<beryl_link::memory::MemoryLink>,
+    guest_events: Receiver<TableEvent>,
+}
+
+fn start_linked_game(assists_off: bool) -> (Game, Connection) {
     let directory = tempfile::tempdir().unwrap();
     let (host, host_updates, _) = watch(directory.path(), SessionIds::default());
     let guest_ids = SessionIds::default();
@@ -356,15 +406,18 @@ fn a_host_and_guest_play_a_scripted_game() {
     assert_connected(&guest_events);
 
     let saved = host.list_saved().unwrap().pop().unwrap();
-    let mut game = Game {
+    let path = directory
+        .path()
+        .join("tables")
+        .join(format!("{}.jsonl", saved.id));
+    let game = Game {
+        _directory: directory,
         host,
         guest,
         updates: [host_updates, guest_updates],
         views,
-        path: directory
-            .path()
-            .join("tables")
-            .join(format!("{}.jsonl", saved.id)),
+        assists_off,
+        path,
     };
     game.check_privacy();
     assert_eq!(
@@ -378,6 +431,28 @@ fn a_host_and_guest_play_a_scripted_game() {
             .all(|updates| updates.try_recv().is_err())
     );
 
+    (
+        game,
+        Connection {
+            sever,
+            guest_id,
+            links,
+            dial,
+            guest_events,
+        },
+    )
+}
+
+#[test]
+fn a_host_and_guest_play_a_scripted_game_with_assists_off() {
+    let (mut game, connection) = start_linked_game(true);
+    let Connection {
+        sever,
+        guest_id,
+        links,
+        dial,
+        guest_events,
+    } = connection;
     game.opening();
     game.combat();
 
@@ -419,11 +494,15 @@ fn a_host_and_guest_play_a_scripted_game() {
     let blocker = reference(&game.views[1], "Runeclaw Bear", ZoneName::Battlefield);
     game.accept(GUEST, tap(blocker));
 
+    game.accept(GUEST, Action::Concede {});
     game.host.leave();
     assert_eq!(link_event(&guest_events), TableEvent::Link(LinkState::Left));
     game.guest.leave();
     assert!(game.guest.current().is_none());
 }
+
+#[path = "scripted_game/assists.rs"]
+mod assists;
 
 #[test]
 fn an_interrupted_action_wakes_its_caller_and_lobby_payloads_pass_through() {

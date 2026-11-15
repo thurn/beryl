@@ -133,6 +133,7 @@ pub struct LogLine {
 #[serde(rename_all = "camelCase")]
 pub struct ProposalView {
     pub id: u32,
+    pub revision: u32,
     pub title: String,
     pub lines: Vec<ProposalLine>,
 }
@@ -140,6 +141,7 @@ pub struct ProposalView {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProposalLine {
+    pub id: u32,
     pub text: String,
     pub whose: Side,
     pub on: bool,
@@ -206,7 +208,7 @@ pub enum TablePrompt {
     },
 }
 
-/// A click in the authenticated seat's current prompt. A placement index
+/// A click in the authenticated seat's current prompt or assist. A placement index
 /// counts cards in the destination after removing the card being placed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -229,6 +231,18 @@ pub enum Answer {
     },
     Done,
     Cancel,
+    ProposalLine {
+        id: u32,
+        line: u32,
+        on: bool,
+    },
+    ApplyProposal {
+        id: u32,
+        revision: u32,
+    },
+    ApplyLabel {
+        id: u32,
+    },
 }
 
 /// A player's ordered slots for the zones whose order is specific to manual play.
@@ -364,4 +378,8 @@ pub struct TableView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub peer_name: Option<String>,
+    // Marks to restore when a viewer opens the latest view without the earlier scripts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub proposal_marks: Option<Vec<ObjectId>>,
 }

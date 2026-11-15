@@ -31,6 +31,7 @@ await import("./kept-table-cardstate.mjs");
 await import("./kept-table-keys.mjs");
 await import("./kept-table-log.mjs");
 await import("./kept-table-turn.mjs");
+await import("./kept-table-assists.mjs");
 await import("./kept-table-prompts.mjs");
 await import("./kept-table-players.mjs");
 await import("./kept-table-lobby.mjs");

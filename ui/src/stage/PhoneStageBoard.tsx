@@ -1,3 +1,5 @@
+import { CardLabels, LifeLabels } from "../table/Labels";
+import { ProposalPanel } from "../table/ProposalPanel";
 import type { MatchPanel } from "../table/lobby/MatchDialog";
 import { TablePromptView } from "../table/TablePromptView";
 import { DropTargets } from "../table/DropTargets";
@@ -132,7 +134,10 @@ export function PhoneStageBoard({
     suggest,
     number,
   };
-  const { ref, viewport, frameStyle } = useViewport();
+  const proposals = view.table?.proposals;
+  const showProposals = !opening && client && !!proposals?.length;
+  // The phone needs a separate strip so the panel cannot cover the card fan.
+  const { ref, viewport, frameStyle } = useViewport(showProposals ? 164 : 0);
   const { layer, surface } = useSurface(
     stage,
     client?.gestures ?? prompts.pointerClient,
@@ -240,7 +245,7 @@ export function PhoneStageBoard({
   const beforeDamage =
     table?.turn.step === "declareAttackers" ||
     table?.turn.step === "declareBlockers";
-  return (
+  const screen = (
     <div
       className="phone-board"
       data-pay={pay}
@@ -293,6 +298,13 @@ export function PhoneStageBoard({
                 ) : (
                   <PlayerTarget prompts={prompts} asked={asked} side={side} />
                 )}
+                {client && !!view.table?.labels.length && (
+                  <LifeLabels
+                    labels={view.table.labels}
+                    client={client}
+                    side={side}
+                  />
+                )}
               </Orb>
               {side === "you" ? (
                 !client &&
@@ -322,7 +334,17 @@ export function PhoneStageBoard({
       )}
       <div className="card-layer phone-cards" ref={layer}>
         {client && surface && (
-          <Selection client={client} stage={stage} surface={surface} />
+          <>
+            <Selection client={client} stage={stage} surface={surface} />
+            {!!view.table?.labels.length && (
+              <CardLabels
+                labels={view.table.labels}
+                client={client}
+                stage={stage}
+                surface={surface}
+              />
+            )}
+          </>
         )}
       </div>
       {surface && <Faces stage={stage} surface={surface} skin={PHONE} />}
@@ -477,5 +499,15 @@ export function PhoneStageBoard({
         <Inspected object={inspected} table={table} viewport={viewport} />
       )}
     </div>
+  );
+  return (
+    <>
+      {screen}
+      {showProposals && proposals && (
+        <div className="phone-proposals">
+          <ProposalPanel proposals={proposals} client={client} />
+        </div>
+      )}
+    </>
   );
 }

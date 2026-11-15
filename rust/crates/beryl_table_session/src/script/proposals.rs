@@ -9,10 +9,14 @@ use crate::view::Slots;
 /// Projects the affected cards in the viewer's enabled proposal lines to their
 /// stage slots. Pass only the proposals sent to this viewer.
 #[must_use]
-pub fn proposal_marks(proposals: &[Proposal], view: &PlayerView, slots: &Slots) -> Vec<ObjectId> {
+pub fn proposal_marks<'a>(
+    proposals: impl IntoIterator<Item = &'a Proposal>,
+    view: &PlayerView,
+    slots: &Slots,
+) -> Vec<ObjectId> {
     let mut ids = BTreeSet::new();
     for action in proposals
-        .iter()
+        .into_iter()
         .flat_map(|proposal| &proposal.lines)
         .filter(|line| line.on)
         .flat_map(|line| &line.actions)

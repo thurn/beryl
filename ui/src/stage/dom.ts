@@ -339,10 +339,9 @@ export class DomSurface implements Surface {
       return () => surface.removeEventListener(kind, heard);
     };
     const onTable = (target: EventTarget | null) =>
-      target === board ||
-      target === layer ||
-      nodeOf(target) !== undefined ||
-      playerOf(target) !== undefined;
+      target instanceof Element &&
+      !target.closest("[data-assist-label]") &&
+      (target.matches("[data-felt]") || nodeOf(target) || playerOf(target));
     const mac = /Mac/.test(navigator.platform);
     const keys = (e: PointerEvent) => ({
       meta: mac ? e.metaKey : e.ctrlKey,

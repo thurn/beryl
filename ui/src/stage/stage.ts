@@ -217,7 +217,7 @@ export class ScriptStage {
       entry.leaving = entry.landing = undefined;
     }
     let table = tableOf(view, script?.reset, this.#table);
-    const { immediate, announcements } = resetSteps(script);
+    const { immediate, announcements } = resetSteps(script, view);
     for (const { act } of immediate) {
       table = apply(table, act);
       this.#over.play(act, -Infinity, -Infinity);

@@ -633,21 +633,21 @@ export async function crowdedControls(page) {
             );
             return hit !== null && (e.contains(hit) || hit.contains(e));
         });
-        // What the open prompt asks (`data-asks`, the phone's pill) lies clear of every
-        // permanent. It takes no pointer, so neither the controls above nor clippedText's
-        // test of text under a card sees it, yet a prompt that picks among permanents in
-        // place is unreadable when its words hide the very cards it picks among. Under the
-        // tray's shade (src/stage/Tray.tsx) the table is not what is being read.
+        // Prompts and proposal panels must leave the cards they refer to visible.
+        // A prompt under the tray's shade (src/stage/Tray.tsx) may cover the table.
         const shaded = document.querySelector(".stage-tray") !== null;
-        for (const asks of shaded
-            ? []
-            : document.querySelectorAll("[data-asks]")) {
+        for (const asks of document.querySelectorAll(
+            "[data-asks], [data-table-proposals]",
+        )) {
+            const proposal = asks.hasAttribute("data-table-proposals");
+            if (shaded && !proposal) continue;
             const style = getComputedStyle(asks);
             if (style.visibility === "hidden" || Number(style.opacity) <= 0)
                 continue;
             const box = asks.getBoundingClientRect();
             const under = cards.find(({ card, box: c }) => {
-                if (card.dataset.zone !== "battlefield") return false;
+                if (!proposal && card.dataset.zone !== "battlefield")
+                    return false;
                 const w =
                     Math.min(box.right, c.right) - Math.max(box.left, c.left);
                 const h =
@@ -656,7 +656,9 @@ export async function crowdedControls(page) {
             })?.card;
             if (under) {
                 faults.push(
-                    `what the prompt asks ("${asks.textContent?.trim().slice(0, 30)}") lies over ${under.dataset.card ?? "a permanent"}`,
+                    proposal
+                        ? `the proposal panel lies over ${under.dataset.card ?? "a card"}`
+                        : `what the prompt asks ("${asks.textContent?.trim().slice(0, 30)}") lies over ${under.dataset.card ?? "a permanent"}`,
                 );
             }
         }

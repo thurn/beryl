@@ -10,7 +10,6 @@ use super::{
 };
 use crate::lobby;
 use crate::prompt::OpeningDecision;
-use crate::script::ProposalMarks;
 use beryl_table::{Action, Chance, Entry, Refusal, Seat};
 
 const HOST: Seat = Seat(0);
@@ -51,16 +50,11 @@ impl PublishedTable {
             // guest die side by side. Each tied round has its own notice.
             let (winner, actions) = roll_for_first(self.chance.clone())?;
             let roll = Action::Batch { actions };
-            self.apply(
-                seat,
-                Request::Host(&roll),
-                |_| ProposalMarks::default(),
-                save,
-            )?;
+            self.apply(seat, Request::Host(&roll), |_| None, save)?;
             for publication in &mut self.seats {
                 // Start leaves the lobby route, so the new stage needs a
                 // snapshot that can still play the roll announcements.
-                let snapshot = crate::script::snapshot(&publication.view);
+                let snapshot = crate::script::snapshot(&publication.view, publication.marks());
                 if let Some(script) = &mut publication.view.script {
                     script.reset = snapshot.reset;
                     // Let each result finish before the next round or choice.

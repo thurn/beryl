@@ -1,3 +1,4 @@
+import { CardLabels } from "../table/Labels";
 import type { MatchPanel } from "../table/lobby/MatchDialog";
 import { TablePromptView } from "../table/TablePromptView";
 import { DropTargets } from "../table/DropTargets";
@@ -120,6 +121,7 @@ export function StageBoard({
   useLayoutEffect(() => {
     if (blockers?.length) setLogOpen(true);
   }, [blockers]);
+  const reserveLogColumn = logOpen || !!view.table?.proposals.length;
   const toggleLog = useCallback(() => setLogOpen((open) => !open), []);
   // The Revealed Cards the player dismissed.
   const [cleared, setCleared] = useState<ReadonlySet<ObjectView>>();
@@ -129,8 +131,9 @@ export function StageBoard({
   // width (the layout reads the stage's as it places, game/layout.ts STAGE) and whenever what
   // stands around it changes.
   useLayoutEffect(
-    () => stage.relayout(desktopWith({ hold, logOpen, cleared })),
-    [stage, width, hold, logOpen, cleared],
+    () =>
+      stage.relayout(desktopWith({ hold, logOpen: reserveLogColumn, cleared })),
+    [stage, width, hold, reserveLogColumn, cleared],
   );
   // Once the opening closes, the hand it showed drops into place.
   useKeptHand(stage, layer, hold === "away");
@@ -264,7 +267,17 @@ export function StageBoard({
         />
         <div className="card-layer" ref={layer}>
           {client && surface && (
-            <Selection client={client} stage={stage} surface={surface} />
+            <>
+              <Selection client={client} stage={stage} surface={surface} />
+              {!!view.table?.labels.length && (
+                <CardLabels
+                  labels={view.table.labels}
+                  client={client}
+                  stage={stage}
+                  surface={surface}
+                />
+              )}
+            </>
           )}
         </div>
         {surface && (

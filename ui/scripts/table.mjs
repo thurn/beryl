@@ -222,14 +222,14 @@ export async function clickTable(page, target, { tap, ...options } = {}) {
     return result;
 }
 
-export async function clickAnswer(page, target, kind) {
+export async function clickAnswer(page, target, kind, { tap = false } = {}) {
     const [response] = await Promise.all([
         page.waitForResponse(
             (result) =>
                 new URL(result.url()).pathname === "/invoke/table_answer" &&
                 result.request().postDataJSON()?.request.answer.kind === kind,
         ),
-        target.click(),
+        tap ? target.tap() : target.click(),
     ]);
     // The host has committed the answer before the guest's streamed view
     // reaches the browser. Wait for that host log position on either page.

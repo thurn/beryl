@@ -124,8 +124,8 @@ fn last_reset(members: &[(Vec<AnimationEvent>, Table)]) -> Option<ResetReason> {
         })
 }
 
-pub(super) fn snapshot(view: &PlayerView) -> Script {
-    reset(&Stage::of(view), &spans::of_view(view, &[]), None, None)
+pub(super) fn snapshot(view: &PlayerView, marks: &[ObjectId]) -> Script {
+    reset(&Stage::of(view), &spans::of_view(view, marks), None, None)
 }
 
 fn reset(end: &Stage, spans: &[Open], notice: Option<Notice>, cause: Option<Subject>) -> Script {

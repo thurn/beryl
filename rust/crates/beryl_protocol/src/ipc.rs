@@ -54,7 +54,7 @@ pub const STAGE_TIMINGS: &str = "stage_timings";
 pub const TABLE_SOLO: &str = "table_solo";
 /// Applies one manual action using references from the published view.
 pub const TABLE_ACT: &str = "table_act";
-/// Answers the authenticated seat's current host-held prompt.
+/// Answers the authenticated seat's current host-held prompt or assist.
 pub const TABLE_ANSWER: &str = "table_answer";
 /// Returns the manual table's latest update, if any.
 pub const TABLE_CURRENT: &str = "table_current";

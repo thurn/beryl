@@ -154,6 +154,7 @@ fn manual_view_with_ordered_zones() -> PlayerView {
     before.table = Some(TableView {
         log: vec![],
         proposals: vec![],
+        proposal_marks: None,
         labels: vec![],
         assists: AssistsView::default(),
         phase: TablePhase::FirstMain,

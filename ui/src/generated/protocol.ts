@@ -1004,7 +1004,7 @@ lastDraw?: number,
 /**
  * The viewer's deck tokens, in deck list order, for the ten numbered shortcuts.
  */
-deckTokens?: Array<CardTokenLink>, prompt?: TablePrompt, choosingFirst?: boolean, arrows?: Array<TableArrow>, link?: LinkState, peerName?: string, };
+deckTokens?: Array<CardTokenLink>, prompt?: TablePrompt, choosingFirst?: boolean, arrows?: Array<TableArrow>, link?: LinkState, peerName?: string, proposalMarks?: Array<ObjectId>, };
 
 export type TableArrow = { arrow: Arrow, from: Subject, to: Subject, own: boolean, };
 
@@ -1024,9 +1024,9 @@ export type LogLine = { n: number,
  */
 by: string, text: string, struck: boolean, undoable: boolean, blockedBy: Array<number>, };
 
-export type ProposalView = { id: number, title: string, lines: Array<ProposalLine>, };
+export type ProposalView = { id: number, revision: number, title: string, lines: Array<ProposalLine>, };
 
-export type ProposalLine = { text: string, whose: Side, on: boolean, };
+export type ProposalLine = { id: number, text: string, whose: Side, on: boolean, };
 
 export type LabelView = { id: number, on: TargetRef, text: string, };
 
@@ -1040,7 +1040,7 @@ export type TablePrompt = { "kind": "sort", title: string, cards: Array<ObjectId
 
 export type PileName = "top" | "bottom" | "graveyard";
 
-export type Answer = { "kind": "place", card: ObjectId, pile: PileName, index: number, } | { "kind": "unplace", card: ObjectId, } | { "kind": "pick", option: number, } | { "kind": "keep" } | { "kind": "mulligan" } | { "kind": "bottom", card: ObjectId, } | { "kind": "done" } | { "kind": "cancel" };
+export type Answer = { "kind": "place", card: ObjectId, pile: PileName, index: number, } | { "kind": "unplace", card: ObjectId, } | { "kind": "pick", option: number, } | { "kind": "keep" } | { "kind": "mulligan" } | { "kind": "bottom", card: ObjectId, } | { "kind": "done" } | { "kind": "cancel" } | { "kind": "proposalLine", id: number, line: number, on: boolean, } | { "kind": "applyProposal", id: number, revision: number, } | { "kind": "applyLabel", id: number, };
 
 export type TableActionOf<Id> = { "move": { to: TableDestination, position?: TablePosition, face?: TableFace, tapped?: boolean, objects: Array<Id>, in: TableZone, } } | { "reorder": { position: TablePosition, objects: Array<Id>, in: TableZone, } } | { "pin": { row: TableRow, objects: Array<Id>, in: TableZone, } } | { "give": { to: TableSeat, objects: Array<Id>, in: TableZone, } } | { "tap": { tapped: boolean, objects: Array<Id>, in: TableZone, } } | { "face": { face: TableFace, objects: Array<Id>, in: TableZone, } } | { "flag": { doesnt_untap: boolean, objects: Array<Id>, in: TableZone, } } | { "peek": { objects: Array<Id>, in: TableZone, } } | { "counter": { name: string, objects: Array<Id>, in: TableZone, } & ({ "add": number } | { "set": number }) } | { "stats": { stats: [number, number] | null, objects: Array<Id>, in: TableZone, } } | { "damage": { damage: number, objects: Array<Id>, in: TableZone, } } | { "note": { note: string | null, objects: Array<Id>, in: TableZone, } } | { "attach": { host: TableSeenObject<Id>, objects: Array<Id>, in: TableZone, } } | { "unattach": { objects: Array<Id>, in: TableZone, } } | { "clone": { objects: Array<Id>, in: TableZone, } } | { "token": { card: TableCard, count: number, attached_to: TableSeenObject<Id> | null, note: string | null, face_down?: boolean, } } | { "marker": { text: string, objects: Array<Id>, in: TableZone, } } | { "remove": { objects: Array<Id>, in: TableZone, } } | { "stack_until": { seat: TableSeat, query: string, hits: number, } } | { "draw": { seat: TableSeat, count: number, } } | { "mulligan": { seat: TableSeat, count: number, } } | { "shuffle": { seat: TableSeat, portion: TablePortion, } } | { "look": { seat: TableSeat, portion: TablePortion, } } | { "close_look": Record<symbol, never> } | { "reveal": { in: TableZone, 
 /**

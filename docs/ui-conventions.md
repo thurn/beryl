@@ -265,6 +265,12 @@ restore the old behavior.
   starts the same aim and a click chooses the target. Escape cancels the aim.
   Right-click a drawn arrow to remove it, or use Cmd+R to remove all the arrows
   you drew.
+- **Proposal panel.** Turn upkeep and combat show the suggested changes with one
+  checkbox per line and a mark on each affected card. Apply commits the checked
+  lines as one undoable batch. The panel shares the log column on desktop and
+  has its own strip on the phone.
+- **Assist label.** State nudges put clickable tags on the affected cards and
+  life total. Click a tag to apply its suggested action.
 - **Selection rectangle.** On a manual table, dragging from empty felt selects
   the cards the rectangle touches. Selected cards wear the gold selection mark.
   A summary beside the selected permanents gives their count, total power and

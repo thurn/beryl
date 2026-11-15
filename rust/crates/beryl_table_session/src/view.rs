@@ -72,6 +72,7 @@ pub(super) fn project(
     view.table = Some(TableView {
         log: Vec::new(),
         proposals: Vec::new(),
+        proposal_marks: None,
         labels: Vec::new(),
         assists: assists(&projected, seat),
         phase,

@@ -1,3 +1,5 @@
+import { LifeLabels } from "../table/Labels";
+import { ProposalPanel } from "../table/ProposalPanel";
 // The desktop's chrome around the stage's cards: everything on the game screen that
 // is neither motion nor a prompt, drawn by React. What shows the table (life, mana, the piles,
 // the turn's step) is
@@ -189,6 +191,13 @@ export function Hud({
             )}
             {change !== undefined && <LifeChange by={change} />}
             {orb?.(side)}
+            {client && !!view.table?.labels.length && (
+              <LifeLabels
+                labels={view.table.labels}
+                client={client}
+                side={side}
+              />
+            )}
           </div>
         );
       })}
@@ -256,6 +265,9 @@ export function Hud({
           />
         )}
       </NoticeSlot>
+      {client && !!view.table?.proposals.length && (
+        <ProposalPanel proposals={view.table.proposals} client={client} />
+      )}
       {view.table && tableLog ? (
         <TableLog
           rows={view.table.log}

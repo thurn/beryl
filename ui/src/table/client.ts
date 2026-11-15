@@ -2,6 +2,8 @@ import type { Box } from "../game/placement";
 import type { Step } from "../generated/protocol";
 import {
   tableAct,
+  tableAnswer,
+  type Answer,
   type ObjectView,
   type PlayerView,
   type Side,
@@ -22,6 +24,11 @@ import { shakeRefusal } from "../stage/Refusal";
 import type { TableArrows } from "./arrows";
 import type { TableDrag } from "./drag";
 import type { TableViewers } from "./viewers";
+
+export type AssistAnswer = Extract<
+  Answer,
+  { kind: "proposalLine" | "applyProposal" | "applyLabel" }
+>;
 
 type ObjectKind =
   "permanent" | "their_permanent" | "hand_card" | "stack_entry" | "viewer_card";
@@ -385,13 +392,27 @@ export class TableClient {
     cancelSweep: () => this.#cancelSweep?.(),
   };
 
-  async send(
+  send(
     action: TableAction,
+    source?: Name | HTMLElement,
+  ): Promise<TableActReply> {
+    return this.#send(() => tableAct(action), source);
+  }
+
+  answerAssist(
+    answer: AssistAnswer,
+    source: HTMLElement,
+  ): Promise<TableActReply> {
+    return this.#send(() => tableAnswer(answer), source);
+  }
+
+  async #send(
+    request: () => Promise<TableActReply>,
     source?: Name | HTMLElement,
   ): Promise<TableActReply> {
     if (this.frozen) return { refused: "stale" };
     const view = this.view;
-    const reply = await tableAct(action);
+    const reply = await request();
     if (
       !this.frozen &&
       "refused" in reply &&

@@ -128,21 +128,24 @@ export function Middle({ band, view }: { band: Band; view: PlayerView }) {
 }
 
 /** The board's size, measured: the viewport inside its top safe area, and the home bar's. */
-export function useViewport() {
+export function useViewport(bottomPanel = 0) {
   const ref = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState<Viewport>();
   const [frameStyle, setFrameStyle] = useState<CSSProperties>();
+  const initialInset = useRef<number>(undefined);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const insetBottom = parseFloat(getComputedStyle(el).paddingBottom) || 0;
+    const insetBottom = (initialInset.current ??=
+      parseFloat(getComputedStyle(el).paddingBottom) || 0);
+    const reservedBottom = bottomPanel ? bottomPanel + insetBottom : 0;
     const measure = () => {
       // The board begins below the top safe area. On a narrow phone its CSS box is the
       // 375px layout scaled to the screen, including enough height for the bottom safe area.
       const insetTop = parseFloat(getComputedStyle(el).top) || 0;
       const frame = phoneFrame(
         window.innerWidth,
-        window.innerHeight - insetTop,
+        window.innerHeight - insetTop - reservedBottom,
       );
       setFrameStyle(
         frame.scale < 1
@@ -156,7 +159,9 @@ export function useViewport() {
               transformOrigin: "top left",
               paddingBottom: insetBottom / frame.scale,
             }
-          : undefined,
+          : reservedBottom
+            ? { bottom: reservedBottom }
+            : undefined,
       );
       setViewport({
         width: frame.width,
@@ -172,7 +177,7 @@ export function useViewport() {
       observer.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, []);
+  }, [bottomPanel]);
   return { ref, viewport, frameStyle };
 }
 

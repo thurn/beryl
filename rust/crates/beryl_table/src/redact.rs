@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 use crate::action::Selection;
 use crate::change::{ObjectEdit, TableEdit};
-use crate::state::{AbilityMarker, Card, LineVisibility, Object, ObjectId};
+use crate::state::{AbilityMarker, Card, LineVisibility, Object, ObjectId, Proposal};
 use crate::{Action, Change, Entry, Seat, Table};
 
 mod animation;
@@ -31,19 +31,31 @@ pub fn seen_by(table: &Table, seat: Seat) -> Table {
         redact_deck(&mut state.sideboard, owner, seat);
     }
     for proposal in &mut view.proposals {
-        for line in &mut proposal.lines {
-            match line.visibility {
-                LineVisibility::Public => {}
-                LineVisibility::KnownObject(id) if knows(table, id, seat) => {}
-                LineVisibility::KnownObject(_) => line.text.clear(),
-                LineVisibility::Unstructured => names.redact_text(&mut line.text),
-            }
-            for action in &mut line.actions {
-                redact_action(action, table, table, seat, &names, &BTreeSet::new());
-            }
-        }
+        redact_proposal(proposal, table, seat, &names);
     }
     view
+}
+
+/// Projects one host-generated proposal without cloning the rest of the table.
+#[must_use]
+pub fn proposal_seen_by(proposal: &Proposal, table: &Table, seat: Seat) -> Proposal {
+    let mut proposal = proposal.clone();
+    redact_proposal(&mut proposal, table, seat, &HiddenNames::new(table, seat));
+    proposal
+}
+
+fn redact_proposal(proposal: &mut Proposal, table: &Table, seat: Seat, names: &HiddenNames) {
+    for line in &mut proposal.lines {
+        match line.visibility {
+            LineVisibility::Public => {}
+            LineVisibility::KnownObject(id) if knows(table, id, seat) => {}
+            LineVisibility::KnownObject(_) => line.text.clear(),
+            LineVisibility::Unstructured => names.redact_text(&mut line.text),
+        }
+        for action in &mut line.actions {
+            redact_action(action, table, table, seat, names, &BTreeSet::new());
+        }
+    }
 }
 
 /// Project the entry for display using the host table immediately before it.

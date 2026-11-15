@@ -1,5 +1,6 @@
 //! Projects manual Magic tables onto the game session's shared UI protocol.
 
+mod assists;
 pub mod connections;
 pub mod decks;
 mod guest;

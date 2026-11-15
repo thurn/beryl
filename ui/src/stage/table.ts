@@ -109,17 +109,31 @@ export interface Script {
 }
 
 /** A reset applies its spans immediately and plays its announcements on the clock. */
-export function resetSteps(script?: Script) {
+export function resetSteps(script: Script | undefined, view: PlayerView) {
+  const proposalMarks = view.table?.proposalMarks;
   const immediate: Step[] = [];
   const announcements: Step[][] = [];
   for (const beat of script?.beats ?? []) {
     const banners: Step[] = [];
     for (const step of beat) {
-      if (script?.reset && step.act.verb === "announce") banners.push(step);
+      const { act } = step;
+      // A manual snapshot carries the final marks even if its last script only changed a line.
+      if (proposalMarks && act.verb === "mark" && act.mark === "suggested")
+        continue;
+      if (script?.reset && act.verb === "announce") banners.push(step);
       else immediate.push(step);
     }
     if (banners.length) announcements.push(banners);
   }
+  for (const slot of proposalMarks ?? [])
+    immediate.push({
+      act: {
+        verb: "mark",
+        span: "begin",
+        mark: "suggested",
+        on: { kind: "object", slot },
+      },
+    });
   return { immediate, announcements };
 }
 
