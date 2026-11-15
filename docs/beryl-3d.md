@@ -677,7 +677,7 @@ platform.
 
 ```rust
 pub enum Input {
-    Update(GameUpdate),                      // from the session
+    Update(Box<GameUpdate>),                 // from the session
     Surface { size: Size, scale: f32, safe_area: Insets },
     Pointer(Pointer),                        // mouse, touch or pen
     Key(Key),
