@@ -4,7 +4,9 @@
 mod common;
 
 use beryl_protocol::GameUpdate;
-use beryl_protocol::script::Verb;
+use beryl_protocol::protocol::{Side, StackItem, Why, ZoneName};
+use beryl_protocol::script::{Act, Fact, Step, Subject, Verb};
+use beryl_scene::testing::{ScriptBuilder, timing};
 use beryl_scene::frame::Wake;
 use beryl_scene::play::Show;
 use beryl_scene::pose::Curve;
@@ -274,4 +276,78 @@ fn the_hand_regroups_in_the_time_its_room_gives_whatever_the_draw_takes() {
         rests(cards.top),
         "the drawn card is still in flight"
     );
+}
+
+#[test]
+fn a_step_the_table_cannot_take_leaves_the_steps_after_it_placed() {
+    // The first beat places the Plains' groups. The second names an ability that is not on
+    // the stack, so the table cannot take it and the third step places every group again.
+    // That step used to panic, clearing the groups' record of their slots before reading it.
+    let (start, cards) = before();
+    let (mut after, mut timings) = common::three_beats(&start, cards);
+    let script = after.view.script.as_mut().expect("a script");
+    script.beats.insert(
+        1,
+        vec![Step {
+            act: Act::Vanish {
+                subject: Subject::Ability { id: 999 },
+                from: ZoneName::Stack,
+                why: Why::Resolve,
+                object: None,
+                at: None,
+            },
+            cause: None,
+        }],
+    );
+    timings.insert(1, timing(100.0));
+    let mut show = show();
+    show.push(Box::new(start), Vec::new());
+    show.push(Box::new(after.clone()), timings);
+    let mut scratch = empty_frame();
+    for ms in (0..=1_500).step_by(50) {
+        frame(&mut show, &mut scratch, ms * MS);
+    }
+    at_rest(&show, &after, 1_500 * MS);
+}
+
+#[test]
+fn a_step_about_an_ability_the_view_did_not_number_does_not_stop_the_show() {
+    // A view's stack gives an engine ability no number: the numbers come from the scripts
+    // before it. A step that changes the ability numbered 7 used to panic comparing it with
+    // an ability that had none, instead of placing the table whole.
+    let (mut start, cards) = before();
+    let ability = StackItem::Ability {
+        source: Some(cards.angel),
+        ability: 0,
+        granted: false,
+        name: "Serra Angel".to_owned(),
+        triggered: true,
+        taps_to_pay: None,
+        nth: 0,
+        text: None,
+        controller: Side::You,
+        manual: None,
+        targets: Vec::new(),
+        x: 0,
+    };
+    start.view.stack.push(ability.clone());
+    let mut after = start.clone();
+    after.view.script = Some(
+        ScriptBuilder::default()
+            .beat([Act::Set {
+                fact: Fact::Item {
+                    subject: Subject::Ability { id: 7 },
+                    item: ability,
+                },
+            }])
+            .build(),
+    );
+    let mut show = show();
+    show.push(Box::new(start), Vec::new());
+    show.push(Box::new(after.clone()), vec![timing(100.0)]);
+    let mut scratch = empty_frame();
+    for ms in (0..=500).step_by(50) {
+        frame(&mut show, &mut scratch, ms * MS);
+    }
+    at_rest(&show, &after, 500 * MS);
 }

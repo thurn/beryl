@@ -9,7 +9,7 @@
 //! share of it, or for the cards that stay in a hand for a set time from when the act is
 //! applied; or over the time the step leaves for what it opened or closed.
 
-use beryl_protocol::protocol::{ObjectId, PlayerView, ZoneName};
+use beryl_protocol::protocol::{ObjectId, PlayerView, StackItem, ZoneName};
 use beryl_protocol::script::{
     Act, Room, Script, Step, StepTiming, Subject, Table as Played, Verb, mover_of,
 };
@@ -241,6 +241,20 @@ struct Motion<'a> {
     records: bool,
 }
 
+/// `played` with a number for each ability on its stack that has none, from its place, as the
+/// session's script builder numbers an ability nothing named. A table made from a view alone
+/// knows no ability's number, since the numbers come from the scripts before it, so a step
+/// that names an ability by its number finds none and the step is placed whole. Unnumbered,
+/// the ability could not be compared with a step's subject at all.
+fn numbered(mut played: Played) -> Played {
+    for (at, entry) in played.stack.iter_mut().enumerate() {
+        if matches!(entry.item, StackItem::Ability { .. }) && entry.id.is_none() {
+            entry.id = Some(u32::MAX - u32::try_from(at).unwrap_or(0));
+        }
+    }
+    played
+}
+
 impl<'a> Motion<'a> {
     fn new(before: &'a PlayerView, table: &'a Table, records: bool, shown: bool) -> Self {
         let rests = if shown {
@@ -261,7 +275,7 @@ impl<'a> Motion<'a> {
         // Room for a track for every object, so that growing `tracks` one slot at a time never
         // copies the tracks it holds.
         let tracks = Vec::with_capacity(rests.rests.len());
-        let played = Played::of(before);
+        let played = numbered(Played::of(before));
         Self {
             table,
             names: NameIds::of(&before.objects),
