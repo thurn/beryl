@@ -479,16 +479,20 @@ it records.
   one. The transcript's `usage.cache_creation` says how many cache write tokens
   went to each, and each part is priced at its own rate. Both are still the one
   class "cache write".
+
 - A model may also have `above`, its prices for a prompt over a number of
   tokens, as Haiku 5.5 has.
+
 - The earliest table also prices requests older than it, since the store holds
   requests from before the file was written.
 
 - A request by a model that is not in the table has an unknown price. Its tokens
   are still counted, its dollars are null, and `coverage` lists the model. A sum
   that includes such requests is marked as a lower bound.
+
 - A price change adds a new dated table and keeps the old one. A request is
   priced by the table in force on its date, so past figures do not move.
+
 - The transcript repeats one assistant message on several lines, one per content
   block. Ingest counts each message id once.
 

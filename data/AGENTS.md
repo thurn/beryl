@@ -85,16 +85,15 @@ runs only the `efficiency` check lane and `repo`.
   anchor them with `^`. When `just efficiency coverage` shows that commands of
   no kind are 5% or more of the week's tool time, add an entry for the longest
   ones it lists.
-- `efficiency-prices.json`: dated tables of each model's price in US dollars
-  per million tokens for uncached input, 5-minute cache writes
-  (`cache_write`), 1-hour cache writes (`cache_write_1h`), cache reads and
-  output, each with the date it was copied (`as_of`) and the address of the
-  provider's price page (`source`). Copy prices from that page, never from
-  memory. When a price changes, add a new table and keep the old one: a request
-  is priced by the latest table dated on or before its day (the earliest table
-  also prices older requests). `above` holds a model's prices for a prompt over
-  `tokens` tokens. A model missing here has no dollars, and
-  `just efficiency coverage` lists it.
+- `efficiency-prices.json`: dated tables of each model's price in US dollars per
+  million tokens for uncached input, 5-minute cache writes (`cache_write`),
+  1-hour cache writes (`cache_write_1h`), cache reads and output, each with the
+  date it was copied (`as_of`) and the address of the provider's price page
+  (`source`). Copy prices from that page, never from memory. When a price
+  changes, add a new table and keep the old one: a request is priced by the
+  latest table dated on or before its day (the earliest table also prices older
+  requests). `above` holds a model's prices for a prompt over `tokens` tokens. A
+  model missing here has no dollars, and `just efficiency coverage` lists it.
 
 ## Card images
 
