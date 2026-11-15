@@ -82,6 +82,31 @@ def test_a_command_after_the_opponents_spell_passes_priority_first() -> None:
     assert lines.count(passing) == 1
 
 
+def test_a_decision_answered_for_a_controlled_player_is_scripted_as_theirs() -> None:
+    # While player 1 (playerA) controls player 0 (CR 724.5), the scenario names player 1 as
+    # the one who casts Mana Drain, but XMage's test players act for themselves, so playerB
+    # casts it and chooses its target.
+    name = (
+        "Mana Drain: the countered spell's mana value at the caster's next main phase"
+    )
+    dump = json.loads(FIXTURE.read_text())
+    entry = next(e for e in dump if e["name"] == name)
+    i = next(i for i, a in enumerate(entry["actions"]) if a.get("card") == "Mana Drain")
+    entry["actions"][i]["player"] = 1
+    entry["trace"][i] |= {"decider": 1, "decides_for": 0}
+    for forced in entry["trace"][i + 1]["forced"]:
+        forced |= {"player": 1, "decides_for": 0}
+    faces = xmage_java.Faces.load(card_store.STORE)
+    (export,) = xmage_export.export_all([entry], faces, XMAGE_CARDS)
+    assert export.unsupported is None, export.unsupported
+    drain = (
+        'castSpell(1, PhaseStep.PRECOMBAT_MAIN, playerB, "Mana Drain", '
+        'TestPlayer.NO_TARGET, "Timetwister");'
+    )
+    assert drain in export.body
+    assert 'addTarget(playerB, "Timetwister");' in export.body
+
+
 def test_payments_replay_the_lands_beryl_tapped() -> None:
     # Get Lost costs {1}{W}: Beryl taps two of player 0's three Plains, which XMage taps by
     # name, as another card may have an ability of the same text.

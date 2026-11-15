@@ -255,6 +255,7 @@ impl Runner {
                             turn: turn.number(),
                             step: turn.step(),
                             purpose: d.prompt.purpose,
+                            decides_for: (d.player != d.decider).then_some(d.player),
                             answer: Action::answer(d.decider, d.kind, pick),
                         });
                     }
@@ -440,9 +441,14 @@ impl Runner {
                 controller: e.controller(),
             })
             .collect();
-        let (decider, kind, purpose) = match *step {
-            Step::Decide(d) => (Some(d.decider), Some(d.kind), Some(d.prompt.purpose)),
-            Step::Over(_) => (None, None, None),
+        let (decider, decides_for, kind, purpose) = match *step {
+            Step::Decide(d) => (
+                Some(d.decider),
+                (d.player != d.decider).then_some(d.player),
+                Some(d.kind),
+                Some(d.prompt.purpose),
+            ),
+            Step::Over(_) => (None, None, None, None),
         };
         // A target asked while a spell or ability resolves is a copy's new target, whose
         // first option is the target it has.
@@ -485,7 +491,7 @@ impl Runner {
             step: turn.step(),
             active: turn.active(),
             decider,
-            controller: turn.controller(),
+            decides_for,
             kind,
             purpose,
             stack,

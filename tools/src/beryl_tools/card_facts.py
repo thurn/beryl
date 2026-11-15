@@ -585,12 +585,16 @@ class Unsupported(Exception):
     """A scenario, or a part of one, outside what the exporter can say in XMage's terms."""
 
 
-# A turn in which one player controls another (CR 724.1). Both harnesses look a player's
-# actions up among that player's own cards and permanents, so neither can yet play the
-# controller's actions with the controlled player's resources.
-CONTROLLED_TURN: str = (
-    "a turn one player controls for another (CR 724), which the harness does not play"
-)
+def as_their_own(action: Json, decides_for: object) -> Json:
+    """`action` as the player it was decided for takes it: a scenario names the player who
+    answers, who controls that player this turn (CR 724.5) when the dump's `decides_for` says
+    so. Neither oracle's harness scripts a controlling player: XMage's test players act for
+    themselves while controlled, and Forge gives the controlled player a controller of its
+    own, so both play the decision as the controlled player's, with that player's cards.
+    """
+    if decides_for is None or "player" not in action:
+        return action
+    return {**action, "player": decides_for}
 
 
 def cost_text(ability: Json, cost: Json, parts: list[Json]) -> str | None:

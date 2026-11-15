@@ -8,7 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import cast
 
-from .card_facts import Json, Unsupported
+from .card_facts import Json, Unsupported, as_their_own
 from .xmage_java import java_string
 
 # Questions with one answer, which Beryl answers silently, that XMage asks anyway: by kind,
@@ -39,8 +39,6 @@ class Position:
     face_down: list[str]
     # How many creatures each seat controls.
     creatures: list[int]
-    # The seat controlling the active player this turn (CR 724.1), if another seat does.
-    controller: int | None = None
     # At a copy of a spell's new target, the target it has now, as a pick.
     kept: Json | None = None
     # The mana permanents and spells made, in order: `source`, `color` and `restricted`.
@@ -115,19 +113,22 @@ class Position:
 
     @staticmethod
     def of(t: Json) -> Position:
-        """The position one entry of the dump's trace records."""
+        """The position one entry of the dump's trace records. A decision one player answers
+        for another who they control is the other's (`as_their_own`)."""
         return Position(
             turn=cast(int, t["turn"]),
             step=cast(str, t["step"]),
-            decider=cast("int | None", t["decider"]),
-            controller=cast("int | None", t.get("controller")),
+            decider=cast("int | None", t.get("decides_for", t["decider"])),
             kind=cast("str | None", t["kind"]),
             purpose=cast("str | None", t.get("purpose")),
             stack=cast(list[Json], t["stack"]),
             flips=cast(list[Json], t["flips"]),
             taps=cast(list[str], t["taps"]),
             mana=cast(list[Json], t.get("mana", [])),
-            forced=cast(list[Json], t["forced"]),
+            forced=[
+                as_their_own(f, f.get("decides_for"))
+                for f in cast(list[Json], t["forced"])
+            ],
             flashback=cast(list[str], t.get("flashback", [])),
             face_down=cast(list[str], t.get("face_down", [])),
             creatures=cast(list[int], t.get("creatures", [1, 1])),

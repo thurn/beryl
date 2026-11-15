@@ -67,13 +67,18 @@ pub struct Position {
     /// Who answers the open decision, and what; both `None` once the game is over.
     #[serde(serialize_with = "json::optional_seat")]
     pub decider: Option<Seat>,
-    /// The player controlling the active player this turn, if another player does
-    /// (CR 724.1): the exporters do not play such a turn yet.
+    /// The player the open decision belongs to, when `decider` answers it for them because
+    /// `decider` controls them this turn ([CR 724.5]): "While controlling another player, a
+    /// player makes all choices and decisions the controlled player is allowed to make or is
+    /// told to make by the rules or by any objects." A scenario's actions name the player who
+    /// answers, but an oracle scripts each choice as the controlled player's own.
+    ///
+    /// [CR 724.5]: https://yawgatog.com/resources/magic-rules/#R7245
     #[serde(
         serialize_with = "json::optional_seat",
         skip_serializing_if = "Option::is_none"
     )]
-    pub controller: Option<Seat>,
+    pub decides_for: Option<Seat>,
     #[serde(serialize_with = "json::optional_variant")]
     pub kind: Option<DecisionKind>,
     /// What the open decision's prompt is for, by its name ([`Purpose::name`]): a kind says
@@ -142,6 +147,13 @@ pub struct Forced {
     pub step: TurnStep,
     #[serde(serialize_with = "json::purpose")]
     pub purpose: Purpose,
+    /// The player the question belongs to, when the answer's player answers it for them
+    /// ([`Position::decides_for`]).
+    #[serde(
+        serialize_with = "json::optional_seat",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub decides_for: Option<Seat>,
     #[serde(flatten, with = "json::ActionDef")]
     pub answer: Action,
 }

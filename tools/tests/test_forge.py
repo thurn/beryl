@@ -100,6 +100,20 @@ def test_first_priority_action_records_whether_setup_stack_should_be_empty(
     assert scenarios[0].get("settle_setup_stack", False) == (not stack)
 
 
+def test_a_decision_answered_for_a_controlled_player_is_scripted_as_theirs() -> None:
+    # While player 1 controls player 0 (CR 724.5), the scenario names player 1 as the one who
+    # casts, but Forge gives player 0 a controller of its own, which casts from player 0's hand.
+    entry = next(e for e in dumped() if e["card"] == "Thieving Skydiver")
+    actions = cast(list[Json], entry["actions"])
+    actions[0] = {**actions[0], "player": 1}
+    entry["trace"] = [
+        {"kind": "Priority", "stack": [], "flips": [], "forced": [], "decides_for": 0}
+    ]
+    scenarios, skipped = forge.export([entry], card_store.STORE)
+    assert skipped == []
+    assert steps(scenarios[0])[0]["player"] == 0
+
+
 def test_scenarios_outside_the_vocabulary_are_unsupported() -> None:
     entry = dumped()[0]
     actions = list(cast(list[Json], entry["actions"]))

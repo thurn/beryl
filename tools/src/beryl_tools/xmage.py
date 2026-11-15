@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from .card_facts import CONTROLLED_TURN, Cards, Json, Unsupported, payment_position
+from .card_facts import Cards, Json, Unsupported, as_their_own, payment_position
 from .xmage_payment import Payments
 from .xmage_trace import (
     FORCED_ASKED,
@@ -164,11 +164,13 @@ class Exporter:
 
     def run(self) -> None:
         self.arrange()
-        actions = self.actions
-        trace = [
-            Position.of(cast(Json, t)) for t in cast(list[object], self.entry["trace"])
-        ]
+        raw = cast(list[Json], self.entry["trace"])
+        trace = [Position.of(t) for t in raw]
         self.trace = trace
+        self.actions = actions = [
+            as_their_own(a, raw[i].get("decides_for")) if i < len(raw) else a
+            for i, a in enumerate(self.actions)
+        ]
         for i, (action, p) in enumerate(zip(actions, trace)):
             self.index = i
             self.unasked(p)
@@ -294,8 +296,6 @@ class Exporter:
             )
 
     def act(self, action: Json, p: Position) -> None:
-        if p.controller is not None:
-            raise Unsupported(CONTROLLED_TURN)
         kind = cast(str, action["action"])
         if kind == "Assert":
             self.check(cast(Json, action["assertion"]), p)

@@ -22,7 +22,7 @@ from typing import cast
 
 from . import card_store, cards, paths
 from .card_facts import (
-    CONTROLLED_TURN,
+    as_their_own,
     Cards,
     Unsupported,
     SYMBOLS,
@@ -440,16 +440,24 @@ def export(
             steps: list[JsonObject] = []
             unchecked = 0
             paid_as_made = False
-            actions = cast(list[JsonObject], entry["actions"])
             trace = cast(list[JsonObject], entry.get("trace", []))
+            actions = [
+                as_their_own(a, trace[i].get("decides_for")) if i < len(trace) else a
+                for i, a in enumerate(cast(list[JsonObject], entry["actions"]))
+            ]
             for i, action in enumerate(actions):
-                if i < len(trace) and trace[i].get("controller") is not None:
-                    raise Unsupported(CONTROLLED_TURN)
                 # Include answers Beryl chose silently. Forge can offer more targets or
                 # choose a different X, and needs the final Done for each damage division.
                 if i < len(trace):
                     steps.extend(
-                        cast(JsonObject, step(forced, described, forced.get("purpose")))
+                        cast(
+                            JsonObject,
+                            step(
+                                as_their_own(forced, forced.get("decides_for")),
+                                described,
+                                forced.get("purpose"),
+                            ),
+                        )
                         for forced in cast(list[JsonObject], trace[i].get("forced", []))
                         if forced["kind"] in ("Target", "X", "DamageDivision")
                     )
