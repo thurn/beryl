@@ -1473,9 +1473,21 @@ Before a match's opening hand is shown:
    both sizes, compresses it and writes the result to the disk cache.
 4. The board-size layers are uploaded during the loading screen.
 
-Three crates do that work: `tiny-skia` (a CPU rasterizer for 2D shapes) and
-`swash` (a glyph rasterizer) draw Beryl's frame, and `ctt` (a wrapper over
-several texture encoders) compresses.
+Three crates do that work: `tiny-skia` 0.12.0 (a CPU rasterizer for 2D shapes)
+and `swash` 0.2.10 (a glyph rasterizer) draw Beryl's frame, and `ctt` 0.6.1 (a
+wrapper over several texture encoders) compresses.
+
+- **`ctt` is built with default features off** and three encoders on:
+  `encoder-astcenc` (ASTC, for iOS and Apple silicon), `encoder-etcpak` (ETC2,
+  for Android) and `encoder-bc7f` (BC7, for Windows). Its default features also
+  enable two encoders that link prebuilt ISPC kernels, and there are no prebuilt
+  kernels for iOS or Android, so the default build fails on both. The three
+  encoders above are C++ that the `cc` crate compiles with each platform's own
+  clang, so no ISPC compiler is needed anywhere.
+- **On Android the app bundles `libc++_shared.so`** from the NDK, because those
+  encoders link against it.
+- **Windows needs the MSVC build tools** (`cl.exe`, `lib.exe`) for the same C++
+  and for `zstd-sys`, so it cannot be cross-checked from the Mac.
 
 During play, two kinds of upload remain.
 
@@ -2432,14 +2444,22 @@ one-shot sounds tied to script steps and looping ambience.
   `ui/public/audio`, listed in `ui/src/audio/manifest.json`, with
   `ui/src/audio/steps.ts` saying which step plays which sound. Beryl 3D reads
   the same manifest and ports the rule in `steps.ts`.
-- **Playback** uses `rodio` over `cpal`, on the audio device's own thread.
+- **Playback** uses `rodio` 0.23.0 over `cpal`, on the audio device's own
+  thread, with rodio's default features off and `playback` and `mp4`
+  (Symphonia's MP4 container and AAC decoder) on. On Android, `rodio` is built
+  without `playback`, as described below.
 - **Sounds are decoded at startup** into memory, so playing one is a message to
   the audio thread and never a file read.
 - **A sound is triggered by the client core**, which emits a sound request when
   a step that has one begins. Tests read those requests like any other output,
   so the timing of a sound against its animation is checkable.
-- **Android before 8.0 is silent.** `cpal`'s Android backend needs API level 26.
-  The game is otherwise complete there.
+- **On Android the Kotlin host plays the sound.** `cpal`'s Android backend uses
+  AAudio, which first shipped in API level 26, and it links `libaaudio.so`
+  unconditionally. A library that links it fails to load at all on API 24 and
+  25, so the app would not start there; it would not merely be silent. So on
+  Android, `rodio` is built without `playback`: the client core mixes with
+  `rodio`'s mixer, and the Kotlin host pulls the mixed samples through a C
+  function into an `AudioTrack`, which every supported API level has.
 
 ## Bug reports
 
