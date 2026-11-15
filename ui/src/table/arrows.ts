@@ -170,6 +170,8 @@ export class TableArrows {
       this.#finishPick = (target) => {
         this.#finishPick = undefined;
         this.#acceptPick = undefined;
+        // A press started while picking cannot become a gesture after the picker closes.
+        this.client.cancelGesture();
         stop();
         close();
         this.#trace([]);

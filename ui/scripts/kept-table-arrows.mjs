@@ -227,9 +227,20 @@ await check(
         await pick();
         await page.mouse.move(at.x + 1, at.y);
         assert.equal(await trace(page).count(), 1);
+        await page.mouse.down({ button: "right" });
+        const sourceAt = center(await card(page, from).boundingBox());
+        await page.mouse.move(sourceAt.x, sourceAt.y);
         await page.keyboard.press("Escape");
         assert.equal(await page.evaluate(() => window.tableTarget), undefined);
         assert.equal(await trace(page).count(), 0);
+        await page.mouse.up({ button: "right" });
+        const actions = await page.evaluate(() =>
+            window.berylLive.log.filter(
+                (entry) =>
+                    entry.kind === "invoke" && entry.command === "table_act",
+            ),
+        );
+        assert.deepEqual(actions, []);
     },
     live,
 );
