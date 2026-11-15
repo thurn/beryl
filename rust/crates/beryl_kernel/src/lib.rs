@@ -245,19 +245,16 @@
 //! `u64`, 16 with padding. It is 20,184 since a [`query::Copiable`] holds three copy exceptions,
 //! 40 bytes more in all. It was 20,216 when phasing began (32 bytes that no change reported
 //! came between), and is 20,248 since the set of phased-out permanents ([`phasing`]), 32 bytes.
-//! The limit is 20,480. Each bead may change the size at its own push by at
-//! most its allotment, whatever landed before it, and reports the size as it reports the count:
+//! The limit is 20,480. Each bead may change the size at its own push by at most its allotment,
+//! whatever landed before it, and reports the size as it reports the count:
 //!
 //! | Bead | Allotment | Why |
 //! | --- | --- | --- |
-//! | by-w8gv.7.3 | +16 (landed: 0) | the rule sets, a byte each while the list has at most eight rules, less `sorceries_as_flash` |
 //! | by-w8gv.7.4 | -200 or lower (landed: -208) | the `permissions` queue (80) and two bytes of each of 64 stack entries go; permissions share the 64 effects |
 //! | by-w8gv.7.5 | +136 (landed: +136) | the locked-in sets |
 //! | by-w8gv.7.6 | +88 (landed: +48) | the Memos store less `entered_x` (50) |
-//! | by-w8gv.7.7 | 0 (landed: 0) | its memos are entries of by-w8gv.7.6's store |
 //! | by-w8gv.7.8 | +64 (landed: +64) | two sets of slots |
 //! | by-w8gv.7.9 | +104 (landed: +96) | the counters table |
-//! | by-w8gv.7.10 | 0 or lower (landed: 0) | deletes only |
 //! | by-bajq.1.1 | +16 (landed: +16) | the listener mask grows from 16 to 64 bits, beside a 64-bit mask of what static abilities replace |
 //! | by-bajq.1.4 | +8 (landed: +8) | three counts for each of two players, padded |
 //! | by-bajq.1.2 | 0 or lower (landed: -56) | last-known information leaves every trigger record for a table of 16 rows |
@@ -269,9 +266,8 @@
 //! | by-bajq.8.3 | +16 (landed: +16) | the count of mandatory resolutions in a row and the hash it compares, padded |
 //! | by-bajq.8.4 | +32 (landed: +32) | a set of the phased-out permanents' slots |
 //!
-//! The allotments of groups 4 to 8 sum to 352, so with all of them landed the size is at
-//! most 20,192 and any order holds the limit. Past them the room left is 288 bytes. The
-//! next room is in [`state::CombatRole`], five bytes in each of the 255 objects, and in
+//! With every allotment of groups 4 to 8 landed the size is 20,248, 232 bytes under the limit.
+//! The next room is in [`state::CombatRole`], five bytes in each of the 255 objects, and in
 //! moving a structure only a rare game fills to [`Large`] alone.
 //!
 //! ### Affected sides and payloads
