@@ -125,6 +125,10 @@ pub fn main(args: &[String]) -> Result<(), String> {
         out,
         positions,
     };
+    #[cfg(windows)]
+    if let Err(error) = disable_execution_speed_throttling() {
+        eprintln!("ladder: could not disable Windows execution speed throttling: {error}");
+    }
     let report = run(&m, |pairs, sprt| {
         let line = format!(
             "pairs {}: {} swept, {} split, {} lost",
@@ -141,6 +145,39 @@ pub fn main(args: &[String]) -> Result<(), String> {
         }
     })?;
     print!("{}", report.text());
+    Ok(())
+}
+
+/// Windows can leave idle-priority searches on the efficiency cores. Set the power policy on
+/// this process, since `just ladder` starts Cargo and Cargo launches the actual search binary.
+#[cfg(windows)]
+#[allow(unsafe_code)]
+fn disable_execution_speed_throttling() -> std::io::Result<()> {
+    use windows_sys::Win32::System::Threading::{
+        GetCurrentProcess, PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+        PROCESS_POWER_THROTTLING_EXECUTION_SPEED, PROCESS_POWER_THROTTLING_STATE,
+        ProcessPowerThrottling, SetProcessInformation,
+    };
+
+    let state = PROCESS_POWER_THROTTLING_STATE {
+        Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+        ControlMask: PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
+        StateMask: 0,
+    };
+    let size = u32::try_from(size_of_val(&state)).expect("Win32 structure size fits in a DWORD");
+    // SAFETY: The current-process pseudo-handle is valid, and `state` has the documented
+    // layout and size for ProcessPowerThrottling and lives for the duration of the call.
+    let success = unsafe {
+        SetProcessInformation(
+            GetCurrentProcess(),
+            ProcessPowerThrottling,
+            std::ptr::from_ref(&state).cast(),
+            size,
+        )
+    };
+    if success == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
     Ok(())
 }
 

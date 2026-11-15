@@ -27,3 +27,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 # resumed game's decisions.jsonl drifts by an ulp once rewards are not multiples of 0.5.
 serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 tempfile = "3"
+
+[target.'cfg(windows)'.dependencies]
+# Provides Win32 power throttling declarations in place of handwritten FFI.
+windows-sys = { version = "0.61.2", features = ["Win32_System_Threading"] }
