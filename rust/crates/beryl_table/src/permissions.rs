@@ -2,9 +2,25 @@ use crate::action::{Destination, SeenObject, Selection, Target};
 use crate::state::{ObjectId, Zone};
 use crate::{Action, Refusal, Seat, Table};
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RevealRules {
+    Explicit,
+    /// Historical save entries used knowledge as permission for hand cards.
+    Legacy,
+}
+
 /// Checks references and access before the action can change the table.
 /// For a batch, this checks every member against the supplied table.
 pub fn check(table: &Table, by: Seat, action: &Action) -> Result<(), Refusal> {
+    check_with_reveals(table, by, action, RevealRules::Explicit)
+}
+
+pub(crate) fn check_with_reveals(
+    table: &Table,
+    by: Seat,
+    action: &Action,
+    reveals: RevealRules,
+) -> Result<(), Refusal> {
     let mut references = vec![Reference::Seat(by)];
     action_references(action, &mut references);
     // Check all references first, so a stale target is reported even if
@@ -20,7 +36,7 @@ pub fn check(table: &Table, by: Seat, action: &Action) -> Result<(), Refusal> {
         return Err(Refusal::Stale);
     }
     for reference in &references {
-        if !reference.allowed(table, by) {
+        if !reference.allowed(table, by, reveals) {
             return Err(Refusal::Permission);
         }
     }
@@ -67,15 +83,15 @@ impl Reference {
         Ok(())
     }
 
-    fn allowed(&self, table: &Table, by: Seat) -> bool {
+    fn allowed(&self, table: &Table, by: Seat, reveals: RevealRules) -> bool {
         match *self {
             Self::Seat(_) | Self::Zone(_) => true,
             Self::OwnSeat(seat) => seat == by,
             Self::UseZone(zone) => can_use_zone(table, by, zone),
-            Self::LendZone(zone) => hidden_owner(zone).is_none_or(|owner| owner == by),
-            Self::Card(seen) => can_use_card(table, by, seen),
+            Self::LendZone(zone) => zone.hidden_owner().is_none_or(|owner| owner == by),
+            Self::Card(seen) => can_use_card(table, by, seen, reveals),
             Self::Peek(seen) => {
-                can_use_card(table, by, seen)
+                can_use_card(table, by, seen, reveals)
                     && table
                         .objects
                         .get(&seen.id)
@@ -88,37 +104,41 @@ impl Reference {
                     || table
                         .objects
                         .get(&id)
-                        .is_some_and(|card| hidden_owner(zone) == Some(card.owner))
+                        .is_some_and(|card| zone.hidden_owner() == Some(card.owner))
             }
         }
     }
 }
 
-fn hidden_owner(zone: Zone) -> Option<Seat> {
-    match zone {
-        Zone::Hand(seat) | Zone::Library(seat) | Zone::Sideboard(seat) => Some(seat),
-        Zone::Battlefield | Zone::Stack | Zone::Graveyard(_) | Zone::Exile(_) => None,
-    }
-}
-
 fn can_use_zone(table: &Table, by: Seat, zone: Zone) -> bool {
-    hidden_owner(zone).is_none_or(|owner| owner == by) || table.lent_zones.contains(&(zone, by))
+    zone.hidden_owner().is_none_or(|owner| owner == by) || table.lent_zones.contains(&(zone, by))
 }
 
 /// The expected zone to offer with a projected object the seat can act on.
 pub fn reference_zone(table: &Table, by: Seat, id: ObjectId) -> Option<Zone> {
     table.players.get(usize::from(by.0))?;
     let (zone, _) = table.position(id)?;
-    can_use_card(table, by, SeenObject { id, zone }).then_some(zone)
+    can_use_card(table, by, SeenObject { id, zone }, RevealRules::Explicit).then_some(zone)
 }
 
-fn can_use_card(table: &Table, by: Seat, seen: SeenObject) -> bool {
-    can_use_zone(table, by, seen.zone)
-        || (matches!(seen.zone, Zone::Hand(_))
+fn can_use_card(table: &Table, by: Seat, seen: SeenObject, reveals: RevealRules) -> bool {
+    if can_use_zone(table, by, seen.zone) {
+        return true;
+    }
+    if reveals == RevealRules::Legacy {
+        return matches!(seen.zone, Zone::Hand(_))
             && table
                 .objects
                 .get(&seen.id)
-                .is_some_and(|card| card.known_to.contains(&by)))
+                .is_some_and(|card| card.known_to.contains(&by));
+    }
+    table
+        .objects
+        .get(&seen.id)
+        .is_some_and(|card| card.revealed_to.contains(&by))
+        || matches!(seen.zone, Zone::Library(owner)
+            if table.always_reveal_top.contains(&owner)
+                && table.zone(seen.zone).and_then(|ids| ids.first()) == Some(&seen.id))
 }
 
 fn selection_references(

@@ -94,6 +94,11 @@ pub enum Change {
         id: ObjectId,
         seat: Seat,
     },
+    /// A reveal grants access independently of what the recipients remember.
+    SetReveal {
+        id: ObjectId,
+        edit: Edit<Vec<Seat>>,
+    },
     /// Hand entries and shuffles reset visibility. The inverse restores the prior
     /// visibility while retaining what was learned after the reset.
     ResetKnowledge {
@@ -177,6 +182,16 @@ fn toggle<T: Copy + Eq + std::fmt::Debug>(items: &mut Vec<T>, item: T, index: us
 }
 
 impl Change {
+    pub(crate) fn clear_reveal(object: &Object) -> Option<Self> {
+        (!object.revealed_to.is_empty()).then(|| Self::SetReveal {
+            id: object.id,
+            edit: Edit {
+                before: object.revealed_to.clone(),
+                after: Vec::new(),
+            },
+        })
+    }
+
     /// Performs a change produced for this state. Callers performing an inverse
     /// must first check that intervening entries have left its inputs intact.
     pub fn perform(&self, table: &mut Table) {
@@ -204,6 +219,12 @@ impl Change {
                     *seat,
                 );
             }
+            Self::SetReveal { id, edit } => table
+                .objects
+                .get_mut(id)
+                .expect("revealed object")
+                .revealed_to
+                .clone_from(&edit.after),
             Self::ResetKnowledge { id, edit, forget } => {
                 let known_to = &mut table.objects.get_mut(id).expect("known object").known_to;
                 if *forget {
@@ -283,6 +304,10 @@ impl Change {
                 to: *from,
             },
             Self::SetObject { id, edit } => Self::SetObject {
+                id: *id,
+                edit: edit.inverse(),
+            },
+            Self::SetReveal { id, edit } => Self::SetReveal {
                 id: *id,
                 edit: edit.inverse(),
             },

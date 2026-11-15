@@ -82,6 +82,10 @@ struct SavedEntry<T> {
     by: crate::Seat,
     action: T,
     outcomes: Vec<u32>,
+    /// Versioned per entry so an existing append-only save can continue under
+    /// explicit reveal permissions after its older entries have been replayed.
+    #[serde(default)]
+    explicit_reveals: bool,
 }
 
 /// Appends one complete entry to the host's save.
@@ -93,6 +97,7 @@ pub fn append(writer: impl Write, entry: &Entry) -> Result<(), SaveError> {
             by: entry.by,
             action: &entry.action,
             outcomes: crate::log::outcomes(&entry.changes).collect(),
+            explicit_reveals: !entry.legacy_reveals,
         },
     )
 }
@@ -171,11 +176,15 @@ fn read_save(mut reader: impl BufRead) -> Result<((Table, Log, Chance), u64), Sa
             return Err(SaveError::InvalidEntry(saved.n));
         }
         let mut replay = fresh.replay_and_advance(saved.outcomes);
-        log.apply(&mut table, saved.by, &saved.action, &mut replay)
-            .map_err(|refusal| SaveError::Replay {
-                entry: saved.n,
-                refusal,
-            })?;
+        let applied = if saved.explicit_reveals {
+            log.apply(&mut table, saved.by, &saved.action, &mut replay)
+        } else {
+            log.apply_legacy_save_entry(&mut table, saved.by, &saved.action, &mut replay)
+        };
+        applied.map_err(|refusal| SaveError::Replay {
+            entry: saved.n,
+            refusal,
+        })?;
         if !replay.update_fresh(&mut fresh) {
             return Err(SaveError::InvalidEntry(saved.n));
         }

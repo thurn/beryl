@@ -9,7 +9,7 @@ use beryl_table::state::{
     Zone,
 };
 use beryl_table::testing::{CORE, Generator};
-use beryl_table::{Action, Chance, Change, Log, Seat, Table};
+use beryl_table::{Action, Chance, Change, Log, Refusal, Seat, Table};
 use beryl_table_session::view::{Slots, view};
 
 const HOST: Seat = Seat(0);
@@ -195,6 +195,97 @@ fn both_seats_get_ordered_piles_and_relative_table_state() {
             == Subject::Ability {
                 id: view.stack[1].marker_id().unwrap()
             }));
+    }
+}
+
+#[test]
+fn explicit_reveals_issue_only_card_references_in_hidden_piles() {
+    for zone in [Zone::Library(HOST), Zone::Sideboard(HOST)] {
+        let mut table = Table::new(2);
+        let known = add(&mut table, 1, "Island", zone, &[HOST, GUEST]);
+        let chosen = add(&mut table, 2, "Plains", zone, &[HOST]);
+        let mut log = Log::new(&table);
+        let mut chance = Chance::fresh(17);
+        let mut slots = Slots::default();
+        let (_, refs) = view(&table, &log, HOST, &mut slots).unwrap();
+        let reference = refs
+            .actions()
+            .iter()
+            .find(|entry| {
+                entry.subject
+                    == Subject::Object {
+                        slot: slots.get(chosen).unwrap(),
+                    }
+            })
+            .unwrap()
+            .reference
+            .clone();
+        refs.apply(
+            &mut table,
+            &mut log,
+            HOST,
+            Action::Reveal {
+                zone,
+                objects: Some(vec![reference]),
+                random: None,
+                to: vec![GUEST],
+            },
+            &mut chance,
+        )
+        .unwrap();
+
+        let mut slots = Slots::default();
+        let (guest, refs) = view(&table, &log, GUEST, &mut slots).unwrap();
+        let subject = |id| Subject::Object {
+            slot: slots.get(id).unwrap(),
+        };
+        let published = guest.table.unwrap();
+        assert!(published.acting.is_empty());
+        assert!(
+            !published
+                .object_actions
+                .iter()
+                .any(|entry| entry.subject == subject(known))
+        );
+        let choice = published
+            .object_actions
+            .iter()
+            .find(|entry| entry.subject == subject(chosen))
+            .unwrap();
+        assert_eq!(choice.zone, zone);
+        assert_eq!(
+            refs.apply(
+                &mut table,
+                &mut log,
+                GUEST,
+                Action::Reveal {
+                    zone,
+                    objects: None,
+                    random: None,
+                    to: vec![GUEST]
+                },
+                &mut chance,
+            ),
+            Err(Refusal::Permission)
+        );
+        refs.apply(
+            &mut table,
+            &mut log,
+            GUEST,
+            Action::Move {
+                selection: Selection {
+                    objects: vec![choice.reference.clone()],
+                    zone,
+                },
+                to: Destination::Zone(Zone::Graveyard(HOST)),
+                position: Position::Top,
+                face: None,
+                tapped: None,
+            },
+            &mut chance,
+        )
+        .unwrap();
+        assert_eq!(table.zone(Zone::Graveyard(HOST)).unwrap(), [chosen]);
     }
 }
 

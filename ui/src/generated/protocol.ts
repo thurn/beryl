@@ -867,7 +867,7 @@ export type TableView = { log: Array<LogLine>, proposals: Array<ProposalView>, l
  */
 seat?: number, orders: ManualOrders, 
 /**
- * Hidden zones lent or revealed to this viewer.
+ * Hidden zones lent to this viewer. Reveals authorize individual object actions.
  */
 acting: Array<ZoneRef>, 
 /**

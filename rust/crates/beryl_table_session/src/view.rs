@@ -200,20 +200,6 @@ fn acting(table: &Table, viewer: Viewer) -> Vec<ZoneRef> {
             }
         }
     }
-    for seat in table.seats().filter(|&seat| seat != viewer.0) {
-        let hand = ZoneRef {
-            side: viewer.side(seat),
-            zone: ZoneName::Hand,
-        };
-        if !zones.contains(&hand)
-            && table.zones[usize::from(seat.0)]
-                .hand
-                .iter()
-                .any(|id| table.objects[id].known_to.contains(&viewer.0))
-        {
-            zones.push(hand);
-        }
-    }
     zones
 }
 

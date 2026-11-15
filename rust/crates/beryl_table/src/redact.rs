@@ -128,7 +128,10 @@ fn project_change(
 ) -> bool {
     match change {
         Change::Move { id, .. } | Change::ReplaceId { from: id, .. } => !private_ids.contains(id),
-        Change::Random { .. } | Change::RestoreTable(_) | Change::ResetKnowledge { .. } => false,
+        Change::Random { .. }
+        | Change::RestoreTable(_)
+        | Change::SetReveal { .. }
+        | Change::ResetKnowledge { .. } => false,
         Change::Learn { id, .. } => knows(after, *id, seat),
         Change::Create { object, .. } => {
             if private_ids.contains(&object.id) {
@@ -215,6 +218,7 @@ fn knows(table: &Table, id: ObjectId, seat: Seat) -> bool {
 }
 
 fn redact_object(object: &mut Object, seat: Seat, names: &HiddenNames) {
+    object.revealed_to.retain(|&viewer| viewer == seat);
     if !object.known_to.contains(&seat) {
         object
             .counters

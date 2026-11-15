@@ -6,6 +6,7 @@ use beryl_card_store::{Record, facts};
 use crate::action::{Destination, Portion, Position, Selection, SortBy};
 use crate::change::{Edit, TableEdit};
 use crate::helpers::card_record;
+use crate::permissions::RevealRules;
 use crate::state::{Card, Handling, Object, ObjectId, Zone};
 use crate::{Action, Chance, Change, Refusal, Seat, Table};
 
@@ -238,6 +239,7 @@ pub(super) fn shuffle(table: &Table, seat: Seat, portion: Portion, chance: &mut 
     for (offset, id) in shuffled.into_iter().enumerate() {
         let card = &table.objects[&id];
         let fresh = table.fresh_id(offset).ok_or(Refusal::INVALID)?;
+        changes.extend(Change::clear_reveal(card));
         changes.push(Change::ResetKnowledge {
             id,
             edit: Edit {
@@ -299,6 +301,7 @@ pub(super) fn reveal(
     random: Option<u16>,
     to: &[Seat],
     chance: &mut Chance,
+    reveals: RevealRules,
 ) -> Result<AppliedChanges, Refusal> {
     if to
         .iter()
@@ -334,7 +337,30 @@ pub(super) fn reveal(
     };
     let seats: BTreeSet<_> = to.iter().copied().collect();
     for card in &cards {
+        let before_learning = changes.len();
         changes.extend(seats.iter().filter_map(|&seat| learn(card, seat)));
+        // In older saves, a reveal that taught nobody did not touch the
+        // object. Preserve those touch sets so saved undos can still apply.
+        if let Some(owner) = zone.hidden_owner()
+            && (reveals == RevealRules::Explicit || changes.len() != before_learning)
+        {
+            let mut after = card.revealed_to.clone();
+            after.extend(
+                seats
+                    .iter()
+                    .copied()
+                    .filter(|seat| *seat != owner && !card.revealed_to.contains(seat)),
+            );
+            if after != card.revealed_to {
+                changes.push(Change::SetReveal {
+                    id: card.id,
+                    edit: Edit {
+                        before: card.revealed_to.clone(),
+                        after,
+                    },
+                });
+            }
+        }
     }
     let ids = cards.iter().map(|card| card.id).collect();
     Ok(AppliedChanges::presented(

@@ -75,6 +75,13 @@ pub enum Zone {
 }
 
 impl Zone {
+    pub(crate) fn hidden_owner(self) -> Option<Seat> {
+        match self {
+            Self::Hand(seat) | Self::Library(seat) | Self::Sideboard(seat) => Some(seat),
+            Self::Battlefield | Self::Stack | Self::Graveyard(_) | Self::Exile(_) => None,
+        }
+    }
+
     pub fn is_public(self) -> bool {
         matches!(
             self,
@@ -103,6 +110,9 @@ pub struct Object {
     pub doesnt_untap: bool,
     pub row: Row,
     pub known_to: Vec<Seat>,
+    /// Explicit permission to use this card in its current hidden zone.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) revealed_to: Vec<Seat>,
 }
 
 impl Object {
@@ -124,6 +134,7 @@ impl Object {
             doesnt_untap: false,
             row: Row::Auto,
             known_to: Vec::new(),
+            revealed_to: Vec::new(),
         }
     }
 }

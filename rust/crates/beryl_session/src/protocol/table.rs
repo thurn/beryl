@@ -228,7 +228,7 @@ pub struct TableView {
     #[ts(optional)]
     pub seat: Option<u8>,
     pub orders: ManualOrders,
-    /// Hidden zones lent or revealed to this viewer.
+    /// Hidden zones lent to this viewer. Reveals authorize individual object actions.
     pub acting: Vec<ZoneRef>,
     /// The opposing hand was lent to the viewer as a zone.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]

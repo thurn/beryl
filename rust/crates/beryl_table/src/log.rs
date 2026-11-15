@@ -3,11 +3,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::apply::{
-    AppliedChanges, Presentation, apply_mapped, commit, next_entry, perform, perform_history,
+    AppliedChanges, Presentation, apply_mapped, apply_with_reveals, commit, next_entry, perform,
+    perform_history,
 };
 use crate::change::Edit;
+use crate::permissions::RevealRules;
 use crate::state::ObjectId;
-use crate::{Action, Chance, Change, Entry, Refusal, Seat, Table, apply, permissions, undo};
+use crate::{Action, Chance, Change, Entry, Refusal, Seat, Table, permissions, undo};
 
 mod line;
 mod touches;
@@ -214,8 +216,27 @@ impl Log {
         check: impl FnOnce(&Table, &Entry) -> Result<(), Refusal>,
     ) -> Result<&Entry, Refusal> {
         self.apply_transaction(table, chance, check, |log, table, chance| {
-            log.execute(table, by, action, chance)
+            log.execute(table, by, action, chance, RevealRules::Explicit)
         })
+    }
+
+    pub(crate) fn apply_legacy_save_entry(
+        &mut self,
+        table: &mut Table,
+        by: Seat,
+        action: &Action,
+        chance: &mut Chance,
+    ) -> Result<&Entry, Refusal> {
+        self.apply_transaction(
+            table,
+            chance,
+            |_, _| Ok(()),
+            |log, table, chance| {
+                let mut entry = log.execute(table, by, action, chance, RevealRules::Legacy)?;
+                entry.legacy_reveals = true;
+                Ok(entry)
+            },
+        )
     }
 
     /// Resolves each member of a batch just before applying it to the staged table.
@@ -232,10 +253,10 @@ impl Log {
     ) -> Result<&Entry, Refusal> {
         self.apply_transaction(table, chance, check, |log, table, chance| {
             if matches!(action, Action::Batch { .. }) {
-                apply_mapped(table, by, action, chance, resolve)
+                apply_mapped(table, by, action, chance, RevealRules::Explicit, resolve)
             } else {
                 let action = resolve(table, action)?;
-                log.execute(table, by, &action, chance)
+                log.execute(table, by, &action, chance, RevealRules::Explicit)
             }
         })
     }
@@ -268,6 +289,7 @@ impl Log {
         by: Seat,
         action: &Action,
         chance: &mut Chance,
+        reveals: RevealRules,
     ) -> Result<Entry, Refusal> {
         match *action {
             Action::Undo { entry } => {
@@ -298,7 +320,7 @@ impl Log {
                 let (applied, touches) = perform_history(table, action, applied);
                 Ok(commit(table, n, by, action.clone(), applied, touches))
             }
-            _ => apply(table, by, action, chance),
+            _ => apply_with_reveals(table, by, action, chance, reveals),
         }
     }
 
@@ -361,7 +383,12 @@ pub fn rebuild(log: &Log, upto: u32) -> Result<Table, Refusal> {
             table.entry_number = n;
         } else {
             let mut chance = Chance::replaying(outcomes(&entry.changes).collect());
-            apply(&mut table, entry.by, &entry.action, &mut chance)?;
+            let reveals = if entry.legacy_reveals {
+                RevealRules::Legacy
+            } else {
+                RevealRules::Explicit
+            };
+            apply_with_reveals(&mut table, entry.by, &entry.action, &mut chance, reveals)?;
         }
     }
     Ok(table)

@@ -303,6 +303,9 @@ fn update_card(
     tapped: Option<bool>,
     changes: &mut Vec<Change>,
 ) {
+    if card.zone != to {
+        changes.extend(Change::clear_reveal(card));
+    }
     let mut set = |edit| changes.push(Change::SetObject { id: card.id, edit });
     if face != card.face {
         set(ObjectEdit::Face(Edit {

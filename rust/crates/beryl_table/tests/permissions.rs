@@ -167,6 +167,50 @@ fn only_the_owner_or_borrower_may_use_hidden_zones_as_a_whole() {
 }
 
 #[test]
+fn always_reveal_authorizes_only_the_current_top_card() {
+    let mut table = Table::new(2);
+    put(&mut table, 1, LIBRARY);
+    put(&mut table, 2, LIBRARY);
+    let take = |id| move_card(id, LIBRARY, GRAVEYARD);
+    act(
+        &mut table,
+        OWNER,
+        &Action::AlwaysRevealTop {
+            seat: OWNER,
+            on: true,
+        },
+    );
+    assert_eq!(check(&table, GUEST, &take(1)), Ok(()));
+    refused(&mut table, GUEST, &take(2), Refusal::Permission);
+
+    act(
+        &mut table,
+        OWNER,
+        &Action::Move {
+            selection: selection(1, LIBRARY),
+            to: Destination::Zone(LIBRARY),
+            position: Position::Bottom,
+            face: None,
+            tapped: None,
+        },
+    );
+    assert!(table.objects[&ObjectId(1)].known_to.contains(&GUEST));
+    refused(&mut table, GUEST, &take(1), Refusal::Permission);
+    assert_eq!(check(&table, GUEST, &take(2)), Ok(()));
+
+    act(
+        &mut table,
+        OWNER,
+        &Action::AlwaysRevealTop {
+            seat: OWNER,
+            on: false,
+        },
+    );
+    assert!(table.objects[&ObjectId(2)].known_to.contains(&GUEST));
+    refused(&mut table, GUEST, &take(2), Refusal::Permission);
+}
+
+#[test]
 fn revealing_a_hand_card_lets_the_other_player_discard_it() {
     let mut table = Table::new(2);
     put(&mut table, 12, HAND);
@@ -200,7 +244,8 @@ fn revealing_a_hand_card_lets_the_other_player_discard_it() {
 #[test]
 fn knowing_a_library_card_does_not_grant_access_and_shuffling_ends_a_loan() {
     let mut table = Table::new(2);
-    put(&mut table, 1, LIBRARY);
+    put(&mut table, 1, Zone::Battlefield);
+    table.objects.get_mut(&ObjectId(1)).unwrap().known_to = vec![OWNER, GUEST];
     let look = Action::Look {
         seat: OWNER,
         portion: Portion::All,
@@ -213,16 +258,7 @@ fn knowing_a_library_card_does_not_grant_access_and_shuffling_ends_a_loan() {
     // A third seat cannot lend a library it does not own.
     let mut three_seats = Table::new(3);
     refused(&mut three_seats, MISSING, &lend, Refusal::Permission);
-    act(
-        &mut table,
-        OWNER,
-        &Action::Reveal {
-            zone: LIBRARY,
-            objects: Some(vec![ObjectId(1)]),
-            random: None,
-            to: vec![GUEST],
-        },
-    );
+    act(&mut table, OWNER, &move_card(1, Zone::Battlefield, LIBRARY));
     refused(
         &mut table,
         GUEST,

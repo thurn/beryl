@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::change::{Edit, TableEdit};
 use crate::log::Touches;
+use crate::permissions::RevealRules;
 use crate::state::{ObjectId, Phase, Zone};
 use crate::{Action, Chance, Change, Seat, Table, permissions};
 
@@ -44,6 +45,8 @@ pub struct Entry {
     // Save replay reconstructs these facts from the action and its outcomes.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) members: Vec<Member>,
+    #[serde(skip)]
+    pub(crate) legacy_reveals: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -179,7 +182,19 @@ pub fn apply(
     action: &Action,
     chance: &mut Chance,
 ) -> Result<Entry, Refusal> {
-    apply_mapped(table, by, action.clone(), chance, |_, action| Ok(action))
+    apply_with_reveals(table, by, action, chance, RevealRules::Explicit)
+}
+
+pub(crate) fn apply_with_reveals(
+    table: &mut Table,
+    by: Seat,
+    action: &Action,
+    chance: &mut Chance,
+    reveals: RevealRules,
+) -> Result<Entry, Refusal> {
+    apply_mapped(table, by, action.clone(), chance, reveals, |_, action| {
+        Ok(action)
+    })
 }
 
 /// Resolve each leaf against the staged state before applying it.
@@ -188,6 +203,7 @@ pub(crate) fn apply_mapped<Id>(
     by: Seat,
     action: Action<Id>,
     chance: &mut Chance,
+    reveals: RevealRules,
     mut resolve: impl FnMut(&Table, Action<Id>) -> Result<Action, Refusal>,
 ) -> Result<Entry, Refusal> {
     let n = next_entry(table)?;
@@ -199,6 +215,7 @@ pub(crate) fn apply_mapped<Id>(
         action,
         &mut planned_chance,
         &mut touches,
+        reveals,
         &mut resolve,
     )?;
     if matches!(
@@ -240,6 +257,7 @@ pub(crate) fn commit(
         undone_action: None,
         summary,
         members: applied.members,
+        legacy_reveals: false,
     }
 }
 
@@ -249,6 +267,7 @@ fn apply_action<Id>(
     action: Action<Id>,
     chance: &mut Chance,
     touches: &mut Touches,
+    reveals: RevealRules,
     resolve: &mut impl FnMut(&Table, Action<Id>) -> Result<Action, Refusal>,
 ) -> Result<(Action, AppliedChanges), Refusal> {
     if let Action::Batch { actions } = action {
@@ -258,7 +277,7 @@ fn apply_action<Id>(
         let mut resolved = Vec::with_capacity(actions.len());
         for member in actions {
             let (action, changes) =
-                apply_action(&mut staged, by, member, chance, touches, resolve)?;
+                apply_action(&mut staged, by, member, chance, touches, reveals, resolve)?;
             resolved.push(action);
             applied.append(changes);
         }
@@ -266,8 +285,8 @@ fn apply_action<Id>(
         return Ok((Action::Batch { actions: resolved }, applied));
     }
     let action = resolve(table, action)?;
-    permissions::check(table, by, &action)?;
-    let mut applied = plan_action(table, by, &action, chance)?;
+    permissions::check_with_reveals(table, by, &action, reveals)?;
+    let mut applied = plan_action(table, by, &action, chance, reveals)?;
     library::settle_handling(table, by, &action, &mut applied);
     let len = applied.changes.len();
     if table.turn_plays.is_some() && counts_as_turn_play(&action, table.turn) {
@@ -438,6 +457,7 @@ fn plan_action(
     by: Seat,
     action: &Action,
     chance: &mut Chance,
+    reveals: RevealRules,
 ) -> Result<AppliedChanges, Refusal> {
     let changes = match action {
         Action::Move {
@@ -516,7 +536,17 @@ fn plan_action(
             objects,
             random,
             to,
-        } => return library::reveal(table, *zone, objects.as_deref(), *random, to, chance),
+        } => {
+            return library::reveal(
+                table,
+                *zone,
+                objects.as_deref(),
+                *random,
+                to,
+                chance,
+                reveals,
+            );
+        }
         Action::Lend { zone, to } => library::lend(table, *zone, *to),
         Action::AlwaysRevealTop { seat, on } => library::always_reveal_top(table, *seat, *on),
         Action::AlwaysLookAtTop { seat, on } => library::always_look_at_top(table, *seat, *on),

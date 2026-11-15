@@ -15,6 +15,8 @@ mod animation;
 mod markers;
 #[path = "history/projection.rs"]
 mod projection;
+#[path = "history/reveals.rs"]
+mod reveals;
 #[cfg(not(feature = "testing"))]
 #[path = "../src/testing.rs"]
 mod testing;

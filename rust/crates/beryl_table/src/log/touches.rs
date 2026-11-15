@@ -128,7 +128,9 @@ impl Touches {
                     self.objects.extend(edit.after);
                 }
             }
-            Change::Learn { id, .. } | Change::ResetKnowledge { id, .. } => {
+            Change::Learn { id, .. }
+            | Change::SetReveal { id, .. }
+            | Change::ResetKnowledge { id, .. } => {
                 self.objects.insert(*id);
             }
             Change::ReplaceId { from, to } => {
