@@ -321,13 +321,11 @@ class Cards:
             ):
                 raise Unsupported(f"ordering the replacement effects of two {name}")
 
-    def chooses_a_card_name_as_it_enters(self, card: str) -> bool:
-        """Whether `card` chooses a card name as it enters, as Pithing Needle does. XMage asks
-        that choice (CR 614.12a) when a scenario's setup adds the permanent, where Beryl's setup
-        gives it no chosen name, which stops nothing: the exporter answers with `ANOTHER_CARD`,
-        a name no card of the game has, which stops nothing too."""
-        text = self.oracle.get(card, "")
-        return "enters, choose a card name" in text
+    def chooses_as_it_enters(self, card: str, choice: str) -> bool:
+        """Whether `card` makes the given choice as it enters (CR 614.12a). XMage asks it
+        when adding the permanent during setup. Beryl puts it in play with no choice.
+        The XMage exporter skips the setup color prompt so no color is recorded."""
+        return f"enters, choose a {choice}" in self.oracle.get(card, "")
 
     def scries(self, card: str) -> bool:
         """Whether resolving `card` scries. Beryl chooses the cards for the bottom one at a

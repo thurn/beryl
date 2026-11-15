@@ -418,21 +418,28 @@ def test_a_blocked_trampler_queues_lethal_damage_for_its_lone_blocker() -> None:
     ]
 
 
-def test_a_setup_permanent_that_names_a_card_names_one_no_card_of_the_game_has() -> (
-    None
-):
-    # XMage asks the setup's Pithing Needle for a name as it adds it. Beryl's setup Needle has
-    # chosen no name and stops nothing, so XMage names a card no scenario uses.
+@pytest.mark.parametrize(
+    ("card", "answer"),
+    [("Pithing Needle", "Black Lotus"), ("Painter's Servant", "[choice_skip]")],
+)
+def test_setup_answers_as_enters_choices_without_changing_the_game(
+    card: str, answer: str
+) -> None:
     entry: card_facts.Json = {
         "setup": {"turn": 1, "active": 0, "step": "PrecombatMain"},
         "actions": [],
     }
-    export = xmage_java.Export(card="Generated", scenario="needle", method="needle")
-    faces = xmage_java.Faces.load(card_store.STORE, ["Pithing Needle"])
+    export = xmage_java.Export(card="Generated", scenario="setup", method="setup")
+    faces = xmage_java.Faces.load(card_store.STORE, [card])
     writer = xmage.Exporter(entry, faces, export)
-    needle: card_facts.Json = {"card": "Pithing Needle", "face": False}
-    writer.permanent("playerB", needle | {"tapped": False, "counters": None}, "Upkeep")
+    permanent: card_facts.Json = {
+        "card": card,
+        "face": False,
+        "tapped": False,
+        "counters": None,
+    }
+    writer.permanent("playerB", permanent, "Upkeep")
     assert export.body == [
-        'addCard(Zone.BATTLEFIELD, playerB, "Pithing Needle", 1, false);',
-        'setChoice(playerB, "Black Lotus");',
+        f'addCard(Zone.BATTLEFIELD, playerB, "{card}", 1, false);',
+        f'setChoice(playerB, "{answer}");',
     ]
