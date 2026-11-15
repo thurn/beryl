@@ -41,7 +41,7 @@ impl From<Unreached> for String {
 
 /// [`reach`], with the views the viewer was shown once the setup was done, each with the
 /// events it animates and its script: the first, shown at once, and the last, [`reach`]'s.
-pub(super) fn trace(
+pub fn trace(
     moment: &'static Moment,
     view: View,
 ) -> Result<(beryl_session::PlayerView, Vec<beryl_session::PlayerView>), Unreached> {

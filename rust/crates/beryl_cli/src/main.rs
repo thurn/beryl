@@ -47,35 +47,15 @@
 //!   each seat, each view whole with `--views`; `beryl_cli specs-script <card> [moment]`
 //!   prints each seat's scripts, view by view ([`specs`]).
 
-mod agreement;
-mod anchor_replay;
-mod blunders;
-mod boards;
-mod evalfit;
-mod fixture;
-mod freeze;
-mod game;
-mod gate;
-mod hunt;
-mod ladder;
-mod match_log;
-mod panics;
-mod positions;
-mod review;
-mod screen;
-mod script_check;
-mod serve;
-mod specs;
-mod tournament;
-mod transcript;
-mod walk;
-mod why;
-
 use std::path::Path;
 use std::process::ExitCode;
 
+use beryl_cli::transcript::Transcript;
+use beryl_cli::{
+    agreement, anchor_replay, blunders, evalfit, fixture, freeze, game, gate, hunt, ladder, number,
+    positions, review, screen, script_check, serve, specs, tournament, why,
+};
 use beryl_search::Budget;
-use transcript::Transcript;
 
 const USAGE: &str = "usage:
   beryl_cli play <agent> <agent> [--seed N] [--out FILE] [--iterations N] [--trees K]
@@ -222,11 +202,6 @@ impl Flags {
         }
         Ok(f)
     }
-}
-
-fn number<T: std::str::FromStr>(flag: &str, v: &str) -> Result<T, String> {
-    v.parse()
-        .map_err(|_| format!("{flag}: not a number: {v:?}"))
 }
 
 fn play(f: &Flags) -> Result<(), String> {

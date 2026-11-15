@@ -34,7 +34,7 @@ use beryl_scenario::{Action, Scenario};
 use beryl_session::Seat;
 
 use describe::reach;
-pub use describe::{Unreached, describe};
+pub use describe::{Unreached, describe, trace};
 pub use script::scripts;
 pub(crate) use script::text as script_text;
 #[cfg(test)]

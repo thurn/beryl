@@ -45,7 +45,7 @@ struct Definitions {
 /// One fixture: the game to play and where to stop.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct Definition {
+pub struct Definition {
     name: String,
     /// A seeded game's seed, with `decks`; or none, with `board`.
     seed: Option<u64>,
@@ -80,12 +80,12 @@ pub(crate) struct Definition {
 }
 
 impl Definition {
-    pub(crate) fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
     /// The seat its recording is seen from: its human's.
-    pub(crate) fn seat(&self) -> Result<Seat, String> {
+    pub fn seat(&self) -> Result<Seat, String> {
         if self.table.is_some() {
             return Ok(Seat::P0);
         }
@@ -100,7 +100,7 @@ impl Definition {
 }
 
 /// The fixtures the file `definitions` defines.
-pub(crate) fn definitions(definitions: &Path) -> Result<Vec<Definition>, String> {
+pub fn definitions(definitions: &Path) -> Result<Vec<Definition>, String> {
     let text = std::fs::read_to_string(definitions)
         .map_err(|e| format!("{}: {e}", definitions.display()))?;
     let defs: Definitions =
@@ -159,7 +159,7 @@ impl Stop {
 }
 
 /// The messages of `def`'s recording, or why it could not be made.
-pub(crate) fn record(def: &Definition, source: &Path) -> Result<Vec<FixtureMessage>, String> {
+pub fn record(def: &Definition, source: &Path) -> Result<Vec<FixtureMessage>, String> {
     if let Some(table) = &def.table {
         if def.seed.is_some()
             || def.decks.is_some()
