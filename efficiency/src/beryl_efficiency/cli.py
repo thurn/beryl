@@ -726,5 +726,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (sqlite3.Error, KeyError) as e:
         print(f"efficiency: {e.args[0] if e.args else e}", file=sys.stderr)
         return 1
+    except argparse.ArgumentTypeError as e:  # A flag's value, such as --since, is bad.
+        print(f"efficiency: {e}", file=sys.stderr)
+        return 2
     print(json.dumps(result.json(), indent=1) if args.json else text(result))
     return 0

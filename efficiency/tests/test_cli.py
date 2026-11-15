@@ -81,6 +81,11 @@ def test_sql_cannot_write(capsys: pytest.CaptureFixture[str]) -> None:
     assert "2" in run(capsys, "sql", "--no-ingest", "select count(*) from beads")
 
 
+def test_a_bad_since_is_a_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
+    assert cli.main(["summary", "--no-ingest", "--since", "2026-11-15T21:10"]) == 2
+    assert "--since takes" in capsys.readouterr().err
+
+
 def test_coverage_reports_rows_skips_and_its_own_cost(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
