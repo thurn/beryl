@@ -4,7 +4,7 @@
 use std::cell::OnceCell;
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, AbilityIx, CastingKind, Face, FaceIx, Subject, Trigger, TriggerEvent};
+use crate::card::{Ability, AbilityIx, CastingKind, FaceIx, Subject, Trigger, TriggerEvent};
 use crate::event::{Event, EventKind, Listens, Recipient, Sink};
 use crate::filter::{Evaluate, Filter, is_for};
 use crate::fixed::Full;
@@ -17,12 +17,6 @@ use crate::state::{
     Zone, ZoneKey,
 };
 use crate::table::GameTable;
-
-/// The face a permanent has up, or a face-down one's blank characteristics: its copiable
-/// values (CR 707.2).
-pub(crate) fn face<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> &'static Face {
-    s.copiable(slot).face(t)
-}
 
 /// The ability a pending trigger or stack entry names.
 pub(crate) fn ability(

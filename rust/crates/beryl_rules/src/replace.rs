@@ -21,7 +21,9 @@ use beryl_card::{ChosenKind, Prompt};
 use beryl_kernel::chosen::ChosenValue;
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityIx, AbilityKind, Replaced, Replacement, Rewrite, Types};
+use crate::card::{
+    Ability, AbilityIx, AbilityKind, ObjectAbility, Replaced, Replacement, Rewrite, Types,
+};
 use crate::decision::{Choice, Decision, DecisionKind, Opt};
 use crate::event::{Entry, Reason, ReplacementKind, Sink};
 use crate::filter::Evaluate;
@@ -34,7 +36,7 @@ use crate::life;
 use crate::profile::Stops;
 use crate::state::{AbilityMask, CounterKind, MoveReplacement, ObjectRef, State, Zone, ZoneKey};
 use crate::table::{Capability, GameTable};
-use crate::{actions, chosen, interpret, trigger, zones};
+use crate::{actions, chosen, interpret, zones};
 
 mod damage;
 mod destruction;
@@ -208,6 +210,29 @@ fn effect_destination(r: MoveReplacement, to: Zone) -> Option<Zone> {
     applies.then_some(Zone::Exile)
 }
 
+/// The replacement abilities the permanent in `p` has now ([`State::abilities`]) that `pick`
+/// accepts, each with what `pick` read of its replacement, its index on the face and the
+/// ability, in the order of the permanent's abilities. `pick` is asked first and the ability's
+/// condition only of one it accepts ([`interpret::static_condition_holds`]), so the cheap tests
+/// go in `pick`.
+///
+/// The card table refuses a card that grants a replacement effect (`TableError::Granted`), so
+/// every one found is the permanent's own, at its index on the face.
+pub(crate) fn statics<'a, L: Layout, T>(
+    s: &'a State<L>,
+    t: &'a GameTable,
+    p: L::Slot,
+    mut pick: impl FnMut(&'static Ability, &'static Replacement) -> Option<T> + 'a,
+) -> impl Iterator<Item = (AbilityIx, &'static Ability, T)> + 'a {
+    s.abilities(t, p).filter_map(move |(ability, a)| {
+        let ObjectAbility::Own(index) = ability else {
+            return None;
+        };
+        let picked = pick(a, a.replacement()?)?;
+        interpret::static_condition_holds(s, t, p, index, a).then_some((index, a, picked))
+    })
+}
+
 /// The static abilities of permanents that replace the object in `slot` being put into `to`,
 /// each with the zone it goes to instead, in the order of the battlefield: "If a card or token
 /// would be put into a graveyard from anywhere, exile it instead." The filter is read for the
@@ -223,28 +248,20 @@ fn static_destinations<'a, L: Layout>(
         .filter(move |&&p| s.copiable(p).may_replace(t).replaces(ReplacementKind::Move))
         .flat_map(move |&p| {
             let controller = s.controller(p);
-            (0u8..)
-                .zip(trigger::face(s, t, p).abilities)
-                .filter_map(move |(index, a)| {
-                    let Some(&Replacement {
-                        replaces: Replaced::PutInto(objects, zone),
-                        rewrite: Rewrite::ToZone(instead),
-                    }) = a.replacement()
-                    else {
-                        return None;
-                    };
-                    let ability = AbilityIx::new(index);
-                    let applies = a.kind() == AbilityKind::Replacement
-                        && zone == to
-                        && s.has_ability(p, ability)
-                        && interpret::static_condition_holds(s, t, p, ability, a)
-                        && objects.matches(s, t, slot, controller);
-                    if !applies {
-                        return None;
-                    }
-                    crate::coverage::hit(a);
-                    Some((p, ability, instead))
-                })
+            let put_into = move |a: &Ability, r: &Replacement| match *r {
+                Replacement {
+                    replaces: Replaced::PutInto(objects, zone),
+                    rewrite: Rewrite::ToZone(instead),
+                } if a.kind() == AbilityKind::Replacement && zone == to => Some((objects, instead)),
+                _ => None,
+            };
+            statics(s, t, p, put_into).filter_map(move |(ability, a, (objects, instead))| {
+                if !objects.matches(s, t, slot, controller) {
+                    return None;
+                }
+                crate::coverage::hit(a);
+                Some((p, ability, instead))
+            })
         })
 }
 
@@ -276,22 +293,16 @@ fn entering_destinations<L: Layout>(
             continue;
         }
         let controller = s.controller(p);
-        for (index, a) in (0u8..).zip(trigger::face(s, t, p).abilities) {
-            let Some(&Replacement {
+        let enters = |a: &Ability, r: &Replacement| match *r {
+            Replacement {
                 replaces: Replaced::Enters { objects, not_cast },
                 rewrite: Rewrite::ToZone(instead),
-            }) = a.replacement()
-            else {
-                continue;
-            };
-            let ability = AbilityIx::new(index);
-            let applies = a.kind() == AbilityKind::Replacement
-                && !(not_cast && cast)
-                && s.has_ability(p, ability)
-                && interpret::static_condition_holds(s, t, p, ability, a);
-            if !applies {
-                continue;
+            } if a.kind() == AbilityKind::Replacement && !(not_cast && cast) => {
+                Some((objects, instead))
             }
+            _ => None,
+        };
+        for (ability, a, (objects, instead)) in statics(s, t, p, enters) {
             let passes = layers::entered(s, t, slot, entry, |as_it_would_exist| {
                 objects.matches(as_it_would_exist, t, slot, controller)
             })?;
@@ -507,11 +518,8 @@ fn dredge_of<L: Layout>(
     t: &GameTable,
     slot: L::Slot,
 ) -> Option<(&'static crate::card::Ability, u8)> {
-    s.copiable(slot)
-        .face(t)
-        .abilities
-        .iter()
-        .find_map(|a| match a.replacement() {
+    s.abilities(t, slot)
+        .find_map(|(_, a)| match a.replacement() {
             Some(&Replacement {
                 rewrite: Rewrite::Dredge(n),
                 ..

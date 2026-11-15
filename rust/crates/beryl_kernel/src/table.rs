@@ -44,6 +44,11 @@ pub enum TableError {
     /// ([`listener::found_where_it_works`]): it would work only where its kind does, so no
     /// game is played with it.
     Zone { card: &'static str },
+    /// A card of the game, or a token or emblem one makes, grants an ability the engine
+    /// does not read when it is granted ([`listener::read_when_granted`]): anything but an
+    /// activated ability or a static ability the layers apply. It would silently do nothing,
+    /// so no game is played with it.
+    Granted { card: &'static str },
     /// A card of the game, or a token or emblem one makes, has a static ability whose
     /// continuous effect the layers have no code to apply ([`static_ability::applied`]): it
     /// would change nothing, so no game is played with it.
@@ -165,18 +170,21 @@ pub struct GameTable {
 }
 
 /// Whether the engine finds each ability of `def`, and each it grants, wherever it says it
-/// works ([`listener::found_where_it_works`]).
+/// works ([`listener::found_where_it_works`]), and reads each it grants
+/// ([`listener::read_when_granted`]).
 fn found_where_they_work(def: &CardDef) -> Result<(), TableError> {
-    let found = def
-        .faces
-        .iter()
-        .flat_map(|f| f.abilities.iter().chain(f.grants))
-        .all(listener::found_where_it_works);
-    if found {
-        Ok(())
-    } else {
-        Err(TableError::Zone { card: def.name })
+    let card = def.name;
+    let mut faces = def.faces.iter();
+    let mut abilities = faces
+        .clone()
+        .flat_map(|f| f.abilities.iter().chain(f.grants));
+    if !abilities.all(listener::found_where_it_works) {
+        return Err(TableError::Zone { card });
     }
+    if !faces.all(|f| f.grants.iter().all(listener::read_when_granted)) {
+        return Err(TableError::Granted { card });
+    }
+    Ok(())
 }
 
 /// A card's replacement mask ([`Replaces`]), with the rule changes its abilities name numbered

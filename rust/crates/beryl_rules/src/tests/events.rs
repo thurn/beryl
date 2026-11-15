@@ -16,13 +16,14 @@ use crate::card::{
     Keywords, LayerSpec, ManaColor, ManaCost, Modification, Objects, Part, Players, Prompt,
     Purpose, Replacement, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
 };
-use crate::card::{CastingKind, Flow};
+use crate::card::{CastingKind, Flow, ObjectAbility};
 use crate::damage;
 use crate::event::{self, Event, Reason, Recipient, Sink, TokenEntry};
 use crate::filter::{Evaluate, Filter};
 use crate::fixed::Fixed;
 use crate::game::Game;
 use crate::ids::{Seat, Slot};
+use crate::layout::Small;
 use crate::profile::Breakpoint;
 use crate::resolution::Resolution;
 use crate::state::{
@@ -1330,8 +1331,19 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     assert!(d.subtypes.contains(t.subtypes(), Subtype::Vehicle));
     let grant = d.granted[0].unwrap();
     assert_eq!(grant.card, s.copiable(aura).record(&t).0);
-    let granted = &t.def(grant.card).front().grants[grant.grant.index()];
-    assert_eq!(granted.kind(), AbilityKind::Activated);
+    // The bear's abilities are its face's, then the crew ability the Aura grants it.
+    let granted = |s: &State<Small>, slot| {
+        (s.abilities(&t, slot))
+            .filter(|&(a, _)| matches!(a, ObjectAbility::Granted(_)))
+            .map(|(a, ability)| (a, ability.kind()))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        granted(&s, bear),
+        vec![(ObjectAbility::Granted(0), AbilityKind::Activated)]
+    );
+    assert!(s.has(bear, ObjectAbility::Granted(0)));
+    assert!(!s.has(bear, ObjectAbility::Granted(1)));
     // A land loses its land types with its land type (CR 205.1a), and keeps the Vehicle.
     let land = put(&t, &mut s, &mut x, p, "Test Land");
     s.board().attach(aura, land);
@@ -1342,6 +1354,8 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
         vec![Subtype::Vehicle]
     );
     assert_eq!(types(&s, bear), Types::CREATURE, "no longer enchanted");
+    assert_eq!(granted(&s, bear), vec![], "no longer granted crew");
+    assert!(!s.has(bear, ObjectAbility::Granted(0)));
     s.board().attach(aura, bear);
     crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     // Crewed: an artifact creature until end of turn, by a later timestamp.

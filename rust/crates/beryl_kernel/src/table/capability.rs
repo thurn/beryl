@@ -38,6 +38,9 @@ pub enum Capability {
     /// ([`Draws::ExceptFirstInDrawStep`]), so the cards each player draws in their own draw
     /// step are counted.
     DrewInDrawStep,
+    /// A card grants another permanent an ability, so the abilities an object has
+    /// ([`crate::State::abilities`]) include those its layer results say it was granted.
+    Grants,
     /// A card grants another permanent a static ability with a continuous effect, so the
     /// layers may find an ability in layer 6 whose effect belongs to an earlier layer, and
     /// run once more with it present (`beryl_rules`' `layers`).
@@ -60,6 +63,9 @@ impl Capability {
         let mut found = 0;
         if Inputs::of(face) != Inputs::NONE {
             found |= Capability::LayerInputs.bit();
+        }
+        if !face.grants.is_empty() {
+            found |= Capability::Grants.bit();
         }
         // An ability a permanent is granted reads what one of its own does.
         if face.grants.iter().any(|a| a.layer().is_some()) {

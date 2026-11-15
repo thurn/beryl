@@ -1,7 +1,9 @@
 //! Tapping and paying: carrying out a plan or a manual choice.
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityIx, CostAction, INTRINSIC_MANA, ManaColor, ManaCost, Types};
+use crate::card::{
+    AbilityIx, CostAction, INTRINSIC_MANA, ManaColor, ManaCost, ObjectAbility, Types,
+};
 use crate::decision::Opt;
 use crate::event::{self, Sink};
 use crate::fixed::Full;
@@ -229,15 +231,18 @@ pub(crate) fn activate<L: Layout>(
     color: ManaColor,
 ) -> Result<(), Full> {
     let (card, face) = s.copiable(slot).record(t);
-    let printed = (s.copiable(slot).face(t).abilities)
-        .iter()
-        .enumerate()
-        .find(|&(i, a)| {
-            s.has_ability(slot, AbilityIx::new(i as u8))
-                && (is_simple(a) || is_sacrificed(a))
+    // The card table refuses a card that grants a mana ability (`TableError::Granted`), so
+    // the one found is the permanent's own.
+    let printed = s.abilities(t, slot).find_map(|(ability, a)| match ability {
+        ObjectAbility::Own(i)
+            if (is_simple(a) || is_sacrificed(a))
                 && a.produces().includes(color)
-                && allowed(s, t, a, s.controller(slot))
-        });
+                && allowed(s, t, a, s.controller(slot)) =>
+        {
+            Some((i, a))
+        }
+        _ => None,
+    });
     // [CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056): a land of a basic land
     // type "has the intrinsic ability “{T}: Add [mana symbol],” even if the text box doesn't
     // actually contain that text". It is no ability of the face, so its activation names
@@ -245,7 +250,7 @@ pub(crate) fn activate<L: Layout>(
     let (index, ability) = printed
         .or_else(|| {
             (s.intrinsic_mana(t, slot) & (1 << color.index()) != 0)
-                .then(|| (usize::from(u8::MAX), &INTRINSIC_MANA[color.index()]))
+                .then(|| (AbilityIx::new(u8::MAX), &INTRINSIC_MANA[color.index()]))
         })
         .expect("a mana ability that makes the chosen mana");
     let source = s.object_ref(slot);
@@ -262,7 +267,7 @@ pub(crate) fn activate<L: Layout>(
         of: AbilityRef {
             source: Some(source),
             controller,
-            ability: crate::card::AbilityIx::new(index as u8),
+            ability: index,
             card,
             face,
         },

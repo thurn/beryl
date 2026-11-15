@@ -175,10 +175,32 @@ static TOLL: CardDef = CardDef {
     }],
     tokens: &[],
 };
-static UNREAD: CardTable = CardTable::new(&[&ALPHA, &ANTHEM, &TOLL]);
+/// "Creatures you control have 'When this creature enters, ...'": a triggered ability granted
+/// to other permanents, which no listener of the table matches.
+static HERALDRY: CardDef = CardDef {
+    name: "Heraldry",
+    faces: &[Face {
+        abilities: &[Ability::static_ability(&LayerSpec {
+            affected: Objects::All {
+                zone: Zone::Battlefield,
+                filter: Filter::All(&[
+                    Filter::Types(Types::CREATURE),
+                    Filter::Whose(&Players::You),
+                ]),
+            },
+            condition: None,
+            modifications: &[Modification::grant(0)],
+        })],
+        grants: &[Ability::triggered(&Trigger::ENTERS).effect(&Effect::NOTHING)],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+static UNREAD: CardTable = CardTable::new(&[&ALPHA, &ANTHEM, &TOLL, &HERALDRY]);
 
-/// A static ability the layers cannot apply would change nothing, and a filter for
-/// players the engine cannot read there would accept nothing: no table is built.
+/// A static ability the layers cannot apply would change nothing, a filter for players the
+/// engine cannot read there would accept nothing, and a granted triggered ability would never
+/// trigger: no table is built.
 #[test]
 fn a_table_refuses_what_the_engine_has_no_code_to_read() {
     let refused =
@@ -191,6 +213,10 @@ fn a_table_refuses_what_the_engine_has_no_code_to_read() {
         })
     );
     assert_eq!(refused("Toll"), Some(TableError::Players { card: "Toll" }));
+    assert_eq!(
+        refused("Heraldry"),
+        Some(TableError::Granted { card: "Heraldry" })
+    );
 }
 
 /// "Create a Beta token", by a card that lists none, and by one that lists it.

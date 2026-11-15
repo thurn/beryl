@@ -212,6 +212,9 @@ impl ReplayFile {
                         "{card} has an ability that works in a zone the engine does not look in"
                     ),
                 },
+                TableError::Granted { card } => SessionError::Deck {
+                    reason: format!("{card} grants an ability the engine does not read"),
+                },
                 TableError::Players { card } => SessionError::Deck {
                     reason: format!("{card} has a filter naming players the engine cannot read"),
                 },

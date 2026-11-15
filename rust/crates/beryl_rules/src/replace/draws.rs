@@ -8,7 +8,7 @@ use beryl_card::prompt::Purpose;
 use beryl_card::{Draws, Prompt};
 
 use super::{MOST, answer};
-use crate::card::{AbilityIx, FaceAbility, Replaced, Replacement};
+use crate::card::{Ability, AbilityIx, FaceAbility, Replaced, Replacement};
 use crate::decision::{Decision, DecisionKind, Opt};
 #[cfg(doc)]
 use crate::event::Sink;
@@ -21,7 +21,6 @@ use crate::layout::{Layout, Queue};
 use crate::replacement;
 use crate::state::{Count, ObjectRef, State, TurnStep};
 use crate::table::GameTable;
-use crate::{interpret, trigger};
 
 /// A replacement of draws by a static ability of a permanent ([`Replaced::Draw`]) that applies
 /// to a draw: the permanent, the index of the ability on its face, the ability and the
@@ -90,25 +89,24 @@ pub(crate) fn draw<L: Layout>(
             continue;
         }
         let controller = s.controller(permanent);
-        for (index, ability) in (0u8..).zip(trigger::face(s, t, permanent).abilities) {
-            let Some(&Replacement {
+        let draws = |ability: &Ability, r: &Replacement| match *r {
+            Replacement {
                 replaces: Replaced::Draw(players, draws),
                 ..
-            }) = ability.replacement()
-            else {
-                continue;
-            };
-            let index = AbilityIx::new(index);
-            let applies = replacement::replaces_draws(ability)
+            } if replacement::replaces_draws(ability)
                 && filter::is_for(&players, player, controller)
-                && replaces_this_draw(s, player, draws)
-                && s.has_ability(permanent, index)
-                && interpret::static_condition_holds(s, t, permanent, index, ability)
-                && !game
-                    .sink
-                    .applied
-                    .as_slice()
-                    .contains(&(s.object_ref(permanent), index.index() as u8));
+                && replaces_this_draw(s, player, draws) =>
+            {
+                Some(())
+            }
+            _ => None,
+        };
+        for (index, ability, ()) in super::statics(s, t, permanent, draws) {
+            let applies = !game
+                .sink
+                .applied
+                .as_slice()
+                .contains(&(s.object_ref(permanent), index.index() as u8));
             if applies {
                 found.push(Some(DrawReplacement {
                     permanent,

@@ -2,7 +2,7 @@
 //! interchangeable permanents.
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, AbilityIx, Face, Types};
+use crate::card::{Ability, Face, Types};
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::state::{Derived, State};
@@ -137,7 +137,7 @@ pub fn mana_contribution<L: Layout>(
 
 /// What [`source`] finds, read from the face of an untapped source `player` controls that may
 /// tap for mana now, the permanent in `slot`: of the abilities it has
-/// ([`State::has_ability`]), with the intrinsic mana abilities of its basic land types
+/// ([`State::abilities`]), with the intrinsic mana abilities of its basic land types
 /// ([`State::intrinsic_mana`]), each of which makes one mana of its kind.
 fn read_source<L: Layout>(
     s: &State<L>,
@@ -146,15 +146,14 @@ fn read_source<L: Layout>(
     slot: L::Slot,
     face: &Face,
 ) -> Option<(u8, u8, bool, bool)> {
-    let has = |i: usize| s.has_ability(slot, AbilityIx::new(i as u8));
     let mut kinds = s.intrinsic_mana(t, slot);
     let mut amount = u8::from(kinds != 0);
     // A source whose mana depends on other permanents, as Floodfarm Verge's {U}, is a class
     // of its own: tapping it rather than another making the same mana now can leave
     // different mana for later.
     let mut conditional = false;
-    let mut abilities = face.abilities.iter().enumerate();
-    for (_, a) in abilities.clone().filter(|&(i, a)| is_simple(a) && has(i)) {
+    let mut abilities = s.abilities(t, slot).map(|(_, a)| a);
+    for a in abilities.clone().filter(|a| is_simple(a)) {
         conditional |= a.only_if_you_control().is_some();
         if !allowed(s, t, a, player) {
             continue;
@@ -165,8 +164,7 @@ fn read_source<L: Layout>(
     }
     if kinds == 0 {
         // A Treasure: its one mana ability sacrifices it.
-        let (_, a) =
-            abilities.find(|&(i, a)| is_sacrificed(a) && has(i) && allowed(s, t, a, player))?;
+        let a = abilities.find(|a| is_sacrificed(a) && allowed(s, t, a, player))?;
         debug_assert!(
             a.produces().amount == 1 || a.produces().colors.is_power_of_two(),
             "a source of several mana makes one kind"

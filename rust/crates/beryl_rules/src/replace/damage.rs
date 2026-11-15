@@ -4,7 +4,7 @@
 //!
 //! [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
 
-use crate::card::{AbilityIx, AbilityKind, Effect, Replaced, Replacement, Rewrite};
+use crate::card::{Ability, AbilityIx, AbilityKind, Effect, Replaced, Replacement, Rewrite};
 use crate::decision::{Decision, DecisionKind, Opt};
 use crate::event::{Recipient, ReplacementKind};
 use crate::filter::Evaluate;
@@ -12,9 +12,9 @@ use crate::fixed::{Fixed, Full};
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
+use crate::protection;
 use crate::state::{ChosenSource, ObjectRef, ShieldAt, State, Subject, Zone, ZoneKey};
 use crate::table::GameTable;
-use crate::{interpret, protection, trigger};
 
 use beryl_card::prompt::Purpose;
 use beryl_card::{Filter, Prompt};
@@ -209,21 +209,14 @@ fn candidates<L: Layout>(
             {
                 continue;
             }
-            for (index, a) in (0u8..).zip(trigger::face(s, t, slot).abilities) {
-                let Some(&Replacement {
+            let multiplies = |a: &Ability, r: &Replacement| match *r {
+                Replacement {
                     replaces: Replaced::Damage,
                     rewrite: Rewrite::Multiply(n),
-                }) = a.replacement()
-                else {
-                    continue;
-                };
-                let ability = AbilityIx::new(index);
-                if a.kind() != AbilityKind::Replacement
-                    || !s.has_ability(slot, ability)
-                    || !interpret::static_condition_holds(s, t, slot, ability, a)
-                {
-                    continue;
-                }
+                } if a.kind() == AbilityKind::Replacement => Some(n),
+                _ => None,
+            };
+            for (ability, a, n) in super::statics(s, t, slot, multiplies) {
                 crate::coverage::hit(a);
                 add(Candidate {
                     key: Key::Ability(slot, ability),

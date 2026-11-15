@@ -8,7 +8,7 @@
 //!   of each mana symbol to a unit of mana from the pool or a mana ability read off the cards.
 
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityIx, AbilityKind, CostAction, CostPart, ManaCost, Types};
+use crate::card::{AbilityKind, CostAction, CostPart, ManaCost, Types};
 use crate::event::Sink;
 use crate::filter::Evaluate;
 use crate::fixed::Fixed;
@@ -19,7 +19,6 @@ use crate::layout::{Layout, Queue, Table};
 use crate::mana::{self, Funds};
 use crate::state::{State, Zone, ZoneKey};
 use crate::table::GameTable;
-use crate::trigger::face;
 
 fn check(ok: bool, what: &'static str, at: Option<At>) -> Result<(), Violation> {
     if ok {
@@ -126,11 +125,8 @@ fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Resul
         .iter()
         .filter(|&&slot| s.controller(slot) == player)
         .flat_map(|&slot| {
-            (0u8..)
-                .zip(face(s, t, slot).abilities)
-                .filter(move |&(i, a)| {
-                    a.kind() == AbilityKind::Activated && s.has_ability(slot, AbilityIx::new(i))
-                })
+            s.abilities(t, slot)
+                .filter(|&(_, a)| a.kind() == AbilityKind::Activated)
                 .map(|(_, a)| a.cost().mana)
         });
     let Ok(funds) = Funds::of(s, t, player) else {
@@ -208,11 +204,8 @@ fn reference_units<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Opti
         // The intrinsic mana abilities of its basic land types make one mana each (CR 305.6).
         let mut kinds = s.intrinsic_mana(t, slot);
         let mut amount = (kinds != 0).then_some(1);
-        for (i, a) in (0u8..).zip(face(s, t, slot).abilities) {
-            // A permanent that lost the ability has none to tap (CR 613.1f).
-            if !s.has_ability(slot, AbilityIx::new(i)) {
-                continue;
-            }
+        // A permanent that lost the ability has none to tap (CR 613.1f).
+        for (_, a) in s.abilities(t, slot) {
             // {T}, or {T} and sacrificing it, and nothing else.
             let tap_only = a.cost().mana.is_zero()
                 && a.cost().does(CostAction::Tap)

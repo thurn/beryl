@@ -13,7 +13,7 @@
 
 use beryl_card::{Governed, RuleChange};
 
-use crate::card::{Ability, AbilityIx, AbilityKind, Face};
+use crate::card::{Ability, AbilityIx, AbilityKind, Face, ObjectAbility};
 use crate::filter::{self, Filter};
 use crate::ids::Seat;
 use crate::interpret;
@@ -193,14 +193,17 @@ fn maker_of<L: Layout>(
     id: RuleId,
 ) -> Option<(AbilityIx, &'static Ability)> {
     let rule = t.rule(id);
-    let abilities = s.copiable(slot).face(t).abilities;
-    (0u8..).zip(abilities).find_map(|(index, ability)| {
+    // The card table refuses a card that grants a rule change (`TableError::Granted`), so
+    // the maker is one of the permanent's own abilities.
+    s.abilities(t, slot).find_map(|(index, ability)| {
+        let ObjectAbility::Own(index) = index else {
+            return None;
+        };
         let makes = ability.kind() == AbilityKind::Static
             && ability
                 .rule()
-                .is_some_and(|named| std::ptr::eq(named, rule))
-            && s.has_ability(slot, AbilityIx::new(index));
-        makes.then_some((AbilityIx::new(index), ability))
+                .is_some_and(|named| std::ptr::eq(named, rule));
+        makes.then_some((index, ability))
     })
 }
 

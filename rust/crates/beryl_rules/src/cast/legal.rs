@@ -12,11 +12,11 @@ use crate::decision::{Opt, Refusal};
 use crate::engine::collapse;
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
-use crate::layout::{Layout, Queue, Small, Table};
+use crate::layout::{Layout, Queue, Small};
 use crate::mana::Funds;
 use crate::rule_change;
 use crate::state::{RuleKind, State, Tracker, Zone, ZoneKey};
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
 
 use super::costs::{From, option_sets, spell_cost, x_range_start};
 use super::parts;
@@ -424,19 +424,12 @@ fn activation_options<L: Layout, const TARGETS: bool>(
     // comparing them. Whether one has is part of what collapsing compares (its card, face
     // and granted abilities), so the result is the same.
     let facts = |slot: L::Slot| s.copiable(slot).facts(t);
+    let granted_any = t.can(Capability::Grants);
     let objects = objects.filter(|slot| {
-        facts(slot).activates()
-            || (s.object(slot).zone() == Zone::Battlefield && { s.derived(slot).granted }
-                .iter()
-                .any(Option::is_some))
+        facts(slot).activates() || (granted_any && s.has(slot, ObjectAbility::Granted(0)))
     });
     // Candidates are listed in the candidate order, which a `Choice` counts in.
     for slot in s.in_candidate_order(collapse(s, objects)) {
-        let granted = if s.object(slot).zone() == Zone::Battlefield {
-            { s.derived(slot).granted }.len() as u8
-        } else {
-            0
-        };
         // Of its own abilities, only the activated ones can be activated (CR 602.1), so the
         // rest are not checked; granted ones are checked whatever they are. One it has lost
         // can't be activated (CR 613.1f): asked once of a permanent that has them all, as
@@ -445,9 +438,9 @@ fn activation_options<L: Layout, const TARGETS: bool>(
         let abilities = facts(slot)
             .activated()
             .map(ObjectAbility::Own)
-            .chain((0..granted).map(ObjectAbility::Granted));
+            .chain(granted(s, t, slot, granted_any));
         for ability in abilities {
-            if lost && matches!(ability, ObjectAbility::Own(i) if !s.has_ability(slot, i)) {
+            if lost && !s.has(slot, ability) {
                 continue;
             }
             if activatable(s, t, now, slot, ability) && !(prunes && pointless(s, t, slot, ability))
@@ -457,6 +450,21 @@ fn activation_options<L: Layout, const TARGETS: bool>(
         }
     }
     Ok(())
+}
+
+/// The abilities other objects granted the object in `slot`, if `any` card of the game grants
+/// one ([`Capability::Grants`]).
+fn granted<'a, L: Layout>(
+    s: &'a State<L>,
+    t: &'a GameTable,
+    slot: L::Slot,
+    any: bool,
+) -> impl Iterator<Item = ObjectAbility> + 'a {
+    any.then(|| s.abilities(t, slot))
+        .into_iter()
+        .flatten()
+        .map(|(ability, _)| ability)
+        .filter(|ability| matches!(ability, ObjectAbility::Granted(_)))
 }
 
 /// Appends the priority actions casting and activation add: spells and abilities.

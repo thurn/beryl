@@ -582,6 +582,7 @@
 //! [`state::Derived`] `granted` entry that [`State::has_ability`] does not answer for, and
 //! trigger matching reads no granted ability.
 //! | the objects another record of the state names, which no twin stands in for (architecture §7.2) | [`State::named`] |
+//! | every ability it has now: its face's own it has not lost, then those granted to it (CR 613.1f) | [`State::abilities`], [`State::has`] |
 //!
 //! A [`Copiable`] is a definition, the face of it that is up and a copy effect's exception
 //! (CR 707.9b). It answers with the face's characteristics ([`Copiable::face`], the blank
@@ -691,6 +692,7 @@
 //! [CR 613.11]: https://yawgatog.com/resources/magic-rules/#R61311
 //! [CR 101.2]: https://yawgatog.com/resources/magic-rules/#R1012
 
+pub mod abilities;
 pub mod asking;
 pub mod bitboard;
 pub mod board;
