@@ -40,6 +40,7 @@ pub enum Rule {
     Named,
     BlankCard,
     LinesHold,
+    Clips,
 }
 
 impl Rule {
@@ -54,6 +55,7 @@ impl Rule {
             Self::Named => "named",
             Self::BlankCard => "blank-card",
             Self::LinesHold => "lines-hold",
+            Self::Clips => "clips",
         }
     }
 }

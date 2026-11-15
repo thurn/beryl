@@ -629,9 +629,5 @@ impl Page {
 
 /// A client sized for the largest board the engine holds.
 fn client() -> Client {
-    Client::new(Config {
-        elements: 4096,
-        draws: 8192,
-        name_bytes: 1 << 17,
-    })
+    Client::new(Config::LARGEST)
 }

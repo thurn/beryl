@@ -3,6 +3,7 @@
 //! which the interface checks and agent tools read, and the draw list, which the renderer reads.
 
 mod draw;
+mod order;
 
 use beryl_session::protocol::{RowName, Side, ZoneName};
 use glam::{Mat4, Vec2};
@@ -217,6 +218,23 @@ pub enum Band {
 /// How many entries `Frame::clips` has; entry 0 means no clip.
 pub const CLIPS: usize = 16;
 
+/// The most objects the engine's largest board holds, and so the most cards a frame draws.
+pub const OBJECTS: usize = 1024;
+/// The most records one card writes: the card, its soft edge, its contact shadow and a mark.
+pub const RECORDS_PER_OBJECT: usize = 4;
+/// The most records the flat layer writes: the glyphs and panels of a prompt, a card browser and
+/// the text around the table.
+pub const LAYER_RECORDS: usize = 4096;
+/// The most records a frame holds, so that ordering the largest board allocates nothing.
+pub const DRAWS: usize = OBJECTS * RECORDS_PER_OBJECT + LAYER_RECORDS;
+/// The most elements of the flat layer a frame holds.
+pub const LAYER_ELEMENTS: usize = 3072;
+/// The most resolved elements a frame holds: one for each card, and the flat layer's.
+pub const ELEMENTS: usize = OBJECTS + LAYER_ELEMENTS;
+/// The most bytes of names a frame holds: 32 bytes for each element, which a card's name
+/// rarely exceeds.
+pub const NAME_BYTES: usize = ELEMENTS * 32;
+
 /// What the client core hands the renderer and the checks for one moment.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Frame {
@@ -236,12 +254,18 @@ pub struct Frame {
     pub view_projection: Mat4,
     /// Clip rectangles in physical pixels; entry 0 is not used.
     pub clips: [Rect; CLIPS],
+    /// Whether a clip was asked for after all 15 entries were taken. The records that wanted it
+    /// are drawn unclipped, and the checks report it as a fault.
+    pub clips_full: bool,
     /// How far the whole picture is shaken, in physical pixels.
     pub shake: Vec2,
     /// The sounds that begin in this frame.
     pub sounds: Vec<SoundId>,
     pub load: Load,
     pub work: Work,
+    /// The sort keys and reordered records of `FrameBuilder::finish`, kept so that ordering
+    /// allocates nothing.
+    scratch: order::Scratch,
 }
 
 impl Frame {
@@ -258,10 +282,12 @@ impl Frame {
             layer: 0,
             view_projection: Mat4::IDENTITY,
             clips: [Rect::default(); CLIPS],
+            clips_full: false,
             shake: Vec2::ZERO,
             sounds: Vec::new(),
             load: Load::default(),
             work: Work::default(),
+            scratch: order::Scratch::with_capacity(draws),
         }
     }
 
@@ -274,13 +300,10 @@ impl Frame {
 }
 
 /// What `Client::frame` writes a frame into. Making one clears the frame, keeping its capacity.
+/// Records may be pushed in any order: `finish` puts them in drawing order.
 pub struct FrameBuilder<'a> {
     frame: &'a mut Frame,
     clips: u8,
-    /// Whether every record pushed so far is opaque.
-    opaque_run: bool,
-    /// Whether a record of the flat layer has been pushed.
-    in_layer: bool,
 }
 
 impl<'a> FrameBuilder<'a> {
@@ -292,16 +315,13 @@ impl<'a> FrameBuilder<'a> {
         frame.layer = 0;
         frame.view_projection = Mat4::IDENTITY;
         frame.clips = [Rect::default(); CLIPS];
+        frame.clips_full = false;
         frame.shake = Vec2::ZERO;
         frame.sounds.clear();
         frame.load = Load::default();
         frame.work = Work::default();
-        Self {
-            frame,
-            clips: 0,
-            opaque_run: true,
-            in_layer: false,
-        }
+        frame.scratch.clear();
+        Self { frame, clips: 0 }
     }
 
     /// Adds `element` named `name`, and returns its index. The builder sets `element.name`.
@@ -316,32 +336,26 @@ impl<'a> FrameBuilder<'a> {
         index(self.frame.resolved.len() - 1)
     }
 
-    /// Sets the camera's view and projection, `Frame::view_projection`.
+    /// Sets the camera's view and projection, `Frame::view_projection`, which `finish` also uses
+    /// to order the records by depth and to measure their screen area.
     pub fn camera(&mut self, view_projection: Mat4) {
         self.frame.view_projection = view_projection;
     }
 
-    /// Adds a record to `band`. The records stay in the order they were pushed, so `opaque`
-    /// counts only the opaque records pushed before any blended one, and `layer` is where the
-    /// first record of the flat layer's bands was pushed.
+    /// Adds a record to `band`. Within the flat layer's band, records are drawn in the order
+    /// they are pushed, which is the order of its tree.
     pub fn draw(&mut self, band: Band, draw: Draw) {
-        self.opaque_run &= band == Band::Opaque;
-        if self.opaque_run {
-            self.frame.opaque += 1;
-        }
-        if !self.in_layer && band >= Band::Layer {
-            self.in_layer = true;
-            self.frame.layer = index(self.frame.draws.len());
-        }
+        self.frame.scratch.push(band, self.frame.draws.len());
         self.frame.draws.push(draw);
         self.frame.work.records += 1;
-        self.frame.load.instances += 1;
     }
 
     /// Adds a clip rectangle in physical pixels and returns its entry, for `Draw::with_clip`.
-    /// Returns `None` once all 15 entries are taken, which is a fault the checks report.
+    /// Returns `None` once all 15 entries are taken, and sets `Frame::clips_full`, which the
+    /// checks report as a fault.
     pub fn clip(&mut self, rect: Rect) -> Option<u8> {
         if usize::from(self.clips) + 1 >= CLIPS {
+            self.frame.clips_full = true;
             return None;
         }
         self.clips += 1;
@@ -349,10 +363,10 @@ impl<'a> FrameBuilder<'a> {
         Some(self.clips)
     }
 
+    /// Puts the records in drawing order, sets `Frame::opaque` and `Frame::layer`, and counts
+    /// the frame's `Load` (see `order`).
     pub fn finish(self) -> &'a Frame {
-        if !self.in_layer {
-            self.frame.layer = index(self.frame.draws.len());
-        }
+        order::finish(self.frame);
         self.frame
     }
 }

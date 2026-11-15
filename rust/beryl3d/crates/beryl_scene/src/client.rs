@@ -6,7 +6,7 @@
 use std::collections::VecDeque;
 
 use crate::command::{Request, SessionCommand};
-use crate::frame::{Frame, FrameBuilder, Wake};
+use crate::frame::{self, Frame, FrameBuilder, Wake};
 use beryl_session::GameUpdate;
 
 use crate::input::{GlyphKey, Input};
@@ -21,6 +21,15 @@ pub struct Config {
     pub draws: usize,
     /// The most bytes of element names a frame holds.
     pub name_bytes: usize,
+}
+
+impl Config {
+    /// Sizes for the engine's largest board, so that no frame allocates (see `frame::DRAWS`).
+    pub const LARGEST: Self = Self {
+        elements: frame::ELEMENTS,
+        draws: frame::DRAWS,
+        name_bytes: frame::NAME_BYTES,
+    };
 }
 
 /// The client core.

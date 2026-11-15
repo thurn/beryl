@@ -382,6 +382,7 @@ pub struct Frame {
                                   // records: no depth test, not shaken
     pub view_projection: Mat4,    // the camera, for every record
     pub clips: [Rect; 16],        // physical pixels; entry 0 is not used
+    pub clips_full: bool,         // a sixteenth clip was asked for: a fault
     pub shake: Vec2,              // physical pixels, see Effects
     pub sounds: Vec<SoundId>,     // the sounds that begin in this frame
     pub load: Load,               // draw calls, instances, upload bytes, and
@@ -542,7 +543,14 @@ The rules for building a frame:
   adds up numbers that predict GPU load: draw calls, instances, bytes to upload,
   and the screen area of its opaque and of its blended records, each divided by
   the screen's area. The [Performance gates](#performance-gates) section below
-  holds these to limits, and counts the pixels actually shaded.
+  holds these to limits, and counts the pixels actually shaded. A record's area
+  is the rectangle that bounds its mesh, cut to the view volume. The one-pixel
+  edge strip counts as no area, and clip rectangles are not taken into account.
+- **Ordered once, without allocating.** Records may be pushed in any order;
+  `FrameBuilder::finish` sorts them by band, then by depth, then by the order
+  they were pushed, with keys held in a scratch array the frame keeps. The
+  frame's arrays are sized at startup for the engine's largest board, 1,024
+  objects (`frame::DRAWS`, `ELEMENTS` and `NAME_BYTES`; `Config::LARGEST`).
 
 ### Drawing only when something changes
 
@@ -1797,6 +1805,9 @@ screen, so they cover every card spec that is ever generated.
   name.
 - **Text fits.** No laid-out line is wider or taller than its element's box.
 - **Named.** Every interactive element has a role and a non-empty name.
+- **Clips fit.** The frame asks for no more than 15 clip rectangles. A clip
+  asked for past the last entry is dropped, and the records that wanted it are
+  drawn whole.
 - **Phone sizes.** On the phone layout, touch targets are at least 44 by 44
   points and text at least 11 points.
 - **No jumps.** Where one of an object's segments ends and the next begins, the

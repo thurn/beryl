@@ -22,6 +22,7 @@ pub fn check(frame: &Frame, context: &Context) -> Vec<Fault> {
     faults.extend(duplicates(frame, context));
     faults.extend(named(frame, context));
     faults.extend(blank_cards(frame, context));
+    faults.extend(clips(frame, context));
     faults
 }
 
@@ -242,6 +243,24 @@ pub fn blank_cards(frame: &Frame, context: &Context) -> Vec<Fault> {
             )
         })
         .collect()
+}
+
+/// Clips fit: the frame asked for no more clip rectangles than `Frame::clips` holds. A clip
+/// asked for past the last entry is dropped, and what it should have cut off is drawn whole.
+#[must_use]
+pub fn clips(frame: &Frame, context: &Context) -> Vec<Fault> {
+    if !frame.clips_full {
+        return Vec::new();
+    }
+    vec![fault(
+        Rule::Clips,
+        context,
+        format!(
+            "the frame asked for more than {} clip rectangles",
+            crate::frame::CLIPS - 1
+        ),
+        Vec::new(),
+    )]
 }
 
 /// Lines hold: an arrow whose two ends are at rest does not change shape. An arrow is matched
