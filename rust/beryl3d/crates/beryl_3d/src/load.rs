@@ -31,7 +31,9 @@ pub fn parse(text: &str) -> Result<(usize, Class), String> {
         .parse()
         .map_err(|_| format!("--load {text}: '{count}' is not a number of threads"))?;
     let class = Class::from_word(class).ok_or_else(|| {
-        format!("--load {text}: a class is utility, default, initiated or interactive, not '{class}'")
+        format!(
+            "--load {text}: a class is utility, default, initiated or interactive, not '{class}'"
+        )
     })?;
     Ok((count, class))
 }
