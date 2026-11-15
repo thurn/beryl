@@ -6,7 +6,7 @@ use crate::actions::destroy::destroy;
 use crate::event::Sink;
 use crate::state::Zone;
 use crate::zone::Place;
-use crate::{DecisionKind, Opt, TurnStep};
+use crate::{Choice, DecisionKind, Opt, Replay, TurnStep, apply};
 
 #[test]
 fn trample_assigns_lethal_damage_to_a_lone_blocker_and_the_rest_to_the_player() {
@@ -139,5 +139,28 @@ fn landwalk_is_unblockable_only_while_the_defender_controls_that_land_type() {
         g.finish_combat();
         assert_eq!(g.life(d), if swamp { 17 } else { 20 });
         assert_eq!(g.on_battlefield(bear), swamp);
+    }
+}
+
+#[test]
+fn a_creature_that_cant_block_is_never_offered_as_a_blocker() {
+    // CR 509.1a with CR 101.2: the Ghoul's "can't block" leaves the Bear as the only
+    // blocker, and with the Ghoul alone the defender is not asked to block at all.
+    for with_bear in [true, false] {
+        let mut g = Game::new();
+        let (a, d) = (g.attacker, g.defender());
+        let giant = g.put(a, "Giant");
+        g.put(d, "Ghoul");
+        let bear = with_bear.then(|| g.put(d, "Bear"));
+        g.pass_to_combat();
+        g.pick(DecisionKind::Attacker, Opt::Attack(giant));
+        if let Some(bear) = bear {
+            let blockers = g.expect(DecisionKind::Blocker);
+            assert_eq!(options(&blockers), [Opt::Done, Opt::Block(bear)]);
+            let done = Choice(0);
+            apply(&mut g.s, &g.t, &mut g.x, &mut Replay, done);
+        }
+        g.finish_combat();
+        assert_eq!(g.life(d), 16);
     }
 }

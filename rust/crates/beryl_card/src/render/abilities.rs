@@ -17,13 +17,26 @@ use crate::continuous::{
 use crate::cost::{CastingKind, Chosen, Cost, CostAction, CostPart, Measure};
 use crate::effect::{Amount, Condition, Effect, Objects, Players};
 use crate::filter::Filter;
-use crate::ids::{TurnStep, Zone};
+use crate::ids::{TurnStep, Zone, ZoneSet};
 use crate::index::GrantIx;
 use crate::trigger::{Subject, Trigger, TriggerEvent};
 
 impl Ctx {
     /// One ability as its paragraph of rules text, each clause a sentence.
     pub(super) fn paragraph(&mut self, ability: &Ability) -> String {
+        // The text of an ability that works only in a graveyard (CR 113.6b) calls its card
+        // this card, as in "return this card from your graveyard to the battlefield".
+        let away = ability.zones() == ZoneSet::GRAVEYARD && !self.in_graveyard;
+        let this = away.then(|| std::mem::replace(&mut self.this, "this card".to_owned()));
+        self.in_graveyard |= away;
+        let text = self.paragraph_here(ability);
+        if let Some(this) = this {
+            (self.this, self.in_graveyard) = (this, false);
+        }
+        text
+    }
+
+    fn paragraph_here(&mut self, ability: &Ability) -> String {
         self.begin(ability.targets(), ability.trigger());
         if let Some(keyword) = Ctx::keyword_line(ability) {
             return keyword;
@@ -568,17 +581,24 @@ impl Ctx {
                 let whose = self.objects_possessive(objects);
                 format!("activate {whose} loyalty abilities")
             }
+            // "This creature can't block": of the creatures, not of who declares blocks.
+            Governed::Block(objects) => {
+                let creatures = self.objects(objects);
+                return match rule.when {
+                    When::Never => format!("{creatures} can't block"),
+                    _ => format!("{creatures} can block only at a changed time"),
+                };
+            }
         };
         match (rule.when, rule.what) {
+            (When::Never, _) => format!("{who} can't {what}"),
             (When::OnlyAsSorcery, _) => {
                 format!("{who} can {what} only any time {they} could cast a sorcery")
-            }
-            (When::AsInstant, Governed::CastSpells(_)) => {
-                format!("{who} may {what} as though they had flash")
             }
             (When::AsInstant, Governed::ActivateLoyaltyAbilities(_)) => {
                 format!("{who} may {what} any time {they} could cast an instant")
             }
+            (When::AsInstant, _) => format!("{who} may {what} as though they had flash"),
         }
     }
 

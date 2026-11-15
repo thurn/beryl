@@ -86,6 +86,9 @@ struct Ctx {
     /// Set from `discarded` once the text names this object after the discard, so "it" would
     /// mean this object: "those" is then "the discarded card".
     those_named: Option<bool>,
+    /// Whether the ability being written works only in a graveyard, so that "this card" is
+    /// in its owner's graveyard.
+    in_graveyard: bool,
 }
 
 /// What "enchanted" or "equipped" names.
@@ -146,6 +149,7 @@ impl Ctx {
             this_is_it: false,
             discarded: None,
             those_named: None,
+            in_graveyard: false,
         }
     }
 

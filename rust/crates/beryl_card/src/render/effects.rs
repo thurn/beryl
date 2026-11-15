@@ -144,6 +144,14 @@ impl Ctx {
                 let to = owners(self.is_plural(objects), "graveyard");
                 vec![self.acts(("put", "puts"), objects, &format!(" into {to}"))]
             }
+            // "Return this card from your graveyard to the battlefield": a card goes to
+            // its owner's graveyard (CR 404.1), and a triggered ability of an object with
+            // no controller is its owner's (CR 113.8), so "your" names the card's owner,
+            // under whose control it returns.
+            Effect::ReturnToBattlefield(Objects::This) if self.in_graveyard => {
+                let rest = " from your graveyard to the battlefield";
+                vec![self.acts(("return", "returns"), Objects::This, rest)]
+            }
             Effect::ReturnToBattlefield(objects) => {
                 let control = owners(self.is_plural(objects), "control");
                 let rest = format!(" to the battlefield under {control}");

@@ -9,17 +9,18 @@ use crate::characteristics::{Supertypes, Types};
 use crate::continuous::{Governed, RuleChange, When};
 use crate::cost::{Cost, CostPart};
 use crate::definition::{CardDef, Face, card};
+use crate::effect::build::may;
 use crate::effect::build::{
     carried_object, counter, deal_damage_to, deal_damage_to_any_target, delay_with, destroy, dig,
     discard, draw, exile, exile_until_this_leaves, flip_coin, if_then, if_you_lose_the_flip,
     may_cast_free, put_back, return_to_battlefield, sequence, target, this, those, you,
 };
-use crate::effect::{Amount, Comparison, Condition, Effect, LibraryOrder, Players, Taken};
+use crate::effect::{Amount, Comparison, Condition, Effect, LibraryOrder, Objects, Players, Taken};
 use crate::filter::Filter;
 use crate::ids::TurnStep;
 use crate::mana::{ManaSet, mana};
 use crate::target::{TargetKind, TargetSpec};
-use crate::trigger::Trigger;
+use crate::trigger::{Subject, Trigger, TriggerEvent};
 
 /// A one-face card named `name`.
 const fn one_face(name: &'static str, face: &'static [Face]) -> CardDef {
@@ -229,5 +230,39 @@ fn a_delayed_ability_on_a_carried_object_says_its_trigger_last() {
         render(&FLICKERWISP),
         "When this creature enters, exile another target permanent. Return that card to the \
          battlefield under its owner's control at the beginning of the next end step."
+    );
+}
+
+/// A creature that can't block and returns itself from its owner's graveyard, as
+/// Bloodghast's "This creature can't block." and "Whenever a land you control enters, you
+/// may return this card from your graveyard to the battlefield." say (its ability word
+/// aside).
+#[test]
+fn a_card_in_a_graveyard_calls_itself_this_card_and_a_creature_can_be_unable_to_block() {
+    static CANT_BLOCK: RuleChange = RuleChange {
+        players: Players::You,
+        what: Governed::Block(Objects::This),
+        when: When::Never,
+    };
+    static RETURN: Effect = return_to_battlefield(Objects::This);
+    static GHAST: CardDef = one_face(
+        "Test Ghast",
+        &[Face::EMPTY.types(Types::CREATURE).abilities(&[
+            Ability::rule_change(&CANT_BLOCK),
+            Ability::triggered(&Trigger::of(
+                TriggerEvent::Enters,
+                Subject::A(Filter::All(&[
+                    Filter::Types(Types::LAND),
+                    Filter::Whose(&Players::You),
+                ])),
+            ))
+            .in_graveyard()
+            .effect(&may(you(), &RETURN)),
+        ])],
+    );
+    assert_eq!(
+        render(&GHAST),
+        "This creature can't block.\nWhenever a land you control enters, you may return \
+         this card from your graveyard to the battlefield."
     );
 }

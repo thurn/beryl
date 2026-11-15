@@ -14,6 +14,7 @@ mod entering;
 mod entering_together;
 mod events;
 mod game;
+mod graveyard_return;
 mod invariants;
 mod land_types;
 mod layer_inputs;

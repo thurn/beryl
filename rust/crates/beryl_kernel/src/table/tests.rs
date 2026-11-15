@@ -78,13 +78,13 @@ static HERALD: CardDef = CardDef {
     ],
     tokens: &[],
 };
-/// "Whenever another creature enters", which the engine has no code to match, on a
-/// token a card makes.
+/// "Whenever a creature attacks" as a trigger of one attacking creature, which the engine
+/// has no code to match, on a token a card makes.
 static GREETER: CardDef = CardDef {
     name: "Greeter",
     faces: &[Face {
         abilities: &[Ability::triggered(&Trigger::of(
-            TriggerEvent::Enters,
+            TriggerEvent::Attacks,
             Subject::A(Filter::Types(Types::CREATURE)),
         ))
         .effect(&Effect::NOTHING)],

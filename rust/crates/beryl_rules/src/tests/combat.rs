@@ -8,8 +8,8 @@ use beryl_card::effect::build::{
 
 use super::begin;
 use crate::card::{
-    Ability, CardDef, Face, Keywords, ObjectAbility, Part, Players, Prompt, Purpose, Subtype,
-    Subtypes, Trigger, Types,
+    Ability, CardDef, Face, Keywords, ObjectAbility, Objects, Part, Players, Prompt, Purpose,
+    RuleChange, Subtype, Subtypes, Trigger, Types,
 };
 use crate::event::Event;
 use crate::ids::{Seat, Slot};
@@ -20,6 +20,7 @@ use crate::{
     Candidates, CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Opt, Profile,
     Replay, Scratch, State, Step, TurnStep, apply, next,
 };
+use beryl_card::{Governed, When};
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 /// A vanilla creature card with keywords.
@@ -135,9 +136,29 @@ static WAGON: CardDef = CardDef {
     tokens: &[],
 };
 
+/// "This creature can't block."
+static CANT_BLOCK: RuleChange = RuleChange {
+    players: Players::You,
+    what: Governed::Block(Objects::This),
+    when: When::Never,
+};
+
+/// A 2/1 that can't block.
+static GHOUL: CardDef = CardDef {
+    name: "Ghoul",
+    faces: &[Face {
+        types: Types::CREATURE,
+        power: Some(2),
+        toughness: Some(1),
+        abilities: &[Ability::rule_change(&CANT_BLOCK)],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
 static CARDS: CardTable = CardTable::new(&[
     &BEAR, &GIANT, &OGRE, &BIRD, &SPIDER, &KNIGHT, &SENTRY, &WALKER, &RAIDER, &CAPTAIN, &WAGON,
-    &WURM, &CLERIC, &GOLEM, &WRAITH, &SWAMP,
+    &WURM, &CLERIC, &GOLEM, &WRAITH, &SWAMP, &GHOUL,
 ]);
 
 const DECK: &Decklist = &[
@@ -157,6 +178,7 @@ const DECK: &Decklist = &[
     (2, "Golem"),
     (2, "Wraith"),
     (2, "Swamp"),
+    (2, "Ghoul"),
 ];
 
 /// A game stopped at the attacking player's first precombat main phase, with the event sink

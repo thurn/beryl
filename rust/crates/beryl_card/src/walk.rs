@@ -179,7 +179,9 @@ impl Ability {
             rule.players.walk(visit);
             match &rule.what {
                 Governed::CastSpells(filter) => filter.walk(visit),
-                Governed::ActivateLoyaltyAbilities(objects) => objects.walk(visit),
+                Governed::ActivateLoyaltyAbilities(objects) | Governed::Block(objects) => {
+                    objects.walk(visit);
+                }
             }
         }
         if let Some(filter) = &self.only_if_you_control() {

@@ -20,8 +20,9 @@ use crate::event::Replaces;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Unchecked {
     /// It governs what no check reads: the loyalty abilities of permanents other than the
-    /// one with the ability, or their timing as the rules have it already; or an effect
-    /// starts one that is asked of a permanent.
+    /// one with the ability, or their timing as the rules have it already; casting that no
+    /// one can do; blocking with creatures other than the one with the ability, or when
+    /// rather than whether one blocks; or an effect starts one that is asked of a permanent.
     Rule,
     /// It governs casting the spells a filter accepts, and the filter asks for more than a
     /// spell's own characteristics.
@@ -130,10 +131,15 @@ pub enum RuleKind {
     ///
     /// [CR 606.3]: https://yawgatog.com/resources/magic-rules/#R6063
     LoyaltyAsInstant,
+    /// The creature with the ability can't be declared as a blocker ([CR 509.1a]): "The
+    /// defending player chooses which creatures they control, if any, will block."
+    ///
+    /// [CR 509.1a]: https://yawgatog.com/resources/magic-rules/#R5091a
+    CantBlock,
 }
 
 impl RuleKind {
-    const COUNT: usize = 3;
+    const COUNT: usize = 4;
 
     /// The kind of change `rule` is, or the part of it no code reads.
     pub fn of(rule: &RuleChange) -> Result<RuleKind, Unchecked> {
@@ -151,6 +157,7 @@ impl RuleKind {
                 Ok(match when {
                     When::OnlyAsSorcery => RuleKind::CastOnlyAsSorcery,
                     When::AsInstant => RuleKind::CastAsInstant,
+                    When::Never => return Err(Unchecked::Rule),
                 })
             }
             // Only its controller activates a permanent's abilities (CR 606.3), so the
@@ -162,9 +169,18 @@ impl RuleKind {
                     Err(Unchecked::Players)
                 }
             }
-            // Other permanents' loyalty abilities, and a restriction to the timing the
-            // rules have already.
-            (Governed::ActivateLoyaltyAbilities(_), _) => Err(Unchecked::Rule),
+            // Its controller declares the block (CR 509.1a), so the change is asked of the
+            // creature, and is for "you" or for nobody.
+            (Governed::Block(Objects::This), When::Never) => {
+                if matches!(rule.players, Players::You) {
+                    Ok(RuleKind::CantBlock)
+                } else {
+                    Err(Unchecked::Players)
+                }
+            }
+            // Other permanents' loyalty abilities or blocks, a restriction to the timing the
+            // rules have already, and a change to when a creature blocks.
+            (Governed::ActivateLoyaltyAbilities(_) | Governed::Block(_), _) => Err(Unchecked::Rule),
         }
     }
 
@@ -436,5 +452,41 @@ mod tests {
         assert_eq!(all.iter().collect::<Vec<_>>(), [loyalty, limit, flash]);
         assert!(all.without(t.player_rules()).contains(loyalty));
         assert!(Rules::NONE.is_empty() && Rules::NONE.common(all).is_empty());
+    }
+
+    /// "This creature can't block" is checked of the creature with the ability; blocking
+    /// with other creatures, or a change to when one blocks, is refused.
+    #[test]
+    fn only_a_creatures_own_cant_block_is_checked() {
+        let block = |players, what, when| {
+            RuleKind::of(&RuleChange {
+                players,
+                what: Governed::Block(what),
+                when,
+            })
+        };
+        assert_eq!(
+            block(Players::You, Objects::This, When::Never),
+            Ok(RuleKind::CantBlock)
+        );
+        assert!(!RuleKind::CantBlock.of_players());
+        assert_eq!(
+            block(Players::EachOpponent, Objects::This, When::Never),
+            Err(Unchecked::Players)
+        );
+        assert_eq!(
+            block(Players::You, Objects::Carried, When::Never),
+            Err(Unchecked::Rule)
+        );
+        assert_eq!(
+            block(Players::You, Objects::This, When::AsInstant),
+            Err(Unchecked::Rule)
+        );
+        let cast_none = RuleChange {
+            players: Players::EachOpponent,
+            what: Governed::CastSpells(Filter::Any),
+            when: When::Never,
+        };
+        assert_eq!(RuleKind::of(&cast_none), Err(Unchecked::Rule));
     }
 }

@@ -14,6 +14,7 @@ use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
 use crate::protection;
+use crate::rule_change;
 use crate::state::{AttackTarget, CombatRole, Pending, State, TurnStep};
 use crate::table::GameTable;
 
@@ -315,7 +316,8 @@ fn landwalks<L: Layout>(
 }
 
 /// Whether a creature may still be declared as a blocker: an untapped creature of the
-/// defending player that blocks nothing yet and can block some attacker.
+/// defending player that blocks nothing yet, that no rule change keeps from blocking
+/// ([`rule_change::cant_block`]), and that can block some attacker.
 ///
 /// [CR 509.1a](https://yawgatog.com/resources/magic-rules/#R5091a): "The defending player chooses
 /// which creatures they control, if any, will block. The chosen creatures must be untapped and they
@@ -326,6 +328,7 @@ fn may_block<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> bool {
         && is_creature(s, slot)
         && !o.is_tapped()
         && !o.is_blocking()
+        && !rule_change::cant_block(s, t, slot)
         && s.battlefield().iter().any(|&a| can_block(s, t, slot, a))
 }
 

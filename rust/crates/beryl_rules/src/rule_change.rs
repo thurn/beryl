@@ -84,7 +84,9 @@ fn governs_a_cast_of(t: &GameTable, rules: Rules, face: &Face) -> bool {
 fn spells_of(rule: &RuleChange) -> Filter {
     match rule.what {
         Governed::CastSpells(filter) => filter,
-        Governed::ActivateLoyaltyAbilities(_) => unreachable!("a rule change about casting"),
+        Governed::ActivateLoyaltyAbilities(_) | Governed::Block(_) => {
+            unreachable!("a rule change about casting")
+        }
     }
 }
 
@@ -123,18 +125,41 @@ fn accepts_composed(filter: Filter, face: &Face) -> bool {
 }
 
 /// Whether the loyalty abilities of the permanent in `slot` may be activated any time its
-/// controller could cast an instant, where
-/// [CR 606.3](https://yawgatog.com/resources/magic-rules/#R6063) has "during a main phase
-/// of their turn": by a static ability of its own whose condition holds
-/// ([CR 604.1](https://yawgatog.com/resources/magic-rules/#R6041): "Static abilities do
-/// something all the time rather than being activated or triggered."). With no such rule
-/// change among the game's cards one test, and with none on this permanent two.
+/// controller could cast an instant, where [CR 606.3] has "during a main phase of their
+/// turn": by a static ability of its own whose condition holds ([`own_rule_holds`]).
+///
+/// [CR 606.3]: https://yawgatog.com/resources/magic-rules/#R6063
+#[inline]
+pub(crate) fn loyalty_as_instant<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> bool {
+    own_rule_holds(s, t, slot, RuleKind::LoyaltyAsInstant)
+}
+
+/// Whether the creature in `slot` can't block, as "This creature can't block." says
+/// ([CR 509.1a]): "The defending player chooses which creatures they control, if any, will
+/// block." A prohibition beats a permission ([CR 101.2]): "When a rule or effect allows or
+/// directs something to happen, and another effect states that it can't happen, the
+/// "can't" effect takes precedence." Made by a static ability of its own whose condition
+/// holds ([`own_rule_holds`]).
+///
+/// [CR 509.1a]: https://yawgatog.com/resources/magic-rules/#R5091a
+/// [CR 101.2]: https://yawgatog.com/resources/magic-rules/#R1012
+#[inline]
+pub(crate) fn cant_block<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> bool {
+    own_rule_holds(s, t, slot, RuleKind::CantBlock)
+}
+
+/// Whether a static ability of the permanent in `slot` whose condition holds makes a rule
+/// change of `kind`, one asked of the permanent with the ability ([CR 604.1]): "Static
+/// abilities do something all the time rather than being activated or triggered." With no
+/// such rule change among the game's cards one test, and with none on this permanent two.
 ///
 /// No effect makes one: the card table refuses an ability whose effect would start a rule
 /// change that is asked of a permanent.
+///
+/// [CR 604.1]: https://yawgatog.com/resources/magic-rules/#R6041
 #[inline]
-pub(crate) fn loyalty_as_instant<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> bool {
-    let of_kind = t.rules_of(RuleKind::LoyaltyAsInstant);
+fn own_rule_holds<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot, kind: RuleKind) -> bool {
+    let of_kind = t.rules_of(kind);
     if of_kind.is_empty() {
         return false;
     }

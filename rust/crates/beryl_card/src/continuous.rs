@@ -37,6 +37,13 @@ pub enum Governed {
     CastSpells(Filter),
     /// Activating the loyalty abilities of these permanents.
     ActivateLoyaltyAbilities(Objects),
+    /// Blocking with these creatures, as "This creature can't block." says
+    /// ([CR 509.1a]): "The defending player chooses which creatures they control, if any,
+    /// will block." The players are those who would declare the block: "you", the
+    /// creatures' controller.
+    ///
+    /// [CR 509.1a]: https://yawgatog.com/resources/magic-rules/#R5091a
+    Block(Objects),
 }
 
 /// When a [`RuleChange`] has what it governs done.
@@ -51,6 +58,9 @@ pub enum When {
     /// ([CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a)): "'Flash' means
     /// 'You may play this card any time you could cast an instant.'" A permission.
     AsInstant,
+    /// "Can't": never, a restriction that beats any permission (CR 101.2), as "This
+    /// creature can't block." is.
+    Never,
 }
 
 impl RuleChange {
@@ -73,6 +83,16 @@ impl RuleChange {
             }
             (Governed::ActivateLoyaltyAbilities(_), When::AsInstant) => {
                 "with loyalty abilities to activate at instant speed".to_owned()
+            }
+            (Governed::CastSpells(filter), When::Never) => {
+                format!("unable to cast {}", spells(filter))
+            }
+            (Governed::ActivateLoyaltyAbilities(_), When::Never) => {
+                "with loyalty abilities that can't be activated".to_owned()
+            }
+            (Governed::Block(_), When::Never) => "with creatures that can't block".to_owned(),
+            (Governed::Block(_), When::OnlyAsSorcery | When::AsInstant) => {
+                "with creatures that block at a changed time".to_owned()
             }
         }
     }
@@ -599,6 +619,10 @@ mod tests {
         assert_eq!(
             change(Players::You, this, When::AsInstant),
             "with loyalty abilities to activate at instant speed"
+        );
+        assert_eq!(
+            change(Players::You, Governed::Block(Objects::This), When::Never),
+            "with creatures that can't block"
         );
     }
 }

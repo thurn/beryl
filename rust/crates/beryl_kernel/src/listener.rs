@@ -41,7 +41,7 @@ pub const AWAY: ZoneSet = ZoneSet::GRAVEYARD
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Unmatched {
     /// Its event is not matched against that subject: an object other than the one the
-    /// ability is on entering, attacking or dealing damage, the object itself being cast or
+    /// ability is on attacking or dealing damage, the object itself being cast or
     /// discarded, or a subject for an event that is about no object.
     Subject,
     /// Its event is not matched for those players: any but "you", "each opponent" and "each
@@ -60,7 +60,10 @@ enum About {
     /// One object or a set of them, matched by a filter.
     Filtered,
     /// One object, matched either way: an ability that looks back in time at the
-    /// permanents leaving the battlefield sees each of them, its own permanent among them.
+    /// permanents leaving the battlefield sees each of them, its own permanent among them,
+    /// and an ability that triggers on a permanent entering sees each one that enters, its
+    /// own permanent or another its filter accepts, as "Whenever a land you control enters"
+    /// does.
     Either,
     /// No object.
     Nothing,
@@ -80,7 +83,7 @@ enum About {
 /// [CR 113.6k]: https://yawgatog.com/resources/magic-rules/#R1136k
 pub fn listens_to(trigger: &Trigger, zones: ZoneSet) -> Result<Option<EventKind>, Unmatched> {
     let (kind, about, has_player) = match trigger.event {
-        TriggerEvent::Enters => (EventKind::Enters, About::This, false),
+        TriggerEvent::Enters => (EventKind::Enters, About::Either, false),
         TriggerEvent::Dies => (EventKind::Dies, About::Either, false),
         TriggerEvent::Leaves => (EventKind::Leaves, About::Either, false),
         TriggerEvent::Attacks => (EventKind::Attack, About::This, false),
@@ -165,6 +168,10 @@ mod tests {
         let creature = Filter::Types(Types::CREATURE);
         for (trigger, kind) in [
             (Trigger::ENTERS, EventKind::Enters),
+            (
+                Trigger::of(TriggerEvent::Enters, Subject::A(creature)),
+                EventKind::Enters,
+            ),
             (Trigger::DIES, EventKind::Dies),
             (
                 Trigger::of(TriggerEvent::Dies, Subject::A(creature)),
@@ -228,8 +235,7 @@ mod tests {
     fn a_subject_the_engine_does_not_match_is_refused() {
         let creature = Subject::A(Filter::Types(Types::CREATURE));
         for trigger in [
-            // Another object entering, attacking or dealing damage.
-            Trigger::of(TriggerEvent::Enters, creature),
+            // Another object attacking or dealing damage.
             Trigger::of(TriggerEvent::Attacks, creature),
             Trigger::of(TriggerEvent::DealsCombatDamageToPlayer, creature),
             // The object itself where the event is matched by a filter.
