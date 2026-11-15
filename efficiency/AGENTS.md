@@ -96,6 +96,21 @@ store" and "Isolation" before changing anything here.
   that a model with no price makes a lower bound is marked `+`; an unknown value
   prints as `-`.
 - `cli.py`: the command and its queries.
+- The page: `serve.py` is `just efficiency serve`, a standard-library server on
+  127.0.0.1 that answers `GET` only. An address is a query (`/bead/<id>?since=7d`
+  is `efficiency bead <id> --since 7d`, `/` is `summary`), `.json` appended
+  gives its JSON and `section=1` the section alone. `page.py` renders a query's
+  result as HTML from its JSON as it is (no figure is computed there), with one
+  script that fetches a line's section the first time it opens. A category's
+  colour comes from its place in the command kinds table, so it is the same in
+  every bar and strip. Only `summary`, `epic`, `bead` and `session` have a page
+  yet; the other queries answer `.json` only.
+- `just efficiency shot <address> [--dark] [--width N]` renders an address to a
+  PNG under `$BERYL_CACHE/efficiency/shots/` with `shot.mjs`, which uses the
+  main checkout's `ui/node_modules` Playwright and takes one of the machine's
+  shared browser slots. Appending `#open` opens every line with more detail,
+  one level deep. It is for looking at the page while changing it, and is in
+  no check.
 
 ## Running and checking
 

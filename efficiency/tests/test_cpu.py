@@ -158,13 +158,17 @@ def test_core_minutes_are_the_worktree_s_cpu_while_the_bead_was_open(
     # 123 s inside the window, and 57 s after it but before the close.
     assert query(capsys, "bead", "by-c.1")["core_minutes"] == 3.0
     summary = query(capsys, "summary")
-    assert summary["core_minutes"] == {
+    figure = summary["core_minutes"]
+    assert isinstance(figure, dict)
+    trend = figure.pop("trend")
+    assert figure == {
         "median": 3.0,
         "p90": 3.0,
         "count": 1,
         "before": None,
         "lower_bound": False,
     }
+    assert isinstance(trend, list) and [p["median"] for p in trend] == [3.0]
 
 
 def test_queued_seconds_move_out_of_the_tool_s_kind(root: Path) -> None:

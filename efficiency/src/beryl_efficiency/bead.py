@@ -10,9 +10,10 @@ import statistics
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 
+from . import timing
 from .facts import Facts, Window, load, minutes, money, total
 from .render import Result, describe, table, wrap
-from .rollups import Part, agent_parts, bar, number, split_lines
+from .rollups import Part, agent_parts, bar, kind_name, number, split_lines
 from .scope import Scope
 
 TOKENS: tuple[str, ...] = (
@@ -22,6 +23,9 @@ TOKENS: tuple[str, ...] = (
     "output_tokens",
 )
 SPLITS: tuple[str, ...] = ("class", "source", "purpose", "model")
+# The most stretches a timeline strip holds; a longer one is cut into this many equal
+# stretches, each named by what took most of it.
+STRIP_STRETCHES = 400
 
 
 @dataclass
@@ -43,6 +47,25 @@ class Detail:
     kind: str
     part: str
     minutes: float
+
+
+@dataclass
+class Stretch:
+    """A stretch of the bead's timeline in one category or kind, `at` minutes after the
+    start of its first window. The bead's windows are laid end to end, so the strip is as
+    long as its wall minutes."""
+
+    at: float
+    minutes: float
+    name: str
+
+
+@dataclass
+class Context:
+    """The context a request read, `at` minutes along the bead's timeline."""
+
+    at: float
+    tokens: int
 
 
 @dataclass
@@ -87,6 +110,8 @@ class BeadReport:
     dollars_by: dict[str, list[Part]]
     unpriced: list[str]
     sessions: list[Worked]
+    strip: list[Stretch]
+    contexts: list[Context]
 
 
 def core_minutes(facts: Facts, bead: str) -> float | None:
@@ -100,6 +125,89 @@ def rounded(value: float | None) -> float | None:
 
 def wall(w: Window) -> float:
     return minutes(sum(w.time.values()))
+
+
+def stretch_name(category: str, running: list[timing.Span]) -> str:
+    """What a stretch of the strip is called: the kind of the first span running in it, as
+    the time split names it."""
+    return kind_name(category, running[0].kind if running else "")
+
+
+def even(found: list[Stretch], length: float) -> list[Stretch]:
+    """`found` cut into `STRIP_STRETCHES` equal stretches, each named by what took most of
+    it, with neighbours of one name joined."""
+    width = length / STRIP_STRETCHES
+    seconds: list[dict[str, float]] = [
+        defaultdict(float) for _ in range(STRIP_STRETCHES)
+    ]
+    for s in found:
+        low, high = s.at, s.at + s.minutes
+        first = min(int(low / width), STRIP_STRETCHES - 1)
+        for index in range(first, STRIP_STRETCHES):
+            left, right = index * width, (index + 1) * width
+            if left >= high:
+                break
+            seconds[index][s.name] += min(high, right) - max(low, left)
+    evened = [
+        Stretch(i * width, width, max(names.items(), key=lambda kv: kv[1])[0])
+        for i, names in enumerate(seconds)
+        if names
+    ]
+    return joined(evened)
+
+
+def joined(found: list[Stretch]) -> list[Stretch]:
+    """`found` with touching neighbours of one name made one stretch."""
+    out: list[Stretch] = []
+    for s in found:
+        last = out[-1] if out else None
+        if last and last.name == s.name and abs(last.at + last.minutes - s.at) < 1e-9:
+            last.minutes += s.minutes
+        else:
+            out.append(Stretch(s.at, s.minutes, s.name))
+    return out
+
+
+def timeline(
+    db: sqlite3.Connection, bead: str, windows: list[Window]
+) -> tuple[list[Stretch], list[Context]]:
+    """The bead's windows laid end to end in order of start: what each stretch was spent on,
+    as time accounting splits it, and the context of each of the windows' requests."""
+    stretches: list[Stretch] = []
+    contexts: list[Context] = []
+    spans: dict[tuple[str, str, str], list[timing.Span]] = {}
+    offset = 0.0
+    for w in sorted(windows, key=lambda w: w.start):
+        closed = w.end
+        if closed is None:
+            continue
+        key = (w.host, w.provider, w.transcript)
+        if key not in spans:
+            spans[key] = timing.spans_of(db, *key)
+        start, end = timing.seconds(w.start), timing.seconds(closed)
+        for low, high, category, running in timing.sweep(spans[key], start, end):
+            stretches.append(
+                Stretch(
+                    offset + (low - start) / 60,
+                    (high - low) / 60,
+                    stretch_name(category, running),
+                )
+            )
+        for time, tokens in db.execute(
+            """SELECT time, context_tokens FROM requests WHERE host = ? AND provider = ?
+                AND transcript = ? AND bead = ? AND time >= ? AND time <= ?
+                AND context_tokens IS NOT NULL ORDER BY time""",
+            (*key, bead, w.start, closed),
+        ):
+            at = offset + (timing.seconds(str(time)) - start) / 60
+            contexts.append(Context(round(at, 2), int(tokens)))
+        offset += (end - start) / 60
+    found = joined(stretches)
+    if len(found) > STRIP_STRETCHES:
+        found = even(found, offset)
+    return [
+        Stretch(round(s.at, 2), round(s.minutes, 2), s.name) for s in found
+    ], contexts
 
 
 def report(db: sqlite3.Connection, bead: str, scope: Scope | None = None) -> Result:
@@ -143,6 +251,7 @@ def report_from(
     reworked = money(sum(c.dollars for c in charges))
     lead = facts.lead(bead)
     direct = None if no_data else money(whole.dollars)
+    strip, marks = timeline(db, bead, windows)
     result = BeadReport(
         bead,
         found.title if found else None,
@@ -191,6 +300,8 @@ def report_from(
             )
             for w in windows
         ],
+        strip,
+        marks,
     )
     sessions = sorted({w.session for w in windows})
     return Result(
@@ -218,6 +329,7 @@ def report_from(
             "context_tokens",
             "prefix_tokens",
             "time",
+            "strip",
         ),
     )
 

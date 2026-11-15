@@ -75,16 +75,27 @@ class Line:
 
 
 @dataclass
+class Point:
+    """The median of a per-bead figure over the beads that closed in one local hour or
+    day, which the page draws as the figure's trend line."""
+
+    at: str
+    median: float
+    count: int
+
+
+@dataclass
 class Figure:
-    """A per-bead figure over the closed beads: its median and 90th percentile, and the
-    median over the range of the same length before, for its trend. All are null where
-    nothing measures the figure yet."""
+    """A per-bead figure over the closed beads: its median and 90th percentile, the median
+    over the range of the same length before, and its median by hour (in a range of two days
+    or less) or by day. All are null where nothing measures the figure yet."""
 
     median: float | None
     p90: float | None
     count: int
     before: float | None
     lower_bound: bool
+    trend: list[Point]
 
 
 def line(
@@ -143,15 +154,19 @@ def agent_parts(windows: Iterable[Window]) -> dict[str, float]:
     return found
 
 
+# A per-bead value at the time its bead closed.
+Valued = list[tuple[str, float]]
+
+
 def bead_figures(
     facts: Facts, scope: Scope, closed: list[Bead]
-) -> tuple[list[float], list[float], bool, int]:
+) -> tuple[Valued, Valued, bool, int]:
     """Each closed bead's agent minutes and dollars, over its windows at any time; whether a
     model with no price makes any of the dollars a lower bound; and how many beads have no
     window in the store."""
     by_bead = facts.bead_windows(scope)
-    agent: list[float] = []
-    dollars: list[float] = []
+    agent: Valued = []
+    dollars: Valued = []
     lower = False
     missing = 0
     for b in closed:
@@ -160,36 +175,67 @@ def bead_figures(
             missing += 1
             continue
         found = total(windows)
-        agent.append(found.agent_seconds / 60)
-        dollars.append(found.dollars)
+        agent.append((str(b.closed), found.agent_seconds / 60))
+        dollars.append((str(b.closed), found.dollars))
         lower = lower or bool(found.unpriced)
     return agent, dollars, lower, missing
 
 
-def core_figures(facts: Facts, closed: list[Bead]) -> list[float]:
+def core_figures(facts: Facts, closed: list[Bead]) -> Valued:
     """The core minutes of each closed bead the sampler measured."""
-    found = (facts.core_minutes(b.id) for b in closed)
-    return [m for m in found if m is not None]
+    found = ((str(b.closed), facts.core_minutes(b.id)) for b in closed)
+    return [(at, m) for at, m in found if m is not None]
+
+
+def bucket_of(moment: str, hourly: bool) -> str:
+    """The local hour or day of a UTC time."""
+    local = parse_time(moment).astimezone()
+    return local.strftime("%Y-%m-%d %H:00" if hourly else "%Y-%m-%d")
+
+
+def trend(values: Valued, digits: int, hourly: bool) -> list[Point]:
+    """The median of `values` by local hour or day."""
+    by_bucket: dict[str, list[float]] = defaultdict(list)
+    for moment, value in values:
+        by_bucket[bucket_of(moment, hourly)].append(value)
+    found: list[Point] = []
+    for at, inside in sorted(by_bucket.items()):
+        median = spread(inside, digits)["median"]
+        assert isinstance(median, float)
+        found.append(Point(at, median, len(inside)))
+    return found
 
 
 def figure(
-    values: list[float], before: list[float], digits: int, lower: bool
+    values: Valued, before: Valued, digits: int, lower: bool, hourly: bool
 ) -> Figure:
-    now_spread = spread(values, digits)
-    then = spread(before, digits)
+    now_spread = spread([v for _, v in values], digits)
+    then = spread([v for _, v in before], digits)
     median, p90, before_median = now_spread["median"], now_spread["p90"], then["median"]
     assert median is None or isinstance(median, float)
     assert p90 is None or isinstance(p90, float)
     assert before_median is None or isinstance(before_median, float)
-    return Figure(median, p90, len(values), before_median, lower)
+    return Figure(
+        median, p90, len(values), before_median, lower, trend(values, digits, hourly)
+    )
 
 
-def rework_figures(facts: Facts, scope: Scope, closed: list[Bead]) -> list[float]:
+def rework_figures(facts: Facts, scope: Scope, closed: list[Bead]) -> Valued:
     """The rework of each closed bead with windows in the store, the beads whose direct
     dollars the summary's dollars figure measures."""
     by_bead = facts.bead_windows(scope)
     found = facts.rework()
-    return [found.dollars(b.id) for b in closed if by_bead.get(b.id)]
+    return [(str(b.closed), found.dollars(b.id)) for b in closed if by_bead.get(b.id)]
+
+
+def source_parts(windows: Iterable[Window]) -> dict[str, float]:
+    """Dollars by source."""
+    found: dict[str, float] = defaultdict(float)
+    for w in windows:
+        for (split, name), (_, value) in w.dollars.items():
+            if split == "source":
+                found[name] += value
+    return found
 
 
 def days_in(facts: Facts, scope: Scope) -> float | None:
@@ -263,12 +309,8 @@ def summary(facts: Facts, scope: Scope) -> Result:
         for name in (NO_EPIC, ORCHESTRATION, NO_BEAD)
     ]
     whole = total(windows)
-    sources: dict[str, float] = defaultdict(float)
-    for w in windows:
-        for (split, name), (_, value) in w.dollars.items():
-            if split == "source":
-                sources[name] += value
     days = days_in(facts, scope)
+    hourly = days is not None and days <= 2
     result = Summary(
         scope.range.since,
         scope.range.until,
@@ -277,14 +319,17 @@ def summary(facts: Facts, scope: Scope) -> Result:
         len(closed),
         round(len(closed) / days, 1) if days else None,
         missing,
-        figure(agent, agent_before, 1, False),
-        figure(core_figures(facts, closed), core_figures(facts, then), 1, False),
-        figure(dollars, dollars_before, 2, lower),
+        figure(agent, agent_before, 1, False, hourly),
+        figure(
+            core_figures(facts, closed), core_figures(facts, then), 1, False, hourly
+        ),
+        figure(dollars, dollars_before, 2, lower, hourly),
         figure(
             rework_figures(facts, scope, closed),
             rework_figures(facts, scope, then),
             2,
             False,
+            hourly,
         ),
         line("total", None, len(closed), whole, sum(rework_by.values())),
         bar(agent_parts(windows), whole.agent_seconds / 60, 1),
@@ -295,7 +340,7 @@ def summary(facts: Facts, scope: Scope) -> Result:
                 ("idle", whole.idle_seconds),
             )
         ],
-        bar(sources, whole.dollars, 2),
+        bar(source_parts(windows), whole.dollars, 2),
         epics + tail,
         sorted(whole.unpriced),
     )
@@ -420,6 +465,8 @@ class Epic:
     filters: str
     beads_closed: int
     total: Line
+    time: list[Part]
+    dollars_by_source: list[Part]
     lines: list[Line]
     unpriced: list[str]
 
@@ -460,6 +507,8 @@ def epic(facts: Facts, scope: Scope, epic_id: str) -> Result:
         within.describe(),
         len(closed),
         line("total", None, len(closed), whole, sum(l.rework for l in beads)),
+        bar(agent_parts(windows), whole.agent_seconds / 60, 1),
+        bar(source_parts(windows), whole.dollars, 2),
         beads + [line(ORCHESTRATION, None, 0, total(groups.get(ORCHESTRATION, [])))],
         sorted(whole.unpriced),
     )
@@ -474,7 +523,17 @@ def epic(facts: Facts, scope: Scope, epic_id: str) -> Result:
             f"efficiency time --by kind {flags}",
             f"efficiency dollars --by source {flags}",
         ],
-        describe("since", "beads_closed", "lines", "rework", "lower_bound"),
+        describe(
+            "since",
+            "beads_closed",
+            "lines",
+            "rework",
+            "lower_bound",
+            "agent_minutes",
+            "dollars",
+            "time",
+            "dollars_by_source",
+        ),
     )
 
 
@@ -486,6 +545,8 @@ def epic_lines(e: Epic) -> list[str]:
         + f"   beads closed {e.beads_closed}",
         f"agent min {t.agent_minutes:.1f}   dollars {t.dollars:.2f}{mark(t.lower_bound)}"
         + f"   rework {t.rework:.2f}",
+        *split_lines("time      ", e.time, 1),
+        *split_lines("dollars   ", e.dollars_by_source, 2),
         "",
         *lines_table([*e.lines, t], "bead"),
         *footnote(e.unpriced),

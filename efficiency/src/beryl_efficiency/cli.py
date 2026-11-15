@@ -535,12 +535,27 @@ def parser() -> argparse.ArgumentParser:
     return top
 
 
+# The commands that are not queries: the page's server and its screenshots.
+PAGE_COMMANDS: dict[str, str] = {
+    "serve": "serve the page on 127.0.0.1 (--port N, --no-ingest)",
+    "shot": "render one address of the page to a PNG (--dark, --width N)",
+}
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    given = list(sys.argv[1:] if argv is None else argv)
+    if given and given[0] in PAGE_COMMANDS:
+        from . import serve  # It imports this module.
+
+        return (serve.serve if given[0] == "serve" else serve.shot)(given[1:])
     top = parser()
-    args = top.parse_args(argv)
+    args = top.parse_args(given)
     if args.command is None:
         print("just efficiency <query>")
-        for name, (summary, _) in QUERIES.items():
+        for name, (summary, _) in [
+            *QUERIES.items(),
+            *((n, (d, None)) for n, d in PAGE_COMMANDS.items()),
+        ]:
             print(f"  {name:<10} {summary}")
         return 0
     try:

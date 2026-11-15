@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections import defaultdict
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -175,44 +176,54 @@ def covered(stretches: list[tuple[float, float]], low: float, high: float) -> fl
     return total
 
 
-def split(spans: list[Span], start: float, end: float) -> dict[Key, float]:
-    """The seconds of `start` to `end` by category, kind and part: a sweep over the points
-    where any span begins or ends, giving each stretch to the category that wins there and
-    dividing it equally among that category's spans."""
+def sweep(
+    spans: list[Span], start: float, end: float
+) -> Iterator[tuple[float, float, str, list[Span]]]:
+    """The stretches of `start` to `end` in order, each with the category that wins there
+    and that category's spans running in it (none for `model`): a sweep over the points
+    where any span begins or ends."""
     inside = [s for s in spans if s.end > start and s.start < end]
     edges: list[tuple[float, int, int]] = []
     for number, span in enumerate(inside):
         edges.append((max(span.start, start), 1, number))
         edges.append((min(span.end, end), -1, number))
     edges.sort()
-    totals: dict[Key, float] = defaultdict(float)
-    per_call: dict[int, float] = defaultdict(float)
     active: dict[str, set[int]] = {c: set() for c in CATEGORIES}
     reached = start
     for point, step, number in [*edges, (end, 0, -1)]:
         if point > reached:
-            width = point - reached
             # The model owns every second no span claims. Its place in the order matters
             # only in principle: turn-end spans never overlap a request being generated.
             winner = next(
                 (c for c in CATEGORIES if c != "model" and active[c]), "model"
             )
-            if winner == "model":
-                totals[("model", "", "")] += width
-            else:
-                share = width / len(active[winner])
-                for running in active[winner]:
-                    if winner == "tool":
-                        per_call[running] += share
-                    else:
-                        totals[(winner, inside[running].kind, "")] += share
+            running = [inside[n] for n in sorted(active[winner])]
+            yield reached, point, winner, running
             reached = point
         if step == 1:
             active[inside[number].category].add(number)
         elif step == -1:
             active[inside[number].category].discard(number)
-    for number, span in enumerate(inside):
-        share = per_call.get(number)
+
+
+def split(spans: list[Span], start: float, end: float) -> dict[Key, float]:
+    """The seconds of `start` to `end` by category, kind and part: each stretch of the
+    sweep goes to the category that wins there, divided equally among its spans."""
+    totals: dict[Key, float] = defaultdict(float)
+    per_call: dict[int, float] = defaultdict(float)
+    for low, high, winner, running in sweep(spans, start, end):
+        width = high - low
+        if winner == "model":
+            totals[("model", "", "")] += width
+            continue
+        share = width / len(running)
+        for span in running:
+            if winner == "tool":
+                per_call[id(span)] += share
+            else:
+                totals[(winner, span.kind, "")] += share
+    for span in spans:
+        share = per_call.get(id(span))
         if not share:
             continue
         length = span.end - span.start

@@ -110,6 +110,8 @@ FIELDS: dict[str, str] = {
     "data/efficiency-changes.json, with its metric's median over the seven days before "
     "and after its commit reached staging. A sample is dated by when its unit began. With "
     "fewer than five samples on a side the verdict is too few samples",
+    "strip": "the bead's windows end to end: what each stretch of wall-clock time went to, "
+    "and the context of each request",
 }
 
 
