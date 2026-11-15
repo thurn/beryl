@@ -34,6 +34,7 @@
 // - `styled`: elements whose style Chromium recalculated (`UpdateLayoutTree`'s elementCount).
 // - `laidOut`: layout objects Chromium laid out (`Layout`'s dirtyObjects).
 // - `styles` and `layouts`: style and layout passes (CDP's RecalcStyleCount, LayoutCount).
+import { hangContext } from "./hang.mjs";
 import { writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
 import { option } from "./moments.mjs";
@@ -195,7 +196,7 @@ async function settle() {
 }
 
 async function count(browser, base, fixtures, name, { phone = false } = {}) {
-    const context = await browser.newContext({
+    const context = await hangContext(browser, {
         viewport: phone
             ? { width: 393, height: 759 }
             : { width: 1600, height: 900 },

@@ -225,11 +225,15 @@ last sweep that passed (up to 30 minutes), then files one P1 `sweep-failure`
 Steward bead per lane naming the checks, the culprit commit or range and how to
 replay them. A check an open sweep bead already names gets a comment instead.
 Its steps' hang limit is 2 hours, because at utility priority on a loaded
-machine they run many times slower than in a check. A sweep that passes starts a
-coverage run of its commit in the background, so the coverage data the fast
-check chooses by is measured nightly and after each passing sweep. A ui/src line
-changed since the coverage's commit is one the data cannot place. The record is
-in `$BERYL_CACHE/sweep`.
+machine they run many times slower than in a check. For the same reason, work at
+low priority sets `BERYL_LOW_PRIORITY=1`, and its Playwright waits time out
+after 3 minutes instead of 30 s (`WAIT_MS` in `ui/scripts/hang.mjs`): at a load
+of 50 to 70, a shot that takes 2 s in a check ran past 30 s, passed on its rerun
+and was filed as a flaky check to delete. A sweep that passes starts a coverage
+run of its commit in the background, so the coverage data the fast check chooses
+by is measured nightly and after each passing sweep. A ui/src line changed since
+the coverage's commit is one the data cannot place. The record is in
+`$BERYL_CACHE/sweep`.
 
 ## Beryl 3D
 

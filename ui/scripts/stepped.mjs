@@ -22,6 +22,7 @@
 // and, for one shot, its folder and where in its frames its subject comes to rest. Nothing here
 // reads the page's own time, so no frame depends on the machine's speed. Exits non-zero if a moment
 // does not play out, the two plays differ or a page logs an error.
+import { hangContext } from "./hang.mjs";
 import { isDeepStrictEqual } from "node:util";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
@@ -400,7 +401,7 @@ let failed = false;
 
 /** A page of `size` on the stage, whose fixtures are this run's, at `fixture`'s first view. */
 async function open(size, query, fixture) {
-    const context = await browser.newContext({
+    const context = await hangContext(browser, {
         viewport: size,
         deviceScaleFactor: 1,
     });

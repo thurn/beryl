@@ -6,6 +6,7 @@
 // paces the page by the stage's clock (`walk`'s `paced`) so that a moment in which a choice
 // opens plays the same twice. Nothing here reads the page's own time, so nothing a play finds
 // depends on the machine's speed.
+import { hangContext } from "./hang.mjs";
 import { isDeepStrictEqual } from "node:util";
 import { basename, join } from "node:path";
 
@@ -308,7 +309,7 @@ export async function openStage(
     browser,
     { base, fixtures, size, query, fixture, scale = 1, paced = false },
 ) {
-    const context = await browser.newContext({
+    const context = await hangContext(browser, {
         viewport: size,
         deviceScaleFactor: scale,
     });

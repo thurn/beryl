@@ -1,5 +1,6 @@
 // What the headless capture scripts share: opening a page at a fixed size and waiting until it has
 // settled.
+import { hangContext } from "./hang.mjs";
 import { createHash } from "node:crypto";
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -158,7 +159,7 @@ export function workers(limit = 4) {
 /** A page at `width`×`height` with device scale factor 1 and motion reduced, collecting the
  * page's errors and console errors into `errors`. */
 export async function openPage(browser, { width, height, scale = 1 }) {
-    const context = await browser.newContext({
+    const context = await hangContext(browser, {
         viewport: { width, height },
         deviceScaleFactor: scale,
         reducedMotion: "reduce",

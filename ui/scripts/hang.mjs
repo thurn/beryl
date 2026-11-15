@@ -39,3 +39,23 @@ export function hangGuard(work, seconds, what) {
     });
     return Promise.race([work, hung]).finally(() => clearInterval(timer));
 }
+
+/** How long, in real milliseconds, one Playwright wait (`page.goto`, `waitForFunction`,
+ * `click` and the rest) may take before it fails, when the call sets no timeout of its own.
+ * Playwright's default is 30 s, which only catches a hang on a machine that gives the check
+ * its share of the CPU. Work started at low priority (`system.utility` in tools/, which the
+ * browser sweep, the nightly and their bisections use) gets only the CPU that agents' checks
+ * leave, and at a load of 50 to 70 a shot that takes 2 s at normal priority ran past 30 s.
+ * Those runs set `BERYL_LOW_PRIORITY=1`, and their waits get six times as long, so that a
+ * wait fails only when the page is stuck. A check at normal priority keeps 30 s, so a real
+ * break still fails fast in the fast check. */
+export const WAIT_MS = process.env.BERYL_LOW_PRIORITY === "1" ? 180000 : 30000;
+
+/** A new browser context for a check, from `browser.newContext(options)`, whose waits time
+ * out after `WAIT_MS`. Every check opens its contexts here (tools/tests/test_browser_waits.py
+ * holds them to it), so no wait falls back to Playwright's own 30 s. */
+export async function hangContext(browser, options) {
+    const context = await browser.newContext(options);
+    context.setDefaultTimeout(WAIT_MS);
+    return context;
+}

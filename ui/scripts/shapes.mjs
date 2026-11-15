@@ -60,7 +60,7 @@ import {
     stageFaults,
     workers,
 } from "./capture.mjs";
-import { CHECK_SECONDS, HangError, hangGuard } from "./hang.mjs";
+import { CHECK_SECONDS, HangError, hangGuard, hangContext } from "./hang.mjs";
 import {
     cardsUp,
     carry as carryTo,
@@ -654,7 +654,7 @@ let ran = 0;
 /** A context of windows of `size`, whose pages fetch the fixtures this run recorded, not what
  * Vite serves. */
 async function open(size) {
-    const context = await browser.newContext({
+    const context = await hangContext(browser, {
         viewport: size,
         deviceScaleFactor: 1,
     });

@@ -6,7 +6,7 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { strings } from "../src/cardRecords.ts";
 import { coverage, launch, recordResult, workers } from "./capture.mjs";
-import { CHECK_SECONDS, HangError, hangGuard } from "./hang.mjs";
+import { CHECK_SECONDS, HangError, hangGuard, hangContext } from "./hang.mjs";
 
 export const [base, fixtures, ...filters] = process.argv.slice(2);
 if (!base || !fixtures) {
@@ -184,7 +184,7 @@ export async function check(
         // failure, and any after the board shows, fails the check.
         const started = performance.now();
         for (let boots = 1; ; boots++) {
-            const context = await browser.newContext({
+            const context = await hangContext(browser, {
                 viewport,
                 deviceScaleFactor: 1,
                 reducedMotion,

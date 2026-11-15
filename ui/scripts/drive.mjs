@@ -21,6 +21,7 @@
 // this file (`by specs --drive` restarts the driver itself); changes under src/ reload in
 // the page. Motion is not reduced, unlike ui-shots: animation and layout shift are what a
 // player sees.
+import { hangContext } from "./hang.mjs";
 import { createServer } from "node:http";
 import { execFile } from "node:child_process";
 import { access, mkdir, readFile } from "node:fs/promises";
@@ -71,7 +72,7 @@ let current;
 let first;
 /** Opens the context and its first page at the app. */
 async function begin() {
-    context = await browser.newContext({ viewport: size });
+    context = await hangContext(browser, { viewport: size });
     current = first = await context.newPage();
     watch(first);
     await first.goto(url);
@@ -794,7 +795,7 @@ const spec = {
     ) {
         const dir = await recorded(name);
         await fixtureContext?.close();
-        fixtureContext = await browser.newContext({
+        fixtureContext = await hangContext(browser, {
             viewport,
             deviceScaleFactor: 1,
         });

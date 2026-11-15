@@ -256,15 +256,23 @@ def file_lock(path: Path, timeout: float | None = None) -> Iterator[None]:
             fcntl.flock(handle, fcntl.LOCK_UN)
 
 
+# The environment of work at low priority: no CPU tokens (tokens.py), and browser waits long
+# enough for a starved page (ui/scripts/hang.mjs).
+LOW_ENV: dict[str, str] = {"BERYL_CPU_POOL": "0", "BERYL_LOW_PRIORITY": "1"}
+LOW_ENV_ARGS: list[str] = [f"{k}={v}" for k, v in LOW_ENV.items()]
+
+
 def utility(command: list[str]) -> list[str]:
     """`command` as one that runs at low priority: at utility QoS on macOS, where the CPU
     goes first to interactive work and checks (`nice` does not do that); at idle priority
     through `by low` on Windows. The justfile's `low`, for work `by` starts itself. Work at low
     priority takes no CPU tokens (tokens.py), so `BERYL_CPU_POOL=0` turns the pool off for it.
+    It gets only the CPU the rest of the machine leaves, so [`LOW_ENV`] tells its browser
+    checks to wait longer before they call a page stuck (`WAIT_MS` in ui/scripts/hang.mjs).
     """
     if WINDOWS:
         return [sys.executable, "-m", "beryl_tools.cli", "low", "--", *command]
-    return ["env", "BERYL_CPU_POOL=0", "taskpolicy", "-c", "utility", *command]
+    return ["env", *LOW_ENV_ARGS, "taskpolicy", "-c", "utility", *command]
 
 
 def low(args: argparse.Namespace) -> int:
@@ -278,7 +286,9 @@ def low(args: argparse.Namespace) -> int:
         print("low: no command", file=sys.stderr)
         return 2
     if not WINDOWS:
-        return subprocess.run(["nice", "-n", "10", *command], check=False).returncode
+        return subprocess.run(
+            ["nice", "-n", "10", *command], env={**os.environ, **LOW_ENV}, check=False
+        ).returncode
     import ctypes
 
     kernel32 = ctypes.windll.kernel32  # pyre-ignore[16]: Windows only
@@ -287,7 +297,7 @@ def low(args: argparse.Namespace) -> int:
         kernel32.SetThreadExecutionState(es_continuous | es_system_required)
     proc = subprocess.Popen(
         [which(command[0]), *command[1:]],
-        env={**os.environ, "BERYL_CPU_POOL": "0"},
+        env={**os.environ, **LOW_ENV},
         # pyre-ignore[16]: Windows only
         creationflags=subprocess.IDLE_PRIORITY_CLASS,
     )

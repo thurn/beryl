@@ -4,6 +4,8 @@
 // a script starts watching before anything moves. Motion is not reduced: how things move is
 // what these look at. A page is settled when its stage says so, on no timer.
 
+import { hangContext } from "./hang.mjs";
+
 /** The most stage time (ms on the stage's own clock, which tests step by hand) a moment may
  * take to play out. It does not depend on how busy the machine is. */
 export const LONGEST = 30000;
@@ -127,7 +129,7 @@ export async function play(...lives) {
 /** Warms the UI's dev server: loads the app once, so the first moment's page does not wait for
  * Vite to compile it under a seat's timeout. */
 export async function warm(browser, base) {
-    const context = await browser.newContext();
+    const context = await hangContext(browser);
     try {
         const page = await context.newPage();
         await retried(() =>
@@ -211,7 +213,7 @@ export async function settled(page) {
 /** A browser context and page at `width`×`height` with motion on, collecting the page's
  * errors and console errors into `errors`. */
 export async function moving(browser, { width = 1600, height = 900 } = {}) {
-    const context = await browser.newContext({
+    const context = await hangContext(browser, {
         viewport: { width, height },
         deviceScaleFactor: 1,
     });

@@ -22,7 +22,7 @@ import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { launch, recordResult, stageFaults, workers } from "./capture.mjs";
 import { ending as endOf } from "./fixture-views.mjs";
-import { CHECK_SECONDS, HangError, hangGuard } from "./hang.mjs";
+import { CHECK_SECONDS, HangError, hangGuard, hangContext } from "./hang.mjs";
 import { CASES as ZONES } from "./verb-cases.mjs";
 import { complete, inOrder, soundsFollowSteps } from "./verb-run.mjs";
 import { CASES as PLACE } from "./verb-cases-place.mjs";
@@ -564,7 +564,7 @@ let ran = 0;
 /** A context of windows of `size`, whose pages fetch the fixtures this run recorded, not what
  * Vite serves. */
 async function open(size) {
-    const context = await browser.newContext({
+    const context = await hangContext(browser, {
         viewport: size,
         deviceScaleFactor: 1,
     });

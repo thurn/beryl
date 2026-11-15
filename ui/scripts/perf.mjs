@@ -9,6 +9,7 @@
 // DevTools opens. Prints, per fixture, how many frames ran, their median and 95th/99th
 // percentile lengths, the share longer than 1.5 frames at 60 Hz (a dropped frame), the longest,
 // and Chromium's time spent in script, style, layout and the rest of the main thread.
+import { hangContext } from "./hang.mjs";
 import { writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -134,7 +135,7 @@ async function measure(name) {
     const size = phone
         ? { width: 393, height: 759 }
         : { width: 1600, height: 900 };
-    const context = await browser.newContext({
+    const context = await hangContext(browser, {
         viewport: size,
         deviceScaleFactor: 2,
     });
