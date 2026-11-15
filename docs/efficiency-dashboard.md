@@ -975,7 +975,12 @@ Privacy:
 
 `just efficiency <query>` prints a compact text table. `--json` prints the query
 result as JSON, which is exactly what the page renders. All queries take
-`--since` (for example `24h`, `7d`, `all`, or a date) and cohort filters.
+`--since` (for example `24h`, `7d`, `all`, or a date) and cohort filters
+(`--where key=value` for the label `key:value`, `--epic`, `--role`, `--tier`,
+`--host`, `--provider`). Roll-ups default to the last 7 days and drill-downs
+(`epic`, `bead`, `session`) to everything. A window counts when it starts in the
+range, and a bead when it closed in it; a closed bead's per-bead figures count
+all of its windows.
 
 ```text
 just efficiency summary --since 24h
@@ -1015,19 +1020,26 @@ $ just efficiency bead by-bajq.6.9
 by-bajq.6.9  Spell copies are never scripted onto the stack
 closed 2026-11-15 07:38   tier:opus   claude on jarvis
 agent min 34.6   core min 51.2   dollars 6.40   rework 0.00
-requests 164   median context 212k   fixed prefix 81k
+requests 164   median context 212040   fixed prefix 81233   wall min 36.1
+beside    waiting on a person 0.0 | idle 1.5
 
-time      model 11.2 | rust tests 7.9 | read 3.8 | push 3.5 | build 3.1
-          slow CI wait 2.2 | other 2.0 | queued for cores 0.9
-dollars   prefix 2.10 | carried logs 1.90 | carried reads 1.20
-          new content 0.60 | output 0.60
+time      model 11.2 | rust tests 7.9 | read and search 3.8 | push 3.5
+          build 3.1 | slow CI wait 2.2 | queued for cores 0.9 | the rest 2.0
+dollars   by class: cache_read 3.90 | cache_write 1.10 | output 0.60 | input 0.80
+          by source: fixed prefix 2.10 | carried: rust tests 1.90 | output 0.60
+          carried: read and search 1.20 | new: rust tests 0.60
+          by purpose: working 6.10 | wake-up 0.30
+          by model: claude-opus-5-5 6.40
 
 more: efficiency session local_ce2b4aa8 --bead by-bajq.6.9
 ```
 
 Every result ends with a `more:` line naming the queries that drill into it. The
 JSON carries the same list, and the page turns each into a section that can be
-opened.
+opened. The JSON also carries `fields`, a description of each field that the
+page shows on hover. Every number in the text is a number in the JSON, already
+rounded; a sum that includes a model with no price is marked `+`, and an unknown
+value prints as `-`.
 
 ## The page
 

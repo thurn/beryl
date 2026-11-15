@@ -51,15 +51,15 @@ store" and "Isolation" before changing anything here.
   `Scope`; `facts.py` loads beads and windows with their `window_time` and
   `window_dollars` rows, which every query adds up, so that a roll-up's lines
   (epics, "(no bead)", "orchestration") sum to its total. `rollups.py` holds
-  `summary`, `epic`, `time --by` and `dollars --by`; `bead.py`, `session.py`
-  and `metrics.py` (the registry of named series, which later queries extend
-  with `register`) hold the others.
+  `summary`, `epic`, `time --by` and `dollars --by`; `bead.py`, `session.py` and
+  `metrics.py` (the registry of named series, which later queries extend with
+  `register`) hold the others.
 - A query returns a typed dataclass whose numbers are already rounded; its
   renderer only formats them, and `--json` prints the same dataclass, so the
   text and the JSON cannot disagree. `render.py` has the `Result`, the field
   descriptions the page shows on hover (`FIELDS`), and the text tables. A sum
-  that a model with no price makes a lower bound is marked `+`; an unknown
-  value prints as `-`.
+  that a model with no price makes a lower bound is marked `+`; an unknown value
+  prints as `-`.
 - `cli.py`: the command and its queries.
 
 ## Running and checking
@@ -70,9 +70,9 @@ store" and "Isolation" before changing anything here.
   `--where key=value` (the label `key:value`), `--epic`, `--role`, `--tier`,
   `--host` and `--provider`. A window counts when it starts in the range, a
   request or tool call when it happened in it, and a bead when it closed in it;
-  a closed bead's per-bead figures count all its windows. A query ingests first when the
-  store's last ingest is over a minute old, unless given `--no-ingest`. The
-  store is `$BERYL_CACHE/efficiency/store.sqlite`.
+  a closed bead's per-bead figures count all its windows. A query ingests first
+  when the store's last ingest is over a minute old, unless given `--no-ingest`.
+  The store is `$BERYL_CACHE/efficiency/store.sqlite`.
 - The `efficiency` check lane (`tools/src/beryl_tools/efficiency.py`) runs
   black, pyre and pytest here. Only a change under `efficiency/` or to
   `data/efficiency-*.json` selects it, and such a change selects no other lane

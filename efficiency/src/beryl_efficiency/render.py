@@ -5,6 +5,7 @@ the text and the JSON cannot disagree."""
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
@@ -72,6 +73,25 @@ def mark(lower_bound: bool) -> str:
     return "+" if lower_bound else ""
 
 
+# A number as text, maybe marked as a lower bound: a table aligns it as a number.
+MARKED: re.Pattern[str] = re.compile(r"^-?\d+(\.\d+)?\+?$")
+# How wide a line of split parts may grow before the next part starts a new line.
+WIDTH = 100
+
+
+def wrap(head: str, parts: Sequence[str], indent: int = 10) -> list[str]:
+    """`head`, then `parts` joined by bars, broken into lines of at most `WIDTH` characters
+    whose continuations are indented by `indent`."""
+    lines = [head]
+    for part in parts:
+        joined = f"{lines[-1]} | {part}" if lines[-1] != head else f"{head}{part}"
+        if len(joined) > WIDTH and lines[-1] != head:
+            lines.append(" " * indent + part)
+        else:
+            lines[-1] = joined
+    return lines
+
+
 def cell(value: object) -> str:
     """A value as a table shows it: unknown is a dash, never zero."""
     if value is None:
@@ -88,7 +108,13 @@ def table(headers: Sequence[str], rows: Sequence[Sequence[object]]) -> list[str]
         max([len(h), *(len(r[i]) for r in shown)]) for i, h in enumerate(headers)
     ]
     numeric: list[bool] = [
-        bool(rows) and all(isinstance(r[i], (int, float)) or r[i] is None for r in rows)
+        bool(rows)
+        and all(
+            isinstance(r[i], (int, float))
+            or r[i] is None
+            or (isinstance(r[i], str) and MARKED.match(str(r[i])) is not None)
+            for r in rows
+        )
         for i in range(len(headers))
     ]
 

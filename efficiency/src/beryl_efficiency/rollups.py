@@ -27,7 +27,7 @@ from .facts import (
     spread,
     total,
 )
-from .render import Result, describe, mark, table
+from .render import Result, describe, mark, table, wrap
 from .scope import Scope, now, parse_time
 from .timing import AGENT_CATEGORIES
 
@@ -298,14 +298,18 @@ def summary(facts: Facts, scope: Scope) -> Result:
     )
 
 
-def number(value: float | None, digits: int, lower: bool = False) -> str:
+def number(value: float | int | None, digits: int, lower: bool = False) -> str:
+    """A value with `digits` decimals, marked when it is a lower bound; `-` when
+    unknown."""
     if value is None:
         return "-"
     return f"{value:.{digits}f}" + mark(lower)
 
 
-def parts_text(parts: list[Part], digits: int) -> str:
-    return " | ".join(f"{p.name} {p.value:.{digits}f}" for p in parts) or "-"
+def split_lines(head: str, parts: list[Part], digits: int) -> list[str]:
+    """A split's parts after `head`, wrapped."""
+    shown = [f"{p.name} {p.value:.{digits}f}" for p in parts] or ["-"]
+    return wrap(head, shown)
 
 
 def figure_text(name: str, f: Figure, digits: int) -> str:
@@ -355,10 +359,11 @@ def summary_lines(s: Summary) -> list[str]:
                 figure_text("rework", s.rework, 2),
             ]
         ),
-        f"time      agent min {t.agent_minutes:.1f}: {parts_text(s.time, 1)}",
-        f"          beside: {parts_text(s.beside, 1)}",
-        f"dollars   {t.dollars:.2f}{mark(t.lower_bound)}: "
-        + parts_text(s.dollars_by_source, 2),
+        *split_lines(f"time      agent min {t.agent_minutes:.1f}: ", s.time, 1),
+        *split_lines("          beside: ", s.beside, 1),
+        *split_lines(
+            f"dollars   {t.dollars:.2f}{mark(t.lower_bound)}: ", s.dollars_by_source, 2
+        ),
         "",
         *lines_table([*s.lines, t], "epic"),
         *footnote(s.unpriced),

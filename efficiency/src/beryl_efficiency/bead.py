@@ -11,8 +11,8 @@ from collections import defaultdict
 from dataclasses import asdict, dataclass
 
 from .facts import Facts, Window, load, minutes, money, total
-from .render import Result, describe, mark, table
-from .rollups import Part, agent_parts, bar
+from .render import Result, describe, table
+from .rollups import Part, agent_parts, bar, number, split_lines
 from .scope import Scope
 
 TOKENS: tuple[str, ...] = (
@@ -179,16 +179,6 @@ def report_from(
     )
 
 
-def number(value: float | int | None, digits: int, lower: bool = False) -> str:
-    if value is None:
-        return "-"
-    return f"{value:.{digits}f}{mark(lower)}"
-
-
-def parts_text(parts: list[Part], digits: int) -> str:
-    return " | ".join(f"{p.name} {p.value:.{digits}f}" for p in parts) or "-"
-
-
 def lines(b: BeadReport) -> list[str]:
     head = f"{b.bead}" + (f"  {b.title}" if b.title else "")
     if b.no_data:
@@ -217,10 +207,13 @@ def lines(b: BeadReport) -> list[str]:
         f"beside    waiting on a person {number(b.person_minutes, 1)}"
         + f" | idle {number(b.idle_minutes, 1)}",
         "",
-        f"time      {parts_text(b.time, 1)}",
+        *split_lines("time      ", b.time, 1),
         *(
-            f"{'dollars' if i == 0 else '':<10}by {s}: {parts_text(parts, 2)}"
+            line
             for i, (s, parts) in enumerate(b.dollars_by.items())
+            for line in split_lines(
+                f"{'dollars' if i == 0 else '':<10}by {s}: ", parts, 2
+            )
         ),
         *(
             [f"+ a lower bound: no price for {', '.join(b.unpriced)}"]
