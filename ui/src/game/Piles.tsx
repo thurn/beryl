@@ -10,6 +10,7 @@ import {
   useState,
   type CSSProperties,
   type PointerEvent,
+  type MouseEvent,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -61,7 +62,7 @@ export function PileButton({
   onOpen,
 }: {
   pile: ZonePile;
-  onOpen(): void;
+  onOpen(event: MouseEvent<HTMLButtonElement>): void;
 }) {
   const { look, cards } = pile;
   const height = look.width / CARD_ASPECT;
@@ -106,6 +107,7 @@ const VIEWER_FADE_MS = 200;
 export function ZoneViewer({
   pile,
   title,
+  onPlay,
   onClose,
 }: {
   /** A zone's pile, or cards that lie in no one zone, which `title` names. */
@@ -113,6 +115,7 @@ export function ZoneViewer({
   /** What the viewer is called, if not the pile's name: the permanent whose exiled cards it
    * shows. */
   title?: string;
+  onPlay?(object: ObjectView, event: MouseEvent<HTMLElement>): void;
   onClose(): void;
 }) {
   useOpenSound();
@@ -193,6 +196,7 @@ export function ZoneViewer({
                 object={o}
                 closing={closing}
                 hover={inspect(o)}
+                onPlay={onPlay}
               />
             ))}
           </div>
@@ -255,12 +259,15 @@ function ViewerCard({
   object,
   closing,
   hover,
+  onPlay,
 }: {
   object: ObjectView;
   closing: boolean;
   hover: HoverHandlers;
+  onPlay?(object: ObjectView, event: MouseEvent<HTMLElement>): void;
 }) {
   const face = useFace(object);
+  const pressed = useRef<ObjectView>(undefined);
   const ref = useRef<HTMLDivElement>(null);
   useOwned(ref, closing ? undefined : object.slot);
   return (
@@ -270,6 +277,19 @@ function ViewerCard({
       data-viewer-slot={object.slot}
       data-card={object.name ?? undefined}
       {...hover}
+      onPointerDown={
+        onPlay &&
+        (() => {
+          pressed.current = object;
+        })
+      }
+      onClick={
+        onPlay &&
+        ((event) => {
+          if (!closing && pressed.current === object) onPlay(object, event);
+          pressed.current = undefined;
+        })
+      }
     >
       {object.name && object.face !== "down" ? (
         <Card card={face} width={VIEWER_CARD} />

@@ -21,7 +21,7 @@ export function Corner({
   open: boolean;
   setOpen(open: boolean): void;
   stops: StopsSetting;
-  setStops(stops: StopsSetting): void;
+  setStops?(stops: StopsSetting): void;
   onLeave(): void;
   /** Concedes the game; none once it is over. */
   onConcede?: () => void;
@@ -76,26 +76,28 @@ export function Settings({
   onConcede,
 }: {
   stops: StopsSetting;
-  setStops(stops: StopsSetting): void;
+  setStops?(stops: StopsSetting): void;
   onLeave(): void;
   onConcede?: () => void;
 }) {
   return (
     <>
       <SoundPanel />
-      <label className="settings-toggle">
-        <input
-          type="checkbox"
-          checked={stops.fullControl}
-          onChange={(e) =>
-            setStops({ ...stops, fullControl: e.target.checked })
-          }
-        />
-        <span>
-          Full control
-          <small>Stop at every priority</small>
-        </span>
-      </label>
+      {setStops && (
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            checked={stops.fullControl}
+            onChange={(e) =>
+              setStops({ ...stops, fullControl: e.target.checked })
+            }
+          />
+          <span>
+            Full control
+            <small>Stop at every priority</small>
+          </span>
+        </label>
+      )}
       {onConcede && <ConcedeButton onConcede={onConcede} />}
       <Button variant="secondary" size="small" onClick={onLeave}>
         Leave Game

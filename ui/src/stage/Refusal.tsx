@@ -98,3 +98,24 @@ export function TimingRefusal({ source }: { source: Resting }) {
     </div>
   );
 }
+
+/** A manual table refusal uses the same sound as an engine refusal. The tapped card
+ * shakes in place while the stage keeps drawing the host's last accepted view. */
+export function shakeRefusal(element?: HTMLElement) {
+  play("no");
+  if (
+    !element?.isConnected ||
+    matchMedia("(prefers-reduced-motion: reduce)").matches
+  )
+    return;
+  // The stage owns the node's pose and hit area. Move only the face inside it.
+  const face = element.matches(".stage-node")
+    ? (element.firstElementChild ?? element)
+    : element;
+  face.animate(
+    ["0", "-5px", "4px", "-3px", "2px", "0"].map((translate) => ({
+      translate,
+    })),
+    { duration: 240, easing: "ease-out", id: "table-refusal" },
+  );
+}

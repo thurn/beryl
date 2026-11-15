@@ -634,3 +634,14 @@ body.phone .phone-opening {
 .phone-opening > .inspect {
   pointer-events: auto;
 }
+
+.phone-board[data-manual-table] .phone-pool .mana-pool {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(16px, auto));
+  gap: 0;
+  font-size: 12px;
+}
+
+.phone-board[data-manual-table] .mana-pool-entry b {
+  font-size: 9px;
+}

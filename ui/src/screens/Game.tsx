@@ -3,10 +3,8 @@
 // Views arrive as `game-update` events and the stage plays their scripts (stage/playback.ts).
 // The stage draws and answers the open prompt (stage/prompt.ts); this answers the opening's
 // decisions through `choose`. A reloaded page takes up the game in progress.
-import { PhoneStageBoard } from "../stage/PhoneStageBoard";
 import { pageStage, type Playback } from "../stage/playback";
 import { usePrompt } from "../stage/PromptBar";
-import { StageBoard } from "../stage/StageBoard";
 import { Button, Dock } from "../components/Controls";
 import {
   type CandidateIndex,
@@ -28,6 +26,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePhone } from "../mobile/phone";
 import { GameOver, resultTitle, useResult } from "./GameOver";
 import { Opening } from "./Opening";
+import { GameBoard } from "./Board";
 
 /** A command's failure as the player should hear of it; none for an answer to a decision
  * that was answered already (a double click) or replaced, or a cast completed before it could
@@ -272,43 +271,23 @@ function Playing({ playback }: { playback: Playback }) {
       )}
     </>
   );
-  if (!phone) {
-    return (
-      <Stage>
-        <StageBoard
-          view={view}
-          log={log}
-          waiting={waiting}
-          onSkip={behind ? skip : undefined}
-          cancel={cancelCast}
-          undo={undoAnswer}
-          stops={stops}
-          setStops={chooseStops}
-          onLeave={leave}
-          onConcede={onConcede}
-          dimmed={opening || over}
-        />
-        {openingScreen}
-        {overlays}
-      </Stage>
-    );
-  }
   return (
-    <>
-      <PhoneStageBoard
-        view={view}
-        opening={opening}
-        waiting={waiting}
-        cancel={cancelCast}
-        onLeave={leave}
-        log={log}
-        undo={undoAnswer}
-        stops={stops}
-        setStops={chooseStops}
-        onConcede={onConcede}
-      />
+    <GameBoard
+      view={view}
+      log={log}
+      waiting={waiting}
+      onSkip={behind ? skip : undefined}
+      cancel={cancelCast}
+      undo={undoAnswer}
+      stops={stops}
+      setStops={chooseStops}
+      onLeave={leave}
+      onConcede={onConcede}
+      opening={opening}
+      dimmed={opening || over}
+    >
       {openingScreen}
       {overlays}
-    </>
+    </GameBoard>
   );
 }

@@ -131,3 +131,16 @@
   font-size: 12px;
   max-width: 240px;
 }
+
+.manual-counter-button {
+  color: inherit;
+  font: inherit;
+  border: 0;
+  padding: 2px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.manual-counter-button:active {
+  opacity: 0.7;
+}

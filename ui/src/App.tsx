@@ -21,6 +21,7 @@ import {
 import { Gallery } from "./screens/Gallery";
 import { Testing } from "./screens/Testing";
 import { GameScreen } from "./screens/Game";
+import { TableScreen } from "./screens/Table";
 import { StartScreen } from "./screens/StartScreen";
 import { usePlayback } from "./stage/playback";
 import { useMusic } from "./audio/SoundControls";
@@ -144,6 +145,8 @@ function Main() {
     <MotionConfig reducedMotion="user">
       {path === "/gallery" ? (
         <Gallery />
+      ) : path === "/table" ? (
+        <TableScreen />
       ) : path === "/game" ? (
         <GameScreen
           playback={playback}

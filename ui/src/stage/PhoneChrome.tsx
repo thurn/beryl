@@ -4,7 +4,12 @@
 // the bug report; a touch on a pile lists its cards, and a touch on a card inspects it; undo
 // and full control's mark stand at the end of the middle band; announcements pass over the
 // table for as long as their steps play.
-import type { CSSProperties, ReactNode } from "react";
+import {
+  useRef,
+  type MouseEvent,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { requestBugReport } from "../components/BugReport";
 import { Button } from "../components/Controls";
 import type {
@@ -67,7 +72,7 @@ export function phonePiles(table: PlayerView): PhonePile[] {
     );
     if (
       pile.zone === "library"
-        ? !knowsAny(pile)
+        ? !(table.table && pile.side === "you") && !knowsAny(pile)
         : pile.cards.length === 0 && !exile?.cards.length
     )
       return [];
@@ -101,7 +106,7 @@ export function PileButtons({
 }: {
   bands: Bands;
   piles: PhonePile[];
-  onOpen(pile: PhonePile): void;
+  onOpen(pile: PhonePile, event: MouseEvent<HTMLButtonElement>): void;
 }) {
   return piles.map((pile) => {
     // As large as a finger: its strip's height, and half the piles' corner each.
@@ -121,7 +126,7 @@ export function PileButtons({
         data-pile={pile.zone}
         data-side={pile.side}
         onPointerDown={(e) => e.stopPropagation()}
-        onClick={() => onOpen(pile)}
+        onClick={(event) => onOpen(pile, event)}
       />
     );
   });
@@ -168,7 +173,7 @@ export function Menu({
   onClose,
 }: {
   stops: StopsSetting;
-  setStops(stops: StopsSetting): void;
+  setStops?(stops: StopsSetting): void;
   onLeave(): void;
   onConcede?: () => void;
   onLog(): void;
@@ -233,14 +238,17 @@ export function PileSheet({
   pile,
   title,
   onInspect,
+  onPlay,
   onClose,
 }: {
   /** A zone's pile, or cards that lie in no one zone, which `title` names. */
   pile: PhonePile | { cards: readonly ObjectView[] };
   title?: string;
   onInspect(slot: number | undefined): void;
+  onPlay?(object: ObjectView, event: MouseEvent<HTMLElement>): void;
   onClose(): void;
 }) {
+  const pressed = useRef<ObjectView>(undefined);
   const name = title ?? ("zone" in pile ? pileTitle(pile) : "");
   const section = (cards: readonly ObjectView[]) => (
     <div className="phone-sheet-cards" onClick={() => onInspect(undefined)}>
@@ -250,8 +258,20 @@ export function PileSheet({
           type="button"
           className="phone-sheet-card"
           aria-label={object.name ?? "A card"}
+          onPointerDown={
+            onPlay &&
+            (() => {
+              pressed.current = object;
+            })
+          }
           onClick={(e) => {
             e.stopPropagation();
+            if (onPlay) {
+              if (e.detail === 0 || pressed.current === object)
+                onPlay(object, e);
+              pressed.current = undefined;
+              return;
+            }
             // A library's card back has nothing to inspect.
             onInspect(object.name === null ? undefined : object.slot);
           }}

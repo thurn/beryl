@@ -48,7 +48,9 @@ import {
   PileSheet,
   type PhonePile,
 } from "./PhoneChrome.tsx";
-import { pageStage } from "./playback.ts";
+import type { TableClient } from "../table/client";
+import { counterControls, pickPile, pickViewerCard } from "../table/controls";
+import { type BoardStage, pageStage } from "./playback.ts";
 import { Entries, Shares, Ways } from "./Choose.tsx";
 import {
   PhonePromptDock,
@@ -78,6 +80,8 @@ export function PhoneStageBoard({
   stops,
   setStops,
   onConcede,
+  board = pageStage(),
+  client,
 }: {
   /** The latest view whose script has played out. */
   view: PlayerView;
@@ -86,17 +90,19 @@ export function PhoneStageBoard({
   /** An answer is on its way, or the game plays on without the player. */
   waiting: boolean;
   /** Takes back the cast in progress. */
-  cancel(): void;
+  cancel?(): void;
   onLeave(): void;
   log: LogEntry[];
   /** Takes back the player's latest answer. */
-  undo(): void;
+  undo?(): void;
   stops: StopsSetting;
-  setStops(stops: StopsSetting): void;
+  setStops?(stops: StopsSetting): void;
   /** Concedes the game; none once it is over. */
   onConcede?: () => void;
+  board?: BoardStage;
+  client?: TableClient;
 }) {
-  const { stage, feed, prompts } = pageStage();
+  const { stage, feed, prompts } = board;
   const prompt = usePrompt(prompts);
   const asked = opening ? { sending: false, answered: false } : prompt;
   const { pay, suggest } = usePaying(asked);
@@ -106,9 +112,19 @@ export function PhoneStageBoard({
     prompts.press.bind(prompts),
   );
   const number = prompts.number.bind(prompts);
-  const answers = { waiting, press, cancel, suggest, number };
+  const answers = {
+    waiting,
+    press,
+    cancel: cancel ?? (() => {}),
+    suggest,
+    number,
+  };
   const { ref, viewport, frameStyle } = useViewport();
-  const { layer, surface } = useSurface(stage, prompts.pointerClient);
+  const { layer, surface } = useSurface(
+    stage,
+    client?.gestures ?? prompts.pointerClient,
+    client?.setSurface,
+  );
   const { table, counts, resting } = useSyncExternalStore(
     stage.subscribe,
     () => stage.shown,
@@ -205,12 +221,13 @@ export function PhoneStageBoard({
     <div
       className="phone-board"
       data-pay={pay}
+      data-manual-table={!!client || undefined}
       data-opening={opening || undefined}
       inert={opening}
       ref={ref}
       style={frameStyle}
       onPointerDown={(e) => {
-        feed.skip();
+        if (!client) feed.skip();
         // A touch beside every card puts the inspected one away.
         if (!(e.target as Element).closest("[data-stage]"))
           setInspecting(undefined);
@@ -225,10 +242,19 @@ export function PhoneStageBoard({
               style={side === "you" ? bands.yourStrip : bands.opponentStrip}
             >
               <Piles side={side} view={landed(table, resting)} tops={false} />
-              <div className="phone-pool">
+              <div className="phone-pool" data-side={side}>
                 <ManaPool
                   pool={table.players[side].mana}
                   pulse={side === "you" ? lost : 0}
+                  counters={
+                    client ? table.players[side].namedCounters : undefined
+                  }
+                  adjust={counterControls(
+                    side === "you" || view.table?.seats === 2
+                      ? client
+                      : undefined,
+                    side,
+                  )}
                 />
               </div>
               <Orb
@@ -242,6 +268,7 @@ export function PhoneStageBoard({
                 <PlayerTarget prompts={prompts} asked={asked} side={side} />
               </Orb>
               {side === "you" ? (
+                !client &&
                 !opening && <PhonePromptDock asked={asked} {...answers} />
               ) : (
                 <>
@@ -302,7 +329,11 @@ export function PhoneStageBoard({
           <PileButtons
             bands={bands}
             piles={piles}
-            onOpen={({ side, zone }) => setSheet({ side, zone })}
+            onOpen={(pile, event) =>
+              pickPile(client, pile, event, () =>
+                setSheet({ side: pile.side, zone: pile.zone }),
+              )
+            }
           />
           {revealed.length > 0 && viewport && (
             // As large as a finger, over the faces the stage rests in the pile.
@@ -328,12 +359,14 @@ export function PhoneStageBoard({
             bands={bands}
             width={viewport?.width ?? 0}
           />
-          <PhonePromptOver
-            asked={asked}
-            {...answers}
-            layout={layout}
-            held={shades(asked.prompt)}
-          />
+          {!client && (
+            <PhonePromptOver
+              asked={asked}
+              {...answers}
+              layout={layout}
+              held={shades(asked.prompt)}
+            />
+          )}
         </>
       )}
       {sheet === "menu" && (
@@ -353,6 +386,9 @@ export function PhoneStageBoard({
         <PileSheet
           pile={pile}
           onInspect={setInspecting}
+          onPlay={
+            client && ((object, event) => pickViewerCard(client, object, event))
+          }
           onClose={() => {
             setSheet(undefined);
             setInspecting(undefined);

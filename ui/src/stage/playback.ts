@@ -35,7 +35,9 @@ type Hooked = Window & {
   berylBehind?: boolean;
 };
 
-let page: { stage: ScriptStage; feed: Feed; prompts: Prompts } | undefined;
+export type BoardStage = ReturnType<typeof createBoardStage>;
+
+let page: BoardStage | undefined;
 
 /** The page's one stage, what feeds it and what draws the session's prompts on it, made when
  * first asked for: the model lasts as long as the page, whatever of the screen is mounted, so
@@ -43,25 +45,26 @@ let page: { stage: ScriptStage; feed: Feed; prompts: Prompts } | undefined;
  * play. The mounted board attaches its pointer client and sets the layout, which defaults
  * to desktop. */
 export function pageStage() {
-  if (!page) {
-    const stage = new ScriptStage({
-      layout: desktop,
-      timings: timingOf,
-      frames: animationFrames,
+  return (page ??= createBoardStage(true));
+}
+
+/** The manual table has its own stage so opening it leaves the engine game's playback intact. */
+export function createBoardStage(engine: boolean) {
+  const stage = new ScriptStage({
+    layout: desktop,
+    timings: timingOf,
+    frames: animationFrames,
+  });
+  soundSteps(stage);
+  if (animationFrames && !navigator.webdriver) {
+    timeFrames(stage, animationFrames, (run) => {
+      const message = `${run.dropped} of ${run.frames} frames dropped`;
+      const lagged = run.dropped >= 3 && run.dropped * 10 >= run.frames;
+      note(lagged ? "warn" : "info", "frames", message, run);
     });
-    soundSteps(stage);
-    // The player's frames, not a driven browser's, whose clock a check may pause.
-    if (animationFrames && !navigator.webdriver) {
-      timeFrames(stage, animationFrames, (run) => {
-        const message = `${run.dropped} of ${run.frames} frames dropped`;
-        // A run that dropped several frames, a tenth of them or more, also reaches the app's
-        // journal, which outlives the page.
-        const lagged = run.dropped >= 3 && run.dropped * 10 >= run.frames;
-        note(lagged ? "warn" : "info", "frames", message, run);
-      });
-    }
-    // While the stage animates, the opponent's search leaves the cores it would take frames
-    // from.
+  }
+  if (engine) {
+    // While the stage animates, the opponent's search leaves it the cores it needs.
     let animating = false;
     stage.follow(() => {
       if (animating) return;
@@ -72,19 +75,26 @@ export function pageStage() {
         stageAnimating(false);
       });
     });
-    const prompts = new Prompts(stage, click);
-    prompts.heard = () => play("select");
-    // A check of the audits plants a fault here (fault.ts): none otherwise.
-    const verb = skipped();
-    const fed = verb === null ? prompts : skipping(prompts, verb);
-    page = { stage, feed: new Feed(fed), prompts };
-    if (navigator.webdriver) {
-      (window as Hooked).berylStage = stage;
-      (window as Hooked).berylPrompts = prompts;
-      (window as Hooked).berylCase = caseOf;
-    }
   }
-  return page;
+  const prompts = new Prompts(stage, click);
+  prompts.heard = () => play("select");
+  // A check of the audits plants a fault here (fault.ts).
+  const verb = skipped();
+  const fed = engine
+    ? verb === null
+      ? prompts
+      : skipping(prompts, verb)
+    : stage;
+  const board = { stage, feed: new Feed(fed), prompts };
+  if (engine) exposeBoardStage(board);
+  return board;
+}
+
+export function exposeBoardStage({ stage, prompts }: BoardStage) {
+  if (!navigator.webdriver) return;
+  (window as Hooked).berylStage = stage;
+  (window as Hooked).berylPrompts = prompts;
+  (window as Hooked).berylCase = caseOf;
 }
 
 /** The game as the screen around the table draws it. */
@@ -117,6 +127,7 @@ export function usePlayback(): {
   const [resuming, setResuming] = useState(true);
   const resumed = useGameUpdates({
     arrive(update, past) {
+      if (update.view.table) return;
       if (feed.arrive(update, past)) setStarting(false);
       setResuming(false);
     },

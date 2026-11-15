@@ -4,6 +4,7 @@
 // and a click sets or clears that stop. The current step burns gold in the active player's
 // rows. No one gets priority in the untap step or, normally, cleanup (CR 502.4, 514.3), so
 // those two are never stops.
+import type { MouseEvent } from "react";
 import type { Step } from "../generated/protocol";
 import { Tip } from "./Controls";
 
@@ -184,6 +185,7 @@ export function StepStops({
   whose,
   stops,
   onStops,
+  onStep,
 }: {
   side: "you" | "opponent";
   /** The current step, in the active player's rows. */
@@ -194,13 +196,15 @@ export function StepStops({
   whose: string;
   /** The steps of these turns with a stop. */
   stops: Step[];
-  onStops(stops: Step[]): void;
+  onStops?(stops: Step[]): void;
+  onStep?(step: Step, event: MouseEvent<HTMLButtonElement>): void;
 }) {
   return (
     <ol className={`step-stops step-stops-${side}`}>
       {STEP_STOPS.map((stop, i) => {
         const column = i % 3;
         const on = stop.stops && stopsAt(stops, stop);
+        const step = stop.steps[0];
         const here = current !== undefined && stop.steps.includes(current);
         const icon = (
           <svg
@@ -231,13 +235,16 @@ export function StepStops({
             <Tip side={side === "you" ? "above" : "below"}>
               {here ? now : `${whose} ${stop.label.toLowerCase()}`}
             </Tip>
-            {stop.stops ? (
+            {(onStep && step) || (stop.stops && onStops) ? (
               <button
                 type="button"
                 className="step-toggle"
-                aria-pressed={on}
+                aria-pressed={onStops ? on : undefined}
                 onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => onStops(toggleStop(stops, stop))}
+                onClick={(event) => {
+                  if (step && onStep) onStep(step, event);
+                  else onStops?.(toggleStop(stops, stop));
+                }}
               >
                 {icon}
               </button>

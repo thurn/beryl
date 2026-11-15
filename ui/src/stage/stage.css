@@ -538,3 +538,14 @@
   height: 11px;
   fill: currentColor;
 }
+
+[data-manual-table] .stack-ability.stage-node {
+  pointer-events: auto;
+}
+
+[data-manual-table] .card-el:active .card-slot,
+[data-manual-table] .stack-ability.stage-node:active,
+[data-manual-table]
+  :is(.pile-button, .zone-viewer-card, .phone-sheet-card):active {
+  filter: brightness(0.85);
+}

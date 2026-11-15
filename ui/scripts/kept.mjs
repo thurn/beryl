@@ -21,4 +21,6 @@ await import("./kept-pointer.mjs");
 await import("./kept-aim.mjs");
 await import("./kept-play.mjs");
 await import("./kept-opening.mjs");
-await finish();
+await import("./kept-table-click.mjs");
+const { stopTableServer } = await import("./table.mjs");
+await finish(stopTableServer);

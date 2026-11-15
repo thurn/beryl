@@ -1,6 +1,6 @@
 // Player and zones: life orbs, mana pools, player badges, the library, the graveyard
 // and stacked lands.
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import {
   CARD_ASPECT,
   Card,
@@ -271,10 +271,12 @@ export function ManaPool({
   pool,
   pulse = 0,
   counters,
+  adjust,
 }: {
   pool: Pool;
   pulse?: number;
   counters?: NamedCounter[];
+  adjust?(name: string, event: MouseEvent<HTMLElement>): void;
 }) {
   const [held, setHeld] = useState<{ pool: Pool; pulse: number }>();
   useEffect(() => {
@@ -285,27 +287,52 @@ export function ManaPool({
     const timer = setTimeout(() => setHeld(undefined), PULSE_MS);
     return () => clearTimeout(timer);
   }, [pulse]);
-  const shown = floating(pool) ? pool : held?.pool;
-  const symbols = shown ? POOL_SYMBOLS.filter(([k]) => shown[k] > 0) : [];
+  const shown = adjust || floating(pool) ? pool : held?.pool;
+  const symbols = shown
+    ? POOL_SYMBOLS.filter(([k]) => adjust || shown[k] > 0)
+    : [];
+  const counterButton = (name: string, count: number, content: ReactNode) => (
+    <button
+      key={name}
+      type="button"
+      className="manual-counter-button"
+      aria-label={`${name} counter: ${count}`}
+      data-counter={name}
+      onClick={(event) => adjust?.(name, event)}
+      onContextMenu={(event) => adjust?.(name, event)}
+    >
+      {content}
+    </button>
+  );
   const mana =
     shown && symbols.length > 0 ? (
       <div
         key={held?.pulse}
         className={held ? "mana-pool mana-pool-pulse" : "mana-pool"}
-        role="img"
-        aria-label={`Unspent mana: ${symbols
-          .map(([k, s]) =>
-            shown[k] <= 255 ? `{${s}}`.repeat(shown[k]) : `${shown[k]} {${s}}`,
-          )
-          .join("")}`}
+        role={adjust ? undefined : "img"}
+        aria-label={
+          adjust
+            ? undefined
+            : `Unspent mana: ${symbols
+                .map(([k, s]) =>
+                  shown[k] <= 255
+                    ? `{${s}}`.repeat(shown[k])
+                    : `${shown[k]} {${s}}`,
+                )
+                .join("")}`
+        }
         data-pool
       >
-        {symbols.map(([k, s]) => (
-          <span key={k} className="mana-pool-entry">
-            <ManaSymbol symbol={s} />
-            {shown[k] > 1 && <b>{shown[k]}</b>}
-          </span>
-        ))}
+        {symbols.map(([k, s]) => {
+          const count = shown[k];
+          const content = (
+            <span className="mana-pool-entry" key={k}>
+              <ManaSymbol symbol={s} />
+              {(count > 1 || (adjust && count > 0)) && <b>{count}</b>}
+            </span>
+          );
+          return adjust ? counterButton(s, count, content) : content;
+        })}
       </div>
     ) : null;
   const named = counters?.filter(({ count }) => count !== 0);
@@ -313,9 +340,17 @@ export function ManaPool({
   return (
     <div className="manual-pool">
       {mana}
-      {named.map((counter) => (
-        <NamedCounterBadge key={counter.name} {...counter} />
-      ))}
+      {named.map((counter) =>
+        adjust ? (
+          counterButton(
+            counter.name,
+            counter.count,
+            <NamedCounterBadge {...counter} />,
+          )
+        ) : (
+          <NamedCounterBadge key={counter.name} {...counter} />
+        ),
+      )}
     </div>
   );
 }

@@ -36,7 +36,8 @@ import type { LogEntry } from "../game/log";
 import { DESKTOP_REVEALED, desktopTray, desktopWith } from "./desktop.ts";
 import { DESKTOP, Faces } from "./Faces.tsx";
 import { useSurface } from "./mount.ts";
-import { pageStage } from "./playback.ts";
+import type { TableClient } from "../table/client";
+import { type BoardStage, pageStage } from "./playback.ts";
 import {
   PlayerTarget,
   PromptDock,
@@ -64,6 +65,8 @@ export function StageBoard({
   onLeave,
   onConcede,
   dimmed,
+  board = pageStage(),
+  client,
 }: {
   /** The latest view whose script has played out. */
   view: PlayerView;
@@ -74,20 +77,26 @@ export function StageBoard({
   /** Plays out at once the views still to show; none when none wait. */
   onSkip?: () => void;
   /** Takes back the cast in progress. */
-  cancel(): void;
+  cancel?(): void;
   /** Takes back the player's latest answer. */
-  undo(): void;
+  undo?(): void;
   stops: StopsSetting;
-  setStops(stops: StopsSetting): void;
+  setStops?(stops: StopsSetting): void;
   onLeave(): void;
   /** Concedes the game; none once it is over. */
   onConcede?: () => void;
   /** A screen is over the table: the opening or the game's end. */
   dimmed: boolean;
+  board?: BoardStage;
+  client?: TableClient;
 }) {
-  const { stage, prompts } = pageStage();
+  const { stage, prompts } = board;
   const asked = usePrompt(prompts);
-  const { layer, surface } = useSurface(stage, prompts.pointerClient);
+  const { layer, surface } = useSurface(
+    stage,
+    client?.gestures ?? prompts.pointerClient,
+    client?.setSurface,
+  );
   const width = useStageWidth();
   const [settings, setSettings] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
@@ -155,7 +164,13 @@ export function StageBoard({
     [table, hovered],
   );
   const number = prompts.number.bind(prompts);
-  const answers = { waiting, press, cancel, suggest, number };
+  const answers = {
+    waiting,
+    press,
+    cancel: cancel ?? (() => {}),
+    suggest,
+    number,
+  };
   // A prompt's keys answer it while nothing else takes them.
   usePromptKeys(asked, answers, !settings && !onSkip);
   // The keys that are not a prompt's: Escape closes the settings, the platform's undo takes
@@ -165,9 +180,15 @@ export function StageBoard({
     // A key the prompt took has done its one thing: the answer it sent may already have
     // views playing, which the same press must not end.
     if (e.defaultPrevented) return;
+    client?.key(e);
+    if (e.defaultPrevented) return;
     if (e.key === "Escape") {
       if (settings) setSettings(false);
-    } else if (e.key.toLowerCase() === "z" && (e.metaKey || e.ctrlKey)) {
+    } else if (
+      undo &&
+      e.key.toLowerCase() === "z" &&
+      (e.metaKey || e.ctrlKey)
+    ) {
       e.preventDefault();
       if (undoable) undo();
     } else if (
@@ -197,6 +218,7 @@ export function StageBoard({
         className={dimmed ? "table table-dimmed" : "table"}
         data-opening={view.turn.number === 0 || undefined}
         data-pay={pay}
+        data-manual-table={!!client || undefined}
         onPointerDown={() => setSettings(false)}
         // Before the card under it hears the press, so that the card's click or drag is one
         // on the newest view.
@@ -212,6 +234,7 @@ export function StageBoard({
           waiting={waiting}
           logOpen={logOpen}
           onLog={toggleLog}
+          client={client}
           orb={(side) => (
             <PlayerTarget prompts={prompts} asked={asked} side={side} />
           )}
@@ -270,8 +293,9 @@ export function StageBoard({
           stops={stops}
           setStops={setStops}
           dimmed={dimmed}
+          client={client}
         >
-          <PromptDock asked={asked} {...answers} />
+          {!client && <PromptDock asked={asked} {...answers} />}
         </Controls>
         {!dimmed && (
           <RevealedCards
@@ -290,7 +314,7 @@ export function StageBoard({
         />
       </div>
       {/* Undo stays accessible while a choice covers the table. */}
-      {undoable && <UndoButton onUndo={undo} />}
+      {undoable && undo && <UndoButton onUndo={undo} />}
     </>
   );
 }

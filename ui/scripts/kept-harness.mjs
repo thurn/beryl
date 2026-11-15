@@ -167,6 +167,8 @@ export async function check(
         viewport = { width: 1600, height: 900 },
         reducedMotion = "no-preference",
         hash = "#/game",
+        route,
+        serial = false,
         init,
         phone = false,
         clock = "paused",
@@ -214,8 +216,10 @@ export async function check(
                 assert.ok(["paused", "off"].includes(clock), clock);
                 if (clock === "paused") await page.clock.install();
                 if (init) await page.addInitScript(init);
-                const route = `/?fixture=${fixture}&at=${at}${phone ? "&phone" : ""}${hash}`;
-                await page.goto(new URL(route, base).href, {
+                const address = route
+                    ? await route(page)
+                    : `/?fixture=${fixture}&at=${at}${phone ? "&phone" : ""}${hash}`;
+                await page.goto(new URL(address, base).href, {
                     waitUntil: "load",
                 });
                 await page.waitForSelector(ready);
@@ -252,6 +256,7 @@ export async function check(
             break;
         }
     });
+    if (serial) await queue.drain();
 }
 
 // Fixtures and helpers more than one part of the checks reads.
@@ -433,9 +438,10 @@ export const tokenRun = {
 
 /** Waits for every check to finish, then exits non-zero if one failed, a page logged an error,
  * or the filters reached none. */
-export async function finish() {
+export async function finish(cleanup) {
     await queue.drain();
     await browser.close();
+    await cleanup?.();
     if (ran === 0 && !chosenTitles && !errors.length) {
         // `by ui-test` hands a filter to every script it may be for, and fails only if it
         // reaches no check in any (selection.py NONE_REACHED).

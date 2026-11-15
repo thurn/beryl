@@ -8,7 +8,11 @@ import { SNAP, type ScriptStage } from "./stage.ts";
 import { effectsOf, RELEASE, snap, timingOf } from "./timing.ts";
 
 /** Mounts the stage on `layer` and attaches the board's pointer client while it is shown. */
-export function useSurface(stage: ScriptStage, client: PointerClient) {
+export function useSurface(
+  stage: ScriptStage,
+  client: PointerClient,
+  setClientSurface?: (surface: DomSurface | undefined) => void,
+) {
   const layer = useRef<HTMLDivElement>(null);
   const [surface, setSurface] = useState<DomSurface>();
   const reduce = useReducedMotion() ?? false;
@@ -18,11 +22,13 @@ export function useSurface(stage: ScriptStage, client: PointerClient) {
     stage.mount(surface);
     const unpoint = surface.point(stage.pointer);
     setSurface(surface);
+    setClientSurface?.(surface);
     return () => {
+      setClientSurface?.(undefined);
       unpoint();
       stage.unmount(surface);
     };
-  }, [stage]);
+  }, [stage, setClientSurface]);
   // Reduced motion is durations of zero: every step is over in the tick that begins it, a
   // card let go is home at once, and no step begins an effect.
   useLayoutEffect(() => {

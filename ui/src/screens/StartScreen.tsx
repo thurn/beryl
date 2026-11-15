@@ -3,9 +3,12 @@
 import {
   type AgentView,
   type SessionId,
+  canStartTable,
   concede,
+  deckImport,
   exportBugs,
   listAgents,
+  tableSolo,
 } from "../ipc";
 import { Button } from "../components/Controls";
 import { SoundCorner } from "../audio/SoundControls";
@@ -160,6 +163,26 @@ export function StartScreen({
         },
       );
   };
+  const solo = async () => {
+    if (starting.current) return;
+    starting.current = true;
+    setPending(true);
+    setError(undefined);
+    try {
+      const { default: text } =
+        await import("../../../docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt?raw");
+      const { name, main, side, skipped } = await deckImport({
+        name: "Beryl sample deck",
+        text,
+      });
+      await tableSolo({ name, main, side, skipped });
+      window.location.hash = "#/table";
+    } catch (failure) {
+      starting.current = false;
+      setPending(false);
+      setError(String(failure));
+    }
+  };
   // Enter takes the primary button from anywhere on the screen but a button, which Enter
   // presses: back to the game in progress, else a new one.
   const onEnter = useRef<(e: KeyboardEvent) => void>(undefined);
@@ -261,6 +284,15 @@ export function StartScreen({
                   : "New Game"}
           </Button>
         </div>
+        {canStartTable() && (
+          <Button
+            variant="secondary"
+            disabled={pending}
+            onClick={() => void solo()}
+          >
+            Solo table
+          </Button>
+        )}
         {error && <p className="game-error">{error}</p>}
         {exportReports && <ExportReports />}
       </section>

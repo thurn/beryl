@@ -600,6 +600,8 @@ let platform: Platform | undefined;
 let appInfoReply: Promise<Result<"app_info">> | undefined;
 
 export const isNativeApp = () => "__TAURI_INTERNALS__" in window;
+export const canStartTable = () =>
+  isNativeApp() || (liveBase() !== undefined && !isRelayedGame());
 export const isMobile = (platform: Platform) =>
   platform === "ios" || platform === "android";
 

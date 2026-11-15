@@ -9,6 +9,13 @@
 // Hover opens the card inspector, placed clear of the open prompt's choices. An unused click
 // can open the viewer for cards tucked under their host or explain why the click was refused
 // (Refusal.tsx).
+import type { TableClient } from "../table/client";
+import {
+  counterControls,
+  pickPile,
+  pickStep,
+  pickViewerCard,
+} from "../table/controls";
 import {
   useEffect,
   useMemo,
@@ -103,6 +110,7 @@ export function Hud({
   logOpen,
   onLog,
   orb,
+  client,
 }: {
   stage: ScriptStage;
   /** The open prompt: the blocks it has picked take their attackers' damage off what is on
@@ -119,6 +127,7 @@ export function Hud({
   waiting: boolean;
   logOpen: boolean;
   onLog(): void;
+  client?: TableClient;
 }) {
   const { table, notices, counts } = useSyncExternalStore(
     stage.subscribe,
@@ -217,11 +226,20 @@ export function Hud({
         </div>
       )}
       {SIDES.map((side) => (
-        <div key={side} className="hud" style={MANA_POOLS[side]}>
+        <div
+          key={side}
+          className="hud"
+          data-side={side}
+          style={MANA_POOLS[side]}
+        >
           <ManaPool
             pool={table.players[side].mana}
             counters={table.players[side].namedCounters}
             pulse={side === "you" ? lost : 0}
+            adjust={counterControls(
+              side === "you" || view.table?.seats === 2 ? client : undefined,
+              side,
+            )}
           />
         </div>
       ))}
@@ -299,6 +317,7 @@ export function Controls({
   setStops,
   dimmed,
   children,
+  client,
 }: {
   stage: ScriptStage;
   asked: Asked;
@@ -307,7 +326,8 @@ export function Controls({
   /** The dock: the open prompt's buttons (PromptBar.tsx). */
   children?: ReactNode;
   stops: StopsSetting;
-  setStops(stops: StopsSetting): void;
+  setStops?(stops: StopsSetting): void;
+  client?: TableClient;
   dimmed?: boolean;
 }) {
   const { table, resting } = useSyncExternalStore(
@@ -368,6 +388,7 @@ export function Controls({
   const pointed = hovered === undefined ? undefined : resting.get(hovered);
   const inspected =
     pointed?.object &&
+    (!client || pointed.object.name != null) &&
     pointed.dress.look !== "hidden" &&
     pointed.dress.look !== "pile" &&
     pointed.dress.look !== "handling" &&
@@ -381,11 +402,19 @@ export function Controls({
       {/* Over the cards on them: a pile is opened, never pointed at card by card. */}
       {piles.map(
         (pile) =>
-          (pile.cards.length > 0 || pile.zone === "library") && (
+          (pile.cards.length > 0 ||
+            (pile.zone === "library" &&
+              (!client ||
+                pile.side === "you" ||
+                table.table?.seats === 2))) && (
             <PileButton
               key={`${pile.side}-${pile.zone}`}
               pile={pile}
-              onOpen={() => setViewing({ side: pile.side, zone: pile.zone })}
+              onOpen={(event) =>
+                pickPile(client, pile, event, () =>
+                  setViewing({ side: pile.side, zone: pile.zone }),
+                )
+              }
             />
           ),
       )}
@@ -408,7 +437,14 @@ export function Controls({
               now={`Turn ${table.turn.ownNumber} · ${STEP_NAMES[table.turn.step]}`}
               whose={side === "you" ? "Your" : "Opponent's"}
               stops={stops[key]}
-              onStops={(steps) => setStops({ ...stops, [key]: steps })}
+              onStep={
+                client?.hasClick("step")
+                  ? (step, event) => pickStep(client, side, step, event)
+                  : undefined
+              }
+              onStops={
+                setStops && ((steps) => setStops({ ...stops, [key]: steps }))
+              }
             />
           );
         })}
@@ -435,6 +471,9 @@ export function Controls({
           key={viewedKey}
           pile={viewed}
           title={viewedTitle}
+          onPlay={
+            client && ((object, event) => pickViewerCard(client, object, event))
+          }
           onClose={() => setViewing(undefined)}
         />
       )}
