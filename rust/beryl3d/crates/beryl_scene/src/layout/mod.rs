@@ -13,7 +13,7 @@ use taffy::{
     NodeId, TaffyTree, compute_leaf_layout,
 };
 
-pub use glyphs::Glyphs;
+pub use glyphs::{Glyphs, key as glyph_key};
 
 use crate::element::{Align, Direction, Element, Justify, Press, Style};
 use crate::frame::{ElementId, Role};

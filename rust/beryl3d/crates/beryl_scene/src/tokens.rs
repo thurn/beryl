@@ -39,6 +39,8 @@ pub mod type_style {
         size: 24.0,
         line_height: 1.0,
     };
+    /// Every type style, for the glyph rasterizer to prepare before the first frame.
+    pub const ALL: [TypeStyle; 3] = [TITLE, BODY, BUTTON];
 }
 
 /// Fixed sizes, in logical points.

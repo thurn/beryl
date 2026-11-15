@@ -13,3 +13,6 @@ workspace = true
 beryl_scene = { path = "../beryl_scene" }
 # Decodes JPEG card scans and PNG pictures, in place of hand-written decoders.
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
+# Rasterizes glyph outlines to coverage bitmaps, in place of a hand-written TrueType and CFF
+# rasterizer. Pinned to the release the cross-target probe built for every platform.
+swash = "=0.2.10"
