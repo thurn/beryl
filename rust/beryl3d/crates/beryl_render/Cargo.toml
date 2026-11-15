@@ -24,7 +24,7 @@ wgpu = "30.0.2"
 # Plays the gated boards and recordings whose frames the `fragments` example counts.
 beryl_inspect = { path = "../beryl_inspect" }
 # The seat a recording is seen from.
-beryl_session = { path = "../../../crates/beryl_session" }
+beryl_protocol = { path = "../../../crates/beryl_protocol" }
 # Parses the shader to count each material's texture samples and expressions, in place of Arm's
 # offline compiler, whose installer needs a person. The release wgpu 30.0.2 compiles with.
 naga = { version = "30.0.2", features = ["wgsl-in"] }

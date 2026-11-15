@@ -4,13 +4,13 @@
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use beryl_engine::card::Purpose;
+use beryl_protocol::GameUpdate;
+use beryl_protocol::prompt::Purpose;
+use beryl_protocol::prompt::{ButtonId, PartName, PromptButton, PromptView, ShapeBody, Words};
+use beryl_protocol::protocol::{DecisionId, DecisionView, Kind, SessionId, Status};
 use beryl_scene::input::{AssetReady, GlyphCell, Input, Insets, Size};
 use beryl_scene::testing::ViewBuilder;
 use beryl_scene::{Client, Config};
-use beryl_session::GameUpdate;
-use beryl_session::prompt::{ButtonId, PartName, PromptButton, PromptView, ShapeBody, Words};
-use beryl_session::protocol::{DecisionId, DecisionView, Kind, SessionId, Status};
 
 /// The system allocator, counting the allocations it makes.
 struct Counting;

@@ -6,11 +6,11 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 
 use beryl_inspect::pages::recording;
+use beryl_protocol::protocol::Side;
 use beryl_scene::driver::{REPLY_DELAY, TICK, plays_on};
 use beryl_scene::frame::Wake;
 use beryl_scene::input::{Input, Insets, Size};
 use beryl_scene::{Client, Config};
-use beryl_session::protocol::Side;
 
 /// The system allocator, counting the allocations this thread makes while `COUNTING` is set.
 struct Counting;

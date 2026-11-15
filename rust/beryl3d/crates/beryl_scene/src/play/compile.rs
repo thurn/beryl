@@ -8,8 +8,8 @@
 //! hand) slides there over the step, or over the time the step leaves for what it opened or
 //! closed.
 
-use beryl_session::protocol::PlayerView;
-use beryl_session::script::{Script, Step, StepTiming, Subject, Table as Played, Verb, mover_of};
+use beryl_protocol::protocol::PlayerView;
+use beryl_protocol::script::{Script, Step, StepTiming, Subject, Table as Played, Verb, mover_of};
 
 use super::record::{Cause, MoveKey, Plant, SegmentRecord, StepRecord};
 use crate::beat::{Laid, beat};

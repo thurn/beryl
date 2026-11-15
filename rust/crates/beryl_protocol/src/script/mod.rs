@@ -17,8 +17,8 @@
 //!   the whole game, through every zone. Only a token's or a copy's slot is used again, and
 //!   only after a `vanish` step with no record has ended it: from an `appear` to that `vanish`
 //!   a slot is one thing, and the stage keeps one node for it.
-//! - An ability on the stack is a number the session gives it as the engine says it arrived
-//!   there (`beryl_session::script::Names`), from 1 and never used again, the same for both seats: a view's stack
+//! - An ability on the stack is a number the session gives it as the engine says it arrived there
+//!   (the session's `Names`), from 1 and never used again, the same for both seats: a view's stack
 //!   does not name its abilities.
 //! - A player is a [`Side`].
 //!
@@ -53,17 +53,17 @@
 //! a later step ends it ([`Span`]), in the same script or in another; between the two the
 //! stage keeps it drawn. A view's `handling` is the lift the script begins and ends.
 //!
-//! A screen holds the spans its scripts have left open (`beryl_session::script::Open`) and its next script ends
-//! them. The arrows and lines are the ones its table calls for (`spans.rs`): from each spell
-//! and ability on the stack to its targets, from each ability to its source on the
-//! battlefield, from each blocker to its attacker, and from each attacker to what it attacks
-//! where a planeswalker could be attacked. One ends in a beat of its own before the beat
-//! that moves either of its ends, and is not drawn again at a card that changed zones. A
-//! script draws no mark: all six are a prompt's, which the session's prompt state will give
-//!.
+//! A screen holds the spans its scripts have left open (the session's `Open`) and its next script
+//! ends them. The arrows and lines are the ones its table calls for (`spans.rs`): from each spell
+//! and ability on the stack to its targets, from each ability to its source on the battlefield,
+//! from each blocker to its attacker, and from each attacker to what it attacks where a
+//! planeswalker could be attacked. One ends in a beat of its own before the beat that moves either
+//! of its ends, and is not drawn again at a card that changed zones. A script draws no mark: all
+//! six are a prompt's, which the session's prompt state will give
 //!
-//! Spans change no table, so replay cannot hold them. The rule invariants do (`beryl_session::script::carried`,
-//! `check.rs`), which a debug build runs with the replay check on every script it builds.
+//! Spans change no table, so replay cannot hold them. The rule invariants do (the session's
+//! `carried`, `check.rs`), which a debug build runs with the replay check on every script it
+//! builds.
 //!
 //! # Mana
 //!
@@ -73,26 +73,26 @@
 //!
 //! # Reset
 //!
-//! A seat's first script, and the script beside an undone view, has [`Script::reset`]: the
-//! stage drops its table and every span and takes the view's table as it stands, with no
-//! card motion. Spans begin at once, and announcements play over the reset table. A stage
-//! with no table yet takes the first view as it stands (a page reloaded into a game in
-//! progress), whose script was written for a screen that had the view before. A page that shows
-//! first a view other than its seat's first has `beryl_session::script::Follow` write that view a reset of its own.
+//! A seat's first script, and the script beside an undone view, has [`Script::reset`]: the stage
+//! drops its table and every span and takes the view's table as it stands, with no card motion.
+//! Spans begin at once, and announcements play over the reset table. A stage with no table yet
+//! takes the first view as it stands (a page reloaded into a game in progress), whose script was
+//! written for a screen that had the view before. A page that shows first a view other than its
+//! seat's first has the session's `Follow` write that view a reset of its own.
 //!
 //! # Building
 //!
-//! A `beryl_session::script::Screen` is what one seat last showed; the session keeps one per seat and asks it for
-//! the script beside each view. The events become steps in order, played on the table as
-//! they are written (`build.rs`, `moves.rs`, `mana.rs`), each with the spans it ends and
-//! begins (`spans.rs`); what the view's table then has that no event told closes the script
-//! (`settle.rs`). What an event came from, what its mana pays for and which stack entry it is
-//! about are the engine's word, which the session hands the screen beside the view
-//! (`beryl_session::script::Heard`, see Cause): the builder follows the stack by the engine's arrivals and
-//! departures, and guesses none of it. Which events happen at once is the engine's word too:
-//! the events of one group are one beat. What the stage shows as one beyond that, and in
-//! what order within a beat, is presentation (`staging.rs`), each rule read from the tags and
-//! citing the UI Conventions entry or the Arena moment it follows.
+//! The session's `Screen` is what one seat last showed; the session keeps one per seat and asks it
+//! for the script beside each view. The events become steps in order, played on the table as they
+//! are written (`build.rs`, `moves.rs`, `mana.rs`), each with the spans it ends and begins
+//! (`spans.rs`); what the view's table then has that no event told closes the script (`settle.rs`).
+//! What an event came from, what its mana pays for and which stack entry it is about are the
+//! engine's word, which the session hands the screen beside the view (the session's `Heard`, see
+//! Cause): the builder follows the stack by the engine's arrivals and departures, and guesses none
+//! of it. Which events happen at once is the engine's word too: the events of one group are one
+//! beat. What the stage shows as one beyond that, and in what order within a beat, is presentation
+//! (`staging.rs`), each rule read from the tags and citing the UI Conventions entry or the Arena
+//! moment it follows.
 //!
 //! # Hidden information
 //!

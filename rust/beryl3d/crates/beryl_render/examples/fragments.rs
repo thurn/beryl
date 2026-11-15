@@ -18,12 +18,12 @@ use std::process::ExitCode;
 
 use beryl_inspect::gate::{self, BOARDS, Moment};
 use beryl_inspect::pages;
+use beryl_protocol::protocol::Side;
 use beryl_render::{Limits, Renderer, Target};
 use beryl_scene::agent::Layout;
 use beryl_scene::driver::Duration;
 use beryl_scene::frame::Frame;
 use beryl_scene::input::Size;
-use beryl_session::protocol::Side;
 use serde_json::{Value, json};
 
 /// The window a recording is drawn in for the doc's comparison, at one pixel per point.

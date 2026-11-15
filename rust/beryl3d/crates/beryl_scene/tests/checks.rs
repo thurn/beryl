@@ -4,6 +4,9 @@
 
 mod common;
 
+use beryl_protocol::ipc::FixtureMessage;
+use beryl_protocol::protocol::{Side, Why, ZoneName};
+use beryl_protocol::script::Verb;
 use beryl_scene::agent::steps::{crowded, no_jumps};
 use beryl_scene::agent::{Context, Fault, Layout, Rule};
 use beryl_scene::driver::{Checked, Mode, Page, Recording};
@@ -11,9 +14,6 @@ use beryl_scene::input::{Insets, Size};
 use beryl_scene::play::record::{Cause, MoveKey, Planted, ScriptRecord, SegmentRecord, StepRecord};
 use beryl_scene::pose::{Curve, Pose, Segment};
 use beryl_session::card_records;
-use beryl_session::ipc::FixtureMessage;
-use beryl_session::protocol::{Side, Why, ZoneName};
-use beryl_session::script::Verb;
 use common::{MS, before, three_beats};
 use glam::Vec3;
 

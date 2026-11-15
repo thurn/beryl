@@ -16,10 +16,10 @@ mod recording;
 
 use std::fmt::{self, Write};
 
-use beryl_session::GameUpdate;
-use beryl_session::card_records::CardRecords;
-use beryl_session::protocol::{Side, Status, ZoneName};
-use beryl_session::script::Verb;
+use beryl_protocol::GameUpdate;
+use beryl_protocol::card_records::CardRecords;
+use beryl_protocol::protocol::{Side, Status, ZoneName};
+use beryl_protocol::script::Verb;
 use glam::Vec2;
 
 pub use action::{Action, key_code};

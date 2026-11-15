@@ -5,9 +5,9 @@
 //! to the view exactly. The stack's entries are told apart by the engine's names
 //! for them (`hear.rs`), which both tables carry.
 
+use super::Table;
 use super::build::Builder;
 use super::moves::{COUNTERS, counted, set_counters};
-use super::Table;
 use super::{Act, Fact, Subject, Tally};
 use crate::protocol::ObjectId;
 use crate::protocol::{ObjectView, Side, StackItem, Why, ZoneName};

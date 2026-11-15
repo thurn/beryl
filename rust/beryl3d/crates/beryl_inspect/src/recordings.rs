@@ -1,7 +1,8 @@
 //! Every recording Beryl 3D's tests and tools read: each fixture in `ui/fixtures.json` and each
-//! card spec moment, as the session's messages to one seat. This is the only way into the
-//! recorder, so the engine runs in one place: on the first call in a process, when the pack for
-//! the present sources is missing (see [`crate::pack`]).
+//! card spec moment, as the session's messages to one seat, read from the pack for the present
+//! sources (see [`crate::pack`]). This crate does not play the engine: the `record` program
+//! (`beryl_record`) builds a missing pack with [`build`], and a read of a missing one fails
+//! with a message that starts with [`MISSING`].
 //!
 //! The pack is read into memory whole on that first call, and each recording's messages are
 //! parsed once, on the first request for them.
@@ -10,15 +11,14 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
+use beryl_protocol::Seat;
+use beryl_protocol::ipc::FixtureMessage;
+use beryl_protocol::protocol::Side;
 use beryl_scene::agent::Layout;
 use beryl_scene::driver::{Page, Recording};
 use beryl_scene::input::Size;
-use beryl_session::Seat;
-use beryl_session::ipc::FixtureMessage;
-use beryl_session::protocol::Side;
 
-use crate::pack::{self, Entry};
-use crate::recorder::Cli;
+use crate::pack::{self, Entry, Recorder};
 use crate::{pages, stress};
 
 /// One recording, as `just b3d list` shows it.
@@ -195,11 +195,53 @@ fn opened() -> Result<&'static Opened, String> {
     OPENED.get_or_init(open).as_ref().map_err(Clone::clone)
 }
 
-fn open() -> Result<Opened, String> {
+/// How a read of a missing pack's error begins.
+pub const MISSING: &str = "the recordings pack for the present sources is missing";
+
+/// The status `b3d` and `b3d-render` exit with when the pack is missing, so that `just b3d`
+/// builds it and runs the command again.
+pub const MISSING_STATUS: u8 = 3;
+
+/// The status to exit with for the error `message`: [`MISSING_STATUS`] when it says the pack
+/// is missing, else `otherwise`.
+#[must_use]
+pub fn status(message: &str, otherwise: u8) -> u8 {
+    if message.contains(MISSING) {
+        MISSING_STATUS
+    } else {
+        otherwise
+    }
+}
+
+/// The path of the pack for the present sources, whether or not it has been built.
+fn current() -> Result<PathBuf, String> {
     let root = root();
     let files = pack::sources::sources(&root)?;
     let hash = pack::sources::hash(&root, &files)?;
-    let path = pack::ensure(&pack::cache_dir(), &hash, &Cli { root })?;
+    Ok(pack::path(&pack::cache_dir(), &hash))
+}
+
+/// Builds the pack for the present sources with `recorder` if it is missing, and returns its
+/// path.
+///
+/// # Errors
+///
+/// When the sources cannot be read or the pack cannot be written.
+pub fn build(recorder: &dyn Recorder) -> Result<PathBuf, String> {
+    let root = root();
+    let files = pack::sources::sources(&root)?;
+    let hash = pack::sources::hash(&root, &files)?;
+    pack::ensure(&pack::cache_dir(), &hash, recorder)
+}
+
+fn open() -> Result<Opened, String> {
+    let path = current()?;
+    if !path.is_file() {
+        return Err(format!(
+            "{MISSING} ({}); `just b3d record` builds it",
+            path.display()
+        ));
+    }
     let bytes = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     // Kept for the life of the process, so that entries can borrow their names and messages.
     let bytes: &'static [u8] = Vec::leak(bytes);
@@ -211,7 +253,7 @@ fn open() -> Result<Opened, String> {
 }
 
 /// The repository this crate was built from.
-fn root() -> PathBuf {
+pub fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../..")
 }
 

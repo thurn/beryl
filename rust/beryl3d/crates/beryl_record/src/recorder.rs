@@ -1,6 +1,5 @@
-//! The one place in Beryl 3D that plays the engine: `beryl_cli`'s recorders, which make the
-//! web interface's fixtures and card spec moments, run for every recording the pack holds.
-//! Only [`crate::recordings`] uses it, when the pack for the present sources is missing.
+//! `beryl_cli`'s recorders, which make the web interface's fixtures and card spec moments, run
+//! for every recording the pack holds.
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -11,7 +10,7 @@ use beryl_cli::specs::{self, Moment, View};
 use beryl_session::ipc::FixtureMessage;
 use beryl_session::{GameUpdate, Seat, SessionId, card_records};
 
-use crate::pack::{Recorded, Recorder};
+use beryl_inspect::pack::{Recorded, Recorder};
 
 /// `beryl_cli`'s recorders, reading the fixture definitions in the repository at `root`.
 pub struct Cli {

@@ -9,8 +9,8 @@
 //! screen holds between scripts are always its table's.
 
 use super::build::Builder;
-use super::{Entry, Table};
 use super::{Act, Arrow, Fact, Open, Span, Step, Subject};
+use super::{Entry, Table};
 use crate::protocol::ObjectId;
 use crate::protocol::{
     CardHandling, Combat, ObjectView, OutcomeView, PlayerView, Side, StackItem, Status, TargetRef,

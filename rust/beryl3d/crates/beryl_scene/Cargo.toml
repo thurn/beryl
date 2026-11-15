@@ -16,7 +16,7 @@ driver = ["dep:serde", "dep:serde_json"]
 
 [dependencies]
 # The game state the scene shows: PlayerView and the table commands.
-beryl_session = { path = "../../../crates/beryl_session" }
+beryl_protocol = { path = "../../../crates/beryl_protocol" }
 # Lets the renderer upload draw records as bytes with no unsafe cast of its own.
 bytemuck = { version = "1.25.2", features = ["derive"] }
 # Vector and matrix math for poses and the camera, in place of hand-written math.
@@ -34,8 +34,8 @@ serde_json = { version = "1.0.154", optional = true }
 [dev-dependencies]
 # The crate itself with the `driver` feature, for the `testing` builders its tests use.
 beryl_scene = { path = ".", features = ["driver"] }
-# The prompt purposes, for the prompts that tests build by hand.
-beryl_engine = { path = "../../../crates/beryl_engine" }
+# The card store's records for the cards a test's views name, which the scene draws faces from.
+beryl_session = { path = "../../../crates/beryl_session" }
 
 [build-dependencies]
 # Reads data/beryl3d/space.json and gates.json at build time, in place of a hand-written parser.

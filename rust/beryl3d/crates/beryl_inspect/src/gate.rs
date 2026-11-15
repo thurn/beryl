@@ -8,12 +8,12 @@
 //! `REST_FRAMES` frames at rest, then the next view, with frames until its script has played
 //! out. Nothing reads a clock, so every playback makes the same calls and gets the same frames.
 
+use beryl_protocol::GameUpdate;
+use beryl_protocol::card_records::CardRecords;
+use beryl_protocol::protocol::SessionId;
 use beryl_scene::frame::{Frame, Wake, Work};
 use beryl_scene::input::{AssetReady, Input, Insets, Size};
 use beryl_scene::{Client, Config};
-use beryl_session::GameUpdate;
-use beryl_session::card_records::card_records_among;
-use beryl_session::protocol::SessionId;
 
 use crate::stress::stress;
 
@@ -113,13 +113,10 @@ impl Playback {
                 )
             })
             .collect();
+        // The stress boards' permanents have names of their own, which no card in the store
+        // has, so their records hold only the card back and the nameless token's art.
+        let records = CardRecords::none();
         // Handed over from the back, so that taking one never moves the rest.
-        let records = card_records_among(
-            views
-                .iter()
-                .flat_map(|(_, update)| &update.view.objects)
-                .filter_map(|object| object.name.as_deref()),
-        );
         views.reverse();
         let mut client = Client::new(Config::LARGEST);
         client.handle(Input::Surface {

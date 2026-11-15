@@ -2,14 +2,14 @@
 
 #![allow(dead_code)] // Each test binary uses part of it.
 
+use beryl_protocol::GameUpdate;
+use beryl_protocol::protocol::{CardType, ObjectId, ObjectView, PlayerView, Side, Why, ZoneName};
+use beryl_protocol::script::{Act, Fact, StepTiming};
 use beryl_scene::frame::{Frame, FrameBuilder};
 use beryl_scene::input::{Insets, Size};
 use beryl_scene::play::Show;
 use beryl_scene::table::{DESKTOP, Table, Window};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, object, timing};
-use beryl_session::GameUpdate;
-use beryl_session::protocol::{CardType, ObjectId, ObjectView, PlayerView, Side, Why, ZoneName};
-use beryl_session::script::{Act, Fact, StepTiming};
 
 /// A millisecond, in nanoseconds.
 pub const MS: u64 = 1_000_000;

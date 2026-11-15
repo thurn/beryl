@@ -4,11 +4,11 @@
 //! Here every permanent has a name of its own. Nothing reads a clock or a random number, so
 //! two calls return equal values.
 
-use beryl_session::PlayerView;
-use beryl_session::protocol::{
+use beryl_protocol::PlayerView;
+use beryl_protocol::protocol::{
     CardType, ObjectId, ObjectView, PlayerState, PowerToughness, Side, Why, ZoneName,
 };
-use beryl_session::script::{Act, Curve, Reset, Script, Step, StepTiming};
+use beryl_protocol::script::{Act, Curve, Reset, Script, Step, StepTiming};
 
 /// How many permanents move in a stress board's second view.
 const FLIGHTS: usize = 40;

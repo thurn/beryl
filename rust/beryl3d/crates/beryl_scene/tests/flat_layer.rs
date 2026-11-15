@@ -1,7 +1,12 @@
 //! The flat layer's first slice: a prompt bar built from a hand-built deciding view, laid out
 //! by taffy with text shaped by parley, and the work it costs.
 
-use beryl_engine::card::Purpose;
+use beryl_protocol::GameUpdate;
+use beryl_protocol::prompt::Purpose;
+use beryl_protocol::prompt::{
+    ButtonId, Click, ClickReply, ClickRequest, PartName, PromptButton, PromptView, ShapeBody, Words,
+};
+use beryl_protocol::protocol::{DecisionId, DecisionView, Kind, SessionId, Side, Status};
 use beryl_scene::agent::checks::text_fits;
 use beryl_scene::agent::{Context, Layout, Rule};
 use beryl_scene::command::{Reply, SessionCommand};
@@ -18,11 +23,6 @@ use beryl_scene::text::Text;
 use beryl_scene::text::fonts::Font;
 use beryl_scene::tokens::{space, type_style};
 use beryl_scene::{Client, Config};
-use beryl_session::GameUpdate;
-use beryl_session::prompt::{
-    ButtonId, Click, ClickReply, ClickRequest, PartName, PromptButton, PromptView, ShapeBody, Words,
-};
-use beryl_session::protocol::{DecisionId, DecisionView, Kind, SessionId, Side, Status};
 use glam::Vec2;
 
 const WIDTH: f32 = 1440.0;

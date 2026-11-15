@@ -1,5 +1,5 @@
 // The marks of the verb suite, as a script written by hand: the session's scripts draw no
-// mark (rust/crates/beryl_session/src/script/mod.rs, Spans: all six are a prompt's, which the
+// mark (rust/crates/beryl_protocol/src/script/mod.rs, Spans: all six are a prompt's, which the
 // session's prompt state will give), so the suite's check of `mark` (verbs.mjs), the stepped
 // capture (stepped.mjs) and the films for the motion review (verb-film.mjs) all play this one
 // over the table their first moment leaves. It marks as three prompts would, each ending its

@@ -2,7 +2,7 @@
 //! (docs/beryl-3d.md, "Elements"). Its words, which buttons it has and whether each can be
 //! pressed are the session's.
 
-use beryl_session::prompt::PromptView;
+use beryl_protocol::prompt::PromptView;
 
 use super::{Element, Press, button, row, text};
 use crate::tokens::{space, type_style};

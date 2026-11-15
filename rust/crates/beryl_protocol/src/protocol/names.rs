@@ -1,6 +1,8 @@
 //! The engine's enums mirrored under the protocol's wire names.
 
-use beryl_card::{CounterKind, DecisionKind, Keywords, ManaColor, TurnStep, Types, Zone, counter_kinds};
+use beryl_card::{
+    CounterKind, DecisionKind, Keywords, ManaColor, TurnStep, Types, Zone, counter_kinds,
+};
 use beryl_kernel::decision::StallReason;
 use beryl_kernel::event::Reason;
 use beryl_kernel::state::MulliganStatus;

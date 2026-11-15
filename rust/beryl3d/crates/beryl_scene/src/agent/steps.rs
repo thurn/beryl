@@ -7,7 +7,7 @@
 //! All but "every step shown" read the script records alone, with no frame. That one reads a
 //! sample of the step's subject from each frame evaluated while the step plays.
 
-use beryl_session::script::Verb;
+use beryl_protocol::script::Verb;
 use glam::Vec2;
 
 use super::fault::Rule;

@@ -7,8 +7,8 @@ use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use beryl_inspect::pack::{self, Recorded, Recorder, sources};
-use beryl_session::Seat;
-use beryl_session::ipc::FixtureMessage;
+use beryl_protocol::Seat;
+use beryl_protocol::ipc::FixtureMessage;
 
 /// A recorder that counts its calls and makes two small recordings and one failure.
 #[derive(Default)]

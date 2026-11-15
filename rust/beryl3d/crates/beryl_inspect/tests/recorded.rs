@@ -6,6 +6,8 @@ use std::time::Instant;
 
 use beryl_inspect::pages::{Recorded, check_recording, recording};
 use beryl_inspect::stress;
+use beryl_protocol::protocol::Side;
+use beryl_protocol::script::Verb;
 use beryl_scene::agent::Layout;
 use beryl_scene::driver::{Page, TICK};
 use beryl_scene::frame::{Frame, FrameBuilder, Wake};
@@ -13,8 +15,6 @@ use beryl_scene::input::{Input, Insets, Size};
 use beryl_scene::play::Show;
 use beryl_scene::table::{DESKTOP, Table, Window};
 use beryl_scene::{Client, Config};
-use beryl_session::protocol::Side;
-use beryl_session::script::Verb;
 
 const SEATS: [Side; 2] = [Side::You, Side::Opponent];
 
@@ -271,7 +271,7 @@ fn the_stress_boards_play_to_their_end() {
 }
 
 /// The timings the session sent with `update`'s script, which the client plays.
-fn timings(update: &beryl_session::GameUpdate) -> Vec<beryl_session::script::StepTiming> {
+fn timings(update: &beryl_protocol::GameUpdate) -> Vec<beryl_protocol::script::StepTiming> {
     update
         .view
         .script

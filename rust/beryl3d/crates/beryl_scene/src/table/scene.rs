@@ -1,7 +1,7 @@
 //! The table's scene objects: one per game object, keyed by the object's slot in the view and
 //! kept across updates, so that a card moving between zones is one object throughout.
 
-use beryl_session::protocol::PlayerView;
+use beryl_protocol::protocol::PlayerView;
 use glam::{Affine3A, Vec2, Vec3};
 
 use super::place::{Placement, Scroll};

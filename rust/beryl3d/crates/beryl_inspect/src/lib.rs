@@ -8,6 +8,5 @@ pub mod cli;
 pub mod gate;
 pub mod pack;
 pub mod pages;
-mod recorder;
 pub mod recordings;
 pub mod stress;

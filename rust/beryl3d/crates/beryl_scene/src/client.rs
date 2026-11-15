@@ -5,9 +5,9 @@
 
 use std::collections::VecDeque;
 
-use beryl_session::prompt::{Click, ClickReply, ClickRequest, PromptView};
-use beryl_session::protocol::{DecisionId, Status};
-use beryl_session::script::Verb;
+use beryl_protocol::prompt::{Click, ClickReply, ClickRequest, PromptView};
+use beryl_protocol::protocol::{DecisionId, Status};
+use beryl_protocol::script::Verb;
 
 use crate::command::{Reply, Request, SessionCommand};
 use crate::element::{Press, prompt_bar};

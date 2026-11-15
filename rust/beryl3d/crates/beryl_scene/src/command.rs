@@ -3,9 +3,9 @@
 
 use std::path::PathBuf;
 
-use beryl_session::ipc::ChooseRequest;
-use beryl_session::prompt::{ClickReply, ClickRequest};
-use beryl_session::{DecisionId, SessionError, SessionId, StartRequest, StopsSetting};
+use beryl_protocol::ipc::ChooseRequest;
+use beryl_protocol::prompt::{ClickReply, ClickRequest};
+use beryl_protocol::{DecisionId, SessionError, SessionId, StartRequest, StopsSetting};
 
 use crate::frame::ElementId;
 use crate::input::Rect;

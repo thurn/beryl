@@ -9,7 +9,7 @@
 
 use std::collections::BTreeSet;
 
-use beryl_session::script::Verb;
+use beryl_protocol::script::Verb;
 
 use super::{DriverError, Name, Page};
 use crate::agent::steps::{self, Found, Sample, card_of, sample, step_nanoseconds};
@@ -268,7 +268,7 @@ fn judged(history: &[ScriptRecord]) -> Vec<Judged> {
             if step.subject.is_none()
                 || !matches!(
                     step.verb,
-                    beryl_session::script::Verb::Fly | beryl_session::script::Verb::Appear
+                    beryl_protocol::script::Verb::Fly | beryl_protocol::script::Verb::Appear
                 )
             {
                 continue;

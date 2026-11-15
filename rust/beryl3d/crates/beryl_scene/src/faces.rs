@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use beryl_session::card_records::{CardEntry, CardRecords};
+use beryl_protocol::card_records::{CardEntry, CardRecords};
 
 use crate::input::{AssetReady, FaceId, FaceSize};
 

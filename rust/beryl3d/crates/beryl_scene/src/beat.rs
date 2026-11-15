@@ -4,7 +4,7 @@
 //! are known only to it: since when each span on screen has stood whole, and until when
 //! something passes over the table.
 
-use beryl_session::script::{Act, Step, StepTiming, Subject, mover_of};
+use beryl_protocol::script::{Act, Step, StepTiming, Subject, mover_of};
 
 /// When one step of a beat plays, in stage milliseconds.
 #[derive(Clone, Copy, Debug, PartialEq)]

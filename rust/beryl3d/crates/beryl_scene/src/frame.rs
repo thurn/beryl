@@ -5,7 +5,7 @@
 mod draw;
 mod order;
 
-use beryl_session::protocol::{RowName, Side, ZoneName};
+use beryl_protocol::protocol::{RowName, Side, ZoneName};
 use glam::{Mat4, Vec2};
 
 pub use draw::{Draw, Material, Mesh, Sprite, TextureArray};

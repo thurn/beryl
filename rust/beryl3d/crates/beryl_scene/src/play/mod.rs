@@ -21,9 +21,9 @@ pub mod record;
 
 use std::collections::VecDeque;
 
-use beryl_session::GameUpdate;
-use beryl_session::protocol::PlayerView;
-use beryl_session::script::{StepTiming, Verb};
+use beryl_protocol::GameUpdate;
+use beryl_protocol::protocol::PlayerView;
+use beryl_protocol::script::{StepTiming, Verb};
 
 use self::compile::{Compiled, bit, compile};
 use self::record::{Plant, ScriptRecord};

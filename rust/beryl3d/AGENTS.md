@@ -6,9 +6,9 @@ Beryl 3D is the native 3D client of Beryl (the design is in `docs/beryl-3d.md`).
 This directory is a Cargo workspace of its own, with its own `Cargo.toml`,
 `Cargo.lock` and `target`, so that no check of the main workspace in `rust/`
 builds it and a change here selects no lane of the main checks (decision C17).
-Its crates depend on the main crates (`beryl_session`) by path. Its
-`[workspace.lints]` table must equal the main one's, which the `lints-match`
-check enforces.
+Its crates depend on the main crates (`beryl_protocol`, `beryl_session`) by
+path. Its `[workspace.lints]` table must equal the main one's, which the
+`lints-match` check enforces.
 
 ## Crates
 
@@ -20,11 +20,16 @@ check enforces.
 - `beryl_assets`: decodes and packs card pictures for the renderer.
 - `beryl_host`: the window and event loop (winit) that drive a scene and render
   it, and `Phone`, the Rust half of the iOS and Android hosts.
-- `beryl_inspect`: reads a scene and reports it as text; it has no GPU
-  dependency.
-- `beryl_3d`: the client that ties the other five crates together. On phones it
-  is a library whose C functions (`src/ffi`, `include/beryl3d.h`) a small Swift
-  app (`ios/`) or Kotlin app (`android/`) calls.
+- `beryl_inspect`: reads a scene and reports it as text; it has no GPU, engine
+  or card dependency, so `b3d` links and starts fast after an edit.
+- `beryl_record`: the `record` program, the only one here besides the app that
+  plays the engine. It builds the recordings pack `beryl_inspect` reads when it
+  is missing; `just b3d record` runs it, and `just b3d` does when `b3d` or
+  `b3d-render` exits with 3.
+- `beryl_3d`: the client that ties `beryl_scene`, `beryl_render`,
+  `beryl_assets`, `beryl_host` and `beryl_inspect` together. On phones it is a
+  library whose C functions (`src/ffi`, `include/beryl3d.h`) a small Swift app
+  (`ios/`) or Kotlin app (`android/`) calls.
 
 ## Commands
 

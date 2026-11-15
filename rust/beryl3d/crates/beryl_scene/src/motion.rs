@@ -4,7 +4,7 @@
 
 use std::f32::consts::PI;
 
-use beryl_session::script::Curve as Named;
+use beryl_protocol::script::Curve as Named;
 use glam::Vec3;
 
 use crate::pose::{Curve, Pose, Segment};

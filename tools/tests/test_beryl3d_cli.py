@@ -1,6 +1,9 @@
 """`just b3d`'s cargo commands and the text commands it hands to the `b3d` program."""
 
+import os
 import subprocess
+from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 
@@ -29,11 +32,54 @@ def test_text_commands_hand_every_argument_to_the_b3d_program(
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr(cli.subprocess, "run", program)
+    monkeypatch.setattr(cli, "linked", lambda name: Path("/linked") / name)
     assert cli.main(["tree", "verbs-zones", "--at", "1500ms", "--help"]) == 0
     build, run = ran
     assert build == ["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"]
-    assert run[0].endswith("target/debug/b3d")
-    assert run[1:] == ["tree", "verbs-zones", "--at", "1500ms", "--help"]
+    assert run == ["/linked/b3d", "tree", "verbs-zones", "--at", "1500ms", "--help"]
+
+
+def test_a_missing_pack_is_recorded_and_the_command_run_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ran: list[list[str]] = []
+    monkeypatch.setattr(cli, "cargo", lambda arguments: ran.append(arguments) or 0)
+    codes: Iterator[int] = iter([cli.MISSING_PACK, 0])
+
+    def program(
+        command: list[str], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        ran.append(command)
+        return subprocess.CompletedProcess(command, next(codes))
+
+    monkeypatch.setattr(cli.subprocess, "run", program)
+    monkeypatch.setattr(cli, "linked", lambda name: Path("/linked") / name)
+    assert cli.main(["list"]) == 0
+    assert ran == [
+        ["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"],
+        ["/linked/b3d", "list"],
+        ["run", "-q", "-p", "beryl_record", "--bin", "record"],
+        ["/linked/b3d", "list"],
+    ]
+
+
+def test_the_linkers_newest_binary_is_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(cli.paths, "WORKSPACE", tmp_path)
+    debug = tmp_path / "target" / "debug"
+    deps = debug / "deps"
+    deps.mkdir(parents=True)
+    assert cli.linked("b3d") == debug / "b3d"
+    old, new = deps / "b3d-0000000000000000", deps / "b3d-1111111111111111"
+    for path in (old, new, deps / "b3d-1111111111111111.d"):
+        path.write_text("")
+    os.utime(old, (1, 1))
+    os.utime(new, (2, 2))
+    assert cli.linked("b3d") == new
+    render = deps / "b3d_render-2222222222222222"
+    render.write_text("")
+    assert cli.linked("b3d-render") == render
 
 
 def test_the_listing_names_every_text_command() -> None:
@@ -55,9 +101,16 @@ def test_picture_commands_hand_every_argument_to_the_b3d_render_program(
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr(cli.subprocess, "run", program)
+    monkeypatch.setattr(cli, "linked", lambda name: Path("/linked") / name)
     assert cli.main(["png", "verbs-zones", "--at", "1500ms", "--tree"]) == 0
     build, run = ran
     assert build[:5] == ["build", "-q", "-p", "beryl_3d", "--features"]
     assert build[-2:] == ["--bin", "b3d-render"]
-    assert run[0].endswith("target/debug/b3d-render")
-    assert run[1:] == ["png", "verbs-zones", "--at", "1500ms", "--tree"]
+    assert run == [
+        "/linked/b3d-render",
+        "png",
+        "verbs-zones",
+        "--at",
+        "1500ms",
+        "--tree",
+    ]

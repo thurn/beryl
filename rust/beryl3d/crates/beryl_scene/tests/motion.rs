@@ -5,12 +5,12 @@
     reason = "a beat's times are sums of whole milliseconds, which are exact"
 )]
 
+use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
+use beryl_protocol::script::{Act, Curve as Named, Step, StepTiming, Subject};
 use beryl_scene::beat::{Laid, Opens, beat};
 use beryl_scene::motion::{Full, SEGMENTS, Track, pose_at};
 use beryl_scene::pose::{Curve, Pose, Segment};
 use beryl_scene::testing::object;
-use beryl_session::protocol::{ObjectId, Side, ZoneName};
-use beryl_session::script::{Act, Curve as Named, Step, StepTiming, Subject};
 use glam::{Quat, Vec3};
 
 const MS: u64 = 1_000_000;

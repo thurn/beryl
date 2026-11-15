@@ -3,12 +3,14 @@
 //! on every tick of a recording. A name is a fixture's, a card spec moment's as
 //! `<card>/<moment>`, or a stress board's ([`crate::stress`]).
 
+use beryl_protocol::card_records::CardRecords;
+use beryl_protocol::ipc::CARD_RECORDS;
+use beryl_protocol::ipc::FixtureMessage;
+use beryl_protocol::protocol::Side;
+use beryl_protocol::{GameUpdate, Seat, SessionId};
 use beryl_scene::agent::Layout;
 use beryl_scene::driver::{Page, Recording, TICK};
 use beryl_scene::input::Size;
-use beryl_session::ipc::FixtureMessage;
-use beryl_session::protocol::Side;
-use beryl_session::{GameUpdate, Seat, SessionId, card_records};
 
 use crate::recordings;
 use crate::stress::stress;
@@ -98,8 +100,12 @@ pub fn recording(name: &str, seat: Side) -> Result<Recording, String> {
             .into_iter()
             .map(|view| FixtureMessage::game_update(&GameUpdate { session, view }))
             .collect();
-        // Like every recording in the pack, it starts with the records of the cards it shows.
-        messages.insert(0, card_records::fixture_message(&messages));
+        // Like every recording in the pack, it starts with the records of the cards it shows:
+        // none, since its permanents have names of their own that the card store does not.
+        messages.insert(
+            0,
+            FixtureMessage::response(CARD_RECORDS, &CardRecords::none()),
+        );
         return Ok(Recording(messages));
     }
     recordings::find(name, seat).map(|messages| Recording(messages.to_vec()))

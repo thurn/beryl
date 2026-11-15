@@ -263,13 +263,15 @@ works out what happened by comparing two views: the step says it.
 
 ## Components
 
-Beryl 3D is six crates and two native programs for phones. Each crate has one
+Beryl 3D is seven crates and two native programs for phones. Each crate has one
 job, and each depends only on crates below it in this list.
 
-The six crates are a Cargo workspace of their own, `rust/beryl3d`, with its own
-lock file and build directory (decision C17). They reach the game through path
-dependencies on three crates of the main workspace: `beryl_session`, the fixture
-recorder in `beryl_cli`, and `beryl_art`, the image download queue and disk
+The seven crates are a Cargo workspace of their own, `rust/beryl3d`, with its
+own lock file and build directory (decision C17). They reach the game through
+path dependencies on four crates of the main workspace: `beryl_protocol`, the
+wire types (views, scripts, prompts and fixture messages) with no rules or
+cards; `beryl_session`, which plays a game and builds those types; the fixture
+recorder in `beryl_cli`; and `beryl_art`, the image download queue and disk
 cache that the Tauri shell also uses.
 
 - **`beryl_3d`**, the app. It connects the session, the client core, the
@@ -284,19 +286,23 @@ cache that the Tauri shell also uses.
 - **`beryl_assets`**, everything prepared off the drawing thread: decoding the
   card images that `beryl_art` downloads, composing card faces, compressing
   textures and rasterizing glyphs.
+- **`beryl_record`**, the `record` program, which plays the engine through
+  `beryl_cli`'s fixture and spec recorders to build the file of recordings when
+  it is missing. It is the only crate of the workspace that plays the engine
+  apart from the app, so that the text commands do not link it.
 - **`beryl_inspect`**, the tools that play recordings with no window and no GPU:
   the file of recordings, the interface test runner, the frame benchmarks, and
   the commands of `just b3d` that print text (see
   [The agent interface](#the-agent-interface)). It depends on the client core
-  and on the code that records fixtures, and on no GPU crate, so it rebuilds
-  quickly after an edit to the client core. The commands that draw pictures are
-  a second program in `beryl_3d`, which has the renderer.
+  and `beryl_protocol`, and on no GPU, engine or card crate, so it rebuilds,
+  links and starts quickly after an edit to the client core. The commands that
+  draw pictures are a second program in `beryl_3d`, which has the renderer.
 - **`beryl_scene`**, which this document calls **the client core**. It holds the
   3D table, the element tree, animation, layout, hit testing and the interface
-  checks. It depends on `taffy`, `parley` and the protocol types of
-  `beryl_session` (plain data: views, scripts, commands), and on nothing that
-  touches a GPU, a clock, a thread or a file. It defines `Input` and `Request`,
-  the types everything above it speaks to it in.
+  checks. It depends on `taffy`, `parley` and `beryl_protocol` (plain data:
+  views, scripts, commands), and on nothing that touches a GPU, a clock, a
+  thread or a file. It defines `Input` and `Request`, the types everything above
+  it speaks to it in.
 
 The boundary that matters most is around the client core. It has two entry
 points, and everything a frame shows is a function of what has passed through
@@ -1027,7 +1033,7 @@ casts is timed differently from one the opponent casts, and a permanent that
 taps and leaves in one beat leaves only after it has turned.
 
 Those rules were the web interface's, in `ui/src/stage/timing.ts`. They move
-into the session, in `beryl_session`'s `script::timing` module, which is the
+into the session, in `beryl_protocol`'s `script::timing` module, which is the
 only place they exist. The session sends each step's timing with its script, and
 both clients play what they are sent.
 
@@ -1707,23 +1713,48 @@ usual load beside each median:
 | `debug = "line-tables-only"`, `split-debuginfo = "unpacked"` |  8.5 s | 7.5 8.5 8.7 7.7 8.6      |   54 |
 | The above, and `opt-level = 1` for dependencies (not kept)   |  8.5 s | 8.2 8.1 16.0 9.6 8.5     |   70 |
 
-The second row is kept. With no edit at all the command takes about 4.5 s, made
+The second row is kept. With no edit at all the command took about 4.5 s, made
 of these parts:
 
 - About 1 s starting `uv` and the tools package.
 - About 0.5 s for cargo to find nothing to build.
 - 3 to 4 s for the first run of the `b3d` binary. macOS checks every newly
-  written executable before it first runs, in time that grows with its size: 0.2
-  s for an empty program, 3.5 s for `b3d`'s 108 MB. Cargo copies the binary into
-  `target/debug` again on every build, even one that changed nothing, so every
-  run pays this.
+  written executable before it first runs, in time that grows with its size and
+  with the machine's load: 0.2 s for an empty program, 3.5 s for `b3d`'s 108 MB.
+  Cargo copies the binary into `target/debug` again on every build, even one
+  that changed nothing, so every run paid this.
 - 0.4 s for the command itself.
 
-`b3d` is that large because it links the engine, the rules and every card: it
-reaches them through `beryl_session`, whose protocol types it needs, and through
-the recorder that builds the recordings pack. Moving the protocol types into a
-crate of their own and running the recorder as a separate program would leave
-`b3d` the client and the protocol alone.
+`b3d` was that large because it linked the engine, the rules and every card: it
+reached them through `beryl_session`, whose protocol types it needs, and through
+the recorder that builds the recordings pack. Three changes followed:
+
+- The protocol types moved into `beryl_protocol`, a crate of the main workspace
+  that depends on `beryl_card`, `beryl_kernel` and `beryl_table` and on no
+  rules, engine or card crate. `beryl_session` re-exports every type at its old
+  path.
+- The recorder became a program of its own, `record` in `beryl_record`. `b3d`
+  and `b3d-render` exit with status 3 when the pack for the present sources is
+  missing, and `just b3d` then runs `record` and the command again.
+  `just b3d cargo-test` and `just b3d gate` run `record` first.
+- `just b3d` runs the binary the linker wrote in `target/debug/deps`, whose file
+  only changes when it is linked again, rather than cargo's fresh copy, so the
+  macOS check is paid once per link instead of once per command.
+
+`b3d` is now 11 MB. Measured again on 2026-11-15 by the same method, five runs
+each, with a different edit in every run (macOS may remember its check of a
+binary it has seen before):
+
+| Case                    | Median | Runs (s)            |  Load |
+| ----------------------- | -----: | ------------------- | ----: |
+| A one-line edit, before |  8.5 s | 7.5 8.5 8.7 7.7 8.6 |    54 |
+| A one-line edit, after  |  2.5 s | 3.2 2.3 2.4 2.5 2.6 | 43-47 |
+| No edit, after          |  1.1 s | 1.1 0.8 1.1 1.7 0.8 | 32-33 |
+
+The target is met. Most of what remains after an edit is the compiler:
+rebuilding `beryl_scene`, then `beryl_inspect`, which depends on it, and linking
+`b3d`. The first edit after a long pause took 11 to 15 s in two of the loops,
+and later edits in the same loops took 3 to 4 s.
 
 `just b3d png verbs-zones --at 1500ms` has a target of 6 seconds after the same
 one-line edit. It was measured on 2026-11-15 with `b3d-render` (`beryl_3d`, 134
@@ -1741,9 +1772,11 @@ The median is 32 s. The build after the edit takes about 13 s (`beryl_scene`,
 then `beryl_inspect`, `beryl_render`, `beryl_host` and `beryl_3d`, which all
 depend on it), and the rest is macOS checking the newly linked executable before
 its first run, which took 28 s at load 20 to 50 and 1.4 s on the next run. The
-program is larger than `b3d` because it links wgpu. The remedies are the ones
-for `tree` above: a smaller program, which needs the protocol types in a crate
-of their own, and a smaller picture program that does not link the recorder.
+program is larger than `b3d` because it links wgpu, and it still links the
+engine through `beryl_session`, which `beryl_3d` plays games with. `just b3d`
+now runs it as it runs `b3d`, from the linker's own file, so a command after a
+build that changed nothing no longer pays the check; the edit case was not
+measured again.
 
 ### Times, moments, locators and actions
 

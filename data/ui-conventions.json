@@ -44,7 +44,7 @@
       "key": "verbs",
       "heading": "Verbs",
       "intro": [
-        "Every change on the table is shown by one of these, applied to a card, an ability or a player by a step of the script the session sends (`rust/crates/beryl_session/src/script`, K23). The list is closed: what Arena does not show is composed from these. A verb's duration, delay, stagger and curve, and each case's, are the values below. The session reads them to time each step of a script it sends (`beryl_session`'s `script/timing.rs`), and both clients play the timing they are sent; `just motion` holds the stage to them; Arena's measured instances are kept beside them as reference in `data/arena-motion.json` (K27)."
+        "Every change on the table is shown by one of these, applied to a card, an ability or a player by a step of the script the session sends (`rust/crates/beryl_protocol/src/script`, K23). The list is closed: what Arena does not show is composed from these. A verb's duration, delay, stagger and curve, and each case's, are the values below. The session reads them to time each step of a script it sends (`beryl_protocol`'s `script/timing.rs`), and both clients play the timing they are sent; `just motion` holds the stage to them; Arena's measured instances are kept beside them as reference in `data/arena-motion.json` (K27)."
       ]
     },
     {

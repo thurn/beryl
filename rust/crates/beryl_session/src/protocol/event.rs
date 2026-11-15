@@ -1,13 +1,13 @@
 //! The game events a view carries, built from the engine's events.
 
-use beryl_engine::event::{Event, Recipient};
-use beryl_engine::state::{self, StackEntry};
-use beryl_engine::{GameTable, Layout, Observation, Place, SlotId};
 use super::{
     GameEvent, ObjectId, ObjectView, StackItem, TargetRef, ZoneName, side, slots, stack_item,
     stack_item_cast,
 };
 use crate::script::{Copied, Heard, Move, Said, Subject};
+use beryl_engine::event::{Event, Recipient};
+use beryl_engine::state::{self, StackEntry};
+use beryl_engine::{GameTable, Layout, Observation, Place, SlotId};
 
 /// What damage was dealt to, as the viewer names it.
 pub(super) fn recipient<L: Layout>(obs: Observation<'_, L>, to: Recipient<L>) -> TargetRef {

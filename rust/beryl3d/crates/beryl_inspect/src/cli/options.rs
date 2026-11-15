@@ -9,11 +9,11 @@
 
 use std::fmt::Write;
 
+use beryl_protocol::Seat;
+use beryl_protocol::protocol::Side;
 use beryl_scene::agent::Layout;
 use beryl_scene::driver::{Action, Moment};
 use beryl_scene::input::Size;
-use beryl_session::Seat;
-use beryl_session::protocol::Side;
 
 use crate::recordings;
 

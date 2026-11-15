@@ -79,4 +79,3 @@ pub enum AbilityClass {
     /// A static ability, one that creates a replacement effect included.
     Static,
 }
-

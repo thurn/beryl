@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use beryl_inspect::stress::stress;
-use beryl_session::script::{Table, failure};
+use beryl_protocol::script::{Table, failure};
 
 const BOARDS: [(&str, usize); 2] = [("stress-255", 255), ("stress-1024", 1024)];
 
@@ -62,7 +62,7 @@ fn the_board_is_mixed() {
     let creatures = objects.iter().filter(|object| object.pt.is_some()).count();
     let yours = objects
         .iter()
-        .filter(|object| object.controller == beryl_session::protocol::Side::You)
+        .filter(|object| object.controller == beryl_protocol::protocol::Side::You)
         .count();
     assert_eq!(creatures, 512);
     assert_eq!(yours, 512);

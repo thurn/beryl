@@ -80,8 +80,8 @@ mod split;
 mod wording;
 mod yes_no;
 
-pub use beryl_protocol::prompt::*;
 pub(crate) use ahead::forced;
+pub use beryl_protocol::prompt::*;
 pub use held::{Clicked, Held, Run, add_opening_state};
 pub(crate) use open::{halt_prompt, prompt_view};
 pub use order::trigger_to_stack;

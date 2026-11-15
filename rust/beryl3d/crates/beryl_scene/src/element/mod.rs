@@ -4,7 +4,7 @@
 
 mod prompt;
 
-use beryl_session::prompt::ButtonId;
+use beryl_protocol::prompt::ButtonId;
 
 pub use prompt::prompt_bar;
 

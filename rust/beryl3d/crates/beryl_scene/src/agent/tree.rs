@@ -4,7 +4,7 @@
 
 use std::fmt::Write;
 
-use beryl_session::protocol::{RowName, Side, ZoneName};
+use beryl_protocol::protocol::{RowName, Side, ZoneName};
 
 use super::fault::rect_text;
 use super::hit::{bounds, covered};

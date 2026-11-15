@@ -8,12 +8,12 @@
 
 use std::collections::BTreeMap;
 
+use super::Table;
 use super::hear::{Cause, Copied, Heard, Move};
 use super::moves::{counted, set_counters};
 use super::spans;
 use super::stack::Held;
 use super::staging::{self, Told};
-use super::Table;
 use super::{Act, Fact, Notice, Open, Reset, Script, Step, Stream, Subject, Tally, check};
 use crate::protocol::ObjectId;
 use crate::protocol::{

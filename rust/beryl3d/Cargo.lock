@@ -299,9 +299,8 @@ dependencies = [
 name = "beryl_inspect"
 version = "0.1.0"
 dependencies = [
- "beryl_cli",
+ "beryl_protocol",
  "beryl_scene",
- "beryl_session",
  "gungraun",
  "miniz_oxide 0.8.9",
  "postcard",
@@ -321,8 +320,31 @@ name = "beryl_link"
 version = "0.1.0"
 dependencies = [
  "flate2",
+ "parking_lot",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "beryl_protocol"
+version = "0.1.0"
+dependencies = [
+ "beryl_card",
+ "beryl_kernel",
+ "beryl_table",
+ "serde",
+ "serde_json",
+ "ts-rs",
+ "uuid",
+]
+
+[[package]]
+name = "beryl_record"
+version = "0.1.0"
+dependencies = [
+ "beryl_cli",
+ "beryl_inspect",
+ "beryl_session",
 ]
 
 [[package]]
@@ -330,8 +352,8 @@ name = "beryl_render"
 version = "0.1.0"
 dependencies = [
  "beryl_inspect",
+ "beryl_protocol",
  "beryl_scene",
- "beryl_session",
  "bytemuck",
  "glam",
  "image",
@@ -371,7 +393,7 @@ dependencies = [
 name = "beryl_scene"
 version = "0.1.0"
 dependencies = [
- "beryl_engine",
+ "beryl_protocol",
  "beryl_scene",
  "beryl_session",
  "bytemuck",
@@ -399,6 +421,7 @@ dependencies = [
  "beryl_card_store",
  "beryl_cards",
  "beryl_engine",
+ "beryl_protocol",
  "beryl_search",
  "beryl_table",
  "flate2",
@@ -430,6 +453,7 @@ dependencies = [
  "beryl_table",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

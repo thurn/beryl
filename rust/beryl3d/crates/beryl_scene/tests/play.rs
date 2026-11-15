@@ -3,11 +3,11 @@
 
 mod common;
 
+use beryl_protocol::GameUpdate;
+use beryl_protocol::script::Verb;
 use beryl_scene::frame::Wake;
 use beryl_scene::play::Show;
 use beryl_scene::pose::Curve;
-use beryl_session::GameUpdate;
-use beryl_session::script::Verb;
 use common::{MS, before, discard, draw, empty_frame, frame, show, three_beats, window};
 
 /// Every object of `update`'s view stands where placement puts it in the show's window.

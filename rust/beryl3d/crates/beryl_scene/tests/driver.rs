@@ -1,16 +1,16 @@
 //! The `Page` test driver, on recordings built by hand.
 
+use beryl_protocol::ipc::{ChooseRequest, FixtureMessage};
+use beryl_protocol::prompt::{ButtonId, Click, ClickReply, ClickRequest};
+use beryl_protocol::protocol::{Side, Status, Why, ZoneName};
+use beryl_protocol::script::{Act, Subject};
+use beryl_protocol::{CandidateIndex, DecisionId, SessionId};
 use beryl_scene::agent::Layout;
 use beryl_scene::command::{Reply, SessionCommand};
 use beryl_scene::driver::{Action, Duration, Moment, Name, Page, Recording, Responses};
 use beryl_scene::frame::StateBits;
 use beryl_scene::input::{Input, KeyCode, PointerPhase, Size};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, timing};
-use beryl_session::ipc::{ChooseRequest, FixtureMessage};
-use beryl_session::prompt::{ButtonId, Click, ClickReply, ClickRequest};
-use beryl_session::protocol::{Side, Status, Why, ZoneName};
-use beryl_session::script::{Act, Subject};
-use beryl_session::{CandidateIndex, DecisionId, SessionId};
 use glam::Vec2;
 
 fn ms(milliseconds: u64) -> Duration {
@@ -410,7 +410,7 @@ fn a_button_press_takes_the_recorded_answer_of_a_recording_without_clicks() {
         revision: 0,
         click: Click::On {
             on: Subject::Object {
-                slot: beryl_session::protocol::ObjectId(3),
+                slot: beryl_protocol::protocol::ObjectId(3),
             },
         },
     });

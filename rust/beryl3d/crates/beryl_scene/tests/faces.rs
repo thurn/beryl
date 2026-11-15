@@ -69,7 +69,7 @@ fn layers(frame: &Frame, name: &str, layer: u16) -> (Vec<Option<u16>>, usize) {
 fn blank(frame: &Frame) -> Vec<String> {
     let context = Context {
         recording: "sample".to_owned(),
-        seat: beryl_session::protocol::Side::You,
+        seat: beryl_protocol::protocol::Side::You,
         layout: Layout::Desktop,
         size: SIZE,
         safe_area: Insets::default(),

@@ -155,4 +155,3 @@ pub enum GameEvent {
         player: Side,
     },
 }
-

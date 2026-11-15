@@ -8,7 +8,7 @@
 //! its new place as the step begins, and the step still holds its beat for as long as its timing
 //! says.
 
-use beryl_session::script::Verb;
+use beryl_protocol::script::Verb;
 
 use crate::data::space;
 use crate::pose::{Curve, Pose, Segment};

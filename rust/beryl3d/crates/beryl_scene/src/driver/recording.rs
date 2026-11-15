@@ -8,15 +8,15 @@
 
 use std::collections::{BTreeMap, VecDeque};
 
-use beryl_session::CandidateIndex;
-use beryl_session::GameUpdate;
-use beryl_session::card_records::CardRecords;
-use beryl_session::ipc::{
+use beryl_protocol::CandidateIndex;
+use beryl_protocol::GameUpdate;
+use beryl_protocol::card_records::CardRecords;
+use beryl_protocol::ipc::{
     self, CancelRequest, ChooseRequest, ConcedeRequest, FixtureMessage, PassOnRequest,
     SetStopsRequest, UndoRequest,
 };
-use beryl_session::prompt::{Click, ClickReply};
-use beryl_session::protocol::Status;
+use beryl_protocol::prompt::{Click, ClickReply};
+use beryl_protocol::protocol::Status;
 use serde::Serialize;
 use serde_json::Value;
 

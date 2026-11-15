@@ -14,7 +14,7 @@ pub use build::*;
 pub(crate) use candidates::*;
 pub(crate) use decide::*;
 pub use event::*;
-use outcome::*;
+use outcome::outcome_view;
 
 #[cfg(test)]
 mod tests;

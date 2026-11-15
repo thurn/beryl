@@ -21,8 +21,8 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use beryl_session::Seat;
-use beryl_session::ipc::{FixtureMessage, GAME_UPDATE};
+use beryl_protocol::Seat;
+use beryl_protocol::ipc::{FixtureMessage, GAME_UPDATE};
 use serde::{Deserialize, Serialize};
 
 /// How many packs the cache keeps: the newest, by when they were written.

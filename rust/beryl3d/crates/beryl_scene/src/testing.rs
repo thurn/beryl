@@ -1,12 +1,12 @@
 //! Builders for the views and scripts that tests and tools hand the client core, so that a test
 //! names only what it is about. Only a driver of the client needs them (the `driver` feature).
 
-use beryl_session::GameUpdate;
-use beryl_session::protocol::{
+use beryl_protocol::GameUpdate;
+use beryl_protocol::protocol::{
     CardType, Declaration, FaceName, Facing, ManaPool, ObjectId, ObjectView, PlayerState,
     PlayerView, SessionId, Side, StackItem, ZoneName,
 };
-use beryl_session::script::{Act, Curve, Reset, Script, Step, StepTiming};
+use beryl_protocol::script::{Act, Curve, Reset, Script, Step, StepTiming};
 
 /// Builds a `PlayerView` one card at a time. Each card takes the next slot.
 #[derive(Clone, Debug)]

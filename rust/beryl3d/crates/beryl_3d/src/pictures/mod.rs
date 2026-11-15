@@ -14,6 +14,7 @@ use std::path::PathBuf;
 
 use beryl_host::Headless;
 use beryl_inspect::cli::{self, Options, Ran, Spec, Usage, options};
+use beryl_inspect::recordings;
 use beryl_scene::agent::{TreeOptions, tree};
 use beryl_scene::input::Rect;
 
@@ -102,10 +103,11 @@ const COMMANDS: [Command; 2] = [
 /// Runs the command line `args`, the arguments after the program's name.
 #[must_use]
 pub fn main(args: &[String]) -> Ran {
+    // A missing recordings pack exits with its own status, so that `just b3d` builds it.
     let usage = |error: &Usage| Ran {
         stdout: String::new(),
         stderr: format!("{error}\n"),
-        code: 2,
+        code: recordings::status(&error.0, 2),
     };
     let Some(first) = args.first() else {
         return Ran {
@@ -144,8 +146,8 @@ pub fn main(args: &[String]) -> Ran {
         Err(Error::Usage(error)) => usage(&error),
         Err(Error::Failed(message)) => Ran {
             stdout: String::new(),
+            code: recordings::status(&message, 1),
             stderr: format!("{message}\n"),
-            code: 1,
         },
     }
 }

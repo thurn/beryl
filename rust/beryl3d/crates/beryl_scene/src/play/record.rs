@@ -4,8 +4,8 @@
 //! running game has no use for one. A test can change a script before it plays (`Plant`), to
 //! make a fault that the checks must find.
 
-use beryl_session::protocol::{Why, ZoneName};
-use beryl_session::script::{Act, Verb};
+use beryl_protocol::protocol::{Why, ZoneName};
+use beryl_protocol::script::{Act, Verb};
 use glam::Vec3;
 
 use crate::motion::pose_at;

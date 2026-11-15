@@ -1,5 +1,6 @@
 //! The tree printout, locators, hit testing and the frame checks, on frames built by hand.
 
+use beryl_protocol::protocol::{RowName, Side, ZoneName};
 use beryl_scene::agent::checks::{
     blank_cards, check, duplicates, lines_hold, named, on_screen, overlap, reachable,
 };
@@ -10,7 +11,6 @@ use beryl_scene::frame::{
     ElementId, Frame, FrameBuilder, NameRef, Place, Resolved, Role, StateBits,
 };
 use beryl_scene::input::{Insets, Rect, Size};
-use beryl_session::protocol::{RowName, Side, ZoneName};
 use glam::Vec2;
 
 const LANDS: Place = Place::Card {

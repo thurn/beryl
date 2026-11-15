@@ -5,10 +5,10 @@
 use beryl_inspect::cli::line::Line;
 use beryl_inspect::cli::{Ran, main};
 use beryl_inspect::pages;
+use beryl_protocol::protocol::Side;
 use beryl_scene::agent::Layout;
 use beryl_scene::driver::Moment;
 use beryl_scene::input::Size;
-use beryl_session::protocol::Side;
 use serde_json::Value;
 
 const RECORDING: &str = "verbs-zones";

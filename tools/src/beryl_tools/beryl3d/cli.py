@@ -10,12 +10,14 @@ from __future__ import annotations
 import argparse
 import difflib
 import os
+import re
 import shlex
 import shutil
 import subprocess
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from .. import system, warm
 from . import app, gate, lane, paths, phone, sweep, vm
@@ -88,8 +90,57 @@ def test_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def run_cargo_test(args: argparse.Namespace) -> int:
+    # The tests read recordings, which only the `record` program can build.
+    recorded = record()
+    if recorded != 0:
+        return recorded
     nextest = shutil.which("cargo-nextest") is not None
     return cargo(test_command(args.package, args.filter, nextest))
+
+
+# The status `b3d` and `b3d-render` exit with when the recordings pack for the present sources
+# is missing (`beryl_inspect::recordings::MISSING_STATUS`).
+MISSING_PACK = 3
+
+
+def record() -> int:
+    """Builds the recordings pack for the present sources with the `record` program of
+    `beryl_record` if it is missing. `b3d` does not link the engine that records, so that it
+    links and starts fast after an edit (docs/beryl-3d.md, 'Edit-to-output time')."""
+    return cargo(["run", "-q", "-p", "beryl_record", "--bin", "record"])
+
+
+def run_record(_args: argparse.Namespace) -> int:
+    return record()
+
+
+def linked(name: str) -> Path:
+    """The binary `name` as the linker wrote it, in `target/debug/deps`. Cargo copies it to
+    `target/debug/<name>` as a new file on every build, even one that changed nothing, and
+    macOS checks each new executable before its first run: 1 to 9 s for `b3d` under the
+    machine's usual load. The linker's own file keeps its inode until the next link, so
+    running it pays that check once per link rather than once per command. The linker's file
+    is named for the crate's form of `name`, with `_` for each `-`."""
+    debug = paths.WORKSPACE / "target" / "debug"
+    stem = name.replace("-", "_")
+    pattern = re.compile(rf"{re.escape(stem)}-[0-9a-f]{{16}}")
+    found = [p for p in (debug / "deps").glob(f"{stem}-*") if pattern.fullmatch(p.name)]
+    if not found:
+        return debug / name
+    return max(found, key=lambda p: p.stat().st_mtime)
+
+
+def run_program(name: str, arguments: list[str]) -> int:
+    """Runs the built program `name` with `arguments`. When it says the recordings pack is
+    missing, builds the pack and runs it again."""
+    line = [str(linked(name)), *arguments]
+    code = subprocess.run(line, env=os.environ, check=False).returncode
+    if code != MISSING_PACK:
+        return code
+    recorded = record()
+    if recorded != 0:
+        return recorded
+    return subprocess.run(line, env=os.environ, check=False).returncode
 
 
 def run_b3d(command: str) -> Callable[[argparse.Namespace], int]:
@@ -99,10 +150,7 @@ def run_b3d(command: str) -> Callable[[argparse.Namespace], int]:
         built = cargo(["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"])
         if built != 0:
             return built
-        program = paths.WORKSPACE / "target" / "debug" / "b3d"
-        return subprocess.run(
-            [str(program), command, *args.arguments], env=os.environ, check=False
-        ).returncode
+        return run_program("b3d", [command, *args.arguments])
 
     return run
 
@@ -132,10 +180,7 @@ def run_render(command: str) -> Callable[[argparse.Namespace], int]:
         )
         if built != 0:
             return built
-        program = paths.WORKSPACE / "target" / "debug" / "b3d-render"
-        return subprocess.run(
-            [str(program), command, *args.arguments], env=os.environ, check=False
-        ).returncode
+        return run_program("b3d-render", [command, *args.arguments])
 
     return run
 
@@ -296,6 +341,18 @@ COMMANDS: tuple[Command, ...] = (
         ),
         run_cargo_test,
         test_arguments,
+    ),
+    Command(
+        "record",
+        "builds the recordings pack for the present sources if it is missing",
+        (
+            ("just b3d record", "build the pack, or print the path of the one built"),
+            (
+                "just b3d record && just b3d list",
+                "build the pack, then list its recordings",
+            ),
+        ),
+        run_record,
     ),
     Command(
         "clippy",

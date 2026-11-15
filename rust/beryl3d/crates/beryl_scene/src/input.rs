@@ -2,8 +2,8 @@
 //! finished assets and platform events. Everything here is plain data with no time of its own
 //! (docs/beryl-3d.md, "Hosts" and "Determinism").
 
-use beryl_session::GameUpdate;
-use beryl_session::card_records::CardRecords;
+use beryl_protocol::GameUpdate;
+use beryl_protocol::card_records::CardRecords;
 use glam::Vec2;
 
 use crate::command::Reply;

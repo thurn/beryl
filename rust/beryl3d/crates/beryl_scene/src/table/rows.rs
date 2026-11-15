@@ -5,7 +5,7 @@
 
 use std::f32::consts::FRAC_PI_2;
 
-use beryl_session::protocol::{Facing, ObjectView};
+use beryl_protocol::protocol::{Facing, ObjectView};
 use glam::{Quat, Vec3};
 
 use super::{CARD_HEIGHT, CARD_WIDTH, LAYER, Layout, RowArea};

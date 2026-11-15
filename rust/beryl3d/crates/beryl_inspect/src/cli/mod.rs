@@ -19,10 +19,11 @@ use beryl_scene::driver::{Moment, Page};
 pub use options::{Options, Spec, Tier, Usage};
 pub use view::position_line;
 
-use crate::pages;
+use crate::{pages, recordings};
 
 /// What a command printed and the status it exits with: 0 when it ran, 1 when a check found a
-/// fault, 2 when the command line was wrong.
+/// fault, 2 when the command line was wrong, and 3 when the recordings pack is missing
+/// ([`recordings::MISSING`]), which `just b3d` builds before running the command again.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Ran {
     pub stdout: String,
@@ -220,7 +221,11 @@ fn usage(error: &Usage) -> Ran {
     Ran {
         stdout: String::new(),
         stderr: format!("{error}\n"),
-        code: 2,
+        code: if error.0.contains(recordings::MISSING) {
+            3
+        } else {
+            2
+        },
     }
 }
 

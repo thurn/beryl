@@ -2,7 +2,7 @@
 //! (docs/beryl-3d.md, "Objects and placement"). Each is pure: it reads the view, the layout, the
 //! camera fitted to the window and the rows' scroll offsets, and nothing else.
 
-use beryl_session::protocol::{
+use beryl_protocol::protocol::{
     CardType, ObjectId, ObjectView, PlayerView, RowName, Side, StackItem, ZoneName,
 };
 use glam::{Quat, Vec2, Vec3};

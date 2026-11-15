@@ -3,7 +3,7 @@
 
 use std::fmt::Write;
 
-use beryl_session::protocol::Side;
+use beryl_protocol::protocol::Side;
 
 use crate::input::{Insets, Rect, Size};
 

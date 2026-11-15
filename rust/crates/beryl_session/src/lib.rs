@@ -31,8 +31,8 @@ pub mod typescript;
 mod wire_fingerprint;
 
 pub use beryl_engine::Seat;
-pub use beryl_protocol::{AgentView, GameUpdate, SessionError, StartRequest};
 use beryl_engine::{GameTable, State};
+pub use beryl_protocol::{AgentView, GameUpdate, SessionError, StartRequest};
 use beryl_search::GameAgent;
 pub use game::{Answer, Game, OpenDecision, UNDO_POINTS, with_stops};
 pub use prompt::trigger_to_stack;
@@ -113,4 +113,3 @@ pub fn agents() -> Vec<AgentView> {
         })
         .collect()
 }
-

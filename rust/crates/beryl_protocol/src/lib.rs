@@ -5,6 +5,7 @@
 //! the app do not change. This crate depends on no rules or card crate, so a client that only
 //! reads views (Beryl 3D) does not link the engine.
 
+pub mod card_records;
 pub mod ipc;
 pub mod prompt;
 pub mod protocol;
@@ -16,7 +17,8 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use protocol::{CandidateIndex, DecisionId, PlayerView, SessionId};
+pub use beryl_card::Seat;
+pub use protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, StopsSetting};
 
 /// An agent a human can play against.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -149,4 +151,3 @@ pub struct StartRequest {
     #[serde(default)]
     pub fair: bool,
 }
-

@@ -1,11 +1,11 @@
 //! The table at rest: the camera's fit, and where each zone's cards are placed.
 
+use beryl_protocol::protocol::{CardType, PlayerView, RowName, Side, ZoneName};
 use beryl_scene::frame::{Frame, Place, Role};
 use beryl_scene::input::{Input, Insets, Size};
 use beryl_scene::table::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Window, place};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
 use beryl_scene::{Client, Config};
-use beryl_session::protocol::{CardType, PlayerView, RowName, Side, ZoneName};
 use glam::{Vec2, Vec3};
 
 fn window(width: f32, height: f32) -> Window {

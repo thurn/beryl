@@ -1,12 +1,10 @@
 //! How a game ended, and the abilities that name its cause.
 
+use super::{AbilityClass, AbilityRef, Culprit, LossReason, Moment, OutcomeView, name, side};
 use beryl_engine::card::{Ability, AbilityKind, Face, FaceAbility};
 use beryl_engine::event::LossCause;
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{GameTable, Layout, Observation, Outcome};
-use super::{
-    AbilityClass, AbilityRef, Culprit, LossReason, Moment, OutcomeView, name, side,
-};
 
 pub(super) fn outcome_view<L: Layout>(
     t: &GameTable,
