@@ -69,5 +69,13 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
 - `ui-conventions.json`: the UI design rules, which `just conventions` turns
   into `docs/ui-conventions.md`. Edit the JSON, never the generated page.
 
+## The efficiency dashboard's files
+
+The files named `data/efficiency-*.json` are read only by the efficiency
+dashboard in `efficiency/` (`docs/efficiency-dashboard.md`). A change to one
+runs only the `efficiency` check lane and `repo`.
+
+## Card images
+
 The app downloads card images on demand into its cache (`beryl_app`'s `art.rs`).
 No images are committed.

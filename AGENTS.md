@@ -79,6 +79,8 @@ write:
   UI values to match one image.
 - `tools/`: `by`, the Python CLI behind the justfile. Run `just` to list the
   commands.
+- `efficiency/`: the efficiency dashboard, `just efficiency`, a standalone
+  Python project with its own check lane (`efficiency/AGENTS.md`).
 - Outside the repository:
   - `~/Library/Caches/beryl` (`$BERYL_CACHE`) holds the shared `rust/target` and
     `ui/node_modules` that worktrees copy from, the oracle builds and their last

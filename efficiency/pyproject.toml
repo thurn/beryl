@@ -1,0 +1,36 @@
+[project]
+name = "beryl-efficiency"
+version = "0.1.0"
+description = "Where agent sessions' time, the machine's CPU and LLM tokens go, per bead"
+requires-python = ">=3.12"
+# Standard library only.
+dependencies = []
+
+[project.scripts]
+beryl-efficiency = "beryl_efficiency.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# The same dev tools tools/pyproject.toml pins. The `efficiency` check lane runs them from the
+# tools' environment, so a worktree needs no second one; `uv run --project efficiency` works
+# too.
+[dependency-groups]
+dev = [
+    "black",
+    # No Windows build: the lane skips pyre there.
+    "pyre-check; sys_platform != 'win32'",
+    "pytest",
+]
+
+[tool.black]
+target-version = ["py312"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+addopts = "-q -p no:cacheprovider"

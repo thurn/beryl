@@ -63,6 +63,7 @@ from . import (
     conventions,
     deadline,
     discarded_push,
+    efficiency,
     file_length,
     hang,
     hygiene,
@@ -506,16 +507,19 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
     """The fast check's lanes for the paths changed since the branch base; None: every lane.
 
     Beryl 3D's paths (beryl3d/paths.py) select the `beryl3d` lane and, like any path, `repo`
-    and `names`. Every other lane is chosen from the rest of the paths alone, so a change to
-    Beryl 3D runs none of the main project's lanes and a change elsewhere never runs Beryl 3D's.
+    and `names`; the efficiency dashboard's (efficiency.py) select the `efficiency` lane and
+    `repo`. Every other lane is chosen from the rest of the paths alone, so a change to Beryl 3D
+    or the dashboard runs none of the main project's lanes and a change elsewhere never runs
+    theirs.
     """
     every: bool = changed is None
     own: list[str]
     rest: list[str]
     own, rest = beryl3d_paths.split(changed or [])
+    dashboard, rest = efficiency.split(rest)
 
     def touched(pattern: str) -> bool:
-        """Whether a path outside Beryl 3D's matches `pattern`."""
+        """Whether a path outside Beryl 3D's and the dashboard's matches `pattern`."""
         return every or any(re.match(pattern, p) for p in rest)
 
     def anywhere(pattern: str) -> bool:
@@ -539,8 +543,9 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
         lanes.append(script_checks.lane())
     if touched(r"^ui/"):
         lanes.append(ui_lane())
-    # The changed files that may cite the rules, held to the cached release's text.
-    cited = None if every else [p for p in changed or [] if citations.cites(p)]
+    # The changed files that may cite the rules, held to the cached release's text. The
+    # dashboard's data files cite none.
+    cited = None if every else [p for p in [*own, *rest] if citations.cites(p)]
     # The set crates as `just card crates` writes them: a card file, a store refresh, a new set
     # group or a keyword added to the engine can call for a new one.
     inputs = re.escape(store_cards.KEYWORDS_SOURCE_REL)
@@ -565,6 +570,8 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
         lanes.append(card_oracle_lane(cards))
     if every or own:
         lanes.append(beryl3d_lane.lane())
+    if every or dashboard:
+        lanes.append(efficiency.lane())
     return lanes
 
 

@@ -188,6 +188,11 @@ speed *args:
 cpu *args:
     {{ by }} cpu "$@"
 
+# Where agent time, CPU and tokens go, per bead (ingest [--rebuild], sql '<query>', coverage; --json, --no-ingest)
+[group('bench')]
+efficiency *args:
+    @{{ low }} uv run --quiet --no-dev --project efficiency beryl-efficiency "$@"
+
 # Who holds and waits for the machine's CPU tokens
 [group('bench')]
 tokens:
@@ -442,7 +447,7 @@ verdict check verdict:
 # Format everything: black, rustfmt, prettier, mdformat (80 columns), the justfile
 [group('checks')]
 fmt:
-    uv run --quiet --project tools black --quiet tools
+    uv run --quiet --project tools black --quiet tools efficiency
     cd rust && uv run --quiet --project ../tools python -m beryl_tools.checks rustfmt
     {{ by }} warm
     cd ui && node_modules/.bin/prettier --write --log-level warn .

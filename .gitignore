@@ -11,6 +11,8 @@
 /tools/.pyre/
 /.pyre/
 /tools/.pytest_cache/
+/efficiency/.venv/
+/efficiency/.pyre/
 __pycache__/
 *.egg-info/
 
