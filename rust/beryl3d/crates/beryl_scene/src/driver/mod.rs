@@ -17,13 +17,14 @@ use std::fmt::{self, Write};
 
 use beryl_session::GameUpdate;
 use beryl_session::protocol::{Side, Status, ZoneName};
+use beryl_session::script::Verb;
 use glam::Vec2;
 
 pub use action::{Action, key_code};
 pub use moment::{Duration, Moment, Name, Offset, ParseError};
 pub use recording::{Answer, Recording, Responses, plays_on};
 
-use crate::agent::{self, Context, Fault, Layout, TreeOptions, locate, uncovered};
+use crate::agent::{self, Context, Fault, Layout, Rule, TreeOptions, locate, uncovered};
 use crate::frame::{Frame, Place, Role, StateBits, Wake};
 use crate::input::{
     Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
@@ -166,6 +167,19 @@ impl Page {
         self.now
     }
 
+    /// Whether the recording has played to its end: every view has been given and the table
+    /// rests in the last.
+    #[must_use]
+    pub fn ended(&self) -> bool {
+        self.released >= self.views.len() && self.rest_since.is_some()
+    }
+
+    /// The next verb the client played as an instant change because it is not built yet, each
+    /// verb returned once.
+    pub fn next_unbuilt(&mut self) -> Option<Verb> {
+        self.client.next_unbuilt()
+    }
+
     /// Every input handed to the client so far, in order.
     #[must_use]
     pub fn inputs(&self) -> &[Input] {
@@ -231,7 +245,17 @@ impl Page {
     ///
     /// When a check finds a fault, with every fault and the clock's state.
     pub fn check(&mut self) {
-        let faults = self.faults();
+        self.check_without(&[]);
+    }
+
+    /// Runs every interface check but those of `rules` on the present frame.
+    ///
+    /// # Panics
+    ///
+    /// When a check finds a fault, with every fault and the clock's state.
+    pub fn check_without(&mut self, rules: &[Rule]) {
+        let mut faults = self.faults();
+        faults.retain(|fault| !rules.contains(&fault.rule));
         if faults.is_empty() {
             return;
         }

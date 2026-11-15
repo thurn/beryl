@@ -7,6 +7,7 @@ use std::collections::VecDeque;
 
 use beryl_session::prompt::{Click, ClickReply, ClickRequest, PromptView};
 use beryl_session::protocol::{DecisionId, Status};
+use beryl_session::script::Verb;
 
 use crate::command::{Reply, Request, SessionCommand};
 use crate::element::{Press, prompt_bar};
@@ -90,7 +91,14 @@ impl Client {
                     .view
                     .script
                     .as_ref()
-                    .map(|script| script.timing.clone())
+                    .map(|script| {
+                        debug_assert_eq!(
+                            script.timing.len(),
+                            script.steps(),
+                            "the session sends one timing per step"
+                        );
+                        script.timing.clone()
+                    })
                     .unwrap_or_default();
                 self.show.push(update, timings);
                 self.show_prompt();
@@ -194,6 +202,12 @@ impl Client {
     #[must_use]
     pub fn wake(&self) -> Wake {
         self.wake
+    }
+
+    /// The next verb that a script played as an instant change because it is not built yet,
+    /// each verb returned once, for the host to log.
+    pub fn next_unbuilt(&mut self) -> Option<Verb> {
+        self.show.next_unbuilt()
     }
 
     /// The next thing the client asks of the platform, if any.

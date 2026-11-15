@@ -29,6 +29,9 @@ pub struct Stress {
     pub timings: Vec<Vec<StepTiming>>,
 }
 
+/// The name of every stress board.
+pub const NAMES: [&str; 2] = ["stress-255", "stress-1024"];
+
 /// The stress board called `name`: `stress-255` (a battlefield of 255 objects) or
 /// `stress-1024` (1,024), or none for any other name.
 #[must_use]

@@ -19,6 +19,7 @@ use beryl_session::protocol::Side;
 
 use crate::pack::{self, Entry};
 use crate::recorder::Cli;
+use crate::{pages, stress};
 
 /// One recording, as `just b3d list` shows it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -71,9 +72,9 @@ pub fn find(name: &str, seat: Seat) -> Result<Arc<[FixtureMessage]>, String> {
     Ok(messages)
 }
 
-/// Every recording, sorted by name and seat, each with its length and number of views. Finding
-/// a length plays the recording through the client, on as many threads as the machine has
-/// cores.
+/// Every recording, stress boards included, sorted by name and seat, each with its length and
+/// number of views. Finding a length plays the recording through the client, on as many
+/// threads as the machine has cores.
 ///
 /// # Errors
 ///
@@ -104,7 +105,7 @@ pub fn list() -> Result<Vec<Listed>, String> {
     let lengths = lengths
         .into_inner()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    Ok(opened
+    let mut listed: Vec<Listed> = opened
         .entries
         .iter()
         .zip(lengths)
@@ -115,8 +116,32 @@ pub fn list() -> Result<Vec<Listed>, String> {
             views: entry.views,
             failure: entry.messages.err().map(str::to_owned),
         })
-        .collect())
+        .collect();
+    listed.extend(stress::NAMES.map(listed_stress));
+    listed.sort_by(|a, b| (&a.name, a.seat.get()).cmp(&(&b.name, b.seat.get())));
+    Ok(listed)
 }
+
+/// The stress board `name`, which is seen from the first seat only.
+fn listed_stress(name: &str) -> Listed {
+    let views = stress::stress(name).map_or(0, |board| board.views.len());
+    let length_ms = pages::page(name, Side::You, Layout::Desktop, LENGTH_WINDOW)
+        .ok()
+        .and_then(|mut page| page.moments().last().map(|(_, at)| at.0 / 1_000_000));
+    Listed {
+        name: name.to_owned(),
+        seat: Seat::P0,
+        length_ms,
+        views: u32::try_from(views).unwrap_or(u32::MAX),
+        failure: None,
+    }
+}
+
+/// The window a recording's length is found in.
+const LENGTH_WINDOW: Size = Size {
+    width: 1440.0,
+    height: 900.0,
+};
 
 /// How long `entry` plays with no action taken, in milliseconds, on the desktop layout.
 fn length(entry: &Entry) -> Option<u64> {
@@ -124,11 +149,7 @@ fn length(entry: &Entry) -> Option<u64> {
     let recording = Recording(messages);
     // A recording the client cannot play has no length; its tests say why.
     std::panic::catch_unwind(|| {
-        let size = Size {
-            width: 1440.0,
-            height: 900.0,
-        };
-        let mut page = Page::new(&recording, Side::You, Layout::Desktop, size).ok()?;
+        let mut page = Page::new(&recording, Side::You, Layout::Desktop, LENGTH_WINDOW).ok()?;
         page.moments().last().map(|(_, at)| at.0 / 1_000_000)
     })
     .ok()

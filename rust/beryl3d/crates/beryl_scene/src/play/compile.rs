@@ -198,7 +198,11 @@ impl<'a> Motion<'a> {
             } else {
                 match (was, now) {
                     (Some(was), Some(now)) if was.pose != now.pose => {
-                        Some(verbs::slide(self.pose(slot, room.from), now.pose, room))
+                        if self.retarget(slot, room.from, was.pose, now.pose) {
+                            None
+                        } else {
+                            Some(verbs::slide(self.pose(slot, room.from), now.pose, room))
+                        }
                     }
                     (Some(_), None) => {
                         let from = self.pose(slot, own.from);
@@ -227,6 +231,27 @@ impl<'a> Motion<'a> {
             }
         }
         self.rests = next;
+    }
+
+    /// Sends every segment of the object in `slot` that lands at `was` and has not ended by
+    /// `from` to `to` instead, and says whether there was one. When several cards are drawn in
+    /// one beat, each later draw makes room in the hand while the cards before it are still in
+    /// flight, or have not left yet. A slide from `from` would be cut off by a flight that
+    /// begins after it, or would cut short one under way, and the card would end the script
+    /// at the place it had before the room was made and jump as the script ends; so the
+    /// flight lands at the new place.
+    fn retarget(&mut self, slot: usize, from: u64, was: Pose, to: Pose) -> bool {
+        let Some(track) = self.tracks.get_mut(slot) else {
+            return false;
+        };
+        let mut found = false;
+        for segment in track.segments_mut() {
+            if segment.end() > from && segment.to == was {
+                segment.to = to;
+                found = true;
+            }
+        }
+        found
     }
 
     /// Where the object in `slot` is at `t` as the steps so far have it: on its track, or where
