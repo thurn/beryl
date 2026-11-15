@@ -147,7 +147,7 @@ fn pays_otherwise<L: Layout>(
     (funds.may_restrict() && restricted_pays(s, t, funds, cost, slot, face))
         || (t.can(Capability::Delve)
             && parts::delves(s.copiable(slot).turned(face).face(t))
-            && parts::delve_pays(s, t, funds, player, slot, cost))
+            && parts::delve_pays(s, t, funds, player, slot, face, cost))
 }
 
 /// Why `player` may not cast the card in `slot` with this face and these casting options:

@@ -8,7 +8,8 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Castings, Chosen, CostAction, CostPart, Face, Keywords, ManaCost, Measure, Prompt, Purpose,
+    Castings, Chosen, CostAction, CostPart, Face, FaceIx, Keywords, ManaCost, Measure, Prompt,
+    Purpose,
 };
 use crate::counters;
 use crate::decision::{Candidates, Decision, DecisionKind, Opt};
@@ -59,22 +60,25 @@ pub(super) fn delves(face: &Face) -> bool {
     face.keywords.contains(Keywords::DELVE)
 }
 
-/// Whether `player` can pay `cost` for casting the card in `slot`, a spell with delve,
-/// exiling cards from their graveyard for its generic mana (CR 702.66a).
+/// Whether `player` can pay `cost` for casting the card in `slot` as its face `face`, a spell
+/// with delve, exiling cards from their graveyard for its generic mana (CR 702.66a). The rest
+/// may be paid with restricted mana the spell accepts, such as mana that may be spent only on
+/// creature spells of a chosen type ([`mana::Paying`]).
 pub(super) fn delve_pays<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     funds: &Funds<L>,
     player: Seat,
     slot: L::Slot,
+    face: FaceIx,
     cost: ManaCost,
 ) -> bool {
     let CostPart::Chosen(action, chosen) = DELVE else {
         unreachable!("delve exiles chosen cards");
     };
     let cards = candidates(s, t, player, slot, action, &chosen);
-    let nothing = mana::Paying::NOTHING;
-    payable_with_substitutes(s, t, funds, cost, u8::MAX, cards, Bitboard::EMPTY, nothing)
+    let paying = mana::Paying::casting(s, t, slot, face);
+    payable_with_substitutes(s, t, funds, cost, u8::MAX, cards, Bitboard::EMPTY, paying)
 }
 
 /// The part at `index` of the cost of the spell or ability `entry`, counting its parts that

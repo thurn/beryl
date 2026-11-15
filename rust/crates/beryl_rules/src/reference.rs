@@ -16,9 +16,11 @@ use crate::ids::{Seat, SlotId};
 use crate::invariants::{At, Violation};
 use crate::layers;
 use crate::layout::{Layout, Queue, Table};
-use crate::mana::{self, Funds};
+use crate::mana::{self, Funds, Paying};
 use crate::state::{State, Zone, ZoneKey};
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
+use beryl_kernel::chosen::ChosenValue;
+use beryl_kernel::mana_memory::RememberedMana;
 
 fn check(ok: bool, what: &'static str, at: Option<At>) -> Result<(), Violation> {
     if ok {
@@ -111,7 +113,7 @@ fn check_layers<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Violation>
 /// probes, as the prefilter, the cached funds and the solver say, against
 /// [`reference_pays`].
 fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Result<(), Violation> {
-    let Some(units) = reference_units(s, t, player) else {
+    let Some(units) = reference_units(s, t, player, Paying::NOTHING) else {
         return Ok(());
     };
     let at = Some(At::Player(player));
@@ -170,6 +172,80 @@ fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Resul
             }
         }
     }
+    check_spell_payments(s, t, player, &funds)
+}
+
+/// Whether `player` can pay the mana cost of each card in their hand for casting it, as the
+/// prefilter, the cached funds and the solver say, against [`reference_pays`] with the
+/// restricted mana that spell accepts among the units ([CR 106.6]): "Some spells or
+/// abilities that produce mana restrict how that mana can be spent". Only in a game whose
+/// cards make restricted mana: in any other, a payment for a spell is one for nothing, which
+/// [`check_payments`] checks.
+///
+/// [CR 106.6]: https://yawgatog.com/resources/magic-rules/#R1066
+fn check_spell_payments<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    funds: &Funds<L>,
+) -> Result<(), Violation> {
+    if !t.can(Capability::RemembersMana) {
+        return Ok(());
+    }
+    let at = Some(At::Player(player));
+    let none = Bitboard::EMPTY;
+    // Every card is checked, so the order only decides which disagreement is reported.
+    for slot in s.in_candidate_order(s.zone(ZoneKey::Of(player, Zone::Hand))) {
+        let Some(def) = s.card_def(t, slot) else {
+            continue;
+        };
+        for face in def.face_ixs() {
+            let paying = Paying::casting(s, t, slot, face);
+            let Some(units) = reference_units(s, t, player, paying) else {
+                continue;
+            };
+            // X is announced before payment, as 0 here.
+            let cost = ManaCost {
+                x: 0,
+                ..def.face(face).cost
+            };
+            let expected = reference_pays(units.as_slice(), cost);
+            // More sources of restricted mana than a small payment holds: the game goes on in
+            // a larger layout, and the funds answer yes until it does.
+            let Ok(prefilter) = mana::payable(s, t, player, cost, none, paying) else {
+                continue;
+            };
+            check(
+                prefilter == expected,
+                "the payability prefilter disagrees with the reference for a spell",
+                at,
+            )?;
+            check(
+                funds.pays_for(s, t, cost, none, paying) == expected,
+                "the cached funds disagree with the reference for a spell",
+                at,
+            )?;
+            for greedy in [false, true] {
+                let plans = mana::plans(
+                    s,
+                    t,
+                    &mut Sink::default(),
+                    player,
+                    cost,
+                    none,
+                    greedy,
+                    paying,
+                );
+                if let Ok(plans) = plans {
+                    check(
+                        plans.is_empty() != expected,
+                        "the payment solver disagrees with the reference for a spell",
+                        at,
+                    )?;
+                }
+            }
+        }
+    }
     Ok(())
 }
 
@@ -180,9 +256,11 @@ const UNITS: usize = 64;
 /// Units of mana, each as the set of kinds it may be.
 type Units = Fixed<u8, UNITS>;
 
-/// The units of mana `player` could make now for a cost of no spell, each as the set of kinds
-/// it may be: their unrestricted floating mana, and one tap of each untapped permanent they control with a mana ability
-/// whose only costs are {T} and perhaps sacrificing it, read from its face up. `None` where a
+/// The units of mana `player` could spend now on what `paying` is for, each as the set of
+/// kinds it may be: their floating mana, and one tap of each untapped permanent they control
+/// with a mana ability whose only costs are {T} and perhaps sacrificing it, read from its face
+/// up. Mana whose spending is restricted counts only where its restriction accepts the spell
+/// being paid for ([CR 106.6]), so never for a cost of no spell. `None` where a
 /// permanent's mana abilities make different amounts, which units cannot say, or where there
 /// are more than [`UNITS`].
 ///
@@ -194,11 +272,23 @@ type Units = Fixed<u8, UNITS>;
 /// ability with the tap symbol or the untap symbol in its activation cost can't be activated
 /// unless the creature has been under its controller's control continuously since their most
 /// recent turn began."
-fn reference_units<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Option<Units> {
+///
+/// [CR 106.6]: https://yawgatog.com/resources/magic-rules/#R1066
+fn reference_units<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    paying: Paying<L>,
+) -> Option<Units> {
     let mut units = Units::new();
     for (k, &n) in s.player(player).mana().amounts().iter().enumerate() {
         for _ in 0..n {
             units.push(1u8 << k).ok()?;
+        }
+    }
+    for mana in s.player(player).remembered_mana() {
+        if paying.reads_restrictions(t) && paying.accepts(t, mana.restriction, mana.chosen_type) {
+            units.push(1u8 << (mana.color as u8)).ok()?;
         }
     }
     for &slot in s.battlefield() {
@@ -227,11 +317,10 @@ fn reference_units<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Opti
                         CostPart::This(CostAction::Tap | CostAction::Sacrifice)
                     )
                 });
-            // The costs checked are for no spell, which restricted mana pays none of
-            // (CR 106.6).
+            // Restricted mana pays only for what its restriction accepts (CR 106.6).
             if a.kind() != AbilityKind::Mana
                 || !tap_only
-                || a.spend().is_some()
+                || !spendable(s, t, paying, slot, a)
                 || !controls(s, t, player, a, &s.words_of(slot))
             {
                 continue;
@@ -249,6 +338,29 @@ fn reference_units<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Opti
         }
     }
     Some(units)
+}
+
+/// Whether the mana that the mana ability `a` of the permanent in `slot` makes may be spent on
+/// what `paying` is for: any mana but restricted mana, and restricted mana that its
+/// restriction accepts, as read of the creature type the permanent chose
+/// ([CR 106.6](https://yawgatog.com/resources/magic-rules/#R1066)).
+fn spendable<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    paying: Paying<L>,
+    slot: L::Slot,
+    a: &crate::card::Ability,
+) -> bool {
+    let Some(restriction) = a.spend() else {
+        return true;
+    };
+    let chosen_type = match s.chosen(slot) {
+        Some(ChosenValue::CreatureType(Some(n))) => n,
+        _ => RememberedMana::<L>::NO_TYPE,
+    };
+    paying.reads_restrictions(t)
+        && t.restriction_id(restriction)
+            .is_some_and(|id| paying.accepts(t, id, chosen_type))
 }
 
 /// Whether `player` meets a mana ability's "Activate only if you control" condition

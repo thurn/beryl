@@ -63,6 +63,21 @@ pub mod scenarios {
                 Resolve,
                 ME.controls(ANGLER, 1),
             ]),
+        // Gurmag Angler is a Zombie Fish, so the colored mana of a Cavern of Souls that chose
+        // Zombie may pay its {B}, and six cards pay {6}: the Cavern is the only land.
+        Scenario::new("Gurmag Angler paid with delve and Cavern of Souls' mana")
+            .interaction(&[Card::CavernOfSouls])
+            .hand(P0, &[Card::CavernOfSouls, ANGLER])
+            .graveyard(P0, &[Card::Island; 6])
+            .actions(&[
+                ME.plays(Card::CavernOfSouls),
+                ME.chooses_named("Zombie"),
+                ME.casts(ANGLER),
+                ME.has(Zone::Exile, Card::Island, 6),
+                ME.tapped(Card::CavernOfSouls, 1),
+                Resolve,
+                ME.controls(ANGLER, 1),
+            ]),
         // Five lands and three cards: two cards must go, and P0 chooses which. Exiling the
         // instant and the sorcery keeps the Island in the graveyard, and the five lands pay
         // the rest rather than a third card. Cards are offered from the bottom of

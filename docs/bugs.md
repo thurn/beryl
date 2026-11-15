@@ -6,6 +6,23 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A delve spell that needed restricted mana could not be cast.** With a Cavern
+  of Souls that chose Zombie as the only land and six cards in the graveyard,
+  Gurmag Angler was not offered: the six cards pay {6} and only the Cavern's
+  colored mana can pay {B}. The legality check tries restricted mana and delve
+  as two separate fallbacks (`cast::legal::pays_otherwise`), and the delve
+  fallback (`cast::parts::delve_pays`) asked for a payment for no spell
+  (`mana::Paying::NOTHING`), which restricted mana never pays. The casting
+  machine itself passed the spell (`Paying::entry`), so only the check was
+  wrong. Nothing caught it because the reference payability check
+  (`reference.rs`) only checked payments for no spell, and no scenario combined
+  delve with restricted mana. Fixed: `delve_pays` takes the face and pays for
+  the spell (`Paying::casting`), and the reference now also checks each card in
+  hand as a spell, counting the restricted mana it accepts. Prevention: a
+  function that answers "can this spell be paid for" takes the spell, never a
+  default `Paying`; a check of a new kind of payment adds the reference's
+  version of it in the same change.
+
 - A copy of an instant or sorcery that had resolved stayed in the stack zone
   with no stack entry, and a copy of a creature spell never reached the
   battlefield. Copies of spells are objects in the shared token pool marked as
