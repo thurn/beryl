@@ -109,16 +109,22 @@ impl<L: Layout> State<L> {
     }
 
     /// What the zone move keeps of the copy effect on the object in `slot` as it leaves: a
-    /// token's effect to carry to its next incarnation ([`State::carried_copy`]), or the card a
-    /// card under the effect really is, which it becomes again ([`Memo::Really`]).
+    /// token's effect to carry to its next incarnation ([`State::carried_copy`]). A card under
+    /// the effect is made the card it really is again ([`Memo::Really`]) and keeps nothing: the
+    /// move then ends the effect and the memo with the rest of what the stores hold. Neither
+    /// is read by the move before then. Out of line, so a move of an object that is no copy
+    /// pays only the test of its flag.
     #[cold]
     #[inline(never)]
-    pub(crate) fn leaving_copy(&self, slot: L::Slot) -> (Option<Carried<L>>, Option<L::Card>) {
+    pub(crate) fn leaving_copy(&mut self, slot: L::Slot) -> Option<Carried<L>> {
         if self.object(slot).is_token() {
-            (self.carried_copy(slot), None)
-        } else {
-            (None, Some(self.really_is(slot)))
+            return self.carried_copy(slot);
         }
+        let card = self.really_is(slot);
+        let o = self.object_mut(slot);
+        o.card = card;
+        o.flags.set(Flag::Copy, false);
+        None
     }
 
     /// Puts a carried copy effect back on the object now in `slot`, with the timestamp it

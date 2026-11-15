@@ -18,7 +18,7 @@ use beryl_card::{AbilityKind, Colors, Face, FaceIx};
 
 use crate::event::{Listens, Replaces};
 use crate::layout::{Layout, Small};
-use crate::object::{Flag, GrantRef};
+use crate::object::{Derived, Flag, GrantRef};
 use crate::query::{Copiable, DefinitionKey};
 use crate::rule_changes::Rules;
 use crate::state::State;
@@ -131,18 +131,24 @@ impl<L: Layout> State<L> {
         (face.power.unwrap_or(0), face.toughness.unwrap_or(0))
     }
 
-    /// The power, toughness and colors layer 1 gives the permanent in `slot`, whose face of its
-    /// definition is `face` ([`State::definition`]): the face's, or for an object with a copy
-    /// effect, its copiable values' ([`State::copiable_pt`], [`State::copiable_colors`]), read
-    /// only behind its [`Flag::Copy`].
-    #[inline]
-    pub fn copiable_base(&self, t: &GameTable, slot: L::Slot, face: &Face) -> (i8, i8, Colors) {
-        if self.object(slot).flags.has(Flag::Copy) {
-            let (power, toughness) = self.excepted_pt(t, slot);
-            return (power, toughness, self.excepted_colors(t, slot));
+    /// What layer 1 gives the permanent in `slot`, which has a copy effect on it
+    /// ([`Flag::Copy`]): `printed`, the results its definition's face gives, with the power,
+    /// toughness, colors and subtypes of its copiable values, which hold its exceptions
+    /// ([`State::copiable_pt`], [`State::copiable_colors`], [`State::copy_subtypes`]), and the
+    /// activated abilities they give ([`State::copy_grants`]). A permanent with no copy effect
+    /// keeps `printed`, so the layers test the flag once and come here only for a copy.
+    #[cold]
+    #[inline(never)]
+    pub fn copy_layer_one(&self, t: &GameTable, slot: L::Slot, printed: Derived<L>) -> Derived<L> {
+        let (power, toughness) = self.excepted_pt(t, slot);
+        Derived {
+            power,
+            toughness,
+            colors: self.excepted_colors(t, slot),
+            subtypes: self.copy_subtypes(t, slot),
+            granted: self.copy_grants(t, slot),
+            ..printed
         }
-        let (power, toughness) = (face.power.unwrap_or(0), face.toughness.unwrap_or(0));
-        (power, toughness, face.colors)
     }
 
     /// The colors of the copiable values of the object in `slot` ([`Copiable::colors`]): what

@@ -341,13 +341,14 @@ fn apply_layers<L: Layout>(
         // with the exceptions it was made with (CR 707.9b).
         let what = s.definition(slot);
         let f = what.face(t);
-        let (power, toughness, colors) = s.copiable_base(t, slot, f);
+        // One test of the flag, read before the write; a copy's values are found out of line.
+        let copy = s.object(slot).flags().has(Flag::Copy);
         s.results()[i] = Derived {
-            power,
-            toughness,
+            power: f.power.unwrap_or(0),
+            toughness: f.toughness.unwrap_or(0),
             types: f.types,
             supertypes: f.supertypes,
-            colors,
+            colors: f.colors,
             controller: s.base_controller(slot),
             protection: Colors::NONE,
             keywords: f.keywords,
@@ -355,9 +356,9 @@ fn apply_layers<L: Layout>(
             granted: [None; 4],
             lost: Default::default(),
         };
-        if s.object(slot).flags().has(Flag::Copy) {
-            s.results()[i].subtypes = s.copy_subtypes(t, slot);
-            s.results()[i].granted = s.copy_grants(t, slot);
+        if copy {
+            let printed = s.results()[i];
+            s.results()[i] = s.copy_layer_one(t, slot, printed);
         }
         for (n, ability) in f.abilities.iter().enumerate() {
             let Some(spec) = ability.layer() else {
