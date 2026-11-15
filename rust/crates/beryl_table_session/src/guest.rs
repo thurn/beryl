@@ -9,6 +9,7 @@ use std::thread;
 
 use beryl_link::LinkError;
 use beryl_link::guest::{Event, Guest};
+use beryl_session::ipc::LobbyUpdate;
 use beryl_session::protocol::LinkState;
 use beryl_session::{GameUpdate, SessionId};
 use beryl_table::Refusal;
@@ -30,6 +31,7 @@ struct Shared {
 struct State {
     guest: Option<Guest>,
     current: Option<GameUpdate>,
+    lobby: Option<LobbyUpdate>,
     link: Option<LinkState>,
     connection: u64,
     pending: HashMap<u64, Sender<Result<(), Refusal>>>,
@@ -44,6 +46,7 @@ impl GuestSession {
             state: Mutex::new(State {
                 guest: Some(guest),
                 current: None,
+                lobby: None,
                 link: None,
                 connection: 0,
                 pending: HashMap::new(),
@@ -70,7 +73,16 @@ impl GuestSession {
                             break;
                         }
                     }
-                    Event::Lobby(payload) => (shared.emit_event)(TableEvent::Lobby(payload)),
+                    Event::Lobby(payload) => match serde_json::from_value::<LobbyUpdate>(payload) {
+                        Ok(update) => {
+                            state.lobby = Some(update.clone());
+                            (shared.emit_event)(TableEvent::Lobby(update));
+                        }
+                        Err(cause) => {
+                            error = Some(format!("Could not read the host's lobby view: {cause}"));
+                            break;
+                        }
+                    },
                     Event::Reconnecting => {
                         state.pending.clear();
                         shared.link(&mut state, LinkState::Reconnecting);
@@ -100,6 +112,10 @@ impl GuestSession {
             };
             drop(guest);
         });
+    }
+
+    pub(super) fn lobby(&self) -> Option<LobbyUpdate> {
+        self.0.lock().lobby.clone()
     }
 
     pub(super) fn current(&self) -> Option<GameUpdate> {

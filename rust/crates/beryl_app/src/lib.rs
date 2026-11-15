@@ -295,6 +295,7 @@ pub fn run() {
             games::resume_game = ipc::RESUME_GAME,
             games::stage_timings = ipc::STAGE_TIMINGS,
             tables::table_solo = ipc::TABLE_SOLO,
+            tables::table_lobby = ipc::TABLE_LOBBY_COMMAND,
             tables::table_act = ipc::TABLE_ACT,
             tables::table_answer = ipc::TABLE_ANSWER,
             tables::table_current = ipc::TABLE_CURRENT,

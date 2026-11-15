@@ -14,6 +14,7 @@ import type {
   Events,
   Fixture,
   GameUpdate,
+  LobbyChange,
   Platform,
   SessionId,
   StopsSetting,
@@ -342,6 +343,7 @@ const logged = (command: Command, value: unknown): unknown => {
   if (
     command === "table_host" ||
     command === "table_join" ||
+    command === "table_lobby" ||
     command === "table_resume"
   )
     return undefined;
@@ -571,6 +573,9 @@ export const currentGame = async () => {
 /** Resumes the newest unfinished game saved, unless one is in progress; resolves to the
  * session in progress, if any. Its views arrive as a started game's do. */
 export const resumeGame = () => call("resume_game", {});
+
+export const tableLobby = (change: LobbyChange) =>
+  call("table_lobby", { request: { change } });
 
 export const tableSolo = (deck: TableDeck) =>
   call("table_solo", { request: { deck } });

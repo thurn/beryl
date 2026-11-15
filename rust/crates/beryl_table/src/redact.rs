@@ -329,6 +329,7 @@ fn redact_table_edit(edit: &TableEdit, seat: Seat) -> bool {
         | TableEdit::ResetTurnPlays { .. }
         | TableEdit::TurnPlay { .. }
         | TableEdit::SetAssists { .. }
+        | TableEdit::SetGameSettings { .. }
         | TableEdit::SetReady { .. }
         | TableEdit::SetWins { .. }
         | TableEdit::SetInGame { .. }
@@ -431,6 +432,7 @@ fn redact_action(
         | Action::Roll { .. }
         | Action::Arrow { .. }
         | Action::ClearArrows { .. }
+        | Action::GameSettings { .. }
         | Action::Ready { .. }
         | Action::Start { .. }
         | Action::NextGame { .. }

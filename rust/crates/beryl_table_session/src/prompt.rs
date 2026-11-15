@@ -1,5 +1,5 @@
 //! Host-only prompt state. The wire view uses viewer slots, never table IDs.
-use beryl_session::ipc::TableAnswerRequest;
+use beryl_session::ipc::{TableAnswerRequest, TableLobbyRequest};
 use beryl_session::protocol::{
     Answer, CardHandling, ObjectId as Slot, PileName, Side, TableAction, TablePrompt, ZoneName,
 };
@@ -16,6 +16,7 @@ use crate::publication::SeatPublication;
 #[serde(untagged)]
 pub(crate) enum Request {
     Answer(TableAnswerRequest),
+    Lobby(TableLobbyRequest),
     Action(TableAction),
 }
 

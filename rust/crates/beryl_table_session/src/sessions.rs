@@ -9,7 +9,9 @@ use beryl_link::guest::{self, Event, Guest};
 use beryl_link::host::Sender;
 use beryl_link::wire::Hello;
 use beryl_link::{Link, LinkError, PING_INTERVAL};
-use beryl_session::ipc::{SavedTable, TABLE_LINK, TABLE_LOBBY, TableAnswerRequest};
+use beryl_session::ipc::{
+    LobbyUpdate, SavedTable, TABLE_LINK, TABLE_LOBBY, TableAnswerRequest, TableLobbyRequest,
+};
 use beryl_session::protocol::{Answer, LinkState, TableAction};
 use beryl_session::{GameUpdate, SessionId, SessionIds, WIRE_HASH};
 use beryl_table::action::Flow;
@@ -19,10 +21,10 @@ use beryl_table::{Action, Chance, Log, Refusal, Seat, Table};
 use serde_json::Value;
 
 use crate::guest::GuestSession;
-use crate::host::HostSession;
 use crate::prompt::{PromptState, Request};
 use crate::publication::PublishedTable;
 use crate::saves::{self, HostSettings, Save};
+use crate::{host::HostSession, lobby};
 
 const SOLO: Seat = Seat(0);
 
@@ -34,7 +36,7 @@ pub(super) type EmitEvent = Arc<dyn Fn(TableEvent) + Send + Sync>;
 pub enum TableEvent {
     Link(LinkState),
     Error(String),
-    Lobby(Value),
+    Lobby(LobbyUpdate),
 }
 
 impl TableEvent {
@@ -46,7 +48,7 @@ impl TableEvent {
                 TABLE_LINK,
                 serde_json::json!({ "kind": "error", "reason": reason }),
             ),
-            Self::Lobby(lobby) => (TABLE_LOBBY, lobby),
+            Self::Lobby(lobby) => (TABLE_LOBBY, serde_json::json!(lobby)),
         }
     }
 }
@@ -87,6 +89,10 @@ struct Solo {
 }
 
 impl Solo {
+    fn lobby(&self) -> LobbyUpdate {
+        lobby::project(self.table.table(), SOLO, &[Some("You".into())], None)
+    }
+
     fn update(&self) -> GameUpdate {
         GameUpdate {
             session: self.session,
@@ -140,24 +146,36 @@ impl TableSessions {
 
     /// Start a solo table with a repeatable shuffle for a recorded run.
     pub fn solo_seeded(&self, deck: Deck, seed: u64) -> Result<SessionId, Refusal> {
+        self.open_solo(Some(deck), seed)
+    }
+
+    pub(super) fn solo_lobby(&self) -> Result<SessionId, Refusal> {
+        self.open_solo(None, RandomState::new().hash_one(0_u8))
+    }
+
+    fn open_solo(&self, deck: Option<Deck>, seed: u64) -> Result<SessionId, Refusal> {
         let mut current = self.lock();
         let table = Table::new(1);
         let log = Log::new(&table);
         let mut table = PublishedTable::new(table, log, Chance::fresh(seed))?;
-        table.apply_host(
-            SOLO,
-            &Action::LoadDeck {
-                seat: SOLO,
-                main: deck.main,
-                side: deck.side,
-            },
-        )?;
-        table.apply_host(SOLO, &Action::Start { first: SOLO })?;
+        if let Some(deck) = deck {
+            table.apply_host(
+                SOLO,
+                &Action::LoadDeck {
+                    seat: SOLO,
+                    main: deck.main,
+                    side: deck.side,
+                },
+            )?;
+            table.apply_host(SOLO, &Action::Start { first: SOLO })?;
+        }
         let session = self.ids.allocate();
         let solo = Solo { table, session };
         let update = solo.update();
+        let lobby = solo.lobby();
         let previous = replace(&mut current, Current::Solo(Box::new(solo)));
         (self.emit)(update);
+        (self.emit_event)(TableEvent::Lobby(lobby));
         drop(current);
         leave_link(previous);
         Ok(session)
@@ -300,9 +318,11 @@ impl TableSessions {
         .map_err(invalid)?;
         let update = host.current();
         let link = update.view.table.as_ref().expect("hosted table view").link;
+        let lobby = host.lobby();
         let previous = replace(&mut current, Current::Hosted(host));
         (self.emit)(update);
         (self.emit_event)(TableEvent::Link(link));
+        (self.emit_event)(TableEvent::Lobby(lobby));
         if let Some(Current::Hosted(host)) = current.as_ref() {
             host.listen(links);
         }
@@ -370,8 +390,13 @@ impl TableSessions {
         let mut current = self.lock();
         match current.as_mut().ok_or(Refusal::Stale)? {
             Current::Solo(solo) => {
+                let was_playing = solo.table.table().game_match.in_game;
                 match request {
                     Request::Action(action) => {
+                        solo.table.apply_client(SOLO, action)?;
+                    }
+                    Request::Lobby(request) => {
+                        let action = lobby::action(solo.table.table(), SOLO, request.change)?;
                         solo.table.apply_client(SOLO, action)?;
                     }
                     Request::Answer(request) => {
@@ -379,6 +404,9 @@ impl TableSessions {
                     }
                 }
                 (self.emit)(solo.update());
+                if !was_playing || !solo.table.table().game_match.in_game {
+                    (self.emit_event)(TableEvent::Lobby(solo.lobby()));
+                }
                 Ok(())
             }
             Current::Hosted(host) => {
@@ -392,6 +420,18 @@ impl TableSessions {
                 apply(request)
             }
         }
+    }
+
+    pub(super) fn lobby(&self) -> Option<LobbyUpdate> {
+        match self.lock().as_ref()? {
+            Current::Solo(solo) => Some(solo.lobby()),
+            Current::Hosted(host) => Some(host.lobby()),
+            Current::Joined(guest) => guest.lobby(),
+        }
+    }
+
+    pub(super) fn change_lobby(&self, request: TableLobbyRequest) -> Result<(), Refusal> {
+        self.send(Request::Lobby(request))
     }
 
     pub fn current(&self) -> Option<GameUpdate> {

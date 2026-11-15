@@ -919,6 +919,11 @@
     },
     {
       "kind": "no-equivalent",
+      "name": "Lobby",
+      "rule": "Host a table, Join a table and Solo table open a manual table lobby. Phones can join or play solo. Each player chooses a deck, can change its sideboard and sets their own assists. The host or solo player sets starting life, starting hand size and who plays first."
+    },
+    {
+      "kind": "no-equivalent",
       "name": "Manual table prompts",
       "rule": "Numbers, text and power/toughness are entered in the lower-right action dock. The field starts selected, and numeric entries have a step down and a step up. A sign changes the current value where one exists. The button says what it will do, such as Draw 3. Return confirms and Escape cancels."
     },

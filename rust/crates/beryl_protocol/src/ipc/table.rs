@@ -1,5 +1,6 @@
 //! Commands for opening and configuring linked manual tables.
 
+use beryl_table::state::{Assist, LobbySettings, Seat};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -10,6 +11,7 @@ pub const TABLE_SAVED: &str = "table_saved";
 pub const TABLE_SETTINGS_GET: &str = "table_settings_get";
 pub const TABLE_SETTINGS_SET: &str = "table_settings_set";
 pub const TABLE_LINK: &str = "table-link";
+pub const TABLE_LOBBY_COMMAND: &str = "table_lobby";
 pub const TABLE_LOBBY: &str = "table-lobby";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -78,4 +80,73 @@ impl TableConnectionError {
             reason: error.to_string(),
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LobbySeat {
+    pub seat: Seat,
+    pub name: Option<String>,
+    pub loaded: bool,
+    pub main_count: u32,
+    pub side_count: u32,
+    pub ready: bool,
+    pub wins: u32,
+}
+
+/// A seat's own deck and the public information about the table.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LobbyView {
+    pub you: Seat,
+    pub seats: Vec<LobbySeat>,
+    pub main: Vec<(String, u16)>,
+    pub side: Vec<(String, u16)>,
+    pub unknown: Vec<String>,
+    pub assists: Vec<Assist>,
+    pub settings: LobbySettings,
+    pub game_number: u32,
+    pub invite: Option<String>,
+    pub can_start: bool,
+}
+
+/// A null view means the current table has started playing.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct LobbyUpdate {
+    pub view: Option<LobbyView>,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+pub struct TableLobbyRequest {
+    pub change: LobbyChange,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum LobbyChange {
+    View,
+    Solo,
+    LoadDeck {
+        main: Vec<(String, u16)>,
+        side: Vec<(String, u16)>,
+    },
+    Sideboard {
+        into_main: Vec<(String, u16)>,
+        into_side: Vec<(String, u16)>,
+    },
+    Ready {
+        ready: bool,
+    },
+    SetAssist {
+        assist: Assist,
+        on: bool,
+    },
+    Settings {
+        settings: LobbySettings,
+    },
+    Start,
 }

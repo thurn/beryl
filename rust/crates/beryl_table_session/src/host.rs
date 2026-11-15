@@ -10,11 +10,13 @@ use std::time::Duration;
 use beryl_link::host::{self, Host, Hosted, Sender, TableQueue};
 use beryl_link::wire::RefusalReason;
 use beryl_link::{Link, LinkError, PING_INTERVAL, PeerInfo, Route};
+use beryl_session::ipc::LobbyUpdate;
 use beryl_session::protocol::{LinkState, TableAction};
 use beryl_session::{GameUpdate, SessionId, WIRE_HASH};
 use beryl_table::{Action, Entry, Refusal, Seat, Table};
 use serde_json::Value;
 
+use crate::lobby;
 use crate::prompt::{PromptState, Request};
 use crate::publication::PublishedTable;
 use crate::refusal::to_wire;
@@ -114,6 +116,10 @@ impl HostSession {
         Ok(())
     }
 
+    pub(super) fn lobby(&self) -> LobbyUpdate {
+        self.0.lock().lobby(LOCAL)
+    }
+
     pub(super) fn current(&self) -> GameUpdate {
         let table = self.0.lock();
         table.update(LOCAL, table.link_state(), table.show_script)
@@ -161,9 +167,17 @@ impl HostedTable {
         {
             return Err(Refusal::Stale);
         }
+        let was_playing = self.table.table().game_match.in_game;
         let all = match request {
             Request::Action(action) => {
                 check_lobby_actor(seat, &action)?;
+                self.table.apply_client_checked(seat, action, |entry| {
+                    save_entry(&mut self.save, entry)
+                })?;
+                true
+            }
+            Request::Lobby(request) => {
+                let action = lobby::action(self.table.table(), seat, request.change)?;
                 self.table.apply_client_checked(seat, action, |entry| {
                     save_entry(&mut self.save, entry)
                 })?;
@@ -174,6 +188,9 @@ impl HostedTable {
             })?,
         };
         self.publish((!all).then_some(seat));
+        if !was_playing || !self.table.table().game_match.in_game {
+            self.publish_lobby();
+        }
         Ok(())
     }
 
@@ -223,6 +240,26 @@ impl HostedTable {
             .map_or(self.link, |sender| connected(&sender.peer()))
     }
 
+    fn lobby(&self, seat: Seat) -> LobbyUpdate {
+        lobby::project(
+            self.table.table(),
+            seat,
+            &seat_names(&self.save),
+            Some(&self.save.metadata.settings.invite),
+        )
+    }
+
+    fn publish_lobby(&mut self) {
+        if let Some(sender) = &self.sender
+            && sender.lobby(serde_json::json!(self.lobby(GUEST))).is_err()
+        {
+            sender.disconnect();
+            self.sender = None;
+            self.link_changed(LinkState::Reconnecting);
+        }
+        (self.emit_event)(TableEvent::Lobby(self.lobby(LOCAL)));
+    }
+
     fn emit_local(&self) {
         (self.emit)(self.update(LOCAL, self.link_state(), self.show_script));
     }
@@ -269,14 +306,15 @@ impl Hosted for HostedTable {
         Ok(serialize(&self.update(seat, connected(peer), true)))
     }
 
-    fn lobby_for(&mut self, _: u8) -> Option<Value> {
-        None
+    fn lobby_for(&mut self, seat: u8) -> Option<Value> {
+        Some(serde_json::json!(self.lobby(Seat(seat))))
     }
 
     fn connected(&mut self, _: u8, sender: Sender) {
         let link = connected(&sender.peer());
         self.sender = Some(sender);
         self.link_changed(link);
+        (self.emit_event)(TableEvent::Lobby(self.lobby(LOCAL)));
     }
 
     fn version_mismatch(&mut self, reason: &str) {

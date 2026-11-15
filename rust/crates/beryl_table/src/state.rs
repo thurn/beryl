@@ -234,11 +234,23 @@ pub struct MatchSeat {
     pub wins: u32,
 }
 
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LobbySettings {
+    pub starting_life: i32,
+    pub starting_hand_size: u16,
+    // None lets the host choose the first seat at random.
+    pub first: Option<Seat>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Match {
     pub seats: Vec<MatchSeat>,
     pub starting_life: i32,
     pub starting_hand_size: u16,
+    #[serde(default)]
+    pub first: Option<Seat>,
     pub in_game: bool,
     /// The game to play next when the table is in the lobby.
     #[serde(default = "first_game")]
@@ -246,6 +258,22 @@ pub struct Match {
     /// The latest game's result, used to offer the losing seat the next choice.
     #[serde(default)]
     pub last_winner: Option<Seat>,
+}
+
+impl Match {
+    pub fn settings(&self) -> LobbySettings {
+        LobbySettings {
+            starting_life: self.starting_life,
+            starting_hand_size: self.starting_hand_size,
+            first: self.first,
+        }
+    }
+
+    pub fn set_settings(&mut self, settings: LobbySettings) {
+        self.starting_life = settings.starting_life;
+        self.starting_hand_size = settings.starting_hand_size;
+        self.first = settings.first;
+    }
 }
 
 const fn first_game() -> u32 {
@@ -358,6 +386,7 @@ impl Table {
                 seats: vec![MatchSeat::default(); count],
                 starting_life,
                 starting_hand_size: 7,
+                first: None,
                 in_game: false,
                 game_number: first_game(),
                 last_winner: None,

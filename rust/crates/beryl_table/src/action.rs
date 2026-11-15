@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::state::{Assist, Card, Face, ObjectId, Phase, Row, Seat, Zone};
+use crate::state::{Assist, Card, Face, LobbySettings, ObjectId, Phase, Row, Seat, Zone};
 
 mod references;
 
@@ -310,6 +310,9 @@ pub enum Action<Id = ObjectId> {
     Ready {
         seat: Seat,
         ready: bool,
+    },
+    GameSettings {
+        settings: LobbySettings,
     },
     Start {
         first: Seat,

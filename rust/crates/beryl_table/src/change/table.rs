@@ -55,6 +55,9 @@ pub enum TableEdit {
         seat: Seat,
         edit: Edit<u32>,
     },
+    SetGameSettings {
+        edit: Edit<crate::state::LobbySettings>,
+    },
     SetInGame {
         edit: Edit<bool>,
     },
@@ -115,6 +118,7 @@ impl TableEdit {
             Self::SetWins { seat, edit } => {
                 table.game_match.seats[usize::from(seat.0)].wins = edit.after;
             }
+            Self::SetGameSettings { edit } => table.game_match.set_settings(edit.after),
             Self::SetInGame { edit } => {
                 table.game_match.in_game = edit.after;
             }
@@ -167,6 +171,9 @@ impl TableEdit {
             },
             Self::SetWins { seat, edit } => Self::SetWins {
                 seat: *seat,
+                edit: edit.inverse(),
+            },
+            Self::SetGameSettings { edit } => Self::SetGameSettings {
                 edit: edit.inverse(),
             },
             Self::SetInGame { edit } => Self::SetInGame {

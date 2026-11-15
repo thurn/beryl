@@ -160,6 +160,12 @@ pub(crate) fn typescript(cfg: &Config) -> String {
             never.clone(),
         ),
         (
+            TABLE_LOBBY_COMMAND,
+            request(name::<TableLobbyRequest>(cfg)),
+            name::<Option<LobbyUpdate>>(cfg),
+            name::<TableRefused>(cfg),
+        ),
+        (
             TABLE_CURRENT,
             "Record<string, never>".to_owned(),
             name::<Option<GameUpdate>>(cfg),
@@ -276,9 +282,10 @@ pub(crate) fn typescript(cfg: &Config) -> String {
     out.push_str("};\n\n/** Each event's payload. */\nexport type Events = {\n");
     writeln!(
         out,
-        "  \"{GAME_UPDATE}\": {};\n  \"{TABLE_QUIT_ASKED}\": {};\n  \"{TABLE_LINK}\": LinkState | ({{ kind: \"error\" }} & TableConnectionError);\n  \"{TABLE_LOBBY}\": unknown;\n}};",
+        "  \"{GAME_UPDATE}\": {};\n  \"{TABLE_QUIT_ASKED}\": {};\n  \"{TABLE_LINK}\": LinkState | ({{ kind: \"error\" }} & TableConnectionError);\n  \"{TABLE_LOBBY}\": {};\n}};",
         name::<GameUpdate>(cfg),
-        name::<()>(cfg)
+        name::<()>(cfg),
+        name::<LobbyUpdate>(cfg)
     )
     .expect("a String takes writes");
     out

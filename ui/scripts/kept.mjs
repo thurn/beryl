@@ -33,5 +33,6 @@ await import("./kept-table-log.mjs");
 await import("./kept-table-turn.mjs");
 await import("./kept-table-prompts.mjs");
 await import("./kept-table-players.mjs");
+await import("./kept-table-lobby.mjs");
 const { stopTableServer } = await import("./table.mjs");
 await finish(stopTableServer);

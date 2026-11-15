@@ -6,6 +6,7 @@ use std::sync::mpsc::{Receiver, SyncSender, channel, sync_channel};
 use beryl_link::memory::{self, MemoryLink};
 use beryl_link::wire::{Hello, Message, RefusalReason, TableStatus, decode, encode};
 use beryl_link::{Link, LinkError};
+use beryl_session::ipc::LobbyUpdate;
 use beryl_session::protocol::{LinkState, TableAction, TableView};
 use beryl_session::script::{Table as Stage, failure};
 use beryl_session::{GameUpdate, SessionIds, WIRE_HASH};
@@ -47,11 +48,18 @@ fn send(link: &mut MemoryLink, message: &Message) {
 }
 
 fn receive(link: &mut MemoryLink) -> Result<Message, LinkError> {
+    receive_matching(link, |message| !matches!(message, Message::Lobby(_)))
+}
+
+fn receive_matching(
+    link: &mut MemoryLink,
+    accept: impl Fn(&Message) -> bool,
+) -> Result<Message, LinkError> {
     loop {
         let message = decode(&link.receive()?)?;
         if let Message::Ping { n } = message {
             send(link, &Message::Pong { n });
-        } else {
+        } else if accept(&message) {
             return Ok(message);
         }
     }
@@ -386,4 +394,80 @@ fn overlapping_local_and_guest_actions_publish_the_same_order() {
     assert!(done);
     assert_eq!(local_life.as_slice(), peer_life);
     assert_eq!(local_life[1], 17);
+}
+
+#[test]
+fn lobby_sends_only_the_viewers_deck_and_unknown_names() {
+    let directory = tempfile::tempdir().unwrap();
+    let (send, events) = channel();
+    let (host, _updates) = tables(directory.path());
+    let host = host.with_events(move |event| {
+        let _ = send.send(event);
+    });
+    let (links, incoming) = sync_channel(1);
+    host.host(incoming, HostSettings::new("Derek", INVITE, SECRET))
+        .unwrap();
+    let (mut guest, _) = join(&links, TableStatus::New);
+
+    let guest_lobby = |guest: &mut MemoryLink| {
+        let Message::Lobby(payload) =
+            receive_matching(guest, |message| matches!(message, Message::Lobby(_))).unwrap()
+        else {
+            unreachable!()
+        };
+        serde_json::from_value::<LobbyUpdate>(payload)
+            .unwrap()
+            .view
+            .unwrap()
+    };
+    assert!(guest_lobby(&mut guest).main.is_empty());
+
+    host.act(Action::LoadDeck {
+        seat: HOST,
+        main: vec![("Host secret typo".into(), 10)],
+        side: vec![("Host secret sideboard".into(), 2)],
+    })
+    .unwrap();
+    let hidden = guest_lobby(&mut guest);
+    assert!(hidden.main.is_empty());
+    assert!(hidden.side.is_empty());
+    assert!(hidden.unknown.is_empty());
+    assert!(hidden.invite.is_none());
+    assert_eq!(hidden.seats[0].main_count, 10);
+    assert_eq!(hidden.seats[0].side_count, 2);
+    let json = serde_json::to_string(&hidden).unwrap();
+    assert!(!json.contains("Host secret"));
+
+    guest_act(
+        &mut guest,
+        1,
+        &Action::LoadDeck {
+            seat: GUEST,
+            main: vec![("Guest secret typo".into(), 11)],
+            side: vec![("Guest secret sideboard".into(), 3)],
+        },
+    );
+    let visible = guest_lobby(&mut guest);
+    assert_eq!(visible.main, [("Guest secret typo".into(), 11)]);
+    assert_eq!(visible.side, [("Guest secret sideboard".into(), 3)]);
+    assert!(
+        visible
+            .unknown
+            .iter()
+            .any(|name| name == "Guest secret typo")
+    );
+    let local = loop {
+        if let beryl_table_session::TableEvent::Lobby(update) = events.recv().unwrap()
+            && let Some(view) = update.view
+            && view.seats[1].loaded
+        {
+            break view;
+        }
+    };
+    assert_eq!(local.seats[1].side_count, 3);
+    assert!(
+        !serde_json::to_string(&local)
+            .unwrap()
+            .contains("Guest secret")
+    );
 }

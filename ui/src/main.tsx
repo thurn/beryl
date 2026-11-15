@@ -7,11 +7,12 @@ import "./design/fonts";
 import "./design/tokens.css";
 import "./design/components";
 import "./screens/styles";
-import { appInfo, isNativeApp, stageTimings } from "./ipc";
+import { appInfo, isMobile, isNativeApp, stageTimings } from "./ipc";
 import { installDiagnostics, note } from "./diagnostics";
 import { ownTimings } from "./stage/timing";
 import { installAudio } from "./audio/sound";
 import { setProfile } from "./profile";
+import { setMobile } from "./mobile/phone";
 
 installDiagnostics();
 
@@ -39,6 +40,7 @@ if (isNativeApp()) {
   void appInfo().then(
     async (info) => {
       setProfile(info.profile);
+      setMobile(isMobile(info.platform));
       await timed;
       render();
     },

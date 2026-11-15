@@ -557,6 +557,7 @@ fn plan_action(
             into_side,
         } => game::sideboard(table, *seat, into_main, into_side),
         Action::Ready { seat, ready } => game::ready(table, *seat, *ready),
+        Action::GameSettings { settings } => game::settings(table, *settings),
         Action::Start { first } => {
             return Ok(AppliedChanges::presented(
                 game::start(table, *first, chance, action)?,

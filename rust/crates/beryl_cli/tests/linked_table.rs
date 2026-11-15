@@ -90,10 +90,16 @@ fn line(reader: &mut impl BufRead) -> String {
 }
 
 fn event(reader: &mut impl BufRead, name: &str) -> Value {
-    assert_eq!(line(reader), format!("event: {name}"));
-    let payload = serde_json::from_str(line(reader).strip_prefix("data: ").unwrap()).unwrap();
-    assert!(line(reader).is_empty());
-    payload
+    let expected = format!("event: {name}");
+    loop {
+        let header = line(reader);
+        let payload = serde_json::from_str(line(reader).strip_prefix("data: ").unwrap()).unwrap();
+        assert!(line(reader).is_empty());
+        if header == expected {
+            return payload;
+        }
+        assert_eq!(header, format!("event: {}", ipc::TABLE_LOBBY));
+    }
 }
 
 fn update(reader: &mut impl BufRead) -> GameUpdate {
@@ -132,6 +138,9 @@ fn play_between_browser_seats(server: &Server, link: TableLink) {
     let initial = update(&mut host_events);
     assert_eq!(initial.view.players.you.life, 25);
     assert_eq!(event(&mut host_events, ipc::TABLE_LINK)["kind"], "alone");
+    let lobby = event(&mut host_events, ipc::TABLE_LOBBY);
+    assert_eq!(lobby["view"]["you"], 0);
+    assert_eq!(lobby["view"]["seats"][0]["name"], "Host");
     assert_eq!(
         server.invoke("guest", ipc::TABLE_CURRENT, &json!({})),
         json!({"ok": null})

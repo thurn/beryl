@@ -6,10 +6,13 @@ import {
 } from "react";
 import {
   appInfo,
+  canStartTable,
   isNativeApp,
   onGameUpdate,
+  onTableLobby,
   tableCurrent,
   tableLeave,
+  tableLobby,
   tableQuit,
 } from "../ipc";
 import {
@@ -134,6 +137,33 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
       );
     };
   }, [client, feed]);
+
+  useEffect(() => {
+    if (!canStartTable()) return;
+    let mounted = true;
+    let heard = false;
+    let played = false;
+    const listening = onTableLobby(({ view }) => {
+      if (!mounted) return;
+      heard = true;
+      if (view === null) played = true;
+      else if (played) window.location.hash = "#/lobby";
+    });
+    void listening
+      .then(async () => {
+        if (heard) return;
+        const update = await tableLobby({ kind: "view" });
+        if (mounted && !heard) played = update?.view === null;
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+      void listening.then(
+        (stop) => stop(),
+        () => {},
+      );
+    };
+  }, []);
 
   useLayoutEffect(() => {
     const update = () => {

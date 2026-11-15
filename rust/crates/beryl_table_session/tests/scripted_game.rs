@@ -8,6 +8,7 @@ use std::thread;
 use beryl_link::memory;
 use beryl_link::wire::{Hello, Message, TableStatus, VERSION_MISMATCH, decode, encode};
 use beryl_link::{Link, LinkError, PING_INTERVAL};
+use beryl_session::ipc::LobbyUpdate;
 use beryl_session::protocol::{LinkState, TableAction, TableObjectRef, ZoneName};
 use beryl_session::script::{Act, Span, Subject, Table as Stage, failure};
 use beryl_session::{GameUpdate, SessionId, SessionIds};
@@ -384,7 +385,7 @@ fn a_host_and_guest_play_a_scripted_game() {
     );
     assert!(Stage::of(&frozen.view).shows(&Stage::of(&game.views[0].view)));
     assert_eq!(
-        guest_events.recv().unwrap(),
+        link_event(&guest_events),
         TableEvent::Link(LinkState::Reconnecting)
     );
     assert_eq!(game.host.act(lose_life.clone()), Err(Refusal::Stale));
@@ -413,10 +414,7 @@ fn a_host_and_guest_play_a_scripted_game() {
     game.accept(GUEST, tap(blocker));
 
     game.host.leave();
-    assert_eq!(
-        guest_events.recv().unwrap(),
-        TableEvent::Link(LinkState::Left)
-    );
+    assert_eq!(link_event(&guest_events), TableEvent::Link(LinkState::Left));
     game.guest.leave();
     assert!(game.guest.current().is_none());
 }
@@ -444,7 +442,7 @@ fn an_interrupted_action_wakes_its_caller_and_lobby_payloads_pass_through() {
         view: view.view().clone(),
     };
     update.view.table.as_mut().unwrap().link = link_state;
-    let lobby = serde_json::json!({ "ready": false, "seats": ["Derek", "Mara"] });
+    let lobby = LobbyUpdate { view: None };
     for message in [
         Message::Welcome {
             seat: GUEST.0,
@@ -452,7 +450,7 @@ fn an_interrupted_action_wakes_its_caller_and_lobby_payloads_pass_through() {
             host: "Derek".into(),
         },
         Message::Update(serde_json::to_value(&update).unwrap()),
-        Message::Lobby(lobby.clone()),
+        Message::Lobby(serde_json::to_value(&lobby).unwrap()),
     ] {
         peer.send(&encode(&message)).unwrap();
     }
@@ -489,9 +487,18 @@ fn an_interrupted_action_wakes_its_caller_and_lobby_payloads_pass_through() {
     guest.leave();
 }
 
+fn link_event(events: &Receiver<TableEvent>) -> TableEvent {
+    loop {
+        let event = events.recv().unwrap();
+        if !matches!(event, TableEvent::Lobby(_)) {
+            return event;
+        }
+    }
+}
+
 fn assert_connected(events: &Receiver<TableEvent>) {
     assert!(matches!(
-        events.recv().unwrap(),
+        link_event(events),
         TableEvent::Link(LinkState::Connected { direct: true, .. })
     ));
 }
@@ -517,12 +524,9 @@ fn an_authenticated_version_mismatch_reaches_both_players() {
         PING_INTERVAL,
     );
 
+    assert_eq!(link_event(&host_events), TableEvent::Link(LinkState::Alone));
     assert_eq!(
-        host_events.recv().unwrap(),
-        TableEvent::Link(LinkState::Alone)
-    );
-    assert_eq!(
-        host_events.recv().unwrap(),
+        link_event(&host_events),
         TableEvent::Error(VERSION_MISMATCH.into())
     );
     assert_eq!(

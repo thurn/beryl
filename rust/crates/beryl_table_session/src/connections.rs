@@ -11,8 +11,9 @@ use std::sync::{Mutex, PoisonError};
 
 use beryl_link::{Invite, TcpHost, TcpLink};
 use beryl_session::ipc::{
-    Platform, SavedTable, TableActReply, TableConnectionError, TableHostReply, TableHostRequest,
-    TableJoinRequest, TableLink, TableRefused, TableResumeRequest, TableSettings, TableSoloRequest,
+    LobbyChange, LobbyUpdate, Platform, SavedTable, TableActReply, TableConnectionError,
+    TableHostReply, TableHostRequest, TableJoinRequest, TableLink, TableLobbyRequest, TableRefused,
+    TableResumeRequest, TableSettings, TableSoloRequest,
 };
 use beryl_session::protocol::{Answer, TableAction};
 use beryl_session::{GameUpdate, SessionId, SessionIds};
@@ -62,6 +63,19 @@ impl TableConnections {
         let session = self.tables.solo(request.deck).map_err(TableRefused::from)?;
         *listener = None;
         Ok(session)
+    }
+
+    pub fn lobby(&self, request: TableLobbyRequest) -> Result<Option<LobbyUpdate>, TableRefused> {
+        match request.change {
+            LobbyChange::View => return Ok(self.tables.lobby()),
+            LobbyChange::Solo => {
+                let mut listener = self.listener.lock().unwrap_or_else(PoisonError::into_inner);
+                self.tables.solo_lobby()?;
+                *listener = None;
+            }
+            _ => self.tables.change_lobby(request)?,
+        }
+        Ok(None)
     }
 
     pub fn act(&self, action: TableAction) -> TableActReply {

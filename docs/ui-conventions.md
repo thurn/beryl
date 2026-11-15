@@ -290,6 +290,10 @@ restore the old behavior.
 - **Library drop halves.** While a dragged card is over a library, the pile
   shows Top and Bottom. The half under the pointer lights up. Dropping multiple
   cards opens the ordering tray before the cards are moved.
+- **Lobby.** Host a table, Join a table and Solo table open a manual table
+  lobby. Phones can join or play solo. Each player chooses a deck, can change
+  its sideboard and sets their own assists. The host or solo player sets
+  starting life, starting hand size and who plays first.
 - **Manual table prompts.** Numbers, text and power/toughness are entered in the
   lower-right action dock. The field starts selected, and numeric entries have a
   step down and a step up. A sign changes the current value where one exists.

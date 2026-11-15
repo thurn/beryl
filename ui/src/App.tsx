@@ -21,6 +21,7 @@ import {
 import { Gallery } from "./screens/Gallery";
 import { Testing } from "./screens/Testing";
 import { GameScreen } from "./screens/Game";
+import { Lobby } from "./screens/Lobby";
 import { TableScreen } from "./screens/Table";
 import { StartScreen } from "./screens/StartScreen";
 import { usePlayback } from "./stage/playback";
@@ -145,6 +146,8 @@ function Main() {
     <MotionConfig reducedMotion="user">
       {path === "/gallery" ? (
         <Gallery />
+      ) : path === "/lobby" ? (
+        <Lobby />
       ) : path === "/table" ? (
         <TableScreen />
       ) : path === "/game" ? (

@@ -1,0 +1,257 @@
+import { useEffect, useRef, useState } from "react";
+import { Button } from "../components/Controls";
+import { Stage } from "../game/Stage";
+import {
+  appInfo,
+  onTableLobby,
+  tableLeave,
+  tableLobby,
+  type DeckImportReply,
+  type LobbyChange,
+  type LobbyUpdate,
+} from "../ipc";
+import { usePhone } from "../mobile/phone";
+import { Bindings } from "../table/bindings";
+import { AssistSwitches } from "../table/lobby/AssistSwitches";
+import { DeckPicker, type DeckPanel } from "../table/lobby/DeckPicker";
+import { GameSettings } from "../table/lobby/GameSettings";
+import { SideboardSwap } from "../table/lobby/SideboardSwap";
+import { resolve } from "../table/shortcuts";
+import "../table/lobby/lobby.css";
+
+export function Lobby() {
+  const phone = usePhone();
+  const [update, setUpdate] = useState<LobbyUpdate | null>();
+  const [picker, setPicker] = useState<DeckPanel>();
+  const [deckName, setDeckName] = useState<string>();
+  const [sideboard, setSideboard] = useState(false);
+  const [pending, setPending] = useState(false);
+  const busy = useRef(false);
+  const [error, setError] = useState<string>();
+  const view = update?.view;
+  const own = view?.seats.find((seat) => seat.seat === view.you);
+  useEffect(() => {
+    let mounted = true;
+    let heard = false;
+    const receive = (next: LobbyUpdate | null) => {
+      if (mounted) setUpdate(next);
+    };
+    const listening = onTableLobby((next) => {
+      heard = true;
+      receive(next);
+    });
+    void listening
+      .then(() => (heard ? undefined : tableLobby({ kind: "view" })))
+      .then((next) => {
+        if (!heard && next !== undefined) receive(next);
+      })
+      .catch(() => {
+        if (mounted) setError("Could not open the lobby.");
+      });
+    return () => {
+      mounted = false;
+      void listening.then(
+        (stop) => stop(),
+        () => {},
+      );
+    };
+  }, []);
+  useEffect(() => {
+    if (update && !update.view) window.location.hash = "#/table";
+  }, [update]);
+
+  const send = async (action: LobbyChange) => {
+    if (busy.current) throw new Error("A lobby action is pending.");
+    busy.current = true;
+    setPending(true);
+    setError(undefined);
+    try {
+      await tableLobby(action);
+    } finally {
+      busy.current = false;
+      setPending(false);
+    }
+  };
+  const change = async (action: LobbyChange) => {
+    try {
+      await send(action);
+    } catch (failure) {
+      setError(
+        action.kind === "start"
+          ? "Could not start the game."
+          : "Could not update the lobby.",
+      );
+      throw failure;
+    }
+  };
+  const run = (action: LobbyChange) => void change(action).catch(() => {});
+  const pick = async ({ name, main, side }: DeckImportReply) => {
+    await send({ kind: "load_deck", main, side });
+    setDeckName(name);
+  };
+  const unload = () => {
+    void change({ kind: "load_deck", main: [], side: [] }).then(
+      () => {
+        setDeckName(undefined);
+        setSideboard(false);
+      },
+      () => {},
+    );
+  };
+  const leave = () => {
+    void tableLeave().then(
+      () => {
+        window.location.hash = "#/";
+      },
+      () => setError("Could not leave the lobby."),
+    );
+  };
+
+  const keyboard =
+    useRef<(event: KeyboardEvent, bindings: Bindings) => void>(undefined);
+  keyboard.current = (event, bindings) => {
+    if (event.defaultPrevented || event.repeat || pending) return;
+    const id = resolve(event, "lobby", bindings);
+    if (id === "lobby.paste_deck") setPicker("paste");
+    else if (id === "lobby.change_deck" && !phone) setPicker("file");
+    else if (id === "lobby.unload_deck" && own?.loaded) unload();
+    else if (id === "lobby.sideboard" && own?.loaded)
+      setSideboard((open) => !open);
+    else return;
+    event.preventDefault();
+  };
+  useEffect(() => {
+    let mounted = true;
+    let bindings: Bindings | undefined;
+    void appInfo().then(
+      ({ platform }) => {
+        if (mounted) bindings = new Bindings(platform);
+      },
+      () => {},
+    );
+    const key = (event: KeyboardEvent) => {
+      if (bindings) keyboard.current?.(event, bindings);
+    };
+    window.addEventListener("keydown", key);
+    return () => {
+      mounted = false;
+      window.removeEventListener("keydown", key);
+    };
+  }, []);
+
+  const screen = (
+    <div className="table start-screen lobby-screen">
+      <main className="start-panel lobby-panel" aria-label="Table lobby">
+        <header className="lobby-heading">
+          <h1 className="start-title">Table</h1>
+          <Button variant="secondary" disabled={pending} onClick={leave}>
+            Leave table
+          </Button>
+        </header>
+        {view && own ? (
+          <>
+            {view.invite && (
+              <label className="lobby-invite">
+                Invite code
+                <input readOnly value={view.invite} />
+              </label>
+            )}
+            <section className="lobby-section" aria-label="Deck">
+              <div className="lobby-deck">
+                <div>
+                  <h2>
+                    {own.loaded
+                      ? (deckName ?? "Deck loaded")
+                      : "No deck loaded"}
+                  </h2>
+                  {own.loaded && (
+                    <p>
+                      {own.mainCount} main · {own.sideCount} sideboard
+                    </p>
+                  )}
+                </div>
+                <div className="lobby-actions">
+                  <Button
+                    variant="secondary"
+                    disabled={pending}
+                    onClick={() => setPicker("change")}
+                  >
+                    Change
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    disabled={pending || !own.loaded}
+                    onClick={() => setSideboard((open) => !open)}
+                  >
+                    Sideboard
+                  </Button>
+                  {own.loaded && (
+                    <Button
+                      variant="secondary"
+                      disabled={pending}
+                      onClick={unload}
+                    >
+                      Unload deck
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {view.unknown.length > 0 && (
+                <div role="status">
+                  <h3>Unknown cards</h3>
+                  <ul>
+                    {view.unknown.map((name) => (
+                      <li key={name}>{name}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </section>
+            {picker && (
+              <DeckPicker
+                key={picker}
+                panel={picker}
+                setPanel={setPicker}
+                phone={phone}
+                useDeck={pick}
+              />
+            )}
+            {sideboard && own.loaded && (
+              <SideboardSwap
+                view={view}
+                pending={pending}
+                change={run}
+                close={() => setSideboard(false)}
+              />
+            )}
+            <AssistSwitches
+              assists={view.assists}
+              disabled={pending}
+              change={run}
+            />
+            {view.you === 0 && (
+              <GameSettings view={view} pending={pending} change={change} />
+            )}
+            {view.seats.length === 1 && (
+              <Button
+                className="lobby-start"
+                disabled={!view.canStart || pending}
+                onClick={() => run({ kind: "start" })}
+              >
+                Start
+              </Button>
+            )}
+          </>
+        ) : update === null ? (
+          <p role="status">Waiting for the table…</p>
+        ) : null}
+        {error && (
+          <p className="game-error" role="alert">
+            {error}
+          </p>
+        )}
+      </main>
+    </div>
+  );
+  return phone ? screen : <Stage>{screen}</Stage>;
+}

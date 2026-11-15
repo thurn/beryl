@@ -72,6 +72,18 @@ export type TableDeck = { name: string, main: Array<[string, number]>, side: Arr
 
 export type TableSoloRequest = { deck: TableDeck, };
 
+export type LobbySettings = { startingLife: number, startingHandSize: number, first: TableSeat | null, };
+
+export type LobbySeat = { seat: TableSeat, name: string | null, loaded: boolean, mainCount: number, sideCount: number, ready: boolean, wins: number, };
+
+export type LobbyView = { you: TableSeat, seats: Array<LobbySeat>, main: Array<[string, number]>, side: Array<[string, number]>, unknown: Array<string>, assists: Array<TableAssist>, settings: LobbySettings, gameNumber: number, invite: string | null, canStart: boolean, };
+
+export type LobbyUpdate = { view: LobbyView | null, };
+
+export type LobbyChange = { "kind": "view" } | { "kind": "solo" } | { "kind": "load_deck", main: Array<[string, number]>, side: Array<[string, number]>, } | { "kind": "sideboard", intoMain: Array<[string, number]>, intoSide: Array<[string, number]>, } | { "kind": "ready", ready: boolean, } | { "kind": "set_assist", assist: TableAssist, on: boolean, } | { "kind": "settings", settings: LobbySettings, } | { "kind": "start" };
+
+export type TableLobbyRequest = { change: LobbyChange, };
+
 export type TableLink = "iroh" | "local" | "memory";
 
 export type TableHostSettings = { name: string, startingLife?: number, startingHandSize?: number, };
@@ -1010,7 +1022,7 @@ export type TableActionOf<Id> = { "move": { to: TableDestination, position?: Tab
 /**
  * With neither objects nor a count, reveal the whole zone.
  */
-objects?: Array<Id>, random?: number, to: Array<TableSeat>, } } | { "lend": { in: TableZone, to: TableSeat, } } | { "always_reveal_top": { seat: TableSeat, on: boolean, } } | { "always_look_at_top": { seat: TableSeat, on: boolean, } } | { "sort_hand": { seat: TableSeat, by: TableSortBy, } } | { "life": { seat: TableSeat, } & ({ "add": number } | { "set": number }) } | { "player_counter": { seat: TableSeat, name: string, } & ({ "add": number } | { "set": number }) } | { "phase": { phase: TableActionPhase, } } | { "next_turn": Record<symbol, never> } | { "roll": { count: number, sides: number, } } | { "arrow": { to: TableTarget<Id>, objects: Array<Id>, in: TableZone, } } | { "clear_arrows": { from: TableSeenObject<Id> | null, to: TableTarget<Id> | null, } } | { "load_deck": { seat: TableSeat, main: Array<[string, number]>, side: Array<[string, number]>, } } | { "sideboard": { seat: TableSeat, into_main: Array<[string, number]>, into_side: Array<[string, number]>, } } | { "ready": { seat: TableSeat, ready: boolean, } } | { "start": { first: TableSeat, } } | { "next_game": { winner: TableSeat | null, } } | { "concede": Record<symbol, never> } | { "set_assist": { assist: TableAssist, on: boolean, } } | { "flow": { seat: TableSeat, flow: TableFlow, count: number, } } | { "undo": { 
+objects?: Array<Id>, random?: number, to: Array<TableSeat>, } } | { "lend": { in: TableZone, to: TableSeat, } } | { "always_reveal_top": { seat: TableSeat, on: boolean, } } | { "always_look_at_top": { seat: TableSeat, on: boolean, } } | { "sort_hand": { seat: TableSeat, by: TableSortBy, } } | { "life": { seat: TableSeat, } & ({ "add": number } | { "set": number }) } | { "player_counter": { seat: TableSeat, name: string, } & ({ "add": number } | { "set": number }) } | { "phase": { phase: TableActionPhase, } } | { "next_turn": Record<symbol, never> } | { "roll": { count: number, sides: number, } } | { "arrow": { to: TableTarget<Id>, objects: Array<Id>, in: TableZone, } } | { "clear_arrows": { from: TableSeenObject<Id> | null, to: TableTarget<Id> | null, } } | { "load_deck": { seat: TableSeat, main: Array<[string, number]>, side: Array<[string, number]>, } } | { "sideboard": { seat: TableSeat, into_main: Array<[string, number]>, into_side: Array<[string, number]>, } } | { "ready": { seat: TableSeat, ready: boolean, } } | { "game_settings": { settings: LobbySettings, } } | { "start": { first: TableSeat, } } | { "next_game": { winner: TableSeat | null, } } | { "concede": Record<symbol, never> } | { "set_assist": { assist: TableAssist, on: boolean, } } | { "flow": { seat: TableSeat, flow: TableFlow, count: number, } } | { "undo": { 
 /**
  * A seat can name its own draw or a batch from either seat.
  */
@@ -1318,6 +1330,7 @@ export type Commands = {
   table_settings_set: { args: { request: TableSettings }; result: null; error: TableConnectionError };
   table_act: { args: { request: TableActRequest }; result: TableActReply; error: never };
   table_answer: { args: { request: TableAnswerRequest }; result: TableActReply; error: never };
+  table_lobby: { args: { request: TableLobbyRequest }; result: LobbyUpdate | null; error: TableRefused };
   table_current: { args: Record<string, never>; result: GameUpdate | null; error: never };
   table_leave: { args: Record<string, never>; result: null; error: never };
   table_keys: { args: { request: TableKeysRequest }; result: null; error: SessionError };
@@ -1342,5 +1355,5 @@ export type Events = {
   "game-update": GameUpdate;
   "table-quit-asked": null;
   "table-link": LinkState | ({ kind: "error" } & TableConnectionError);
-  "table-lobby": unknown;
+  "table-lobby": LobbyUpdate;
 };

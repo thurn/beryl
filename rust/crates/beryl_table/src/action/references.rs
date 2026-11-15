@@ -167,6 +167,7 @@ impl<Id> Action<Id> {
                 into_side,
             },
             Self::Ready { seat, ready } => Action::Ready { seat, ready },
+            Self::GameSettings { settings } => Action::GameSettings { settings },
             Self::Start { first } => Action::Start { first },
             Self::NextGame { winner } => Action::NextGame { winner },
             Self::Concede {} => Action::Concede {},

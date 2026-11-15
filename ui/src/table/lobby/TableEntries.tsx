@@ -1,0 +1,137 @@
+import { useState } from "react";
+import { Button } from "../../components/Controls";
+import {
+  CommandError,
+  isNativeApp,
+  tableHost,
+  tableJoin,
+  tableLobby,
+} from "../../ipc";
+import "./lobby.css";
+
+export function TableEntries({
+  phone,
+  disabled,
+  pending,
+  setPending,
+}: {
+  phone: boolean;
+  disabled: boolean;
+  pending: boolean;
+  setPending(pending: boolean): void;
+}) {
+  const [mode, setMode] = useState<"host" | "join">();
+  const [name, setName] = useState("");
+  const [invite, setInvite] = useState("");
+  const [local, setLocal] = useState(!isNativeApp());
+  const [error, setError] = useState<string>();
+  const blocked = disabled || pending;
+  const open = async (operation: () => Promise<unknown>) => {
+    setError(undefined);
+    setPending(true);
+    try {
+      await operation();
+      window.location.hash = "#/lobby";
+    } catch (failure) {
+      const detail =
+        failure instanceof CommandError ? failure.error : undefined;
+      setError(
+        detail && typeof detail === "object" && "reason" in detail
+          ? String(detail.reason)
+          : "Could not open the table.",
+      );
+      setPending(false);
+    }
+  };
+  return (
+    <div className="lobby-entry">
+      <nav className="lobby-actions" aria-label="Manual tables">
+        {!phone && (
+          <Button
+            variant="secondary"
+            disabled={blocked}
+            onClick={() => setMode("host")}
+          >
+            Host a table
+          </Button>
+        )}
+        <Button
+          variant="secondary"
+          disabled={blocked}
+          onClick={() => setMode("join")}
+        >
+          Join a table
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={blocked}
+          onClick={() => void open(() => tableLobby({ kind: "solo" }))}
+        >
+          Solo table
+        </Button>
+      </nav>
+      {mode && (
+        <form
+          className="lobby-actions"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (blocked || !name.trim() || (mode === "join" && !invite.trim()))
+              return;
+            void open(() =>
+              mode === "host"
+                ? tableHost(local ? "local" : "iroh", { name: name.trim() })
+                : tableJoin(invite.trim(), name.trim()),
+            );
+          }}
+        >
+          <label>
+            Name
+            <input
+              required
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </label>
+          {mode === "join" && (
+            <label>
+              Invite code
+              <input
+                required
+                autoCapitalize="none"
+                spellCheck={false}
+                value={invite}
+                onChange={(event) => setInvite(event.target.value)}
+              />
+            </label>
+          )}
+          {mode === "host" && isNativeApp() && (
+            <label>
+              Connection
+              <select
+                value={local ? "local" : "internet"}
+                onChange={(event) => setLocal(event.target.value === "local")}
+              >
+                <option value="internet">Internet</option>
+                <option value="local">Local</option>
+              </select>
+            </label>
+          )}
+          <Button type="submit" disabled={blocked}>
+            {mode === "host" ? "Host" : "Join"}
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={blocked}
+            onClick={() => {
+              setMode(undefined);
+              setError(undefined);
+            }}
+          >
+            Cancel
+          </Button>
+        </form>
+      )}
+      {error && <p role="alert">{error}</p>}
+    </div>
+  );
+}

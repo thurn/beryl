@@ -26,7 +26,8 @@ use beryl_session::ipc::decks::{
 use beryl_session::ipc::{
     self, AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, PassOnRequest, Platform,
     SetStopsRequest, TableActRequest, TableAnswerRequest, TableHostRequest, TableJoinRequest,
-    TableKeysRequest, TableResumeRequest, TableSettings, TableSoloRequest, UndoRequest,
+    TableKeysRequest, TableLobbyRequest, TableResumeRequest, TableSettings, TableSoloRequest,
+    UndoRequest,
 };
 use beryl_session::prompt::ClickRequest;
 use beryl_session::{GameUpdate, SessionError, Sessions, StartRequest, agents};
@@ -156,6 +157,9 @@ fn handle(mut stream: TcpStream, seats: &[BrowserSeat; 2]) -> Result<(), String>
                 }
                 #[cfg(debug_assertions)]
                 "test_open_table_sort" => answer::<_, ()>(Ok(tables.open_test_sort())),
+                ipc::TABLE_LOBBY_COMMAND => {
+                    table_command(args, |r: TableLobbyRequest| tables.lobby(r))
+                }
                 ipc::TABLE_CURRENT => answer::<_, ()>(Ok(tables.current())),
                 ipc::TABLE_LEAVE => {
                     tables.leave();

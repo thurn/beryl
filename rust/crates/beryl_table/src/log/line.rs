@@ -387,6 +387,7 @@ fn game(action: &Action, summary: &Summary, names: &Cards<'_>) -> String {
         Action::Sideboard { .. } => "Sideboarded".into(),
         Action::Ready { ready: true, .. } => "Ready".into(),
         Action::Ready { ready: false, .. } => "Cleared readiness".into(),
+        Action::GameSettings { .. } => "Changed game settings".into(),
         Action::Start { .. } => "Started the game".into(),
         Action::NextGame {
             winner: Some(winner),

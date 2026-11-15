@@ -162,6 +162,15 @@ pub(super) fn ready(table: &Table, seat: Seat, ready: bool) -> Changes {
     .collect())
 }
 
+pub(super) fn settings(table: &Table, settings: crate::state::LobbySettings) -> Changes {
+    lobby_seat(table, settings.first.unwrap_or(Seat(0)))?;
+    Ok(edit(table.game_match.settings(), settings, |edit| {
+        Change::SetTable(TableEdit::SetGameSettings { edit })
+    })
+    .into_iter()
+    .collect())
+}
+
 fn clear_zone(table: &Table, zone: Zone, changes: &mut Vec<Change>) {
     for (index, id) in table
         .zone(zone)

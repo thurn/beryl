@@ -5,13 +5,12 @@ import {
   type SessionId,
   canStartTable,
   concede,
-  deckImport,
   exportBugs,
   listAgents,
-  tableSolo,
 } from "../ipc";
 import { Button } from "../components/Controls";
 import { SoundCorner } from "../audio/SoundControls";
+import { TableEntries } from "../table/lobby/TableEntries";
 import { Stage } from "../game/Stage";
 import { usePhone } from "../mobile/phone";
 import { play } from "../audio/sound";
@@ -114,6 +113,7 @@ export function StartScreen({
   const [fair, setFair] = useState(() => lastGame().fair ?? false);
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState(false);
+  const [openingTable, setOpeningTable] = useState(false);
   // A new game was asked for with one in progress: the next click concedes it.
   const [confirming, setConfirming] = useState(false);
   useEffect(() => {
@@ -134,7 +134,7 @@ export function StartScreen({
   const seedOk =
     seedValue === undefined ||
     (Number.isInteger(seedValue) && seedValue >= 0 && seedValue < 2 ** 32);
-  const startable = agent !== undefined && seedOk && !pending;
+  const startable = agent !== undefined && seedOk && !pending && !openingTable;
   const starting = useRef(false);
   const start = () => {
     if (!agent || !startable || starting.current) return;
@@ -163,32 +163,12 @@ export function StartScreen({
         },
       );
   };
-  const solo = async () => {
-    if (starting.current) return;
-    starting.current = true;
-    setPending(true);
-    setError(undefined);
-    try {
-      const { default: text } =
-        await import("../../../docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt?raw");
-      const { name, main, side, skipped } = await deckImport({
-        name: "Beryl sample deck",
-        text,
-      });
-      await tableSolo({ name, main, side, skipped });
-      window.location.hash = "#/table";
-    } catch (failure) {
-      starting.current = false;
-      setPending(false);
-      setError(String(failure));
-    }
-  };
   // Enter takes the primary button from anywhere on the screen but a button, which Enter
   // presses: back to the game in progress, else a new one.
   const onEnter = useRef<(e: KeyboardEvent) => void>(undefined);
   onEnter.current = (e) => {
-    if (e.key !== "Enter" || e.repeat) return;
-    if (e.target instanceof Element && e.target.closest("button")) return;
+    if (e.key !== "Enter" || e.repeat || openingTable) return;
+    if (e.target instanceof Element && e.target.closest("button, form")) return;
     e.preventDefault();
     if (inProgress !== undefined) window.location.hash = "#/game";
     else start();
@@ -266,7 +246,10 @@ export function StartScreen({
         {/* With a game in progress, going back to it comes first. */}
         <div className="start-buttons">
           {inProgress !== undefined && (
-            <Button onClick={() => (window.location.hash = "#/game")}>
+            <Button
+              disabled={openingTable}
+              onClick={() => (window.location.hash = "#/game")}
+            >
               Return to Game
             </Button>
           )}
@@ -285,13 +268,12 @@ export function StartScreen({
           </Button>
         </div>
         {canStartTable() && (
-          <Button
-            variant="secondary"
+          <TableEntries
+            phone={phone}
             disabled={pending}
-            onClick={() => void solo()}
-          >
-            Solo table
-          </Button>
+            pending={openingTable}
+            setPending={setOpeningTable}
+          />
         )}
         {error && <p className="game-error">{error}</p>}
         {exportReports && <ExportReports />}

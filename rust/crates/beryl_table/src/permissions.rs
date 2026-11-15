@@ -257,6 +257,7 @@ fn action_references(action: &Action, references: &mut Vec<Reference>) {
         | Action::PlayerCounter { seat, .. }
         | Action::Start { first: seat } => references.push(Reference::Seat(*seat)),
         Action::NextGame { winner } => references.extend(winner.map(Reference::Seat)),
+        Action::GameSettings { .. } => references.push(Reference::OwnSeat(Seat(0))),
         Action::Batch { actions } => {
             for action in actions {
                 action_references(action, references);

@@ -22,6 +22,7 @@ enum Field {
     Ready(Seat),
     Wins(Seat),
     InGame,
+    GameSettings,
     LastWinner,
     GameNumber,
     Arrows,
@@ -48,6 +49,7 @@ impl From<&TableEdit> for Field {
             TableEdit::SetReady { seat, .. } => Self::Ready(seat),
             TableEdit::SetWins { seat, .. } => Self::Wins(seat),
             TableEdit::SetInGame { .. } => Self::InGame,
+            TableEdit::SetGameSettings { .. } => Self::GameSettings,
             TableEdit::SetLastWinner { .. } => Self::LastWinner,
             TableEdit::SetGameNumber { .. } => Self::GameNumber,
         }
