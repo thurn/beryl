@@ -9,13 +9,10 @@
 // Hover opens the card inspector, placed clear of the open prompt's choices. An unused click
 // can open the viewer for cards tucked under their host or explain why the click was refused
 // (Refusal.tsx).
+import { TablePileViewer, usePileViewer } from "../table/TableViewer";
+import { revealedIn } from "./Revealed.tsx";
 import type { TableClient } from "../table/client";
-import {
-  counterControls,
-  pickPile,
-  pickStep,
-  pickViewerCard,
-} from "../table/controls";
+import { counterControls, pickPile, pickStep } from "../table/controls";
 import {
   useEffect,
   useMemo,
@@ -331,11 +328,12 @@ export function Controls({
   client?: TableClient;
   dimmed?: boolean;
 }) {
-  const { table, resting } = useSyncExternalStore(
+  const { table, resting, view } = useSyncExternalStore(
     stage.subscribe,
     () => stage.shown,
   );
   const width = useStageWidth();
+  const manualPile = usePileViewer(client);
   // The pile whose viewer is open, or the permanent `linked` whose exiled cards it shows.
   const [viewing, setViewing] = useState<
     { side: Side; zone: string } | { linked: number }
@@ -351,10 +349,12 @@ export function Controls({
           if (!table || !clicked?.object) return;
           if (clicked.dress.look !== "beneath") return;
           const host = heldBy(clicked.object, new Set(table.battlefield));
-          if (host !== undefined) setViewing({ linked: host });
+          if (host === undefined) return;
+          if (client?.viewers) client.viewers.open({ zone: "linked", host });
+          else setViewing({ linked: host });
         },
       }),
-    [stage],
+    [stage, client],
   );
   const piles = useMemo(
     () => (table ? [...zonePiles(table), ...libraries(table)] : []),
@@ -403,9 +403,12 @@ export function Controls({
       {/* Over the cards on them: a pile is opened, never pointed at card by card. */}
       {piles.map((pile) => {
         const open = (event: MouseEvent<HTMLButtonElement>) =>
-          pickPile(client, pile, event, () =>
-            setViewing({ side: pile.side, zone: pile.zone }),
-          );
+          pickPile(client, pile, event, () => {
+            const { side, zone } = pile;
+            if (client?.viewers && zone !== "library")
+              client.viewers.open({ side, zone });
+            else setViewing({ side, zone });
+          });
         return (
           (pile.cards.length > 0 ||
             (pile.zone === "library" &&
@@ -454,7 +457,7 @@ export function Controls({
         {children}
       </div>
       {notice && <TimingRefusal key={notice.id} source={notice.source} />}
-      {inspected && !dimmed && !viewed && (
+      {inspected && !dimmed && !viewed && !manualPile && (
         <InspectAt
           view={table}
           object={inspected.object}
@@ -469,15 +472,20 @@ export function Controls({
           }
         />
       )}
+      {manualPile && client && view && !dimmed && (
+        <TablePileViewer
+          key={manualPile.key}
+          client={client}
+          view={view}
+          pile={manualPile}
+          reveals={manualPile.zone === "revealed" ? revealedIn(resting) : []}
+        />
+      )}
       {viewed && !dimmed && (
         <ZoneViewer
           key={viewedKey}
-          client={client}
           pile={viewed}
           title={viewedTitle}
-          onPlay={
-            client && ((object, event) => pickViewerCard(client, object, event))
-          }
           onClose={() => setViewing(undefined)}
         />
       )}

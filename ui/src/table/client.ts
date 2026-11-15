@@ -20,6 +20,7 @@ import type {
 import { shakeRefusal } from "../stage/Refusal";
 import type { TableArrows } from "./arrows";
 import type { TableDrag } from "./drag";
+import type { TableViewers } from "./viewers";
 
 type ObjectKind =
   "permanent" | "their_permanent" | "hand_card" | "stack_entry" | "viewer_card";
@@ -100,6 +101,7 @@ export class TableClient {
   #cardClick?: (target: CardTarget, keys: PointerKeys) => boolean;
   view?: PlayerView;
   drag?: TableDrag;
+  viewers?: TableViewers;
   arrows?: TableArrows;
   #surface?: DomSurface;
   readonly #clicks = new Map<TableTarget["kind"], Click>();
@@ -192,6 +194,10 @@ export class TableClient {
     };
   };
 
+  closeTop() {
+    this.#open.at(-1)?.close();
+  }
+
   get overlayOpen() {
     return this.#open.length !== 0;
   }
@@ -249,7 +255,7 @@ export class TableClient {
     if (event.defaultPrevented || event.isComposing) return;
     if (event.key === "Escape" && this.overlayOpen) {
       event.preventDefault();
-      this.#open.at(-1)?.close();
+      this.closeTop();
       return;
     }
     for (const handler of this.#keys) {

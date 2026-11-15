@@ -52,7 +52,8 @@ import {
 } from "./PhoneChrome.tsx";
 import { Selection } from "../table/Selection";
 import type { TableClient } from "../table/client";
-import { counterControls, pickPile, pickViewerCard } from "../table/controls";
+import { TablePileViewer, usePileViewer } from "../table/TableViewer";
+import { counterControls, pickPile } from "../table/controls";
 import { type BoardStage, pageStage } from "./playback.ts";
 import { Entries, Shares, Ways } from "./Choose.tsx";
 import {
@@ -146,6 +147,7 @@ export function PhoneStageBoard({
   );
   const bands = layout && layout.bands;
   const piles = useMemo(() => (table ? phonePiles(table) : []), [table]);
+  const manualPile = usePileViewer(client);
   const [sheet, setSheet] = useState<
     "menu" | "log" | Pick<PhonePile, "side" | "zone">
   >();
@@ -153,14 +155,19 @@ export function PhoneStageBoard({
     const back = (event: Event) => {
       event.stopPropagation();
       if (sheet) setSheet(undefined);
+      else client?.closeTop();
     };
     document.addEventListener("beryl:android-back", back);
     return () => document.removeEventListener("beryl:android-back", back);
-  }, [sheet]);
+  }, [sheet, client]);
   // The slot of the card a touch inspects, or the face of one of the Revealed Cards.
   const [inspecting, setInspecting] = useState<number | ObjectView>();
   const revealed = useMemo(() => revealedIn(resting), [resting]);
-  const [revealedOpen, setRevealedOpen] = useRevealedOpen(stage, revealed);
+  const [revealedOpen, setRevealedOpen] = useRevealedOpen(
+    stage,
+    revealed,
+    client,
+  );
   // A touch on a card the player can read inspects it, and a second one puts it away: one
   // the open prompt had no use for, or on a card of the hand, which the prompt leaves to be
   // read.
@@ -348,9 +355,12 @@ export function PhoneStageBoard({
             bands={bands}
             piles={piles}
             onOpen={(pile, event) =>
-              pickPile(client, pile, event, () =>
-                setSheet({ side: pile.side, zone: pile.zone }),
-              )
+              pickPile(client, pile, event, () => {
+                const { side, zone } = pile;
+                if (client?.viewers && zone !== "library")
+                  client.viewers.open({ side, zone });
+                else setSheet({ side, zone });
+              })
             }
           />
           {revealed.length > 0 && viewport && (
@@ -401,14 +411,20 @@ export function PhoneStageBoard({
       {sheet === "log" && (
         <LogSheet log={log} onClose={() => setSheet(undefined)} />
       )}
+      {manualPile && client && (
+        <TablePileViewer
+          key={manualPile.key}
+          client={client}
+          view={view}
+          pile={manualPile}
+          reveals={revealed}
+          phone
+        />
+      )}
       {pile && (
         <PileSheet
           pile={pile}
-          client={client}
           onInspect={setInspecting}
-          onPlay={
-            client && ((object, event) => pickViewerCard(client, object, event))
-          }
           onClose={() => {
             setSheet(undefined);
             setInspecting(undefined);

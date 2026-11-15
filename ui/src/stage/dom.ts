@@ -415,7 +415,7 @@ export class DomSurface implements Surface {
             : e.pointerType === "touch"
               ? "touch"
               : "primary";
-        if (!pointer.press(target, at(e), kind, external?.origin)) return;
+        if (!pointer.press(target, at(e), kind, external)) return;
         // A card keeps capture as it did before. Bare felt captures on the board itself.
         const capture = external?.capture ?? node ?? board;
         capture.setPointerCapture(e.pointerId);

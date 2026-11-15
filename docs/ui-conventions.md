@@ -289,6 +289,10 @@ restore the old behavior.
   step down and a step up. A sign changes the current value where one exists.
   The button says what it will do, such as Draw 3. Return confirms and Escape
   cancels.
+- **Manual table pile viewers.** The existing pile browser can be searched,
+  grouped by card type, and sorted by name or mana value. The other player sees
+  how many cards are lifted from a library during a look. Closing a full library
+  search offers Shuffle and Don't shuffle, with Shuffle highlighted.
 - **Context menu.** The manual table's context menu names the card or pile and
   whose it is. It lists commands as plain labeled rows with key hints, check
   marks for active switches and at most one submenu level. A command that needs

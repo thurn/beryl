@@ -27,6 +27,7 @@ export interface MenuContext {
   printed?: ReadonlyMap<number, PrintedCard>;
   element?: HTMLElement;
   pointed?: Element | null;
+  viewer?: { revealed: boolean; wholeLibrary: boolean };
   key?: (id: string) => string | undefined;
 }
 
@@ -128,10 +129,14 @@ function conditions({
   view,
   cards,
   printed,
+  viewer,
   tokens = [],
 }: MenuContext) {
   const object = "name" in target ? target.object : undefined;
   const result = new Set<string>();
+  if (viewer) result.add("open_viewer");
+  if (viewer?.revealed) result.add("revealed_cards");
+  if (viewer?.wholeLibrary) result.add("whole_library");
   if (
     cards.length &&
     cards.every(({ object }) => {

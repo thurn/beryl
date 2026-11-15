@@ -154,8 +154,9 @@ export class TableDrag {
         control = node;
       }
     }
-    if (!control || name === undefined || !this.client.card(name, true)?.action)
-      return;
+    if (!control || name === undefined) return;
+    const target = this.client.card(name, true);
+    if (!target?.action) return;
     this.#source = { name, element: control, box: surface.bounds(control) };
     const { left, top, right } = this.#source.box;
     return {
@@ -165,6 +166,10 @@ export class TableDrag {
         element.matches(".viewer-scrim, .phone-scrim")
           ? element
           : control,
+      longPress: viewerCard
+        ? (at: Point) =>
+            this.client.secondary(target, surface.viewportPoint(at), viewerCard)
+        : undefined,
       origin: {
         x: left,
         y: top,
@@ -200,7 +205,7 @@ export class TableDrag {
   #hover(at: Point) {
     const card = this.#cards[0]?.object;
     if (!card) return;
-    const pose = this.stage.pose(card.slot);
+    const pose = this.stage.pointer.carriedPose();
     if (!pose) return;
     this.#show({
       preview: {

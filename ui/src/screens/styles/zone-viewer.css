@@ -146,3 +146,42 @@
   font: italic 16px var(--font-sans);
   color: var(--text-dim);
 }
+
+.table-viewer-controls,
+.table-viewer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.table-viewer-controls {
+  margin-bottom: 12px;
+}
+
+.table-viewer-controls label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.table-viewer-controls :is(input[type="search"], select) {
+  border: 1px solid var(--metal);
+  border-radius: 4px;
+  background: var(--felt, #211f1c);
+  color: var(--text);
+  padding: 6px 8px;
+  font: inherit;
+}
+
+.table-viewer-actions {
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.zone-viewer-group {
+  grid-column: 1 / -1;
+  margin: 0;
+  font: 700 16px var(--font-serif);
+  color: var(--gold);
+}

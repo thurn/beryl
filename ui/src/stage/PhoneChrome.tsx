@@ -22,7 +22,12 @@ import type {
 import { FullControlIcon, Settings, UndoButton } from "../game/Corner";
 import type { LogEntry } from "../game/log";
 import { GameLog } from "../game/Narration";
-import { Inspect, pileName, pileTitle } from "../game/Piles";
+import {
+  Inspect,
+  pileName,
+  pileTitle,
+  type ViewerOptions,
+} from "../game/Piles";
 import { StepBanner, useBannerUp } from "../game/StepBanner";
 import { combatBanner } from "../game/stepLabels";
 import { NoticeSlot, TurnAnnouncement } from "../game/TurnBanner";
@@ -144,11 +149,13 @@ function Sheet({
   className,
   onClose,
   children,
+  drop,
 }: {
   label: string;
   className: string;
   onClose(): void;
   children: ReactNode;
+  drop?: ViewerOptions["drop"];
 }) {
   return (
     <div
@@ -160,6 +167,8 @@ function Sheet({
         className={className}
         role="dialog"
         aria-label={label}
+        data-pile={drop?.zone}
+        data-side={drop?.side}
         onClick={(e) => e.stopPropagation()}
       >
         {children}
@@ -256,6 +265,7 @@ export function PileSheet({
   onPlay,
   onClose,
   client,
+  options,
 }: {
   /** A zone's pile, or cards that lie in no one zone, which `title` names. */
   pile: PhonePile | { cards: readonly ObjectView[] };
@@ -264,6 +274,7 @@ export function PileSheet({
   onPlay?(object: ObjectView, event: MouseEvent<HTMLElement>): void;
   onClose(): void;
   client?: TableClient;
+  options?: ViewerOptions;
 }) {
   const pressed = useRef<ObjectView>(undefined);
   const selected = useTableSelection(client);
@@ -277,39 +288,72 @@ export function PileSheet({
       data-selection-viewer={!!client || undefined}
       onClick={() => onInspect(undefined)}
     >
-      {[...cards].reverse().map((object) => (
-        <button
-          key={object.slot}
-          type="button"
-          className="phone-sheet-card"
-          data-viewer-slot={client ? object.slot : undefined}
-          aria-label={object.name ?? "A card"}
-          onPointerDown={
-            onPlay &&
-            (() => {
-              pressed.current = object;
-            })
-          }
-          onContextMenu={onPlay && ((event) => onPlay(object, event))}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (onPlay) {
-              if (e.detail === 0 || pressed.current === object)
-                onPlay(object, e);
-              pressed.current = undefined;
-              return;
+      {cards.map((object) => {
+        const interactive = options?.actionable?.(object) ?? true;
+        const play = interactive ? onPlay : undefined;
+        return (
+          <button
+            key={object.slot}
+            type="button"
+            className="phone-sheet-card"
+            data-viewer-slot={client && interactive ? object.slot : undefined}
+            aria-label={object.name ?? "A card"}
+            onPointerDown={
+              play &&
+              (() => {
+                pressed.current = object;
+              })
             }
-            // A library's card back has nothing to inspect.
-            onInspect(object.name === null ? undefined : object.slot);
-          }}
-        >
-          <CardScan object={object} width={LISTED} field={false} />
-          {selected.has(object.slot) && <SelectionMark frame={LISTED} />}
-        </button>
-      ))}
+            onContextMenu={play && ((event) => play(object, event))}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (play) {
+                if (e.detail === 0 || pressed.current === object)
+                  play(object, e);
+                pressed.current = undefined;
+                return;
+              }
+              // A library's card back has nothing to inspect.
+              onInspect(object.name === null ? undefined : object.slot);
+            }}
+          >
+            <CardScan object={object} width={LISTED} field={false} />
+            {selected.has(object.slot) && <SelectionMark frame={LISTED} />}
+          </button>
+        );
+      })}
     </div>
   );
   const exile = "zone" in pile ? pile.exile : undefined;
+  if (options)
+    return (
+      <Sheet
+        label={name}
+        className="phone-sheet"
+        onClose={onClose}
+        drop={options.drop}
+      >
+        <header className="phone-viewer-header">
+          <h2 className="phone-sheet-title">{name}</h2>
+          <Button variant="secondary" size="small" onClick={onClose}>
+            Close
+          </Button>
+        </header>
+        {options.controls}
+        <div className="phone-sheet-pile-list">
+          {options.sections.every(({ cards }) => !cards.length) && (
+            <p>Nothing here.</p>
+          )}
+          {options.sections.map(({ label, cards }) => (
+            <div key={label ?? ""}>
+              {label && <h3 className="phone-sheet-title">{label}</h3>}
+              {section(cards)}
+            </div>
+          ))}
+        </div>
+        {options.footer}
+      </Sheet>
+    );
   return (
     <Sheet label={name} className="phone-sheet" onClose={onClose}>
       <div className="phone-sheet-pile-list">
@@ -321,7 +365,7 @@ export function PileSheet({
             >
               {name}
             </h2>
-            {section(pile.cards)}
+            {section([...pile.cards].reverse())}
           </>
         )}
         {exile && exile.cards.length > 0 && (
@@ -332,7 +376,7 @@ export function PileSheet({
             >
               {pileName(exile)}
             </h2>
-            {section(exile.cards)}
+            {section([...exile.cards].reverse())}
           </>
         )}
       </div>

@@ -320,6 +320,7 @@ export function StageBoard({
           <RevealedCards
             stage={stage}
             space={DESKTOP_REVEALED}
+            client={client}
             onDismiss={(cards) => setCleared(new Set(cards))}
           />
         )}

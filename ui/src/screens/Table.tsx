@@ -31,6 +31,7 @@ import { TableClient } from "../table/client";
 import { listenTableKeys } from "../table/keyboard";
 import type { AppInfo } from "../generated/protocol";
 import { TableDrag } from "../table/drag";
+import { TableViewers } from "../table/viewers";
 import { registerSelection } from "../table/select";
 import { GameBoard } from "./Board";
 import { Button } from "../components/Controls";
@@ -60,6 +61,7 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
     const report = (failure: unknown) => setError(String(failure));
     client.drag = new TableDrag(client, board.stage, report);
     client.arrows = new TableArrows(client, board.stage, report);
+    client.viewers = new TableViewers(client, report);
     registerSelection(client);
     registerClicks(client, report);
     const leave = () => {
@@ -79,6 +81,7 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
       leave,
       quit,
     );
+    client.viewers.register(commands);
     return { board, client, commands, leave };
   });
   const { stage, feed } = board;

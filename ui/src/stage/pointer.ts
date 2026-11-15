@@ -29,6 +29,7 @@ export interface PointerKeys {
 interface Press {
   name: Name | undefined;
   origin?: DragSource["origin"];
+  longPress?: DragSource["longPress"];
   player: { player: Side } | undefined;
   kind: PressKind;
   start: Point;
@@ -55,6 +56,7 @@ export interface Drop {
 export interface DragSource {
   name: Name;
   capture: HTMLElement;
+  longPress?: (at: Point) => void;
   origin: Pick<Pose, "x" | "y" | "width" | "rotation" | "skew" | "opacity">;
 }
 
@@ -105,6 +107,8 @@ export interface Held {
   /** Where the press began, and where the pointer is. */
   start: Point;
   at: Point;
+  /** The starting pose of a card listed outside the stage card layer. */
+  external?: Pose;
 }
 
 /** What the stage does as a card is held (stage.ts): each is called after `held` changed. */
@@ -206,6 +210,16 @@ export class Pointer {
     return this.#held;
   }
 
+  /** Where the carried card lies, including a card with no stage node. */
+  carriedPose(): Pose | undefined {
+    const held = this.#held;
+    return (
+      held &&
+      (this.#holding.pose(held.name) ??
+        (held.external && heldPose(held.external, held.start, held.at)))
+    );
+  }
+
   /** The node the pointer is on, as last told. */
   get hovered(): Name | undefined {
     return this.#told;
@@ -287,7 +301,7 @@ export class Pointer {
     target: Target,
     at: Point,
     kind: PressKind = "primary",
-    origin?: DragSource["origin"],
+    source?: DragSource,
   ): boolean {
     const name =
       typeof target === "object"
@@ -317,7 +331,8 @@ export class Pointer {
       (this.handlesContextMenu || this.#client?.over || this.#client?.sweep);
     const press: Press = {
       name,
-      origin,
+      origin: source?.origin,
+      longPress: source?.longPress,
       player,
       kind,
       start: at,
@@ -331,10 +346,11 @@ export class Pointer {
         () => (press.touchReady = true),
         TOUCH_DRAG_DELAY,
       );
-    if (kind === "touch" && this.#client?.secondary) {
+    if (kind === "touch" && (press.longPress || this.#client?.secondary)) {
       press.secondaryTimer = setTimeout(() => {
         this.#endPress();
-        this.#client?.secondary?.(press.name ?? press.player, press.at);
+        if (press.longPress) press.longPress(press.at);
+        else this.#client?.secondary?.(press.name ?? press.player, press.at);
       }, LONG_PRESS_DELAY);
     }
     return true;
@@ -373,7 +389,7 @@ export class Pointer {
   #carry(press: Press, name: Name): boolean {
     const { start, at } = press;
     if (this.#held) {
-      this.#held = { name, start, at };
+      this.#held = { ...this.#held, at };
       this.#holding.moved(name);
       return true;
     }
@@ -382,8 +398,14 @@ export class Pointer {
       Math.hypot(at.x - start.x, at.y - start.y) < DRAG_THRESHOLD
     )
       return false;
-    if (!this.holdable(name) || !this.#holding.pose(name)) return false;
-    this.#held = { name, start, at };
+    if (!this.holdable(name)) return false;
+    const resting = this.#holding.pose(name);
+    if (!resting && !press.origin) return false;
+    const external =
+      !resting && press.origin
+        ? { ...press.origin, turn: 0, depth: 0, face: "front" as const }
+        : undefined;
+    this.#held = external ? { name, start, at, external } : { name, start, at };
     this.#settling = undefined;
     this.#tell();
     this.#holding.lifted(name, press.origin);
@@ -421,7 +443,7 @@ export class Pointer {
       return press.origin !== undefined && moved;
     }
     this.#held = { ...held, at };
-    const pose = this.#holding.pose(held.name) ?? undefined;
+    const pose = this.carriedPose();
     this.#held = undefined;
     this.#client?.lift?.(undefined);
     const taken =
@@ -465,7 +487,7 @@ export class Pointer {
    * stage says it is at rest; the pointer may be on something else by now, which is told
    * afresh. */
   #letGo(name: Name, pose: Pose | undefined, taken: boolean) {
-    this.#settling = name;
+    this.#settling = this.#holding.pose(name) ? name : undefined;
     this.#holding.dropped(name, pose, taken);
     this.#tell();
   }
@@ -484,7 +506,7 @@ export class Pointer {
       this.#client?.cancelSweep?.();
     const held = this.#held;
     if (!held) return;
-    const pose = this.#holding.pose(held.name) ?? undefined;
+    const pose = this.carriedPose();
     this.#held = undefined;
     this.#client?.lift?.(undefined);
     this.#letGo(held.name, pose, false);

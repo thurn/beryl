@@ -4,6 +4,7 @@
 // hover. A card the open decision offers something for (a target, a cast) is picked there.
 import { useOpenSound } from "../audio/SoundControls";
 import {
+  Fragment,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -26,7 +27,12 @@ import {
 import { Tip } from "../components/Controls";
 import { cardEntry, type CardFace } from "../cards";
 import { ManaSymbol } from "../components/Mana";
-import type { CardType, ObjectView, RefusalView } from "../generated/protocol";
+import type {
+  CardType,
+  ObjectView,
+  RefusalView,
+  Side,
+} from "../generated/protocol";
 import { BLANK, printedFace, tone, useFace, useObjectArt } from "./faces";
 import { STAGE } from "./perspective";
 import { type Box } from "./placement";
@@ -107,6 +113,16 @@ const VIEWER_COLUMNS = 5;
 /** Matches the chrome transition in screens.css. */
 const VIEWER_FADE_MS = 200;
 
+/** The manual table can filter or group its grid and act on the displayed zone. */
+export interface ViewerOptions {
+  sections: { label?: string; cards: readonly ObjectView[] }[];
+  controls: ReactNode;
+  footer?: ReactNode;
+  drop?: { side: Side; zone: string };
+  topFirst: boolean;
+  actionable?(object: ObjectView): boolean;
+}
+
 /** Every card in a pile, the top one first, over the dimmed table: hovering one shows it
  * whole. Escape, the close button or a click beside it closes it. */
 export function ZoneViewer({
@@ -115,6 +131,7 @@ export function ZoneViewer({
   onPlay,
   onClose,
   client,
+  options,
 }: {
   /** A zone's pile, or cards that lie in no one zone, which `title` names. */
   pile: ZonePile | { cards: ObjectView[] };
@@ -124,21 +141,35 @@ export function ZoneViewer({
   onPlay?(object: ObjectView, event: MouseEvent<HTMLElement>): void;
   onClose(): void;
   client?: TableClient;
+  options?: ViewerOptions;
 }) {
   useOpenSound();
   const selected = useTableSelection(client);
-  const [inspector, inspect] = useHoverInspect();
   const cards = [...pile.cards].reverse();
-  const columns = Math.min(VIEWER_COLUMNS, Math.max(1, cards.length));
+  const sections = options?.sections ?? [{ cards, label: undefined }];
+  const count = sections.reduce(
+    (sum, section) => sum + section.cards.length,
+    0,
+  );
+  const columns = Math.min(
+    VIEWER_COLUMNS,
+    Math.max(1, ...sections.map(({ cards }) => cards.length)),
+  );
   const zone = "zone" in pile ? pile : undefined;
   const name = title ?? (zone ? pileTitle(zone) : "");
-  const [list, more, onScroll] = useScrollEdges();
+  const [inspector, inspect] = useHoverInspect(
+    undefined,
+    options &&
+      ((slot) =>
+        sections.some(({ cards }) => cards.some((card) => card.slot === slot))),
+  );
+  const [list, more, onScroll] = useScrollEdges(count > 0);
   const panel = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   const [closing, setClosing] = useState(false);
   const closingTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const close = () => {
-    if (reduce) return onClose();
+    if (reduce || options) return onClose();
     if (closingTimer.current) return;
     setClosing(true);
     closingTimer.current = setTimeout(onClose, VIEWER_FADE_MS);
@@ -175,14 +206,16 @@ export function ZoneViewer({
         role="dialog"
         aria-label={name}
         data-selection-viewer={!!client || undefined}
-        data-pile={zone?.zone}
-        data-side={zone?.side}
+        data-pile={(options?.drop ?? zone)?.zone}
+        data-side={(options?.drop ?? zone)?.side}
       >
         <header className="zone-viewer-header">
           <h2 className="zone-viewer-title">{name}</h2>
           <span className="zone-viewer-count">
-            {viewerCount(cards.length, zone?.zone)}
-            {cards.length > 1 && title === undefined && " · top first"}
+            {viewerCount(count, options?.drop?.zone ?? zone?.zone)}
+            {count > 1 &&
+              (options?.topFirst ?? title === undefined) &&
+              " · top first"}
           </span>
           <button
             type="button"
@@ -195,7 +228,8 @@ export function ZoneViewer({
             </svg>
           </button>
         </header>
-        {cards.length === 0 ? (
+        {options?.controls}
+        {count === 0 ? (
           <p className="zone-viewer-empty">Nothing here.</p>
         ) : (
           <div
@@ -207,18 +241,25 @@ export function ZoneViewer({
               gridTemplateColumns: `repeat(${columns}, ${VIEWER_CARD}px)`,
             }}
           >
-            {cards.map((o) => (
-              <ViewerCard
-                key={o.slot}
-                object={o}
-                closing={closing}
-                selected={selected.has(o.slot)}
-                hover={inspect(o)}
-                onPlay={onPlay}
-              />
+            {sections.map(({ label, cards }) => (
+              <Fragment key={label ?? ""}>
+                {label && <h3 className="zone-viewer-group">{label}</h3>}
+                {cards.map((object) => (
+                  <ViewerCard
+                    key={object.slot}
+                    object={object}
+                    closing={closing}
+                    selected={selected.has(object.slot)}
+                    hover={inspect(object)}
+                    interactive={options?.actionable?.(object) ?? true}
+                    onPlay={onPlay}
+                  />
+                ))}
+              </Fragment>
             ))}
           </div>
         )}
+        {options?.footer}
       </div>
       {!closing && inspector}
     </>
@@ -237,7 +278,7 @@ const beyond = (e: HTMLElement): Beyond => {
 /** A scrolling list's ref, which of its ends have more beyond them (for a fade there, so a
  * list that overflows says so though the system hides its scroll bar), and its scroll
  * handler. */
-function useScrollEdges() {
+function useScrollEdges(hasCards: boolean) {
   const ref = useRef<HTMLDivElement>(null);
   const [more, setMore] = useState<Beyond>("none");
   const measure = () => {
@@ -250,7 +291,7 @@ function useScrollEdges() {
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [hasCards]);
   return [ref, more, measure] as const;
 }
 
@@ -278,41 +319,44 @@ function ViewerCard({
   closing,
   selected,
   hover,
+  interactive,
   onPlay,
 }: {
   object: ObjectView;
   closing: boolean;
   selected: boolean;
   hover: HoverHandlers;
+  interactive: boolean;
   onPlay?(object: ObjectView, event: MouseEvent<HTMLElement>): void;
 }) {
   const face = useFace(object);
   const pressed = useRef<ObjectView>(undefined);
   const ref = useRef<HTMLDivElement>(null);
-  useOwned(ref, closing ? undefined : object.slot);
+  useOwned(ref, closing || !interactive ? undefined : object.slot);
+  const play = interactive ? onPlay : undefined;
   return (
     <div
       ref={ref}
       className="zone-viewer-card"
-      data-viewer-slot={object.slot}
+      data-viewer-slot={interactive ? object.slot : undefined}
       data-card={object.name ?? undefined}
       {...hover}
       onPointerDown={
-        onPlay &&
+        play &&
         (() => {
           pressed.current = object;
         })
       }
       onContextMenu={
-        onPlay &&
+        play &&
         ((event) => {
-          if (!closing) onPlay(object, event);
+          if (!closing) play(object, event);
         })
       }
       onClick={
-        onPlay &&
+        play &&
         ((event) => {
-          if (!closing && pressed.current === object) onPlay(object, event);
+          if (!closing && pressed.current === object) play(object, event);
           pressed.current = undefined;
         })
       }
@@ -340,6 +384,7 @@ export interface HoverHandlers {
  * know is not inspected. */
 export function useHoverInspect(
   place?: InspectPlace,
+  visible?: (slot: number) => boolean,
 ): [ReactNode, (object: ObjectView | undefined) => HoverHandlers] {
   const [shown, setShown] = useState<{ object: ObjectView; left: number }>();
   const handlers = (object: ObjectView | undefined): HoverHandlers => ({
@@ -357,7 +402,7 @@ export function useHoverInspect(
       setShown((s) => (s?.object.slot === object?.slot ? undefined : s)),
   });
   return [
-    shown && (
+    shown && (visible?.(shown.object.slot) ?? true) && (
       <Inspect object={shown.object} place={place ?? { left: shown.left }} />
     ),
     handlers,

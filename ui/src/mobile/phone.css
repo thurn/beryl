@@ -647,3 +647,23 @@ body.phone .phone-opening {
 .phone-board[data-manual-table] .mana-pool-entry b {
   font-size: 9px;
 }
+
+.phone-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.phone-sheet .table-viewer-controls {
+  gap: 8px;
+}
+
+.phone-sheet .table-viewer-controls :is(input[type="search"], select) {
+  max-width: 100%;
+  min-height: 40px;
+}
+
+.phone-sheet .table-viewer-controls label {
+  min-height: 40px;
+}

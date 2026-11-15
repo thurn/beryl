@@ -139,7 +139,8 @@ export class ScriptStage {
     this.pointer = new Pointer({
       pose: (name) => this.pose(name),
       lifted: (name, origin) => {
-        const entry = this.#entries.get(name)!;
+        const entry = this.#entries.get(name);
+        if (!entry) return;
         const from = poseOn(entry, this.clock.now);
         this.#lifted = { name, from: origin ? { ...from, ...origin } : from };
         entry.track = undefined;

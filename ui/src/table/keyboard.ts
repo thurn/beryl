@@ -62,7 +62,9 @@ export function listenTableKeys(commands: TableCommands) {
       document.documentElement.classList.contains("page-frozen")
     )
       return;
+    const id = resolve(event, "table", bindings);
     if (
+      id !== "viewer.hide_revealed" &&
       event.target instanceof Element &&
       event.target.closest("input, textarea, select, [contenteditable], dialog")
     )
@@ -72,7 +74,6 @@ export function listenTableKeys(commands: TableCommands) {
       (client.overlayOpen || client.selection.size || client.sweepSnapshot())
     )
       return;
-    const id = resolve(event, "table", bindings);
     if (id || claims(event, bindings.platform)) event.preventDefault();
     if (id && !event.repeat && !commands.overlayOpen)
       void commands

@@ -137,11 +137,19 @@ export class TableCommands {
         return object && found ? [[object.slot, found] as const] : [];
       }),
     );
+    const viewer =
+      target.kind === "viewer_card"
+        ? this.client.viewers?.snapshot()
+        : undefined;
     return {
       target,
       view,
       cards,
       printed,
+      viewer: viewer && {
+        revealed: viewer.zone === "revealed",
+        wholeLibrary: viewer.zone === "library" && viewer.portion === "all",
+      },
       pointed: this.client.surface?.pointed(),
       key: (id) => describe(this.bindings.get(id), this.bindings.platform),
     };
@@ -207,8 +215,6 @@ export class TableCommands {
       [
         "open_command_list",
         "view_related_cards",
-        "view_graveyard",
-        "view_exile",
         "select_all",
         "select_row",
         "select_column",
@@ -257,6 +263,10 @@ export class TableCommands {
       this.openList(pointed);
       return;
     }
+    if (id === "viewer.hide_revealed") {
+      this.client.viewers?.hideRevealed();
+      return;
+    }
     const command = registry.find((command) => command.id === id);
     if (!command) return;
     const target =
@@ -286,7 +296,11 @@ export class TableCommands {
       if (context.view !== client.view) return;
       const actions = commandActions(entry, context, values);
       const [first] = actions;
-      if (first)
+      if (first && "look" in first && client.viewers) {
+        void client.viewers
+          .look(first, context.view, context.element)
+          .catch(this.report);
+      } else if (first)
         void client
           .send(
             actions.length === 1 ? first : { batch: { actions } },
@@ -301,20 +315,6 @@ export class TableCommands {
     }
     if (command.client === "view_related_cards" && token) {
       this.#set({ kind: "related", name: token.name, context });
-      return;
-    }
-    if (
-      command.client === "view_graveyard" ||
-      command.client === "view_exile"
-    ) {
-      if (target.kind === "graveyard" || target.kind === "exile")
-        if (target.open) target.open();
-        else
-          document
-            .querySelector<HTMLButtonElement>(
-              `button[data-pile="${target.kind}"][data-side="${target.side}"]`,
-            )
-            ?.click();
       return;
     }
     switch (command.client) {
