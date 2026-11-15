@@ -596,6 +596,7 @@ const MARK_NAMES: Record<MarkIcon, string> = {
   time: "Time",
   story: "Story",
   chorus: "Chorus",
+  ice: "Ice",
   damage: "Damage",
   sick: "Summoning sick",
   token: "Token",

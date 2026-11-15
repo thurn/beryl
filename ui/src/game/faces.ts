@@ -106,6 +106,7 @@ const BADGED: ReadonlySet<string> = new Set<CounterMark>([
   "time",
   "story",
   "chorus",
+  "ice",
 ]);
 
 const isBadged = (c: CounterView): c is { kind: CounterMark; count: number } =>

@@ -47,7 +47,8 @@ export interface CardFace {
 export type StatTone = "up" | "down";
 
 /** A kind of counter a permanent wears as a badge; loyalty is its plaque's. */
-export type CounterMark = "plusOne" | "minusOne" | "time" | "story" | "chorus";
+export type CounterMark =
+  "plusOne" | "minusOne" | "time" | "story" | "chorus" | "ice";
 
 type NamedMark = NamedCounter & { kind?: Counter };
 
@@ -270,6 +271,7 @@ const MARK_ICONS = {
     "M0.8 3 C3.2 1.8 5.8 2.1 7.4 3.4 V14.2 C5.8 13 3.2 12.8 0.8 13.8 Z M15.2 3 C12.8 1.8 10.2 2.1 8.6 3.4 V14.2 C10.2 13 12.8 12.8 15.2 13.8 Z",
   chorus:
     "M5.6 2.6 L14.4 0.8 V11.6 A2.6 2.1 0 1 1 12.6 9.6 V4.4 L7.4 5.5 V13.2 A2.6 2.1 0 1 1 5.6 11.2 Z",
+  ice: "M8.9 0.8 L7.1 0.8 L7.1 15.2 L8.9 15.2 Z M14.7 5.2 L13.8 3.6 L1.3 10.8 L2.2 12.4 Z M13.8 12.4 L14.7 10.8 L2.2 3.6 L1.3 5.2 Z",
   loyalty:
     "M8 0.8 L14.4 2.9 V8 C14.4 11.6 11.4 14.2 8 15.3 C4.6 14.2 1.6 11.6 1.6 8 V2.9 Z",
   damage:
