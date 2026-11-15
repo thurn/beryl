@@ -1004,10 +1004,14 @@ camera, how game objects are placed in it and how verbs move them.
   of a second (see [Effects](#effects)).
 - **The camera is fitted to Arena.** Its pitch and field of view are solved from
   the corners of cards measured in Arena's recordings, so the table's
-  foreshortening matches the reference. The fitted values are data: the desktop
-  layout's camera, rows, piles, stack and hands are `layout.desktop` in
-  `data/beryl3d/space.json`, and the card's size is `card`. A build script turns
-  the file into constants by one rule that names no key.
+  foreshortening matches the reference. Arena's battlefield cards are cropped
+  art tiles of unknown proportions, so `just b3d camera-fit` measures the art
+  frame printed on each tile and gives each its own aspect ratio: the sides of
+  untapped cards fix the pitch, and the slight turn of tapped cards fixes the
+  field of view. The fitted values are data: the desktop layout's camera, rows,
+  piles, stack and hands are `layout.desktop` in `data/beryl3d/space.json`, and
+  the card's size is `card`. A build script turns the file into constants by one
+  rule that names no key.
 
 A window of another shape does not turn the camera. It moves the camera along
 its own line of sight, nearer or farther:

@@ -1,0 +1,102 @@
+{
+  "cards": [
+    {
+      "recording": "0VsYGs88NXA",
+      "time": "37:30.0",
+      "name": "Celestial Colonnade",
+      "tapped": false,
+      "corners": [[243.2, 244.9], [359.2, 244.9], [371.3, 163.4], [254.5, 161.7]]
+    },
+    {
+      "recording": "0VsYGs88NXA",
+      "time": "37:30.0",
+      "name": "Plains",
+      "tapped": false,
+      "corners": [[393.7, 243.7], [508.5, 245.0], [518.1, 162.1], [401.5, 162.0]]
+    },
+    {
+      "recording": "0VsYGs88NXA",
+      "time": "37:30.0",
+      "name": "Tundra",
+      "tapped": false,
+      "corners": [[543.4, 245.3], [660.1, 243.5], [666.0, 163.4], [549.0, 161.6]]
+    },
+    {
+      "recording": "0VsYGs88NXA",
+      "time": "37:30.0",
+      "name": "Island",
+      "tapped": false,
+      "corners": [[692.2, 244.0], [809.4, 243.7], [814.0, 163.0], [696.6, 163.0]]
+    },
+    {
+      "recording": "0VsYGs88NXA",
+      "time": "37:30.0",
+      "name": "Lavaspur Boots",
+      "tapped": false,
+      "corners": [[1335.5, 245.0], [1450.9, 245.0], [1443.6, 162.0], [1325.7, 162.1]]
+    },
+    {
+      "recording": "0VsYGs88NXA",
+      "time": "37:30.0",
+      "name": "Island",
+      "tapped": false,
+      "corners": [[408.4, 822.5], [533.5, 821.9], [543.2, 721.9], [418.8, 724.3]]
+    },
+    {
+      "recording": "0VsYGs88NXA",
+      "time": "37:30.0",
+      "name": "Plains",
+      "tapped": true,
+      "corners": [[101.1, 811.8], [222.6, 826.5], [250.7, 731.6], [130.8, 714.8]]
+    },
+    {
+      "recording": "0VsYGs88NXA",
+      "time": "37:30.0",
+      "name": "Island",
+      "tapped": true,
+      "corners": [[252.0, 814.2], [374.5, 829.5], [400.5, 730.9], [279.1, 717.0]]
+    },
+    {
+      "recording": "0VsYGs88NXA",
+      "time": "37:30.0",
+      "name": "Mother of Runes",
+      "tapped": false,
+      "corners": [[575.8, 652.3], [743.9, 651.2], [748.9, 521.0], [586.1, 520.9]]
+    },
+    {
+      "recording": "0VsYGs88NXA",
+      "time": "37:30.0",
+      "name": "Esper Sentinel",
+      "tapped": true,
+      "corners": [[766.5, 638.3], [936.5, 661.2], [955.0, 533.3], [790.8, 511.6]]
+    },
+    {
+      "recording": "iRr-GeSF0lI",
+      "time": "27:44.0",
+      "name": "Thundertrap Trainer",
+      "tapped": false,
+      "corners": [[238.5, 650.1], [410.1, 645.8], [423.2, 524.0], [256.5, 524.0]]
+    },
+    {
+      "recording": "iRr-GeSF0lI",
+      "time": "27:44.0",
+      "name": "Myr Battlesphere",
+      "tapped": false,
+      "corners": [[639.2, 650.0], [810.7, 650.1], [808.5, 522.0], [649.5, 522.0]]
+    },
+    {
+      "recording": "iRr-GeSF0lI",
+      "time": "27:44.0",
+      "name": "Golos, Tireless Pilgrim",
+      "tapped": false,
+      "corners": [[993.9, 401.1], [1157.1, 401.1], [1152.5, 283.8], [995.1, 283.3]]
+    },
+    {
+      "recording": "iRr-GeSF0lI",
+      "time": "27:44.0",
+      "name": "Pinnacle Emissary",
+      "tapped": false,
+      "corners": [[1184.3, 400.9], [1346.6, 399.5], [1337.9, 287.0], [1179.4, 287.0]]
+    }
+  ]
+}

@@ -112,6 +112,12 @@ project, and selects the main lanes.
   `data::space::verbs::fly::ARC`. A spatial value is added by editing the file
   alone; `table::DESKTOP` is built from the constants.
 
+- `data/beryl3d/camera-fit.json`: cards measured in Arena's recordings, each a
+  rectangle on a card's face (the art frame) with its four corners in pixels of
+  a 1920 by 1080 frame. `just b3d camera-fit` solves the desktop camera's pitch
+  and field of view from them, and `layout.desktop.camera` in `space.json` holds
+  the result, which a tools test keeps equal to the fit.
+
 - `data/beryl3d/gates.json`: the audit, frame, tier, material and test gates.
   Each number under `audit` becomes an `f32` constant in `beryl_scene`'s
   `data::audit`, named for its key in upper case:

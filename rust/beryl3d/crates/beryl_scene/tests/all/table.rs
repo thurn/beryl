@@ -233,8 +233,31 @@ fn a_card_at_the_tables_centre_projects_where_a_hand_calculation_says() {
 }
 
 #[test]
+fn the_desktop_camera_is_the_one_fitted_to_arena() {
+    use beryl_scene::data::space::layout::desktop::camera;
+    assert_eq!(
+        DESKTOP.camera.pitch_degrees.to_bits(),
+        camera::PITCH_DEGREES.to_bits()
+    );
+    assert_eq!(
+        DESKTOP.camera.fov_degrees.to_bits(),
+        camera::FOV_DEGREES.to_bits()
+    );
+}
+
+/// The desktop windows every recording is checked in (`beryl_inspect::pages::DESKTOP_WINDOWS`,
+/// which this crate cannot depend on).
+const DESKTOP_WINDOWS: [(f32, f32); 4] = [
+    (1440.0, 900.0),
+    (1600.0, 900.0),
+    (1920.0, 1080.0),
+    (2560.0, 1080.0),
+];
+
+#[test]
 fn resizing_keeps_the_required_rectangle_in_view() {
-    for (width, height) in [(1440.0, 900.0), (2560.0, 1080.0)] {
+    for (width, height) in DESKTOP_WINDOWS {
+        assert!(Camera::fit(DESKTOP.camera, window(width, height)).required_fits());
         let camera = Camera::fit(DESKTOP.camera, window(width, height));
         let [low, high] = DESKTOP.camera.required;
         for corner in [

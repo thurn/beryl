@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .. import system, warm
-from . import app, gate, lane, paths, phone, sweep, vm
+from . import app, camera, gate, lane, paths, phone, sweep, vm
 
 # Exit code for a command line `just b3d` cannot run, as argparse uses.
 USAGE = 2
@@ -448,6 +448,19 @@ COMMANDS: tuple[Command, ...] = (
         ),
         phone.checked(phone.run_ios_device),
         phone.ios_device_arguments,
+    ),
+    Command(
+        "camera-fit",
+        "solves the desktop camera's pitch and field of view from cards measured in Arena",
+        (
+            ("just b3d camera-fit", "fit data/beryl3d/camera-fit.json"),
+            (
+                "just b3d camera-fit --file cards.json",
+                "fit another file of measured cards",
+            ),
+        ),
+        camera.run_camera_fit,
+        camera.camera_fit_arguments,
     ),
     Command(
         "vm",

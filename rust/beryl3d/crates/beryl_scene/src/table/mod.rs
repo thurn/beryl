@@ -141,9 +141,9 @@ macro_rules! hand_data {
     };
 }
 
-/// The desktop layout, built from `layout.desktop` in `space.json`. The camera is a first
-/// estimate fitted by eye to Arena's recordings: the far edge of Arena's table is about 0.85
-/// times as wide on screen as the near edge.
+/// The desktop layout, built from `layout.desktop` in `space.json`. The camera's pitch and
+/// field of view are solved by `just b3d camera-fit` from the cards measured in Arena's
+/// recordings, `data/beryl3d/camera-fit.json`.
 pub const DESKTOP: Layout = Layout {
     camera: CameraData {
         pitch_degrees: desktop::camera::PITCH_DEGREES,

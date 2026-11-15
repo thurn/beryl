@@ -37,8 +37,8 @@
   "layout": {
     "desktop": {
       "camera": {
-        "pitch_degrees": 24,
-        "fov_degrees": 30,
+        "pitch_degrees": 27.0,
+        "fov_degrees": 24.29,
         "target": [
           0,
           -30,
