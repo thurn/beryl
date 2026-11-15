@@ -82,3 +82,30 @@ def test_only_the_recorder_file_names_the_recorder(tmp_path: Path) -> None:
     )
     (found,) = purity.scene_purity(tmp_path)
     assert "beryl_inspect depends on beryl_cli" in found
+
+
+def test_the_scene_names_no_clock_however_it_is_imported(tmp_path: Path) -> None:
+    scene = f"{CRATES}/beryl_scene/src/lib.rs"
+    write(
+        tmp_path,
+        scene,
+        "use std::collections::{BTreeMap, VecDeque};\nuse std::{\n    fmt,\n"
+        "    time::Duration,\n};\n",
+    )
+    (found,) = purity.scene_purity(tmp_path)
+    assert found.startswith(f"{scene}:4: beryl_scene names std::time")
+    write(tmp_path, scene, "use std::collections::*;\ntype Seen = HashSet<u32>;\n")
+    (found,) = purity.scene_purity(tmp_path)
+    assert found.startswith(f"{scene}:2: beryl_scene names HashSet")
+    write(tmp_path, scene, "static COUNT: AtomicU32 = AtomicU32::new(0);\n")
+    (found,) = purity.scene_purity(tmp_path)
+    assert "names AtomicU32" in found
+
+
+def test_the_scene_depends_only_on_listed_crates(tmp_path: Path) -> None:
+    manifest = f"{CRATES}/beryl_scene/Cargo.toml"
+    write(tmp_path, manifest, '[dependencies]\nglam = "0.34"\n')
+    assert purity.scene_purity(tmp_path) == []
+    write(tmp_path, manifest, '[dependencies]\nglam = "0.34"\nrand = "0.9"\n')
+    (found,) = purity.scene_purity(tmp_path)
+    assert found.startswith(f"{manifest}: beryl_scene depends on rand")

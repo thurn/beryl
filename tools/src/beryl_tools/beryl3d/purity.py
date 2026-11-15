@@ -4,6 +4,7 @@ when there is any."""
 
 from __future__ import annotations
 
+import bisect
 import json
 import re
 import sys
@@ -16,18 +17,46 @@ SCENE = "beryl_scene"
 RENDER = "beryl_render"
 INSPECT = "beryl_inspect"
 # What beryl_scene's source may not name: it is a pure function of its inputs, so no clock,
-# thread, file, socket, lock or iteration-order-dependent map, and no GPU or window crate.
-SCENE_BANNED: tuple[str, ...] = (
-    "std::time",
-    "std::thread",
-    "std::fs",
-    "std::net",
-    "std::sync::Mutex",
-    "std::sync::RwLock",
-    "std::collections::HashMap",
-    "std::collections::HashSet",
+# thread, file, socket, lock, global state or iteration-order-dependent map, and no GPU or
+# window crate (docs/beryl-3d.md, 'Determinism'). The modules of `std` it may not reach, however
+# the path is written (`std::time::Instant`, `use std::{fs, time}` or a group over several
+# lines).
+SCENE_MODULES: tuple[str, ...] = (
+    "time",
+    "thread",
+    "fs",
+    "net",
+    "env",
+    "process",
+    "io",
+    "os",
+)
+# The names it may not use at all, however they were imported: maps seeded per process, clocks,
+# locks and global state.
+SCENE_NAMES: tuple[str, ...] = (
+    "HashMap",
+    "HashSet",
+    "RandomState",
+    "Instant",
+    "SystemTime",
+    "Mutex",
+    "RwLock",
+    "Condvar",
+    "OnceLock",
+    "LazyLock",
+    "thread_local",
     "wgpu",
     "winit",
+)
+# `AtomicBool`, `AtomicU32` and the rest: state shared between threads.
+ATOMIC: re.Pattern[str] = re.compile(r"(?<![\w:])Atomic[A-Z]\w*")
+# A path into `std`, or a braced group of them: `std::time`, `std::{fs, collections::X}`.
+STD_PATH: re.Pattern[str] = re.compile(r"\bstd\s*::\s*(\{|[a-z_]+)")
+# The crates beryl_scene may depend on. Each was checked to read no clock, start no thread and
+# touch no file inside `Client::handle` and `Client::frame`; a new one is added here once it
+# has been checked the same way, and the frame gate runs it twice to hold its counts equal.
+SCENE_DEPENDENCIES: frozenset[str] = frozenset(
+    {"beryl_protocol", "bytemuck", "glam", "taffy", "parley", "serde", "serde_json"}
 )
 # What beryl_inspect's manifest may not name: the inspector reads a scene with no GPU.
 INSPECT_BANNED: tuple[str, ...] = (
@@ -69,21 +98,21 @@ def scene_purity(root: Path) -> list[str]:
     base = crates(root)
     if not base.is_dir():
         return found
-    banned = [(name, name_pattern(name)) for name in SCENE_BANNED]
     for crate in sorted(p for p in base.iterdir() if p.is_dir()):
         found.extend(recorder_use(root, crate))
+        if crate.name == SCENE:
+            found.extend(scene_dependencies(root, crate))
         for path in sorted((crate / "src").rglob("*.rs")):
             rel = path.relative_to(root).as_posix()
+            if crate.name == SCENE:
+                found.extend(
+                    f"{rel}:{number}: beryl_scene names {name}; the scene is pure data, with "
+                    "no clock, thread, file, socket, lock, global state, unordered map or GPU"
+                    for number, name in scene_names(path)
+                )
+                continue
             for number, line in code_lines(path):
-                if crate.name == SCENE:
-                    for name, pattern in banned:
-                        if pattern.search(line):
-                            found.append(
-                                f"{rel}:{number}: beryl_scene names {name}; the scene is "
-                                "pure data, with no clock, thread, file, socket, lock, "
-                                "unordered map or GPU"
-                            )
-                elif crate.name != RENDER and GPU_CALL.search(line):
+                if crate.name != RENDER and GPU_CALL.search(line):
                     found.append(
                         f"{rel}:{number}: {crate.name} calls wgpu; only beryl_render "
                         "talks to the GPU"
@@ -102,6 +131,69 @@ def scene_purity(root: Path) -> list[str]:
                     f"{name}; the inspector reads a scene with no GPU"
                 )
     return found
+
+
+def scene_names(path: Path) -> list[tuple[int, str]]:
+    """Each line of `path` that names something `SCENE_MODULES` or `SCENE_NAMES` bans, with
+    what it names. A braced `use std::{...}` group is followed across lines."""
+    lines = code_lines(path)
+    numbers: list[int] = [number for number, _ in lines]
+    text = "\n".join(line for _, line in lines)
+    starts: list[int] = [0]
+    for line in text.split("\n")[:-1]:
+        starts.append(starts[-1] + len(line) + 1)
+
+    def number_at(offset: int) -> int:
+        return numbers[bisect.bisect_right(starts, offset) - 1]
+
+    found: list[tuple[int, str]] = []
+    for match in STD_PATH.finditer(text):
+        head = match.group(1)
+        if head != "{":
+            if head in SCENE_MODULES:
+                found.append((number_at(match.start()), f"std::{head}"))
+            continue
+        depth = 0
+        end = match.end(1) - 1
+        for end in range(match.end(1) - 1, len(text)):
+            depth += {"{": 1, "}": -1}.get(text[end], 0)
+            if depth == 0:
+                break
+        group = text[match.end(1) : end]
+        # The top-level items of the group: what comes first, and after each comma at depth 0.
+        depth = 0
+        item_start = 0
+        for index, char in enumerate(group + ","):
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+            elif char == "," and depth == 0:
+                item = re.match(r"\s*([a-z_]+)", group[item_start:index])
+                if item and item.group(1) in SCENE_MODULES:
+                    offset = match.end(1) + item_start + item.start(1)
+                    found.append((number_at(offset), f"std::{item.group(1)}"))
+                item_start = index + 1
+    names = [(name, name_pattern(name)) for name in SCENE_NAMES]
+    for number, line in lines:
+        found.extend((number, name) for name, pattern in names if pattern.search(line))
+        found.extend((number, atomic) for atomic in ATOMIC.findall(line))
+    return sorted(set(found))
+
+
+def scene_dependencies(root: Path, crate: Path) -> list[str]:
+    """A line for each crate beryl_scene's manifest depends on outside `SCENE_DEPENDENCIES`."""
+    manifest = crate / "Cargo.toml"
+    if not manifest.is_file():
+        return []
+    named = tomllib.loads(manifest.read_text())
+    return [
+        f"{manifest.relative_to(root).as_posix()}: beryl_scene depends on {name}, which "
+        "SCENE_DEPENDENCIES in tools/src/beryl_tools/beryl3d/purity.py does not list; add it "
+        "there once it is known to read no clock, start no thread and touch no file"
+        for name in sorted(named.get("dependencies", {}))
+        if name not in SCENE_DEPENDENCIES
+    ]
 
 
 def recorder_use(root: Path, crate: Path) -> list[str]:

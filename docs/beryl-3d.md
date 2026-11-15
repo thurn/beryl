@@ -2751,7 +2751,12 @@ What keeps the two apart:
 - **Tools of its own.** Everything behind `just b3d` is one Python package,
   which the main tools import in one place. Adding a check to Beryl 3D edits
   that package and nothing else, so no other lane's record of its own tools
-  changes and no other lane runs again.
+  changes and slow CI runs no other lane again. The package is the one exception
+  to the paths above: it is Python under `tools/`, so a change to it also runs
+  the main `python` lane (Black, Pyre and the tools' tests), and its own tests,
+  `tools/tests/test_beryl3d*.py`, run in that lane for every change to `tools/`.
+  They take about 2 seconds, so they stay there rather than in a Python lane of
+  Beryl 3D's own.
 - **Data of its own.** Limits, thresholds, spatial values and allowlists are in
   `data/beryl3d/`. Beryl 3D adds nothing to `data/ui-conventions.json`, which
   the web interface's checks watch, except an entry under "Not seen in Arena"
