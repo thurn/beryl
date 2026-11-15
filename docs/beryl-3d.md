@@ -64,7 +64,8 @@ Some parts of Beryl, and a few terms, are used throughout and are defined here
 once.
 
 - **The session** is the Rust code that runs a game and tells a client what to
-  show (`beryl_session`). It does not change in this design.
+  show (`beryl_session`). This design changes it in one way: it sends the timing
+  of each animation step (see [Timing a script](#timing-a-script)).
 - **A view** is everything one player may see at one moment. **A seat** is one
   of the two players' places at the table; every view is from one seat.
 - **A script** is the list of animation steps that turns the previous view into
@@ -105,11 +106,13 @@ once.
   `beryl-bench` Linux virtual machine, and timing under load. The performance
   gates here use the same tools.
 - [Checks](checks.md): the fast check that runs before every push, the slow
-  check that runs after, and their parts, into which the new checks fit.
+  check that runs after, and their parts. Beryl 3D's checks are a lane and a
+  sweep of their own (see [Checks and isolation](#checks-and-isolation)).
 - [Manual multiplayer](manual-multiplayer.md): a rules-free table for two
   people. Its screens are part of what Beryl 3D must reproduce.
 - `ui/AGENTS.md` and `rust/AGENTS.md`: how the web interface and the Rust crates
-  are tested today.
+  are tested today. `rust/beryl3d/AGENTS.md` is the reference for work in Beryl
+  3D's own workspace.
 - [wgpu](https://docs.rs/wgpu/30.0.2/wgpu/),
   [taffy](https://docs.rs/taffy/0.15.1/taffy/) and
   [parley](https://docs.rs/parley/0.13.0/parley/): the three third-party crates
@@ -211,6 +214,16 @@ the client they describe, and later sections refer to them by number.
   this, finding why a window dropped frames took the project's owner moving the
   pointer and pasting terminal output back, several times.
 
+- **C17. Beryl 3D's checks are its own.** Beryl 3D is a separate program in a
+  Cargo workspace of its own. A change to it runs only Beryl 3D's checks, and a
+  change to anything else runs none of them and builds none of its code. The
+  project's owner asked for this on 2026-11-14: the rest of the project lands
+  about eight changes an hour, and none of them may wait for, or be failed by, a
+  client that is not yet the app. The cost is that a change to the session can
+  break Beryl 3D without its author being told. A sweep finds that afterwards,
+  and Beryl 3D's own work fixes it (see
+  [Checks and isolation](#checks-and-isolation)).
+
 ## What does not change
 
 Beryl 3D is a second player of scripts the session already writes. Nothing in
@@ -253,6 +266,12 @@ works out what happened by comparing two views: the step says it.
 Beryl 3D is six crates and two native programs for phones. Each crate has one
 job, and each depends only on crates below it in this list.
 
+The six crates are a Cargo workspace of their own, `rust/beryl3d`, with its own
+lock file and build directory (decision C17). They reach the game through path
+dependencies on three crates of the main workspace: `beryl_session`, the fixture
+recorder in `beryl_cli`, and `beryl_art`, the image download queue and disk
+cache that the Tauri shell also uses.
+
 - **`beryl_3d`**, the app. It connects the session, the client core, the
   renderer, the background workers and audio. It is built as an executable on
   the desktop and as a library for the phone programs, and it exports the C
@@ -262,16 +281,16 @@ job, and each depends only on crates below it in this list.
   the windowless and desktop implementations.
 - **`beryl_render`**, the renderer. It draws a frame with `wgpu`. It is the only
   crate that names a `wgpu` type.
-- **`beryl_assets`**, everything prepared off the drawing thread: downloading
-  and decoding card images, composing card faces, compressing textures and
-  rasterizing glyphs.
-- **`beryl_stage`**, the tools that play recordings with no window and no GPU:
-  the file of recordings, the interface test runner, and the text half of the
-  command-line tool (see [The agent interface](#the-agent-interface)). It
-  depends on the client core and on the code that records fixtures, and on no
-  GPU crate, so it rebuilds quickly after an edit to the client core. The
-  commands that draw pictures are a second program in `beryl_3d`, which has the
-  renderer.
+- **`beryl_assets`**, everything prepared off the drawing thread: decoding the
+  card images that `beryl_art` downloads, composing card faces, compressing
+  textures and rasterizing glyphs.
+- **`beryl_inspect`**, the tools that play recordings with no window and no GPU:
+  the file of recordings, the interface test runner, the frame benchmarks, and
+  the commands of `just b3d` that print text (see
+  [The agent interface](#the-agent-interface)). It depends on the client core
+  and on the code that records fixtures, and on no GPU crate, so it rebuilds
+  quickly after an edit to the client core. The commands that draw pictures are
+  a second program in `beryl_3d`, which has the renderer.
 - **`beryl_scene`**, which this document calls **the client core**. It holds the
   3D table, the element tree, animation, layout, hit testing and the interface
   checks. It depends on `taffy`, `parley` and the protocol types of
@@ -352,6 +371,7 @@ The frame itself, and what `Client` says about when it next needs one:
 ```rust
 pub struct Frame {
     pub resolved: Vec<Resolved>,  // capacity set at startup, cleared each frame
+    pub names: String,            // every resolved element's name, end to end
     pub draws: Vec<Draw>,         // in drawing order
     pub opaque: u32,              // draws[..opaque] are the opaque records
     pub clips: [Rect; 16],        // physical pixels; entry 0 is not used
@@ -370,6 +390,33 @@ impl Client {
     pub fn wake(&self) -> Wake;
     /// The next thing the client asks of the platform, if any.
     pub fn next_request(&mut self) -> Option<Request>;
+}
+```
+
+The small types those records name:
+
+```rust
+/// A card's element id is its object's slot in the view. A flat-layer
+/// element's is given when it first enters the tree, and kept while it stays.
+pub struct ElementId(pub u32);
+
+/// A range of `Frame::names`, so that a resolved element owns no string.
+pub struct NameRef { pub start: u32, pub len: u32 }
+
+pub struct Load {
+    pub draw_calls: u32,
+    pub instances: u32,
+    pub upload_bytes: u32,
+    pub opaque_area: f32,     // in screens
+    pub blended_area: f32,    // in screens
+}
+
+pub struct Work {
+    pub elements: u32,        // elements visited
+    pub segments: u32,        // segments evaluated
+    pub layout_nodes: u32,    // layout nodes computed, in `handle`
+    pub text_runs: u32,       // runs of text shaped, in `handle`
+    pub records: u32,         // draw records written
 }
 ```
 
@@ -482,7 +529,8 @@ The rules for building a frame:
   inside the shadow's blur, so in the prototype every opaque record was one call
   and every blended record another: two calls a frame on every board. Every
   blended record outside a card face samples the atlas, so a whole band is one
-  call. A frame is normally four to eight calls.
+  call. The flat layer's quads are a third call, cards at full size a fourth,
+  and each clip adds two, so a frame is normally two to six calls.
 - **Load counted as it is built.** While it builds the list, the client core
   adds up numbers that predict GPU load: draw calls, instances, bytes to upload,
   and the screen area of its opaque and of its blended records, each divided by
@@ -535,10 +583,14 @@ enforces the ones that can be seen in source.
   fallback switched off, so a line breaks in the same place on every machine.
   The web interface takes these fonts from npm packages, as WOFF2 files that the
   Rust text crates cannot read. Beryl 3D commits the same families as TrueType
-  files, with their licences, in `rust/crates/beryl_scene/fonts`, and embeds
-  them in the client core at build time.
+  files, with their licences, in `rust/beryl3d/crates/beryl_scene/fonts`, and
+  embeds them in the client core at build time.
 - **Seeded effects.** A particle effect's randomness comes from a fixed
   generator seeded by the object's id and the step's index.
+- **Data is compiled in.** The client core's data files (spatial values and the
+  checks' thresholds, in `data/beryl3d/`) are read by its build script, which
+  writes them out as constants. Nothing is parsed when the app starts, and the
+  client core needs no JSON crate.
 
 A **pose** is where one object is and how it is turned: position, rotation,
 scale, opacity and how far its face has turned over. A **segment** is one
@@ -572,9 +624,8 @@ code usually goes wrong.
 ### Motion the pointer drives
 
 Three motions follow the pointer and not a script. Their values are in
-`data/ui-conventions.json`, in a `pointer` entry that the web interface does not
-read. They start as copies of the constants in the web interface's
-`ui/src/stage/raised.ts` and `heft.ts`.
+`data/beryl3d/space.json`, under `pointer`. They start as copies of the
+constants in the web interface's `ui/src/stage/raised.ts` and `heft.ts`.
 
 - **Where the pointer is, is state. When it moved is not.** `handle` stores the
   pointer's latest position and phase. `frame` finds what the pointer is over
@@ -631,7 +682,7 @@ pub enum Input {
     Pointer(Pointer),                        // mouse, touch or pen
     Key(Key),
     Text(TextChange),                        // the edited field's new contents
-    Assets(AssetReady),                      // a texture or glyph page is ready
+    Assets(AssetReady),                      // a face or a glyph page is ready
     Lifecycle(Lifecycle),                    // suspended, resumed, low memory
     Tier(Tier),                              // Baseline or Enhanced
     Reply(Reply),                            // the session's answer to a command
@@ -674,6 +725,30 @@ pub enum Request {
 }
 ```
 
+What a worker tells the client core when it finishes. The pixels themselves go
+to the renderer, and the client core learns only where they are:
+
+```rust
+pub enum AssetReady {
+    /// A face is in a layer of the small or of the full-size array.
+    Face { face: FaceId, size: FaceSize, layer: u16 },
+    /// Glyphs are in a page of the atlas, each at a rectangle in texels.
+    Glyphs { page: u16, glyphs: Vec<(GlyphKey, [u16; 4])> },
+}
+
+/// An index into the list of faces the client made when the match loaded.
+pub struct FaceId(pub u16);
+pub enum FaceSize { Board, Full }
+/// One glyph of one bundled font at one size in physical pixels.
+pub struct GlyphKey { pub font: u8, pub glyph: u16, pub size: u16 }
+
+impl Client {
+    /// The glyphs that laid-out text needs and no page holds yet. Each is
+    /// returned once. The host hands them to the rasterizer.
+    pub fn wanted_glyphs(&mut self) -> impl Iterator<Item = GlyphKey> + '_;
+}
+```
+
 A pointer or key event carries no time (see [Determinism](#determinism)):
 
 ```rust
@@ -701,7 +776,12 @@ There are four hosts.
   `handle` and `frame` directly and reads the frames. It can also own a renderer
   that draws into a texture instead of a window, for pictures.
 - **The desktop host** uses `winit` 0.30, the current stable release, on macOS
-  and Windows.
+  and Windows. It starts fullscreen (decision C15). On macOS it paces frames
+  with a display link (`NSView`'s, asking for the display's highest rate) and
+  draws only on the link's ticks: an input or a session update reaches the
+  client core at once and is drawn on the next tick. In the prototype, `winit`'s
+  own redraw requests left a 120 Hz display at 60 Hz, and drawing on every input
+  used up macOS's three drawables.
 - **The iOS host** is a Swift app of a few hundred lines. It owns a
   `CAMetalLayer` and a `CADisplayLink`, asks for the display's highest refresh
   rate, and calls the Rust library through C functions.
@@ -837,8 +917,11 @@ script step into segments on the scene objects it concerns.
   pick up.
 - **Space comes from data too.** Values only a 3D client needs (how high a
   flight arcs, how far a held card lifts off the table, how far a striking
-  creature lunges) are added to the same entries, and the web interface ignores
-  them.
+  creature lunges) are in a file of Beryl 3D's own, `data/beryl3d/space.json`,
+  under the names of the verbs and cases in `data/ui-conventions.json`. A check
+  fails for a name that is no verb or case. Tuning a 3D value does not touch the
+  web interface's data file, so none of the web interface's checks run for it
+  (decision C17).
 - **A step ends when its animation ends.** A script's beats play in order, the
   steps of one beat together, on the time passed to `frame`.
 - **Objects come to rest where placement puts them.** When a script has
@@ -846,14 +929,21 @@ script step into segments on the scene objects it concerns.
   new view. A check holds this on every fixture, so animation code cannot leave
   an object slightly out of place.
 
-A verb's entry, with the spatial values added. Durations are in milliseconds and
-distances in millimetres:
+A verb's entry in `data/ui-conventions.json`, and then its spatial values in
+`data/beryl3d/space.json`. Durations are in milliseconds and distances in
+millimetres:
 
 ```json
 {
   "name": "fly",
-  "values": { "duration": 420, "curve": [0.2, 0.0, 0.1, 1.0], "stagger": 330 },
-  "space": { "arc": 55 }
+  "values": { "duration": 420, "curve": [0.2, 0.0, 0.1, 1.0], "stagger": 330 }
+}
+```
+
+```json
+{
+  "verbs": { "fly": { "arc": 55 } },
+  "pointer": { "rise": 100, "fall": 160, "held_height": 40 }
 }
 ```
 
@@ -1133,13 +1223,22 @@ The limits the Baseline tier is held to on every gated fixture. **Fragments**
 are pixels actually shaded, counted as the
 [Performance gates](#performance-gates) section describes:
 
-```toml
-[tier.baseline]
-draw_calls = 16          # per frame
-fragments = 1.75         # pixels shaded, in screens
-blended_area = 0.75      # screen area of blended records, in screens
-upload_bytes = 327_680   # instance data per frame, room for 4,096 records
+```json
+{
+  "tiers": {
+    "baseline": {
+      "draw_calls": 16,
+      "fragments": 1.75,
+      "blended_area": 0.75,
+      "upload_bytes": 327680
+    }
+  }
+}
 ```
+
+Each is a limit on one frame. `fragments` and `blended_area` are in screens, and
+`upload_bytes` is instance data, with room for 4,096 records. The limits are in
+`data/beryl3d/gates.json`.
 
 The fragment limit is the floor's fill rate turned into a budget. A 2015
 mid-range phone GPU shades roughly 300 to 500 million pixels a second, and a
@@ -1235,11 +1334,12 @@ how large it is or when it moves.**
 The Enhanced tier has its own limits in the gate file, and the automated checks
 draw every gated fixture in it on a device with full limits:
 
-```toml
-[tier.enhanced]
-draw_calls = 32
-fragments = 4.0
-particles = 2_000
+```json
+{
+  "tiers": {
+    "enhanced": { "draw_calls": 32, "fragments": 4.0, "particles": 2000 }
+  }
+}
 ```
 
 ### Choosing a tier
@@ -1343,9 +1443,11 @@ During play, two kinds of upload remain.
   no animation playing, one layer per frame, so a card never changes its picture
   in the middle of a flight.
 
-The download queue and disk cache already exist in the Tauri shell. They move
-into `beryl_assets` unchanged in behavior, and the Tauri shell uses them from
-there.
+The download queue and disk cache already exist in the Tauri shell. They move,
+unchanged in behavior, into `beryl_art`, a small crate of the main workspace
+that the Tauri shell and `beryl_assets` both use. They are not part of
+`beryl_assets`, because the Tauri shell must not link Beryl 3D's texture
+encoders (decision C17).
 
 ## Threads
 
@@ -1360,7 +1462,11 @@ reason to wait on another thread.
 - **The session thread** runs the game, as today.
 - **Search threads** run the AI, as today, on every core. They run at a lower
   scheduling priority than the frame thread, so the operating system preempts
-  one when the frame thread wakes. No core is reserved.
+  one when the frame thread wakes. No core is reserved. The app sets their
+  scheduling class itself (utility, on Apple platforms), and the frame thread's
+  (user-interactive). A thread otherwise inherits the class of the thread that
+  made it, and in the prototype a game started from the frame thread searched at
+  drawing's priority.
 - **Asset workers**, two to four, decode, compose, compress and rasterize.
 - **The audio thread** is the audio device's callback.
 
@@ -1411,64 +1517,144 @@ Beryl 3D is built to be worked on by a coding agent from a terminal. Everything
 an agent needs to know about what the client shows is available as text, as a
 picture or as a test assertion, with no window and no browser.
 
-### The command-line tool
+The tool is held to these rules, because an agent meets it with no memory of the
+last time it used it, and several agents often run it at once.
 
-One command shows any moment of any fixture or card spec. It runs the client
-core under the headless host.
+- **One entry point.** Every Beryl 3D command is `just b3d <command>`.
+  `just b3d` alone lists the commands with one line each, and
+  `just b3d <command> --help` gives that command's options with two examples.
+- **Commands are words, not options.** `tree`, `png` and `check` are commands,
+  so no combination of them is left undefined.
+- **Nothing has to be guessed.** `list` names every recording, and `info` names
+  every moment of one. An unknown name fails with the five nearest names.
+- **Output can be pasted back.** Every printout begins with the command that
+  prints it again. A line of the tree is a locator. A failing test's name is an
+  argument.
+- **One way to write a time, a moment, a locator and an action**, in every
+  command, in test code and in a script that drives the app.
+- **Output is bounded.** A printout that would be long is cut, says how much was
+  cut, and names the option that shows the rest.
+- **Two runs never share a file.** Every file a command writes is named for that
+  run, and the command prints its path.
+
+### Commands
 
 ```bash
-just stage pay-default --seat you --at 1250ms --tree
-just stage counterspell/cast --layout phone --size 393x759 --png
-just stage verbs-zones --film 0ms..3000ms --every 100ms
-just stage stress-255 --check
+just b3d list counterspell
+just b3d info pay-default
+just b3d tree pay-default --at prompt:1
+just b3d png counterspell/cast --layout phone --size 393x759 --at 1250ms --tree
+just b3d film verbs-zones --from 0ms --to 3s --frames 12 --crop 'card "Island" #7'
+just b3d diff verbs-zones --from 800ms --to 1250ms
+just b3d check pay-default
+just b3d test b3d:counterspell
 ```
 
-- **`--tree`** prints the resolved elements as an indented tree. This is the
-  default way to see what is on screen.
-- **`--png`** draws the frame with the real renderer into a texture and writes a
-  PNG, in either tier.
-- **`--film`** writes a strip of frames across a time range, to judge motion.
-- **`--check`** runs every interface check over the whole fixture and prints the
-  faults.
-- **`--timeline`** prints each script's timeline, one line per step (see
-  [Timeline parity](#timeline-parity)).
-- **`--all`** runs every interface test (see [Test speed](#test-speed)).
-- **`--size`, `--layout`, `--seat`, `--scale` and `--tier`** choose the window,
-  the viewer and the look.
+| Command                          | What it prints                                                                                                                                  |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list [prefix]`                  | Every recording whose name starts with the prefix: fixtures, card spec moments and stress boards, each with its length and its number of views. |
+| `info <recording>`               | The recording's moments: each view with its time, each script's steps with their start and end, and each prompt with its buttons.               |
+| `tree <recording>`               | The resolved elements at one moment, as an indented tree.                                                                                       |
+| `png <recording>`                | The frame at one moment, drawn by the real renderer into a file. With `--tree`, the tree of the same frame as well.                             |
+| `film <recording>`               | Frames across a span of time, as one picture laid out as a grid, with one line of text for each frame.                                          |
+| `diff <recording>`               | What changed between two moments: the elements that appeared, left, moved or changed state.                                                     |
+| `check <recording>`              | Every interface check on every tick of the recording, and the faults.                                                                           |
+| `test [prefix]`                  | Every interface test whose name starts with the prefix (see [Test speed](#test-speed)). `--every-tick` checks every tick.                       |
+| `timeline <recording>`           | Each script's timeline, one line per step (see [Timeline parity](#timeline-parity)).                                                            |
+| `gate`                           | The frame gates (see [Performance gates](#performance-gates)).                                                                                  |
+| `app`, `smoke`, `frames`, `live` | The running app (see [Driving the running app](#driving-the-running-app)).                                                                      |
+| `sweep`                          | Everything Beryl 3D checks after a push (see [Checks and isolation](#checks-and-isolation)).                                                    |
 
-`just stage` is two programs behind one command. `--tree`, `--check`,
-`--timeline` and `--all` are `beryl_stage`'s program, which contains no GPU
-code. `--png` and `--film` are a second program, in `beryl_3d`, which has the
-renderer. `just stage` runs whichever the options need.
+Every command that takes a recording also takes `--seat you|opponent`,
+`--layout desktop|phone`, `--size <width>x<height>`, `--scale <number>`,
+`--tier baseline|enhanced`, `--at <moment>`, `--do <action>` (which may be
+repeated) and `--json`. Left out, they are `you`, `desktop`, 1600 by 900, 1,
+`baseline` and the recording's start, with no action.
 
-`stress-255` in the last example is a stress board: a hand-built position at the
-engine's capacity, defined in the [Performance gates](#performance-gates)
-section below.
+`just b3d` is two programs behind one command. The commands that print text are
+`beryl_inspect`'s program, `b3d`, which contains no GPU code. `png` and `film`
+are a second program, `b3d-render`, in `beryl_3d`, which has the renderer.
+`just b3d` runs whichever the command needs, and both read their options with
+the same code.
 
-The tree printout names every element with its role, its name, its id, where it
-is and what state it is in:
+`stress-255`, used in examples below, is a stress board: a hand-built position
+at the engine's capacity, defined in the [Performance gates](#performance-gates)
+section.
+
+### Times, moments, locators and actions
+
+These four are written one way everywhere.
+
+- **A duration** is a number and a unit: `850ms` or `1.25s`. Every command reads
+  both units and prints milliseconds.
+- **A moment** is what `--at`, `--from` and `--to` take. It is a duration since
+  the recording's start, or a name that `info` prints: `start`, `end`, `view:12`
+  (the first frame in which the twelfth view is still), `prompt:1` (the first
+  prompt, open and still) or `step:12.0.1` (the middle of the second step of the
+  first beat of view 12's script). A name may be followed by an offset, as in
+  `view:12+250ms`.
+- **A recording plays on a clock of its own.** Each recorded reply is given 400
+  milliseconds after the table comes to rest in the view it answers. Every
+  moment therefore has the same time on every run.
+- **A locator** is the start of a tree line: `button "Auto Pay"`,
+  `card "Island"`, `card "Island" #8` or `card #8`. `>` looks inside another
+  element, as in `region "prompt" > button "Cancel"`. A name matches whole and
+  exactly. A locator that matches nothing, or more than one element, fails, and
+  the failure lists the elements with the nearest names and says how to narrow
+  it.
+- **An action** is one line: `press <locator>`, `hover <locator>`,
+  `drag <locator> to <locator>`, `type <locator> "<text>"`, `key <name>`,
+  `move <x>,<y>`, `step <duration>` or `still` (run the clock until nothing
+  moves). `--do` takes one action. A drive script is a file of them. The running
+  app's socket reads them. The test driver's methods have the same names.
+
+### What is printed
+
+The tree's first line is the command that prints it again, and its second says
+where in the recording it is. Every line after that has the same fields in the
+same order: role, name, id, place, the top left corner and the size of the
+element's box on screen in logical points, and then its states.
 
 ```text
-game 1600x900 seat=you t=1.250s
+just b3d tree pay-default --seat you --size 1600x900 --at 1250ms
+view 12 of 31, t=1250ms, animating, 143 elements
+game
   table
-    card "Counterspell" #41 stack moving(fly 62%) 1180,402 116x162
-    card "Island" #7 battlefield.yours.lands tapped 412,640 96x134
-    card "Island" #8 battlefield.yours.lands 516,640 96x134 eligible
+    card "Counterspell" #41 stack 1180,402 116x162 moving(fly 62%)
+    card "Island" #7 battlefield.yours.lands 412,640 96x134 tapped
+    card "Island" #8 battlefield.yours.lands 516,640 96x134 interactive eligible
+    ... 22 more in battlefield.yours.lands (--within battlefield.yours.lands)
   layer
     region "prompt" 520,820 560x64
       text "Pay {1}{U}" 536,838 180x28
-      button "Auto Pay" 880,832 96x40
-      button "Cancel" 984,832 80x40
+      button "Auto Pay" 880,832 96x40 interactive
+      button "Cancel" 984,832 80x40 interactive
 ```
 
-A fault names the element, the moment, the rule and the command that reproduces
-it:
+- **States** are words from a closed list: `interactive`, `tapped`, `face-down`,
+  `moving(<verb> <percent>)`, `hovered`, `held`, `eligible`, `selected`,
+  `target`, `disabled`, `focused`, `covered(<percent>)` and `faded(<percent>)`.
+- **A place holding more than 12 cards** prints its first three and a count.
+  `--within <place or locator>` prints one part whole, `--role <role>` prints
+  one role, and `--full` prints everything.
+- **A film** is at most 24 frames, in a grid no wider than 2,000 pixels, each
+  frame labelled with its time. `--crop <locator>` follows one element, so a
+  flight can be read at full size. With the file's path, `film` prints one line
+  for each frame: its time and what was moving.
+- **`--json`** prints the same content as JSON, for a script.
+
+A fault names the rule, the elements, the moment and the command that shows it.
+The same fault found in several seats or windows is printed once, with a count:
 
 ```text
-FAULT overlap  pay-default seat=you size=375x647 t=0.850s
+FAULT overlap  b3d:pay-default/you/375x647 t=850ms  (and 3 more tests)
   button "Auto Pay" (188,598 96x44) overlaps button "Cancel" (270,598 80x44)
-  reproduce: just stage pay-default --seat you --size 375x647 --at 850ms --tree
+  show: just b3d tree pay-default --seat you --layout phone --size 375x647 --at 850ms
 ```
+
+`check` and `test` print at most 20 faults, then a count of the rest, then one
+closing line with the tests run, the faults found and the time taken. They exit
+with 1 when there is a fault and with 2 when the command itself was wrong.
 
 ### The test driver
 
@@ -1478,54 +1664,73 @@ server and no waiting, because the test owns the clock.
 
 ```rust
 let mut page = Page::fixture("pay-default", Side::You, Layout::Desktop);
-page.locator(Role::Button, "Auto Pay").press();
-page.run_until_still();
-assert_eq!(page.locator(Role::Card, "Counterspell").zone(), Zone::Stack);
+page.still();
+page.press("button \"Auto Pay\"");
+page.still();
+assert_eq!(page.find("card \"Counterspell\"").zone(), Zone::Stack);
 page.check();
 
 // Several cards share a name: narrow the locator.
-page.locator(Role::Card, "Island").nth(1).hover();
+page.hover("card \"Island\" #8");
 ```
 
-- **Locators** find elements by role and name, optionally inside another
-  element. Several cards can share a name, so a locator that matches more than
-  one element must be narrowed with `nth` or with the element's id. A locator
-  that matches nothing, or matches several without being narrowed, fails with
-  the tree printed.
-- **Actions** are `press`, `hover`, `drag_to`, `type_text` and `key`. They enter
-  through `handle` as pointer and key inputs at a point where the element is
-  uncovered, the same path a real click takes.
-- **The clock** is advanced with `step(duration)` and `run_until_still()`. A
-  **tick** is one step of a test's clock, a sixtieth of a second unless the test
-  says otherwise.
+- **Locators and actions** are the ones defined above. `press`, `hover`, `drag`,
+  `type_text`, `key`, `step` and `still` are methods, and `page.run(script)`
+  takes the same lines as text. An action enters through `handle` as pointer and
+  key inputs at a point where the element is uncovered, the same path a real
+  click takes.
+- **Nothing waits by itself.** This is the one difference from Playwright. An
+  action happens at the clock's present time, and the clock moves only when the
+  test calls `step` or `still`. A failed locator or assertion therefore says
+  where the clock is and what was still moving, so a missing `still` shows in
+  the failure.
+- **A tick** is one step of a test's clock, a sixtieth of a second unless the
+  test says otherwise.
 - **`check()`** runs every interface check on the current frame.
 - **Where it lives.** `Page` is in `beryl_scene`, behind a Cargo feature named
   `driver` that the app does not enable. `Page::new` takes a recording, so
   `beryl_scene` never runs the engine. `Page::fixture` and `Page::spec` are in
-  `beryl_stage`, which finds a recording by name in the file of recordings (see
-  [Recordings](#recordings)).
+  `beryl_inspect`, which finds a recording by name in the file of recordings
+  (see [Recordings](#recordings)).
 
 ### Driving the running app
 
-Debug builds of the app listen on a local socket and accept the same commands as
-the test driver. An agent can therefore inspect and drive a real game on the
-Mac, in the iOS Simulator or in the Android emulator.
+An agent starts the app, drives it and reads what it did, with no person
+involved (decision C16).
 
 ```bash
-just stage --live --tree
-just stage --live --press 'button "Auto Pay"'
-just stage --live --png
+just b3d app --fixture verbs-zones --for 10s
+just b3d app --drive hover-hand --load 8:utility --window background --for 20s
+just b3d frames
+just b3d live tree
+just b3d live do 'press button "Auto Pay"'
+just b3d smoke
 ```
 
-Debug builds also take options that put the app into a known state, for agents
-and for manual testing:
+- **`app`** runs the app. `--fixture <recording>` replays a recording instead of
+  a game. `--pause-at <moment>` stops its clock there. `--drive <script>` plays
+  a file of actions on the display's clock. `--load <threads>[:<class>]` starts
+  busy threads, to imitate a loaded machine. `--slow-gpu <duration>` holds each
+  finished frame back, to imitate a slow GPU. `--for <duration>` ends the run.
+- **`--window`** says what is opened. `none` is the windowless host, which
+  measures everything up to presentation, and is what an agent gets when it
+  gives no `--window`. `background` is a window that never takes focus and opens
+  behind the others. `foreground` is an ordinary window. `fullscreen` is what a
+  person gets when they give no `--window` (decision C15). A run that an agent
+  starts with a window must give `--for`, so that it always ends.
+- **Every run writes a frame log of its own** and prints the log's path with a
+  summary: frames drawn, late frames, frames held to 60 Hz on a faster display,
+  and how long frames waited for a drawable. `just b3d frames [path]` prints a
+  log's summary and its worst frames. With no path it reads the newest log of a
+  run started from the same checkout.
+- **`live`** speaks to a running debug build over a local socket named for that
+  process: `live tree`, `live png` and `live do '<action>'`. When several apps
+  are running it takes `--app <process id>`.
+- **`smoke`** starts the app with no window, waits for its first presented frame
+  and exits.
 
-- **`--fixture <name>`** starts the app replaying a fixture instead of a game.
-- **`--pause-at <time>`** stops the clock at a moment of the fixture.
-- **`--delay-frames <milliseconds>`** holds each finished frame back before it
-  is shown, to imitate a slow GPU.
-
-Release builds contain neither the listener nor the options.
+Release builds contain neither the socket nor the options that replay, drive,
+load or slow the app.
 
 ## Interface checks
 
@@ -1569,7 +1774,7 @@ screen, so they cover every card spec that is ever generated.
 
 The last four are the web interface's stage audits (`ui/scripts/stage-audit.mjs`
 and `audit.mjs`), with the same thresholds. The thresholds are in
-`data/frame-gate.json`, under `audit`.
+`data/beryl3d/gates.json`, under `audit`.
 
 What the checks run over:
 
@@ -1601,14 +1806,16 @@ every interface check applied. It is a pure function: the same three inputs give
 the same faults, with no browser, no GPU, no engine and no clock.
 
 ```text
-ui:counterspell/cast/you/1600x900
-ui:counterspell/cast/opponent/375x647
-ui:verbs-zones/you/2560x1080
-ui:stress-255/you/393x759
+b3d:counterspell/cast/you/1600x900
+b3d:counterspell/cast/opponent/375x647
+b3d:verbs-zones/you/2560x1080
+b3d:stress-255/you/393x759
 ```
 
-`just stage --all` runs every test, and a name or the start of one runs those
-that match.
+`just b3d test` runs every test, and `just b3d test <start of a name>` runs
+those that match. A test's name is also an argument to the other commands:
+`just b3d tree b3d:counterspell/cast/you/1600x900` prints that test's recording
+from its seat at its size.
 
 How many there are, with the 47 cards the engine knows today:
 
@@ -1621,11 +1828,11 @@ How many there are, with the 47 cards the engine knows today:
 These numbers are targets on the development machine under its usual load. The
 first measurement of the real client replaces them.
 
-| Measure                                          | Target           |
-| ------------------------------------------------ | ---------------- |
-| CPU time for one card spec moment's test         | 2 milliseconds   |
-| All 21,500 tests, before every push              | under 10 seconds |
-| The same tests checked on every tick, after push | under 2 minutes  |
+| Measure                                              | Target           |
+| ---------------------------------------------------- | ---------------- |
+| CPU time for one card spec moment's test             | 2 milliseconds   |
+| All 21,500 tests, before a push of a Beryl 3D change | under 10 seconds |
+| The same tests checked on every tick, in the sweep   | under 2 minutes  |
 
 For comparison, the web interface's browser check of one animation takes 36
 seconds at the 90th percentile, and the existing check of the session's scripts
@@ -1658,8 +1865,10 @@ directly.
 
 Checking every tick remains, as the second line:
 
-- **After every push**, the same tests run again with the checks applied on
-  every tick. This is the exhaustive form.
+- **In the sweep**, after a push, the same tests run again with the checks
+  applied on every tick. This is the exhaustive form. It is not part of slow CI,
+  whose budget of CPU time it would spend several times over (see
+  [Checks and isolation](#checks-and-isolation)).
 - **A differential test** holds the two together. On a fixed sample of tests it
   plants each kind of fault at a random tick and requires the check times to
   find it. A fault only the every-tick run finds is a missing check time, and is
@@ -1671,16 +1880,21 @@ A recording is the stream of session updates for one fixture or card spec
 moment. Making one means playing the engine and the session, which costs more
 than the test that reads it.
 
-- **Recordings are packed into one file** by `beryl_stage`, which calls the code
-  that records fixtures and card spec moments today (`beryl_cli`'s `fixture` and
-  `specs` modules, made a library for it). The file is under `$BERYL_CACHE`.
+- **Recordings are packed into one file** by `beryl_inspect`, which calls the
+  code that records fixtures and card spec moments today (`beryl_cli`'s
+  `fixture` and `specs` modules, made a library for it). The file is under
+  `$BERYL_CACHE/b3d`, which every worktree on the machine shares.
 - **The file is cached** under a hash of everything a recording depends on: the
   engine, rules, session and card sources, the fixture definitions and the verb
   data.
 - **A change to client code alone leaves the hash unchanged**, so the tests read
   the file and run no engine.
-- **A change to a card or a rule** rebuilds the recordings it affects and no
-  others.
+- **A change to the engine, a card or the session changes the hash**, and the
+  whole file is built again, once. Of several sessions working at one staging
+  commit, one builds it and the rest read it. Building it costs about a minute
+  of CPU time, is reported apart from the tests' time, and is not part of their
+  target. The sweep builds the file for each staging commit it checks, so a
+  session that has just rebased usually finds it there.
 
 ### What keeps it fast
 
@@ -1699,10 +1913,10 @@ than the test that reads it.
 The engine's goal is 50,000 cards. At about three moments a card that is 2.1
 million tests over the full matrix, or roughly 50 minutes of CPU time.
 
-- **Before every push** the tests run at one desktop size and one phone size:
+- **Before a push** the tests run at one desktop size and one phone size:
   600,000 tests, about 15 minutes of CPU time, about a minute across the
   development machine's 18 cores.
-- **After every push** they run over the full matrix.
+- **In the sweep** they run over the full matrix.
 - **Nothing is chosen by guessing what a change affects.** A change to the
   client core can break any card's moment, so all of them run.
 
@@ -1719,9 +1933,12 @@ the draw list asks of the GPU.
 
 On the CPU:
 
-- **Instructions per frame**, under Callgrind in the `beryl-bench` Linux virtual
-  machine, as the engine's count gate is. The counted boundary is one call to
-  `frame` plus the `handle` calls since the previous frame.
+- **Instructions per frame**, under Callgrind in a Linux virtual machine of
+  Beryl 3D's own, `beryl3d-bench`, made the way the engine's `beryl-bench` is. A
+  second machine keeps the engine's counts from moving when Beryl 3D installs a
+  graphics driver, and keeps either gate from waiting for the other. The counted
+  boundary is one call to `frame` plus the `handle` calls since the previous
+  frame.
 - **Allocations in `frame`**, from a counting global allocator in a native test.
   The limit is zero once a game has started. `handle` may allocate, and its
   allocations are counted and limited per fixture.
@@ -1774,17 +1991,22 @@ The gated fixtures are of two kinds.
   - every verb playing at once on 100 objects;
   - a stack of 50 spells and abilities with arrows to their targets.
 
-The limits live in one file beside the engine's:
+The limits live in one file of Beryl 3D's own, `data/beryl3d/gates.json`. The
+first board below is played for 1,200 frames, and the tolerance is explained
+after it:
 
-```toml
-[frame."stress-255"]          # 1,200 frames
-worst_frame_instructions = 2_000_000
-total_instructions = 1_450_000_000
-frame_allocations = 0
-tolerance_percent = 1.0       # see below
-
-[frame."stress-1024"]
-worst_frame_instructions = 4_000_000
+```json
+{
+  "frames": {
+    "stress-255": {
+      "worst_frame_instructions": 2000000,
+      "total_instructions": 1450000000,
+      "frame_allocations": 0,
+      "tolerance_percent": 1.0
+    },
+    "stress-1024": { "worst_frame_instructions": 4000000 }
+  }
+}
 ```
 
 Where the worst-frame limits come from:
@@ -1815,6 +2037,9 @@ them, and after that the rule is the engine count gate's:
   new counts: the work itself changed (a new verb, a new element on every
   screen), or a compiler or dependency upgrade moved the count with no change to
   Beryl's code.
+- **No limit waits for anyone.** Neither kind of rise needs the owner's
+  approval. The commit that raises a limit states its reason, and that is the
+  record.
 
 ### Finding the worst frame
 
@@ -1987,6 +2212,80 @@ What these show:
   41.7 MB, 185 MB of memory, 24 threads, a 546-second build). Those were the
   numbers that chose `wgpu`; this prototype's replace their frame times.
 
+## Checks and isolation
+
+Beryl 3D is a separate program, and until the switch it is not the app. Its
+checks are therefore its own (decision C17): they run for a change to Beryl 3D
+and for no other change, and no other change builds Beryl 3D's code.
+
+What keeps the two apart:
+
+- **A workspace of its own.** `rust/beryl3d` is a Cargo workspace with its own
+  manifest, lock file and build directory. The main workspace's Clippy run and
+  its tests never see it. Its dependencies (`wgpu`, `winit`, `taffy`, `parley`
+  and the rest) never enter the main lock file, or the build directory that
+  every worktree copies.
+- **Paths of its own.** Beryl 3D's files are under `rust/beryl3d/`,
+  `data/beryl3d/` and `tools/src/beryl_tools/beryl3d/`. A change under the first
+  two selects one lane of the checks, `beryl3d`, and no other lane except the
+  two that check formatting and source rules (`repo` and `names`). A test in the
+  tools holds both directions: a list of Beryl 3D paths selects no other lane,
+  and a list with none of them never selects `beryl3d`.
+- **Tools of its own.** Everything behind `just b3d` is one Python package,
+  which the main tools import in one place. Adding a check to Beryl 3D edits
+  that package and nothing else, so no other lane's record of its own tools
+  changes and no other lane runs again.
+- **Data of its own.** Limits, thresholds, spatial values and allowlists are in
+  `data/beryl3d/`. Beryl 3D adds nothing to `data/ui-conventions.json`, which
+  the web interface's checks watch, except an entry under "Not seen in Arena"
+  when it builds something Arena does not show.
+- **A virtual machine and a name of its own.** Counts are taken in
+  `beryl3d-bench`, and every check it logs is named `b3d:` and what it checks.
+
+What runs, and when:
+
+| When                                                                             | What                                                                                                                                                                                                                                    | If it fails                                                             |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Before a push that changes a Beryl 3D path: the `beryl3d` lane of the fast check | Formatting, Clippy and the tests of the workspace. The source rules (`scene-purity`). Every interface test at its check times. The work counters and the allocation gate. Timeline parity.                                              | The push is refused, as for any lane.                                   |
+| After a push, on staging: `just b3d sweep`                                       | The same, then every interface test on every tick, the instruction and fragment counts in the virtual machine, every gated fixture drawn on the floor's feature set, the app's launch test, and a build for each phone and for Windows. | A task is filed under Beryl 3D's epic. The `master` branch is not held. |
+
+- **The sweep is not slow CI.** It is modelled on the browser sweep
+  (`just sweep`). It runs at low priority on the staging tip when a Beryl 3D
+  path, or a path of the main workspace that Beryl 3D depends on, has changed
+  since its last run. Its cost is outside slow CI's budget of CPU time.
+- **A step that the fast check cuts off at its time limit** is left to the
+  sweep, not to slow CI.
+
+What isolation costs, and who pays:
+
+- **A change elsewhere can break Beryl 3D unseen.** Beryl 3D links the session,
+  the fixture recorder and the image cache. A change to one of them is checked
+  without Beryl 3D, so it can land and leave Beryl 3D not compiling, or playing
+  a script wrongly.
+- **The sweep finds it, and Beryl 3D's own work fixes it.** The sweep's task
+  names the commit that broke it. Whoever is working on Beryl 3D takes that task
+  first, and a session whose own check fails on such a break fixes the break in
+  its own change.
+- **The two timelines can drift.** A change to how the web interface lays a beat
+  out in time is not held to Beryl 3D's. The sweep's timeline parity run lists
+  the recordings that now differ, and Beryl 3D follows.
+
+The exceptions. Each is a change to the rest of the project, made once and
+checked by the rest of the project's checks:
+
+- **Moving step timing into the session** (see
+  [Timing a script](#timing-a-script)): three changes to `beryl_session` and the
+  web stage.
+- **Code both shells use**, moved out of the Tauri shell into crates of the main
+  workspace that depend on nothing of Beryl 3D's: `beryl_art` (the image
+  download queue and cache), and later the crate for profiles, bug report
+  storage and resuming a game.
+- **The fixture recorder made a library**, in `beryl_cli`.
+- **One import of Beryl 3D's tools package**, the `just b3d` recipe, and the
+  rule that sorts paths into lanes.
+- **Design tokens**: the data file that generates the web interface's CSS
+  variables as well as Beryl 3D's constants.
+
 ## Sound
 
 Beryl 3D plays the same sounds as the web interface, from the same list:
@@ -2036,7 +2335,7 @@ change there and a small change in each client.
   interface and constants for Beryl 3D.
 - **Fixtures, card specs and the list of sounds.**
 - **The image download queue and disk cache**, moved out of the Tauri shell into
-  `beryl_assets`.
+  `beryl_art`, a crate of the main workspace.
 - **Bug report storage, profiles and settings**, moved out of the Tauri shell
   into a crate both shells use.
 
@@ -2065,16 +2364,18 @@ script, as one seat sees it. A step a client made itself has `"own": true`.
   a recording through the stage's model in Node, with no browser and no drawing
   surface, and records each step as the stage begins and ends it
   (`ScriptStage.follow`).
-- **Beryl 3D's side** is `just stage <fixture> --timeline`.
-- **The check**, `just timeline-parity`, compares the two for every fixture and
-  card spec moment, from both seats. Two timelines agree when they hold the same
-  steps with the same verb, case and effects, and every start and end is within
-  1 millisecond.
+- **Beryl 3D's side** is `just b3d timeline <recording>`.
+- **The check**, `just b3d timeline-parity`, compares the two for every fixture
+  and card spec moment, from both seats. Two timelines agree when they hold the
+  same steps with the same verb, case and effects, and every start and end is
+  within 1 millisecond.
 - **Recordings that do not agree yet are listed** in
-  `data/timeline-parity.json`, each with the number of its steps that differ.
-  Like every allowlist under `data/`, its counts may only go down.
-- **It runs in the fast check** when either client's code for playing a script
-  changes.
+  `data/beryl3d/timeline-parity.json`, each with the number of its steps that
+  differ. Like every allowlist under `data/`, its counts may only go down.
+- **It runs in the `beryl3d` lane** when a Beryl 3D path changes, and in the
+  sweep. It never runs for a change to the web interface (decision C17). When
+  the web interface's timeline moves, the sweep lists the recordings that now
+  differ, and Beryl 3D follows.
 
 What the check does not cover is fixed by hand, and found by the parity list: a
 screen's layout, a prompt's wording, and how an effect looks.
@@ -2082,8 +2383,8 @@ screen's layout, a prompt's wording, and how an effect looks.
 ### The parity list
 
 The **parity list** is a generated report of everything the web interface can
-show, with each item's state in Beryl 3D. A command prints it, and a check keeps
-it current. An example of its output, with invented numbers:
+show, with each item's state in Beryl 3D. `just b3d parity` prints it, and the
+sweep keeps it current. An example of its output, with invented numbers:
 
 ```text
 fixtures      118 / 140 play with no fault
@@ -2139,7 +2440,7 @@ When the owner says to delete, one change removes:
 - the browser checks, their scheduling and the three-hourly run of all of them;
 - the TypeScript protocol generation in `beryl_session`.
 
-Until then, both clients' checks run.
+Until then, each client's checks run for its own changes.
 
 ### Platforms and versions
 
@@ -2152,7 +2453,7 @@ iOS.
 | Windows  | Windows 10                           | DirectX 12, else OpenGL 3.3      |
 | iOS      | iOS 15, which reaches the iPhone 6s  | Metal                            |
 | Android  | API level 24 (Android 7.0), as today | Vulkan, else OpenGL ES 3.0       |
-| Linux    | the `beryl-bench` virtual machine    | software Vulkan, for counts only |
+| Linux    | the `beryl3d-bench` virtual machine  | software Vulkan, for counts only |
 
 - **Beryl 3D's iOS host targets iOS 15**, the last version the floor runs. The
   Tauri app keeps its target of iOS 17 while it exists.
@@ -2234,13 +2535,14 @@ Do this as soon as a fixture can be drawn, before any broad testing. It crosses
 every boundary in the design once: session recording, client core, renderer,
 host and agent tool.
 
-1. Run `just stage verbs-zones --seat you --at 1500ms --tree` and note the
-   position of one card that is mid-flight.
-2. Run the same command with `--png` and open the picture. The card is where the
-   tree said, mid-air, with its shadow on the table beneath it.
-3. Start the desktop app with `--fixture verbs-zones --pause-at 1500ms`. The
-   window shows the same picture as the PNG.
-4. Run `just stage --live --tree` against the app. The tree matches step 1.
+1. Run `just b3d tree verbs-zones --at 1500ms` and note the position of one card
+   that is mid-flight.
+2. Run `just b3d png verbs-zones --at 1500ms` and open the picture. The card is
+   where the tree said, mid-air, with its shadow on the table beneath it.
+3. Run
+   `just b3d app --fixture verbs-zones --pause-at 1500ms --window foreground`.
+   The window shows the same picture as the PNG.
+4. Run `just b3d live tree` against the app. The tree matches step 1.
 
 ### A whole game on the desktop
 
@@ -2265,12 +2567,12 @@ host and agent tool.
    every motion; only lighting, the shape of shadows, bloom and particles
    change.
 2. Choose Automatic on a machine that passes the startup measurement, then run
-   the app with `--delay-frames 20`. Within a second or two the log records a
-   step down to Baseline, and no object moves when it happens.
+   the app with `--slow-gpu 20ms`. Within a second or two the log records a step
+   down to Baseline, and no object moves when it happens.
 3. Choose Enhanced and repeat. The tier stays Enhanced.
-4. Run `just stage stress-255 --png` and `just stage stress-1024 --png`. Both
-   boards are readable: rows have overlapped and identical permanents have piled
-   up with counts.
+4. Run `just b3d png stress-255` and `just b3d png stress-1024`. Both boards are
+   readable: rows have overlapped and identical permanents have piled up with
+   counts.
 5. On the oldest phone available, start the app with `--fixture stress-255` and
    read the frame log afterwards. It records no late frame in the Baseline tier.
 
@@ -2292,14 +2594,14 @@ host and agent tool.
 ### Agent tools
 
 1. Introduce a deliberate overlap in a prompt's layout and run
-   `just stage pay-default --check`. The fault names both buttons, the window
-   size and the moment, and its reproduce command shows the overlap.
+   `just b3d check pay-default`. The fault names both buttons, the window size
+   and the moment, and its `show:` command prints the overlap.
 2. Make one verb's implementation 50 milliseconds longer than its data. The verb
    values check fails and names the verb.
 3. Add an allocation to `frame`. The allocation gate fails and names the
    fixture.
-4. With the app running, use `just stage --live --press` to play a land. The app
-   plays it as if clicked.
+4. With the app running, use `just b3d live do 'press card "Island"'` to play a
+   land. The app plays it as if clicked.
 
 ### Checking the parity list
 
