@@ -269,7 +269,7 @@ def rust_tests_step(
         check=False,
     )
     # The build's share of the step, which says whether a slow run compiled or tested slowly.
-    print(f"rust-tests: built in {time.perf_counter() - started:.0f} s", flush=True)
+    print(finished_line(time.perf_counter() - started), flush=True)
     if build.returncode != 0:
         return CANNOT_RUN
     # Every test runs past a failure, so that a rerun of those named failed covers the run:
@@ -529,6 +529,20 @@ CARGO_ONLY = ("--doc", "--")
 NO_ALLOCATIONS = "not binary(allocations)"
 
 
+RUN_ONLY_FLAGS = ("--no-fail-fast", "--status-level", "--final-status-level")
+
+
+def finished_line(seconds: float) -> str:
+    """One line in cargo's format for the end of a build, `Finished `test` profile [...] target(s)
+    in 1m 02s` (or `in 42.10s`), so that the efficiency dashboard reads the build's share of a
+    test run from the output (`FINISHED` in efficiency's claude.py). The tests build with cargo's
+    `--cargo-quiet`, which drops cargo's own line and its per-crate `Compiling` lines, which cost
+    agents tokens."""
+    minutes, rest = divmod(seconds, 60)
+    took = f"{int(minutes)}m {int(rest):02d}s" if minutes else f"{seconds:.2f}s"
+    return f"Finished `test` profile [unoptimized + debuginfo] target(s) in {took}"
+
+
 def session_command(args: list[str], nextest: bool) -> list[str] | None:
     """The command `by test-rust <args>` runs in `rust/`, or none for the whole workspace as the
     check runs it (`rust_tests_step`): cargo-nextest's for a package or a name filter, and
@@ -570,6 +584,18 @@ def session_tests(args: argparse.Namespace) -> int:
         os.environ.update(lease.env())
         if cmd is None:
             return rust_tests_step()
+        if cmd[:3] == ["cargo", "nextest", "run"]:
+            # Build first, timed, so the output carries the build's seconds; the run then
+            # builds nothing.
+            started = time.perf_counter()
+            # `--no-run` conflicts with the flags that shape a run.
+            build = [a for a in cmd[3:] if not a.startswith(RUN_ONLY_FLAGS)]
+            built = subprocess.run(
+                [*cmd[:3], "--no-run", *build], cwd=paths.RUST, check=False
+            )
+            if built.returncode != 0:
+                return built.returncode
+            print(finished_line(time.perf_counter() - started), flush=True)
         return subprocess.run(cmd, cwd=paths.RUST, check=False).returncode
 
 

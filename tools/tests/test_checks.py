@@ -748,3 +748,13 @@ def test_doctests_run_only_in_the_packages_that_hold_them(tmp_path: Path) -> Non
     ]
     assert rust_tests.doctest_packages(packages, None) == ["with"]
     assert rust_tests.doctest_packages(packages, ["without"]) == []
+
+
+def test_the_build_line_matches_the_efficiency_dashboards_pattern() -> None:
+    import re
+
+    finished = re.compile(r"Finished\b[^\n]*? in (?:(\d+)m )?(\d+(?:\.\d+)?)s\b")
+    short = finished.search(rust_tests.finished_line(42.1))
+    assert short is not None and (short[1], short[2]) == (None, "42.10")
+    long = finished.search(rust_tests.finished_line(62.0))
+    assert long is not None and (long[1], long[2]) == ("1", "02")
