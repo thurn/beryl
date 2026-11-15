@@ -14,6 +14,8 @@ from pathlib import Path
 
 from . import (
     bead,
+    ci,
+    cilog,
     claude,
     codex,
     cpu,
@@ -48,6 +50,8 @@ def sources() -> list[ingest.Source]:
         codex.Rollouts(paths.codex_sessions(), checkout, host),
         cpu.Samples(cpu.samples_path(paths.cache_root()), host),
         cpu.Leases(cpu.leases_path(paths.cache_root()), host),
+        cilog.RunLog(cilog.runlog_path(paths.cache_root())),
+        cilog.Verdicts.here(checkout),
     ]
 
 
@@ -378,6 +382,13 @@ def run_machine(args: argparse.Namespace) -> Result:
     return answer(args, machine.report)
 
 
+def run_ci(args: argparse.Namespace) -> Result:
+    return answer(
+        args,
+        lambda db, f, s: ci.report(db, f, s, str(args.script), args.lane, args.family),
+    )
+
+
 def run_metrics(args: argparse.Namespace) -> Result:
     if args.name is None:
         return metrics.listing()
@@ -401,6 +412,10 @@ QUERIES: dict[str, tuple[str, Callable[[argparse.Namespace], Result]]] = {
         "cores in use, saturation, time queued for cores, shared CPU, capacity",
         run_machine,
     ),
+    "ci": (
+        "CI's cost, catches and flakiness by script, check lane, family and check",
+        run_ci,
+    ),
     "metrics": ("the named series, or one series by day", run_metrics),
     "ingest": ("update the store from the sources", run_ingest),
     "sql": ("run a read-only SQL query against the store", run_sql),
@@ -417,6 +432,7 @@ SCOPED: dict[str, str] = {
     "dollars": "7d",
     "metrics": "7d",
     "machine": "7d",
+    "ci": "7d",
     "epic": "all",
     "bead": "all",
     "session": "all",
@@ -454,6 +470,14 @@ def parser() -> argparse.ArgumentParser:
             p.add_argument("--by", choices=rollups.TIME_BY, default="kind")
         if name == "dollars":
             p.add_argument("--by", choices=rollups.DOLLARS_BY, default="source")
+        if name == "ci":
+            p.add_argument(
+                "--script",
+                default="ci",
+                help="ci (slow CI, the default), check, sweep, nightly or bisect",
+            )
+            p.add_argument("--lane", help="only this check lane, by family")
+            p.add_argument("--family", help="only this family, by check")
         if name == "metrics":
             p.add_argument("name", nargs="?", metavar="<name>", help="a metric's name")
         if name in SCOPED:

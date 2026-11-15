@@ -33,15 +33,16 @@ def main_checkout(start: Path) -> Path:
     return Path(found).parent
 
 
-def run_bd(cwd: Path) -> bytes:
+def run_bd(cwd: Path, command: list[str] = COMMAND) -> bytes:
+    """`command`'s output, run in `cwd`; `bd list` by default."""
     try:
-        done = subprocess.run(COMMAND, cwd=cwd, capture_output=True, check=False)
+        done = subprocess.run(command, cwd=cwd, capture_output=True, check=False)
     except OSError as e:
-        raise SourceError(f"{' '.join(COMMAND)}: {e}") from e
+        raise SourceError(f"{' '.join(command)}: {e}") from e
     if done.returncode != 0:
         message = done.stderr.decode(errors="replace").strip().splitlines()
         raise SourceError(
-            f"{' '.join(COMMAND)} exited {done.returncode}: {message[-1] if message else ''}"
+            f"{' '.join(command)} exited {done.returncode}: {message[-1] if message else ''}"
         )
     return done.stdout
 

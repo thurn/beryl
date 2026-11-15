@@ -359,6 +359,63 @@ MIGRATIONS: tuple[str, ...] = (
     -- survive the call's row being read again.
     ALTER TABLE tool_calls DROP COLUMN queued_seconds;
     """,
+    """
+    -- CI accounting, from the run log and the verdicts on the checks' beads. `checks` adds
+    -- up the run log's lines: one row per check per local day per host and script, with
+    -- `first` its earliest line's time. `runs` counts the lines that ran (passed, failed or
+    -- pending), `seconds` their wall seconds, `cpu_seconds` their measured CPU and
+    -- `measured_seconds` the wall seconds of the lines that measured it, so that the CPU of
+    -- the rest can be estimated.
+    DROP TABLE checks;
+    CREATE TABLE checks (
+        day TEXT NOT NULL,
+        host TEXT NOT NULL,
+        script TEXT NOT NULL,
+        lane TEXT NOT NULL,
+        "check" TEXT NOT NULL,
+        first TEXT NOT NULL,
+        runs INTEGER NOT NULL,
+        passes INTEGER NOT NULL,
+        fails INTEGER NOT NULL,
+        skips INTEGER NOT NULL,
+        seconds REAL NOT NULL,
+        cpu_seconds REAL NOT NULL,
+        measured_seconds REAL NOT NULL,
+        PRIMARY KEY (day, host, script, lane, "check")
+    );
+    -- One row per run of a check lane: the run log's lines of one script, worktree, commit,
+    -- tree and lane added up, from the earliest check's start to the latest one's end.
+    CREATE TABLE lane_runs (
+        host TEXT NOT NULL,
+        script TEXT NOT NULL,
+        worktree TEXT NOT NULL,
+        "commit" TEXT NOT NULL,
+        tree TEXT NOT NULL,
+        lane TEXT NOT NULL,
+        start TEXT NOT NULL,
+        end TEXT NOT NULL,
+        checks INTEGER NOT NULL,
+        fails INTEGER NOT NULL,
+        seconds REAL NOT NULL,
+        cpu_seconds REAL NOT NULL,
+        measured_seconds REAL NOT NULL,
+        PRIMARY KEY (host, script, worktree, "commit", tree, lane)
+    );
+    CREATE INDEX lane_runs_start ON lane_runs (script, start);
+    -- One row per verdict on a check's failure, keyed by its comment on the check's bead;
+    -- `time` is the failure's.
+    CREATE TABLE verdicts (
+        comment TEXT PRIMARY KEY,
+        "check" TEXT NOT NULL,
+        time TEXT NOT NULL,
+        host TEXT NOT NULL,
+        "commit" TEXT NOT NULL,
+        script TEXT NOT NULL,
+        lane TEXT NOT NULL,
+        verdict TEXT NOT NULL,
+        steward TEXT
+    );
+    """,
 )
 
 

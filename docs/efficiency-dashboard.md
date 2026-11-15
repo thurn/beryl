@@ -707,6 +707,13 @@ At every level of the tree the same figures are shown:
   caused. The cost of the sessions that worked the beads filed for flaky checks
   is shown beside it, in dollars.
 
+Failures count under the script that recorded them, so a catch by the fast check
+is not counted in slow CI's tree. This differs from `just ci-value`, which
+credits a check with catches from any script and counts the checks of a group
+that fails together once per commit. The two agree on slow CI's runs and CPU
+seconds. The run log is kept added up per day, so a check's CPU for one run is a
+mean, not a median.
+
 ```text
 slow CI, last 7 days      431 runs    141 core h
   check lane   core h  catches  flaky  stale  misses  core h per catch

@@ -59,6 +59,13 @@ store" and "Isolation" before changing anything here.
   for cores. It also gives each minute of a worktree's CPU to a bead.
   `facts.Facts.core_minutes` uses it per bead, and `machine.py` is the `machine`
   query and the CPU metrics.
+- `cilog.py`: CI's sources. The run log is added up as it is read into one
+  `checks` row per check per local day per host and script and one `lane_runs`
+  row per run of a check lane (a `LineSource` whose `merges` add each row to the
+  stored one); no line is kept. The verdicts on the `ci-check` beads come from
+  `bd export` into `verdicts`. `family` names a check's family. `ci.py` is the
+  `ci` query (the tree script, check lane, family, check, with CPU by kind of
+  process from the sampler) and the CI metrics.
 - The query layer: `scope.py` parses `--since` and the cohort filters into a
   `Scope`; `facts.py` loads beads and windows with their `window_time` and
   `window_dollars` rows, which every query adds up, so that a roll-up's lines

@@ -13,8 +13,12 @@ A source is one of three kinds:
   app's session records. A file is read whole when its size or modification time changed.
 
 Each kind turns its input into rows, `(table, {column: value})`, written with
-`INSERT OR REPLACE` so that reading the same bytes twice changes nothing. A malformed line or
-record is skipped and counted, and never stops an ingest.
+`INSERT OR REPLACE` so that reading the same bytes twice changes nothing. A `LineSource` may
+instead name tables whose rows add up (`LineSource.merges`), such as one row per check per day
+from the run log's line per check per run: each row is added to the stored row with the same
+key. Since a file's offset is recorded in the same transaction as the rows read up to it, each
+line is still added exactly once. A malformed line or record is skipped and counted, and never
+stops an ingest.
 """
 
 from __future__ import annotations
@@ -33,6 +37,15 @@ from . import store
 
 # A row for the store: its table and its columns' values.
 Row = tuple[str, dict[str, object]]
+# How a table's rows add up: each column that is not part of the key, with how a new row's
+# value combines with the stored one: `sum`, `min` or `max`.
+Merge = dict[str, str]
+# The SQL that combines a stored value (the column) with a new one (`excluded.<column>`).
+COMBINE: dict[str, str] = {
+    "sum": '"{0}" + excluded."{0}"',
+    "min": 'min("{0}", excluded."{0}")',
+    "max": 'max("{0}", excluded."{0}")',
+}
 # How many leading bytes of a file its fingerprint covers.
 FINGERPRINT_BYTES = 256
 # How many rows a `LineSource` writes per transaction. A transcript can be hundreds of
@@ -77,6 +90,8 @@ class LineSource(ABC):
     """Files of lines, each read from its recorded offset."""
 
     name: str = ""
+    # The tables whose rows add up rather than replace each other, with how (`Merge`).
+    merges: dict[str, Merge] = {}
 
     @abstractmethod
     def files(self) -> list[Path]:
@@ -187,16 +202,58 @@ def record_position(
     )
 
 
-def write(db: sqlite3.Connection, rows: Iterable[Row]) -> int:
-    """Writes `rows`, replacing any with the same key. Returns how many."""
-    count = 0
+def combined(how: str, a: object, b: object) -> object:
+    """Two values of a merged column combined as `how` says (`Merge`)."""
+    if isinstance(a, str) and isinstance(b, str) and how != "sum":
+        return min(a, b) if how == "min" else max(a, b)
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        if how == "sum":
+            return a + b
+        return min(a, b) if how == "min" else max(a, b)
+    raise TypeError(f"cannot combine {a!r} and {b!r} as {how}")
+
+
+def combine(rows: Iterable[Row], merges: dict[str, Merge]) -> list[Row]:
+    """`rows` with those of the same table and key in `merges` combined into one."""
+    kept: list[Row] = []
+    merged: dict[tuple[str, tuple[object, ...]], dict[str, object]] = {}
     for table, values in rows:
+        merge = merges.get(table)
+        if merge is None:
+            kept.append((table, values))
+            continue
+        key = (table, tuple(v for c, v in values.items() if c not in merge))
+        old = merged.get(key)
+        if old is None:
+            merged[key] = dict(values)
+            continue
+        for column, how in merge.items():
+            old[column] = combined(how, old[column], values[column])
+    return kept + [(table, values) for (table, _), values in merged.items()]
+
+
+def write(
+    db: sqlite3.Connection, rows: Iterable[Row], merges: dict[str, Merge] | None = None
+) -> int:
+    """Writes `rows`, replacing any with the same key, or for a table in `merges` adding
+    each to the stored row with the same key. Returns how many rows were written."""
+    count = 0
+    for table, values in combine(rows, merges or {}):
+        merge = (merges or {}).get(table)
         columns = ", ".join(f'"{c}"' for c in values)
         marks = ", ".join("?" for _ in values)
-        db.execute(
-            f'INSERT OR REPLACE INTO "{table}" ({columns}) VALUES ({marks})',
-            list(values.values()),
-        )
+        if merge is None:
+            sql = f'INSERT OR REPLACE INTO "{table}" ({columns}) VALUES ({marks})'
+        else:
+            key = ", ".join(f'"{c}"' for c in values if c not in merge)
+            updates = ", ".join(
+                f'"{c}" = ' + COMBINE[how].format(c) for c, how in merge.items()
+            )
+            sql = (
+                f'INSERT INTO "{table}" ({columns}) VALUES ({marks}) '
+                f"ON CONFLICT ({key}) DO UPDATE SET {updates}"
+            )
+        db.execute(sql, list(values.values()))
         count += 1
     return count
 
@@ -262,16 +319,16 @@ def read_file_lines(
                 except MALFORMED:
                     skipped += 1
             if len(rows) >= BATCH_ROWS:
-                save_batch(db, source.name, key, offset, print_, rows, skipped, tally)
+                save_batch(db, source, key, offset, print_, rows, skipped, tally)
                 rows, skipped = [], 0
-        save_batch(db, source.name, key, offset, print_, rows, skipped, tally)
+        save_batch(db, source, key, offset, print_, rows, skipped, tally)
     tally.bytes_read += offset - start
     return offset > start
 
 
 def save_batch(
     db: sqlite3.Connection,
-    source: str,
+    source: LineSource,
     key: str,
     offset: int,
     print_: str,
@@ -280,11 +337,11 @@ def save_batch(
     tally: Tally,
 ) -> None:
     with db:
-        tally.rows += write(db, rows)
-        record_position(db, source, key, offset, print_, skipped)
+        tally.rows += write(db, rows, source.merges)
+        record_position(db, source.name, key, offset, print_, skipped)
         db.execute(
             "INSERT OR IGNORE INTO settings (key, value) VALUES (?, '')",
-            (unfinished_key(source, key),),
+            (unfinished_key(source.name, key),),
         )
     tally.skipped += skipped
 

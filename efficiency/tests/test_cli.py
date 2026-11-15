@@ -22,6 +22,8 @@ TABLES = {
     "labels",
     "commits",
     "checks",
+    "lane_runs",
+    "verdicts",
     "cpu",
     "cpu_minutes",
     "leases",
