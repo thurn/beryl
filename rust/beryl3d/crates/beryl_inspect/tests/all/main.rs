@@ -6,9 +6,11 @@
 
 mod cli;
 mod differential;
+mod faults;
 mod frame_allocation;
 mod gate;
 mod pack;
 mod recorded;
 mod runner;
+mod specs;
 mod stress;

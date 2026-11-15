@@ -197,12 +197,22 @@ const COMMANDS: [Command; 8] = [
         spec: Spec {
             recording: false,
             values: &[],
-            switches: &[test::EVERY_TICK],
+            switches: &[test::EVERY_TICK, test::UPDATE, test::RAISE],
         },
-        own: &[(
-            "--every-tick",
-            "check every tick instead of the check times, as the sweep does",
-        )],
+        own: &[
+            (
+                "--every-tick",
+                "check every tick instead of the check times, as the sweep does",
+            ),
+            (
+                "--update",
+                "lower data/beryl3d/test-faults.json to the faults found, and remove entries at zero",
+            ),
+            (
+                "--raise",
+                "beside --update: also raise and add entries; the commit says which bead owns the fault",
+            ),
+        ],
         run: test::test,
     },
     Command {

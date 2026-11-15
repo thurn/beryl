@@ -20,8 +20,14 @@ fn one_test_runs_and_closes_with_one_line() {
         lines.next(),
         Some("just b3d test b3d:verbs-zones/you/1600x900")
     );
-    let closing = lines.last().unwrap_or_default();
+    let rest: Vec<&str> = lines.collect();
+    let closing = rest[rest.len() - 2];
     assert!(closing.starts_with("1 test, 0 failed"), "{closing}");
+    assert!(
+        rest[rest.len() - 1].contains("a listed fault"),
+        "{}",
+        rest[rest.len() - 1]
+    );
 
     let ran = run(&["test", "verbs-zones/you/1600x900", "--json"]);
     let value: Value = serde_json::from_str(&ran.stdout).expect("JSON");

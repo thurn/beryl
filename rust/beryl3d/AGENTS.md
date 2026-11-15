@@ -160,6 +160,19 @@ project, and selects the main lanes.
   runs a prefix's tests. They are set from a measurement and rise by the same
   rule as the frame limits.
 
+- `data/beryl3d/test-faults.json`:
+  `{"tests": {"<test name>": {"<rule>": <count>}}}`, the faults each interface
+  test of `just b3d test` may have today, counted by the rule's word
+  (`Rule::word`). These are faults that a later milestone's verb, mark or
+  placement removes, so the run passes while they exist and still fails for any
+  fault that is not listed or a count over its entry. An entry that is now too
+  high also fails, with the command that lowers it, so that a fix is recorded in
+  the commit that makes it. `just b3d test --update` lowers entries and removes
+  those at zero, and changes nothing when nothing improved. It raises or adds an
+  entry only with `--raise` beside it, and the commit that does so says which
+  bead owns the fault. The list is held at the check times only, not with
+  `--every-tick`.
+
 A break caused by a change to the main workspace (a renamed `beryl_session`
 item, say) is fixed in the Beryl 3D change that meets it, not by holding the
 main change back.
