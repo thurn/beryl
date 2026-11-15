@@ -269,5 +269,112 @@ pub mod scenarios {
                 ME.has(Zone::Exile, ANIMATE, 1),
                 ME.controls(ANIMATE, 0),
             ]),
+        // The only target leaves in response, so the Aura spell has no legal target and
+        // doesn't resolve (CR 608.2b); as a spell that didn't resolve it goes to its owner's
+        // graveyard, never entering the battlefield, so its enters ability never exists.
+        SETUP
+            .titled("Animate Dead fizzles when the creature card is exiled in response")
+            .interaction(&[Card::TormodsCrypt])
+            .battlefield(P0, &[Card::Swamp, Card::Plains, Card::TormodsCrypt])
+            .actions(&[
+                ME.casts(ANIMATE),
+                ME.activates(Card::TormodsCrypt, 0),
+                ME.targets_player(THEM),
+                Resolve,
+                Resolve,
+                ME.has(Zone::Graveyard, ANIMATE, 1),
+                ME.controls(ANIMATE, 0),
+                THEM.has(Zone::Exile, Prop::Vanilla, 1),
+                ME.controls(Prop::Vanilla, 0),
+            ]),
+        // Any graveyard: the caster's own creature card comes back too, with -1/-0 to its 3/1.
+        SETUP
+            .titled("Animate Dead returns a creature card from its controller's own graveyard")
+            .graveyard(P0, &[Prop::Flier])
+            .actions(&[
+                ME.casts(ANIMATE),
+                ME.targets(Prop::Flier),
+                Resolve,
+                Resolve,
+                ME.controls(Prop::Flier, 1),
+                ME.pt(Prop::Flier, 2, 1),
+                THEM.has(Zone::Graveyard, Prop::Vanilla, 1),
+            ]),
+        // The creature dies: Animate Dead is attached to nothing and goes to the graveyard as a
+        // state-based action (CR 704.5m). The creature goes to its owner's graveyard.
+        GET_LOST_SETUP
+            .titled("The Animate Dead creature destroyed: Animate Dead goes to the graveyard")
+            .interaction(&[Card::GetLost])
+            .actions(&[
+                ME.casts(ANIMATE),
+                Resolve,
+                Resolve,
+                ME.casts(Card::GetLost),
+                ME.targets(Prop::Vanilla),
+                Resolve,
+                ME.has(Zone::Graveyard, ANIMATE, 1),
+                ME.controls(ANIMATE, 0),
+                THEM.has(Zone::Graveyard, Prop::Vanilla, 1),
+            ]),
+        // Rest in Peace exiles each card that would go to a graveyard (CR 614.1): Animate
+        // Dead destroyed is exiled, and the creature it sacrifices is exiled with it.
+        GET_LOST_SETUP
+            .titled("Animate Dead destroyed under Rest in Peace exiles both")
+            .interaction(&[Card::GetLost, Card::RestInPeace])
+            .battlefield(P1, &[Card::RestInPeace])
+            .actions(&[
+                ME.casts(ANIMATE),
+                Resolve,
+                Resolve,
+                ME.controls(Prop::Vanilla, 1),
+                ME.casts(Card::GetLost),
+                ME.targets(ANIMATE),
+                Resolve,
+                Resolve,
+                ME.has(Zone::Exile, ANIMATE, 1),
+                THEM.has(Zone::Exile, Prop::Vanilla, 1),
+                ME.controls(Prop::Vanilla, 0),
+            ]),
+        // The sacrifice trigger is a triggered ability on the stack, and Stifle counters it:
+        // the creature stays under P0's control, without the -1/-0 of the Aura now in the
+        // graveyard.
+        GET_LOST_SETUP
+            .titled("Stifle on the sacrifice trigger leaves the creature")
+            .interaction(&[Card::GetLost, Card::Stifle])
+            .battlefield(P1, &[Card::Island])
+            .hand(P1, &[Card::Stifle])
+            .actions(&[
+                ME.casts(ANIMATE),
+                Resolve,
+                Resolve,
+                ME.casts(Card::GetLost),
+                ME.targets(ANIMATE),
+                Resolve,
+                ME.passes(),
+                THEM.casts(Card::Stifle),
+                stack(0),
+                ME.has(Zone::Graveyard, ANIMATE, 1),
+                ME.controls(Prop::Vanilla, 1),
+                ME.pt(Prop::Vanilla, 2, 1),
+            ]),
+        // Stifle on the enters trigger: the Aura entered attached to the creature card in the
+        // graveyard (CR 303.4a), which is still a legal object for "enchant creature card in a
+        // graveyard", so it stays on the battlefield (CR 704.5m doesn't apply) and the card
+        // is not returned.
+        SETUP
+            .titled("Stifle on the enters trigger leaves the creature card")
+            .interaction(&[Card::Stifle])
+            .battlefield(P1, &[Card::Island])
+            .hand(P1, &[Card::Stifle])
+            .actions(&[
+                ME.casts(ANIMATE),
+                Resolve,
+                ME.passes(),
+                THEM.casts(Card::Stifle),
+                stack(0),
+                ME.controls(ANIMATE, 1),
+                THEM.has(Zone::Graveyard, Prop::Vanilla, 1),
+                ME.controls(Prop::Vanilla, 0),
+            ]),
     ];
 }

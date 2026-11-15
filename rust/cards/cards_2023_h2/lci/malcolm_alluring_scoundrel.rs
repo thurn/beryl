@@ -122,5 +122,70 @@ pub mod scenarios {
                 ME.has(Zone::Hand, Card::Island, 3),
                 THEM.life(12),
             ]),
+        // Cast without paying its mana cost, the flier's total cost starts at zero, an
+        // alternative cost, and Trinisphere raises it to three
+        // ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f)): "Once the total
+        // cost is determined, any effects that directly affect the total cost are applied."
+        Scenario::new("Trinisphere raises the free cast to three")
+            .interaction(&[Card::Trinisphere])
+            .battlefield(
+                P0,
+                &[
+                    MALCOLM,
+                    Card::Trinisphere,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                ],
+            )
+            // Malcolm's draws in turns 1, 3, 5 and 7 and the draw steps of 3, 5 and 7: Islands,
+            // then the flier last.
+            .library(
+                P0,
+                &[
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    FLIER,
+                ],
+            )
+            .library(P1, &[Card::Plains, Card::Plains, Card::Plains])
+            .actions(&[
+                HITS[0][0],
+                HITS[0][1],
+                HITS[0][2],
+                HITS[0][3],
+                HITS[0][4],
+                ME.counters(MALCOLM, CounterKind::Chorus, 1),
+                HITS[1][0],
+                HITS[1][1],
+                HITS[1][2],
+                HITS[1][3],
+                HITS[1][4],
+                HITS[2][0],
+                HITS[2][1],
+                HITS[2][2],
+                HITS[2][3],
+                HITS[2][4],
+                ME.counters(MALCOLM, CounterKind::Chorus, 3),
+                HITS[3][0],
+                HITS[3][1],
+                HITS[3][2],
+                HITS[3][3],
+                HITS[3][4],
+                // Three Islands and the flier in hand.
+                ME.picks(FLIER),
+                ME.chooses(DecisionKind::CastOffer, FLIER),
+                stack(1),
+                Resolve,
+                ME.counters(MALCOLM, CounterKind::Chorus, 4),
+                ME.controls(FLIER, 1),
+                ME.tapped(Card::Mountain, 3),
+                ME.has(Zone::Hand, Card::Island, 3),
+                THEM.life(12),
+            ]),
     ];
 }

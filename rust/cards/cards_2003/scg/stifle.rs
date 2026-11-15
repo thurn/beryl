@@ -161,5 +161,62 @@ pub mod scenarios {
                 ME.life(22),
                 THEM.has(Zone::Graveyard, Card::Stifle, 1),
             ]),
+        // Stifle can target only an ability (CR 114.1 and its "target activated or triggered
+        // ability"), so with only a spell on the stack it can't be cast: P0 can pass or cast
+        // Counterspell, and nothing else.
+        Scenario::new("Stifle can't be cast with only a spell on the stack")
+            .battlefield(P0, &[Card::Island, Card::Island])
+            .hand(P0, &[Card::Stifle, Card::Counterspell])
+            .battlefield(P1, &[Card::Plains])
+            .hand(P1, &[Prop::Artifact])
+            .at(2, P1, TurnStep::PrecombatMain)
+            .actions(&[
+                THEM.casts(Prop::Artifact),
+                ME.deciding(DecisionKind::Priority, 2),
+            ]),
+        // Cycling is an activated ability. Stifle counters the draw, and the card, discarded as
+        // a cost, stays in the graveyard (CR 602.2b, costs are paid on activation).
+        Scenario::new("Stifle counters a cycling ability")
+            .interaction(&[Card::SparasHeadquarters])
+            .battlefield(P0, &[Card::Island])
+            .hand(P0, &[Card::Stifle])
+            .battlefield(P1, &[Card::Plains; 3])
+            .hand(P1, &[Card::SparasHeadquarters])
+            .library(P1, &[Card::Plains, Card::Plains])
+            .at(2, P1, TurnStep::PrecombatMain)
+            .actions(&[
+                THEM.activates(Card::SparasHeadquarters, 4),
+                ME.casts(Card::Stifle),
+                stack(0),
+                THEM.has(Zone::Graveyard, Card::SparasHeadquarters, 1),
+                THEM.has(Zone::Hand, Card::Plains, 0),
+                THEM.has(Zone::Hand, Card::Island, 0),
+            ]),
+        // The leaves trigger of Fiend Hunter, countered, never returns the creature, which
+        // stays in exile for good (the second ruling of Fiend Hunter's leaves ability).
+        Scenario::new("Stifle counters a leaves trigger")
+            .interaction(&[Card::FiendHunter, Card::GetLost])
+            .hand(P0, &[Card::FiendHunter, Card::GetLost])
+            .battlefield(P0, &[Card::Plains; 5])
+            .battlefield(P1, &[Prop::Flier, Card::Island])
+            .hand(P1, &[Card::Stifle])
+            .library(P0, &[Card::Plains])
+            .library(P1, &[Card::Plains])
+            .actions(&[
+                ME.casts(Card::FiendHunter),
+                Resolve,
+                Resolve,
+                ME.yes(),
+                THEM.has(Zone::Exile, Prop::Flier, 1),
+                ME.casts(Card::GetLost),
+                Resolve,
+                ME.has(Zone::Graveyard, Card::FiendHunter, 1),
+                stack(1),
+                ME.passes(),
+                THEM.casts(Card::Stifle),
+                stack(0),
+                THEM.has(Zone::Exile, Prop::Flier, 1),
+                THEM.controls(Prop::Flier, 0),
+            ]),
     ];
 }

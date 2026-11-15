@@ -429,5 +429,84 @@ pub mod scenarios {
                 advance_to(2, TurnStep::EndOfCombat),
                 ME.life(18),
             ]),
+        // CR 702.140a: a mutating creature spell targets a non-Human creature its caster owns. The
+        // only creature P0 has is a Human (Hired Blade), so with the three Forests that pay for
+        // mutate and not the four that pay the mana cost, the cast is not offered.
+        Scenario::new("Gemrazer can't mutate onto a Human")
+            .interaction(&[Prop::FlashCreature])
+            .battlefield(
+                P0,
+                &[
+                    Card::Forest,
+                    Card::Forest,
+                    Card::Forest,
+                    Prop::FlashCreature,
+                ],
+            )
+            .hand(P0, &[Card::Gemrazer])
+            .library(P0, &[Card::Island])
+            // With no cast offered, the only decision before combat is whether to attack with the
+            // Hired Blade, so the game passes priority on its own.
+            .actions(&[ME.deciding(DecisionKind::Attacker, 2)]),
+        // CR 702.140a: "non-Human creature you own". A creature P1 owns is not a legal target even
+        // under P0's control, and a creature P1 controls and owns certainly isn't.
+        Scenario::new("Gemrazer can't mutate onto an opponent's creature")
+            .battlefield(P0, &[Card::Forest, Card::Forest, Card::Forest])
+            .hand(P0, &[Card::Gemrazer])
+            .battlefield(P1, &[Prop::Vanilla])
+            .library(P0, &[Card::Island])
+            // With no cast offered, P0 has nothing to do in the turn and the game reaches P1's
+            // first priority.
+            .actions(&[THEM.deciding(DecisionKind::Priority, 2)]),
+        // CR 730.2 / CR 702.140b: the merged permanent is the same object as the target, so
+        // +1/+1 counters and attached Equipment stay on it: over a 2/1 with two +1/+1 counters
+        // wearing a +1/+1 Equipment, a 4/4 Gemrazer is 7/7.
+        Scenario::new("Gemrazer over a creature keeps its counters and Equipment")
+            .interaction(&[Card::LeoninScimitar])
+            .permanents(
+                P0,
+                &[
+                    Permanent::new(Prop::Vanilla).counters(CounterKind::PlusOne, 2),
+                    Permanent::new(Prop::Equipment),
+                ],
+            )
+            .battlefield(
+                P0,
+                &[Card::Forest, Card::Forest, Card::Forest, Card::Forest],
+            )
+            .hand(P0, &[Card::Gemrazer])
+            .battlefield(P1, &[Card::LeoninScimitar])
+            .library(P1, &[Card::Island])
+            .actions(&[
+                ME.activates(Prop::Equipment, 1),
+                Resolve,
+                ME.pt(Prop::Vanilla, 5, 4),
+                MUTATE,
+                Resolve,
+                ME.yes(),
+                Resolve,
+                ME.pt(Card::Gemrazer, 7, 7),
+                ME.counters(Card::Gemrazer, CounterKind::PlusOne, 2),
+            ]),
+        // CR 702.140 / CR 302.6: mutating moves nothing onto the battlefield, so a summoning
+        // sick Gold Myr stays sick as the merged creature and can't pay {T} for its {W}; the
+        // fourth Forest alone can't cast Get Lost ({1}{W}).
+        Scenario::new("Gemrazer over a summoning-sick creature is still sick")
+            .interaction(&[Card::GoldMyr, Card::GetLost])
+            .permanents(P0, &[Permanent::new(Card::GoldMyr).sick()])
+            .battlefield(
+                P0,
+                &[Card::Forest, Card::Forest, Card::Forest, Card::Forest],
+            )
+            .hand(P0, &[Card::Gemrazer, Card::GetLost])
+            .battlefield(P1, &[Card::LeoninScimitar, Prop::Vanilla])
+            .library(P1, &[Card::Island])
+            .actions(&[
+                MUTATE,
+                Resolve,
+                ME.yes(),
+                Resolve,
+                ME.deciding(DecisionKind::Priority, 1),
+            ]),
     ];
 }

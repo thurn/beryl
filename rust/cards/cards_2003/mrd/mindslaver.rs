@@ -229,5 +229,59 @@ pub mod scenarios {
             THEM.has(Zone::Library, Prop::Flier, 1),
             THEM.life(23),
         ]),
+        // CR 724.8: the controller keeps making their own decisions. In P1's controlled turn P0
+        // casts P1's Oust at P1's creature, then, as themself, responds with their own Sink into
+        // Stupor on the Oust, paying with their own Islands; the Oust returns to P1's hand and
+        // P1's creature stays.
+        slaving("the controller also acts for themself during the controlled turn")
+            .interaction(&[Prop::Removal])
+            .hand(P0, &[Prop::Removal])
+            .battlefield(
+                P0,
+                &[
+                    MINDSLAVER,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Prop::Vanilla,
+                ],
+            )
+            .actions(&[
+                ME.activates(MINDSLAVER, 0),
+                ME.targets_player(THEM),
+                Resolve,
+                advance_to(2, TurnStep::PrecombatMain),
+                ME.casts(Prop::Sorcery),
+                ME.targets(Prop::Flier),
+                // Their own spell alone on the stack, P1 is not asked to pass: P0 holds priority
+                // as themself.
+                ME.casts(Prop::Removal),
+                ME.targets(Prop::Sorcery),
+                // Nobody can respond, so the Sink into Stupor resolves, and then the Oust is gone.
+                THEM.controls(Prop::Flier, 1),
+                THEM.has(Zone::Hand, Prop::Sorcery, 1),
+                ME.has(Zone::Graveyard, Prop::Removal, 1),
+                ME.tapped(Card::Island, 7),
+            ]),
+        // CR 724.5: the controller makes the controlled player's cleanup-step discard choice
+        // ("a player makes all choices and decisions the controlled player is allowed to make"),
+        // here which of P1's nine cards go.
+        slaving("the controller chooses the controlled player's cleanup discard")
+            .hand(P1, &[Card::Plains; 8])
+            .actions(&[
+                ME.activates(MINDSLAVER, 0),
+                ME.targets_player(THEM),
+                Resolve,
+                advance_to(2, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                ME.done_attacking(),
+                advance_to(2, TurnStep::End),
+                ME.passes(),
+                ME.deciding(DecisionKind::ChooseObject, 2),
+            ]),
     ];
 }

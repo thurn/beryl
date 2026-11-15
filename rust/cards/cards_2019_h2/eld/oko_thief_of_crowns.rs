@@ -274,5 +274,123 @@ pub mod scenarios {
                 ME.controls(VANILLA, 0),
                 ME.has(Zone::Graveyard, OKO, 1),
             ]),
+        // Under Humility, Oko's effect began after Humility's and sets base 3/3 later in layer 7b
+        // (CR 613.7), so the target is a 3/3 while the others are 1/1.
+        Scenario::new("+1's Elk under an earlier Humility is 3/3")
+            .battlefield(P0, &[OKO, Card::Humility, VANILLA])
+            .battlefield(P1, &[Prop::Flier])
+            .library(P0, &[Card::Island])
+            .library(P1, &[Card::Island])
+            .actions(&[
+                ME.pt(VANILLA, 1, 1),
+                ME.activates(OKO, 1), // +1
+                ME.targets(VANILLA),
+                Resolve,
+                ME.pt(VANILLA, 3, 3),
+                THEM.pt(Prop::Flier, 1, 1),
+            ]),
+        // Humility cast after Oko's effect began applies its 1/1 later in layer 7b.
+        Scenario::new("+1's Elk under a later Humility is 1/1")
+            .battlefield(
+                P0,
+                &[
+                    OKO,
+                    VANILLA,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                ],
+            )
+            .hand(P0, &[Card::Humility])
+            .library(P0, &[Card::Island])
+            .library(P1, &[Card::Island])
+            .actions(&[
+                ME.activates(OKO, 1), // +1
+                Resolve,
+                ME.pt(VANILLA, 3, 3),
+                ME.casts(Card::Humility),
+                Resolve,
+                ME.pt(VANILLA, 1, 1),
+            ]),
+        // Counters stay on the Elk and modify the new base 3/3 (CR 613.4c).
+        Scenario::new("+1's Elk keeps its +1/+1 counters")
+            .permanents(
+                P0,
+                &[Permanent::new(VANILLA).counters(CounterKind::PlusOne, 2)],
+            )
+            .battlefield(P0, &[OKO])
+            .library(P0, &[Card::Island])
+            .library(P1, &[Card::Island])
+            .actions(&[
+                ME.pt(VANILLA, 4, 3),
+                ME.activates(OKO, 1), // +1
+                Resolve,
+                ME.pt(VANILLA, 5, 5),
+                ME.counters(VANILLA, CounterKind::PlusOne, 2),
+            ]),
+        // The Elk's ability loss is applied in layer 6, before Tarmogoyf's would define its
+        // size in layer 7a, and base 3/3 is set anyway.
+        Scenario::new("+1 on Tarmogoyf makes a 3/3 Elk")
+            .interaction(&[Card::Tarmogoyf])
+            .battlefield(P0, &[OKO, Card::Tarmogoyf])
+            .graveyard(P0, &[Prop::Flier, Prop::Sorcery, Prop::Instant])
+            .library(P0, &[Card::Island])
+            .library(P1, &[Card::Island])
+            .actions(&[
+                ME.activates(OKO, 1), // +1
+                Resolve,
+                ME.pt(Card::Tarmogoyf, 3, 3),
+                ME.has_subtype(Card::Tarmogoyf, Subtype::Elk, true),
+                ME.has_subtype(Card::Tarmogoyf, Subtype::Lhurgoyf, false),
+            ]),
+        // A land creature made an Elk is no land and no Dryad: it has the Elk type alone
+        // (CR 205.1a, CR 205.3d).
+        Scenario::new("+1's Elk replaces a land creature's subtypes")
+            .battlefield(P0, &[OKO, Card::DryadArbor])
+            .library(P0, &[Card::Island])
+            .library(P1, &[Card::Island])
+            .actions(&[
+                ME.activates(OKO, 1), // +1
+                Resolve,
+                ME.pt(Card::DryadArbor, 3, 3),
+                ME.has_subtype(Card::DryadArbor, Subtype::Elk, true),
+                ME.has_subtype(Card::DryadArbor, Subtype::Dryad, false),
+                ME.has_subtype(Card::DryadArbor, Subtype::Forest, false),
+            ]),
+        // A Food token made an Elk is a 3/3 creature with no Food ability and no Food type.
+        Scenario::new("+1 makes a Food token a 3/3 Elk")
+            .battlefield(P0, &[OKO])
+            .battlefield(P1, &[VANILLA])
+            .library(P0, &[Card::Island, Card::Island])
+            .library(P1, &[Card::Island, Card::Island])
+            .actions(&[
+                ME.activates(OKO, 0), // +2
+                Resolve,
+                advance_to(2, TurnStep::BeginningOfCombat),
+                THEM.passes(),
+                THEM.done_attacking(),
+                advance_to(3, TurnStep::PrecombatMain),
+                ME.activates(OKO, 1), // +1
+                ME.targets(FOOD_TOKEN),
+                Resolve,
+                ME.creature(FOOD_TOKEN, true),
+                ME.token_pt(FOOD_TOKEN, 3, 3),
+            ]),
+        // Opalescence's enchantment creature is a creature, so Oko can target it. Oko's effect
+        // sets its types to creature alone (CR 205.1a): it is no longer an enchantment, so
+        // Opalescence's mana-value size no longer applies and the Elk is 3/3, not 2/2.
+        Scenario::new("+1 on an Opalescence creature makes a 3/3 Elk")
+            .interaction(&[Card::DressDown])
+            .battlefield(P0, &[OKO, Card::Opalescence, Card::DressDown])
+            .library(P0, &[Card::Island])
+            .library(P1, &[Card::Island])
+            .actions(&[
+                ME.pt(Card::DressDown, 2, 2),
+                ME.activates(OKO, 1), // +1
+                Resolve,
+                ME.pt(Card::DressDown, 3, 3),
+                ME.has_subtype(Card::DressDown, Subtype::Elk, true),
+            ]),
     ];
 }

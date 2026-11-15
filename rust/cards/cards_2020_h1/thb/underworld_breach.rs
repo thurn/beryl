@@ -377,5 +377,90 @@ pub mod scenarios {
                 ME.controls(BREACH, 0),
                 ME.has(Zone::Graveyard, BREACH, 1),
             ]),
+        // [CR 107.3a]: "the player announces the value of X" as the spell is cast, and an
+        // escaped spell's cost is its mana cost, so {X}{U}{U} with X = 2 is four mana.
+        //
+        // [CR 107.3a]: https://yawgatog.com/resources/magic-rules/#R1073a
+        Scenario::new("an X spell escapes with X chosen")
+            .battlefield(
+                P0,
+                &[
+                    BREACH,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                ],
+            )
+            .graveyard(
+                P0,
+                &[Card::Braingeyser, Card::Plains, Card::Plains, Card::Plains],
+            )
+            .library(P0, &[Card::Swamp; 4])
+            .actions(&[
+                ME.escapes(Card::Braingeyser),
+                ME.x(2),
+                ME.targets_player(ME),
+                Resolve,
+                ME.has(Zone::Hand, Card::Swamp, 2),
+                ME.has(Zone::Exile, Card::Plains, 3),
+                ME.tapped(Card::Island, 4),
+            ]),
+        // An Aura card that escapes is cast targeting a creature and enters attached to it
+        // ([CR 303.4f]).
+        //
+        // [CR 303.4f]: https://yawgatog.com/resources/magic-rules/#R3034f
+        Scenario::new("an Aura card escapes and enters attached")
+            .interaction(&[Card::HolyStrength])
+            .battlefield(P0, &[BREACH, Card::Plains, Prop::Vanilla])
+            .graveyard(
+                P0,
+                &[Card::HolyStrength, Card::Island, Card::Island, Card::Island],
+            )
+            .actions(&[
+                ME.escapes(Card::HolyStrength),
+                Resolve,
+                ME.pt(Prop::Vanilla, 3, 3),
+                ME.has(Zone::Battlefield, Card::HolyStrength, 1),
+                ME.has(Zone::Exile, Card::Island, 3),
+            ]),
+        // Ruling: a countered escaped spell goes to the graveyard (CR 701.6a), not exile.
+        Scenario::new("a countered escaped spell goes to the graveyard")
+            .interaction(&[Card::Counterspell])
+            .battlefield(P0, &[BREACH, Card::Island, Card::Island])
+            .graveyard(
+                P0,
+                &[Prop::Vanilla, Card::Plains, Card::Plains, Card::Plains],
+            )
+            .battlefield(P1, &[Card::Island, Card::Island])
+            .hand(P1, &[Card::Counterspell])
+            .actions(&[
+                ME.escapes(Prop::Vanilla),
+                THEM.casts(Card::Counterspell),
+                ME.controls(Prop::Vanilla, 0),
+                ME.has(Zone::Graveyard, Prop::Vanilla, 1),
+                ME.has(Zone::Exile, Prop::Vanilla, 0),
+            ]),
+        // Once Underworld Breach is sacrificed at the end step its static ability is gone, so
+        // on P1's turn P0 may only pass or cast Counterspell from hand ([CR 611.3b]).
+        Scenario::new("the graveyard has no escape once the Breach is sacrificed")
+            .at(1, P0, TurnStep::PrecombatMain)
+            .battlefield(P0, &[BREACH, Card::Island, Card::Island])
+            .hand(P0, &[Card::Counterspell])
+            .graveyard(
+                P0,
+                &[Prop::Instant, Card::Plains, Card::Plains, Card::Plains],
+            )
+            .battlefield(P1, &[Card::Island; 4])
+            .hand(P1, &[Prop::Vanilla])
+            .library(P0, &[Card::Plains; 3])
+            .library(P1, &[Card::Plains; 3])
+            .actions(&[
+                advance_to(1, TurnStep::End),
+                Resolve,
+                advance_to(2, TurnStep::PrecombatMain),
+                THEM.casts(Prop::Vanilla),
+                ME.deciding(DecisionKind::Priority, 2),
+            ]),
     ];
 }

@@ -140,5 +140,20 @@ pub mod scenarios {
                 ME.has(Zone::Hand, HUMILITY, 1),
                 THEM.pt(Prop::Flier, 3, 1),
             ]),
+        // Tarmogoyf's characteristic-defining ability is lost in layer 6, before layer 7a would
+        // apply it, so base 1/1 is all it has however full the graveyards (CR 613.1f).
+        Scenario::new("Tarmogoyf under it is 1/1")
+            .interaction(&[Card::Tarmogoyf])
+            .battlefield(P0, &[HUMILITY, Card::Tarmogoyf])
+            .graveyard(P0, &[Prop::Flier, Prop::Sorcery, Prop::Instant])
+            .actions(&[ME.pt(Card::Tarmogoyf, 1, 1)]),
+        // Counters count after the base 1/1 (CR 613.4c).
+        Scenario::new("two +1/+1 counters count on top of the base 1/1")
+            .battlefield(P0, &[HUMILITY])
+            .permanents(
+                P0,
+                &[Permanent::new(Prop::Vanilla).counters(CounterKind::PlusOne, 2)],
+            )
+            .actions(&[ME.pt(Prop::Vanilla, 3, 3)]),
     ];
 }

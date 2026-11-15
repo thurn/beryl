@@ -257,5 +257,42 @@ pub mod scenarios {
                 ME.has_cards(Zone::Graveyard, 4),
                 ME.library_top(&[Card::Island]),
             ]),
+        // The draw is replaced by a mill, so a player with an empty library and an empty hand
+        // never draws from it and doesn't lose (CR 614.6: the replaced draw never happens;
+        // CR 704.5b: a player loses only if they attempted to draw from an empty library).
+        Scenario::new("an empty library and an empty hand: the replaced draw doesn't lose")
+            .interaction(&[DRESS])
+            .battlefield(P0, ISLANDS)
+            .battlefield(P1, &[CHAINS])
+            .hand(P0, &[DRESS])
+            .library(P0, &[])
+            .actions(&[
+                ME.casts(DRESS),
+                Resolve,
+                Resolve,
+                ME.has_cards(Zone::Hand, 0),
+                ME.has_cards(Zone::Library, 0),
+                ME.has_cards(Zone::Graveyard, 0),
+            ]),
+        // A draw in the upkeep is not in the draw step, so it is replaced; the draw step's
+        // draw is still the first one drawn in that step (CR 504.1).
+        Scenario::new("an upkeep draw is replaced, the draw step's draw is not")
+            .interaction(&[DRESS])
+            .at(3, P0, TurnStep::Upkeep)
+            .battlefield(P0, ISLANDS)
+            .battlefield(P1, &[CHAINS])
+            .hand(P0, &[DRESS, Card::Plains])
+            .library(P0, LIBRARY)
+            .actions(&[
+                ME.casts(DRESS),
+                Resolve,
+                Resolve,
+                ME.has(Zone::Graveyard, Card::Plains, 1),
+                ME.has(Zone::Hand, Card::Island, 1),
+                ME.passes(),
+                ME.has(Zone::Hand, Card::Plains, 1),
+                ME.has_cards(Zone::Hand, 2),
+                ME.has_cards(Zone::Graveyard, 1),
+            ]),
     ];
 }

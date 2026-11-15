@@ -136,5 +136,21 @@ pub mod scenarios {
                 ME.plays(Card::SeachromeCoast),
                 ME.tapped(Card::SeachromeCoast, 0),
             ]),
+        // Under Humility, Dryad Arbor loses the mana ability its Mountain type gives it
+        // (CR 305.6, CR 613.1f), whichever of the two effects began first: one Mountain alone
+        // can't pay for Gold Myr, and P0 is given no priority in the main phase.
+        Scenario::new("Dryad Arbor under Blood Moon and Humility makes no mana")
+            .interaction(&[Card::GoldMyr])
+            .battlefield(
+                P0,
+                &[BLOOD_MOON, Card::Humility, Card::DryadArbor, Card::Mountain],
+            )
+            .hand(P0, &[Card::GoldMyr])
+            .actions(&[ME.deciding(DecisionKind::Attacker, 2)]),
+        // Opalescence makes Blood Moon a creature, and a 3/3 one; Blood Moon is no land, so it
+        // still changes nothing about itself.
+        Scenario::new("Blood Moon under Opalescence is a 3/3 creature")
+            .battlefield(P0, &[BLOOD_MOON, Card::Opalescence])
+            .actions(&[ME.creature(BLOOD_MOON, true), ME.pt(BLOOD_MOON, 3, 3)]),
     ];
 }

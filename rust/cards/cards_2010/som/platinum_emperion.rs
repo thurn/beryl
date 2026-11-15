@@ -80,5 +80,24 @@ pub mod scenarios {
                 THEM.life(20),
                 ME.has(Zone::Graveyard, BOLT, 1),
             ]),
+        // The same ruling for a spell's cost: Force of Will's alternative cost pays 1 life, so it
+        // is not offered. With Lightning Bolt on the stack, P0 may pass or cast Counterspell from
+        // its two Islands, and nothing else.
+        Scenario::new("Force of Will's alternative cost is not offered")
+            .interaction(&[BOLT, Card::ForceOfWill, Card::Counterspell])
+            .battlefield(P0, &[EMPERION, Card::Island, Card::Island])
+            .hand(P0, &[Card::ForceOfWill, Card::Counterspell])
+            .battlefield(P1, &[Card::Mountain])
+            .hand(P1, &[BOLT])
+            .at(1, P1, TurnStep::PrecombatMain)
+            .actions(&[
+                THEM.casts(BOLT),
+                THEM.targets_player(ME),
+                ME.deciding(DecisionKind::Priority, 2),
+                ME.casts(Card::Counterspell),
+                stack(0),
+                ME.has(Zone::Hand, Card::ForceOfWill, 1),
+                THEM.has(Zone::Graveyard, BOLT, 1),
+            ]),
     ];
 }

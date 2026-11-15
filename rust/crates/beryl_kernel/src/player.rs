@@ -204,16 +204,18 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// Whether `player` can pay `amount` life
+    /// Whether `player` has the life to pay `amount`
     /// ([CR 119.4](https://yawgatog.com/resources/magic-rules/#R1194)): "If a cost or effect
     /// allows a player to pay an amount of life greater than 0, the player may do so only if
     /// their life total is greater than or equal to the amount of the payment." And
     /// ([CR 119.4b](https://yawgatog.com/resources/magic-rules/#R1194b)): "Players can always
     /// pay 0 life, no matter what their (or their team's) life total is, and even if an effect
-    /// says players can't pay life." Every rule that asks whether life can be paid asks here.
+    /// says players can't pay life." This is only half of whether life can be paid: an effect can
+    /// also stop a player's life total from changing, which the kernel can't see. Rules code asks
+    /// `beryl_rules::life::can_pay`, which asks both.
     #[inline]
     #[must_use]
-    pub fn can_pay_life(&self, player: Seat, amount: u8) -> bool {
+    pub fn has_life_to_pay(&self, player: Seat, amount: u8) -> bool {
         amount == 0 || self.player(player).life() >= i16::from(amount)
     }
 

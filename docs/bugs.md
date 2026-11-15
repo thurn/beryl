@@ -6,6 +6,23 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A spell's life payment ignored "your life total can't change".** Under
+  Teferi's Protection or Platinum Emperion, a player was offered Force of Will
+  for its alternative cost, and casting it exiled the blue card and paid no
+  life, though no life can be paid while a player's life total can't change (CR
+  119.8). An activated ability's life cost was already refused. Whether a
+  spell's cost could be paid was decided by `cast::parts::spell_payable`, which
+  asked the kernel's `State::can_pay_life`. That function only compared the
+  amount with the life total, but its comment said every rule asked it. The
+  check that also reads the rule change is `beryl_rules::life::can_pay`. Found
+  by an adversarial review of the keystone cards. Fixed: `spell_payable` asks
+  `life::can_pay`, and the kernel function is renamed `State::has_life_to_pay`,
+  with a comment saying that it is only half the question. A Platinum Emperion
+  scenario holds Force of Will under it. Prevention: when the kernel can answer
+  only part of a rules question, its function should be named for that part, so
+  that a caller can't mistake it for the whole answer. No check can stop the
+  next such pair. Here the rename makes the mistake visible at the call site.
+
 - **Painter's Servant entering with another permanent at once panicked.** When
   Worldgorger Dragon left and returned Painter's Servant together with another
   permanent that has a static ability, the engine panicked with "the layers read

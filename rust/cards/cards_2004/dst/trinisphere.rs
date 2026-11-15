@@ -167,5 +167,53 @@ pub mod scenarios {
                 ME.has(Zone::Exile, BOLT, 1),
                 ME.tapped(Card::Mountain, 3),
             ]),
+        // Fork costs {R}{R}, three under Trinisphere ({1}{R}{R}); the copy it makes is not cast
+        // and costs nothing ([CR 707.10]). Bolt, Fork: six Mountains.
+        Scenario::new("Trinisphere: Fork costs three and its copy is free")
+            .interaction(&[BOLT, Card::Fork])
+            .battlefield(
+                P0,
+                &[
+                    TRINISPHERE,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                ],
+            )
+            .hand(P0, &[BOLT, Card::Fork])
+            .actions(&[
+                ME.casts(BOLT),
+                ME.targets_player(THEM),
+                ME.casts(Card::Fork),
+                ME.tapped(Card::Mountain, 6),
+                Resolve,
+                ME.targets_player(THEM),
+                Resolve,
+                Resolve,
+                THEM.life(14),
+            ]),
+        // Trinisphere affects spells only: an activated ability costing {2} still costs {2}.
+        Scenario::new("Trinisphere does not raise an activated ability")
+            .interaction(&[Card::ThespiansStage])
+            .battlefield(
+                P0,
+                &[
+                    TRINISPHERE,
+                    Card::ThespiansStage,
+                    Card::Island,
+                    Card::Island,
+                    Card::Plains,
+                ],
+            )
+            .actions(&[
+                ME.activates(Card::ThespiansStage, 1),
+                ME.targets(Card::Plains),
+                ME.tapped(Card::Island, 2),
+                Resolve,
+                ME.controls(Card::Plains, 2),
+            ]),
     ];
 }

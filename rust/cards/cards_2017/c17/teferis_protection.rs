@@ -284,6 +284,50 @@ pub mod scenarios {
                 Resolve,
                 THEM.has(Zone::Graveyard, Prop::Flier, 1),
             ]),
+        // [CR 702.15b]: lifelink gains life for the damage dealt. Damage that is prevented is
+        // not dealt ([CR 615.1]), so P1's Griselbrand attacking the protected P0 gains P1
+        // nothing, and P0's life total is unchanged.
+        //
+        // [CR 702.15b]: https://yawgatog.com/resources/magic-rules/#R70215b
+        // [CR 615.1]: https://yawgatog.com/resources/magic-rules/#R6151
+        Scenario::new("prevented combat damage from a lifelink attacker gains no life")
+            .interaction(&[BOLT, Card::Griselbrand])
+            .at(2, P1, TurnStep::PrecombatMain)
+            .battlefield(P0, &[Card::Plains, Card::Plains, Card::Plains])
+            .hand(P0, &[PROTECTION])
+            .battlefield(P1, &[Card::Griselbrand])
+            .library(P0, &[Card::Plains; 3])
+            .library(P1, &[Card::Plains; 3])
+            .actions(&[
+                THEM.passes(),
+                ME.casts(PROTECTION),
+                Resolve,
+                advance_to(2, TurnStep::BeginningOfCombat),
+                THEM.passes(),
+                THEM.attacks_with(Card::Griselbrand),
+                advance_to(2, TurnStep::EndOfCombat),
+                ME.life(20),
+                THEM.life(20),
+            ]),
+        // A token that phases out does not cease to exist ([CR 702.26b] only treats it as
+        // nonexistent; [CR 111.7] ends a token's existence only when it is in a zone other than
+        // the battlefield). It phases in at P0's next untap step.
+        //
+        // [CR 111.7]: https://yawgatog.com/resources/magic-rules/#R1117
+        Scenario::new("a token that phases out phases back in")
+            .hand(P1, &[Card::Hullbreacher])
+            .permanents(P0, &[Permanent::token(crate::tokens::TREASURE_TOKEN)])
+            .battlefield(P0, &[Card::Plains, Card::Plains, Card::Plains])
+            .hand(P0, &[PROTECTION])
+            .library(P0, &[Card::Plains; 3])
+            .library(P1, &[Card::Plains; 3])
+            .actions(&[
+                ME.casts(PROTECTION),
+                Resolve,
+                ME.controls(crate::tokens::TREASURE_TOKEN, 0),
+                advance_to(3, TurnStep::Upkeep),
+                ME.controls(crate::tokens::TREASURE_TOKEN, 1),
+            ]),
         // Phased out, P1's permanents stay out for the rest of P1's turn: P1, with a land still
         // to play, and P0, with Lightning Bolt to cast in P1's end step, both see P1's lands
         // and 2/1 phased out.

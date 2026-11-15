@@ -278,7 +278,7 @@ pub(super) fn spell_payable<L: Layout>(
     }
     face.cost_parts(costs).all(|part| match part {
         CostPart::Chosen(action, chosen) => payable(s, t, player, slot, *action, chosen),
-        CostPart::Life(n) => s.can_pay_life(player, *n),
+        CostPart::Life(n) => life::can_pay(s, t, player, *n),
         _ => unreachable!("the card table refuses a spell's cost the engine cannot pay"),
     })
 }

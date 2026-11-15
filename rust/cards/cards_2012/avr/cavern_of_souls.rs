@@ -123,5 +123,57 @@ pub mod scenarios {
                 ME.tapped(Card::Island, 1),
                 ME.tapped(Card::CavernOfSouls, 1),
             ]),
+        // A creature spell with two types is "of the chosen type" by either one: the Assassin
+        // is a Human Assassin. The Cavern's {B} is the only black mana, and the spell it pays
+        // for can't be countered, though P1 has Counterspell.
+        Scenario::new("Cavern of Souls' mana works for either type of a creature with two")
+            .battlefield(P0, &[Card::Plains, Card::Plains])
+            .hand(P0, &[Card::CavernOfSouls, Prop::FlashCreature])
+            .battlefield(P1, &[Card::Island, Card::Island])
+            .hand(P1, &[Card::Counterspell])
+            .actions(&[
+                ME.plays(Card::CavernOfSouls),
+                ME.chooses_named("Assassin"),
+                ME.casts(Prop::FlashCreature),
+                ME.tapped(Card::CavernOfSouls, 1),
+                THEM.casts(Card::Counterspell),
+                Resolve,
+                ME.controls(Prop::FlashCreature, 1),
+            ]),
+        // Force of Will counters with the same effect as Counterspell, and the rider stops it too.
+        Scenario::new("Cavern of Souls' creature spell can't be countered by Force of Will")
+            .battlefield(P0, &[Card::Plains])
+            .hand(P0, &[Card::CavernOfSouls, Prop::Vanilla])
+            .battlefield(P1, &[Card::Island; 5])
+            .hand(P1, &[Card::ForceOfWill])
+            .actions(&[
+                ME.plays(Card::CavernOfSouls),
+                ME.chooses_named("Elk"),
+                ME.casts(Prop::Vanilla),
+                THEM.casts(Card::ForceOfWill),
+                Resolve,
+                ME.controls(Prop::Vanilla, 1),
+            ]),
+        // "Counter target spell" does nothing to a spell that can't be countered, but the
+        // spell is still a legal target and Mana Drain's second sentence is unconditional:
+        // P1 gets {C} equal to the Elk's mana value, 2, at their next main phase.
+        Scenario::new("Cavern of Souls' spell drained still gives the Mana Drain mana")
+            .battlefield(P0, &[Card::Plains])
+            .hand(P0, &[Card::CavernOfSouls, Prop::Vanilla])
+            .battlefield(P1, &[Card::Island, Card::Island])
+            .hand(P1, &[Card::ManaDrain, Card::Plains])
+            .library(P1, &[Card::Plains, Card::Plains])
+            .library(P0, &[Card::Plains, Card::Plains])
+            .actions(&[
+                ME.plays(Card::CavernOfSouls),
+                ME.chooses_named("Elk"),
+                ME.casts(Prop::Vanilla),
+                THEM.casts(Card::ManaDrain),
+                Resolve,
+                ME.controls(Prop::Vanilla, 1),
+                advance_to(2, TurnStep::PrecombatMain),
+                THEM.passes(),
+                THEM.mana(ManaColor::Colorless, 2),
+            ]),
     ];
 }

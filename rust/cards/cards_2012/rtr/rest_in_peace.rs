@@ -122,5 +122,39 @@ pub mod scenarios {
                 ME.has(Zone::Graveyard, Card::Oust, 0),
                 ME.has(Zone::Hand, Card::Plains, 1),
             ]),
+        // A spell that is countered is put into its owner's graveyard (CR 701.6a), and is
+        // exiled instead.
+        Scenario::new("a countered spell is exiled")
+            .battlefield(P0, &[Card::Island, Card::Island])
+            .hand(P0, &[Card::Counterspell])
+            .battlefield(P1, &[RIP, Card::Plains])
+            .hand(P1, &[Prop::Artifact, Card::Plains])
+            .at(2, P1, TurnStep::PrecombatMain)
+            .actions(&[
+                THEM.casts(Prop::Artifact),
+                ME.casts(Card::Counterspell),
+                THEM.has(Zone::Exile, Prop::Artifact, 1),
+                THEM.has(Zone::Graveyard, Prop::Artifact, 0),
+                ME.has(Zone::Exile, Card::Counterspell, 1),
+            ]),
+        // The legend rule puts one Thalia into the graveyard (CR 704.5j), where she's exiled
+        // instead: she didn't die, so Blood Artist doesn't trigger (CR 614.6).
+        Scenario::new("the legend rule's creature is exiled and doesn't die")
+            .battlefield(
+                P0,
+                &[
+                    RIP,
+                    Card::BloodArtist,
+                    Card::ThaliaGuardianOfThraben,
+                    Card::ThaliaGuardianOfThraben,
+                ],
+            )
+            .actions(&[
+                ME.has(Zone::Exile, Card::ThaliaGuardianOfThraben, 1),
+                ME.controls(Card::ThaliaGuardianOfThraben, 1),
+                ME.has_cards(Zone::Graveyard, 0),
+                ME.life(20),
+                THEM.life(20),
+            ]),
     ];
 }

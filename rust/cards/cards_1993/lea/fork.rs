@@ -160,5 +160,83 @@ pub mod scenarios {
                 ME.has(Zone::Hand, Card::Plains, 0),
                 ME.has(Zone::Graveyard, GEYSER, 1),
             ]),
+        // Fork copies Tendrils of Agony: the copy is not cast, so its storm does not trigger
+        // again ([CR 702.40c](https://yawgatog.com/resources/magic-rules/#R70240c)): "storm
+        // ... triggers when you cast this spell". Only the Tendrils' own storm trigger (storm
+        // count 0, so no copies) is on the stack; the copy and the original each drain 2.
+        Scenario::new("Fork copies Tendrils of Agony without a second storm trigger")
+            .battlefield(
+                P0,
+                &[
+                    Card::Swamp,
+                    Card::Swamp,
+                    Card::Swamp,
+                    Card::Swamp,
+                    MOUNTAIN,
+                    MOUNTAIN,
+                ],
+            )
+            .hand(P0, &[Card::TendrilsOfAgony, FORK])
+            .actions(&[
+                ME.casts(Card::TendrilsOfAgony),
+                ME.targets_player(THEM),
+                stack(2),
+                ME.casts(FORK),
+                Resolve,
+                ME.targets_player(THEM),
+                stack(3),
+                Resolve,
+                THEM.life(18),
+                ME.life(22),
+                stack(2),
+                Resolve,
+                stack(1),
+                Resolve,
+                THEM.life(16),
+                ME.life(24),
+            ]),
+        // Fork's one target is countered first, so Fork is countered on resolution for lack of
+        // a legal target ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): no
+        // copy is made, and Fork goes to the graveyard.
+        Scenario::new("Fork does nothing when its target spell was countered")
+            .interaction(&[BOLT])
+            .battlefield(P0, &[MOUNTAIN, MOUNTAIN, MOUNTAIN])
+            .hand(P0, &[BOLT, FORK])
+            .battlefield(P1, &[ISLAND, ISLAND])
+            .hand(P1, &[Card::Counterspell])
+            .actions(&[
+                ME.casts(BOLT),
+                ME.targets_player(THEM),
+                ME.casts(FORK),
+                THEM.casts(Card::Counterspell),
+                THEM.targets(BOLT),
+                Resolve,
+                THEM.life(20),
+                ME.has(Zone::Graveyard, FORK, 1),
+                ME.has(Zone::Graveyard, BOLT, 1),
+            ]),
+        // A Fork can copy a Fork ([CR 707.10]): the copy of the first Fork is red, targets the
+        // Bolt, and when it resolves copies the Bolt again. Three Bolts in all.
+        Scenario::new("Fork copies a Fork")
+            .interaction(&[BOLT])
+            .battlefield(P0, &[MOUNTAIN, MOUNTAIN, MOUNTAIN, MOUNTAIN, MOUNTAIN])
+            .hand(P0, &[BOLT, FORK, FORK])
+            .actions(&[
+                ME.casts(BOLT),
+                ME.targets_player(THEM),
+                ME.casts(FORK),
+                ME.casts(FORK),
+                ME.targets(FORK),
+                Resolve,
+                ME.targets(BOLT),
+                Resolve,
+                ME.targets_player(THEM),
+                Resolve,
+                Resolve,
+                ME.targets_player(THEM),
+                Resolve,
+                Resolve,
+                THEM.life(11),
+            ]),
     ];
 }

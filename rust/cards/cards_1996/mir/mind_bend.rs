@@ -116,5 +116,90 @@ pub mod scenarios {
                 ME.targets(Card::Forest),
                 ME.tapped(Card::Forest, 1),
             ]),
+        // Urborg's "Swamp" reads "Island": every land is an Island, so P0's Plains taps for {U}
+        // (CR 305.7) and pays for a second Mind Bend.
+        Scenario::new("Mind Bend makes Urborg give every land the Island type")
+            .interaction(&[Card::UrborgTombOfYawgmoth])
+            .battlefield(
+                P0,
+                &[Card::UrborgTombOfYawgmoth, Card::Island, Card::Plains],
+            )
+            .hand(P0, &[MIND_BEND, MIND_BEND])
+            .actions(&[
+                ME.casts(MIND_BEND),
+                ME.targets(Card::UrborgTombOfYawgmoth),
+                Resolve,
+                ME.chooses_word(TextWord::LandType(Subtype::Swamp)),
+                ME.chooses_word(ISLAND),
+                ME.has_subtype(Card::Plains, Subtype::Island, true),
+                ME.has_subtype(Card::Plains, Subtype::Swamp, false),
+                ME.casts(MIND_BEND),
+            ]),
+        // [CR 400.7]: an object that changes zones becomes a new object with no memory of
+        // its previous existence, so a text change on a Forest ends when Flickerwisp exiles it
+        // and it returns.
+        //
+        // [CR 400.7]: https://yawgatog.com/resources/magic-rules/#R4007
+        Scenario::new("a text change ends when the permanent leaves and returns")
+            .interaction(&[Card::Flickerwisp])
+            .battlefield(
+                P0,
+                &[
+                    Card::Forest,
+                    Card::Island,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                ],
+            )
+            .hand(P0, &[MIND_BEND, Card::Flickerwisp])
+            .library(P0, &[Card::Plains])
+            .library(P1, &[Card::Plains])
+            .actions(&[
+                ME.casts(MIND_BEND),
+                ME.targets(Card::Forest),
+                Resolve,
+                ME.chooses_word(FOREST),
+                ME.chooses_word(ISLAND),
+                ME.has_subtype(Card::Forest, Subtype::Island, true),
+                ME.casts(Card::Flickerwisp),
+                Resolve,
+                ME.targets(Card::Forest),
+                Resolve,
+                advance_to(1, TurnStep::End),
+                Resolve,
+                ME.has_subtype(Card::Forest, Subtype::Forest, true),
+                ME.has_subtype(Card::Forest, Subtype::Island, false),
+            ]),
+        // [CR 612.3]: text changes on a creature don't touch an ability another object
+        // granted it. The Lord grants islandwalk; changing "Island" on the Merfolk itself
+        // changes nothing, so P1's lone Island still keeps the flier from blocking.
+        //
+        // [CR 612.3]: https://yawgatog.com/resources/magic-rules/#R6123
+        Scenario::new("Mind Bend on a Merfolk doesn't change the islandwalk the Lord gave")
+            .interaction(&[Card::LordOfAtlantis])
+            .battlefield(
+                P0,
+                &[
+                    Card::LordOfAtlantis,
+                    Card::MerfolkOfThePearlTrident,
+                    Card::Island,
+                ],
+            )
+            .battlefield(P1, &[Card::Island, Prop::Flier])
+            .hand(P0, &[MIND_BEND])
+            .actions(&[
+                ME.casts(MIND_BEND),
+                ME.targets(Card::MerfolkOfThePearlTrident),
+                Resolve,
+                ME.chooses_word(ISLAND),
+                ME.chooses_word(TextWord::LandType(Subtype::Swamp)),
+                advance_to(1, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                ME.attacks_with(Card::MerfolkOfThePearlTrident),
+                ME.done_attacking(),
+                advance_to(1, TurnStep::EndOfCombat),
+                THEM.life(18),
+            ]),
     ];
 }

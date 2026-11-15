@@ -165,5 +165,41 @@ pub mod scenarios {
                 ME.has(Zone::Exile, Card::Plains, 1),
                 ME.has(Zone::Graveyard, Card::Subtlety, 1),
             ]),
+        // [CR 611.3b]: the effect applies only while Painter's Servant is on the battlefield,
+        // so once Lightning Bolt kills it every card is back to its own colors, itself included.
+        //
+        // [CR 611.3b]: https://yawgatog.com/resources/magic-rules/#R6113b
+        Scenario::new("the colors are gone when Painter's Servant leaves")
+            .interaction(&[BOLT])
+            .battlefield(P0, &[Card::Plains, Card::Plains, Card::Mountain])
+            .hand(P0, &[PAINTER, BOLT])
+            .graveyard(P1, &[Card::Island])
+            .actions(&[
+                RED[0],
+                RED[1],
+                RED[2],
+                THEM.colored(Zone::Graveyard, Card::Island, Colors::RED),
+                ME.casts(BOLT),
+                ME.targets(PAINTER),
+                Resolve,
+                ME.has(Zone::Graveyard, PAINTER, 1),
+                ME.colored(Zone::Graveyard, PAINTER, Colors::NONE),
+                THEM.colored(Zone::Graveyard, Card::Island, Colors::NONE),
+            ]),
+        // "All cards that aren't on the battlefield": libraries and exile too.
+        Scenario::new("the chosen color is added to cards in libraries and exile")
+            .battlefield(P0, &[Card::Plains, Card::Plains])
+            .hand(P0, &[PAINTER, Card::Plains])
+            .library(P0, &[Card::Island, Card::Island])
+            .library(P1, &[Card::Swamp, Card::Swamp])
+            .exile(P1, &[Card::Island])
+            .actions(&[
+                RED[0],
+                RED[1],
+                RED[2],
+                ME.colored(Zone::Library, Card::Island, Colors::RED),
+                THEM.colored(Zone::Library, Card::Swamp, Colors::RED),
+                THEM.colored(Zone::Exile, Card::Island, Colors::RED),
+            ]),
     ];
 }

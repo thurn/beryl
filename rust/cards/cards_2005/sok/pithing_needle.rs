@@ -158,5 +158,77 @@ pub mod scenarios {
                 ME.deciding(DecisionKind::Priority, 2),
                 ME.has_loyalty(JACE, 3),
             ]),
+        // Cycling is an activated ability that works from the hand, and Needle stops it
+        // wherever the card is (CR 602.5). Spara's Headquarters, a land, is still playable:
+        // Needle stops activating, not casting or playing. P0 has pass and play-the-land, and
+        // no cycling, with three Plains left untapped.
+        needle("naming a card stops it from being cycled in hand")
+            .interaction(&[Card::SparasHeadquarters])
+            .battlefield(P0, &[Card::Plains; 4])
+            .hand(P0, &[NEEDLE, Card::SparasHeadquarters])
+            .actions(&[
+                ME.casts(NEEDLE),
+                Resolve,
+                ME.names(Card::SparasHeadquarters),
+                ME.deciding(DecisionKind::Priority, 2),
+            ]),
+        // The same, naming something else: cycling is offered as a third option.
+        needle("naming another card leaves cycling")
+            .interaction(&[Card::SparasHeadquarters])
+            .battlefield(P0, &[Card::Plains; 4])
+            .hand(P0, &[NEEDLE, Card::SparasHeadquarters])
+            .actions(&[
+                ME.casts(NEEDLE),
+                Resolve,
+                ME.names_another_card(),
+                ME.deciding(DecisionKind::Priority, 3),
+            ]),
+        // The restriction lasts only while Needle is on the battlefield (CR 611.3a, a static
+        // ability's effect). On P1's turn Portable Hole exiles Needle, and P0 can activate
+        // Mother of Runes again.
+        Scenario::new("Pithing Needle leaving the battlefield ends its restriction")
+            .interaction(&[MOTHER, Card::PortableHole])
+            .battlefield(P0, &[Card::Island, MOTHER])
+            .hand(P0, &[NEEDLE, Card::Island])
+            .battlefield(P1, &[Card::Plains])
+            .hand(P1, &[Card::PortableHole])
+            .library(P0, &[Card::Island, Card::Island])
+            .library(P1, &[Card::Island, Card::Island])
+            .actions(&[
+                ME.casts(NEEDLE),
+                Resolve,
+                ME.names(MOTHER),
+                ME.passes(),
+                ME.done_attacking(),
+                advance_to(2, TurnStep::PrecombatMain),
+                THEM.casts(Card::PortableHole),
+                Resolve,
+                THEM.targets(NEEDLE),
+                Resolve,
+                ME.controls(NEEDLE, 0),
+                THEM.passes(),
+                ME.activates(MOTHER, 0),
+                Resolve,
+                ME.chooses_color(Colors::RED),
+                ME.tapped(MOTHER, 1),
+            ]),
+        // A mana ability that costs more than tapping is still a mana ability (CR 605.1a).
+        // Lion's Eye Diamond can be activated, from the hand even, when named.
+        needle("naming Lion's Eye Diamond leaves its mana ability")
+            .interaction(&[Card::LionsEyeDiamond])
+            .battlefield(
+                P0,
+                &[Card::Island, Card::LionsEyeDiamond, Card::LionsEyeDiamond],
+            )
+            .hand(P0, &[NEEDLE, Card::Plains])
+            .actions(&[
+                ME.casts(NEEDLE),
+                Resolve,
+                ME.names(Card::LionsEyeDiamond),
+                ME.activates(Card::LionsEyeDiamond, 0),
+                ME.chooses_color(Colors::RED),
+                ME.mana(ManaColor::Red, 3),
+                ME.has(Zone::Graveyard, Card::LionsEyeDiamond, 1),
+            ]),
     ];
 }

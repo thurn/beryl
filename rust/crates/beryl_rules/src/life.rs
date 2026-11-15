@@ -43,7 +43,7 @@ pub fn lose<L: Layout>(game: &mut Game<'_, L>, player: Seat, amount: u8) -> Resu
     game.settle(e)
 }
 
-/// Whether `player` can pay `amount` life: they have that much ([`State::can_pay_life`],
+/// Whether `player` can pay `amount` life: they have that much ([`State::has_life_to_pay`],
 /// [CR 119.4]), and their life total can change ([CR 119.8]): "a cost that involves having that
 /// player pay life can't be paid." Every rule that asks whether life can be paid asks here.
 ///
@@ -51,7 +51,7 @@ pub fn lose<L: Layout>(game: &mut Game<'_, L>, player: Seat, amount: u8) -> Resu
 /// [CR 119.8]: https://yawgatog.com/resources/magic-rules/#R1198
 #[inline]
 pub(crate) fn can_pay<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, amount: u8) -> bool {
-    s.can_pay_life(player, amount) && (amount == 0 || rule_change::life_can_change(s, t, player))
+    s.has_life_to_pay(player, amount) && (amount == 0 || rule_change::life_can_change(s, t, player))
 }
 
 /// [`Effect::GainLife`](beryl_card::Effect::GainLife): "[Player] gains [amount] life." The

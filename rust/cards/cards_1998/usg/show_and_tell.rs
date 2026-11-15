@@ -145,5 +145,72 @@ pub mod scenarios {
                 ME.has(Zone::Exile, Card::Griselbrand, 1),
                 THEM.controls(Card::Island, 1),
             ]),
+        // [CR 303.4f]: an Aura put onto the battlefield enchants something already there; the
+        // ruling for Show and Tell: "If you put an Aura onto the battlefield this way, it can't
+        // enchant a permanent that's entering at the same time." P1's creature enters
+        // simultaneously with Holy Strength, so P0, with no other creature, has nothing for it
+        // to enchant, and the Aura stays in P0's hand ([CR 303.4g]).
+        //
+        // [CR 303.4f]: https://yawgatog.com/resources/magic-rules/#R3034f
+        // [CR 303.4g]: https://yawgatog.com/resources/magic-rules/#R3034g
+        Scenario::new("Show and Tell: an Aura can't enchant a creature entering with it")
+            .interaction(&[Card::HolyStrength])
+            .hand(P0, &[SHOW, Card::HolyStrength])
+            .battlefield(P0, &[Card::Island; 3])
+            .hand(P1, &[Prop::Vanilla])
+            .actions(&[
+                ME.casts(SHOW),
+                ME.picks_up_to(Card::HolyStrength),
+                THEM.picks_up_to(Prop::Vanilla),
+                THEM.controls(Prop::Vanilla, 1),
+                ME.controls(Card::HolyStrength, 0),
+                ME.has(Zone::Hand, Card::HolyStrength, 1),
+            ]),
+        // An Aura P1 puts onto the battlefield may enchant P0's creature (CR 303.4f): it is put
+        // onto the battlefield under P1's control, enchanting a creature P0 controls.
+        Scenario::new("Show and Tell: an Aura may enchant the opponent's creature")
+            .interaction(&[Card::HolyStrength])
+            .hand(P0, &[SHOW])
+            .battlefield(
+                P0,
+                &[Card::Island, Card::Island, Card::Island, Prop::Vanilla],
+            )
+            .hand(P1, &[Card::HolyStrength])
+            .actions(&[
+                // P0's hand is empty, so only P1 is asked.
+                ME.casts(SHOW),
+                THEM.picks_up_to(Card::HolyStrength),
+                THEM.controls(Card::HolyStrength, 1),
+                ME.pt(Prop::Vanilla, 3, 3),
+            ]),
+        // A land put onto the battlefield is not a land play (CR 305.1 and 305.2): P0 still
+        // plays a land from hand afterwards.
+        Scenario::new("Show and Tell's land does not use the land drop")
+            .hand(P0, &[SHOW, Card::Plains, Card::Plains])
+            .battlefield(P0, &[Card::Island; 3])
+            .actions(&[
+                ME.casts(SHOW),
+                ME.picks_up_to(Card::Plains),
+                ME.controls(Card::Plains, 1),
+                ME.plays(Card::Plains),
+                ME.controls(Card::Plains, 2),
+            ]),
+        // A permanent that enters as a copy chooses among permanents already on the battlefield
+        // (CR 614.12): "the permanent can't copy something entering simultaneously". P0's
+        // Phantasmal Image has nothing to copy, so it enters as a 0/0 and dies; P1's creature
+        // stays.
+        Scenario::new("Show and Tell: a clone can't copy a creature entering with it")
+            .interaction(&[Card::PhantasmalImage])
+            .hand(P0, &[SHOW, Card::PhantasmalImage])
+            .battlefield(P0, &[Card::Island; 3])
+            .hand(P1, &[Prop::Vanilla])
+            .actions(&[
+                ME.casts(SHOW),
+                ME.picks_up_to(Card::PhantasmalImage),
+                THEM.picks_up_to(Prop::Vanilla),
+                THEM.controls(Prop::Vanilla, 1),
+                ME.controls(Card::PhantasmalImage, 0),
+                ME.has(Zone::Graveyard, Card::PhantasmalImage, 1),
+            ]),
     ];
 }

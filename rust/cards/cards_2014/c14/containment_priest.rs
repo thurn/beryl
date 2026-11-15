@@ -127,5 +127,23 @@ pub mod scenarios {
                 Resolve,
                 ME.controls(SPIRIT_TOKEN, 1),
             ]),
+        // The Priest isn't on the battlefield as it enters with a creature in the same event,
+        // so its replacement effect doesn't affect that creature or the Priest itself
+        // (CR 614.12: a replacement effect from a permanent applies only if it is on the
+        // battlefield; here it is not yet).
+        Scenario::new("Containment Priest entering with another creature exiles neither")
+            .interaction(&[Card::ShowAndTell, PRIEST])
+            .hand(P0, &[Card::ShowAndTell, PRIEST])
+            .battlefield(P0, &[Card::Island; 3])
+            .hand(P1, &[Prop::Vanilla])
+            .actions(&[
+                ME.casts(Card::ShowAndTell),
+                ME.picks_up_to(PRIEST),
+                THEM.picks_up_to(Prop::Vanilla),
+                ME.controls(PRIEST, 1),
+                THEM.controls(Prop::Vanilla, 1),
+                ME.has_cards(Zone::Exile, 0),
+                THEM.has_cards(Zone::Exile, 0),
+            ]),
     ];
 }

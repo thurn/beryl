@@ -206,5 +206,43 @@ pub mod scenarios {
                 Resolve,
                 ME.has(Zone::Graveyard, IMAGE, 1),
             ]),
+        // Counters are not copiable ([CR 707.2]): an Image of a Mother of Runes with three
+        // +1/+1 counters is a 1/1 with no counters, an Illusion in addition to its types.
+        Scenario::new("an Image does not copy counters")
+            .interaction(&[MOTHER])
+            .battlefield(P0, &[Card::Island, Card::Island])
+            .hand(P0, &[IMAGE])
+            .permanents(
+                P1,
+                &[Permanent::new(MOTHER).counters(CounterKind::PlusOne, 3)],
+            )
+            .actions(&[
+                ME.casts(IMAGE),
+                Resolve,
+                ME.picks_up_to(MOTHER),
+                ME.pt(MOTHER, 1, 1),
+                ME.counters(MOTHER, CounterKind::PlusOne, 0),
+                ME.has_subtype(MOTHER, Subtype::Illusion, true),
+                ME.has_subtype(MOTHER, Subtype::Human, true),
+                THEM.pt(MOTHER, 4, 4),
+            ]),
+        // The Image of a Marit Lage token is a 20/20 card-less copy; copying copiable values of
+        // a token ([CR 707.2]) doesn't make the Image a token.
+        Scenario::new("an Image copies a token's characteristics but is not a token")
+            .interaction(&[Card::DarkDepths])
+            .battlefield(P0, &[Card::Island, Card::Island])
+            .hand(P0, &[IMAGE])
+            .permanents(
+                P1,
+                &[Permanent::new(Card::DarkDepths).counters(CounterKind::Ice, 0)],
+            )
+            .actions(&[
+                THEM.controls("Marit Lage", 1),
+                ME.casts(IMAGE),
+                Resolve,
+                ME.picks_up_to("Marit Lage"),
+                ME.pt("Marit Lage", 20, 20),
+                ME.has_subtype("Marit Lage", Subtype::Illusion, true),
+            ]),
     ];
 }

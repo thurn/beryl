@@ -173,5 +173,33 @@ pub mod scenarios {
                 ME.pt(Card::Humility, 4, 4),
                 ME.pt(OPALESCENCE, 1, 1),
             ]),
+        // Summoning sickness applies to a permanent that became a creature the turn it came
+        // under its controller's control (CR 302.6): Glorious Anthem, cast this turn, can't
+        // attack; the Flier can.
+        Scenario::new("an enchantment cast this turn can't attack")
+            .interaction(&[Card::GloriousAnthem])
+            .battlefield(
+                P0,
+                &[
+                    OPALESCENCE,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Prop::Flier,
+                ],
+            )
+            .hand(P0, &[Card::GloriousAnthem])
+            .actions(&[
+                ME.casts(Card::GloriousAnthem),
+                Resolve,
+                advance_to(1, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                ME.deciding(DecisionKind::Attacker, 2),
+            ]),
+        // Without Opalescence on the battlefield an enchantment is no creature.
+        Scenario::new("an enchantment is no creature without it")
+            .interaction(&[Card::GloriousAnthem])
+            .battlefield(P0, &[Card::GloriousAnthem])
+            .actions(&[ME.creature(Card::GloriousAnthem, false)]),
     ];
 }

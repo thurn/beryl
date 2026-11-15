@@ -80,8 +80,8 @@ fn a_life_total_equal_to_the_payment_pays_it_as_a_loss_of_life() {
 #[test]
 fn any_life_total_can_pay_0_life() {
     let (mut g, _) = bloodletter_at(-2);
-    assert!(g.s.can_pay_life(g.me, 0));
-    assert!(!g.s.can_pay_life(g.me, 1));
+    assert!(g.s.has_life_to_pay(g.me, 0));
+    assert!(!g.s.has_life_to_pay(g.me, 1));
     g.s.board().set_life(g.me, 1);
-    assert!(g.s.can_pay_life(g.me, 1));
+    assert!(g.s.has_life_to_pay(g.me, 1));
 }

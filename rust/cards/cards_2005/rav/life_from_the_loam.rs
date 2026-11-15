@@ -223,5 +223,53 @@ pub mod scenarios {
                 ME.has_cards(Zone::Graveyard, 4),
                 ME.library_top(&[Card::Plains]),
             ]),
+        // A library of exactly three cards is enough (CR 702.52b): the dredge empties it and
+        // the player doesn't lose for the draw that was replaced (CR 614.6).
+        Scenario::new("dredge with exactly three cards in the library")
+            .at(3, P0, TurnStep::Upkeep)
+            .battlefield(P0, FLASH_MANA)
+            .hand(P0, &[Prop::FlashCreature])
+            .graveyard(P0, &[LOAM])
+            .library(P0, &[Card::Plains, Card::Island, Card::Island])
+            .actions(&[
+                ME.passes(),
+                ME.deciding(DecisionKind::ChooseUpTo, 2),
+                ME.picks_up_to(LOAM),
+                ME.has(Zone::Hand, LOAM, 1),
+                ME.has_cards(Zone::Library, 0),
+                ME.has_cards(Zone::Graveyard, 3),
+            ]),
+        // Dredge works only from its owner's graveyard (CR 702.52a): a Life from the Loam in
+        // the opponent's graveyard offers P0 nothing, and P0 draws.
+        Scenario::new("dredge in the opponent's graveyard isn't offered")
+            .at(3, P0, TurnStep::Upkeep)
+            .battlefield(P0, FLASH_MANA)
+            .hand(P0, &[Prop::FlashCreature])
+            .graveyard(P1, &[LOAM])
+            .library(P0, LIBRARY)
+            .actions(&[
+                ME.passes(),
+                ME.has(Zone::Hand, Card::Island, 1),
+                ME.has_cards(Zone::Graveyard, 0),
+                THEM.has(Zone::Graveyard, LOAM, 1),
+            ]),
+        // Under Rest in Peace the three milled cards are exiled instead of reaching the
+        // graveyard (CR 614.1a), but the dredge still happened, so Life from the Loam returns
+        // (CR 702.52a).
+        Scenario::new("dredge under Rest in Peace exiles the milled cards")
+            .at(3, P0, TurnStep::Upkeep)
+            .battlefield(P0, FLASH_MANA)
+            .battlefield(P1, &[Card::RestInPeace])
+            .hand(P0, &[Prop::FlashCreature])
+            .graveyard(P0, &[LOAM])
+            .library(P0, LIBRARY)
+            .actions(&[
+                ME.passes(),
+                ME.deciding(DecisionKind::ChooseUpTo, 2),
+                ME.picks_up_to(LOAM),
+                ME.has(Zone::Hand, LOAM, 1),
+                ME.has_cards(Zone::Graveyard, 0),
+                ME.has_cards(Zone::Exile, 3),
+            ]),
     ];
 }
