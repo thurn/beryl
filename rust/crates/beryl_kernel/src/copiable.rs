@@ -186,7 +186,16 @@ impl<L: Layout> Copiable<L> {
     #[cold]
     #[inline(never)]
     pub fn excepted_subtypes(self, t: &GameTable) -> GameSubtypes {
-        let printed = self.subtypes(t);
+        self.with_excepted_subtypes(t, self.subtypes(t))
+    }
+
+    /// `printed`, the subtypes of the face that is up as some reader takes them, with those
+    /// the exceptions add (CR 707.9b). The layers pass the face's subtypes read through the
+    /// permanent's text changes: those change the type line the copy took, and the subtype an
+    /// exception adds stays.
+    #[cold]
+    #[inline(never)]
+    pub fn with_excepted_subtypes(self, t: &GameTable, printed: GameSubtypes) -> GameSubtypes {
         (self.additions.iter())
             .flat_map(|addition| addition.changes(t))
             .fold(printed, |subtypes, change| match *change {

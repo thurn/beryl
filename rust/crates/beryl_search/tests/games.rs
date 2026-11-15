@@ -8,10 +8,11 @@ mod common;
 use std::collections::{BTreeSet, HashMap};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-use beryl_cards::CARDS;
 use beryl_cards::decks::{VINTAGE_WU_CONTROL, WU_CONTROL, fuzz_deck};
-use beryl_engine::card::{CardDef, FaceIx};
+use beryl_cards::{CARDS, names};
+use beryl_engine::card::{CardDef, Colors, FaceIx, Words};
 use beryl_engine::coverage;
+use beryl_engine::filter::Filter;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
     CardId, CardIx, CardTable, Choice, Counts, Decision, GameTable, Large, LargeCardIx, LargeSlot,
@@ -519,6 +520,75 @@ fn agents_decide_the_same_on_a_redeterminized_state() {
     }
     // Hidden cards really were dealt anew: the test has something to catch.
     assert!(redealt * 2 > decisions, "{redealt} of {decisions}");
+}
+
+/// What a view shows of colors: for every slot, whether it is each color as the viewer may
+/// ask ([`Observation::matches`]) and its text changes, with the identities and zones
+/// [`Observer`] hashes.
+fn colors_seen(t: &GameTable, obs: Observation<'_>) -> u64 {
+    let mut h = DefaultHasher::new();
+    for slot in Slot::all() {
+        (
+            obs.knows(slot),
+            obs.card(slot),
+            obs.object(slot),
+            obs.words_of(slot),
+        )
+            .hash(&mut h);
+        for color in Colors::EACH {
+            obs.matches(t, &Filter::Colors(color), slot, &Words::NONE)
+                .hash(&mut h);
+        }
+    }
+    for p in Seat::BOTH {
+        for zone in [Zone::Library, Zone::Hand, Zone::Graveyard, Zone::Exile] {
+            obs.zone(ZoneKey::Of(p, zone)).hash(&mut h);
+        }
+    }
+    h.finish()
+}
+
+/// A color that an effect gives cards in every zone, as Painter's Servant's chosen color,
+/// betrays nothing hidden: redealt, the hidden cards are all that color too, and the view of
+/// colors is the same. Each fuzz deck here ends in Painter's Servants.
+#[test]
+fn a_color_given_in_every_zone_shows_nothing_hidden() {
+    let mut rng = SplitMix64::new(7);
+    let mut reached = 0;
+    for seed in 0..games(20) {
+        let deck = |seed: u64| {
+            let mut deck = fuzz_deck(seed);
+            deck.truncate(deck.len() - 2);
+            let cards: u8 = deck.iter().map(|&(count, _)| count).sum();
+            deck.push((40 - cards, names::PAINTERS_SERVANT));
+            deck
+        };
+        let decks = [deck(seed), deck(seed.wrapping_add(1 << 32))];
+        let t = GameTable::new(&CARDS, [decks[0].as_slice(), decks[1].as_slice()]).unwrap();
+        let mut s = State::new(&t, seed, Profile::EXACT).unwrap();
+        play(
+            &t,
+            &mut s,
+            &mut Scratch::new(),
+            &mut agents(seed),
+            |s, d| {
+                if !s.reaches_elsewhere() {
+                    return;
+                }
+                reached += 1;
+                let det = Observation::new(s, d.decider).determinize(&t, &mut rng);
+                assert_eq!(
+                    colors_seen(&t, Observation::new(s, d.decider)),
+                    colors_seen(&t, Observation::new(&det, d.decider)),
+                    "seed {seed}"
+                );
+            },
+        );
+    }
+    assert!(
+        reached > 0,
+        "no game had Painter's Servant on the battlefield"
+    );
 }
 
 #[test]

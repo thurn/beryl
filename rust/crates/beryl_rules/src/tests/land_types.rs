@@ -5,17 +5,23 @@
 //! [CR 305.7]: https://yawgatog.com/resources/magic-rules/#R3057
 //! [CR 613.8]: https://yawgatog.com/resources/magic-rules/#R6138
 
-use beryl_card::{AbilityIx, Amount, BasicLandTypes, ManaColor, ManaCost, Objects};
+use beryl_card::{
+    AbilityIx, Amount, BasicLandTypes, CopyChange, CopyException, ExceptIx, FaceIx, ManaColor,
+    ManaCost, Objects, TextChange,
+};
 
+use crate::additions::Addition;
 use crate::bitboard::Bitboard;
 use crate::card::{Ability, CardDef, Face, LayerSpec, Modification, Subtype, Subtypes, Types};
 use crate::event::Sink;
+use crate::event::TokenEntry;
 use crate::filter::Filter;
 use crate::ids::{Seat, Slot};
-use crate::state::{TurnStep, Zone};
+use crate::state::{Continuous, Duration, TurnStep, Zone};
 use crate::{CardTable, GameTable, Profile, State, layers, reference};
+use crate::{Scratch, tokens};
 
-use super::events::find;
+use super::events::{find, with_game};
 use super::{DUAL, LAND};
 
 const fn enchantment(abilities: &'static [Ability]) -> Face {
@@ -127,8 +133,19 @@ static GROVE: CardDef = CardDef {
     tokens: &[],
 };
 
+/// Phantasmal Image's exception: its copy is "an Illusion in addition to its other types".
+static MIMIC: CardDef = CardDef {
+    name: "Test Mimic",
+    faces: &[Face {
+        types: Types::CREATURE,
+        excepts: &[CopyException(&[CopyChange::AddSubtype(Subtype::Illusion)])],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
 static CARDS: CardTable = CardTable::new(&[
-    &LAND, &DUAL, &MOON, &TOMB, &MOONLAND, &ARBOR, &HUMBLE, &GROVE,
+    &LAND, &DUAL, &MOON, &TOMB, &MOONLAND, &ARBOR, &HUMBLE, &GROVE, &MIMIC,
 ]);
 
 /// A game in the first player's main phase, each deck holding some of each card.
@@ -142,6 +159,7 @@ fn game() -> (GameTable, State) {
         (2, "Test Arbor"),
         (2, "Test Humble"),
         (2, "Test Grove"),
+        (2, "Test Mimic"),
     ];
     let t = GameTable::new(&CARDS, [deck, deck]).unwrap();
     let mut s = State::new(&t, 3, Profile::EXACT).unwrap();
@@ -356,4 +374,50 @@ fn an_effect_whose_set_a_type_change_empties_waits_for_it() {
             "grove first: {grove_first}"
         );
     }
+}
+
+/// A text change on a copy changes the type line it copied, and keeps the subtype its copy
+/// exception adds ([CR 707.9b]): "Some copy effects modify a characteristic as part of the
+/// copying process." A copy of Test Arbor that is also an Illusion, whose "Forest" reads
+/// "Island", is an Island Dryad Illusion.
+///
+/// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
+#[test]
+fn a_text_change_on_a_copy_keeps_the_subtype_its_exception_adds() {
+    let (t, mut s) = game();
+    let mut x = Scratch::new();
+    let arbor = on(&t, &mut s, "Test Arbor");
+    let illusion = Addition::new(
+        t.index_named("Test Mimic").unwrap(),
+        FaceIx::FRONT,
+        ExceptIx::new(0),
+    );
+    let values = s.copiable(arbor).with_addition(illusion).unwrap();
+    let mut made = Bitboard::EMPTY;
+    with_game(&t, &mut s, &mut x, arbor, |game, resolution| {
+        made = tokens::create(
+            game,
+            resolution.controller(),
+            values,
+            1,
+            TokenEntry::default(),
+        )
+        .unwrap();
+    });
+    let copy = made.sole().unwrap();
+    assert!(is(&t, &s, copy, Subtype::Illusion) && is(&t, &s, copy, Subtype::Forest));
+    let card = s.copiable(arbor).record(&t).0;
+    let change = TextChange::Subtype {
+        from: Subtype::Forest,
+        to: Subtype::Island,
+    };
+    let effect = Continuous::Text(s.object_ref(copy), change);
+    s.start_effect(card, effect, Duration::Indefinite).unwrap();
+    layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
+    assert!(is(&t, &s, copy, Subtype::Island) && !is(&t, &s, copy, Subtype::Forest));
+    assert!(is(&t, &s, copy, Subtype::Dryad));
+    assert!(
+        is(&t, &s, copy, Subtype::Illusion),
+        "the exception's subtype stays"
+    );
 }

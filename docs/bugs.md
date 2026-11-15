@@ -6,6 +6,20 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A copy lost the subtype its copy exception added once a text change changed
+  a land type word on it.** A token copy that is "an Illusion in addition to its
+  other types", whose "Forest" a text change made "Island", was an Island Dryad
+  and no longer an Illusion. Layer 3's `layers::text::type_line` rebuilt the
+  permanent's subtypes from the copied face read through its words, overwriting
+  the layer 1 subtypes that held the exception's addition (CR 707.9b). No card
+  of the pool reached it, since Phantasmal Image sacrifices itself when Mind
+  Bend or Crystal Spray targets it; the group 4 Warden found it in review.
+  Fixed: `Copiable::with_excepted_subtypes` adds the exceptions over the
+  subtypes read through the words. Prevention: a later layer step changes the
+  value an earlier step computed rather than recomputing it from a narrower
+  source, or the two share one function, so a part one of them adds cannot be
+  forgotten.
+
 - An Aura stayed on the battlefield attached to an object its enchant ability no
   longer allowed, and an Aura that became a creature stayed attached. The
   state-based action for Auras (CR 704.5m) asked only whether the enchanted

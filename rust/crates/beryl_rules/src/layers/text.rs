@@ -11,6 +11,7 @@ use beryl_kernel::derive::Rederive;
 use crate::card::{AbilityIx, BasicLandTypes, Face, Types, Words};
 use crate::fixed::Full;
 use crate::layout::Layout;
+use crate::state::Flag;
 use crate::table::{GameTable, is_simple};
 
 use super::granted::GRANTED;
@@ -103,8 +104,17 @@ fn type_line<L: Layout>(
     if !words.changes_subtypes() {
         return Ok(Changed::default());
     }
+    let slot = s.battlefield()[i];
+    let read = t.subtypes().of(face.subtypes.read(&words));
+    // A copy keeps the subtypes its exceptions add (CR 707.9b): they are not words of the
+    // type line the copy took.
+    let subtypes = if s.object(slot).flags().has(Flag::Copy) {
+        s.copiable(slot).with_excepted_subtypes(t, read)
+    } else {
+        read
+    };
     let d = &mut s.results()[i];
-    d.subtypes = t.subtypes().of(face.subtypes.read(&words));
+    d.subtypes = subtypes;
     d.keywords = words.landwalk(d.keywords);
     if !face.types.intersects(Types::LAND) {
         return Ok(Changed::default());
