@@ -593,6 +593,47 @@ impl Runner {
         })
     }
 
+    /// What an assertion about a card's characteristics in a zone reads, and what it expects:
+    /// its colors, or its power and toughness.
+    fn characteristic_in(
+        &self,
+        position: &Step,
+        assertion: Assertion,
+    ) -> Result<(String, String), String> {
+        let s = &self.s;
+        if let Step::Over(o) = position {
+            return Err(format!(
+                "no characteristics to read: the game is over ({o:?})"
+            ));
+        }
+        Ok(match assertion {
+            Assertion::Colors {
+                player,
+                zone,
+                card,
+                colors,
+            } => {
+                let slot = self.object_in(player, zone, card)?;
+                (
+                    format!("{:?}", s.colors(&self.t, slot)),
+                    format!("{colors:?}"),
+                )
+            }
+            Assertion::PtIn {
+                player,
+                zone,
+                card,
+                power,
+                toughness,
+            } => {
+                let slot = self.object_in(player, zone, card)?;
+                let (p, t) = (s.power(&self.t, slot), s.toughness(&self.t, slot));
+                (format!("{p}/{t}"), format!("{power}/{toughness}"))
+            }
+            _ => unreachable!("an assertion about characteristics in a zone"),
+        })
+    }
+
     fn check(&self, position: &Step, assertion: Assertion) -> Result<(), String> {
         let position = *position;
         let s = &self.s;
@@ -629,34 +670,8 @@ impl Runner {
                 }
                 self.permanent_fact(assertion)?
             }
-            Assertion::Colors {
-                player,
-                zone,
-                card,
-                colors,
-            } => {
-                if let Step::Over(o) = position {
-                    return Err(format!("no colors to read: the game is over ({o:?})"));
-                }
-                let slot = self.object_in(player, zone, card)?;
-                (
-                    format!("{:?}", s.colors(&self.t, slot)),
-                    format!("{colors:?}"),
-                )
-            }
-            Assertion::PtIn {
-                player,
-                zone,
-                card,
-                power,
-                toughness,
-            } => {
-                if let Step::Over(o) = position {
-                    return Err(format!("no power to read: the game is over ({o:?})"));
-                }
-                let slot = self.object_in(player, zone, card)?;
-                let (p, t) = (s.power(&self.t, slot), s.toughness(&self.t, slot));
-                (format!("{p}/{t}"), format!("{power}/{toughness}"))
+            Assertion::Colors { .. } | Assertion::PtIn { .. } => {
+                self.characteristic_in(&position, assertion)?
             }
             Assertion::Stack { count } => (s.stack().len().to_string(), count.to_string()),
             Assertion::Library { player, top } => {
