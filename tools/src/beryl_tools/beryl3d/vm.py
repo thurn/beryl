@@ -17,8 +17,9 @@ from . import paths
 NAME = "beryl3d-bench"
 
 # Mesa's Vulkan drivers, among them lavapipe, the software driver the renderer draws on to
-# count fragments, and the Vulkan loader that finds them.
-GRAPHICS = ("mesa-vulkan-drivers", "libvulkan1")
+# count fragments, and the Vulkan loader that finds them. `pkg-config` and OpenSSL's headers are
+# for `openssl-sys`, which the renderer's example links through `beryl_art`'s `ureq`.
+GRAPHICS = ("mesa-vulkan-drivers", "libvulkan1", "pkg-config", "libssl-dev")
 
 
 def runner_version() -> str | None:
