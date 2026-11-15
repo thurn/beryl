@@ -9,4 +9,5 @@ pub mod gate;
 pub mod pack;
 pub mod pages;
 pub mod recordings;
+pub mod runner;
 pub mod stress;

@@ -84,7 +84,7 @@ def test_the_linkers_newest_binary_is_run(
 
 def test_the_listing_names_every_text_command() -> None:
     listed = cli.listing()
-    for name in ("list", "info", "tree", "diff", "check", "png", "film"):
+    for name in ("list", "info", "tree", "diff", "check", "test", "png", "film"):
         assert f"\n  {name} " in listed
 
 

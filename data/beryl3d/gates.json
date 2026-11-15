@@ -86,5 +86,8 @@
       "expressions": 64
     }
   },
-  "tests": {}
+  "tests": {
+    "median_frames": 103,
+    "most_frames": 1704
+  }
 }

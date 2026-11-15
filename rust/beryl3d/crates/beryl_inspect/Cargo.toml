@@ -9,7 +9,7 @@ publish = false
 [lints]
 workspace = true
 
-# `just b3d list`, `info`, `tree`, `diff` and `check`.
+# `just b3d list`, `info`, `tree`, `diff`, `check` and `test`.
 [[bin]]
 name = "b3d"
 path = "src/main.rs"

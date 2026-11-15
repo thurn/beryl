@@ -47,7 +47,8 @@ pub struct Checked {
     /// Every fault, each once: a fault a frame check finds again in a later frame, about the same
     /// elements, is not repeated.
     pub faults: Vec<Fault>,
-    /// How many frames the frame checks ran on.
+    /// How many frames were drawn: those the frame checks ran on, those in which a step's
+    /// subject was only sampled, and those that name the objects of a fault.
     pub frames: usize,
 }
 
@@ -96,10 +97,15 @@ impl Page {
         let mut judged = judged(&history);
         // The frames that name the objects of the faults the segment checks found.
         let naming: BTreeSet<u64> = found.iter().map(|found| found.at).collect();
+        // "Every step shown" judges the share of frames in which a step's subject is seen, so
+        // its subject is sampled at every tick while the step plays, in both modes: a sparser
+        // sample would judge the same step differently.
+        let sampled = sampled(&judged, self.tick.0, end);
         let all: BTreeSet<u64> = checked
             .iter()
             .copied()
             .chain(naming.iter().copied())
+            .chain(sampled.iter().copied())
             .collect();
         let checked: BTreeSet<u64> = checked.into_iter().collect();
 
@@ -114,6 +120,8 @@ impl Page {
             let frame = page.frame();
             if checked.contains(&t) {
                 faults.extend(agent::check(frame, &context));
+            }
+            if sampled.contains(&t) {
                 for step in judged
                     .iter_mut()
                     .filter(|step| step.from <= t && t < step.until)
@@ -158,7 +166,7 @@ impl Page {
         faults.sort_by_key(|fault| fault.at);
         Checked {
             faults,
-            frames: checked.len(),
+            frames: all.len(),
         }
     }
 
@@ -254,6 +262,24 @@ fn times(given_at: &[u64], history: &[ScriptRecord], end: u64) -> Vec<u64> {
         }
     }
     times.into_iter().filter(|&t| t <= end).collect()
+}
+
+/// The times at which `judged`'s subjects are sampled: each tick of the clock (a multiple of
+/// `tick`, or the recording's `end`) from when each step begins until its subject stops being
+/// sampled. They are the frames checking every tick evaluates in the same span.
+fn sampled(judged: &[Judged], tick: u64, end: u64) -> BTreeSet<u64> {
+    let mut times = BTreeSet::new();
+    for step in judged {
+        let mut t = step.from.div_ceil(tick) * tick;
+        while t < step.until && t <= end {
+            times.insert(t);
+            t += tick;
+        }
+        if step.from <= end && end < step.until {
+            times.insert(end);
+        }
+    }
+    times
 }
 
 /// Every step of `history` that "every step shown" judges: those with a subject whose verb it

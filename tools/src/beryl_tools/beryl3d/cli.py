@@ -253,6 +253,17 @@ COMMANDS: tuple[Command, ...] = (
             ),
         ),
     ),
+    b3d_command(
+        "test",
+        "every interface test whose name starts with a prefix, at its check times",
+        (
+            ("just b3d test", "every test, at its check times"),
+            (
+                "just b3d test b3d:verbs-zones --every-tick",
+                "one recording's tests, checked on every tick",
+            ),
+        ),
+    ),
     render_command(
         "png",
         "draws one moment of a recording offscreen to a PNG file, and with --tree its tree",

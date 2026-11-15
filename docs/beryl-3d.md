@@ -2120,22 +2120,36 @@ those that match. A test's name is also an argument to the other commands:
 `just b3d tree b3d:counterspell/cast/you/1600x900` prints that test's recording
 from its seat at its size.
 
-How many there are, with the 47 cards the engine knows today:
+How many there are, as measured on 2026-11-15:
 
-- About 1,400 card spec moments and about 140 recorded games.
-- Two seats and seven window sizes each.
-- About 21,500 tests in all.
+- 1,904 recordings from a seat: each card spec moment and fixture in the pack
+  from each seat it is recorded for, and the two stress boards.
+- Four desktop window sizes each. The three phone sizes come with the phone
+  layout.
+- 7,616 tests in all, about 13,300 with the phone sizes.
 
 ### The target
 
-These numbers are targets on the development machine under its usual load. The
-first measurement of the real client replaces them.
+These numbers are the targets on the development machine under its usual load,
+and what `just b3d test` measured in the debug build `just b3d` uses: medians of
+five runs each at load 86 to 101 on 2026-11-15.
 
-| Measure                                              | Target           |
-| ---------------------------------------------------- | ---------------- |
-| CPU time for one card spec moment's test             | 2 milliseconds   |
-| All 21,500 tests, before a push of a Beryl 3D change | under 10 seconds |
-| The same tests checked on every tick, in the sweep   | under 2 minutes  |
+| Measure                                | Target           | Measured               |
+| -------------------------------------- | ---------------- | ---------------------- |
+| CPU time for one test                  | 2 milliseconds   | 10.2 ms                |
+| Tests per CPU-second                   |                  | 98                     |
+| All the tests at their check times     | under 10 seconds | 9.1 s, 78 CPU-s        |
+| The same tests checked on every tick   | under 2 minutes  | 9.9 s, 87 CPU-s        |
+| Frames a test draws at its check times |                  | median 103, most 1,704 |
+| Frames a test draws on every tick      |                  | median 166, most 2,889 |
+
+The slowest tests are the four `stress-1024` tests, at about 1.7 seconds each.
+The check times save less than the frame counts suggest: on every tick a test
+draws 1.6 times as many frames but costs only 1.1 times as much. One reason is
+that every judged step is sampled at every tick in both modes. Another is that
+`stress-1024` draws more frames at its check times (152) than on every tick
+(121), because each of 1,024 cards adds the start, middle and end of its
+segments.
 
 For comparison, the web interface's browser check of one animation takes 36
 seconds at the 90th percentile, and the existing check of the session's scripts
@@ -2204,8 +2218,11 @@ The **check times** of a test are:
 
 Four checks need no frame at all. "No jumps", "rest equals placement", "verb
 values" (so far, each step's duration) and "not crowded" read the segments and
-steps directly. "Every step shown" samples the step's subject in each frame
-evaluated while the step plays, and judges the samples together.
+steps directly. "Every step shown" samples the step's subject at every tick
+while the step plays, in both modes, and judges the samples together. It judges
+the share of frames in which the subject is seen, so a sparser sample judges the
+same step differently; the differential test below found that. Those frames are
+drawn and sampled, but the frame checks do not run on them.
 
 Checking every tick remains, as the second line:
 
@@ -2213,10 +2230,13 @@ Checking every tick remains, as the second line:
   applied on every tick. This is the exhaustive form. It is not part of slow CI,
   whose budget of CPU time it would spend several times over (see
   [Checks and isolation](#checks-and-isolation)).
-- **A differential test** holds the two together. On a fixed sample of tests it
-  plants each kind of fault at a random tick and requires the check times to
-  find it. A fault only the every-tick run finds is a missing check time, and is
-  fixed by adding one.
+- **A differential test** holds the two together
+  (`beryl_inspect/tests/differential.rs`). On a fixed sample of 200 tests, drawn
+  with a fixed seed from every test but the stress boards', it plants each kind
+  of fault at a seeded random tick inside one of the test's steps, and requires
+  every fault the every-tick run finds to be found at the check times too. A
+  fault only the every-tick run finds is a missing check time, and is fixed by
+  adding one. The 1,000 plantings take about 2 seconds in `cargo test`.
 
 ### Recordings
 

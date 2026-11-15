@@ -1,6 +1,6 @@
 ---
 name: b3d
-description: See and check what Beryl 3D, the native 3D client in rust/beryl3d, shows at any moment of a recording, as text, with no window and no GPU — `just b3d list`, `info`, `tree`, `diff` and `check`, and pictures of a moment or a span with `png` and `film`. Lists recordings and their moments, prints the elements on screen as a tree whose lines are locators, drives the client with actions (hover, press, drag), diffs two moments and runs every interface check on every tick. Use when changing or debugging Beryl 3D's scene, layout, animation or prompts, or checking a Beryl 3D change from the player's side.
+description: See and check what Beryl 3D, the native 3D client in rust/beryl3d, shows at any moment of a recording, as text, with no window and no GPU — `just b3d list`, `info`, `tree`, `diff`, `check` and `test`, and pictures of a moment or a span with `png` and `film`. Lists recordings and their moments, prints the elements on screen as a tree whose lines are locators, drives the client with actions (hover, press, drag), diffs two moments, runs every interface check on every tick, and runs every interface test over the window matrix. Use when changing or debugging Beryl 3D's scene, layout, animation or prompts, or checking a Beryl 3D change from the player's side.
 ---
 
 # Seeing and checking Beryl 3D
@@ -23,6 +23,7 @@ just b3d info verbs-zones                    # every moment of one recording
 just b3d tree verbs-zones --at 1500ms        # the elements on screen at a moment
 just b3d diff verbs-zones --from 800ms --to 1500ms   # what appeared, left, moved or changed
 just b3d check verbs-zones                   # every interface check on every tick
+just b3d test b3d:verbs-zones                # the interface tests whose names start so
 just b3d png verbs-zones --at 1500ms --tree  # a picture of that moment, and its tree
 just b3d film verbs-zones --from 0ms --to 3s --frames 12   # twelve frames in one picture
 ```
@@ -43,6 +44,14 @@ just b3d film verbs-zones --from 0ms --to 3s --frames 12   # twelve frames in on
 - **`check <recording>`** runs every check on every tick for one seat and window
   and prints each fault with a `show:` command, then one closing line. It exits
   with 1 when it finds a fault.
+- **`test [prefix]`** runs every interface test whose name starts with the
+  prefix, on every core: each recording from each seat in each of the four
+  desktop windows, named `b3d:<recording>/<seat>/<width>x<height>`, checked at
+  its check times (`--every-tick` checks every tick). A fault several tests find
+  is printed once with a count. Paste a test's name into `tree` or `check` in
+  place of a recording to see it from that seat at that size. The whole run
+  takes about ten seconds; a prefix, as in `just b3d test b3d:verbs-zones`, runs
+  one recording's tests.
 
 - **`png <recording>`** draws the frame at `--at` with the real renderer, with no
   window, and prints the file's path (under `$BERYL_CACHE/b3d/out/`, named with the

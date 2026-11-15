@@ -1,6 +1,6 @@
 //! The text commands of `just b3d` (docs/beryl-3d.md, "The agent interface"): `list`, `info`,
-//! `tree`, `diff` and `check`. The `b3d` program runs [`main`]; `just b3d` builds it and passes
-//! its arguments through.
+//! `tree`, `diff`, `check` and `test`. The `b3d` program runs [`main`]; `just b3d` builds it and
+//! passes its arguments through.
 //!
 //! Every printout begins with the command that prints it again, every name it prints can be
 //! pasted into the next command, and a wrong command line exits with status 2 and a message that
@@ -10,6 +10,7 @@ mod check;
 pub mod line;
 mod listing;
 pub mod options;
+mod test;
 mod view;
 
 use std::fmt::Write;
@@ -56,7 +57,7 @@ impl Printed {
     }
 }
 
-const COMMANDS: [Command; 5] = [
+const COMMANDS: [Command; 6] = [
     Command {
         name: "list",
         summary: "every recording whose name starts with the prefix, with its length and views",
@@ -172,6 +173,27 @@ const COMMANDS: [Command; 5] = [
         },
         own: &[],
         run: check::check,
+    },
+    Command {
+        name: "test",
+        summary: "every interface test whose name starts with the prefix, and the faults",
+        examples: [
+            ("just b3d test", "every test, at its check times"),
+            (
+                "just b3d test b3d:verbs-zones --every-tick",
+                "one recording's tests, checked on every tick",
+            ),
+        ],
+        spec: Spec {
+            recording: false,
+            values: &[],
+            switches: &[test::EVERY_TICK],
+        },
+        own: &[(
+            "--every-tick",
+            "check every tick instead of the check times, as the sweep does",
+        )],
+        run: test::test,
     },
 ];
 

@@ -60,16 +60,19 @@ pub fn find(name: &str, seat: Seat) -> Result<Arc<[FixtureMessage]>, String> {
         .entries
         .binary_search_by(|e| (e.name, e.seat).cmp(&(name, seat.get())))
         .map_err(|_| missing(&opened.entries, name, seat))?;
-    let mut parsed = opened
-        .parsed
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if let Some(messages) = parsed.get(&at) {
+    let parsed = || {
+        opened
+            .parsed
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    };
+    if let Some(messages) = parsed().get(&at) {
         return Ok(Arc::clone(messages));
     }
+    // Parsed with the lock released, so that the interface tests' threads parse different
+    // recordings at once. Two threads may parse the same one; the first to finish keeps it.
     let messages: Arc<[FixtureMessage]> = pack::messages(&opened.entries[at])?.into();
-    parsed.insert(at, Arc::clone(&messages));
-    Ok(messages)
+    Ok(Arc::clone(parsed().entry(at).or_insert(messages)))
 }
 
 /// The name and seat of every recording, stress boards included, sorted by name and seat,
@@ -88,6 +91,25 @@ pub fn names() -> Result<Vec<(String, Seat)>, String> {
         .collect();
     names.sort_by(|a, b| (&a.0, a.1.get()).cmp(&(&b.0, b.1.get())));
     Ok(names)
+}
+
+/// A guess at how long the recording `name` takes to play for `seat`, for running the longest
+/// first: the size of its deflated messages, or the most for a stress board, whose battlefield
+/// is at the engine's capacity. Zero when there is no such recording.
+#[must_use]
+pub fn weight(name: &str, seat: Seat) -> usize {
+    if stress::NAMES.contains(&name) {
+        return usize::MAX;
+    }
+    let Ok(opened) = opened() else {
+        return 0;
+    };
+    opened
+        .entries
+        .binary_search_by(|e| (e.name, e.seat).cmp(&(name, seat.get())))
+        .ok()
+        .and_then(|at| opened.entries[at].messages.ok())
+        .map_or(0, <[u8]>::len)
 }
 
 /// Every recording whose name starts with `prefix`, stress boards included, sorted by name and

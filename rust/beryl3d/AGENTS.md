@@ -50,6 +50,9 @@ through the client with no window or GPU (the `b3d` skill has the details):
   left, moved or changed state.
 - `just b3d check <name>` runs every interface check on every tick, and exits
   with 1 on a fault.
+- `just b3d test [prefix]` runs every interface test whose name starts with the
+  prefix: each recording from each seat in each desktop window, as
+  `b3d:<recording>/<seat>/<width>x<height>`, which `tree` and `check` also take.
 - `just b3d png <name> --at <moment> [--tree] [--crop <locator>]` draws that
   moment offscreen with the real renderer, and
   `just b3d film <name> --from <moment> --to <moment> --frames 12` draws up to
@@ -127,6 +130,12 @@ project, and selects the main lanes.
   gated board's ranked frames may shade, counted in the `beryl3d-bench` machine.
   `just b3d gate --gpu` holds both, and its `--update` lowers them. They rise by
   the same rule as the frame limits.
+
+  Under `tests` are the limits on the frames an interface test draws at its
+  check times: `median_frames` over every test and `most_frames` for any one.
+  `just b3d test` holds both when it runs every test, and `most_frames` when it
+  runs a prefix's tests. They are set from a measurement and rise by the same
+  rule as the frame limits.
 
 A break caused by a change to the main workspace (a renamed `beryl_session`
 item, say) is fixed in the Beryl 3D change that meets it, not by holding the
