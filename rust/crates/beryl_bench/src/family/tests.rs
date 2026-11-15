@@ -168,8 +168,8 @@ fn families_pair_their_steps() {
             (
                 "copies",
                 Pairing {
-                    paired: 3_774,
-                    skipped: 153,
+                    paired: 3_765,
+                    skipped: 162,
                     capacity_stalls: 0,
                     layer_recomputes: 1_252,
                     transactions: 3_771
