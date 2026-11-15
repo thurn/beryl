@@ -2,8 +2,9 @@
 //!
 //! It also holds every recording the tests and tools read ([`recordings`]), packed into one
 //! file per state of the sources they are recorded from ([`pack`]), and plays them through the
-//! test driver by name ([`pages`]).
+//! test driver by name ([`pages`]). [`cli`] is the text commands of `just b3d`.
 
+pub mod cli;
 pub mod gate;
 pub mod pack;
 pub mod pages;

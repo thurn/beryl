@@ -22,7 +22,7 @@ use beryl_session::script::Verb;
 use glam::Vec2;
 
 pub use action::{Action, key_code};
-pub use check::{Checked, Mode};
+pub use check::{Checked, Mode, StepMoment};
 pub use moment::{Duration, Moment, Name, Offset, ParseError};
 pub use recording::{Answer, Recording, Responses, plays_on};
 
@@ -120,6 +120,8 @@ pub struct Page {
     plants: Vec<Plant>,
     /// Each named moment of the recording, with its time, once asked for.
     moments: Option<Vec<(Name, u64)>>,
+    /// Every step of the recording's scripts, once asked for.
+    steps: Option<Vec<StepMoment>>,
 }
 
 impl Page {
@@ -154,6 +156,7 @@ impl Page {
             records: false,
             plants: Vec::new(),
             moments: None,
+            steps: None,
         };
         page.begin();
         Ok(page)
@@ -374,6 +377,42 @@ impl Page {
         }
     }
 
+    /// Does one action, or says why it cannot be done without doing it: a locator that names
+    /// no element or several, or an element that is covered.
+    ///
+    /// # Errors
+    ///
+    /// When a locator of the action names no single uncovered element in the present frame.
+    pub fn try_act(&mut self, action: &Action) -> Result<(), DriverError> {
+        let locators: Vec<&str> = match action {
+            Action::Press(locator) | Action::Hover(locator) | Action::Type(locator, _) => {
+                vec![locator]
+            }
+            Action::Drag(from, to) => vec![from, to],
+            Action::Key(_) | Action::Move(_) | Action::Step(_) | Action::Still => Vec::new(),
+        };
+        for locator in locators {
+            let element = self.try_find(locator)?;
+            if uncovered(self.frame(), element.index).is_none() {
+                let message = format!("no part of '{locator}' can be pressed: it is covered");
+                return Err(self.error(&message));
+            }
+        }
+        self.act(action);
+        Ok(())
+    }
+
+    /// Where the page is: how many views the client has been given, of how many, and whether
+    /// anything on the table is moving.
+    pub fn position(&mut self) -> (usize, usize, bool) {
+        self.render();
+        (
+            self.released,
+            self.views.len(),
+            self.client.wake() != Wake::Never,
+        )
+    }
+
     /// Does one action.
     pub fn act(&mut self, action: &Action) {
         match action {
@@ -426,17 +465,17 @@ impl Page {
         };
         let moments = self.named_moments();
         let Some(&(_, time)) = moments.iter().find(|(known, _)| *known == name) else {
-            let names: Vec<String> = moments.iter().map(|(name, _)| name.to_string()).collect();
+            // The five nearest: moments of the same kind first, then by their numbers.
+            let mut near: Vec<Name> = moments.iter().map(|&(known, _)| known).collect();
+            near.sort_by_key(|&known| moment_distance(known, name));
+            near.truncate(5);
+            let names: Vec<String> = near.iter().map(ToString::to_string).collect();
             return Err(DriverError(format!(
-                "the recording has no moment '{name}'; it has {}",
+                "the recording has no moment '{name}'; the nearest are {}",
                 names.join(", ")
             )));
         };
-        Ok(if offset.before {
-            time.saturating_sub(offset.length.0)
-        } else {
-            time + offset.length.0
-        })
+        Ok(offset_from(time, offset))
     }
 
     /// The clock's state, which ends every failure's message: the time, the view, and whether
@@ -649,6 +688,7 @@ impl Page {
             records,
             plants: self.plants.clone(),
             moments: Some(Vec::new()),
+            steps: Some(Vec::new()),
         };
         page.begin();
         page
@@ -695,6 +735,34 @@ impl Page {
             let name = Name::Step(number, step.beat as u32, step.index as u32);
             moments.push((name, from + (to - from) / 2));
         }
+    }
+}
+
+/// How far apart two moments' names are: whether they are of different kinds, then how far
+/// apart their numbers are, the view first.
+fn moment_distance(a: Name, b: Name) -> (bool, u32, u32, u32) {
+    match (a, b) {
+        (Name::Step(v, e, s), Name::Step(w, f, t)) => {
+            (false, v.abs_diff(w), e.abs_diff(f), s.abs_diff(t))
+        }
+        (Name::View(v), Name::View(w)) | (Name::Prompt(v), Name::Prompt(w)) => {
+            (false, v.abs_diff(w), 0, 0)
+        }
+        _ => (
+            std::mem::discriminant(&a) != std::mem::discriminant(&b),
+            0,
+            0,
+            0,
+        ),
+    }
+}
+
+/// `time` moved by `offset`, in nanoseconds.
+fn offset_from(time: u64, offset: Offset) -> u64 {
+    if offset.before {
+        time.saturating_sub(offset.length.0)
+    } else {
+        time + offset.length.0
     }
 }
 

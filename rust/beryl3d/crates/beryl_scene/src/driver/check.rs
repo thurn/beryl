@@ -9,13 +9,28 @@
 
 use std::collections::BTreeSet;
 
-use super::{DriverError, Page};
+use beryl_session::script::Verb;
+
+use super::{DriverError, Name, Page};
 use crate::agent::steps::{self, Found, Sample, card_of, sample, step_nanoseconds};
 use crate::agent::tree::locator_of;
 use crate::agent::{self, Fault, Subject, hit::bounds};
 use crate::frame::Frame;
 use crate::input::Rect;
 use crate::play::record::{Plant, Planted, ScriptRecord};
+
+/// One step of a script, as `Page::steps` lists it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StepMoment {
+    /// `step:V.B.S`: the view its script leads to, counted from 1, then its beat and its index
+    /// in the beat, counted from 0.
+    pub name: Name,
+    pub verb: Verb,
+    /// When it begins, ends, and is halfway through, in nanoseconds since the recording's start.
+    pub from: u64,
+    pub to: u64,
+    pub middle: u64,
+}
 
 /// Which frames `check_all` evaluates.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -176,6 +191,34 @@ impl Page {
         });
         self.restart();
         Ok(())
+    }
+
+    /// Every step of every script the recording plays with no action taken, in the order the
+    /// scripts are given, each with its moment, its verb, and when it begins and ends in real
+    /// time. Its middle is the time `moments` gives the step.
+    pub fn steps(&mut self) -> Vec<StepMoment> {
+        if self.steps.is_none() {
+            let (played, _) = self.played();
+            let mut steps = Vec::new();
+            // The client is given one script per view, in order, from the first: the script at
+            // index `i` of the history leads to view `i + 1`.
+            for (number, script) in played.client.history().iter().enumerate() {
+                for step in &script.steps {
+                    let Some((from, to)) = script.span(step) else {
+                        continue;
+                    };
+                    steps.push(StepMoment {
+                        name: Name::Step(number as u32 + 1, step.beat as u32, step.index as u32),
+                        verb: step.verb,
+                        from,
+                        to,
+                        middle: from + (to - from) / 2,
+                    });
+                }
+            }
+            self.steps = Some(steps);
+        }
+        self.steps.clone().unwrap_or_default()
     }
 
     /// The recording played to its end with no action taken, the client keeping a record of its

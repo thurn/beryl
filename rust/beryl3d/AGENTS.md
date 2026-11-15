@@ -30,6 +30,23 @@ check enforces.
 `just b3d lane` runs the checks of the `beryl3d` lane that the fast check runs
 for a change here.
 
+## Seeing and checking
+
+To see what the client shows, use the text commands, which play a recording
+through the client with no window or GPU (the `b3d` skill has the details):
+
+- `just b3d list [prefix]` names every recording, and `just b3d info <name>`
+  every moment of one (`view:3`, `step:4.1.0`, `prompt:1`).
+- `just b3d tree <name> --at <moment>` prints the elements on screen. Each line
+  is a locator for `--do`, as in `--do 'hover card "Island" #8'`.
+- `just b3d diff <name> --from <moment> --to <moment>` prints what appeared,
+  left, moved or changed state.
+- `just b3d check <name>` runs every interface check on every tick, and exits
+  with 1 on a fault.
+
+They are the `b3d` program in `beryl_inspect` (`src/cli`), built in debug. A
+wrong name, moment or locator exits with 2 and lists what would work.
+
 ## Paths
 
 Beryl 3D's files live only under `rust/beryl3d`, `data/beryl3d` and

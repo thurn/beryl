@@ -29,6 +29,13 @@ must_use_candidate = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 
+# Debug builds keep line tables only, and leave them in the object files, so that linking is
+# faster. After a one-line edit to `beryl_scene`, `just b3d tree` took a median of 11.9 s with
+# Cargo's defaults and 8.5 s with these (docs/beryl-3d.md, "Edit-to-output time").
+[profile.dev]
+debug = "line-tables-only"
+split-debuginfo = "unpacked"
+
 # The card crates' build scripts read the whole card store, as the main workspace's do.
 [profile.dev.package.beryl_card_build]
 opt-level = 3

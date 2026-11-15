@@ -1637,8 +1637,12 @@ just b3d test b3d:counterspell
 Every command that takes a recording also takes `--seat you|opponent`,
 `--layout desktop|phone`, `--size <width>x<height>`, `--scale <number>`,
 `--tier baseline|enhanced`, `--at <moment>`, `--do <action>` (which may be
-repeated) and `--json`. Left out, they are `you`, `desktop`, 1600 by 900, 1,
-`baseline` and the recording's start, with no action.
+repeated) and `--json`. Left out, they are `you`, `desktop`, 1600 by 900 (393 by
+759 with `--layout phone`), 1, `baseline` and the recording's start, with no
+action. A test's name, `b3d:<recording>/<seat>/<width>x<height>`, also names a
+recording and sets its seat and window. `diff` runs its actions after `--from`,
+so `--from` and `--to` at the same moment show what an action changes. `check`
+leaves out `blank-card` until cards have faces, and its closing line says so.
 
 `just b3d` is two programs behind one command. The commands that print text are
 `beryl_inspect`'s program, `b3d`, which contains no GPU code. `png` and `film`
@@ -1649,6 +1653,38 @@ the same code.
 `stress-255`, used in examples below, is a stress board: a hand-built position
 at the engine's capacity, defined in the [Performance gates](#performance-gates)
 section.
+
+### Edit-to-output time
+
+Agents work in a loop of one edit and one command, so the time from a one-line
+edit in `beryl_scene` to the last line of
+`just b3d tree verbs-zones --at 1500ms` is held to a target of 3 seconds. It was
+measured on 2026-11-15 on the 18-core Mac, five runs each, with the machine's
+usual load beside each median:
+
+| Dev profile                                                  | Median | Runs (s)                 | Load |
+| ------------------------------------------------------------ | -----: | ------------------------ | ---: |
+| Cargo's defaults                                             | 11.9 s | 11.6 11.1 12.9 16.7 11.9 |   43 |
+| `debug = "line-tables-only"`, `split-debuginfo = "unpacked"` |  8.5 s | 7.5 8.5 8.7 7.7 8.6      |   54 |
+| The above, and `opt-level = 1` for dependencies (not kept)   |  8.5 s | 8.2 8.1 16.0 9.6 8.5     |   70 |
+
+The second row is kept. With no edit at all the command takes about 4.5 s, made
+of these parts:
+
+- About 1 s starting `uv` and the tools package.
+- About 0.5 s for cargo to find nothing to build.
+- 3 to 4 s for the first run of the `b3d` binary. macOS checks every newly
+  written executable before it first runs, in time that grows with its size: 0.2
+  s for an empty program, 3.5 s for `b3d`'s 108 MB. Cargo copies the binary into
+  `target/debug` again on every build, even one that changed nothing, so every
+  run pays this.
+- 0.4 s for the command itself.
+
+`b3d` is that large because it links the engine, the rules and every card: it
+reaches them through `beryl_session`, whose protocol types it needs, and through
+the recorder that builds the recordings pack. Moving the protocol types into a
+crate of their own and running the recorder as a separate program would leave
+`b3d` the client and the protocol alone.
 
 ### Times, moments, locators and actions
 
@@ -1779,8 +1815,8 @@ page.hover("card \"Island\" #8");
 - **Moments.** `page.moments()` lists the recording's named moments with their
   times, and `page.seek(moment)` goes to one, starting over when it lies in the
   past. Views that the game plays on through (thinking or playing) arrive
-  together and share one moment. `step:` moments need the script clock and fail
-  until the client has it.
+  together and share one moment. `page.steps()` lists each script step with its
+  start and end, and a `step:` moment is the middle of its step.
 - **`check()`** runs every interface check on the current frame.
 - **Where it lives.** `Page` is in `beryl_scene`, behind a Cargo feature named
   `driver` that the app does not enable. `Page::new` takes a recording, so

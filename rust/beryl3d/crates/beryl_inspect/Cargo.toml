@@ -9,6 +9,11 @@ publish = false
 [lints]
 workspace = true
 
+# `just b3d list`, `info`, `tree`, `diff` and `check`.
+[[bin]]
+name = "b3d"
+path = "src/main.rs"
+
 [dependencies]
 beryl_scene = { path = "../beryl_scene", features = ["driver"] }
 beryl_session = { path = "../../../crates/beryl_session" }

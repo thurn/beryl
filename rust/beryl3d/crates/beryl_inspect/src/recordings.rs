@@ -72,26 +72,49 @@ pub fn find(name: &str, seat: Seat) -> Result<Arc<[FixtureMessage]>, String> {
     Ok(messages)
 }
 
-/// Every recording, stress boards included, sorted by name and seat, each with its length and
-/// number of views. Finding a length plays the recording through the client, on as many
-/// threads as the machine has cores.
+/// The name and seat of every recording, stress boards included, sorted by name and seat,
+/// without playing any.
 ///
 /// # Errors
 ///
 /// When the pack cannot be built or read.
-pub fn list() -> Result<Vec<Listed>, String> {
+pub fn names() -> Result<Vec<(String, Seat)>, String> {
     let opened = opened()?;
+    let mut names: Vec<(String, Seat)> = opened
+        .entries
+        .iter()
+        .map(|entry| (entry.name.to_owned(), entry.seat()))
+        .chain(stress::NAMES.map(|name| (name.to_owned(), Seat::P0)))
+        .collect();
+    names.sort_by(|a, b| (&a.0, a.1.get()).cmp(&(&b.0, b.1.get())));
+    Ok(names)
+}
+
+/// Every recording whose name starts with `prefix`, stress boards included, sorted by name and
+/// seat, each with its length and number of views. Finding a length plays the recording
+/// through the client, on as many threads as the machine has cores.
+///
+/// # Errors
+///
+/// When the pack cannot be built or read.
+pub fn list(prefix: &str) -> Result<Vec<Listed>, String> {
+    let opened = opened()?;
+    let entries: Vec<&Entry> = opened
+        .entries
+        .iter()
+        .filter(|entry| entry.name.starts_with(prefix))
+        .collect();
     let next = std::sync::atomic::AtomicUsize::new(0);
-    let lengths = Mutex::new(vec![None; opened.entries.len()]);
+    let lengths = Mutex::new(vec![None; entries.len()]);
     let threads = std::thread::available_parallelism()
         .map_or(1, std::num::NonZero::get)
-        .min(opened.entries.len().max(1));
+        .min(entries.len().max(1));
     std::thread::scope(|scope| {
         for _ in 0..threads {
             scope.spawn(|| {
                 loop {
                     let at = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    let Some(entry) = opened.entries.get(at) else {
+                    let Some(entry) = entries.get(at) else {
                         break;
                     };
                     let length = length(entry);
@@ -105,8 +128,7 @@ pub fn list() -> Result<Vec<Listed>, String> {
     let lengths = lengths
         .into_inner()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let mut listed: Vec<Listed> = opened
-        .entries
+    let mut listed: Vec<Listed> = entries
         .iter()
         .zip(lengths)
         .map(|(entry, length_ms)| Listed {
@@ -117,7 +139,12 @@ pub fn list() -> Result<Vec<Listed>, String> {
             failure: entry.messages.err().map(str::to_owned),
         })
         .collect();
-    listed.extend(stress::NAMES.map(listed_stress));
+    listed.extend(
+        stress::NAMES
+            .into_iter()
+            .filter(|name| name.starts_with(prefix))
+            .map(listed_stress),
+    );
     listed.sort_by(|a, b| (&a.name, a.seat.get()).cmp(&(&b.name, b.seat.get())));
     Ok(listed)
 }
@@ -212,7 +239,8 @@ fn missing(entries: &[Entry], name: &str, seat: Seat) -> String {
 }
 
 /// The edit distance between `a` and `b`, by characters.
-fn distance(a: &str, b: &str) -> usize {
+#[must_use]
+pub fn distance(a: &str, b: &str) -> usize {
     let b: Vec<char> = b.chars().collect();
     let mut row: Vec<usize> = (0..=b.len()).collect();
     for (i, ca) in a.chars().enumerate() {

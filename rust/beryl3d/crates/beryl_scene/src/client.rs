@@ -12,7 +12,7 @@ use beryl_session::script::Verb;
 use crate::command::{Reply, Request, SessionCommand};
 use crate::element::{Press, prompt_bar};
 use crate::frame::{self, ElementId, Frame, FrameBuilder, Wake};
-use crate::input::{AssetReady, Button, GlyphKey, Input, Pointer, PointerPhase};
+use crate::input::{AssetReady, Button, GlyphKey, Input, Pointer, PointerKind, PointerPhase};
 use crate::layout::Layer;
 use crate::play::Show;
 use crate::play::record::{Plant, ScriptRecord};
@@ -53,6 +53,9 @@ pub struct Client {
     prompt: Option<(DecisionId, PromptView)>,
     /// The element the primary pointer went down on, which a release on it presses.
     pressed: Option<ElementId>,
+    /// Where the mouse pointer is, in logical points, while it is over the window. The element
+    /// a press there would reach is drawn `hovered`. A touch never hovers.
+    mouse: Option<glam::Vec2>,
     wake: Wake,
     requests: VecDeque<Request>,
     commands: VecDeque<SessionCommand>,
@@ -69,6 +72,7 @@ impl Client {
             layer: Layer::new(),
             prompt: None,
             pressed: None,
+            mouse: None,
             wake: Wake::Never,
             requests: VecDeque::new(),
             commands: VecDeque::new(),
@@ -147,7 +151,13 @@ impl Client {
         let (layout_nodes, text_runs) = self.layer.take_work();
         builder.layout_work(layout_nodes, text_runs);
         self.layer.write(&mut builder, self.show.table().camera());
-        builder.finish()
+        builder.finish();
+        if let Some(point) = self.mouse
+            && let Some(index) = crate::agent::hit(&self.frame, point)
+        {
+            self.frame.resolved[index as usize].state.0 |= frame::StateBits::HOVERED;
+        }
+        &self.frame
     }
 
     /// Rebuilds the prompt bar from the open prompt, or takes it away.
@@ -159,6 +169,12 @@ impl Client {
     /// A press is the primary button or a touch going down and coming up on the same enabled
     /// element. It queues the command the element's `Press` means.
     fn point(&mut self, pointer: Pointer) {
+        if pointer.kind == PointerKind::Mouse {
+            self.mouse = match pointer.phase {
+                PointerPhase::Cancel | PointerPhase::Leave => None,
+                _ => Some(pointer.position),
+            };
+        }
         let primary = pointer.button == Button::Primary;
         match pointer.phase {
             PointerPhase::Down if primary => {
