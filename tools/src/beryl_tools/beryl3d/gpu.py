@@ -37,6 +37,8 @@ TARGET_SCREENS = 1.75
 SCREEN_PLACES = 6
 # The build directory in the machine, shared by every worktree's gate.
 VM_TARGET = "$HOME/targets/gpu-gate"
+# Where in the machine's home the recordings pack arrives, as `BERYL_CACHE` for the example.
+VM_CACHE = "b3d-cache"
 # The line the `shader_cost` test prints, after any progress dots `cargo test -q` writes.
 MATERIALS_LINE: re.Pattern[str] = re.compile(r"materials (\{.*\})$", re.MULTILINE)
 
@@ -175,19 +177,48 @@ def shader_cost() -> tuple[int, str]:
 
 def fragments_script(names: list[str]) -> str:
     """The script that takes in the sources (`source.py`), builds the `fragments` example from
-    the machine's copy and runs it twice, after building the recordings pack it reads with the
-    `record` program. It holds the machine's lock so that it takes turns with the frame counts
+    the machine's copy and runs it twice, reading the recordings pack that `send_pack` put in the
+    machine (building it there would compile the engine, which exceeds 4 GiB). It holds the machine's lock so that it takes turns with the frame counts
     (counts.py): two builds at once exceed the machine's 4 GiB."""
     boards = " ".join(f"--board {shlex.quote(n)}" for n in names)
     return bench.locked(f""". "$HOME/.cargo/env"
 set -e
 {source.take_in_script()}cd {source.SOURCE}/rust/beryl3d
-export CARGO_TARGET_DIR="{VM_TARGET}"
-cargo run --locked -q -j {counts.JOBS} -p beryl_record --bin record
+export CARGO_TARGET_DIR="{VM_TARGET}" BERYL_CACHE="$HOME/{VM_CACHE}"
 cargo build --locked -q -j {counts.JOBS} -p beryl_render --example fragments
 "$CARGO_TARGET_DIR/debug/examples/fragments" {boards}
 "$CARGO_TARGET_DIR/debug/examples/fragments" {boards}
 """)
+
+
+def send_pack() -> bool:
+    """Builds the recordings pack for the present sources on this machine, where the engine
+    that plays them builds, and copies it into the VM's `BERYL_CACHE`. The pack is named for a
+    hash of the sources, not of the checkout's path, so the example in the VM finds it.
+    """
+    built = subprocess.run(
+        ["cargo", "run", "-q", "-p", "beryl_record", "--bin", "record"],
+        cwd=paths.WORKSPACE,
+        check=False,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    lines = built.stdout.split()
+    if built.returncode != 0 or not lines:
+        return False
+    directory = f"{VM_CACHE}/b3d"
+    make = [
+        "limactl",
+        "shell",
+        "--workdir",
+        "/",
+        vm.NAME,
+        "mkdir",
+        "-p",
+        f"$HOME/{directory}",
+    ]
+    copy = ["limactl", "copy", lines[-1], f"{vm.NAME}:{directory}/"]
+    return all(subprocess.run(cmd, check=False).returncode == 0 for cmd in (make, copy))
 
 
 def count_fragments(names: list[str]) -> list[BoardCount]:
@@ -196,6 +227,8 @@ def count_fragments(names: list[str]) -> list[BoardCount]:
     code = vm.ensure()
     if code != 0:
         raise SystemExit(code)
+    if not send_pack():
+        raise SystemExit(1)
     done = source.run_with_sources(fragments_script(names))
     if done is None:
         raise SystemExit(1)
