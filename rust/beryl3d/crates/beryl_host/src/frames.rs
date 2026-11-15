@@ -90,6 +90,12 @@ pub trait Feed {
     fn wake(&self) -> Wake {
         Wake::Never
     }
+
+    /// Whether the feed has nothing more to show, as when the game it plays is over: the host
+    /// then ends the run.
+    fn ended(&self) -> bool {
+        false
+    }
 }
 
 /// A feed that adds nothing.
@@ -180,18 +186,18 @@ impl<T: Ticks> FrameLoop<T> {
         self
     }
 
-    /// Whether the drive script has given its last action, with the error that stopped it
-    /// early if one did. `None` while it plays, and always when there is none. The host ends
-    /// the run when it is `Some`.
+    /// Whether the run is over: the drive script has given its last action, with the error
+    /// that stopped it early if one did, or the feed has ended. `None` while neither has
+    /// happened. The host ends the run when it is `Some`.
     #[must_use]
-    pub fn driven_to_end(&self) -> Option<Result<(), String>> {
+    pub fn at_end(&self) -> Option<Result<(), String>> {
         #[cfg(feature = "drive")]
         if let Some(drive) = &self.drive
             && drive.finished()
         {
             return Some(drive.error().map_or(Ok(()), |error| Err(error.to_owned())));
         }
-        None
+        self.feed.ended().then_some(Ok(()))
     }
 
     /// The same loop with `feed` added.

@@ -1,11 +1,12 @@
 //! The frame thread never waits for the session: while the session thread is inside a call
 //! that does not return until the test lets it, the frame loop draws a frame on every tick and
 //! the commands sent meanwhile queue up. Each reply then reaches the host's inbox, in order.
+//! And what `--agent` reports of the opponent's searches.
 
 use std::sync::mpsc::{Receiver, channel};
 
 use beryl_3d::session::{self, Session};
-use beryl_host::{Draw, FrameLoop, Inbox, Shown, Ticks};
+use beryl_host::{Class, Draw, FrameLoop, Inbox, Shown, Ticks};
 use beryl_scene::command::{Reply, SessionCommand};
 use beryl_scene::frame::Frame;
 use beryl_scene::input::{Input, Lifecycle};
@@ -49,7 +50,11 @@ impl Draw for Counter {
 fn the_frame_loop_draws_every_tick_while_the_session_is_busy() {
     let (releases, held) = channel();
     let (sender, inbox) = channel();
-    let commands = session::spawn(move || Held { releases: held }, Inbox::new(sender, || true));
+    let commands = session::spawn(
+        Class::Utility,
+        move || Held { releases: held },
+        Inbox::new(sender, || true),
+    );
     let client = Client::new(Config {
         elements: 64,
         draws: 64,
@@ -81,4 +86,28 @@ fn the_frame_loop_draws_every_tick_while_the_session_is_busy() {
         assert_eq!(session, SessionId(id), "the replies came out of order");
     }
     commands.close();
+}
+
+#[test]
+fn the_search_report_rates_rollouts_and_engine_steps_over_the_time_searched() {
+    let searches = [
+        session::Searched {
+            ms: 1_500,
+            rollouts: 3_000,
+            work: 1_000_000,
+        },
+        session::Searched {
+            ms: 500,
+            rollouts: 1_000,
+            work: 3_000_000,
+        },
+    ];
+    assert_eq!(
+        session::search_report(&searches).as_deref(),
+        Some(
+            "beryl3d: search: 2 decisions searched in 2.0 s, 4000 rollouts and 4000000 engine \
+             steps: 2000 rollouts/s, 2000000 engine steps/s"
+        )
+    );
+    assert_eq!(session::search_report(&[]), None);
 }

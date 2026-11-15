@@ -33,6 +33,8 @@ const WINDOWLESS_HZ: f32 = 60.0;
 pub const FIRST_SHOWN: &str = "beryl3d: first frame shown";
 /// The line the app prints when a replayed recording's last script has ended.
 pub const FIXTURE_ENDED: &str = "beryl3d: fixture ended";
+/// The line the app prints when a view first says the game is over.
+pub const GAME_OVER: &str = "beryl3d: game over";
 
 /// What a finished run left.
 pub struct Finished {
@@ -65,6 +67,11 @@ struct AppFeed {
     /// Whether the latest view says the AI is searching.
     searching: bool,
     shown_first: bool,
+    /// Whether the run ends when the game is over: with `--agent`, which plays a whole game
+    /// with nobody at the table.
+    end_at_game_over: bool,
+    /// Whether a view has said the game is over.
+    game_over: bool,
 }
 
 /// When the frame log is finished and its summary written.
@@ -126,6 +133,10 @@ impl Feed for AppFeed {
     fn input(&mut self, input: &Input) {
         if let Input::Update(update) = input {
             self.searching = matches!(update.view.status, Status::Thinking);
+            if !self.game_over && matches!(update.view.status, Status::Over { .. }) {
+                self.game_over = true;
+                println!("{GAME_OVER}");
+            }
         }
     }
 
@@ -191,6 +202,10 @@ impl Feed for AppFeed {
             _ => Wake::Never,
         }
     }
+
+    fn ended(&self) -> bool {
+        self.end_at_game_over && self.game_over
+    }
 }
 
 /// The feed of a phone's app (`beryl_3d`'s C functions): it replays `fixture`, the recording
@@ -215,9 +230,12 @@ pub(crate) fn phone_feed(name: &str, fixture: Fixture, log_dir: PathBuf) -> Box<
             drive: None,
             load_threads: None,
             slow_gpu_ms: None,
+            game: None,
         },
         searching: false,
         shown_first: false,
+        end_at_game_over: false,
+        game_over: false,
     })
 }
 
@@ -244,6 +262,14 @@ pub fn run(options: &Options) -> Result<Finished, String> {
             .load
             .map(|(threads, class)| format!("{threads}:{}", class.word())),
         slow_gpu_ms: options.slow_gpu.map(|slow| slow.as_secs_f64() * 1e3),
+        game: options.agent.as_ref().map(|agent| {
+            format!(
+                "{agent} against {}, seed {}, search class {}",
+                options.opponent,
+                options.seed,
+                options.search_class.word()
+            )
+        }),
     };
     // Started before the host, from the main thread, and stopped when the run ends.
     let _load = options
@@ -262,6 +288,8 @@ pub fn run(options: &Options) -> Result<Finished, String> {
         run: run.clone(),
         searching: false,
         shown_first: false,
+        end_at_game_over: options.agent.is_some(),
+        game_over: false,
     };
     let client = Client::new(Config::LARGEST);
     let hosted = match options.window {
@@ -320,7 +348,9 @@ pub fn run(options: &Options) -> Result<Finished, String> {
     Ok(Finished { summary, run, path })
 }
 
-/// The session thread, or with `--fixture` the recording.
+/// The session thread, or with `--fixture` the recording. With `--agent`, the session starts a
+/// fresh game that the agent plays for the viewer, and keeps no replay or ledger, so that the
+/// web app and a later run of this one have no unfinished game of it to resume.
 // Only the recording can fail to start, and only a build with `tools` has one.
 #[cfg_attr(not(feature = "tools"), expect(clippy::unnecessary_wraps))]
 fn source(options: &Options, inbox: Inbox) -> Result<Source, String> {
@@ -330,11 +360,24 @@ fn source(options: &Options, inbox: Inbox) -> Result<Source, String> {
     }
     #[cfg(not(feature = "tools"))]
     let _ = options;
-    let data = data_dir();
+    let (data, played_by) = match &options.agent {
+        Some(agent) => (
+            None,
+            Some((agent.clone(), options.opponent.clone(), options.seed)),
+        ),
+        None => (data_dir(), None),
+    };
     Ok(Source::Live(session::spawn(
+        options.search_class,
         {
             let inbox = inbox.clone();
-            move || Live::new(data, inbox)
+            move || {
+                let live = Live::new(data, inbox);
+                match played_by {
+                    Some((agent, opponent, seed)) => live.played_by(&agent, &opponent, seed),
+                    None => live,
+                }
+            }
         },
         inbox,
     )))

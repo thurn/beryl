@@ -1,6 +1,6 @@
 //! The app run as an agent runs it: a fixture replayed with no window for three seconds exits
 //! with status 0, prints the frame log's summary and names a log that reads back. And the
-//! options a release build lacks are not options without `tools`.
+//! options a release build lacks are not options without `tools`, and read as given with it.
 
 use std::process::Command;
 
@@ -57,4 +57,16 @@ fn a_release_build_has_no_fixture_option() {
     )
     .expect("a debug build replays");
     assert_eq!(with.fixture.as_deref(), Some("verbs-zones"));
+    let agent = |words: &[&str], tools| Options::parse(&arguments(words), tools);
+    assert!(agent(&["--agent", "expert"], false).is_err());
+    let played = agent(
+        &["--agent", "expert", "--seed", "7", "--search-class", "default"],
+        true,
+    )
+    .expect("a debug build plays a game for the viewer");
+    assert_eq!(played.agent.as_deref(), Some("expert"));
+    assert_eq!(played.opponent, beryl_3d::options::OPPONENT);
+    assert_eq!(played.seed, 7);
+    assert_eq!(played.search_class, beryl_host::Class::Default);
+    assert!(agent(&["--search-class", "idle"], true).is_err());
 }

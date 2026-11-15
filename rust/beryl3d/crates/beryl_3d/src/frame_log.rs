@@ -63,6 +63,10 @@ pub struct Run {
     /// How long each finished frame was held back, in milliseconds, if it was (`--slow-gpu`).
     #[serde(default)]
     pub slow_gpu_ms: Option<f64>,
+    /// The game `--agent` started, if it did: who plays it, its seed and the AI's scheduling
+    /// class (`expert against mcts-hidden, seed 20261114, search class utility`).
+    #[serde(default)]
+    pub game: Option<String>,
 }
 
 /// A late frame. Times are in milliseconds.
@@ -139,6 +143,20 @@ pub struct Summary {
     /// The host's steps down and up, in order.
     #[serde(default)]
     pub steps: Vec<Stepped>,
+    /// The frames drawn while the latest view said the AI was searching.
+    #[serde(default)]
+    pub searching: Searching,
+}
+
+/// The frames drawn while the AI searched: whether its search threads delayed drawing
+/// (docs/beryl-3d.md, "Threads"). Times are in milliseconds.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Searching {
+    pub frames: u64,
+    pub late: u64,
+    /// The longest `Client::frame` took, and the longest the encode and submit took.
+    pub worst_client_ms: f64,
+    pub worst_encoded_ms: f64,
 }
 
 /// One line of the log.
@@ -248,10 +266,19 @@ impl FrameLog {
             }
             self.reached_pause = true;
         }
+        if searching {
+            summary.searching.frames += 1;
+            summary.searching.worst_client_ms =
+                summary.searching.worst_client_ms.max(ms(ticked.client));
+        }
         let Some(shown) = ticked.shown else {
             summary.skipped += 1;
             return;
         };
+        if searching {
+            summary.searching.worst_encoded_ms =
+                summary.searching.worst_encoded_ms.max(ms(shown.encoded));
+        }
         summary.first_shown_ms.get_or_insert(ms(ticked.tick));
         let waited = ms(shown.waited);
         let bucket = usize::try_from(shown.waited / WAIT_BUCKET).unwrap_or(usize::MAX);
@@ -267,6 +294,9 @@ impl FrameLog {
         }
         let held_to_60 = ticked.hz > 61.0 && (gap as f64) <= LATE * SIXTIETH;
         summary.late += 1;
+        if searching {
+            summary.searching.late += 1;
+        }
         if held_to_60 {
             summary.held_to_60 += 1;
         } else {
@@ -392,6 +422,9 @@ impl Run {
         if let Some(slow) = self.slow_gpu_ms {
             parts.push(format!("slow GPU {slow} ms"));
         }
+        if let Some(game) = &self.game {
+            parts.push(format!("game {game}"));
+        }
         (!parts.is_empty()).then(|| parts.join(", "))
     }
 }
@@ -443,6 +476,17 @@ impl Summary {
         ];
         if let Some(conditions) = run.conditions() {
             lines.insert(1, conditions);
+        }
+        let searching = &self.searching;
+        if searching.frames > 0 {
+            lines.push(format!(
+                "while the AI searched: {} frames, {} late; worst client {:.2} ms, worst encode \
+                 {:.2} ms",
+                searching.frames,
+                searching.late,
+                searching.worst_client_ms,
+                searching.worst_encoded_ms
+            ));
         }
         if let Some(pause) = run.pause_at_ms {
             lines.push(format!(

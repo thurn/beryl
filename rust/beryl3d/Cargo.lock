@@ -134,6 +134,7 @@ version = "0.1.0"
 dependencies = [
  "beryl_3d",
  "beryl_assets",
+ "beryl_cards",
  "beryl_host",
  "beryl_inspect",
  "beryl_render",

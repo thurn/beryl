@@ -45,6 +45,7 @@ fn what_the_writer_writes_the_reader_reads() {
         drive: Some("hover-hand".to_owned()),
         load_threads: Some("16:utility".to_owned()),
         slow_gpu_ms: Some(5.0),
+        game: Some("expert against mcts-hidden".to_owned()),
     };
     let dir = dir("frame-log");
     let mut log = FrameLog::create(&dir, &run).expect("the log is made");
@@ -72,6 +73,8 @@ fn what_the_writer_writes_the_reader_reads() {
     );
     assert_eq!(summary.after_pause, 1);
     assert_eq!(summary.unbuilt, ["tap"]);
+    // Only the frame at 35 ms was drawn while the AI searched, and it came late.
+    assert_eq!((summary.searching.frames, summary.searching.late), (1, 1));
     let gaps: Vec<f64> = read.late.iter().map(|late| late.since_last_ms).collect();
     assert_eq!(gaps, [17.0, 40.0, 17.0]);
     assert_eq!(read.late[0].verbs, ["fly", "set"]);
@@ -79,7 +82,10 @@ fn what_the_writer_writes_the_reader_reads() {
     assert!(!read.late[1].held_to_60);
     let printed = summary.print(&read.run);
     assert!(
-        printed.contains("drive hover-hand, load threads 16:utility, slow GPU 5 ms"),
+        printed.contains(
+            "drive hover-hand, load threads 16:utility, slow GPU 5 ms, game expert against \
+             mcts-hidden"
+        ),
         "{printed}"
     );
     let _ = std::fs::remove_dir_all(&dir);
@@ -100,6 +106,7 @@ fn frames_are_late_against_the_rate_the_host_chose() {
         drive: None,
         load_threads: None,
         slow_gpu_ms: None,
+        game: None,
     };
     let dir = dir("rate");
     let mut log = FrameLog::create(&dir, &run).expect("the log is made");
@@ -150,6 +157,7 @@ fn the_summary_gives_the_median_and_95th_percentile_wait_for_a_drawable() {
         drive: None,
         load_threads: None,
         slow_gpu_ms: None,
+        game: None,
     };
     let dir = dir("waits");
     let mut log = FrameLog::create(&dir, &run).expect("the log is made");
@@ -195,6 +203,7 @@ fn a_log_that_cannot_be_written_is_reported_when_it_finishes() {
         drive: None,
         load_threads: None,
         slow_gpu_ms: None,
+        game: None,
     };
     let mut log = FrameLog::create(&dir, &run).expect("the log's thread starts");
     log.frame(&ticked(10, None, true), &[], false);

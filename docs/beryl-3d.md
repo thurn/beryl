@@ -2052,6 +2052,7 @@ involved (decision C16).
 ```bash
 just b3d app --fixture verbs-zones --for 10s
 just b3d app --drive hover-hand --load 8:utility --window background --for 20s
+just b3d app --agent expert --for 600s
 just b3d frames
 just b3d live tree
 just b3d live do 'press button "Auto Pay"'
@@ -2063,6 +2064,17 @@ just b3d smoke
   a file of actions on the display's clock. `--load <threads>[:<class>]` starts
   busy threads, to imitate a loaded machine. `--slow-gpu <duration>` holds each
   finished frame back, to imitate a slow GPU. `--for <duration>` ends the run.
+- **`--agent <name>`** starts a fresh game in which that agent of the session's
+  answers for the viewer, so the AI searches with nobody at the table, and ends
+  the run when the game is over. The opponent is `mcts-hidden` unless
+  `--opponent` names another, and the seed is fixed unless `--seed` gives one.
+  `--search-class <class>` puts the session thread and the AI's search threads
+  in another scheduling class than utility, to compare them (see
+  [Threads](#threads)). At the end the app prints the rollouts and engine steps
+  a second of the opponent's searches, and the frame log's summary counts the
+  frames drawn while the AI searched: how many, how many late, and the worst
+  client and encode times among them. The game keeps no replay, so neither app
+  resumes it.
 - **`--window`** says what is opened. `none` is the windowless host, which
   measures everything up to presentation, and is what an agent gets when it
   gives no `--window`. `background` is a window that never takes focus and opens
@@ -2096,7 +2108,7 @@ just b3d smoke
   and exits.
 
 Release builds contain neither the socket nor the options that replay, drive,
-load or slow the app.
+load, slow or play the app for the viewer.
 
 ## Interface checks
 

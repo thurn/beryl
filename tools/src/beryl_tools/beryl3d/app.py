@@ -4,8 +4,8 @@
 
 The app is built with cargo's `test` profile, as the workspace's tests are: optimized enough to
 measure frames, it shares the dependencies `just b3d cargo-test` built, and the `tools` feature
-gives it `--fixture`, `--pause-at`, `--drive`, `--load` and `--slow-gpu`, which a release build
-leaves off.
+gives it `--fixture`, `--pause-at`, `--drive`, `--load`, `--slow-gpu` and `--agent` with its
+`--opponent`, `--seed` and `--search-class`, which a release build leaves off.
 """
 
 from __future__ import annotations
@@ -73,6 +73,17 @@ def app_arguments(parser: argparse.ArgumentParser) -> None:
         "--slow-gpu", help="hold each finished frame back this long (5ms)"
     )
     parser.add_argument(
+        "--agent",
+        help="start a new game this agent plays for the viewer; the run ends when it is over",
+    )
+    parser.add_argument("--opponent", help="--agent's opponent (mcts-hidden)")
+    parser.add_argument("--seed", help="--agent's game's seed")
+    parser.add_argument(
+        "--search-class",
+        choices=("utility", "default", "interactive"),
+        help="the scheduling class of the AI's threads (utility)",
+    )
+    parser.add_argument(
         "--window",
         choices=WINDOWS,
         help="none for an agent and fullscreen for a person, unless given",
@@ -96,6 +107,10 @@ def run_app(args: argparse.Namespace) -> int:
         ("--drive", args.drive),
         ("--load", args.load),
         ("--slow-gpu", args.slow_gpu),
+        ("--agent", args.agent),
+        ("--opponent", args.opponent),
+        ("--seed", args.seed),
+        ("--search-class", args.search_class),
     ):
         if value is not None:
             command += [option, value]
@@ -180,6 +195,7 @@ def report(path: Path) -> str:
             ("drive", "drive"),
             ("load_threads", "load threads"),
             ("slow_gpu_ms", "slow GPU ms"),
+            ("game", "game"),
         )
         if run.get(key) is not None
     ]
@@ -199,6 +215,13 @@ def report(path: Path) -> str:
             f" worst {summary['worst_wait_ms']:.1f} ms; {summary['total_wait_ms']:.1f} ms in all;"
             f" {summary['skipped']} frames found none",
         ]
+        searching = summary.get("searching", {})
+        if searching.get("frames"):
+            out.append(
+                f"while the AI searched: {searching['frames']} frames, {searching['late']} late;"
+                f" worst client {searching['worst_client_ms']:.2f} ms,"
+                f" worst encode {searching['worst_encoded_ms']:.2f} ms"
+            )
         if run.get("pause_at_ms") is not None:
             out.append(
                 f"paused at {run['pause_at_ms']} ms:"

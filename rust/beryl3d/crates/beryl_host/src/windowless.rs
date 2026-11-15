@@ -69,8 +69,9 @@ impl Windowless {
         Inbox::new(self.sender.clone(), || true)
     }
 
-    /// Runs `client` with `feed` added to its frame loop until `end_after` has passed or the
-    /// drive script has given its last action, or for ever when neither is given. `setup` prepares the renderer before the first frame.
+    /// Runs `client` with `feed` added to its frame loop until `end_after` has passed, the
+    /// drive script has given its last action or the feed has ended, or for ever when none of
+    /// these happens. `setup` prepares the renderer before the first frame.
     ///
     /// # Errors
     ///
@@ -126,7 +127,7 @@ impl Windowless {
             if end.is_some_and(|end| now >= end) {
                 return Ok(());
             }
-            if let Some(driven) = frames.driven_to_end() {
+            if let Some(driven) = frames.at_end() {
                 return driven;
             }
             let since = |at: Instant| at.duration_since(started).as_nanos() as u64;

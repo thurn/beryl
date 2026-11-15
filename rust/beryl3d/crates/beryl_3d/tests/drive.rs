@@ -77,12 +77,12 @@ fn play(script: &str, ticks: u64) -> (Vec<String>, Option<Result<(), String>>) {
     });
     let mut trees = Trees::default();
     for tick in 1..=ticks {
-        if frames.driven_to_end().is_some() {
+        if frames.at_end().is_some() {
             break;
         }
         frames.tick(tick * INTERVAL, &mut trees);
     }
-    (trees.0, frames.driven_to_end())
+    (trees.0, frames.at_end())
 }
 
 const SWEEP: &str = "\

@@ -61,10 +61,26 @@ pub struct Options {
     /// With `fixture`, write that recording to this file as JSON and exit, for a phone's app to
     /// replay.
     pub write_fixture: Option<String>,
+    /// A fresh game in which this agent answers for the viewer, so that a run with no person
+    /// plays a whole game and the AI searches (`--agent`).
+    pub agent: Option<String>,
+    /// With `agent`, the agent in the other seat.
+    pub opponent: String,
+    /// With `agent`, the game's seed.
+    pub seed: u64,
+    /// The scheduling class the session thread, and through it the AI's search threads, run
+    /// in (`--search-class`): utility, one below drawing, unless a run compares another.
+    pub search_class: Class,
 }
 
+/// The agent across the table in a game `--agent` starts: the searching agent the prototype
+/// measured, with the budget the web app gives it.
+pub const OPPONENT: &str = "mcts-hidden";
+/// The seed of a game `--agent` starts, unless `--seed` gives another: the prototype's.
+pub const SEED: u64 = 20_261_114;
+
 /// Whether this build has the options only a debug build has (`--fixture`, `--pause-at`,
-/// `--drive`, `--load` and `--slow-gpu`).
+/// `--drive`, `--load`, `--slow-gpu`, `--agent`, `--opponent`, `--seed` and `--search-class`).
 pub const TOOLS: bool = cfg!(feature = "tools");
 
 impl Options {
@@ -84,6 +100,10 @@ impl Options {
             load: None,
             slow_gpu: None,
             write_fixture: None,
+            agent: None,
+            opponent: OPPONENT.to_owned(),
+            seed: SEED,
+            search_class: Class::Utility,
         };
         let mut rest = arguments.iter();
         while let Some(option) = rest.next() {
@@ -99,6 +119,22 @@ impl Options {
                 "--load" if tools => options.load = Some(crate::load::parse(&value()?)?),
                 "--slow-gpu" if tools => options.slow_gpu = Some(duration(&value()?)?),
                 "--write-fixture" if tools => options.write_fixture = Some(value()?),
+                "--agent" if tools => options.agent = Some(value()?),
+                "--opponent" if tools => options.opponent = value()?,
+                "--seed" if tools => {
+                    let text = value()?;
+                    options.seed = text
+                        .parse()
+                        .map_err(|_| format!("--seed {text}: a seed is a whole number"))?;
+                }
+                "--search-class" if tools => {
+                    let word = value()?;
+                    options.search_class = Class::from_word(&word).ok_or_else(|| {
+                        format!(
+                            "--search-class {word}: a class is utility, default or interactive"
+                        )
+                    })?;
+                }
                 "--for" => options.run_for = Some(duration(&value()?)?),
                 "--window" => {
                     let word = value()?;
@@ -138,6 +174,16 @@ pub fn usage(tools: bool) -> String {
         );
         lines.push(
             "  --write-fixture <path>                           write --fixture's recording, exit",
+        );
+        lines.push(
+            "  --agent <name>                                   a new game this agent plays for you",
+        );
+        lines.push(
+            "  --opponent <name>                                --agent's opponent (mcts-hidden)",
+        );
+        lines.push("  --seed <number>                                  --agent's game's seed");
+        lines.push(
+            "  --search-class utility|default|interactive       the AI's threads' class (utility)",
         );
     }
     lines.join("\n")

@@ -20,7 +20,8 @@ path = "src/main.rs"
 
 [features]
 # What only a debug build has: `--fixture`, which replays a recording from the recordings pack
-# instead of playing a game, `--pause-at`, `--drive`, `--load` and `--slow-gpu`. A release build leaves it off, and with it the
+# instead of playing a game, `--pause-at`, `--drive`, `--load`, `--slow-gpu`, and `--agent`
+# with its `--opponent`, `--seed` and `--search-class`. A release build leaves it off, and with it the
 # pack.
 tools = ["dep:beryl_inspect", "beryl_host/drive", "beryl_host/headless"]
 
@@ -31,6 +32,9 @@ beryl_inspect = { path = "../beryl_inspect", optional = true }
 beryl_render = { path = "../beryl_render" }
 # The `driver` feature reads a replayed recording's views and responses.
 beryl_scene = { path = "../beryl_scene", features = ["driver"] }
+# The decklist of a game `--agent` starts, as the web app's session deals it. The session
+# already depends on it.
+beryl_cards = { path = "../../../crates/beryl_cards" }
 # The game the app plays: `Sessions` on the session thread.
 beryl_session = { path = "../../../crates/beryl_session" }
 # Receives wgpu's warnings on a phone, which shows no standard error, and writes them to a file

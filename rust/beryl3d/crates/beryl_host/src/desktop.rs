@@ -118,8 +118,8 @@ impl Desktop {
         })
     }
 
-    /// Runs `client` in the window until it is closed or `Options::end_after` has passed, with
-    /// `feed` added to its frame loop. `setup` prepares the renderer (its card faces, say)
+    /// Runs `client` in the window until it is closed, `Options::end_after` has passed or the
+    /// drive script or the feed has ended (`FrameLoop::at_end`), with `feed` added to its frame loop. `setup` prepares the renderer (its card faces, say)
     /// before the first frame.
     pub fn run(
         self,
@@ -479,7 +479,7 @@ impl<S: FnOnce(&mut Renderer)> ApplicationHandler<UserEvent> for App<S> {
         let Some(running) = &mut self.running else {
             return;
         };
-        if let Some(driven) = running.frames.driven_to_end() {
+        if let Some(driven) = running.frames.at_end() {
             self.error = driven.err();
             event_loop.exit();
             return;
