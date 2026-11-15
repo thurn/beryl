@@ -75,6 +75,11 @@ fn family_corpora_never_change() {
                 vec![20, 15, 20, 4, 13, 16, 19, 14, 17, 20, 15, 18],
                 3_337_079_432_780_671_536
             ),
+            (
+                "costs",
+                vec![2, 5, 8, 13, 16, 19, 2, 5, 8, 11, 14, 17],
+                16_420_930_836_580_429_720
+            ),
         ]
     );
 }
@@ -128,6 +133,16 @@ fn families_pair_their_steps() {
                     capacity_stalls: 0,
                     layer_recomputes: 827,
                     transactions: 7_700
+                }
+            ),
+            (
+                "costs",
+                Pairing {
+                    paired: 2_953,
+                    skipped: 0,
+                    capacity_stalls: 0,
+                    layer_recomputes: 1_278,
+                    transactions: 2_901
                 }
             ),
         ]

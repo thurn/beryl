@@ -94,6 +94,19 @@ pub const FAMILIES: &[Family] = &[
             (1, names::FURNACE_OF_RATH, names::NO_MORE_LIES),
         ],
     },
+    // The costs family: Trinisphere (a floor on a spell's total cost, CR 601.2f), Thalia (a
+    // static increase on noncreature spells), Pithing Needle (a prohibition keyed on a chosen
+    // name) and Cavern of Souls (mana that remembers what it may pay for). Cost rules are read
+    // at every priority for every card in hand.
+    Family {
+        name: "costs",
+        swaps: &[
+            (1, names::TRINISPHERE, names::CURRENCY_CONVERTER),
+            (1, names::THALIA_GUARDIAN_OF_THRABEN, names::TRINKET_MAGE),
+            (1, names::PITHING_NEEDLE, names::STAFF_OF_THE_STORYTELLER),
+            (2, names::CAVERN_OF_SOULS, names::PLAINS),
+        ],
+    },
 ];
 
 /// The family called `name`.
