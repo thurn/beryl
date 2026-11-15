@@ -452,6 +452,7 @@ fn copied<L: Layout>(t: &GameTable, obs: Observation<'_, L>, entry: &StackEntry<
 /// carry no identity: anything an event says about a card must come from `obs`, which the
 /// information independence test redeals. The table names only an ability's card, public as
 /// the stack shows it.
+#[allow(clippy::too_many_lines)] // A line or five per event, in one exhaustive match.
 fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -> GameEvent {
     let side = |p| side(obs, p);
     match *e {

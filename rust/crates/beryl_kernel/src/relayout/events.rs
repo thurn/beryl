@@ -196,6 +196,7 @@ impl<L: Layout> Relayout for Tagged<L> {
 impl<L: Layout> Relayout for Event<L> {
     type In<M: Layout> = Event<M>;
 
+    #[allow(clippy::too_many_lines)] // A line or five per event, in one exhaustive match.
     fn relayout<M: Layout>(&self) -> Event<M> {
         match self {
             &Event::ZoneChange {

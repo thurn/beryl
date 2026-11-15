@@ -169,7 +169,7 @@ pub(crate) fn given(def: &CardDef) -> Result<Listens, Unmatched> {
                 continue;
             }
             if let Some(kind) = listens_to(trigger, ability.zones())? {
-                kinds = kinds | Listens::event(kind);
+                kinds |= Listens::event(kind);
             }
         }
     }

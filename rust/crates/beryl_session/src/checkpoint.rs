@@ -295,6 +295,7 @@ impl Checkpoint {
     /// the engine's next call begins the turn ([`State::begin_before_turn`]). The library's
     /// cards no player knows go in an order `seed` shuffles. Fails, saying why, where the
     /// game's decks cannot hold the board.
+    #[allow(clippy::too_many_lines)] // A few lines per zone of the board, in order.
     pub fn arrange(&self, t: &GameTable, s: &mut State<Small>, seed: u64) -> Result<(), String> {
         let seat = |p: u8| Seat::try_new(p).ok_or_else(|| format!("no seat {p}"));
         let full = |_| "a zone is full".to_owned();

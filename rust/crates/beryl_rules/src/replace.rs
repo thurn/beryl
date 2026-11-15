@@ -407,11 +407,11 @@ fn entering<L: Layout>(
                 let value = choose_value(s, t, sink, slot, controller, kind)?;
                 sink.chosen.push((slot, value))?;
             }
-            // Applied first ([`copy_to_enter`]); a copied one finds the event already
-            // modified by a copy effect, which it is one of (CR 614.5).
-            Rewrite::EnterAsCopy { .. } => continue,
-            // The card table holds no other rewrite of entering.
-            Rewrite::None
+            // `EnterAsCopy` is applied first ([`copy_to_enter`]); a copied one finds the event
+            // already modified by a copy effect, which it is one of (CR 614.5). The card table
+            // holds no other rewrite of entering.
+            Rewrite::EnterAsCopy { .. }
+            | Rewrite::None
             | Rewrite::ToZone(_)
             | Rewrite::Instead
             | Rewrite::Dredge(_)
