@@ -104,6 +104,37 @@ pub mod scenarios {
                 THEM.has(Zone::Hand, Card::Plains, 3),
                 ME.has(Zone::Hand, BOLT, 1),
             ]),
+        // The copy's effect exiles the copy first, and the copy is still in exile while each
+        // player wheels and its controller untaps lands; then it ceases to exist (CR 704.5e).
+        // The spell resolves after it, for its own controller, and stays in exile.
+        Scenario::new("Fork copies Time Spiral, which exiles the copy first")
+            .interaction(&[Card::TimeSpiral])
+            .battlefield(P0, &[MOUNTAIN, MOUNTAIN])
+            .hand(P0, &[FORK])
+            .library(P0, &[Card::Plains; 16])
+            .battlefield(P1, &[ISLAND, ISLAND, ISLAND, ISLAND, ISLAND, ISLAND])
+            .hand(P1, &[Card::TimeSpiral])
+            .library(P1, &[Card::Island; 16])
+            .at(2, P1, TurnStep::PrecombatMain)
+            .actions(&[
+                THEM.casts(Card::TimeSpiral),
+                ME.casts(FORK),
+                Resolve,
+                Resolve,
+                ME.deciding(DecisionKind::ChooseUpTo, 3),
+                ME.picks_up_to(MOUNTAIN),
+                ME.done_picking(),
+                ME.tapped(MOUNTAIN, 1),
+                ME.has_cards(Zone::Hand, 7),
+                ME.has_cards(Zone::Exile, 0),
+                Resolve,
+                THEM.picks_up_to(ISLAND),
+                THEM.done_picking(),
+                THEM.tapped(ISLAND, 5),
+                THEM.has(Zone::Exile, Card::TimeSpiral, 1),
+                THEM.has_cards(Zone::Hand, 7),
+                ME.has_cards(Zone::Hand, 7),
+            ]),
         // A copy is countered on its own, and like the spell it leaves no card behind.
         Scenario::new("Fork's copy and its spell are countered one at a time")
             .interaction(&[GEYSER])

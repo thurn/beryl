@@ -65,7 +65,9 @@ impl Builder<'_> {
         // in a zone other than the battlefield, it ceases to exist"), and a copy of a spell
         // as it leaves the stack: no view has a record of either afterwards.
         let ceases = to == ZoneName::Nowhere
-            || (token && !matches!(to, ZoneName::Battlefield | ZoneName::Stack));
+            || (token
+                && !matches!(to, ZoneName::Battlefield | ZoneName::Stack)
+                && !self.lingers(i, slot, from, to));
         if ceases || from == ZoneName::Nowhere {
             if was.is_some() {
                 let subject = Subject::Object { slot };
@@ -107,6 +109,28 @@ impl Builder<'_> {
         if unveiled && let Some(object) = self.table.objects.get(&slot).cloned() {
             self.showcase(object, cause);
         }
+    }
+
+    /// Whether the copy of a spell in `slot`, which event `i` moves from the stack to `to`, is
+    /// still shown there after the move.
+    ///
+    /// A copy of a spell that leaves the stack goes where a card would and ceases to exist
+    /// only at the next state-based check ([CR 704.5e]): "If a copy of a spell is in a zone
+    /// other than the stack, it ceases to exist." The engine reports no event for that, so
+    /// the script usually lets the copy vanish as it leaves the stack. A copy whose effect
+    /// first exiles the spell itself is still in exile while the rest of the effect resolves:
+    /// later events name it as their cause, and a view drawn at a choice within the effect
+    /// lists it in exile. Then the copy moves to that zone as a card does, and the script's
+    /// end (`settle.rs`) makes it vanish once a view no longer lists it.
+    ///
+    /// [CR 704.5e]: https://yawgatog.com/resources/magic-rules/#R7045e
+    fn lingers(&self, i: usize, slot: ObjectId, from: ZoneName, to: ZoneName) -> bool {
+        let subject = Some(Subject::Object { slot });
+        from == ZoneName::Stack
+            && (self.after.objects.get(&slot).is_some_and(|o| o.zone == to)
+                || self.causes[i + 1..]
+                    .iter()
+                    .any(|cause| cause.subject() == subject))
     }
 
     /// Event `i` reveals the card in `slot`
