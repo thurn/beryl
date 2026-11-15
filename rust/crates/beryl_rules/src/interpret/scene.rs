@@ -17,8 +17,8 @@ use crate::ids::Seat;
 use crate::layout::{Layout, PerPlayer, Table};
 use crate::query::Copiable;
 use crate::state::{
-    AbilityRef, Count, CountersHeld, PendingTrigger, State, TARGETS, Target, TargetPlace,
-    TargetPlaces, Tracker, Zone, ZoneKey, placed,
+    AbilityRef, AbilityTarget, Count, CountersHeld, PendingTrigger, State, TARGETS, Target,
+    TargetPlace, TargetPlaces, Tracker, Zone, ZoneKey, placed,
 };
 use crate::table::GameTable;
 use crate::trigger::entered_with;
@@ -187,6 +187,22 @@ impl<L: Layout> Scene<'_, L> {
                         .is_some_and(|object| !self.s.is_current(object))
             })
             .map(|(place, _)| &self.registers.known[place.index()])
+    }
+
+    /// The abilities on the stack `objects` names, a bit for each place counted from the
+    /// bottom: the targets of an ability target that were legal as the resolution began and
+    /// are still on the stack. Nothing names an ability but a target.
+    pub(crate) fn abilities(&self, objects: Objects) -> u64 {
+        let Objects::Target(spec) = objects else {
+            return 0;
+        };
+        let mut places = 0;
+        for (_, target) in self.targets(spec) {
+            if let Some(AbilityTarget::At(place)) = target.as_ability() {
+                places |= 1 << place;
+            }
+        }
+        places
     }
 
     /// The objects `objects` names that are where they were: one that has changed zones is

@@ -425,6 +425,15 @@ pub enum PaidCost {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum TargetRef {
-    Player { player: Side },
-    Object { slot: ObjectId },
+    Player {
+        player: Side,
+    },
+    Object {
+        slot: ObjectId,
+    },
+    /// The activated or triggered ability at `place` on the stack, counted from the bottom
+    /// as the view's stack lists it. Only a target is one.
+    Ability {
+        place: u16,
+    },
 }

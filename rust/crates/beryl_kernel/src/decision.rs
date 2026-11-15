@@ -5,7 +5,7 @@ use crate::bitboard::{Bitboard, Slots};
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
 use crate::observation::Observation;
-use crate::state::State;
+use crate::state::{StackEntry, State};
 use beryl_card::{Castings, FaceIx, ManaColor, ObjectAbility, Prompt};
 
 // The kinds are vocabulary: a scenario names the kind of question it answers, and a card's
@@ -201,6 +201,9 @@ pub enum Opt<L: Layout = Small> {
     Plan(L::Index),
     /// A player, as a target.
     Player(Seat),
+    /// The activated or triggered ability at this place on the stack, counted from the
+    /// bottom, as a target.
+    Ability(L::Index),
     /// The object in this slot, among options that also offer [`Opt::Done`].
     Object(L::Slot),
     /// Turn the face-down permanent in this slot face up, a special action (CR 116.2b).
@@ -212,7 +215,8 @@ const _: () = assert!(size_of::<Opt<Small>>() == 4);
 impl<L: Layout> Opt<L> {
     /// The object this option names, if it names one: the card to play, cast, activate or
     /// turn face up, a creature to attack or block with, a blocker, a mana source, a
-    /// planeswalker to attack, an object chosen, or a waiting trigger's source.
+    /// planeswalker to attack, an object chosen, or a waiting trigger's or a targeted
+    /// ability's source.
     pub fn object_named(self, s: &State<L>) -> Option<L::Slot> {
         match self {
             Opt::PlayLand(slot)
@@ -229,6 +233,11 @@ impl<L: Layout> Opt<L> {
                 .triggers()
                 .get(Into::<usize>::into(i))
                 .and_then(|tr| tr.of.source)
+                .map(|r| r.slot),
+            Opt::Ability(place) => s
+                .stack()
+                .get(Into::<usize>::into(place))
+                .and_then(StackEntry::source)
                 .map(|r| r.slot),
             Opt::Pass
             | Opt::Play

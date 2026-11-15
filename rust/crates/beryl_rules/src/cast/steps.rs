@@ -390,19 +390,35 @@ pub(crate) fn decision<L: Layout>(
         }
         // The targets of one spec are one prompt, which says how many are still to choose.
         // A spec that can choose players lists them as options, by seat, which a `Choice`
-        // counts in, and then any objects it can also choose, in the candidate order.
+        // counts in, and then any objects it can also choose, in the candidate order. One
+        // that chooses abilities on the stack lists them as options too.
         CastStep::Target { left } => match target_options(s, t, c) {
-            TargetSet { objects, players } if players.is_empty() => Decision {
+            TargetSet {
+                objects,
+                players,
+                abilities: 0,
+            } if players.is_empty() => Decision {
                 player: c.player,
                 kind: DecisionKind::Target,
                 candidates: Candidates::Objects(collapse(s, objects)),
                 prompt: Prompt::new(Purpose::Target).most(left),
                 about: Bitboard::EMPTY,
             },
-            TargetSet { objects, players } => {
+            TargetSet {
+                objects,
+                players,
+                abilities,
+            } => {
                 let mut list: L::Queue<Opt<L>, 64> = Default::default();
                 for player in s.players_in_seat_order(players) {
                     list.push(Opt::Player(player))?;
+                }
+                // Abilities on the stack, the top first, as the stack is read.
+                let mut unlisted = abilities;
+                while unlisted != 0 {
+                    let place = 63 - unlisted.leading_zeros() as usize;
+                    unlisted &= !(1 << place);
+                    list.push(Opt::Ability(index::<L>(place)))?;
                 }
                 for slot in s.in_candidate_order(collapse(s, objects)) {
                     list.push(Opt::Object(slot))?;
@@ -476,6 +492,7 @@ pub(crate) fn perform<L: Layout>(
         CastStep::Target { left } => {
             let target = match (option, object) {
                 (Some(Opt::Player(player)), _) => Target::player(c.spec, player),
+                (Some(Opt::Ability(place)), _) => Target::ability(c.spec, place.into()),
                 (Some(Opt::Object(slot)), _) | (_, Some(slot)) => {
                     Target::object(c.spec, s.object_ref(slot))
                 }

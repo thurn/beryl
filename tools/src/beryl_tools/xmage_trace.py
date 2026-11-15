@@ -7,7 +7,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import cast
 
-from .card_facts import Json
+from .card_facts import Json, Unsupported
+
+# Questions with one answer, which Beryl answers silently, that XMage asks anyway: by kind,
+# targets (with none to choose too) and X, whose limit XMage leaves to the payment; by what the
+# prompt is for (the trace's `purpose`), the permanents to tap or cards to exile for a cost.
+FORCED_ASKED = ("Target", "TargetCount", "X")
+FORCED_COSTS = ("crew", "waterbend", "exile-cost")
+# Others XMage asks when the one answer stands for several identical cards.
+FORCED_CHOICES = ("ChooseObject", "ChooseUpTo")
+# What the prompts are for whose cards XMage asks as targets even when they are identical, as
+# Brainstorm's cards to put back from a hand of Islands: their answers go in the target queue.
+FORCED_TARGETS = ("put-back",)
 
 
 @dataclass
@@ -33,6 +44,17 @@ class Position:
         if card in self.face_down:
             return "[face_down_creature]"
         return card
+
+    def stack_ability(self, source: str) -> str:
+        """The name XMage's test player targets the ability of `source` on the stack by: a
+        stack ability's name is "stack ability (" and its rule, which Beryl does not know, so
+        only the prefix names it, and only while it is the one ability on the stack."""
+        abilities = [
+            cast(str, i["name"]) for i in self.stack if not cast(bool, i["spell"])
+        ]
+        if abilities != [source]:
+            raise Unsupported("a target among several abilities on the stack")
+        return "stack ability ("
 
     @staticmethod
     def of(t: Json) -> Position:

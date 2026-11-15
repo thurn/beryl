@@ -7,6 +7,7 @@ use beryl_engine::card::{
 use beryl_engine::chosen::ChosenValue;
 use beryl_engine::filter::Filter;
 use beryl_engine::layout::Queue;
+use beryl_engine::state::StackEntry;
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
     Candidates, Decision, GameTable, Layout, Observation, Opt, Seat, SlotId, Zone, ZoneKey,
@@ -136,6 +137,7 @@ pub(super) fn candidate<L: Layout>(
             },
         ),
         Opt::Object(slot) => (named(slot).to_owned(), Candidate::Object { slot: id(slot) }),
+        Opt::Ability(place) => ability_candidate(t, obs, place.into()),
         Opt::TurnFaceUp(slot) => (
             format!("Turn {} face up", named(slot)),
             Candidate::TurnFaceUp { slot: id(slot) },
@@ -150,6 +152,24 @@ pub(super) fn candidate<L: Layout>(
         text: ability_text(t, obs, o),
         targets: Vec::new(),
     }
+}
+
+/// The ability at `place` on the stack as a target, named by its source, as a stack item is
+/// shown.
+fn ability_candidate<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    place: u16,
+) -> (String, Candidate) {
+    let source = (obs.stack().get(usize::from(place))).and_then(StackEntry::source);
+    let label = match source {
+        Some(source) => {
+            let name = name(t, obs, source.slot).unwrap_or("a hidden card");
+            format!("{name}'s ability")
+        }
+        None => "Ability".to_owned(),
+    };
+    (label, Candidate::Ability { place })
 }
 
 fn mana_candidate<L: Layout>(

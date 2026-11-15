@@ -5,7 +5,9 @@ use beryl_engine::card::{
 };
 use beryl_engine::event::{Event, LossCause};
 use beryl_engine::layout::Queue;
-use beryl_engine::state::{AttackTarget, CombatRole, ObjectRef, Pending, StackEntry};
+use beryl_engine::state::{
+    AbilityTarget, AttackTarget, CombatRole, ObjectRef, Pending, StackEntry,
+};
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
     Candidates, Decision, GameTable, Layout, Observation, Opt, Outcome, Seat, SlotId, Small, State,
@@ -474,18 +476,25 @@ pub(super) fn stack_item_cast<L: Layout>(
     e: &StackEntry<L>,
     flashback: bool,
 ) -> StackItem {
+    // An ability target whose ability has left the stack names nothing to show.
     let targets = e
         .targets
         .iter()
-        .map(|target| match (target.as_player(), target.as_object()) {
-            (Some(player), _) => TargetRef::Player {
-                player: side(obs, player),
+        .filter_map(
+            |target| match (target.as_player(), target.as_object(), target.as_ability()) {
+                (Some(player), _, _) => Some(TargetRef::Player {
+                    player: side(obs, player),
+                }),
+                (None, Some(o), _) => Some(TargetRef::Object {
+                    slot: ObjectId(o.slot.num()),
+                }),
+                (None, None, Some(AbilityTarget::At(place))) => Some(TargetRef::Ability {
+                    place: u16::try_from(place).expect("a stack place fits"),
+                }),
+                (None, None, Some(AbilityTarget::Gone)) => None,
+                (None, None, None) => unreachable!("a target is a player, an object or an ability"),
             },
-            (None, Some(o)) => TargetRef::Object {
-                slot: ObjectId(o.slot.num()),
-            },
-            (None, None) => unreachable!("a target is a player or an object"),
-        })
+        )
         .collect();
     let source = e.object().map(|r| ObjectId(r.slot.num()));
     match e.ability() {

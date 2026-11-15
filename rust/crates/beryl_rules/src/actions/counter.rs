@@ -35,16 +35,38 @@ pub fn counter<L: Layout>(
     Ok(true)
 }
 
-/// The topmost spell on the stack among `spells`.
-fn top_spell<L: Layout>(s: &State<L>, spells: Bitboard<L::Slot>) -> Option<ObjectRef<L>> {
-    let stack = s.stack().iter().rev();
-    stack
-        .filter_map(StackEntry::spell)
-        .find(|spell| spells.contains(spell.slot))
+/// Counters the activated or triggered ability at `place` on the stack (CR 701.6a). Its
+/// source is untouched, and a delayed triggered ability countered this way does not wait
+/// again: it left the list of delayed triggers as it triggered
+/// ([CR 603.7b](https://yawgatog.com/resources/magic-rules/#R6037b)): "A delayed triggered
+/// ability will trigger only once—the next time its trigger event occurs—unless it has a
+/// stated duration". Returns whether it was countered.
+pub(crate) fn counter_ability<L: Layout>(game: &mut Game<'_, L>, place: usize) -> bool {
+    game.state
+        .take_ability_off_stack(game.sink, place)
+        .is_some()
 }
 
-/// [`Effect::Counter`](beryl_card::Effect::Counter): "Counter [spell]" (CR 701.6a). Of
-/// several, the topmost first. The outcome is the spells countered.
+/// The topmost entry on the stack among the spells `spells` and the abilities at the places
+/// `abilities`: its place, and its spell if it is one.
+fn topmost<L: Layout>(
+    s: &State<L>,
+    spells: Bitboard<L::Slot>,
+    abilities: u64,
+) -> Option<(usize, Option<ObjectRef<L>>)> {
+    let named = |place: usize, entry: &StackEntry<L>| match entry.spell() {
+        Some(spell) => spells.contains(spell.slot),
+        None => place < 64 && abilities & (1 << place) != 0,
+    };
+    let stack = s.stack().iter().enumerate().rev();
+    stack
+        .filter(|&(place, entry)| named(place, entry))
+        .map(|(place, entry)| (place, entry.spell()))
+        .next()
+}
+
+/// [`Effect::Counter`](beryl_card::Effect::Counter): "Counter [spell or ability]" (CR 701.6a).
+/// Of several, the topmost first. The outcome is the spells countered.
 pub(crate) fn instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     objects: Objects,
@@ -63,12 +85,20 @@ pub(crate) fn into_instruction<L: Layout>(
     zone: Zone,
 ) -> Result<Outcome<L>, Full> {
     let mut spells = run.scene().objects(objects);
+    let mut abilities = run.scene().abilities(objects);
     run.remember(spells)?;
     let mut countered = Bitboard::EMPTY;
-    while let Some(spell) = top_spell(run.state(), spells) {
-        spells.remove(spell.slot);
-        if counter(run.game(), spell, zone)? {
-            countered.insert(spell.slot);
+    // The topmost first: an entry leaving moves the places of those above it, and none of
+    // those still to counter is above it.
+    while let Some((place, spell)) = topmost(run.state(), spells, abilities) {
+        if let Some(spell) = spell {
+            spells.remove(spell.slot);
+            if counter(run.game(), spell, zone)? {
+                countered.insert(spell.slot);
+            }
+        } else {
+            abilities &= !(1 << place);
+            counter_ability(run.game(), place);
         }
     }
     Ok(Outcome::acted_on(countered))

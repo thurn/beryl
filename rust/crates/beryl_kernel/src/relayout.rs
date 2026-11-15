@@ -125,11 +125,7 @@ impl<L: Layout> Relayout for Target<L> {
     type In<M: Layout> = Target<M>;
 
     fn relayout<M: Layout>(&self) -> Target<M> {
-        match (self.as_object(), self.as_player()) {
-            (Some(r), _) => Target::object(self.spec(), r.relayout()),
-            (None, Some(p)) => Target::player(self.spec(), p),
-            (None, None) => Target::default(),
-        }
+        self.with_slot(self.as_object().map(|r| r.relayout::<M>().slot))
     }
 }
 
@@ -430,6 +426,7 @@ impl<L: Layout> Relayout for Opt<L> {
             Opt::Number(n) => Opt::Number(n),
             Opt::Plan(i) => Opt::Plan(index::<M>(i.into())),
             Opt::Player(p) => Opt::Player(p),
+            Opt::Ability(i) => Opt::Ability(index::<M>(i.into())),
             Opt::Object(s) => Opt::Object(slot(s)),
             Opt::TurnFaceUp(s) => Opt::TurnFaceUp(slot(s)),
         }

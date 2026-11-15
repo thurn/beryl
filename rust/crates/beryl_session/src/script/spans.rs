@@ -110,6 +110,17 @@ fn aimed(table: &Table) -> Vec<Open> {
         for target in targets {
             let (to, theirs) = match *target {
                 TargetRef::Player { player } => (Subject::Player { player }, player),
+                // The ability's entry, which is below this one on the table's stack.
+                TargetRef::Ability { place } => {
+                    let Some(entry) = table.stack.get(usize::from(place)) else {
+                        continue;
+                    };
+                    let theirs = match &entry.item {
+                        StackItem::Ability { controller, .. } => *controller,
+                        StackItem::Spell { .. } => continue,
+                    };
+                    (entry.subject(), theirs)
+                }
                 TargetRef::Object { slot } => {
                     // A card in a hand or a library is no longer what was aimed at.
                     let Some(object) = table

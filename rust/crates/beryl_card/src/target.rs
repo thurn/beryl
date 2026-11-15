@@ -21,6 +21,58 @@ pub enum TargetKind {
     /// A permanent or a player, such as "any target". The filter applies to the permanents
     /// only: every player may be chosen.
     PermanentOrPlayer,
+    /// An activated or triggered ability on the stack: "target activated or triggered
+    /// ability". The filter of this and the next two is [`Filter::Any`]. A mana ability is
+    /// never on the stack, so never a target ([CR 605.3b]): "An activated mana ability doesn't
+    /// go on the stack, so it can't be targeted, countered, or otherwise responded to."
+    ///
+    /// [CR 605.3b]: https://yawgatog.com/resources/magic-rules/#R6053b
+    Ability,
+    /// An activated ability on the stack: "target activated ability".
+    ActivatedAbility,
+    /// A triggered ability on the stack: "target triggered ability".
+    TriggeredAbility,
+}
+
+impl TargetKind {
+    /// The kinds of abilities on the stack it may be, if it is an ability: a kind without a
+    /// payload, so that a spec stays one byte for the rules that compare kinds.
+    pub const fn abilities(self) -> Option<Abilities> {
+        match self {
+            TargetKind::Ability => Some(Abilities::ActivatedOrTriggered),
+            TargetKind::ActivatedAbility => Some(Abilities::Activated),
+            TargetKind::TriggeredAbility => Some(Abilities::Triggered),
+            _ => None,
+        }
+    }
+}
+
+/// The kinds of abilities on the stack a target may be.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Abilities {
+    ActivatedOrTriggered,
+    Activated,
+    Triggered,
+}
+
+impl Abilities {
+    /// Whether an ability on the stack, activated or else triggered, is of these kinds.
+    pub const fn include(self, triggered: bool) -> bool {
+        match self {
+            Abilities::ActivatedOrTriggered => true,
+            Abilities::Activated => !triggered,
+            Abilities::Triggered => triggered,
+        }
+    }
+
+    /// The noun that names them: "activated or triggered ability".
+    pub const fn noun(self) -> &'static str {
+        match self {
+            Abilities::ActivatedOrTriggered => "activated or triggered ability",
+            Abilities::Activated => "activated ability",
+            Abilities::Triggered => "triggered ability",
+        }
+    }
 }
 
 /// How an effect takes what it targets from its controller, which a player is told as they
@@ -30,7 +82,7 @@ pub enum Takes {
     /// A permanent, from the battlefield: destroyed, exiled, sacrificed, returned to a hand
     /// or put into a library.
     Removal,
-    /// A spell, from the stack
+    /// A spell or an ability, from the stack
     /// ([CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a)): "To counter a spell
     /// or ability means to cancel it, removing it from the stack. It doesn't resolve and none
     /// of its effects occur."
@@ -83,6 +135,11 @@ impl TargetSpec {
     /// "Target spell".
     pub const fn spell() -> TargetSpec {
         TargetSpec::one(TargetKind::Spell, Filter::Any)
+    }
+
+    /// "Target activated or triggered ability".
+    pub const fn ability() -> TargetSpec {
+        TargetSpec::one(TargetKind::Ability, Filter::Any)
     }
 
     /// "Target player".

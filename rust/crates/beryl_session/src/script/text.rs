@@ -146,6 +146,7 @@ impl Display for Announced<'_> {
             match *target {
                 TargetRef::Player { player } => f.write_str(&wire(player))?,
                 TargetRef::Object { slot } => write!(f, "#{slot}")?,
+                TargetRef::Ability { place } => write!(f, "stack {place}")?,
             }
         }
         Ok(())

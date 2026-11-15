@@ -5,16 +5,19 @@
 //! candidate that does the same ([`Chosen::find`]); the index it had is kept as a hint, which
 //! only breaks ties between candidates that do the same and shows drift.
 
-use beryl_engine::card::{AbilityKind, CastingOption, ChosenKind, ManaColor, ObjectAbility, Types};
+use beryl_engine::card::{AbilityKind, CastingOption, ChosenKind, ManaColor, Types};
 use beryl_engine::chosen::ChosenValue;
+use beryl_engine::state::StackItem;
 use beryl_engine::{Choice, Decision, GameTable, Layout, Opt, State, TurnStep, Zone};
 use serde::{Deserialize, Serialize};
 
 use crate::checkpoint::Counter;
 use crate::perturb;
 
+mod ability;
 mod kind;
 
+pub use ability::AbilityRef;
 use kind::KindFile;
 pub use kind::{Kind, KindBeforeV10};
 
@@ -382,6 +385,16 @@ pub enum Act {
     Player {
         seat: u8,
     },
+    /// An activated or triggered ability on the stack, as a target: by its source, whether it
+    /// is triggered, and its place among the abilities of that kind of its source's face, or
+    /// for an ability other objects grant, its place among those. Two alike, as two triggers
+    /// of one ability, are told apart by their place among like ones ([`Described::nth`]).
+    Ability {
+        source: Option<Obj>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        triggered: bool,
+        ability: AbilityRef,
+    },
     /// An object, as an object candidate or [`Opt::Object`].
     Object {
         object: Obj,
@@ -414,9 +427,9 @@ impl Act {
             | Act::Mana { source: card, .. }
             | Act::Object { object: card }
             | Act::TurnFaceUp { card } => Some(card),
-            Act::Trigger { source: card, .. } | Act::Defender { planeswalker: card } => {
-                card.as_ref()
-            }
+            Act::Trigger { source: card, .. }
+            | Act::Defender { planeswalker: card }
+            | Act::Ability { source: card, .. } => card.as_ref(),
             _ => None,
         }
     }
@@ -432,9 +445,9 @@ impl Act {
             | Act::Mana { source: card, .. }
             | Act::Object { object: card }
             | Act::TurnFaceUp { card } => Some(card),
-            Act::Trigger { source: card, .. } | Act::Defender { planeswalker: card } => {
-                card.as_mut()
-            }
+            Act::Trigger { source: card, .. }
+            | Act::Defender { planeswalker: card }
+            | Act::Ability { source: card, .. } => card.as_mut(),
             _ => None,
         }
     }
@@ -535,6 +548,14 @@ impl Act {
                 i: u16::try_from(Into::<usize>::into(i)).expect("a plan's index fits"),
             },
             Opt::Player(seat) => Act::Player { seat: seat.get() },
+            Opt::Ability(place) => {
+                let entry = &s.stack()[Into::<usize>::into(place)];
+                Act::Ability {
+                    source: o.object_named(s).map(obj),
+                    triggered: matches!(entry.item, StackItem::Triggered { .. }),
+                    ability: AbilityRef::on_stack(t, entry),
+                }
+            }
             Opt::Object(slot) => Act::Object { object: obj(slot) },
             Opt::TurnFaceUp(slot) => Act::TurnFaceUp { card: obj(slot) },
         }
@@ -696,36 +717,6 @@ impl From<Zone> for ZoneName {
             Zone::Exile => ZoneName::Exile,
             Zone::Stack => ZoneName::Stack,
             Zone::Nowhere => ZoneName::Nowhere,
-        }
-    }
-}
-
-/// A permanent's ability to activate: one of its face up's own, by its place among that
-/// face's activated and mana abilities (so a static or triggered ability added to the card
-/// moves nothing), or the `n`th ability other objects grant it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AbilityRef {
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub granted: bool,
-    pub n: u8,
-}
-
-impl AbilityRef {
-    fn of<L: Layout>(t: &GameTable, s: &State<L>, slot: L::Slot, ability: ObjectAbility) -> Self {
-        match ability {
-            ObjectAbility::Own(i) => {
-                let face = s.definition(slot).face(t);
-                let before = face.abilities[..i.index()]
-                    .iter()
-                    .filter(|a| matches!(a.kind(), AbilityKind::Activated | AbilityKind::Mana))
-                    .count();
-                AbilityRef {
-                    granted: false,
-                    n: u8::try_from(before).expect("a face's abilities number under 256"),
-                }
-            }
-            ObjectAbility::Granted(n) => AbilityRef { granted: true, n },
         }
     }
 }

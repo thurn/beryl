@@ -35,7 +35,13 @@ from collections.abc import Sequence
 from typing import cast
 
 from .card_facts import Cards, Json, Unsupported, payment_taps
-from .xmage_trace import Position
+from .xmage_trace import (
+    FORCED_ASKED,
+    FORCED_CHOICES,
+    FORCED_COSTS,
+    FORCED_TARGETS,
+    Position,
+)
 from .xmage_java import (
     ANOTHER_CARD,
     creature_type,
@@ -54,17 +60,6 @@ from .xmage_java import (
     setup_cards,
     trample_amount,
 )
-
-# Questions with one answer, which Beryl answers silently, that XMage asks anyway: by kind,
-# targets (with none to choose too) and X, whose limit XMage leaves to the payment; by what the
-# prompt is for (the trace's `purpose`), the permanents to tap or cards to exile for a cost.
-FORCED_ASKED = ("Target", "TargetCount", "X")
-FORCED_COSTS = ("crew", "waterbend", "exile-cost")
-# Others XMage asks when the one answer stands for several identical cards.
-FORCED_CHOICES = ("ChooseObject", "ChooseUpTo")
-# What the prompts are for whose cards XMage asks as targets even when they are identical, as
-# Brainstorm's cards to put back from a hand of Islands: their answers go in the target queue.
-FORCED_TARGETS = ("put-back",)
 
 
 class Exporter:
@@ -391,6 +386,9 @@ class Exporter:
         targets = "TestPlayer.NO_TARGET"
         if self.cards.targets_in_cast(card):
             targets = java_string("^".join(self.take_targets(action["player"])))
+        elif self.cards.targets_abilities(card):
+            names = self.take_targets(action["player"])
+            targets = java_string("^".join(p.stack_ability(n) for n in names))
         if p.stack and not any(cast(bool, item["spell"]) for item in p.stack):
             # XMage's spell abilities are named "Cast <card>"; an ability's text is its rule.
             self.emit(

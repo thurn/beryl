@@ -401,7 +401,7 @@ x: number, };
 
 export type PaidCost = "kicker" | "offspring" | "impending" | "overload" | "evoke" | "flashback";
 
-export type TargetRef = { "kind": "player", player: Side, } | { "kind": "object", slot: ObjectId, };
+export type TargetRef = { "kind": "player", player: Side, } | { "kind": "object", slot: ObjectId, } | { "kind": "ability", place: number, };
 
 export type DecisionView = { 
 /**
@@ -525,7 +525,7 @@ taps: Array<ObjectId>,
  */
 cost: string | null, };
 
-export type Candidate = { "kind": "object", slot: ObjectId, } | { "kind": "pass" } | { "kind": "playLand", slot: ObjectId, } | { "kind": "play" } | { "kind": "draw" } | { "kind": "keep" } | { "kind": "mulligan" } | { "kind": "trigger", index: number, source: ObjectId | null, ability: number, } | { "kind": "yes" } | { "kind": "no" } | { "kind": "done" } | { "kind": "attack", slot: ObjectId, } | { "kind": "defender", planeswalker: ObjectId | null, } | { "kind": "block", slot: ObjectId, } | { "kind": "lethal", slot: ObjectId, } | { "kind": "cast", slot: ObjectId, face: number, costs: Array<number>, } | { "kind": "activate", slot: ObjectId, ability: number, granted: boolean, } | { "kind": "mana", slot: ObjectId, color: Mana, } | { "kind": "pool", color: Mana, } | { "kind": "number", n: number, } | { "kind": "plan", index: number, } | { "kind": "player", player: Side, } | { "kind": "turnFaceUp", slot: ObjectId, };
+export type Candidate = { "kind": "object", slot: ObjectId, } | { "kind": "pass" } | { "kind": "playLand", slot: ObjectId, } | { "kind": "play" } | { "kind": "draw" } | { "kind": "keep" } | { "kind": "mulligan" } | { "kind": "trigger", index: number, source: ObjectId | null, ability: number, } | { "kind": "yes" } | { "kind": "no" } | { "kind": "done" } | { "kind": "attack", slot: ObjectId, } | { "kind": "defender", planeswalker: ObjectId | null, } | { "kind": "block", slot: ObjectId, } | { "kind": "lethal", slot: ObjectId, } | { "kind": "cast", slot: ObjectId, face: number, costs: Array<number>, } | { "kind": "activate", slot: ObjectId, ability: number, granted: boolean, } | { "kind": "mana", slot: ObjectId, color: Mana, } | { "kind": "pool", color: Mana, } | { "kind": "number", n: number, } | { "kind": "plan", index: number, } | { "kind": "player", player: Side, } | { "kind": "ability", place: number, } | { "kind": "turnFaceUp", slot: ObjectId, };
 
 export type OutcomeView = { "kind": "win", winner: Side, 
 /**

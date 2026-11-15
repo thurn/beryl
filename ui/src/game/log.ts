@@ -171,8 +171,17 @@ export function logLines(view: PlayerView, names: Names): LogLine[] {
   const owner = (slot: number) => objects.get(slot)?.owner ?? "opponent";
   const controller = (slot: number) =>
     objects.get(slot)?.controller ?? owner(slot);
+  // An ability on the stack is named by the face it is printed on.
+  const ability = (place: number) => {
+    const item = view.stack[place];
+    return item?.kind === "ability" ? `${item.name}'s ability` : "an ability";
+  };
   const target = (t: TargetRef) =>
-    t.kind === "player" ? whom(t.player) : name(t.slot);
+    t.kind === "player"
+      ? whom(t.player)
+      : t.kind === "object"
+        ? name(t.slot)
+        : ability(t.place);
   const out: LogLine[] = [];
   const say = (side: Side, text: string, kind: LogLine["kind"] = "action") =>
     out.push({ kind, side, text });

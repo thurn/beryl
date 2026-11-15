@@ -668,11 +668,12 @@ impl Ability {
         match self.body {
             Behavior::Data(effect) => {
                 let may_be = match how {
-                    Takes::Removal => TargetKind::Permanent,
-                    Takes::Counter => TargetKind::Spell,
+                    Takes::Removal => spec.kind == TargetKind::Permanent,
+                    Takes::Counter => {
+                        spec.kind == TargetKind::Spell || spec.kind.abilities().is_some()
+                    }
                 };
-                (spec.kind == may_be || spec.kind == TargetKind::SpellOrPermanent)
-                    && effect.takes(target, how)
+                (may_be || spec.kind == TargetKind::SpellOrPermanent) && effect.takes(target, how)
             }
             Behavior::Custom(custom) => {
                 custom.says().takes.get(target.index()).copied().flatten() == Some(how)

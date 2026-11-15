@@ -722,7 +722,9 @@ Built by by-bajq.3.10:
   the stack. Only an entry above an ability can name it. When an entry leaves
   from below the top, the kernel moves the names that pointed above it and marks
   those that pointed at it as gone. A save describes such a target by the
-  ability's source and index.
+  ability's source and index. Built as a decision option for the ability's
+  place; the table names a stack ability by a number the script gives it, so a
+  target choice that offers one is answered by the candidates' buttons.
 - **An Aura on a card in a graveyard.** `attached_to` may name an object in
   another zone. The state-based check reads the enchant ability in force, which
   is a layer 6 result: Animate Dead loses one and gains another, and what "put

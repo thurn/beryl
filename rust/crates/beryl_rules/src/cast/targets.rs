@@ -2,25 +2,74 @@
 
 use crate::PlayerSet;
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, TargetKind, TargetSpec, Words};
+use crate::card::{Abilities, Ability, TargetKind, TargetSpec, Words};
 use crate::event::Sink;
 use crate::filter::{self, Evaluate, Filter};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
 use crate::protection;
-use crate::state::{CastKind, CastStep, Casting, StackEntry, State, Target, Zone};
+use crate::state::{
+    AbilityTarget, CastKind, CastStep, Casting, StackEntry, StackItem, State, Target, Zone,
+};
 use crate::table::GameTable;
 
 use super::steps::{ability_event, advance, specs, top};
 use super::timing::entry_ability;
 
-/// The objects and players a target spec can choose. A spec of most kinds chooses only one
-/// of the two, and the other is empty; "any target" chooses from both.
+/// The objects, players and abilities on the stack a target spec can choose. A spec of most
+/// kinds chooses only one of them, and the others are empty; "any target" chooses from
+/// objects and players.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct TargetSet<L: Layout = Small> {
     pub objects: Bitboard<L::Slot>,
     pub players: PlayerSet,
+    /// The abilities, a bit for each place on the stack, counted from the bottom. A stack
+    /// deeper than 64 entries needs the large layout, whose abilities above the 64th place
+    /// are never candidates.
+    pub abilities: u64,
+}
+
+/// The spell or ability whose targets are chosen or checked, which is an illegal target for
+/// itself ([CR 115.5]): "A spell or ability on the stack is an illegal target for itself."
+/// `spell` is the spell, if it is one; `on_stack` says whether its entry is the top of the
+/// stack, as it is while its targets are chosen, where an ability target can name only the
+/// entries below it. Before it is cast it is not yet on the stack, but it will have left the
+/// zone it is in when its targets are chosen; as it resolves it has left the stack.
+///
+/// [CR 115.5]: https://yawgatog.com/resources/magic-rules/#R1155
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct Itself<L: Layout = Small> {
+    pub spell: Option<L::Slot>,
+    pub on_stack: bool,
+}
+
+/// An ability not yet on the stack, being activated.
+impl<L: Layout> Default for Itself<L> {
+    fn default() -> Self {
+        Itself {
+            spell: None,
+            on_stack: false,
+        }
+    }
+}
+
+impl<L: Layout> Itself<L> {
+    /// What `entry`, the top of the stack, chooses targets for.
+    fn top(entry: &StackEntry<L>) -> Itself<L> {
+        Itself {
+            spell: entry.spell().map(|r| r.slot),
+            on_stack: true,
+        }
+    }
+
+    /// What `entry`, resolving and so off the stack, checks its targets for.
+    fn resolving(entry: &StackEntry<L>) -> Itself<L> {
+        Itself {
+            spell: entry.spell().map(|r| r.slot),
+            on_stack: false,
+        }
+    }
 }
 
 /// Whether a target spec can choose `player`: a spec for "target player" or "target opponent"
@@ -37,8 +86,42 @@ fn player_matches(spec: &TargetSpec, player: Seat, you: Seat) -> bool {
         TargetKind::Permanent
         | TargetKind::Spell
         | TargetKind::SpellOrPermanent
-        | TargetKind::GraveyardCard => false,
+        | TargetKind::GraveyardCard
+        | TargetKind::Ability
+        | TargetKind::ActivatedAbility
+        | TargetKind::TriggeredAbility => false,
     }
+}
+
+/// What a spec that targets abilities of `kinds` chooses from, for `itself`: out of line, so
+/// that a game without such a spec runs the object and player paths as before.
+#[cold]
+#[inline(never)]
+fn ability_domain<L: Layout>(s: &State<L>, kind: TargetKind, itself: Itself<L>) -> TargetSet<L> {
+    let kinds = kind.abilities().expect("an ability");
+    let below = s.stack().len() - usize::from(itself.on_stack);
+    TargetSet {
+        objects: Bitboard::EMPTY,
+        players: PlayerSet::NOBODY,
+        abilities: abilities(s, kinds, below),
+    }
+}
+
+/// The activated and triggered abilities of `kinds` on the stack below `below`, by place
+/// ([`TargetSet::abilities`]). Mana abilities never go on the stack (CR 605.3b).
+fn abilities<L: Layout>(s: &State<L>, kinds: Abilities, below: usize) -> u64 {
+    let mut places = 0;
+    for (place, entry) in s.stack().iter().enumerate().take(below.min(64)) {
+        let triggered = match entry.item {
+            StackItem::Spell { .. } => continue,
+            StackItem::Activated { .. } => false,
+            StackItem::Triggered { .. } => true,
+        };
+        if kinds.include(triggered) {
+            places |= 1 << place;
+        }
+    }
+    places
 }
 
 /// The spells on the stack, as objects.
@@ -50,19 +133,15 @@ pub(crate) fn spells<L: Layout>(s: &State<L>) -> Bitboard<L::Slot> {
         .collect()
 }
 
-/// The objects or players a target spec can choose now, for a spell or ability controlled by
-/// `you`. `itself` is the spell being cast, if one is, which is an illegal target for itself
-/// ([CR 115.5](https://yawgatog.com/resources/magic-rules/#R1155)): "A spell or ability on the
-/// stack is an illegal target for itself." Before it is cast it is not yet on the stack, but
-/// it will have left the zone it is in when its targets are chosen. `x` is the value of X of
-/// the spell or ability. `source` is an ability's source, which "another target" can't
-/// choose.
+/// The objects, players or abilities a target spec can choose now, for a spell or ability
+/// controlled by `you`, which is `itself`. `x` is the value of X of the spell or ability.
+/// `source` is an ability's source, which "another target" can't choose.
 pub(super) fn candidates<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     spec: &TargetSpec,
     you: Seat,
-    itself: Option<L::Slot>,
+    itself: Itself<L>,
     x: u8,
     source: Option<L::Slot>,
 ) -> TargetSet<L> {
@@ -86,12 +165,16 @@ fn candidates_through<L: Layout>(
     t: &GameTable,
     spec: &TargetSpec,
     you: Seat,
-    itself: Option<L::Slot>,
+    itself: Itself<L>,
     x: u8,
     source: Option<L::Slot>,
     words: Words,
 ) -> TargetSet<L> {
-    let TargetSet { objects, players } = domain(s, t, spec, you, itself, source);
+    let TargetSet {
+        objects,
+        players,
+        abilities,
+    } = domain(s, t, spec, you, itself, source);
     TargetSet {
         objects: if objects.is_empty() {
             objects
@@ -99,18 +182,19 @@ fn candidates_through<L: Layout>(
             spec.filter.select_x(s, t, objects, you, &words, x)
         },
         players,
+        abilities,
     }
 }
 
-/// What [`candidates`] chooses from: the players a spec can choose, and the objects its filter
-/// is still to pass on. A permanent with protection from the spell, or from the ability's
-/// source, is none of them ([`protection::targetable_by`]).
+/// What [`candidates`] chooses from: the players and abilities a spec can choose, and the
+/// objects its filter is still to pass on. A permanent with protection from the spell, or from
+/// the ability's source, is none of them ([`protection::targetable_by`]).
 fn domain<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     spec: &TargetSpec,
     you: Seat,
-    itself: Option<L::Slot>,
+    itself: Itself<L>,
     source: Option<L::Slot>,
 ) -> TargetSet<L> {
     let players = match spec.kind {
@@ -125,16 +209,20 @@ fn domain<L: Layout>(
         TargetKind::Spell => spells(s),
         TargetKind::SpellOrPermanent => spells(s) | s.in_zone(Zone::Battlefield),
         TargetKind::GraveyardCard => s.in_zone(Zone::Graveyard),
+        TargetKind::Ability | TargetKind::ActivatedAbility | TargetKind::TriggeredAbility => {
+            return ability_domain(s, spec.kind, itself);
+        }
     };
-    if let Some(itself) = itself {
+    if let Some(itself) = itself.spell {
         within.remove(itself);
     }
     if let Some(source) = source.filter(|_| spec.other) {
         within.remove(source);
     }
     TargetSet {
-        objects: protection::targetable_by(s, t, within, source.or(itself)),
+        objects: protection::targetable_by(s, t, within, source.or(itself.spell)),
         players,
+        abilities: 0,
     }
 }
 
@@ -145,12 +233,17 @@ fn enough_candidates<L: Layout>(
     t: &GameTable,
     spec: &TargetSpec,
     you: Seat,
-    itself: Option<L::Slot>,
+    itself: Itself<L>,
     x: u8,
     source: Option<L::Slot>,
 ) -> bool {
-    let TargetSet { objects, players } = domain(s, t, spec, you, itself, source);
-    let Some(need) = usize::from(spec.count).checked_sub(players.count() as usize) else {
+    let TargetSet {
+        objects,
+        players,
+        abilities,
+    } = domain(s, t, spec, you, itself, source);
+    let found = players.count() + abilities.count_ones();
+    let Some(need) = usize::from(spec.count).checked_sub(found as usize) else {
         return true;
     };
     let words = printed_on(s, itself, source);
@@ -161,15 +254,15 @@ fn enough_candidates<L: Layout>(
 
 /// The text changes of the object the target spec is printed on: the ability's source, or
 /// the spell being cast ([`State::words_of`]).
-fn printed_on<L: Layout>(s: &State<L>, itself: Option<L::Slot>, source: Option<L::Slot>) -> Words {
+fn printed_on<L: Layout>(s: &State<L>, itself: Itself<L>, source: Option<L::Slot>) -> Words {
     source
-        .or(itself)
+        .or(itself.spell)
         .map_or(Words::NONE, |slot| s.words_of(slot))
 }
 
 impl<L: Layout> TargetSet<L> {
     pub(super) fn count(self) -> u32 {
-        self.objects.count() + self.players.count()
+        self.objects.count() + self.players.count() + self.abilities.count_ones()
     }
 }
 
@@ -181,7 +274,7 @@ pub(super) fn targetable<L: Layout>(
     t: &GameTable,
     ability: Option<&Ability>,
     you: Seat,
-    itself: Option<L::Slot>,
+    itself: Itself<L>,
     x: u8,
     source: Option<L::Slot>,
 ) -> bool {
@@ -201,7 +294,8 @@ pub(super) fn source_of<L: Layout>(entry: &StackEntry<L>) -> Option<L::Slot> {
 /// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "A target that's no
 /// longer in the zone it was in when it was targeted is illegal. Other changes to the game
 /// state may cause a target to no longer be legal". A zone change gives the object a new
-/// incarnation, so a stale reference is illegal.
+/// incarnation, so a stale reference is illegal, and an ability that has left the stack is
+/// gone ([`AbilityTarget::Gone`]).
 pub(crate) fn still_legal<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -211,18 +305,38 @@ pub(crate) fn still_legal<L: Layout>(
 ) -> bool {
     let spec = &ability.targets()[target.spec().index()];
     let you = entry.controller();
+    let itself = Itself::resolving(entry);
     let Some(r) = target.as_object() else {
-        return target
-            .as_player()
-            .is_some_and(|p| player_matches(spec, p, you));
+        if let Some(player) = target.as_player() {
+            return player_matches(spec, player, you);
+        }
+        return ability_still_legal(s, t, entry, spec, target);
     };
     if !s.is_current(r) {
         return false;
     }
-    let itself = entry.spell().map(|r| r.slot);
     let words = s.entry_words(entry);
     (candidates_through(s, t, spec, you, itself, entry.x, source_of(entry), words).objects)
         .contains(r.slot)
+}
+
+/// [`still_legal`] for an ability target: out of line, as [`ability_domain`] is.
+#[cold]
+#[inline(never)]
+fn ability_still_legal<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    entry: &StackEntry<L>,
+    spec: &TargetSpec,
+    target: Target<L>,
+) -> bool {
+    let Some(AbilityTarget::At(place)) = target.as_ability() else {
+        return false;
+    };
+    let itself = Itself::resolving(entry);
+    let you = entry.controller();
+    let set = candidates(s, t, spec, you, itself, entry.x, source_of(entry));
+    place < 64 && set.abilities & (1 << place) != 0
 }
 
 /// Chooses the targets of the triggered ability just put on the stack, if it has any.
@@ -253,7 +367,7 @@ pub(crate) fn target_trigger<L: Layout>(
         t,
         Some(ability),
         entry.controller(),
-        None,
+        Itself::top(entry),
         entry.x,
         source_of(entry),
     ) {
@@ -275,7 +389,7 @@ pub(super) fn target_options<L: Layout>(
 ) -> TargetSet<L> {
     let entry = top(s);
     let spec = &specs(t, entry)[c.spec.index()];
-    let itself = entry.spell().map(|r| r.slot);
+    let itself = Itself::top(entry);
     let mut set = candidates(s, t, spec, c.player, itself, entry.x, source_of(entry));
     for target in entry.targets.iter().filter(|x| x.spec() == c.spec) {
         if let Some(r) = target.as_object() {
@@ -283,6 +397,9 @@ pub(super) fn target_options<L: Layout>(
         }
         if let Some(player) = target.as_player() {
             set.players.remove(player);
+        }
+        if let Some(AbilityTarget::At(place)) = target.as_ability() {
+            set.abilities &= !(1 << place);
         }
     }
     set

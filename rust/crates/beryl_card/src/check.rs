@@ -286,7 +286,21 @@ impl Scope<'_> {
             }
             Behavior::Custom(_) => Ok(()),
         };
-        both(condition, both(layer, body))
+        both(both(condition, self.ability_targets()), both(layer, body))
+    }
+
+    /// Whether each target of an ability on the stack has no filter: what a filter says is
+    /// about objects and players, and no rule reads it of an ability.
+    const fn ability_targets(self) -> Checked {
+        let targets = self.ability.targets();
+        let mut i = 0;
+        while i < targets.len() {
+            if targets[i].kind.abilities().is_some() && !matches!(targets[i].filter, Filter::Any) {
+                return Err(Malformed::Target);
+            }
+            i += 1;
+        }
+        Ok(())
     }
 
     const fn layer(self, layer: &LayerSpec) -> Checked {

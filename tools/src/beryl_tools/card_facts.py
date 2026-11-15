@@ -269,6 +269,16 @@ class Cards:
             for t in cast(list[Json], a.get("targets", []))
         )
 
+    def targets_abilities(self, card: str) -> bool:
+        """Whether a spell targets an activated or triggered ability on the stack, which
+        XMage names by its name's prefix, "stack ability (", in the cast command."""
+        return any(
+            t["kind"] in ("Ability", "ActivatedAbility", "TriggeredAbility")
+            for a in self.abilities(card)
+            if a["kind"] == "Spell"
+            for t in cast(list[Json], a.get("targets", []))
+        )
+
     def unless_pays(self, card: str) -> bool:
         """Whether resolving `card` asks a target's controller to pay a mana cost or have it
         countered. XMage asks even a controller who cannot pay, where Beryl asks nothing

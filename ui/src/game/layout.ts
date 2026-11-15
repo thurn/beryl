@@ -207,7 +207,7 @@ export function layout(
   const aimed = new Set(
     view.stack
       .at(-1)
-      ?.targets.flatMap((t) => (t.kind === "player" ? [] : [t.slot])) ?? [],
+      ?.targets.flatMap((t) => (t.kind === "object" ? [t.slot] : [])) ?? [],
   );
   const scope = view.handling;
   const zoneHeld = scope?.zone === "pile" ? scope.pile : scope?.zone;

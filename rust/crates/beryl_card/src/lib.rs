@@ -63,7 +63,7 @@ pub use ids::{Seat, TurnStep, Zone, ZoneSet};
 pub use index::{AbilityIx, CastingIx, ExceptIx, GrantIx, ModeIx, SpecIx};
 pub use mana::{INTRINSIC_MANA, ManaColor, ManaCost, ManaRestriction, ManaSet, mana};
 pub use prompt::{Part, Place, Prompt, Purpose, Shape};
-pub use target::{Takes, TargetKind, TargetSpec};
+pub use target::{Abilities, Takes, TargetKind, TargetSpec};
 pub use trigger::{Subject, Trigger, TriggerEvent};
 pub use walk::Node;
 pub use words::{

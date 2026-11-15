@@ -20,26 +20,51 @@ use crate::state::State;
 /// Targets per stack entry (architecture §4.2).
 pub const TARGETS: usize = 8;
 
-/// One chosen target: an object or a player, and the instance of the word "target" it was
-/// chosen for (an index into the ability's target specs).
+/// One chosen target: an object, a player or an ability on the stack, and the instance of the
+/// word "target" it was chosen for (an index into the ability's target specs).
 ///
-/// Four bytes, where an enum of an [`ObjectRef`] and a [`Seat`] beside the spec would take
-/// six: `slot` says which of the two it is, and `rest` is what else names that one. No field
-/// is public, so [`Target::object`] and [`Target::player`] are the only way in and
-/// [`Target::as_object`] and [`Target::as_player`] the only way out, and `rest` is never read
-/// as the wrong one.
+/// Four bytes, where an enum of an [`ObjectRef`], a [`Seat`] and a place beside the spec
+/// would take six: `slot` says whether it is an object, and `rest` is what else names it. No
+/// field is public, so [`Target::object`], [`Target::player`] and [`Target::ability`] are the
+/// only way in and [`Target::as_object`], [`Target::as_player`] and [`Target::as_ability`]
+/// the only way out, and `rest` is never read as the wrong one.
+///
+/// An ability is named by its place on the stack, counted from the bottom, since stack
+/// entries have no identity of their own: a field in each entry would be copied in every
+/// rollout. Only an entry above an ability can name it, so the names change only when an
+/// entry below the top leaves, and [`State::take_off_stack`] repairs them then.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Target<L: Layout = Small> {
     spec: SpecIx,
-    /// The targeted object's slot; none for a player.
+    /// The targeted object's slot; none for a player or an ability.
     slot: Option<L::Slot>,
-    /// The targeted object's incarnation, or the targeted player's seat.
+    /// The targeted object's incarnation; the targeted player's seat; or, with
+    /// [`Target::ABILITY`] set, the targeted ability's place on the stack, or
+    /// [`Target::GONE`] once it has left.
     rest: u16,
 }
 
 const _: () = assert!(size_of::<Target<Small>>() == 4);
 
+/// What an ability target names: its entry's place on the stack, counted from the bottom, or
+/// nothing, once that entry has left the stack.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum AbilityTarget {
+    At(usize),
+    /// The ability has left the stack, which makes it an illegal target
+    /// ([CR 608.2b]): "A target that's no longer in the zone it was in when it was targeted
+    /// is illegal."
+    ///
+    /// [CR 608.2b]: https://yawgatog.com/resources/magic-rules/#R6082b
+    Gone,
+}
+
 impl<L: Layout> Target<L> {
+    /// The bit of `rest` that marks an ability.
+    const ABILITY: u16 = 0x8000;
+    /// `rest` for an ability that has left the stack.
+    const GONE: u16 = u16::MAX;
+
     #[inline]
     pub fn object(spec: SpecIx, object: ObjectRef<L>) -> Target<L> {
         Target {
@@ -55,6 +80,18 @@ impl<L: Layout> Target<L> {
             spec,
             slot: None,
             rest: u16::from(player.get()),
+        }
+    }
+
+    /// The activated or triggered ability at `place` on the stack, counted from the bottom.
+    #[inline]
+    pub fn ability(spec: SpecIx, place: usize) -> Target<L> {
+        let place = u16::try_from(place).expect("a stack place fits in 15 bits");
+        assert!(place < Self::GONE & !Self::ABILITY, "a stack place fits");
+        Target {
+            spec,
+            slot: None,
+            rest: Self::ABILITY | place,
         }
     }
 
@@ -77,8 +114,49 @@ impl<L: Layout> Target<L> {
     #[inline]
     pub fn as_player(self) -> Option<Seat> {
         match self.slot {
-            None => Seat::try_new(self.rest as u8),
-            Some(_) => None,
+            None if self.rest & Self::ABILITY == 0 => Seat::try_new(self.rest as u8),
+            _ => None,
+        }
+    }
+
+    /// The targeted ability, if it is one.
+    #[inline]
+    pub fn as_ability(self) -> Option<AbilityTarget> {
+        match self.slot {
+            None if self.rest == Self::GONE => Some(AbilityTarget::Gone),
+            None if self.rest & Self::ABILITY != 0 => {
+                Some(AbilityTarget::At(usize::from(self.rest & !Self::ABILITY)))
+            }
+            _ => None,
+        }
+    }
+
+    /// The same target after the entry at `removed` left the stack from below the top: one
+    /// that named it is gone, one that named a higher place names the place one lower, and
+    /// any other is unchanged.
+    #[inline]
+    #[must_use]
+    fn after_removal(self, removed: usize) -> Target<L> {
+        match self.as_ability() {
+            Some(AbilityTarget::At(place)) if place == removed => Target {
+                rest: Self::GONE,
+                ..self
+            },
+            Some(AbilityTarget::At(place)) if place > removed => {
+                Target::ability(self.spec, place - 1)
+            }
+            _ => self,
+        }
+    }
+
+    /// The same target in another layout: an ability's place and a player's seat are the
+    /// same in every layout.
+    #[inline]
+    pub(crate) fn with_slot<M: Layout>(self, slot: Option<M::Slot>) -> Target<M> {
+        Target {
+            spec: self.spec,
+            slot,
+            rest: self.rest,
         }
     }
 }
@@ -480,7 +558,8 @@ impl<L: Layout> State<L> {
 
     /// Takes a spell's entry off the stack, wherever in it the spell is, for the rules to
     /// move its card elsewhere without its resolving: countered, returned to a hand, put
-    /// into a library, exiled. Nothing if the spell is not on the stack. The entry says where
+    /// into a library, exiled. Nothing if the spell is not on the stack. The ability targets
+    /// of the entries above it are repaired, as [`Target`] says. The entry says where
     /// such a spell goes, which is the rules' to read; its card leaves the stack zone with
     /// the move that must follow. The sink is told it left.
     #[inline]
@@ -490,10 +569,45 @@ impl<L: Layout> State<L> {
         spell: ObjectRef<L>,
     ) -> Option<StackEntry<L>> {
         let i = self.stack.iter().position(|e| e.spell() == Some(spell))?;
+        Some(self.remove_from_stack(sink, i))
+    }
+
+    /// Takes the activated or triggered ability at `place` off the stack, counted from the
+    /// bottom, for an effect that counters it ([CR 701.6a]): "To counter a spell or ability
+    /// means to cancel it, removing it from the stack." Nothing if no ability is there. The
+    /// sink is told it left.
+    ///
+    /// [CR 701.6a]: https://yawgatog.com/resources/magic-rules/#R7016a
+    #[inline]
+    pub fn take_ability_off_stack(
+        &mut self,
+        sink: &mut Sink<L>,
+        place: usize,
+    ) -> Option<StackEntry<L>> {
+        let entry = self.stack.as_slice().get(place)?;
+        entry
+            .spell()
+            .is_none()
+            .then(|| self.remove_from_stack(sink, place))
+    }
+
+    /// Removes the entry at `i`, wherever in the stack it is, and repairs the ability targets
+    /// of the entries above it, the only ones that can name it or a place above it
+    /// ([`Target::after_removal`]). A target that named the removed entry is gone, which the
+    /// rules read as illegal ([CR 608.2b]): "A target that's no longer in the zone it was in
+    /// when it was targeted is illegal." Removing the top entry repairs nothing.
+    ///
+    /// [CR 608.2b]: https://yawgatog.com/resources/magic-rules/#R6082b
+    fn remove_from_stack(&mut self, sink: &mut Sink<L>, i: usize) -> StackEntry<L> {
         sink.departed(|| i);
-        let entry = self.stack.remove(i);
+        let removed = self.stack.remove(i);
+        for entry in &mut self.stack.as_mut_slice()[i..] {
+            for target in entry.targets.as_mut_slice() {
+                *target = target.after_removal(i);
+            }
+        }
         self.settle_captured_words();
-        Some(entry)
+        removed
     }
 
     /// Announces the value of X for the spell or ability being cast, the top of the stack
@@ -582,7 +696,31 @@ mod tests {
         assert_eq!(chosen.as_player(), None);
         let chosen: Target = Target::player(spec, Seat::P1);
         assert_eq!((chosen.spec(), chosen.as_player()), (spec, Some(Seat::P1)));
-        assert_eq!(chosen.as_object(), None);
+        assert_eq!((chosen.as_object(), chosen.as_ability()), (None, None));
+        let chosen: Target = Target::ability(spec, 1);
+        assert_eq!(
+            (chosen.spec(), chosen.as_ability()),
+            (spec, Some(AbilityTarget::At(1)))
+        );
+        assert_eq!((chosen.as_object(), chosen.as_player()), (None, None));
+    }
+
+    /// When an entry leaves from below the top, a target that named it is gone, one that
+    /// named a place above it moves down one, and one below it or not an ability stays.
+    #[test]
+    fn a_removal_below_an_ability_target_repairs_it() {
+        let spec = SpecIx::new(0);
+        let at = |place| Target::<Small>::ability(spec, place);
+        assert_eq!(
+            at(2).after_removal(2).as_ability(),
+            Some(AbilityTarget::Gone)
+        );
+        assert_eq!(at(3).after_removal(1), at(2));
+        assert_eq!(at(1).after_removal(2), at(1));
+        let gone = at(2).after_removal(2);
+        assert_eq!(gone.after_removal(0), gone);
+        let player = Target::<Small>::player(spec, Seat::P0);
+        assert_eq!(player.after_removal(0), player);
     }
 
     /// Targets are placed in the order they were chosen, and a set of places holds what was

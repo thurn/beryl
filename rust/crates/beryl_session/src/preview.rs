@@ -129,6 +129,9 @@ fn targets<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Vec<Vec<T
                             Opt::Object(slot) => Some(TargetRef::Object {
                                 slot: ObjectId(slot.num()),
                             }),
+                            Opt::Ability(place) => Some(TargetRef::Ability {
+                                place: place.into(),
+                            }),
                             _ => None,
                         })
                         .collect(),
@@ -683,6 +686,7 @@ mod tests {
                     .map(|target| match target {
                         TargetRef::Object { slot } => named(&s, slot),
                         TargetRef::Player { .. } => panic!("a player target"),
+                        TargetRef::Ability { .. } => panic!("an ability target"),
                     })
                     .collect();
                 (o, what)

@@ -211,6 +211,11 @@ pub enum Candidate {
     Player {
         player: Side,
     },
+    /// The activated or triggered ability at `place` on the stack, counted from the bottom
+    /// as the view's stack lists it, as a target.
+    Ability {
+        place: u16,
+    },
     /// Turn the face-down permanent in `slot` face up, paying its card's mana cost.
     TurnFaceUp {
         slot: ObjectId,

@@ -4,7 +4,7 @@
 use crate::bitboard::Bitboard;
 use crate::ids::{CardId, Place, Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
-use crate::state::{Flag, Object, Pending, State, Zone};
+use crate::state::{AbilityTarget, Flag, Object, Pending, State, Zone};
 use crate::table::GameTable;
 use beryl_card::FaceIx;
 
@@ -200,7 +200,19 @@ impl<L: Layout> State<L> {
             "the battlefield index lists a slot off the battlefield",
             None,
         )?;
-        for e in self.stack.iter() {
+        for (i, e) in self.stack.iter().enumerate() {
+            // Only an entry above an ability can name it, which is what lets the kernel
+            // repair the names when an entry leaves from below the top
+            // ([`State::take_off_stack`]).
+            for target in e.targets.iter() {
+                if let Some(AbilityTarget::At(place)) = target.as_ability() {
+                    check(
+                        place < i && self.stack.as_slice()[place].spell().is_none(),
+                        "an ability target names no ability below its own entry",
+                        None,
+                    )?;
+                }
+            }
             if let Some(r) = e.spell() {
                 check(
                     self.is_current(r) && self.object(r.slot).zone == Zone::Stack,

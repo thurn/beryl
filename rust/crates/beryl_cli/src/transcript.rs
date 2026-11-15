@@ -405,6 +405,10 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
         Opt::Number(n) => n.to_string(),
         Opt::Plan(i) => format!("plan {}", i + 1),
         Opt::Player(p) => format!("P{}", p.get()),
+        Opt::Ability(_) => match o.object_named(s) {
+            Some(source) => format!("{}'s ability", named(source)),
+            None => "an ability".to_owned(),
+        },
         Opt::TurnFaceUp(slot) => format!("turn {} face up", named(slot)),
     }
 }

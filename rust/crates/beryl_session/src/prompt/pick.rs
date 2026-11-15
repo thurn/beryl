@@ -64,6 +64,15 @@ impl Pick {
                 Some(Pick::Priority(Box::new(Priority::open(table, decision))))
             }
             (Purpose::CombatDamage, _) => Damage::open(table, decision).map(Pick::Damage),
+            // An ability on the stack is named on the table by a number the script gives it,
+            // which this state has no way to learn: a choice that offers one is answered by
+            // the candidates' buttons.
+            (Purpose::Target, PartName::Count | PartName::Pick)
+                if (decision.candidates.iter())
+                    .any(|c| matches!(c.option, Candidate::Ability { .. })) =>
+            {
+                None
+            }
             (Purpose::Target, PartName::Count | PartName::Pick) => {
                 Some(Pick::Objects(Box::new(Objects::targets(table, decision))))
             }
@@ -540,6 +549,7 @@ fn offered_targets(decision: &DecisionView) -> (Vec<Subject>, Vec<u8>) {
             offer(match *target {
                 TargetRef::Object { slot } => card(slot),
                 TargetRef::Player { player } => Subject::Player { player },
+                TargetRef::Ability { .. } => continue,
             });
         }
     }

@@ -21,7 +21,7 @@ use crate::table::{Capability, GameTable};
 
 use super::costs::{From, option_sets, spell_cost, x_range_start};
 use super::parts;
-use super::targets::targetable;
+use super::targets::{Itself, targetable};
 use super::timing::{activated, instant_speed, sorcery_timing};
 
 /// What every check of one player's options reads, found once for all of them: the mana they
@@ -179,7 +179,10 @@ fn refused<L: Layout, const TARGETS: bool>(
             t,
             face.spell_ability_with(costs),
             player,
-            Some(slot),
+            Itself {
+                spell: Some(slot),
+                on_stack: false,
+            },
             0,
             None,
         ))
@@ -405,7 +408,7 @@ fn activatable<L: Layout, const TARGETS: bool>(
         }
         None => funds.pays(s, t, cost, spent),
     });
-    paid && (!TARGETS || targetable(s, t, Some(a), player, None, 0, Some(slot)))
+    paid && (!TARGETS || targetable(s, t, Some(a), player, Itself::default(), 0, Some(slot)))
 }
 
 /// Whether activating `ability` of the object in `slot` now would do nothing, as its effect

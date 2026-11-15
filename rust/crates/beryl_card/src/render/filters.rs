@@ -7,7 +7,7 @@ use super::words::{article, colors, list, plural, supertypes, types, with_articl
 use crate::effect::Players;
 use crate::filter::Filter;
 use crate::ids::Zone;
-use crate::target::{TargetKind, TargetSpec};
+use crate::target::{Abilities, TargetKind, TargetSpec};
 
 /// The kind of thing a filter is read over, which names it when the filter names no type:
 /// "permanent", "card", "spell", "player".
@@ -21,6 +21,8 @@ pub(super) enum Kind {
     Player,
     /// A source of damage, whatever zone it is in: "a red source of your choice".
     Source,
+    /// An ability on the stack: "activated or triggered ability".
+    Ability(Abilities),
 }
 
 impl Kind {
@@ -80,7 +82,7 @@ impl Ctx {
                     let owner = self.zone_owner(*players);
                     noun.suffixes.push(format!("in {owner} zones"));
                 }
-                Kind::Permanent | Kind::Spell | Kind::Source => {
+                Kind::Permanent | Kind::Spell | Kind::Source | Kind::Ability(_) => {
                     let who = self.controls(*players, true);
                     noun.suffixes.push(who);
                 }
@@ -192,6 +194,10 @@ impl Ctx {
             TargetKind::SpellOrPermanent => (Kind::Permanent, "spell or "),
             TargetKind::GraveyardCard => (Kind::Card(Some(Zone::Graveyard)), ""),
             TargetKind::Player => (Kind::Player, ""),
+            TargetKind::Ability | TargetKind::ActivatedAbility | TargetKind::TriggeredAbility => (
+                Kind::Ability(spec.kind.abilities().expect("an ability")),
+                "",
+            ),
         };
         if spec == TargetSpec::any_target() {
             return "any target".to_owned();
@@ -228,6 +234,9 @@ impl Ctx {
             TargetKind::Spell => Kind::Spell,
             TargetKind::GraveyardCard => Kind::Card(Some(Zone::Graveyard)),
             TargetKind::Player => Kind::Player,
+            TargetKind::Ability | TargetKind::ActivatedAbility | TargetKind::TriggeredAbility => {
+                Kind::Ability(spec.kind.abilities().expect("an ability"))
+            }
             TargetKind::Permanent
             | TargetKind::SpellOrPermanent
             | TargetKind::PermanentOrPlayer => Kind::Permanent,
@@ -280,6 +289,7 @@ impl Noun {
             Kind::Spell => Some("spell"),
             Kind::Player => Some("player"),
             Kind::Source => Some("source"),
+            Kind::Ability(abilities) => Some(abilities.noun()),
         }
     }
 

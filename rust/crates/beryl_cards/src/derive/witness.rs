@@ -59,6 +59,20 @@ const REGENERATION_SHIELD: Witness = Witness {
     ],
 };
 
+/// A target that is an ability on the stack: player 0's Equipment and their one creature,
+/// whose equip ability they activate for the card to respond to (`play.rs`), since nothing in
+/// the starting positions puts an ability on the stack while its owner holds priority.
+const ABILITY_TO_TARGET: Witness = Witness {
+    words: "with an ability to target",
+    mine: &[
+        Permanent::new(props::EQUIPMENT),
+        Permanent::new(props::THIEF),
+    ],
+    theirs: &[],
+    hand: &[],
+    prelude: &[],
+};
+
 /// A `Players::ControllerOf` or `Players::OwnerOf` in any field: a permanent player 1 owns
 /// and player 0 controls, an artifact creature Thieving Skydiver stole, so that "its
 /// controller" and "its owner" name different players.
@@ -159,6 +173,11 @@ pub(super) fn witnesses(def: &'static CardDef) -> Vec<&'static Witness> {
         .flat_map(|face| face.abilities.iter().chain(face.grants));
     if abilities.clone().any(affects_own_creatures) {
         found.borrow_mut().push(&OWN_CREATURE);
+    }
+    let targets_abilities =
+        |a: &Ability| (a.targets().iter()).any(|t| t.kind.abilities().is_some());
+    if abilities.clone().any(targets_abilities) {
+        found.borrow_mut().push(&ABILITY_TO_TARGET);
     }
     for ability in abilities.filter(|a| resolves(a)) {
         let Behavior::Data(effect) = ability.body() else {

@@ -540,6 +540,7 @@ impl<'a> Builder<'a> {
         // event of its own, nor has the life a player loses to it.
         let (to, object) = match *to {
             TargetRef::Player { player } => (Subject::Player { player }, None),
+            TargetRef::Ability { .. } => unreachable!("damage is dealt to no ability"),
             TargetRef::Object { slot } => {
                 let mut object = self.table.objects.get(&slot).cloned();
                 if let Some(object) = &mut object {
