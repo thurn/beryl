@@ -50,3 +50,5 @@ def test_the_cli_builds_over_the_tests_steps_packages_in_its_profile() -> None:
     assert any(build[i : i + len(scope)] == scope for i in range(len(build)))
     assert build[build.index("--profile") + 1] == "test"
     assert "--lib" in build
+    # The oracle lane's dump runs this build's `beryl_scenario` (oracles.dump_scenarios).
+    assert "beryl_scenario" in build

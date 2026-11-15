@@ -92,8 +92,9 @@ NIGHTLY_PACKAGE = "beryl_link_iroh"
 # What the rust lane builds (`rust_tests.BUILD_SCOPE`, which says why).
 BUILD_SCOPE: list[str] = ["--workspace", "--exclude", NIGHTLY_PACKAGE]
 
-# The command that builds the `beryl_cli` binary the checks run: the script checks, the fixture
-# recordings of the browser lanes and the spec pages. It must build the same units as the tests
+# The command that builds the binaries the checks run: `beryl_cli` for the script checks, the
+# fixture recordings of the browser lanes and the spec pages, and `beryl_scenario` for the
+# oracle lane's scenario dump. It must build the same units as the tests
 # step, which shares the target directory with it. `cargo test` builds every library in the
 # `test` profile, and Cargo's hash for a unit also depends on which packages the command names,
 # so `cargo build -p beryl_cli` compiled the rules, the engine, every card crate and the CLI a
@@ -102,7 +103,7 @@ BUILD_SCOPE: list[str] = ["--workspace", "--exclude", NIGHTLY_PACKAGE]
 # the 180 s limit while waiting on that lock. Built over [`BUILD_SCOPE`] in the `test` profile,
 # whichever of the two runs second compiles nothing the first did: after edits to beryl_kernel
 # and beryl_table and the tests step's build, this command only linked the CLI, in 2 s. The
-# binary lands in target/debug. tools/tests/test_cli_build.py keeps the features the same.
+# binaries land in target/debug. tools/tests/test_cli_build.py keeps the features the same.
 CLI_BUILD: list[str] = [
     "cargo",
     "build",
@@ -116,6 +117,8 @@ CLI_BUILD: list[str] = [
     "--lib",
     "--bin",
     "beryl_cli",
+    "--bin",
+    "beryl_scenario",
 ]
 
 

@@ -534,30 +534,15 @@ def apply_gaps(oracle: str, result: dict[str, object]) -> list[str]:
 
 def dump_scenarios(path: Path, log: Path, cards: list[str]) -> list[card_store.Json]:
     """Every card scenario and the generated ones, as `beryl_scenario dump` writes them, and
-    those generated for each of `cards` complete from the card store (store_cards.py).
+    those generated for each of `cards` complete from the card store (store_cards.py). The
+    binary is the one the rust lane's tests step builds (`paths.CLI_BUILD`, at opt-level 1):
+    `cargo run -p beryl_cards` built an unoptimized one, whose dump took 48 s of the 180 s the
+    fast check allows, against 4.5 s, and compiled the rules and card crates a second time.
     """
-    run(
-        [
-            "cargo",
-            "run",
-            "--quiet",
-            "-p",
-            "beryl_cards",
-            "--features",
-            "scenarios",
-            "--bin",
-            "beryl_scenario",
-            "--",
-            "dump",
-            str(path),
-            "--generated",
-            str(GENERATED),
-            *(arg for card in cards for arg in ("--card", card)),
-        ],
-        log,
-        paths.RUST,
-        CARGO_TARGET_DIR=str(paths.RUN_TARGET),
-    )
+    run(paths.CLI_BUILD, log, paths.RUST, CARGO_TARGET_DIR=str(paths.RUN_TARGET))
+    binary = system.exe(paths.RUN_TARGET / "debug" / "beryl_scenario")
+    named = [arg for card in cards for arg in ("--card", card)]
+    run([str(binary), "dump", str(path), "--generated", str(GENERATED), *named], log)
     return json.loads(path.read_text())
 
 

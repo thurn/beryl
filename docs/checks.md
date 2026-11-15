@@ -77,7 +77,9 @@ The lanes:
   that already failed elsewhere is left to slow CI, so a failure on staging
   fails no one else's push. It plays what fits the time left, cheapest first,
   each generated scenario on its own (`oracle_selection.fitted`). Skipped if
-  another oracle run has held the oracles for more than 10 s.
+  another oracle run has held the oracles for more than 10 s. The scenarios are
+  dumped by the `beryl_scenario` that `paths.CLI_BUILD` builds with the tests
+  step's units, at opt-level 1: unoptimized, the dump took 48 s.
 - `motion`: `just motion`, when the stage, its capture code or the animation
   data changed. It records each animation verb in stepped stage time, measures
   it the same way Arena's clips were measured, and compares it with its own
