@@ -19,7 +19,7 @@
 
 use beryl_kernel::derive::Rederive;
 
-use super::{Apply, Begun, apply, apply_one, members, position};
+use super::{Apply, Begun, apply, apply_one, members};
 use crate::bitboard::Bitboard;
 use crate::fixed::Full;
 use crate::layout::{Layout, Queue, Table};
@@ -184,10 +184,10 @@ fn depends<L: Layout>(
         Table::from_fn(|i| rows.get(i).copied().unwrap_or_default())
     };
     if let Some(members) = members(s, t, b, begun) {
-        let you = controller(s, b);
+        let by = super::reader(s, b);
         // A removal past a mask's width changes the trial no more than the game, which
         // stalls once the effect applies for real.
-        let _ = apply::apply_to_members(s, t, members, b.source, b.change, you);
+        let _ = apply::apply_to_members(s, t, members, b.source, b.change, by);
     }
     let after = what_it_does(s, t, a, begun);
     let len = s.rows().len();
@@ -206,18 +206,11 @@ fn what_it_does<L: Layout>(
     let members = members(s, t, a, begun);
     let change = match a.change {
         LayerChange::Read { .. } if members.is_some() => {
-            apply::settle(s, t, a.source, a.change, controller(s, a))
+            apply::settle(s, t, a.source, a.change, super::reader(s, a))
         }
         change => change,
     };
     (members, change)
-}
-
-/// The controller of the permanent with the static ability `a` is part of, as the layers so
-/// far left it; none for a resolved effect.
-fn controller<L: Layout>(s: &Rederive<'_, L>, a: &Apply<L>) -> Option<crate::ids::Seat> {
-    a.from
-        .map(|(from, _)| s.rows()[position::<L>(from)].controller)
 }
 
 /// Whether `a` and `b` are parts of one static ability's effect, which apply in the order

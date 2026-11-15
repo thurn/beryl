@@ -119,8 +119,18 @@ fn tundra_is_a_plains_island_with_both_mana_abilities() {
     let tundra = CARDS.get(names::TUNDRA).unwrap().front();
     assert_eq!(tundra.types, Types::LAND);
     assert!(!tundra.supertypes.contains(Supertypes::BASIC));
-    assert!(tundra.subtypes.contains(Subtype::Plains));
-    assert!(tundra.subtypes.contains(Subtype::Island));
+    assert!(
+        tundra
+            .subtypes
+            .read(&beryl_card::Words::NONE)
+            .contains(Subtype::Plains)
+    );
+    assert!(
+        tundra
+            .subtypes
+            .read(&beryl_card::Words::NONE)
+            .contains(Subtype::Island)
+    );
     let produced: Vec<_> = tundra
         .abilities
         .iter()

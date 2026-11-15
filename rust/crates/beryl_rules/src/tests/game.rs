@@ -98,7 +98,7 @@ fn only_the_active_player_plays_one_land_in_a_main_phase() {
             panic!("expected a land play");
         };
         assert!(
-            Filter::Types(Types::LAND).matches(s, &t, slot, d.player)
+            Filter::Types(Types::LAND).matches(s, &t, slot, d.player, &crate::card::Words::NONE)
                 && s.zone(ZoneKey::Of(d.player, Zone::Hand)).contains(slot)
         );
         land_offers += 1;

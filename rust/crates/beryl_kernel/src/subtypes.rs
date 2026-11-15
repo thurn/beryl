@@ -22,7 +22,7 @@
 //! creature types the game numbers and one more for all the rest
 //! ([`SubtypeNumbers::creature_types`]): the set stays 128 bits.
 
-use beryl_card::{CardDef, Subtype, Subtypes, Types};
+use beryl_card::{CardDef, Subtype, Subtypes, Types, Words};
 
 /// The subtypes a game numbers at most: a bit of [`GameSubtypes`] each, and one more for
 /// every creature type.
@@ -125,14 +125,16 @@ impl SubtypeNumbers {
             .map(|(n, &subtype)| (n, subtype))
     }
 
-    /// The printed subtypes of the first two faces of each of `defs`, by these numbers.
+    /// The printed subtypes of the first two faces of each of `defs`, by these numbers: their
+    /// type lines as printed ([`Words::NONE`]), the base an object without text changes
+    /// starts from.
     pub fn of_cards(&self, defs: &[&CardDef]) -> Vec<[GameSubtypes; 2]> {
         defs.iter()
             .map(|d| {
                 let of = |i: usize| {
-                    d.faces
-                        .get(i)
-                        .map_or(GameSubtypes::NONE, |f| self.of(f.subtypes))
+                    d.faces.get(i).map_or(GameSubtypes::NONE, |f| {
+                        self.of(f.subtypes.read(&Words::NONE))
+                    })
                 };
                 [of(0), of(1)]
             })
@@ -291,7 +293,7 @@ mod tests {
     #[test]
     fn a_game_numbers_its_subtypes() {
         let numbers = SubtypeNumbers::new(&[&LAND, &KNIGHT]).unwrap();
-        let knight = numbers.of(KNIGHT.faces[0].subtypes);
+        let knight = numbers.of(KNIGHT.faces[0].subtypes.read(&beryl_card::Words::NONE));
         assert!(knight.contains(&numbers, Subtype::Knight));
         assert!(!knight.contains(&numbers, Subtype::Island));
         assert!(!knight.contains(&numbers, Subtype::Elf));
@@ -300,7 +302,7 @@ mod tests {
             vec![Subtype::Human, Subtype::Knight]
         );
         let land = numbers
-            .of(LAND.faces[0].subtypes)
+            .of(LAND.faces[0].subtypes.read(&beryl_card::Words::NONE))
             .with(&numbers, Subtype::Knight);
         assert_eq!(
             land.iter(&numbers).collect::<Vec<_>>(),
@@ -314,7 +316,9 @@ mod tests {
     #[test]
     fn a_changeling_is_every_creature_type() {
         let numbers = SubtypeNumbers::new(&[&SHAPESHIFTER, &LAND]).unwrap();
-        let every = numbers.of(SHAPESHIFTER.faces[0].subtypes);
+        let every = numbers.of(SHAPESHIFTER.faces[0]
+            .subtypes
+            .read(&beryl_card::Words::NONE));
         assert!(every.contains(&numbers, Subtype::Elf));
         assert!(every.contains(&numbers, Subtype::TimeLord));
         assert!(!every.contains(&numbers, Subtype::Island));

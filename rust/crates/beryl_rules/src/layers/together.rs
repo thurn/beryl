@@ -74,6 +74,7 @@ fn parts<'a, L: Layout>(
     let face = what.face(t);
     let (_, face_ix) = what.record(t);
     let you = s.controller(slot);
+    let words = s.words_of(slot);
     face.abilities
         .iter()
         .enumerate()
@@ -84,13 +85,14 @@ fn parts<'a, L: Layout>(
                 .iter()
                 .enumerate()
                 .map(move |(part, &modification)| {
-                    let change =
-                        LayerChange::resolve(modification, you).unwrap_or(LayerChange::Read {
+                    let change = LayerChange::resolve(modification, you, &words).unwrap_or(
+                        LayerChange::Read {
                             layer: read_layer(modification),
                             face: face_ix,
                             ability: AbilityIx::new(n as u8),
                             part: part as u8,
-                        });
+                        },
+                    );
                     let amount = match change {
                         LayerChange::Read { .. } => apply::amount_reads(spec, part as u8),
                         _ => Characteristics::NONE,

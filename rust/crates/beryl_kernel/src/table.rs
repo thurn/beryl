@@ -3,7 +3,7 @@
 
 use beryl_card::{
     Ability, AbilityIx, AbilityKind, CardDef, Condition, CostAction, CostPart, FACE_DOWN,
-    FACE_DOWN_COPY, Face, FaceIx, RuleChange, Zone, ZoneSet,
+    FACE_DOWN_COPY, Face, FaceIx, RuleChange, Words, Zone, ZoneSet,
 };
 
 use crate::event::{Listens, Replaces};
@@ -423,7 +423,9 @@ impl GameTable {
         match self.face_subtypes[card.index()].get(usize::from(face.get())) {
             Some(&subtypes) => subtypes,
             None if face == FaceIx::DOWN => GameSubtypes::NONE,
-            None => self.subtypes.of(self.def(card).face(face).subtypes),
+            None => self
+                .subtypes
+                .of(self.def(card).face(face).subtypes.read(&Words::NONE)),
         }
     }
 
@@ -734,7 +736,7 @@ pub fn land_mana(face: &Face) -> u8 {
         .iter()
         .filter(|a| is_simple(a) && a.produces().amount == 1)
         .fold(0, |k, a| k | a.produces().colors);
-    beryl_card::BasicLandTypes::of(face.subtypes)
+    beryl_card::BasicLandTypes::of(face.subtypes.read(&Words::NONE))
         .mana()
         .intrinsic_mana()
         & !written

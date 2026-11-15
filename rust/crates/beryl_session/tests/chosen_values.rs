@@ -44,7 +44,7 @@ static GOBLIN: CardDef = CardDef {
     name: "Test Goblin",
     faces: &[Face {
         types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Goblin]),
+        subtypes: beryl_card::SubtypeWords::new(Subtypes::of(&[Subtype::Goblin])),
         power: Some(1),
         toughness: Some(1),
         ..Face::EMPTY
@@ -56,7 +56,7 @@ static ELF: CardDef = CardDef {
     name: "Test Elf",
     faces: &[Face {
         types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Elf]),
+        subtypes: beryl_card::SubtypeWords::new(Subtypes::of(&[Subtype::Elf])),
         power: Some(1),
         toughness: Some(1),
         ..Face::EMPTY

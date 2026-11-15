@@ -173,7 +173,14 @@ impl Agent for ExpertAgent {
                 let worth = e.deadly_crypt().is_some()
                     || e.bounce_spec().is_some_and(|spec| {
                         e.permanents(e.opp())
-                            .filter(|&s| e.obs().matches(t, &spec.filter, s))
+                            .filter(|&s| {
+                                e.obs().matches(
+                                    t,
+                                    &spec.filter,
+                                    s,
+                                    &beryl_engine::card::Words::NONE,
+                                )
+                            })
                             .any(|s| e.bounce_value(s) >= 15)
                     });
                 best(d, |c| match c.option() {
@@ -1674,7 +1681,10 @@ impl Expert<'_> {
         let spec = a.targets().first()?;
         let target = self
             .permanents(self.opp())
-            .filter(|&s| self.obs().matches(self.p.t, &spec.filter, s))
+            .filter(|&s| {
+                self.obs()
+                    .matches(self.p.t, &spec.filter, s, &beryl_engine::card::Words::NONE)
+            })
             .max_by_key(|&s| self.removal_rank(name, s))?;
         let walker = self.has_type(target, Types::PLANESWALKER);
         let ours = self.obs().turn().active() == self.me();

@@ -118,9 +118,9 @@ impl CustomBody for Binder {
             return Ok(());
         };
         let (s, you) = (game.state(), resolution.controller());
-        let nonland: Bitboard<L::Slot> = s
-            .zone(ZoneKey::Of(opponent, Zone::Hand))
-            .filter(|slot| !LANDS.matches(s, game.table(), slot, opponent));
+        let nonland: Bitboard<L::Slot> = s.zone(ZoneKey::Of(opponent, Zone::Hand)).filter(|slot| {
+            !LANDS.matches(s, game.table(), slot, opponent, &crate::card::Words::NONE)
+        });
         let may = Prompt::new(Purpose::May);
         if nonland.is_empty() || !choices::yes_no(game, resolution, you, may, Bitboard::EMPTY)? {
             return Ok(());
@@ -167,7 +167,7 @@ pub(crate) static ISLAND: CardDef = CardDef {
     faces: &[Face {
         supertypes: Supertypes::BASIC,
         types: Types::LAND,
-        subtypes: Subtypes::of(&[Subtype::Island]),
+        subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Island])),
         abilities: &[Ability::tap_for_mana(ManaSet::one(ManaColor::Blue))],
         ..Face::EMPTY
     }],

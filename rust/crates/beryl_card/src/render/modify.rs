@@ -62,8 +62,12 @@ impl Ctx {
         let mut base = None;
         for &modification in modifications {
             match modification {
-                Modification::SetColors(set) => words.push(list(&colors(set), "and")),
-                Modification::SetSubtype(subtype) => words.push(subtype.name().to_owned()),
+                Modification::SetColorWords(set) => {
+                    words.push(list(&colors(set.read(&self.words)), "and"));
+                }
+                Modification::SetSubtypeWord(word) => {
+                    words.push(word.read(&self.words).name().to_owned());
+                }
                 Modification::SetBasePt(power, toughness) => base = Some((*power, *toughness)),
                 _ => {}
             }
@@ -127,27 +131,36 @@ impl Ctx {
                 a_types(set),
                 verb("loses", "lose")
             ),
-            Modification::AddSubtype(subtype) => format!(
-                "{} {} in addition to its other {}",
-                verb("becomes", "become"),
-                with_article(subtype.name()),
-                other_types(subtype)
-            ),
-            Modification::SetLandTypes(set) => {
-                format!("{} {}", verb("becomes", "become"), land_types(set, plural))
+            Modification::AddSubtypeWord(word) => {
+                let subtype = word.read(&self.words);
+                format!(
+                    "{} {} in addition to its other {}",
+                    verb("becomes", "become"),
+                    with_article(subtype.name()),
+                    other_types(subtype)
+                )
             }
-            Modification::SetSubtype(subtype) => {
+            Modification::SetLandTypeWords(set) => format!(
+                "{} {}",
+                verb("becomes", "become"),
+                land_types(set.read(&self.words), plural)
+            ),
+            Modification::SetSubtypeWord(word) => {
                 format!(
                     "{} {}",
                     verb("becomes", "become"),
-                    with_article(subtype.name())
+                    with_article(word.read(&self.words).name())
                 )
             }
             Modification::AddKeywords(set) => {
                 format!("{} {}", verb("gains", "gain"), list(&keywords(set), "and"))
             }
             Modification::AddProtection(from) => {
-                format!("{} {}", verb("gains", "gain"), protection(from))
+                format!(
+                    "{} {}",
+                    verb("gains", "gain"),
+                    protection(from, &self.words)
+                )
             }
             Modification::Grant(ix) => format!("{} {}", verb("gains", "gain"), self.granted(ix)),
             Modification::ModifyPt(power, toughness) => {
@@ -157,17 +170,17 @@ impl Ctx {
             Modification::LoseAbility(ix) => {
                 format!("{} {}", verb("loses", "lose"), self.own_ability(ix))
             }
-            Modification::SetColors(set) => {
+            Modification::SetColorWords(set) => {
                 format!(
                     "{} {}",
                     verb("becomes", "become"),
-                    list(&colors(set), "and")
+                    list(&colors(set.read(&self.words)), "and")
                 )
             }
-            Modification::AddColors(set) => format!(
+            Modification::AddColorWords(set) => format!(
                 "{} {} in addition to its other colors",
                 verb("becomes", "become"),
-                list(&colors(set), "and")
+                list(&colors(set.read(&self.words)), "and")
             ),
             Modification::SetBasePt(power, toughness) => {
                 format!(
@@ -199,8 +212,8 @@ fn part_of_becoming(modification: Modification) -> bool {
     matches!(
         modification,
         Modification::SetTypes(_)
-            | Modification::SetColors(_)
-            | Modification::SetSubtype(_)
+            | Modification::SetColorWords(_)
+            | Modification::SetSubtypeWord(_)
             | Modification::SetBasePt(..)
     )
 }

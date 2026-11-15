@@ -216,25 +216,41 @@ fn filters_select_by_type_and_owner() {
     begin(&t, &mut s);
     let p = s.turn().starting_player();
     let hand = s.zone(ZoneKey::Of(p, Zone::Hand));
-    let lands = Filter::Types(Types::LAND).select(&s, &t, hand, p);
-    let others = Filter::Not(&Filter::Types(Types::LAND)).select(&s, &t, hand, p);
+    let lands = Filter::Types(Types::LAND).select(&s, &t, hand, p, &crate::card::Words::NONE);
+    let others =
+        Filter::Not(&Filter::Types(Types::LAND)).select(&s, &t, hand, p, &crate::card::Words::NONE);
     assert_eq!((lands | others), hand);
     assert!((lands & others).is_empty());
     assert!(lands.all(|slot| s.definition_name(&t, slot) == "Test Land"));
-    assert_eq!(Filter::Whose(&Players::You).select(&s, &t, hand, p), hand);
+    assert_eq!(
+        Filter::Whose(&Players::You).select(&s, &t, hand, p, &crate::card::Words::NONE),
+        hand
+    );
     assert!(
         Filter::Whose(&Players::EachOpponent)
-            .select(&s, &t, hand, p)
+            .select(&s, &t, hand, p, &crate::card::Words::NONE)
             .is_empty()
     );
     assert_eq!(
-        Filter::Whose(&Players::EachOpponent).select(&s, &t, hand, p.opponent()),
+        Filter::Whose(&Players::EachOpponent).select(
+            &s,
+            &t,
+            hand,
+            p.opponent(),
+            &crate::card::Words::NONE
+        ),
         hand
     );
     // "A player's": whoever reads it.
     for you in [p, p.opponent()] {
         assert_eq!(
-            Filter::Whose(&Players::EachPlayer).select(&s, &t, hand, you),
+            Filter::Whose(&Players::EachPlayer).select(
+                &s,
+                &t,
+                hand,
+                you,
+                &crate::card::Words::NONE
+            ),
             hand
         );
     }

@@ -368,7 +368,11 @@ fn exile_text(part: &CostPart) -> Option<String> {
         return None;
     };
     Some(match chosen.filter {
-        Filter::Colors(colors) => format!("exile a {} card", color_words(colors)),
+        // The label shows the card's text as printed, as its rendered rules text does.
+        Filter::ColorWords(colors) => format!(
+            "exile a {} card",
+            color_words(colors.read(&beryl_card::Words::NONE))
+        ),
         _ => "exile a card".to_owned(),
     })
 }

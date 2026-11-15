@@ -2,7 +2,7 @@
 //! interchangeable permanents.
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, Face, Types};
+use crate::card::{Ability, Face, Types, Words};
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::state::{Derived, State};
@@ -51,12 +51,20 @@ pub(crate) struct Sources<L: Layout = Small> {
 /// Whether `player` may activate a mana ability now: one restricted to "Activate only if you
 /// control" a kind of permanent needs one on the battlefield
 /// ([CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)): "A player can't begin to
-/// activate an ability that's prohibited from being activated."
-pub(super) fn allowed<L: Layout>(s: &State<L>, t: &GameTable, a: &Ability, player: Seat) -> bool {
+/// activate an ability that's prohibited from being activated." The kind of permanent is
+/// read through `words`, those of the permanent with the ability: the card table refuses a
+/// granted mana ability, so it is always the permanent's own.
+pub(super) fn allowed<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    a: &Ability,
+    player: Seat,
+    words: &Words,
+) -> bool {
     a.only_if_you_control().is_none_or(|f| {
         s.battlefield()
             .iter()
-            .any(|&slot| s.controller(slot) == player && f.matches(s, t, slot, player))
+            .any(|&slot| s.controller(slot) == player && f.matches(s, t, slot, player, words))
     })
 }
 
@@ -152,10 +160,11 @@ fn read_source<L: Layout>(
     // of its own: tapping it rather than another making the same mana now can leave
     // different mana for later.
     let mut conditional = false;
+    let words = s.words_of(slot);
     let mut abilities = s.abilities(t, slot).map(|(_, a)| a);
     for a in abilities.clone().filter(|a| is_simple(a)) {
         conditional |= a.only_if_you_control().is_some();
-        if !allowed(s, t, a, player) {
+        if !allowed(s, t, a, player, &words) {
             continue;
         }
         kinds |= a.produces().colors;
@@ -164,7 +173,7 @@ fn read_source<L: Layout>(
     }
     if kinds == 0 {
         // A Treasure: its one mana ability sacrifices it.
-        let a = abilities.find(|a| is_sacrificed(a) && allowed(s, t, a, player))?;
+        let a = abilities.find(|a| is_sacrificed(a) && allowed(s, t, a, player, &words))?;
         debug_assert!(
             a.produces().amount == 1 || a.produces().colors.is_power_of_two(),
             "a source of several mana makes one kind"

@@ -15,7 +15,7 @@ use beryl_kernel::derive::Rederive;
 use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityIx, AbilityKind, Colors, FaceIx, GrantIx, Layer, LayerSpec, Modification,
-    Objects,
+    Objects, Words,
 };
 use crate::decision::{Outcome, StallReason};
 use crate::event::{Listens, Replaces, Sink};
@@ -482,9 +482,17 @@ fn list_static<L: Layout>(
         _ => Target::Static(index::<L>(i)),
     };
     let you = s.base_controller(slot);
+    // CR 612.3: "any abilities that are granted to an object can't be modified by
+    // text-changing effects that affect that object", so only the permanent's own ability is
+    // read through its words. A granted one reads as its granter prints it.
+    let words = if on.order & GRANTED == 0 {
+        s.words_of(slot)
+    } else {
+        Words::NONE
+    };
     // The part in the earliest layer, where the effect begins: the first said of those.
     let layer_of = |modification: Modification| {
-        LayerChange::resolve(modification, you)
+        LayerChange::resolve(modification, you, &words)
             .map_or_else(|| read_layer(modification), LayerChange::layer)
     };
     let first = (0..spec.modifications.len())
@@ -497,7 +505,7 @@ fn list_static<L: Layout>(
         debug_assert_ne!(modification, Modification::Control);
         // An amount read as its layer applies is named by the ability that says it. The card
         // table refuses a granted ability with one (`Unapplied::GrantedAmount`).
-        let change = LayerChange::resolve(modification, you).unwrap_or_else(|| {
+        let change = LayerChange::resolve(modification, you, &words).unwrap_or_else(|| {
             debug_assert_eq!(on.order & GRANTED, 0);
             LayerChange::Read {
                 layer: read_layer(modification),
@@ -587,12 +595,29 @@ fn apply_one<L: Layout>(
     let Some(members) = members else {
         return applied;
     };
-    let you = a
-        .from
-        .map(|(from, _)| s.rows()[position::<L>(from)].controller);
+    let by = reader(s, a);
     applied.and(apply::apply_to_members(
-        s, t, members, a.source, a.change, you,
+        s, t, members, a.source, a.change, by,
     ))
+}
+
+/// Who reads the part `a` of a static ability as its layer applies: the controller of its
+/// permanent as the layers so far left it, and the words of the permanent's text it is read
+/// through. None for an effect of a resolved spell or ability, settled as it began. CR 612.3:
+/// "any abilities that are granted to an object can't be modified by text-changing effects
+/// that affect that object", so a granted ability reads as its granter prints it.
+fn reader<L: Layout>(s: &Rederive<'_, L>, a: &Apply<L>) -> Option<apply::Reader> {
+    a.from.map(|(from, _)| {
+        let i = position::<L>(from);
+        apply::Reader {
+            you: s.rows()[i].controller,
+            words: if a.order & GRANTED == 0 {
+                s.words_of(s.battlefield()[i])
+            } else {
+                Words::NONE
+            },
+        }
+    })
 }
 
 /// The permanents `a` applies to now, or none if it does not apply. A static ability's
@@ -619,7 +644,8 @@ fn members<L: Layout>(
             Some(match target {
                 Target::Position(i) => Bitboard::single(s.battlefield()[position::<L>(i)]),
                 Target::Static(i) => {
-                    apply::static_members(s, t, i.into(), static_ability_of(s, t, from, a))
+                    let words = reader(s, a).map_or(Words::NONE, |by| by.words);
+                    apply::static_members(s, t, i.into(), static_ability_of(s, t, from, a), words)
                 }
                 Target::Set(_) => unreachable!("a static ability locks in no set"),
             })

@@ -785,8 +785,8 @@ impl Scope<'_> {
             Filter::Any
             | Filter::Types(_)
             | Filter::Supertypes(_)
-            | Filter::Subtype(_)
-            | Filter::Colors(_)
+            | Filter::SubtypeWord(_)
+            | Filter::ColorWords(_)
             | Filter::Tapped
             | Filter::Token
             | Filter::ManaValueAtMost(_)

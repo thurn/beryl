@@ -580,6 +580,7 @@
 //! | the mana its basic land types make (CR 305.6, 305.7) | [`State::intrinsic_mana`] |
 //! | the colors a permanent has protection from | [`State::protection`] |
 //! | what an object that left was as it last existed (CR 603.10a) | [`State::last_known`] |
+//! | what the color words and subtypes its text names read as after text changes (CR 612.1); every reader of such a word ([`beryl_card::words`]) takes them | [`State::words_of`] |
 //!
 //! Its card types, subtypes and keywords have no query yet: a reader takes the layer result
 //! of a permanent ([`State::derived`]) and the copiable values of anything else, and so does

@@ -50,7 +50,7 @@ static GOLEM: CardDef = CardDef {
     faces: &[Face {
         types: Types::ARTIFACT.union(Types::CREATURE),
         supertypes: Supertypes::LEGENDARY,
-        subtypes: Subtypes::of(&[Subtype::Human]),
+        subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Human])),
         colors: Colors::WHITE,
         power: Some(2),
         toughness: Some(2),
@@ -65,7 +65,7 @@ static BANNER: CardDef = CardDef {
     name: "Test Banner",
     faces: &[Face {
         types: Types::ARTIFACT,
-        subtypes: Subtypes::of(&[Subtype::Equipment]),
+        subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Equipment])),
         abilities: &[Ability::static_ability(&LayerSpec {
             affected: Objects::AttachedTo,
             condition: None,
@@ -112,7 +112,7 @@ fn elk(t: &GameTable, s: &mut State, slot: Slot) {
     let you = Seat::P0;
     let changes: Vec<LayerChange> = ELK
         .iter()
-        .map(|&m| LayerChange::resolve(m, you).unwrap())
+        .map(|&m| LayerChange::resolve(m, you, &crate::card::Words::NONE).unwrap())
         .collect();
     let (card, _) = s.copiable(slot).record(t);
     let mut members = crate::bitboard::Bitboard::EMPTY;

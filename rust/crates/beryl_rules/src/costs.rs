@@ -194,7 +194,8 @@ fn unless_discards<L: Layout>(
     if instead_of.is_some_and(|cards| cards > 0) && hand.count() == 1 {
         return Ok(false);
     }
-    let cards = filter.select(game.state, game.table, hand, player);
+    let words = resolution.words(game);
+    let cards = filter.select(game.state, game.table, hand, player, &words);
     let instead = Prompt::new(Purpose::Discard)
         .most(instead_of.unwrap_or(1))
         .part(Part::Instead);

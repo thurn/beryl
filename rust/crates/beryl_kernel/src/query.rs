@@ -9,7 +9,7 @@
 //! [`crate::Observation::card`] is the other door, for a player's view: nothing when the
 //! viewer does not know the card.
 
-use beryl_card::{AbilityIx, CardDef, Colors, Face, FaceIx, Zone};
+use beryl_card::{AbilityIx, CardDef, Colors, Face, FaceIx, Words, Zone};
 
 use crate::bitboard::Bitboard;
 use crate::event::{Listens, Replaces};
@@ -547,6 +547,17 @@ impl<L: Layout> State<L> {
         } else {
             Copiable::of_object(o).face(t).colors
         }
+    }
+
+    /// The text changes on the object in `slot` ([CR 612.1]): what the color words and
+    /// subtypes its printed text and type line name read as. Every reader of a word an
+    /// object's text names takes these ([`beryl_card::words`]). No text-changing effect
+    /// exists yet, so each object's words read as printed.
+    ///
+    /// [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
+    #[inline]
+    pub fn words_of(&self, _slot: L::Slot) -> Words {
+        Words::NONE
     }
 
     /// Whether an effect that gives protection applied in the last run of the layers

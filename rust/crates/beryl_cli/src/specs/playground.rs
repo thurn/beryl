@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use beryl_cards::CARDS;
 use beryl_engine::Seat;
-use beryl_engine::card::{AbilityKind, CardDef, TargetKind, Types};
+use beryl_engine::card::{AbilityKind, CardDef, TargetKind, Types, Words};
 use beryl_engine::filter::Evaluate;
 use beryl_scenario::{Action, Permanent, Scenario};
 use beryl_search::{Agent, AgentDecision};
@@ -466,9 +466,14 @@ fn choice_rich(def: &CardDef, mut board: Scenario, controller: View) -> Scenario
             .copied()
             .filter(|&slot| {
                 state.name(&table, slot) != def.name
-                    && target
-                        .filter
-                        .matches_x(&state, &table, slot, controller.seat(), 3)
+                    && target.filter.matches_x(
+                        &state,
+                        &table,
+                        slot,
+                        controller.seat(),
+                        &Words::NONE,
+                        3,
+                    )
             })
             .collect();
         if eligible.len() > usize::from(target.count) {
@@ -500,9 +505,14 @@ fn choice_rich(def: &CardDef, mut board: Scenario, controller: View) -> Scenario
                 };
                 if state.battlefield().iter().any(|&slot| {
                     state.name(&table, slot) == support.name
-                        && target
-                            .filter
-                            .matches_x(&state, &table, slot, controller.seat(), 3)
+                        && target.filter.matches_x(
+                            &state,
+                            &table,
+                            slot,
+                            controller.seat(),
+                            &Words::NONE,
+                            3,
+                        )
                 }) {
                     board = candidate;
                     break 'support;

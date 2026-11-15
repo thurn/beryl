@@ -2,7 +2,7 @@
 //! (architecture §6.2), against a game state.
 
 pub use beryl_card::Filter;
-use beryl_card::{CardDef, Players};
+use beryl_card::{CardDef, Players, Words};
 
 use crate::bitboard::Bitboard;
 use crate::ids::Seat;
@@ -15,20 +15,33 @@ use crate::table::GameTable;
 ///
 /// The filter is vocabulary (`beryl_card`), which knows nothing of the state, so its meaning
 /// is this trait: bring it into scope to evaluate one.
+///
+/// A filter is read for the spell or ability it is part of: `you` is its controller, and
+/// `words` are the text changes of the object it is printed on ([`State::words_of`]), through
+/// which the color words and subtypes it names are read ([`beryl_card::words`]).
 pub trait Evaluate {
-    /// Whether the object in `slot` passes, evaluated for player `you`, where X is 0.
-    fn matches<L: Layout>(&self, s: &State<L>, t: &GameTable, slot: L::Slot, you: Seat) -> bool {
-        self.matches_x(s, t, slot, you, 0)
+    /// Whether the object in `slot` passes, evaluated for player `you` through `words`,
+    /// where X is 0.
+    fn matches<L: Layout>(
+        &self,
+        s: &State<L>,
+        t: &GameTable,
+        slot: L::Slot,
+        you: Seat,
+        words: &Words,
+    ) -> bool {
+        self.matches_x(s, t, slot, you, words, 0)
     }
 
-    /// Whether the object in `slot` passes, evaluated for player `you` and the value `x` of
-    /// X.
+    /// Whether the object in `slot` passes, evaluated for player `you` through `words` and
+    /// the value `x` of X.
     fn matches_x<L: Layout>(
         &self,
         s: &State<L>,
         t: &GameTable,
         slot: L::Slot,
         you: Seat,
+        words: &Words,
         x: u8,
     ) -> bool;
 
@@ -39,8 +52,9 @@ pub trait Evaluate {
         t: &GameTable,
         within: Bitboard<L::Slot>,
         you: Seat,
+        words: &Words,
     ) -> Bitboard<L::Slot> {
-        self.select_x(s, t, within, you, 0)
+        self.select_x(s, t, within, you, words, 0)
     }
 
     /// The members of `within` that pass, for the value `x` of X.
@@ -50,11 +64,12 @@ pub trait Evaluate {
         t: &GameTable,
         within: Bitboard<L::Slot>,
         you: Seat,
+        words: &Words,
         x: u8,
     ) -> Bitboard<L::Slot> {
         within
             .iter()
-            .filter(|&slot| self.matches_x(s, t, slot, you, x))
+            .filter(|&slot| self.matches_x(s, t, slot, you, words, x))
             .collect()
     }
 }
@@ -66,6 +81,7 @@ impl Evaluate for Filter {
         t: &GameTable,
         slot: L::Slot,
         you: Seat,
+        words: &Words,
         x: u8,
     ) -> bool {
         let o = s.object(slot);
@@ -81,13 +97,17 @@ impl Evaluate for Filter {
             Filter::Supertypes(supertypes) => derived()
                 .map_or_else(|| face().supertypes, |d| d.supertypes)
                 .intersects(supertypes),
-            Filter::Subtype(subtype) => match derived() {
-                Some(d) => d.subtypes.contains(t.subtypes(), subtype),
-                None => face().subtypes.contains(subtype),
-            },
-            Filter::Colors(colors) => derived()
+            Filter::SubtypeWord(word) => {
+                let subtype = word.read(words);
+                match derived() {
+                    Some(d) => d.subtypes.contains(t.subtypes(), subtype),
+                    // The candidate's type line is its own text, read through its own words.
+                    None => face().subtypes.read(&s.words_of(slot)).contains(subtype),
+                }
+            }
+            Filter::ColorWords(colors) => derived()
                 .map_or_else(|| face().colors, |d| d.colors)
-                .intersects(colors),
+                .intersects(colors.read(words)),
             // CR 108.4a: a card that is no permanent or spell has no controller, and "its
             // owner" is used instead, which is what the query answers.
             Filter::Whose(players) => is_for(players, s.controller(slot), you),
@@ -96,9 +116,9 @@ impl Evaluate for Filter {
             Filter::ManaValueAtMost(n) => s.mana_value(t, slot) <= n,
             Filter::ManaValueAtMostX => s.mana_value(t, slot) <= x,
             Filter::PowerAtMost(n) => s.power(t, slot) <= n,
-            Filter::Not(f) => !f.matches_x(s, t, slot, you, x),
-            Filter::All(fs) => fs.iter().all(|f| f.matches_x(s, t, slot, you, x)),
-            Filter::AnyOf(fs) => fs.iter().any(|f| f.matches_x(s, t, slot, you, x)),
+            Filter::Not(f) => !f.matches_x(s, t, slot, you, words, x),
+            Filter::All(fs) => fs.iter().all(|f| f.matches_x(s, t, slot, you, words, x)),
+            Filter::AnyOf(fs) => fs.iter().any(|f| f.matches_x(s, t, slot, you, words, x)),
         }
     }
 }

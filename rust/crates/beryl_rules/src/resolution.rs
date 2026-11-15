@@ -2,7 +2,7 @@
 //! answered from (the crate's contract, "Resolution"; architecture §7.3). The questions
 //! themselves are [`crate::choices`]'.
 
-use crate::card::{Ability, CastingIx, ManaColor, Stop};
+use crate::card::{Ability, CastingIx, ManaColor, Stop, Words};
 use crate::cast;
 use crate::decision::{Answers, Choice, Decision, Outcome, StallReason};
 use crate::game::Game;
@@ -86,6 +86,15 @@ impl<'a, L: Layout> Resolution<'a, L> {
     /// For an emblem's ability, which has no source.
     pub fn source(&self) -> ObjectRef<L> {
         self.entry.object().expect("an ability with a source")
+    }
+
+    /// The text changes of the spell or ability's source, which the color words and subtypes
+    /// of its text are read through ([`crate::state::State::words_of`]). An emblem's ability
+    /// has no source, and its words read as printed.
+    pub fn words(&self, game: &Game<'_, L>) -> Words {
+        self.entry
+            .object()
+            .map_or(Words::NONE, |source| game.state.words_of(source.slot))
     }
 
     /// The player who controls the spell or ability

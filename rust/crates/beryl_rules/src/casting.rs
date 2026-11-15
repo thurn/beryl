@@ -6,7 +6,7 @@
 //! on the card (`beryl_kernel`'s contract, "Stores"), and its terms become entries on the
 //! spell as it is cast.
 
-use beryl_card::{CastTerms, Filter, Objects, Players, Types};
+use beryl_card::{CastTerms, Filter, Objects, Players, Types, Words};
 
 use crate::bitboard::Bitboard;
 use crate::filter::Evaluate;
@@ -166,7 +166,9 @@ pub(crate) fn permit_instruction<L: Layout>(
         // as a spell, whichever is appropriate." Only casting is permitted here.
         if terms.played {
             let (game, _) = run.resolving();
-            if Filter::Types(Types::LAND).matches(game.state, game.table, slot, player) {
+            // The engine's own filter, which names no word of a card's text.
+            let land = Filter::Types(Types::LAND);
+            if land.matches(game.state, game.table, slot, player, &Words::NONE) {
                 no_primitive(&terms);
             }
         }

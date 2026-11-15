@@ -248,6 +248,7 @@ fn static_destinations<'a, L: Layout>(
         .filter(move |&&p| s.copiable(p).may_replace(t).replaces(ReplacementKind::Move))
         .flat_map(move |&p| {
             let controller = s.controller(p);
+            let words = s.words_of(p);
             let put_into = move |a: &Ability, r: &Replacement| match *r {
                 Replacement {
                     replaces: Replaced::PutInto(objects, zone),
@@ -256,7 +257,7 @@ fn static_destinations<'a, L: Layout>(
                 _ => None,
             };
             statics(s, t, p, put_into).filter_map(move |(ability, a, (objects, instead))| {
-                if !objects.matches(s, t, slot, controller) {
+                if !objects.matches(s, t, slot, controller, &words) {
                     return None;
                 }
                 crate::coverage::hit(a);
@@ -293,6 +294,7 @@ fn entering_destinations<L: Layout>(
             continue;
         }
         let controller = s.controller(p);
+        let words = s.words_of(p);
         let enters = |a: &Ability, r: &Replacement| match *r {
             Replacement {
                 replaces: Replaced::Enters { objects, not_cast },
@@ -304,7 +306,7 @@ fn entering_destinations<L: Layout>(
         };
         for (ability, a, (objects, instead)) in statics(s, t, p, enters) {
             let passes = layers::entered(s, t, slot, entry, |as_it_would_exist| {
-                objects.matches(as_it_would_exist, t, slot, controller)
+                objects.matches(as_it_would_exist, t, slot, controller, &words)
             })?;
             if !passes {
                 continue;

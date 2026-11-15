@@ -17,7 +17,7 @@ use crate::state::{ChosenSource, ObjectRef, ShieldAt, State, Subject, Zone, Zone
 use crate::table::GameTable;
 
 use beryl_card::prompt::Purpose;
-use beryl_card::{Filter, Prompt};
+use beryl_card::{Filter, Prompt, Words};
 
 /// Damage proposed before it is dealt: the proposal that prevention and replacement effects
 /// of damage rewrite ([`damage`]).
@@ -286,10 +286,12 @@ fn applies<L: Layout>(s: &State<L>, t: &GameTable, p: &Damage<L>, shield: Shield
     let Some(chosen) = shield.shield.from else {
         return true;
     };
+    // A shield outlives the object that made it, so its filter is read as printed.
     chosen.object == p.source
         && s.is_current(p.source)
-        && chosen_with(t, shield.source, chosen)
-            .is_none_or(|filter| filter.matches(s, t, p.source.slot, affected(s, p.to)))
+        && chosen_with(t, shield.source, chosen).is_none_or(|filter| {
+            filter.matches(s, t, p.source.slot, affected(s, p.to), &Words::NONE)
+        })
 }
 
 /// The filter a source was chosen with for a shield of the card `card`: the `from` of the

@@ -114,7 +114,10 @@ impl Pools {
                 let copies = if basic { 3 } else { 1 };
                 pools.lands.add(def.name, copies);
             } else if !front.is_instant_or_sorcery()
-                && !front.subtypes.contains(Subtype::Aura)
+                && !front
+                    .subtypes
+                    .read(&beryl_card::Words::NONE)
+                    .contains(Subtype::Aura)
                 && !triggers_before_main(front)
             {
                 pools.permanents.add(def.name, 1);

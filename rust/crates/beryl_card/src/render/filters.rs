@@ -64,8 +64,12 @@ impl Ctx {
             Filter::Any => {}
             Filter::Types(set) => noun.kind_or_adjective(types(set)),
             Filter::Supertypes(set) => noun.adjectives.extend(supertypes(set)),
-            Filter::Subtype(subtype) => noun.kind_or_adjective(vec![subtype.name().to_owned()]),
-            Filter::Colors(set) => noun.adjectives.push(list(&colors(set), "or")),
+            Filter::SubtypeWord(word) => {
+                noun.kind_or_adjective(vec![word.read(&self.words).name().to_owned()]);
+            }
+            Filter::ColorWords(set) => noun
+                .adjectives
+                .push(list(&colors(set.read(&self.words)), "or")),
             Filter::Whose(players) => match kind {
                 Kind::Card(Some(zone)) => {
                     let owner = self.zone_owner(*players);
@@ -102,7 +106,7 @@ impl Ctx {
             Filter::AnyOf(filters) => {
                 let simple = filters
                     .iter()
-                    .all(|f| matches!(f, Filter::Types(_) | Filter::Subtype(_)));
+                    .all(|f| matches!(f, Filter::Types(_) | Filter::SubtypeWord(_)));
                 if simple {
                     let mut kinds = Vec::new();
                     for &each in filters {
@@ -134,10 +138,14 @@ impl Ctx {
             Filter::Supertypes(set) => noun
                 .adjectives
                 .extend(supertypes(set).into_iter().map(|t| format!("non{t}"))),
-            Filter::Subtype(subtype) => noun.adjectives.push(format!("non-{}", subtype.name())),
-            Filter::Colors(set) => noun
+            Filter::SubtypeWord(word) => noun
                 .adjectives
-                .extend(colors(set).into_iter().map(|c| format!("non{c}"))),
+                .push(format!("non-{}", word.read(&self.words).name())),
+            Filter::ColorWords(set) => noun.adjectives.extend(
+                colors(set.read(&self.words))
+                    .into_iter()
+                    .map(|c| format!("non{c}")),
+            ),
             Filter::Tapped => noun.adjectives.push("untapped".to_owned()),
             Filter::Token => noun.adjectives.push("nontoken".to_owned()),
             Filter::Whose(players) => {

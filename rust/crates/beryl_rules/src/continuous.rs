@@ -137,6 +137,10 @@ pub(crate) fn instruction<L: Layout>(
     }
     let mut changes = [LayerChange::SwitchPt; MODIFY_PARTS];
     let mut parts = 0;
+    let words = {
+        let (game, resolution) = run.resolving();
+        resolution.words(game)
+    };
     for &modification in modifications {
         let change = match modification {
             Modification::Control => continue,
@@ -164,7 +168,7 @@ pub(crate) fn instruction<L: Layout>(
                 LayerChange::AddProtection(color)
             }
             // The card table refuses an effect that sets a power alone to an amount.
-            modification => match LayerChange::resolve(modification, you) {
+            modification => match LayerChange::resolve(modification, you, &words) {
                 Some(change) => change,
                 None => no_primitive(&modification),
             },

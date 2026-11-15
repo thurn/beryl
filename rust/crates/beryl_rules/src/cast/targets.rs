@@ -2,7 +2,7 @@
 
 use crate::PlayerSet;
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, TargetKind, TargetSpec};
+use crate::card::{Ability, TargetKind, TargetSpec, Words};
 use crate::event::Sink;
 use crate::filter::{self, Evaluate, Filter};
 use crate::fixed::Full;
@@ -71,7 +71,8 @@ pub(super) fn candidates<L: Layout>(
         objects: if objects.is_empty() {
             objects
         } else {
-            spec.filter.select_x(s, t, objects, you, x)
+            spec.filter
+                .select_x(s, t, objects, you, &printed_on(s, itself, source), x)
         },
         players,
     }
@@ -128,7 +129,18 @@ fn enough_candidates<L: Layout>(
     let Some(need) = usize::from(spec.count).checked_sub(players.count() as usize) else {
         return true;
     };
-    objects.at_least(need, |slot| spec.filter.matches_x(s, t, slot, you, x))
+    let words = printed_on(s, itself, source);
+    objects.at_least(need, |slot| {
+        spec.filter.matches_x(s, t, slot, you, &words, x)
+    })
+}
+
+/// The text changes of the object the target spec is printed on: the ability's source, or
+/// the spell being cast ([`State::words_of`]).
+fn printed_on<L: Layout>(s: &State<L>, itself: Option<L::Slot>, source: Option<L::Slot>) -> Words {
+    source
+        .or(itself)
+        .map_or(Words::NONE, |slot| s.words_of(slot))
 }
 
 impl<L: Layout> TargetSet<L> {

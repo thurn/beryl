@@ -85,7 +85,7 @@ static ARBOR: CardDef = CardDef {
     name: "Test Arbor",
     faces: &[Face {
         types: Types::LAND.union(Types::CREATURE),
-        subtypes: Subtypes::of(&[Subtype::Forest, Subtype::Dryad]),
+        subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Forest, Subtype::Dryad])),
         power: Some(1),
         toughness: Some(1),
         ..Face::EMPTY

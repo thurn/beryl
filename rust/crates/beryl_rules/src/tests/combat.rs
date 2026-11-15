@@ -57,7 +57,7 @@ static SWAMP: CardDef = CardDef {
     name: "Swamp",
     faces: &[Face {
         types: Types::LAND,
-        subtypes: Subtypes::of(&[Subtype::Swamp]),
+        subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Swamp])),
         ..Face::EMPTY
     }],
     tokens: &[],
@@ -127,7 +127,7 @@ static WAGON: CardDef = CardDef {
     name: "Wagon",
     faces: &[Face {
         types: Types::ARTIFACT,
-        subtypes: Subtypes::of(&[Subtype::Vehicle]),
+        subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Vehicle])),
         power: Some(3),
         toughness: Some(3),
         abilities: &[Ability::crew(3)],

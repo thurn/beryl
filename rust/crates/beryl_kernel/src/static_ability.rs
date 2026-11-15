@@ -363,8 +363,8 @@ pub fn read_by_the_layers(filter: Filter) -> bool {
         Filter::Any
         | Filter::Types(_)
         | Filter::Supertypes(_)
-        | Filter::Subtype(_)
-        | Filter::Colors(_)
+        | Filter::SubtypeWord(_)
+        | Filter::ColorWords(_)
         | Filter::Whose(_)
         | Filter::Tapped
         | Filter::Token

@@ -239,8 +239,8 @@ fn of_a_spells_characteristics(filter: Filter) -> bool {
         Filter::Any
         | Filter::Types(_)
         | Filter::Supertypes(_)
-        | Filter::Subtype(_)
-        | Filter::Colors(_) => true,
+        | Filter::SubtypeWord(_)
+        | Filter::ColorWords(_) => true,
         Filter::Whose(_)
         | Filter::Tapped
         | Filter::Token

@@ -37,6 +37,7 @@ pub mod render;
 pub mod target;
 pub mod trigger;
 mod walk;
+pub mod words;
 
 pub use ability::{Ability, AbilityKind, Behavior, Custom, Says, Timing};
 pub use characteristics::{BasicLandTypes, Colors, Keywords, Subtype, Subtypes, Supertypes, Types};
@@ -65,6 +66,7 @@ pub use prompt::{Part, Place, Prompt, Purpose, Shape};
 pub use target::{Takes, TargetKind, TargetSpec};
 pub use trigger::{Subject, Trigger, TriggerEvent};
 pub use walk::Node;
+pub use words::{ColorWords, LandTypeWords, SubtypeWord, SubtypeWords, Words};
 
 /// Everything a card file uses: the vocabulary's types and its builders,
 /// `use beryl_card::prelude::*;`.

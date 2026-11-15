@@ -10,7 +10,7 @@ use crate::state::{
     Derived, Object, Pending, PendingTrigger, Player, StackEntry, State, Turn, Zone, ZoneKey,
 };
 use crate::table::GameTable;
-use beryl_card::FaceIx;
+use beryl_card::{FaceIx, Words};
 
 /// The state as one player sees it. Slots are public handles; what is hidden is which card
 /// sits behind a slot the viewer has not seen. Agents, rollout policies and the UI read the
@@ -155,10 +155,17 @@ impl<'a, L: Layout> Observation<'a, L> {
         self.state.triggers()
     }
 
-    /// Whether the object in `slot` passes `filter`, evaluated for the viewer: always false
-    /// for an object the viewer does not know, whose characteristics would betray it.
-    pub fn matches(&self, t: &GameTable, filter: &Filter, slot: L::Slot) -> bool {
-        self.knows(slot) && filter.matches(self.state, t, slot, self.viewer)
+    /// Whether the object in `slot` passes `filter`, evaluated for the viewer through `words`,
+    /// the text changes of the object the filter is printed on ([`Self::words_of`]): always
+    /// false for an object the viewer does not know, whose characteristics would betray it.
+    pub fn matches(&self, t: &GameTable, filter: &Filter, slot: L::Slot, words: &Words) -> bool {
+        self.knows(slot) && filter.matches(self.state, t, slot, self.viewer, words)
+    }
+
+    /// The text changes on the object in `slot` ([`State::words_of`]), which every player
+    /// sees: a text-changing effect is public.
+    pub fn words_of(&self, slot: L::Slot) -> Words {
+        self.state.words_of(slot)
     }
 
     /// The committed state behind the view, unmasked. Reading it is cheating: only the

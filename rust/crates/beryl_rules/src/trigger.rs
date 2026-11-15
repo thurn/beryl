@@ -4,7 +4,7 @@
 use std::cell::OnceCell;
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, AbilityIx, CastingKind, FaceIx, Subject, Trigger, TriggerEvent};
+use crate::card::{Ability, AbilityIx, CastingKind, FaceIx, Subject, Trigger, TriggerEvent, Words};
 use crate::event::{Event, EventKind, Listens, Recipient, Sink};
 use crate::filter::{Evaluate, Filter, is_for};
 use crate::fixed::Full;
@@ -223,7 +223,8 @@ fn fires<L: Layout>(
         amount,
     };
     let whose = |player: Seat| is_for(&trigger.whose, player, you);
-    let about = |object: ObjectRef<L>| about(s, t, trigger.subject, this, you, object);
+    let words = this.map_or(Words::NONE, |slot| s.words_of(slot));
+    let about = |object: ObjectRef<L>| about(s, t, trigger.subject, this, you, &words, object);
     match (trigger.event, e) {
         // The amount is the X its spell was cast with
         // ([CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)): "If an object's
@@ -239,7 +240,7 @@ fn fires<L: Layout>(
             Some(info(Some(s.object_ref(this?)), you, 0))
         }
         (TriggerEvent::PlayerAttacks, &Event::Attack { player, attackers }) if whose(player) => {
-            let attacking = how_many(s, t, trigger.subject, attackers, you);
+            let attacking = how_many(s, t, trigger.subject, attackers, you, &words);
             (attacking > 0).then(|| info(None, player, counted(attacking)))
         }
         (
@@ -257,7 +258,7 @@ fn fires<L: Layout>(
         (TriggerEvent::CreatesTokens, &Event::TokensCreated { controller, tokens })
             if whose(controller) =>
         {
-            let matching = how_many(s, t, trigger.subject, tokens, you);
+            let matching = how_many(s, t, trigger.subject, tokens, you, &words);
             (matching > 0).then(|| info(None, controller, counted(matching)))
         }
         (
@@ -278,38 +279,41 @@ fn fires<L: Layout>(
 }
 
 /// Whether `object`, which an event is about, is a trigger's subject: the object its
-/// ability is on, or one its filter accepts as it is now, read for the ability's controller.
+/// ability is on, or one its filter accepts as it is now, read for the ability's controller
+/// through `words`, those of the object the ability is on.
 fn about<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     subject: Subject,
     this: Option<L::Slot>,
     you: Seat,
+    words: &Words,
     object: ObjectRef<L>,
 ) -> bool {
     match subject {
         Subject::This => this == Some(object.slot) && s.is_current(object),
         Subject::A(Filter::Any) => true,
-        Subject::A(filter) => s.is_current(object) && filter.matches(s, t, object.slot, you),
+        Subject::A(filter) => s.is_current(object) && filter.matches(s, t, object.slot, you, words),
     }
 }
 
 /// How many of `objects`, the set an event is about, a trigger's subject accepts: those on
-/// the battlefield its filter accepts, read for the ability's controller. "One or more"
-/// triggers once, with the number.
+/// the battlefield its filter accepts, read for the ability's controller through `words`, as
+/// [`about`] reads it. "One or more" triggers once, with the number.
 fn how_many<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     subject: Subject,
     objects: Bitboard<L::Slot>,
     you: Seat,
+    words: &Words,
 ) -> u32 {
     let Subject::A(filter) = subject else {
         unreachable!("the card table refuses a set of objects that is this one");
     };
     objects
         .filter(|slot| {
-            s.object(slot).zone() == Zone::Battlefield && filter.matches(s, t, slot, you)
+            s.object(slot).zone() == Zone::Battlefield && filter.matches(s, t, slot, you, words)
         })
         .count()
 }
@@ -362,6 +366,7 @@ pub(crate) fn match_look_back<L: Layout>(
             }
             let source = s.object_ref(slot);
             let controller = s.controller(slot);
+            let words = s.words_of(slot);
             let (card, face) = what.record(t);
             // CR 700.4: dying is going to a graveyard.
             let kinds = [
@@ -376,7 +381,15 @@ pub(crate) fn match_look_back<L: Layout>(
                     // CR 603.10: the game looks back to whether the ability existed just
                     // before the event, as the permanent is now.
                     if !s.has_ability(slot, l.ability)
-                        || !about(s, t, l.trigger.subject, Some(slot), controller, object)
+                        || !about(
+                            s,
+                            t,
+                            l.trigger.subject,
+                            Some(slot),
+                            controller,
+                            &words,
+                            object,
+                        )
                     {
                         continue;
                     }
@@ -414,6 +427,7 @@ fn look_back_away<L: Layout>(
             let zone = s.object(slot).zone();
             let source = s.object_ref(slot);
             let controller = s.controller(slot);
+            let words = s.words_of(slot);
             let (card, face) = s.copiable(slot).record(t);
             let info = TriggerInfo {
                 object: Some(object),
@@ -432,7 +446,15 @@ fn look_back_away<L: Layout>(
                 for l in t.away_listeners(card, face, kind) {
                     if l.zones.contains(zone)
                         && s.has_ability(slot, l.ability)
-                        && about(s, t, l.trigger.subject, Some(slot), controller, object)
+                        && about(
+                            s,
+                            t,
+                            l.trigger.subject,
+                            Some(slot),
+                            controller,
+                            &words,
+                            object,
+                        )
                     {
                         enqueue(s, t, Some(source), card, face, l.ability, controller, info)?;
                     }

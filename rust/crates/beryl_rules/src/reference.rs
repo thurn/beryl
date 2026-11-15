@@ -215,7 +215,10 @@ fn reference_units<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Opti
                         CostPart::This(CostAction::Tap | CostAction::Sacrifice)
                     )
                 });
-            if a.kind() != AbilityKind::Mana || !tap_only || !controls(s, t, player, a) {
+            if a.kind() != AbilityKind::Mana
+                || !tap_only
+                || !controls(s, t, player, a, &s.words_of(slot))
+            {
                 continue;
             }
             if amount.is_some_and(|n| n != a.produces().amount) {
@@ -240,11 +243,12 @@ fn controls<L: Layout>(
     t: &GameTable,
     player: Seat,
     a: &crate::card::Ability,
+    words: &crate::card::Words,
 ) -> bool {
     a.only_if_you_control().is_none_or(|f| {
-        s.battlefield()
-            .iter()
-            .any(|&slot: &L::Slot| s.controller(slot) == player && f.matches(s, t, slot, player))
+        s.battlefield().iter().any(|&slot: &L::Slot| {
+            s.controller(slot) == player && f.matches(s, t, slot, player, words)
+        })
     })
 }
 

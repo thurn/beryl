@@ -44,6 +44,7 @@ use crate::definition::Face;
 use crate::effect::Players;
 use crate::target::TargetSpec;
 use crate::trigger::Trigger;
+use crate::words::Words;
 
 /// What a rendering knows as it writes one ability: whose ability it is, its targets and
 /// what the text before has already said, so that a target is "target creature" the first
@@ -90,6 +91,9 @@ struct Ctx {
     /// Whether the ability being written works only in a graveyard, so that "this card" is
     /// in its owner's graveyard.
     in_graveyard: bool,
+    /// The text changes the color words and subtypes are read through
+    /// ([`crate::words`]). A rendering of a definition reads its printed text.
+    words: Words,
 }
 
 /// What "enchanted" or "equipped" names.
@@ -110,13 +114,14 @@ impl Ctx {
     /// A rendering of an ability of `face`, named `name`.
     fn of_face(face: &'static Face, name: &str) -> Ctx {
         let this = self_reference(face, name);
-        let attached = if face.subtypes.contains(Subtype::Aura) {
+        let subtypes = face.subtypes.read(&Words::NONE);
+        let attached = if subtypes.contains(Subtype::Aura) {
             let creature = face
                 .spell_ability()
                 .and_then(|spell| spell.targets().first())
                 .is_some_and(|spec| spec.filter == crate::Filter::Types(Types::CREATURE));
             Attached::Aura { creature }
-        } else if face.subtypes.contains(Subtype::Equipment) {
+        } else if subtypes.contains(Subtype::Equipment) {
             Attached::Equipment
         } else {
             Attached::Neither
@@ -151,6 +156,7 @@ impl Ctx {
             discarded: None,
             those_named: None,
             in_graveyard: false,
+            words: Words::NONE,
         }
     }
 
@@ -185,7 +191,7 @@ fn self_reference(face: &Face, name: &str) -> String {
         (Subtype::Equipment, "Equipment"),
         (Subtype::Vehicle, "Vehicle"),
     ] {
-        if face.subtypes.contains(subtype) {
+        if face.subtypes.read(&Words::NONE).contains(subtype) {
             return format!("this {noun}");
         }
     }

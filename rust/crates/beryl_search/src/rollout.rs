@@ -548,7 +548,8 @@ mod tests {
             while let Step::Decide(d) = next(&mut s, &t, &mut x, &mut Replay) {
                 let obs = observe(&s, &t, &mut x, d.player);
                 let target = obs.battlefield().iter().any(|&slot| {
-                    obs.controller(slot) != d.player && obs.matches(&t, &hole.filter, slot)
+                    obs.controller(slot) != d.player
+                        && obs.matches(&t, &hole.filter, slot, &beryl_engine::card::Words::NONE)
                 });
                 let is_hole = |c: Choice| {
                     matches!(d.candidates.option(c), Some(Opt::Cast { slot, .. })

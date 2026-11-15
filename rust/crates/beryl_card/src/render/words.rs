@@ -4,6 +4,7 @@
 use crate::characteristics::{Colors, Keywords, Supertypes, Types};
 use crate::continuous::Protection;
 use crate::mana::{ManaColor, ManaCost, ManaSet};
+use crate::words::Words;
 
 /// A number of things as Oracle text spells it: "a card", "two cards", up to ten, then
 /// digits ("11 cards").
@@ -200,10 +201,13 @@ pub(super) fn colors(colors: Colors) -> Vec<String> {
 /// shorthand for “protection from [quality A]” and “protection from [quality B]”".
 ///
 /// [CR 702.16g]: https://yawgatog.com/resources/magic-rules/#R70216g
-pub(super) fn protection(protection: Protection) -> String {
+pub(super) fn protection(protection: Protection, words: &Words) -> String {
     match protection {
-        Protection::Colors(set) => {
-            let from: Vec<String> = colors(set).iter().map(|c| format!("from {c}")).collect();
+        Protection::ColorWords(set) => {
+            let from: Vec<String> = colors(set.read(words))
+                .iter()
+                .map(|c| format!("from {c}"))
+                .collect();
             format!("protection {}", list(&from, "and"))
         }
         Protection::ChosenColor => "protection from the color of your choice".to_owned(),

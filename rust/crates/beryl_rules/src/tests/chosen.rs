@@ -64,7 +64,7 @@ pub(super) static GOBLIN: CardDef = CardDef {
     name: "Test Goblin",
     faces: &[Face {
         types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Goblin]),
+        subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Goblin])),
         power: Some(1),
         toughness: Some(1),
         ..Face::EMPTY
@@ -76,7 +76,7 @@ static GOBLIN_TOKEN: CardDef = CardDef {
     name: "Test Goblin Token",
     faces: &[Face {
         types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Goblin]),
+        subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Goblin])),
         power: Some(1),
         toughness: Some(1),
         ..Face::EMPTY

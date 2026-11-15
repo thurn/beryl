@@ -10,7 +10,7 @@ use std::fmt::{Debug, Write};
 use beryl_card::{
     Ability, AbilityKind, Amount, BasicLandTypes, Behavior, CardDef, CastingOption, Cost,
     CostAction, CostPart, Effect, Face, ManaColor, ManaCost, ManaSet, Measure, Modification,
-    Objects, Players, Taken, TargetSpec,
+    Objects, Players, Taken, TargetSpec, Words,
 };
 use beryl_engine::CardTable;
 use serde::Serialize;
@@ -309,8 +309,11 @@ fn ability_facts(index: String, ability: &Ability) -> AbilityFacts {
         custom,
         changes_land_types: ability.layer().is_some_and(|spec| {
             spec.modifications.iter().any(|m| match *m {
-                Modification::SetLandTypes(_) => true,
-                Modification::AddSubtype(subtype) => BasicLandTypes::of_subtype(subtype).is_some(),
+                Modification::SetLandTypeWords(_) => true,
+                // The card's text as printed: what scenarios are made from.
+                Modification::AddSubtypeWord(word) => {
+                    BasicLandTypes::of_subtype(word.read(&Words::NONE)).is_some()
+                }
                 _ => false,
             })
         }),

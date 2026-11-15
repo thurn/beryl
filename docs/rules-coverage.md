@@ -554,6 +554,23 @@ Built by by-bajq.3.10:
   intrinsic mana abilities a layer 4 effect gave (`Keywords::PLAINS_MANA` to
   `FOREST_MANA`, group 2). A card's name is never changed (CR 612.2), and a mana
   symbol is not a color word.
+- **Words as built** (2026-11-15). `beryl_card::words` holds `ColorWords` (a set
+  of colors), `SubtypeWord` (any subtype: a change names only basic land types
+  and creature types, so any other reads as itself), `SubtypeWords` (a type
+  line's subtypes, `Face::subtypes`) and `LandTypeWords` (the basic land types
+  of `Modification::SetLandTypeWords`), each read only through a `Words`. The
+  vocabulary variants hold them (`Filter::SubtypeWord`, `Filter::ColorWords`,
+  `Modification::AddSubtypeWord` and so on), and `const fn`s with the old names
+  build them, so no card file changed. `State::words_of` gives an object's
+  words; `Evaluate` and `LayerChange::resolve` take the words of the object the
+  filter or effect is printed on, and the layers read a static ability through
+  its permanent's words, a granted one as printed (CR 612.3). Still read as
+  printed, each to be given an object when text changes arrive: a rule change in
+  force (it is known by its card, not its permanent), a prevention shield's
+  filter after its source is gone, the table's per-definition caches of a face's
+  subtypes and land mana, the AI's target guesses and the UI's labels. The
+  capability that skips the read when no card changes text waits for the first
+  card that changes text, since nothing would set it before.
 - **A text change** is a layer 3 entry of the Effects store on one object,
   permanent or spell: a kind of word, from and to. Several compose in timestamp
   order. It does not reach an ability another object granted (CR 612.3), because

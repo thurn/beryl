@@ -372,7 +372,7 @@ static RECONFIG: CardDef = CardDef {
     name: "Test Reconfiguration",
     faces: &[Face {
         types: Types::ENCHANTMENT,
-        subtypes: Subtypes::of(&[Subtype::Aura]),
+        subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Aura])),
         abilities: &[
             Ability::static_ability(&LayerSpec {
                 affected: Objects::AttachedTo,
@@ -2127,8 +2127,20 @@ fn a_transformed_permanent_has_its_front_faces_mana_value() {
     let prodigy = find(&s, &t, Seat::P0, "Test Prodigy");
     s.board().place(prodigy, Zone::Battlefield).unwrap();
     s.board().set_face(prodigy, FaceIx::BACK);
-    assert!(!Filter::ManaValueAtMost(1).matches(&s, &t, prodigy, Seat::P0));
-    assert!(Filter::ManaValueAtMost(2).matches(&s, &t, prodigy, Seat::P0));
+    assert!(!Filter::ManaValueAtMost(1).matches(
+        &s,
+        &t,
+        prodigy,
+        Seat::P0,
+        &crate::card::Words::NONE
+    ));
+    assert!(Filter::ManaValueAtMost(2).matches(
+        &s,
+        &t,
+        prodigy,
+        Seat::P0,
+        &crate::card::Words::NONE
+    ));
     let mut x = Scratch::new();
     crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let mut copy = None;
@@ -2140,5 +2152,5 @@ fn a_transformed_permanent_has_its_front_faces_mana_value() {
     });
     let copy = copy.expect("a token copy");
     assert_eq!(s.object(copy).face(), FaceIx::BACK);
-    assert!(Filter::ManaValueAtMost(0).matches(&s, &t, copy, Seat::P1));
+    assert!(Filter::ManaValueAtMost(0).matches(&s, &t, copy, Seat::P1, &crate::card::Words::NONE));
 }

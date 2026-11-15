@@ -12,7 +12,7 @@ static LAND: CardDef = CardDef {
     name: "Test Land",
     faces: &[Face {
         types: Types::LAND,
-        subtypes: Subtypes::of(&[Subtype::Plains]),
+        subtypes: beryl_card::SubtypeWords::new(Subtypes::of(&[Subtype::Plains])),
         abilities: &[Ability::tap_for_mana(ManaSet::one(ManaColor::White))],
         ..Face::EMPTY
     }],
@@ -56,7 +56,7 @@ static ISLAND: CardDef = CardDef {
     name: "Island",
     faces: &[Face {
         types: Types::LAND,
-        subtypes: Subtypes::of(&[Subtype::Island]),
+        subtypes: beryl_card::SubtypeWords::new(Subtypes::of(&[Subtype::Island])),
         abilities: &[Ability::tap_for_mana(ManaSet::one(ManaColor::Blue))],
         ..Face::EMPTY
     }],

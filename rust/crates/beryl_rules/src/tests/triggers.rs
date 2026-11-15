@@ -57,7 +57,7 @@ static KNIGHT: CardDef = CardDef {
     name: "Test Knight",
     faces: &[Face {
         types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Knight]),
+        subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Knight])),
         power: Some(2),
         toughness: Some(2),
         ..Face::EMPTY

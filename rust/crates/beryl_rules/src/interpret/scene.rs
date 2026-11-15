@@ -6,7 +6,7 @@
 //! nothing, so the same reader serves an ability as it triggers, where there is no
 //! resolution yet, and as it resolves.
 
-use beryl_card::{Amount, CastingKind, Condition, Objects, Players, SpecIx, Types};
+use beryl_card::{Amount, CastingKind, Condition, Objects, Players, SpecIx, Types, Words};
 
 use crate::PlayerSet;
 use crate::bitboard::Bitboard;
@@ -140,6 +140,15 @@ impl<L: Layout> Scene<'_, L> {
         self.subject.of.controller
     }
 
+    /// The text changes of the object the spell or ability is printed on, which its color
+    /// words and subtypes are read through ([`State::words_of`]).
+    fn words(&self) -> Words {
+        self.subject
+            .of
+            .source
+            .map_or(Words::NONE, |source| self.s.words_of(source.slot))
+    }
+
     /// The targets chosen for the `spec`th instance of the word "target" that were legal as
     /// the resolution began, with their places in the entry's list.
     fn targets(&self, spec: SpecIx) -> impl Iterator<Item = (TargetPlace, Target<L>)> + '_ {
@@ -246,7 +255,7 @@ impl<L: Layout> Scene<'_, L> {
                 for player in s.players_in_seat_order(self.players(*players)) {
                     within |= s.zone(ZoneKey::Of(player, zone));
                 }
-                filter.select_x(s, self.t, within, self.you(), self.x)
+                filter.select_x(s, self.t, within, self.you(), &self.words(), self.x)
             }
             // CR 400.1: "Each player has their own library, hand, and graveyard."
             Objects::CardsIn { players, zones } => {
@@ -264,7 +273,7 @@ impl<L: Layout> Scene<'_, L> {
                     Zone::Stack => cast::spells(s),
                     _ => s.in_zone(zone),
                 };
-                filter.select_x(s, self.t, within, self.you(), self.x)
+                filter.select_x(s, self.t, within, self.you(), &self.words(), self.x)
             }
             // "Each other creature": the set without the ability's source. A source that has
             // changed zones since is a new object (CR 400.7), which is "other".
@@ -566,7 +575,7 @@ impl<L: Layout> Scene<'_, L> {
     }
 
     fn passing(&self, objects: Bitboard<L::Slot>, filter: Filter) -> Bitboard<L::Slot> {
-        filter.select_x(self.s, self.t, objects, self.you(), self.x)
+        filter.select_x(self.s, self.t, objects, self.you(), &self.words(), self.x)
     }
 
     /// Whether the spell was cast with this kind of cost, or the permanent's spell was

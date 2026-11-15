@@ -479,15 +479,24 @@ impl Ctx {
             Modification::SetTypes(set) => {
                 format!("{is} {} and loses all other card types", a_types(set))
             }
-            Modification::AddSubtype(subtype) => format!(
-                "{is} {} in addition to its other {}",
-                with_article(subtype.name()),
-                other_types(subtype)
-            ),
-            Modification::SetSubtype(subtype) => format!("{is} {}", with_article(subtype.name())),
-            Modification::SetLandTypes(set) => format!("{is} {}", land_types(set, plural)),
+            Modification::AddSubtypeWord(word) => {
+                let subtype = word.read(&self.words);
+                format!(
+                    "{is} {} in addition to its other {}",
+                    with_article(subtype.name()),
+                    other_types(subtype)
+                )
+            }
+            Modification::SetSubtypeWord(word) => {
+                format!("{is} {}", with_article(word.read(&self.words).name()))
+            }
+            Modification::SetLandTypeWords(set) => {
+                format!("{is} {}", land_types(set.read(&self.words), plural))
+            }
             Modification::AddKeywords(set) => format!("{has} {}", list(&keywords(set), "and")),
-            Modification::AddProtection(from) => format!("{has} {}", protection(from)),
+            Modification::AddProtection(from) => {
+                format!("{has} {}", protection(from, &self.words))
+            }
             Modification::Grant(ix) => format!("{has} {}", self.granted(ix)),
             Modification::ModifyPt(power, toughness) => {
                 format!("{} {}", verb("gets", "get"), pt_change(power, toughness))
@@ -496,10 +505,12 @@ impl Ctx {
             Modification::LoseAbility(ix) => {
                 format!("{} {}", verb("loses", "lose"), self.own_ability(ix))
             }
-            Modification::SetColors(set) => format!("{is} {}", list(&colors(set), "and")),
-            Modification::AddColors(set) => format!(
+            Modification::SetColorWords(set) => {
+                format!("{is} {}", list(&colors(set.read(&self.words)), "and"))
+            }
+            Modification::AddColorWords(set) => format!(
                 "{is} {} in addition to its other colors",
-                list(&colors(set), "and")
+                list(&colors(set.read(&self.words)), "and")
             ),
             Modification::SetBasePt(power, toughness) => {
                 format!("{has} {}", self.base_pt(*power, *toughness))

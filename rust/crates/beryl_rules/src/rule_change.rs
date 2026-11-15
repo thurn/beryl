@@ -15,7 +15,7 @@ use beryl_card::{Governed, RuleChange};
 use beryl_kernel::chosen::ChosenValue;
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, AbilityIx, AbilityKind, Face, ObjectAbility};
+use crate::card::{Ability, AbilityIx, AbilityKind, Face, ObjectAbility, Words};
 use crate::filter::{self, Filter};
 use crate::ids::Seat;
 use crate::interpret;
@@ -110,8 +110,13 @@ fn accepts_composed(filter: Filter, face: &Face) -> bool {
         Filter::Any => true,
         Filter::Types(types) => face.types.intersects(types),
         Filter::Supertypes(supertypes) => face.supertypes.intersects(supertypes),
-        Filter::Subtype(subtype) => face.subtypes.contains(subtype),
-        Filter::Colors(colors) => face.colors.intersects(colors),
+        // A rule in force is known by its card, not by the permanent whose text says it, and
+        // the spell is not yet an object, so both read as printed.
+        Filter::SubtypeWord(word) => face
+            .subtypes
+            .read(&Words::NONE)
+            .contains(word.read(&Words::NONE)),
+        Filter::ColorWords(colors) => face.colors.intersects(colors.read(&Words::NONE)),
         Filter::Not(filter) => !accepts_composed(*filter, face),
         Filter::All(filters) => filters.iter().all(|&filter| accepts_composed(filter, face)),
         Filter::AnyOf(filters) => filters.iter().any(|&filter| accepts_composed(filter, face)),

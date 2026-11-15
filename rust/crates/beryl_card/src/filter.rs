@@ -2,6 +2,7 @@
 
 use crate::characteristics::{Colors, Subtype, Supertypes, Types};
 use crate::effect::Players;
+use crate::words::{ColorWords, SubtypeWord};
 
 /// A predicate over objects. Evaluating one is a pass over a candidate set; the hot ones
 /// become ANDs over per-slot attribute bitboards as the cards that need them arrive.
@@ -14,9 +15,12 @@ pub enum Filter {
     /// Has at least one of these card types.
     Types(Types),
     Supertypes(Supertypes),
-    Subtype(Subtype),
-    /// Is at least one of these colors: "a blue card".
-    Colors(Colors),
+    /// Has this subtype: "Aura", "a Mountain". The word is read through the text changes of
+    /// the object the filter is printed on ([`crate::words`]); [`Filter::Subtype`] builds it.
+    SubtypeWord(SubtypeWord),
+    /// Is at least one of these colors: "a blue card". The words are read as
+    /// [`Filter::SubtypeWord`]'s is; [`Filter::Colors`] builds it.
+    ColorWords(ColorWords),
     /// Controlled by (on the battlefield or stack) or owned by (elsewhere) one of these
     /// players, read for the controller of the spell or ability the filter is part of: "you
     /// control", "an opponent controls", "your graveyard"
@@ -50,6 +54,20 @@ pub enum Filter {
 }
 
 impl Filter {
+    /// Has `subtype`, as the card's text prints it.
+    #[allow(non_snake_case)]
+    #[inline]
+    pub const fn Subtype(subtype: Subtype) -> Filter {
+        Filter::SubtypeWord(SubtypeWord::new(subtype))
+    }
+
+    /// Is at least one of `colors`, as the card's text prints them.
+    #[allow(non_snake_case)]
+    #[inline]
+    pub const fn Colors(colors: Colors) -> Filter {
+        Filter::ColorWords(ColorWords::new(colors))
+    }
+
     /// Whether this means something only a resolving spell or ability has
     /// ([`crate::Objects::needs_a_resolution`]): its X, or players that do.
     pub const fn needs_a_resolution(&self) -> bool {
@@ -57,8 +75,8 @@ impl Filter {
             Filter::Any
             | Filter::Types(_)
             | Filter::Supertypes(_)
-            | Filter::Subtype(_)
-            | Filter::Colors(_)
+            | Filter::SubtypeWord(_)
+            | Filter::ColorWords(_)
             | Filter::Tapped
             | Filter::Token
             | Filter::ManaValueAtMost(_)

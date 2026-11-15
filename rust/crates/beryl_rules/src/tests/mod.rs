@@ -48,7 +48,7 @@ pub(crate) static LAND: CardDef = CardDef {
     faces: &[Face {
         supertypes: Supertypes::BASIC,
         types: Types::LAND,
-        subtypes: Subtypes::of(&[Subtype::Plains]),
+        subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Plains])),
         abilities: &[Ability::tap_for_mana(ManaSet::one(ManaColor::White))],
         ..Face::EMPTY
     }],
@@ -59,7 +59,7 @@ pub(crate) static DUAL: CardDef = CardDef {
     name: "Test Dual",
     faces: &[Face {
         types: Types::LAND,
-        subtypes: Subtypes::of(&[Subtype::Plains, Subtype::Island]),
+        subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Plains, Subtype::Island])),
         abilities: &[
             Ability::tap_for_mana(ManaSet::one(ManaColor::White)),
             Ability::tap_for_mana(ManaSet::one(ManaColor::Blue)),

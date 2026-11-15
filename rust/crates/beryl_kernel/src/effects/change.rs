@@ -7,7 +7,7 @@
 
 use beryl_card::{
     AbilityIx, Amount, BasicLandTypes, Colors, FaceIx, GrantIx, Keywords, Layer, Modification,
-    Protection, Subtype, Types,
+    Protection, Subtype, Types, Words,
 };
 
 use crate::ids::Seat;
@@ -87,24 +87,25 @@ pub enum LayerChange {
 }
 
 impl LayerChange {
-    /// What `modification` is for an ability whose controller is `you`: "gain control"
-    /// names that player. None for one with an amount that is not a number, which a
+    /// What `modification` is for an ability whose controller is `you`, printed on an object
+    /// with the text changes `words`: "gain control" names that player, and a color word or
+    /// subtype is what it reads as ([`beryl_card::words`]). None for one with an amount that is not a number, which a
     /// resolving effect settles as it begins and a static ability reads as its layer
     /// applies ([`LayerChange::Read`]).
     #[inline]
-    pub fn resolve(modification: Modification, you: Seat) -> Option<LayerChange> {
+    pub fn resolve(modification: Modification, you: Seat, words: &Words) -> Option<LayerChange> {
         Some(match modification {
             Modification::Control => LayerChange::Control(you),
             Modification::AddTypes(types) => LayerChange::AddTypes(types),
             Modification::RemoveTypes(types) => LayerChange::RemoveTypes(types),
             Modification::SetTypes(types) => LayerChange::SetTypes(types),
-            Modification::AddSubtype(subtype) => LayerChange::AddSubtype(subtype),
-            Modification::SetSubtype(subtype) => LayerChange::SetSubtype(subtype),
-            Modification::SetLandTypes(types) => LayerChange::SetLandTypes(types),
+            Modification::AddSubtypeWord(word) => LayerChange::AddSubtype(word.read(words)),
+            Modification::SetSubtypeWord(word) => LayerChange::SetSubtype(word.read(words)),
+            Modification::SetLandTypeWords(types) => LayerChange::SetLandTypes(types.read(words)),
             Modification::AddKeywords(keywords) => LayerChange::AddKeywords(keywords),
             Modification::Grant(grant) => LayerChange::Grant(grant),
-            Modification::SetColors(colors) => LayerChange::SetColors(colors),
-            Modification::AddColors(colors) => LayerChange::AddColors(colors),
+            Modification::SetColorWords(colors) => LayerChange::SetColors(colors.read(words)),
+            Modification::AddColorWords(colors) => LayerChange::AddColors(colors.read(words)),
             Modification::LoseAllAbilities => LayerChange::LoseAllAbilities,
             Modification::LoseAbility(ability) => LayerChange::LoseAbility(ability),
             Modification::SetBasePt(&Amount::Fixed(power), &Amount::Fixed(toughness)) => {
@@ -115,8 +116,8 @@ impl LayerChange {
             }
             Modification::ModifyPt(power, toughness) => LayerChange::ModifyPt(power, toughness),
             Modification::SwitchPt => LayerChange::SwitchPt,
-            Modification::AddProtection(Protection::Colors(colors)) => {
-                LayerChange::AddProtection(colors)
+            Modification::AddProtection(Protection::ColorWords(colors)) => {
+                LayerChange::AddProtection(colors.read(words))
             }
             Modification::AddProtection(Protection::ChosenColor) => return None,
         })

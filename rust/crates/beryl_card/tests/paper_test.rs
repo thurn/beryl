@@ -13,8 +13,8 @@ use beryl_card::effect::build::{
 use beryl_card::{
     Ability, Amount, Behavior, CardDef, Colors, Comparison, Condition, Cost, CostAction, CostPart,
     CounterKind, Effect, Face, Filter, Keywords, LayerSpec, Modification, Objects, Subject,
-    Subtype, Subtypes, Supertypes, TargetKind, TargetSpec, Trigger, TriggerEvent, TurnStep, Types,
-    Zone, mana,
+    Subtype, SubtypeWords, Subtypes, Supertypes, TargetKind, TargetSpec, Trigger, TriggerEvent,
+    TurnStep, Types, Zone, mana,
 };
 
 /// Fire Nation Warship {3}, Artifact — Vehicle 4/4. "Reach / When this Vehicle dies, create a
@@ -24,7 +24,7 @@ static FIRE_NATION_WARSHIP: CardDef = CardDef {
     faces: &[Face {
         cost: mana("{3}"),
         types: Types::ARTIFACT,
-        subtypes: Subtypes::of(&[Subtype::Vehicle]),
+        subtypes: SubtypeWords::new(Subtypes::of(&[Subtype::Vehicle])),
         power: Some(4),
         toughness: Some(4),
         keywords: Keywords::REACH,
@@ -122,7 +122,7 @@ static FUGITIVE_WIZARD: CardDef = CardDef {
     faces: &[Face {
         cost: mana("{U}"),
         types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Human, Subtype::Wizard]),
+        subtypes: SubtypeWords::new(Subtypes::of(&[Subtype::Human, Subtype::Wizard])),
         colors: Colors::BLUE,
         power: Some(1),
         toughness: Some(1),

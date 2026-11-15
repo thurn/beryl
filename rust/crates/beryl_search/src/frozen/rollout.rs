@@ -491,7 +491,10 @@ impl Policy<'_> {
             self.me.opponent()
         };
         let ok = |slot: Slot, controller: Seat| {
-            controller == side && self.obs.matches(self.t, &spec.filter, slot)
+            controller == side
+                && self
+                    .obs
+                    .matches(self.t, &spec.filter, slot, &beryl_engine::card::Words::NONE)
         };
         let mut top: Option<i32> = None;
         let mut offer = |v: i32| top = Some(top.map_or(v, |t| t.max(v)));
@@ -519,7 +522,12 @@ impl Policy<'_> {
         match spec.kind {
             TargetKind::GraveyardCard => {
                 for &slot in self.obs.graveyard(side) {
-                    if self.obs.matches(self.t, &spec.filter, slot) {
+                    if self.obs.matches(
+                        self.t,
+                        &spec.filter,
+                        slot,
+                        &beryl_engine::card::Words::NONE,
+                    ) {
                         offer(self.value(slot));
                     }
                 }
@@ -536,7 +544,10 @@ impl Policy<'_> {
         self.obs
             .battlefield()
             .iter()
-            .filter(|&&slot| self.obs.matches(self.t, &spec.filter, slot))
+            .filter(|&&slot| {
+                self.obs
+                    .matches(self.t, &spec.filter, slot, &beryl_engine::card::Words::NONE)
+            })
             .map(|&slot| {
                 if self.obs.controller(slot) == self.me {
                     -self.value(slot)

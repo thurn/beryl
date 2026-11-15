@@ -49,7 +49,7 @@ static AURA: CardDef = CardDef {
     name: "Group Aura",
     faces: &[Face {
         types: Types::ENCHANTMENT,
-        subtypes: Subtypes::of(&[Subtype::Aura]),
+        subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Aura])),
         ..Face::EMPTY
     }],
     tokens: &[],

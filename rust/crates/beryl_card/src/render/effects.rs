@@ -612,7 +612,14 @@ impl Ctx {
         let Some(face) = token.faces.first() else {
             return self.count_of(count, "token", "tokens");
         };
-        let subtypes: Vec<&str> = face.subtypes.iter().map(crate::Subtype::name).collect();
+        // CR 612.4: "A token’s subtypes and rules text are defined by the spell or ability
+        // that created the token."
+        let subtypes: Vec<&str> = face
+            .subtypes
+            .read(&self.words)
+            .iter()
+            .map(crate::Subtype::name)
+            .collect();
         let (one, many) = if let (Some(power), Some(toughness)) = (face.power, face.toughness) {
             let colors = super::words::colors(face.colors);
             let colors = if colors.is_empty() {

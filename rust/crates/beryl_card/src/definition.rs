@@ -6,6 +6,7 @@ use crate::characteristics::{Colors, Keywords, Subtypes, Supertypes, Types};
 use crate::cost::{CastingOption, Castings, CostPart};
 use crate::index::{AbilityIx, GrantIx};
 use crate::mana::ManaCost;
+use crate::words::SubtypeWords;
 
 /// One card: its name and its faces.
 #[derive(Debug)]
@@ -90,7 +91,8 @@ pub struct Face {
     pub cost: ManaCost,
     pub supertypes: Supertypes,
     pub types: Types,
-    pub subtypes: Subtypes,
+    /// Its type line's subtypes, words of its text ([`crate::words`]).
+    pub subtypes: SubtypeWords,
     pub colors: Colors,
     pub power: Option<i8>,
     pub toughness: Option<i8>,
@@ -273,7 +275,10 @@ impl Face {
 
     #[must_use]
     pub const fn subtypes(self, subtypes: Subtypes) -> Face {
-        Face { subtypes, ..self }
+        Face {
+            subtypes: SubtypeWords::new(subtypes),
+            ..self
+        }
     }
 
     #[must_use]
@@ -363,7 +368,7 @@ impl Face {
         cost: ManaCost::NONE,
         supertypes: Supertypes::NONE,
         types: Types::NONE,
-        subtypes: Subtypes::NONE,
+        subtypes: SubtypeWords::NONE,
         colors: Colors::NONE,
         power: None,
         toughness: None,

@@ -181,7 +181,8 @@ pub fn dig<L: Layout>(
             zones::move_all(game, taken, Zone::Hand, Reason::Effect)?;
         }
         Taken::MayReveal(filter) => {
-            let accepted = filter.select(game.state, game.table, looked, player);
+            let words = resolution.words(game);
+            let accepted = filter.select(game.state, game.table, looked, player, &words);
             let look = Prompt::new(Purpose::Look)
                 .count(n)
                 .most(1)

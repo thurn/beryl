@@ -7,6 +7,7 @@ use crate::filter::Filter;
 use crate::ids::Zone;
 use crate::index::{AbilityIx, GrantIx};
 use crate::prompt::Purpose;
+use crate::words::{ColorWords, LandTypeWords, SubtypeWord};
 
 /// A change to a rule of the game rather than to an object's characteristics
 /// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311)): "Some continuous
@@ -451,7 +452,7 @@ pub enum Modification {
     /// was not gains that type's intrinsic mana ability ([CR 305.6]).
     ///
     /// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056
-    AddSubtype(Subtype),
+    AddSubtypeWord(SubtypeWord),
     /// Layer 4: "is a [subtype]", which replaces its subtypes of the same kind ([CR 205.1a]):
     /// "when an effect sets one or more of an object's subtypes, the new subtype(s) replaces
     /// any existing subtypes from the appropriate set (creature types, land types, artifact
@@ -459,7 +460,7 @@ pub enum Modification {
     /// creature" makes it an Elk and no other creature type.
     ///
     /// [CR 205.1a]: https://yawgatog.com/resources/magic-rules/#R2051a
-    SetSubtype(Subtype),
+    SetSubtypeWord(SubtypeWord),
     /// Layer 4: "is a [basic land types]", setting a land's land types ([CR 305.7]): "If an
     /// effect sets a land's subtype to one or more of the basic land types, the land no longer
     /// has its old land type. It loses all abilities generated from its rules text, its old
@@ -468,7 +469,7 @@ pub enum Modification {
     /// were granted to the land by other effects."
     ///
     /// [CR 305.7]: https://yawgatog.com/resources/magic-rules/#R3057
-    SetLandTypes(BasicLandTypes),
+    SetLandTypeWords(LandTypeWords),
     /// Layer 6: "gains [keywords]".
     AddKeywords(Keywords),
     /// Layer 6: "has [ability]": the ability at this index of the effect source's front
@@ -501,9 +502,9 @@ pub enum Modification {
     /// effects are applied."
     ///
     /// [CR 613.1e]: https://yawgatog.com/resources/magic-rules/#R6131e
-    SetColors(Colors),
+    SetColorWords(ColorWords),
     /// Layer 5: "is [colors] in addition to its other colors".
-    AddColors(Colors),
+    AddColorWords(ColorWords),
     /// Layer 7b: "has base power and toughness [power]/[toughness]" ([CR 613.4b]): "Effects
     /// that set power and/or toughness to a specific number or value are applied." A
     /// resolving spell or ability settles each amount as its effect begins ([CR 608.2h]); a
@@ -552,7 +553,7 @@ pub enum Protection {
     /// “protection from [quality B]”".
     ///
     /// [CR 702.16g]: https://yawgatog.com/resources/magic-rules/#R70216g
-    Colors(Colors),
+    ColorWords(ColorWords),
     /// From the color the controller of the resolving spell or ability chooses as the effect
     /// begins, "protection from the color of your choice" ([CR 105.4]): "If a player is asked
     /// to choose a color, they must choose one of the five colors." Only a resolving effect
@@ -592,6 +593,44 @@ impl Modification {
     /// from 0: [`Modification::Grant`], as a card file writes it.
     pub const fn grant(index: u8) -> Modification {
         Modification::Grant(GrantIx::new(index))
+    }
+
+    /// [`Modification::AddSubtypeWord`], as a card file writes it.
+    #[allow(non_snake_case)]
+    pub const fn AddSubtype(subtype: Subtype) -> Modification {
+        Modification::AddSubtypeWord(SubtypeWord::new(subtype))
+    }
+
+    /// [`Modification::SetSubtypeWord`], as a card file writes it.
+    #[allow(non_snake_case)]
+    pub const fn SetSubtype(subtype: Subtype) -> Modification {
+        Modification::SetSubtypeWord(SubtypeWord::new(subtype))
+    }
+
+    /// [`Modification::SetLandTypeWords`], as a card file writes it.
+    #[allow(non_snake_case)]
+    pub const fn SetLandTypes(types: BasicLandTypes) -> Modification {
+        Modification::SetLandTypeWords(LandTypeWords::new(types))
+    }
+
+    /// [`Modification::SetColorWords`], as a card file writes it.
+    #[allow(non_snake_case)]
+    pub const fn SetColors(colors: Colors) -> Modification {
+        Modification::SetColorWords(ColorWords::new(colors))
+    }
+
+    /// [`Modification::AddColorWords`], as a card file writes it.
+    #[allow(non_snake_case)]
+    pub const fn AddColors(colors: Colors) -> Modification {
+        Modification::AddColorWords(ColorWords::new(colors))
+    }
+}
+
+impl Protection {
+    /// [`Protection::ColorWords`], as a card file writes it.
+    #[allow(non_snake_case)]
+    pub const fn Colors(colors: Colors) -> Protection {
+        Protection::ColorWords(ColorWords::new(colors))
     }
 }
 

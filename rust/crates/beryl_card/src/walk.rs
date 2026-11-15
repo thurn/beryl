@@ -10,6 +10,7 @@ use crate::definition::CardDef;
 use crate::effect::{Amount, Condition, Effect, Objects, Players};
 use crate::filter::Filter;
 use crate::trigger::Subject;
+use crate::words::Words;
 
 /// A part of a definition a walk meets: each filter, amount and condition, those inside
 /// another included.
@@ -53,26 +54,33 @@ impl CardDef {
 impl CardDef {
     /// Calls `visit` with every set of subtypes an object of the card can have or a rule of
     /// it can ask about: each face's printed subtypes, each subtype a filter names
-    /// ([`Filter::Subtype`]) and each a continuous effect gives
-    /// ([`Modification::AddSubtype`], [`Modification::SetSubtype`],
-    /// [`Modification::SetLandTypes`]), in its static abilities or its effect data. The game
-    /// numbers what this finds (`beryl_kernel`'s `GameTable`); a Rust body that names
+    /// ([`Filter::SubtypeWord`]) and each a continuous effect gives
+    /// ([`Modification::AddSubtypeWord`], [`Modification::SetSubtypeWord`],
+    /// [`Modification::SetLandTypeWords`]), in its static abilities or its effect data. The
+    /// game numbers what this finds (`beryl_kernel`'s `GameTable`); a Rust body that names
     /// another subtype is read by nothing, so it names none a game does not.
+    ///
+    /// These are the words as printed ([`Words::NONE`]). A subtype that a text change makes
+    /// a word read as is named by the card that changes the text.
     pub fn subtypes(&self, visit: &mut dyn FnMut(Subtypes)) {
+        let printed = &Words::NONE;
         // "Islandwalk" asks whether a land the defending player controls is an Island
         // (CR 702.14c), so a landwalk names its subtype.
         let given = |modification: &Modification| match *modification {
-            Modification::AddSubtype(subtype) | Modification::SetSubtype(subtype) => {
-                Some(Subtypes::of(&[subtype]))
+            Modification::AddSubtypeWord(word) | Modification::SetSubtypeWord(word) => {
+                Some(Subtypes::of(&[word.read(printed)]))
             }
-            Modification::SetLandTypes(types) => {
-                Some(types.subtypes().fold(Subtypes::NONE, Subtypes::with))
-            }
+            Modification::SetLandTypeWords(types) => Some(
+                types
+                    .read(printed)
+                    .subtypes()
+                    .fold(Subtypes::NONE, Subtypes::with),
+            ),
             Modification::AddKeywords(keywords) => Some(keywords.landwalk()),
             _ => None,
         };
         for face in self.faces {
-            visit(face.subtypes.union(face.keywords.landwalk()));
+            visit(face.subtypes.read(printed).union(face.keywords.landwalk()));
             for ability in face.abilities.iter().chain(face.grants) {
                 if let Some(spec) = ability.layer() {
                     for given in spec.modifications.iter().filter_map(given) {
@@ -96,8 +104,8 @@ impl CardDef {
         }
         let mut named = Subtypes::NONE;
         self.filters(&mut |filter| {
-            if let Filter::Subtype(subtype) = *filter {
-                named = named.with(subtype);
+            if let Filter::SubtypeWord(word) = *filter {
+                named = named.with(word.read(printed));
             }
         });
         visit(named);
@@ -241,8 +249,8 @@ impl Filter {
             Filter::Any
             | Filter::Types(_)
             | Filter::Supertypes(_)
-            | Filter::Subtype(_)
-            | Filter::Colors(_)
+            | Filter::SubtypeWord(_)
+            | Filter::ColorWords(_)
             | Filter::Tapped
             | Filter::Token
             | Filter::ManaValueAtMost(_)

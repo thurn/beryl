@@ -237,7 +237,7 @@ pub(crate) fn activate<L: Layout>(
         ObjectAbility::Own(i)
             if (is_simple(a) || is_sacrificed(a))
                 && a.produces().includes(color)
-                && allowed(s, t, a, s.controller(slot)) =>
+                && allowed(s, t, a, s.controller(slot), &s.words_of(slot)) =>
         {
             Some((i, a))
         }

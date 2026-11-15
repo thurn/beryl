@@ -48,7 +48,8 @@ pub fn search_library_up_to<L: Layout>(
 ) -> Result<Bitboard<L::Slot>, Stop> {
     let library = game.state.zone(ZoneKey::Of(player, Zone::Library));
     zones::look_at(game, player, library);
-    let found = filter.select(game.state, game.table, library, player);
+    let words = resolution.words(game);
+    let found = filter.select(game.state, game.table, library, player, &words);
     let prompt = Prompt::new(Purpose::Search).most(n);
     choices::pick_up_to(game, resolution, player, found, n, prompt)
 }

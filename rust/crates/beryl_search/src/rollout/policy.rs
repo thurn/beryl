@@ -420,8 +420,10 @@ impl<L: Layout> Policy<'_, L> {
         } else {
             self.me.opponent()
         };
+        // A guess at the best target reads the spec as printed: it has no source at hand.
+        let printed = &beryl_engine::card::Words::NONE;
         let ok = move |slot: L::Slot, controller: Seat| {
-            controller == side && self.obs.matches(self.t, &spec.filter, slot)
+            controller == side && self.obs.matches(self.t, &spec.filter, slot, printed)
         };
         let permanents = matches!(
             spec.kind,
@@ -448,7 +450,7 @@ impl<L: Layout> Policy<'_, L> {
             &[]
         }
         .iter()
-        .filter(|&&slot| self.obs.matches(self.t, &spec.filter, slot))
+        .filter(|&&slot| self.obs.matches(self.t, &spec.filter, slot, printed))
         .map(|&slot| self.value(slot));
         let player = matches!(
             spec.kind,
@@ -464,10 +466,12 @@ impl<L: Layout> Policy<'_, L> {
     /// What hitting each permanent `spec`'s filter accepts gains a harmful effect: the value of
     /// the opponent's, less that of ours.
     pub(crate) fn sweep(&self, spec: &TargetSpec) -> i32 {
+        // As in `target_values`, the spec is read as printed.
+        let printed = &beryl_engine::card::Words::NONE;
         self.obs
             .battlefield()
             .iter()
-            .filter(|&&slot| self.obs.matches(self.t, &spec.filter, slot))
+            .filter(|&&slot| self.obs.matches(self.t, &spec.filter, slot, printed))
             .map(|&slot| {
                 if self.obs.controller(slot) == self.me {
                     -self.value(slot)

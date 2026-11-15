@@ -170,9 +170,9 @@ impl<L: Layout> Agent<L> for ExpertAgent<L> {
             DecisionKind::TargetCount if e.bouncing() => {
                 // Teferi's −3 draws a card whatever it returns: return nothing not worth it.
                 let worth = e.deadly_crypt().is_some()
-                    || e.bounce_spec().is_some_and(|spec| {
+                    || e.bounce_spec().is_some_and(|(spec, words)| {
                         e.permanents(e.opp())
-                            .filter(|&s| e.obs().matches(t, &spec.filter, s))
+                            .filter(|&s| e.obs().matches(t, &spec.filter, s, &words))
                             .any(|s| e.bounce_value(s) >= 15)
                     });
                 best(d, |c| match c.option() {
@@ -1683,9 +1683,10 @@ impl<L: Layout> Expert<'_, L> {
             .spell_ability()
             .or_else(|| self.etb_targets(card))?;
         let spec = a.targets().first()?;
+        let words = self.obs().words_of(slot);
         let target = self
             .permanents(self.opp())
-            .filter(|&s| self.obs().matches(self.p.t, &spec.filter, s))
+            .filter(|&s| self.obs().matches(self.p.t, &spec.filter, s, &words))
             .max_by_key(|&s| self.removal_rank(name, s))?;
         let walker = self.has_type(target, Types::PLANESWALKER);
         let ours = self.obs().turn().active() == self.me();
@@ -2422,14 +2423,22 @@ impl<L: Layout> Expert<'_, L> {
     }
 
     /// The target spec of the bounce being cast or activated.
-    fn bounce_spec(&self) -> Option<&'static beryl_engine::card::TargetSpec> {
+    fn bounce_spec(
+        &self,
+    ) -> Option<(
+        &'static beryl_engine::card::TargetSpec,
+        beryl_engine::card::Words,
+    )> {
         let e = self.obs().stack().last()?;
+        let words = e.object().map_or(beryl_engine::card::Words::NONE, |o| {
+            self.obs().words_of(o.slot)
+        });
         let face = self.p.t.def(e.card()).face(e.face());
         let a = match e.ability() {
             Some(ability) => face.ability(ability),
             None => face.spell_ability_with(e.costs())?,
         };
-        a.targets().first()
+        a.targets().first().map(|spec| (spec, words))
     }
 
     /// Whether the spell or ability being cast or activated returns a permanent to its

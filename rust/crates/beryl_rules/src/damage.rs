@@ -1,7 +1,7 @@
 //! Damage ([CR 120](https://yawgatog.com/resources/magic-rules/#R120)).
 
 use beryl_card::prompt::Purpose;
-use beryl_card::{Amount, Filter, Keywords, Prevention, Prompt, Recipients};
+use beryl_card::{Amount, Filter, Keywords, Prevention, Prompt, Recipients, Words};
 
 use crate::bitboard::Bitboard;
 use crate::card::Stop;
@@ -179,8 +179,10 @@ pub(crate) fn prevent_instruction<L: Layout>(
         None => None,
         Some(filter) => {
             let controller = run.resolution().controller();
+            let (game, resolution) = run.resolving();
+            let words = resolution.words(game);
             let game = run.game();
-            let candidates = sources(game.state(), game.table(), filter, controller);
+            let candidates = sources(game.state(), game.table(), filter, controller, &words);
             if candidates.is_empty() {
                 return Ok(Outcome::NOTHING);
             }
@@ -224,7 +226,8 @@ pub(crate) fn prevent_instruction<L: Layout>(
     Ok(Outcome::acted_on(shielded))
 }
 
-/// The sources of damage `filter` accepts, read for `you`, that a player may choose
+/// The sources of damage `filter` accepts, read for `you` through `words`, that a player may
+/// choose
 /// ([CR 609.7a]): "they may choose a permanent; a spell on the stack (including a permanent
 /// spell)". An object an ability on the stack names is a permanent or has left its zone, and
 /// a source that has left its zone is a new object (CR 400.7) that its damage does not come
@@ -236,7 +239,8 @@ fn sources<L: Layout>(
     t: &GameTable,
     filter: &Filter,
     you: Seat,
+    words: &Words,
 ) -> Bitboard<L::Slot> {
     let permanents: Bitboard<L::Slot> = s.battlefield().iter().copied().collect();
-    (permanents | s.zone(ZoneKey::Stack)).filter(|slot| filter.matches(s, t, slot, you))
+    (permanents | s.zone(ZoneKey::Stack)).filter(|slot| filter.matches(s, t, slot, you, words))
 }

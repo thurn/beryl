@@ -117,6 +117,7 @@ pub(super) fn candidates<L: Layout>(
     action: CostAction,
     chosen: &Chosen,
 ) -> Bitboard<L::Slot> {
+    let words = s.words_of(itself);
     match chosen.zone {
         Zone::Battlefield => s
             .battlefield()
@@ -125,7 +126,7 @@ pub(super) fn candidates<L: Layout>(
             .filter(|&slot| {
                 !(chosen.other && slot == itself)
                     && s.controller(slot) == player
-                    && chosen.filter.matches(s, t, slot, player)
+                    && chosen.filter.matches(s, t, slot, player, &words)
                     && !(action == CostAction::Tap && s.object(slot).is_tapped())
             })
             .collect(),
@@ -133,7 +134,7 @@ pub(super) fn candidates<L: Layout>(
             let mut cards = s.zone(ZoneKey::Of(player, zone));
             cards.remove(itself);
             cards.filter(|slot| {
-                s.card_behind(slot).is_some() && chosen.filter.matches(s, t, slot, player)
+                s.card_behind(slot).is_some() && chosen.filter.matches(s, t, slot, player, &words)
             })
         }
     }
@@ -158,10 +159,11 @@ pub(super) fn payable<L: Layout>(
 ) -> bool {
     match chosen.measure {
         Measure::Count(n) if chosen.zone != Zone::Battlefield => {
+            let words = s.words_of(itself);
             let mut cards = s.zone(ZoneKey::Of(player, chosen.zone));
             cards.remove(itself);
             cards.at_least(usize::from(n), |slot| {
-                s.card_behind(slot).is_some() && chosen.filter.matches(s, t, slot, player)
+                s.card_behind(slot).is_some() && chosen.filter.matches(s, t, slot, player, &words)
             })
         }
         Measure::Count(n) => {

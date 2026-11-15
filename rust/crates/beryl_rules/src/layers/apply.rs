@@ -4,7 +4,7 @@
 use beryl_kernel::derive::Rederive;
 use beryl_kernel::static_ability::{self, LayerResults, NoResults};
 
-use beryl_card::{Amount, Modification};
+use beryl_card::{Amount, Modification, Words};
 
 use crate::bitboard::Bitboard;
 use crate::card::Objects;
@@ -16,11 +16,22 @@ use crate::layout::Layout;
 use crate::state::{AbilityMask, Characteristics, Derived, GrantRef, LayerChange};
 use crate::table::GameTable;
 
+/// Who reads a static ability as its layer applies: the controller of its permanent as the
+/// layers so far left it ("you", [CR 109.5]: "For a static ability, this is the current
+/// controller of the object it's on"), and the text changes its color words and subtypes are
+/// read through ([`beryl_kernel::State::words_of`]).
+///
+/// [CR 109.5]: https://yawgatog.com/resources/magic-rules/#R1095
+#[derive(Clone, Copy)]
+pub(super) struct Reader {
+    pub(super) you: Seat,
+    pub(super) words: Words,
+}
+
 /// Applies `change` to each permanent in `members`, in battlefield order. One change to
 /// each member commutes with the others, so the order is nothing to the results.
 ///
-/// `you` is the controller of the permanent with the static ability the change is part of,
-/// as the layers so far left it, for an amount the change reads ([`LayerChange::Read`]):
+/// `by` reads the static ability the change is part of, for an amount the change reads ([`LayerChange::Read`]):
 /// read once, unless it is the mana value of each permanent it changes
 /// ([`static_ability::reads_each`]).
 ///
@@ -31,19 +42,19 @@ pub(super) fn apply_to_members<L: Layout>(
     members: Bitboard<L::Slot>,
     source: L::Card,
     change: LayerChange,
-    you: Option<Seat>,
+    by: Option<Reader>,
 ) -> Result<(), Full> {
     if members.is_empty() {
         return Ok(());
     }
     let each = reads_each::<L>(t, source, change);
-    let change = settle(s, t, source, change, you);
+    let change = settle(s, t, source, change, by);
     let mut applied = Ok(());
     for i in 0..s.battlefield().len() {
         let slot = s.battlefield()[i];
         if members.contains(slot) {
             let change = if each {
-                read(s, t, source, change, you, Some(slot))
+                read(s, t, source, change, by, Some(slot))
             } else {
                 change
             };
@@ -70,28 +81,26 @@ fn reads_each<L: Layout>(t: &GameTable, source: L::Card, change: LayerChange) ->
         .is_some_and(|spec| static_ability::reads_each(spec, part))
 }
 
-/// `change` with any amount it reads ([`LayerChange::Read`]) read now, for `you`, the
-/// controller of the permanent with the static ability the change is part of: what it does
-/// to each permanent it applies to.
+/// `change` with any amount it reads ([`LayerChange::Read`]) read now by `by`, which reads
+/// the static ability the change is part of: what it does to each permanent it applies to.
 pub(super) fn settle<L: Layout>(
     s: &Rederive<'_, L>,
     t: &GameTable,
     source: L::Card,
     change: LayerChange,
-    you: Option<Seat>,
+    by: Option<Reader>,
 ) -> LayerChange {
     match change {
         // One that reads each permanent is read as it changes each: what it does depends on
         // nothing the layers change, a permanent's mana value.
         LayerChange::Read { .. } if reads_each::<L>(t, source, change) => change,
-        LayerChange::Read { .. } => read(s, t, source, change, you, None),
+        LayerChange::Read { .. } => read(s, t, source, change, by, None),
         change => change,
     }
 }
 
 /// The change `change`, a [`LayerChange::Read`] naming a part of a static ability of
-/// `source`, makes, its amounts read now for `you`, the controller of the permanent with the
-/// ability, and of `member`, the permanent it changes, for one that reads each
+/// `source`, makes, its amounts read now by `by`, which reads the ability, and of `member`, the permanent it changes, for one that reads each
 /// ([`static_ability::reads_each`]): a characteristic-defining power ([CR 613.4a]): "Layer 7a: Effects from
 /// characteristic-defining abilities that define power and/or toughness are applied", or a
 /// base power and toughness ([CR 613.4b]): "Layer 7b: Effects that set power and/or
@@ -106,7 +115,7 @@ fn read<L: Layout>(
     t: &GameTable,
     source: L::Card,
     change: LayerChange,
-    you: Option<Seat>,
+    by: Option<Reader>,
     member: Option<L::Slot>,
 ) -> LayerChange {
     let LayerChange::Read {
@@ -119,10 +128,10 @@ fn read<L: Layout>(
         unreachable!("only a part whose amounts the layers read is read");
     };
     let said_by = &t.def(source).face(face).abilities[ability.index()];
-    let (Some(spec), Some(you)) = (said_by.layer(), you) else {
+    let (Some(spec), Some(by)) = (said_by.layer(), by) else {
         unreachable!("a static ability's part names its ability and its controller");
     };
-    let number = |amount| i8::try_from(defined(s, t, amount, you, member)).unwrap_or(i8::MAX);
+    let number = |amount| i8::try_from(defined(s, t, amount, by, member)).unwrap_or(i8::MAX);
     match spec.modifications[usize::from(part)] {
         Modification::SetPower(power) => LayerChange::DefinedPower(number(power)),
         Modification::SetPt(power, toughness) => {
@@ -156,6 +165,7 @@ pub(super) fn static_members<L: Layout>(
     t: &GameTable,
     at: usize,
     ability: &'static beryl_card::Ability,
+    words: Words,
 ) -> Bitboard<L::Slot> {
     let slot = s.battlefield()[at];
     let Some(spec) = ability.layer() else {
@@ -165,7 +175,10 @@ pub(super) fn static_members<L: Layout>(
         s,
         t,
         at,
-        you: s.rows()[at].controller,
+        by: Reader {
+            you: s.rows()[at].controller,
+            words,
+        },
     };
     if spec
         .condition
@@ -219,17 +232,17 @@ pub(super) fn holds_from_base<L: Layout>(
 }
 
 /// The layer results so far, read for the static ability of the permanent at position `at`
-/// whose controller is `you`.
+/// by `by`.
 struct SoFar<'r, 'a, L: Layout> {
     s: &'r Rederive<'a, L>,
     t: &'r GameTable,
     at: usize,
-    you: Seat,
+    by: Reader,
 }
 
 impl<L: Layout> SoFar<'_, '_, L> {
     fn passes_at(&self, filter: Filter, i: usize) -> bool {
-        passes(self.s, self.t, filter, i, self.you)
+        passes(self.s, self.t, filter, i, self.by)
     }
 
     /// The permanents that pass `filter`.
@@ -402,7 +415,7 @@ fn modify<L: Layout>(
 }
 
 /// The value of an amount a static ability's part reads as its layer applies, for the
-/// controller `you` of the permanent with the ability: of the permanents as layers 2 to 6
+/// reader `by` of the ability: of the permanents as layers 2 to 6
 /// left them, so a count sees each one's final types and controller. "Its mana value" is
 /// that of `member`, the permanent the part changes ([CR 202.3]): "The mana value of an
 /// object is a number equal to the total amount of mana in its mana cost, regardless of
@@ -414,13 +427,13 @@ fn defined<L: Layout>(
     s: &Rederive<'_, L>,
     t: &GameTable,
     amount: &Amount,
-    you: Seat,
+    by: Reader,
     member: Option<L::Slot>,
 ) -> usize {
     match *amount {
         Amount::Fixed(n) => usize::from(n),
         Amount::Times(n, amount) => {
-            usize::from(n).saturating_mul(defined(s, t, amount, you, member))
+            usize::from(n).saturating_mul(defined(s, t, amount, by, member))
         }
         Amount::ManaValue(Objects::Those) => {
             let Some(member) = member else {
@@ -428,11 +441,9 @@ fn defined<L: Layout>(
             };
             usize::from(s.mana_value(t, member))
         }
-        Amount::Plus(n, amount) => {
-            defined(s, t, amount, you, member).saturating_add(usize::from(n))
-        }
+        Amount::Plus(n, amount) => defined(s, t, amount, by, member).saturating_add(usize::from(n)),
         Amount::Count(&Objects::All { filter, .. }) => (0..s.battlefield().len())
-            .filter(|&i| passes(s, t, filter, i, you))
+            .filter(|&i| passes(s, t, filter, i, by))
             .count(),
         Amount::CardTypesAmong(_) => card_types_in_graveyards(s, t),
         _ => unreachable!("the card table refuses an amount the layers cannot read"),
@@ -462,7 +473,7 @@ fn card_types_in_graveyards<L: Layout>(s: &Rederive<'_, L>, t: &GameTable) -> us
     types.0.count_ones() as usize
 }
 
-/// Whether the permanent at battlefield position `i` passes `filter`, read for `you`: what
+/// Whether the permanent at battlefield position `i` passes `filter`, read by `by`: what
 /// [`Filter`]'s evaluation says of a permanent, of the layer results so far, which the state
 /// does not yet hold. Whether it is tapped and its mana value are the object's, which no
 /// layer changes.
@@ -471,22 +482,22 @@ fn passes<L: Layout>(
     t: &GameTable,
     filter: Filter,
     i: usize,
-    you: Seat,
+    by: Reader,
 ) -> bool {
     let d = &s.rows()[i];
     match filter {
         Filter::Any => true,
         Filter::Types(types) => d.types.intersects(types),
         Filter::Supertypes(supertypes) => d.supertypes.intersects(supertypes),
-        Filter::Subtype(subtype) => d.subtypes.contains(t.subtypes(), subtype),
-        Filter::Colors(colors) => d.colors.intersects(colors),
-        Filter::Whose(players) => filter::is_for(players, d.controller, you),
+        Filter::SubtypeWord(word) => d.subtypes.contains(t.subtypes(), word.read(&by.words)),
+        Filter::ColorWords(colors) => d.colors.intersects(colors.read(&by.words)),
+        Filter::Whose(players) => filter::is_for(players, d.controller, by.you),
         Filter::Tapped => s.object(s.battlefield()[i]).is_tapped(),
         Filter::Token => s.object(s.battlefield()[i]).is_token(),
         Filter::ManaValueAtMost(n) => s.mana_value(t, s.battlefield()[i]) <= n,
-        Filter::Not(filter) => !passes(s, t, *filter, i, you),
-        Filter::All(filters) => filters.iter().all(|&filter| passes(s, t, filter, i, you)),
-        Filter::AnyOf(filters) => filters.iter().any(|&filter| passes(s, t, filter, i, you)),
+        Filter::Not(filter) => !passes(s, t, *filter, i, by),
+        Filter::All(filters) => filters.iter().all(|&filter| passes(s, t, filter, i, by)),
+        Filter::AnyOf(filters) => filters.iter().any(|&filter| passes(s, t, filter, i, by)),
         Filter::ManaValueAtMostX | Filter::PowerAtMost(_) => {
             unreachable!("the card table refuses a filter the layers cannot read")
         }
@@ -504,8 +515,8 @@ pub(super) fn filter_reads(filter: Filter) -> Characteristics {
         | Filter::ManaValueAtMostX => Characteristics::NONE,
         Filter::Types(_) => Characteristics::TYPES,
         Filter::Supertypes(_) => Characteristics::SUPERTYPES,
-        Filter::Subtype(_) => Characteristics::SUBTYPES,
-        Filter::Colors(_) => Characteristics::COLORS,
+        Filter::SubtypeWord(_) => Characteristics::SUBTYPES,
+        Filter::ColorWords(_) => Characteristics::COLORS,
         Filter::Whose(_) => Characteristics::CONTROLLER,
         // The card table refuses it in a layer effect ([`passes`]), but it would read power.
         Filter::PowerAtMost(_) => Characteristics::PT,
