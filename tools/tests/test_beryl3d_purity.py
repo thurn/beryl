@@ -59,3 +59,26 @@ def test_a_verb_key_names_a_verb_or_a_case(tmp_path: Path) -> None:
     write(tmp_path, space, json.dumps({"verbs": {"flee": {}}}))
     (found,) = purity.data_names(tmp_path)
     assert "verbs.flee names no verb or case" in found
+
+
+def test_only_the_recorder_file_names_the_recorder(tmp_path: Path) -> None:
+    recorder = f"{CRATES}/beryl_inspect/src/recorder.rs"
+    write(tmp_path, recorder, "use beryl_cli::fixture;\n")
+    write(
+        tmp_path,
+        f"{CRATES}/beryl_inspect/Cargo.toml",
+        "[dependencies]\nberyl_cli = {}\n",
+    )
+    assert purity.scene_purity(tmp_path) == []
+    test = f"{CRATES}/beryl_inspect/tests/pack.rs"
+    write(tmp_path, test, "use beryl_cli::specs;\n")
+    (found,) = purity.scene_purity(tmp_path)
+    assert found.startswith(f"{test}:1: names beryl_cli")
+    write(tmp_path, test, "")
+    write(
+        tmp_path,
+        f"{CRATES}/beryl_3d/Cargo.toml",
+        "[dev-dependencies]\nberyl_cli = {}\n",
+    )
+    (found,) = purity.scene_purity(tmp_path)
+    assert "beryl_3d depends on beryl_cli" in found

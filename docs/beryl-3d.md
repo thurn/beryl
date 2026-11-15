@@ -1971,6 +1971,26 @@ than the test that reads it.
   of CPU time, is reported apart from the tests' time, and is not part of their
   target. The sweep builds the file for each staging commit it checks, so a
   session that has just rebased usually finds it there.
+- **`beryl_inspect::recordings` is the only way in.** `messages(name, seat)`
+  gives one recording's messages and `list()` every recording with its length
+  and number of views. A fixture is named as in `ui/fixtures.json` and a card
+  spec moment as `<card>/<moment>`. The `scene-purity` check fails on any other
+  Beryl 3D code that names `beryl_cli`.
+- **How the file is laid out.** It is `recordings-<hash>.bin`, in postcard: each
+  recording's name, seat and number of views, and its messages as deflated JSON
+  (the views of a recording repeat, so deflating makes the file about 30 times
+  smaller), or why it could not be recorded. The builder holds
+  `recordings-<hash>.lock`, writes under a temporary name and renames; the
+  newest three files are kept.
+- **Card spec moments are recorded from both seats; a fixture from its own.** A
+  fixture's definition names the seat its stop is seen from, and `beryl_cli`
+  cannot yet seat the human across the table from it.
+
+Measured on 2026-11-15, each the median of five runs at load 40 to 50 on the
+development Mac, in an unoptimized build: building the file from nothing takes
+23 s on the clock and about 64 s of CPU time, with a peak of 3.3 GB of memory,
+for 1,532 recordings; the file is 9.1 MB; and opening it and reading one
+recording takes 0.19 s, most of it hashing the sources.
 
 ### What keeps it fast
 

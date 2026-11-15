@@ -12,3 +12,15 @@ workspace = true
 [dependencies]
 beryl_scene = { path = "../beryl_scene", features = ["driver"] }
 beryl_session = { path = "../../../crates/beryl_session" }
+# Records the fixtures and card spec moments the recordings pack holds, with the code the web
+# interface's fixtures are recorded with, in place of a second recorder.
+beryl_cli = { path = "../../../crates/beryl_cli" }
+# The recordings pack's file format, in place of a hand-written binary format.
+postcard = { version = "1.1.3", default-features = false, features = ["use-std"] }
+# Derives the pack's index types, in place of hand-written serializers.
+serde = { version = "1.0.229", features = ["derive"] }
+# A recording's messages hold JSON values, which postcard cannot read back, so each is kept in
+# the pack as JSON text, in place of a schema of its own.
+serde_json = "1.0.154"
+# Deflates each recording in the pack, whose views repeat, in place of a format of our own.
+miniz_oxide = "0.8.9"

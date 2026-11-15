@@ -38,6 +38,10 @@ INSPECT_BANNED: tuple[str, ...] = (
     "winit",
 )
 GPU_CALL: re.Pattern[str] = re.compile(r"\bwgpu::")
+# The engine runs in one place in Beryl 3D: the recorder behind `beryl_inspect::recordings`,
+# when the recordings pack is built. Only that file may name the crate that plays it.
+RECORDER_CRATE = "beryl_cli"
+RECORDER_FILE = f"rust/beryl3d/crates/{INSPECT}/src/recorder.rs"
 
 
 def crates(root: Path) -> Path:
@@ -65,6 +69,7 @@ def scene_purity(root: Path) -> list[str]:
         return found
     banned = [(name, name_pattern(name)) for name in SCENE_BANNED]
     for crate in sorted(p for p in base.iterdir() if p.is_dir()):
+        found.extend(recorder_use(root, crate))
         for path in sorted((crate / "src").rglob("*.rs")):
             rel = path.relative_to(root).as_posix()
             for number, line in code_lines(path):
@@ -93,6 +98,34 @@ def scene_purity(root: Path) -> list[str]:
                 found.append(
                     f"{manifest.relative_to(root).as_posix()}: beryl_inspect depends on "
                     f"{name}; the inspector reads a scene with no GPU"
+                )
+    return found
+
+
+def recorder_use(root: Path, crate: Path) -> list[str]:
+    """Each place in `crate` (its manifest, sources, tests and build script) that names the
+    recorder's crate, but beryl_inspect's manifest and its recorder file."""
+    found: list[str] = []
+    # The crate as code names it, not a path that has it as a directory.
+    pattern = re.compile(rf"(?<![\w/]){RECORDER_CRATE}(?![\w/])")
+    manifest = crate / "Cargo.toml"
+    if crate.name != INSPECT and manifest.is_file():
+        named = tomllib.loads(manifest.read_text())
+        tables = ("dependencies", "dev-dependencies", "build-dependencies")
+        if any(RECORDER_CRATE in named.get(table, {}) for table in tables):
+            found.append(
+                f"{manifest.relative_to(root).as_posix()}: {crate.name} depends on "
+                f"{RECORDER_CRATE}; only beryl_inspect plays the engine, behind recordings"
+            )
+    for path in sorted(crate.rglob("*.rs")):
+        rel = path.relative_to(root).as_posix()
+        if rel == RECORDER_FILE:
+            continue
+        for number, line in code_lines(path):
+            if pattern.search(line):
+                found.append(
+                    f"{rel}:{number}: names {RECORDER_CRATE}; recordings come from "
+                    "beryl_inspect::recordings, the only path to the recorder"
                 )
     return found
 
