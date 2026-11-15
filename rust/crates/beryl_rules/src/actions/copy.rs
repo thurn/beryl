@@ -38,10 +38,17 @@ use crate::state::{AbilityTarget, ObjectRef, StackEntry, StackItem, Target, Targ
 /// [`Effect::CopySpell`](beryl_card::Effect::CopySpell): "Copy [spells] [count] times[, except
 /// ...]. You may choose new targets for the copies" (CR 707.10). Each spell still on the stack
 /// is copied `count` times, the spells in the order their entries are on the stack, from the
-/// bottom. The ability's controller controls and owns the copies ([CR 707.10]): "A copy of a
-/// spell is owned by the player under whose control it was put on the stack." The outcome is
-/// the copies.
+/// bottom. The ability's own spell that has left the stack, as a storm trigger's countered
+/// spell has, is copied as it last existed there ([`State::departed_spell`]), since the
+/// ability exists independently of it ([CR 113.7a]) and uses its last known information
+/// ([CR 608.2h]): "if it's no longer in that zone ... the effect uses the object's last known
+/// information." The ability's controller controls and owns the copies ([CR 707.10]): "A copy
+/// of a spell is owned by the player under whose control it was put on the stack." The
+/// outcome is the copies.
 ///
+/// [`State::departed_spell`]: crate::state::State::departed_spell
+/// [CR 113.7a]: https://yawgatog.com/resources/magic-rules/#R1137a
+/// [CR 608.2h]: https://yawgatog.com/resources/magic-rules/#R6082h
 /// [CR 707.10]: https://yawgatog.com/resources/magic-rules/#R70710
 pub(crate) fn instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
@@ -57,6 +64,19 @@ pub(crate) fn instruction<L: Layout>(
     // CR 707.9b: the exception is one the ability's own face lists, and the copy takes it
     // after those of what it copies.
     let addition = except.map(|ix| Addition::new(entry.card(), entry.face(), ix));
+    let departed = match spells {
+        Objects::This => (entry.source())
+            .filter(|&source| !run.state().is_current(source))
+            .and_then(|source| run.state().departed_spell(source))
+            .cloned(),
+        _ => None,
+    };
+    let copies = Copies {
+        count,
+        controller,
+        addition,
+        new_targets,
+    };
     let mut made = Bitboard::EMPTY;
     // The copies go on above the entries there now, whose places stay as they are.
     for place in 0..run.state().stack().len() {
@@ -67,20 +87,46 @@ pub(crate) fn instruction<L: Layout>(
         else {
             continue;
         };
-        let mut what = run.state().copiable(slot);
-        if let Some(addition) = addition {
-            what = what.with_addition(addition)?;
-        }
-        for _ in 0..count {
-            let (game, resolution) = run.resolving();
-            let mut copy = original.clone();
-            if new_targets {
-                choose_new_targets(game, resolution, controller, &mut copy)?;
-            }
-            made.insert(put_copy(game, controller, what, copy)?);
-        }
+        let what = run.state().copiable(slot);
+        copies.make(run, &original, what, &mut made)?;
+    }
+    if let Some(row) = departed {
+        copies.make(run, &row.entry, row.copiable, &mut made)?;
     }
     Ok(Outcome::acted_on(made))
+}
+
+/// How an [`instruction`] makes the copies of each spell it copies.
+struct Copies<L: Layout> {
+    count: u8,
+    controller: Seat,
+    addition: Option<Addition<L::Card>>,
+    new_targets: bool,
+}
+
+impl<L: Layout> Copies<L> {
+    /// Puts `count` copies of the spell whose entry is `original` and whose copiable values
+    /// are `what` on the stack, noting each in `made`.
+    fn make(
+        &self,
+        run: &mut Run<'_, '_, L>,
+        original: &StackEntry<L>,
+        mut what: Copiable<L>,
+        made: &mut Bitboard<L::Slot>,
+    ) -> Result<(), Stop> {
+        if let Some(addition) = self.addition {
+            what = what.with_addition(addition)?;
+        }
+        for _ in 0..self.count {
+            let (game, resolution) = run.resolving();
+            let mut copy = original.clone();
+            if self.new_targets {
+                choose_new_targets(game, resolution, self.controller, &mut copy)?;
+            }
+            made.insert(put_copy(game, self.controller, what, copy)?);
+        }
+        Ok(())
+    }
 }
 
 /// Asks `controller` for each target of `copy` in the order they were chosen whether to keep it

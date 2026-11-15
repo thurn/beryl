@@ -1,7 +1,8 @@
 //! [`Capability`]: what a game's cards may make the stores keep.
 
 use beryl_card::{
-    Amount, Condition, Draws, Face, Modification, Node, Replaced, Replacement, Rewrite,
+    Amount, Behavior, Condition, Draws, Effect, Face, Modification, Node, Objects, Replaced,
+    Replacement, Rewrite,
 };
 
 use crate::static_ability::Inputs;
@@ -81,6 +82,11 @@ pub enum Capability {
     /// definition, so trigger matching looks at the exceptions of copies (`beryl_rules`'
     /// `trigger`).
     GivesTriggers,
+    /// A card has an ability that copies its own spell ([`Effect::CopySpell`] of
+    /// [`Objects::This`]), as storm does, so a spell that leaves the stack while such an
+    /// ability waits or is on the stack keeps what a copy of it takes
+    /// ([`crate::last_known::DepartedSpell`]).
+    CopiesItself,
 }
 
 impl Capability {
@@ -139,6 +145,11 @@ impl Capability {
             if a.spend().is_some() {
                 found |= Capability::RemembersMana.bit();
             }
+            if let Behavior::Data(effect) = a.body()
+                && copies_itself(effect)
+            {
+                found |= Capability::CopiesItself.bit();
+            }
             if a.cost().is_loyalty() {
                 found |= Capability::LoyaltyActivated.bit();
             }
@@ -166,5 +177,23 @@ impl Capability {
     #[inline]
     pub(super) const fn bit(self) -> u16 {
         1 << (self as u16)
+    }
+}
+
+/// Whether `effect`, or an instruction it holds, copies the spell whose ability it is.
+fn copies_itself(effect: &Effect) -> bool {
+    match *effect {
+        Effect::CopySpell {
+            spells: Objects::This,
+            ..
+        } => true,
+        Effect::Sequence(effects) => effects.iter().any(copies_itself),
+        Effect::If {
+            then, otherwise, ..
+        } => copies_itself(then) || otherwise.is_some_and(copies_itself),
+        Effect::May { effect, .. }
+        | Effect::Unless { effect, .. }
+        | Effect::ForEachPlayer { effect, .. } => copies_itself(effect),
+        _ => false,
     }
 }

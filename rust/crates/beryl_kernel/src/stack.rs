@@ -16,6 +16,7 @@ use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
 use crate::object::ObjectRef;
 use crate::state::State;
+use crate::table::GameTable;
 
 /// Targets per stack entry (architecture §4.2).
 pub const TARGETS: usize = 8;
@@ -136,7 +137,7 @@ impl<L: Layout> Target<L> {
     /// any other is unchanged.
     #[inline]
     #[must_use]
-    fn after_removal(self, removed: usize) -> Target<L> {
+    pub(crate) fn after_removal(self, removed: usize) -> Target<L> {
         match self.as_ability() {
             Some(AbilityTarget::At(place)) if place == removed => Target {
                 rest: Self::GONE,
@@ -605,14 +606,21 @@ impl<L: Layout> State<L> {
     /// of the entries above it are repaired, as [`Target`] says. The entry says where
     /// such a spell goes, which is the rules' to read; its card leaves the stack zone with
     /// the move that must follow. The sink is told it left.
+    /// What an ability of the spell's own that copies it needs of it is kept
+    /// ([`State::departed_spell`]). [`Full`] if that table has no room.
     #[inline]
     pub fn take_off_stack(
         &mut self,
+        t: &GameTable,
         sink: &mut Sink<L>,
         spell: ObjectRef<L>,
-    ) -> Option<StackEntry<L>> {
-        let i = self.stack.iter().position(|e| e.spell() == Some(spell))?;
-        Some(self.remove_from_stack(sink, i))
+    ) -> Result<Option<StackEntry<L>>, Full> {
+        let Some(i) = self.stack.iter().position(|e| e.spell() == Some(spell)) else {
+            return Ok(None);
+        };
+        let entry = self.remove_from_stack(sink, i);
+        self.keep_departed_spell(t, &entry)?;
+        Ok(Some(entry))
     }
 
     /// Takes the activated or triggered ability at `place` off the stack, counted from the
@@ -648,6 +656,9 @@ impl<L: Layout> State<L> {
             for target in entry.targets.as_mut_slice() {
                 *target = target.after_removal(i);
             }
+        }
+        if !self.departed_spells.is_empty() {
+            self.repair_departed_targets(i);
         }
         self.settle_captured_words();
         removed

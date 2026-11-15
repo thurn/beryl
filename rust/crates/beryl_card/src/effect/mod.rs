@@ -165,7 +165,9 @@ pub enum Effect {
     /// With `new_targets`, the controller may choose new targets for each copy as it is made
     /// ([CR 707.10c]): "The player may leave any number of the targets unchanged, even if those
     /// targets would be illegal. If the player chooses to change some or all of the targets,
-    /// the new targets must be legal." A spell that has left the stack is not copied.
+    /// the new targets must be legal." A spell that has left the stack is not copied, except
+    /// the ability's own spell ([`Objects::This`], as storm's), which is copied as it last
+    /// existed there.
     ///
     /// [CR 707.10]: https://yawgatog.com/resources/magic-rules/#R70710
     /// [CR 707.10c]: https://yawgatog.com/resources/magic-rules/#R70710c

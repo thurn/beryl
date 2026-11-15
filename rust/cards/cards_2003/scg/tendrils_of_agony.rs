@@ -96,5 +96,26 @@ pub mod scenarios {
                 THEM.life(16),
                 ME.life(21),
             ]),
+        // Countered under its storm trigger, Tendrils of Agony is still copied as it last was
+        // on the stack, and the copy may aim at another player.
+        Scenario::new("Tendrils of Agony countered under its storm trigger is still copied")
+            .battlefield(P0, &[SWAMP, SWAMP, SWAMP, SWAMP, Card::Plains])
+            .hand(P0, &[SCIMITAR, TENDRILS])
+            .battlefield(P1, &[Card::Island, Card::Island])
+            .hand(P1, &[Card::Counterspell])
+            .actions(&[
+                ME.casts(SCIMITAR),
+                Resolve,
+                ME.casts(TENDRILS),
+                ME.targets_player(THEM),
+                stack(2),
+                THEM.casts(Card::Counterspell),
+                ME.has(Zone::Graveyard, TENDRILS, 1),
+                stack(1),
+                ME.targets_player(THEM),
+                Resolve,
+                THEM.life(18),
+                ME.life(22),
+            ]),
     ];
 }

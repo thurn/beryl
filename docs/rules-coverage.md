@@ -700,10 +700,13 @@ Built by by-bajq.3.10:
   resolution question for each target, with the target it has listed first
   (`choices::retarget`), before the copy goes on the stack. Storm's count is the
   amount of the "when you cast" trigger (`Amount::SpellsCastBefore`), the spells
-  cast this turn by every player less the spell itself, read as it triggers. Not
-  built: copying a spell that has left the stack, from its last known
-  information, as storm does when the spell is countered before its trigger
-  resolves.
+  cast this turn by every player less the spell itself, read as it triggers. A
+  spell countered or otherwise taken off the stack while an ability of its own
+  that copies it waits or is on the stack (CR 113.7a, 608.2h) is kept as it last
+  was there, its stack entry and copiable values, in a table of the state beside
+  last-known information (`last_known::DepartedSpell`, two rows in `Small`).
+  Only a game whose cards have such an ability keeps one
+  (`Capability::CopiesItself`), and the ability copies from it.
 
 ### 6. Costs, prohibitions and mana
 

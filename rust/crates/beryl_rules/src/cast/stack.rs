@@ -36,16 +36,20 @@ pub(crate) fn offer_options<L: Layout>(
 
 /// Takes a spell off the stack for an effect that moves its card to `to` without its
 /// resolving: where the card goes ([`crate::replace::exiled_instead`]), or nothing if the
-/// spell is not on the stack.
+/// spell is not on the stack. [`Full`] if what an ability that copies the spell needs of it
+/// finds no room ([`State::take_off_stack`]).
 pub(crate) fn unstack<L: Layout>(
     s: &mut State<L>,
+    t: &GameTable,
     sink: &mut Sink<L>,
     spell: ObjectRef<L>,
     to: Zone,
-) -> Option<Zone> {
-    s.take_off_stack(sink, spell)?;
+) -> Result<Option<Zone>, Full> {
+    if s.take_off_stack(t, sink, spell)?.is_none() {
+        return Ok(None);
+    }
     let exiled = crate::replace::exiled_instead(s, spell, to);
-    Some(if exiled { Zone::Exile } else { to })
+    Ok(Some(if exiled { Zone::Exile } else { to }))
 }
 
 /// Moves the card of a spell whose entry is off the stack, and which did not become a

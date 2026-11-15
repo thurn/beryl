@@ -11,9 +11,9 @@ use crate::mana_memory::RememberedMana;
 mod events;
 
 use crate::state::{
-    AbilityRef, CastStep, Casting, Derived, GrantRef, LastKnown, Object, ObjectRef, PayingObjects,
-    Pending, PendingTrigger, Player, Resolving, SLOTS, StackEntry, StackItem, State, Target,
-    TriggerInfo, Zones,
+    AbilityRef, CastStep, Casting, DepartedSpell, Derived, GrantRef, LastKnown, Object, ObjectRef,
+    PayingObjects, Pending, PendingTrigger, Player, Resolving, SLOTS, StackEntry, StackItem, State,
+    Target, TriggerInfo, Zones,
 };
 
 /// A value of one layout's types, as another layout's.
@@ -137,6 +137,17 @@ impl<L: Layout> Relayout for TriggerInfo<L> {
             object: self.object.map(|r| r.relayout()),
             player: self.player,
             amount: self.amount,
+        }
+    }
+}
+
+impl<L: Layout> Relayout for DepartedSpell<L> {
+    type In<M: Layout> = DepartedSpell<M>;
+
+    fn relayout<M: Layout>(&self) -> DepartedSpell<M> {
+        DepartedSpell {
+            entry: self.entry.relayout(),
+            copiable: self.copiable.relayout(),
         }
     }
 }
@@ -522,6 +533,7 @@ impl<L: Layout> Relayout for State<L> {
             triggers,
             delayed,
             last_known,
+            departed_spells,
             effects,
             keyed,
             memos,
@@ -559,6 +571,7 @@ impl<L: Layout> Relayout for State<L> {
             triggers: queue(triggers.as_slice(), PendingTrigger::relayout),
             delayed: queue(delayed.as_slice(), PendingTrigger::relayout),
             last_known: queue(last_known.as_slice(), LastKnown::relayout),
+            departed_spells: queue(departed_spells.as_slice(), DepartedSpell::relayout),
             effects: effects.relayout(),
             keyed: bits(*keyed),
             memos: memos.relayout(),

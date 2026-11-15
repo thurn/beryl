@@ -99,5 +99,26 @@ pub mod scenarios {
                 THEM.has_cards(Zone::Library, 7),
                 ME.has(Zone::Graveyard, FREEZE, 1),
             ]),
+        // The storm trigger exists apart from the spell (CR 113.7a): with Brain Freeze
+        // countered under it, the trigger still copies the spell as it last was on the stack.
+        Scenario::new("Brain Freeze countered under its storm trigger is still copied")
+            .battlefield(P0, &[ISLAND, ISLAND, Card::Plains])
+            .hand(P0, &[SCIMITAR, FREEZE])
+            .battlefield(P1, &[ISLAND, ISLAND])
+            .hand(P1, &[Card::Counterspell])
+            .library(P1, &[Card::Plains; 10])
+            .actions(&[
+                ME.casts(SCIMITAR),
+                Resolve,
+                ME.casts(FREEZE),
+                ME.targets_player(THEM),
+                stack(2),
+                THEM.casts(Card::Counterspell),
+                ME.has(Zone::Graveyard, FREEZE, 1),
+                stack(1),
+                ME.targets_player(THEM),
+                Resolve,
+                THEM.has_cards(Zone::Library, 7),
+            ]),
     ];
 }

@@ -73,6 +73,10 @@ impl<L: Layout> State<L> {
         }) {
             return Some(format!("a delayed trigger of {}", t.def(d.of.card).name));
         }
+        if let Some(row) = self.departed_spells.as_slice().first() {
+            let name = t.def(row.entry.card()).name;
+            return Some(format!("{name} kept as it left the stack"));
+        }
         if let Some(row) = self.last_known.as_slice().first() {
             let name = t.def(row.copiable.record(t).0).name;
             return Some(format!("the last-known information of {name}"));

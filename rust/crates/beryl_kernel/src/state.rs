@@ -11,7 +11,7 @@ pub use crate::effects::{
     Effects, EffectsOn, LayerChange, LockedIn, MoveReplacement, Payload, Permanents, Permission,
     Permitted, SETS, Shield, ShieldAt, Subject, read_layer,
 };
-pub use crate::last_known::{LAST_KNOWN, LastKnown};
+pub use crate::last_known::{DEPARTED_SPELLS, DepartedSpell, LAST_KNOWN, LastKnown};
 pub use crate::memos::{MEMOS, Memo, Memos, MemosOf};
 pub use crate::object::{
     AbilityMask, AttackTarget, CombatRole, Derived, Flag, GrantRef, Object, ObjectFlags, ObjectRef,
@@ -196,6 +196,11 @@ pub struct State<L: Layout = Small> {
     /// that look back read ([`crate::last_known`]): [`State::record_last_known`] writes it
     /// and [`State::forget_last_known`] empties it.
     pub(crate) last_known: L::Queue<LastKnown<L>, LAST_KNOWN>,
+    /// What spells that left the stack without resolving were there, for abilities of their
+    /// own that copy them ([`crate::last_known::DepartedSpell`]): written as a spell leaves
+    /// ([`State::take_off_stack`]) and emptied with the last-known information. Empty in a
+    /// game whose cards copy no spell of their own.
+    pub(crate) departed_spells: L::Queue<DepartedSpell<L>, DEPARTED_SPELLS>,
     /// The Effects store ([`crate::effects`]): [`State::start_effect`] and
     /// [`State::expire`] write it.
     pub(crate) effects: Effects<L>,
@@ -249,6 +254,7 @@ impl<L: Layout> std::hash::Hash for State<L> {
             triggers,
             delayed,
             last_known,
+            departed_spells,
             effects,
             memos,
             trackers,
@@ -273,6 +279,11 @@ impl<L: Layout> std::hash::Hash for State<L> {
         triggers.hash(h);
         delayed.hash(h);
         last_known.hash(h);
+        // Empty in a game whose cards copy no spell of their own, which hashes as it did
+        // before the table.
+        if !departed_spells.is_empty() {
+            departed_spells.hash(h);
+        }
         effects.hash(h);
         memos.hash(h);
         trackers.hash(h);

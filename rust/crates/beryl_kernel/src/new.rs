@@ -136,6 +136,7 @@ impl<L: Layout> State<L> {
             triggers: Default::default(),
             delayed: Default::default(),
             last_known: Default::default(),
+            departed_spells: Default::default(),
             effects: Effects::empty(),
             keyed: Bitboard::EMPTY,
             memos: Memos::empty(),

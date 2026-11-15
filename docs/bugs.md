@@ -6,6 +6,19 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Storm copied nothing once its spell was countered.** With Brain Freeze or
+  Tendrils of Agony on the stack, countering the spell in response to its storm
+  trigger left the trigger with nothing to copy, though the rules copy it from
+  its last known information (CR 113.7a, 608.2h). `actions::copy::instruction`
+  copied only spells still on the stack, because the stack entry holds the
+  targets, X and costs paid a copy takes, and `State::take_off_stack` dropped
+  the entry. Fixed: `take_off_stack` keeps the entry and copiable values of a
+  spell that an ability of its own still names (`State::departed_spell`), in
+  games whose cards copy their own spells, and the copy reads it. Prevention: an
+  effect that reads its source names, in its vocabulary entry, what it does when
+  the source has left its zone, and each such entry gets a scenario that removes
+  the source first.
+
 - **A delve spell that needed restricted mana could not be cast.** With a Cavern
   of Souls that chose Zombie as the only land and six cards in the graveyard,
   Gurmag Angler was not offered: the six cards pay {6} and only the Cavern's

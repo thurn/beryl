@@ -177,6 +177,19 @@ impl<L: Layout> State<L> {
         for row in self.last_known.iter() {
             row.copiable.fits::<M>()?;
         }
+        room(
+            "the spells kept as they left the stack",
+            self.departed_spells.len(),
+            capacity(|s: &State<M>| &s.departed_spells),
+        )?;
+        for row in self.departed_spells.iter() {
+            row.copiable.fits::<M>()?;
+            room(
+                "a kept spell's targets",
+                row.entry.targets.len(),
+                capacity(|e: &StackEntry<M>| &e.targets),
+            )?;
+        }
         self.stores_fit::<M>()?;
         for player in self.players.iter() {
             room(

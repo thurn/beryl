@@ -46,7 +46,9 @@ pub(crate) fn unstack<L: Layout>(
     // order, so the order these come off in is nothing.
     for slot in game.state.in_candidate_order(spells) {
         let spell = game.state.object_ref(slot);
-        let taken = game.state.take_off_stack(game.sink, spell).is_some();
+        let taken = (game.state)
+            .take_off_stack(game.table, game.sink, spell)?
+            .is_some();
         if taken && crate::replace::exiled_instead(game.state, spell, to) {
             flashback.insert(slot);
         }
