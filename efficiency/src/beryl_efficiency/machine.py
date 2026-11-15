@@ -15,7 +15,7 @@ from collections import defaultdict
 from dataclasses import asdict, dataclass
 
 from . import cpu
-from .facts import Facts, spread, total
+from .facts import Bead, Facts, spread, total
 from .metrics import Metric, Points, register
 from .render import Result, describe, table
 from .rollups import Part, bar, day_of, number, split_lines
@@ -183,10 +183,19 @@ def shared_cpu(
     return claimed, dict(shared)
 
 
-def capacity(facts: Facts, scope: Scope, cores: int | None) -> Capacity:
+def machine_cores(db: sqlite3.Connection) -> int | None:
+    """The most cores the sampler has seen the machine have."""
+    found = db.execute("SELECT max(cores) FROM cpu_minutes").fetchone()[0]
+    return int(found) if found else None
+
+
+def capacity(
+    facts: Facts, scope: Scope, cores: int | None, beads: list[Bead] | None = None
+) -> Capacity:
+    """The capacity estimate over `beads`, by default the beads closed in the range."""
     windows = facts.bead_windows(scope)
     per_session: list[float] = []
-    for b in facts.closed(scope):
+    for b in facts.closed(scope) if beads is None else beads:
         core = facts.core_minutes(b.id)
         agent = total(windows.get(b.id, [])).agent_seconds / 60
         if core is not None and agent > 0:
@@ -272,6 +281,7 @@ def report(db: sqlite3.Connection, facts: Facts, scope: Scope) -> Result:
         asdict(result),
         lines(result),
         [
+            "efficiency metrics machine.cores-in-use " + flags,
             "efficiency metrics machine.saturation " + flags,
             "efficiency metrics machine.queued-core-hours-per-day " + flags,
             "efficiency sql 'select * from leases order by time desc limit 20'",
@@ -399,6 +409,22 @@ def saturation(db: sqlite3.Connection, _: Facts, scope: Scope) -> Points:
     ]
 
 
+def cores_in_use(db: sqlite3.Connection, _: Facts, scope: Scope) -> Points:
+    """Each day's mean cores in use: the sampled CPU seconds, each minute's at most all of
+    the machine's cores, over the sampled seconds."""
+    used = daily(
+        db,
+        scope,
+        "SELECT time, min(cpu_seconds, cores * seconds) FROM cpu_minutes WHERE 1",
+    )
+    seconds = daily(db, scope, "SELECT time, seconds FROM cpu_minutes WHERE 1")
+    return [
+        (first, value / seconds[day][1])
+        for day, (first, value) in used.items()
+        if seconds[day][1] > 0
+    ]
+
+
 def queued_per_day(db: sqlite3.Connection, _: Facts, scope: Scope) -> Points:
     found = daily(
         db,
@@ -415,6 +441,15 @@ register(
         "minutes",
         1,
         bead_core_minutes,
+    )
+)
+register(
+    Metric(
+        "machine.cores-in-use",
+        "mean cores in use each day, from the CPU sampler's minutes",
+        "cores",
+        1,
+        cores_in_use,
     )
 )
 register(

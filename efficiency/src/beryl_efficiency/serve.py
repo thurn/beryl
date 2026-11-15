@@ -22,11 +22,11 @@ import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
 
-from . import cli, page, paths
+from . import ci_views, cli, page, paths, views  # noqa: F401, they add pages to page
 from .beads import main_checkout
 
 HOST = "127.0.0.1"
@@ -46,6 +46,7 @@ FLAGS: frozenset[str] = frozenset(
         "script",
         "lane",
         "family",
+        "rule",
     }
 )
 # The queries an address may name: every query that only reads the store.
@@ -120,7 +121,7 @@ def respond(path: str, query: str, no_ingest: bool) -> Answer:
         raise Refused(HTTPStatus.NOT_FOUND, f"no page for {result.query}; try .json")
     command = command_of(argv)
     shown = page.section(
-        result.query, result.data, result.fields, command if section else None
+        result.query, found, result.fields, command if section else None
     )
     if not section:
         since = getattr(args, "since", None)
@@ -186,13 +187,16 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def server(port: int, no_ingest: bool = False) -> HTTPServer:
-    """A server on 127.0.0.1 at `port` (0 for any free port)."""
+    """A server on 127.0.0.1 at `port` (0 for any free port). It answers each connection on
+    its own thread: a browser opens connections it sends nothing on until it needs them, and
+    a server that answered one connection at a time would wait on such a connection while the
+    page's own requests, such as its trends, waited behind it."""
 
     class Bound(Handler):
         pass
 
     Bound.no_ingest = no_ingest
-    return HTTPServer((HOST, port), Bound)
+    return ThreadingHTTPServer((HOST, port), Bound)
 
 
 def serve(argv: Sequence[str]) -> int:

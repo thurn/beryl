@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import functools
 import zlib
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from datetime import datetime
 from html import escape
 from urllib.parse import urlencode
 
@@ -139,33 +140,94 @@ def copy(command: str) -> str:
     )
 
 
-def sparkline(trend: list[Mapping[str, object]], digits: int) -> str:
-    """A small line through the medians of a figure's trend, oldest first."""
-    values = [float(str(p["median"])) for p in trend]
+def local_moment(moment: str, width: int) -> str:
+    """A UTC time as the local day ("2026-11-15", width 10) or hour ("2026-11-15 10:00",
+    width 16) that a trend's points are named by."""
+    found = datetime.fromisoformat(moment.replace("Z", "+00:00")).astimezone()
+    return found.strftime("%Y-%m-%d %H:%M")[:width]
+
+
+def mark_at(names: list[str], moment: str | None) -> float | None:
+    """Where on a trend through points named `names` a mark at `moment` goes: on its own
+    point's place, halfway between the two it falls between, or nowhere when it is outside
+    the trend."""
+    if not moment or not names:
+        return None
+    at = local_moment(moment, len(names[0]))
+    if at < names[0] or at > names[-1]:
+        return None
+    for i, name in enumerate(names):
+        if name == at:
+            return float(i)
+        if name > at:
+            return i - 0.5
+    return None
+
+
+def mark_title(m: Mapping[str, object], digits: int) -> str:
+    """A mark's label and the medians either side of it, shown on hover."""
+    return (
+        f"{text(m['label'])}: {number(m['before'], digits)} ({integer(m['before_count'])})"
+        f" to {number(m['after'], digits)} ({integer(m['after_count'])}), "
+        f"{text(m['verdict'])}"
+    )
+
+
+def sparkline(
+    trend: list[Mapping[str, object]],
+    digits: int,
+    marks: list[Mapping[str, object]] | None = None,
+    key: str = "at",
+    kind: str = "spark",
+) -> str:
+    """A small line through the medians of a figure's trend, oldest first, each point named
+    by its `key`; each efficiency change on it is a mark at its commit, with its label and
+    medians on hover."""
+    shown = [p for p in trend if p.get("median") is not None]
+    values = [float(str(p["median"])) for p in shown]
     if len(values) < 2:
-        return '<svg class="spark" aria-hidden="true"></svg>'
+        # A small line keeps its place in its figure; a wide one with nothing to draw goes.
+        return '<svg class="spark" aria-hidden="true"></svg>' if kind == "spark" else ""
     low, high = min(values), max(values)
     span = (high - low) or 1.0
     step = 100 / (len(values) - 1)
     points = " ".join(
         f"{i * step:.2f},{22 - 20 * (v - low) / span:.2f}" for i, v in enumerate(values)
     )
-    marks = "".join(
-        f'<circle cx="{i * step:.2f}" cy="{22 - 20 * (v - low) / span:.2f}" r="3">'
-        f"<title>{text(p['at'])}: {number(p['median'], digits)} "
-        f"({integer(p['count'])})</title></circle>"
-        for i, (v, p) in enumerate(zip(values, trend))
+    # A point is a line of no length with a round cap, so that it stays round however far
+    # the line is stretched.
+    dots = "".join(
+        f'<g class="dot"><title>{text(p[key])}: {number(p["median"], digits)} '
+        f'({integer(p["count"])})</title><line x1="{i * step:.2f}" x2="{i * step:.2f}" '
+        f'y1="{22 - 20 * (v - low) / span:.2f}" y2="{22 - 20 * (v - low) / span:.2f}" '
+        'vector-effect="non-scaling-stroke"></line></g>'
+        for i, (v, p) in enumerate(zip(values, shown))
     )
+    names = [str(p[key]) for p in shown]
+    lines = []
+    for m in marks or []:
+        place = mark_at(names, str(m["time"]) if m.get("time") else None)
+        if place is None:
+            continue
+        x = f"{place * step:.2f}"
+        lines.append(
+            f'<g class="mark"><title>{mark_title(m, digits)}</title>'
+            f'<line x1="{x}" x2="{x}" y1="-1" y2="25" '
+            'vector-effect="non-scaling-stroke"></line>'
+            f'<line class="hit" x1="{x}" x2="{x}" y1="-1" y2="25" '
+            'vector-effect="non-scaling-stroke"></line></g>'
+        )
     return (
-        '<svg class="spark" viewBox="-3 -1 106 26" preserveAspectRatio="none">'
-        f'<polyline points="{points}" vector-effect="non-scaling-stroke"/>{marks}</svg>'
+        f'<svg class="{kind}" viewBox="-3 -1 106 26" preserveAspectRatio="none">'
+        + "".join(lines)
+        + f'<polyline points="{points}" vector-effect="non-scaling-stroke"/>{dots}</svg>'
     )
 
 
 def bar(
     name: str,
     total: str,
-    parts: list[Mapping[str, object]],
+    parts: Sequence[Mapping[str, object]],
     digits: int,
     fields: Mapping[str, str],
     field: str,
@@ -193,22 +255,29 @@ def bar(
 
 def line_grid(
     headers: Sequence[tuple[str, str | None]],
-    lines: list[tuple[list[str], str | None]],
+    lines: Sequence[tuple[list[str], str | None]],
     fields: Mapping[str, str],
     kind: str,
+    words: frozenset[int] = frozenset(),
 ) -> str:
     """Lines in aligned columns: the first is a name, the last a title, the ones between
-    numbers. A line with an address opens the section it names in place."""
+    numbers, except the columns `words` names, which hold words. A line with an address
+    opens the section it names in place."""
+
+    def kind_of(i: int, last: int, cell: bool) -> str:
+        if 0 < i < last:
+            return "w" if i in words else "num"
+        return ("t" if i else "id") if cell else ""
+
     head = "".join(
-        f'<span class="{"num" if 0 < i < len(headers) - 1 else ""}">'
+        f'<span class="{kind_of(i, len(headers) - 1, False)}">'
         f"{heading(h, fields, f)}</span>"
         for i, (h, f) in enumerate(headers)
     )
     body: list[str] = []
     for cells, src in lines:
         shown = "".join(
-            f'<span class="{"num" if 0 < i < len(cells) - 1 else "t" if i else "id"}">'
-            f"{c}</span>"
+            f'<span class="{kind_of(i, len(cells) - 1, True)}">{c}</span>'
             for i, c in enumerate(cells)
         )
         if src:
@@ -245,7 +314,8 @@ def summary(data: Mapping[str, object], fields: Mapping[str, str]) -> str:
         figures.append(
             f'<div class="fig">{heading(name, fields, key)}'
             f'<span class="n">{number(found["median"], digits, bool(found["lower_bound"]))}'
-            f"</span>{sparkline(rows(found['trend']), digits)}</div>"
+            f"</span>{sparkline(rows(found['trend']), digits, rows(found['marks']))}"
+            "</div>"
         )
     params = scope_params(data)
     lines = []
@@ -488,19 +558,34 @@ def session(data: Mapping[str, object], fields: Mapping[str, str]) -> str:
     )
 
 
-# The queries the page renders, by name.
-RENDERERS = {
+Renderer = Callable[[Mapping[str, object], Mapping[str, str]], str]
+# The queries the page renders, by name; `views` adds the other views.
+RENDERERS: dict[str, Renderer] = {
     "summary": summary,
     "epic": epic,
     "bead": bead,
     "session": session,
 }
+# The headings of the sections whose heading is not an id and title, by query.
+TITLES: dict[str, Callable[[Mapping[str, object]], str]] = {}
+# The views' own rules, added to the stylesheet.
+STYLES: list[str] = []
+# The views the page's header leads to.
+VIEWS: tuple[tuple[str, str], ...] = (
+    ("cards", "Cards"),
+    ("machine", "Machine"),
+    ("ci", "CI"),
+    ("changes", "Changes"),
+    ("findings", "Findings"),
+)
 
 
 def title_of(data: Mapping[str, object], query: str) -> str:
     """The section's heading: the id and title of what it shows."""
     if query == "summary":
         return ""
+    if query in TITLES:
+        return TITLES[query](data)
     name = data.get(query)
     found = data.get("title")
     return (
@@ -544,11 +629,19 @@ def page(path: str, since: str | None, body: str, title: str, command: str) -> s
         + f">{label}</a>"
         for value, label in RANGES
     )
+    here = path.strip("/").split("/")[0]
+    views = "".join(
+        f'<a href="{escape(address("/" + name, {"since": since}))}"'
+        + (' class="on"' if name == here else "")
+        + f">{label}</a>"
+        for name, label in VIEWS
+    )
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
-        f"<title>{escape(title)}</title><style>{STYLE}</style></head><body>"
-        f'<header><a class="home" href="/">efficiency</a>'
+        f"<title>{escape(title)}</title><style>{STYLE}{''.join(STYLES)}</style></head>"
+        f'<body><header><a class="home" href="/">efficiency</a>'
+        f'<nav class="views">{views}</nav>'
         f'<nav class="range">{choices}</nav>{copy(command)}</header>'
         f"<main>{body}</main><script>{SCRIPT}</script></body></html>"
     )
@@ -567,13 +660,14 @@ STYLE = """
 body{margin:0;background:var(--bg);color:var(--fg);
 font:14px/1.4 -apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
 font-variant-numeric:tabular-nums}
-header{display:flex;align-items:baseline;gap:16px 24px;max-width:1080px;margin:0 auto;
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 24px;max-width:1080px;margin:0 auto;
 padding:20px 16px 4px}
 a{color:inherit;text-decoration:none}
 .home{font-weight:600}
-.range{display:flex;gap:4px}
-.range a{padding:2px 8px;border-radius:6px;color:var(--dim)}
-.range a.on{background:var(--hover);color:var(--fg)}
+.range,.views{display:flex;flex-wrap:wrap;gap:4px}
+.range a,.views a{padding:2px 8px;border-radius:6px;color:var(--dim)}
+.range a.on,.views a.on{background:var(--hover);color:var(--fg)}
+.views a:hover,.range a:hover{color:var(--fg)}
 main{max-width:1080px;margin:0 auto;padding:8px 16px 48px}
 section{min-width:0}
 .top{display:flex;align-items:baseline;gap:12px;min-height:8px}
@@ -588,9 +682,13 @@ border:1px solid var(--line);border-radius:6px;padding:1px 8px;cursor:pointer}
 .figs{display:flex;flex-wrap:wrap;gap:12px 32px;margin:12px 0 20px}
 .fig{display:flex;flex-direction:column;min-width:96px}
 .spark{width:96px;height:24px;overflow:visible}
-.spark polyline{fill:none;stroke:var(--model);stroke-width:1.5}
-.spark circle{fill:transparent}
-.spark circle:hover{fill:var(--model)}
+.spark polyline,.trend polyline{fill:none;stroke:var(--model);stroke-width:1.5}
+.dot line{stroke:transparent;stroke-width:9;stroke-linecap:round}
+.dot:hover line{stroke:var(--model)}
+.mark line{stroke:var(--dim);stroke-width:1;stroke-dasharray:2 2}
+.mark line.hit{stroke:transparent;stroke-width:9;stroke-dasharray:none}
+.mark:hover line{stroke:var(--fg)}
+.mark:hover line.hit{stroke:transparent}
 .bar-row,.strip-row{display:grid;grid-template-columns:72px 88px minmax(0,1fr);
 align-items:center;gap:8px;margin:6px 0}
 .bar-row .n,.strip-row .n{font-size:14px;text-align:right}
@@ -639,18 +737,21 @@ td,th{padding-left:4px;padding-right:4px}
 .rows td:nth-child(2){white-space:normal;overflow-wrap:anywhere}}
 """
 
-# Opens a section's content the first time its line opens, copies a section's command, and
-# hides a bar part's label where it does not fit.
+# Opens a section's content the first time its line opens (a line open from the start, such
+# as a trend, at once), copies a section's command, and hides a bar part's label where it
+# does not fit.
 SCRIPT = """
 function fit(root){for(const i of root.querySelectorAll('.seg i')){
 i.classList.remove('hide');if(i.scrollWidth>i.parentElement.clientWidth)
 i.classList.add('hide');}}
-document.addEventListener('toggle',async e=>{const d=e.target;
-if(!d.open||!d.dataset||!d.dataset.src||d.dataset.loaded)return;d.dataset.loaded='1';
-const r=await fetch(d.dataset.src);const box=d.querySelector('.open');
-box.innerHTML=r.ok?await r.text():'-';fit(box);},true);
+async function load(d){if(!d.dataset||!d.dataset.src||d.dataset.loaded)return;
+d.dataset.loaded='1';const r=await fetch(d.dataset.src);const box=d.querySelector('.open');
+box.innerHTML=r.ok?await r.text():'-';fit(box);opened(box);}
+function opened(root){for(const d of root.querySelectorAll('details[open][data-src]'))
+load(d);}
+document.addEventListener('toggle',e=>{if(e.target.open)load(e.target);},true);
 document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('.copy');
 if(!b)return;navigator.clipboard.writeText(b.dataset.command);b.textContent='copied';
 setTimeout(()=>{b.textContent='copy'},1200);});
-addEventListener('resize',()=>fit(document));fit(document);
+addEventListener('resize',()=>fit(document));fit(document);opened(document);
 """

@@ -9,6 +9,7 @@ import argparse
 import json
 import sqlite3
 import sys
+from collections import defaultdict
 from datetime import datetime
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -38,6 +39,7 @@ from . import (
     store,
 )
 from .beads import Beads, main_checkout
+from .metrics import Mark
 from .render import Result, table, text
 from .scope import Scope, add_arguments, from_arguments, parse_since
 
@@ -455,8 +457,21 @@ def answer(
         db.close()
 
 
+def figure_marks(db: sqlite3.Connection, f: facts.Facts) -> dict[str, list[Mark]]:
+    """The efficiency changes on each metric that measures one of the summary's figures."""
+    wanted = set(rollups.FIGURE_METRICS.values())
+    listed = [c for c in changes.load() if changes.base(c.metric) in wanted]
+    if not listed:
+        return {}
+    added = changes.introduced(changes.file_versions(main_checkout(Path.cwd())))
+    found: dict[str, list[Mark]] = defaultdict(list)
+    for m in changes.marks(db, f, listed, added):
+        found[changes.base(m.metric)].append(m)
+    return found
+
+
 def run_summary(args: argparse.Namespace) -> Result:
-    return answer(args, lambda _, f, s: rollups.summary(f, s))
+    return answer(args, lambda db, f, s: rollups.summary(f, s, figure_marks(db, f)))
 
 
 def run_epic(args: argparse.Namespace) -> Result:
@@ -482,7 +497,7 @@ def run_dollars(args: argparse.Namespace) -> Result:
 
 
 def run_cards(args: argparse.Namespace) -> Result:
-    return answer(args, lambda _, f, s: cards.report(f, s, str(args.by)))
+    return answer(args, lambda db, f, s: cards.report(db, f, s, str(args.by)))
 
 
 def run_machine(args: argparse.Namespace) -> Result:

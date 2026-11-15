@@ -136,14 +136,22 @@ store" and "Isolation" before changing anything here.
   `page.py` renders a query's result as HTML from its JSON as it is (no figure
   is computed there), with one script that fetches a line's section the first
   time it opens. A category's colour comes from its place in the command kinds
-  table, so it is the same in every bar and strip. Only `summary`, `epic`,
-  `bead` and `session` have a page yet; the other queries answer `.json` only.
+  table, so it is the same in every bar and strip. `views.py` and `ci_views.py`
+  add the views the header leads to (`cards`, `machine`, `ci`, `changes`,
+  `findings`) and the sections they open (`metrics`, `pushes`, `failures`, one
+  finding's items) to `page.RENDERERS`, built from the same parts. A view's
+  trend lines are the metrics its result names under `more`, as lines open from
+  the start whose section the script fetches at once; a trend marks each
+  efficiency change on its metric, and the summary's figures carry the marks of
+  the metrics in `rollups.FIGURE_METRICS`. `time` and `dollars` answer `.json`
+  only. The server answers each connection on its own thread, because a browser
+  holds connections open that it sends nothing on.
 - `just efficiency shot <address> [--dark] [--width N]` renders an address to a
   PNG under `$BERYL_CACHE/efficiency/shots/` with `shot.mjs`, which uses the
   main checkout's `ui/node_modules` Playwright and takes one of the machine's
   shared browser slots. Appending `#open` opens every line with more detail, one
-  level deep. It is for looking at the page while changing it, and is in no
-  check.
+  level deep; every open line is waited for. It is for looking at the page while
+  changing it, and is in no check.
 
 ## Running and checking
 

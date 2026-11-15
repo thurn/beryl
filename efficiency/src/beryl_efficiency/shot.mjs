@@ -2,7 +2,8 @@
 // Usage: node shot.mjs <ui-folder> <url> <out.png> <width> <light|dark>
 // Playwright and the machine's shared browser slots come from the UI's own scripts, so this
 // file needs no packages of its own. It opens every line of the page that has more detail,
-// one level deep, only when the url asks with `#open`.
+// one level deep, only when the url asks with `#open`, and waits for every open line, such as
+// a trend, to show its section.
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -33,15 +34,15 @@ try {
                 d.open = true;
             }
         });
-        await page.waitForFunction(
-            () =>
-                [...document.querySelectorAll("details.shot")].every(
-                    (d) => d.querySelector(".open").childElementCount > 0,
-                ),
-            null,
-            { timeout: 120_000 },
-        );
     }
+    await page.waitForFunction(
+        () =>
+            [...document.querySelectorAll("details.shot, details[open][data-src]")].every(
+                (d) => d.querySelector(".open").childElementCount > 0,
+            ),
+        null,
+        { timeout: 120_000 },
+    );
     await page.screenshot({ path: out, fullPage: true });
     if (errors.length) {
         console.error(errors.join("\n"));

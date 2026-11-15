@@ -10,8 +10,9 @@ the lines sum to the total.
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Callable, Iterable
-from dataclasses import asdict, dataclass
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import asdict, dataclass, field
+from typing import TYPE_CHECKING
 
 from .facts import (
     NO_BEAD,
@@ -30,6 +31,9 @@ from .facts import (
 from .render import Result, describe, mark, table, wrap
 from .scope import Scope, now, parse_time
 from .timing import AGENT_CATEGORIES
+
+if TYPE_CHECKING:  # `metrics` imports this module.
+    from .metrics import Mark
 
 # How many parts a split's bar shows before the rest are added up as one.
 BAR_PARTS = 8
@@ -88,7 +92,9 @@ class Point:
 class Figure:
     """A per-bead figure over the closed beads: its median and 90th percentile, the median
     over the range of the same length before, and its median by hour (in a range of two days
-    or less) or by day. All are null where nothing measures the figure yet."""
+    or less) or by day. All are null where nothing measures the figure yet. `marks` are the
+    efficiency changes made to the metric that measures the same figure (`FIGURE_METRICS`).
+    """
 
     median: float | None
     p90: float | None
@@ -96,6 +102,7 @@ class Figure:
     before: float | None
     lower_bound: bool
     trend: list[Point]
+    marks: list[Mark] = field(default_factory=list)
 
 
 def line(
@@ -268,7 +275,21 @@ class Summary:
     unpriced: list[str]
 
 
-def summary(facts: Facts, scope: Scope) -> Result:
+# The metric that measures each of the summary's per-bead figures, whose efficiency changes
+# the figure's trend line marks.
+FIGURE_METRICS: dict[str, str] = {
+    "agent_minutes": "bead.agent-minutes",
+    "core_minutes": "bead.core-minutes",
+    "dollars": "bead.dollars",
+    "rework": "bead.rework-share",
+}
+
+
+def summary(
+    facts: Facts, scope: Scope, marks: Mapping[str, list[Mark]] | None = None
+) -> Result:
+    """The summary; `marks` are the efficiency changes on each metric of
+    `FIGURE_METRICS`, by metric."""
     windows = facts.chosen(scope)
     closed = facts.closed(scope)
     agent, dollars, lower, missing = bead_figures(facts, scope, closed)
@@ -344,6 +365,14 @@ def summary(facts: Facts, scope: Scope) -> Result:
         epics + tail,
         sorted(whole.unpriced),
     )
+    figures = {
+        "agent_minutes": result.agent_minutes,
+        "core_minutes": result.core_minutes,
+        "dollars": result.dollars,
+        "rework": result.rework,
+    }
+    for key, metric in FIGURE_METRICS.items():
+        figures[key].marks = list((marks or {}).get(metric, []))
     top = next((l.name for l in epics), None)
     flags = scope.flags()
     return Result(

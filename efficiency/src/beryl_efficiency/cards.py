@@ -12,6 +12,7 @@ from collections import defaultdict
 from dataclasses import asdict, dataclass
 
 from .facts import NO_EPIC, Bead, Facts, total
+from .machine import Capacity, capacity, machine_cores
 from .metrics import Metric, Points, register
 from .render import Result, describe, mark, table
 from .scope import Scope
@@ -44,6 +45,7 @@ class Cards:
     filters: str
     groups: list[CardGroup]
     total: CardGroup
+    capacity: Capacity
 
 
 class Tally:
@@ -88,12 +90,13 @@ def card_beads(facts: Facts, scope: Scope) -> list[tuple[Bead, list[str]]]:
     return [(b, cards) for b, cards in found if cards]
 
 
-def report(facts: Facts, scope: Scope, by: str) -> Result:
+def report(db: sqlite3.Connection, facts: Facts, scope: Scope, by: str) -> Result:
     windows = facts.bead_windows(scope)
+    added = card_beads(facts, scope)
     rework = facts.rework()
     tallies: dict[str, Tally] = defaultdict(Tally)
     whole = Tally()
-    for b, cards in card_beads(facts, scope):
+    for b, cards in added:
         fixed = sum(1 for c in cards if c in rework.fixed_later)
         mine = windows.get(b.id, [])
         spent = total(mine)
@@ -119,6 +122,7 @@ def report(facts: Facts, scope: Scope, by: str) -> Result:
         scope.describe(),
         groups,
         whole.group("total"),
+        capacity(facts, scope, machine_cores(db), [b for b, _ in added]),
     )
     flags = scope.flags()
     return Result(
@@ -129,7 +133,15 @@ def report(facts: Facts, scope: Scope, by: str) -> Result:
             f"efficiency metrics card.dollars {flags}".rstrip(),
             f"efficiency metrics bead.rework-share {flags}".rstrip(),
         ],
-        describe("since", "cards", "rework", "fixed_later", "per_card", "lower_bound"),
+        describe(
+            "since",
+            "cards",
+            "rework",
+            "fixed_later",
+            "per_card",
+            "lower_bound",
+            "capacity",
+        ),
     )
 
 
@@ -138,6 +150,7 @@ def number(value: float | None, digits: int, lower: bool = False) -> str:
 
 
 def lines(c: Cards) -> list[str]:
+    k = c.capacity
     head = f"cards by {c.by}  since {c.since or 'the start'} ({c.range})"
     rows = [
         [
@@ -169,6 +182,10 @@ def lines(c: Cards) -> list[str]:
             ],
             rows,
         ),
+        "",
+        f"capacity  cores per session {number(k.mean_cores, 1)} mean, "
+        f"{number(k.p90_cores, 1)} p90 over {k.beads} beads; parallel capacity "
+        f"{number(k.sessions, 0)} sessions",
     ]
 
 

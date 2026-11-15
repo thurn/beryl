@@ -13,7 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from beryl_efficiency import cli, serve
+from beryl_efficiency import changes, cli, paths, serve, store
+from beryl_efficiency.changes import Change
 from tests.test_queries import NUMBER, numbers_in, root  # noqa: F401, the fixture
 
 # Elements that have no end tag.
@@ -58,6 +59,44 @@ def checked(html: str) -> str:
     return " ".join(parser.shown)
 
 
+# Efficiency changes on the per-bead dollars and on requests' context, made between the
+# fixture's old bead and its recent ones, so that both trends over all time carry a mark.
+LABEL = "Sessions read smaller logs"
+CONTEXT_LABEL = "Requests carry less context"
+SHA = "c" * 40
+COMMITTED = "2026-11-10T12:00:00Z"
+
+
+@pytest.fixture(autouse=True)
+def changes_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The changes file is this test's, not the project's, whose labels carry digits."""
+    listed = [
+        Change(LABEL, "bead.dollars", "down", SHA),
+        Change(CONTEXT_LABEL, "request.context-tokens", "down", SHA),
+        Change(
+            "Fewer agent minutes for sonnet",
+            "bead.agent-minutes[tier=sonnet]",
+            "down",
+            None,
+        ),
+    ]
+    monkeypatch.setattr(changes, "load", lambda path=None: listed)
+    monkeypatch.setattr(changes, "file_versions", lambda checkout, ref="staging": [])
+
+
+@pytest.fixture
+def marked(root: Path) -> Path:
+    """The fixture's store with the change's commit on staging."""
+    db = store.open_store(paths.store())
+    db.execute(
+        "INSERT INTO commits (sha, time, subject) VALUES (?, ?, 'perf: smaller logs')",
+        (SHA, COMMITTED),
+    )
+    db.commit()
+    db.close()
+    return root
+
+
 def get(path: str) -> serve.Answer:
     path, _, query = path.partition("?")
     return serve.respond(path, query, no_ingest=True)
@@ -75,6 +114,32 @@ ADDRESSES: list[str] = [
     "/bead/by-far",
     "/session/t1",
     "/session/t1?bead=by-e.2",
+    "/cards",
+    "/cards?since=all&by=role",
+    "/machine",
+    "/ci",
+    "/ci?script=check&since=all",
+    "/ci?lane=rust",
+    "/pushes",
+    "/failures",
+    "/changes",
+    "/findings?since=all",
+    "/findings?rule=waiting-on-person&since=all",
+    "/metrics",
+    "/metrics/bead.dollars?since=all",
+    "/metrics/request.context-tokens?since=all",
+]
+# The five views the page's header leads to, and the sections they open.
+VIEWS: list[str] = [
+    "/cards",
+    "/machine",
+    "/ci",
+    "/changes",
+    "/findings",
+    "/pushes",
+    "/failures",
+    "/metrics",
+    "/metrics/bead.dollars",
 ]
 
 
@@ -83,7 +148,9 @@ def with_section(path: str) -> str:
 
 
 @pytest.mark.parametrize("path", ADDRESSES)
-def test_every_number_on_a_page_is_a_number_of_its_json(root: Path, path: str) -> None:
+def test_every_number_on_a_page_is_a_number_of_its_json(
+    marked: Path, path: str
+) -> None:
     as_json = path.replace("?", ".json?", 1) if "?" in path else path + ".json"
     found = json.loads(get(as_json).body)
     have = numbers_in(found)
@@ -141,7 +208,8 @@ def test_the_trends_are_medians_by_day_or_hour(root: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "path", ["/", "/?since=all", "/epic/by-none", "/bead/by-none", "/?section=1"]
+    "path",
+    ["/", "/?since=all", "/epic/by-none", "/bead/by-none", "/?section=1", *VIEWS],
 )
 def test_the_empty_store_renders_every_page(path: str) -> None:
     answer = get(path)
@@ -158,6 +226,7 @@ def test_bad_addresses_are_refused(root: Path) -> None:
         ("/?since=never", 400),
         ("/?drop=1", 400),
         ("/time", 404),  # No page for it yet; its JSON is served.
+        ("/findings?rule=none", 400),
     ):
         with pytest.raises(serve.Refused) as e:
             get(path)
@@ -198,3 +267,45 @@ def test_the_server_answers_get_only_on_the_loopback(
     # A page on another site reaching this port through its own name is refused.
     assert fetch(running, "GET", "/", host="attacker.example:80")[0] == 403
     assert fetch(running, "GET", "/nothing")[0] == 404
+
+
+def test_a_trend_with_a_change_on_it_carries_the_changes_mark(marked: Path) -> None:
+    """The summary's dollars trend and the context metric's trend mark their changes with
+    the label and medians; a trend with no change on it has no mark."""
+    found = json.loads(get("/.json?since=all").body)
+    marks = found["dollars"]["marks"]
+    assert [m["label"] for m in marks] == [LABEL] and marks[0]["time"] == COMMITTED
+    assert found["agent_minutes"]["marks"][0]["time"] is None  # Not on staging yet.
+    for address, label in (
+        ("/?since=all", LABEL),
+        ("/metrics/request.context-tokens?since=all&section=1", CONTEXT_LABEL),
+    ):
+        shown = get(address).body.decode()
+        assert shown.count('class="mark"') == 1, address
+        assert f"<title>{label}: " in shown, address
+    assert (
+        'class="mark"' not in get("/metrics/bead.agent-minutes?since=all").body.decode()
+    )
+
+
+def test_every_view_leads_to_the_sections_it_opens(marked: Path) -> None:
+    """The header leads to the five views; a view's metrics are trends open from the start,
+    a change opens its metric's trend, a finding its items, and a check lane its families.
+    """
+    home = get("/").body.decode()
+    for name in ("cards", "machine", "ci", "changes", "findings"):
+        assert f'href="/{name}?since=7d"' in home or f'href="/{name}"' in home, name
+    cards = get("/cards").body.decode()
+    assert (
+        '<details class="line" open data-src="/metrics/card.dollars?since=7d&amp;section=1">'
+        in cards
+    )
+    changed = get("/changes").body.decode()
+    assert 'data-src="/metrics/bead.dollars?since=all&amp;section=1"' in changed
+    assert (
+        'data-src="/metrics/bead.agent-minutes?since=all&amp;where=tier%3Asonnet'
+        in changed
+    )
+    ci = get("/ci?since=all").body.decode()
+    assert 'data-src="/pushes?since=all&amp;section=1"' in ci
+    assert 'data-src="/failures?since=all&amp;section=1"' in ci

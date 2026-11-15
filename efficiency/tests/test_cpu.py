@@ -161,6 +161,7 @@ def test_core_minutes_are_the_worktree_s_cpu_while_the_bead_was_open(
     figure = summary["core_minutes"]
     assert isinstance(figure, dict)
     trend = figure.pop("trend")
+    figure.pop("marks")  # From the project's own changes file; test_page covers them.
     assert figure == {
         "median": 3.0,
         "p90": 3.0,
