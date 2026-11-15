@@ -39,9 +39,13 @@ pub struct Resolved {
     /// Nearer the camera is smaller.
     pub depth: f32,
     pub opacity: f32,
+    /// The rectangle it is clipped to, in logical points.
     pub clip: Option<Rect>,
     pub interactive: bool,
     pub state: StateBits,
+    /// For a card, the layer of the face-texture array its face is drawn from, or `None` when
+    /// it has no face of its own yet and is drawn blank. `None` for every other role.
+    pub face: Option<u16>,
 }
 
 /// What kind of thing an element is. Closed: a new role is added here with the word the tree
@@ -60,6 +64,9 @@ pub enum Role {
     Toggle,
     List,
     MenuItem,
+    /// An arrow or line on the table. Its `corners` are not a box but the four control points
+    /// of the cubic Bezier curve it is drawn along: its start, two control points and its end.
+    Arrow,
 }
 
 impl Role {
@@ -79,7 +86,31 @@ impl Role {
             Self::Toggle => "toggle",
             Self::List => "list",
             Self::MenuItem => "menuitem",
+            Self::Arrow => "arrow",
         }
+    }
+
+    /// Every role, in declaration order.
+    pub const ALL: [Self; 13] = [
+        Self::Card,
+        Self::Ability,
+        Self::Pile,
+        Self::Player,
+        Self::Region,
+        Self::Button,
+        Self::Text,
+        Self::Icon,
+        Self::Field,
+        Self::Toggle,
+        Self::List,
+        Self::MenuItem,
+        Self::Arrow,
+    ];
+
+    /// The role whose tree word is `word`.
+    #[must_use]
+    pub fn from_word(word: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|role| role.word() == word)
     }
 }
 

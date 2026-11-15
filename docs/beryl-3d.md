@@ -352,12 +352,16 @@ pub struct Resolved {
     pub clip: Option<Rect>,
     pub interactive: bool,
     pub state: StateBits,
+    pub face: Option<u16>,     // a card's face layer; None while it has no
+                               // face of its own and is drawn blank
 }
 
 /// Closed. A new role is added here with the word the tree printout uses.
+/// An arrow's four corners are the control points of its cubic Bezier
+/// curve: its start, two control points and its end.
 pub enum Role {
     Card, Ability, Pile, Player, Region, Button, Text, Icon, Field, Toggle,
-    List, MenuItem,
+    List, MenuItem, Arrow,
 }
 
 /// One bit each, in this order from bit 0.
@@ -1625,15 +1629,24 @@ game
     card "Island" #8 battlefield.yours.lands 516,640 96x134 interactive eligible
     ... 22 more in battlefield.yours.lands (--within battlefield.yours.lands)
   layer
-    region "prompt" 520,820 560x64
-      text "Pay {1}{U}" 536,838 180x28
-      button "Auto Pay" 880,832 96x40 interactive
-      button "Cancel" 984,832 80x40 interactive
+    region "prompt" #100 520,820 560x64
+      text "Pay {1}{U}" #101 536,838 180x28
+      button "Auto Pay" #102 880,832 96x40 interactive
+      button "Cancel" #103 984,832 80x40 interactive
 ```
 
+- **Every line names its element's id**, so every line, pasted back, locates
+  exactly its own element. A card's place is its zone, then `yours` or `theirs`
+  (except on the stack), then its battlefield row. An element of the flat layer
+  has no place. A name with a quote or a backslash in it is escaped with a
+  backslash.
 - **States** are words from a closed list: `interactive`, `tapped`, `face-down`,
-  `moving(<verb> <percent>)`, `hovered`, `held`, `eligible`, `selected`,
-  `target`, `disabled`, `focused`, `covered(<percent>)` and `faded(<percent>)`.
+  `moving(<verb> <percent>)` (`moving` alone until an element carries its verb),
+  `hovered`, `held`, `eligible`, `selected`, `target`, `disabled`, `focused`,
+  `covered(<percent>)` and `faded(<percent>)`.
+- **`covered(<percent>)`** is how much of the element other elements hide, and
+  **`faded(<percent>)`** how far its opacity is below 1. Neither is printed
+  under 1%.
 - **A place holding more than 12 cards** prints its first three and a count.
   `--within <place or locator>` prints one part whole, `--role <role>` prints
   one role, and `--full` prints everything.
@@ -1648,7 +1661,7 @@ The same fault found in several seats or windows is printed once, with a count:
 
 ```text
 FAULT overlap  b3d:pay-default/you/375x647 t=850ms  (and 3 more tests)
-  button "Auto Pay" (188,598 96x44) overlaps button "Cancel" (270,598 80x44)
+  button "Auto Pay" #12 (188,598 96x44) overlaps button "Cancel" #13 (270,598 80x44)
   show: just b3d tree pay-default --seat you --layout phone --size 375x647 --at 850ms
 ```
 
@@ -1743,9 +1756,9 @@ screen, so they cover every card spec that is ever generated.
   unless one contains the other in the tree. Cards are exempt, because rows and
   hands overlap them on purpose.
 - **Reachable.** A hit test at the centre of an interactive flat-layer element
-  returns that element. Every interactive card at rest has an uncovered area of
-  at least 24 by 24 points (44 by 44 on the phone layout) where a hit test
-  returns it.
+  returns that element or one inside it. Every interactive card at rest has an
+  uncovered area of at least 24 by 24 points (44 by 44 on the phone layout)
+  where a hit test returns it.
 - **No duplicates.** No two elements share an id, a game object has exactly one
   scene object, and no two sibling elements of the flat layer share a role and a
   name.
@@ -1770,7 +1783,8 @@ screen, so they cover every card spec that is ever generated.
 - **No blank card.** Every card drawn face up, whose name the viewer knows, has
   a face layer of its own.
 - **Lines hold.** An arrow or line whose two ends are at rest does not change
-  shape.
+  shape: between two frames in which it is not moving, neither control point of
+  its curve moves 4 points or more while its two ends stay within 0.1.
 
 The last four are the web interface's stage audits (`ui/scripts/stage-audit.mjs`
 and `audit.mjs`), with the same thresholds. The thresholds are in

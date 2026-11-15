@@ -125,6 +125,8 @@ impl Table {
                     clip: None,
                     interactive: false,
                     state: StateBits(state),
+                    // Card faces are not loaded yet, so every card is drawn from layer 0.
+                    face: None,
                 },
             );
             let opacity = (object.pose.opacity.clamp(0.0, 1.0) * 255.0).round() as u8;

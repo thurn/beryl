@@ -41,6 +41,14 @@ project, and selects the main lanes.
 - `data/beryl3d/space.json`: the table's spatial values; its keys under `verbs`
   name verbs or cases of `data/ui-conventions.json` (`data-names`).
 - `data/beryl3d/gates.json`: the audit, frame, tier, material and test gates.
+  Each number under `audit` becomes an `f32` constant in `beryl_scene`'s
+  `data::audit`, named for its key in upper case:
+  - `target_points` and `phone_target_points`: the side of the square an
+    interactive card at rest must leave uncovered (the "reachable" check), on
+    the desktop and phone layouts.
+  - `line_end_points` and `line_reshape_points`: how far an arrow's end may move
+    and still be at rest, and how far a control point must move to count as a
+    change of shape (the "lines hold" check).
 
 A break caused by a change to the main workspace (a renamed `beryl_session`
 item, say) is fixed in the Beryl 3D change that meets it, not by holding the

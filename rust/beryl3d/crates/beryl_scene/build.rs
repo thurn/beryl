@@ -1,6 +1,8 @@
-//! Writes `data/beryl3d/space.json` and the `audit` object of `data/beryl3d/gates.json` to
-//! `OUT_DIR/data.rs` as string constants, which `src/data.rs` includes.
+//! Writes `data/beryl3d/space.json` as a string constant, and each number of the `audit` object
+//! of `data/beryl3d/gates.json` as an `f32` constant named for its key in upper case, to
+//! `OUT_DIR/data.rs`, which `src/data.rs` includes.
 
+use std::fmt::Write;
 use std::fs;
 use std::path::PathBuf;
 
@@ -16,11 +18,28 @@ fn main() {
         serde_json::from_str(&fs::read_to_string(&gates).unwrap()).unwrap();
     // Checked to parse, so a malformed file fails the build, not a run.
     serde_json::from_str::<serde_json::Value>(&space_text).unwrap();
-    let audit = gates_json["audit"].to_string();
-    let out = format!(
-        "/// The contents of `data/beryl3d/space.json`.\npub const SPACE: &str = {space_text:?};\n\
-         /// The `audit` object of `data/beryl3d/gates.json`.\npub const AUDIT: &str = {audit:?};\n"
+    let mut out = format!(
+        "/// The contents of `data/beryl3d/space.json`.\npub const SPACE: &str = {space_text:?};\n"
     );
+    let audit = gates_json["audit"]
+        .as_object()
+        .expect("gates.json's `audit` is an object");
+    out.push_str(
+        "/// The interface checks' thresholds: the `audit` object of `data/beryl3d/gates.json`.\n",
+    );
+    out.push_str("pub mod audit {\n");
+    for (key, value) in audit {
+        let number = value
+            .as_f64()
+            .unwrap_or_else(|| panic!("gates.json's `audit.{key}` is a number"));
+        let name = key.to_uppercase();
+        writeln!(
+            out,
+            "    /// `audit.{key}` in `data/beryl3d/gates.json`.\n    pub const {name}: f32 = {number:?}_f32;"
+        )
+        .unwrap();
+    }
+    out.push_str("}\n");
     let dest = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("data.rs");
     fs::write(dest, out).unwrap();
 }
