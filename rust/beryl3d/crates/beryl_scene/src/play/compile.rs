@@ -18,7 +18,7 @@ use super::record::{Cause, MoveKey, Plant, SegmentRecord, StepRecord};
 use crate::beat::{Laid, beat};
 use crate::motion::Track;
 use crate::pose::{Curve, Pose, Segment};
-use crate::table::{Group, Placement, Rest, SceneObject, Table, Zones};
+use crate::table::{Group, NameIds, Placement, Rest, SceneObject, Table, Zones};
 use crate::verbs::{self, Interval};
 
 /// A script laid out in time, ready to start.
@@ -70,19 +70,23 @@ impl Compiled {
 /// Lays out `after`'s script, played from `before`, the view the table shows when it starts,
 /// with one timing per step in `timings`. With `records`, it also keeps a record of each step and
 /// of the step that made each segment, for the interface checks; a running game does without,
-/// so that compiling allocates no more than playing needs. With no `before` (the first view), with a reset, or
+/// so that compiling allocates no more than playing needs. `shown` says whether `before` is the
+/// view the table shows at rest, whose resting places the table holds already. With no `before`
+/// (the first view), with a reset, or
 /// with timings that do not match the steps, nothing moves: the table takes `after` as it stands
 /// when the script ends. A reset's beats still hold the time their timings give.
-pub(crate) fn compile(
-    before: Option<&PlayerView>,
+pub(crate) fn compile<'a>(
+    before: Option<&'a PlayerView>,
     after: &PlayerView,
     timings: &[StepTiming],
-    table: &Table,
+    table: &'a Table,
     records: bool,
+    shown: bool,
 ) -> Compiled {
+    let at_rest = || Table::objects_for(after, &table.placement(after));
     let mut compiled = Compiled {
         tracks: Vec::new(),
-        finals: Table::objects_for(after, &table.placement(after)),
+        finals: Vec::new(),
         end: 0,
         unbuilt: 0,
         verbs: 0,
@@ -90,6 +94,7 @@ pub(crate) fn compile(
         segments: Vec::new(),
     };
     let Some(script) = after.script.as_ref() else {
+        compiled.finals = at_rest();
         return compiled;
     };
     compiled.verbs = script
@@ -98,11 +103,12 @@ pub(crate) fn compile(
         .flatten()
         .fold(0, |verbs, step| verbs | bit(step.act.verb()));
     if timings.len() != script.beats.iter().map(Vec::len).sum::<usize>() {
+        compiled.finals = at_rest();
         return compiled;
     }
     let mut motion = before
         .filter(|_| script.reset.is_none())
-        .map(|before| Motion::new(before, table, records));
+        .map(|before| Motion::new(before, table, records, shown));
     let mut steps = Vec::new();
     compiled.end = lay_out(
         script,
@@ -129,9 +135,13 @@ pub(crate) fn compile(
         },
     );
     compiled.steps = steps;
-    if let Some(motion) = motion {
-        compiled.tracks = motion.tracks;
-        compiled.segments = motion.segments;
+    match motion {
+        Some(motion) => {
+            compiled.finals = Table::objects_for(after, &motion.placement_of(after));
+            compiled.tracks = motion.tracks;
+            compiled.segments = motion.segments;
+        }
+        None => compiled.finals = at_rest(),
     }
     compiled
 }
@@ -203,11 +213,14 @@ struct Motion<'a> {
     members: Vec<Vec<ObjectId>>,
     /// The group each slot was last placed in, by `Group::index`, indexed by slot.
     groups: Vec<Option<usize>>,
-    /// Whether the next step places every group, not only the ones its act changed. The first
-    /// step does: `rests` then holds the view the script starts from, whose hands are listed in
-    /// that view's order, not by slot as the table played over lists them. So does the step
+    /// Whether the next step places every group, not only the ones its act changed: the step
     /// after one the table could not take, which may have changed part of it.
     whole: bool,
+    /// Whether the next step is the first, which also places the groups that lay their objects
+    /// out in the order the table lists them (`Group::in_object_order`): `rests` then holds the
+    /// view the script starts from, which lists its hands in its own order, not by slot as the
+    /// table played over does.
+    first: bool,
     /// The resting places of the groups a step placed again, until it makes them the table's
     /// own. Kept between steps, empty, so that a step need not allocate it.
     fresh: Placement,
@@ -216,6 +229,12 @@ struct Motion<'a> {
     next: Vec<Vec<ObjectId>>,
     /// The slots the step's act named.
     touched: Vec<ObjectId>,
+    /// The numbers of the names of `played`'s objects.
+    names: NameIds<'a>,
+    /// A bit set by slot that `affected` marks slots in, kept between steps.
+    marks: Vec<u64>,
+    /// The slots `affected` gives, kept between steps so that a step need not allocate them.
+    affected: Vec<usize>,
     tracks: Vec<Track>,
     /// Every segment added to `tracks`, in order, with why, if it keeps `records`.
     segments: Vec<SegmentRecord>,
@@ -223,18 +242,41 @@ struct Motion<'a> {
 }
 
 impl<'a> Motion<'a> {
-    fn new(before: &PlayerView, table: &'a Table, records: bool) -> Self {
+    fn new(before: &'a PlayerView, table: &'a Table, records: bool, shown: bool) -> Self {
+        let rests = if shown {
+            table.rests()
+        } else {
+            table.placement(before)
+        };
+        // Each object's group, read from where it rests.
+        let mut members = vec![Vec::new(); Group::ALL.len()];
+        let mut groups = vec![None; rests.rests.len()];
+        for (slot, rest) in rests.rests.iter().enumerate() {
+            if let Some(group) = rest.and_then(|rest| Group::at(rest.place)) {
+                let id = ObjectId(u16::try_from(slot).expect("a slot fits an object id"));
+                members[group.index()].push(id);
+                groups[slot] = Some(group.index());
+            }
+        }
+        // Room for a track for every object, so that growing `tracks` one slot at a time never
+        // copies the tracks it holds.
+        let tracks = Vec::with_capacity(rests.rests.len());
+        let played = Played::of(before);
         Self {
             table,
-            played: Played::of(before),
-            rests: table.placement(before),
-            members: vec![Vec::new(); Group::ALL.len()],
-            groups: Vec::new(),
-            whole: true,
+            names: NameIds::of(&before.objects),
+            played,
+            rests,
+            members,
+            groups,
+            whole: false,
+            first: true,
             fresh: Placement::default(),
             next: vec![Vec::new(); Group::ALL.len()],
             touched: Vec::new(),
-            tracks: Vec::new(),
+            marks: Vec::new(),
+            affected: Vec::new(),
+            tracks,
             segments: Vec::new(),
             records,
         }
@@ -259,6 +301,17 @@ impl<'a> Motion<'a> {
         let zones = Zones::of_table(&self.played);
         let mut dirty = [self.whole; Group::ALL.len()];
         dirty[Group::Stack.index()] = true;
+        if self.first {
+            for group in Group::ALL
+                .into_iter()
+                .filter(|group| group.in_object_order())
+            {
+                dirty[group.index()] = true;
+            }
+        }
+        for object in self.touched.iter().filter_map(|&slot| zones.get(slot)) {
+            self.names.note(object);
+        }
         for &slot in &self.touched {
             if let Some(group) = self.groups.get(usize::from(slot.0)).copied().flatten() {
                 dirty[group] = true;
@@ -269,10 +322,24 @@ impl<'a> Motion<'a> {
         }
         for (group, next) in Group::ALL.into_iter().zip(&mut self.next) {
             if dirty[group.index()] {
-                self.table.place_group(&zones, group, &mut self.fresh, next);
+                let zones = (&zones, &self.names);
+                self.table.place_group(zones, group, &mut self.fresh, next);
             }
         }
         Some(dirty)
+    }
+
+    /// Every object's resting place in `view`, the view the script leads to. The table played
+    /// over should end as that view stands, so each group that holds the same objects in both
+    /// keeps the resting places the steps left, and only the others are placed again. After a
+    /// step the table could not take, `rests` may not match the table, so every group is.
+    fn placement_of(&self, view: &PlayerView) -> Placement {
+        if self.whole {
+            return self.table.placement(view);
+        }
+        let played = Zones::of_table(&self.played);
+        self.table
+            .placement_reusing(&Zones::of_view(view), (&played, &self.rests))
     }
 
     /// Where the object in `slot` rests after the step, given the groups `dirty` it placed again.
@@ -296,34 +363,48 @@ impl<'a> Motion<'a> {
     }
 
     /// The slots whose resting place the step may have changed, given the groups `dirty` it
-    /// placed again, and the step's own object, in order.
-    fn affected(&self, dirty: &[bool], subject: Option<usize>) -> Vec<usize> {
-        let mut affected: Vec<usize> = if self.whole {
-            (0..self.rests.rests.len().max(self.fresh.rests.len())).collect()
+    /// placed again, and the step's own object, in order, in `self.affected`. They are marked in
+    /// a bit set by slot and read back in order, which costs less than sorting them.
+    fn mark_affected(&mut self, dirty: &[bool], subject: Option<usize>) {
+        let end = self.rests.rests.len().max(self.fresh.rests.len());
+        let end = end.max(subject.map_or(0, |slot| slot + 1));
+        let marks = &mut self.marks;
+        marks.clear();
+        marks.resize(end.div_ceil(64), 0);
+        let mut mark = |slot: usize| marks[slot / 64] |= 1 << (slot % 64);
+        if self.whole {
+            (0..end).for_each(&mut mark);
         } else {
-            dirty
-                .iter()
-                .enumerate()
-                .filter(|(_, dirty)| **dirty)
-                .flat_map(|(group, _)| self.members[group].iter().chain(&self.next[group]))
-                .map(|slot| usize::from(slot.0))
-                .collect()
-        };
-        affected.extend(subject);
-        affected.sort_unstable();
-        affected.dedup();
-        affected
+            let placed = dirty.iter().enumerate().filter(|(_, dirty)| **dirty);
+            for (group, _) in placed {
+                for slot in self.members[group].iter().chain(&self.next[group]) {
+                    mark(usize::from(slot.0));
+                }
+            }
+        }
+        subject.into_iter().for_each(mark);
+        let affected = &mut self.affected;
+        affected.clear();
+        for (word, &bits) in self.marks.iter().enumerate() {
+            let mut bits: u64 = bits;
+            while bits != 0 {
+                affected.push(word * 64 + bits.trailing_zeros() as usize);
+                bits &= bits - 1;
+            }
+        }
     }
 
     /// Makes the resting places the step placed again the table's own, and empties `fresh` for
     /// the next step.
     fn commit(&mut self, dirty: &[bool]) {
+        // A step that placed every group replaces every resting place; otherwise only the dirty
+        // groups' old members leave theirs.
         if self.whole {
             self.rests.rests.clear();
             self.groups.clear();
         }
         for (group, members) in self.members.iter().enumerate() {
-            if dirty[group] {
+            if dirty[group] && !self.whole {
                 for &slot in members {
                     self.rests.unset(slot);
                     self.groups[usize::from(slot.0)] = None;
@@ -348,6 +429,7 @@ impl<'a> Motion<'a> {
             std::mem::swap(&mut self.members[group], &mut self.next[group]);
         }
         self.whole = false;
+        self.first = false;
         // Checked where the interface checks keep records, so that the allocations the frame gate
         // counts in a debug build are a running game's.
         if cfg!(debug_assertions) && self.records {
@@ -375,7 +457,9 @@ impl<'a> Motion<'a> {
         };
         let (room, regroup) = room_of(timing, laid, own);
         let subject = subject_of(step);
-        for slot in self.affected(&dirty, subject) {
+        self.mark_affected(&dirty, subject);
+        let affected = std::mem::take(&mut self.affected);
+        for &slot in &affected {
             let was = self.rests.rests.get(slot).copied().flatten();
             let now = self.now(slot, &dirty);
             let segment = if Some(slot) == subject {
@@ -445,6 +529,7 @@ impl<'a> Motion<'a> {
                 self.push(slot, segment, cause);
             }
         }
+        self.affected = affected;
         self.commit(&dirty);
     }
 

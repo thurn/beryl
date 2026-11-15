@@ -163,7 +163,10 @@ impl Show {
     ) -> Compiled {
         let plants = self.plants.iter().filter(|plant| plant.script == number);
         let records = self.history.is_some() || plants.clone().next().is_some();
-        let mut compiled = compile(before, &update.view, timings, &self.table, records);
+        let shown = before
+            .zip(self.shown.as_deref())
+            .is_some_and(|(before, shown)| std::ptr::eq(before, &raw const shown.view));
+        let mut compiled = compile(before, &update.view, timings, &self.table, records, shown);
         for plant in plants {
             compiled.plant(plant);
         }

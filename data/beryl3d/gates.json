@@ -27,8 +27,8 @@
       "worst_frame_blended_area": 0.0,
       "handle_allocations": 5580,
       "frame_allocations": 0,
-      "worst_frame_instructions": 6713316,
-      "total_instructions": 56880876,
+      "worst_frame_instructions": 3437301,
+      "total_instructions": 53367887,
       "tolerance_percent": 1.0
     },
     "stress-1024": {
@@ -47,8 +47,8 @@
       "worst_frame_blended_area": 0.0,
       "handle_allocations": 18129,
       "frame_allocations": 0,
-      "worst_frame_instructions": 26838750,
-      "total_instructions": 214851096,
+      "worst_frame_instructions": 13282629,
+      "total_instructions": 200453170,
       "tolerance_percent": 1.0
     }
   },

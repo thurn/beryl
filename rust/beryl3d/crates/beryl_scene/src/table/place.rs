@@ -8,7 +8,7 @@ use beryl_protocol::protocol::{
 use beryl_protocol::script::{Piles, Table as Played};
 use glam::{Quat, Vec2, Vec3};
 
-use super::rows::{Laid, RowRules, by_name, face_up, lay_row};
+use super::rows::{Laid, NameIds, RowRules, SameName, face_up, lay_row};
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, HandData, LAYER, Layout};
 use crate::frame::Place;
 use crate::pose::Pose;
@@ -73,15 +73,44 @@ pub(crate) fn place_zones(
     scroll: &Scroll,
 ) -> Placement {
     let mut placement = Placement::default();
-    for group in Group::ALL {
-        lay(
-            group,
-            &members(zones, group),
-            layout,
-            camera,
-            scroll,
-            &mut placement,
-        );
+    for (group, objects) in Group::ALL.into_iter().zip(all_members(zones)) {
+        let rules = (layout, camera, scroll, None);
+        lay(group, &objects, rules, &mut placement);
+    }
+    placement
+}
+
+/// Every object's resting place in `zones`, as `place_zones` gives it, taking a group's resting
+/// places from `known`, the placement of `known_zones` under the same rules, wherever that group
+/// holds equal objects in the same order in both. Comparing the objects costs less than laying
+/// them out again.
+pub(crate) fn place_reusing(
+    zones: &Zones,
+    (known_zones, known): (&Zones, &Placement),
+    layout: &Layout,
+    camera: &Camera,
+    scroll: &Scroll,
+) -> Placement {
+    let mut placement = Placement {
+        rests: Vec::with_capacity(known.rests.len()),
+    };
+    let groups = Group::ALL.into_iter().zip(all_members(zones));
+    for ((group, objects), was) in groups.zip(all_members(known_zones)) {
+        let same = objects.len() == was.len() && objects.iter().zip(&was).all(|(a, b)| a == b);
+        if same {
+            for object in objects {
+                if let Some(rest) = known.get(object.slot) {
+                    placement.set(object.slot, *rest);
+                }
+            }
+        } else {
+            lay(
+                group,
+                &objects,
+                (layout, camera, scroll, None),
+                &mut placement,
+            );
+        }
     }
     placement
 }
@@ -92,16 +121,19 @@ pub(crate) fn place_zones(
 pub(crate) fn place_group(
     zones: &Zones,
     group: Group,
-    rules: (&Layout, &Camera, &Scroll),
+    rules: Rules,
     placement: &mut Placement,
     placed: &mut Vec<ObjectId>,
 ) {
-    let (layout, camera, scroll) = rules;
     let objects = members(zones, group);
     placed.clear();
     placed.extend(objects.iter().map(|object| object.slot));
-    lay(group, &objects, layout, camera, scroll, placement);
+    lay(group, &objects, rules, placement);
 }
+
+/// What placement follows besides the objects: the layout, the camera, the rows' scroll offsets
+/// and, if the caller keeps them, the numbers of the objects' names.
+pub(crate) type Rules<'r> = (&'r Layout, &'r Camera, &'r Scroll, Option<&'r NameIds<'r>>);
 
 /// A part of the table whose objects are placed together and apart from every other part: a
 /// pile, a hand, a battlefield row or the stack. Where an object rests depends only on the
@@ -190,6 +222,37 @@ impl Group {
         }
     }
 
+    /// Whether it lays its objects out in the order the table lists every object, which a view
+    /// and the table a script plays over list differently: by the view's order, and by slot.
+    /// The other groups follow lists the two keep alike (the battlefield's, a library's or
+    /// graveyard's) or, the stack, are placed again after every step.
+    pub(crate) fn in_object_order(self) -> bool {
+        matches!(
+            self,
+            Group::Hand(_)
+                | Group::Pile {
+                    zone: ZoneName::Exile,
+                    ..
+                }
+        )
+    }
+
+    /// The group of an object resting at `place`, which only that group's placement gives.
+    pub(crate) fn at(place: Place) -> Option<Group> {
+        let Place::Card { zone, side, row } = place else {
+            return None;
+        };
+        Some(match (zone, row) {
+            (ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile, _) => {
+                Group::Pile { side, zone }
+            }
+            (ZoneName::Hand, _) => Group::Hand(side),
+            (ZoneName::Battlefield, Some(row)) => Group::Row { side, row },
+            (ZoneName::Stack, _) => Group::Stack,
+            _ => return None,
+        })
+    }
+
     /// The group `object` belongs in, by its zone, if the table shows it.
     pub(crate) fn of(object: &ObjectView) -> Option<Group> {
         let side = side_of(object);
@@ -227,9 +290,10 @@ fn side_index(side: Side) -> usize {
 /// What placement reads of a table, borrowed from where it is kept: a view, or the table a
 /// script is played over.
 pub(crate) struct Zones<'a> {
-    /// Every object, in the order hands and exile piles list them.
-    objects: Vec<&'a ObjectView>,
-    /// The same objects, by slot.
+    /// A view's objects, in the order its hands and exile piles list them; none for the table a
+    /// script plays over, which lists them by slot, the order of `slots`.
+    in_view_order: Option<&'a [ObjectView]>,
+    /// Every object, by slot.
     slots: Vec<Option<&'a ObjectView>>,
     /// Permanents, in the order they entered.
     battlefield: &'a [ObjectId],
@@ -242,53 +306,48 @@ pub(crate) struct Zones<'a> {
 impl<'a> Zones<'a> {
     pub(crate) fn of_view(view: &'a PlayerView) -> Self {
         let player = |player: &'a PlayerState| [&player.library[..], &player.graveyard[..]];
-        Self::new(
-            view.objects.iter().collect(),
-            &view.battlefield,
-            view.stack.iter(),
-            [player(&view.players.you), player(&view.players.opponent)],
-        )
+        let end = view
+            .objects
+            .iter()
+            .map(|object| usize::from(object.slot.0) + 1)
+            .max()
+            .unwrap_or(0);
+        Self {
+            in_view_order: Some(&view.objects),
+            slots: by_slot(end, view.objects.iter()),
+            battlefield: &view.battlefield,
+            spells: spells(view.stack.iter()),
+            piles: [player(&view.players.you), player(&view.players.opponent)],
+        }
     }
 
     /// The zones of the table a script plays over. It keeps its objects by slot, which is the
     /// order its hands and exile piles list them in.
     pub(crate) fn of_table(table: &'a Played) -> Self {
         let piles = |piles: &'a Piles| [&piles.library[..], &piles.graveyard[..]];
-        Self::new(
-            table.objects.values().collect(),
-            &table.battlefield,
-            table.stack.iter().map(|entry| &entry.item),
-            [piles(&table.you), piles(&table.opponent)],
-        )
+        let end = table
+            .objects
+            .last_key_value()
+            .map_or(0, |(slot, _)| usize::from(slot.0) + 1);
+        Self {
+            in_view_order: None,
+            slots: by_slot(end, table.objects.values()),
+            battlefield: &table.battlefield,
+            spells: spells(table.stack.iter().map(|entry| &entry.item)),
+            piles: [piles(&table.you), piles(&table.opponent)],
+        }
     }
 
-    fn new(
-        objects: Vec<&'a ObjectView>,
-        battlefield: &'a [ObjectId],
-        stack: impl Iterator<Item = &'a StackItem>,
-        piles: [[&'a [ObjectId]; 2]; 2],
-    ) -> Self {
-        let mut slots = Vec::new();
-        for &object in &objects {
-            let index = usize::from(object.slot.0);
-            if slots.len() <= index {
-                slots.resize(index + 1, None);
-            }
-            slots[index] = Some(object);
-        }
-        let spells = stack
-            .filter_map(|item| match item {
-                StackItem::Spell { slot, .. } => Some(*slot),
-                StackItem::Ability { .. } => None,
-            })
-            .collect();
-        Self {
-            objects,
-            slots,
-            battlefield,
-            spells,
-            piles,
-        }
+    /// Every object, in the order the table lists them.
+    fn objects(&self) -> impl Iterator<Item = &'a ObjectView> + '_ {
+        let (in_view, by_slot) = match self.in_view_order {
+            Some(objects) => (Some(objects.iter()), None),
+            None => (None, Some(self.slots.iter().filter_map(|object| *object))),
+        };
+        in_view
+            .into_iter()
+            .flatten()
+            .chain(by_slot.into_iter().flatten())
     }
 
     /// The object in `slot`, if the table holds one there.
@@ -298,9 +357,7 @@ impl<'a> Zones<'a> {
 
     /// The objects in one side's `zone`, in the order the table lists them.
     fn in_zone(&self, side: Side, zone: ZoneName) -> Vec<&'a ObjectView> {
-        self.objects
-            .iter()
-            .copied()
+        self.objects()
             .filter(|object| object.zone == zone && side_of(object) == side)
             .collect()
     }
@@ -309,6 +366,28 @@ impl<'a> Zones<'a> {
     fn listed(&self, slots: &[ObjectId]) -> Vec<&'a ObjectView> {
         slots.iter().filter_map(|&slot| self.get(slot)).collect()
     }
+}
+
+/// `objects`, none of whose slots is `end` or more, by slot.
+fn by_slot<'a>(
+    end: usize,
+    objects: impl Iterator<Item = &'a ObjectView>,
+) -> Vec<Option<&'a ObjectView>> {
+    let mut slots = vec![None; end];
+    for object in objects {
+        slots[usize::from(object.slot.0)] = Some(object);
+    }
+    slots
+}
+
+/// The slots of the spells among `stack`'s items, in order.
+fn spells<'a>(stack: impl Iterator<Item = &'a StackItem>) -> Vec<ObjectId> {
+    stack
+        .filter_map(|item| match item {
+            StackItem::Spell { slot, .. } => Some(*slot),
+            StackItem::Ability { .. } => None,
+        })
+        .collect()
 }
 
 /// The objects of `group`, in the order it lays them out from.
@@ -324,25 +403,55 @@ fn members<'a>(zones: &Zones<'a>, group: Group) -> Vec<&'a ObjectView> {
         } => zones.listed(zones.piles[side_index(side)][1]),
         Group::Pile { side, zone } => zones.in_zone(side, zone),
         Group::Hand(side) => zones.in_zone(side, ZoneName::Hand),
-        Group::Row { side, row } => zones
-            .battlefield
-            .iter()
-            .filter_map(|&slot| zones.get(slot))
-            .filter(|object| side_of(object) == side && row_of(object) == row)
-            .collect(),
+        Group::Row { side, row } => {
+            let mut found = Vec::with_capacity(zones.battlefield.len());
+            found.extend(
+                zones
+                    .battlefield
+                    .iter()
+                    .filter_map(|&slot| zones.get(slot))
+                    .filter(|object| side_of(object) == side && row_of(object) == row),
+            );
+            found
+        }
         Group::Stack => zones.listed(&zones.spells),
     }
 }
 
+/// The objects of every group, by `Group::index`, each in the order `members` gives, reading each
+/// list of `zones` once rather than once for each group.
+fn all_members<'a>(zones: &Zones<'a>) -> Vec<Vec<&'a ObjectView>> {
+    let mut all: Vec<Vec<&'a ObjectView>> = Group::ALL.iter().map(|_| Vec::new()).collect();
+    for side in [Side::You, Side::Opponent] {
+        let piles = zones.piles[side_index(side)];
+        for (zone, slots) in [ZoneName::Library, ZoneName::Graveyard]
+            .into_iter()
+            .zip(piles)
+        {
+            all[Group::Pile { side, zone }.index()] = zones.listed(slots);
+        }
+    }
+    for object in zones.objects() {
+        if matches!(object.zone, ZoneName::Hand | ZoneName::Exile)
+            && let Some(group) = Group::of(object)
+        {
+            all[group.index()].push(object);
+        }
+    }
+    for object in zones.battlefield.iter().filter_map(|&slot| zones.get(slot)) {
+        let group = Group::Row {
+            side: side_of(object),
+            row: row_of(object),
+        };
+        all[group.index()].push(object);
+    }
+    all[Group::Stack.index()] = zones.listed(&zones.spells);
+    all
+}
+
 /// Places `objects`, the members of `group`, into `placement`.
-fn lay(
-    group: Group,
-    objects: &[&ObjectView],
-    layout: &Layout,
-    camera: &Camera,
-    scroll: &Scroll,
-    placement: &mut Placement,
-) {
+fn lay(group: Group, objects: &[&ObjectView], rules: Rules, placement: &mut Placement) {
+    let (layout, camera, scroll, ids) = rules;
     match group {
         Group::Pile { side, zone } => {
             let at = match zone {
@@ -361,7 +470,14 @@ fn lay(
         }
         Group::Row { side, row } => {
             let offset = scroll[side_index(side)][row_index(row)];
-            battlefield_row(placement, objects, side, row, layout, camera, offset);
+            battlefield_row(
+                placement,
+                objects,
+                (side, row),
+                (layout, camera),
+                offset,
+                ids,
+            );
         }
         Group::Stack => stack(placement, objects, layout),
     }
@@ -483,11 +599,10 @@ fn row_of(object: &ObjectView) -> RowName {
 fn battlefield_row(
     placement: &mut Placement,
     cards: &[&ObjectView],
-    side: Side,
-    row: RowName,
-    layout: &Layout,
-    camera: &Camera,
+    (side, row): (Side, RowName),
+    (layout, camera): (&Layout, &Camera),
     offset: usize,
+    ids: Option<&NameIds<'_>>,
 ) {
     let area = match row {
         RowName::Creatures => layout.creatures,
@@ -495,11 +610,12 @@ fn battlefield_row(
         RowName::Others => layout.others,
     };
     let sorted;
-    let cards = if row == RowName::Lands {
-        sorted = lands_in_order(cards);
-        &sorted[..]
+    let (cards, names) = if row == RowName::Lands {
+        let names;
+        (sorted, names) = lands_in_order(cards, ids);
+        (&sorted[..], Some(names))
     } else {
-        cards
+        (cards, None)
     };
     let y = match side {
         Side::You => area.y,
@@ -511,17 +627,16 @@ fn battlefield_row(
         strip,
         scroll: offset,
     };
-    for Laid {
-        object,
-        pose,
-        visible,
-    } in lay_row(cards, area, y, &rules)
-    {
-        let place = Place::Card {
-            zone: ZoneName::Battlefield,
-            side,
-            row: Some(row),
-        };
+    let place = Place::Card {
+        zone: ZoneName::Battlefield,
+        side,
+        row: Some(row),
+    };
+    let mut set = |Laid {
+                       object,
+                       pose,
+                       visible,
+                   }| {
         placement.set(
             object.slot,
             Rest {
@@ -530,22 +645,50 @@ fn battlefield_row(
                 visible,
             },
         );
-    }
+    };
+    lay_row(cards, (names, ids), area, y, &rules, &mut set);
 }
 
 /// A lands row's cards in the order they stand: untapped first, and each name together, in the
-/// order the names first appear in `cards`. Otherwise the order of `cards` is kept.
-fn lands_in_order<'a>(cards: &[&'a ObjectView]) -> Vec<&'a ObjectView> {
-    // The index of the first card with each card's name.
-    let mut first = vec![0; cards.len()];
-    for run in by_name(cards).chunk_by(|&a, &b| cards[a].name == cards[b].name) {
-        for &index in run {
-            first[index] = run[0];
+/// order the names first appear in `cards`. Otherwise the order of `cards` is kept. Also links
+/// each card, in that order, to the one before it with its name.
+fn lands_in_order<'a>(
+    cards: &[&'a ObjectView],
+    ids: Option<&NameIds<'_>>,
+) -> (Vec<&'a ObjectView>, SameName) {
+    let names = SameName::of(cards, ids);
+    // The index of the first card with each card's name, and the next card after each with the
+    // same name.
+    let mut first = Vec::with_capacity(cards.len());
+    let mut after: Vec<Option<usize>> = vec![None; cards.len()];
+    for index in 0..cards.len() {
+        first.push(names.first(index, &first));
+        if let Some(previous) = names.before(index) {
+            after[previous] = Some(index);
         }
     }
-    let mut order: Vec<usize> = (0..cards.len()).collect();
-    order.sort_by_key(|&index| (cards[index].tapped, first[index]));
-    order.into_iter().map(|index| cards[index]).collect()
+    // Each name's cards, untapped and then tapped, from its first card. `latest` holds where
+    // the card last put in order with each name went, by the index of that name's first card.
+    let mut order = Vec::with_capacity(cards.len());
+    let mut previous = Vec::with_capacity(cards.len());
+    let mut latest: Vec<Option<usize>> = vec![None; cards.len()];
+    for tapped in [false, true] {
+        for (index, &first) in first.iter().enumerate() {
+            if first != index {
+                continue;
+            }
+            let mut next = Some(index);
+            while let Some(card) = next {
+                if cards[card].tapped == tapped {
+                    previous.push(latest[index]);
+                    latest[index] = Some(order.len());
+                    order.push(cards[card]);
+                }
+                next = after[card];
+            }
+        }
+    }
+    (order, SameName::from_previous(previous))
 }
 
 /// The stack's spells, `spells` bottom first, raised above the table at its right: each one

@@ -4,7 +4,10 @@
 use beryl_protocol::protocol::{ObjectId, PlayerView};
 use glam::{Affine3A, Vec2, Vec3};
 
-use super::place::{Group, Placement, Scroll, Zones, place_group, place_zones};
+use super::place::{
+    Group, Placement, Rest, Scroll, Zones, place_group, place_reusing, place_zones,
+};
+use super::rows::NameIds;
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, Window, place};
 use crate::faces::{CARD_BACK, Faces};
 use crate::frame::{Band, Draw, ElementId, FrameBuilder, Place, Resolved, Role, StateBits};
@@ -99,27 +102,51 @@ impl Table {
         place(view, &self.layout, &self.camera, &self.scroll)
     }
 
+    /// Every object's resting place in the view the table shows, which it holds already: the
+    /// same as `placement` of that view, for nothing but a copy.
+    pub(crate) fn rests(&self) -> Placement {
+        Placement {
+            rests: self
+                .objects
+                .iter()
+                .map(|object| {
+                    object.map(|object| Rest {
+                        pose: object.pose,
+                        place: object.place,
+                        visible: object.visible,
+                    })
+                })
+                .collect(),
+        }
+    }
+
     /// Every object's resting place in `zones`, for this window.
     pub(crate) fn placement_of(&self, zones: &Zones) -> Placement {
         place_zones(zones, &self.layout, &self.camera, &self.scroll)
     }
 
-    /// Places the objects of `group` in `zones` into `placement` for this window, and leaves the
-    /// slots it placed in `placed`.
-    pub(crate) fn place_group(
+    /// Every object's resting place in `zones`, for this window, taking each group's from
+    /// `known`, this window's placement of `known_zones`, where that group holds the same objects
+    /// in both.
+    pub(crate) fn placement_reusing(
         &self,
         zones: &Zones,
+        known: (&Zones, &Placement),
+    ) -> Placement {
+        place_reusing(zones, known, &self.layout, &self.camera, &self.scroll)
+    }
+
+    /// Places the objects of `group` in `zones` into `placement` for this window, and leaves the
+    /// slots it placed in `placed`. `ids` numbers the names of `zones`' objects.
+    pub(crate) fn place_group(
+        &self,
+        (zones, ids): (&Zones, &NameIds<'_>),
         group: Group,
         placement: &mut Placement,
         placed: &mut Vec<ObjectId>,
     ) {
-        place_group(
-            zones,
-            group,
-            (&self.layout, &self.camera, &self.scroll),
-            placement,
-            placed,
-        );
+        let rules = (&self.layout, &self.camera, &self.scroll, Some(ids));
+        place_group(zones, group, rules, placement, placed);
     }
 
     /// Puts every object of `view` at its resting place, and forgets the objects it no longer
