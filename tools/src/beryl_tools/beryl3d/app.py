@@ -67,7 +67,8 @@ def app_arguments(parser: argparse.ArgumentParser) -> None:
         help="play this script of actions (a name in rust/beryl3d/drive), then end",
     )
     parser.add_argument(
-        "--load", help="start busy threads: <threads>[:default|utility|interactive]"
+        "--load",
+        help="start busy threads: <threads>[:utility|default|initiated|interactive]",
     )
     parser.add_argument(
         "--slow-gpu", help="hold each finished frame back this long (5ms)"
@@ -80,8 +81,8 @@ def app_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--seed", help="--agent's game's seed")
     parser.add_argument(
         "--search-class",
-        choices=("utility", "default", "interactive"),
-        help="the scheduling class of the AI's threads (utility)",
+        choices=("utility", "default", "initiated", "interactive"),
+        help="the scheduling class of the AI's threads (default)",
     )
     parser.add_argument(
         "--window",

@@ -3,10 +3,11 @@
 //! and this thread calls the function the command names and hands the result back to the host
 //! as an `Input::Reply`, which wakes the event loop.
 //!
-//! The thread puts itself in the utility scheduling class before it starts or resumes a game.
+//! The thread puts itself in the default scheduling class before it starts or resumes a game.
 //! The game's thread and the search threads are started from it and inherit that class, so the
-//! AI runs one class below drawing (decision C9) with no hook in the session or the search.
-//! `--search-class` puts it in another class, to compare the two.
+//! AI runs below drawing and the asset workers (decision C9) with no hook in the session or the
+//! search, and as fast as the web app's session, which runs in the same class.
+//! `--search-class` puts it in another class, to compare them.
 
 use std::path::PathBuf;
 use std::sync::mpsc::{Sender, channel};

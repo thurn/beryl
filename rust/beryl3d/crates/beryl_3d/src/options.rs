@@ -69,7 +69,7 @@ pub struct Options {
     /// With `agent`, the game's seed.
     pub seed: u64,
     /// The scheduling class the session thread, and through it the AI's search threads, run
-    /// in (`--search-class`): utility, one below drawing, unless a run compares another.
+    /// in (`--search-class`): default, as in the web app, unless a run compares another.
     pub search_class: Class,
 }
 
@@ -103,7 +103,7 @@ impl Options {
             agent: None,
             opponent: OPPONENT.to_owned(),
             seed: SEED,
-            search_class: Class::Utility,
+            search_class: Class::Default,
         };
         let mut rest = arguments.iter();
         while let Some(option) = rest.next() {
@@ -130,7 +130,7 @@ impl Options {
                 "--search-class" if tools => {
                     let word = value()?;
                     options.search_class = Class::from_word(&word).ok_or_else(|| {
-                        format!("--search-class {word}: a class is utility, default or interactive")
+                        format!("--search-class {word}: a class is utility, default, initiated or interactive")
                     })?;
                 }
                 "--for" => options.run_for = Some(duration(&value()?)?),
@@ -181,7 +181,7 @@ pub fn usage(tools: bool) -> String {
         );
         lines.push("  --seed <number>                                  --agent's game's seed");
         lines.push(
-            "  --search-class utility|default|interactive       the AI's threads' class (utility)",
+            "  --search-class <class>                           the AI's threads' class (default)",
         );
     }
     lines.join("\n")

@@ -19,7 +19,7 @@ pub struct Load {
     pub classes: Vec<Option<Class>>,
 }
 
-/// Reads `<threads>[:<class>]`: a number of threads and `default`, `utility` or
+/// Reads `<threads>[:<class>]`: a number of threads and `utility`, `default`, `initiated` or
 /// `interactive`, `default` when no class is given.
 ///
 /// # Errors
@@ -31,7 +31,7 @@ pub fn parse(text: &str) -> Result<(usize, Class), String> {
         .parse()
         .map_err(|_| format!("--load {text}: '{count}' is not a number of threads"))?;
     let class = Class::from_word(class).ok_or_else(|| {
-        format!("--load {text}: a class is default, utility or interactive, not '{class}'")
+        format!("--load {text}: a class is utility, default, initiated or interactive, not '{class}'")
     })?;
     Ok((count, class))
 }

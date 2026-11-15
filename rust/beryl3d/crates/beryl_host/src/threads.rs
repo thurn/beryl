@@ -4,18 +4,21 @@
 //! class and stalled frames by 50 to 230 ms on a loaded machine.
 //!
 //! On Apple platforms a class is a quality-of-service class. On Windows it is a thread
-//! priority within the process's priority class, which the same three levels map onto. On
+//! priority within the process's priority class, which the same four levels map onto. On
 //! Android and Linux, setting a class does nothing and no thread reports one.
 
-/// A scheduling class, from the lowest of the three to the highest.
+/// A scheduling class, from the lowest of the four to the highest.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Class {
-    /// Below drawing and below the asset workers: the session thread and the AI's search
-    /// threads.
+    /// Background work nobody waits for: the frame log's writer. The AI's search threads ran
+    /// here once; they moved to `Default` so that they search in the web app's class.
     Utility,
-    /// What a thread of an ordinary program gets: the asset workers, which decode, compress
-    /// and rasterize ahead of the AI but behind drawing.
+    /// What a thread of an ordinary program gets: the session thread and the AI's search
+    /// threads, as in the web app, so that the AI searches as fast as it does there.
     Default,
+    /// Above the AI and below drawing: the asset workers, which decode, compress and
+    /// rasterize card faces and glyphs ahead of the search.
+    Initiated,
     /// The highest: the frame thread, which the system runs ahead of the others when it wakes.
     Interactive,
 }
@@ -27,6 +30,7 @@ impl Class {
         match self {
             Self::Utility => "utility",
             Self::Default => "default",
+            Self::Initiated => "initiated",
             Self::Interactive => "interactive",
         }
     }
@@ -37,7 +41,12 @@ impl Class {
         Self::ALL.into_iter().find(|class| class.word() == word)
     }
 
-    const ALL: [Self; 3] = [Self::Utility, Self::Default, Self::Interactive];
+    const ALL: [Self; 4] = [
+        Self::Utility,
+        Self::Default,
+        Self::Initiated,
+        Self::Interactive,
+    ];
 }
 
 /// Puts the calling thread in `class`.
@@ -58,21 +67,23 @@ pub fn interactive_thread() {
     set_class(Class::Interactive);
 }
 
-/// Puts the calling thread in the default class, below drawing and above the AI: an asset
-/// worker's (`beryl_assets`' `Preparer` and `GlyphWorker` call it as each thread starts).
+/// Puts the calling thread in the user-initiated class, below drawing and above the AI: an
+/// asset worker's (`beryl_assets`' `Preparer` and `GlyphWorker` call it as each thread starts).
 pub fn asset_thread() {
-    set_class(Class::Default);
+    set_class(Class::Initiated);
 }
 
-/// Puts the calling thread in the utility class, below drawing: the session thread, and through
-/// it every thread the session and the search start, which inherit its class.
+/// Puts the calling thread in the utility class, below everything else Beryl runs: background
+/// work nobody waits for, such as the frame log's writer.
 pub fn utility_thread() {
     set_class(Class::Utility);
 }
 
 #[cfg(target_vendor = "apple")]
 mod platform {
-    use libc::qos_class_t::{QOS_CLASS_DEFAULT, QOS_CLASS_USER_INTERACTIVE, QOS_CLASS_UTILITY};
+    use libc::qos_class_t::{
+        QOS_CLASS_DEFAULT, QOS_CLASS_USER_INITIATED, QOS_CLASS_USER_INTERACTIVE, QOS_CLASS_UTILITY,
+    };
 
     use super::Class;
 
@@ -80,6 +91,7 @@ mod platform {
         match class {
             Class::Utility => QOS_CLASS_UTILITY,
             Class::Default => QOS_CLASS_DEFAULT,
+            Class::Initiated => QOS_CLASS_USER_INITIATED,
             Class::Interactive => QOS_CLASS_USER_INTERACTIVE,
         }
     }
@@ -116,8 +128,8 @@ mod platform {
 #[cfg(windows)]
 mod platform {
     use windows_sys::Win32::System::Threading::{
-        GetCurrentThread, GetThreadPriority, SetThreadPriority, THREAD_PRIORITY_BELOW_NORMAL,
-        THREAD_PRIORITY_HIGHEST, THREAD_PRIORITY_NORMAL,
+        GetCurrentThread, GetThreadPriority, SetThreadPriority, THREAD_PRIORITY_ABOVE_NORMAL,
+        THREAD_PRIORITY_BELOW_NORMAL, THREAD_PRIORITY_HIGHEST, THREAD_PRIORITY_NORMAL,
     };
 
     use super::Class;
@@ -126,6 +138,7 @@ mod platform {
         match class {
             Class::Utility => THREAD_PRIORITY_BELOW_NORMAL,
             Class::Default => THREAD_PRIORITY_NORMAL,
+            Class::Initiated => THREAD_PRIORITY_ABOVE_NORMAL,
             Class::Interactive => THREAD_PRIORITY_HIGHEST,
         }
     }

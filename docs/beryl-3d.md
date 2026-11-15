@@ -169,7 +169,9 @@ the client they describe, and later sections refer to them by number.
 - **C9. Search threads use every core at a lower scheduling priority than the
   thread that draws.** No core is reserved. Drawing needs about a tenth of one
   core at worst, and reserving a core would cost 30 to 50% of search throughput
-  on a phone.
+  on a phone. The search runs in the default class, the web app's, so that it
+  searches as fast as the web app does. Over 40 whole games on a loaded Mac, the
+  lower utility class neither sped up drawing nor measurably slowed the search.
 
 - **C10. The performance gate holds the worst single frame as well as the
   total**, over recorded games and over hand-built boards at the engine's
@@ -1663,14 +1665,19 @@ reason to wait on another thread.
 - **Search threads** run the AI, as today, on every core. They run at a lower
   scheduling priority than the frame thread, so the operating system preempts
   one when the frame thread wakes. No core is reserved. The app sets their
-  scheduling class itself (utility on Apple platforms, below-normal priority on
-  Windows), and the frame thread's (user-interactive, or the highest priority on
-  Windows). A thread otherwise inherits the class of the thread that made it,
-  and in the prototype a game started from the frame thread searched at
-  drawing's priority.
+  scheduling class itself, and the frame thread's (user-interactive, or the
+  highest priority on Windows). The search threads are in the default class
+  (normal priority on Windows), the class the web app's session searches in, so
+  that the AI searches as fast as it does there. The session thread puts itself
+  in that class and the search threads inherit it. A thread otherwise inherits
+  the class of the thread that made it, and in the prototype a game started from
+  the frame thread searched at drawing's priority.
 - **Asset workers**, two to four, decode, compose, compress and rasterize. Each
-  puts itself in the default class as it starts, below drawing and above the AI,
-  since a worker started from the frame thread would otherwise share its class.
+  puts itself in the user-initiated class as it starts (above-normal priority on
+  Windows), below drawing and above the AI, since a worker started from the
+  frame thread would otherwise share its class.
+- **The frame log's writer** runs in the utility class, below everything else,
+  since nothing waits for it.
 - **The audio thread** is the audio device's callback.
 
 Communication is by channels only:
@@ -1700,11 +1707,19 @@ assets: Receiver<AssetReady>,
   2% of what the current app achieves, and the app's log of late frames must
   show none while the AI thinks. While something animates, the AI loses what
   drawing uses and no more.
-- **Measured, the utility class does not meet it.** Over whole games on the
-  development Mac, the search threads in the utility class searched at a median
-  0.88 of the rate they reach in the default class, the web app's, and late
-  frames while the AI searched were no fewer ([Measurements](#measurements)).
-  by-q44s.1.60 chooses the class again.
+- **Why the default class.** The budget compares the search with the web app's,
+  and the web app's session searches in the default class. Running Beryl 3D's
+  search in the same class meets the throughput half of the budget by
+  construction, on every platform, whatever the machine's other load. The
+  utility class was measured too, over 20 pairs of whole games on the
+  development Mac: it searched faster than default in 10 of them and slower in
+  10, a median 0.99 of default's rate, and late frames while the AI searched
+  were as many with either class ([Measurements](#measurements)). At those loads
+  the run-to-run spread was far wider than 2%, so the measurement cannot show
+  the budget met or missed; the choice of class can. Utility also lets the
+  system run a thread on slower cores, which costs a phone's search most. The
+  "no late frame while the AI thinks" half is not met at those loads with either
+  class.
 
 Why no core is reserved:
 
@@ -2074,7 +2089,7 @@ just b3d smoke
   the run when the game is over. The opponent is `mcts-hidden` unless
   `--opponent` names another, and the seed is fixed unless `--seed` gives one.
   `--search-class <class>` puts the session thread and the AI's search threads
-  in another scheduling class than utility, to compare them (see
+  in another scheduling class than default, to compare them (see
   [Threads](#threads)). At the end the app prints the rollouts and engine steps
   a second of the opponent's searches, and the frame log's summary counts the
   frames drawn while the AI searched: how many, how many late, and the worst
@@ -2832,18 +2847,18 @@ run is one whole game, the WU Control mirror from seed 20261114 between the
 answering for the viewer, ended when the game is over. Every run played the same
 game: 124 searched decisions, 408,036 rollouts and 157.5 million engine steps.
 `--search-class` put the session thread and the search threads in utility, as
-Beryl 3D does, or in default, the class the web app's session runs its search
-in. `--load 16:default` added 16 busy threads. Five rounds ran each of the four
-configurations once, in a rotated order, at machine load averages of 41 to 77
-from other sessions' builds and tests. Rates are the opponent's rollouts per
-second of decision time, from its own search counters; the windowless host
-ticked at 60 Hz. Each figure is the median of five runs, with the worst beside
-it.
+Beryl 3D then did, or in default, the class the web app's session runs its
+search in and the one Beryl 3D uses now. `--load 16:default` added 16 busy
+threads. Five rounds ran each of the four configurations once, in a rotated
+order, at machine load averages of 41 to 77 from other sessions' builds and
+tests. Rates are the opponent's rollouts per second of decision time, from its
+own search counters; the windowless host ticked at 60 Hz. Each figure is the
+median of five runs, with the worst beside it.
 
 | Search class          | Busy threads | Rollouts/s      | Frames while searching | Late among them | Worst client | Worst encode | Worst gap   |
 | --------------------- | -----------: | --------------- | ---------------------: | --------------- | ------------ | ------------ | ----------- |
 | default (the web app) |            0 | 17,437 (12,180) |                    772 | 7 (12)          | 10.4 (43.5)  | 6.1 (13.9)   | 44.4 (55.2) |
-| utility (Beryl 3D)    |            0 | 13,879 (10,910) |                    800 | 6 (11)          | 12.3 (53.7)  | 9.3 (20.6)   | 46.6 (54.1) |
+| utility               |            0 | 13,879 (10,910) |                    800 | 6 (11)          | 12.3 (53.7)  | 9.3 (20.6)   | 46.6 (54.1) |
 | default               |           16 | 16,587 (13,467) |                    807 | 4 (6)           | 4.3 (77.2)   | 7.4 (19.0)   | 36.0 (82.9) |
 | utility               |           16 | 14,367 (11,028) |                    852 | 6 (10)          | 12.3 (31.0)  | 10.4 (18.1)  | 43.9 (49.2) |
 
@@ -2855,8 +2870,8 @@ while the AI searched, and the longest gap between two frames in the run.
   the 10. The machine's load moved the rates more than the class did, from
   10,910 to 27,948 rollouts a second across runs, so the pairing is what shows
   the class's cost. On a busy machine, threads in the utility class yield to
-  every default-class process, which is what the other sessions run in.
-  by-q44s.1.60 chooses another class for the search threads and measures again.
+  every default-class process, which is what the other sessions run in. The
+  second set of runs below did not repeat this.
 - **Utility bought drawing nothing measurable.** Late frames while the AI
   searched were as many with utility as with default, with and without the busy
   threads. Every run had some, so the "no late frame while the AI thinks" half
@@ -2874,6 +2889,36 @@ while the AI searched, and the longest gap between two frames in the run.
   its own table from each view and so knows no ability's number. It now places
   such a step whole; by-q44s.1.59 keeps the table across scripts so that the
   step animates.
+
+**The search threads' class, measured again** the same day with the same driver,
+after the session thread moved to the default class and the asset workers to
+user-initiated: five more rounds of the four configurations, from a release
+build with `tools`, at machine load averages of 23 to 99. Every run again played
+the same game of 124 searched decisions and 408,036 rollouts, and the rate rule
+stepped the windowless host down to 30 Hz in all 20.
+
+| Search class       | Busy threads | Rollouts/s      | Frames while searching | Late among them | Worst client | Worst encode | Worst gap   |
+| ------------------ | -----------: | --------------- | ---------------------: | --------------- | ------------ | ------------ | ----------- |
+| default (Beryl 3D) |            0 | 12,555 (11,088) |                    831 | 10 (14)         | 9.9 (33.1)   | 7.9 (11.8)   | 51.9 (77.7) |
+| utility            |            0 | 14,838 (12,516) |                    739 | 7 (9)           | 17.9 (31.0)  | 6.5 (15.4)   | 48.5 (50.2) |
+| default (Beryl 3D) |           16 | 10,278 (8,413)  |                    984 | 7 (12)          | 11.0 (21.7)  | 9.0 (28.5)   | 47.8 (49.0) |
+| utility            |           16 | 11,494 (9,253)  |                    847 | 8 (12)          | 18.1 (31.4)  | 5.4 (7.5)    | 49.2 (53.9) |
+
+As in the first table, each figure is the median of five runs with the worst
+beside it, and times are in milliseconds.
+
+- **This time utility searched faster.** Paired by round, default's rate was a
+  median 0.89 of utility's (0.68 to 1.25 over the ten pairs), and lower in 8 of
+  the 10: the reverse of the first set. Over both sets' 20 pairs, default was
+  faster in 10 and the median ratio was 0.99. Rates across runs went from 8,413
+  to 21,252 rollouts a second, so on this machine the class's effect on the
+  search is smaller than what the other sessions' load does to it, and neither
+  set can resolve the 2% budget. The default class meets it by being the web
+  app's class.
+- **Late frames are unchanged.** Every run had some while the AI searched, 162
+  in all, with either class. In 18 of the 20 runs the worst late frame's client
+  work was under 1 ms and in 17 its encode was under 2 ms, so as before these
+  are the frame thread waiting for the machine, not doing work.
 
 **Card face preparation**, measured 2026-11-15 on the same machine at a load
 average of 55 to 57, by `beryl_assets` itself in a release build. The faces are

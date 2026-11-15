@@ -64,7 +64,7 @@ pub struct Run {
     #[serde(default)]
     pub slow_gpu_ms: Option<f64>,
     /// The game `--agent` started, if it did: who plays it, its seed and the AI's scheduling
-    /// class (`expert against mcts-hidden, seed 20261114, search class utility`).
+    /// class (`expert against mcts-hidden, seed 20261114, search class default`).
     #[serde(default)]
     pub game: Option<String>,
 }

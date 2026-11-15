@@ -8,7 +8,12 @@ fn a_thread_is_in_the_class_it_asked_for() {
     if cfg!(not(any(target_vendor = "apple", windows))) {
         return;
     }
-    for class in [Class::Utility, Class::Default, Class::Interactive] {
+    for class in [
+        Class::Utility,
+        Class::Default,
+        Class::Initiated,
+        Class::Interactive,
+    ] {
         let found = std::thread::spawn(move || {
             set_class(class);
             current_class()

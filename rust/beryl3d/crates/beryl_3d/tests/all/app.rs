@@ -75,5 +75,11 @@ fn a_release_build_has_no_fixture_option() {
     assert_eq!(played.opponent, beryl_3d::options::OPPONENT);
     assert_eq!(played.seed, 7);
     assert_eq!(played.search_class, beryl_host::Class::Default);
+    let plain = agent(&["--agent", "expert"], true).expect("a game for the viewer");
+    assert_eq!(
+        plain.search_class,
+        beryl_host::Class::Default,
+        "the AI searches in the web app's class unless a run compares another"
+    );
     assert!(agent(&["--search-class", "idle"], true).is_err());
 }
