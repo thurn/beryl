@@ -26,6 +26,10 @@ use crate::state::{State, Zone};
 /// hidden zones, even if all the cards in one such zone happen to be revealed", a copy the
 /// other player has seen and one they haven't lead to different games, as playing the one they
 /// know tells them nothing new and leaves them the other unknown.
+///
+/// Inlined, so the common set of fewer than two candidates returns at once; the comparison
+/// is out of line, where it saved its registers on every call before that test.
+#[inline]
 pub(crate) fn collapse<L: Layout>(
     s: &State<L>,
     candidates: Bitboard<L::Slot>,
@@ -33,6 +37,12 @@ pub(crate) fn collapse<L: Layout>(
     if candidates.count() < 2 {
         return candidates;
     }
+    collapse_several(s, candidates)
+}
+
+/// [`collapse`] of two or more candidates.
+#[inline(never)]
+fn collapse_several<L: Layout>(s: &State<L>, candidates: Bitboard<L::Slot>) -> Bitboard<L::Slot> {
     // Of interchangeable objects the candidate is the first in candidate order.
     collapse_ordered(s, s.in_candidate_order(candidates))
 }

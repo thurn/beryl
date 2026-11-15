@@ -129,10 +129,31 @@ impl Evaluate for Filter {
             Filter::ManaValueAtMost(n) => s.mana_value(t, slot) <= n,
             Filter::ManaValueAtMostX => s.mana_value(t, slot) <= x,
             Filter::PowerAtMost(n) => s.power(t, slot) <= n,
-            Filter::Not(f) => !f.matches_x(s, t, slot, you, words, x),
-            Filter::All(fs) => fs.iter().all(|f| f.matches_x(s, t, slot, you, words, x)),
-            Filter::AnyOf(fs) => fs.iter().any(|f| f.matches_x(s, t, slot, you, words, x)),
+            Filter::Not(_) | Filter::All(_) | Filter::AnyOf(_) => {
+                combined(self, s, t, slot, you, words, x)
+            }
         }
+    }
+}
+
+/// [`Evaluate::matches_x`] for a filter made of other filters. Out of line: a loop that calls
+/// back into `matches_x` keeps its operands in saved registers, and inlined there it made
+/// every call save them, even for the single test most filters are.
+#[inline(never)]
+fn combined<L: Layout>(
+    filter: &Filter,
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    you: Seat,
+    words: &Words,
+    x: u8,
+) -> bool {
+    match *filter {
+        Filter::Not(f) => !f.matches_x(s, t, slot, you, words, x),
+        Filter::All(fs) => fs.iter().all(|f| f.matches_x(s, t, slot, you, words, x)),
+        Filter::AnyOf(fs) => fs.iter().any(|f| f.matches_x(s, t, slot, you, words, x)),
+        _ => filter.matches_x(s, t, slot, you, words, x),
     }
 }
 
