@@ -296,6 +296,13 @@ MIGRATIONS: tuple[str, ...] = (
     -- transcript, which a change to its version makes happen.
     SELECT 1;
     """,
+    """
+    -- An ingest stopped after committing a transcript's rows but before deriving its
+    -- windows left those rows with no bead, and later ingests saw the file as read.
+    -- Ingest now marks such files in `settings` until their windows are derived; reading
+    -- every transcript again repairs the rows left before that.
+    DELETE FROM sources WHERE source = 'claude';
+    """,
 )
 
 

@@ -6,6 +6,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from beryl_efficiency import ingest, store
 from beryl_efficiency.beads import Beads
 from beryl_efficiency.ingest import SourceError
@@ -141,3 +143,35 @@ def test_a_snapshot_counts_its_malformed_records_once(tmp_path: Path) -> None:
         tally = ingest.ingest(db, [Beads(lambda: output)], "host").sources["beads"]
         assert tally.skipped == 2
     assert db.execute("SELECT skipped FROM sources").fetchone()[0] == 2
+
+
+def test_files_read_by_an_ingest_stopped_before_finish_are_finished_next_time(
+    tmp_path: Path,
+) -> None:
+    """An ingest killed after committing a file's rows but before `finish` derived what
+    depends on them must leave that file to the next ingest's `finish`, although its
+    offset says it has been read."""
+
+    class Finishing(Lines):
+        def __init__(self, folder: Path) -> None:
+            super().__init__(folder)
+            self.finished: list[list[str]] = []
+            self.stop = True
+
+        def finish(self, db: sqlite3.Connection, changed: list[Path]) -> int:
+            self.finished.append([p.name for p in changed])
+            if self.stop:
+                raise RuntimeError("killed")
+            return 0
+
+    folder = tmp_path / "logs"
+    folder.mkdir()
+    (folder / "a.jsonl").write_bytes(b'{"id": "x", "n": 1}\n')
+    db = open_db(tmp_path)
+    source = Finishing(folder)
+    with pytest.raises(RuntimeError):
+        ingest.ingest(db, [source], "host")
+    source.stop = False
+    assert ingest.ingest(db, [source], "host").total().bytes_read == 0
+    ingest.ingest(db, [source], "host")
+    assert source.finished == [["a.jsonl"], ["a.jsonl"], []]

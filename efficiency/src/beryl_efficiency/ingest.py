@@ -201,18 +201,36 @@ def write(db: sqlite3.Connection, rows: Iterable[Row]) -> int:
     return count
 
 
+def unfinished_key(source: str, path: str = "") -> str:
+    """The `settings` key that marks `path` as read by `source` but not yet finished."""
+    return f"unfinished:{source}:{path}"
+
+
 def read_lines(db: sqlite3.Connection, source: LineSource, tally: Tally) -> None:
-    changed: list[Path] = []
+    """Reads every file's new lines, then runs `finish` on the files that gained any. Each
+    batch of rows is committed with a mark that its file is unfinished, and the marks are
+    cleared in `finish`'s transaction, so that an ingest stopped between the two (killed,
+    or failing in `finish`) leaves the files to the next ingest's `finish`, although their
+    offsets say they have been read."""
     for path in source.files():
         try:
-            if read_file_lines(db, source, path, tally):
-                changed.append(path)
+            read_file_lines(db, source, path, tally)
         except OSError as e:
             tally.error = tally.error or f"{path}: {e}"
+    prefix = unfinished_key(source.name)
+    marks = [
+        str(r[0])
+        for r in db.execute(
+            "SELECT key FROM settings WHERE substr(key, 1, ?) = ? ORDER BY key",
+            (len(prefix), prefix),
+        )
+    ]
+    changed = [Path(m[len(prefix) :]) for m in marks]
     # `finish` runs even when no file changed, since what it derives can depend on more
     # than the files, such as the command kinds table.
     with db:
         tally.rows += source.finish(db, changed)
+        db.executemany("DELETE FROM settings WHERE key = ?", [(m,) for m in marks])
 
 
 def read_file_lines(
@@ -264,6 +282,10 @@ def save_batch(
     with db:
         tally.rows += write(db, rows)
         record_position(db, source, key, offset, print_, skipped)
+        db.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, '')",
+            (unfinished_key(source, key),),
+        )
     tally.skipped += skipped
 
 
