@@ -236,8 +236,9 @@ fn ability_text<L: Layout>(t: &GameTable, obs: Observation<'_, L>, o: Opt<L>) ->
 }
 
 /// The card, face and ability of that face that ability `ability` of the object in `slot`
-/// is, if the viewer knows the card: its own face's, or the granting card's front face's
-/// ([`ObjectAbility::Granted`]).
+/// is, if the viewer knows the card: its own face's, the granting card's front face's
+/// ([`ObjectAbility::Granted`]), or that of a card under a merged permanent
+/// ([`ObjectAbility::Merged`]), whose cards are public as the permanent is.
 fn face_ability<L: Layout>(
     obs: Observation<'_, L>,
     slot: L::Slot,
@@ -252,6 +253,10 @@ fn face_ability<L: Layout>(
         ObjectAbility::Granted(k) => {
             let grant = obs.derived(slot).granted[usize::from(k)]?;
             (grant.card, FaceIx::FRONT, FaceAbility::Grant(grant.grant))
+        }
+        ObjectAbility::Merged(place, i) => {
+            let (card, face) = obs.copiable(slot)?.merged_face(place)?;
+            (card, face, FaceAbility::Own(i))
         }
     })
 }
@@ -495,14 +500,16 @@ pub(crate) fn mana_text(cost: ManaCost) -> String {
 
 /// Activating ability `ability` of the object in `slot`.
 pub(super) fn activate<S: SlotId>(slot: S, ability: ObjectAbility) -> Candidate {
-    let (ability, granted) = match ability {
-        ObjectAbility::Own(i) => (i.get(), false),
-        ObjectAbility::Granted(k) => (k, true),
+    let (ability, granted, merged) = match ability {
+        ObjectAbility::Own(i) => (i.get(), false, None),
+        ObjectAbility::Granted(k) => (k, true, None),
+        ObjectAbility::Merged(place, i) => (i.get(), false, Some(place)),
     };
     Candidate::Activate {
         slot: ObjectId::of(slot),
         ability,
         granted,
+        merged,
     }
 }
 

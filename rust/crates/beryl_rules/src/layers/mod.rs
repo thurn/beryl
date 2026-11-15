@@ -6,9 +6,12 @@ mod dependency;
 mod elsewhere;
 pub(crate) mod entering;
 mod granted;
+mod merged;
+mod player_rules;
 mod text;
 mod together;
 
+use player_rules::player_rules;
 use text::reader;
 
 pub(crate) use entering::{entered, lost_entering};
@@ -18,15 +21,13 @@ use beryl_kernel::derive::Rederive;
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, AbilityKind, Colors, FaceIx, GrantIx, Layer, LayerSpec, Modification,
-    Objects, Words,
+    Ability, AbilityIx, Colors, FaceIx, GrantIx, Layer, LayerSpec, Modification, Objects, Words,
 };
 use crate::decision::{Outcome, StallReason};
 use crate::event::{Listens, Replaces, Sink};
-use crate::filter;
 use crate::fixed::Full;
 use crate::ids::CardId;
-use crate::layout::{Layout, PerSeat, Queue, index};
+use crate::layout::{Layout, Queue, index};
 use crate::state::{
     AbilityMask, Derived, Flag, GrantRef, LayerChange, LockedIn, Permanents, Rules, State, Zone,
     read_layer,
@@ -194,11 +195,17 @@ pub(crate) fn over_or_refreshed<L: Layout>(
 ///
 /// [CR 708.2a]: https://yawgatog.com/resources/magic-rules/#R7082a
 pub(crate) fn listening_of_all<L: Layout>(s: &State<L>, t: &GameTable) -> (Listens, Replaces) {
+    let merges = t.can(Capability::Merges);
     s.battlefield()
         .iter()
         .fold((Listens::NONE, Replaces::NONE), |(l, r), &slot| {
             let what = s.definition(slot);
-            (l | what.may_listen(t), r | what.may_replace(t))
+            let (l, r) = (l | what.may_listen(t), r | what.may_replace(t));
+            if merges {
+                merged::masks(s, t, slot, (l, r))
+            } else {
+                (l, r)
+            }
         })
 }
 
@@ -209,6 +216,7 @@ pub(crate) fn listening<L: Layout>(
     t: &GameTable,
     rows: &[Derived<L>],
 ) -> (Listens, Replaces) {
+    let merges = t.can(Capability::Merges);
     s.battlefield().iter().zip(rows).fold(
         (Listens::NONE, Replaces::NONE),
         |(l, r), (&slot, row)| {
@@ -219,7 +227,12 @@ pub(crate) fn listening<L: Layout>(
                 return (l, r);
             }
             let what = s.definition(slot);
-            (l | what.may_listen(t), r | what.may_replace(t))
+            let (l, r) = (l | what.may_listen(t), r | what.may_replace(t));
+            if merges {
+                merged::masks(s, t, slot, (l, r))
+            } else {
+                (l, r)
+            }
         },
     )
 }
@@ -292,7 +305,7 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable, trials: &mut u64) -> Re
     // A permanent that may change a rule for players said so in the mask just read for
     // the replacements: with none on the battlefield, one AND.
     let rules = if replacing.changes_player_rules() {
-        player_rules(&mut s, t)
+        player_rules(&s, t)
     } else {
         [Rules::NONE; _]
     };
@@ -302,7 +315,8 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable, trials: &mut u64) -> Re
     // while it stays so and saves reading the results.
     let inputs = if t.can(Capability::LayerInputs) {
         (s.battlefield().iter()).fold(Inputs::NONE, |inputs, &slot| {
-            inputs.union(s.definition(slot).layer_inputs(t))
+            let inputs = inputs.union(s.definition(slot).layer_inputs(t));
+            merged::inputs(&s, t, slot, inputs)
         })
     } else {
         Inputs::NONE
@@ -317,7 +331,9 @@ fn recompute<L: Layout>(s: &mut State<L>, t: &GameTable, trials: &mut u64) -> Re
 struct Applied {
     /// An effect that removes abilities.
     removed: bool,
-    /// An effect that changes a land's land types.
+    /// An effect that changes a land's land types, or a merged permanent with the abilities
+    /// of cards under its top card: either makes a permanent's mana other than its card's
+    /// ([`State::makes_card_mana`]).
     land_types: bool,
     /// An effect that gives protection ([`Replaces::PROTECTION`]).
     protection: bool,
@@ -335,6 +351,7 @@ fn apply_layers<L: Layout>(
     // Made at the first effect that applies: most recomputes have none, and the list is big.
     let mut list: Option<Applying<L>> = None;
     let mut listed = Ok(());
+    let mut merged = false;
     for i in 0..s.battlefield().len() {
         let slot = s.battlefield()[i];
         // Layer 1: the copiable values (CR 613.2a). A copy's are those of what it copies,
@@ -373,6 +390,11 @@ fn apply_layers<L: Layout>(
             };
             listed = listed.and(list_static(s, &mut list, on, ability, spec));
         }
+        if copy && t.can(Capability::Merges) {
+            let (is_merged, full) = merged::list(s, t, &mut list, i);
+            merged |= is_merged;
+            listed = listed.and(full);
+        }
     }
     for &GrantedTo { at, grant } in slice::<L>(granted) {
         let ability = granted_ability(t, grant);
@@ -399,7 +421,7 @@ fn apply_layers<L: Layout>(
     listed = listed.and(resolved_effects(s, &mut list));
     let mut applied = Applied {
         removed: text.removed,
-        land_types: text.land_types,
+        land_types: text.land_types || merged,
         protection: false,
     };
     match &mut list {
@@ -440,7 +462,7 @@ struct Listed<L: Layout> {
 }
 
 /// The static ability `a`, a part of whose effect it is: an ability of its permanent's face,
-/// or one granted to the permanent ([`GRANTED`]).
+/// one granted to the permanent ([`GRANTED`]), or one of a card under it ([`merged::MERGED`]).
 fn static_ability_of<L: Layout>(
     s: &Rederive<'_, L>,
     t: &GameTable,
@@ -449,6 +471,8 @@ fn static_ability_of<L: Layout>(
 ) -> &'static Ability {
     if a.order & GRANTED != 0 {
         &t.def(a.source).front().grants[usize::from(a.order & !GRANTED)]
+    } else if a.order & merged::MERGED != 0 {
+        merged::ability(s, t, s.battlefield()[position::<L>(from)], a)
     } else {
         &s.definition(s.battlefield()[position::<L>(from)])
             .face(t)
@@ -535,7 +559,7 @@ fn list_static<L: Layout>(
             LayerChange::Read {
                 layer: read_layer(modification),
                 face: on.face,
-                ability: AbilityIx::new(on.order),
+                ability: AbilityIx::new(on.order & !merged::MERGED),
                 part: part as u8,
             }
         });
@@ -674,6 +698,9 @@ fn members<L: Layout>(
 /// if the permanent has been granted it again in this run.
 fn has_so_far<L: Layout>(s: &Rederive<'_, L>, from: L::Index, a: &Apply<L>) -> bool {
     let at = position::<L>(from);
+    if a.order & merged::MERGED != 0 {
+        return merged::has_so_far(s, at);
+    }
     if a.order & GRANTED == 0 {
         return s.has_ability_so_far(at, AbilityIx::new(a.order));
     }
@@ -749,52 +776,4 @@ fn resolved_effects<L: Layout>(
         listed = listed.and(pushed);
     }
     listed
-}
-
-/// The rules the permanents' static abilities change for each player, by seat ([CR 613.11]): "Some
-/// continuous effects affect game rules rather than objects. ... These effects are applied after
-/// all other continuous effects have been applied." So control is settled: "each opponent" and
-/// "you" in such an ability are read for the permanent's controller as layer 2 left it ([CR 109.5]:
-/// "For a static ability, this is the current controller of the object it's on."). A face-down
-/// permanent has no abilities ([CR 708.2]), which its copiable values answer for.
-///
-/// Out of line: only a recompute with such a permanent on the battlefield comes here.
-///
-/// [CR 613.11]: https://yawgatog.com/resources/magic-rules/#R61311
-/// [CR 109.5]: https://yawgatog.com/resources/magic-rules/#R1095
-/// [CR 708.2]: https://yawgatog.com/resources/magic-rules/#R7082
-#[inline(never)]
-fn player_rules<L: Layout>(s: &mut Rederive<'_, L>, t: &GameTable) -> PerSeat<Rules> {
-    let mut rules = [Rules::NONE; _];
-    for i in 0..s.battlefield().len() {
-        let what = s.definition(s.battlefield()[i]);
-        let made = what.player_rules(t);
-        if made.is_empty() {
-            continue;
-        }
-        let controller = s.results()[i].controller;
-        for (n, ability) in what.face(t).abilities.iter().enumerate() {
-            let (AbilityKind::Static, Some(rule)) = (ability.kind(), ability.rule()) else {
-                continue;
-            };
-            // A permanent that lost the ability changes no rule (CR 613.1f).
-            if !s.has_ability_so_far(i, AbilityIx::new(n as u8)) {
-                continue;
-            }
-            // The card table has numbered every rule change its cards name.
-            let Some(id) = t.rule_id(rule).filter(|&id| made.contains(id)) else {
-                continue;
-            };
-            // The rule is in force for those players from here: the ability did what it
-            // says, as one that changes a permanent does above.
-            crate::coverage::hit(ability);
-            // Each player's set is a union: the order they are met in is nothing.
-            for player in s.players_in_seat_order(s.players()) {
-                if filter::is_for(&rule.players, player, controller) {
-                    rules[player.index()] = rules[player.index()].with(id);
-                }
-            }
-        }
-    }
-    rules
 }

@@ -85,6 +85,50 @@ class Cards:
                 self.grants.append((name, granted))
         # Each face's Oracle text by face name, from the card store.
         self.oracle: dict[str, str] = oracle or {}
+        # The cards under each merged permanent, by the permanent's name, from the top of the
+        # pile down (`track_merges`).
+        self.piles: dict[str, list[str]] = {}
+
+    def track_merges(self, actions: Sequence[Json]) -> None:
+        """Follow the mutate casts of a scenario's `actions` to know which cards are under
+        each merged permanent: a Cast paying the mutate cost, its Target answer and its
+        YesNo answer, yes for over (CR 702.140c). Over, the permanent takes the caster's name
+        and the target and the cards under it go under; under, the caster goes beneath the
+        target's pile. A cast whose target Beryl chose without asking is not followed.
+        """
+        caster: str | None = None
+        target: str | None = None
+        for action in actions:
+            kind = action.get("action")
+            if kind == "Cast":
+                card = cast(str, action["card"])
+                bit = self.mutate_bit(card)
+                mutates = bit is not None and cast(int, action["costs"]) >> bit & 1
+                caster, target = (card, None) if mutates else (None, None)
+            elif caster is not None and kind == "Answer":
+                pick = cast(Json, action["pick"])
+                if action["kind"] == "Target" and target is None:
+                    target = cast("str | None", pick.get("card"))
+                elif action["kind"] == "YesNo" and target is not None:
+                    if pick["pick"] == "Yes":
+                        self.piles[caster] = [target] + self.piles.pop(target, [])
+                    else:
+                        self.piles.setdefault(target, []).append(caster)
+                    caster = None
+
+    def ability_card(self, card: str, ability: object) -> tuple[str, str, int]:
+        """The card whose face has the ability a scenario activates of the permanent `card`
+        as `ability`, `{how: index}`, with how and index on that card: an ability of a card
+        under a merged permanent, `{"Merged": [place, i]}`, is that card's own ability `i`
+        (CR 702.140e). Any other is as given."""
+        ((how, index),) = cast(Json, ability).items()
+        if how != "Merged":
+            return card, how, cast(int, index)
+        place, i = cast(list[int], index)
+        pile = self.piles.get(card, [])
+        if place >= len(pile):
+            raise Unsupported(f"no card {place} under {card}")
+        return pile[place], "Own", i
 
     def abilities(self, name: str) -> list[Json]:
         return [

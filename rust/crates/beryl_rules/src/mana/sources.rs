@@ -4,11 +4,11 @@
 use crate::bitboard::Bitboard;
 #[cfg(doc)]
 use crate::card::ManaColor;
-use crate::card::{Ability, Face, Keywords, Types, Words};
+use crate::card::{Ability, AbilityIx, Face, Keywords, ObjectAbility, Types, Words};
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::state::{Derived, State};
-use crate::table::{GameTable, ManaFace, has_other_ability, is_sacrificed, is_simple};
+use crate::table::{Capability, GameTable, ManaFace, has_other_ability, is_sacrificed, is_simple};
 use crate::{filter::Evaluate, fixed::Full};
 
 use super::remembered::{self, Paying};
@@ -158,16 +158,15 @@ pub(super) fn source<L: Layout>(
     let mana = s.definition(slot).facts(t).mana;
     // The table's facts stand in for reading the face, for a permanent that makes its card's
     // mana: they must say what reading it would. One that lost an ability, or whose land
-    // types an effect changed, is read ability by ability (CR 613.1f, CR 305.7).
+    // types an effect changed, is read ability by ability (CR 613.1f, CR 305.7), as is a
+    // merged permanent, which has the abilities of the cards under it too (CR 702.140e).
+    let card_mana = || s.makes_card_mana(slot);
     debug_assert!(
-        mana != ManaFace::Not
-            || !s.makes_card_mana(slot)
-            || read_source(s, t, player, slot, face()).is_none(),
+        mana != ManaFace::Not || !card_mana() || read_source(s, t, player, slot, face()).is_none(),
         "a face the table calls no source makes mana"
     );
     let o = s.object(slot);
-    if (mana == ManaFace::Not && s.makes_card_mana(slot)) || d.controller != player || o.is_tapped()
-    {
+    if (mana == ManaFace::Not && card_mana()) || d.controller != player || o.is_tapped() {
         return None;
     }
     // CR 302.6: a creature's {T} abilities need it under its controller's control since their
@@ -184,7 +183,7 @@ pub(super) fn source<L: Layout>(
         amount,
         other,
     } = mana
-        && s.makes_card_mana(slot)
+        && card_mana()
     {
         let plain = Some((kinds, amount, other, false));
         debug_assert_eq!(
@@ -195,6 +194,14 @@ pub(super) fn source<L: Layout>(
         return plain;
     }
     read_source(s, t, player, slot, face())
+}
+
+/// Whether the permanent in `slot` is a merged permanent with the abilities of the cards
+/// under it ([`ObjectAbility::Merged`]): never, after one test, in a game with no card that
+/// merges.
+#[inline]
+fn merged<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> bool {
+    t.can(Capability::Merges) && s.has(slot, ObjectAbility::Merged(0, AbilityIx::new(0)))
 }
 
 /// Amount and whether the source is consumed by its mana activation, for payment previews.
@@ -249,7 +256,11 @@ fn read_source<L: Layout>(
         amount == 1 || kinds.is_power_of_two(),
         "a source of several mana makes one kind"
     );
-    Some((kinds, amount, conditional || has_other_ability(face), false))
+    // A merged permanent's other cards may have other abilities: it is a class of its own.
+    // It makes no card's mana (`State::makes_card_mana`), which most sources do, so that is
+    // asked first.
+    let other = has_other_ability(face) || (!s.makes_card_mana(slot) && merged(s, t, slot));
+    Some((kinds, amount, conditional || other, false))
 }
 
 impl<L: Layout> Sources<L> {

@@ -5,8 +5,8 @@ use std::cell::{Cell, OnceCell};
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, Castings, CostAction, Face, FaceIx, Keywords, ManaCost, ObjectAbility,
-    Timing, Types,
+    Ability, AbilityIx, AbilityKind, Castings, CostAction, Face, FaceIx, Keywords, ManaCost,
+    ObjectAbility, Timing, Types,
 };
 use crate::casting;
 use crate::decision::{Opt, Refusal};
@@ -455,7 +455,7 @@ fn activatable<L: Layout, const TARGETS: bool>(
 ) -> bool {
     let player = now.player;
     let o = s.object(slot);
-    let Some((source, index)) = activated(s, slot, ability) else {
+    let Some((source, index)) = activated(s, t, slot, ability) else {
         return false;
     };
     let a = source.face(t).ability(index);
@@ -547,7 +547,7 @@ pub fn pointless<L: Layout>(
     slot: L::Slot,
     ability: ObjectAbility,
 ) -> bool {
-    let Some((source, index)) = activated(s, slot, ability) else {
+    let Some((source, index)) = activated(s, t, slot, ability) else {
         return false;
     };
     (source.face(t).ability(index).needs())
@@ -574,10 +574,10 @@ fn activation_options<L: Layout, const TARGETS: bool>(
     // comparing them. Whether one has is part of what collapsing compares (its card, face
     // and granted abilities), so the result is the same.
     let facts = |slot: L::Slot| s.definition(slot).facts(t);
-    let granted_any = t.can(Capability::Grants);
-    let objects = objects.filter(|slot| {
-        facts(slot).activates() || (granted_any && s.has(slot, ObjectAbility::Granted(0)))
-    });
+    // Abilities that are not those of the face up: granted ones, and those of the cards under
+    // a merged permanent, in a game with a card that grants one or merges.
+    let others = t.can_either(Capability::Grants, Capability::Merges);
+    let objects = objects.filter(|slot| facts(slot).activates() || (others && has_others(s, slot)));
     // CR 602.5: "A player can't begin to activate an ability that's prohibited from being
     // activated." Asked once of the player, and of the objects only while such a rule change
     // is in force for them.
@@ -590,14 +590,15 @@ fn activation_options<L: Layout, const TARGETS: bool>(
     // Candidates are listed in the candidate order, which a `Choice` counts in.
     for slot in s.in_candidate_order(collapse(s, objects)) {
         // Of its own abilities, only the activated ones can be activated (CR 602.1), so the
-        // rest are not checked; granted ones are checked whatever they are. One it has lost
+        // rest are not checked; granted ones and those of the cards under a merged permanent
+        // are checked whatever they are. One it has lost
         // can't be activated (CR 613.1f): asked once of a permanent that has them all, as
         // most have.
         let lost = !s.has_every_ability(slot);
         let abilities = facts(slot)
             .activated()
             .map(ObjectAbility::Own)
-            .chain(granted(s, t, slot, granted_any));
+            .chain(granted(s, t, slot, others));
         for ability in abilities {
             if lost && !s.has(slot, ability) {
                 continue;
@@ -611,8 +612,11 @@ fn activation_options<L: Layout, const TARGETS: bool>(
     Ok(())
 }
 
-/// The abilities other objects granted the object in `slot`, if `any` card of the game grants
-/// one ([`Capability::Grants`]).
+/// The abilities other objects granted the object in `slot`, and those of the cards under it
+/// if it is a merged permanent ([CR 702.140e]), if `any` card of the game grants one or merges
+/// ([`Capability::Grants`], [`Capability::Merges`]).
+///
+/// [CR 702.140e]: https://yawgatog.com/resources/magic-rules/#R702140e
 fn granted<'a, L: Layout>(
     s: &'a State<L>,
     t: &'a GameTable,
@@ -623,7 +627,21 @@ fn granted<'a, L: Layout>(
         .into_iter()
         .flatten()
         .map(|(ability, _)| ability)
-        .filter(|ability| matches!(ability, ObjectAbility::Granted(_)))
+        .filter(|ability| {
+            matches!(
+                ability,
+                ObjectAbility::Granted(_) | ObjectAbility::Merged(..)
+            )
+        })
+}
+
+/// Whether the object in `slot` has an ability other objects granted it, or one of a card
+/// under it as a merged permanent. Out of line: only a game with a card that grants an
+/// ability or merges asks.
+#[inline(never)]
+fn has_others<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
+    s.has(slot, ObjectAbility::Granted(0))
+        || s.has(slot, ObjectAbility::Merged(0, AbilityIx::new(0)))
 }
 
 /// Appends the priority actions casting and activation add: spells and abilities.

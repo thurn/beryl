@@ -481,6 +481,9 @@ fn label(action: Action, def: &CardDef) -> Option<String> {
         } if card(c) => match ability {
             ObjectAbility::Own(i) => format!("activate ability {}", i.index()),
             ObjectAbility::Granted(k) => format!("activate granted ability {k}"),
+            ObjectAbility::Merged(place, i) => {
+                format!("activate ability {} of merged card {place}", i.index())
+            }
         },
         Action::TurnFaceUp { card: c, .. } if card(c) => "turn face up".to_owned(),
         _ => return None,

@@ -65,6 +65,13 @@ impl<'a, L: Layout> Observation<'a, L> {
         self.knows(slot).then(|| self.state.card(slot))
     }
 
+    /// The copiable values of the object in a slot ([`State::copiable`]), if the viewer
+    /// knows its card. A merged permanent's other cards are as public as it is
+    /// ([`crate::query::Copiable::merged_faces`]).
+    pub fn copiable(&self, slot: L::Slot) -> Option<crate::query::Copiable<L>> {
+        self.knows(slot).then(|| self.state.copiable(slot))
+    }
+
     /// The object in a slot, with every field that could betray an unknown identity masked:
     /// its card, which only [`Observation::card`] reads, and the face up. Whether a
     /// permanent is face down is public: it is part of its status

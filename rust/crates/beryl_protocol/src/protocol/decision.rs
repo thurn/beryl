@@ -188,12 +188,16 @@ pub enum Candidate {
         face: u8,
         costs: Vec<u8>,
     },
-    /// The ability at index `ability` among the object's own, or, when `granted`, among
-    /// those other objects grant it.
+    /// The ability at index `ability` among the object's own, when `granted` among those
+    /// other objects grant it, or, with `merged`, among those of the face of the card at
+    /// that place under a merged permanent, counting from the top of the pile down.
     Activate {
         slot: ObjectId,
         ability: u8,
         granted: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        merged: Option<u8>,
     },
     Mana {
         slot: ObjectId,

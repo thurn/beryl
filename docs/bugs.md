@@ -6,6 +6,23 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A merged permanent lost the activated, mana and static abilities of the
+  cards under it.** Gemrazer cast for its mutate cost over Drudge Skeletons
+  could not regenerate, over Gold Myr could not tap for {W}, and over Lord of
+  Atlantis gave other Merfolk nothing, though a mutated permanent has every
+  ability of each card that represents it (CR 702.140e). Only keywords and
+  triggered abilities were read from the cards under it: `State::abilities`, the
+  layers and the mana solver each read the top face's abilities directly. Fixed:
+  `State::abilities` yields `ObjectAbility::Merged(place, index)` for each
+  ability of a card under the permanent, activation and the mana solver take
+  them, and the layers list their static abilities, masks and player rule
+  changes (`layers/merged.rs`). Static replacement abilities and object rule
+  changes from under a merged permanent are still not read: those readers name
+  an ability by its index on the permanent's own face. Prevention: every reader
+  of an object's abilities goes through `State::abilities`; a reader that walks
+  a face itself, or keeps an `AbilityIx` as an ability's identity, misses each
+  new place abilities come from.
+
 - **Phasing out a permanent that entered this turn could panic.** The tracker
   check looked for the permanent in the battlefield zone set, which omits
   phased-out permanents even though they stay in the same zone (CR 702.26d).
@@ -27,6 +44,8 @@ fixed in the same session. Newest first.
   a list position must be sized by the list's capacity in every layout, or
   stored in the list itself (a flag beside each entry), so that a `Large` list
   cannot outgrow it.
+
+||||||| parent of 22b17783e (feat: abilities from under a merged permanent)
 
 - **A save with a copy replayed a different attack once its cards were in other
   slots.** A Phantasmal Image copying Grizzly Bears and a real Grizzly Bears,

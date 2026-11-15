@@ -63,6 +63,7 @@ pub fn snapshot(view: &PlayerView, def: &'static CardDef) -> Vec<String> {
                     slot,
                     ability,
                     granted: false,
+                    merged: None,
                 } if name_of(slot).as_deref() == Some(def.name) => Some(ability),
                 _ => None,
             })

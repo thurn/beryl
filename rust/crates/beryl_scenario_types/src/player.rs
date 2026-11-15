@@ -92,6 +92,12 @@ impl Player {
         Action::activate(self.0, card, ability)
     }
 
+    /// Activates the ability at `index` of the card at `place` under the merged permanent
+    /// `card` ([`Action::activate_merged`]).
+    pub const fn activates_merged(self, card: &'static str, place: u8, index: u8) -> Action {
+        Action::activate_merged(self.0, card, place, index)
+    }
+
     /// Passes priority.
     pub const fn passes(self) -> Action {
         Action::pass(self.0)

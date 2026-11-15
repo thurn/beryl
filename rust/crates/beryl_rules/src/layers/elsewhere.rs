@@ -52,11 +52,13 @@ fn list_reaching<L: Layout>(
     let mut listed = Ok(());
     for a in list {
         // A face's own static ability: the card table refuses a granted one that reaches
-        // every zone (the kernel's `listener::read_when_granted`).
+        // every zone (the kernel's `listener::read_when_granted`). One of a card under a
+        // merged permanent is not read here: the kernel names a reaching ability by its index
+        // on the permanent's own face.
         let (Target::Static(_), Some((from, _))) = (a.target, a.from) else {
             continue;
         };
-        if a.order & GRANTED != 0 {
+        if a.order & (GRANTED | super::merged::MERGED) != 0 {
             continue;
         }
         let ability = static_ability_of(s, t, from, a);

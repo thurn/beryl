@@ -281,6 +281,7 @@ fn in_face_order<L: Layout>(
                     slot,
                     ability,
                     granted: false,
+                    merged: None,
                 }
         }
         Way::Unusable { .. } => false,
@@ -288,7 +289,11 @@ fn in_face_order<L: Layout>(
     let own = |way: &Way| match *way {
         Way::Offered(i) => matches!(
             decision.candidates[usize::from(i)].option,
-            Candidate::Activate { granted: false, .. }
+            Candidate::Activate {
+                granted: false,
+                merged: None,
+                ..
+            }
         ),
         Way::Unusable { .. } => false,
     };

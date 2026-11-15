@@ -40,6 +40,12 @@ impl<L: Layout> Definition<L> {
         Definition(Copiable::of_card(card))
     }
 
+    /// The card at a game index with its face `face` up.
+    #[inline]
+    pub const fn of_face(card: L::Card, face: FaceIx) -> Definition<L> {
+        Definition(Copiable::of_card(card).turned(face))
+    }
+
     /// [`Copiable::face`].
     #[inline]
     pub fn face(self, t: &GameTable) -> &'static Face {

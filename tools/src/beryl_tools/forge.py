@@ -269,16 +269,14 @@ def step(action: JsonObject, cards: Cards, purpose: object = None) -> JsonObject
             out["cost"] = casting_option(cards, cast(str, action["card"]), costs)
         return out
     if kind == "Activate":
-        ability = cast(dict[str, int], action["ability"])
-        [(source, index)] = ability.items()
-        described = cards.ability(cast(str, action["card"]), source, index)
+        card = cast(str, action["card"])
+        written, source, index = cards.ability_card(card, action["ability"])
+        described = cards.ability(written, source, index)
         out = {
             "op": "activate",
             "player": action["player"],
             "card": action["card"],
-            "ability": ability_selector(
-                cards, cast(str, action["card"]), source, index
-            ),
+            "ability": ability_selector(cards, written, source, index),
         }
         if described is not None and described["kind"] == "Mana":
             out["mana"] = True
@@ -437,6 +435,7 @@ def export(
             if "failure" in entry:
                 raise Unsupported(f"Beryl fails it: {entry['failure']}")
             described = Cards(cast(JsonObject, entry.get("cards", {})), oracle)
+            described.track_merges(cast(list[JsonObject], entry["actions"]))
             steps: list[JsonObject] = []
             unchecked = 0
             setup_target = None

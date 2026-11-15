@@ -104,7 +104,7 @@ pub(crate) fn begin_activate<L: Layout>(
     slot: L::Slot,
     ability: ObjectAbility,
 ) -> Result<(), Full> {
-    let (source, index) = activated(s, slot, ability).expect("an ability offered");
+    let (source, index) = activated(s, t, slot, ability).expect("an ability offered");
     let a = source.face(t).ability(index);
     let (card, face) = source.record(t);
     if a.is_loyalty() {

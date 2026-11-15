@@ -362,12 +362,16 @@ pub(crate) fn variant<T: std::fmt::Debug, S: Serializer>(
     s.collect_str(&format_args!("{value:?}"))
 }
 
-/// An ability of a permanent, as `{"Own": i}` or `{"Granted": k}`.
+/// An ability of a permanent, as `{"Own": i}`, `{"Granted": k}` or, of a card under a merged
+/// permanent, `{"Merged": [place, i]}`.
 #[allow(clippy::trivially_copy_pass_by_ref)] // the signature `serialize_with` calls
 pub(crate) fn ability_ix<S: Serializer>(ability: &ObjectAbility, s: S) -> Result<S::Ok, S::Error> {
     match *ability {
         ObjectAbility::Own(i) => s.serialize_newtype_variant("ObjectAbility", 0, "Own", &i.get()),
         ObjectAbility::Granted(k) => s.serialize_newtype_variant("ObjectAbility", 1, "Granted", &k),
+        ObjectAbility::Merged(place, i) => {
+            s.serialize_newtype_variant("ObjectAbility", 2, "Merged", &[place, i.get()])
+        }
     }
 }
 

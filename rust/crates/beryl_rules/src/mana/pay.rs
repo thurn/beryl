@@ -2,7 +2,8 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    AbilityIx, ChosenKind, CostAction, INTRINSIC_MANA, ManaColor, ManaCost, ObjectAbility, Types,
+    Ability, AbilityIx, ChosenKind, CostAction, FaceIx, INTRINSIC_MANA, ManaColor, ManaCost,
+    ObjectAbility, Types,
 };
 use crate::decision::Opt;
 use crate::event::{self, Sink};
@@ -375,7 +376,8 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
     let restricted = RESTRICTED;
     let (card, face) = s.definition(slot).record(t);
     // The card table refuses a card that grants a mana ability (`TableError::Granted`), so
-    // the one found is the permanent's own.
+    // the one found is the permanent's own, or, of a merged permanent, that of a card under
+    // it (CR 702.140e), printed on that card's face.
     let printed = s.abilities(t, slot).find_map(|(ability, a)| match ability {
         ObjectAbility::Own(i)
             if !restricted
@@ -383,8 +385,9 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
                 && a.produces().includes(color)
                 && allowed(s, t, a, s.controller(slot), &s.words_of(slot)) =>
         {
-            Some((i, a))
+            Some((card, face, i, a))
         }
+        ObjectAbility::Merged(..) if !restricted => merged_mana(s, t, slot, ability, color),
         _ => None,
     });
     if printed.is_none()
@@ -400,10 +403,12 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
     // type "has the intrinsic ability “{T}: Add [mana symbol],” even if the text box doesn't
     // actually contain that text". It is no ability of the face, so its activation names
     // none: the ability adds its mana with no resolution that would read one.
-    let (index, ability) = printed
+    let (card, face, index, ability) = printed
         .or_else(|| {
-            (s.intrinsic_mana(t, slot) & (1 << color.index()) != 0)
-                .then(|| (AbilityIx::new(u8::MAX), &INTRINSIC_MANA[color.index()]))
+            (s.intrinsic_mana(t, slot) & (1 << color.index()) != 0).then(|| {
+                let intrinsic = &INTRINSIC_MANA[color.index()];
+                (card, face, AbilityIx::new(u8::MAX), intrinsic)
+            })
         })
         .expect("a mana ability that makes the chosen mana");
     let source = s.object_ref(slot);
@@ -438,6 +443,25 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
         ..PendingTrigger::default()
     };
     crate::interpret::mana_ability(s, t, sink, activation, ability, color)
+}
+
+/// The card, face, index and ability of `ability`, an ability of a card under the merged
+/// permanent in `slot` ([`ObjectAbility::Merged`]), if it is a mana ability that makes
+/// `color` now. Out of line: only a game with a card that merges has one.
+#[cold]
+#[inline(never)]
+fn merged_mana<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    ability: ObjectAbility,
+    color: ManaColor,
+) -> Option<(L::Card, FaceIx, AbilityIx, &'static Ability)> {
+    let (card, face, i, a) = s.merged_ability(t, slot, ability)?;
+    let usable = (is_simple(a) || is_sacrificed(a) || is_instant_mana(a))
+        && a.produces().includes(color)
+        && allowed(s, t, a, s.controller(slot), &s.words_of(slot));
+    usable.then_some((card, face, i, a))
 }
 
 /// Manual payment (the `manual_mana` flag): the floating mana and the sources, one per
@@ -613,7 +637,7 @@ fn list_instant_options<L: Layout>(
     let instant = |slot: L::Slot| {
         let words = s.words_of(slot);
         s.abilities(t, slot).filter(move |&(ability, a)| {
-            matches!(ability, ObjectAbility::Own(_))
+            matches!(ability, ObjectAbility::Own(_) | ObjectAbility::Merged(..))
                 && is_instant_mana(a)
                 && !(a.cost().does(CostAction::Tap) && s.object(slot).is_tapped())
                 && allowed(s, t, a, player, &words)

@@ -426,7 +426,7 @@ impl Condition {
                 None => false,
             },
             Condition::Offers(card, ability) => candidates(view).any(|c| {
-                matches!(c.option, Candidate::Activate { slot, ability: a, granted: false }
+                matches!(c.option, Candidate::Activate { slot, ability: a, granted: false, merged: None }
                     if a == *ability && name(slot) == Some(card.as_str()))
             }),
             Condition::ExiledWithCard(n, card) => view

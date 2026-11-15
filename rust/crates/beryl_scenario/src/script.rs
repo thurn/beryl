@@ -150,6 +150,15 @@ pub fn source(action: &Action) -> String {
             card,
             ability: ObjectAbility::Granted(k),
         } => format!("Action::activate_granted({}, {card:?}, {k})", seat(player)),
+        Action::Activate {
+            player,
+            card,
+            ability: ObjectAbility::Merged(place, i),
+        } => format!(
+            "Action::activate_merged({}, {card:?}, {place}, {})",
+            seat(player),
+            i.get()
+        ),
         Action::TurnFaceUp { player, card } => {
             format!(
                 "Action::TurnFaceUp {{ player: {}, card: {card:?} }}",

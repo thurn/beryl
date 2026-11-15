@@ -251,5 +251,128 @@ pub mod scenarios {
             THEM.life(18),
             ME.life(22),
         ]),
+        // Over Drudge Skeletons, the merged creature is a Gemrazer with the Skeletons' "{B}:
+        // Regenerate this creature" (CR 702.140e). Activated in response to Get Lost, it
+        // regenerates: the merged creature stays, tapped, and both cards stay with it.
+        Scenario::new("Gemrazer over Drudge Skeletons activates the Skeletons' ability")
+            .interaction(&[Card::DrudgeSkeletons, Card::GetLost])
+            .battlefield(
+                P0,
+                &[
+                    Card::Forest,
+                    Card::Forest,
+                    Card::Forest,
+                    Card::Swamp,
+                    Card::DrudgeSkeletons,
+                    Card::MerfolkOfThePearlTrident,
+                ],
+            )
+            .hand(P0, &[Card::Gemrazer])
+            .battlefield(P1, &[Card::Plains, Card::Plains, Card::LeoninScimitar])
+            .hand(P1, &[Card::GetLost])
+            .library(P1, &[Card::Island])
+            .actions(&[
+                MUTATE,
+                ME.targets(Card::DrudgeSkeletons),
+                Resolve,
+                ME.yes(),
+                Resolve,
+                ME.passes(),
+                THEM.casts(Card::GetLost),
+                THEM.targets(Card::Gemrazer),
+                ME.activates_merged(Card::Gemrazer, 0, 0),
+                Resolve,
+                Resolve,
+                ME.controls(Card::Gemrazer, 1),
+                ME.tapped(Card::Gemrazer, 1),
+                ME.has_cards(Zone::Graveyard, 0),
+            ]),
+        // Over Gold Myr, the merged creature taps for the Myr's {W} (CR 702.140e). It has been
+        // on the battlefield since the turn began, as the Myr was: mutating moved nothing onto
+        // the battlefield (CR 731.2c). Its {W} and the fourth Forest cast Get Lost.
+        Scenario::new("Gemrazer over Gold Myr taps for the Myr's mana")
+            .interaction(&[Card::GoldMyr, Card::GetLost])
+            .battlefield(
+                P0,
+                &[
+                    Card::Forest,
+                    Card::Forest,
+                    Card::Forest,
+                    Card::Forest,
+                    Card::GoldMyr,
+                ],
+            )
+            .hand(P0, &[Card::Gemrazer, Card::GetLost])
+            .battlefield(P1, &[Card::LeoninScimitar, Prop::Vanilla])
+            .library(P1, &[Card::Island])
+            .actions(&[
+                MUTATE,
+                Resolve,
+                ME.yes(),
+                Resolve,
+                ME.casts(Card::GetLost),
+                ME.targets(Prop::Vanilla),
+                Resolve,
+                THEM.controls(Prop::Vanilla, 0),
+                ME.tapped(Card::Gemrazer, 1),
+            ]),
+        // Over Lord of Atlantis, the merged creature is a Gemrazer whose static ability, from
+        // under it, gives other Merfolk +1/+1 and islandwalk (CR 702.140e, CR 613.4c).
+        Scenario::new("Gemrazer over Lord of Atlantis: the Lord's anthem applies")
+            .interaction(&[Card::LordOfAtlantis])
+            .battlefield(
+                P0,
+                &[
+                    Card::Forest,
+                    Card::Forest,
+                    Card::Forest,
+                    Card::LordOfAtlantis,
+                    Card::MerfolkOfThePearlTrident,
+                ],
+            )
+            .hand(P0, &[Card::Gemrazer])
+            .battlefield(P1, &[Card::LeoninScimitar])
+            .library(P1, &[Card::Island])
+            .actions(&[
+                ME.pt(Card::MerfolkOfThePearlTrident, 2, 2),
+                MUTATE,
+                ME.targets(Card::LordOfAtlantis),
+                Resolve,
+                ME.yes(),
+                Resolve,
+                ME.controls(Card::LordOfAtlantis, 0),
+                ME.pt(Card::Gemrazer, 4, 4),
+                ME.pt(Card::MerfolkOfThePearlTrident, 2, 2),
+            ]),
+        // Over Platinum Emperion, the merged creature is a Gemrazer with the Emperion's "Your
+        // life total can't change", a rule change from under it (CR 702.140e, CR 613.11):
+        // Lightning Bolt deals P0 3 damage and P0 loses no life.
+        Scenario::new("Gemrazer over Platinum Emperion: P0's life total can't change")
+            .interaction(&[Card::PlatinumEmperion, Card::LightningBolt])
+            .battlefield(
+                P0,
+                &[
+                    Card::Forest,
+                    Card::Forest,
+                    Card::Forest,
+                    Card::PlatinumEmperion,
+                ],
+            )
+            .hand(P0, &[Card::Gemrazer])
+            .battlefield(P1, &[Card::Mountain, Card::LeoninScimitar])
+            .hand(P1, &[Card::LightningBolt])
+            .library(P1, &[Card::Island])
+            .actions(&[
+                MUTATE,
+                Resolve,
+                ME.yes(),
+                Resolve,
+                ME.controls(Card::PlatinumEmperion, 0),
+                ME.passes(),
+                THEM.casts(Card::LightningBolt),
+                THEM.targets_player(ME),
+                THEM.has(Zone::Graveyard, Card::LightningBolt, 1),
+                ME.life(20),
+            ]),
     ];
 }

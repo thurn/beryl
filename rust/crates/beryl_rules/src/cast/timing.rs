@@ -28,10 +28,15 @@ pub(super) fn entry_ability_of<L: Layout>(
 }
 
 /// The card, face and ability a stack entry records for activating ability `ability` of the
-/// permanent in `slot`: one of its own, or one granted to it, which is printed on the
-/// granting card's front face (§9).
+/// permanent in `slot`: one of its own, one granted to it, which is printed on the
+/// granting card's front face (§9), or one of a card under it, if it is a merged permanent,
+/// printed on that card's face ([CR 702.140e]): "A mutated permanent has all abilities of
+/// each card and token that represents it."
+///
+/// [CR 702.140e]: https://yawgatog.com/resources/magic-rules/#R702140e
 pub(super) fn activated<L: Layout>(
     s: &State<L>,
+    t: &GameTable,
     slot: L::Slot,
     ability: ObjectAbility,
 ) -> Option<(Definition<L>, FaceAbility)> {
@@ -45,7 +50,22 @@ pub(super) fn activated<L: Layout>(
             let granter = Definition::of_card(grant.card);
             Some((granter, FaceAbility::Grant(grant.grant)))
         }
+        ObjectAbility::Merged(..) => merged(s, t, slot, ability),
     }
+}
+
+/// [`activated`] for an ability of a card under a merged permanent. Out of line: only a game
+/// with a card that merges offers one.
+#[cold]
+#[inline(never)]
+fn merged<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    ability: ObjectAbility,
+) -> Option<(Definition<L>, FaceAbility)> {
+    let (card, face, index, _) = s.merged_ability(t, slot, ability)?;
+    Some((Definition::of_face(card, face), FaceAbility::Own(index)))
 }
 
 /// Whether `player` may cast a sorcery now

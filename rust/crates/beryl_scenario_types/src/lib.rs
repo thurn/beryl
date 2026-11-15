@@ -13,8 +13,8 @@
 //! The actions and assertions are the ones the engine's mechanics support so far.
 
 use beryl_card::{
-    Castings, Colors, CounterKind, DecisionKind, FaceIx, ManaColor, ObjectAbility, Seat, Subtype,
-    TurnStep, Zone,
+    AbilityIx, Castings, Colors, CounterKind, DecisionKind, FaceIx, ManaColor, ObjectAbility, Seat,
+    Subtype, TurnStep, Zone,
 };
 
 mod player;
@@ -286,6 +286,17 @@ impl Action {
             player,
             card,
             ability: ObjectAbility::Granted(k),
+        }
+    }
+
+    /// `player` activates the ability at `index` on the face of the card at `place` under the
+    /// merged permanent `card`, counting from the top of the pile down
+    /// ([`ObjectAbility::Merged`]), at priority.
+    pub const fn activate_merged(player: Seat, card: &'static str, place: u8, index: u8) -> Action {
+        Action::Activate {
+            player,
+            card,
+            ability: ObjectAbility::Merged(place, AbilityIx::new(index)),
         }
     }
 

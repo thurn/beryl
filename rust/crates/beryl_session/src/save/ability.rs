@@ -1,6 +1,6 @@
 //! An ability a save names: one to activate, or one on the stack as a target ([`AbilityRef`]).
 
-use beryl_engine::card::{AbilityKind, FaceAbility, ObjectAbility};
+use beryl_engine::card::{AbilityIx, AbilityKind, Face, FaceAbility, ObjectAbility};
 use beryl_engine::state::{StackEntry, StackItem};
 use beryl_engine::{GameTable, Layout, State};
 use serde::{Deserialize, Serialize};
@@ -9,13 +9,16 @@ use super::is_false;
 
 /// A permanent's ability to activate: one of its face up's own, by its place among that
 /// face's activated and mana abilities (so a static or triggered ability added to the card
-/// moves nothing), or the `n`th ability other objects grant it.
+/// moves nothing), the `n`th ability other objects grant it, or, with `merged`, an ability of
+/// the face of the card at that place under a merged permanent, counted as an own one is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AbilityRef {
     #[serde(default, skip_serializing_if = "is_false")]
     pub granted: bool,
     pub n: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub merged: Option<u8>,
 }
 
 impl AbilityRef {
@@ -26,20 +29,37 @@ impl AbilityRef {
         ability: ObjectAbility,
     ) -> Self {
         match ability {
-            ObjectAbility::Own(i) => {
-                let face = s.definition(slot).face(t);
-                let before = face.abilities[..i.index()]
-                    .iter()
-                    .filter(|a| matches!(a.kind(), AbilityKind::Activated | AbilityKind::Mana))
-                    .count();
+            ObjectAbility::Own(i) => AbilityRef {
+                granted: false,
+                n: activated_before(s.definition(slot).face(t), i),
+                merged: None,
+            },
+            ObjectAbility::Granted(n) => AbilityRef {
+                granted: true,
+                n,
+                merged: None,
+            },
+            ObjectAbility::Merged(place, i) => {
+                let (card, face, ..) = s
+                    .merged_ability(t, slot, ability)
+                    .expect("an ability the permanent has");
                 AbilityRef {
                     granted: false,
-                    n: u8::try_from(before).expect("a face's abilities number under 256"),
+                    n: activated_before(t.def(card).face(face), i),
+                    merged: Some(place),
                 }
             }
-            ObjectAbility::Granted(n) => AbilityRef { granted: true, n },
         }
     }
+}
+
+/// How many activated and mana abilities `face` lists before the one at `i`.
+fn activated_before(face: &Face, i: AbilityIx) -> u8 {
+    let before = face.abilities[..i.index()]
+        .iter()
+        .filter(|a| matches!(a.kind(), AbilityKind::Activated | AbilityKind::Mana))
+        .count();
+    u8::try_from(before).expect("a face's abilities number under 256")
 }
 
 impl AbilityRef {
@@ -60,10 +80,12 @@ impl AbilityRef {
                 FaceAbility::Own(i) => AbilityRef {
                     granted: false,
                     n: place(of.card, of.face, i.index(), &[AbilityKind::Triggered]),
+                    merged: None,
                 },
                 FaceAbility::Grant(i) => AbilityRef {
                     granted: true,
                     n: u8::try_from(i.index()).expect("a face's grants number under 256"),
+                    merged: None,
                 },
             },
             StackItem::Activated { of } => match of.ability {
@@ -75,10 +97,12 @@ impl AbilityRef {
                         i.index(),
                         &[AbilityKind::Activated, AbilityKind::Mana],
                     ),
+                    merged: None,
                 },
                 FaceAbility::Grant(i) => AbilityRef {
                     granted: true,
                     n: u8::try_from(i.index()).expect("a face's grants number under 256"),
+                    merged: None,
                 },
             },
             StackItem::Spell { .. } => unreachable!("an ability's entry"),

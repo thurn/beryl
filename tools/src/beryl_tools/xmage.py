@@ -70,6 +70,7 @@ class Exporter:
         self.faces = faces
         self.export = export
         self.cards = Cards(cast(Json, entry.get("cards", {})), faces.oracle)
+        self.cards.track_merges(cast(list[Json], entry["actions"]))
         setup = cast(Json, entry["setup"])
         self.setup: Json = setup
         self.first_turn: int = cast(int, setup["turn"])
@@ -523,12 +524,11 @@ class Exporter:
     def activate(self, action: Json, p: Position) -> None:
         who = self.player(action["player"])
         card = cast(str, action["card"])
-        ability = cast(Json, action["ability"])
-        ((how, index),) = ability.items()
-        if mana := self.cards.instant_mana_text(card, how, cast(int, index)):
+        written, how, index = self.cards.ability_card(card, action["ability"])
+        if mana := self.cards.instant_mana_text(written, how, index):
             self.prepare(who, p, starts=True)  # off the stack (CR 605.3b)
             return self.emit(self.cards.tap_source(self.at(p), who, card, mana))
-        text = self.cards.ability_text(card, how, cast(int, index))
+        text = self.cards.ability_text(written, how, index)
         if text is None:
             raise Unsupported(f"{card}'s ability {how} {index}")
         self.prepare(who, p, starts=True)

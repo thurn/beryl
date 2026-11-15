@@ -176,9 +176,11 @@ impl<L: Layout> State<L> {
 
     /// Whether the permanent in `slot` makes the mana its card table's facts say
     /// ([`crate::table::FaceFacts::mana`]): it has every ability of its face and no intrinsic
-    /// mana ability of a basic land type but its face's ([CR 305.7]). With no effect on the
-    /// battlefield removing abilities or changing land types, as most games go, one test of
-    /// a flag the layers store.
+    /// mana ability of a basic land type but its face's ([CR 305.7]), and it is no merged
+    /// permanent with the abilities of cards under its top card
+    /// ([`crate::query::Copiable::merged_faces`]). With no effect on the battlefield removing
+    /// abilities or changing land types and no merged permanent, as most games go, one test
+    /// of a flag the layers store.
     ///
     /// [CR 305.7]: https://yawgatog.com/resources/magic-rules/#R3057
     #[inline]
@@ -186,15 +188,17 @@ impl<L: Layout> State<L> {
         !self.flags.mana_changed || self.keeps_card_mana(slot)
     }
 
-    /// [`State::makes_card_mana`] when some effect changed abilities or land types. Out of
-    /// line: most games never come here.
+    /// [`State::makes_card_mana`] when some effect changed abilities or land types, or a
+    /// merged permanent is on the battlefield. Out of line: most games never come here.
     #[cold]
     #[inline(never)]
     fn keeps_card_mana(&self, slot: L::Slot) -> bool {
         self.battlefield_position(slot).is_none_or(|i| {
             debug_assert!(!self.flags.derived_dirty, "derived read while dirty");
             let d = self.derived[i];
-            { d.lost }.is_empty() && { d.keywords }.intrinsic_mana() == 0
+            let merged = self.object(slot).flags.has(Flag::Copy)
+                && self.copiable(slot).merged_face(0).is_some();
+            { d.lost }.is_empty() && { d.keywords }.intrinsic_mana() == 0 && !merged
         })
     }
 
@@ -264,6 +268,22 @@ impl<L: Layout> State<L> {
             debug_assert!(!self.flags.derived_dirty, "derived read while dirty");
             { self.derived[i].lost }.is_empty()
         })
+    }
+
+    /// Whether the merged permanent in `slot` has the abilities of the cards under its top
+    /// card ([`crate::query::Copiable::merged_faces`]): it has, unless an effect removed all
+    /// its abilities ([CR 613.1f]). An effect that removes one ability names it on the top
+    /// card's face, so it removes none of these.
+    ///
+    /// [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
+    #[inline]
+    pub fn keeps_merged(&self, slot: L::Slot) -> bool {
+        !self.flags.abilities_lost
+            || self.battlefield_position(slot).is_none_or(|i| {
+                debug_assert!(!self.flags.derived_dirty, "derived read while dirty");
+                let lost = self.derived[i].lost;
+                lost != L::AbilityMask::ALL
+            })
     }
 
     /// [`State::has_ability`] when some permanent has lost an ability. Out of line: most

@@ -422,6 +422,17 @@ impl<L: Layout> Copiable<L> {
             .map(|addition| (addition.card(), addition.face()))
     }
 
+    /// The card and face at `place` among [`Copiable::merged_faces`], counting from 0.
+    #[inline]
+    pub fn merged_face(self, place: u8) -> Option<(L::Card, FaceIx)> {
+        let additions = self.additions;
+        (0..additions.len())
+            .filter_map(|i| additions.as_ref()[i])
+            .filter(|addition| addition.is_every_ability())
+            .nth(usize::from(place))
+            .map(|addition| (addition.card(), addition.face()))
+    }
+
     /// The values a merged permanent has once the card `card`, cast with its face `face` up,
     /// merges with a permanent whose values these are ([CR 731.2a]): "A merged permanent has
     /// only the characteristics of its topmost component, unless otherwise specified by the
