@@ -2,8 +2,7 @@
 //! (docs/beryl-3d.md, "Interface checks" and "Test speed"), on the three-beat script of the
 //! script clock's tests, played by the test driver.
 
-mod common;
-
+use crate::common::{MS, before, three_beats};
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::{Side, Why, ZoneName};
 use beryl_protocol::script::Verb;
@@ -14,7 +13,6 @@ use beryl_scene::input::{Insets, Size};
 use beryl_scene::play::record::{Cause, MoveKey, Planted, ScriptRecord, SegmentRecord, StepRecord};
 use beryl_scene::pose::{Curve, Pose, Segment};
 use beryl_session::card_records;
-use common::{MS, before, three_beats};
 use glam::Vec3;
 
 const SIZE: Size = Size {

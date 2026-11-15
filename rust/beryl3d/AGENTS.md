@@ -39,6 +39,13 @@ path. Its `[workspace.lints]` table must equal the main one's, which the
 `just b3d lane` runs the checks of the `beryl3d` lane that the fast check runs
 for a change here.
 
+Each crate's integration tests are one binary, `tests/all/main.rs` with one
+module per file, because every test binary links the crate and its dependencies
+again after an edit. Add a test file under `tests/all/`. Only a file that
+installs a global allocator gets a binary of its own in `tests/`. The tests,
+`record` and `gate` share one build in cargo's `test` profile (`SHARED_BUILD` in
+`tools/src/beryl_tools/beryl3d/cli.py`), so don't build them with `cargo run`.
+
 ## Seeing and checking
 
 To see what the client shows, use the text commands, which play a recording

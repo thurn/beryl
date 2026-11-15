@@ -2315,12 +2315,12 @@ Checking every tick remains, as the second line:
   whose budget of CPU time it would spend several times over (see
   [Checks and isolation](#checks-and-isolation)).
 - **A differential test** holds the two together
-  (`beryl_inspect/tests/differential.rs`). On a fixed sample of 200 tests, drawn
-  with a fixed seed from every test but the stress boards', it plants each kind
-  of fault at a seeded random tick inside one of the test's steps, and requires
-  every fault the every-tick run finds to be found at the check times too. A
-  fault only the every-tick run finds is a missing check time, and is fixed by
-  adding one. The 1,000 plantings take about 2 seconds in `cargo test`.
+  (`beryl_inspect/tests/all/differential.rs`). On a fixed sample of 200 tests,
+  drawn with a fixed seed from every test but the stress boards', it plants each
+  kind of fault at a seeded random tick inside one of the test's steps, and
+  requires every fault the every-tick run finds to be found at the check times
+  too. A fault only the every-tick run finds is a missing check time, and is
+  fixed by adding one. The 1,000 plantings take about 2 seconds in `cargo test`.
 
 ### Recordings
 
@@ -2577,8 +2577,8 @@ which a counting global allocator sees, and the allocations made in
 The counters are exact, so they have no tolerance: one over its limit fails, and
 the report names the board, the frame and the count. `just b3d gate --update`
 lowers each limit to what was measured and never raises one. The allocation gate
-is also a test of `beryl_inspect` (`tests/frame_allocation.rs`), which prints
-the backtrace of the first allocation inside a frame.
+is also a test of `beryl_inspect` (`tests/all/frame_allocation.rs`), which
+prints the backtrace of the first allocation inside a frame.
 `beryl_inspect::gate::rank` gives the 8 frames that the counters rank highest,
 for the instruction-count gate.
 

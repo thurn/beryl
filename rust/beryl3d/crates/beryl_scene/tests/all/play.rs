@@ -1,8 +1,7 @@
 //! The script clock: scripts compiled whole, played in order and coming to rest where placement
 //! puts every object, whatever the frames between (docs/beryl-3d.md, "Determinism" and "Verbs").
 
-mod common;
-
+use crate::common::{MS, before, discard, draw, empty_frame, frame, show, three_beats, window};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{Side, StackItem, Why, ZoneName};
 use beryl_protocol::script::{Act, Fact, Step, Subject, Verb};
@@ -10,7 +9,6 @@ use beryl_scene::frame::Wake;
 use beryl_scene::play::Show;
 use beryl_scene::pose::Curve;
 use beryl_scene::testing::{ScriptBuilder, timing};
-use common::{MS, before, discard, draw, empty_frame, frame, show, three_beats, window};
 
 /// Every object of `update`'s view stands where placement puts it in the show's window.
 fn at_rest(show: &Show, update: &GameUpdate, now: u64) {
@@ -27,7 +25,7 @@ fn at_rest(show: &Show, update: &GameUpdate, now: u64) {
 }
 
 /// A show that has taken the table before and the three-beat script, with one frame at 0.
-fn three_beat_show() -> (Show, GameUpdate, common::Cards) {
+fn three_beat_show() -> (Show, GameUpdate, crate::common::Cards) {
     let (start, cards) = before();
     let (after, timings) = three_beats(&start, cards);
     let mut show = show();
@@ -284,7 +282,7 @@ fn a_step_the_table_cannot_take_leaves_the_steps_after_it_placed() {
     // the stack, so the table cannot take it and the third step places every group again.
     // That step used to panic, clearing the groups' record of their slots before reading it.
     let (start, cards) = before();
-    let (mut after, mut timings) = common::three_beats(&start, cards);
+    let (mut after, mut timings) = crate::common::three_beats(&start, cards);
     let script = after.view.script.as_mut().expect("a script");
     script.beats.insert(
         1,

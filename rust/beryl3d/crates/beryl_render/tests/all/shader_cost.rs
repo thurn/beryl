@@ -14,8 +14,8 @@ use std::collections::BTreeMap;
 use naga::{Expression, Function, ShaderStage};
 use serde_json::{Value, json};
 
-const SHADER: &str = include_str!("../src/shader.wgsl");
-const GATES: &str = include_str!("../../../../../data/beryl3d/gates.json");
+const SHADER: &str = include_str!("../../src/shader.wgsl");
+const GATES: &str = include_str!("../../../../../../data/beryl3d/gates.json");
 /// The most texture samples a Baseline material may take per fragment.
 const MOST_SAMPLES: u64 = 1;
 

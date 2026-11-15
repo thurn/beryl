@@ -439,14 +439,14 @@ fn a_button_press_takes_the_recorded_answer_of_a_recording_without_clicks() {
 /// The app builds `beryl_scene` without the `driver` feature, so it has no `Page`.
 #[test]
 fn the_driver_is_only_in_a_build_with_its_feature() {
-    let lib = include_str!("../src/lib.rs");
+    let lib = include_str!("../../src/lib.rs");
     let lines: Vec<&str> = lib.lines().collect();
     let at = lines
         .iter()
         .position(|line| *line == "pub mod driver;")
         .expect("lib.rs declares the driver");
     assert_eq!(lines[at - 1], "#[cfg(feature = \"driver\")]");
-    let manifest = include_str!("../Cargo.toml");
+    let manifest = include_str!("../../Cargo.toml");
     assert!(manifest.contains("driver = [\"dep:serde\", \"dep:serde_json\"]"));
     assert!(
         !manifest.contains("default ="),

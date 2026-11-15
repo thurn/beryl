@@ -153,14 +153,12 @@ fn build_in_a_child_process() {
 #[test]
 fn two_processes_at_once_leave_one_whole_file() {
     let dir = scratch("two-processes");
+    // The harness names a test by its module path without the crate's name.
+    let module = module_path!().split_once("::").map_or("", |(_, path)| path);
+    let name = format!("{module}::build_in_a_child_process");
     let child = || {
         Command::new(std::env::current_exe().unwrap())
-            .args([
-                "build_in_a_child_process",
-                "--exact",
-                "--ignored",
-                "--quiet",
-            ])
+            .args([name.as_str(), "--exact", "--ignored", "--quiet"])
             .env(CHILD_DIR, &dir)
             .spawn()
             .unwrap()

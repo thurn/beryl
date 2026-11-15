@@ -58,5 +58,10 @@
     "metric": "slow-ci.cpu-seconds-per-run",
     "expect": "down",
     "commit": "fc50cb18df2dc426e13052a3c0d53077167a8066"
+  },
+  {
+    "label": "Beryl 3D's tests, record and gate share one test-profile build, with one integration-test binary per crate",
+    "metric": "fast-check.cpu-seconds",
+    "expect": "down"
   }
 ]
