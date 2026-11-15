@@ -11,8 +11,21 @@ workspace = true
 
 [dependencies]
 beryl_scene = { path = "../beryl_scene" }
+# The scan cache and Scryfall's download queue, shared with the Tauri app.
+beryl_art = { path = "../../../crates/beryl_art" }
+# Each card's printing, faces and tokens, from which a match's faces are listed.
+beryl_card_store = { path = "../../../crates/beryl_card_store" }
+beryl_session = { path = "../../../crates/beryl_session" }
+# Compresses faces to ASTC, ETC2 and BC7 with their mipmaps, in place of hand-written texture
+# encoders. Default features off: they add encoders that link prebuilt ISPC kernels, which do not
+# exist for iOS or Android (docs/beryl-3d.md, "Card faces").
+ctt = { version = "=0.6.1", default-features = false, features = ["encoder-astcenc", "encoder-etcpak", "encoder-bc7f"] }
 # Decodes JPEG card scans and PNG pictures, in place of hand-written decoders.
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
 # Rasterizes glyph outlines to coverage bitmaps, in place of a hand-written TrueType and CFF
 # rasterizer. Pinned to the release the cross-target probe built for every platform.
 swash = "=0.2.10"
+
+[dev-dependencies]
+# The WU Control list, whose faces the tests prepare.
+beryl_cards = { path = "../../../crates/beryl_cards" }

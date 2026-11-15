@@ -2381,6 +2381,28 @@ What these show:
   41.7 MB, 185 MB of memory, 24 threads, a 546-second build). Those were the
   numbers that chose `wgpu`; this prototype's replace their frame times.
 
+**Card face preparation**, measured 2026-11-15 on the same machine at a load
+average of 55 to 57, by `beryl_assets` itself in a release build. The faces are
+real Scryfall scans at 672 by 936. The 127 faces are those of the implemented
+cards, each given one of 49 real scans, prepared at board size on 4 workers. The
+times are inflated by the load, perhaps two to three times.
+
+| Measure                                  | ASTC 4x4 | ETC2 RGBA | BC7     | RGBA   |
+| ---------------------------------------- | -------- | --------- | ------- | ------ |
+| Compress one board face, with mipmaps    | 77 ms    | 3 ms      | 19 ms   | 4 ms   |
+| Compress one full-size face              | 388 ms   | 18 ms     | 44 ms   | 13 ms  |
+| 127 faces cold (decode, compress, cache) | 1.9 s    | 0.95 s    | 1.2 s   |        |
+| 127 faces from the compressed cache      | 8 ms     | 6 ms      | 6 ms    |        |
+| One board face with mipmaps              | 123 KB   | 123 KB    | 123 KB  | 491 KB |
+| 150 board faces                          | 18.5 MB  | 18.5 MB   | 18.5 MB | 74 MB  |
+
+- **Decoding and scaling a scan** to board size took 14 to 24 ms a face.
+- **ASTC uses astcenc's fastest preset.** Its quality-35 preset took 190 ms a
+  board face and its `fast` preset 110 ms. Faces are compressed once per
+  machine, so the cold time is paid only for a deck seen for the first time.
+- **Full-size faces are made only on request**, not during the cold start, so
+  the cold start does not pay ASTC's 388 ms a face.
+
 ## Checks and isolation
 
 Beryl 3D is a separate program, and until the switch it is not the app. Its

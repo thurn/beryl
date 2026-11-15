@@ -26,7 +26,9 @@ fn open_sans(character: char, size: u16) -> GlyphKey {
 /// The next page the worker sends, with its pixels and its glyphs.
 fn next(results: &Receiver<Prepared>) -> (Vec<u8>, Vec<GlyphCell>) {
     let prepared = results.recv_timeout(HANG).expect("the worker sends a page");
-    let Upload::GlyphPage { page, pixels } = prepared.upload;
+    let Upload::GlyphPage { page, pixels } = prepared.upload else {
+        panic!("the glyph worker sent a face");
+    };
     let AssetReady::Glyphs {
         page: ready_page,
         glyphs,
