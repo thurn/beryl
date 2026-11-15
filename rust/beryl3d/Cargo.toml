@@ -1,0 +1,51 @@
+# Beryl 3D's Cargo workspace: the native 3D client (docs/beryl-3d.md). It is separate from the
+# main workspace in ../Cargo.toml so that no check of the main workspace builds it and a change
+# here selects no main lane. Its crates depend on the main crates by path. `lints-match`
+# (`just b3d lane`) keeps the lint tables below equal to the main workspace's.
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+# Every warning is an error, in every build: clippy only checks a debug build with every feature
+# on, so a warning that only a release build or a build without `scenarios` sees would otherwise
+# reach the release build's output and stay there.
+warnings = "deny"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+many_single_char_names = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+
+# The card crates' build scripts read the whole card store, as the main workspace's do.
+[profile.dev.package.beryl_card_build]
+opt-level = 3
+[profile.dev.package.beryl_card_store]
+opt-level = 3
+[profile.dev.package.serde_json]
+opt-level = 3
+
+[profile.release]
+debug = "line-tables-only"
+codegen-units = 1
+lto = "thin"
+
+# `cargo test` (the rust lane's tests step, `just test-rust`) at opt-level 1. Unoptimized, the
+# workspace's tests took about 437 test-seconds, 27 s on the clock at load 40 on 18 cores, and
+# the step took 44 s after a kernel change, most of the fast check's 60 s budget; at opt-level 1
+# they take 2.6 s and the step 17 s, with no slower build. Debug assertions and overflow checks
+# stay on, as `dev` has them.
+[profile.test]
+opt-level = 1

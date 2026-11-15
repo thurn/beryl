@@ -1,0 +1,21 @@
+[package]
+name = "beryl_render"
+version = "0.1.0"
+description = "Beryl 3D's renderer: draws a scene with wgpu"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+beryl_scene = { path = "../beryl_scene" }
+# Casts draw records to bytes for upload, in place of hand-written unsafe casts.
+bytemuck = { version = "1.25.2", features = ["derive"] }
+# Writes a rendered frame as a PNG picture, in place of a hand-written encoder.
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+# Blocks on wgpu's adapter and device requests, in place of an async runtime.
+pollster = "1.0.1"
+# The GPU API (Metal on this Mac).
+wgpu = "30.0.2"

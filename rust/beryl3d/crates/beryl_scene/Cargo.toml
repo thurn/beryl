@@ -1,0 +1,28 @@
+[package]
+name = "beryl_scene"
+version = "0.1.0"
+description = "Beryl 3D's scene: poses, layout and animation as pure data, with no GPU, window, clock or thread"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+# Code that only a driver of the scene (the inspector, a host) needs; nothing is behind it yet.
+driver = []
+
+[dependencies]
+# The game state the scene shows: PlayerView and the table commands.
+beryl_session = { path = "../../../crates/beryl_session" }
+# Vector and matrix math for poses and the camera, in place of hand-written math.
+glam = "0.34.3"
+# Lays out text and 2D regions as flexbox and grid, in place of hand-written layout.
+taffy = "0.15.1"
+# Shapes and breaks lines of text, in place of hand-written text layout.
+parley = "0.13.0"
+
+[build-dependencies]
+# Reads data/beryl3d/space.json and gates.json at build time, in place of a hand-written parser.
+serde_json = "1.0.154"

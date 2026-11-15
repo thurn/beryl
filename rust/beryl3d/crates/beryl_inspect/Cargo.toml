@@ -1,0 +1,14 @@
+[package]
+name = "beryl_inspect"
+version = "0.1.0"
+description = "Beryl 3D's inspector: reads a scene and reports it as text, with no GPU"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+beryl_scene = { path = "../beryl_scene", features = ["driver"] }
+beryl_session = { path = "../../../crates/beryl_session" }

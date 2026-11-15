@@ -1,0 +1,17 @@
+[package]
+name = "beryl_host"
+version = "0.1.0"
+description = "Beryl 3D's host: the window and event loop that drive a scene and render it"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+beryl_assets = { path = "../beryl_assets" }
+beryl_render = { path = "../beryl_render" }
+beryl_scene = { path = "../beryl_scene" }
+# The desktop window and its events, in place of hand-written platform windowing.
+winit = "0.30.13"

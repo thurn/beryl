@@ -1,0 +1,15 @@
+[package]
+name = "beryl_assets"
+version = "0.1.0"
+description = "Beryl 3D's assets: card pictures decoded and packed for the renderer"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+beryl_scene = { path = "../beryl_scene" }
+# Decodes JPEG card scans and PNG pictures, in place of hand-written decoders.
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }

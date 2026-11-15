@@ -2,6 +2,9 @@
 
 This adds to the root `AGENTS.md`, whose rules all apply here.
 
+Beryl 3D, the native 3D client, is a separate workspace in `rust/beryl3d` with
+its own build and checks; see `rust/beryl3d/AGENTS.md`.
+
 ## Crates and card files
 
 - `crates/beryl_app` is the Tauri shell: the window, IPC commands,

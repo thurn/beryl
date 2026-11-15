@@ -1,0 +1,17 @@
+[package]
+name = "beryl_3d"
+version = "0.1.0"
+description = "Beryl 3D's client: the crates that make up the native 3D app"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+beryl_assets = { path = "../beryl_assets" }
+beryl_host = { path = "../beryl_host" }
+beryl_inspect = { path = "../beryl_inspect" }
+beryl_render = { path = "../beryl_render" }
+beryl_scene = { path = "../beryl_scene" }
