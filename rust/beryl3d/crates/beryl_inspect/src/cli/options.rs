@@ -165,6 +165,9 @@ impl Options {
         let mut positional = positional.into_iter();
         if spec.recording {
             let Some(name) = positional.next() else {
+                if spec.switches.contains(&"--all") && options.switch("--all") {
+                    return Ok(options);
+                }
                 return Err(Usage(format!(
                     "{command} needs a recording's name; `just b3d list` lists them"
                 )));

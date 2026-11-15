@@ -11,6 +11,7 @@ pub mod line;
 mod listing;
 pub mod options;
 mod test;
+mod timeline;
 mod view;
 
 use std::fmt::Write;
@@ -37,6 +38,9 @@ struct Command {
     name: &'static str,
     /// What `--help` and the listing say it does.
     summary: &'static str,
+    /// What follows the name in `--help`, where the command takes no recording: a prefix, or what
+    /// it says.
+    argument: &'static str,
     /// Two command lines, each with what it does.
     examples: [(&'static str, &'static str); 2],
     spec: Spec,
@@ -57,10 +61,11 @@ impl Printed {
     }
 }
 
-const COMMANDS: [Command; 6] = [
+const COMMANDS: [Command; 8] = [
     Command {
         name: "list",
         summary: "every recording whose name starts with the prefix, with its length and views",
+        argument: " [prefix]",
         examples: [
             ("just b3d list", "every recording"),
             (
@@ -79,6 +84,7 @@ const COMMANDS: [Command; 6] = [
     Command {
         name: "info",
         summary: "a recording's moments: views, script steps and prompts with their buttons",
+        argument: " <recording>",
         examples: [
             (
                 "just b3d info verbs-zones",
@@ -100,6 +106,7 @@ const COMMANDS: [Command; 6] = [
     Command {
         name: "tree",
         summary: "the elements on screen at one moment, as an indented tree",
+        argument: " <recording>",
         examples: [
             (
                 "just b3d tree verbs-zones --at 1500ms",
@@ -128,6 +135,7 @@ const COMMANDS: [Command; 6] = [
     Command {
         name: "diff",
         summary: "the elements that appeared, left, moved or changed state between two moments",
+        argument: " <recording>",
         examples: [
             (
                 "just b3d diff verbs-zones --from 800ms --to 1500ms",
@@ -156,6 +164,7 @@ const COMMANDS: [Command; 6] = [
     Command {
         name: "check",
         summary: "every interface check on every tick of a recording, and the faults",
+        argument: " <recording>",
         examples: [
             (
                 "just b3d check verbs-zones",
@@ -177,6 +186,7 @@ const COMMANDS: [Command; 6] = [
     Command {
         name: "test",
         summary: "every interface test whose name starts with the prefix, and the faults",
+        argument: " [prefix]",
         examples: [
             ("just b3d test", "every test, at its check times"),
             (
@@ -194,6 +204,53 @@ const COMMANDS: [Command; 6] = [
             "check every tick instead of the check times, as the sweep does",
         )],
         run: test::test,
+    },
+    Command {
+        name: "timeline",
+        summary: "when each step of each script of a recording begins and ends, as JSON lines",
+        argument: " <recording>",
+        examples: [
+            (
+                "just b3d timeline verbs-zones --seat opponent",
+                "one line for each step, as the second seat sees it",
+            ),
+            (
+                "just b3d timeline --all",
+                "every recording and seat, written to a file",
+            ),
+        ],
+        spec: Spec {
+            recording: true,
+            values: &[],
+            switches: &[timeline::ALL],
+        },
+        own: &[(
+            "--all",
+            "every recording and seat, in a file under $BERYL_CACHE/b3d/out; takes no name",
+        )],
+        run: timeline::timeline,
+    },
+    Command {
+        name: "export",
+        summary: "every recording's messages, as the fixture files the web interface reads",
+        argument: " <directory>",
+        examples: [
+            (
+                "just b3d export /tmp/recordings",
+                "writes <name>.<seat>.json for each recording",
+            ),
+            (
+                "just b3d export ui/target/recordings",
+                "the same, into another directory",
+            ),
+        ],
+        spec: Spec {
+            recording: false,
+            values: &[],
+            switches: &[],
+        },
+        own: &[],
+        run: timeline::export,
     },
 ];
 
@@ -255,7 +312,7 @@ fn usage(error: &Usage) -> Ran {
 fn listing_text() -> String {
     let mut out = String::from("b3d: Beryl 3D's text commands\n");
     for command in &COMMANDS {
-        let _ = writeln!(out, "  {:<6}  {}", command.name, command.summary);
+        let _ = writeln!(out, "  {:<8}  {}", command.name, command.summary);
     }
     out.push_str("`b3d <command> --help` gives a command's options and examples.\n");
     out
@@ -264,13 +321,7 @@ fn listing_text() -> String {
 fn help(command: &Command) -> String {
     let mut out = format!(
         "just b3d {}{}: {}\n\n",
-        command.name,
-        if command.spec.recording {
-            " <recording>"
-        } else {
-            " [prefix]"
-        },
-        command.summary
+        command.name, command.argument, command.summary
     );
     if command.spec.recording {
         out.push_str(

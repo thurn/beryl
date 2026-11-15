@@ -244,6 +244,14 @@ COMMANDS: tuple[Command, ...] = (
         "test",
         "every interface test whose name starts with a prefix, at its check times",
     ),
+    b3d_command(
+        "timeline",
+        "when each step of each script of a recording begins and ends, as JSON lines",
+    ),
+    b3d_command(
+        "export",
+        "every recording's messages, as the fixture files the web interface reads",
+    ),
     render_command(
         "png",
         "draws one moment of a recording offscreen to a PNG file, and with --tree its tree",

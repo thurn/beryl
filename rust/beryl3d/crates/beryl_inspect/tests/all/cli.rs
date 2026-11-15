@@ -278,3 +278,82 @@ fn an_unknown_action_says_so_once() {
     assert_eq!(message.matches("is not an action").count(), 1, "{message}");
     assert!(message.contains("The actions are press"), "{message}");
 }
+
+const TIMELINE_KEYS: [&str; 10] = [
+    "recording",
+    "seat",
+    "view",
+    "beat",
+    "step",
+    "verb",
+    "case",
+    "start",
+    "end",
+    "effects",
+];
+
+/// The JSON lines `timeline` printed after its first line, the command that prints them again.
+fn timeline_lines(printed: &str) -> Vec<&str> {
+    printed.lines().skip(1).collect()
+}
+
+#[test]
+fn timeline_prints_one_line_for_each_step_info_lists() {
+    let info = ok(&["info", RECORDING]);
+    let steps: usize = info
+        .lines()
+        .nth(1)
+        .and_then(|summary| summary.split(" prompts, ").nth(1))
+        .and_then(|rest| rest.split(' ').next())
+        .and_then(|count| count.parse().ok())
+        .unwrap_or_else(|| panic!("{info}"));
+    let printed = ok(&["timeline", RECORDING]);
+    assert_eq!(timeline_lines(&printed).len(), steps, "{printed}");
+}
+
+#[test]
+fn every_timeline_line_is_json_with_its_keys_in_order() {
+    let printed = ok(&["timeline", RECORDING, "--seat", "opponent"]);
+    assert!(
+        printed.starts_with("just b3d timeline verbs-zones --seat opponent"),
+        "{printed}"
+    );
+    for line in timeline_lines(&printed) {
+        let value: Value = serde_json::from_str(line).unwrap_or_else(|e| panic!("{line}: {e}"));
+        assert_eq!(value["seat"], "opponent", "{line}");
+        // The line's keys are in the order given, which parsing into a map would hide.
+        let mut at = 0;
+        for key in TIMELINE_KEYS {
+            let found = line[at..]
+                .find(&format!("\"{key}\":"))
+                .unwrap_or_else(|| panic!("no {key} after byte {at} of {line}"));
+            at += found;
+        }
+        assert!(value["end"].as_f64() >= value["start"].as_f64(), "{line}");
+        assert!(value["effects"].is_array(), "{line}");
+    }
+}
+
+#[test]
+fn two_timeline_runs_print_identical_bytes() {
+    assert_eq!(ok(&["timeline", RECORDING]), ok(&["timeline", RECORDING]),);
+}
+
+#[test]
+fn export_writes_the_messages_find_gives() {
+    let directory = std::env::temp_dir().join(format!("b3d-export-{}", std::process::id()));
+    let printed = ok(&["export", directory.to_str().unwrap()]);
+    let file = directory.join(format!("{RECORDING}.you.json"));
+    let read: Vec<beryl_protocol::ipc::FixtureMessage> =
+        serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    let found = beryl_inspect::recordings::find(RECORDING, beryl_protocol::Seat::P0).unwrap();
+    assert_eq!(read, found.to_vec());
+    assert!(printed.contains(" files"), "{printed}");
+    std::fs::remove_dir_all(&directory).unwrap();
+}
+
+#[test]
+fn timeline_names_the_nearest_recordings_for_a_wrong_name() {
+    let message = refused(&["timeline", "verbs-zone"]);
+    assert!(message.contains("verbs-zones"), "{message}");
+}

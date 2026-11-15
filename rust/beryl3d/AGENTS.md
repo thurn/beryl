@@ -62,6 +62,11 @@ through the client with no window or GPU (the `b3d` skill has the details):
 - `just b3d test [prefix]` runs every interface test whose name starts with the
   prefix: each recording from each seat in each desktop window, as
   `b3d:<recording>/<seat>/<width>x<height>`, which `tree` and `check` also take.
+- `just b3d timeline <name> [--seat <seat>]` prints one JSON line for each step
+  of each script of a recording, and `--all` writes every recording and seat to
+  a file under `$BERYL_CACHE/b3d/out`.
+- `just b3d export <directory>` writes each recording's messages to
+  `<directory>/<name>.<seat>.json`, the fixture files the web interface reads.
 - `just b3d png <name> --at <moment> [--tree] [--crop <locator>]` draws that
   moment offscreen with the real renderer, and
   `just b3d film <name> --from <moment> --to <moment> --frames 12` draws up to

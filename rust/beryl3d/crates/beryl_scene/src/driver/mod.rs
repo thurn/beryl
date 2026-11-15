@@ -25,7 +25,7 @@ use beryl_protocol::script::Verb;
 use glam::Vec2;
 
 pub use action::{Action, key_code};
-pub use check::{Checked, Mode, StepMoment};
+pub use check::{Checked, Mode, StepMoment, TimelineStep};
 pub use moment::{Duration, Moment, Name, Offset, ParseError};
 pub use recording::{Answer, Recording, Responses, plays_on};
 

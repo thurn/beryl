@@ -9,7 +9,7 @@
 
 use std::collections::BTreeSet;
 
-use beryl_protocol::script::Verb;
+use beryl_protocol::script::{Edge, Verb};
 
 use super::{DriverError, Name, Page};
 use crate::agent::steps::{self, Found, Sample, card_of, sample, step_nanoseconds};
@@ -33,6 +33,25 @@ pub struct StepMoment {
     pub from: u64,
     pub to: u64,
     pub middle: u64,
+}
+
+/// One step of one script, as `just b3d timeline` prints it: when it begins and ends on its
+/// script's own clock, and how its `StepTiming` plays it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TimelineStep {
+    /// The view its script leads to, counted from 1.
+    pub view: usize,
+    pub beat: usize,
+    pub index: usize,
+    pub verb: Verb,
+    /// The step's `StepTiming::case`.
+    pub case: Option<String>,
+    /// When it begins and ends, in nanoseconds on its script's own clock.
+    pub from: u64,
+    pub to: u64,
+    /// Each of the step's `StepTiming::effects`, as its name, the edge it begins at and how far
+    /// through the step it begins when that is not an edge.
+    pub effects: Vec<(String, Edge, Option<f64>)>,
 }
 
 /// Which frames `check_all` evaluates.
@@ -231,6 +250,55 @@ impl Page {
             self.steps = Some(steps);
         }
         self.steps.clone().unwrap_or_default()
+    }
+
+    /// Every step of every script the recording plays with no action taken, in the order the
+    /// scripts are given, with the timing the same view's script gives it entry by entry.
+    pub fn timeline(&mut self) -> Vec<TimelineStep> {
+        let (played, _) = self.played();
+        let mut out = Vec::new();
+        for (number, script) in played.client.history().iter().enumerate() {
+            let timing = self
+                .views
+                .get(number)
+                .and_then(|update| update.view.script.as_ref());
+            // Timing entries run through every step of the first beat, then of the second.
+            let first: Vec<usize> = timing
+                .map(|script| {
+                    script
+                        .beats
+                        .iter()
+                        .scan(0, |sum, beat| {
+                            let at = *sum;
+                            *sum += beat.len();
+                            Some(at)
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            for step in &script.steps {
+                let entry = first
+                    .get(step.beat)
+                    .and_then(|&at| timing?.timing.get(at + step.index));
+                out.push(TimelineStep {
+                    view: number + 1,
+                    beat: step.beat,
+                    index: step.index,
+                    verb: step.verb,
+                    case: entry.and_then(|timing| timing.case.clone()),
+                    from: step.from,
+                    to: step.to,
+                    effects: entry.map_or_else(Vec::new, |timing| {
+                        timing
+                            .effects
+                            .iter()
+                            .map(|effect| (effect.name.clone(), effect.when, effect.into))
+                            .collect()
+                    }),
+                });
+            }
+        }
+        out
     }
 
     /// The recording played to its end with no action taken, the client keeping a record of its
