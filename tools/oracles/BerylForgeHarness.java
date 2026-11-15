@@ -515,6 +515,12 @@ public final class BerylForgeHarness {
                     yield List.of(cast(player, step));
                 }
                 case "activate" -> {
+                    if (step.has("mana") && step.get("mana").getAsBoolean()) {
+                        activateMana(player, step);
+                        // A mana ability does not use the stack (CR 605.3b): the player keeps
+                        // priority.
+                        yield priority(player);
+                    }
                     taps = step.getAsJsonArray("taps");
                     yield List.of(activate(player, step));
                 }
@@ -582,6 +588,12 @@ public final class BerylForgeHarness {
                 }
                 for (SpellAbility sa : card.getAllPossibleAbilities(player, true)) {
                     if (sa.isManaAbility()) {
+                        // Beryl offers a mana ability that is activated only as an instant
+                        // (CR 605.3b) as a choice, like any other activation.
+                        if (sa.getRestrictions().isInstantSpeed() && sa.canPlay()
+                                && ComputerUtilCost.canPayCost(sa, player, false)) {
+                            return true;
+                        }
                         continue;
                     }
                     if (sa.isLandAbility()) {
@@ -698,6 +710,30 @@ public final class BerylForgeHarness {
             chosen.setActivatingPlayer(player);
             prepare(player, chosen);
             return chosen;
+        }
+
+        /**
+         * Plays a mana ability activated at priority (CR 605.3b), as Lion's Eye Diamond's. The
+         * color of its mana is asked of the controller (`chooseColor`), which reads the script's
+         * next answer for the purpose "color".
+         */
+        void activateMana(Player player, JsonObject step) {
+            String name = step.get("card").getAsString();
+            String selector = step.get("ability").getAsString();
+            Card card = find(player, name, ZoneType.Battlefield);
+            List<String> seen = new ArrayList<>();
+            for (SpellAbility sa : card.getManaAbilities()) {
+                seen.add(sa.toString());
+                if (!sa.toString().contains(selector)) {
+                    continue;
+                }
+                sa.setActivatingPlayer(player);
+                if (!ComputerUtil.playNoStack(player, sa, game, true)) {
+                    throw new StepFailed("Forge could not activate " + sa);
+                }
+                return;
+            }
+            throw new StepFailed("Forge offers no mana ability of " + name + " matching " + selector + "; it offers " + seen);
         }
 
         SpellAbility activate(Player player, JsonObject step) {
@@ -1353,12 +1389,17 @@ public final class BerylForgeHarness {
             return pick == null ? null : WORDS[pick.get("n").getAsInt()];
         }
 
-        /** Beryl's color word for a text change (purposes "replace-word", "new-word"). */
+        /** Beryl's color word for a text change (purposes "replace-word", "new-word"), or the color of mana ("color"). */
         @Override
         public byte chooseColor(String message, SpellAbility sa, forge.card.ColorSet colors) {
             String word = scriptedWord();
             if (word == null) {
-                return super.chooseColor(message, sa, colors);
+                // The color of mana an ability makes (its purpose "color").
+                JsonObject pick = run.takeFollowingFor(player, "color");
+                if (pick == null) {
+                    return super.chooseColor(message, sa, colors);
+                }
+                word = COLORS[pick.get("n").getAsInt()];
             }
             byte color = forge.card.MagicColor.fromName(word);
             if (!colors.hasAnyColor(color)) {
