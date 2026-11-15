@@ -78,10 +78,9 @@ class Board:
     handle_allocations: int
     # The frame and backtrace of the first allocation inside `Client::frame`, if any.
     first_allocation: tuple[int, str] | None
-    # The frames `rank` picks, most work first, and the first and past-the-end frames of the
-    # stretch that checks the ranking: what the instruction-count gate counts (counts.py).
+    # The frames `rank` picks, most work first. The instruction-count gate (counts.py) counts
+    # every frame and expects the one with the most instructions among these.
     ranked: tuple[int, ...] = ()
-    stretch: tuple[int, int] = (0, 0)
 
 
 @dataclass(frozen=True)
@@ -121,11 +120,6 @@ def parse(text: str) -> list[Board]:
                     (int(first["frame"]), str(first["backtrace"])) if first else None
                 ),
                 ranked=tuple(int(f) for f in board.get("ranked", ())),
-                stretch=(
-                    (int(board["stretch"][0]), int(board["stretch"][1]))
-                    if "stretch" in board
-                    else (0, 0)
-                ),
             )
         )
     return boards

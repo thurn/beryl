@@ -11,13 +11,16 @@ def test_commands_go_to_the_named_machine_and_the_engine_keeps_its_own() -> None
 
 
 def test_provisioning_adds_the_vulkan_drivers_to_the_engine_machine_s() -> None:
-    script = vm.provision_script("1.0.0", "0.20.0")
-    assert script.startswith(bench.provision_script("1.0.0", "0.20.0"))
+    script = vm.provision_script("1.0.0")
+    assert script.startswith(bench.provision_script("1.0.0", None))
     assert "mesa-vulkan-drivers" in script
+    # Beryl 3D counts with Callgrind alone, so the machine needs no Gungraun runner.
+    assert "gungraun" not in script
+    assert "gungraun-runner" in bench.provision_script("1.0.0", "0.20.0")
 
 
-def test_the_runner_matches_a_locked_gungraun() -> None:
-    assert vm.runner_version() is not None
+def test_the_machine_s_packages_change_only_when_provisioning_installs_them() -> None:
+    assert "systemctl disable --now unattended-upgrades" in vm.provision_script("1.0.0")
 
 
 def test_provisioning_runs_from_the_machine_s_root() -> None:

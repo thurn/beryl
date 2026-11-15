@@ -1,7 +1,7 @@
 //! The gated boards played natively, frame by frame, for the frame gates (docs/beryl-3d.md,
 //! "Performance gates"). `just b3d gate` holds each frame's work counters and load to the limits
 //! in `data/beryl3d/gates.json`, the allocation gate counts the heap allocations of each
-//! `Client::frame`, and the instruction-count gate sends the frames `rank` picks through
+//! `Client::frame`, and the instruction-count gate counts every frame's instructions under
 //! Callgrind.
 //!
 //! A board is played as a host would play it at 60 frames a second. Its first view is handed
@@ -41,13 +41,6 @@ const MOST_FRAMES: usize = 1200;
 
 /// How many frames `rank` returns.
 pub const RANKED: usize = 8;
-
-/// How many frames the instruction-count gate counts one by one, in `stretch`, to check that
-/// `rank` picks the most expensive.
-pub const STRETCH_FRAMES: usize = RANKED + 8;
-
-/// How many frames before the top-ranked one its stretch starts.
-const STRETCH_BEFORE: usize = 4;
 
 /// The window the boards are drawn in: a 1440 by 900 point desktop window on a display of two
 /// pixels per point.
@@ -259,8 +252,8 @@ fn recorded(name: &str) -> (Vec<Vec<GameUpdate>>, CardRecords) {
 }
 
 /// Makes one frame of `playback`'s host work: hands over the inputs due and draws the frame.
-/// Under Callgrind, the instruction-count gate collects only inside this function
-/// (`--toggle-collect`), so the frames sent through it are the frames counted.
+/// `b3d-frame-counts` sends every frame through it, with Callgrind collecting only around the
+/// call and dumping after it, so one run gives every frame's instruction count.
 #[inline(never)]
 pub fn frame_counted(playback: &mut Playback) {
     playback.handle();
@@ -278,58 +271,6 @@ pub fn play_all(mut playback: Playback) -> Playback {
     playback
 }
 
-/// A gated board's playback with one frame to count: the instruction-count gate's workload.
-pub struct Counted {
-    playback: Playback,
-    /// The index of the frame sent through `frame_counted`.
-    frame: usize,
-}
-
-impl Counted {
-    /// The board called `name`, counting the frame at index `frame`.
-    ///
-    /// # Panics
-    ///
-    /// When `name` is not one of `BOARDS`.
-    #[must_use]
-    pub fn frame(name: &str, frame: usize) -> Self {
-        let playback = Playback::new(name).expect("a gated board");
-        Self { playback, frame }
-    }
-
-    /// The board called `name`, counting the frame in place `place` (from 0) of those `rank`
-    /// picks.
-    ///
-    /// # Panics
-    ///
-    /// When `name` is not one of `BOARDS` or `place` is not below `RANKED`.
-    #[must_use]
-    pub fn ranked(name: &str, place: usize) -> Self {
-        let ranked = rank(name).expect("a gated board");
-        Self::frame(name, ranked[place])
-    }
-
-    /// Plays the board up to and including the counted frame, which goes through
-    /// `frame_counted` while every frame before it makes its calls directly, and returns the
-    /// playback.
-    ///
-    /// # Panics
-    ///
-    /// When the board ends before the counted frame.
-    #[must_use]
-    pub fn play(mut self) -> Playback {
-        loop {
-            let moment = self.playback.moment().expect("the counted frame is played");
-            if moment.frame == self.frame {
-                frame_counted(&mut self.playback);
-                return self.playback;
-            }
-            self.playback.handle();
-            std::hint::black_box(self.playback.frame());
-        }
-    }
-}
-
 /// Plays the gated board called `name` to its end, calling `each` with every frame and its
 /// moment. Returns `false` for a name that is not one of `BOARDS`.
 pub fn play(name: &str, mut each: impl FnMut(Moment, &Frame)) -> bool {
@@ -343,8 +284,10 @@ pub fn play(name: &str, mut each: impl FnMut(Moment, &Frame)) -> bool {
     true
 }
 
-/// The `RANKED` frames of the board called `name` with the most work, most first: the frames
-/// the instruction-count gate measures. A frame's work is the sum of its work counters, and of
+/// The `RANKED` frames of the board called `name` with the most work, most first. The
+/// instruction-count gate counts every frame and checks that the one with the most
+/// instructions is among these, so that the work counters, which the native gate reads in
+/// seconds, keep seeing the work that costs instructions. A frame's work is the sum of its work counters, and of
 /// two frames with the same work the earlier ranks higher. Returns `None` for a name that is
 /// not one of `BOARDS`.
 #[must_use]
@@ -361,18 +304,6 @@ pub fn rank(name: &str) -> Option<[usize; RANKED]> {
         *place = frame;
     }
     Some(ranked)
-}
-
-/// The frames of the board called `name` whose instructions the instruction-count gate counts
-/// one by one, to check that `rank` picks the most expensive (docs/beryl-3d.md, "Finding the
-/// worst frame"): `STRETCH_FRAMES` frames from a few before the frame `rank` puts first. On a
-/// stress board these are the last frames at rest, the first frames of the flight, which the
-/// work counters rank highest, and the flight frames after them. Returns `None` for a name that
-/// is not one of `BOARDS`.
-#[must_use]
-pub fn stretch(name: &str) -> Option<std::ops::Range<usize>> {
-    let start = rank(name)?[0].saturating_sub(STRETCH_BEFORE);
-    Some(start..start + STRETCH_FRAMES)
 }
 
 /// The sum of a frame's work counters.

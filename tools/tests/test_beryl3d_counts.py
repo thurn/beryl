@@ -1,132 +1,97 @@
-"""`just b3d gate --counts`: reading Gungraun's counts of a board's frames and holding them to
+"""`just b3d gate --counts`: reading Callgrind's per-frame counts of a board and holding them to
 their limits."""
 
-import json
+from beryl_tools.beryl3d import counts, vm
 
-from beryl_tools.beryl3d import counts, gate
-
-BOARD = gate.Board(
-    name="stress-255",
-    frames=[],
-    handle_allocations=0,
-    first_allocation=None,
-    ranked=(30, 31),
-    stretch=(29, 33),
-)
+RANKED = (1, 2)
 
 
-def summary(function: str, id: str, instructions: int) -> str:
-    """One of Gungraun's JSON lines."""
-    return json.dumps(
-        {
-            "module_path": f"frame_counts::frames::{function}",
-            "id": id,
-            "profiles": [
-                {
-                    "tool": "Callgrind",
-                    "data": {
-                        "total": {"metrics": {"Ir": {"values": {"new": instructions}}}}
-                    },
-                }
-            ],
-        }
-    )
-
-
-def output(ranked: list[int], stretch: list[int], total: int = 1000) -> str:
-    lines = ["Compiling beryl_inspect", summary("total", "stress_255", total)]
-    lines += [summary("ranked", f"stress_255_{i}", n) for i, n in enumerate(ranked)]
-    lines += [summary("stretch", f"stress_255_{i}", n) for i, n in enumerate(stretch)]
+def output(board: str, frames: list[int]) -> str:
+    """The machine script's lines for one board whose frames counted `frames`, among the build's
+    own output."""
+    lines = ["   Compiling beryl_inspect", f"frames {board} {len(frames)}"]
+    lines += [f"count {board} {dump} {n}" for dump, n in enumerate(frames, start=1)]
     return "\n".join(lines)
 
 
-def measured(
-    ranked: list[int], stretch: list[int], total: int = 1000
-) -> counts.Counted:
-    found = counts.counted(BOARD, counts.summaries(output(ranked, stretch, total)))
-    assert found is not None
-    return found
+def measured(frames: list[int]) -> counts.Counted:
+    found = counts.parse(output("stress-255", frames))
+    return found["stress-255"]
 
 
-def test_each_run_counts_the_frame_in_its_place() -> None:
-    found = measured([50, 70], [10, 50, 70, 20])
-    assert found.total == 1000
-    assert found.ranked == {30: 50, 31: 70}
-    assert found.stretch == {29: 10, 30: 50, 31: 70, 32: 20}
-    assert counts.worst(found) == (31, 70)
+def test_dump_n_counts_frame_n_minus_one() -> None:
+    found = measured([10, 50, 70, 20])
+    assert found.frames == {0: 10, 1: 50, 2: 70, 3: 20}
+    assert found.total == 150
+    assert counts.worst(found) == (2, 70)
 
 
-def test_a_missing_run_is_no_count() -> None:
-    found = counts.summaries(output([50], [10, 50, 70, 20]))
-    assert counts.counted(BOARD, found) is None
+def test_boards_counted_at_once_keep_their_own_dumps() -> None:
+    text = output("stress-255", [1, 2]) + "\n" + output("pay-default", [3])
+    found = counts.parse(text)
+    assert found["stress-255"].frames == {0: 1, 1: 2}
+    assert found["pay-default"].frames == {0: 3}
+
+
+def test_a_board_missing_a_dump_is_no_count() -> None:
+    text = "frames stress-255 3\ncount stress-255 1 10\ncount stress-255 3 30"
+    assert counts.parse(text) == {}
 
 
 def test_the_worst_frame_fails_past_its_tolerance_while_the_total_passes() -> None:
     limits = {
         "worst_frame_instructions": 69,
-        "total_instructions": 1000,
+        "total_instructions": 150,
         "tolerance_percent": 1.0,
     }
-    failed, _ = counts.judge("stress-255", measured([50, 70], [10, 50, 70, 20]), limits)
+    failed, _ = counts.judge("stress-255", measured([10, 50, 70, 20]), limits, RANKED)
     assert len(failed) == 1
-    assert "frame 31: worst_frame_instructions 70" in failed[0]
-    within = {**limits, "worst_frame_instructions": 70}
+    assert "frame 2: worst_frame_instructions 70" in failed[0]
+    within = {**limits, "worst_frame_instructions": 70, "total_instructions": 1000}
     failed, said = counts.judge(
-        "stress-255", measured([50, 70], [10, 50, 70, 20], 1009), within
+        "stress-255",
+        measured([10, 50, 70, 20, 849]),
+        {**within, "worst_frame_instructions": 849},
+        (4,),
     )
     assert failed == []
     assert len(said) == 2
 
 
 def test_a_frame_the_counters_did_not_rank_fails() -> None:
-    limits = {"worst_frame_instructions": 70, "total_instructions": 1000}
-    failed, _ = counts.judge("stress-255", measured([50, 70], [10, 50, 70, 90]), limits)
+    limits = {"worst_frame_instructions": 90, "total_instructions": 220}
+    failed, _ = counts.judge("stress-255", measured([10, 50, 70, 90]), limits, RANKED)
     assert len(failed) == 1
-    assert "frame 32 has the most instructions of frames 29 to 32" in failed[0]
+    assert "frame 3 has the most instructions (90)" in failed[0]
 
 
 def test_update_sets_missing_limits_and_never_raises_one() -> None:
-    found = measured([50, 70], [10, 50, 70, 20])
+    found = measured([10, 50, 70, 20])
     limits = counts.lowered("stress-255", found, {})
     assert limits == {
         "worst_frame_instructions": 70,
-        "total_instructions": 1000,
+        "total_instructions": 150,
         "tolerance_percent": 1.0,
     }
     old = {"worst_frame_instructions": 60, "total_instructions": 2000}
     limits = counts.lowered("stress-255", found, old)
     assert limits["worst_frame_instructions"] == 60
-    assert limits["total_instructions"] == 1000
-    assert (
-        counts.judge("stress-255", found, {**limits, "worst_frame_instructions": 70})[0]
-        == []
-    )
-
-
-def test_the_gate_binary_names_the_frames_to_count() -> None:
-    text = json.dumps(
-        {
-            "boards": [
-                {
-                    "name": "stress-255",
-                    "handle_allocations": 0,
-                    "frames": [],
-                    "first_frame_allocation": None,
-                    "ranked": [30, 31],
-                    "stretch": [29, 33],
-                }
-            ]
-        }
-    )
-    (board,) = gate.parse(text)
-    assert board.ranked == (30, 31)
-    assert board.stretch == (29, 33)
+    assert limits["total_instructions"] == 150
 
 
 def test_a_count_below_its_limit_past_the_tolerance_fails() -> None:
     # Room left under a limit lets a later change add the work back without failing.
-    limits = {"worst_frame_instructions": 80, "total_instructions": 1000}
-    failed, _ = counts.judge("stress-255", measured([50, 70], [10, 50, 70, 20]), limits)
+    limits = {"worst_frame_instructions": 80, "total_instructions": 150}
+    failed, _ = counts.judge("stress-255", measured([10, 50, 70, 20]), limits, RANKED)
     assert len(failed) == 1
     assert "worst_frame_instructions 70, -12.50% against the limit 80" in failed[0]
     assert "--counts --update" in failed[0]
+
+
+def test_the_machine_script_counts_every_board_at_once_under_callgrind() -> None:
+    script = counts.script(["stress-255", "pay-default"])
+    # The program dumps each frame itself; Callgrind's own triggers missed returns on arm64.
+    assert "--collect-atstart=no" in script
+    assert "--dump-after" not in script
+    assert "for board in stress-255 pay-default; do" in script
+    assert vm.JOBS_SCRIPT in script

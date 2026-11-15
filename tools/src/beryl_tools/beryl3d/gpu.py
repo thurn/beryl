@@ -28,7 +28,7 @@ from typing import Any
 
 from .. import bench
 from .. import paths as repo_paths
-from . import counts, paths, source, vm
+from . import paths, source, vm
 
 # The Baseline tier's target: no gated frame shades more than this many screens.
 TARGET_SCREENS = 1.75
@@ -179,13 +179,13 @@ def fragments_script(names: list[str]) -> str:
     """The script that takes in the sources (`source.py`), builds the `fragments` example from
     the machine's copy and runs it twice, reading the recordings pack that `source.send_pack` put in
     the machine (building it there would compile the engine, which exceeds 4 GiB). It holds the machine's lock so that it takes turns with the frame counts
-    (counts.py): two builds at once exceed the machine's 4 GiB."""
+    (counts.py), since two builds at once could exceed the machine's memory."""
     boards = " ".join(f"--board {shlex.quote(n)}" for n in names)
     return bench.locked(f""". "$HOME/.cargo/env"
 set -e
 {source.take_in_script()}cd {source.SOURCE}/rust/beryl3d
 export CARGO_TARGET_DIR="{VM_TARGET}" BERYL_CACHE="$HOME/{source.VM_CACHE}"
-cargo build --locked -q -j {counts.JOBS} -p beryl_render --example fragments
+{vm.JOBS_SCRIPT}cargo build --locked -q -p beryl_render --example fragments
 "$CARGO_TARGET_DIR/debug/examples/fragments" {boards}
 "$CARGO_TARGET_DIR/debug/examples/fragments" {boards}
 """)

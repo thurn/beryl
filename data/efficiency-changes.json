@@ -68,5 +68,10 @@
     "label": "Only beryl_3d and beryl_record link the engine, so an engine edit rebuilds no other Beryl 3D test",
     "metric": "fast-check.cpu-seconds",
     "expect": "down"
+  },
+  {
+    "label": "The Beryl 3D instruction-count gate counts every frame in one Callgrind run per board, and no bead waits for it before pushing",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

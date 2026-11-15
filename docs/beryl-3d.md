@@ -2590,24 +2590,29 @@ thousands of measurements, so the gate finds its candidates first.
    segments evaluated, layout nodes computed, records written. They are
    deterministic.
 2. A native pass plays the fixture and ranks its frames by those counters.
-3. The Callgrind benchmark plays the fixture again, once for each of the 8
-   highest-ranked frames. That frame goes through a wrapper function,
-   `frame_counted`, which makes its `handle` calls and its `frame` call, and
-   every other frame makes them directly. Callgrind's `--toggle-collect` option
-   counts instructions only inside the wrapper. Each frame needs a run of its
-   own, because collection toggled around several frames in one run gives their
+3. One run of `b3d-frame-counts` under Callgrind plays the fixture again, with
+   every frame sent through a wrapper function, `frame_counted`, which makes its
+   `handle` calls and its `frame` call. Around each call the program asks
+   Callgrind, through Valgrind's client requests, to collect and then stop, and
+   after it to write the counts out and zero them, so dump `n` holds frame
+   `n - 1`. (Callgrind's own `--dump-after` option dumped only once on arm64,
+   because Callgrind lost track of the wrapper's returns.) The four fixtures run
+   at once. An earlier version ran one Valgrind process per counted frame
+   through Gungraun, each replaying the fixture up to its frame: about 100
+   processes and 25 minutes, during which every other session waited for the
+   machine.
+4. The gate's worst frame is the largest frame count, and its total is their
    sum.
-4. The gate's worst frame is the largest of the 8 counts.
 
-- **The same frames are chosen on every run**, because the work counters are
-  deterministic.
-- **A test checks that the counters rank frames correctly.** On every gated
-  board it counts each frame of a short stretch under Callgrind
-  (`gate::stretch`: 16 frames from 4 before the frame the counters rank first,
-  which on a stress board are the last frames at rest, the first frames of the
-  flight and a few after) and requires the true worst frame of the stretch to be
-  among the 8 the counters ranked highest. `just b3d gate --counts` runs it with
-  the gate, as a step of the Beryl 3D sweep.
+- **A check holds the counters to their purpose.** The frame with the most
+  instructions must be among the 8 the work counters rank highest, so that the
+  native gate, which reads the counters in seconds, keeps seeing the work that
+  costs instructions. When it does not, the fix is a counter that sees that
+  work.
+- **Only the Beryl 3D sweep runs the count gate.** No change waits for it before
+  pushing. A session checks a change's frame cost on the Mac with the native
+  gate and the `frame_abba` timing, and a sweep that finds a count past its
+  limit files a bead like any other sweep failure.
 - **The work counters are also limited natively**, on every tick, in the check
   that runs before each push. That catches most regressions without the virtual
   machine.
@@ -2692,11 +2697,17 @@ call. Three runs gave identical counts.
 
 | Board         | Worst frame           | Total, every frame | Target for the worst frame |
 | ------------- | --------------------- | -----------------: | -------------------------- |
-| `stress-255`  | 3,453,495 (frame 30)  |         53,391,042 | 2,000,000: not met         |
-| `stress-1024` | 13,394,223 (frame 30) |        200,546,807 | 4,000,000: not met         |
-| `verbs-zones` | 955,192 (frame 30)    |        101,327,683 | 2,000,000: met             |
-| `pay-default` | 357,443 (frame 30)    |          4,629,334 | 2,000,000: met             |
+| `stress-255`  | 3,055,119 (frame 30)  |         37,895,318 | 2,000,000: not met         |
+| `stress-1024` | 11,210,755 (frame 30) |         79,392,870 | 4,000,000: not met         |
+| `verbs-zones` | 2,085,813 (frame 894) |        100,894,992 | 2,000,000: not met         |
+| `pay-default` | 347,285 (frame 30)    |          4,620,323 | 2,000,000: met             |
 
+- **`verbs-zones`' worst frame was missed until every frame was counted.** The
+  gate used to count only the 8 frames the work counters rank highest, and
+  reported 878,544 instructions (frame 30). Frame 894 takes a view whose script
+  compiles in `play::compile` and re-places rows in `table::place`, work no
+  counter sees, so it was never ranked or counted. The gate's ranking check now
+  fails on it until a counter sees that work.
 - **The worst frame is the one whose `handle` takes a view with a script.**
   Compiling the script still re-places part of a battlefield row for each step
   that moves a card in it. by-q44s.22 continues that work. Every other frame is

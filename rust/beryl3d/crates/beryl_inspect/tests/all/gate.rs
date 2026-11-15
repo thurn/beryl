@@ -1,6 +1,6 @@
 //! The frames `rank` picks for the instruction-count gate, and a playback's shape.
 
-use beryl_inspect::gate::{BOARDS, Counted, Phase, REST_FRAMES, play, rank, stretch};
+use beryl_inspect::gate::{Phase, REST_FRAMES, play, rank};
 use beryl_inspect::stress::NAMES;
 
 #[test]
@@ -38,32 +38,6 @@ fn a_stress_board_rests_then_flies_until_its_script_ends() {
 }
 
 #[test]
-fn the_stretch_holds_the_top_ranked_frame_and_frames_on_either_side() {
-    // The instruction-count gate checks the ranking by counting every frame of the stretch, so
-    // the stretch must reach past the frame the counters rank highest on both sides to catch a
-    // frame they missed.
-    for name in BOARDS {
-        let top = rank(name).expect("a gated board")[0];
-        let frames = stretch(name).expect("a gated board");
-        assert!(frames.contains(&top), "{name}: {frames:?} holds {top}");
-        assert!(frames.start < top || top == 0, "{name}: {frames:?} {top}");
-        assert!(top + 1 < frames.end, "{name}: {frames:?} {top}");
-        let mut played = 0;
-        play(name, |_, _| played += 1);
-        assert!(
-            frames.end <= played,
-            "{name}: {frames:?} of {played} frames"
-        );
-    }
-    // On a stress board, every ranked frame is in it: the first frames of the flight.
-    for name in NAMES {
-        let frames = stretch(name).expect("a gated board");
-        let ranked = rank(name).expect("a gated board");
-        assert!(ranked.iter().all(|f| frames.contains(f)), "{name}");
-    }
-}
-
-#[test]
 fn a_recorded_board_plays_every_view() {
     // `pay-default` opens prompts, so some of its frames lay out text.
     let mut texts = 0;
@@ -75,14 +49,6 @@ fn a_recorded_board_plays_every_view() {
     // Its views each wait 30 frames for the one before, and there are more than two.
     assert!(frames > 2 * REST_FRAMES, "{frames} frames");
     assert!(texts > 0, "no frame of pay-default laid out text");
-}
-
-#[test]
-fn a_counted_playback_stops_after_its_frame() {
-    let start = stretch("stress-255").expect("a gated board").start;
-    let playback = Counted::frame("stress-255", start).play();
-    let next = playback.moment().expect("the board goes on");
-    assert_eq!(next.frame, start + 1);
 }
 
 #[test]

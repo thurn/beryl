@@ -15,6 +15,19 @@ from .. import bench
 from . import paths
 
 NAME = "beryl3d-bench"
+# The machine's size. The gates build with several compilers at once (`JOBS_SCRIPT`) and the
+# count gate runs the four gated boards under Callgrind at once; with 4 GiB they built with one
+# compiler, since two of the main workspace's crates built together passed 4 GiB and the kernel
+# killed one.
+CPUS = 8
+MEMORY_GIB = 12
+# Script lines that let cargo run one compiler for each 3 GiB of the machine's memory, at least
+# one. A machine made before it had `MEMORY_GIB` keeps its old size until it is next found
+# stopped (`bench.vm_ensure`), and builds with fewer compilers until then.
+JOBS_SCRIPT = (
+    "export CARGO_BUILD_JOBS=$(awk '/MemTotal/ {n = int($2 / 3145728);"
+    " print (n < 1) ? 1 : n}' /proc/meminfo)\n"
+)
 
 # Mesa's Vulkan drivers, among them lavapipe, the software driver the renderer draws on to
 # count fragments, and the Vulkan loader that finds them. `pkg-config` and OpenSSL's headers are
@@ -22,40 +35,38 @@ NAME = "beryl3d-bench"
 GRAPHICS = ("mesa-vulkan-drivers", "libvulkan1", "pkg-config", "libssl-dev")
 
 
-def runner_version() -> str | None:
-    """The Gungraun release the runner must match: Beryl 3D's lock file's, else the main
-    workspace's, which the engine's machine also installs."""
-    for lock in (paths.WORKSPACE / "Cargo.lock", bench.paths.RUST / "Cargo.lock"):
-        found = bench.locked_version(lock.read_text(), "gungraun")
-        if found is not None:
-            return found
-    return None
-
-
-def provision_script(channel: str, runner: str) -> str:
-    """Idempotent: what `beryl-bench` installs, then the graphics packages."""
+def provision_script(channel: str) -> str:
+    """Idempotent: what `beryl-bench` installs except the Gungraun runner, which Beryl 3D does
+    not use, then the graphics packages."""
     packages = " ".join(GRAPHICS)
-    return bench.provision_script(channel, runner) + (
+    return bench.provision_script(channel, None) + (
         f"if ! dpkg -s {packages} >/dev/null 2>&1; then\n"
         "  sudo apt-get update -qq\n"
         f"  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq {packages}\n"
         "fi\n"
+        # Ubuntu upgrades its packages unattended, and an upgrade of Valgrind or glibc moved
+        # every count between two runs of the same commit by more than the tolerance. The
+        # machine's packages change only when this script installs them.
+        "if systemctl is-enabled --quiet unattended-upgrades 2>/dev/null; then\n"
+        "  sudo systemctl disable --now unattended-upgrades\n"
+        "fi\n"
     )
+
+
+def start() -> int:
+    """Creates or starts the machine at its size: 0, or the code to exit with."""
+    return bench.vm_ensure(NAME, CPUS, MEMORY_GIB)
 
 
 def ensure() -> int:
     """Creates and starts the machine if needed, and provisions it: 0, or the code to exit
     with."""
-    code = bench.vm_ensure(NAME)
+    code = start()
     if code != 0:
         return code
-    runner = runner_version()
-    if runner is None:
-        bench.log("no gungraun in rust/beryl3d/Cargo.lock or rust/Cargo.lock")
-        return 2
     # From the machine's root: the sweep calls this from a worktree that the machine does not
     # mount, so the checkout's own path does not exist there.
-    return bench.vm_shell(provision_script(bench.toolchain(), runner), NAME, "/")
+    return bench.vm_shell(provision_script(bench.toolchain()), NAME, "/")
 
 
 def run_vm(args: argparse.Namespace) -> int:

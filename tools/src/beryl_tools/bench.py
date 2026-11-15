@@ -268,9 +268,10 @@ def locked_version(lock: str, package: str) -> str | None:
     return match.group(1) if match else None
 
 
-def provision_script(channel: str, runner: str) -> str:
-    """Idempotent: installs Valgrind, the pinned Rust and the runner matching Cargo.lock."""
-    return f"""set -euo pipefail
+def provision_script(channel: str, runner: str | None) -> str:
+    """Idempotent: installs Valgrind, the pinned Rust and, unless `runner` is `None`, the
+    Gungraun runner of that release, which must match Cargo.lock's."""
+    script = f"""set -euo pipefail
 if ! command -v valgrind >/dev/null || ! command -v cc >/dev/null; then
   sudo apt-get update -qq
   sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq valgrind build-essential
@@ -281,10 +282,16 @@ if [ ! -x "$HOME/.cargo/bin/rustup" ]; then
 fi
 . "$HOME/.cargo/env"
 rustup toolchain install {channel} --profile minimal >/dev/null 2>&1
-if ! gungraun-runner --version 2>/dev/null | grep -qF {runner}; then
+"""
+    if runner is None:
+        return script
+    return (
+        script
+        + f"""if ! gungraun-runner --version 2>/dev/null | grep -qF {runner}; then
   cargo +{channel} install --quiet --locked gungraun-runner --version {runner}
 fi
 """
+    )
 
 
 def wsl_status(vm: str = VM) -> str | None:
@@ -405,7 +412,21 @@ def wsl_ensure(vm: str = VM) -> int:
     ).returncode
 
 
-def vm_ensure(vm: str = VM) -> int:
+def vm_size(vm: str) -> tuple[int, int] | None:
+    """The Lima machine `vm`'s CPUs and memory in GiB, or `None` if there is none."""
+    for line in output(
+        "limactl", "list", "--format", "{{.Name}} {{.CPUs}} {{.Memory}}"
+    ).splitlines():
+        fields = line.split()
+        if len(fields) == 3 and fields[0] == vm:
+            return int(fields[1]), int(fields[2]) >> 30
+    return None
+
+
+def vm_ensure(vm: str = VM, cpus: int = 4, memory_gib: int = 4) -> int:
+    """Creates the machine `vm` with `cpus` CPUs and `memory_gib` GiB, or starts it. A stopped
+    machine smaller than that grows first. A running one is left as it is, since stopping it
+    would kill another session's run, and grows the next time it is found stopped."""
     if system.WINDOWS:
         return wsl_ensure(vm)
     if not output("which", "limactl").strip():
@@ -413,12 +434,19 @@ def vm_ensure(vm: str = VM) -> int:
         return 2
     status = vm_status(vm)
     checkout = paths.main_checkout() or paths.REPO
+    size = [f"--cpus={cpus}", f"--memory={memory_gib}"]
     if status is None:
         log(f"creating the {vm} VM (downloads Ubuntu once; a few minutes)")
-        cmd = ["limactl", "start", f"--name={vm}", "--tty=false", "--cpus=4"]
-        cmd += ["--memory=4", "--containerd=none", f"--mount-only={checkout}"]
+        cmd = ["limactl", "start", f"--name={vm}", "--tty=false", *size]
+        cmd += ["--containerd=none", f"--mount-only={checkout}"]
         code = subprocess.run([*cmd, "template:ubuntu-lts"], check=False).returncode
     elif status != "Running":
+        now = vm_size(vm)
+        if now is not None and (now[0] < cpus or now[1] < memory_gib):
+            log(f"growing the {vm} VM from {now[0]} CPUs and {now[1]} GiB")
+            edit = ["limactl", "edit", "--tty=false", *size, vm]
+            if subprocess.run(edit, check=False).returncode != 0:
+                return 2
         code = subprocess.run(["limactl", "start", "--tty=false", vm]).returncode
     else:
         code = 0

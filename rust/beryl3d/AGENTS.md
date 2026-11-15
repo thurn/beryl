@@ -134,13 +134,18 @@ project, and selects the main lanes.
   frame"). `just b3d gate --update` lowers them to what was measured.
   `worst_frame_instructions`, `total_instructions` and `tolerance_percent` are
   the instruction-count gate's, counted under Callgrind in `beryl3d-bench` by
-  `just b3d gate --counts` (a step of the sweep, `benches/frame_counts.rs` in
-  `beryl_inspect`), and `--counts --update` lowers them. A count may pass its
-  limit by the tolerance, 1%, which absorbs inlining and layout shifts from
-  unrelated changes; the work counters' limits have none. A count below its
-  limit (past the tolerance, for instructions) fails too: a change that cuts the
-  work lowers the limit in the same commit, so that no room is left for a later
-  change to add work back unseen. A limit rises only when the work itself
+  `just b3d gate --counts` (a step of the sweep, the `b3d-frame-counts` program
+  in `beryl_inspect`), and `--counts --update` lowers them. Never wait for the
+  count gate before pushing: check a change's frame cost with `just b3d gate`
+  and `frame_abba` on the Mac, and leave the counts to the sweep, which files a
+  bead when one moves past its tolerance. A bead may ask for `--counts` only
+  when instruction counts are what it is about, and it takes a few minutes. A
+  count may pass its limit by the tolerance, 1%, which absorbs inlining and
+  layout shifts from unrelated changes; the work counters' limits have none. A
+  count below its limit (past the tolerance, for instructions) fails too, so
+  that no room is left for a later change to add work back unseen: a change that
+  cuts the work lowers the native limits in the same commit, and the sweep's
+  bead lowers the instruction limits. A limit rises only when the work itself
   changed (a new verb, a new element on every screen) or a compiler or
   dependency upgrade moved the count with no change to Beryl's code, and the
   commit that raises it gives the old and new numbers. It needs nobody's
