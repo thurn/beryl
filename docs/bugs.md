@@ -6,6 +6,14 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Phasing out a permanent that entered this turn could panic.** The tracker
+  check looked for the permanent in the battlefield zone set, which omits
+  phased-out permanents even though they stay in the same zone (CR 702.26d).
+  Fixed: the check includes phased-out permanents, and a regression test
+  verifies that both turn trackers survive phasing out and in. Prevention:
+  validate object lifetime against zone membership that includes phased-out
+  permanents. Use the gameplay zone set when a rule needs to ignore them.
+
 - **A save with a copy replayed a different attack once its cards were in other
   slots.** A Phantasmal Image copying Grizzly Bears and a real Grizzly Bears,
   both able to attack, were named alike in a save: an answer names an object by

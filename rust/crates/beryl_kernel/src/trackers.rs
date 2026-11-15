@@ -210,8 +210,14 @@ impl<L: Layout> Store<L> for Trackers<L> {
         Ok(())
     }
 
+    /// The battlefield zone set omits phased-out permanents for gameplay, but they still have
+    /// trackers. [CR 702.26d]: "The phasing event doesn't actually cause a permanent to change
+    /// zones or control, even though it's treated as though it's not on the battlefield and
+    /// not under its controller's control while it's phased out."
+    ///
+    /// [CR 702.26d]: https://yawgatog.com/resources/magic-rules/#R70226d
     fn check(&self, s: &State<L>, t: &GameTable) -> Result<(), Violation> {
-        let battlefield = s.in_zone(Zone::Battlefield);
+        let battlefield = s.in_zone(Zone::Battlefield) | s.phased_out();
         for tracker in Tracker::ALL {
             let set = self.sets[tracker as usize];
             let stray = (set & !battlefield).iter().next();

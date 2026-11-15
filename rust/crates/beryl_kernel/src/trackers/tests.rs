@@ -167,6 +167,26 @@ fn a_tracker_ends_with_the_turn_and_as_its_permanent_leaves() {
 }
 
 #[test]
+fn phasing_preserves_a_permanents_turn_trackers() {
+    let (t, mut s, [a, _]) = game(1);
+    s.track(&t, Tracker::EnteredThisTurn, a);
+    s.track(&t, Tracker::LoyaltyActivated, a);
+    let tracked = s.trackers(a);
+    let slots = Bitboard::single(a);
+    derive(&t, &mut s);
+
+    s.phase_out(slots).unwrap();
+    derive(&t, &mut s);
+    assert_eq!(s.trackers(a), tracked);
+    assert_eq!(s.check_invariants(&t), Ok(()));
+
+    s.phase_in(slots).unwrap();
+    derive(&t, &mut s);
+    assert_eq!(s.trackers(a), tracked);
+    assert_eq!(s.check_invariants(&t), Ok(()));
+}
+
+#[test]
 fn signature_tells_two_permanents_apart_by_a_tracker() {
     let (t, mut s, [a, b]) = game(1);
     let same = |t: &GameTable, s: &mut State| {
