@@ -305,6 +305,11 @@ restore the old behavior.
   settings menu offers Reset shortcuts.
 - **Quitting from a manual table.** On the desktop, the Quit shortcut asks
   whether to leave the table and quit Beryl. Cancel keeps the table open.
+- **Manual table turn controls.** The step track lights the current step beside
+  the active player's life total. Clicking an icon sets the phase. Clicking the
+  lit Untap or Draw icon on your turn also performs that action. Cleanup selects
+  End step. The Next button names the following phase and advances to it,
+  wrapping to Untap. The Next turn command passes the turn.
 - **Manual table announcements.** The stage uses its existing step banner for a
   manual shuffle, roll, phase, turn, rewind or game start. It reads Shuffled,
   Rolled 4 (d6), Heads, the phase name, the active player's name followed by 's

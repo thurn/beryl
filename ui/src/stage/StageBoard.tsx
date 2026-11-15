@@ -21,6 +21,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { Corner, UndoButton } from "../game/Corner";
+import { Dock, TurnButton } from "../components/Controls";
 import { RAISE, raisedPose } from "../game/raise";
 import { STAGE } from "../game/perspective";
 import { useStageWidth } from "../game/Stage";
@@ -40,6 +41,7 @@ import { DESKTOP, Faces } from "./Faces.tsx";
 import { useSurface } from "./mount.ts";
 import { Selection } from "../table/Selection";
 import type { TableClient } from "../table/client";
+import { nextPhaseLabel } from "../table/turn";
 import { type BoardStage, pageStage } from "./playback.ts";
 import {
   PlayerTarget,
@@ -67,6 +69,7 @@ export function StageBoard({
   setStops,
   onLeave,
   onShortcuts,
+  onNextPhase,
   onConcede,
   dimmed,
   board = pageStage(),
@@ -88,6 +91,7 @@ export function StageBoard({
   setStops?(stops: StopsSetting): void;
   onLeave(): void;
   onShortcuts?: () => void;
+  onNextPhase?: () => void;
   /** Concedes the game; none once it is over. */
   onConcede?: () => void;
   /** A screen is over the table: the opening or the game's end. */
@@ -314,6 +318,16 @@ export function StageBoard({
           dimmed={dimmed}
           client={client}
         >
+          {view.table && onNextPhase && (
+            <Dock className="stage-prompt">
+              <div className="turn-action">
+                <TurnButton label="Next" onClick={onNextPhase} />
+                <span className="turn-caption">
+                  {nextPhaseLabel(view.table.phase)}
+                </span>
+              </div>
+            </Dock>
+          )}
           {!client && <PromptDock asked={asked} {...answers} />}
         </Controls>
         {!dimmed && (

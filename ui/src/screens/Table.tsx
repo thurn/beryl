@@ -29,6 +29,7 @@ import { TableArrows } from "../table/arrows";
 import { registerClicks } from "../table/click";
 import { TableClient } from "../table/client";
 import { listenTableKeys } from "../table/keyboard";
+import { registerTurn } from "../table/turn";
 import type { AppInfo } from "../generated/protocol";
 import { TableDrag } from "../table/drag";
 import { TableViewers } from "../table/viewers";
@@ -64,6 +65,7 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
     client.viewers = new TableViewers(client, report);
     registerSelection(client);
     registerClicks(client, report);
+    registerTurn(client, report);
     const leave = () => {
       void tableLeave().then(() => {
         window.location.hash = "#/";
@@ -173,6 +175,10 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
       stops={shown.view.stops}
       onLeave={leave}
       onShortcuts={commands.openShortcuts}
+      onNextPhase={() => {
+        if (!commands.overlayOpen && !client.overlayOpen)
+          void commands.shortcut("phase.next").catch(commands.reportError);
+      }}
     >
       <TableMenu
         commands={commands}

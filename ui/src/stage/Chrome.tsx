@@ -425,7 +425,7 @@ export function Controls({
         );
       })}
       <div className="turn-controls">
-        {stops.fullControl && (
+        {!client && stops.fullControl && (
           <span className="full-control has-tip">
             <FullControlIcon />
             <Tip side="above">Full control</Tip>
@@ -442,14 +442,16 @@ export function Controls({
               current={table.turn.active === side ? table.turn.step : undefined}
               now={`Turn ${table.turn.ownNumber} · ${STEP_NAMES[table.turn.step]}`}
               whose={side === "you" ? "Your" : "Opponent's"}
-              stops={stops[key]}
+              stops={client ? [] : stops[key]}
               onStep={
                 client?.hasClick("step")
                   ? (step, event) => pickStep(client, side, step, event)
                   : undefined
               }
               onStops={
-                setStops && ((steps) => setStops({ ...stops, [key]: steps }))
+                !client && setStops
+                  ? (steps) => setStops({ ...stops, [key]: steps })
+                  : undefined
               }
             />
           );

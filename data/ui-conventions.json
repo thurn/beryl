@@ -939,6 +939,11 @@
     },
     {
       "kind": "no-equivalent",
+      "name": "Manual table turn controls",
+      "rule": "The step track lights the current step beside the active player's life total. Clicking an icon sets the phase. Clicking the lit Untap or Draw icon on your turn also performs that action. Cleanup selects End step. The Next button names the following phase and advances to it, wrapping to Untap. The Next turn command passes the turn."
+    },
+    {
+      "kind": "no-equivalent",
       "name": "Manual table announcements",
       "rule": "The stage uses its existing step banner for a manual shuffle, roll, phase, turn, rewind or game start. It reads Shuffled, Rolled 4 (d6), Heads, the phase name, the active player's name followed by 's turn, Rewound to 41, or Game 2. The banner fades on the stage's clock."
     },
