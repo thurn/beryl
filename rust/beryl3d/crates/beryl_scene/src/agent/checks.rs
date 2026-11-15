@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use glam::Vec2;
 
 use super::fault::{Context, Fault, Layout, Rule, Subject};
-use super::hit::{bounds, contains, free_rect, hit, intersection, is_within};
+use super::hit::{Overlaps, bounds, contains, has_free_rect, hit, intersection, is_within};
 use super::tree::locator_of;
 use crate::data::audit;
 use crate::frame::{Frame, Place, Role, StateBits};
@@ -101,6 +101,8 @@ pub fn reachable(frame: &Frame, context: &Context) -> Vec<Fault> {
         Layout::Phone => audit::PHONE_TARGET_POINTS,
     };
     let mut faults = Vec::new();
+    // Built on the first card at rest, so a frame with none builds no index.
+    let mut overlaps: Option<Overlaps> = None;
     for index in interactive(frame) {
         let element = &frame.resolved[index as usize];
         if element.role == Role::Card {
@@ -111,7 +113,8 @@ pub fn reachable(frame: &Frame, context: &Context) -> Vec<Fault> {
                 width: side,
                 height: side,
             };
-            if free_rect(frame, index, min).is_none() {
+            let overlaps = overlaps.get_or_insert_with(|| Overlaps::new(frame));
+            if !has_free_rect(frame, overlaps, index, min) {
                 let subject = subject(frame, index);
                 faults.push(fault(
                     Rule::Reachable,

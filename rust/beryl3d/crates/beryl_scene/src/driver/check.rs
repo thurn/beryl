@@ -320,21 +320,22 @@ fn fault(found: &Found, elements: Vec<Subject>) -> Fault {
     }
 }
 
-/// `faults` with each rule's fault about the same elements kept once, the first.
+/// `faults` with each rule's fault about the same elements kept once, the first. A board with
+/// many cards finds many faults in every frame, so the faults already kept are looked up in a
+/// set rather than scanned.
 fn unique(faults: Vec<Fault>) -> Vec<Fault> {
-    let mut seen: Vec<(agent::Rule, Vec<String>)> = Vec::new();
+    let mut seen: BTreeSet<(&'static str, Vec<String>)> = BTreeSet::new();
     let mut kept = Vec::new();
     for fault in faults {
         let key = (
-            fault.rule,
+            fault.rule.word(),
             fault
                 .elements
                 .iter()
                 .map(|subject| subject.locator.clone())
                 .collect(),
         );
-        if !seen.contains(&key) {
-            seen.push(key);
+        if seen.insert(key) {
             kept.push(fault);
         }
     }

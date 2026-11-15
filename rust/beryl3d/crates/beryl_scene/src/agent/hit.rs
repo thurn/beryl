@@ -39,61 +39,120 @@ pub fn uncovered(frame: &Frame, index: u32) -> Option<Rect> {
 /// The largest rectangle, by area, at least `min` large, inside element `index` where a press
 /// reaches that element or one of its descendants.
 ///
-/// The element's bounding box is cut into cells along the edges of every box that overlaps it,
-/// and into cells at most `CELL` points large. A cell is free when a press at its centre and
-/// just inside each of its corners reaches the element. The answer is the largest run of free
-/// cells that forms a rectangle. A slanted edge that cuts a cell without reaching any of those
-/// five points is missed, which can only make the answer slightly too large.
+/// The element's bounding box is cut into cells along the edges of every box that overlaps it
+/// and can decide what a press there reaches, and into cells at most `CELL` points large. A cell
+/// is free when a press at its centre and just inside each of its corners reaches the element.
+/// The answer is the largest run of free cells that forms a rectangle. A slanted edge that cuts
+/// a cell without reaching any of those five points is missed, which can only make the answer
+/// slightly too large.
 #[must_use]
 pub fn free_rect(frame: &Frame, index: u32, min: Size) -> Option<Rect> {
-    let grid = Grid::new(frame, index);
+    let grid = Grid::new(frame, index, everything(frame));
     let free = grid.free_cells(frame, index, true);
-    let (columns, rows) = (grid.xs.len() - 1, grid.ys.len() - 1);
-    let mut best: Option<(f32, Rect)> = None;
-    for left in 0..columns {
-        // `open[row]` is whether every cell from `left` to `right` in that row is free.
-        let mut open = vec![true; rows];
-        for right in left..columns {
-            let width = grid.xs[right + 1] - grid.xs[left];
-            for (row, open) in open.iter_mut().enumerate() {
-                *open &= free[row * columns + right];
-            }
-            if width < min.width {
+    grid.search(&free, min, false)
+}
+
+/// Whether element `index` has a rectangle at least `min` large where a press reaches it or one
+/// of its descendants: whether `free_rect` would find one. `overlaps` must have been built from
+/// `frame`. It stops at the first such rectangle, which is what the "reachable" check asks.
+#[must_use]
+pub fn has_free_rect(frame: &Frame, overlaps: &Overlaps, index: u32, min: Size) -> bool {
+    let grid = Grid::new(frame, index, overlaps.near(grid_area(frame, index)));
+    let free = grid.free_cells(frame, index, true);
+    grid.search(&free, min, true).is_some()
+}
+
+/// The elements of a frame filed by the squares of the screen their boxes touch, so that finding
+/// the elements whose boxes overlap an area costs about as much as there are near it, not as
+/// many as the frame has. Built once per frame by the checks that ask this of every element.
+pub struct Overlaps {
+    /// The top left corner of the square at column 0 and row 0, and each square's side.
+    origin: Vec2,
+    side: f32,
+    columns: usize,
+    rows: usize,
+    /// The elements that touch each square, row by row, each in index order. Arrows never catch
+    /// a press, so they are left out.
+    squares: Vec<Vec<u32>>,
+    boxes: Vec<Rect>,
+}
+
+/// The most squares `Overlaps` cuts the frame into along one axis.
+const MOST_SQUARES: f32 = 64.0;
+
+impl Overlaps {
+    #[must_use]
+    pub fn new(frame: &Frame) -> Self {
+        let boxes: Vec<Rect> = frame.resolved.iter().map(bounds).collect();
+        let (mut min, mut max) = (Vec2::splat(f32::MAX), Vec2::splat(f32::MIN));
+        for rect in &boxes {
+            min = min.min(Vec2::new(rect.x, rect.y));
+            max = max.max(Vec2::new(rect.x + rect.width, rect.y + rect.height));
+        }
+        if boxes.is_empty() {
+            (min, max) = (Vec2::ZERO, Vec2::ONE);
+        }
+        let extent = (max - min).max(Vec2::ONE);
+        let side = (extent.max_element() / MOST_SQUARES).max(1.0);
+        let columns = (extent.x / side).ceil() as usize + 1;
+        let rows = (extent.y / side).ceil() as usize + 1;
+        let mut overlaps = Self {
+            origin: min,
+            side,
+            columns,
+            rows,
+            squares: vec![Vec::new(); columns * rows],
+            boxes,
+        };
+        for (index, element) in frame.resolved.iter().enumerate() {
+            if element.role == Role::Arrow {
                 continue;
             }
-            let mut top = 0;
-            for (bottom, &open) in open.iter().enumerate() {
-                if !open {
-                    top = bottom + 1;
-                    continue;
-                }
-                let height = grid.ys[bottom + 1] - grid.ys[top];
-                if height < min.height {
-                    continue;
-                }
-                let area = width * height;
-                if best.is_none_or(|(most, _)| area > most) {
-                    best = Some((
-                        area,
-                        Rect {
-                            x: grid.xs[left],
-                            y: grid.ys[top],
-                            width,
-                            height,
-                        },
-                    ));
+            let (left, top, right, bottom) = overlaps.span(overlaps.boxes[index]);
+            for row in top..=bottom {
+                for column in left..=right {
+                    overlaps.squares[row * columns + column].push(index as u32);
                 }
             }
         }
+        overlaps
     }
-    best.map(|(_, rect)| rect)
+
+    /// The columns and rows of the squares `rect` touches, clamped to the frame's: left, top,
+    /// right and bottom, inclusive.
+    fn span(&self, rect: Rect) -> (usize, usize, usize, usize) {
+        let cell = |value: f32, origin: f32, most: usize| {
+            (((value - origin) / self.side).floor().max(0.0) as usize).min(most - 1)
+        };
+        (
+            cell(rect.x, self.origin.x, self.columns),
+            cell(rect.y, self.origin.y, self.rows),
+            cell(rect.x + rect.width, self.origin.x, self.columns),
+            cell(rect.y + rect.height, self.origin.y, self.rows),
+        )
+    }
+
+    /// The elements, other than arrows, whose boxes share some area with `area`, in index order.
+    fn near(&self, area: Rect) -> Vec<u32> {
+        let (left, top, right, bottom) = self.span(area);
+        let mut near = Vec::new();
+        for row in top..=bottom {
+            for column in left..=right {
+                near.extend(&self.squares[row * self.columns + column]);
+            }
+        }
+        near.sort_unstable();
+        near.dedup();
+        near.retain(|&other| intersection(area, self.boxes[other as usize]).is_some());
+        near
+    }
 }
 
 /// How much of element `index`'s area is covered by other elements, from 0 to 1, measured on
 /// the same cells as `free_rect`, each counted by its centre.
 #[must_use]
 pub fn covered(frame: &Frame, index: u32) -> f32 {
-    let grid = Grid::new(frame, index);
+    let grid = Grid::new(frame, index, everything(frame));
     let free = grid.free_cells(frame, index, false);
     let element = &frame.resolved[index as usize];
     let columns = grid.xs.len() - 1;
@@ -226,14 +285,37 @@ fn covers(frame: &Frame, a: u32, b: u32) -> bool {
     }
 }
 
+/// Every element of `frame` other than its arrows, which never catch a press, in index order.
+fn everything(frame: &Frame) -> Vec<u32> {
+    (0..frame.resolved.len() as u32)
+        .filter(|&index| frame.resolved[index as usize].role != Role::Arrow)
+        .collect()
+}
+
+/// The area `Grid` measures element `index` on: its box, cut to its clip.
+fn grid_area(frame: &Frame, index: u32) -> Rect {
+    let element = &frame.resolved[index as usize];
+    let area = bounds(element);
+    match element.clip {
+        Some(clip) => intersection(area, clip).unwrap_or(Rect {
+            x: area.x,
+            y: area.y,
+            width: 0.0,
+            height: 0.0,
+        }),
+        None => area,
+    }
+}
+
 /// The cells `free_rect` and `covered` measure an element on: its box cut along the edges of
-/// every box that overlaps it, and then into cells no larger than `CELL` points, so that the
-/// cells along a slanted edge of a card drawn in perspective are small.
+/// every box that overlaps it and can decide what a press reaches there, and then into cells no
+/// larger than `CELL` points, so that the cells along a slanted edge of a card drawn in
+/// perspective are small.
 struct Grid {
     xs: Vec<f32>,
     ys: Vec<f32>,
-    /// The elements whose boxes overlap the element's, itself among them: the only ones a hit
-    /// test inside its box can return.
+    /// The elements whose boxes overlap the element's and that can decide what a press inside
+    /// its box reaches, itself among them.
     candidates: Vec<u32>,
 }
 
@@ -243,17 +325,16 @@ const CELL: f32 = 4.0;
 const MOST_CUTS: f32 = 64.0;
 
 impl Grid {
-    fn new(frame: &Frame, index: u32) -> Self {
-        let element = &frame.resolved[index as usize];
-        let mut area = bounds(element);
-        if let Some(clip) = element.clip {
-            area = intersection(area, clip).unwrap_or(Rect {
-                x: area.x,
-                y: area.y,
-                width: 0.0,
-                height: 0.0,
-            });
-        }
+    /// The grid for element `index`, from `near`: the elements other than arrows whose boxes
+    /// may overlap its own, in index order, a superset of those that do.
+    ///
+    /// Of those, only the element, its descendants and what is drawn over the lowest of them
+    /// can decide whether a press reaches it. Where an element drawn under all of them is the
+    /// topmost to catch a press, none of them catches it, so the press reaches some other
+    /// element whether or not that one is counted. Leaving such elements out keeps a card in
+    /// a crowded row from being measured against every card drawn under it.
+    fn new(frame: &Frame, index: u32, near: Vec<u32>) -> Self {
+        let area = grid_area(frame, index);
         let (mut xs, mut ys) = (Vec::new(), Vec::new());
         for (edges, start, length) in [
             (&mut xs, area.x, area.width),
@@ -262,24 +343,97 @@ impl Grid {
             let cuts = (length / CELL).ceil().clamp(1.0, MOST_CUTS) as u32;
             edges.extend((0..=cuts).map(|cut| start + length * cut as f32 / cuts as f32));
         }
-        let mut candidates = vec![index];
-        for (other, candidate) in frame.resolved.iter().enumerate() {
-            if other as u32 == index || candidate.role == Role::Arrow {
+        let mut overlapping = Vec::with_capacity(near.len());
+        let mut lowest = index;
+        for other in near {
+            if other != index
+                && intersection(area, bounds(&frame.resolved[other as usize])).is_none()
+            {
                 continue;
             }
-            let Some(shared) = intersection(area, bounds(candidate)) else {
+            let inside = is_within(frame, other, index);
+            if inside && covers(frame, lowest, other) {
+                lowest = other;
+            }
+            overlapping.push((other, inside));
+        }
+        let mut candidates = Vec::with_capacity(overlapping.len());
+        for (other, inside) in overlapping {
+            if !inside && !covers(frame, other, lowest) {
                 continue;
-            };
-            candidates.push(other as u32);
+            }
+            candidates.push(other);
+            if other == index {
+                continue;
+            }
+            let shared = intersection(area, bounds(&frame.resolved[other as usize]))
+                .expect("only overlapping elements are kept");
             xs.extend([shared.x, shared.x + shared.width]);
             ys.extend([shared.y, shared.y + shared.height]);
         }
-        candidates.sort_unstable();
+        if candidates.binary_search(&index).is_err() {
+            // An element with an empty area overlaps nothing, itself included.
+            candidates.push(index);
+            candidates.sort_unstable();
+        }
         for edges in [&mut xs, &mut ys] {
             edges.sort_by(f32::total_cmp);
             edges.dedup_by(|a, b| (*a - *b).abs() < 0.001);
         }
         Self { xs, ys, candidates }
+    }
+
+    /// The largest rectangle of free cells at least `min` large, by area, or with `first` the
+    /// first one found.
+    fn search(&self, free: &[bool], min: Size, first: bool) -> Option<Rect> {
+        let (columns, rows) = (self.xs.len() - 1, self.ys.len() - 1);
+        let mut best: Option<(f32, Rect)> = None;
+        for left in 0..columns {
+            // `open[row]` is whether every cell from `left` to `right` in that row is free.
+            let mut open = vec![true; rows];
+            for right in left..columns {
+                let width = self.xs[right + 1] - self.xs[left];
+                let mut any = false;
+                for (row, open) in open.iter_mut().enumerate() {
+                    *open &= free[row * columns + right];
+                    any |= *open;
+                }
+                if !any {
+                    // Wider runs from `left` hold no free cell either.
+                    break;
+                }
+                if width < min.width {
+                    continue;
+                }
+                let mut top = 0;
+                for (bottom, &open) in open.iter().enumerate() {
+                    if !open {
+                        top = bottom + 1;
+                        continue;
+                    }
+                    let height = self.ys[bottom + 1] - self.ys[top];
+                    if height < min.height {
+                        continue;
+                    }
+                    let area = width * height;
+                    if best.is_none_or(|(most, _)| area > most) {
+                        best = Some((
+                            area,
+                            Rect {
+                                x: self.xs[left],
+                                y: self.ys[top],
+                                width,
+                                height,
+                            },
+                        ));
+                        if first {
+                            return best.map(|(_, rect)| rect);
+                        }
+                    }
+                }
+            }
+        }
+        best.map(|(_, rect)| rect)
     }
 
     /// Whether a press at `point` reaches element `index` or one of its descendants.

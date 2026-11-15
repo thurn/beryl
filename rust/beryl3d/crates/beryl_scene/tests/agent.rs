@@ -577,3 +577,42 @@ fn a_card_drawn_in_perspective_is_not_covered_by_its_own_slant() {
     assert!(rect.width >= 80.0 && rect.height >= 120.0, "{rect:?}");
     assert_eq!(summary(&check(&frame, &context(Layout::Phone))), vec![]);
 }
+
+#[test]
+fn reachable_finds_the_same_cards_as_the_largest_free_rectangle_in_a_crowded_row() {
+    // A row of overlapping cards: each nearer card hides all but a strip of the one before it,
+    // a strip 10 points wide where they are packed and 30 where they are spread. A few cards are
+    // drawn behind their neighbours instead, and a panel of the flat layer covers part of the row.
+    let mut specs = Vec::new();
+    let mut x = 0.0;
+    for n in 0..40_u32 {
+        let depth = if n % 7 == 3 {
+            50.0
+        } else {
+            40.0 - n as f32 * 0.5
+        };
+        specs.push(card("Island", n + 1, LANDS, x, 100.0, depth));
+        x += if n % 5 < 2 { 30.0 } else { 10.0 };
+    }
+    specs.push(layer(
+        Role::Region,
+        "panel",
+        99,
+        rect(150.0, 0.0, 60.0, 180.0),
+    ));
+    let frame = frame(specs);
+    let side = Size {
+        width: 24.0,
+        height: 24.0,
+    };
+    let expected: Vec<String> = (0..40)
+        .filter(|&index| beryl_scene::agent::hit::free_rect(&frame, index, side).is_none())
+        .map(|index| beryl_scene::agent::tree::locator_of(&frame, index))
+        .collect();
+    let found: Vec<String> = reachable(&frame, &desktop())
+        .iter()
+        .map(|fault| fault.elements[0].locator.clone())
+        .collect();
+    assert!(!expected.is_empty() && expected.len() < 40);
+    assert_eq!(found, expected);
+}
