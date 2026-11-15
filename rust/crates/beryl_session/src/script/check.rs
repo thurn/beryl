@@ -179,6 +179,23 @@ struct Beat {
     left: Vec<Subject>,
 }
 
+/// Whether `script` carries one timing for each of its steps, as every script a client is
+/// sent must ([`Script::timing`]).
+///
+/// # Errors
+///
+/// When it carries more or fewer.
+pub(super) fn timed(script: &Script) -> Result<(), String> {
+    let (timings, steps) = (script.timing.len(), script.steps());
+    if timings == steps {
+        Ok(())
+    } else {
+        Err(format!(
+            "the script has {steps} steps and {timings} timings"
+        ))
+    }
+}
+
 /// The spans `script` leaves open, for the seat's next script to end, as a screen that shows
 /// `table` with the spans `open` plays it: `table` is the table of the view before, or with a
 /// reset, the table of the view the script came with. An error names the first step that

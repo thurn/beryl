@@ -43,6 +43,7 @@ mod script_manual;
 mod script_order;
 mod script_piles;
 mod script_spans;
+mod script_timing;
 mod sessions;
 mod smart_stops;
 mod splits;

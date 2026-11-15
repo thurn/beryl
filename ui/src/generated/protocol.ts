@@ -642,7 +642,13 @@ reset?: Reset,
 /**
  * In order; the steps of one beat happen together.
  */
-beats: Array<Array<ScriptStep>>, };
+beats: Array<Array<ScriptStep>>, 
+/**
+ * How each step is played: one entry for each step, in the order the steps are played,
+ * every step of the first beat, then every step of the second, and so on
+ * ([`time_script`]). Both clients play it as it is.
+ */
+timing: Array<StepTiming>, };
 
 export type Reset = { 
 /**
@@ -655,6 +661,122 @@ export type ScriptStep = { act: Act,
  * The spell, ability, permanent or player responsible; none for the rules of the game.
  */
 cause?: Subject, };
+
+export type StepTiming = { 
+/**
+ * The verb's case in `data/ui-conventions.json`.
+ */
+case?: string, 
+/**
+ * How long its motion takes.
+ */
+duration: number, 
+/**
+ * How long after its turn comes it begins.
+ */
+delay: number, 
+/**
+ * How long the next step waits for its turn.
+ */
+stagger: number, 
+/**
+ * The easing of its motion.
+ */
+curve: Curve, 
+/**
+ * For a step that moves several cards one after another, how long each one moves.
+ */
+each?: number, 
+/**
+ * It takes the turn of the step before it.
+ */
+with: boolean, 
+/**
+ * It waits until the steps of its beat that move these have ended.
+ */
+after: Array<Subject>, 
+/**
+ * It ends a span, and waits until the span has stood whole this long.
+ */
+hold?: number, 
+/**
+ * What follows it waits until it is over.
+ */
+leads: boolean, 
+/**
+ * Its beat does not wait for it.
+ */
+passes: boolean, 
+/**
+ * It waits until nothing passes over the table.
+ */
+alone: boolean, 
+/**
+ * Its act is applied as its delay begins.
+ */
+opens: boolean, 
+/**
+ * Its act is applied with the step before's.
+ */
+ahead: boolean, 
+/**
+ * How long what it left room for takes to close up after it.
+ */
+closes?: number, 
+/**
+ * The effects it begins.
+ */
+effects: Array<StepEffect>, };
+
+export type StepEffect = { 
+/**
+ * The effect's name in the data.
+ */
+name: string, 
+/**
+ * The edge of the step it begins at.
+ */
+when: Edge, 
+/**
+ * What it is on, where that is not the step's own subject.
+ */
+on?: Subject, 
+/**
+ * How far through the step it begins, from 0 to 1, where that is not an edge of it.
+ */
+into?: number, 
+/**
+ * How long it lasts.
+ */
+duration?: number, 
+/**
+ * How long after it begins it starts to show.
+ */
+delay: number, 
+/**
+ * The easing of the effect.
+ */
+curve: Curve, };
+
+export type Curve = "linear" | "easeIn" | "easeOut" | "easeInOut";
+
+export type Edge = "start" | "end";
+
+export type OwnTimings = { entries: Array<OwnTiming>, };
+
+export type OwnTiming = { step: OwnStep, 
+/**
+ * Its `after` is always empty: the table cannot name the ends of an arrow it does not
+ * know (see `after_ends`).
+ */
+timing: StepTiming, 
+/**
+ * It waits until the steps of its beat that move its arrow's ends have ended: the client
+ * fills `after` with the ends of its arrow that are not players.
+ */
+afterEnds: boolean, };
+
+export type OwnStep = { "kind": "markBegins", mark: Mark, } | { "kind": "markEnds" } | { "kind": "arrowBegins", arrow: Arrow, } | { "kind": "arrowEnds" } | { "kind": "trayLifts", sorted: boolean, } | { "kind": "trayLetGo" };
 
 export type Subject = { "kind": "object", slot: ObjectId, } | { "kind": "ability", id: number, } | { "kind": "player", player: Side, };
 
@@ -1093,6 +1215,7 @@ export type Commands = {
   concede: { args: { request: ConcedeRequest }; result: null; error: SessionError };
   current_game: { args: Record<string, never>; result: GameUpdate | null; error: never };
   resume_game: { args: Record<string, never>; result: SessionId | null; error: never };
+  stage_timings: { args: Record<string, never>; result: OwnTimings; error: never };
   table_solo: { args: { request: TableSoloRequest }; result: SessionId; error: TableRefused };
   table_act: { args: { request: TableActRequest }; result: TableActReply; error: never };
   table_current: { args: Record<string, never>; result: GameUpdate | null; error: never };

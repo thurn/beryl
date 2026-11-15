@@ -125,6 +125,11 @@ pub fn record_all(definitions: &Path, out: &Path, only: &[String]) -> Result<(),
         let mut messages =
             record(def, definitions).map_err(|e| format!("fixture {}: {e}", def.name))?;
         messages.insert(0, beryl_session::card_records::fixture_message(&messages));
+        // The stage asks for the timing of its own steps once, whatever the game.
+        messages.insert(
+            1,
+            FixtureMessage::response(ipc::STAGE_TIMINGS, &beryl_session::script::own_timings()),
+        );
         let path = out.join(format!("{}.json", def.name));
         let json = serde_json::to_string(&Fixture { messages }).expect("a fixture serializes");
         std::fs::write(&path, json).map_err(|e| format!("{}: {e}", path.display()))?;

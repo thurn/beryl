@@ -1,7 +1,7 @@
 //! The script: what one seat's screen does between two views. The session builds one beside each
-//! view, per seat; the stage plays it and guesses nothing. A script says what happens and in
-//! what order. It holds no geometry and no timing: where things lie is the stage's layout, and
-//! how long a verb takes is the design language's data (`data/ui-conventions.json`).
+//! view, per seat; the stage plays it and guesses nothing. A script says what happens, in what
+//! order, and how each step is timed ([`Script::timing`], from the design language's data,
+//! `data/ui-conventions.json`). It holds no geometry: where things lie is the stage's layout.
 //!
 //! # Shape
 //!
@@ -159,7 +159,8 @@ pub use replay::{failure, replay};
 pub use table::{Entry, Piles, Table, Turn};
 pub(crate) use text::wire;
 pub use timing::{
-    Curve, Edge, StepEffect, StepTiming, case_of, effects_of, mover_of, time_script, timing_of,
+    Curve, Edge, OwnStep, OwnTiming, OwnTimings, StepEffect, StepTiming, case_of, effects_of,
+    mover_of, own_timings, time_script, timing_of,
 };
 pub use verb::{Arrow, Mark, Span, Verb};
 
@@ -178,6 +179,26 @@ pub struct Script {
     pub reset: Option<Reset>,
     /// In order; the steps of one beat happen together.
     pub beats: Vec<Vec<Step>>,
+    /// How each step is played: one entry for each step, in the order the steps are played,
+    /// every step of the first beat, then every step of the second, and so on
+    /// ([`time_script`]). Both clients play it as it is.
+    #[serde(default)]
+    pub timing: Vec<StepTiming>,
+}
+
+impl Script {
+    /// The script with each of its steps timed ([`time_script`]) as it plays over `before`:
+    /// the table of the view before, or with a reset, the table of the view it came with.
+    #[must_use]
+    pub fn timed(mut self, before: &Table) -> Script {
+        self.timing = time_script(&self, before);
+        self
+    }
+
+    /// How many steps it has, in all its beats.
+    pub fn steps(&self) -> usize {
+        self.beats.iter().map(Vec::len).sum()
+    }
 }
 
 /// A fresh start from a view.

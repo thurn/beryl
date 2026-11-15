@@ -1,4 +1,5 @@
-// The web interface's timing of every step of every recording, for `just timing-parity`:
+// The web interface's timing of every step of every recording, for `just timing-parity`, to
+// hold beside the timing the session sent with it:
 // `node scripts/timings.mjs <pack.json>` reads the recordings `beryl_cli step-timings` wrote,
 // replays each view's script over the stage's table (src/stage/table.ts `apply`) and prints
 // one JSON line per step with `timingOf`, `caseOf` and `effectsOf` (src/stage/timing.ts),
@@ -93,6 +94,15 @@ for (const { name, seat, views } of pack) {
         let table = script.reset ? tableOf(view, script.reset) : carried;
         carried = undefined;
         if (!table) return;
+        // The session sends one timing with each step (`Script.timing`), which the lines
+        // `beryl_cli step-timings` prints are: a script without one for each step is wrong.
+        const steps = script.beats.reduce((n, beat) => n + beat.length, 0);
+        if ((script.timing ?? []).length !== steps) {
+            throw new Error(
+                `${name} ${seat} view ${n + 1}: ${steps} steps and ` +
+                    `${(script.timing ?? []).length} timings sent`,
+            );
+        }
         let applied = true;
         let k = 0;
         for (const beat of script.beats) {

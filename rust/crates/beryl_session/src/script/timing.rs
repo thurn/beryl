@@ -9,8 +9,11 @@
 //! verb has several, and the effects each verb's steps begin.
 
 mod conventions;
+mod own;
 #[cfg(test)]
 mod tests;
+
+pub use own::{OwnStep, OwnTiming, OwnTimings, own_timings};
 
 use std::ptr;
 

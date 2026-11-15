@@ -215,9 +215,11 @@ pub(super) fn after(stop: &GameUpdate) -> GameUpdate {
     if let Status::Deciding { decision } = &mut update.view.status {
         decision.id.seq += 1;
     }
+    // No steps, so no timings.
     update.view.script = Some(Script {
         reset: None,
         beats: Vec::new(),
+        timing: Vec::new(),
     });
     update
 }

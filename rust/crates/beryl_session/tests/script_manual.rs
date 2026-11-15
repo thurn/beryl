@@ -83,6 +83,7 @@ fn manual_numbers_replay_through_each_count() {
                 }]
             })
             .collect(),
+        timing: Vec::new(),
     });
 
     let decoded = round_trip(&after);
@@ -122,6 +123,7 @@ fn manual_notices_round_trip_and_replay_without_a_card_source() {
                 act: Act::Announce { notice },
                 cause: None,
             }]],
+            timing: Vec::new(),
         };
         after.script = Some(script.clone());
         let decoded = round_trip(&after);
@@ -247,6 +249,7 @@ fn manual_order_replays_without_renumbering_slots() {
             .into_iter()
             .map(|act| vec![Step { act, cause: None }])
             .collect(),
+        timing: Vec::new(),
     });
 
     let decoded = round_trip(&after);
@@ -259,6 +262,7 @@ fn manual_order_replays_without_renumbering_slots() {
         &Script {
             reset: None,
             beats: script.beats[..1].to_vec(),
+            timing: Vec::new(),
         },
     )
     .unwrap();
@@ -304,6 +308,7 @@ fn manual_marker_replay_removes_only_the_named_marker_after_reset() {
             abilities: vec![first, second],
         }),
         beats: vec![],
+        timing: Vec::new(),
     };
     assert_eq!(failure(&before, &reset, &view), None);
     reset.reset.as_mut().unwrap().abilities.swap(0, 1);
@@ -325,6 +330,7 @@ fn manual_marker_replay_removes_only_the_named_marker_after_reset() {
             },
             cause: None,
         }]],
+        timing: Vec::new(),
     };
     view.stack.pop();
     assert_eq!(failure(&before, &vanish(second), &view), None);

@@ -15,6 +15,7 @@ use crate::bugs::{BugReport, BugSaved, UiLogRequest};
 use crate::card_records::{CardRecords, CardRecordsRequest};
 use crate::prompt::{ClickReply, ClickRequest};
 use crate::protocol::{CandidateIndex, DecisionId, SessionId, StopsSetting, TableAction};
+use crate::script::OwnTimings;
 use crate::{AgentView, GameUpdate, SessionError, StartRequest};
 
 pub mod decks;
@@ -54,6 +55,9 @@ pub const CURRENT_GAME: &str = "current_game";
 /// ([`crate::Sessions::resume_latest`]); returns the [`SessionId`] of the game in progress,
 /// if any now. Its views arrive as a started game's do.
 pub const RESUME_GAME: &str = "resume_game";
+/// The timing of the steps the stage makes itself while a prompt is open
+/// ([`crate::script::own_timings`]), which it asks for once.
+pub const STAGE_TIMINGS: &str = "stage_timings";
 
 /// Starts a solo manual table.
 pub const TABLE_SOLO: &str = "table_solo";
@@ -421,6 +425,12 @@ pub(crate) fn typescript(cfg: &Config) -> String {
             RESUME_GAME,
             "Record<string, never>".to_owned(),
             name::<Option<SessionId>>(cfg),
+            never.clone(),
+        ),
+        (
+            STAGE_TIMINGS,
+            "Record<string, never>".to_owned(),
+            name::<OwnTimings>(cfg),
             never.clone(),
         ),
         (

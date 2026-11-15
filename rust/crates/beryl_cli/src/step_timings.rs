@@ -1,10 +1,11 @@
-//! `beryl_cli step-timings <definitions.json> <pack.json> [--fixtures-only]`: the session's
-//! timing of every step of every recording, beside the recordings themselves, for
+//! `beryl_cli step-timings <definitions.json> <pack.json> [--fixtures-only]`: the timing the
+//! session sent with every step of every recording, beside the recordings themselves, for
 //! `just timing-parity`. It records each UI fixture `definitions` defines, from its own seat,
 //! and unless `--fixtures-only`, each card spec moment from both seats. It writes the
 //! recordings' views to `pack.json`, which `ui/scripts/timings.mjs` times with the web
-//! interface's rules, and prints one JSON line per step with `beryl_session`'s
-//! [`time_script`], in the same form as that script's lines.
+//! interface's rules, and prints one JSON line per step with the script's own
+//! [`Script::timing`](beryl_session::script::Script::timing), in the same form as that
+//! script's lines.
 
 use std::path::Path;
 use std::sync::Mutex;
@@ -12,7 +13,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use beryl_session::ipc::{FixtureMessage, GAME_UPDATE};
 use beryl_session::protocol::PlayerView;
-use beryl_session::script::{Table, replay, time_script};
+use beryl_session::script::{Table, replay};
 use beryl_session::{GameUpdate, Seat};
 use serde::Serialize;
 
@@ -48,7 +49,8 @@ pub fn main(definitions: &Path, pack: &Path, fixtures_only: bool) -> Result<(), 
                 continue;
             };
             // With a reset the script starts over from its own view's table; with none, it
-            // plays over the table the scripts before it left.
+            // plays over the table the scripts before it left. A view the web cannot follow
+            // is left out on both sides.
             let before = if script.reset.is_some() {
                 Table::of(view)
             } else if let Some(table) = carried.take() {
@@ -56,7 +58,17 @@ pub fn main(definitions: &Path, pack: &Path, fixtures_only: bool) -> Result<(), 
             } else {
                 continue;
             };
-            for (k, timing) in time_script(script, &before).iter().enumerate() {
+            if script.timing.len() != script.steps() {
+                return Err(format!(
+                    "{} {} view {}: {} steps and {} timings",
+                    recording.name,
+                    recording.seat,
+                    n + 1,
+                    script.steps(),
+                    script.timing.len()
+                ));
+            }
+            for (k, timing) in script.timing.iter().enumerate() {
                 let line = serde_json::json!({
                     "fixture": recording.name,
                     "seat": recording.seat,

@@ -31,8 +31,8 @@ use crate::protocol::{
     TableObjectRef, TablePhase, TablePrompt, TableView, ZoneRef,
 };
 use crate::script::{
-    Act, Arrow, Fact, Mark, Notice, Reset, Script, Span, Step as ScriptStep, Stream, Subject,
-    Tally, Verb,
+    Act, Arrow, Curve, Edge, Fact, Mark, Notice, OwnStep, OwnTiming, OwnTimings, Reset, Script,
+    Span, Step as ScriptStep, StepEffect, StepTiming, Stream, Subject, Tally, Verb,
 };
 use crate::{AgentView, GameUpdate, SessionError, StartRequest};
 
@@ -197,6 +197,13 @@ fn session_decls(cfg: &Config) -> impl IntoIterator<Item = String> {
         Script::decl(cfg),
         Reset::decl(cfg),
         ScriptStep::decl(cfg),
+        StepTiming::decl(cfg),
+        StepEffect::decl(cfg),
+        Curve::decl(cfg),
+        Edge::decl(cfg),
+        OwnTimings::decl(cfg),
+        OwnTiming::decl(cfg),
+        OwnStep::decl(cfg),
         Subject::decl(cfg),
         Act::decl(cfg),
         Stream::decl(cfg),

@@ -491,6 +491,7 @@ fn an_arrow_at_a_thing_that_is_moving_or_gone_breaks_a_rule() {
     let gone = Script {
         reset: None,
         beats: vec![vec![step(source.act(Span::Begin))]],
+        timing: Vec::new(),
     };
     assert_eq!(
         broken(&table, &[], &gone),
@@ -552,6 +553,7 @@ fn two_visuals_of_one_thing_break_a_rule() {
             at: None,
             item: None,
         })]],
+        timing: Vec::new(),
     };
     assert_eq!(
         broken(&table, &[], &again),
@@ -590,6 +592,7 @@ fn taking_off_the_stack_what_it_does_not_hold_breaks_a_rule() {
             object: None,
             at: None,
         })]],
+        timing: Vec::new(),
     };
     assert_eq!(
         broken(&table, &[], &finish),
@@ -719,6 +722,7 @@ fn a_span_is_ended_by_its_script_or_carried_to_the_next() {
     let rest = Script {
         reset: None,
         beats: cast.beats.split_off(2),
+        timing: Vec::new(),
     };
     assert_eq!(carried(table.clone(), &[], &cast), Ok(vec![ARROW]));
     let shown = beryl_session::script::replay(table.clone(), &cast).unwrap();
@@ -732,6 +736,7 @@ fn a_span_is_ended_by_its_script_or_carried_to_the_next() {
     let over = Script {
         reset: Some(beryl_session::script::Reset::default()),
         beats: Vec::new(),
+        timing: Vec::new(),
     };
     assert_eq!(carried(shown, &[ARROW], &over), Ok(Vec::new()));
 }

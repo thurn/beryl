@@ -34,6 +34,12 @@ pub fn list_agents() -> Vec<AgentView> {
     beryl_session::agents()
 }
 
+/// The timing of the steps the stage makes itself while a prompt is open.
+#[tauri::command]
+pub fn stage_timings() -> beryl_session::script::OwnTimings {
+    beryl_session::script::own_timings()
+}
+
 // Async, so it runs off the main thread: a fair deal's search takes seconds and would
 // otherwise freeze the window.
 #[tauri::command(async)]

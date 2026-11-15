@@ -624,6 +624,9 @@ export const onAndroidBack = async (handler: () => void): Promise<Unlisten> => {
 // `SessionError`.
 
 export const listAgents = () => call("list_agents", {});
+/** The timing of the steps the stage makes itself while a prompt is open, which it asks for
+ * once (`beryl_session`'s `own_timings`). */
+export const stageTimings = () => call("stage_timings", {});
 
 /** Starts a game against `agent`, replacing any in progress; resolves to its session. */
 /** Starts a game against `agent`. A `fair` game is dealt the deal the AI judges fairest of

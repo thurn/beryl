@@ -1,10 +1,11 @@
-"""`just timing-parity`: holds the session's timing rules (`beryl_session`'s `script::timing`) to
-the web interface's (`ui/src/stage/timing.ts`), which they are a port of, until the web
-interface plays what the session sends. `beryl_cli step-timings` records every UI fixture and
-every card spec moment from both seats, writes their views to a pack and prints the session's
-timing of each step; `ui/scripts/timings.mjs` prints the web interface's for the same pack;
-and the two are compared line by line. Numbers are equal within 0.001. It prints the first
-differing lines with both values, and fails on any.
+"""`just timing-parity`: holds the timing the session sends with each step of a script
+(`Script.timing`, from `beryl_session`'s `script::timing`) to the web interface's own rules
+(`ui/src/stage/timing.ts`), until the web interface plays what the session sends.
+`beryl_cli step-timings` records every UI fixture and every card spec moment from both seats,
+writes their views to a pack and prints the timing each step was sent with;
+`ui/scripts/timings.mjs` prints the web interface's for the same pack; and the two are compared
+line by line. Numbers are equal within 0.001. It prints the first differing lines with both
+values, and fails on any.
 """
 
 from __future__ import annotations

@@ -295,6 +295,7 @@ fn handle_moment(
                 // The moment is the game: the page never starts another.
                 ipc::START_GAME | ipc::CONCEDE | ipc::RESUME_GAME => json!({ "ok": null }),
                 ipc::LIST_AGENTS => json!({ "ok": [] }),
+                ipc::STAGE_TIMINGS => json!({ "ok": beryl_session::script::own_timings() }),
                 ipc::CARD_RECORDS => card_records(args),
                 _ => {
                     // The viewer acts on the game: it plays on from where it truly is.

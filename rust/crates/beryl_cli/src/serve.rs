@@ -249,6 +249,7 @@ pub(crate) fn invoke(sessions: &Sessions, command: &str, args: Value) -> Value {
         })),
         ipc::UI_READY => answer::<_, ()>(Ok(())),
         ipc::LIST_AGENTS => answer::<_, ()>(Ok(agents())),
+        ipc::STAGE_TIMINGS => answer::<_, ()>(Ok(beryl_session::script::own_timings())),
         ipc::START_GAME => answer(
             request::<StartRequest>(args).and_then(|r| sessions.start(&r).map_err(|e| json!(e))),
         ),

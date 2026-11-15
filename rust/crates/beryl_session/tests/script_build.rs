@@ -830,6 +830,7 @@ fn a_script_that_leaves_a_change_out_fails_the_replay_check() {
     let bad = Script {
         reset: None,
         beats: vec![vec![vanish]],
+        timing: Vec::new(),
     };
     let error = replay(Table::of(before), &bad).unwrap_err();
     assert_eq!(

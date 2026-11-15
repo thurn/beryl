@@ -78,6 +78,7 @@ impl Screen {
                 #[cfg(debug_assertions)]
                 let shown = (before.clone(), self.spans.clone());
                 let pregame = before.turn.number == 0;
+                let start = before.clone();
                 let mut builder = Builder::new(before, &after, view, heard, self);
                 let told = staging::tell(view, heard, &builder.causes, &self.looked, pregame);
                 builder.lower(spans::lift_of(view.handling));
@@ -93,11 +94,17 @@ impl Screen {
                     ..
                 } = builder;
                 #[allow(unused_mut)] // A test may plant a fault in it.
-                let mut script = Script { reset: None, beats };
+                let mut script = Script {
+                    reset: None,
+                    beats,
+                    timing: Vec::new(),
+                };
                 #[cfg(test)]
                 if let Some(fault) = PLANTED.get() {
                     fault(&mut script);
                 }
+                // Timed last, once nothing adds, removes or reorders a step.
+                let script = script.timed(&start);
                 #[cfg(debug_assertions)]
                 verify(shown, &script, &after, &spans);
                 // A release build starts the stage over rather than leave it out of step.
@@ -128,11 +135,18 @@ impl Screen {
         let script = Script {
             reset: Some(Reset { abilities }),
             beats: spans::shown(&self.spans),
-        };
+            timing: Vec::new(),
+        }
+        .timed(table);
         debug_assert_eq!(
             check::carried(table.clone(), &[], &script).as_ref(),
             Ok(&self.spans),
             "a reset shows its screen's spans"
+        );
+        debug_assert_eq!(
+            check::timed(&script),
+            Ok(()),
+            "a reset is timed step for step"
         );
         script
     }
@@ -148,11 +162,15 @@ thread_local! {
 
 /// The checks every script a debug build makes is held to: it replays from the
 /// table `shown` to the view's, and it keeps the rule invariants over the spans `shown`
-/// had open, leaving open the ones the builder says it does.
+/// had open, leaving open the ones the builder says it does, and it carries one timing for each
+/// of its steps.
 #[cfg(debug_assertions)]
 fn verify((before, open): (Table, Vec<Open>), script: &Script, after: &Table, spans: &[Open]) {
     if let Some(failure) = super::replay::check(before.clone(), script, after) {
         panic!("a script does not replay to its view: {failure}");
+    }
+    if let Err(untimed) = check::timed(script) {
+        panic!("a script is not timed step for step: {untimed}\nin the script\n{script}");
     }
     match check::carried(before, &open, script) {
         Err(broken) => panic!("a script breaks a rule: {broken}\nin the script\n{script}"),

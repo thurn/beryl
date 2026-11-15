@@ -481,6 +481,7 @@ fn a_script_of_three_beats_has_one_timing_per_step() {
                 }),
             ],
         ],
+        timing: Vec::new(),
     };
     let timings = time_script(&script, &Table::empty(20));
     let cases: Vec<_> = timings.iter().map(|t| t.case.as_deref()).collect();
@@ -489,4 +490,28 @@ fn a_script_of_three_beats_has_one_timing_per_step() {
         cases,
         [Some("land played"), Some("tap"), Some("life loss"), None]
     );
+}
+
+/// Every shape of step a client makes itself has one timing, and an arrow's says the client
+/// names what it waits for.
+#[test]
+fn own_timings_has_an_entry_for_every_own_step() {
+    use super::{OwnStep, own_timings};
+    let timings = own_timings();
+    let steps: Vec<OwnStep> = timings.entries.iter().map(|entry| entry.step).collect();
+    assert_eq!(steps, OwnStep::all());
+    for entry in &timings.entries {
+        assert!(entry.timing.after.is_empty(), "{entry:?}");
+        let begins_arrow = matches!(entry.step, OwnStep::ArrowBegins { .. });
+        assert_eq!(entry.after_ends, begins_arrow, "{entry:?}");
+    }
+    let tray = |sorted| {
+        timings
+            .entries
+            .iter()
+            .find(|e| e.step == OwnStep::TrayLifts { sorted })
+            .and_then(|e| e.timing.case.clone())
+    };
+    assert_eq!(tray(false).as_deref(), Some("tray"));
+    assert_eq!(tray(true).as_deref(), Some("sort"));
 }

@@ -100,7 +100,9 @@ pub fn script_with_proposal_marks(
     let script = Script {
         reset: None,
         beats: builder.beats,
-    };
+        timing: Vec::new(),
+    }
+    .timed(&start);
     let failure = builder
         .error
         .or_else(|| replay::failure(&start, &script, after));
@@ -164,7 +166,9 @@ fn reset(end: &Stage, spans: &[Open], notice: Option<Notice>, cause: Option<Subj
             abilities: end.stack.iter().filter_map(|item| item.id).collect(),
         }),
         beats,
+        timing: Vec::new(),
     }
+    .timed(end)
 }
 
 struct Builder {

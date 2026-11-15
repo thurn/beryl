@@ -134,6 +134,7 @@ fn a_script_reads_one_step_a_line_with_beats_joined() {
                 at: None,
             })],
         ],
+        timing: Vec::new(),
     };
     assert_eq!(
         script.to_string(),
@@ -165,6 +166,7 @@ fn a_reset_names_the_abilities_on_the_stack_and_shows_only_spans() {
                 on: object(9),
             }),
         ]],
+        timing: Vec::new(),
     };
     assert_eq!(
         script.to_string(),
@@ -174,6 +176,7 @@ fn a_reset_names_the_abilities_on_the_stack_and_shows_only_spans() {
         Script {
             reset: Some(Reset::default()),
             beats: Vec::new(),
+            timing: Vec::new(),
         }
         .to_string(),
         "reset\n"
@@ -624,6 +627,7 @@ fn a_script_survives_the_wire_and_leaves_out_what_it_lacks() {
             },
             player(Side::You),
         )]],
+        timing: Vec::new(),
     };
     let json = serde_json::to_value(&script).unwrap();
     assert_eq!(json["beats"][0][0]["act"]["verb"], "tap");

@@ -59,10 +59,10 @@ pub struct Turn {
     pub step: TurnStep,
 }
 
-#[cfg(test)]
 impl Table {
     /// A table with nothing on it and each player at `life`, in the first main phase of
-    /// your first turn.
+    /// your first turn: what the steps a client makes itself are timed against
+    /// ([`super::own_timings`]), and what tests build on.
     pub(crate) fn empty(life: i32) -> Table {
         let piles = || Piles {
             life,

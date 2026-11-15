@@ -289,6 +289,7 @@ pub fn run() {
             games::concede = ipc::CONCEDE,
             games::current_game = ipc::CURRENT_GAME,
             games::resume_game = ipc::RESUME_GAME,
+            games::stage_timings = ipc::STAGE_TIMINGS,
             tables::table_solo = ipc::TABLE_SOLO,
             tables::table_act = ipc::TABLE_ACT,
             tables::table_current = ipc::TABLE_CURRENT,

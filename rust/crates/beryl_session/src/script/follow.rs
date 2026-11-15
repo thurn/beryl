@@ -4,7 +4,7 @@
 //! scripts after it name what its stage holds: the abilities on the stack by the numbers the
 //! scripts before gave them, and the spans they left open.
 
-use super::check::carried;
+use super::check::{carried, timed};
 use super::replay::replay;
 use super::{Open, Reset, Script, Table, spans};
 use crate::protocol::{PlayerView, StackItem};
@@ -21,11 +21,12 @@ impl Follow {
     ///
     /// # Errors
     ///
-    /// When the script cannot be played there or breaks a rule invariant, or does not reset
-    /// with nothing played before it. Nothing is then followed until a script that resets.
+    /// When the script has other than one timing for each step, cannot be played there or
+    /// breaks a rule invariant, or does not reset with nothing played before it. Nothing is then followed until a script that resets.
     pub fn play(&mut self, view: &PlayerView) -> Result<(), String> {
         let shown = self.shown.take();
         let script = view.script.as_ref().ok_or("the view has no script")?;
+        timed(script)?;
         let (table, open) = match (&script.reset, shown) {
             (Some(_), _) => (Table::of(view), Vec::new()),
             (None, Some(shown)) => shown,
@@ -66,6 +67,8 @@ impl Follow {
         Ok(Script {
             reset: Some(Reset { abilities }),
             beats: spans::shown(open),
-        })
+            timing: Vec::new(),
+        }
+        .timed(table))
     }
 }
