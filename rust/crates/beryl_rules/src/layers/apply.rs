@@ -13,7 +13,7 @@ use crate::filter::{self, Filter};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::Layout;
-use crate::state::{AbilityMask, Characteristics, Derived, GrantRef, LayerChange};
+use crate::state::{AbilityMask, Characteristics, Derived, GrantRef, LayerChange, Zone};
 use crate::table::GameTable;
 
 /// Who reads a static ability as its layer applies: the controller of its permanent as the
@@ -368,6 +368,9 @@ fn modify<L: Layout>(
         // effects, and effects that say an object can't have an ability are applied."
         LayerChange::AddKeywords(k) => d.keywords = d.keywords.union(k),
         LayerChange::AddProtection(colors) => d.protection = d.protection.union(colors),
+        // CR 702.138a: escape "functions while the card with escape is in a player's
+        // graveyard", so a permanent that has it gets nothing a rule reads.
+        LayerChange::GrantEscape => {}
         LayerChange::Grant(grant) => {
             let mut granted = d.granted;
             if let Some(free) = granted.iter_mut().find(|g| g.is_none()) {
@@ -473,6 +476,8 @@ fn passes<L: Layout>(
         Filter::Tapped => s.object(s.battlefield()[i]).is_tapped(),
         Filter::Token => s.object(s.battlefield()[i]).is_token(),
         Filter::ManaValueAtMost(n) => s.mana_value(t, s.battlefield()[i]) <= n,
+        // The layers apply to permanents, which are on the battlefield.
+        Filter::InZone(zone) => zone == Zone::Battlefield,
         Filter::Not(filter) => !passes(s, t, *filter, i, by),
         Filter::All(filters) => filters.iter().all(|&filter| passes(s, t, filter, i, by)),
         Filter::AnyOf(filters) => filters.iter().any(|&filter| passes(s, t, filter, i, by)),
@@ -490,7 +495,8 @@ pub(super) fn filter_reads(filter: Filter) -> Characteristics {
         | Filter::Tapped
         | Filter::Token
         | Filter::ManaValueAtMost(_)
-        | Filter::ManaValueAtMostX => Characteristics::NONE,
+        | Filter::ManaValueAtMostX
+        | Filter::InZone(_) => Characteristics::NONE,
         Filter::Types(_) => Characteristics::TYPES,
         Filter::Supertypes(_) => Characteristics::SUPERTYPES,
         Filter::SubtypeWord(_) => Characteristics::SUBTYPES,

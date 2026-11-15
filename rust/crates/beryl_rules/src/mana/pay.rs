@@ -2,7 +2,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    AbilityIx, CostAction, INTRINSIC_MANA, ManaColor, ManaCost, ObjectAbility, Types,
+    AbilityIx, ChosenKind, CostAction, INTRINSIC_MANA, ManaColor, ManaCost, ObjectAbility, Types,
 };
 use crate::decision::Opt;
 use crate::event::{self, Sink};
@@ -11,6 +11,7 @@ use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
 use crate::state::{AbilityRef, Pending, PendingTrigger, State, TriggeredAbility, Zone, ZoneKey};
 use crate::table::{Capability, GameTable, is_instant_mana, is_sacrificed, is_simple};
+use beryl_kernel::chosen::ChosenValue;
 
 use super::pool::{helps, pay_unit};
 use super::remembered::{self, Paying};
@@ -647,12 +648,36 @@ pub(crate) fn begin_instant<L: Layout>(
         .find(|&(a, _)| a == ability)
         .map(|(_, a)| a.produces().colors)
         .expect("an ability offered");
+    // CR 117.3c: "If a player has priority when they ... activate an ability ..., that player
+    // receives priority afterward."
+    s.reset_passes();
     if kinds.count_ones() == 1 {
         let color = ManaColor::ALL[kinds.trailing_zeros() as usize];
         return activate(s, t, sink, slot, color);
     }
     s.ask(Pending::ManaColor { slot, ability });
     Ok(())
+}
+
+/// Activates the mana ability [`Pending::ManaColor`] asked about, of the permanent in `slot`,
+/// for the color the answer `opt` names.
+pub(crate) fn activate_chosen<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
+    opt: Option<Opt<L>>,
+) -> Result<(), Full> {
+    let ChosenValue::Color(colors) = crate::chosen::value(ChosenKind::Color, opt) else {
+        unreachable!("a color among a color's candidates");
+    };
+    activate(
+        s,
+        t,
+        sink,
+        slot,
+        ManaColor::ALL[colors.0.trailing_zeros() as usize],
+    )
 }
 
 /// Whether `ability` of the permanent in `slot` is a mana ability activated only as an

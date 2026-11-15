@@ -14,6 +14,7 @@ use beryl_engine::{
 
 use crate::{CARDS, decks, names};
 
+mod breach_loop;
 mod derive;
 mod equipment;
 mod facts;

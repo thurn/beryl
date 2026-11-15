@@ -380,6 +380,8 @@ impl Policy<'_> {
                 CastingOption::Evoke { .. } => -30,
                 // What it costs besides mana, as a card from hand.
                 CastingOption::Alternative { .. } => -20,
+                // A card back from the graveyard, for three others there.
+                CastingOption::Escape { .. } => 10,
             };
         }
         // Overloaded, a spell hits each permanent its first target's filter accepts

@@ -45,7 +45,12 @@ pub(crate) fn begin_cast<L: Layout>(
     let Opt::Cast { slot, face, costs } = option else {
         unreachable!("a cast option");
     };
-    let permission = casting::permission(s, player, slot);
+    // A cast for escape is under no permission's terms (CR 118.9a): only one alternative
+    // cost is paid, so a flashback permission the card also has does nothing to it.
+    let permission = casting::permission(s, player, slot).filter(|_| !costs.escapes());
+    if costs.escapes() {
+        hit_escape(s, t, slot);
+    }
     event::move_one(s, t, sink, slot, Zone::Stack, Reason::Cast)?;
     let (card, _) = s.definition(slot).record(t);
     s.become_spell(slot, face, player);
@@ -75,6 +80,15 @@ pub(crate) fn begin_cast<L: Layout>(
     };
     let c = Casting::new(player, kind, step);
     advance(s, t, sink, c)
+}
+
+/// Notes that the static ability that gives the card in `slot` escape did what it says, as the
+/// card is cast for it ([`crate::coverage`]).
+fn hit_escape<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) {
+    if let Some(reach) = s.escape_from(t, slot) {
+        let face = s.definition(reach.source).face(t);
+        crate::coverage::hit(&face.abilities[usize::from(reach.ability)]);
+    }
 }
 
 /// Begins activating an ability: puts it on the stack and starts the machine.

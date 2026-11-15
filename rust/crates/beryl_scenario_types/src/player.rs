@@ -2,7 +2,9 @@
 //! `THEM.has(Zone::Hand, card, 1)`. Each builds an [`Action`] the long way would spell out as
 //! an `Action::answer(..)` or an `Action::assert(Assertion::..)` struct literal.
 
-use beryl_card::{Colors, CounterKind, DecisionKind, ManaColor, Seat, TextWord, TurnStep, Zone};
+use beryl_card::{
+    Castings, Colors, CounterKind, DecisionKind, FaceIx, ManaColor, Seat, TextWord, TurnStep, Zone,
+};
 
 use crate::{Action, Assertion, Ending, Pick};
 
@@ -56,6 +58,17 @@ impl Player {
     /// Casts `card`'s front face with none of its casting options.
     pub const fn casts(self, card: &'static str) -> Action {
         Action::cast(self.0, card)
+    }
+
+    /// Casts `card`'s front face from their graveyard with the escape an effect grants it
+    /// (CR 702.138a), with none of its own casting options.
+    pub const fn escapes(self, card: &'static str) -> Action {
+        Action::Cast {
+            player: self.0,
+            card,
+            face: FaceIx::FRONT,
+            costs: Castings::ESCAPE,
+        }
     }
 
     /// Plays the land `card` from their hand.

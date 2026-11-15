@@ -13,7 +13,8 @@
 //! An effect of this kind is a static ability of a permanent whose affected set is
 //! [`beryl_card::Objects::Everywhere`]. The card table admits only those whose parts change
 //! card types, subtypes and colors (layers 4 and 5, `beryl_card`'s `Malformed::Everywhere`),
-//! so this module applies no other change.
+//! which this module applies, or grant escape to cards in a graveyard, which the casting
+//! rules ask of a card there ([`State::escapes`]).
 //!
 //! [CR 613.1]: https://yawgatog.com/resources/magic-rules/#R6131
 
@@ -111,6 +112,10 @@ impl<L: Layout> State<L> {
         };
         for &reach in self.elsewhere.iter() {
             let (filter, change) = self.reach_change(t, reach);
+            // Escape is an ability, read by `escapes`: no characteristic here.
+            if change == LayerChange::GrantEscape {
+                continue;
+            }
             let you = self.controller(reach.source);
             // The filter is the source's text, read through the source's words.
             let words = self.words_of(reach.source);
@@ -123,6 +128,38 @@ impl<L: Layout> State<L> {
 }
 
 impl<L: Layout> State<L> {
+    /// Whether the card in `slot`, which is not a permanent, has escape from an effect that
+    /// reaches it ([`beryl_card::Modification::GrantEscape`]), as Underworld Breach's "Each
+    /// nonland card in your graveyard has escape" ([CR 702.138a]): "Escape represents a
+    /// static ability that functions while the card with escape is in a player's
+    /// graveyard." One test of the list's length while no effect reaches other zones.
+    ///
+    /// [CR 702.138a]: https://yawgatog.com/resources/magic-rules/#R702138a
+    #[inline]
+    pub fn escapes(&self, t: &GameTable, slot: L::Slot) -> bool {
+        self.reaches_elsewhere() && self.escape_from(t, slot).is_some()
+    }
+
+    /// The effect that gives the card in `slot`, which is not a permanent, escape, the first
+    /// in the order the layers apply them: [`State::escapes`]'s answer, with what said it.
+    /// The effect's filter reads the card as the effects before it in the layers left it:
+    /// escape is granted in layer 6, after any change of its types or colors.
+    #[cold]
+    #[inline(never)]
+    pub fn escape_from(&self, t: &GameTable, slot: L::Slot) -> Option<Reach<L>> {
+        let mut so_far = None;
+        self.elsewhere.iter().copied().find(|&reach| {
+            let (filter, change) = self.reach_change(t, reach);
+            if change != LayerChange::GrantEscape {
+                return false;
+            }
+            let so_far = *so_far.get_or_insert_with(|| self.elsewhere(t, slot));
+            let you = self.controller(reach.source);
+            let words = self.words_of(reach.source);
+            crate::filter::passes_so_far(&filter, self, t, slot, you, &words, &so_far)
+        })
+    }
+
     /// The filter of the effect `reach` names and the change its part makes: the part as the
     /// layers resolve it for the source's controller, the chosen color read from the source.
     fn reach_change(&self, t: &GameTable, reach: Reach<L>) -> (Filter, LayerChange) {
@@ -140,7 +177,7 @@ impl<L: Layout> State<L> {
                 self.controller(reach.source),
                 &self.words_of(reach.source),
             )
-            .expect("the card table admits only changes of types and colors here"),
+            .expect("the card table admits only changes of types and colors, and escape, here"),
         };
         (filter, change)
     }
@@ -191,8 +228,8 @@ fn apply(t: &GameTable, so_far: &mut SoFar, change: LayerChange) {
 }
 
 /// Whether the effects that reach other zones could hold `change`: a change of card types,
-/// subtypes or colors, which [`State::elsewhere`] applies. A land type's mana abilities
-/// (CR 305.7) are none of these.
+/// subtypes or colors, which [`State::elsewhere`] applies, or escape, which
+/// [`State::escapes`] reads. A land type's mana abilities (CR 305.7) are none of these.
 pub fn reaches(change: LayerChange) -> bool {
     matches!(
         change,
@@ -203,5 +240,6 @@ pub fn reaches(change: LayerChange) -> bool {
             | LayerChange::SetSubtype(_)
             | LayerChange::SetColors(_)
             | LayerChange::AddColors(_)
+            | LayerChange::GrantEscape
     )
 }

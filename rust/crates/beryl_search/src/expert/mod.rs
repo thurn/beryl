@@ -1362,7 +1362,8 @@ impl<L: Layout> Expert<'_, L> {
                 CastingOption::Impending { cost: c, .. }
                 | CastingOption::Overload { cost: c, .. }
                 | CastingOption::Evoke { cost: c, .. }
-                | CastingOption::Alternative { cost: c, .. } => cost = i32::from(c.mana_value()),
+                | CastingOption::Alternative { cost: c, .. }
+                | CastingOption::Escape { cost: c, .. } => cost = i32::from(c.mana_value()),
             }
         }
         self.mana(self.me()) - cost

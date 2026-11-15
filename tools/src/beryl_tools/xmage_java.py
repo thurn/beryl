@@ -167,6 +167,13 @@ def java_string(text: str) -> str:
     return json.dumps(text, ensure_ascii=False)
 
 
+def tap_source(at: str, who: str, card: str, text: str) -> str:
+    """The statement that has `who` activate the mana ability of the permanent `card` whose
+    text starts with `text`, at the turn and step `at` names (`BerylScenarioTest.tapSource`).
+    """
+    return f"tapSource({at}, {who}, {java_string(card)}, {java_string(text)});"
+
+
 def class_name(card: str) -> str:
     return xmage_classes.card_class(card.split(" // ")[0]) + "BerylTest"
 

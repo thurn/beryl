@@ -32,7 +32,8 @@ use crate::layout::Small;
 pub use add::add;
 pub(crate) use add::{add_instruction, add_of_kind_instruction};
 pub(crate) use pay::{
-    activate, begin_instant, instant_options, is_instant, manual_options, manual_pay, pay, standalone_options, waterbend_mana_options,
+    activate, activate_chosen, begin_instant, instant_options, is_instant, manual_options,
+    manual_pay, pay, standalone_options, waterbend_mana_options,
 };
 pub(crate) use pool::{Funds, payable};
 pub(crate) use remembered::Paying;

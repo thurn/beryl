@@ -132,6 +132,7 @@ pub fn source(action: &Action) -> String {
             };
             let costs = match costs.bits() {
                 0 => "Castings::NONE".to_owned(),
+                _ if costs == Castings::ESCAPE => "Castings::ESCAPE".to_owned(),
                 bits => format!("Castings::only({})", bits.trailing_zeros()),
             };
             format!(

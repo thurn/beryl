@@ -99,6 +99,8 @@ impl Ctx {
             }
             Filter::ManaValueAtMostX => noun.suffixes.push("with mana value X or less".to_owned()),
             Filter::PowerAtMost(n) => noun.suffixes.push(format!("with power {n} or less")),
+            // The zone is the noun's own ("card in your graveyard"), which `Filter::Whose` says.
+            Filter::InZone(_) => {}
             Filter::Not(inner) => self.add_not(noun, *inner, kind),
             Filter::All(filters) => {
                 for &each in filters {
@@ -158,6 +160,7 @@ impl Ctx {
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
             | Filter::ManaValueAtMostX
+            | Filter::InZone(_)
             | Filter::Not(_)
             | Filter::All(_)
             | Filter::AnyOf(_) => {

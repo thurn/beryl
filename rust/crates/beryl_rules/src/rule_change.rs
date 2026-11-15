@@ -128,7 +128,8 @@ fn accepts_composed(filter: Filter, face: &Face) -> bool {
         | Filter::Token
         | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
-        | Filter::ManaValueAtMostX => {
+        | Filter::ManaValueAtMostX
+        | Filter::InZone(_) => {
             unreachable!("the card table refuses a filter that is not of a spell's own")
         }
     }

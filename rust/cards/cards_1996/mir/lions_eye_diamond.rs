@@ -9,8 +9,8 @@
 use crate::prelude::*;
 
 /// A mana ability ([CR 605.1a]): "An activated ability is a mana ability if it meets all of
-/// the following criteria: it doesn't require a target ..., it could add mana to a player's
-/// mana pool when it resolves, and it's not a loyalty ability." It doesn't go on the stack
+/// the following criteria: it doesn't require a target (see rule 115.6), it could add mana to
+/// a player's mana pool when it resolves, it's not a loyalty ability". It doesn't go on the stack
 /// ([CR 605.3b]): "An activated mana ability doesn't go on the stack, so it can't be
 /// targeted, countered, or otherwise responded to."
 ///

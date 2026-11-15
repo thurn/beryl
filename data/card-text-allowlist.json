@@ -158,6 +158,13 @@
       "Winds of Abandon: exile target creature you don't control . [-for-] each [-creature exiled this way , its controller-] {+player+} searches their library for a basic land card [-.-] {+for each of+} those [-players put those cards-] {+permanents they controlled , puts them+} onto the battlefield tapped , then [-shuffle-] {+shuffles+} ."
     ]
   },
+  "Underworld Breach": {
+    "reason": "wording",
+    "note": "\"The end step\" and \"each end step\" both mean every player's end step, which is what the trigger waits for; Dress Down's sacrifice trigger reads the same.",
+    "diff": [
+      "Underworld Breach: at the beginning of [-the-] {+each+} end step , sacrifice ~ ."
+    ]
+  },
   "Dress Down": {
     "reason": "wording",
     "note": "\"Creatures\" and \"all creatures\" name the same set, every creature on the battlefield; Humility's text says \"All creatures\" for the same definition. \"The end step\" and \"each end step\" both mean every player's end step, which is what the trigger waits for.",

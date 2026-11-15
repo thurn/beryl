@@ -172,10 +172,12 @@ fn refused<L: Layout, const TARGETS: bool>(
         return Some(Refusal::Timing { by: None });
     }
     let (increase, free) = match from {
-        From::Priority => (
+        // A cast for escape is under no permission's terms.
+        From::Priority if !costs.escapes() => (
             casting::permission(s, player, slot).map_or(0, |p| p.terms.increase),
             false,
         ),
+        From::Priority => (0, false),
         From::Resolution { free } => (0, free),
     };
     // The checks are pure, so their order changes nothing but their cost: the mana, found
@@ -237,14 +239,14 @@ pub(crate) fn refusal<L: Layout>(
     let Some(def) = s.card_def(t, slot) else {
         return Ok(land);
     };
-    let flashback = casting::permission(s, player, slot).is_some_and(|p| p.terms.is_flashback());
+    let ways = Ways::of(s, t, player, slot, From::Priority);
     let mut most = land;
     for f in def.face_ixs() {
         let face = def.face(f);
         if face.transformed || face.types.intersects(Types::LAND) {
             continue;
         }
-        for costs in option_sets(face, flashback) {
+        for costs in ways.option_sets(face) {
             let Some(r) = refused(s, t, &now, slot, f, costs, From::Priority) else {
                 return Ok(None);
             };
@@ -268,15 +270,76 @@ pub(crate) fn refusal<L: Layout>(
     Ok(most)
 }
 
-/// The cards `player` can cast at priority: their hand and the cards a permission names.
-fn cast_sources<L: Layout>(s: &State<L>, player: Seat) -> Bitboard<L::Slot> {
+/// The cards `player` can cast at priority: their hand, the cards a permission names, and
+/// the cards in their graveyard that have escape. Their graveyard is looked at only while an
+/// effect reaches cards off the battlefield, which a game without one tests once.
+fn cast_sources<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboard<L::Slot> {
     let mut cards = s.zone(ZoneKey::Of(player, Zone::Hand));
     for p in s.cast_permissions() {
         if p.terms.player == player {
             cards.insert(p.card.slot);
         }
     }
+    if s.reaches_elsewhere() {
+        cards |= s
+            .zone(ZoneKey::Of(player, Zone::Graveyard))
+            .filter(|slot| s.escapes(t, slot));
+    }
     cards
+}
+
+/// How `player` may cast one card now, apart from its face's own options: for free during a
+/// resolution, under a flashback permission, under another permission or from their hand,
+/// and with escape.
+#[derive(Clone, Copy)]
+struct Ways {
+    /// Without escape, and so with or without the face's own alternative cost: from a hand or
+    /// under a permission, or during a resolution.
+    plain: bool,
+    /// With an alternative cost no face lists: free, or flashback's. Then the face's own
+    /// alternative costs can't be paid (CR 118.9a).
+    alternative: bool,
+    /// With the escape an effect grants a card in a graveyard ([`Castings::ESCAPE`]).
+    escape: bool,
+}
+
+impl Ways {
+    fn of<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, slot: L::Slot, from: From) -> Ways {
+        match from {
+            From::Resolution { free } => Ways {
+                plain: true,
+                alternative: free,
+                escape: false,
+            },
+            From::Priority => {
+                let permission = casting::permission(s, player, slot);
+                let o = s.object(slot);
+                // CR 702.138a: escape "functions while the card with escape is in a player's
+                // graveyard", and lets its owner cast it from there.
+                let escape =
+                    o.zone() == Zone::Graveyard && o.owner() == player && s.escapes(t, slot);
+                Ways {
+                    plain: !escape || permission.is_some() || o.zone() == Zone::Hand,
+                    alternative: permission.is_some_and(|p| p.terms.is_flashback()),
+                    escape,
+                }
+            }
+        }
+    }
+
+    /// The sets of casting options of `face` these ways allow: each set the face's own
+    /// options allow, and with escape, each of those that pays none of the face's own
+    /// alternative costs, with [`Castings::ESCAPE`].
+    fn option_sets(self, face: &Face) -> impl Iterator<Item = Castings> + '_ {
+        let plain = self.plain.then(|| option_sets(face, self.alternative));
+        let escape = self
+            .escape
+            .then(|| option_sets(face, true).map(Castings::with_escape));
+        plain
+            .into_iter()
+            .flatten()
+            .chain(escape.into_iter().flatten())
+    }
 }
 
 /// Appends the spells `player` can cast now, by card, face and casting options.
@@ -289,7 +352,6 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool>(
     out: &mut L::Queue<Opt<L>, 64>,
 ) -> Result<(), Full> {
     let player = now.player;
-    let free = matches!(from, From::Resolution { free: true });
     // Cards no face of which may be cast now are left out before collapsing, which saves
     // comparing them: whether one may depends only on its card, which interchangeable cards
     // share, so the cards kept are the same.
@@ -307,14 +369,13 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool>(
         .in_candidate_order(collapse(s, cards))
         .filter_map(with_def)
     {
-        let flashback = from == From::Priority
-            && casting::permission(s, player, slot).is_some_and(|p| p.terms.is_flashback());
+        let ways = Ways::of(s, t, player, slot, from);
         for f in def.face_ixs() {
             let face = def.face(f);
             if face.transformed {
                 continue;
             }
-            for costs in option_sets(face, free || flashback) {
+            for costs in ways.option_sets(face) {
                 if refused(s, t, now, slot, f, costs, from).is_none() {
                     out.push(Opt::Cast {
                         slot,
@@ -530,7 +591,7 @@ pub(crate) fn priority_options<L: Layout>(
     out: &mut L::Queue<Opt<L>, 64>,
 ) -> Result<(), Full> {
     let now = Situation::of(player);
-    cast_options(s, t, &now, cast_sources(s, player), From::Priority, out)?;
+    cast_options(s, t, &now, cast_sources(s, t, player), From::Priority, out)?;
     activation_options(s, t, &now, out)?;
     now.complete()?;
     Ok(())
@@ -557,7 +618,7 @@ pub fn payable_responses<L: Layout>(
         s,
         t,
         &now,
-        cast_sources(s, player),
+        cast_sources(s, t, player),
         From::Priority,
         &mut out,
     )?;

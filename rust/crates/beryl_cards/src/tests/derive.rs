@@ -22,6 +22,12 @@ const UNREACHED: &[(&str, &str)] = &[
          hand-written scenarios destroy it and flicker it",
     ),
     (
+        "Underworld Breach: ability 0 (Static)",
+        "it gives escape to nonland cards in its controller's graveyard, and a generated scenario \
+         casts the card with that graveyard empty; the card's hand-written scenarios escape \
+         creatures, instants, sorceries and an artifact",
+    ),
+    (
         "Cavern of Souls: ability 2 (Mana)",
         "its mana pays only for a creature spell of the type the land chose as it entered, and a \
          generated position puts the land onto the battlefield having chosen none; the card's \

@@ -163,6 +163,7 @@ impl Ctx {
                 )
             }
             Modification::Grant(ix) => format!("{} {}", verb("gains", "gain"), self.granted(ix)),
+            Modification::GrantEscape => format!("{} escape", verb("gains", "gain")),
             Modification::ModifyPt(power, toughness) => {
                 format!("{} {}", verb("gets", "get"), pt_change(power, toughness))
             }

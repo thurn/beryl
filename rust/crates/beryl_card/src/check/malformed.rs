@@ -92,9 +92,10 @@ pub enum Malformed {
     /// once moved, and the controller, the owner or a number of any of those but a target.
     LastKnown,
     /// [`Objects::Everywhere`] anywhere but a static ability's continuous effect with no "as
-    /// long as", whose parts change only card types, subtypes and colors (layers 4 and 5).
-    /// Those are what the kernel's query applies to an object off the battlefield, which has
-    /// no layer results to hold any other change.
+    /// long as", whose parts change only card types, subtypes and colors (layers 4 and 5) or
+    /// grant escape. Those are what the kernel's query applies to an object off the
+    /// battlefield, which has no layer results to hold any other change, and escape, which
+    /// the casting rules ask of a card in a graveyard.
     Everywhere,
     /// [`Modification::AddChosenColor`] in a resolving effect: the chosen color is one the
     /// permanent with a static ability remembers, and a resolving effect has no such
@@ -155,7 +156,7 @@ impl Malformed {
                 "a resolving effect adds a chosen color, which only a permanent has"
             }
             Malformed::Everywhere => {
-                "an effect on objects in every zone is not a static ability's change of types or colors"
+                "an effect on objects in every zone is not a static ability's change of types or colors, or escape"
             }
         }
     }

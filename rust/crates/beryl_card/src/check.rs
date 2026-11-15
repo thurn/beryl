@@ -28,8 +28,8 @@ pub use malformed::Malformed;
 type Checked = Result<(), Malformed>;
 
 /// Whether every one of `modifications` changes only card types, subtypes or colors (layers
-/// 4 and 5): the changes an effect on objects in every zone may make
-/// ([`Malformed::Everywhere`]).
+/// 4 and 5), or grants escape, which works only from a graveyard: the changes an effect on
+/// objects in every zone may make ([`Malformed::Everywhere`]).
 const fn reaches_every_zone(modifications: &[Modification]) -> bool {
     let mut i = 0;
     while i < modifications.len() {
@@ -43,6 +43,7 @@ const fn reaches_every_zone(modifications: &[Modification]) -> bool {
                 | Modification::SetColorWords(_)
                 | Modification::AddColorWords(_)
                 | Modification::AddChosenColor
+                | Modification::GrantEscape
         ) {
             return false;
         }
@@ -751,7 +752,8 @@ impl Scope<'_> {
             | Filter::Token
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
-            | Filter::ManaValueAtMostX => Ok(()),
+            | Filter::ManaValueAtMostX
+            | Filter::InZone(_) => Ok(()),
         }
     }
 }

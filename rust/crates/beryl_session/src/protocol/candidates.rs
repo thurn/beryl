@@ -350,10 +350,11 @@ fn casting_options<L: Layout>(
     };
     // CR 702.34a: a flashback cost is an alternative cost, so no other is paid with it. A
     // permission names its card's current object: one whose card has since changed zones,
-    // as when Timetwister draws it again, has ended.
-    if obs
-        .cast_permissions()
-        .any(|p| p.card.slot == slot && p.terms.player == obs.viewer() && p.terms.is_flashback())
+    // as when Timetwister draws it again, has ended. A cast for escape is under none.
+    if !costs.escapes()
+        && obs.cast_permissions().any(|p| {
+            p.card.slot == slot && p.terms.player == obs.viewer() && p.terms.is_flashback()
+        })
     {
         return " with flashback".to_owned();
     }
@@ -385,6 +386,9 @@ fn casting_options<L: Layout>(
                 }));
                 format!(" for {}", words.join(", "))
             }
+            // CR 702.138a: escape is a cast from the graveyard, its cost the card's mana cost
+            // and the cards it exiles.
+            CastingOption::Escape { .. } => " with escape".to_owned(),
         })
         .collect()
 }

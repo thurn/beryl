@@ -2,6 +2,7 @@
 
 use crate::characteristics::{Colors, Subtype, Supertypes, Types};
 use crate::effect::Players;
+use crate::ids::Zone;
 use crate::words::{ColorWords, SubtypeWord};
 
 /// A predicate over objects. Evaluating one is a pass over a candidate set; the hot ones
@@ -51,6 +52,10 @@ pub enum Filter {
     Not(&'static Filter),
     All(&'static [Filter]),
     AnyOf(&'static [Filter]),
+    /// Is in this zone: "in your graveyard", with [`Filter::Whose`] for whose. A filter that
+    /// only names objects in a zone needs none, so only an effect that reaches every zone
+    /// ([`crate::Objects::Everywhere`]) says one.
+    InZone(Zone),
 }
 
 impl Filter {
@@ -80,7 +85,8 @@ impl Filter {
             | Filter::Tapped
             | Filter::Token
             | Filter::ManaValueAtMost(_)
-            | Filter::PowerAtMost(_) => false,
+            | Filter::PowerAtMost(_)
+            | Filter::InZone(_) => false,
             Filter::ManaValueAtMostX => true,
             Filter::Whose(players) => players.needs_a_resolution(),
             Filter::Not(filter) => filter.needs_a_resolution(),

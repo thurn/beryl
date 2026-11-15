@@ -12,7 +12,7 @@ use crate::ability::{Ability, AbilityKind, Behavior, Timing};
 use crate::continuous::{
     ChosenKind, Draws, LayerSpec, Modification, Replaced, Replacement, Rewrite,
 };
-use crate::cost::{CastingKind, Chosen, Cost, CostAction, CostPart, Measure};
+use crate::cost::{CastingKind, Chosen, Cost, CostAction, CostPart, ESCAPE_EXILES, Measure};
 use crate::effect::{Amount, Condition, Effect, Objects, Players};
 use crate::filter::Filter;
 use crate::ids::{TurnStep, Zone, ZoneSet};
@@ -516,6 +516,10 @@ impl Ctx {
                 format!("{has} {}", protection(from, &self.words))
             }
             Modification::Grant(ix) => format!("{has} {}", self.granted(ix)),
+            Modification::GrantEscape => format!(
+                "{has} escape. The escape cost is equal to the card's mana cost plus {}",
+                list(&self.cost_actions(Cost::of_parts(&ESCAPE_EXILES)), "and")
+            ),
             Modification::ModifyPt(power, toughness) => {
                 format!("{} {}", verb("gets", "get"), pt_change(power, toughness))
             }

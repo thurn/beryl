@@ -446,7 +446,33 @@ pub enum CastingOption {
         cost: ManaCost,
         parts: &'static [CostPart],
     },
+    /// Escape ([CR 702.138a]): "Escape represents a static ability that functions while the
+    /// card with escape is in a player's graveyard. 'Escape [cost]' means 'You may cast this
+    /// card from your graveyard by paying [cost] rather than paying its mana cost.'" No face
+    /// lists it: it is the escape an effect grants a card in a graveyard, whose cost is the
+    /// card's mana cost and `parts`, as Underworld Breach's "The escape cost is equal to the
+    /// card's mana cost plus exile three other cards from your graveyard." A cast for it
+    /// carries [`Castings::ESCAPE`], and [`Castings::paid`] yields it.
+    ///
+    /// [CR 702.138a]: https://yawgatog.com/resources/magic-rules/#R702138a
+    Escape {
+        cost: ManaCost,
+        parts: &'static [CostPart],
+    },
 }
+
+/// The part of a granted escape cost that is not mana ([`CastingOption::Escape`]): "exile
+/// three other cards from your graveyard". The one card that grants escape says three, so the
+/// number is fixed here rather than carried by every cast.
+pub static ESCAPE_EXILES: [CostPart; 1] = [CostPart::Chosen(
+    CostAction::Exile,
+    Chosen {
+        zone: Zone::Graveyard,
+        filter: Filter::Any,
+        other: true,
+        measure: Measure::Count(3),
+    },
+)];
 
 /// Which keyword a [`CastingOption`] is, as an effect asks whether its cost was paid
 /// ([`crate::Condition::Paid`]).
@@ -458,6 +484,12 @@ pub enum CastingKind {
     Overload,
     Evoke,
     Alternative,
+    /// Escape, as "it escaped" asks ([CR 702.138b]): "A spell or permanent 'escaped' if that
+    /// spell or the spell that became that permanent as it resolved was cast from a graveyard
+    /// with an escape ability."
+    ///
+    /// [CR 702.138b]: https://yawgatog.com/resources/magic-rules/#R702138b
+    Escape,
 }
 
 /// A set of [`CastingKind`]s: the keywords whose costs were paid for one spell, as the
@@ -512,6 +544,7 @@ impl CastingOption {
             CastingOption::Overload { .. } => CastingKind::Overload,
             CastingOption::Evoke { .. } => CastingKind::Evoke,
             CastingOption::Alternative { .. } => CastingKind::Alternative,
+            CastingOption::Escape { .. } => CastingKind::Escape,
         }
     }
 
@@ -525,6 +558,7 @@ impl CastingOption {
                 | CastingOption::Overload { .. }
                 | CastingOption::Evoke { .. }
                 | CastingOption::Alternative { .. }
+                | CastingOption::Escape { .. }
         )
     }
 
@@ -536,14 +570,17 @@ impl CastingOption {
             | CastingOption::Impending { cost, .. }
             | CastingOption::Overload { cost, .. }
             | CastingOption::Evoke { cost, .. }
-            | CastingOption::Alternative { cost, .. } => cost,
+            | CastingOption::Alternative { cost, .. }
+            | CastingOption::Escape { cost, .. } => cost,
         }
     }
 
     /// The parts of its cost that are not mana.
     pub fn parts(self) -> &'static [CostPart] {
         match self {
-            CastingOption::Evoke { parts, .. } | CastingOption::Alternative { parts, .. } => parts,
+            CastingOption::Evoke { parts, .. }
+            | CastingOption::Alternative { parts, .. }
+            | CastingOption::Escape { parts, .. } => parts,
             CastingOption::Kicker { .. }
             | CastingOption::Offspring(_)
             | CastingOption::Impending { .. }
@@ -553,30 +590,50 @@ impl CastingOption {
 }
 
 /// A set of a face's casting options ([`Face::casting`]): those chosen for one cast, as its
-/// decision option and stack entry record them.
+/// decision option and stack entry record them. A bit for each option the face lists, at
+/// most [`Castings::MOST`], and [`Castings::ESCAPE`] for a cast with the escape an effect
+/// grants the card.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Castings(u8);
 
 impl Castings {
     pub const NONE: Castings = Castings(0);
 
+    /// The most options a face lists: the last bit is [`Castings::ESCAPE`].
+    pub const MOST: usize = 7;
+
+    /// Cast with the escape an effect grants the card ([`CastingOption::Escape`]), its cost
+    /// the card's mana cost and [`ESCAPE_EXILES`].
+    pub const ESCAPE: Castings = Castings(1 << Castings::MOST);
+
     /// The option at index `i` in [`Face::casting`] alone, counting from 0, as a scenario
     /// writes it.
     pub const fn only(i: u8) -> Castings {
-        assert!(i < 8, "eight options at most");
+        assert!((i as usize) < Castings::MOST, "seven options at most");
         Castings(1 << i)
     }
 
     /// Every set of `face`'s options, the empty one first.
     pub fn subsets(face: &Face) -> impl Iterator<Item = Castings> {
         let n = face.casting.len();
-        debug_assert!(n <= 8);
-        (0..(1u16 << n)).map(|m| Castings(u8::try_from(m).expect("eight options at most")))
+        debug_assert!(n <= Castings::MOST);
+        (0..(1u16 << n)).map(|m| Castings(u8::try_from(m).expect("seven options at most")))
+    }
+
+    /// The same options, with the granted escape too.
+    #[must_use]
+    pub const fn with_escape(self) -> Castings {
+        Castings(self.0 | Castings::ESCAPE.0)
+    }
+
+    /// Whether it is a cast with the escape an effect grants ([`Castings::ESCAPE`]).
+    pub const fn escapes(self) -> bool {
+        self.0 & Castings::ESCAPE.0 != 0
     }
 
     /// Whether it has the option at `option` in [`Face::casting`].
     pub fn contains(self, option: CastingIx) -> bool {
-        option.get() < 8 && self.0 & (1 << option.get()) != 0
+        usize::from(option.get()) < Castings::MOST && self.0 & (1 << option.get()) != 0
     }
 
     pub fn is_empty(self) -> bool {
@@ -588,19 +645,26 @@ impl Castings {
         self.0
     }
 
-    /// The indices in [`Face::casting`] of its options, in order.
+    /// The indices in [`Face::casting`] of its options, in order: not the granted escape,
+    /// which the face doesn't list.
     pub fn indices(self) -> impl Iterator<Item = CastingIx> {
-        (0..8)
+        (0..Castings::MOST as u8)
             .filter(move |&i| self.0 & (1 << i) != 0)
             .map(CastingIx::new)
     }
 
-    /// The options of `face` it has, in the face's order.
+    /// The options of `face` it has, in the face's order, and then the granted escape, its
+    /// cost the face's mana cost ([`CastingOption::Escape`]).
     pub fn paid(self, face: &Face) -> impl Iterator<Item = CastingOption> + '_ {
+        let escape = self.escapes().then_some(CastingOption::Escape {
+            cost: face.cost,
+            parts: &ESCAPE_EXILES,
+        });
         face.casting
             .iter()
             .enumerate()
-            .filter(move |&(i, _)| i < 8 && self.0 & (1 << i) != 0)
+            .filter(move |&(i, _)| i < Castings::MOST && self.0 & (1 << i) != 0)
             .map(|(_, &o)| o)
+            .chain(escape)
     }
 }

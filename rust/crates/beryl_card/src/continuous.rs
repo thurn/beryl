@@ -438,6 +438,15 @@ pub enum Modification {
     ///
     /// [CR 702.16a]: https://yawgatog.com/resources/magic-rules/#R70216a
     AddProtection(Protection),
+    /// Layer 6: "has escape. The escape cost is equal to the card's mana cost plus exile
+    /// three other cards from your graveyard." ([CR 702.138a]): "Escape represents a static
+    /// ability that functions while the card with escape is in a player's graveyard." Of a
+    /// card in a graveyard, which only an effect on [`crate::Objects::Everywhere`] reaches;
+    /// it gives a permanent nothing. Cast for it, the card is cast for
+    /// [`crate::CastingOption::Escape`].
+    ///
+    /// [CR 702.138a]: https://yawgatog.com/resources/magic-rules/#R702138a
+    GrantEscape,
 }
 
 impl Modification {

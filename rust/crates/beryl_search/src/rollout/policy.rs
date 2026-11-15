@@ -265,6 +265,8 @@ impl<L: Layout> Policy<'_, L> {
                 }
                 // What it costs besides mana, as Force of Will's card from hand and life.
                 CastingOption::Alternative { .. } => -20,
+                // A card back from the graveyard, for three others there.
+                CastingOption::Escape { .. } => 10,
             };
         }
         // Overloaded, a spell hits each permanent its first target's filter accepts

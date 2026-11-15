@@ -84,6 +84,10 @@ pub enum LayerChange {
     /// Layer 6: "gains protection from [colors]", the colors settled. Last, for the same
     /// reason as [`LayerChange::SetSubtype`].
     AddProtection(Colors),
+    /// Layer 6: "has escape", of a card in a graveyard ([`Modification::GrantEscape`]). It
+    /// changes nothing of a permanent. Last, for the same reason as
+    /// [`LayerChange::SetSubtype`].
+    GrantEscape,
 }
 
 impl LayerChange {
@@ -126,6 +130,7 @@ impl LayerChange {
             Modification::AddProtection(Protection::ColorWords(colors)) => {
                 LayerChange::AddProtection(colors.read(words))
             }
+            Modification::GrantEscape => LayerChange::GrantEscape,
         })
     }
 
@@ -146,6 +151,7 @@ impl LayerChange {
             LayerChange::AddKeywords(_)
             | LayerChange::AddProtection(_)
             | LayerChange::Grant(_)
+            | LayerChange::GrantEscape
             | LayerChange::LoseAllAbilities
             | LayerChange::LoseAbility(_) => Layer::Ability,
             LayerChange::DefinedPower(_) | LayerChange::DefinedPt(..) => Layer::PtDefining,
@@ -189,6 +195,7 @@ impl LayerChange {
                     | LayerChange::AddKeywords(_)
                     | LayerChange::AddProtection(_)
                     | LayerChange::Grant(_)
+                    | LayerChange::GrantEscape
                     | LayerChange::AddColors(_)
                     | LayerChange::ModifyPt(..)
             )
@@ -222,9 +229,10 @@ impl LayerChange {
                 .union(Characteristics::ADDS_ABILITIES)
                 .union(Characteristics::REMOVES_ABILITIES),
             LayerChange::SetColors(_) | LayerChange::AddColors(_) => Characteristics::COLORS,
-            LayerChange::AddKeywords(_) | LayerChange::AddProtection(_) | LayerChange::Grant(_) => {
-                Characteristics::ADDS_ABILITIES
-            }
+            LayerChange::AddKeywords(_)
+            | LayerChange::AddProtection(_)
+            | LayerChange::Grant(_)
+            | LayerChange::GrantEscape => Characteristics::ADDS_ABILITIES,
             LayerChange::LoseAllAbilities | LayerChange::LoseAbility(_) => {
                 Characteristics::REMOVES_ABILITIES
             }

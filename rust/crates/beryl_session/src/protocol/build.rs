@@ -454,8 +454,9 @@ fn paid_costs<L: Layout>(t: &GameTable, e: &StackEntry<L>, flashback: bool) -> V
             CastingOption::Overload { .. } => Some(PaidCost::Overload),
             CastingOption::Evoke { .. } => Some(PaidCost::Evoke),
             // No keyword names it, so Arena tags nothing: Force of Will cast for its
-            // alternative cost is a plain Force of Will on the stack.
-            CastingOption::Alternative { .. } => None,
+            // alternative cost is a plain Force of Will on the stack. An escaped spell is
+            // tagged nothing either, as no tag of the views says escape.
+            CastingOption::Alternative { .. } | CastingOption::Escape { .. } => None,
         })
         .collect()
 }

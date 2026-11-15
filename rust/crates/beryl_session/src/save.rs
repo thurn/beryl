@@ -540,6 +540,7 @@ impl Act {
                         .enumerate()
                         .filter(|&(i, _)| costs.bits() & (1 << i) != 0)
                         .map(|(_, &option)| option.into())
+                        .chain(costs.escapes().then_some(CastingName::Escape))
                         .collect(),
                 }
             }
@@ -749,6 +750,10 @@ pub enum CastingName {
     Overload,
     Evoke,
     Alternative,
+    /// The escape an effect grants a card in a graveyard ([`Castings::ESCAPE`]).
+    ///
+    /// [`Castings::ESCAPE`]: beryl_engine::card::Castings::ESCAPE
+    Escape,
 }
 
 impl From<CastingOption> for CastingName {
@@ -760,6 +765,7 @@ impl From<CastingOption> for CastingName {
             CastingOption::Overload { .. } => CastingName::Overload,
             CastingOption::Evoke { .. } => CastingName::Evoke,
             CastingOption::Alternative { .. } => CastingName::Alternative,
+            CastingOption::Escape { .. } => CastingName::Escape,
         }
     }
 }

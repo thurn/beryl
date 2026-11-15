@@ -750,6 +750,30 @@ Built by by-bajq.3.10:
   does so by granting an ability to cards in a graveyard is read through group
   4's list. `cast::legal::cast_sources` scans the zone only while such a rule is
   in force.
+- **Escape as built** (by-bajq.5.5). Underworld Breach's grant is a static
+  ability on `Objects::Everywhere` whose filter names the zone
+  (`Filter::InZone(Graveyard)`) and whose part is `Modification::GrantEscape`
+  (layer 6, `LayerChange::GrantEscape`, which changes nothing of a permanent).
+  The layers list it in group 4's list, and `State::escapes` answers whether a
+  card there has it. `cast_sources` adds the caster's graveyard cards with
+  escape while that list is not empty. A cast for escape carries a reserved
+  bit, `Castings::ESCAPE` (so a face lists at most seven options), and
+  `Castings::paid` yields `CastingOption::Escape`: the face's mana cost and
+  `ESCAPE_EXILES` ("exile three other cards from your graveyard"; Breach is the
+  only card that grants escape, so the count is fixed). The total cost, X, the
+  parts step and `Memo::Paid` (`CastingKind::Escape`) read it with no special
+  case. A card that also has flashback offers both casts, and a cast for escape
+  starts no permission's replacement. The rule-change form of a class of
+  permission is not built: no card of the pool says one.
+- **Mana abilities activated only as an instant** (by-bajq.5.5). Lion's Eye
+  Diamond's ability ("Discard your hand", `CostPart::DiscardHand`;
+  `Timing::AsInstant`) is never a source of the mana solver, so it can't be
+  activated while a cost is paid. Priority offers it as an activation of its own
+  (`Capability::InstantMana`); a color of "any one color" is asked first
+  (`Pending::ManaColor`, the color question a land asks as it enters), then the
+  costs are paid and the mana added without the stack (CR 605.3b). The Breach
+  loop with Brain Freeze empties a 53-card library in 118 of a turn's 500
+  decisions.
 - **Mana with memory** (built by by-bajq.7.4). A mana ability may restrict its
   mana (`ManaRestriction`: the spells it casts, "of the chosen type", a rider).
   The game numbers restrictions as it numbers rule changes, and the rider is a

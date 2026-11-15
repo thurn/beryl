@@ -54,6 +54,22 @@ KEYWORD_TRIGGERS: dict[str, str] = {"Evoke": "Sacrifice", "Offspring": "CreateCo
 TRIGGER_START: re.Pattern[str] = re.compile(r"^(When|Whenever|At) (this \w+|.+?) ")
 
 
+# The bit of a Cast's `costs` for a cast with the escape an effect grants a card in a
+# graveyard: Beryl's `Castings::ESCAPE`, the last of the eight.
+ESCAPE = 1 << 7
+
+
+def escape_spell(card: str, costs: int) -> tuple[str, int]:
+    """The spell XMage casts for a Cast of `card` paying `costs`, and the options left: with
+    the escape an effect grants, its EscapeAbility, the spell ability "<card> with Escape".
+    """
+    if not costs & ESCAPE:
+        return card, costs
+    if costs != ESCAPE:
+        raise Unsupported(f"escape with another casting option of {card}")
+    return f"{card} with Escape", 0
+
+
 class Cards:
     """The descriptions of the cards one scenario names, looked up by card or face name."""
 
@@ -108,6 +124,20 @@ class Cards:
             granted = self.grants[0]
             return granted[index] if index < len(granted) else None
         return None
+
+    def instant_mana_text(self, card: str, how: str, index: int) -> str | None:
+        """The start of a mana ability's text in XMage where the ability is activated only at
+        priority, as Lion's Eye Diamond's "Discard your hand, Sacrifice this artifact: Add
+        three mana of any one color. Activate only as an instant." does: its first cost part.
+        None for any other ability."""
+        ability = self.ability(card, how, index)
+        if ability is None or ability["kind"] != "Mana":
+            return None
+        cost = cast(Json, ability.get("cost", {}))
+        parts = cast(list[Json], cost.get("parts", []))
+        if not parts or parts[0]["action"] != "DiscardHand":
+            return None
+        return "Discard your hand"
 
     def ability_text(self, card: str, how: str, index: int) -> str | None:
         """The start of an activated or loyalty ability's text in XMage, which its

@@ -47,7 +47,8 @@ pub use continuous::{
     Protection, Replaced, Replacement, Rewrite, RuleChange, SpellCost, When,
 };
 pub use cost::{
-    CastingKind, CastingKinds, CastingOption, Castings, Chosen, Cost, CostAction, CostPart, Measure,
+    CastingKind, CastingKinds, CastingOption, Castings, Chosen, Cost, CostAction, CostPart,
+    ESCAPE_EXILES, Measure,
 };
 pub use counter::CounterKind;
 pub use decision::DecisionKind;

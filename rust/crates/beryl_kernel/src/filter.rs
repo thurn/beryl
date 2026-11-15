@@ -129,6 +129,7 @@ impl Evaluate for Filter {
             Filter::ManaValueAtMost(n) => s.mana_value(t, slot) <= n,
             Filter::ManaValueAtMostX => s.mana_value(t, slot) <= x,
             Filter::PowerAtMost(n) => s.power(t, slot) <= n,
+            Filter::InZone(zone) => o.zone == zone,
             Filter::Not(_) | Filter::All(_) | Filter::AnyOf(_) => {
                 combined(self, s, t, slot, you, words, x)
             }
@@ -190,7 +191,8 @@ pub(crate) fn passes_so_far<L: Layout>(
         | Filter::Token
         | Filter::ManaValueAtMost(_)
         | Filter::ManaValueAtMostX
-        | Filter::PowerAtMost(_) => filter.matches(s, t, slot, you, words),
+        | Filter::PowerAtMost(_)
+        | Filter::InZone(_) => filter.matches(s, t, slot, you, words),
     }
 }
 

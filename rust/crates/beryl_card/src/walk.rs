@@ -291,7 +291,8 @@ impl Filter {
             | Filter::Token
             | Filter::ManaValueAtMost(_)
             | Filter::PowerAtMost(_)
-            | Filter::ManaValueAtMostX => {}
+            | Filter::ManaValueAtMostX
+            | Filter::InZone(_) => {}
             Filter::Whose(players) => players.walk(visit),
             Filter::Not(filter) => filter.walk(visit),
             Filter::All(filters) | Filter::AnyOf(filters) => {

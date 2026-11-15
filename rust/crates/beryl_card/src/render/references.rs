@@ -128,6 +128,11 @@ impl Ctx {
                 format!("{owner} {}", list(&names, "and"))
             }
             Objects::Paid(action) => paid(action).to_owned(),
+            // "Each nonland card in your graveyard": an effect on the cards of one zone.
+            Objects::Everywhere(filter) if zone_of(filter).is_some() => {
+                let card = Kind::Card(zone_of(filter));
+                format!("each {}", self.noun(filter, card).singular(card))
+            }
             Objects::Everywhere(filter) => {
                 let card = Kind::Card(None);
                 let cards = self.noun(filter, card).plural(card);
@@ -250,8 +255,9 @@ impl Ctx {
             Objects::All { .. }
             | Objects::InZoneOf { .. }
             | Objects::CardsIn { .. }
-            | Objects::Everywhere(_)
             | Objects::ExiledWithThis => true,
+            // "Each nonland card in your graveyard has": one at a time.
+            Objects::Everywhere(filter) => zone_of(filter).is_none(),
             // "Each other creature is": one at a time.
             Objects::PutOntoBattlefieldWithThis
             | Objects::This
@@ -574,6 +580,13 @@ impl Ctx {
             CastingKind::Overload => "overload",
             CastingKind::Evoke => "evoke",
             CastingKind::Alternative => "alternative",
+            CastingKind::Escape => {
+                return if paid {
+                    format!("{it} escaped")
+                } else {
+                    format!("{it} didn't escape")
+                };
+            }
         };
         let whose = if it == "it" {
             "its".to_owned()
@@ -791,5 +804,15 @@ fn paid(action: CostAction) -> &'static str {
         CostAction::Exile => "the exiled card",
         CostAction::Reveal => "the revealed card",
         CostAction::RemoveCounter(_) => "it",
+    }
+}
+
+/// The zone `filter` names its objects in ([`Filter::InZone`]), directly or among the filters
+/// it requires all of.
+fn zone_of(filter: Filter) -> Option<Zone> {
+    match filter {
+        Filter::InZone(zone) => Some(zone),
+        Filter::All(filters) => filters.iter().find_map(|&f| zone_of(f)),
+        _ => None,
     }
 }
