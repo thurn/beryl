@@ -315,7 +315,12 @@ def vm_status(vm: str = VM) -> str | None:
     return None
 
 
-def vm_command(script: str, vm: str = VM) -> list[str]:
+def vm_command(script: str, vm: str = VM, workdir: str | None = None) -> list[str]:
+    """`script` run in `vm`'s login shell from `workdir`, by default this checkout's rust/
+    directory. That path exists in the machine only when this checkout is in the main checkout,
+    the one directory the machine mounts, so a script that may run from a worktree elsewhere
+    (the Beryl 3D sweep's) passes `/`."""
+    where = str(paths.RUST) if workdir is None else workdir
     if system.WINDOWS:
         # Windows' command line would mangle the script's quotes on the way through wsl.exe:
         # it goes as base64, and runs from a file so that its commands' stdin is not it.
@@ -326,17 +331,17 @@ def vm_command(script: str, vm: str = VM) -> list[str]:
             "-d",
             vm,
             "--cd",
-            str(paths.RUST),
+            where,
             "--exec",
             "bash",
             "-c",
             unpack,
         ]
-    return ["limactl", "shell", "--workdir", str(paths.RUST), vm, "bash", "-lc", script]
+    return ["limactl", "shell", "--workdir", where, vm, "bash", "-lc", script]
 
 
-def vm_shell(script: str, vm: str = VM) -> int:
-    return subprocess.run(vm_command(script, vm), check=False).returncode
+def vm_shell(script: str, vm: str = VM, workdir: str | None = None) -> int:
+    return subprocess.run(vm_command(script, vm, workdir), check=False).returncode
 
 
 def locked(script: str) -> str:

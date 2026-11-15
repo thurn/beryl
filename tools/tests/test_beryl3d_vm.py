@@ -18,3 +18,10 @@ def test_provisioning_adds_the_vulkan_drivers_to_the_engine_machine_s() -> None:
 
 def test_the_runner_matches_a_locked_gungraun() -> None:
     assert vm.runner_version() is not None
+
+
+def test_provisioning_runs_from_the_machine_s_root() -> None:
+    # The sweep's worktree is outside the main checkout, the only directory the machine
+    # mounts, so a command run from the checkout's own path fails to start there.
+    command = bench.vm_command("true", vm.NAME, "/")
+    assert command[command.index("--workdir") + 1] == "/"

@@ -53,7 +53,9 @@ def ensure() -> int:
     if runner is None:
         bench.log("no gungraun in rust/beryl3d/Cargo.lock or rust/Cargo.lock")
         return 2
-    return bench.vm_shell(provision_script(bench.toolchain(), runner), NAME)
+    # From the machine's root: the sweep calls this from a worktree that the machine does not
+    # mount, so the checkout's own path does not exist there.
+    return bench.vm_shell(provision_script(bench.toolchain(), runner), NAME, "/")
 
 
 def run_vm(args: argparse.Namespace) -> int:
