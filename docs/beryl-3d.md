@@ -1700,6 +1700,11 @@ assets: Receiver<AssetReady>,
   2% of what the current app achieves, and the app's log of late frames must
   show none while the AI thinks. While something animates, the AI loses what
   drawing uses and no more.
+- **Measured, the utility class does not meet it.** Over whole games on the
+  development Mac, the search threads in the utility class searched at a median
+  0.88 of the rate they reach in the default class, the web app's, and late
+  frames while the AI searched were no fewer ([Measurements](#measurements)).
+  by-q44s.1.60 chooses the class again.
 
 Why no core is reserved:
 
