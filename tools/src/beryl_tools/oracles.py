@@ -20,6 +20,8 @@ vocabulary, with the reason). It fails on any failure the allowlist does not exp
 the full results go to oracles/logs. Forge's AI also plays a few games of the deck, unless
 `--no-sim`. With `--lock-wait`, a run that finds another holding the oracles that long skips
 every scenario and passes: the fast check's oracle lane for changed cards does that.
+`--select` (slow CI) and `--new` (the fast check) play only the scenarios new to the oracles
+(oracle_memory.py).
 """
 
 from __future__ import annotations
@@ -42,7 +44,7 @@ from pathlib import Path
 from typing import cast
 
 from . import card_store, cards, checks, forge, oracle_selection, paths, runlog, system
-from . import card_diverge, card_facts, deadline, xmage, xmage_java
+from . import card_diverge, card_facts, deadline, oracle_memory, xmage, xmage_java
 from .oracle_selection import skip_all
 
 FORMULAS = ("maven", "openjdk@21")
@@ -663,36 +665,6 @@ def check_xmage(entries: list[dict[str, object]], log: Path) -> dict[str, object
     return {**counts, "stale_allowlist": stale, "scenarios": scenarios, "log": str(log)}
 
 
-# How each scenario status counts in the run log: an allowlisted divergence fails no run.
-RUN_LOG_OUTCOMES = {
-    "pass": "pass",
-    "allowlisted": "pass",
-    "fail": "fail",
-    "unsupported": "skip",
-}
-
-
-def log_results(
-    results: dict[str, dict[str, object]],
-    seconds: dict[str, float],
-    chosen: dict[str, str] | None = None,
-) -> None:
-    """Reports each scenario of each oracle to the run log as `oracle:<card>/<scenario>/<engine>`,
-    with why its card was chosen when cards were (`oracle_selection`). Neither oracle times a
-    scenario, so each engine's seconds are shared evenly among those it played."""
-    for engine, result in results.items():
-        scenarios = cast(list[dict[str, object]], result["scenarios"])
-        played = sum(1 for s in scenarios if s["status"] != "unsupported") or 1
-        for s in scenarios:
-            outcome = RUN_LOG_OUTCOMES.get(cast(str, s["status"]), "fail")
-            runlog.result(
-                f"oracle:{s['card']}/{s['name']}/{engine}",
-                outcome,
-                0.0 if outcome == "skip" else seconds[engine] / played,
-                chosen.get(cast(str, s["card"])) if chosen is not None else None,
-            )
-
-
 def oracle(args: argparse.Namespace) -> int:
     work = root() / "run"
     work.mkdir(exist_ok=True)
@@ -714,11 +686,12 @@ def oracle(args: argparse.Namespace) -> int:
         chosen = (
             oracle_selection.slow_ci(every) if args.select and not args.cards else None
         )
+        # The scenarios new to the oracles, or all of them (oracle_memory.py).
+        memory = oracle_memory.Memory.load([o.commit for o in ORACLES])
+        sampled = oracle_selection.SAMPLED
+        entries = memory.select(entries, chosen, args.cards, args.new, sampled)
         if chosen is not None:
             print(f"oracle: chosen: {json.dumps(chosen)}")
-        wanted = chosen or args.cards
-        if wanted:
-            entries = [e for e in entries if e["card"] in wanted]
         if records is not None:
             entries = oracle_selection.fitted(entries, records.get())
             if not entries:
@@ -737,6 +710,7 @@ def oracle(args: argparse.Namespace) -> int:
                 started = time.perf_counter()
                 results["forge"] = check_forge(entries, work)
                 seconds["forge"] = time.perf_counter() - started
+                memory.record(entries, results)  # Before the gaps rewrite failures.
                 if not args.no_sim:
                     # A few AI-versus-AI games of the deck: Forge knows every card of it.
                     sim_log = log_dir() / "forge-sim.log"
@@ -745,7 +719,7 @@ def oracle(args: argparse.Namespace) -> int:
                 stale = [g for name, r in results.items() for g in apply_gaps(name, r)]
                 for r in results.values():
                     mark_generated(r)
-                log_results(results, seconds, chosen)
+                oracle_selection.log_results(results, seconds, chosen)
         except system.LockHeld:
             # Another run holds the oracles, as slow CI's oracle lane does for a minute or more.
             skip_all(
@@ -790,6 +764,11 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         action="store_true",
         help="only the cards slow CI chooses: those changed since origin/master and a "
         "sample, or every card when the exporters or harness changed",
+    )
+    p.add_argument(
+        "--new",
+        action="store_true",
+        help="the named cards' scenarios and the generated ones that have not passed",
     )
     p.add_argument(
         "--lock-wait",

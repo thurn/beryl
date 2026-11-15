@@ -16,6 +16,7 @@ from beryl_tools import (
     checks,
     file_length,
     hygiene,
+    oracle_memory,
     oracles,
     paths,
     reruns,
@@ -347,12 +348,23 @@ def test_changed_card_files_pick_cards_only_where_the_oracles_are_built(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     changed = ["rust/cards/cards_1993/lea/counterspell.rs", "tools/x.py"]
-    assert checks.changed_cards(changed) == []
+    assert checks.changed_cards(changed) is None
     monkeypatch.setattr(oracles, "built", lambda oracle: True)
     assert checks.changed_cards(changed) == ["Counterspell"]
-    assert checks.changed_cards(None) == []
+    assert checks.changed_cards(None) is None
+    # No card file, but a rules change can rewrite the generated scenarios.
+    monkeypatch.setattr(oracle_memory, "reached", lambda changed: True)
+    assert checks.changed_cards(["rust/crates/beryl_rules/src/combat.rs"]) == []
+    monkeypatch.setattr(oracle_memory, "reached", lambda changed: False)
+    assert checks.changed_cards(["tools/x.py"]) is None
     lane = checks.card_oracle_lane(["Counterspell"])
-    assert lane.steps[0].cmd[-4:] == ["--no-sim", "--lock-wait", "10", "Counterspell"]
+    assert lane.steps[0].cmd[-5:] == [
+        "--new",
+        "--no-sim",
+        "--lock-wait",
+        "10",
+        "Counterspell",
+    ]
     # Slow CI's lane chooses its cards itself (oracle_selection.py).
     assert checks.oracle_lane().steps[0].cmd[-2:] == ["oracle", "--select"]
 

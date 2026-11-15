@@ -2,11 +2,12 @@ import argparse
 import json
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
 
-from beryl_tools import oracles
+from beryl_tools import oracle_memory, oracles
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -119,6 +120,8 @@ def fake_oracles(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
     """Replaces the dump and both oracles with stand-ins that pass every scenario; returns the
     cards each oracle played, then "sim" for each round of Forge's AI games."""
     played: list[list[str]] = []
+    # The outcomes the runs record (oracle_memory.py) go to a cache of the test's own.
+    monkeypatch.setenv("BERYL_CACHE", tempfile.mkdtemp(prefix="beryl-oracle-test-"))
 
     def check(entries: list[dict[str, object]], _work: Path) -> dict[str, object]:
         played.append([str(e["card"]) for e in entries])
@@ -145,9 +148,10 @@ def oracle_args(
     no_sim: bool = False,
     lock_wait: float | None = None,
     select: bool = False,
+    new: bool = False,
 ) -> argparse.Namespace:
     return argparse.Namespace(
-        cards=list(cards), no_sim=no_sim, lock_wait=lock_wait, select=select
+        cards=list(cards), no_sim=no_sim, lock_wait=lock_wait, select=select, new=new
     )
 
 
@@ -160,9 +164,14 @@ def test_select_plays_slow_cis_cards_and_logs_why(
     chosen: dict[str, str] | None = {"Ponder": "card file changed"}
     monkeypatch.setattr(oracles.oracle_selection, "slow_ci", lambda every: chosen)
     assert oracles.oracle(oracle_args(select=True, no_sim=True)) == 0
-    assert played == [["Ponder"], ["Ponder"]]
+    # Counterspell is no changed card, but it has never passed, so it plays as new.
+    assert played == [["Counterspell", "Ponder"]] * 2
     logged = [json.loads(line) for line in results.read_text().splitlines()]
-    assert {r["chosen"] for r in logged} == {"card file changed"}
+    assert {r["chosen"] for r in logged} == {"card file changed", oracle_memory.NEW}
+    # Both passed under the same oracles' side: the same choice plays neither again.
+    played.clear()
+    assert oracles.oracle(oracle_args(select=True, no_sim=True)) == 0
+    assert played == [[], []]
     # Cards named too are a rerun's: they narrow the run.
     played.clear()
     assert oracles.oracle(oracle_args("Counterspell", select=True, no_sim=True)) == 0

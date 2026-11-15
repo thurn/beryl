@@ -7,6 +7,8 @@ and a failure in the sample reproduces from the SHA. A change to what the export
 oracle harnesses are built from ([`HARNESS`]) can break any card's translation: then every card
 plays. A rules change does not select every card; the nightly's full sweep on staging
 (nightly.py, `oracle_step`) does that. `by oracle` with no names stays the manual full sweep.
+Of the chosen cards, the sample plays whole and the others only their scenarios that have not
+passed; every other scenario that has not passed joins them (oracle_memory.py).
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ import re
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, cast
 
-from . import card_files, deadline, runlog
+from . import card_files, deadline, oracle_memory, runlog
 from .changes import changed_paths, git, master_base
 
 if TYPE_CHECKING:
@@ -93,7 +95,7 @@ def fitted(
         for engine in ("xmage", "forge"):
             r = known.get(f"oracle:{e['card']}/{e['name']}/{engine}")
             seconds = r.seconds if r and r.seconds > 0 else SCENARIO_SECONDS
-            card = cast(str, e["card"])
+            card = unit(e)
             cost[card] = cost.get(card, 0.0) + seconds
     left, spent, kept = deadline.left() or 0.0, 0.0, set()
     for card in sorted(cost, key=lambda c: (cost[c], c)):
@@ -101,14 +103,21 @@ def fitted(
             break
         spent += cost[card]
         kept.add(card)
-    cut = [e for e in entries if e["card"] not in kept]
+    cut = [e for e in entries if unit(e) not in kept]
     if cut:
         skip_all(
             cut,
             f"deferred to slow CI: {len(cost) - len(kept)} of {len(cost)} cards do not fit"
             f" the {max(left, 0):.0f} s left of the fast check's target",
         )
-    return [e for e in entries if e["card"] in kept]
+    return [e for e in entries if unit(e) in kept]
+
+
+def unit(entry: Mapping[str, object]) -> str:
+    """What `fitted` keeps or defers together: a card's scenarios, or one generated scenario,
+    since the generated ones are a hundred unrelated positions under one card."""
+    card = cast(str, entry["card"])
+    return f"{card}/{entry['name']}" if card == oracle_memory.GENERATED else card
 
 
 def skip_all(entries: list[dict[str, object]], why: str) -> None:
@@ -117,3 +126,33 @@ def skip_all(entries: list[dict[str, object]], why: str) -> None:
     for e in entries:
         for engine in ("xmage", "forge"):
             runlog.result(f"oracle:{e['card']}/{e['name']}/{engine}", "skip", 0.0)
+
+
+# How each scenario status counts in the run log: an allowlisted divergence fails no run.
+RUN_LOG_OUTCOMES = {
+    "pass": "pass",
+    "allowlisted": "pass",
+    "fail": "fail",
+    "unsupported": "skip",
+}
+
+
+def log_results(
+    results: dict[str, dict[str, object]],
+    seconds: dict[str, float],
+    chosen: dict[str, str] | None = None,
+) -> None:
+    """Reports each scenario of each oracle to the run log as `oracle:<card>/<scenario>/<engine>`,
+    with why its card was chosen when cards were (`oracle_selection`). Neither oracle times a
+    scenario, so each engine's seconds are shared evenly among those it played."""
+    for engine, result in results.items():
+        scenarios = cast(list[dict[str, object]], result["scenarios"])
+        played = sum(1 for s in scenarios if s["status"] != "unsupported") or 1
+        for s in scenarios:
+            outcome = RUN_LOG_OUTCOMES.get(cast(str, s["status"]), "fail")
+            runlog.result(
+                f"oracle:{s['card']}/{s['name']}/{engine}",
+                outcome,
+                0.0 if outcome == "skip" else seconds[engine] / played,
+                chosen.get(cast(str, s["card"])) if chosen is not None else None,
+            )

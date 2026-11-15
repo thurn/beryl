@@ -15,7 +15,7 @@ steps on the wall clock before Enact's `slow_timeout` would kill it (bisect.time
 killed that late still prints its lanes and names the step it cut off.
 
 The fast check runs the lanes whose files changed since the branch left origin/staging,
-`oracle` on the scenarios of each card whose file changed, without Forge's AI games, and for a
+`oracle` on changed cards and new generated scenarios, without Forge's AI games, and for a
 change to ui/ or rust/, `ui-test` and `shots` on the browser checks it can break, as many as fit
 its budget (selection.py). Slow CI has every lane plus `app` (the debug app built and launched
 headless until its UI loads), `ui-smoke` (a few browser checks, [`SMOKE_TITLES`]), `ui-counts`
@@ -67,6 +67,7 @@ from . import (
     file_length,
     hang,
     hygiene,
+    oracle_memory,
     justfile_format,
     paths,
     plan_references,
@@ -636,24 +637,23 @@ def choice_flags(select: bool, affected: str) -> list[str]:
 
 
 def oracle_lane() -> Lane:
-    """Plays in XMage and Forge the scenarios of the cards changed since master and a sample,
-    or of every card when the exporters or harness changed (`by oracle --select`,
-    oracle_selection.py; the nightly plays them all): a failure the divergence allowlist does
-    not explain fails it, as does an oracle not built at its pin."""
+    """Plays in XMage and Forge what `by oracle --select` chooses (oracle_selection.py): the
+    changed cards, a sample and every scenario not yet passed, or every card when the exporters
+    changed. A failure the divergence allowlist does not explain fails it."""
     cmd = [*BY, "oracle", "--select"]
     return Lane("oracle", warm=True).step("oracle", cmd, rerun=failed_cards)
 
 
-# How long the fast check's oracle lane waits for another oracle run, such as slow CI's, before
-# it skips: that run holds the oracles for up to a minute and a half.
+# Seconds the fast check's oracle lane waits for another oracle run (slow CI's: ~90 s), then skips.
 ORACLE_LOCK_WAIT = 10
 
 
 def card_oracle_lane(cards: list[str]) -> Lane:
-    """Plays the scenarios of `cards` in XMage and Forge without Forge's AI games, skipping
-    them, and passing, when another oracle run holds the oracles past the wait."""
-    cmd = [*BY, "oracle", "--no-sim", "--lock-wait", str(ORACLE_LOCK_WAIT), *cards]
-    return Lane("oracle", warm=True).step("oracle", cmd, rerun=failed_cards)
+    """Plays the scenarios of `cards` and the new generated ones (`--new`) in XMage and Forge
+    without Forge's AI games, passing when another run holds the oracles past the wait.
+    """
+    cmd = [*BY, "oracle", "--new", "--no-sim", "--lock-wait", str(ORACLE_LOCK_WAIT)]
+    return Lane("oracle", warm=True).step("oracle", cmd + cards, rerun=failed_cards)
 
 
 def fast(args: argparse.Namespace) -> int:
@@ -722,20 +722,20 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
 
     if not every and touched(motion.INPUTS) and not system.WINDOWS:
         lanes.append(motion.lane())
-    if cards := changed_cards(changed):
+    if (cards := changed_cards(changed)) is not None:
         lanes.append(card_oracle_lane(cards))
     return lanes
 
 
-def changed_cards(changed: list[str] | None) -> list[str]:
-    """The cards whose files changed, for the oracle lane: none with no base, when every card
-    would count (slow CI checks them all), or on a machine without the oracles built
-    (`just oracle-setup`)."""
+def changed_cards(changed: list[str] | None) -> list[str] | None:
+    """The cards whose files changed, for the oracle lane, or None for no lane: no base (slow
+    CI checks every card), no scenario reached (oracle_memory.reached) or no oracles built.
+    """
     from . import oracles  # It imports this module.
 
     if not changed or not all(oracles.built(o) for o in oracles.ORACLES):
-        return []
-    return card_files.cards_in(changed)
+        return None
+    return card_files.cards_in(changed) if oracle_memory.reached(changed) else None
 
 
 def slow_run(

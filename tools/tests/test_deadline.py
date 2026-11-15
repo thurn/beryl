@@ -83,3 +83,17 @@ def test_the_oracle_lane_plays_the_cards_that_fit_cheapest_first(
     kept = oracle_selection.fitted(entries, known)
     assert kept == [{"card": "Small", "name": "s1"}]
     assert ("oracle:Big/s1/forge", "skip", 0.0) in skipped
+
+
+def test_the_oracle_lane_fits_generated_scenarios_one_at_a_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(runlog, "result", lambda *_: None)
+    monkeypatch.setattr(deadline, "left", lambda: 40.0)
+    # The generated scenarios are unrelated positions under one card: each counts alone, so
+    # two of three fit (8 + 8 s each) where the card as a whole would not.
+    entries: list[dict[str, object]] = []
+    for i in range(3):
+        entries.append({"card": "Generated", "name": f"Generated {i}"})
+    kept = oracle_selection.fitted(entries, {})
+    assert [e["name"] for e in kept] == ["Generated 0", "Generated 1"]

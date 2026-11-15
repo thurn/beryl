@@ -61,11 +61,18 @@ The lanes:
   - `citations`: `just citations` on the changed files, using the cached rules
     text, and skipped if none is cached. Slow CI runs it on the whole tree and
     downloads the text.
-- `oracle`: the scenarios in each changed card file, run in XMage and Forge, for
-  the cards whose recorded times fit what is left, cheapest first
-  (`oracle_selection.fitted`). Slow CI's `oracle` lane plays every card changed
-  since `master`. Skipped if another oracle run has held the oracles for more
-  than 10 s.
+- `oracle`: in XMage and Forge, the scenarios in each changed card file that
+  have not passed before, and, when the change reaches `beryl_cards` (a card
+  file, the card store or a crate it depends on), each random scenario under the
+  card `Generated` that no run has played. A rules change rewrites some of those
+  without touching any card file. Every oracle run records each scenario's
+  outcome under a hash of its dump entry and the oracles' side (their pins, the
+  exporters, the harnesses and the card store) in
+  `$BERYL_CACHE/oracles/outcomes.txt` (`oracle_memory.py`). A generated scenario
+  that already failed elsewhere is left to slow CI, so a failure on staging
+  fails no one else's push. It plays what fits the time left, cheapest first,
+  each generated scenario on its own (`oracle_selection.fitted`). Skipped if
+  another oracle run has held the oracles for more than 10 s.
 - `motion`: `just motion`, when the stage, its capture code or the animation
   data changed. It records each animation verb in stepped stage time, measures
   it the same way Arena's clips were measured, and compares it with its own
@@ -127,9 +134,13 @@ The lanes slow CI adds to the fast check's:
   land. Each takes about a second and runs on the page's own clock, so slow CI
   still sees the browser UI start and play.
 - `oracle`: `just oracle --select`, which needs `just oracle-setup` once per
-  machine. It runs the cards changed since `origin/master` plus a sample chosen
-  from the commit hash, or every card if the exporters or harnesses changed. The
-  nightly run plays every card on staging.
+  machine. It plays a sample of cards chosen from the commit hash whole, the
+  scenarios of the cards changed since `origin/master` that have not passed
+  before, and every other scenario that has not passed under its hash
+  (`oracle_memory.py`), or every card if the exporters or harnesses changed. A
+  scenario listed in `data/oracle-exporter-gaps.json` or
+  `data/oracle-divergences.json` plays only with its card. The nightly run plays
+  every card on staging.
 - `counts`: `just count-gate`, which checks the rollout benchmark's instruction
   count against the limit in `rust/crates/beryl_bench/count-gate.toml`. That
   file's comments say when the limit may go up. Each staging commit's count goes

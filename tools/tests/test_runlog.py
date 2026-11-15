@@ -9,7 +9,15 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import checks, oracles, paths, reruns, runlog, system, verdicts
+from beryl_tools import (
+    checks,
+    oracle_selection,
+    paths,
+    reruns,
+    runlog,
+    system,
+    verdicts,
+)
 
 
 def logged() -> list[dict[str, object]]:
@@ -263,7 +271,7 @@ def test_oracle_scenarios_share_their_engines_seconds(
     results = tmp_path / "results.jsonl"
     monkeypatch.setenv(runlog.RESULTS_ENV, str(results))
     scenario = lambda name, status: {"card": "Ponder", "name": name, "status": status}
-    oracles.log_results(
+    oracle_selection.log_results(
         {
             "xmage": {
                 "scenarios": [
