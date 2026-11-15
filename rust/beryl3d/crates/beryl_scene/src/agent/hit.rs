@@ -39,15 +39,15 @@ pub fn uncovered(frame: &Frame, index: u32) -> Option<Rect> {
 /// The largest rectangle, by area, at least `min` large, inside element `index` where a press
 /// reaches that element or one of its descendants.
 ///
-/// The element's bounding box is cut into cells along the edges of its own box and of every
-/// box that overlaps it. A cell is free when a press at its centre and just inside each of its
-/// corners reaches the element. The answer is the largest run of free cells that forms a
-/// rectangle. A slanted edge that cuts a cell without reaching any of those five points is
-/// missed, which can only make the answer slightly too large on a strongly rotated element.
+/// The element's bounding box is cut into cells along the edges of every box that overlaps it,
+/// and into cells at most `CELL` points large. A cell is free when a press at its centre and
+/// just inside each of its corners reaches the element. The answer is the largest run of free
+/// cells that forms a rectangle. A slanted edge that cuts a cell without reaching any of those
+/// five points is missed, which can only make the answer slightly too large.
 #[must_use]
 pub fn free_rect(frame: &Frame, index: u32, min: Size) -> Option<Rect> {
     let grid = Grid::new(frame, index);
-    let free = grid.free_cells(frame, index);
+    let free = grid.free_cells(frame, index, true);
     let (columns, rows) = (grid.xs.len() - 1, grid.ys.len() - 1);
     let mut best: Option<(f32, Rect)> = None;
     for left in 0..columns {
@@ -90,11 +90,11 @@ pub fn free_rect(frame: &Frame, index: u32, min: Size) -> Option<Rect> {
 }
 
 /// How much of element `index`'s area is covered by other elements, from 0 to 1, measured on
-/// the same cells as `free_rect`.
+/// the same cells as `free_rect`, each counted by its centre.
 #[must_use]
 pub fn covered(frame: &Frame, index: u32) -> f32 {
     let grid = Grid::new(frame, index);
-    let free = grid.free_cells(frame, index);
+    let free = grid.free_cells(frame, index, false);
     let element = &frame.resolved[index as usize];
     let columns = grid.xs.len() - 1;
     let (mut inside, mut open) = (0.0, 0.0);
@@ -226,11 +226,21 @@ fn covers(frame: &Frame, a: u32, b: u32) -> bool {
     }
 }
 
-/// The cells `free_rect` and `covered` measure an element on.
+/// The cells `free_rect` and `covered` measure an element on: its box cut along the edges of
+/// every box that overlaps it, and then into cells no larger than `CELL` points, so that the
+/// cells along a slanted edge of a card drawn in perspective are small.
 struct Grid {
     xs: Vec<f32>,
     ys: Vec<f32>,
+    /// The elements whose boxes overlap the element's, itself among them: the only ones a hit
+    /// test inside its box can return.
+    candidates: Vec<u32>,
 }
+
+/// The largest side of a cell, in logical points, and the most cuts a grid makes along one
+/// axis to keep to it.
+const CELL: f32 = 4.0;
+const MOST_CUTS: f32 = 64.0;
 
 impl Grid {
     fn new(frame: &Frame, index: u32) -> Self {
@@ -244,10 +254,15 @@ impl Grid {
                 height: 0.0,
             });
         }
-        let (mut xs, mut ys) = (
-            vec![area.x, area.x + area.width],
-            vec![area.y, area.y + area.height],
-        );
+        let (mut xs, mut ys) = (Vec::new(), Vec::new());
+        for (edges, start, length) in [
+            (&mut xs, area.x, area.width),
+            (&mut ys, area.y, area.height),
+        ] {
+            let cuts = (length / CELL).ceil().clamp(1.0, MOST_CUTS) as u32;
+            edges.extend((0..=cuts).map(|cut| start + length * cut as f32 / cuts as f32));
+        }
+        let mut candidates = vec![index];
         for (other, candidate) in frame.resolved.iter().enumerate() {
             if other as u32 == index || candidate.role == Role::Arrow {
                 continue;
@@ -255,35 +270,61 @@ impl Grid {
             let Some(shared) = intersection(area, bounds(candidate)) else {
                 continue;
             };
+            candidates.push(other as u32);
             xs.extend([shared.x, shared.x + shared.width]);
             ys.extend([shared.y, shared.y + shared.height]);
         }
+        candidates.sort_unstable();
         for edges in [&mut xs, &mut ys] {
             edges.sort_by(f32::total_cmp);
             edges.dedup_by(|a, b| (*a - *b).abs() < 0.001);
         }
-        Self { xs, ys }
+        Self { xs, ys, candidates }
     }
 
-    /// Whether each cell is free, row by row.
-    fn free_cells(&self, frame: &Frame, index: u32) -> Vec<bool> {
-        let reaches = |point: Vec2| hit(frame, point).is_some_and(|at| is_within(frame, at, index));
+    /// Whether a press at `point` reaches element `index` or one of its descendants.
+    fn reaches(&self, frame: &Frame, index: u32, point: Vec2) -> bool {
+        let mut best: Option<u32> = None;
+        for &candidate in &self.candidates {
+            if !catches(&frame.resolved[candidate as usize], point) {
+                continue;
+            }
+            best = match best {
+                Some(other) if covers(frame, other, candidate) => Some(other),
+                _ => Some(candidate),
+            };
+        }
+        best.is_some_and(|at| is_within(frame, at, index))
+    }
+
+    /// Whether each cell is free, row by row. With `whole`, a press at the cell's centre and
+    /// just inside each of its corners must reach the element; otherwise only at its centre.
+    fn free_cells(&self, frame: &Frame, index: u32, whole: bool) -> Vec<bool> {
         let mut free = Vec::with_capacity((self.xs.len() - 1) * (self.ys.len() - 1));
         for ys in self.ys.windows(2) {
             for xs in self.xs.windows(2) {
+                let center = Vec2::new(f32::midpoint(xs[0], xs[1]), f32::midpoint(ys[0], ys[1]));
+                if !whole {
+                    free.push(self.reaches(frame, index, center));
+                    continue;
+                }
                 let inset = 0.01_f32
                     .min((xs[1] - xs[0]) / 4.0)
                     .min((ys[1] - ys[0]) / 4.0);
                 let (left, right) = (xs[0] + inset, xs[1] - inset);
                 let (top, bottom) = (ys[0] + inset, ys[1] - inset);
                 let points = [
-                    Vec2::new(f32::midpoint(xs[0], xs[1]), f32::midpoint(ys[0], ys[1])),
+                    center,
                     Vec2::new(left, top),
                     Vec2::new(right, top),
                     Vec2::new(right, bottom),
                     Vec2::new(left, bottom),
                 ];
-                free.push(points.into_iter().all(reaches));
+                free.push(
+                    points
+                        .into_iter()
+                        .all(|point| self.reaches(frame, index, point)),
+                );
             }
         }
         free

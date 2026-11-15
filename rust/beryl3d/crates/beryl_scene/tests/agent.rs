@@ -556,3 +556,24 @@ fn an_arrow_that_changes_shape_with_its_ends_at_rest_is_a_fault() {
         vec![]
     );
 }
+
+#[test]
+fn a_card_drawn_in_perspective_is_not_covered_by_its_own_slant() {
+    // A trapezoid, as the camera draws a card lying on the table: its box's corners are
+    // outside it.
+    let frame = frame(vec![card("Island", 1, LANDS, 0.0, 0.0, 10.0).with(|e| {
+        e.corners = [
+            Vec2::new(0.0, 137.0),
+            Vec2::new(117.0, 137.0),
+            Vec2::new(100.0, 0.0),
+            Vec2::new(17.0, 0.0),
+        ];
+    })]);
+    assert_eq!(
+        line(&frame, 0),
+        "card \"Island\" #1 battlefield.yours.lands 0,0 117x137 interactive"
+    );
+    let rect = uncovered(&frame, 0).unwrap();
+    assert!(rect.width >= 80.0 && rect.height >= 120.0, "{rect:?}");
+    assert_eq!(summary(&check(&frame, &context(Layout::Phone))), vec![]);
+}
