@@ -29,7 +29,9 @@ import {
   shownUntil,
   shownUp,
   STRIKE,
+  strikePhases,
   struck,
+  type Timing,
   turned,
   turnedOver,
   turning,
@@ -56,6 +58,8 @@ export interface Scene {
   moving: boolean;
   /** The acts of every step of the step's beat, its own among them. */
   beat: readonly Act[];
+  /** Where each named phase of the step's motion begins (`Timing.phases`). */
+  phases?: Timing["phases"];
 }
 
 /** A track for the node `name`, which shows as `cover` until the track turns it over. One
@@ -173,13 +177,17 @@ interface Span {
   from: number;
   to: number;
   step: { act: Act };
+  phases?: Timing["phases"];
 }
 
 /** Where the middle of the card that goes `way` is at stage time `at`, its strike being
  * played over `span`: where it rests before and after, and its pull back left out. */
 function middleAt(way: Way, span: Span, at: number): Point {
   const progress = (at - span.from) / (span.to - span.from);
-  const [toward] = struck(Math.min(1, Math.max(0, progress)));
+  const [toward] = struck(
+    Math.min(1, Math.max(0, progress)),
+    strikePhases(span.phases),
+  );
   return {
     x: way.middle.x + way.unit.x * way.go * toward,
     y: way.middle.y + way.unit.y * way.go * toward,
@@ -396,6 +404,7 @@ function enters(
       // drawn from the record the step found, and so is one that strikes back, which the
       // other's step has covered already.
       const veiled = was !== undefined && was.resting !== striker.resting;
+      const phases = strikePhases(scene.phases);
       const lunging: Entering = {
         name: act.source,
         track: {
@@ -409,9 +418,10 @@ function enters(
               way.unit.x < 0 ? -STRIKE.lean : STRIKE.lean,
               about,
               deep,
+              phases,
             ),
           ),
-          turn: veiled ? STRIKE.hit : undefined,
+          turn: veiled ? phases.hit : undefined,
         },
         cover: veiled ? was.resting : undefined,
       };
@@ -422,7 +432,7 @@ function enters(
       if (!lay?.object || !before) return lunging;
       const struck: Entering = {
         name: lay.object.slot,
-        track: { pose: stays, turn: STRIKE.hit },
+        track: { pose: stays, turn: phases.hit },
         cover: { ...lay, object: before },
         rides: true,
       };

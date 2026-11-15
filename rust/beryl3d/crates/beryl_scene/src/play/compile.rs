@@ -5,12 +5,13 @@
 //! The script is played over a copy of the table it starts from: after each step, the resting
 //! places of the parts of the table its act changed are worked out again, and the step's verb
 //! carries its object there. An object no step names whose resting place the step changed (the
-//! rest of a hand) slides there over the step, or over the time the step leaves for what it
-//! opened or closed.
+//! rest of a hand) slides there as the step's `StepTiming::room` says: over the step, from a
+//! share of it, or for the cards that stay in a hand for a set time from when the act is
+//! applied; or over the time the step leaves for what it opened or closed.
 
-use beryl_protocol::protocol::{ObjectId, PlayerView};
+use beryl_protocol::protocol::{ObjectId, PlayerView, ZoneName};
 use beryl_protocol::script::{
-    Act, Script, Step, StepTiming, Subject, Table as Played, Verb, mover_of,
+    Act, Room, Script, Step, StepTiming, Subject, Table as Played, Verb, mover_of,
 };
 
 use super::record::{Cause, MoveKey, Plant, SegmentRecord, StepRecord};
@@ -372,20 +373,7 @@ impl<'a> Motion<'a> {
             from: nanoseconds(laid.from),
             to: nanoseconds(laid.to),
         };
-        // What makes room for the step does so before it begins, where its act went ahead of it;
-        // after it, where it says how long the room it left takes to close; and otherwise over
-        // the step.
-        let room = match (laid.opens, timing.closes) {
-            (Some(opens), _) => Interval {
-                from: nanoseconds(opens.at),
-                to: nanoseconds(opens.by),
-            },
-            (None, Some(closes)) => Interval {
-                from: own.to,
-                to: nanoseconds(laid.to + closes),
-            },
-            (None, None) => own,
-        };
+        let (room, regroup) = room_of(timing, laid, own);
         let subject = subject_of(step);
         for slot in self.affected(&dirty, subject) {
             let was = self.rests.rests.get(slot).copied().flatten();
@@ -412,6 +400,10 @@ impl<'a> Motion<'a> {
             } else {
                 match (was, now) {
                     (Some(was), Some(now)) if was.pose != now.pose => {
+                        let room = match regroup {
+                            Some(regroup) if self.stays_in_hand(slot) => regroup,
+                            _ => room,
+                        };
                         if self.retarget(slot, room.from, was.pose, now.pose) {
                             None
                         } else {
@@ -454,6 +446,19 @@ impl<'a> Motion<'a> {
             }
         }
         self.commit(&dirty);
+    }
+
+    /// Whether the object in `slot` lies in a hand after the step being played: one of the
+    /// cards of a hand that regroup round a card that joins or leaves it, where the step does
+    /// not move it itself. Where it lay before is not asked: the first step of a script has
+    /// no record of the groups.
+    fn stays_in_hand(&self, slot: usize) -> bool {
+        u16::try_from(slot).is_ok_and(|slot| {
+            self.played
+                .objects
+                .get(&ObjectId(slot))
+                .is_some_and(|object| object.zone == ZoneName::Hand)
+        })
     }
 
     /// Sends every segment of the object in `slot` that lands at `was` and has not ended by
@@ -503,6 +508,18 @@ impl<'a> Motion<'a> {
     /// segment comes after one that holds it where it rested before the script, so that it
     /// stands there until it moves.
     fn push(&mut self, slot: usize, segment: Segment, cause: Cause) {
+        // A segment an earlier step gave the object that has not begun when this one does is
+        // out of date: this step has moved the object's resting place since. When three
+        // permanents tap at once, the first tap's row waits until its card has turned, but
+        // the second card turns from the start of its own step, before that slide began.
+        if self
+            .tracks
+            .get_mut(slot)
+            .is_some_and(|track| track.cut_after(segment.start))
+        {
+            self.segments
+                .retain(|record| record.slot != slot || record.segment.start <= segment.start);
+        }
         if self
             .tracks
             .get(slot)
@@ -529,13 +546,49 @@ impl<'a> Motion<'a> {
     }
 }
 
+/// When what the step makes room among goes to its new place, given its `timing`, when it was
+/// `laid` out and its `own` interval: what makes room for it does so before it begins, where its
+/// act went ahead of it; after it, where it says how long the room it left takes to close; and
+/// otherwise as its `room` says, over the step or from a share of it. And, where its `room` says
+/// so, when the cards that stay in a hand a card joins or leaves go to their new places: in the
+/// time it gives, from when its act is applied, whatever else the step says, as the web stage's
+/// do (`carried` in `ui/src/stage/tracks.ts`).
+fn room_of(timing: &StepTiming, laid: &Laid, own: Interval) -> (Interval, Option<Interval>) {
+    let room = match (laid.opens, timing.closes, timing.room) {
+        (Some(opens), _, _) => Interval {
+            from: nanoseconds(opens.at),
+            to: nanoseconds(opens.by),
+        },
+        (None, Some(closes), _) => Interval {
+            from: own.to,
+            to: nanoseconds(laid.to + closes),
+        },
+        (None, None, Room::From { share }) => Interval {
+            from: nanoseconds(laid.from + share * (laid.to - laid.from)),
+            to: own.to,
+        },
+        (None, None, Room::Step | Room::For { .. }) => own,
+    };
+    let regroup = match timing.room {
+        Room::For { ms } => {
+            let applied = laid.opens.map_or(laid.from, |opens| opens.at);
+            Some(Interval {
+                from: nanoseconds(applied),
+                to: nanoseconds(applied + ms),
+            })
+        }
+        Room::Step | Room::From { .. } => None,
+    };
+    (room, regroup)
+}
+
 /// Adds `segment` to the track of the object in `slot`, growing `tracks` to hold it.
 fn add(tracks: &mut Vec<Track>, slot: usize, segment: Segment) {
     if tracks.len() <= slot {
         tracks.resize(slot + 1, Track::default());
     }
-    // The segments of one object are added in order of their starts, so any that ended before
-    // this one starts no longer decides a pose and can go to make room.
+    // No segment of the object begins after this one (`Motion::push` cuts them), so any that
+    // ended before this one starts no longer decides a pose and can go to make room.
     if tracks[slot].push(segment, segment.start).is_err() {
         // Every segment it holds is still under way as this one starts, which only a script that
         // moves one object eight times at once can do. The track starts over from this segment,

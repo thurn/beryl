@@ -813,6 +813,18 @@ ahead: boolean,
  */
 closes?: number, 
 /**
+ * How what it makes room among (the cards whose resting place its act changed but that
+ * it does not move itself) goes to its new place. Where `opens` or `closes` is set, it
+ * says when that room is made instead, except for the cards of a hand that regroup in the
+ * time [`Room::For`] gives.
+ */
+room: Room, 
+/**
+ * For a verb whose motion has named phases (a strike's poise and hit), where each phase
+ * begins, as a share of the step, in the order the motion reaches them.
+ */
+phases: Array<Phase>, 
+/**
  * The effects it begins.
  */
 effects: Array<StepEffect>, };
@@ -846,6 +858,18 @@ delay: number,
  * The easing of the effect.
  */
 curve: Curve, };
+
+export type Room = { "kind": "step" } | { "kind": "for", ms: number, } | { "kind": "from", share: number, };
+
+export type Phase = { 
+/**
+ * The phase's name in the data (`poise`, `hit`).
+ */
+name: string, 
+/**
+ * Where it begins, as a share of the step from 0 to 1.
+ */
+at: number, };
 
 export type Curve = "linear" | "easeIn" | "easeOut" | "easeInOut";
 

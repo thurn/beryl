@@ -27,7 +27,8 @@
 // One verb's subject does not go where the table has it as the step begins: what a `vanish`
 // takes goes from sight where it was, dressed as it was, and only as the step ends is it at
 // its new place, or no more (`#lay`, `#left`). What it leaves room for closes up after the
-// step, once it has gone, and the beat lasts until it has (tracks.ts CLOSES, CLOSED).
+// step, once it has gone, and the beat lasts until it has (tracks.ts CLOSES, or the time a
+// cut's timing gives, `Timing.closes`).
 //
 // Steps are sequenced inside the tick: a beat begins at the stage time the beat before it
 // ended, however late the tick that finds it over, so a script's timeline is a function of the
@@ -593,6 +594,7 @@ export class ScriptStage {
       moving:
         mover !== undefined && this.#entries.get(mover)?.track !== undefined,
       beat: this.#playback!.steps.map((other) => other.step.act),
+      phases: run.phases,
     });
     for (const { name, track, cover, rides } of found) {
       const entry = this.#entries.get(name);

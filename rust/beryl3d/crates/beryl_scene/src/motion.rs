@@ -287,6 +287,14 @@ impl Track {
         Ok(())
     }
 
+    /// Drops every segment that begins after `t`, and says whether there was one.
+    pub fn cut_after(&mut self, t: u64) -> bool {
+        let kept = self.segments().partition_point(|s| s.start <= t);
+        let cut = kept < self.len;
+        self.len = kept;
+        cut
+    }
+
     /// Drops every segment that ended by `now` except the latest of them.
     fn drop_ended(&mut self, now: u64) {
         let Some(kept) = self.segments().iter().rposition(|s| s.end() <= now) else {

@@ -100,6 +100,10 @@ function playedOf(sent: StepTiming, after = sent.after.map(namedBy)): Played {
       opens: sent.opens,
       ahead: sent.ahead,
       closes: sent.closes,
+      room: sent.room,
+      phases: sent.phases.length
+        ? Object.fromEntries(sent.phases.map(({ name, at }) => [name, at]))
+        : undefined,
     },
     effects: sent.effects.flatMap((effect) => effectOf(effect) ?? []),
   };

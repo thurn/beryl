@@ -17,7 +17,8 @@ import type {
 } from "../generated/protocol";
 import type { Edge, ScriptStage } from "../stage/stage.ts";
 import type { Act, Step as ScriptStep, Table } from "../stage/table.ts";
-import { STRIKE } from "../stage/tracks.ts";
+import { played } from "../stage/timing.ts";
+import type { Played } from "../stage/table.ts";
 import { play, type Sound } from "./sound";
 
 /** A card arriving in each zone. */
@@ -47,9 +48,9 @@ export interface Cue {
   into?: number;
 }
 
-/** What a step's sounds are picked from besides its act: the table as the step found it, and
- * the steps of its beat before it. */
-type Found = Pick<Edge, "table" | "earlier">;
+/** What a step's sounds are picked from besides its act: the table as the step found it, the
+ * steps of its beat before it, and how the step is played. */
+type Found = Pick<Edge, "table" | "earlier"> & { played: Played };
 
 type Cues = {
   [V in Verb]: (act: Extract<Act, { verb: V }>, found: Found) => Cue[];
@@ -120,9 +121,12 @@ const CUES: Cues = {
     ...at("start", object.tapped ? "tap" : "untap"),
     ...at("start", attacks(object, table) && "attack"),
   ],
-  // A creature hits as its lunge lands, a share of the way through its strike (tracks.ts
-  // STRIKE.hit), where Arena's screen flashes: one step, so the sound waits within it.
-  strike: () => [{ sound: "hit", edge: "start", into: STRIKE.hit }],
+  // A creature hits as its lunge lands, a share of the way through its strike (the `hit`
+  // of the phases its timing sends), where Arena's screen flashes: one step, so the sound
+  // waits within it.
+  strike: (_, { played }) => [
+    { sound: "hit", edge: "start", into: played.timing.phases?.hit },
+  ],
   // Mana sounds as it leaves its source; damage hits as its streak lands.
   streak: ({ stream }) =>
     stream.kind === "mana" ? at("start", "mana") : at("end", "hit"),
@@ -202,10 +206,13 @@ const CUES: Cues = {
 
 /** The sounds the step `step` asks for, given what it found: each at the step's start or its
  * end. */
-export function stepCues(step: ScriptStep, found: Found): Cue[] {
+export function stepCues(
+  step: ScriptStep,
+  found: Omit<Found, "played">,
+): Cue[] {
   const act = step.act;
   const cues = CUES[act.verb] as (act: Act, found: Found) => Cue[];
-  return cues(act, found);
+  return cues(act, { ...found, played: played(step) });
 }
 
 /** Who controls what `subject` names on `table`. */

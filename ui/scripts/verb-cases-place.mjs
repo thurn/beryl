@@ -15,6 +15,11 @@ import {
     where,
 } from "./verb-run.mjs";
 import { NEAR, STRIKE } from "../src/stage/tracks.ts";
+import conventions from "../../data/ui-conventions.json" with { type: "json" };
+
+/** Where a strike's blow lands, as a share of its step: the session times strikes by the
+ * data's `phases` and sends them with each step. */
+const HIT = conventions.verbs.find((verb) => verb.name === "strike").phases.hit;
 
 /** The middle of a permanent's card at `pose`: of its frame, which lies turned a quarter in
  * its slot when it is tapped, leaned as the table leans it (src/stage/desktop.ts middle). */
@@ -260,8 +265,7 @@ export const CASES = {
                     ),
                     `${what}: the blow shows on the player's total`,
                 );
-                const lands =
-                    strike.from + STRIKE.hit * (strike.to - strike.from);
+                const lands = strike.from + HIT * (strike.to - strike.from);
                 const taken = combat.steps.find(
                     (s) =>
                         s.verb === "count" &&
@@ -339,7 +343,7 @@ export const CASES = {
             );
             assert.ok(strike.at.to.poses[source].depth < ALOFT, what);
             // As its lunge lands, within the step.
-            const lands = STRIKE.hit * (strike.to - strike.from);
+            const lands = HIT * (strike.to - strike.from);
             sounded(combat, "hit", strike.from, what, lands);
             for (const [name, pose] of Object.entries(was.poses)) {
                 if (strikers.includes(name)) continue;

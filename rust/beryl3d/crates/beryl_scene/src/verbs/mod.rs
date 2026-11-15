@@ -88,8 +88,8 @@ pub fn instant(from: Pose, to: Pose, at: u64) -> Segment {
 }
 
 /// The objects that no step names but whose place a step changed (the rest of a hand closing up
-/// round a card that left it) slide from where they are to where they now rest, over `interval`,
-/// slowing into place.
+/// round a card that left it) slide from where they are to where they now rest, over `interval`
+/// (the one the step's `StepTiming::room` gives), slowing into place.
 #[must_use]
 pub fn slide(from: Pose, to: Pose, interval: Interval) -> Segment {
     Segment {

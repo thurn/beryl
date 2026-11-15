@@ -10,18 +10,7 @@ import { abilityName, type Name, type Point, type Resting } from "./layout.ts";
 import { ALOFT, between, type Pose } from "./pose.ts";
 import { bowed, bowOf, type Bow } from "./bows.ts";
 import type { Table } from "./table.ts";
-import conventions from "../../../data/ui-conventions.json" with { type: "json" };
-
-/** The verb the data names `name`, with the numbers the stage reads beside its values: a
- * strike's `phases`, and the `closes` of a case that a rule sets apart from the case's
- * measured values. */
-const verbRules = (name: string) =>
-  conventions.verbs.find((verb) => verb.name === name) as
-    | {
-        phases?: { poise: number; hit: number };
-        closes?: Record<string, number>;
-      }
-    | undefined;
+import type { Room } from "../generated/protocol";
 
 /** How a verb is played, in stage milliseconds: how long its motion takes, how long after its
  * turn comes it begins, how long the next step of its beat waits for it, and its curve from 0
@@ -66,6 +55,12 @@ export interface Timing {
    * all in the hand as the first leaves the library, so that the hand opens their places
    * once and no place moves under a card on its way. */
   ahead?: boolean;
+  /** How what it makes room among goes to its new place (`Room`): over the step where it
+   * says none. */
+  room?: Room;
+  /** Where each named phase of its motion begins, as a share of the step: a strike's `poise`
+   * and `hit` (`strikePhases`). */
+  phases?: Readonly<Record<string, number>>;
 }
 
 /** No motion: the step is over in the tick that begins it. Reduced motion is every verb's. */
@@ -266,22 +261,6 @@ export const roomIn = (
 ): [from: number, to: number] =>
   verb === "vanish" ? [to, to + Math.round(CLOSES * (to - from))] : [from, to];
 
-/** How long the cards that stay in a hand take to move to their new places when a card
- * joins or leaves it, in stage milliseconds, easing out from the moment the change is
- * applied. Arena's hand regroups in about a sixth of a second whatever the card's flight
- * takes: for a draw it begins just before the card leaves the library and is at rest well
- * before the card is held up beside the stack (`SswBO8aOOgc 20:28.35` to `20:28.53`), and
- * for a cast it closes the card's gap as the card is let go (`SswBO8aOOgc 20:11.68` to
- * `20:11.85`). Moving them over the whole flight instead, 1050 ms for a draw, read as a
- * slow reshape of the hand. */
-export const REGROUP = 170;
-
-/** How long what a finished ability left room for takes to close up (the motion review of
- * vanish: a phone's rows, hands and piles closed its band of the table "in
- * one frame"; "one move of about 200 to 250 ms, ease-out, starting on the frame after"). The
- * ability itself is cut (UI Conventions, "A finished ability"). */
-export const CLOSED = verbRules("vanish")!.closes!["ability finished"]!;
-
 /** An entry that goes from sight where it was at `start`, and never travels: slowly at first,
  * while the effect that says how it leaves is seen on it (effects.ts), all at once at the
  * last, and gone as its step ends. */
@@ -346,7 +325,9 @@ export function paying(
 
 /** How much of its step a permanent that taps or untaps turns in. It turns where it lies, and
  * only then do it and its row go to where they now rest, the tapped apart from the untapped
- * (game/battlefield.ts), so that nothing crosses a card while it turns. */
+ * (game/battlefield.ts), so that nothing crosses a card while it turns. Its row waits as
+ * long: the session sends the same share as the tap's `room` (the `tap` verb's `room` in
+ * data/ui-conventions.json). */
 export const TURNED = 0.6;
 
 /** A permanent turning as it taps or untaps (UI Conventions, exception 2). It is dressed as
@@ -367,35 +348,31 @@ export const turned =
 /** How near where it lay, in its own widths, a place is that a card turns straight onto. */
 export const NEAR = 0.5;
 
-/** How far along its way what only makes room in a step of these verbs begins to move, and
- * is until then as it was, at the depth it had: once a card that taps has turned. What makes
- * room for a card that leaves has its way after that card's step (`roomIn`), and waits there
- * for it to begin: a spell over one that leaves the stack stays over it while it goes. */
-const WAITS: Partial<Record<Act["verb"], number>> = {
-  vanish: 0,
-  tap: TURNED,
-};
-
 /** How far out of its row a card swings as it steps past the cards that tapped, in its own
  * widths, and never more than a third of how far it goes: a card that only closes up a gap
  * hardly leaves the row. */
 const SWING = 0.45;
 
-/** The way of an entry that was at `start` and only makes room in a step of `verb`, if such
- * a step keeps it waiting (`WAITS`): it stays there and then glides to where it rests. After
- * a tap the untapped and the tapped of a row change places, and it swings out of the row on
- * its way, `toward` its controller's edge of the table (1 down the stage, -1 up it), so that
- * it is seen to step past and does not pass under them. */
+/** The way of an entry that was at `start` and only makes room in a step of `verb` played
+ * with `room`, if that keeps it waiting: it stays there, at the depth it had, and then glides
+ * to where it rests. What makes room in a step whose `room` is `from` waits until that share
+ * of the step (once a card that taps has turned): the untapped and the tapped of a row then
+ * change places, and it swings out of the row on its way, `toward` its controller's edge of
+ * the table (1 down the stage, -1 up it), so that it is seen to step past and does not pass
+ * under them. What makes room for a card that vanishes has its way after that card's step
+ * (`roomIn`) and waits there for it to begin: a spell over one that leaves the stack stays
+ * over it while it goes. */
 export function makingRoom(
   verb: Act["verb"],
+  room: Room | undefined,
   start: Pose,
   ease: Timing["ease"],
   toward: number,
 ): Path | undefined {
-  const from = WAITS[verb];
-  if (from === undefined) return undefined;
+  if (verb === "vanish") return later(start, ease, 0);
+  if (room?.kind !== "from") return undefined;
+  const from = room.share;
   const waited = later(start, ease, from);
-  if (verb !== "tap") return waited;
   return (progress, rest) => {
     const pose = waited(progress, rest);
     const far = Math.hypot(rest.x - start.x, rest.y - start.y);
@@ -416,9 +393,10 @@ const inOut = (progress: number) =>
  * height, grows about a tenth toward the eye and leans about 15 degrees toward the side its
  * target is on. It hangs there, poised, for about 300 ms, then dashes onto its target in two
  * or three frames (about 70 ms), lands flat, and stays on it about 130 ms while the table
- * shakes, before it drifts back to its place, still leaning, over about 600 ms. `wind`,
- * `poise`, `hit` and `stay` are the shares of the step by which it has reared back, begins
- * its dash, has landed and begins to draw back; `back` is how far it rears back, in its own
+ * shakes, before it drifts back to its place, still leaning, over about 600 ms. `wind` and
+ * `stay` are the shares of the step by which it has reared back and begins to draw back
+ * (where it begins its dash and lands come with its timing, `StrikePhases`); `back` is how
+ * far it rears back, in its own
  * widths, `raise` how much larger it is drawn while poised and `lean` how far it leans, in
  * degrees. The blow is where the two overlap by `bite` of the striker's width, as Arena's
  * covers about two thirds of the blocker it lands on (IEXcjBn3BXk 22:25.37), and two
@@ -433,8 +411,6 @@ const inOut = (progress: number) =>
  * over it before then is held back (enter.ts `awaited`). */
 export const STRIKE = {
   wind: 0.08,
-  poise: verbRules("strike")!.phases!.poise,
-  hit: verbRules("strike")!.phases!.hit,
   stay: 0.48,
   seen: 0.53,
   home: 0.9,
@@ -446,6 +422,21 @@ export const STRIKE = {
   small: { from: 0.7, to: 0.55, least: 0.6 },
 };
 
+/** Where a strike's creature begins its dash from its poise and where its blow lands, as
+ * shares of the step: the `poise` and `hit` of the phases its timing sends
+ * (data/ui-conventions.json, strike's `phases`). */
+export interface StrikePhases {
+  poise: number;
+  hit: number;
+}
+
+/** The strike phases `named` gives: a step that names none (one with no motion, which is
+ * over as it begins) dashes and lands at once. */
+export const strikePhases = (named: Timing["phases"]): StrikePhases => ({
+  poise: named?.poise ?? 0,
+  hit: named?.hit ?? 0,
+});
+
 /** Where a creature is `progress` through its strike, each as a share from 0 to 1: how far
  * along its way to the blow it is (`toward`), how far back of where it rests as a share of
  * how far it rears back (`back`), how far up toward the eye it is raised (`raised`) and how
@@ -454,8 +445,9 @@ export const STRIKE = {
  * moment; and draws back, slowing onto its place, leaning less as it goes. */
 export function struck(
   progress: number,
+  { poise, hit }: StrikePhases,
 ): [toward: number, back: number, raised: number, leaning: number] {
-  const { wind, poise, hit, stay } = STRIKE;
+  const { wind, stay } = STRIKE;
   if (progress < wind) {
     const rear = out(progress / wind);
     return [0, rear, rear, rear];
@@ -485,9 +477,10 @@ export const lunge =
     lean: number,
     about: (pose: Pose, size: number) => Pose,
     [over, after]: readonly [number, number],
+    phases: StrikePhases,
   ): Path =>
   (progress, rest) => {
-    const [to, away, raised, leaning] = struck(progress);
+    const [to, away, raised, leaning] = struck(progress, phases);
     const pose = about(
       rest,
       (1 + (size - 1) * to) * (1 + STRIKE.raise * raised),
@@ -597,7 +590,15 @@ const fanned = ({ object, dress }: Resting) =>
 /** A step as the track of what its change moves is made from (beat.ts `Run`). */
 type Moving = Pick<
   Run,
-  "verb" | "from" | "to" | "ease" | "each" | "opens" | "closes" | "step"
+  | "verb"
+  | "from"
+  | "to"
+  | "ease"
+  | "each"
+  | "opens"
+  | "closes"
+  | "room"
+  | "step"
 >;
 
 /** Whether what the change of the step `run`, applied at stage time `at`, moves travels to
@@ -612,12 +613,12 @@ export const carries = (run: Moving, at: number) =>
  * turning over on the way if it lands face up from face down, `halfTurn` giving a pose half
  * a turn round (`halfTurned`). It flies for its step's own time, where it is until then if
  * its act went ahead of it (`Timing.ahead`). What another verb's change moves goes there as what makes
- * room does, when its verb has it go: over the step; once a card has turned (`WAITS`);
- * after a card that left has gone, for `CLOSES` of its step or, after a cut, for the time
- * the step says (`Timing.closes`); or before the step begins, where its act went ahead of it
- * (`Timing.opens`), slowing into its place. A card that stays in a hand while another joins
- * or leaves it goes to its new place in `REGROUP`, slowing into it, from when the change is
- * applied, unless the step is a `vanish`, whose room closes once its card has gone. A card
+ * room does, as the step's `room` and its verb have it go: over the step; once a card has
+ * turned (`room` from a share of the step); after a card that left has gone, for `CLOSES` of
+ * its step or, after a cut, for the time the step says (`Timing.closes`); or before the step
+ * begins, where its act went ahead of it (`Timing.opens`), slowing into its place. A card
+ * that stays in a hand while another joins or leaves it goes to its new place in the time
+ * the step's `room` gives (`for`), slowing into it, from when the change is applied. A card
  * that goes to lie out of sight, or face down where a `lift` lets it go, shows the face it
  * had until it is there (`shownUntil`): on other moves a card that comes to lie face down
  * turns over on its way. */
@@ -638,14 +639,15 @@ export function carried(
   const faceUp = flies && bowOf(run.step.act, toward)?.back !== undefined;
   const turns =
     flies && !faceUp && start.face === "back" && resting.pose.face === "front";
+  const room = run.room;
   const regroups =
-    verb !== "vanish" &&
+    room?.kind === "for" &&
     moverOf(run.step.act) !== name &&
     fanned(before) &&
     fanned(resting);
   const opens = run.opens !== undefined && !flies && !regroups;
   const [from, to] = regroups
-    ? [at, at + REGROUP]
+    ? [at, at + room.ms]
     : opens
       ? [at, run.opens!.by]
       : run.closes !== undefined
@@ -658,7 +660,7 @@ export function carried(
     ? glide(start, ease, false)
     : run.each
       ? later(start, ease, ...shareOf(run, table, name))
-      : ((opens ? undefined : makingRoom(verb, start, ease, toward)) ??
+      : ((opens ? undefined : makingRoom(verb, room, start, ease, toward)) ??
         glide(start, ease, flies, {
           over: turns ? halfTurn : undefined,
           turning: turningOf(run.step.act),

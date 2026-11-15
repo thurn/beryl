@@ -516,3 +516,52 @@ fn own_timings_has_an_entry_for_every_own_step() {
     assert_eq!(tray(false).as_deref(), Some("tray"));
     assert_eq!(tray(true).as_deref(), Some("sort"));
 }
+
+/// The cards that stay in a hand regroup in a sixth of a second as a card is drawn into it,
+/// whatever the draw's own time; a permanent's row makes room once it has turned, which is
+/// `TURNED` of its step in `ui/src/stage/tracks.ts`, where the web stage turns the card; and a
+/// strike sends where its creature dashes and where its blow lands.
+#[test]
+fn a_step_says_when_what_it_makes_room_among_moves_and_a_strike_its_phases() {
+    use super::{Phase, Room};
+    let table = Table::empty(20);
+    let time = |act: &Act| timing_of(act, &table, None, &[act]);
+
+    let draw = fly(
+        ZoneName::Library,
+        Why::Draw,
+        card(1, ZoneName::Hand, Side::You),
+    );
+    assert_eq!(time(&draw).room, Room::For { ms: 170.0 });
+
+    let mut land = card(2, ZoneName::Battlefield, Side::You);
+    land.tapped = true;
+    assert_eq!(
+        time(&Act::Tap { object: land }).room,
+        Room::From { share: 0.6 }
+    );
+
+    let strike = Act::Strike {
+        source: ObjectId(3),
+        to: player(Side::Opponent),
+        amount: 2,
+        object: None,
+    };
+    let phase = |name: &str, at| Phase {
+        name: name.to_owned(),
+        at,
+    };
+    let timing = time(&strike);
+    assert_eq!(timing.phases, [phase("poise", 0.32), phase("hit", 0.376)]);
+    assert_eq!(timing.room, Room::Step);
+
+    // What leaves the battlefield for a graveyard touches no hand, and what vanishes from
+    // one leaves its room to close once it has gone.
+    let dies = vanish(
+        object(2),
+        Why::Destroy,
+        Some(card(2, ZoneName::Graveyard, Side::You)),
+    );
+    assert_eq!(time(&dies).room, Room::Step);
+    assert!(time(&draw).phases.is_empty());
+}

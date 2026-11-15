@@ -6,7 +6,7 @@ use beryl_protocol::protocol::{
     CardType, Declaration, FaceName, Facing, ManaPool, ObjectId, ObjectView, PlayerState,
     PlayerView, SessionId, Side, StackItem, ZoneName,
 };
-use beryl_protocol::script::{Act, Curve, Reset, Script, Step, StepTiming};
+use beryl_protocol::script::{Act, Curve, Reset, Room, Script, Step, StepTiming};
 
 /// Builds a `PlayerView` one card at a time. Each card takes the next slot.
 #[derive(Clone, Debug)]
@@ -220,6 +220,8 @@ pub fn timing(duration: f64) -> StepTiming {
         opens: false,
         ahead: false,
         closes: None,
+        room: Room::Step,
+        phases: Vec::new(),
         effects: Vec::new(),
     }
 }

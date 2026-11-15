@@ -26,7 +26,9 @@ use self::conventions::{Conventions, curve, snap};
 use super::{
     Act, Arrow, Fact, Mark, Notice, Script, Span, Stream, Subject, Table, Tally, Verb, replay,
 };
-use crate::protocol::{CardHandling, Counter, ObjectView, Side, StackItem, Why, ZoneName};
+use crate::protocol::{
+    CardHandling, Counter, ObjectId, ObjectView, Side, StackItem, Why, ZoneName,
+};
 
 /// How one step is played. Times are in milliseconds.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -71,8 +73,45 @@ pub struct StepTiming {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub closes: Option<f64>,
+    /// How what it makes room among (the cards whose resting place its act changed but that
+    /// it does not move itself) goes to its new place. Where `opens` or `closes` is set, it
+    /// says when that room is made instead, except for the cards of a hand that regroup in the
+    /// time [`Room::For`] gives.
+    #[serde(default)]
+    pub room: Room,
+    /// For a verb whose motion has named phases (a strike's poise and hit), where each phase
+    /// begins, as a share of the step, in the order the motion reaches them.
+    #[serde(default)]
+    pub phases: Vec<Phase>,
     /// The effects it begins.
     pub effects: Vec<StepEffect>,
+}
+
+/// How what a step makes room among goes to its new place.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Room {
+    /// Over the step.
+    #[default]
+    Step,
+    /// The cards that stay in a hand as a card joins or leaves it, or as a prompt holds some
+    /// of them up, go to their new places in `ms`, easing out, from when the step's act is
+    /// applied, whatever the step's own time (`regroup` in the data). Whatever else the step
+    /// makes room among does so over the step.
+    For { ms: f64 },
+    /// From `share` of the way through the step to its end: a permanent that taps turns where
+    /// it lies, and only then does its row make room (the `tap` verb's `room` in the data).
+    From { share: f64 },
+}
+
+/// One named phase of a step's motion.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct Phase {
+    /// The phase's name in the data (`poise`, `hit`).
+    pub name: String,
+    /// Where it begins, as a share of the step from 0 to 1.
+    pub at: f64,
 }
 
 /// An effect a step begins.
@@ -303,8 +342,76 @@ pub fn timing_of(act: &Act, found: &Table, before: Option<&Act>, beside: &[&Act]
     let case = case_of(act, found, beside);
     StepTiming {
         case: case.map(str::to_owned),
+        room: room_of(act, found),
+        phases: phases_of(act),
         ..motion(act, found, case, before, beside)
     }
+}
+
+/// How what the step `act` makes room among goes to its new place. A permanent's row makes
+/// room once it has turned, if it taps or untaps. The cards that stay in a hand go to their
+/// new places in a sixth of a second if `act` takes a card into or out of a hand or the
+/// opponent handles a hand: Arena's regroup in that time whatever the card's flight takes
+/// (`SswBO8aOOgc 20:28.35` to `20:28.53` for a draw, `20:11.68` to `20:11.85` for a cast), and
+/// moving them over the whole of a draw's flight read as a slow reshape of the hand. A card
+/// that vanishes from a hand leaves its room to close once it has gone, as everything does
+/// after a `vanish`.
+fn room_of(act: &Act, found: &Table) -> Room {
+    let data = Conventions::get();
+    match act {
+        Act::Vanish { .. } => Room::Step,
+        Act::Tap { .. } => Room::From {
+            share: data.turned(),
+        },
+        _ if touches_hand(act, found) => Room::For { ms: data.regroup() },
+        _ => Room::Step,
+    }
+}
+
+/// Whether `act` takes a card into or out of a hand, moves one within it, or has the opponent
+/// handle a hand's cards: whether the other cards of a hand may move to new places.
+fn touches_hand(act: &Act, found: &Table) -> bool {
+    let in_hand = |slot: ObjectId| {
+        found
+            .objects
+            .get(&slot)
+            .is_some_and(|object| object.zone == ZoneName::Hand)
+    };
+    let record = |object: &ObjectView| object.zone == ZoneName::Hand || in_hand(object.slot);
+    match act {
+        Act::Fly { from, object, .. } | Act::Appear { from, object, .. } => {
+            *from == ZoneName::Hand || record(object)
+        }
+        Act::Lift {
+            handling: CardHandling::Hand { .. },
+            ..
+        } => true,
+        Act::Set {
+            fact: Fact::Object { object },
+        } => record(object),
+        Act::Set {
+            fact: Fact::Forget { slots },
+        } => slots.iter().copied().any(in_hand),
+        _ => carried(act).is_some_and(record),
+    }
+}
+
+/// Where each named phase of the step `act`'s motion begins: a strike's poise and hit.
+fn phases_of(act: &Act) -> Vec<Phase> {
+    if !matches!(act, Act::Strike { .. }) {
+        return Vec::new();
+    }
+    let strike = Conventions::get().strike();
+    vec![
+        Phase {
+            name: "poise".to_owned(),
+            at: strike.poise,
+        },
+        Phase {
+            name: "hit".to_owned(),
+            at: strike.hit,
+        },
+    ]
 }
 
 /// [`timing_of`] but for its case.

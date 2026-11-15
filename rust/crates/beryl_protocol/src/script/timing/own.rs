@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::conventions::Conventions;
-use super::{StepTiming, effects_of, timing_of};
+use super::{Room, StepTiming, effects_of, timing_of};
 use crate::protocol::ObjectId;
 use crate::script::{Act, Arrow, Mark, Span, Subject, Table, Verb};
 
@@ -132,15 +132,19 @@ pub fn own_timings() -> OwnTimings {
 }
 
 /// A tray's timing: its case's (`sort` for one that only moves cards within a tray already
-/// up, `tray` otherwise, its letting go too).
+/// up, `tray` otherwise, its letting go too), with the rest of a hand regrouping as a
+/// card's step does.
 fn tray(step: OwnStep) -> StepTiming {
     let case = match step {
         OwnStep::TrayLifts { sorted: true } => "sort",
         _ => "tray",
     };
+    let data = Conventions::get();
     StepTiming {
         case: Some(case.to_owned()),
-        ..Conventions::get().timing(Verb::Lift, Some(case))
+        // The cards a tray takes from a hand, or gives back to it, leave room among the rest.
+        room: Room::For { ms: data.regroup() },
+        ..data.timing(Verb::Lift, Some(case))
     }
 }
 

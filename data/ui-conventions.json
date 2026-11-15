@@ -1425,6 +1425,7 @@
         "stagger": 326,
         "curve": "ease-out"
       },
+      "regroup": 170,
       "cases": {
         "land played": {
           "duration": 315,
@@ -1813,7 +1814,8 @@
           "curve": "ease-out"
         }
       },
-      "exempt": 2
+      "exempt": 2,
+      "room": 0.6
     },
     {
       "name": "strike",

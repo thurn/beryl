@@ -21,6 +21,8 @@ const sent = (more = {}) => ({
     alone: false,
     opens: false,
     ahead: false,
+    room: { kind: "step" },
+    phases: [],
     effects: [],
     ...more,
 });

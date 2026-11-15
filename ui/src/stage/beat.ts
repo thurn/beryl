@@ -57,6 +57,10 @@ export interface Run extends Playing {
   opens?: { at: number; by: number };
   /** How long what it left room for takes to close up after it (`Timing.closes`). */
   closes?: number;
+  /** How what it makes room among goes to its new place (`Timing.room`). */
+  room?: Timing["room"];
+  /** Where each named phase of its motion begins (`Timing.phases`). */
+  phases?: Timing["phases"];
   /** Its act is applied: it has begun, or its act went ahead of it (`opens`). */
   begun: boolean;
   /** It passes over the table (`Timing.passes`): it may outlast its beat and its script. */
@@ -167,6 +171,8 @@ export function laid(
       each: timing.each,
       opens: opens < from ? { at: opens, by: open } : undefined,
       closes: timing.closes,
+      room: timing.room,
+      phases: timing.phases,
       passes: timing.passes,
       begun: false,
       ended: false,

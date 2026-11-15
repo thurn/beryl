@@ -142,8 +142,8 @@ pub use replay::{failure, replay};
 pub use table::{Entry, Piles, Table, Turn};
 pub use text::wire;
 pub use timing::{
-    Curve, Edge, OwnStep, OwnTiming, OwnTimings, StepEffect, StepTiming, case_of, effects_of,
-    mover_of, own_timings, time_script, timing_of,
+    Curve, Edge, OwnStep, OwnTiming, OwnTimings, Phase, Room, StepEffect, StepTiming, case_of,
+    effects_of, mover_of, own_timings, time_script, timing_of,
 };
 pub use verb::{Arrow, Mark, Span, Verb};
 

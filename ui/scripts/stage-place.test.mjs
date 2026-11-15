@@ -13,14 +13,17 @@ import {
     roomIn,
     makingRoom,
     meets,
-    REGROUP,
     STRIKE,
     turned,
     TURNED,
 } from "../src/stage/tracks.ts";
-import { object, reach, stage, view } from "./stage-table.mjs";
+import { object, reach, REGROUP, stage, view } from "./stage-table.mjs";
 
-const LINEAR = { duration: 200 };
+// A tap as the session times it: its row makes room once the card has turned.
+const LINEAR = { duration: 200, room: { kind: "from", share: TURNED } };
+// A strike's phases, as the session sends them (data/ui-conventions.json, strike's
+// `phases`).
+const PHASES = { poise: 0.32, hit: 0.376 };
 const tap = (slot, tapped) => ({
     act: { verb: "tap", object: object(slot, "battlefield", { tapped }) },
 });
@@ -102,25 +105,28 @@ test("a permanent whose place is far off turns where it lies, and then goes ther
 test("what makes room for a tapped card waits for its turn, then steps past", () => {
     // Two card widths to the left, on its controller's side of the row: it swings a third
     // of its way toward them, or 0.45 of its width, whichever is less.
-    const past = makingRoom("tap", lying(600, 0), even, 1);
+    const past = makingRoom("tap", LINEAR.room, lying(600, 0), even, 1);
     const rest = lying(400, 0);
     assert.deepEqual(at(past(TURNED, rest)), at(lying(600, 0)));
     assert.deepEqual(at(past((1 + TURNED) / 2, rest)), at(lying(500, 45)));
     assert.deepEqual(at(past(1, rest)), at(rest));
     // The opponent's swings the other way; a card that only closes up a gap hardly swings.
-    const theirs = makingRoom("tap", lying(600, 0), even, -1);
+    const theirs = makingRoom("tap", LINEAR.room, lying(600, 0), even, -1);
     assert.equal(whole(theirs((1 + TURNED) / 2, rest).y), -45);
-    const closing = makingRoom("tap", lying(430, 0), even, 1);
+    const closing = makingRoom("tap", LINEAR.room, lying(430, 0), even, 1);
     assert.equal(whole(closing((1 + TURNED) / 2, rest).y), 10);
     // A row closes up after a card that leaves once its step is over, straight, and until
     // then is as it was, at the depth it had: what lay over the card that leaves still
     // does. For any other verb it moves through the step, and waits for nothing.
     const under = { ...rest, depth: 0 };
-    const after = makingRoom("vanish", lying(600, 0), even, 1);
+    const after = makingRoom("vanish", undefined, lying(600, 0), even, 1);
     assert.deepEqual(at(after(0, under)), at(lying(600, 0)));
     assert.deepEqual(at(after(0.5, under)), at({ ...lying(500, 0), depth: 0 }));
     assert.deepEqual(at(after(1, under)), at(under));
-    assert.equal(makingRoom("fly", lying(600, 0), even, 1), undefined);
+    assert.equal(
+        makingRoom("fly", { kind: "step" }, lying(600, 0), even, 1),
+        undefined,
+    );
     assert.deepEqual(roomIn("vanish", 100, 600), [600, 600 + 500 * CLOSES]);
     assert.deepEqual(roomIn("fly", 100, 600), [100, 600]);
 });
@@ -228,7 +234,9 @@ const strike = (source, to) => ({
 });
 
 test("a creature lunges at the player it strikes and draws back", () => {
-    const { stage: made } = stage({ strike: { duration: 1000 } });
+    const { stage: made } = stage({
+        strike: { duration: 1000, phases: PHASES },
+    });
     made.play(view([1, 2]));
     made.play(view([1, 2]), {
         beats: [[strike(1, { kind: "player", player: "opponent" })]],
@@ -253,9 +261,9 @@ test("a creature lunges at the player it strikes and draws back", () => {
     assert.ok(Math.abs(made.pose(1).width - 100 * (1 + STRIKE.raise)) < 1e-9);
     assert.equal(made.pose(1).turn, STRIKE.lean);
     // It hangs there, poised, until its dash.
-    made.clock.advance((STRIKE.poise - STRIKE.wind) * 1000);
+    made.clock.advance((PHASES.poise - STRIKE.wind) * 1000);
     assert.ok(Math.abs(left() - far - STRIKE.back * 100) < 1e-9);
-    made.clock.advance((STRIKE.hit - STRIKE.poise) * 1000);
+    made.clock.advance((PHASES.hit - PHASES.poise) * 1000);
     assert.ok(Math.abs(left() - reaches) < 1e-9);
     assert.ok(
         Math.abs(made.pose(1).x * unit.y - made.pose(1).y * unit.x) < 1e-9,
@@ -266,7 +274,7 @@ test("a creature lunges at the player it strikes and draws back", () => {
     assert.deepEqual(at(made.pose(2)), at({ ...made.pose(2), x: 400, y: 0 }));
     const blow = made.pose(1).x;
     // It stays on what it struck a moment before it draws back.
-    made.clock.advance((STRIKE.stay - STRIKE.hit) * 1000 - 1);
+    made.clock.advance((STRIKE.stay - PHASES.hit) * 1000 - 1);
     assert.ok(Math.abs(made.pose(1).x - blow) < 1e-9);
     made.clock.advance(250);
     const back = made.pose(1);
@@ -309,9 +317,10 @@ test("a creature dives onto what is much smaller than itself, shrinking", () => 
         was: placed.get(1),
         moving: false,
         beat: [act],
+        phases: PHASES,
     });
     const rest = placed.get(1).pose;
-    const blow = lunging.track.pose(STRIKE.hit, rest);
+    const blow = lunging.track.pose(PHASES.hit, rest);
     assert.ok(Math.abs(blow.width - 100 * STRIKE.small.least) < 1e-9);
     assert.ok(Math.abs(blow.x + blow.width / 2 - 50) < 1e-9);
     assert.ok(Math.abs(blow.y + blow.width * 0.7 + 365) < 1e-9, "it is on it");
@@ -328,13 +337,16 @@ test("a creature dives onto what is much smaller than itself, shrinking", () => 
         was: placed.get(1),
         moving: false,
         beat: [act],
+        phases: PHASES,
     });
-    const part = partly.track.pose(STRIKE.hit, rest);
+    const part = partly.track.pose(PHASES.hit, rest);
     assert.ok(part.width < 100 && part.width > 100 * STRIKE.small.least);
 });
 
 test("a creature stops where it first overlaps the card it strikes", () => {
-    const { stage: made } = stage({ strike: { duration: 1000 } });
+    const { stage: made } = stage({
+        strike: { duration: 1000, phases: PHASES },
+    });
     made.play(view([1, 2]));
     made.play(view([1, 2]), {
         beats: [[strike(1, { kind: "object", slot: 2 })]],
@@ -345,7 +357,7 @@ test("a creature stops where it first overlaps the card it strikes", () => {
     // Straight along the table to its right: it leans to the right.
     assert.equal(made.pose(1).turn, STRIKE.lean);
     // Cards 100 wide, 400 apart: its edge is `bite` of its width past the other's.
-    made.clock.advance((STRIKE.hit - STRIKE.wind) * 1000);
+    made.clock.advance((PHASES.hit - STRIKE.wind) * 1000);
     assert.ok(Math.abs(made.pose(1).x - (300 + STRIKE.bite * 100)) < 1e-9);
     assert.ok(Math.abs(made.pose(1).y) < 1e-9);
     assert.equal(made.pose(2).x, 400, "what is struck stays where it lies");
@@ -354,6 +366,7 @@ test("a creature stops where it first overlaps the card it strikes", () => {
 test("what a blow does to a card shows as it lands, in a fight on both", () => {
     const timed = (act, _, before) => ({
         duration: 1000,
+        phases: PHASES,
         with: meets(act, before),
     });
     const { stage: made } = stage(timed);
@@ -372,7 +385,7 @@ test("what a blow does to a card shows as it lands, in a fight on both", () => {
         beats: [[blow(1, 2, 3), blow(2, 1, 1)], [blow(1, 3, 2)]],
     });
     const damage = (slot) => made.shown.resting.get(slot).object.damage;
-    made.clock.advance(STRIKE.hit * 1000 - 1);
+    made.clock.advance(PHASES.hit * 1000 - 1);
     assert.deepEqual([damage(1), damage(2)], [undefined, undefined]);
     // Neither card left its lunge to wait.
     assert.ok(made.pose(1).x > 0 && made.pose(2).x < 400);
@@ -391,7 +404,7 @@ test("a step played with the one before it begins its delay after that one begin
     // which goes as its blow lands, 450 ms into it.
     const timed = (act, _, before) =>
         act.verb === "strike"
-            ? { duration: 1000, stagger: 300 }
+            ? { duration: 1000, stagger: 300, phases: PHASES }
             : before?.verb === "strike"
               ? { duration: 200, delay: 450, with: true }
               : { duration: 200, delay: 100 };
@@ -429,6 +442,7 @@ test("a strike waits for a fight in its way to be home before it passes over it"
     const timed = (act, _, before) => ({
         duration: 1000,
         stagger: 300,
+        phases: PHASES,
         with: meets(act, before),
     });
     const { stage: made } = stage(timed);
@@ -475,6 +489,7 @@ test("creatures that strike one another meet half way, at one time", () => {
     const timed = (act, _, before) => ({
         duration: 1000,
         stagger: 300,
+        phases: PHASES,
         with: meets(act, before),
     });
     const { stage: made } = stage(timed);
@@ -490,7 +505,7 @@ test("creatures that strike one another meet half way, at one time", () => {
     assert.deepEqual(made.pose(3), made.shown.resting.get(3).pose);
     made.clock.advance(2);
     assert.ok(made.pose(3).depth >= ALOFT);
-    made.clock.advance(STRIKE.hit * 1000 - 301);
+    made.clock.advance(PHASES.hit * 1000 - 301);
     const met = (300 + STRIKE.bite * 100) / 2;
     assert.ok(Math.abs(made.pose(1).x - met) < 1e-9);
     assert.ok(Math.abs(made.pose(2).x - (400 - met)) < 1e-9);
@@ -499,7 +514,7 @@ test("creatures that strike one another meet half way, at one time", () => {
     // then one still on its way goes over it, and all are over what rests.
     assert.ok(made.pose(1).depth > made.pose(2).depth);
     assert.ok(made.pose(2).depth > made.pose(3).depth);
-    made.clock.advance((STRIKE.seen - STRIKE.hit) * 1000);
+    made.clock.advance((STRIKE.seen - PHASES.hit) * 1000);
     assert.ok(made.pose(3).depth > made.pose(1).depth);
     assert.ok(made.pose(1).depth > made.pose(2).depth);
     assert.ok(made.pose(2).depth >= ALOFT);

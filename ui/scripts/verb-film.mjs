@@ -88,7 +88,7 @@ const MOMENTS = [
     })),
 ];
 /** Ticks filmed before a take and after it: after, as long as what a finished ability left
- * room for takes to close up (src/stage/tracks.ts CLOSED). */
+ * room for takes to close up (the `closes` the session sends with its step). */
 const LEAD = 6;
 const TAIL = 16;
 /** The span filmed tick by tick, in stage ms. */

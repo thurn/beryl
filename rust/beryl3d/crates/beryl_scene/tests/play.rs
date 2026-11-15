@@ -225,3 +225,53 @@ fn a_long_queue_plays_faster() {
         "the first script ended at twice the speed"
     );
 }
+
+/// A draw that takes 1,050 ms: the cards already in the hand go to their new places in the
+/// 170 ms the step's `room` gives from when the drawn card's act is applied, and are at rest
+/// then, long before the drawn card lands; they were still on their way half way through.
+#[test]
+fn the_hand_regroups_in_the_time_its_room_gives_whatever_the_draw_takes() {
+    use beryl_protocol::script::Room;
+    let (start, cards) = before();
+    let (after, mut timings) = draw(&start, cards);
+    timings[0].duration = 1050.0;
+    timings[0].room = Room::For { ms: 170.0 };
+    let mut show = show();
+    show.push(Box::new(start.clone()), Vec::new());
+    show.push(Box::new(after.clone()), timings);
+    frame(&mut show, &mut empty_frame(), 0);
+    let placement = show.table().placement(&after.view);
+    let held: Vec<_> = start
+        .view
+        .objects
+        .iter()
+        .filter(|o| o.zone == beryl_protocol::protocol::ZoneName::Hand)
+        .map(|o| o.slot)
+        .collect();
+    assert_eq!(held.len(), 3, "three cards were in the hand");
+    let rests = |slot: beryl_protocol::protocol::ObjectId| placement.get(slot).map(|r| r.pose);
+    let moved = held
+        .iter()
+        .filter(|&&slot| show.pose(usize::from(slot.0), 0) != rests(slot))
+        .count();
+    assert!(moved > 0, "the draw changes where the hand's cards rest");
+    for &slot in &held {
+        let index = usize::from(slot.0);
+        assert_eq!(
+            show.pose(index, 170 * MS),
+            rests(slot),
+            "card #{index} at rest"
+        );
+    }
+    assert!(
+        held.iter()
+            .any(|&slot| show.pose(usize::from(slot.0), 85 * MS) != rests(slot)),
+        "a card of the hand is still on its way half way through the regroup"
+    );
+    let top = usize::from(cards.top.0);
+    assert_ne!(
+        show.pose(top, 170 * MS),
+        rests(cards.top),
+        "the drawn card is still in flight"
+    );
+}

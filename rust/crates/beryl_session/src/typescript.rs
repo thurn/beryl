@@ -33,8 +33,8 @@ use crate::protocol::{
     ZoneRef,
 };
 use crate::script::{
-    Act, Arrow, Curve, Edge, Fact, Mark, Notice, OwnStep, OwnTiming, OwnTimings, Reset, Script,
-    Span, Step as ScriptStep, StepEffect, StepTiming, Stream, Subject, Tally, Verb,
+    Act, Arrow, Curve, Edge, Fact, Mark, Notice, OwnStep, OwnTiming, OwnTimings, Phase, Reset,
+    Room, Script, Span, Step as ScriptStep, StepEffect, StepTiming, Stream, Subject, Tally, Verb,
 };
 use crate::{AgentView, GameUpdate, SessionError, StartRequest};
 
@@ -226,6 +226,8 @@ fn view_decls(cfg: &Config) -> impl IntoIterator<Item = String> {
         ScriptStep::decl(cfg),
         StepTiming::decl(cfg),
         StepEffect::decl(cfg),
+        Room::decl(cfg),
+        Phase::decl(cfg),
         Curve::decl(cfg),
         Edge::decl(cfg),
         OwnTimings::decl(cfg),

@@ -1,13 +1,14 @@
 //! The design language's timing data, `data/ui-conventions.json`, read once: each verb's
 //! duration, delay, stagger and curve, its cases' own, the effects its steps begin, and the
-//! few numbers the timing rules take from the data beside them.
+//! few numbers the timing rules take from the data beside them: a strike's phases, how long a
+//! hand takes to regroup and how far a tap turns before its row makes room.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use serde::Deserialize;
 
-use super::{Curve, StepTiming};
+use super::{Curve, Room, StepTiming};
 use crate::protocol::ZoneName;
 use crate::script::Verb;
 
@@ -28,6 +29,8 @@ struct VerbTimings {
     phases: Option<Phases>,
     closes: HashMap<String, f64>,
     stagger: HashMap<String, f64>,
+    regroup: Option<f64>,
+    room: Option<f64>,
 }
 
 /// How an effect is played where a step begins it.
@@ -82,6 +85,8 @@ struct VerbData {
     closes: HashMap<String, f64>,
     #[serde(default)]
     stagger: HashMap<String, f64>,
+    regroup: Option<f64>,
+    room: Option<f64>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -117,6 +122,8 @@ pub(crate) fn snap() -> StepTiming {
         opens: false,
         ahead: false,
         closes: None,
+        room: Room::Step,
+        phases: Vec::new(),
         effects: Vec::new(),
     }
 }
@@ -176,6 +183,8 @@ impl Conventions {
                     phases: verb.phases,
                     closes: verb.closes,
                     stagger: verb.stagger,
+                    regroup: verb.regroup,
+                    room: verb.room,
                 };
                 (verb.name, timings)
             })
@@ -216,6 +225,24 @@ impl Conventions {
             .get(Verb::Strike.name())
             .and_then(|t| t.phases)
             .expect("the strike verb has phases in data/ui-conventions.json")
+    }
+
+    /// How long the cards that stay in a hand take to go to their new places as a card joins
+    /// or leaves it (the `fly` verb's `regroup`).
+    pub(crate) fn regroup(&self) -> f64 {
+        self.verbs
+            .get(Verb::Fly.name())
+            .and_then(|t| t.regroup)
+            .expect("the fly verb has a regroup in data/ui-conventions.json")
+    }
+
+    /// How far through a tap or an untap its permanent has turned, and its row begins to make
+    /// room (the `tap` verb's `room`).
+    pub(crate) fn turned(&self) -> f64 {
+        self.verbs
+            .get(Verb::Tap.name())
+            .and_then(|t| t.room)
+            .expect("the tap verb has a room in data/ui-conventions.json")
     }
 
     /// How long what a step of `verb` and `case` left room for takes to close up after it

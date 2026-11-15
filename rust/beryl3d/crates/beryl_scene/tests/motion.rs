@@ -6,7 +6,7 @@
 )]
 
 use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
-use beryl_protocol::script::{Act, Curve as Named, Step, StepTiming, Subject};
+use beryl_protocol::script::{Act, Curve as Named, Room, Step, StepTiming, Subject};
 use beryl_scene::beat::{Laid, Opens, beat};
 use beryl_scene::motion::{Full, SEGMENTS, Track, pose_at};
 use beryl_scene::pose::{Curve, Pose, Segment};
@@ -178,6 +178,8 @@ fn timing(f: impl FnOnce(&mut StepTiming)) -> StepTiming {
         opens: false,
         ahead: false,
         closes: None,
+        room: Room::Step,
+        phases: Vec::new(),
         effects: Vec::new(),
     };
     f(&mut timing);

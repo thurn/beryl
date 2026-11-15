@@ -8,7 +8,7 @@ use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{
     CardType, ObjectId, ObjectView, PlayerState, PowerToughness, Side, Why, ZoneName,
 };
-use beryl_protocol::script::{Act, Curve, Reset, Script, Step, StepTiming};
+use beryl_protocol::script::{Act, Curve, Reset, Room, Script, Step, StepTiming};
 
 /// How many permanents move in a stress board's second view.
 const FLIGHTS: usize = 40;
@@ -136,6 +136,8 @@ fn flight_timing() -> StepTiming {
         opens: false,
         ahead: false,
         closes: None,
+        room: Room::Step,
+        phases: Vec::new(),
         effects: Vec::new(),
     }
 }

@@ -1118,7 +1118,26 @@ pub struct StepTiming {
     pub ahead: bool,            // its act is applied with the step before's
     pub closes: Option<f64>,    // how long what it left room for takes to
                                 // close up after it
+    pub room: Room,             // how what it makes room among goes to its
+                                // new place
+    pub phases: Vec<Phase>,     // where each named phase of its motion
+                                // begins (a strike's poise and hit)
     pub effects: Vec<StepEffect>,
+}
+
+/// How what a step makes room among goes to its new place.
+pub enum Room {
+    Step,                       // over the step
+    For { ms: f64 },            // the cards that stay in a hand regroup in
+                                // `ms` from when its act is applied
+    From { share: f64 },        // from this share of the step to its end
+                                // (a tap's row waits until it has turned)
+}
+
+/// One named phase of a step's motion.
+pub struct Phase {
+    pub name: String,           // "poise" or "hit"
+    pub at: f64,                // where it begins, as a share of the step
 }
 
 /// An effect a step begins.

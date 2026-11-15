@@ -233,6 +233,19 @@ export function recorder() {
     };
 }
 
+/** How long a hand takes to regroup as a card joins or leaves it, as the session sends it
+ * (data/ui-conventions.json, fly's `regroup`). */
+export const REGROUP = 170;
+
+/** What makes room in a step of `act` unless a test says otherwise: as the session times
+ * a step that takes a card into or out of a hand (beryl_protocol's `script::timing`), the
+ * cards of a hand regroup in `REGROUP`, except after a `vanish`, whose room closes once its
+ * card has gone, and a `tap`, whose row the session has wait until the card has turned. */
+const roomOf = (act) =>
+    act.verb === "vanish" || act.verb === "tap"
+        ? undefined
+        : { kind: "for", ms: REGROUP };
+
 /** A stage on a held clock. `durations` gives the verbs that take time, or says of each act
  * how long it takes, given the table it finds and the act of the step before it in its beat;
  * `effects`, the effects each act begins, given the table it finds; `layout`, where things
@@ -249,6 +262,7 @@ export function stage(durations = {}, effects = undefined, layout = row) {
         surface,
         timings: (step, found, before) => ({
             ...SNAP,
+            room: roomOf(step.act),
             ...timed(step.act, found, before?.act),
         }),
         effects: effects && ((step, found) => effects(step.act, found)),
