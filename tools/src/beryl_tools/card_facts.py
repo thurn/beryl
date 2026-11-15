@@ -491,7 +491,7 @@ def payment_taps(
             # A scenario's assertion that a choice is open, which has no taps either.
             (
                 actions[after]["action"] == "Assert"
-                and actions[after]["assertion"]["assert"] == "Decision"
+                and cast(Json, actions[after]["assertion"])["assert"] == "Decision"
             )
             or (
                 actions[after]["action"] == "Answer"
