@@ -319,21 +319,54 @@ def append(records: Iterable[dict[str, object]]) -> None:
             f.write(text)
 
 
-def read_log(since: datetime) -> list[dict[str, object]]:
-    """The records from `since` on, skipping any line that is not one."""
+def field_bytes(key: str, value: str) -> bytes:
+    """How `append` writes one string field, so a line without it can be skipped unparsed."""
+    return f"{json.dumps(key)}: {json.dumps(value)}".encode()
+
+
+def read_log(
+    since: datetime,
+    lane: str | None = None,
+    host: str | None = None,
+    keys: Iterable[str] | None = None,
+) -> list[dict[str, object]]:
+    """The records from `since` on, skipping any line that is not one: only those of `lane`
+    and of `host` when given, each cut to `keys` (and `time`) when given.
+
+    The log holds every check of every run for weeks: 2 million lines and 720 MB after four
+    days. Reading it whole into one list of full records took 7 s and 5.7 GB of memory, once
+    per lane per fast check, so the file is streamed, and a line naming another lane or host
+    is dropped before it is parsed.
+    """
+    needles = [
+        field_bytes(k, v) for k, v in (("lane", lane), ("host", host)) if v is not None
+    ]
+    kept = None if keys is None else {*keys, "time"}
+    records: list[dict[str, object]] = []
     try:
-        lines = log_path().read_text(errors="replace").splitlines()
+        f = open(log_path(), "rb")
     except FileNotFoundError:
         return []
-    records: list[dict[str, object]] = []
-    for line in lines:
-        try:
-            r = json.loads(line)
-            when = datetime.fromisoformat(r["time"])
-        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
-            continue
-        if when >= since:
-            records.append(r)
+    with f:
+        for line in f:
+            if not all(n in line for n in needles):
+                continue
+            try:
+                r = json.loads(line)
+                when = datetime.fromisoformat(r["time"])
+            except (
+                KeyError,
+                TypeError,
+                ValueError,
+            ):  # JSON and Unicode errors among them.
+                continue
+            if when < since:
+                continue
+            if (lane is not None and r.get("lane") != lane) or (
+                host is not None and r.get("host") != host
+            ):
+                continue
+            records.append(r if kept is None else {k: r[k] for k in kept if k in r})
     return records
 
 

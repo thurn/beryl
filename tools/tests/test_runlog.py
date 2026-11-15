@@ -103,6 +103,38 @@ def test_a_rerun_logs_its_own_results_on_the_same_tree(tmp_path: Path) -> None:
     assert records[0]["tree"] == records[1]["tree"]
 
 
+def test_reading_the_log_keeps_only_the_asked_lane_host_window_and_fields() -> None:
+    now: datetime = datetime.now(timezone.utc)
+
+    def record(lane: str, host: str, age: timedelta) -> dict[str, object]:
+        when = (now - age).isoformat(timespec="seconds")
+        return {
+            "time": when,
+            "host": host,
+            "lane": lane,
+            "check": f"{lane}:a",
+            "outcome": "pass",
+            "seconds": 1.0,
+            "commit": "c0",
+        }
+
+    runlog.append(
+        [
+            record("rust", "mac", timedelta(0)),
+            record("rust", "pc", timedelta(0)),
+            record("oracle", "mac", timedelta(0)),
+            record("rust", "mac", timedelta(days=40)),
+        ]
+    )
+    with open(runlog.log_path(), "a") as f:
+        f.write('not json, "lane": "rust"\n')
+    since = now - timedelta(days=30)
+    assert len(runlog.read_log(since)) == 3
+    [rust] = runlog.read_log(since, lane="rust", host="mac", keys=("check",))
+    assert set(rust) == {"time", "check"}
+    assert [r["host"] for r in runlog.read_log(since, host="mac")] == ["mac", "mac"]
+
+
 def test_a_log_that_cannot_be_written_fails_no_check(
     own_cache: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -156,7 +188,7 @@ def record(
 def test_the_report_totals_each_check_and_lane_costliest_first(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    now = datetime.now(timezone.utc)
+    now: datetime = datetime.now(timezone.utc)
 
     class Verdicts(verdicts.Beads):
         """The checks' beads hold one recent flake and one catch from before the window."""
@@ -297,7 +329,7 @@ def test_oracle_scenarios_share_their_engines_seconds(
 def test_the_report_counts_selection_misses_per_100_landed_commits(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    now = datetime.now(timezone.utc)
+    now: datetime = datetime.now(timezone.utc)
 
     class Verdicts(verdicts.Beads):
         """Two misses in the window and one before it, beside a catch."""

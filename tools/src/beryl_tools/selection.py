@@ -66,6 +66,8 @@ STARTUP = 4.0
 DEFAULT_SECONDS = 3.0
 # How far back the run log's records count (runlog.tally).
 RECORD_DAYS = 30
+# The fields of a run-log record that `records` and `every_check` read.
+RECORD_KEYS = ("script", "lane", "check", "outcome", "seconds", "backfilled")
 # The pages a capture script runs at once (capture.mjs' workers).
 WORKERS = 4
 # What `--select` tells a check script to run: a file of titles, one a line, matched exactly.
@@ -712,7 +714,9 @@ class Chooser:
         self.started: float = self.clock.now()
         now = datetime.now(timezone.utc)
         self.since: datetime = now - timedelta(days=RECORD_DAYS)
-        self.log: list[dict[str, object]] = runlog.read_log(self.since)
+        self.log: list[dict[str, object]] = runlog.read_log(
+            self.since, lane=lane, keys=RECORD_KEYS
+        )
         loaded = Coverage.load()
         fallback = stale(loaded, now)
         self.coverage: Coverage | None = None if fallback else loaded

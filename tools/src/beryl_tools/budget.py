@@ -262,7 +262,7 @@ def slow_report(
     since = datetime.now(timezone.utc) - timedelta(days=check_value.DAYS)
     host = host or platform.node()
     if records is None:
-        records = runlog.read_log(since)
+        records = runlog.read_log(since, host=host)
     mine = [r for r in records if r.get("host") == host]
     if history is None:
         history = store.history(store.checks())

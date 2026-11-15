@@ -72,7 +72,7 @@ def env() -> dict[str, str]:
 
 class Records:
     """The records (selection.Record) of a lane's checks from the run log, read in a thread
-    while the step builds what it runs: reading 30 days of the log takes about 10 seconds.
+    while the step builds what it runs.
     """
 
     def __init__(self, lane: str) -> None:
@@ -84,11 +84,11 @@ class Records:
     def read(self) -> None:
         # They import this module, by way of checks.py.
         from . import runlog, verdicts
-        from .selection import RECORD_DAYS, records
+        from .selection import RECORD_DAYS, RECORD_KEYS, records
 
         since = datetime.now(timezone.utc) - timedelta(days=RECORD_DAYS)
         try:
-            log = [r for r in runlog.read_log(since) if r.get("lane") == self.lane]
+            log = runlog.read_log(since, lane=self.lane, keys=RECORD_KEYS)
             self.known = records(log, verdicts.cached_history(), None, since)
         except Exception as e:  # A plan without records still fits, at default times.
             print(f"{self.lane}: no records to plan with: {e}", flush=True)

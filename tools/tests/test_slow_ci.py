@@ -200,7 +200,7 @@ def chooser_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(checks, "git", lambda *args: json.dumps(old))
     monkeypatch.setattr(checks, "changed_paths", lambda base: ["ui/shots.json"])
     monkeypatch.setattr(selection, "diff", lambda *args, under="": {})
-    monkeypatch.setattr(runlog, "read_log", lambda since: [])
+    monkeypatch.setattr(runlog, "read_log", lambda since, **_: [])
     monkeypatch.setattr(verdicts, "cached_history", lambda: {})
     fresh = Coverage("c0", datetime.now(timezone.utc), {}, {})
     monkeypatch.setattr(Coverage, "load", staticmethod(lambda: fresh))
