@@ -75,10 +75,12 @@ export function listenTableKeys(commands: TableCommands) {
     )
       return;
     if (id || claims(event, bindings.platform)) event.preventDefault();
-    if (id && !event.repeat && !commands.overlayOpen)
-      void commands
-        .shortcut(id, currentTarget(client))
-        .catch(commands.reportError);
+    if (id && !event.repeat && !commands.overlayOpen) {
+      const target = id.startsWith("life.")
+        ? pointedTarget(client)
+        : currentTarget(client);
+      void commands.shortcut(id, target).catch(commands.reportError);
+    }
   };
   window.addEventListener("keydown", keydown, true);
   window.addEventListener("keydown", client.key);

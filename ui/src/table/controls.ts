@@ -43,14 +43,8 @@ export function counterControls(client: TableClient | undefined, side: Side) {
   if (!client) return undefined;
   return (counter: string, event: ClickEvent) => {
     const target = { kind: "counter" as const, side, counter };
-    if (event.type === "contextmenu") {
-      event.preventDefault();
-      client.secondary(
-        target,
-        { x: event.clientX, y: event.clientY },
-        event.currentTarget,
-      );
-    } else client.click(target, keys(event), event.currentTarget);
+    if (event.type === "contextmenu") secondaryControl(client, target, event);
+    else client.click(target, keys(event), event.currentTarget);
   };
 }
 

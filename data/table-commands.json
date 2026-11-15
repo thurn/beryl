@@ -2193,6 +2193,7 @@
       "player_counter": { "seat": "$seat", "name": "$text", "add": "$number" }
     },
     "menu": { "group": "Player counters", "order": 10 },
+    "also_applies_to": { "life": { "group": "Player counters", "order": 60 } },
     "group": "Player counters"
   },
   {

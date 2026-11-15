@@ -15,6 +15,7 @@ import {
   type Command,
 } from "./commands.ts";
 import { uses } from "./fill.ts";
+import { manaColor } from "./players.ts";
 import type { Row } from "./Menu.tsx";
 
 export type PrintedCard = { card: CardEntry; face: number };
@@ -76,6 +77,10 @@ export function allowed(
   if (!table) return false;
   if ("name" in target) {
     if (!target.action) return false;
+    if (command.id === "permanent.reduce_life_by_power")
+      return (
+        table.seats === 2 && target.object?.types.includes("creature") === true
+      );
     if (!target.object)
       return (
         command.id === "stack_entry.resolve" ||
@@ -152,7 +157,10 @@ function conditions({
     })
   )
     result.add("two_faced");
-  if (target.kind === "counter") result.add("counter_selected");
+  if (target.kind === "counter")
+    result.add(
+      manaColor(target.counter) ? "mana_selected" : "counter_selected",
+    );
   if (view.turn.active === "you" && view.table?.phase === "untap")
     result.add("active_untap");
   if (view.turn.active === "you" && view.table?.phase === "draw")

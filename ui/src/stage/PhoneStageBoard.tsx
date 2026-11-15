@@ -284,7 +284,11 @@ export function PhoneStageBoard({
                 }
                 change={lifeChange(counts, side)}
               >
-                <PlayerTarget prompts={prompts} asked={asked} side={side} />
+                {client ? (
+                  <span className="life-hit" aria-hidden="true" />
+                ) : (
+                  <PlayerTarget prompts={prompts} asked={asked} side={side} />
+                )}
               </Orb>
               {side === "you" ? (
                 !client &&

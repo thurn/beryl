@@ -93,11 +93,20 @@ export function commandActions(
   if (command.id === "hand.mulligan_same_size") args.number = handSize;
   if (command.id === "hand.mulligan_one_fewer")
     args.number = Math.max(0, handSize - 1);
-  if (command.id === "permanent.reduce_life_by_power")
-    args.number = -context.cards.reduce(
-      (total, card) => total + (card.object?.pt?.power ?? 0),
-      0,
+  if (command.id === "permanent.reduce_life_by_power") {
+    const reductions = new Map<number, number>();
+    for (const { object } of context.cards) {
+      if (!object?.pt) continue;
+      const recipient = 1 - seatOf(view, object.owner);
+      reductions.set(
+        recipient,
+        (reductions.get(recipient) ?? 0) - object.pt.power,
+      );
+    }
+    return [...reductions].map(([seat, number]) =>
+      fill(template, { ...args, seat, number }),
     );
+  }
   if (command.id === "counter.increment_all") {
     args.actions = context.cards.flatMap(({ action, object }) => {
       if (!action || !object) return [];

@@ -15,6 +15,7 @@ import type { TableClient, TableTarget } from "./client";
 import { commands as registry, type Command } from "./commands";
 import { currentTarget } from "./keyboard";
 import { selectAt } from "./select";
+import { playerCounterValue } from "./players";
 import { describe } from "./shortcuts";
 import { TablePalette } from "./TablePalette";
 import {
@@ -102,6 +103,7 @@ export class TableCommands {
         if (!area) return;
         target = { kind: "hand", side: area.side };
       }
+      if (target.kind === "counter") return;
       const point = element ? at : client.surface?.viewportPoint(at);
       if (point) this.open(target, point, element);
       return true;
@@ -284,9 +286,13 @@ export class TableCommands {
       pointed && applies(command, pointed)
         ? pointed
         : [table, ...defaults].find((target) => applies(command, target));
-    if (!target) return;
+    if (target) await this.runAt(id, target);
+  }
+
+  async runAt(id: string, target: TableTarget, element?: HTMLElement) {
     let context = this.context(target);
     if (!context) return;
+    context.element = element;
     if (id === "token.all") context = await this.#withTokens(context);
     const entry = availableCommands(kindOf(target), context).find(
       (entry) => entry.id === id && this.#supports(entry),
@@ -431,13 +437,13 @@ export class TableCommands {
               : label,
         onCancel: this.close,
         onConfirm: (text) => {
-          if (stackUntil && !text.trim()) return;
+          if (command.asks === "text_and_number" && !text.trim()) return;
           if (command.asks === "text_and_number") {
             show({
               kind: "number",
               start: 1,
               min: 1,
-              max: 65535,
+              max: stackUntil ? 65535 : MAX_INT,
               fieldLabel: stackUntil ? "Hits" : undefined,
               label: (number) =>
                 stackUntil ? "Put cards on stack" : `Add ${number} ${text}`,
@@ -462,9 +468,7 @@ export class TableCommands {
           : "storm";
       const playerValue =
         playerCounter && "side" in target
-          ? (context.view.players[target.side].namedCounters?.find(
-              ({ name }) => name === playerCounterName,
-            )?.count ?? 0)
+          ? playerCounterValue(context.view, target.side, playerCounterName)
           : undefined;
       const counter = command.id.startsWith("counter.");
       const counterSlot = command.id.includes(".second_")
@@ -496,9 +500,9 @@ export class TableCommands {
             : 1),
         current,
         min:
-          life !== undefined || playerCounter
+          life !== undefined
             ? MIN_INT
-            : counter || command.id === "hand.mulligan"
+            : counter || playerCounter || command.id === "hand.mulligan"
               ? 0
               : 1,
         max:

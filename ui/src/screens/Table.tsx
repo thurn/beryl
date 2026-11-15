@@ -29,6 +29,7 @@ import { TableArrows } from "../table/arrows";
 import { registerClicks } from "../table/click";
 import { TableClient } from "../table/client";
 import { listenTableKeys } from "../table/keyboard";
+import { registerPlayers } from "../table/players";
 import { registerTurn } from "../table/turn";
 import type { AppInfo } from "../generated/protocol";
 import { TableDrag } from "../table/drag";
@@ -85,6 +86,7 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
       quit,
       showBlockers,
     );
+    registerPlayers(client, commands);
     client.viewers.register(commands);
     return { board, client, commands, leave };
   });
