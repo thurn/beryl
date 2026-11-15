@@ -374,3 +374,17 @@ def test_each_failing_lane_gets_its_own_bead(bd: FakeBd) -> None:
         "Fix nightly motion failure: motion:fly/desktop",
         "Fix nightly oracle failure: oracle:Card A/a/forge",
     ]
+
+
+def test_a_check_that_passed_its_rerun_is_not_filed() -> None:
+    # A step's rerun logs the checks that failed again after the first run's records.
+    first = [("ui-test:a", "fail"), ("ui-test:b", "fail"), ("ui-test:c", "pass")]
+    rerun = [("ui-test:a", "pass"), ("ui-test:b", "fail")]
+    records: list[dict[str, object]] = []
+    for check, outcome in first + rerun:
+        record: dict[str, object] = {"check": check, "outcome": outcome}
+        record |= {"time": NOW.isoformat(), "script": "sweep", "commit": "tip"}
+        records.append(record | {"lane": "ui-test"})
+    runlog.append(records)
+    found = nightly_failures.failed_checks("tip", NOW - timedelta(hours=1), "sweep")
+    assert found == {"ui-test": ["ui-test:b"]}

@@ -41,17 +41,23 @@ def failed_checks(
     commit: str, since: datetime, script: str = "nightly"
 ) -> dict[str, list[str]]:
     """The failed checks on `commit` of the runs of `script` (the nightly's by default) logged
-    from `since` on, by lane, each once."""
-    found: dict[str, list[str]] = {}
+    from `since` on, by lane, each once.
+
+    A check whose last record passed is left out: a step that fails reruns its failed checks
+    once (`checks.run_lane`), and a pass on that rerun proves the first failure a flake,
+    which flaky.py reports on its own. Counting the first failure filed a sweep bead for 92
+    checks when the rerun had passed 67 of them, each a page load that timed out on a loaded
+    machine.
+    """
+    last: dict[str, tuple[str, str]] = {}
     for r in runlog.read_log(since):
-        if (
-            r.get("script") == script
-            and r.get("commit") == commit
-            and r.get("outcome") == "fail"
-        ):
-            checks = found.setdefault(str(r.get("lane")), [])
-            if str(r["check"]) not in checks:
-                checks.append(str(r["check"]))
+        if r.get("script") == script and r.get("commit") == commit:
+            check = str(r["check"])
+            last[check] = (str(r.get("lane")), str(r.get("outcome")))
+    found: dict[str, list[str]] = {}
+    for check, (lane, outcome) in last.items():
+        if outcome == "fail":
+            found.setdefault(lane, []).append(check)
     return found
 
 
