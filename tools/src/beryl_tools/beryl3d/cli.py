@@ -18,7 +18,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from .. import system, warm
-from . import lane, paths, sweep
+from . import lane, paths, sweep, vm
 
 # Exit code for a command line `just b3d` cannot run, as argparse uses.
 USAGE = 2
@@ -180,6 +180,19 @@ COMMANDS: tuple[Command, ...] = (
         ),
         run_fmt,
         lambda p: p.add_argument("--check", action="store_true"),
+    ),
+    Command(
+        "vm",
+        "creates and provisions the beryl3d-bench count machine; runs a command there",
+        (
+            ("just b3d vm", "create, start and provision the machine"),
+            (
+                "just b3d vm vulkaninfo --summary",
+                "run a command in the machine, from rust/",
+            ),
+        ),
+        vm.run_vm,
+        vm.vm_arguments,
     ),
 )
 

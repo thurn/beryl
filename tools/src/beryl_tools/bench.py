@@ -287,8 +287,8 @@ fi
 """
 
 
-def wsl_status() -> str | None:
-    """The WSL distribution's state, Running or Stopped; None if there is none."""
+def wsl_status(vm: str = VM) -> str | None:
+    """The WSL distribution `vm`'s state, Running or Stopped; None if there is none."""
     run = subprocess.run(
         ["wsl", "--list", "--verbose"],
         capture_output=True,
@@ -298,24 +298,24 @@ def wsl_status() -> str | None:
     )
     for line in run.stdout.splitlines():
         fields = line.replace("*", " ").split()
-        if len(fields) >= 2 and fields[0] == VM:
+        if len(fields) >= 2 and fields[0] == vm:
             return fields[1]
     return None
 
 
-def vm_status() -> str | None:
+def vm_status(vm: str = VM) -> str | None:
     if system.WINDOWS:
-        return wsl_status()
+        return wsl_status(vm)
     for line in output(
         "limactl", "list", "--format", "{{.Name}} {{.Status}}"
     ).splitlines():
         name, _, status = line.partition(" ")
-        if name == VM:
+        if name == vm:
             return status
     return None
 
 
-def vm_command(script: str) -> list[str]:
+def vm_command(script: str, vm: str = VM) -> list[str]:
     if system.WINDOWS:
         # Windows' command line would mangle the script's quotes on the way through wsl.exe:
         # it goes as base64, and runs from a file so that its commands' stdin is not it.
@@ -324,7 +324,7 @@ def vm_command(script: str) -> list[str]:
         return [
             "wsl",
             "-d",
-            VM,
+            vm,
             "--cd",
             str(paths.RUST),
             "--exec",
@@ -332,11 +332,11 @@ def vm_command(script: str) -> list[str]:
             "-c",
             unpack,
         ]
-    return ["limactl", "shell", "--workdir", str(paths.RUST), VM, "bash", "-lc", script]
+    return ["limactl", "shell", "--workdir", str(paths.RUST), vm, "bash", "-lc", script]
 
 
-def vm_shell(script: str) -> int:
-    return subprocess.run(vm_command(script), check=False).returncode
+def vm_shell(script: str, vm: str = VM) -> int:
+    return subprocess.run(vm_command(script, vm), check=False).returncode
 
 
 def locked(script: str) -> str:
@@ -384,37 +384,37 @@ fi
     return locked(f"{provision}{prepare}{commands}\n")
 
 
-def wsl_ensure() -> int:
+def wsl_ensure(vm: str = VM) -> int:
     """Creates the WSL distribution, its disk in the cache (on the Dev Drive, if the cache is),
     where it runs as root; WSL starts it for each command."""
     if shutil.which("wsl") is None:
         log("WSL is missing: wsl --install, in an administrator's terminal")
         return 2
-    if wsl_status() is not None:
+    if wsl_status(vm) is not None:
         return 0
-    log(f"creating the {VM} WSL distribution (downloads Ubuntu once; a few minutes)")
+    log(f"creating the {vm} WSL distribution (downloads Ubuntu once; a few minutes)")
     return subprocess.run(
-        ["wsl", "--install", "Ubuntu-24.04", "--name", VM, "--no-launch"]
-        + ["--location", str(paths.cache_root() / "wsl" / VM)],
+        ["wsl", "--install", "Ubuntu-24.04", "--name", vm, "--no-launch"]
+        + ["--location", str(paths.cache_root() / "wsl" / vm)],
         check=False,
     ).returncode
 
 
-def vm_ensure() -> int:
+def vm_ensure(vm: str = VM) -> int:
     if system.WINDOWS:
-        return wsl_ensure()
+        return wsl_ensure(vm)
     if not output("which", "limactl").strip():
         log("Lima is missing: brew install lima")
         return 2
-    status = vm_status()
+    status = vm_status(vm)
     checkout = paths.main_checkout() or paths.REPO
     if status is None:
-        log(f"creating the {VM} VM (downloads Ubuntu once; a few minutes)")
-        cmd = ["limactl", "start", f"--name={VM}", "--tty=false", "--cpus=4"]
+        log(f"creating the {vm} VM (downloads Ubuntu once; a few minutes)")
+        cmd = ["limactl", "start", f"--name={vm}", "--tty=false", "--cpus=4"]
         cmd += ["--memory=4", "--containerd=none", f"--mount-only={checkout}"]
         code = subprocess.run([*cmd, "template:ubuntu-lts"], check=False).returncode
     elif status != "Running":
-        code = subprocess.run(["limactl", "start", "--tty=false", VM]).returncode
+        code = subprocess.run(["limactl", "start", "--tty=false", vm]).returncode
     else:
         code = 0
     return code

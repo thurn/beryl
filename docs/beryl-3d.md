@@ -590,7 +590,14 @@ enforces the ones that can be seen in source.
   `handle`. The performance gate runs each workload twice and requires identical
   counts, so a dependency that varies between runs is caught the day it is
   added. The work that dependency does then moves to `beryl_assets`, outside the
-  counted boundary, or the dependency is replaced.
+  counted boundary, or the dependency is replaced. Both were measured before any
+  code was built on them (2026-11-15): a row of one text and three buttons laid
+  out by `taffy` 0.15.1, and "Pay {1}{U}" and a 200-character rules text shaped
+  by `parley` 0.13.0 with a fresh and with a warmed cache, gave identical
+  instruction counts under Callgrind on three runs out of three. `fontique` and
+  `parley` keep `hashbrown` maps with a per-process hash seed inside them; the
+  counts did not vary, so the rule against seeded hashing binds Beryl 3D's own
+  code and the gate holds the dependencies.
 - **No threads, locks or files.** Work that needs them lives in `beryl_assets`,
   and its results arrive as inputs.
 - **No system fonts.** Text is laid out with the fonts bundled in the app
@@ -599,7 +606,11 @@ enforces the ones that can be seen in source.
   The web interface takes these fonts from npm packages, as WOFF2 files that the
   Rust text crates cannot read. Beryl 3D commits the same families as TrueType
   files, with their licences, in `rust/beryl3d/crates/beryl_scene/fonts`, and
-  embeds them in the client core at build time.
+  embeds them in the client core at build time. Where a family has a variable
+  font file, that file is committed instead of separate weights: `parley`
+  selects a weight from it (Open Sans at weight 700 keeps the glyphs of weight
+  400, with the variation coordinates of 700 and wider advances), and the
+  rasterizer draws each glyph run with the run's variation coordinates.
 - **Seeded effects.** A particle effect's randomness comes from a fixed
   generator seeded by the object's id and the step's index.
 - **Data is compiled in.** The client core's data files (spatial values and the
@@ -1994,9 +2005,11 @@ On the CPU:
 - **Instructions per frame**, under Callgrind in a Linux virtual machine of
   Beryl 3D's own, `beryl3d-bench`, made the way the engine's `beryl-bench` is. A
   second machine keeps the engine's counts from moving when Beryl 3D installs a
-  graphics driver, and keeps either gate from waiting for the other. The counted
-  boundary is one call to `frame` plus the `handle` calls since the previous
-  frame.
+  graphics driver, and keeps either gate from waiting for the other.
+  `just b3d vm` creates and provisions it
+  (`tools/src/beryl_tools/beryl3d/vm.py`), with Mesa's Vulkan drivers added to
+  what `beryl-bench` installs. The counted boundary is one call to `frame` plus
+  the `handle` calls since the previous frame.
 - **Allocations in `frame`**, from a counting global allocator in a native test.
   The limit is zero once a game has started. `handle` may allocate, and its
   allocations are counted and limited per fixture.
@@ -2023,10 +2036,13 @@ On the GPU, time cannot be counted, but work can:
   core computes as it builds the draw list. These need no renderer, so they are
   checked on every tick.
 
-If the software driver's fragment count proves not to be repeatable, the gate
-computes the count itself: test code draws the frame's opaque records, nearest
-first, into a depth buffer of its own, counts the pixels that pass, and adds the
-pixels of the blended records.
+The driver's count was measured before the gate was built (2026-11-15, Mesa
+26.0.8's llvmpipe Vulkan driver in `beryl3d-bench`, `wgpu` 30.0.2). One opaque
+quad of 4,096 pixels drawn in front of one of 16,384, with a depth buffer, gave
+20,480 fragment shader runs drawn far first and 16,384 drawn near first, on
+three runs out of three, with default limits and with
+`Limits::downlevel_webgl2_defaults()`. So the count is repeatable and leaves out
+the fragments the depth buffer rejects, and the gate reads it from the driver.
 
 ### What it is held to
 
