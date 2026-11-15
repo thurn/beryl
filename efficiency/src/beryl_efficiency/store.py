@@ -303,6 +303,20 @@ MIGRATIONS: tuple[str, ...] = (
     -- every transcript again repairs the rows left before that.
     DELETE FROM sources WHERE source = 'claude';
     """,
+    """
+    -- Facts in a Codex log that belong to a request but are on other lines: `kind` is `model`
+    -- (the model a turn used, in `value`) or `turn_end` (a turn finished or was aborted).
+    -- Ingest copies them onto the transcript's requests as `model` and `stop_reason`.
+    CREATE TABLE codex_marks (
+        host TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        transcript TEXT NOT NULL,
+        time TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        value TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (host, provider, transcript, time, kind)
+    );
+    """,
 )
 
 

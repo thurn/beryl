@@ -15,6 +15,7 @@ from pathlib import Path
 from . import (
     bead,
     claude,
+    codex,
     facts,
     ingest,
     kinds,
@@ -41,6 +42,7 @@ def sources() -> list[ingest.Source]:
         Beads.here(checkout),
         claude.Sessions(paths.claude_sessions(), checkout, host),
         claude.Transcripts(paths.claude_projects(), checkout, host),
+        codex.Rollouts(paths.codex_sessions(), checkout, host),
     ]
 
 
@@ -152,13 +154,21 @@ def gaps(db: sqlite3.Connection) -> dict[str, object]:
             0
         ]
     )
+    # A bead ran with a provider (Claude unless the bead says otherwise): it has no data when
+    # the store holds no transcript of that provider from its host.
     elsewhere = {
         str(r[0]): int(r[1])
-        for r in db.execute("""SELECT h, count(*) FROM (SELECT coalesce(
-                json_extract(enact, '$.enact_spawn_host'),
-                json_extract(enact, '$.enact_worktree_host')) AS h FROM beads)
-            WHERE h IS NOT NULL AND h NOT IN (SELECT DISTINCT host FROM transcripts)
-            GROUP BY h ORDER BY h""")
+        for r in db.execute(
+            """SELECT CASE WHEN p = 'claude' THEN h ELSE h || ' (' || p || ')' END,
+                count(*)
+            FROM (SELECT coalesce(json_extract(enact, '$.enact_spawn_host'),
+                    json_extract(enact, '$.enact_worktree_host')) AS h,
+                    coalesce(json_extract(enact, '$.enact_spawn_provider'), 'claude') AS p
+                FROM beads)
+            WHERE h IS NOT NULL AND NOT EXISTS (SELECT 1 FROM transcripts AS t
+                WHERE t.host = h AND t.provider = p)
+            GROUP BY 1 ORDER BY 1"""
+        )
     }
     return {
         "sessions_without_window": without,

@@ -92,7 +92,7 @@ runs only the `efficiency` check lane and `repo`.
   (`source`). Copy prices from that page, never from memory. When a price
   changes, add a new table and keep the old one: a request is priced by the
   latest table dated on or before its day (the earliest table also prices older
-  requests). `above` holds a model's prices for a prompt over `tokens` tokens. A
+  requests). Codex's models (`gpt-*`) are in the same table, from OpenAI's page named in its `note`. `above` holds a model's prices for a prompt over `tokens` tokens. A
   model missing here has no dollars, and `just efficiency coverage` lists it.
 
 ## Card images

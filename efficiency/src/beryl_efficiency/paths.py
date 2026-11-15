@@ -58,3 +58,10 @@ def claude_sessions() -> Path:
     else:
         base = Path.home() / "Library" / "Application Support"
     return base / "Claude" / "claude-code-sessions"
+
+
+def codex_sessions() -> list[Path]:
+    """Where Codex keeps its logs: `sessions/<year>/<month>/<day>/rollout-*.jsonl`, and the
+    flat `archived_sessions/` that finished ones are moved to."""
+    home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+    return [home / "sessions", home / "archived_sessions"]

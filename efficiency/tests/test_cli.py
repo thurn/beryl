@@ -27,6 +27,7 @@ TABLES = {
     "sources",
     "ingests",
     "sessions",
+    "codex_marks",
     "prompts",
     "settings",
     "window_time",
