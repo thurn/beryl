@@ -33,7 +33,7 @@
 # moved, while the gate still passes (`tools/src/beryl_tools/count_trend.py`).
 
 benchmark = "rollout_counts::cube_rollout::rollouts::corpus"
-instructions = 390_293_470
+instructions = 384_206_865
 tolerance_percent = 1.0
 
 # The present-cost gate (docs/benchmarking.md, "The present-cost gate"): each family's
