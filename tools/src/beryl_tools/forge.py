@@ -272,8 +272,7 @@ def step(action: JsonObject, cards: Cards, purpose: object = None) -> JsonObject
         ability = cast(dict[str, int], action["ability"])
         [(source, index)] = ability.items()
         described = cards.ability(cast(str, action["card"]), source, index)
-        return {
-            "mana": described is not None and described["kind"] == "Mana",
+        out = {
             "op": "activate",
             "player": action["player"],
             "card": action["card"],
@@ -281,6 +280,9 @@ def step(action: JsonObject, cards: Cards, purpose: object = None) -> JsonObject
                 cards, cast(str, action["card"]), source, index
             ),
         }
+        if described is not None and described["kind"] == "Mana":
+            out["mana"] = True
+        return out
     if kind == "TurnFaceUp":
         # Forge offers turning a manifested permanent face up as its "Unmanifest" ability.
         return {
