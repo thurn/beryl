@@ -63,9 +63,11 @@ class Transcript:
         message: str,
         usage: tuple[int, int, int, int] = (1, 10, 100, 5),
         tools: tuple[tuple[str, str, Mapping[str, object]], ...] = (),
+        stop: str | None = None,
     ) -> Transcript:
         """A request at `time` with `usage` as (input, cache write, cache read, output), a
         text block and a `tool_use` block for each of `tools`, given as (id, name, input).
+        It stops for its tools, or with `stop`, else ends the turn.
         """
         counts = dict(
             zip(
@@ -94,6 +96,8 @@ class Transcript:
                             "model": "claude-test",
                             "usage": counts,
                             "content": [block],
+                            "stop_reason": stop
+                            or ("tool_use" if tools else "end_turn"),
                         },
                     }
                 )
@@ -105,7 +109,26 @@ class Transcript:
             time, message, tools=((call, "Bash", {"command": command}),)
         )
 
-    def result(self, time: str, call: str, stdout: str = "ok") -> Transcript:
+    def prompt(
+        self,
+        time: str,
+        text: str = "please go on",
+        origin: Mapping[str, object] | None = None,
+    ) -> Transcript:
+        """A message that starts a turn: typed by a person unless `origin` says otherwise
+        (such as `{"kind": "task-notification"}`)."""
+        record: dict[str, object] = {
+            "type": "user",
+            "timestamp": time,
+            "message": {"role": "user", "content": text},
+            "origin": dict(origin or {"kind": "human"}),
+        }
+        self.lines.append(json.dumps(record))
+        return self
+
+    def result(
+        self, time: str, call: str, stdout: str = "ok", stderr: str = ""
+    ) -> Transcript:
         self.lines.append(
             json.dumps(
                 {
@@ -120,7 +143,7 @@ class Transcript:
                             }
                         ]
                     },
-                    "toolUseResult": {"stdout": stdout, "stderr": ""},
+                    "toolUseResult": {"stdout": stdout, "stderr": stderr},
                 }
             )
         )

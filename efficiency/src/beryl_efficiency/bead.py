@@ -9,6 +9,7 @@ import sqlite3
 from datetime import datetime
 
 from .render import Result, table
+from .timing import AGENT_CATEGORIES
 
 TOKENS: tuple[str, ...] = (
     "input_tokens",
@@ -31,6 +32,56 @@ def hosts_of(db: sqlite3.Connection, bead: str) -> tuple[str | None, set[str]]:
     ran = enact.get("enact_spawn_host") or enact.get("enact_worktree_host")
     have = {str(r[0]) for r in db.execute("SELECT DISTINCT host FROM transcripts")}
     return (str(ran) if ran else None), have
+
+
+def time_split(db: sqlite3.Connection, bead: str) -> list[dict[str, object]]:
+    """The bead's windows' minutes by category, kind and part, largest first."""
+    return [
+        {
+            "category": str(r[0]),
+            "kind": str(r[1]),
+            "part": str(r[2]),
+            "minutes": round(float(r[3]) / 60, 2),
+        }
+        for r in db.execute(
+            """SELECT t.category, t.kind, t.part, sum(t.seconds) AS s FROM window_time AS t
+            JOIN windows AS w ON w.host = t.host AND w.provider = t.provider
+                AND w.transcript = t.transcript AND w.start = t.start
+            WHERE w.bead = ? GROUP BY t.category, t.kind, t.part ORDER BY s DESC""",
+            (bead,),
+        )
+    ]
+
+
+def time_lines(split: list[dict[str, object]]) -> list[str]:
+    """Agent minutes, then each category and kind (parts indented under it), then the
+    minutes beside agent minutes."""
+    totals: dict[tuple[str, str], float] = {}
+    parts: dict[tuple[str, str], list[tuple[str, float]]] = {}
+    for row in split:
+        key = (str(row["category"]), str(row["kind"]))
+        value = float(str(row["minutes"]))
+        totals[key] = totals.get(key, 0.0) + value
+        if row["part"]:
+            parts.setdefault(key, []).append((str(row["part"]), value))
+    agent = sum(v for (c, _), v in totals.items() if c in AGENT_CATEGORIES)
+    lines = [f"time      {agent:.1f} agent min"]
+    for (category, kind), value in sorted(totals.items(), key=lambda kv: -kv[1]):
+        if category not in AGENT_CATEGORIES or value < 0.05:
+            continue
+        name = f"{category}: {kind}" if kind else category
+        lines.append(f"  {name:<34}{value:7.1f}")
+        for part, minutes in parts.get((category, kind), []):
+            if minutes >= 0.05:
+                lines.append(f"      {part:<30}{minutes:7.1f}")
+    beside = {
+        c: sum(v for (k, _), v in totals.items() if k == c) for c in ("person", "idle")
+    }
+    lines.append(
+        f"beside agent minutes: waiting on a person {beside['person']:.1f}, "
+        f"idle {beside['idle']:.1f}"
+    )
+    return lines
 
 
 def report(db: sqlite3.Connection, bead: str) -> Result:
@@ -63,6 +114,7 @@ def report(db: sqlite3.Connection, bead: str) -> Result:
             (bead,),
         )
     ]
+    split = time_split(db, bead)
     ran, have = hosts_of(db, bead)
     no_data = not sessions and ran is not None and ran not in have
     wall = round(sum(float(str(s["minutes"])) for s in sessions), 1)
@@ -80,6 +132,7 @@ def report(db: sqlite3.Connection, bead: str) -> Result:
             f"requests {requests}  wall {wall:.1f} min in {len(sessions)} windows",
             "tokens   "
             + "  ".join(f"{k.removesuffix('_tokens')} {v}" for k, v in tokens.items()),
+            *time_lines(split),
             "",
             *table(
                 ["session", "title", "kind", "start", "minutes"],
@@ -99,6 +152,7 @@ def report(db: sqlite3.Connection, bead: str) -> Result:
             "requests": None if no_data else requests,
             "tokens": None if no_data else tokens,
             "wall_minutes": None if no_data else wall,
+            "time": None if no_data else split,
             "sessions": sessions,
         },
         lines,

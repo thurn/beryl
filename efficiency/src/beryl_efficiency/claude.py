@@ -23,7 +23,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import windows
+from . import timing, windows
 from .ingest import FileSource, LineSource, Row
 
 PROVIDER = "claude"
@@ -48,8 +48,16 @@ ENACT: re.Pattern[str] = re.compile(
 NEXT: re.Pattern[str] = re.compile(
     r'"next":\s*\{.*?"id":\s*"(' + BEAD + r')"', re.DOTALL
 )
-# Lines without one of these are neither requests nor tool results, and are not parsed.
-WANTED: tuple[bytes, ...] = (b'"usage"', b'"tool_result"')
+# Cargo's line when a build ends, `Finished `test` profile [...] target(s) in 1m 02s` (or
+# `in 42.10s`): the minutes and seconds the build took.
+FINISHED: re.Pattern[str] = re.compile(
+    r"Finished\b[^\n]*? in (?:(\d+)m )?(\d+(?:\.\d+)?)s\b"
+)
+# The tool call a task notification reports on.
+NOTIFIED: re.Pattern[str] = re.compile(r"<tool-use-id>([^<\s]+)</tool-use-id>")
+# Lines without one of these are neither requests, tool results nor prompts, and are not
+# parsed.
+WANTED: tuple[bytes, ...] = (b'"usage"', b'"tool_result"', b'"user"')
 
 
 def project_name(path: Path) -> str:
@@ -97,6 +105,60 @@ def size(value: object) -> int:
             size(b.get("text") or "") if isinstance(b, dict) else size(b) for b in value
         )
     return len(json.dumps(value).encode())
+
+
+def compile_seconds(output: object) -> float | None:
+    """The seconds cargo spent building in a shell command's output, from each `Finished`
+    line it printed, added together; None when it printed none."""
+    if not isinstance(output, dict):
+        return None
+    total: float | None = None
+    for key in ("stdout", "stderr"):
+        value = output.get(key)
+        for found in FINISHED.finditer(value if isinstance(value, str) else ""):
+            total = (total or 0.0) + 60 * int(found[1] or 0) + float(found[2])
+    return total
+
+
+def message_text(content: object) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(str(b.get("text") or "") for b in content if isinstance(b, dict))
+    return ""
+
+
+def prompt_kind(record: dict[str, object], text: str) -> tuple[str, str | None] | None:
+    """What a message that is not a tool result means for the time split: `person` with no
+    detail (or `interrupt` when it stopped the model), `background` with the tool call it
+    reports on (or `session` for a message from another session), or `idle`. None for a
+    line that only adds to a prompt just made, such as an image or a skill's text. Newer transcripts say where a prompt came from in
+    `origin` and `turnOrigin`; older ones are told apart by how the text starts."""
+    origin = record.get("origin")
+    source = str(origin.get("kind") or "") if isinstance(origin, dict) else ""
+    subkind = str(origin.get("subkind") or "") if isinstance(origin, dict) else ""
+    turn = str(record.get("turnOrigin") or "")
+    start = text.lstrip()
+    if record.get("isMeta") and source != "peer":
+        return None
+    if start.startswith("[Request interrupted"):
+        return "person", "interrupt"
+    if source == "human" or turn == "human":
+        return "person", None
+    if (
+        source == "peer"
+        or turn == "peer"
+        or start.startswith(("<cross-session-message", "Another Claude session"))
+    ):
+        return "background", "session"
+    if subkind == "scheduled-trigger" or turn == "scheduled":
+        return "idle", None
+    if source == "task-notification" or start.startswith("<task-notification"):
+        found = NOTIFIED.search(text)
+        return "background", found[1] if found else None
+    if source or turn or start.startswith(("<system-reminder", "<scheduled")):
+        return "idle", None
+    return "person", None
 
 
 def number(usage: dict[str, object], key: str) -> int:
@@ -182,6 +244,21 @@ class Transcripts(LineSource):
             return self.assistant(key, time, message, blocks)
         output = record.get("toolUseResult")
         rows: list[Row] = []
+        if not any(b.get("type") == "tool_result" for b in blocks):
+            found_kind = prompt_kind(record, message_text(content))
+            if found_kind is None:
+                return []
+            return [
+                (
+                    "prompts",
+                    {
+                        **key,
+                        "time": time,
+                        "kind": found_kind[0],
+                        "detail": found_kind[1],
+                    },
+                )
+            ]
         for block in blocks:
             if block.get("type") != "tool_result":
                 continue
@@ -196,6 +273,7 @@ class Transcripts(LineSource):
                         "result_bytes": size(
                             output if output is not None else block.get("content")
                         ),
+                        "compile_seconds": compile_seconds(output),
                     },
                 )
             )
@@ -241,6 +319,11 @@ class Transcripts(LineSource):
                     "message": text_field(message, "id"),
                     "time": time,
                     "model": model if isinstance(model, str) else None,
+                    "stop_reason": (
+                        stop
+                        if isinstance(stop := message.get("stop_reason"), str)
+                        else None
+                    ),
                     **tokens,
                     "context_tokens": tokens["input_tokens"]
                     + tokens["cache_write_tokens"]
@@ -278,9 +361,10 @@ class Transcripts(LineSource):
         return rows
 
     def finish(self, db: windows.Connection, changed: list[Path]) -> int:
-        return windows.derive(
-            db, self.host, PROVIDER, [transcript_of(p) for p in changed]
-        )
+        found = [transcript_of(p) for p in changed]
+        written = windows.derive(db, self.host, PROVIDER, found)
+        tops = sorted({parent or transcript for transcript, parent in found})
+        return written + timing.refresh(db, self.host, PROVIDER, tops)
 
 
 def iso_from_milliseconds(value: object) -> str | None:

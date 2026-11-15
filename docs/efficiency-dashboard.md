@@ -367,6 +367,22 @@ When several tool calls run at once, the overlapping seconds are divided equally
 among the calls running at that instant, so a window's categories still sum to
 its wall-clock length.
 
+How the transcripts show these, as built:
+
+- A turn ends at a request whose `stop_reason` is not `tool_use`, or at an
+  interrupt (`[Request interrupted by user]`). The wait runs from the last
+  record before the next prompt to that prompt, and is not counted while a tool
+  call is still running.
+- A prompt's `origin.kind` says where it came from: `human` is a person, `peer`
+  is another session, and `task-notification` is a background command (its
+  `<tool-use-id>` names the call, which gives the kind) unless its `subkind` is
+  `scheduled-trigger`, which is idle. Older transcripts without `origin` are
+  told apart by how the text starts.
+- Model time is every second that no other category claims.
+- Each window's split is stored in the `window_time` table, with a row per
+  category, kind and part, so later queries sum rows instead of replaying
+  transcripts.
+
 Two kinds of tool time are split one level further, because the split decides
 what to optimise:
 
@@ -421,7 +437,8 @@ changing code. The first matching pattern wins. This excerpt shows the format:
   as `enact` does not decide the kind.
 - A command that chains several heavy commands with `&&` is given the kind of
   the first heavy one, and is flagged as chained, since its parts cannot be
-  timed apart.
+  timed apart. An entry is heavy when it has `"heavy": true`. A command with no
+  heavy part takes the kind of its first part that matches.
 - Tools other than the shell are their own kinds: `Read`, `Edit`, `Agent` (a
   subagent), and so on.
 - Commands that match nothing are kind **other**. The `coverage` query lists the

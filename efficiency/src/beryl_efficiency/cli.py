@@ -12,7 +12,7 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from . import bead, claude, ingest, paths, store
+from . import bead, claude, ingest, kinds, paths, store
 from .beads import Beads, main_checkout
 from .render import Result, table, text
 
@@ -155,6 +155,38 @@ def gaps(db: sqlite3.Connection) -> dict[str, object]:
     }
 
 
+def unmatched(db: sqlite3.Connection, days: int = 7) -> dict[str, object]:
+    """The share of the last `days` days' tool time whose command matched no kind, and the
+    unmatched commands that took longest, so that the kinds table can be extended."""
+    since = f"-{days} days"
+    duration = "(julianday(end) - julianday(start)) * 86400"
+    found = db.execute(
+        f"""SELECT coalesce(sum({duration}), 0),
+            coalesce(sum(CASE WHEN kind = ? THEN {duration} END), 0)
+        FROM tool_calls WHERE end IS NOT NULL
+            AND start >= strftime('%Y-%m-%dT%H:%M:%S', 'now', ?)""",
+        (kinds.OTHER, since),
+    ).fetchone()
+    total, other = float(found[0]), float(found[1])
+    commands = [
+        {"command": str(r[0]), "calls": int(r[1]), "seconds": round(float(r[2]), 1)}
+        for r in db.execute(
+            f"""SELECT substr(command, 1, 100) AS c, count(*), sum({duration}) AS s
+            FROM tool_calls WHERE end IS NOT NULL AND kind = ?
+                AND start >= strftime('%Y-%m-%dT%H:%M:%S', 'now', ?)
+            GROUP BY c ORDER BY s DESC LIMIT 10""",
+            (kinds.OTHER, since),
+        )
+    ]
+    return {
+        "days": days,
+        "tool_seconds": round(total, 1),
+        "other_seconds": round(other, 1),
+        "other_share": round(other / total, 4) if total else None,
+        "commands": commands,
+    }
+
+
 def coverage(db: sqlite3.Connection, pending: dict[str, int] | None = None) -> Result:
     """What the store holds and what it is missing: rows per table, skipped lines per source,
     what attribution could not place, files not yet read, and the cost of the ingests, all of
@@ -211,6 +243,27 @@ def coverage(db: sqlite3.Connection, pending: dict[str, int] | None = None) -> R
     lines.append(
         f"ingests   {count} since {since or '-'}: wall {wall:.2f} s  cpu {cpu:.2f} s"
     )
+    other = unmatched(db)
+    share = other["other_share"]
+    lines.append(
+        "other     commands of no kind: "
+        + (f"{float(str(share)):.1%}" if share is not None else "-")
+        + f" of {other['days']} days' tool time"
+    )
+    found_commands = other["commands"]
+    assert isinstance(found_commands, list)
+    if found_commands:
+        lines += [
+            "",
+            "longest commands of no kind",
+            *table(
+                ["seconds", "calls", "command"],
+                [
+                    [c["seconds"], c["calls"], c["command"].replace("\n", " ")]
+                    for c in found_commands
+                ],
+            ),
+        ]
     if recent:
         lines += ["", "recent ingests", *table(columns, recent)]
     return Result(
@@ -227,6 +280,7 @@ def coverage(db: sqlite3.Connection, pending: dict[str, int] | None = None) -> R
             "ingests": [dict(zip(columns, r)) for r in recent],
             **missing,
             "unread": pending,
+            "unmatched": other,
         },
         lines,
         ["efficiency sql 'select * from sources'"],

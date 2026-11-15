@@ -75,6 +75,17 @@ The files named `data/efficiency-*.json` are read only by the efficiency
 dashboard in `efficiency/` (`docs/efficiency-dashboard.md`). A change to one
 runs only the `efficiency` check lane and `repo`.
 
+- `efficiency-command-kinds.json`: the ordered table that gives each shell
+  command an agent ran a kind, such as `rust tests` or `push`, for the time
+  split. Each entry has a unique `kind`, a Python regular expression `pattern`
+  and `heavy`, true for commands that take real time or CPU. The first entry
+  whose pattern matches wins. Patterns are matched against each part of a
+  command chained with `&&`, `||` or `;`, after a leading `cd <path>`,
+  environment assignments and wrappers such as `timeout 600` are removed, so
+  anchor them with `^`. When `just efficiency coverage` shows that commands of
+  no kind are 5% or more of the week's tool time, add an entry for the longest
+  ones it lists.
+
 ## Card images
 
 The app downloads card images on demand into its cache (`beryl_app`'s `art.rs`).

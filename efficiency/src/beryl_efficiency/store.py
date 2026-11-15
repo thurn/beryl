@@ -217,6 +217,51 @@ MIGRATIONS: tuple[str, ...] = (
         PRIMARY KEY (host, provider, transcript, call)
     );
     """,
+    """
+    -- Why a request stopped (`end_turn`, `tool_use`, ...): a turn ends at a request that did
+    -- not stop for a tool.
+    ALTER TABLE requests ADD COLUMN stop_reason TEXT;
+    -- `chained` is 1 for a shell command that chains two or more heavy commands. Of a call's
+    -- seconds, `compile_seconds` were cargo building (from its `Finished ... in` lines) and
+    -- `queued_seconds` were spent waiting for a CPU lease.
+    ALTER TABLE tool_calls ADD COLUMN chained INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE tool_calls ADD COLUMN compile_seconds REAL;
+    ALTER TABLE tool_calls ADD COLUMN queued_seconds REAL NOT NULL DEFAULT 0;
+    ALTER TABLE tool_results ADD COLUMN compile_seconds REAL;
+    -- A message that started a turn, other than a tool result. `kind` is `person` (typed by a
+    -- person, or an interrupt), `background` (a background command or another session
+    -- finished; `detail` is the command's tool call id, or `session`) or `idle` (anything
+    -- else, such as a scheduled wake-up).
+    CREATE TABLE prompts (
+        host TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        transcript TEXT NOT NULL,
+        time TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        detail TEXT,
+        PRIMARY KEY (host, provider, transcript, time)
+    );
+    -- Each window's wall-clock seconds split by category (`person`, `queued`, `tool`,
+    -- `model`, `background`, `idle`), kind of command and part (`compile`, `run`, or empty).
+    -- A window's rows sum to its length. `start` is the window's start.
+    CREATE TABLE window_time (
+        host TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        transcript TEXT NOT NULL,
+        start TEXT NOT NULL,
+        category TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT '',
+        part TEXT NOT NULL DEFAULT '',
+        seconds REAL NOT NULL,
+        PRIMARY KEY (host, provider, transcript, start, category, kind, part)
+    );
+    -- Values the store keeps about itself, such as the digest of the command kinds table
+    -- the stored kinds came from.
+    CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
+    -- Transcripts are read again from the start, for the stop reasons, prompts and compile
+    -- times that earlier ingests did not keep.
+    DELETE FROM sources WHERE source = 'claude';
+    """,
 )
 
 

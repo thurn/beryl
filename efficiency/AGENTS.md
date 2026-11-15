@@ -39,6 +39,10 @@ store" and "Isolation" before changing anything here.
   the Enact commands a session ran) and the desktop app's session records.
   `windows.py` derives bead windows from those commands and sets the `bead` of
   each request and tool call; `bead.py` is the `bead <id>` query.
+- `kinds.py`: command kinds from `data/efficiency-command-kinds.json`.
+  `timing.py` splits each window's seconds into the categories of "Time
+  accounting" and stores them in `window_time`. Kinds and splits are derived
+  again for every transcript when the kinds table changes.
 - `cli.py`: the queries `just efficiency` runs; `render.py`: results and their
   text tables.
 

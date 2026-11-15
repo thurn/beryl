@@ -88,8 +88,9 @@ class LineSource(ABC):
         `MALFORMED` for a line it cannot read."""
 
     def finish(self, db: sqlite3.Connection, changed: list[Path]) -> int:
-        """Runs after an ingest read new lines from the files `changed`, to derive rows that
-        depend on more than one line. Returns how many rows it wrote."""
+        """Runs after every ingest of this source, with the files it read new lines from in
+        `changed` (maybe none), to derive rows that depend on more than one line. Returns
+        how many rows it wrote."""
         return 0
 
 
@@ -208,9 +209,10 @@ def read_lines(db: sqlite3.Connection, source: LineSource, tally: Tally) -> None
                 changed.append(path)
         except OSError as e:
             tally.error = tally.error or f"{path}: {e}"
-    if changed:
-        with db:
-            tally.rows += source.finish(db, changed)
+    # `finish` runs even when no file changed, since what it derives can depend on more
+    # than the files, such as the command kinds table.
+    with db:
+        tally.rows += source.finish(db, changed)
 
 
 def read_file_lines(

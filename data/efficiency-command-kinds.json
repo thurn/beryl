@@ -1,0 +1,23 @@
+[
+  {"kind": "push", "pattern": "^(?:\\S*enact(?:\\.py|\\.sh)?\"?|\"?\\S*python\\S*\"? \"?\\S*enact\\.py\"?|\"?\\$\\{?\\w+\\}?\"?) push\\b", "heavy": true},
+  {"kind": "slow CI wait", "pattern": "^(?:\\S*enact(?:\\.py|\\.sh)?\"?|\"?\\S*python\\S*\"? \"?\\S*enact\\.py\"?|\"?\\$\\{?\\w+\\}?\"?) ci\\b.*--wait", "heavy": true},
+  {"kind": "orchestration wait", "pattern": "^(?:\\S*enact(?:\\.py|\\.sh)?\"?|\"?\\S*python\\S*\"? \"?\\S*enact\\.py\"?|\"?\\$\\{?\\w+\\}?\"?) (next|wait)\\b", "heavy": true},
+  {"kind": "enact", "pattern": "^(?:\\S*enact(?:\\.py|\\.sh)?\"?|\"?\\S*python\\S*\"? \"?\\S*enact\\.py\"?|\"?\\$\\{?\\w+\\}?\"?) \\S"},
+  {"kind": "rust tests", "pattern": "^just (test-rust|test)\\b|\\bcargo (nextest|test)\\b", "heavy": true},
+  {"kind": "browser checks", "pattern": "^just (ui-test|ui-shots|ui-smoke|specs|motion|sweep|shots)\\b|\\bplaywright\\b", "heavy": true},
+  {"kind": "build", "pattern": "\\bcargo (build|check|clippy|run|b|c)\\b|^just (build|clippy|smoke)\\b", "heavy": true},
+  {"kind": "fast check", "pattern": "^just (check|ci|lint|fmt)\\b", "heavy": true},
+  {"kind": "card tools", "pattern": "^just (card|cards|census|citations)\\b", "heavy": true},
+  {"kind": "oracle", "pattern": "^just (oracle|xmage|forge)\\b", "heavy": true},
+  {"kind": "beryl 3d", "pattern": "^just b3d\\b", "heavy": true},
+  {"kind": "ui typecheck and unit", "pattern": "^just (ui-typecheck|ui-unit)\\b|\\b(tsc|vitest)\\b", "heavy": true},
+  {"kind": "tournament", "pattern": "^just (tournament|play|review|bench)\\b", "heavy": true},
+  {"kind": "python checks", "pattern": "\\b(pytest|pyre|black)\\b", "heavy": true},
+  {"kind": "just other", "pattern": "^just\\b"},
+  {"kind": "git", "pattern": "^git\\b|^gh\\b"},
+  {"kind": "bd", "pattern": "^bd\\b"},
+  {"kind": "read and search", "pattern": "^(rg|grep|egrep|sed|awk|cat|ls|head|tail|wc|find|fd|jq|diff|stat|file|tree|sort|uniq|cut|tr|echo|printf|pwd|which|du|test|\\[)\\b"},
+  {"kind": "shell scripts", "pattern": "^(bash|sh|zsh)\\b|^\\S+\\.sh\\b"},
+  {"kind": "python scripts", "pattern": "^\\S*python[0-9.]*\\b|^uv run\\b"},
+  {"kind": "sleep", "pattern": "^sleep\\b"}
+]
