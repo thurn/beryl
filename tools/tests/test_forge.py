@@ -89,6 +89,17 @@ def test_without_a_trace_flips_are_unknown() -> None:
     assert all("flips" not in s for s in scenarios)
 
 
+@pytest.mark.parametrize("stack", [[], [{"name": "Dark Depths"}]])
+def test_first_priority_action_records_whether_setup_stack_should_be_empty(
+    stack: list[Json],
+) -> None:
+    entry = dumped()[0]
+    entry["trace"] = [{"kind": "Priority", "stack": stack, "flips": [], "forced": []}]
+    scenarios, skipped = forge.export([entry], card_store.STORE)
+    assert skipped == []
+    assert scenarios[0].get("settle_setup_stack", False) == (not stack)
+
+
 def test_scenarios_outside_the_vocabulary_are_unsupported() -> None:
     entry = dumped()[0]
     actions = list(cast(list[Json], entry["actions"]))

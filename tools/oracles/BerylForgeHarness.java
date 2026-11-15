@@ -209,6 +209,9 @@ public final class BerylForgeHarness {
         // Whether the game has stopped at a priority decision a step asked for (after a Resolve
         // or an AdvanceTo), where asserts apply even if passing is all the player can do.
         boolean stopped;
+        // The first scripted priority action in Beryl came after any setup triggers resolved.
+        boolean settleSetupStack;
+
         // Beryl's coin flips, in order, and the random source that replays them.
         final java.util.ArrayDeque<JsonObject> flips = new java.util.ArrayDeque<>();
         FlipRandom random;
@@ -219,6 +222,8 @@ public final class BerylForgeHarness {
 
         Run(JsonObject scenario) {
             this.scenario = scenario;
+            settleSetupStack = scenario.has("settle_setup_stack")
+                    && scenario.get("settle_setup_stack").getAsBoolean();
             for (JsonElement step : scenario.getAsJsonArray("steps")) {
                 steps.add(step.getAsJsonObject());
             }
@@ -433,6 +438,15 @@ public final class BerylForgeHarness {
             boolean active = phases.getPlayerTurn() == player;
             if (System.getenv("BERYL_FORGE_TRACE") != null) {
                 notes.add("priority p" + seat(player) + " " + where() + " mode " + mode + " next " + next);
+            }
+            if (settleSetupStack) {
+                // Forge gives both players priority on setup triggers that Beryl already
+                // resolved while advancing to its first scripted action. Pass until that
+                // action can start with the same empty stack.
+                if (!game.getStack().isEmpty()) {
+                    return null;
+                }
+                settleSetupStack = false;
             }
             if (mode == Mode.ADVANCE) {
                 if (!reached()) {

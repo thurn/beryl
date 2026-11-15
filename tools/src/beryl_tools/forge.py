@@ -503,6 +503,14 @@ def export(
                 "steps": steps,
                 "unchecked": unchecked,
             }
+            if (
+                trace
+                and trace[0].get("kind") == "Priority"
+                and trace[0].get("stack") == []
+                and steps
+                and steps[0]["op"] in ("cast", "activate", "play_land")
+            ):
+                scenario["settle_setup_stack"] = True
             # The dump's trace records Beryl's coin flips; the harness replays them. Without
             # a trace, a scenario that flips a coin is unsupported.
             if "trace" in entry:
