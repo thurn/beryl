@@ -479,8 +479,8 @@ mod tests {
         let at = reach(&entry("skip-teferi-plus-one")).unwrap();
         let mut scratch = Scratch::new();
         let obs = observe(&at.s, &at.t, &mut scratch, at.d.decider);
-        let mut family = beryl_search::DEEP_SEARCHER;
-        assert!(!family.options.sure);
+        let mut family: beryl_search::Family =
+            "pimc72/hidden/rollout/tuned/anchor+guard".parse().unwrap();
         let mut run = |sure| {
             family.options.sure = sure;
             let settings = beryl_search::Settings {

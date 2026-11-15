@@ -1,25 +1,26 @@
 # The ladder
 
-Champion: `pimc72/hidden/rollout/tuned/anchor+guard`
+Champion: `pimc72/hidden/rollout/tuned/anchor+guard+hold+combat+sure`
 
 One row a match or audit, newest first. docs/ai-plan.md §4 says how each row is
 made. Rows up to 2026-11-13 were made by the plan before it, whose gate stopped
 a rung at the suite on any one lower entry.
 
-| Date       | Challenger                                         | Champion                                    | Budget | Games | Score | Elo (95%)      | Verdict             | Suite open / fixed | Human games |
-| ---------- | -------------------------------------------------- | ------------------------------------------- | ------ | ----- | ----- | -------------- | ------------------- | ------------------ | ----------- |
-| 2026-11-13 | turn72/hidden/rollout/tuned/anchor+guard           | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 14 / 7             | ?           |
-| 2026-11-13 | pimc72/hidden/rollout/tuned/anchor+guard+mid       | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 14 / 6             | ?           |
-| 2026-11-13 | pimc72/hidden/rollout/tuned/anchor+guard+combat    | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 15 / 5             | ?           |
-| 2026-11-13 | pimc72/hidden/rollout/tuned/anchor+guard+hold      | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 9 / 11             | ?           |
-| 2026-11-13 | pimc72/hidden/rollout/tuned/anchor+guard+order@3M  | pimc72/hidden/rollout/tuned/anchor+guard@3M | 3M     | 1652  | 50.7% | +6 [-13, +24]  | fail                | 13 / 7             | ?           |
-| 2026-11-12 | pimc18/hidden/rollout/tuned/anchor+guard           | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 16 / 4             | ?           |
-| 2026-11-12 | pimc72/hidden/rollout/tuned/anchor+guard+mid       | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 14 / 6             | ?           |
-| 2026-11-12 | pimc72/hidden/rollout/tuned/anchor+guard+combat    | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 15 / 5             | ?           |
-| 2026-11-12 | pimc72/hidden/rollout/tuned/anchor+expert+guard@3M | pimc72/hidden/rollout/tuned/anchor+guard@3M | 3M     | 400   | 56.8% | +54 [+17, +92] | yardstick           | 12 / 8             | ?           |
-| 2026-11-12 | pimc72/hidden/rollout/tuned/anchor+guard+waste     | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 14 / 6             | ?           |
-| 2026-11-12 | pimc72/hidden/rollout/tuned/anchor+guard+hold      | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 11 / 9             | ?           |
-| 2026-11-12 | pimc72/hidden/rollout/tuned/anchor+guard@3M        | pimc72/hidden/rollout/tuned/anchor@3M       | 3M     | 574   | 52.4% | +23 [-10, +57] | pass                | 15 / 5             | ?           |
+| Date       | Challenger                                                   | Champion                                    | Budget | Games | Score | Elo (95%)      | Verdict             | Suite open / fixed | Human games |
+| ---------- | ------------------------------------------------------------ | ------------------------------------------- | ------ | ----- | ----- | -------------- | ------------------- | ------------------ | ----------- |
+| 2026-11-15 | pimc72/hidden/rollout/tuned/anchor+guard+hold+combat+sure@3M | pimc72/hidden/rollout/tuned/anchor+guard@3M | 3M     | 430   | 53.3% | +25 [-9, +60]  | pass                | 8 / 12 (315/400)   | ?           |
+| 2026-11-13 | turn72/hidden/rollout/tuned/anchor+guard                     | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 14 / 7             | ?           |
+| 2026-11-13 | pimc72/hidden/rollout/tuned/anchor+guard+mid                 | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 14 / 6             | ?           |
+| 2026-11-13 | pimc72/hidden/rollout/tuned/anchor+guard+combat              | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 15 / 5             | ?           |
+| 2026-11-13 | pimc72/hidden/rollout/tuned/anchor+guard+hold                | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 9 / 11             | ?           |
+| 2026-11-13 | pimc72/hidden/rollout/tuned/anchor+guard+order@3M            | pimc72/hidden/rollout/tuned/anchor+guard@3M | 3M     | 1652  | 50.7% | +6 [-13, +24]  | fail                | 13 / 7             | ?           |
+| 2026-11-12 | pimc18/hidden/rollout/tuned/anchor+guard                     | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 16 / 4             | ?           |
+| 2026-11-12 | pimc72/hidden/rollout/tuned/anchor+guard+mid                 | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 14 / 6             | ?           |
+| 2026-11-12 | pimc72/hidden/rollout/tuned/anchor+guard+combat              | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 15 / 5             | ?           |
+| 2026-11-12 | pimc72/hidden/rollout/tuned/anchor+expert+guard@3M           | pimc72/hidden/rollout/tuned/anchor+guard@3M | 3M     | 400   | 56.8% | +54 [+17, +92] | yardstick           | 12 / 8             | ?           |
+| 2026-11-12 | pimc72/hidden/rollout/tuned/anchor+guard+waste               | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 14 / 6             | ?           |
+| 2026-11-12 | pimc72/hidden/rollout/tuned/anchor+guard+hold                | pimc72/hidden/rollout/tuned/anchor+guard    | -      | -     | -     | -              | failed at the suite | 11 / 9             | ?           |
+| 2026-11-12 | pimc72/hidden/rollout/tuned/anchor+guard@3M                  | pimc72/hidden/rollout/tuned/anchor@3M       | 3M     | 574   | 52.4% | +23 [-10, +57] | pass                | 15 / 5             | ?           |
 
 ## Measured on the first match
 

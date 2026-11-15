@@ -35,13 +35,13 @@ Two numbers measure progress, and each has a target:
 
 | Measure      | How it is counted                                                                 | Now          | Target       |
 | ------------ | --------------------------------------------------------------------------------- | ------------ | ------------ |
-| Blunder rate | Suite runs passed, of 400 (20 entries, 3M and 30M, 10 seeds each)                 | 90 of 200    | 380 of 400   |
+| Blunder rate | Suite runs passed, of 400 (20 entries, 3M and 30M, 10 seeds each)                 | 315 of 400   | 380 of 400   |
 |              | New suite entries per human game, from the app's games ledger                     | 0 in 9 games | under 1 in 5 |
 | Strength     | Elo against the reference agent (§3) at 10M steps, over 400 games (`--bar audit`) | 0            | +50          |
 
-"Now" for the suite is the champion's count in the gates of 2026-11-12, which
-ran five seeds. Nine human games are too few to say the second target is met: no
-entries in nine games is still consistent with one game in four.
+The suite total comes from the rung 1 comparison in [the ladder](ladder.md).
+Nine human games are too few to say the second target is met. No entries in nine
+games is still consistent with one game in four.
 
 ## 2. What we learned
 
@@ -151,17 +151,17 @@ Twelve rungs were tried ([ladder.md](ladder.md)). Three reached a match:
 
 The **champion** is the app's Deep Searcher (`beryl_search::DEEP_SEARCHER`), and
 a promotion is a change to it. Today it is
-`pimc72/hidden/rollout/tuned/anchor+guard@30M`:
+`pimc72/hidden/rollout/tuned/anchor+guard+hold+combat+sure@30M`:
 
-| Axis      | Setting                                                                       |
-| --------- | ----------------------------------------------------------------------------- |
-| Method    | PIMC, 72 worlds dealt from what it can see, a tree each                       |
-| Sight     | Hidden                                                                        |
-| Leaf      | Softmax rollout to the end of the game, temperature 10                        |
-| Knowledge | Hand-tuned card values (`Knowledge::Tuned`)                                   |
-| Options   | `anchor+guard`: greedy's answer at four kinds of decision unless search leads |
-| Scores    | Turn discount 0.98: win sooner, lose later                                    |
-| Budget    | 30M engine steps a decision, on every core                                    |
+| Axis      | Setting                                                                                                       |
+| --------- | ------------------------------------------------------------------------------------------------------------- |
+| Method    | PIMC, 72 worlds dealt from what it can see, a tree each                                                       |
+| Sight     | Hidden                                                                                                        |
+| Leaf      | Softmax rollout to the end of the game, temperature 10                                                        |
+| Knowledge | Hand-tuned card values (`Knowledge::Tuned`)                                                                   |
+| Options   | `anchor+guard` checks overrides, `hold` delays plays, `combat` plans combat, and `sure` answers free choices. |
+| Scores    | Turn discount 0.98: win sooner, lose later                                                                    |
+| Budget    | 30M engine steps a decision, on every core                                                                    |
 
 Every change is a named part of the family's name, so any past champion can be
 played again from the current build.
@@ -307,33 +307,34 @@ A ledger of every blunder a human has caught: `data/blunders.json`.
   a board (`data/blunders/*.json`) or retired with a note. The suite fails on it
   until then.
 
-The champion and best measured columns show runs passed of 10 in the gates of
-2026-11-12 and 2026-11-13. The Policy column shows one run per entry with
+The champion column shows runs passed of 20 in the rung 1 comparison. The best
+measured column records pass counts out of 10 from the gates of 2026-11-12 and
+2026-11-13. The Policy column shows one run per entry with
 `greedy+hold+waste+combat`. The last column names the rungs of §6 that claim
 each entry.
 
 | Entry                              | Greedy | Policy | Champion | Best measured   | Claimed by        |
 | ---------------------------------- | ------ | ------ | -------- | --------------- | ----------------- |
-| `oust-own-token`                   | right  | right  | 10       |                 | Fixed             |
-| `skip-beza-after-winds`            | right  | right  | 10       |                 | Fixed             |
-| `decline-mana-crypt`               | right  | right  | 10       |                 | `sure` pins it    |
-| `decline-both-teferi-untaps`       | right  | right  | 10       |                 | `sure` pins it    |
-| `decline-second-teferi-untap`      | right  | right  | 10       |                 | `sure` pins it    |
-| `snapcaster-sorcery-speed`         | wrong  | right  | 9        | 10 with `hold`  | `hold`            |
-| `evoke-subtlety-no-target`         | wrong  | right  | 9        | 10 with `waste` | `waste`           |
-| `staff-in-upkeep`                  | wrong  | right  | 5        | 10 with `hold`  | `hold`            |
-| `staff-before-combat-damage`       | wrong  | right  | 3        | 9 with `hold`   | `hold`            |
-| `subtlety-before-own-draw`         | wrong  | right  | 3        | 10 with `hold`  | `hold`            |
-| `jace-loots-before-draw`           | wrong  | right  | 0        | 9 with `hold`   | `hold`            |
-| `discard-emperor-over-spare-crypt` | right  | right  | 0        | 10 with `hold`  | `hold`, `paired`  |
-| `evoke-subtlety-empty-stack-hunt`  | right  | right  | 0        | 10 with `hold`  | `hold`, `waste`   |
-| `beza-trinket-into-blockers`       | wrong  | right  | 0        | 8 with `combat` | `combat`          |
-| `manifest-into-samurai`            | right  | right  | 1        | 8 with `combat` | `combat`          |
-| `subtlety-main-phase-empty-stack`  | right  | right  | 4        | 4               | `paired`          |
-| `spirits-stay-home`                | right  | right  | 2        | 5 with `hold`   | `paired`, `first` |
-| `skip-teferi-plus-one`             | right  | right  | 0        | 4 with `turn72` | `first`           |
-| `samurai-into-jace`                | wrong  | right  | 2        | 4 with `hold`   | `hold`, `paired`  |
-| `spare-jace-wielder`               | wrong  | wrong  | 2        | 4 with `hold`   | `walker`          |
+| `oust-own-token`                   | right  | right  | 20/20    |                 | Fixed             |
+| `skip-beza-after-winds`            | right  | right  | 20/20    |                 | Fixed             |
+| `decline-mana-crypt`               | right  | right  | 20/20    |                 | `sure` pins it    |
+| `decline-both-teferi-untaps`       | right  | right  | 20/20    |                 | `sure` pins it    |
+| `decline-second-teferi-untap`      | right  | right  | 20/20    |                 | `sure` pins it    |
+| `snapcaster-sorcery-speed`         | wrong  | right  | 20/20    | 10 with `hold`  | `hold`            |
+| `evoke-subtlety-no-target`         | wrong  | right  | 17/20    | 10 with `waste` | `waste`           |
+| `staff-in-upkeep`                  | wrong  | right  | 18/20    | 10 with `hold`  | `hold`            |
+| `staff-before-combat-damage`       | wrong  | right  | 19/20    | 9 with `hold`   | `hold`            |
+| `subtlety-before-own-draw`         | wrong  | right  | 20/20    | 10 with `hold`  | `hold`            |
+| `jace-loots-before-draw`           | wrong  | right  | 19/20    | 9 with `hold`   | `hold`            |
+| `discard-emperor-over-spare-crypt` | right  | right  | 20/20    | 10 with `hold`  | `hold`, `paired`  |
+| `evoke-subtlety-empty-stack-hunt`  | right  | right  | 20/20    | 10 with `hold`  | `hold`, `waste`   |
+| `beza-trinket-into-blockers`       | wrong  | right  | 14/20    | 8 with `combat` | `combat`          |
+| `manifest-into-samurai`            | right  | right  | 20/20    | 8 with `combat` | `combat`          |
+| `subtlety-main-phase-empty-stack`  | right  | right  | 10/20    | 4               | `paired`          |
+| `spirits-stay-home`                | right  | right  | 9/20     | 5 with `hold`   | `paired`, `first` |
+| `skip-teferi-plus-one`             | right  | right  | 1/20     | 4 with `turn72` | `first`           |
+| `samurai-into-jace`                | wrong  | right  | 8/20     | 4 with `hold`   | `hold`, `paired`  |
+| `spare-jace-wielder`               | wrong  | wrong  | 0/20     | 4 with `hold`   | `walker`          |
 
 ## 6. The rungs
 
@@ -341,17 +342,17 @@ In order. First the tools. Then what is already built is played, stacked. Then
 the root is rebuilt around the policy. Then the two strength rungs. The session
 may reorder rungs when a result suggests it, and says why in the bead.
 
-| Order | Rung                       | Aim      | Changes         | Built          |
-| ----- | -------------------------- | -------- | --------------- | -------------- |
-| 0     | Tools                      |          |                 | Partly         |
-| 1     | `sure` + `hold` + `combat` | Blunders | Policy and root | All but `sure` |
-| 2     | `paired`                   | Blunders | Root            | Yes            |
-| 3     | `first`                    | Both     | Root            | No             |
-| 4     | `prior`                    | Strength | Tree            | No             |
-| 5     | `waste`                    | Blunders | Policy          | Yes            |
-| 6     | `fit`                      | Strength | Numbers         | No             |
-| 7     | `walker`                   | Blunders | Planner         | Yes            |
-| 8     | `turn72`                   | Strength | Method          | Yes            |
+| Order | Rung                       | Aim      | Changes         | Built  |
+| ----- | -------------------------- | -------- | --------------- | ------ |
+| 0     | Tools                      |          |                 | Partly |
+| 1     | `sure` + `hold` + `combat` | Blunders | Policy and root | Yes    |
+| 2     | `paired`                   | Blunders | Root            | Yes    |
+| 3     | `first`                    | Both     | Root            | No     |
+| 4     | `prior`                    | Strength | Tree            | No     |
+| 5     | `waste`                    | Blunders | Policy          | Yes    |
+| 6     | `fit`                      | Strength | Numbers         | No     |
+| 7     | `walker`                   | Blunders | Planner         | Yes    |
+| 8     | `turn72`                   | Strength | Method          | Yes    |
 
 ### 6.1 Tools
 

@@ -430,8 +430,9 @@ mod tests {
         let candidates = labels(&at.t, &at.s, &at.d);
         let [attack, hold] = ["attack with Beza, the Bounding Spring", "done"]
             .map(|name| candidates.iter().position(|label| label == name).unwrap());
-        let mut family = DEEP_SEARCHER;
-        family.options.prior = true;
+        let family = "pimc72/hidden/rollout/tuned/anchor+guard+prior"
+            .parse()
+            .unwrap();
         let settings = Settings {
             family,
             work: 3_000_000,
