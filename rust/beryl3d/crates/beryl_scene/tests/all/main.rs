@@ -19,4 +19,5 @@ mod motion;
 mod play;
 mod table;
 mod tokens;
+mod verbs_count;
 mod verbs_strike;

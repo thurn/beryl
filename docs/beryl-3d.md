@@ -1295,6 +1295,13 @@ shows or removes one, and its ids are in `element::floats`.
   box stands there (from (0, 0), its top left, to (1, 1)), its `opacity` and an
   optional `tint` for its text. Setting a look lays nothing out and allocates
   nothing, so the client may move or fade a float on every frame.
+- **A float whose text changes during a script is laid out ahead.**
+  `Layer::prepare(id, key, element)` lays an element out in `Client::handle`
+  under a key the caller chooses, and `Layer::show_prepared(id, key)` swaps it
+  in during a frame with no layout and no allocation. The life totals, the
+  amount a total changed by and the mana pools are prepared this way, for every
+  value the scripts still to play will set (`hud::counts`), so a total changes
+  as its `count` step begins without the frame laying anything out.
 - **Floats are drawn whether a prompt is open or not**, after the screen and in
   order of their ids. The top element of a float is drawn on a panel, as a
   screen's top element is. A float with a press takes presses at any time.

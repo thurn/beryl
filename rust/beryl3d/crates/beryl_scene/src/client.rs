@@ -14,6 +14,7 @@ use crate::command::{Reply, Request, SessionCommand};
 use crate::element::Press;
 use crate::faces::{FaceList, Faces};
 use crate::frame::{self, ElementId, Frame, FrameBuilder, Wake};
+use crate::hud::counts::CountFloats;
 use crate::input::{AssetReady, Button, GlyphKey, Input, Pointer, PointerKind, PointerPhase};
 use crate::layout::Layer;
 use crate::play::Show;
@@ -54,6 +55,8 @@ pub struct Client {
     show: Show,
     /// The flat layer: the screen, the sheet over it and the floats.
     layer: Layer,
+    /// The floats that show the players' life totals and pools.
+    counts: CountFloats,
     /// The screen the flat layer shows. A recording or a game is fed to the client on the game
     /// screen, which it starts on.
     screen: Screen,
@@ -100,6 +103,7 @@ impl Client {
             window: Window::default(),
             show: Show::new(Table::default()),
             layer: Layer::new(),
+            counts: CountFloats::default(),
             screen: Screen::Game,
             sheet: None,
             settings: Settings::default(),
@@ -147,6 +151,13 @@ impl Client {
                     })
                     .unwrap_or_default();
                 self.show.push(update, timings);
+                // Every life total and pool the scripts to come will show is laid out now, so
+                // that a frame lays out none of them.
+                (self.counts).prepare(
+                    &mut self.layer,
+                    self.show.counts(),
+                    self.show.coming_counts(),
+                );
                 self.show_screen();
             }
             Input::Reply(Reply::Click(Ok(reply))) => {
@@ -209,6 +220,16 @@ impl Client {
         let mut builder = FrameBuilder::new(&mut self.frame);
         self.show.frame(now, &mut builder);
         self.wake = self.show.wake(now);
+        // A total that changes shows the element `prepare` laid out for it.
+        self.counts.write(
+            &mut self.layer,
+            self.show.counts(),
+            self.show.effects(),
+            now,
+            self.show.table().layout(),
+            self.window.size,
+            self.screen == Screen::Game && self.sheet.is_none(),
+        );
         let (layout_nodes, text_runs) = self.layer.take_work();
         builder.layout_work(layout_nodes, text_runs);
         builder.placement_work(self.show.table().take_placed());

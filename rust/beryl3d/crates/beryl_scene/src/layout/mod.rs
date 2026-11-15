@@ -16,7 +16,7 @@ use taffy::{
 
 pub use float::FloatLook;
 
-use float::Float;
+use float::{Float, Prepared};
 
 use crate::element::{Align, Direction, Element, Justify, Press, Style};
 use crate::frame::{ElementId, Role};
@@ -66,6 +66,8 @@ pub struct Layer {
     screen: Option<Node>,
     /// The floats, in order of their ids, which is the order they are drawn in.
     floats: Vec<Float>,
+    /// Elements laid out ahead for floats, which a frame shows without laying anything out.
+    prepared: Vec<Prepared>,
     next_id: u32,
     text: Text,
     window: Window,
@@ -97,6 +99,7 @@ impl Layer {
             root,
             screen: None,
             floats: Vec::new(),
+            prepared: Vec::new(),
             next_id: FIRST_ID,
             text: Text::new(),
             window,
@@ -314,7 +317,14 @@ impl Layer {
             }
             self.floats = floats;
         }
-        self.text_runs += self.text.end_pass();
+        // Only a pass over the screen drops the texts it did not use. A pass over floats alone
+        // uses only their texts, and would drop the screen's, which taffy measures again when
+        // any part of the screen changes, so they would all be shaped again.
+        self.text_runs += if root_dirty {
+            self.text.end_pass()
+        } else {
+            self.text.take_runs()
+        };
         self.want_glyphs();
     }
 

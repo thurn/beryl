@@ -166,7 +166,9 @@ fn a_crowded_battlefield_keeps_its_cards_in_the_table_with_their_strips_uncovere
     }
     let frame = frame_of(&mut client(), &builder);
     assert_eq!(
-        frame.resolved.len(),
+        (frame.resolved.iter())
+            .filter(|element| element.role == Role::Card)
+            .count(),
         drawn,
         "only the cards in view are drawn"
     );

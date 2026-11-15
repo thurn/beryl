@@ -19,7 +19,9 @@
 //! - When asked to (`record`), the show keeps a record of every script it is given, for the
 //!   interface checks, and a test can plant a fault in a script before it plays (`plant`).
 
+mod affect;
 mod compile;
+mod counts;
 pub mod record;
 pub(crate) mod step;
 
@@ -36,6 +38,7 @@ use crate::data::space::catch_up;
 use crate::effects::{self, EffectRun};
 use crate::faces::Faces;
 use crate::frame::{FrameBuilder, Wake};
+use crate::hud::counts::Counts;
 use crate::light::{self, Lit, StreakRun};
 use crate::motion::Track;
 use crate::pointer::Pointer;
@@ -105,6 +108,7 @@ struct Playing {
     /// How many of its `compiled.spans` and `compiled.streaks` have reached the table's `Lit`.
     spans_given: usize,
     streaks_given: usize,
+    counts_given: usize,
 }
 
 impl Playing {
@@ -126,9 +130,10 @@ impl Playing {
         }
     }
 
-    /// Gives `lit` each span change and streak of the script whose real time is at or before
-    /// `now`, in order, that it has not given yet.
-    fn light(&mut self, now: u64, lit: &mut Lit) {
+    /// Gives `lit` each span change and streak, and `counts` each count change, of the script
+    /// whose real time is at or before `now`, in order, that it has not given yet.
+    fn light(&mut self, now: u64, lit: &mut Lit, counts: &mut Counts) {
+        self.give_counts(now, counts);
         while let Some(change) = self.compiled.spans.get(self.spans_given) {
             let over = self.real_interval(change.over);
             if over.from > now {
@@ -148,49 +153,6 @@ impl Playing {
             lit.streak(StreakRun { over, ..*run });
             self.streaks_given += 1;
         }
-    }
-
-    /// Adds each of its effect runs to `effects`, in real time, as the script starts.
-    fn affect(&self, effects: &mut Vec<EffectRun>) {
-        for run in &self.compiled.effects {
-            let over = self.real_interval(Interval {
-                from: run.start,
-                to: run.start + run.duration,
-            });
-            begin(
-                effects,
-                EffectRun {
-                    start: over.from,
-                    duration: over.duration(),
-                    ..*run
-                },
-            );
-        }
-    }
-}
-
-/// Adds `run` to `effects`, the runs the show holds. As on the web stage
-/// (`Effects::begin` in ui/src/stage/effects.ts), a run of the same effect on the same thing
-/// gives way to it: one yet to begin is dropped, and one under way ends as `run` begins. When
-/// the list is full, `run` replaces the run that ends first, so that it allocates nothing.
-fn begin(effects: &mut Vec<EffectRun>, run: EffectRun) {
-    effects.retain_mut(|other| {
-        if other.effect != run.effect || other.on != run.on {
-            return true;
-        }
-        if other.start >= run.start {
-            return false;
-        }
-        other.duration = other.duration.min(run.start - other.start);
-        true
-    });
-    if effects.len() < LIGHTS {
-        effects.push(run);
-    } else if let Some(first) = effects
-        .iter_mut()
-        .min_by_key(|other| other.start + other.duration)
-    {
-        *first = run;
     }
 }
 
@@ -232,6 +194,8 @@ pub struct Show {
     effects: Vec<EffectRun>,
     /// What the pointer is doing on the table.
     pointer: Pointer,
+    /// The life totals and pools the table shows.
+    counts: Counts,
 }
 
 impl Show {
@@ -256,6 +220,7 @@ impl Show {
             lit: Lit::with_capacity(LIGHTS),
             effects: Vec::with_capacity(LIGHTS),
             pointer: Pointer::default(),
+            counts: Counts::default(),
         }
     }
 
@@ -567,7 +532,7 @@ impl Show {
                 ended = Some(real);
                 self.rested = real;
                 if let Some(playing) = &mut self.playing {
-                    playing.light(real, &mut self.lit);
+                    playing.light(real, &mut self.lit, &mut self.counts);
                 }
                 self.finish();
             }
@@ -598,6 +563,7 @@ impl Show {
                 rate,
                 spans_given: 0,
                 streaks_given: 0,
+                counts_given: 0,
             });
             if let Some(playing) = &self.playing {
                 playing.affect(&mut self.effects);
@@ -607,7 +573,7 @@ impl Show {
             }
         }
         if let Some(playing) = &mut self.playing {
-            playing.light(now, &mut self.lit);
+            playing.light(now, &mut self.lit, &mut self.counts);
         }
         self.lit.advance(now);
         // A run is under way from its start until, not at, its end, as on the web stage.
@@ -641,10 +607,14 @@ impl Show {
         builder.shake(effects::shake::offset(&self.effects, now));
     }
 
-    /// Ends the playing script: the table shows its view, at rest.
+    /// Ends the playing script: the table shows its view, at rest, with its life totals and
+    /// pools.
     fn finish(&mut self) {
         self.show_playing();
         self.playing = None;
+        if let Some(shown) = &self.shown {
+            self.counts.take_view(&shown.view);
+        }
     }
 
     /// The table shows the playing script's view at rest, if it does not already.

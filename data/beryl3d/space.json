@@ -11,6 +11,9 @@
       "lean": 15,
       "near": 2,
       "least": 0.3
+    },
+    "count": {
+      "drift": 24
     }
   },
   "pointer": {},

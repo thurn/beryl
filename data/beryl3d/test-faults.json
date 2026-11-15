@@ -723,11 +723,13 @@
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/opponent/1600x900": {
       "no-jumps": 114,
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/opponent/1920x1080": {
       "no-jumps": 114,
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/opponent/2560x1080": {
       "no-jumps": 114,

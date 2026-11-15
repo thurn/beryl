@@ -11,13 +11,14 @@
 
 use beryl_protocol::protocol::{PlayerView, StackItem};
 use beryl_protocol::script::{
-    Edge, Script, Step, StepTiming, Subject, Table as Played, Verb, mover_of, replay,
+    Act, Edge, Script, Step, StepTiming, Subject, Table as Played, Tally, Verb, mover_of, replay,
 };
 
 use super::record::{MoveKey, Plant, Planted, SegmentRecord, StepRecord};
 use super::step::{Motion, add, numbers_of};
 use crate::beat::{Laid, beat};
 use crate::effects::{Effect, EffectRun};
+use crate::hud::counts::CountChange;
 use crate::light::{MarkSpan, Span, SpanChange, StreakRun};
 use crate::motion::Track;
 use crate::notice::NoticeRun;
@@ -65,6 +66,9 @@ pub(crate) struct Compiled {
     /// The effects its steps begin (`StepTiming::effects`), ordered by when each begins on its
     /// clock, and as its steps wrote them where two begin together.
     pub effects: Vec<EffectRun>,
+    /// The life totals and pools its `count` steps set, ordered by when each is set on its
+    /// clock, and as its steps wrote them where two are set together.
+    pub counts: Vec<CountChange>,
 }
 
 impl Compiled {
@@ -151,6 +155,7 @@ pub(crate) fn compile<'a>(
         streaks: Vec::new(),
         notices: Vec::new(),
         effects: Vec::new(),
+        counts: Vec::new(),
     };
     let Some(script) = after.script.as_ref() else {
         let played = numbered(Played::of(after));
@@ -228,6 +233,8 @@ pub(crate) fn compile<'a>(
     compiled.streaks.sort_by_key(|run| run.over.from);
     compiled.notices = motion.written.notices;
     compiled.notices.sort_by_key(|run| run.over.from);
+    compiled.counts = motion.written.counts;
+    compiled.counts.sort_by_key(|change| change.at);
     (compiled, fallback.unwrap_or(motion.played))
 }
 
@@ -280,7 +287,8 @@ fn lay_out(
 
 /// Adds to `runs` the effects that `step`, the script's step `number`, begins, on the script's
 /// clock, as the web stage begins them (`Effects::begin` in ui/src/stage/effects.ts). Each is on
-/// what its `on` names, or else on the step's subject; with neither it is dropped. It begins
+/// what its `on` names, or else on what the step's act is about (`lit_by`); with neither it is
+/// dropped. It begins
 /// at the edge of the step its `when` names, `into` the step's length after that, and then
 /// `delay` later, and it lasts its `duration`, or the step's length where it has none. One that
 /// would last no time is dropped.
@@ -293,7 +301,7 @@ fn effects_of(
 ) {
     let span = laid.to - laid.from;
     for effect in &timing.effects {
-        let Some(on) = effect.on.or_else(|| mover_of(&step.act)) else {
+        let Some(on) = effect.on.or_else(|| lit_by(&step.act)) else {
             continue;
         };
         let Some(named) = Effect::from_name(&effect.name) else {
@@ -318,6 +326,22 @@ fn effects_of(
             curve: Curve::named(effect.curve),
             step: number,
         });
+    }
+}
+
+/// What the effects of `act` are on where they name nothing themselves, as the web stage's
+/// `litBy` (ui/src/stage/tracks.ts) has it: what a count's number is on, a player's life total
+/// or a card, and otherwise what the act moves. A count of a pool or of a player's counters
+/// lights nothing.
+fn lit_by(act: &Act) -> Option<Subject> {
+    match act {
+        Act::Count {
+            tally: Tally::Life { player, .. },
+        } => Some(Subject::Player { player: *player }),
+        Act::Count { .. } => act
+            .object()
+            .map(|object| Subject::Object { slot: object.slot }),
+        _ => mover_of(act),
     }
 }
 

@@ -215,13 +215,14 @@ fn the_prompt_bar_shows_its_title_and_buttons_in_the_dock() {
     assert!(frame.resolved[auto].interactive && frame.resolved[cancel].interactive);
     assert!(!frame.resolved[title].interactive);
     assert!(text_fits(frame, &context()).is_empty());
-    // A panel for the bar and one for each button, all in the flat layer's band.
+    // A panel for the bar, one for each button and one under each player's life total, all in
+    // the flat layer's band.
     let layer = &frame.draws[frame.layer as usize..];
     let panels = layer
         .iter()
         .filter(|draw| draw.material == Material::Panel as u8)
         .count();
-    assert_eq!(panels, 3);
+    assert_eq!(panels, 5);
     assert!(frame.work.layout_nodes > 0 && frame.work.text_runs > 0);
 }
 
@@ -235,7 +236,7 @@ fn a_prompt_with_no_title_shows_only_its_buttons() {
         !frame
             .resolved
             .iter()
-            .any(|element| element.role == Role::Text),
+            .any(|element| element.role == Role::Text && element.parent == bar as u32),
         "no text for an empty title"
     );
     // The bar holds its padding, the two buttons and one gap between them, and nothing else.
@@ -459,14 +460,16 @@ fn a_prompt_opens_only_once_its_view_has_played_out() {
     view.script = Some(script);
     client.handle(Input::Update(update));
 
-    // While the card flies, the bar is neither drawn nor pressed.
+    // While the card flies, the bar is neither drawn nor pressed. The life totals, which are
+    // floats, are drawn.
     let frame = client.frame(MS);
     assert!(
         !frame
             .resolved
             .iter()
-            .any(|element| element.place == Place::Layer),
-        "no flat-layer element while the draw plays"
+            .any(|element| element.place == Place::Layer
+                && !matches!(element.role, Role::Player | Role::Text)),
+        "no prompt bar while the draw plays"
     );
     let open = {
         let mut later = self::client();

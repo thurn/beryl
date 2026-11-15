@@ -41,7 +41,16 @@ fn every_verb_has_a_play_function_and_says_whether_it_is_built() {
             verbs::built(*verb)
         })
         .collect();
-    assert_eq!(built, [Verb::Fly, Verb::Appear, Verb::Strike, Verb::Set]);
+    assert_eq!(
+        built,
+        [
+            Verb::Fly,
+            Verb::Appear,
+            Verb::Strike,
+            Verb::Count,
+            Verb::Set
+        ]
+    );
 }
 
 #[test]

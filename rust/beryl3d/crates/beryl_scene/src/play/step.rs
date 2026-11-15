@@ -8,6 +8,7 @@ use beryl_protocol::script::{Act, Room, Step, StepTiming, Subject, Table as Play
 use super::compile::{nanoseconds, subject_of};
 use super::record::{Cause, SegmentRecord};
 use crate::beat::Laid;
+use crate::hud::counts::CountChange;
 use crate::light::{SpanChange, StreakRun};
 use crate::motion::Track;
 use crate::notice::NoticeRun;
@@ -16,6 +17,7 @@ use crate::table::{Group, NameIds, Placement, Rest, Table, Zones};
 use crate::verbs::{self, Interval};
 
 mod abilities;
+mod counts;
 mod places;
 
 pub use places::Places;
@@ -62,6 +64,7 @@ pub(crate) struct Written {
     pub spans: Vec<SpanChange>,
     pub streaks: Vec<StreakRun>,
     pub notices: Vec<NoticeRun>,
+    pub counts: Vec<CountChange>,
 }
 
 /// What a verb writes for one step.

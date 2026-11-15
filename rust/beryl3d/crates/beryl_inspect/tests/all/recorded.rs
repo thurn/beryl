@@ -232,10 +232,14 @@ fn pay_default_shows_each_prompt_in_the_prompt_bar() {
         page.seek(&moment.parse().expect("a moment"))
             .expect("the recording has the moment");
         let tree = page.tree();
-        let bar: Vec<&str> = tree
+        let indent = |line: &str| line.len() - line.trim_start().len();
+        let mut lines_from_bar = tree
             .lines()
-            .skip_while(|line| !line.trim().starts_with("region \"prompt\""))
-            .skip(1)
+            .skip_while(|line| !line.trim().starts_with("region \"prompt\""));
+        let depth = lines_from_bar.next().map_or(0, indent);
+        // The lines indented under the bar's: the floats after it stand beside it.
+        let bar: Vec<&str> = lines_from_bar
+            .take_while(|line| indent(line) > depth)
             .map(str::trim)
             .collect();
         assert_eq!(bar.len(), lines.len(), "{moment}: the bar holds\n{tree}");

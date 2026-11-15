@@ -1,6 +1,9 @@
-//! `Client::frame` allocates nothing once a prompt bar has been laid out, and neither does
-//! moving a float of the flat layer and writing it (docs/beryl-3d.md, "The frame": no
-//! allocation). This binary counts every heap allocation, so it holds one test.
+//! `Client::frame` allocates nothing once a prompt bar has been laid out, nor while a life total
+//! falls and the amount it fell by sinks away, and neither does moving a float of the flat
+//! layer and writing it (docs/beryl-3d.md, "The frame": no allocation). This binary counts
+//! every heap allocation, so it holds one test.
+
+mod common;
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -8,7 +11,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::prompt::Purpose;
 use beryl_protocol::prompt::{ButtonId, PartName, PromptButton, PromptView, ShapeBody, Words};
-use beryl_protocol::protocol::{DecisionId, DecisionView, Kind, SessionId, Status};
+use beryl_protocol::protocol::{DecisionId, DecisionView, Kind, SessionId, Side, Status};
+use beryl_protocol::script::{Act, Tally};
 use beryl_scene::element::{floats, text};
 use beryl_scene::frame::{Frame, FrameBuilder};
 use beryl_scene::input::{AssetReady, GlyphCell, Input, Insets, Size};
@@ -130,6 +134,26 @@ fn a_frame_with_a_prompt_bar_allocates_nothing() {
     let after = ALLOCATIONS.load(Ordering::Relaxed);
     assert!(records > 3, "the frame holds the bar's records");
     assert_eq!(after - before, 0, "allocations during Client::frame");
+
+    // The frames of a step that takes the viewer's life from 20 to 17: the one that begins it,
+    // which shows the new total and the loss, and those that sink and fade the loss.
+    let (mut client, steps) = common::counting(vec![Act::Count {
+        tally: Tally::Life {
+            player: Side::You,
+            life: 17,
+        },
+    }]);
+    let (from, to) = steps[0];
+    for now in [from, from + (to - from) / 2, to - 1, to] {
+        let before = ALLOCATIONS.load(Ordering::Relaxed);
+        client.frame(now);
+        let after = ALLOCATIONS.load(Ordering::Relaxed);
+        assert_eq!(
+            after - before,
+            0,
+            "allocations in the frame at {now} during a loss"
+        );
+    }
 
     // A float moved and faded by a new look, then written into a frame.
     let mut layer = Layer::new();

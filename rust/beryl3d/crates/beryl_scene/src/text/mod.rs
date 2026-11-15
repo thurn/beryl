@@ -178,6 +178,11 @@ impl Text {
         std::mem::take(&mut self.runs)
     }
 
+    /// Returns how many texts were shaped since the last call, and drops none.
+    pub fn take_runs(&mut self) -> u32 {
+        std::mem::take(&mut self.runs)
+    }
+
     fn shape(&mut self, text: &str, style: TypeStyle) -> Layout<()> {
         self.runs += 1;
         let family = self.families[style.font as usize].as_str();
