@@ -2,8 +2,9 @@
 //! a library, onto the battlefield, and whose zone that is (CR 400.3).
 
 use super::Ctx;
+use super::filters::{Kind, zone_name};
 use super::words::ordinal;
-use crate::effect::{LibraryPosition, Objects, Players, PutOnto};
+use crate::effect::{Effect, LibraryPosition, Objects, Players, PutOnto};
 
 impl Ctx {
     /// "Put [objects] into their owners' libraries [position]" (CR 400.3).
@@ -49,6 +50,54 @@ impl Ctx {
                 clauses
             }
         }
+    }
+
+    /// "Each player may put an artifact card from their hand onto the battlefield": each
+    /// player's hidden pick of a card of their zone (CR 101.4a), and then the cards picked put
+    /// onto the battlefield under their owners' control, said as one instruction. `None` for
+    /// any other pair.
+    pub(super) fn hidden_put(&mut self, effect: &Effect, next: &Effect) -> Option<String> {
+        let (
+            &Effect::ForEachPlayer {
+                players,
+                effect:
+                    &Effect::Choose {
+                        player,
+                        among:
+                            Objects::InZoneOf {
+                                zone,
+                                players: whose,
+                                filter,
+                            },
+                        hidden: true,
+                        ..
+                    },
+            },
+            &Effect::PutOntoBattlefield(&PutOnto {
+                objects: Objects::Those,
+                under: None,
+                tapped,
+                linked: false,
+            }),
+        ) = (effect, next)
+        else {
+            return None;
+        };
+        let saved = self.group.replace(players);
+        self.may = true;
+        let tapped = if tapped { " tapped" } else { "" };
+        let clause = self.clause(player, ("put", "puts"), |c| {
+            let owner = c.possessive(*whose);
+            let noun = c
+                .noun(filter, Kind::Card(None))
+                .indefinite(Kind::Card(None));
+            format!(
+                "{noun} from {owner} {} onto the battlefield{tapped}",
+                zone_name(zone)
+            )
+        });
+        self.group = saved;
+        Some(clause)
     }
 
     /// "Return enchanted creature card to the battlefield under your control", for a

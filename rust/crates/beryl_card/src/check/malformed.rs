@@ -61,7 +61,9 @@ pub enum Malformed {
     /// [`Objects::TriggeredOn`] in an ability that is not triggered: no event was about anything.
     TriggeredOn,
     /// [`Effect::Choose`] with a prompt that is not a pick of one object, which is the one
-    /// choice the interpreter asks.
+    /// choice the interpreter asks; or a hidden pick that is not optional, or not among the
+    /// cards of a hand or library each player has ([`Objects::InZoneOf`]), the one kind of
+    /// candidates whose filter determinization deals a hidden pick's card from.
     Chosen,
     /// [`Objects::InZoneOf`] a zone the players share: each has a library, a hand and a graveyard
     /// of their own, and no other ([CR 400.1](https://yawgatog.com/resources/magic-rules/#R4001)).

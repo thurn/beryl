@@ -204,6 +204,9 @@ def test_what_resolving_a_card_does_picks_the_questions_xmage_asks() -> None:
 def test_choices_among_cards_go_to_the_queue_their_instruction_says() -> None:
     choose = gadget(ability(0, "Triggered", does("Choose", optional=True)))
     assert choose.may_choose("Gadget") == (False, "setChoice")
+    assert not choose.hidden_pick("Gadget")
+    hidden = gadget(ability(0, "Spell", does("Choose", optional=True, hidden=True)))
+    assert hidden.hidden_pick("Gadget")
     reveal = gadget(ability(0, "Triggered", does("Dig", count=4, take="MayReveal")))
     assert reveal.may_choose("Gadget") == (True, "addTarget")
     assert reveal.takes("Gadget") is None

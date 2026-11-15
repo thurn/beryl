@@ -188,6 +188,9 @@ pub struct Instruction {
     /// A choice's "you may".
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub optional: bool,
+    /// A choice made without revealing it (CR 101.4a), which each player is asked.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub hidden: bool,
     /// A dig's cards taken into the hand: a number, or `MayReveal` for "you may reveal one".
     #[serde(skip_serializing_if = "Option::is_none")]
     pub take: Option<Value>,
@@ -407,7 +410,12 @@ fn leaf(effect: &Effect, shape: &Shape) -> Instruction {
         ..instruction(&variant(effect), shape)
     };
     match *effect {
-        Effect::Choose { optional, .. } => out.optional = optional,
+        Effect::Choose {
+            optional, hidden, ..
+        } => {
+            out.optional = optional;
+            out.hidden = hidden;
+        }
         Effect::Dig { take, rest, .. } => {
             out.take = Some(match take {
                 Taken::Put(n) => Value::from(n),

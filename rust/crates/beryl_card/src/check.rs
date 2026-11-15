@@ -485,6 +485,22 @@ impl Scope<'_> {
             {
                 Err(Malformed::Chosen)
             }
+            Effect::Choose {
+                hidden: true,
+                optional,
+                among,
+                ..
+            } if !*optional
+                || !matches!(
+                    among,
+                    Objects::InZoneOf {
+                        zone: Zone::Hand | Zone::Library,
+                        ..
+                    }
+                ) =>
+            {
+                Err(Malformed::Chosen)
+            }
             Effect::PermitCast {
                 duration: Duration::UntilYourNextTurn,
                 ..

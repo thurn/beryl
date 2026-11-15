@@ -10,7 +10,7 @@ use crate::state::{
     Derived, Object, Pending, PendingTrigger, Player, StackEntry, State, Turn, Zone, ZoneKey,
 };
 use crate::table::GameTable;
-use beryl_card::{FaceIx, Words};
+use beryl_card::{Ability, Behavior, FaceIx, Objects, Words};
 
 /// The state as one player sees it. Slots are public handles; what is hidden is which card
 /// sits behind a slot the viewer has not seen. Agents, rollout policies and the UI read the
@@ -204,6 +204,16 @@ impl<'a, L: Layout> Observation<'a, L> {
 
     /// The root with each player's cards the viewer does not know, `shown` ones aside, dealt
     /// at random from the rest of their decklist.
+    ///
+    /// A card a player picked without revealing it, earlier in the paused resolution
+    /// ([`crate::pending::Resolving`], "Hidden picks"), is dealt one the pick's filter
+    /// accepts: the viewer knows the slot was picked, and so that it held such a card
+    /// ([CR 101.4a]): "each player must clearly indicate which face-down card they are
+    /// choosing." Where the deal put another card there, it trades with the first other slot
+    /// of that player's unknown cards, in slot order, whose card passes; the deal's order is
+    /// random, so which card that is is too.
+    ///
+    /// [CR 101.4a]: https://yawgatog.com/resources/magic-rules/#R1014a
     fn deal(
         &self,
         t: &GameTable,
@@ -211,6 +221,7 @@ impl<'a, L: Layout> Observation<'a, L> {
         shown: impl Fn(L::Slot) -> bool,
     ) -> State<L> {
         let mut s = self.root.clone();
+        let picks = self.unseen_hidden_picks(t);
         for player in Seat::BOTH {
             let mut remainder: L::Deck<L::Card> = Default::default();
             for card in t.deck(player) {
@@ -236,8 +247,89 @@ impl<'a, L: Layout> Observation<'a, L> {
             for (&slot, &card) in unknown.iter().zip(remainder.iter()) {
                 s.object_mut(slot).card = card;
             }
+            if let Some(picks) = &picks {
+                picks.deal(&mut s, t, unknown.as_slice());
+            }
         }
         s.reseed(rng.next_u64());
         s
+    }
+
+    /// The hidden picks of the paused resolution whose cards the viewer does not know, and
+    /// the filter each passed ([`HiddenPicks`]); none where there are none.
+    fn unseen_hidden_picks(&self, t: &GameTable) -> Option<HiddenPicks<L>> {
+        let Pending::Resolving(r) = self.root.pending() else {
+            return None;
+        };
+        let mut slots = Bitboard::EMPTY;
+        for slot in r.hidden_picks() {
+            if !self.root.knows(self.viewer, slot) {
+                slots.insert(slot);
+            }
+        }
+        if slots.is_empty() {
+            return None;
+        }
+        // A hidden pick is among the cards of a hand or library each player has, which
+        // pass a filter read for the controller of what is resolving (`Malformed::Chosen`).
+        let entry = self.root.stack().last()?;
+        let ability = entry.ability_in(t).map(Ability::body);
+        let Some(Behavior::Data(effect)) = ability else {
+            debug_assert!(false, "a hidden pick recorded by a Rust body");
+            return None;
+        };
+        let Some(Objects::InZoneOf { filter, .. }) = effect.hidden_pick() else {
+            debug_assert!(false, "a hidden pick recorded by an ability that has none");
+            return None;
+        };
+        Some(HiddenPicks {
+            slots,
+            filter,
+            you: entry.controller(),
+            words: self.root.entry_words(entry),
+        })
+    }
+}
+
+/// The slots hidden picks picked that a viewer does not know, and the filter each card
+/// picked passed, read for `you` through `words`.
+struct HiddenPicks<L: Layout> {
+    slots: Bitboard<L::Slot>,
+    filter: Filter,
+    you: Seat,
+    words: Words,
+}
+
+impl<L: Layout> HiddenPicks<L> {
+    /// Gives each picked slot among `unknown`, the slots of one player dealt at random in
+    /// `s`, a card the filter accepts, trading with another of `unknown` that is not picked
+    /// ([`Observation::deal`]).
+    fn deal(&self, s: &mut State<L>, t: &GameTable, unknown: &[L::Slot]) {
+        for &slot in unknown.iter().filter(|&&slot| self.slots.contains(slot)) {
+            if self.passes(s, t, slot) {
+                continue;
+            }
+            let dealt = s.object(slot).card;
+            let traded = unknown.iter().any(|&other| {
+                if self.slots.contains(other) {
+                    return false;
+                }
+                let card = s.object(other).card;
+                s.object_mut(slot).card = card;
+                let passes = self.passes(s, t, slot);
+                s.object_mut(slot).card = dealt;
+                if passes {
+                    s.object_mut(slot).card = card;
+                    s.object_mut(other).card = dealt;
+                }
+                passes
+            });
+            // The card truly picked is among those dealt, so one passes.
+            debug_assert!(traded, "no card the hidden pick's filter accepts");
+        }
+    }
+
+    fn passes(&self, s: &State<L>, t: &GameTable, slot: L::Slot) -> bool {
+        self.filter.matches(s, t, slot, self.you, &self.words)
     }
 }

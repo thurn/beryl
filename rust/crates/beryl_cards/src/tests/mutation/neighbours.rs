@@ -423,17 +423,35 @@ fn local(effect: &'static Effect) -> Neighbours<Effect> {
             among,
             prompt,
             optional,
+            hidden,
         } => {
-            let name = if optional { "required" } else { "optional" };
-            add(
-                name.to_owned(),
-                Effect::Choose {
-                    player,
-                    among,
-                    prompt,
-                    optional: !optional,
-                },
-            );
+            // A hidden pick is optional (`Malformed::Chosen`), so it is not made required.
+            if !hidden {
+                let name = if optional { "required" } else { "optional" };
+                add(
+                    name.to_owned(),
+                    Effect::Choose {
+                        player,
+                        among,
+                        prompt,
+                        optional: !optional,
+                        hidden,
+                    },
+                );
+            }
+            if optional {
+                let name = if hidden { "revealed" } else { "hidden" };
+                add(
+                    name.to_owned(),
+                    Effect::Choose {
+                        player,
+                        among,
+                        prompt,
+                        optional,
+                        hidden: !hidden,
+                    },
+                );
+            }
             for (name, among) in objects(among) {
                 add(
                     name,
@@ -442,6 +460,7 @@ fn local(effect: &'static Effect) -> Neighbours<Effect> {
                         among,
                         prompt,
                         optional,
+                        hidden,
                     },
                 );
             }

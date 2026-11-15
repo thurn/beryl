@@ -134,11 +134,15 @@ pub enum Effect {
     /// ([CR 609.3](https://yawgatog.com/resources/magic-rules/#R6093)).
     ///
     /// The `prompt` is what the choice is for ([`Prompt`]): a pick of one object.
+    ///
+    /// With `hidden`, the pick is not revealed to the other players as it is made
+    /// ([`Effect::hidden_pick`] says how it is asked).
     Choose {
         player: Players,
         among: Objects,
         prompt: Prompt,
         optional: bool,
+        hidden: bool,
     },
     /// "[Player] looks at [cards]", cards of a hidden zone
     /// ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)): "Hidden zones are

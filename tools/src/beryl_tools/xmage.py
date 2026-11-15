@@ -207,6 +207,14 @@ class Exporter:
         kind = answer["kind"]
         scrying = self.scry is not None and kind == "ChooseObject"
         asked = kind in FORCED_ASKED or answer.get("purpose") in FORCED_COSTS
+        # Each player's hidden pick, which XMage asks of every player as Beryl does. A forced
+        # answer belongs to the position after it, where the spell may have resolved and what
+        # it put onto the battlefield triggered: then it answers the spell the last answer did.
+        top = cast(str, p.stack[-1]["name"]) if p.stack else None
+        hiding = [c for c in (top, self.last_answer[0]) if self.cards.hidden_pick(c)]
+        if kind == "ChooseUpTo" and hiding:
+            self.answer(answer, p, hiding[0])
+            return
         if asked or self.may_choose is not None or scrying:
             self.answer(answer, p)
             return
@@ -526,7 +534,9 @@ class Exporter:
                 f"TestPlayer.NO_TARGET, {java_string(spell)});"
             )
 
-    def answer(self, action: Json, p: Position) -> None:
+    def answer(self, action: Json, p: Position, of: str | None = None) -> None:
+        """Queues one answer's commands. `of` names what it answers where the stack at `p` no
+        longer holds it, as for a forced answer of a spell that has since resolved."""
         if id(action) in self.taken:
             return
         who = self.player(action["player"])
@@ -536,7 +546,7 @@ class Exporter:
         card = cast("str | None", pick.get("card"))
         # A forced answer says its own; a scripted one answers the decision open at `p`.
         bending = action.get("purpose", p.purpose) == "waterbend"
-        source = cast(str, p.stack[-1]["name"]) if p.stack else None
+        source = of or (cast(str, p.stack[-1]["name"]) if p.stack else None)
         if kind == "PaymentPlan" and self.payments.as_made:
             # The payment's taps, replayed with the mana each made, chose the plan already.
             return
@@ -567,6 +577,14 @@ class Exporter:
             else:
                 self.emit(f"setChoice({who}, true);")
                 self.emit(f"setChoice({who}, {java_string(p.object_name(card))});")
+            return
+        if kind == "ChooseUpTo" and self.cards.hidden_pick(source):
+            # XMage asks each player whether to put a card, then which, from the hand.
+            if card is None:
+                self.emit(f"setChoice({who}, false);")
+            else:
+                self.emit(f"setChoice({who}, true);")
+                self.emit(f"addTarget({who}, {java_string(p.object_name(card))});")
             return
         resolving = source or ""
         may_choose = self.cards.may_choose(resolving)

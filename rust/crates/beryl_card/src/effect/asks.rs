@@ -1,6 +1,6 @@
 //! [`Effect::asks`]: whether carrying out an effect may ask a player to choose.
 
-use super::{Effect, LibraryPosition};
+use super::{Effect, LibraryPosition, Objects};
 use crate::continuous::Modification;
 
 impl Effect {
@@ -103,5 +103,32 @@ impl Effect {
             | Effect::ControlPlayer(_)
             | Effect::ExtraTurn(_) => false,
         }
+    }
+
+    /// What the hidden pick of this effect, if it has one, picks among: an
+    /// [`Effect::Choose`] with `hidden`, as each player's pick of a card from their hand in
+    /// turn order before the cards are put onto the battlefield together ([CR 101.4a]): "If an
+    /// effect has each player choose a card in a hidden zone, such as their hand or library,
+    /// those cards may remain face down as they're chosen. However, each player must clearly
+    /// indicate which face-down card they are choosing." A hidden pick is optional, and is
+    /// asked whether or not any candidate passes, so that the other players do not learn from
+    /// being asked or not. Its candidates are the cards of a hidden zone
+    /// ([`crate::Malformed::Chosen`]), and an effect has at most one.
+    ///
+    /// [CR 101.4a]: https://yawgatog.com/resources/magic-rules/#R1014a
+    pub fn hidden_pick(&self) -> Option<Objects> {
+        let found = core::cell::Cell::new(None);
+        self.any(&|effect| match *effect {
+            Effect::Choose {
+                among,
+                hidden: true,
+                ..
+            } => {
+                found.set(Some(among));
+                true
+            }
+            _ => false,
+        });
+        found.get()
     }
 }

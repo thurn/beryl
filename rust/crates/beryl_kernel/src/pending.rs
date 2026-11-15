@@ -7,7 +7,7 @@ use beryl_card::{ManaCost, SpecIx};
 use crate::bitboard::Bitboard;
 use crate::decision::Decision;
 use crate::fixed::Full;
-use crate::ids::Seat;
+use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small};
 use crate::object::ObjectRef;
 use crate::state::State;
@@ -134,7 +134,19 @@ impl<L: Layout> Casting<L> {
 /// ([`Pending::StepActions`]): the answers it has been given so far, and the question it
 /// stopped at. The committed state is still the state before the resolution or the actions
 /// began, except that it keeps known what the runs showed.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+///
+/// # Hidden picks
+///
+/// A pick a player makes without revealing it ([`beryl_card::Effect::Choose`] with `hidden`;
+/// [CR 101.4a]) is recorded as the slot picked ([`hidden_pick_answer`]), not as an index into
+/// its candidates: which of a hand's cards a filter accepts is hidden from the other players,
+/// so a state determinized for one of them may give the question other candidates, and an
+/// index would name another card. `hidden` marks the record's entries that hold such a slot,
+/// and determinization deals each slot picked a card the pick's filter accepts
+/// ([`crate::observation::Observation::determinize`]).
+///
+/// [CR 101.4a]: https://yawgatog.com/resources/magic-rules/#R1014a
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Resolving<L: Layout = Small> {
     pub record: L::Queue<L::Index, 32>,
     pub question: Decision<L>,
@@ -145,9 +157,69 @@ pub struct Resolving<L: Layout = Small> {
     /// [`State::resume_resolution`] gives it back, so nothing else decides what a player
     /// knows.
     pub(crate) knowledge: L::PerPlayer<Bitboard<L::Slot>>,
+    /// The record's entries, by position, that answer a hidden pick (bit `i` for entry `i`).
+    pub(crate) hidden: u32,
+    /// Whether the question is a hidden pick, whose answer [`State::record_answer`] marks as
+    /// one.
+    pub(crate) asks_hidden: bool,
 }
 
 impl Copy for Resolving<Small> {}
+
+/// Every field, but the hidden picks only where there are any: a resolution with none hashes
+/// as it did before hidden picks were recorded, so the states the benchmark corpora pin by
+/// their hashes still hash the same.
+impl<L: Layout> std::hash::Hash for Resolving<L> {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        let Resolving {
+            record,
+            question,
+            knowledge,
+            hidden,
+            asks_hidden,
+        } = self;
+        (record, question, knowledge).hash(h);
+        if *hidden != 0 || *asks_hidden {
+            (hidden, asks_hidden).hash(h);
+        }
+    }
+}
+
+impl<L: Layout> Resolving<L> {
+    /// Whether the question is a hidden pick, answered with the slot picked.
+    #[inline]
+    pub fn asks_hidden(&self) -> bool {
+        self.asks_hidden
+    }
+
+    /// The slots the hidden picks recorded so far picked, in the order picked; a pick of
+    /// nothing names none.
+    pub fn hidden_picks(&self) -> impl Iterator<Item = L::Slot> + '_ {
+        self.record
+            .as_slice()
+            .iter()
+            .enumerate()
+            .filter(|&(i, _)| self.hidden & (1 << i) != 0)
+            .filter_map(|(_, &answer)| hidden_pick_of::<L>(answer))
+    }
+}
+
+/// The record's entry for a hidden pick of `slot`, or of nothing ([`Resolving`], "Hidden
+/// picks"): 0 for nothing, else one more than the slot's index.
+#[inline]
+pub fn hidden_pick_answer<L: Layout>(slot: Option<L::Slot>) -> L::Index {
+    let n = slot.map_or(0, |slot| slot.index() + 1);
+    L::Index::try_from(n)
+        .ok()
+        .expect("a slot's index and one more fit an index")
+}
+
+/// The slot a hidden pick's record entry names ([`hidden_pick_answer`]).
+#[inline]
+pub fn hidden_pick_of<L: Layout>(answer: L::Index) -> Option<L::Slot> {
+    let n: usize = answer.into();
+    n.checked_sub(1).map(L::Slot::from_index)
+}
 
 /// The open question when it belongs to a machine step rather than to priority. Flat, like
 /// the rest of the state.
@@ -258,16 +330,27 @@ impl<L: Layout> State<L> {
     /// Pauses the resolution of the stack's top at `question`, with the answers its body has
     /// been given so far (architecture §7.3). What each player knew as the resolution began
     /// is kept from its first pause: every run of the body starts from that.
+    ///
+    /// `asks_hidden` says the question is a hidden pick ([`Resolving`], "Hidden picks"). The
+    /// record's hidden picks are kept from the pause before, together with the one its
+    /// answer added.
     #[inline]
-    pub fn pause_resolution(&mut self, record: L::Queue<L::Index, 32>, question: Decision<L>) {
-        let knowledge = match &self.pending {
-            Pending::Resolving(r) => r.knowledge.clone(),
-            _ => self.knowledge.clone(),
+    pub fn pause_resolution(
+        &mut self,
+        record: L::Queue<L::Index, 32>,
+        question: Decision<L>,
+        asks_hidden: bool,
+    ) {
+        let (knowledge, hidden) = match &self.pending {
+            Pending::Resolving(r) => (r.knowledge.clone(), r.hidden),
+            _ => (self.knowledge.clone(), 0),
         };
         self.pending = Pending::Resolving(Resolving {
             record,
             question,
             knowledge,
+            hidden,
+            asks_hidden,
         });
     }
 
@@ -285,6 +368,8 @@ impl<L: Layout> State<L> {
             record,
             question,
             knowledge,
+            hidden: 0,
+            asks_hidden: false,
         });
     }
 
@@ -308,7 +393,8 @@ impl<L: Layout> State<L> {
     }
 
     /// Records the answer to a paused resolution's or step's question, for it to run again
-    /// with.
+    /// with: for a hidden pick, the [`hidden_pick_answer`] of the slot picked, which the
+    /// record then marks as one.
     ///
     /// # Panics
     ///
@@ -318,6 +404,10 @@ impl<L: Layout> State<L> {
         let (Pending::Resolving(r) | Pending::StepActions(r)) = &mut self.pending else {
             unreachable!("a paused resolution or step");
         };
+        if r.asks_hidden {
+            // The record holds at most 32 answers, one bit each.
+            r.hidden |= 1 << r.record.len();
+        }
         r.record.push(answer)
     }
 }
@@ -331,7 +421,7 @@ mod tests {
     use crate::decision::{Candidates, DecisionKind};
     use crate::event::Sink;
     use crate::fixed::Fixed;
-    use crate::ids::{Slot, SlotId};
+    use crate::ids::Slot;
     use crate::profile::Profile;
 
     /// A paused resolution keeps what each player knew at its first pause through every
@@ -353,9 +443,9 @@ mod tests {
         let began = s.knowledge();
 
         // Two runs pause, each after a card was shown that the one before had not shown.
-        s.pause_resolution(Fixed::default(), question);
+        s.pause_resolution(Fixed::default(), question, false);
         s.look(&mut Sink::default(), Seat::P0, Bitboard::single(first));
-        s.pause_resolution(Fixed::default(), question);
+        s.pause_resolution(Fixed::default(), question, false);
         s.look(&mut Sink::default(), Seat::P1, Bitboard::single(second));
         assert!(s.knows(Seat::P0, first) && s.knows(Seat::P1, second));
 

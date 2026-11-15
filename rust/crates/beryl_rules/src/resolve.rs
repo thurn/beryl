@@ -24,7 +24,8 @@ use crate::observation::Observation;
 use crate::resolution::Resolution;
 use crate::scratch::Scratch;
 use crate::state::{
-    CounterKind, Pending, PendingTrigger, StackEntry, StackItem, State, TargetPlaces, Zone, placed,
+    CounterKind, Pending, PendingTrigger, StackEntry, StackItem, State, TargetPlaces, Zone,
+    hidden_pick_answer, placed,
 };
 use crate::table::GameTable;
 use crate::{interpret, replace};
@@ -135,9 +136,10 @@ fn resolve_on_copy<L: Layout>(
             return Ok(());
         };
         sink.truncate(mark);
+        let hidden = sink.asking.take_hidden();
         if inline {
             match answer_inline(s, spare, a, &question) {
-                Some(c) => record.push(c)?,
+                Some(c) => record.push(recorded(&question, c, hidden))?,
                 None => return Ok(()),
             }
             continue;
@@ -146,7 +148,7 @@ fn resolve_on_copy<L: Layout>(
         // While the question is open no one holds priority; the finished resolution gives
         // it to the active player (CR 117.3b).
         s.reset_passes();
-        s.pause_resolution(record, question);
+        s.pause_resolution(record, question, hidden);
         return Ok(());
     }
 }
@@ -177,6 +179,16 @@ pub(crate) fn answer_inline<L: Layout>(
     };
     debug_assert!(c.is_some(), "an inline answer source declined to answer");
     Some(index::<L>(usize::from(c.unwrap_or(Choice(0)).0)))
+}
+
+/// The record's entry for the answer at index `c` to `question`: the index itself, or for a
+/// hidden pick the slot it picked ([`crate::state::Resolving`], "Hidden picks").
+pub(crate) fn recorded<L: Layout>(question: &Decision<L>, c: L::Index, hidden: bool) -> L::Index {
+    if !hidden {
+        return c;
+    }
+    let picked = crate::resolution::picked(question, Choice(c.into()));
+    hidden_pick_answer::<L>(picked)
 }
 
 /// `a`'s answer to `question`, asked of the player controlling its player this turn.

@@ -399,6 +399,17 @@ class Cards:
                 return (True, "addTarget")
         return None
 
+    def hidden_pick(self, card: str | None) -> bool:
+        """Whether resolving `card` has each player pick a card of their hand without revealing
+        it (CR 101.4a), which Beryl asks of every player as one pick of a card or none, and XMage
+        as a yes or no ("put a card onto the battlefield?") and then the card, as a target.
+        """
+        if card is None:
+            return False
+        return any(
+            i["kind"] == "Choose" and i.get("hidden") for i in self.instructions(card)
+        )
+
     def enters_as_copy(self, card: str) -> bool:
         """Whether `card` may enter as a copy of a permanent its controller chooses, which
         Beryl asks as one pick of the permanent or none, and XMage as a yes or no ("use the

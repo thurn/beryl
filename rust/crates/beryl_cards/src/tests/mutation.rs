@@ -60,6 +60,13 @@ const EQUIVALENT: &[(&str, &str, &str, &str)] = &[
          no `Amount::Carried`, so the number the delay carries is never read",
     ),
     (
+        "Show and Tell",
+        "ability 0, step 1",
+        "linked true",
+        "a permanent remembers that an ability of its source put it onto the battlefield only for \
+         that object's other abilities to find it, and a sorcery has no ability that does",
+    ),
+    (
         "Teferi, Hero of Dominaria",
         "ability 0, step 1",
         "Amount::Fixed(1)",

@@ -477,6 +477,19 @@ impl<L: Layout> StackEntry<L> {
         }
     }
 
+    /// The ability that resolves for this entry: a spell's ability, by the casting options it
+    /// was cast with, or the ability of the card's face. `None` for a spell with no ability,
+    /// a permanent spell.
+    #[inline]
+    pub fn ability_in(&self, t: &GameTable) -> Option<&'static beryl_card::Ability> {
+        let face = t.def(self.card()).face(self.face());
+        match self.item {
+            StackItem::Spell { costs, .. } => face.spell_ability_with(costs),
+            StackItem::Activated { of } => Some(face.ability(of.ability)),
+            StackItem::Triggered { of, .. } => Some(of.ability.of_face(face)),
+        }
+    }
+
     /// What a triggered ability triggered on, if this is one.
     #[inline]
     pub fn info(&self) -> Option<&TriggerInfo<L>> {

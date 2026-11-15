@@ -904,10 +904,17 @@ Built by by-bajq.3.10:
   XMage's tests. A save records the decider of an answer where it is not the
   player (version 11), and older answers are their player's.
 - **Hidden picks** (CR 101.4a). When a player picks a card from a zone the other
-  player cannot see, the slot is public and the card is not. The record of the
-  pick notes the filter it had to pass. Determinization for the other player
-  deals that slot a card the filter accepts. The information-independence test
-  covers the case.
+  player cannot see, the slot is public and the card is not. Built:
+  `Effect::Choose` with `hidden` is one question, "none" and the candidates,
+  asked of every player whatever their hand holds and never answered silently,
+  since which cards pass the filter is hidden too. Its answer is recorded as the
+  slot picked, not as an index into candidates a redealt state may not have;
+  `Resolving` marks those entries in its padding (no size change). The filter is
+  the effect's one hidden pick's, which determinization for the other player
+  reads from the stack top and deals the slot a card it accepts. The
+  information-independence test
+  (`a_hidden_pick_redealt_shows_and_asks_the_same`) covers the case. Showing the
+  pick face down, set apart from the hand, is a follow-up for the stage.
 - **Naming** is in group 6. Its prompt, its save description and its view are
   built here with the rest of the protocol.
 - **The view.** A `PlayerView` says who it is acting for, which permanents are

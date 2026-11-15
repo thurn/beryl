@@ -248,6 +248,7 @@ pub const fn choose(player: Players, among: Objects, prompt: Prompt) -> Effect {
         among,
         prompt,
         optional: false,
+        hidden: false,
     }
 }
 
@@ -259,6 +260,19 @@ pub const fn may_choose(player: Players, among: Objects, prompt: Prompt) -> Effe
         among,
         prompt,
         optional: true,
+        hidden: false,
+    }
+}
+
+/// [`Effect::Choose`], optional and hidden: "[player] may choose one of [among]", without
+/// revealing which until the effect goes on (CR 101.4a), for what `prompt` says.
+pub const fn may_choose_hidden(player: Players, among: Objects, prompt: Prompt) -> Effect {
+    Effect::Choose {
+        player,
+        among,
+        prompt,
+        optional: true,
+        hidden: true,
     }
 }
 

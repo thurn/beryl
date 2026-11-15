@@ -4,15 +4,15 @@
 
 use crate::card::{Ability, CastingIx, ManaColor, Stop, Words};
 use crate::cast;
-use crate::decision::{Answers, Choice, Decision, Outcome, StallReason};
+use crate::decision::{Answers, Choice, Decision, Opt, Outcome, StallReason};
 use crate::game::Game;
 use crate::ids::Seat;
-use crate::layout::{Layout, Queue, Small};
+use crate::layout::{Layout, Queue, Small, index};
 use crate::observation::Observation;
 use crate::profile::Stops;
 use crate::state::{
     ObjectRef, PendingTrigger, StackEntry, StackItem, Target, TargetPlace, TargetPlaces,
-    TriggerInfo,
+    TriggerInfo, hidden_pick_of,
 };
 
 /// One resolution of a spell or ability: what is resolving, and the record its questions are
@@ -167,6 +167,39 @@ impl<'a, L: Layout> Resolution<'a, L> {
         if let Some(c) = game.sink.asking.recorded() {
             return Ok(c);
         }
+        self.ask(game, d)
+    }
+
+    /// The answer to `d`, a hidden pick of one of its object options or of none
+    /// ([`crate::choices::hidden_pick`]): never answered silently, and recorded as the slot
+    /// picked ([`crate::state::Resolving`], "Hidden picks"), so that a run in a state where
+    /// the question has other candidates still reads the card picked.
+    pub(crate) fn answer_hidden(
+        &mut self,
+        game: &mut Game<'_, L>,
+        d: &Decision<L>,
+    ) -> Result<Option<L::Slot>, Stop> {
+        debug_assert!(
+            self.ability.asks(),
+            "a hidden pick in a body that never asks"
+        );
+        if game.state.outcome().is_some() {
+            return Err(Stop::Pause);
+        }
+        if let Some(c) = game.sink.asking.recorded() {
+            return Ok(hidden_pick_of::<L>(index::<L>(usize::from(c.0))));
+        }
+        match self.ask(game, d) {
+            Ok(c) => Ok(picked(d, c)),
+            Err(stop) => {
+                game.sink.asking.stop_hidden();
+                Err(stop)
+            }
+        }
+    }
+
+    /// `d` asked of an inline source, or the pause at it.
+    fn ask(&mut self, game: &mut Game<'_, L>, d: &Decision<L>) -> Result<Choice, Stop> {
         if let Some(answers) = self.answers.as_deref_mut()
             && answers.inline()
         {
@@ -195,5 +228,13 @@ impl<'a, L: Layout> Resolution<'a, L> {
         }
         self.question = Some(d.clone());
         Err(Stop::Pause)
+    }
+}
+
+/// The object a hidden pick's answer `c` picked, or none ([`Resolution::answer_hidden`]).
+pub(crate) fn picked<L: Layout>(d: &Decision<L>, c: Choice) -> Option<L::Slot> {
+    match d.candidates.option(c) {
+        Some(Opt::Object(slot)) => Some(slot),
+        _ => None,
     }
 }

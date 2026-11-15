@@ -17,7 +17,10 @@ pub use crate::object::{
     AbilityMask, AttackTarget, CombatRole, Derived, Flag, GrantRef, Object, ObjectFlags, ObjectRef,
     SlotSet,
 };
-pub use crate::pending::{CastKind, CastStep, Casting, PayingObjects, Pending, Resolving};
+pub use crate::pending::{
+    CastKind, CastStep, Casting, PayingObjects, Pending, Resolving, hidden_pick_answer,
+    hidden_pick_of,
+};
 pub use crate::player::{ManaPool, MulliganStatus, Player};
 pub use crate::stack::{
     AS_PRINTED, AbilityRef, AbilityTarget, PendingTrigger, READ_NOW, StackEntry, StackItem,

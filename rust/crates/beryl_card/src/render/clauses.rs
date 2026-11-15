@@ -58,7 +58,17 @@ impl Ctx {
     pub(super) fn sequence(&mut self, effects: &[Effect]) -> Vec<String> {
         let mut clauses: Vec<String> = Vec::new();
         let mut previous: Option<&Effect> = None;
-        for effect in effects {
+        let mut effects = effects.iter().peekable();
+        while let Some(effect) = effects.next() {
+            if let Some(put) = effects
+                .peek()
+                .and_then(|&next| self.hidden_put(effect, next))
+            {
+                effects.next();
+                clauses.push(put);
+                previous = None;
+                continue;
+            }
             let then = previous.is_some_and(|before| joined_by_then(before, effect));
             let and = previous.is_some_and(|before| joined_by_and(before, effect));
             self.continued = then && previous.and_then(subject_of) == subject_of(effect);

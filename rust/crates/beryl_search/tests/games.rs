@@ -14,10 +14,11 @@ use beryl_engine::card::{CardDef, Colors, FaceIx, Words};
 use beryl_engine::coverage;
 use beryl_engine::filter::Filter;
 use beryl_engine::rng::SplitMix64;
+use beryl_engine::state::Pending;
 use beryl_engine::{
     CardId, CardIx, CardTable, Choice, Counts, Decision, GameTable, Large, LargeCardIx, LargeSlot,
     Layout, Misfit, Observation, Outcome, Profile, Relayout, Replay, Scratch, Seat, Slot, SlotId,
-    Small, StallReason, State, Step, Zone, ZoneKey, apply, next,
+    Small, StallReason, State, Step, Zone, ZoneKey, apply, next, observe,
 };
 use beryl_search::{Agent, AgentDecision, GreedyAgent, RandomAgent};
 use common::{agents, fingerprint, fixed_game, game, games, mirror, play};
@@ -520,6 +521,65 @@ fn agents_decide_the_same_on_a_redeterminized_state() {
     }
     // Hidden cards really were dealt anew: the test has something to catch.
     assert!(redealt * 2 > decisions, "{redealt} of {decisions}");
+}
+
+/// Show and Tell's picks are hidden until both players have made one (CR 101.4a). At the second
+/// player's question, a state redealt from what they know deals the first player's picked
+/// slot a card the pick could have taken, never the instant each deck also holds, and the
+/// second player sees and is asked the same there: the view of the paused resolution, which
+/// replays the first pick, and the decision itself.
+#[test]
+fn a_hidden_pick_redealt_shows_and_asks_the_same() {
+    let deck: &[(u8, &str)] = &[
+        (12, names::SHOW_AND_TELL),
+        (16, names::ISLAND),
+        (6, names::GRISELBRAND),
+        (6, names::COUNTERSPELL),
+    ];
+    let t = GameTable::new(&CARDS, [deck, deck]).unwrap();
+    let mut rng = SplitMix64::new(7);
+    let (mut reached, mut redealt) = (0, 0);
+    for seed in 0..games(6) {
+        let mut s = State::new(&t, seed, Profile::EXACT).unwrap();
+        play(
+            &t,
+            &mut s,
+            &mut Scratch::new(),
+            &mut agents(seed),
+            |s, d| {
+                let Pending::Resolving(r) = s.pending() else {
+                    return;
+                };
+                let picks: Vec<Slot> = r.hidden_picks().collect();
+                let viewer = d.decider;
+                if !r.asks_hidden() || picks.iter().all(|&slot| s.knows(viewer, slot)) {
+                    return;
+                }
+                reached += 1;
+                let mut x = Scratch::new();
+                let seen = Observer.choose(observe(s, &t, &mut x, viewer), d, AgentDecision(0));
+                for _ in 0..4 {
+                    let mut det = Observation::new(s, viewer).determinize(&t, &mut rng);
+                    det.check_invariants(&t).unwrap();
+                    for &slot in &picks {
+                        let card = det.card_behind(slot).expect("a card picked");
+                        assert_ne!(t.def(card).name, names::COUNTERSPELL, "seed {seed}");
+                        redealt += usize::from(det.card_behind(slot) != s.card_behind(slot));
+                    }
+                    let theirs =
+                        Observer.choose(observe(&det, &t, &mut x, viewer), d, AgentDecision(0));
+                    assert_eq!(seen, theirs, "seed {seed}: the paused view differs");
+                    match next(&mut det, &t, &mut Scratch::new(), &mut Replay) {
+                        Step::Decide(again) => assert_eq!(again, *d, "seed {seed}"),
+                        Step::Over(o) => panic!("seed {seed}: the redealt game ended: {o:?}"),
+                    }
+                }
+            },
+        );
+    }
+    assert!(reached > 0, "no second player's hidden pick was asked");
+    // The cards picked really were dealt anew: the test has something to catch.
+    assert!(redealt > 0, "no picked card was redealt");
 }
 
 /// What a view shows of colors: for every slot, whether it is each color as the viewer may

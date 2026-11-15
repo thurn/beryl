@@ -321,6 +321,9 @@ impl<L: Layout> Relayout for Resolving<L> {
             record: queue(self.record.as_slice(), |&i| index::<M>(i.into())),
             question: self.question.relayout(),
             knowledge: per_player(&self.knowledge, |&k| bits(k)),
+            // A hidden pick's entry names a slot by its index, the same in every layout.
+            hidden: self.hidden,
+            asks_hidden: self.asks_hidden,
         }
     }
 }

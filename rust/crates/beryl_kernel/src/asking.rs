@@ -29,6 +29,10 @@ pub struct Asking<L: Layout = Small> {
     /// candidate.
     open: bool,
     question: Option<Decision<L>>,
+    /// Whether the question the run stopped at is a hidden pick, whose answer is recorded as
+    /// the slot picked ([`crate::state::Resolving`], "Hidden picks"). It outlives
+    /// [`Asking::end`], for the caller to read with [`Asking::take_hidden`].
+    hidden: bool,
 }
 
 impl<L: Layout> Asking<L> {
@@ -43,6 +47,7 @@ impl<L: Layout> Asking<L> {
         self.used = 0;
         self.open = open;
         self.question = None;
+        self.hidden = false;
         Ok(())
     }
 
@@ -75,6 +80,18 @@ impl<L: Layout> Asking<L> {
         debug_assert!(self.open, "a run stopped that cannot pause");
         self.question = Some(question);
         Full
+    }
+
+    /// Notes that the question the run is stopping at is a hidden pick.
+    #[inline]
+    pub fn stop_hidden(&mut self) {
+        self.hidden = true;
+    }
+
+    /// Whether the question the last run stopped at is a hidden pick, forgetting it.
+    #[inline]
+    pub fn take_hidden(&mut self) -> bool {
+        core::mem::take(&mut self.hidden)
     }
 
     /// Whether the run stopped at a question, so that the [`Full`] it returned is that stop

@@ -417,20 +417,60 @@ pub(crate) fn may_instruction<L: Layout>(
     run.carry_out_or_nothing(agreed.then_some(effect))
 }
 
+/// Asks `player` for one of `candidates`, cards of a hidden zone of theirs, or for none
+/// (`Opt::Done`, offered first), without revealing which
+/// ([CR 101.4a](https://yawgatog.com/resources/magic-rules/#R1014a)): "If an effect has each
+/// player choose a card in a hidden zone, such as their hand or library, those cards may
+/// remain face down as they're chosen." It is asked though no card passes, and never
+/// answered silently: the other players do not know the candidates, so whether and how it is
+/// asked must not depend on them. Interchangeable cards are one answer (§7.2). The answer is
+/// recorded as the slot picked ([`Resolution::answer_hidden`]).
+pub fn hidden_pick<L: Layout>(
+    game: &mut Game<'_, L>,
+    resolution: &mut Resolution<'_, L>,
+    player: Seat,
+    candidates: Bitboard<L::Slot>,
+    prompt: Prompt,
+) -> Result<Option<L::Slot>, Stop> {
+    let mut list: L::Queue<Opt<L>, 64> = Default::default();
+    list.push(Opt::Done)?;
+    let candidates = crate::engine::collapse(game.state, candidates);
+    for slot in game.state.in_candidate_order(candidates) {
+        list.push(Opt::Object(slot))?;
+    }
+    let d = Decision {
+        player,
+        decider: player,
+        kind: DecisionKind::ChooseUpTo,
+        candidates: Candidates::Options(list),
+        prompt,
+        about: Bitboard::EMPTY,
+    };
+    resolution.answer_hidden(game, &d)
+}
+
 /// [`Effect::Choose`]: "[Player] chooses one of [objects]", or with `optional` may choose
 /// none (CR 608.2d): a [`pick`], or a [`may_pick`]. With no such player or no object there
-/// is nothing to ask. The outcome is the object chosen.
+/// is nothing to ask. A `hidden` pick is a [`hidden_pick`], asked of the player whatever
+/// their candidates. The outcome is the object chosen.
 pub(crate) fn choose_instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     player: Players,
     among: Objects,
     prompt: Prompt,
-    optional: bool,
+    (optional, hidden): (bool, bool),
 ) -> Result<Outcome<L>, Stop> {
     let candidates = run.scene().objects(among);
     let Some(player) = run.one(player) else {
         return Ok(Outcome::NOTHING);
     };
+    if hidden {
+        let (game, resolution) = run.resolving();
+        let chosen = hidden_pick(game, resolution, player, candidates, prompt)?;
+        return Ok(chosen.map_or(Outcome::NOTHING, |slot| {
+            Outcome::acted_on(Bitboard::single(slot))
+        }));
+    }
     if candidates.is_empty() {
         return Ok(Outcome::NOTHING);
     }

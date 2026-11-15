@@ -463,9 +463,11 @@ fn perform_machine<L: Layout>(
     c: Choice,
 ) -> Option<Result<(), Full>> {
     Some(match *s.pending() {
-        Pending::Resolving(_) => s
-            .record_answer(index::<L>(usize::from(c.0)))
-            .and_then(|()| resolve::resolve(s, t, x, a)),
+        Pending::Resolving(ref r) => {
+            let answer = resolve::recorded(d, index::<L>(usize::from(c.0)), r.asks_hidden());
+            s.record_answer(answer)
+                .and_then(|()| resolve::resolve(s, t, x, a))
+        }
         Pending::StepActions(_) => s
             .record_answer(index::<L>(usize::from(c.0)))
             .and_then(|()| paused_step::step_actions(s, t, x, a)),
