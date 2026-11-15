@@ -160,6 +160,55 @@ await check(
 );
 
 await check(
+    "manual table command list can draw while a card is selected",
+    async (page) => {
+        const mod = await setup(page, [handMove]);
+        const before = await tableView();
+        const [slot] = before.battlefield;
+        const card = page.locator(`.card-layer > [data-slot="${slot}"]`);
+        await card.click({ modifiers: [mod] });
+        await card.locator(".manual-selection-mark").waitFor();
+        await page.keyboard.press(mod + "+k");
+        const list = page.getByRole("dialog", { name: "Command list" });
+        const search = list.getByRole("combobox");
+        await search.fill("draw");
+        const draw = list.getByRole("option", { name: /^Draw Your library/ });
+        await draw.waitFor();
+        const [after] = await Promise.all([
+            clickTableResult(page),
+            draw.click(),
+        ]);
+        assert.equal(
+            after.table.orders.you.hand.length,
+            before.table.orders.you.hand.length + 1,
+        );
+        await card.locator(".manual-selection-mark").waitFor();
+
+        await page.evaluate(() => {
+            window.location.hash = "#/";
+        });
+        await page.locator(".start-panel").waitFor();
+        assert.equal(
+            await page.evaluate(
+                (mac) =>
+                    document.body.dispatchEvent(
+                        new KeyboardEvent("keydown", {
+                            code: "KeyW",
+                            metaKey: mac,
+                            ctrlKey: !mac,
+                            bubbles: true,
+                            cancelable: true,
+                        }),
+                    ),
+                mod === "Meta",
+            ),
+            true,
+        );
+    },
+    tabletop,
+);
+
+await check(
     "manual table stack until sends only the query and hit count",
     async (page) => {
         const mod = await setup(page);

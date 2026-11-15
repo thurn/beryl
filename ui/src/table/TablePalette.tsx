@@ -1,5 +1,5 @@
 import { useReducer, useState } from "react";
-import { CommandList } from "./CommandList";
+import { CommandList, type CommandListEntry } from "./CommandList";
 import { commands as registry } from "./commands";
 import { describe, bindingFor } from "./shortcuts";
 import type { TableCommands } from "./TableMenu";
@@ -25,12 +25,24 @@ export function TablePalette({
   const [notice, setNotice] = useState("");
   const { bindings } = commands;
   const entries = commands.list(context, contextual);
-  const rows = entries.map(({ entry }) => ({
-    id: entry.id,
-    label: entry.label,
-    group: entry.command.group,
-    key: describe(bindings.get(entry.command.id), bindings.platform),
-  }));
+  const rows = entries.map<CommandListEntry>(
+    ({ entry, context: actionContext }) => {
+      const { target } = actionContext;
+      const detail =
+        actionContext !== context && "side" in target
+          ? target.kind === "player"
+            ? "You"
+            : `Your ${target.kind}`
+          : undefined;
+      return {
+        id: entry.id,
+        label: entry.label,
+        detail,
+        group: entry.command.group,
+        key: describe(bindings.get(entry.command.id), bindings.platform),
+      };
+    },
+  );
   if (settings)
     rows.unshift({
       id: reset,

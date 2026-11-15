@@ -66,7 +66,6 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
     client.arrows = new TableArrows(client, board.stage, report);
     client.viewers = new TableViewers(client, report);
     registerSelection(client);
-    registerClicks(client, report);
     registerTurn(client, report);
     const leave = () => {
       void tableLeave().then(() => {
@@ -86,6 +85,7 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
       quit,
       showBlockers,
     );
+    registerClicks(client, commands);
     registerPlayers(client, commands);
     client.viewers.register(commands);
     return { board, client, commands, leave };

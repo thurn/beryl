@@ -108,6 +108,44 @@ await check(
 );
 
 await check(
+    "manual table menu puts a mixed selection on top in selection order",
+    async (page) => {
+        await startTable(page, deck, [
+            moveHand("battlefield"),
+            moveHand("battlefield"),
+            (view) => ({
+                pin: {
+                    row: "others",
+                    ...tableActionRef(view, {
+                        kind: "object",
+                        slot: view.battlefield[1],
+                    }),
+                },
+            }),
+        ]);
+        const before = await tableView();
+        const [first, last] = before.battlefield;
+        const hand = before.table.orders.you.hand.at(-1);
+        const order = [last, hand, first];
+        const mod = (await page.evaluate(() => /Mac/.test(navigator.platform)))
+            ? "Meta"
+            : "Control";
+        for (const id of order) {
+            await permanent(page, id).click({ modifiers: [mod] });
+            await permanent(page, id)
+                .locator(".manual-selection-mark")
+                .waitFor();
+        }
+
+        await permanent(page, last).click({ button: "right" });
+        const after = await clickTable(page, row(page, "Top of library"));
+        assert.equal(after.table.log.length, before.table.log.length + 1);
+        assert.deepEqual(after.players.you.library.slice(-3).reverse(), order);
+    },
+    tabletop,
+);
+
+await check(
     "manual table menu picks a permanent to attach to",
     async (page) => {
         await startTable(page, deck, [

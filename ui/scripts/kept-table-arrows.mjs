@@ -215,6 +215,9 @@ await check(
         const at = center(await card(page, to).boundingBox());
         await page.mouse.move(at.x, at.y);
         assert.equal(await trace(page).count(), 1);
+        await page.mouse.click(at.x, at.y, { button: "right" });
+        assert.equal(await page.getByRole("menu").count(), 0);
+        assert.equal(await trace(page).count(), 1);
         await page.mouse.click(at.x, at.y);
         assert.deepEqual(await page.evaluate(() => window.tableTarget), {
             name: to,
@@ -227,6 +230,27 @@ await check(
         await page.keyboard.press("Escape");
         assert.equal(await page.evaluate(() => window.tableTarget), undefined);
         assert.equal(await trace(page).count(), 0);
+    },
+    live,
+);
+
+await check(
+    "manual table arrow menu plays a hand card and aims in one entry",
+    async (page) => {
+        await startTable(page, "24 Counterspell");
+        const before = await tableView();
+        const from = lastHand(before);
+        await card(page, from).click({ button: "right" });
+        await page.getByRole("menuitem", { name: "Draw arrow…" }).click();
+        const result = clickTableResult(page);
+        await life(page).locator(".life-hit").click();
+        const after = await result;
+        assert.equal(after.table.log.length, before.table.log.length + 1);
+        assert.equal(tableActionRef(after, object(from)).in, "stack");
+        assert.deepEqual(
+            after.table.arrows?.map(({ from, to }) => [from, to]),
+            [[object(from), ownLife]],
+        );
     },
     live,
 );

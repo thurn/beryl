@@ -226,6 +226,41 @@ await check(
 );
 
 await check(
+    "manual table click uses guest seats for drawing and counters",
+    async (page) => {
+        // The browser can play the guest projection before the live server
+        // exposes a linked table. Inspect the absolute seats sent to the host.
+        await page.route("**/invoke/table_current", async (route) => {
+            const response = await route.fetch();
+            const payload = await response.json();
+            payload.ok.view.table.seat = 1;
+            payload.ok.view.table.seats = 2;
+            await route.fulfill({ response, json: payload });
+        });
+        await startTable(page, LANDS);
+        const actions = [];
+        await page.route("**/invoke/table_act", (route) => {
+            actions.push(route.request().postDataJSON().request.action);
+            return route.fulfill({
+                headers: { "Access-Control-Allow-Origin": "*" },
+                json: { ok: { refused: "permission" } },
+            });
+        });
+        await page
+            .locator('button[data-pile="library"][data-side="opponent"]')
+            .click();
+        await clickTable(page, pile(page, "library"));
+        const mana = counter(page, "W");
+        await clickTable(page, mana, { button: "right" });
+        assert.deepEqual(actions, [
+            { draw: { seat: 1, count: 1 } },
+            { player_counter: { seat: 1, name: "W", add: -1 } },
+        ]);
+    },
+    tabletop,
+);
+
+await check(
     "manual table click shakes the refused card without changing the view",
     async (page) => {
         await startTable(page, LANDS, [moveHand("battlefield")]);

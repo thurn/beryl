@@ -1,12 +1,9 @@
-import type { Side, TableAction, TableObjectAction } from "../ipc";
+import type { TableAction, TableObjectAction } from "../ipc";
 import { sameZone, type CardTarget, type TableClient } from "./client";
+import type { TableCommands } from "./TableMenu";
 
-const seat = (side: Side) => (side === "you" ? 0 : 1);
-
-export function registerClicks(
-  client: TableClient,
-  report: (error: unknown) => void,
-) {
+export function registerClicks(client: TableClient, commands: TableCommands) {
+  const report = commands.reportError;
   const send = (
     action: TableAction,
     source?: Parameters<TableClient["send"]>[1],
@@ -75,30 +72,10 @@ export function registerClicks(
     });
   }
 
-  client.onClick("library", ({ side }, _keys, element) =>
-    send({ draw: { seat: seat(side), count: 1 } }, element),
-  );
+  client.onClick("library", (target, _keys, element) => {
+    void commands.runAt("library.draw", target, element).catch(report);
+  });
   for (const kind of ["graveyard", "exile"] as const) {
     client.onClick(kind, ({ open }) => open?.());
   }
-  client.onClick("counter", ({ side, counter }, _keys, element) =>
-    send(
-      { player_counter: { seat: seat(side), name: counter, add: 1 } },
-      element,
-    ),
-  );
-  client.onSecondary((target, _at, element) => {
-    if (target?.kind !== "counter") return;
-    send(
-      {
-        player_counter: {
-          seat: seat(target.side),
-          name: target.counter,
-          add: -1,
-        },
-      },
-      element,
-    );
-    return true;
-  });
 }

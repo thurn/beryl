@@ -152,6 +152,7 @@ await check(
             }),
         ]);
         const [first, second, third] = await onField();
+        await toggle(page, (await tableView()).table.orders.you.hand.at(-1));
         await card(page, second).hover();
         await page.keyboard.press(`${await modifiers(page)}+Shift+X`);
         assert.deepEqual(await marked(page), [second, third]);

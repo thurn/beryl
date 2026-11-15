@@ -88,15 +88,19 @@ export function listenTableKeys(commands: TableCommands) {
       event.code === "Escape" &&
       (client.overlayOpen ||
         client.arrows?.dragging ||
+        client.holdingCard ||
         client.selection.size ||
         client.sweepSnapshot())
     )
       return;
     if (id || claims(event, bindings.platform)) event.preventDefault();
     if (id && !event.repeat && !commands.overlayOpen) {
-      const target = id.startsWith("life.")
-        ? pointedTarget(client)
-        : currentTarget(client);
+      const target =
+        id.startsWith("life.") ||
+        id === "selection.row" ||
+        id === "selection.column"
+          ? pointedTarget(client)
+          : currentTarget(client);
       void commands
         .shortcut(id, target, event.shiftKey)
         .catch(commands.reportError);

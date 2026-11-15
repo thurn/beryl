@@ -252,9 +252,9 @@ export class TableCommands {
   list(context: MenuContext, contextual = false) {
     const targets = contextual
       ? []
-      : context.target.kind === "table"
-        ? defaults
-        : [table];
+      : [table, ...defaults].filter(
+          (target) => target.kind !== context.target.kind,
+        );
     const entries = [
       context,
       ...targets.flatMap((target) => {

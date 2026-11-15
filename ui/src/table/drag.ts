@@ -46,6 +46,12 @@ export class TableDrag {
     private readonly stage: ScriptStage,
     private readonly report: (error: unknown) => void,
   ) {
+    client.onKey((event) => {
+      if (event.key === "Escape" && client.holdingCard) {
+        event.preventDefault();
+        client.cancelGesture();
+      }
+    });
     client.onDrop(this.#drop, {
       dragSource: this.#dragSource,
       canHold: () => !this.#pending && !this.#display.order,

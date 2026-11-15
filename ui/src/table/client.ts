@@ -202,6 +202,10 @@ export class TableClient {
     return this.#open.length !== 0;
   }
 
+  get holdingCard() {
+    return this.pointer.held !== undefined;
+  }
+
   onCardClick(handler: (target: CardTarget, keys: PointerKeys) => boolean) {
     this.#cardClick = handler;
   }
@@ -319,6 +323,7 @@ export class TableClient {
   }
 
   secondary(target: TableTarget | undefined, at: Point, element?: HTMLElement) {
+    if (this.#aim?.picking()) return;
     for (const handler of this.#secondaries) {
       if (handler(target, at, element)) break;
     }
@@ -354,7 +359,9 @@ export class TableClient {
       if (from) this.#aim?.drag(from, at, this.#under(over), done);
     },
     cancelAim: () => this.#aim?.cancel(),
-    sweep: (from, to, done) => this.#sweep?.(from, to, done),
+    sweep: (from, to, done) => {
+      if (!this.#aim?.picking()) this.#sweep?.(from, to, done);
+    },
     cancelSweep: () => this.#cancelSweep?.(),
   };
 

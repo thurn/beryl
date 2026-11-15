@@ -5,6 +5,7 @@ import { duplicates, record } from "./audit.mjs";
 import { crowdedControls, screenFaults, stageFaults } from "./capture.mjs";
 import { check, committed } from "./kept-harness.mjs";
 import {
+    clickTable,
     clickTableResult,
     startTable,
     tableActionRef,
@@ -379,6 +380,42 @@ await check(
             give: { to: 0, ...ref(before, permanent) },
         });
         assert.deepEqual((await tableView()).battlefield, [permanent]);
+    },
+    live,
+);
+
+await check(
+    "manual table drag Escape releases the card without dropping it",
+    async (page) => {
+        await startTable(page, "24 Island", [move("battlefield")]);
+        const before = await tableView();
+        const [slot] = before.battlefield;
+        const actions = [];
+        page.on("request", (request) => {
+            if (request.url().endsWith("/invoke/table_act"))
+                actions.push(request.postDataJSON().request.action);
+        });
+        await begin(
+            page,
+            await point(card(page, slot)),
+            await point(pile(page, "library"), 0.5, 0.25),
+        );
+        assert.equal(await page.locator(".selection-rectangle").count(), 0);
+        assert.equal(
+            await page.locator("[data-position=top][data-over]").count(),
+            1,
+        );
+        await page.keyboard.press("Escape");
+        await page
+            .locator("[data-position=top][data-over]")
+            .waitFor({ state: "hidden" });
+        await page.mouse.up();
+        const after = await clickTable(page, card(page, slot));
+        assert.ok(after.objects.find((object) => object.slot === slot)?.tapped);
+        assert.deepEqual(
+            actions.map((action) => Object.keys(action)),
+            [["tap"]],
+        );
     },
     live,
 );
