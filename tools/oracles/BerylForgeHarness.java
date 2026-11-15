@@ -1740,6 +1740,21 @@ public final class BerylForgeHarness {
                     run.mode = Run.Mode.PLAY;
                     run.chooseTargets(player, sa);
                     ComputerUtil.playStack(sa, player, getGame());
+                } else if (sa.isCopied() && sa.isMayChooseNewTargets() && scriptedTargets(sa)) {
+                    // A copy whose controller may choose new targets (CR 707.10c): the script's
+                    // answers, one for each target, as Beryl asks them as the copy is made.
+                    run.checkAsserts();
+                    run.mode = Run.Mode.PLAY;
+                    run.stopped = false;
+                    if (sa.isSpell()) {
+                        if (!sa.getHostCard().isInZone(ZoneType.Stack)) {
+                            sa.setHostCard(getGame().getAction().moveToStack(sa.getHostCard(), sa));
+                        } else {
+                            getGame().getStackZone().add(sa.getHostCard());
+                        }
+                    }
+                    run.chooseTargets(player, sa);
+                    getGame().getStack().add(sa);
                 } else {
                     super.orderAndPlaySimultaneousSa(List.of(sa));
                 }

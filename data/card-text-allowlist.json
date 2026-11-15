@@ -8,9 +8,9 @@
   },
   "Blood Artist": {
     "reason": "wording",
-    "note": "\"Whenever this creature or another creature dies\" and \"whenever a creature dies\" are the same trigger, since \"a creature\" includes the creature the ability is on; the renderer says it the second way. Both instructions are the same, split into two sentences.",
+    "note": "\"Whenever this creature or another creature dies\" and \"whenever a creature dies\" are the same trigger, since \"a creature\" includes the creature the ability is on; the renderer says it the second way.",
     "diff": [
-      "Blood Artist: whenever [-~ or another-] {+a+} creature dies , target player loses 1 life [-and-] {+.+} you gain 1 life ."
+      "Blood Artist: whenever [-~ or another-] {+a+} creature dies , target player loses 1 life and you gain 1 life ."
     ]
   },
   "Bloodghast": {

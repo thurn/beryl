@@ -60,6 +60,7 @@ impl Ctx {
         let mut previous: Option<&Effect> = None;
         for effect in effects {
             let then = previous.is_some_and(|before| joined_by_then(before, effect));
+            let and = previous.is_some_and(|before| joined_by_and(before, effect));
             self.continued = then && previous.and_then(subject_of) == subject_of(effect);
             let mut more = self.effect(effect);
             self.continued = false;
@@ -68,6 +69,12 @@ impl Ctx {
                 && !more.is_empty()
             {
                 last.push_str(", then ");
+                last.push_str(&more.remove(0));
+            } else if and
+                && let Some(last) = clauses.last_mut()
+                && !more.is_empty()
+            {
+                last.push_str(" and ");
                 last.push_str(&more.remove(0));
             }
             clauses.extend(more);
@@ -178,6 +185,21 @@ fn joined_by_then(before: &Effect, after: &Effect) -> bool {
     )
 }
 
+/// Whether Oracle text joins two instructions with "and": a player losing life and you
+/// gaining it, "target player loses 2 life and you gain 2 life".
+fn joined_by_and(before: &Effect, after: &Effect) -> bool {
+    matches!(
+        (before, after),
+        (
+            Effect::LoseLife { .. },
+            Effect::GainLife {
+                player: Players::You,
+                ..
+            }
+        )
+    )
+}
+
 /// The player an instruction is about, when it is one a player carries out.
 pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
     match *effect {
@@ -212,6 +234,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::LoseGame(player) => Some(player),
         Effect::ForEachPlayer { .. }
         | Effect::Counter(_)
+        | Effect::CopySpell { .. }
         | Effect::CounterInto { .. }
         | Effect::Destroy { .. }
         | Effect::Regenerate(_)

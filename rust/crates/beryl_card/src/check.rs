@@ -18,6 +18,7 @@ use crate::ids::Zone;
 use crate::index::SpecIx;
 use crate::prompt::Shape;
 use crate::target::TargetKind;
+use crate::trigger::{Subject, Trigger, TriggerEvent};
 
 mod malformed;
 pub use malformed::Malformed;
@@ -423,6 +424,9 @@ impl Scope<'_> {
             },
             Effect::CreateCopies {
                 except: Some(ix), ..
+            }
+            | Effect::CopySpell {
+                except: Some(ix), ..
             } if ix.index() >= self.face.excepts.len() => Err(Malformed::Copy),
             Effect::AddMana { .. } if !matches!(self.ability.kind(), AbilityKind::Mana) => {
                 Err(Malformed::AddMana)
@@ -644,6 +648,14 @@ impl Scope<'_> {
             Amount::Carried => match self.ability.trigger() {
                 Some(trigger) if trigger.delayed => Ok(()),
                 _ => Err(Malformed::Carried),
+            },
+            Amount::SpellsCastBefore => match self.ability.trigger() {
+                Some(Trigger {
+                    event: TriggerEvent::Casts,
+                    subject: Subject::This,
+                    ..
+                }) => Ok(()),
+                _ => Err(Malformed::CastBefore),
             },
             Amount::Count(objects) | Amount::CardTypesAmong(objects) => self.objects(objects),
             Amount::Times(_, amount) | Amount::Plus(_, amount) => self.amount(amount),

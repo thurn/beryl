@@ -341,13 +341,13 @@ fn apply_layers<L: Layout>(
         // copies, with the exceptions it was made with (CR 707.9b).
         let what = s.definition(slot);
         let f = what.face(t);
-        let (power, toughness) = s.copiable_pt(t, slot);
+        let (power, toughness, colors) = s.copiable_base(t, slot, f);
         s.results()[i] = Derived {
             power,
             toughness,
             types: f.types,
             supertypes: f.supertypes,
-            colors: f.colors,
+            colors,
             controller: s.base_controller(slot),
             protection: Colors::NONE,
             keywords: f.keywords,

@@ -83,6 +83,13 @@ pub struct Position {
     pub purpose: Option<Purpose>,
     /// Bottom first.
     pub stack: Vec<StackItem>,
+    /// At the question of a new target for a copy of a spell, the target the copy has now,
+    /// which Beryl offers first ([CR 707.10c]): "The player may leave any number of the targets
+    /// unchanged". An oracle asks whether to change it before it asks for the new one.
+    ///
+    /// [CR 707.10c]: https://yawgatog.com/resources/magic-rules/#R70710c
+    #[serde(serialize_with = "json::optional_pick")]
+    pub kept: Option<Pick>,
     /// The coin flips since the previous action began, in order, so that an oracle can
     /// replay Beryl's seeded results with its own.
     pub flips: Vec<CoinFlip>,

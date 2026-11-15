@@ -1,5 +1,6 @@
 //! The parameters an entry has of its own: where, in what order and on what terms.
 
+use crate::characteristics::Colors;
 #[cfg(doc)]
 use crate::continuous::Duration;
 #[cfg(doc)]
@@ -95,6 +96,9 @@ impl CopyException {
     /// ([CR 702.175a](https://yawgatog.com/resources/magic-rules/#R702175a)): "create a token
     /// that's a copy of it, except it's 1/1."
     pub const ONE_ONE: CopyException = CopyException(&[CopyChange::PowerToughness(1, 1)]);
+
+    /// "Except that the copy is red", as Fork copies a spell.
+    pub const RED: CopyException = CopyException(&[CopyChange::Colors(Colors::RED)]);
 }
 
 /// One change a [`CopyException`] makes to the values a copy takes.
@@ -102,6 +106,9 @@ impl CopyException {
 pub enum CopyChange {
     /// "Except it's [power]/[toughness]" (CR 707.9b).
     PowerToughness(i8, i8),
+    /// "Except that the copy is [colors]", as Fork's copy is red (CR 707.9b): the copy's
+    /// colors are these, whatever its mana cost says.
+    Colors(Colors),
 }
 
 /// Which of the cards a player looks at they take into their hand ([`Effect::Dig`]).

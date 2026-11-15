@@ -405,6 +405,24 @@ impl Ability {
             .effect(&COPY)
     }
 
+    /// Storm ([CR 702.40a]): "Storm is a triggered ability that functions on the stack. 'Storm'
+    /// means 'When you cast this spell, copy it for each other spell that was cast before it
+    /// this turn. If the spell has any targets, you may choose new targets for any of the
+    /// copies.'" The count is read as the ability triggers ([`Amount::SpellsCastBefore`]).
+    ///
+    /// [CR 702.40a]: https://yawgatog.com/resources/magic-rules/#R70240a
+    pub const fn storm() -> Ability {
+        const COPY: Effect = Effect::CopySpell {
+            spells: Objects::This,
+            count: Amount::SpellsCastBefore,
+            except: None,
+            new_targets: true,
+        };
+        Ability::triggered(&Trigger::CAST)
+            .on_the_stack()
+            .effect(&COPY)
+    }
+
     /// Impending's static ability (CR 702.176a): "As long as this permanent's impending cost
     /// was paid and it has a time counter on it, it's not a creature". The face lists
     /// [`CastingOption::Impending`], whose counters the permanent enters with, and

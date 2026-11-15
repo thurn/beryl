@@ -6,6 +6,18 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- A copy of an instant or sorcery that had resolved stayed in the stack zone
+  with no stack entry, and a copy of a creature spell never reached the
+  battlefield. Copies of spells are objects in the shared token pool marked as
+  tokens, and `event::move_batch` skipped every token outside the battlefield,
+  which CR 111.8 says can't change zones. Found and fixed in the change that
+  added copies (Fork, storm). A token on the stack is a copy of a spell, which
+  moves as a spell does: `move_batch` now lets it leave the stack, and the
+  state-based check ends it in any zone but the stack (CR 704.5e). Prevention: a
+  rule written for one kind of object ("a token") names in a comment the zones
+  it was written for, and a new kind of object that shares the representation
+  gets a test of each zone change it makes (`tests/spell_copies.rs`).
+
 - A landwalk keyword that a static ability grants ignored text changes of the
   permanent with the ability. Lord of Atlantis whose "Island" Mind Bend changed
   to "Swamp" still gave other Merfolk islandwalk instead of swampwalk.

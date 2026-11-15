@@ -143,6 +143,8 @@ pub enum Subject {
 impl Trigger {
     /// "When this enters."
     pub const ENTERS: Trigger = Trigger::of(TriggerEvent::Enters, Subject::This);
+    /// "When you cast this spell", which works on the stack ([`crate::Ability::on_the_stack`]).
+    pub const CAST: Trigger = Trigger::of(TriggerEvent::Casts, Subject::This);
     /// "When this dies."
     pub const DIES: Trigger = Trigger::of(TriggerEvent::Dies, Subject::This);
     /// "When this leaves the battlefield."

@@ -394,6 +394,17 @@ pub(crate) fn purpose<S: Serializer>(purpose: &Purpose, s: S) -> Result<S::Ok, S
     s.serialize_str(purpose.name())
 }
 
+/// A pick as the scenario vocabulary writes it, or null.
+#[allow(clippy::ref_option)] // the signature `serialize_with` calls
+pub(crate) fn optional_pick<S: Serializer>(pick: &Option<Pick>, s: S) -> Result<S::Ok, S::Error> {
+    #[derive(Serialize)]
+    struct Written(#[serde(with = "PickDef")] Pick);
+    match *pick {
+        Some(pick) => s.serialize_some(&Written(pick)),
+        None => s.serialize_none(),
+    }
+}
+
 #[allow(clippy::ref_option, clippy::trivially_copy_pass_by_ref)] // as `serialize_with` calls
 pub(crate) fn optional_purpose<S: Serializer>(
     purpose: &Option<Purpose>,

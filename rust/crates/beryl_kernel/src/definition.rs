@@ -14,7 +14,7 @@
 //!
 //! [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
 
-use beryl_card::{Face, FaceIx};
+use beryl_card::{Colors, Face, FaceIx};
 
 use crate::event::{Listens, Replaces};
 use crate::layout::{Layout, Small};
@@ -129,6 +129,39 @@ impl<L: Layout> State<L> {
         }
         let face = Copiable::of_object(o).face(t);
         (face.power.unwrap_or(0), face.toughness.unwrap_or(0))
+    }
+
+    /// The power, toughness and colors layer 1 gives the permanent in `slot`, whose face of its
+    /// definition is `face` ([`State::definition`]): the face's, or for an object with a copy
+    /// effect, its copiable values' ([`State::copiable_pt`], [`State::copiable_colors`]), read
+    /// only behind its [`Flag::Copy`].
+    #[inline]
+    pub fn copiable_base(&self, t: &GameTable, slot: L::Slot, face: &Face) -> (i8, i8, Colors) {
+        if self.object(slot).flags.has(Flag::Copy) {
+            let (power, toughness) = self.excepted_pt(t, slot);
+            return (power, toughness, self.excepted_colors(t, slot));
+        }
+        let (power, toughness) = (face.power.unwrap_or(0), face.toughness.unwrap_or(0));
+        (power, toughness, face.colors)
+    }
+
+    /// The colors of the copiable values of the object in `slot` ([`Copiable::colors`]): what
+    /// an object off the battlefield has before the effects that reach it. The exceptions of a
+    /// copy effect are read only behind its [`Flag::Copy`].
+    #[inline]
+    pub fn copiable_colors(&self, t: &GameTable, slot: L::Slot) -> Colors {
+        let o = self.object(slot);
+        if o.flags.has(Flag::Copy) {
+            return self.excepted_colors(t, slot);
+        }
+        Copiable::of_object(o).face(t).colors
+    }
+
+    /// [`State::copiable_colors`] of an object with a copy effect on it.
+    #[cold]
+    #[inline(never)]
+    fn excepted_colors(&self, t: &GameTable, slot: L::Slot) -> Colors {
+        self.copiable(slot).colors(t)
     }
 
     /// [`State::copiable_pt`] of an object with a copy effect on it.

@@ -419,6 +419,50 @@ def test_a_blocked_trampler_queues_lethal_damage_for_its_lone_blocker() -> None:
 
 
 @pytest.mark.parametrize(
+    ("pick", "expected"),
+    [
+        # Kept: XMage asks whether to change the target, and Beryl's pick is the one it has.
+        ({"pick": "Player", "player": 1}, ["setChoice(playerB, false);"]),
+        # Changed: yes, then the new target.
+        (
+            {"pick": "Player", "player": 0},
+            ["setChoice(playerB, true);", "addTarget(playerB, playerB);"],
+        ),
+    ],
+)
+def test_a_copys_new_target_answers_xmages_change_question(
+    pick: card_facts.Json, expected: list[str]
+) -> None:
+    # Fork's copy of a Lightning Bolt aimed at player 1; player 0 (playerB) controls it.
+    entry: card_facts.Json = {
+        "setup": {"turn": 1, "active": 1, "step": "PrecombatMain"},
+        "actions": [],
+        "cards": {},
+    }
+    export = xmage_java.Export(card="Fork", scenario="fork", method="fork")
+    faces = xmage_java.Faces.load(card_store.STORE, ["Fork", "Lightning Bolt"])
+    writer = xmage.Exporter(entry, faces, export)
+    position = xmage.Position(
+        turn=1,
+        step="PrecombatMain",
+        decider=0,
+        kind="Target",
+        purpose="target",
+        stack=[{"name": "Lightning Bolt", "spell": True, "controller": 1}],
+        flips=[],
+        taps=[],
+        forced=[],
+        flashback=[],
+        face_down=[],
+        creatures=[0, 0],
+        kept={"pick": "Player", "player": 1},
+    )
+    writer.answer({"player": 0, "kind": "Target", "pick": pick}, position)
+    assert export.body == expected
+    assert writer.retargeted == "playerB"
+
+
+@pytest.mark.parametrize(
     ("card", "answer"),
     [
         ("Pithing Needle", "Black Lotus"),

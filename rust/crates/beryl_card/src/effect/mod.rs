@@ -155,6 +155,26 @@ pub enum Effect {
     /// on the card may modify the meaning of earlier text". The engine puts a countered spell
     /// into exile and nowhere else ([`crate::Malformed::Countered`]).
     CounterInto { spells: Objects, zone: Zone },
+    /// "Copy [spells][ [count] times][, except ...]. You may choose new targets for the copy"
+    /// ([CR 707.10]): "To copy a spell, activated ability, or triggered ability means to put a
+    /// copy of it onto the stack; a copy of a spell isn't cast ... A copy of a spell or ability
+    /// copies both the characteristics of the spell or ability and all decisions made for it,
+    /// including modes, targets, the value of X, and additional or alternative costs." The
+    /// ability's controller controls and owns the copies. `except` names an exception of the
+    /// ability's own face ([`crate::Face::excepts`]), as Fork's "except that the copy is red".
+    /// With `new_targets`, the controller may choose new targets for each copy as it is made
+    /// ([CR 707.10c]): "The player may leave any number of the targets unchanged, even if those
+    /// targets would be illegal. If the player chooses to change some or all of the targets,
+    /// the new targets must be legal." A spell that has left the stack is not copied.
+    ///
+    /// [CR 707.10]: https://yawgatog.com/resources/magic-rules/#R70710
+    /// [CR 707.10c]: https://yawgatog.com/resources/magic-rules/#R70710c
+    CopySpell {
+        spells: Objects,
+        count: Amount,
+        except: Option<ExceptIx>,
+        new_targets: bool,
+    },
     /// "Destroy [permanents]"
     /// ([CR 701.8a](https://yawgatog.com/resources/magic-rules/#R7018a)): "To destroy a
     /// permanent, move it from the battlefield to its owner's graveyard."
@@ -625,6 +645,7 @@ impl Effect {
             | Effect::Unless { effect, .. }
             | Effect::ForEachPlayer { effect, .. } => effect.takes(target, how),
             Effect::Attach { .. }
+            | Effect::CopySpell { .. }
             | Effect::ExchangeControl(..)
             | Effect::Regenerate(_)
             | Effect::PreventDamage { .. }

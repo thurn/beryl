@@ -136,7 +136,9 @@ impl Capability {
                     Node::Condition(Condition::EnteredThisTurn(_)) => {
                         Capability::EnteredThisTurn.bit()
                     }
-                    Node::Amount(Amount::SpellsCast(_)) => Capability::SpellsCast.bit(),
+                    Node::Amount(Amount::SpellsCast(_) | Amount::SpellsCastBefore) => {
+                        Capability::SpellsCast.bit()
+                    }
                     Node::Amount(Amount::CardsDrawn(_)) => Capability::CardsDrawn.bit(),
                     Node::Condition(Condition::DrewInDrawStep(_)) => {
                         Capability::DrewInDrawStep.bit()

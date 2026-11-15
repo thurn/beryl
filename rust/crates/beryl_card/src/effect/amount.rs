@@ -88,6 +88,15 @@ pub enum Amount {
     /// [CR 121.1]: https://yawgatog.com/resources/magic-rules/#R1211
     /// [CR 614.6]: https://yawgatog.com/resources/magic-rules/#R6146
     CardsDrawn(Players),
+    /// "For each other spell that was cast before it this turn", storm's count ([CR 702.40a]):
+    /// "When you cast this spell, copy it for each other spell that was cast before it this
+    /// turn." Every player's spells count. It is read as a "when you cast" ability triggers
+    /// and kept with the trigger, since spells cast after the ability triggered are not
+    /// before the spell; in any other ability it is 0. Kept only in a game with a card that
+    /// reads it, as [`Amount::SpellsCast`] is.
+    ///
+    /// [CR 702.40a]: https://yawgatog.com/resources/magic-rules/#R70240a
+    SpellsCastBefore,
 }
 
 impl Amount {
@@ -96,7 +105,11 @@ impl Amount {
     pub const fn needs_a_resolution(&self) -> bool {
         match self {
             Amount::Fixed(_) => false,
-            Amount::X | Amount::ThatMany | Amount::Carried | Amount::ThoseOf(_) => true,
+            Amount::X
+            | Amount::ThatMany
+            | Amount::Carried
+            | Amount::ThoseOf(_)
+            | Amount::SpellsCastBefore => true,
             Amount::Count(objects) | Amount::CardTypesAmong(objects) => {
                 objects.needs_a_resolution()
             }
@@ -119,7 +132,11 @@ impl Amount {
     /// Whether it reads what a cost took ([`Objects::Paid`]).
     pub const fn names_paid(&self) -> bool {
         match self {
-            Amount::Fixed(_) | Amount::X | Amount::ThatMany | Amount::Carried => false,
+            Amount::Fixed(_)
+            | Amount::X
+            | Amount::ThatMany
+            | Amount::Carried
+            | Amount::SpellsCastBefore => false,
             Amount::Count(objects) | Amount::CardTypesAmong(objects) => objects.names_paid(),
             Amount::Times(_, amount) | Amount::Plus(_, amount) => amount.names_paid(),
             Amount::Life(players)

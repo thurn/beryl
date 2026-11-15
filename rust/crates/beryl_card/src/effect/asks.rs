@@ -53,6 +53,8 @@ impl Effect {
                     }
             }
             Effect::ForEachPlayer { effect, .. } => effect.asks(),
+            // The copies' new targets are chosen as they are made (CR 707.10c).
+            Effect::CopySpell { new_targets, .. } => new_targets,
             // A source of the controller's choice is chosen as the shield begins.
             Effect::PreventDamage { from, .. } => from.is_some(),
             Effect::Modify { modifications, .. } => Modification::any_asks(modifications),

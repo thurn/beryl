@@ -323,6 +323,9 @@ impl Ctx {
             Amount::X => "X".to_owned(),
             Amount::ThatMany => "that many".to_owned(),
             Amount::Carried => "that amount".to_owned(),
+            Amount::SpellsCastBefore => {
+                "the number of other spells cast before it this turn".to_owned()
+            }
             Amount::ThoseOf(players) => {
                 let who = self.player(players);
                 format!("the number of them {who} controlled")

@@ -2,6 +2,7 @@
 //! for each, named as the rules name it.
 
 pub mod attach;
+pub mod copy;
 pub mod counter;
 pub mod destroy;
 pub mod discard;

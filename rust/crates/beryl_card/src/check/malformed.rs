@@ -33,7 +33,8 @@ pub enum Malformed {
     NoModification,
     /// A resolving continuous effect of more parts than [`MODIFY_PARTS`].
     Parts,
-    /// An [`Effect::CreateCopies`] naming a copy exception its face does not list
+    /// An [`Effect::CreateCopies`] or [`Effect::CopySpell`] naming a copy exception its face
+    /// does not list
     /// ([`Face::excepts`]).
     Copy,
     /// [`Effect::AddMana`] outside a mana ability, whose activator chooses the kind
@@ -51,6 +52,9 @@ pub enum Malformed {
     /// [`Amount::Carried`] or [`Objects::Carried`] in an ability that is not a delayed
     /// triggered ability: no effect made it, so it carries nothing.
     Carried,
+    /// [`Amount::SpellsCastBefore`] outside a "when you cast this spell" triggered ability,
+    /// the one ability that keeps it as it triggers.
+    CastBefore,
     /// [`Objects::TriggeredOn`] in an ability that is not triggered: no event was about anything.
     TriggeredOn,
     /// [`Effect::Choose`] with a prompt that is not a pick of one object, which is the one
@@ -127,6 +131,9 @@ impl Malformed {
             }
             Malformed::Carried => {
                 "an expression is what a delayed trigger carries, and its ability is not one"
+            }
+            Malformed::CastBefore => {
+                "an expression counts the spells cast before a spell, outside a trigger of casting it"
             }
             Malformed::TriggeredOn => {
                 "an effect names what its trigger event was about, and its ability has none"

@@ -108,7 +108,8 @@ type Legendary<L> = PerPlayer<L, Bitboard<<L as Layout>::Slot>>;
 /// exist.
 ///
 /// [CR 704.5d](https://yawgatog.com/resources/magic-rules/#R7045d): "If a token is in a zone
-/// other than the battlefield, it ceases to exist."
+/// other than the battlefield, it ceases to exist." A copy of a spell, which is in the shared pool
+/// with the tokens, ceases to exist in a zone other than the stack ([CR 704.5e]).
 ///
 /// [CR 704.5f](https://yawgatog.com/resources/magic-rules/#R7045f): "If a creature has
 /// toughness 0 or less, it's put into its owner's graveyard."
@@ -135,6 +136,7 @@ type Legendary<L> = PerPlayer<L, Bitboard<<L as Layout>::Slot>>;
 /// rule.
 ///
 /// [CR 702.16c]: https://yawgatog.com/resources/magic-rules/#R70216c
+/// [CR 704.5e]: https://yawgatog.com/resources/magic-rules/#R7045e
 fn doomed<L: Layout>(s: &State<L>, t: &GameTable) -> Doomed<L> {
     // A game none of whose cards is an Aura or makes one never asks (the count gate).
     let aura = t.subtypes().has(Subtype::Aura);
@@ -167,16 +169,13 @@ fn doomed<L: Layout>(s: &State<L>, t: &GameTable) -> Doomed<L> {
         }
     }
     // The zones' memberships hold everything off the battlefield and in a zone, so the
-    // token slots need no scan.
-    let away = [
-        Zone::Stack,
-        Zone::Library,
-        Zone::Hand,
-        Zone::Graveyard,
-        Zone::Exile,
-    ]
-    .into_iter()
-    .fold(Bitboard::EMPTY, |away, zone| away | s.in_zone(zone));
+    // token slots need no scan. A token on the stack is a copy of a spell, which no token
+    // ever is otherwise, and stays there
+    // ([CR 704.5e](https://yawgatog.com/resources/magic-rules/#R7045e)): "If a copy of a spell is in a zone
+    // other than the stack, it ceases to exist."
+    let away = [Zone::Library, Zone::Hand, Zone::Graveyard, Zone::Exile]
+        .into_iter()
+        .fold(Bitboard::EMPTY, |away, zone| away | s.in_zone(zone));
     let tokens = (away & L::TOKEN_POOL).filter(|slot| s.object(slot).is_token());
     (graveyard, tokens, legendary)
 }

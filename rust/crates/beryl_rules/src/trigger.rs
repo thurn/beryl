@@ -13,8 +13,8 @@ use crate::layers;
 use crate::layout::{Layout, Queue, index};
 use crate::query::Copiable;
 use crate::state::{
-    AbilityRef, ObjectRef, PendingTrigger, StackEntry, StackItem, State, TriggerInfo, TurnStep,
-    Zone, ZoneKey,
+    AbilityRef, Count, ObjectRef, PendingTrigger, StackEntry, StackItem, State, TriggerInfo,
+    TurnStep, Zone, ZoneKey,
 };
 use crate::table::GameTable;
 
@@ -266,7 +266,9 @@ fn fires<L: Layout>(
             &Event::Cast {
                 spell, controller, ..
             },
-        ) if whose(controller) && about(spell) => Some(info(Some(spell), controller, 0)),
+        ) if whose(controller) && about(spell) => {
+            Some(info(Some(spell), controller, cast_before(s)))
+        }
         (TriggerEvent::Discards, &Event::ZoneChange { object, .. }) => {
             let discarder = s.object(object.slot).owner();
             (whose(discarder) && about(object)).then(|| info(Some(object), discarder, 0))
@@ -276,6 +278,18 @@ fn fires<L: Layout>(
         }
         _ => None,
     }
+}
+
+/// The number of other spells cast before the spell just cast this turn, by every player, which
+/// a "when you cast" ability keeps as it triggers, for storm ([CR 702.40a]): "copy it for each
+/// other spell that was cast before it this turn." The spell itself was counted as it became
+/// cast, before its Cast event. Zero in a game that keeps no count of spells cast.
+///
+/// [CR 702.40a]: https://yawgatog.com/resources/magic-rules/#R70240a
+fn cast_before<L: Layout>(s: &State<L>) -> u8 {
+    let players = s.players_in_seat_order(s.players());
+    let counted = players.map(|p| s.counted(Count::SpellsCast, p));
+    counted.fold(0u8, u8::saturating_add).saturating_sub(1)
 }
 
 /// Whether `object`, which an event is about, is a trigger's subject: the object its

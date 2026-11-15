@@ -24,6 +24,7 @@
 mod abilities;
 mod card;
 mod clauses;
+mod copies;
 mod effects;
 mod filters;
 mod modify;

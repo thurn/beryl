@@ -107,7 +107,7 @@ impl<L: Layout> State<L> {
             types: face.types,
             supertypes: face.supertypes,
             subtypes: what.subtypes(t),
-            colors: face.colors,
+            colors: what.colors(t),
         };
         for &reach in self.elsewhere.iter() {
             let (filter, change) = self.reach_change(t, reach);

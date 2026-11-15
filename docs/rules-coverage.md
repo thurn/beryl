@@ -668,6 +668,21 @@ Built by by-bajq.3.10:
   machine's target step. A copy of a permanent spell becomes a token. Storm is a
   triggered ability that works on the stack and reads the count of spells cast
   this turn as it triggers.
+- **As built** (by-bajq.6.4, 2026-11-14). `Effect::CopySpell` names the spells,
+  a count, an exception of the copier's face and whether new targets may be
+  chosen. A copy is a slot of the shared pool marked as a token, which no card
+  casts, so a token on the stack is always a copy: it moves as a spell does, and
+  the state-based check ends it off the stack (CR 704.5e). Its copy exception
+  (`CopyChange::Colors`, Fork's red) is a copy effect on it, as a token copy's
+  is, and layer 1 and the queries of objects off the battlefield read its
+  colors. New targets are not chosen through the casting machine but by a
+  resolution question for each target, with the target it has listed first
+  (`choices::retarget`), before the copy goes on the stack. Storm's count is the
+  amount of the "when you cast" trigger (`Amount::SpellsCastBefore`), the spells
+  cast this turn by every player less the spell itself, read as it triggers. Not
+  built: copying a spell that has left the stack, from its last known
+  information, as storm does when the spell is countered before its trigger
+  resolves.
 
 ### 6. Costs, prohibitions and mana
 

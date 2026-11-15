@@ -14,6 +14,7 @@
 //! | --- | --- | --- |
 //! | [`Shape::YesNo`] | [`yes_no`] | The yes or no. Also the one that opens another shape's run ([`Part::Whether`], [`Part::Instead`]). |
 //! | [`Shape::Pick`] | [`pick`] | One object, where one must be taken. |
+//! | | [`retarget`] | A copy's target: the one it has, or a new one. |
 //! | | [`pick_or_end`] | One more object, or the end of the picks. |
 //! | | [`pick_up_to`] | A whole run: up to a number of objects. |
 //! | | [`may_pick`] | A whole run: one object, which may be declined. |
@@ -279,6 +280,53 @@ pub fn may_pick<L: Layout>(
     }
     let pick = prompt.part(Part::Pick);
     pick_about(game, resolution, player, candidates, pick, candidates).map(Some)
+}
+
+/// Asks `player` for a target of a copy of a spell as it is made: `kept`, the target it has,
+/// listed first, or one of `others`, the new targets it may have instead
+/// ([CR 707.10c](https://yawgatog.com/resources/magic-rules/#R70710c)): "The player may leave
+/// any number of the targets unchanged, even if those targets would be illegal." A target spec
+/// that can choose players lists them by seat, then any abilities on the stack, the top first,
+/// then any objects in the candidate order, as the casting machine lists a target's options.
+/// Returns the one chosen.
+pub(crate) fn retarget<L: Layout>(
+    game: &mut Game<'_, L>,
+    resolution: &mut Resolution<'_, L>,
+    player: Seat,
+    kept: Opt<L>,
+    others: crate::cast::TargetSet<L>,
+) -> Result<Opt<L>, Stop> {
+    let s = &*game.state;
+    let mut opts: L::Queue<Opt<L>, 64> = Default::default();
+    opts.push(kept)?;
+    for p in s.players_in_seat_order(others.players) {
+        opts.push(Opt::Player(p))?;
+    }
+    let mut unlisted = others.abilities;
+    while unlisted != 0 {
+        let place = 63 - unlisted.leading_zeros() as usize;
+        unlisted &= !(1 << place);
+        opts.push(Opt::Ability(crate::layout::index::<L>(place)))?;
+    }
+    for slot in s.in_candidate_order(crate::engine::collapse(s, others.objects)) {
+        opts.push(Opt::Object(slot))?;
+    }
+    let opts = opts.as_slice().iter().copied().enumerate();
+    // The target kept is never listed twice.
+    let opts = opts
+        .filter(|&(i, opt)| i == 0 || opt != kept)
+        .map(|(_, opt)| opt);
+    let prompt = Prompt::new(Purpose::Target).most(1);
+    let none = Bitboard::EMPTY;
+    option(
+        game,
+        resolution,
+        player,
+        DecisionKind::Target,
+        opts,
+        prompt,
+        none,
+    )
 }
 
 /// Asks `player` what the objects `aimed`, chosen already, are aimed at, one of `targets`:

@@ -1,7 +1,7 @@
 //! Copiable values: a definition, the face of it that is up, and the copy exceptions that
 //! made them ([`crate::additions`]). [`crate::query`] asks them of an object.
 
-use beryl_card::{CopyChange, Face, FaceIx};
+use beryl_card::{Colors, CopyChange, Face, FaceIx};
 
 use crate::additions::{Addition, AdditionList};
 use crate::event::{Listens, Replaces};
@@ -272,6 +272,34 @@ impl<L: Layout> Copiable<L> {
         }
     }
 
+    /// Colors ([CR 105.2]): "An object can be one or more of the five colors, or it can be no
+    /// color at all." The face's, or those the last exception that sets colors sets (CR
+    /// 707.9b), as Fork's copy is red whatever its mana cost says.
+    ///
+    /// [CR 105.2]: https://yawgatog.com/resources/magic-rules/#R1052
+    #[inline]
+    pub fn colors(self, t: &GameTable) -> Colors {
+        if self.additions.is_empty() {
+            self.face(t).colors
+        } else {
+            self.colors_of_additions(t)
+        }
+    }
+
+    /// [`Copiable::colors`] of values with exceptions.
+    #[cold]
+    #[inline(never)]
+    fn colors_of_additions(self, t: &GameTable) -> Colors {
+        let changes = self
+            .additions
+            .iter()
+            .flat_map(|addition| addition.changes(t));
+        changes.fold(self.face(t).colors, |colors, change| match *change {
+            CopyChange::Colors(set) => set,
+            CopyChange::PowerToughness(..) => colors,
+        })
+    }
+
     /// Toughness, 0 where the face has none (CR 208.1): "the second is its toughness".
     #[inline]
     pub fn toughness(self, t: &GameTable) -> i8 {
@@ -301,7 +329,8 @@ impl<L: Layout> Copiable<L> {
             .iter()
             .flat_map(|addition| addition.changes(t))
             .fold(None, |pt, change| match *change {
-                CopyChange::PowerToughness(power, toughness) => Some((power, toughness)).or(pt),
+                CopyChange::PowerToughness(power, toughness) => Some((power, toughness)),
+                CopyChange::Colors(_) => pt,
             })
     }
 

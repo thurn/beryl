@@ -190,8 +190,11 @@ pub(crate) fn move_batch_to<L: Layout>(
         let o = *s.object(slot);
         // CR 111.8: "A token that has left the battlefield can't move to another zone or
         // come back onto the battlefield. If such a token would change zones, it remains in
-        // its current zone instead."
-        if o.is_token() && !matches!(o.zone(), Zone::Battlefield | Zone::Nowhere) {
+        // its current zone instead." A token on the stack is a copy of a spell, which leaves
+        // it as a spell does: onto the battlefield as a token as it resolves
+        // ([CR 608.3f](https://yawgatog.com/resources/magic-rules/#R6083f)), or to where a
+        // card would go, where the state-based check ends it (CR 704.5e).
+        if o.is_token() && !matches!(o.zone(), Zone::Battlefield | Zone::Nowhere | Zone::Stack) {
             continue;
         }
         let from = o.zone();

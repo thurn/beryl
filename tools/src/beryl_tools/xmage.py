@@ -94,6 +94,10 @@ class Exporter:
         # How many targets of an "up to N" spec are still to come when fewer than N were
         # announced: XMage asks for more until told to stop.
         self.targets_short: int | None = None
+        # The player who chose a copy's targets as it resolved, for the asserts and Resolves
+        # after it until the stack empties or another answer: XMage runs a command as soon as its player holds priority, and the
+        # player Beryl gives priority next may have held it since before the copy was made.
+        self.retargeted: str | None = None
         # The resolving object and kind of the last answer, for XMage's untap shortcut.
         self.last_answer: tuple[str | None, str] = (None, "")
         # After a yes to a `Cards.may_choose` ability's question: the command for the card chosen.
@@ -180,23 +184,15 @@ class Exporter:
             self.reach(p.turn, p.step)
             if action["action"] != "Answer":
                 self.end_scry()
-            self.simultaneous_emblem_triggers(p)
+            p.check_simultaneous_emblem_triggers()
             self.act(action, p)
+            kept = action["action"] == "Answer" and p.kept is not None
+            if not p.stack or not (kept or action["action"] in ("Assert", "Resolve")):
+                self.retargeted = None
         self.end_scry()
         if self.take_pending is not None:
             raise Unsupported(f"{self.take_pending} putting cards into a hand unasked")
         self.stop()
-
-    @staticmethod
-    def simultaneous_emblem_triggers(p: Position) -> None:
-        """An emblem's triggers on one event, such as Teferi, Hero of Dominaria's for each card
-        of a multiple draw, go on the stack together: XMage asks their order, which Beryl, with
-        the triggers equivalent (architecture section 7.2), never asks, and an emblem names no
-        card to answer with."""
-        names = [cast(str, item["name"]) for item in p.stack if not item["spell"]]
-        for name in set(names):
-            if name.endswith(" Emblem") and names.count(name) > 1:
-                raise Unsupported(f"ordering {name}'s simultaneous triggers")
 
     def unasked(self, p: Position) -> None:
         """For each `Cards.unless_pays` counterspell that left the stack without Beryl asking its
@@ -317,7 +313,7 @@ class Exporter:
         elif kind == "Resolve":
             if p.decider is None:
                 raise Unsupported("resolves after the game is over")
-            who = self.player(p.decider)
+            who = self.retargeted or self.player(p.decider)
             self.prepare(who, p)
             self.emit(f"resolveTop({self.at(p)}, {who});")
             self.empty_search(p)
@@ -610,6 +606,10 @@ class Exporter:
             self.emit(f"setChoice({who}, {'true' if what == 'Yes' else 'false'});")
             if what == "Yes" and self.next_answer_kind() != "ChooseUpTo":
                 self.emit(f"addTarget({who}, TestPlayer.TARGET_SKIP);")
+        elif kind == "Target" and p.kept is not None and "purpose" not in action:
+            self.retargeted = who
+            for line in p.new_target(who, pick, self.player):
+                self.emit(line)
         elif kind == "Priority" and what == "Pass":
             if p.stack:
                 self.prepare(who, p)
@@ -751,7 +751,7 @@ class Exporter:
             self.export.skipped.append("Tapped: after XMage chose a payment's sources")
             return
         code = assertion_code(assertion, self.player(assertion.get("player")))
-        who = self.player(p.decider)
+        who = self.retargeted or self.player(p.decider)
         self.prepare(who, p)
         self.emit(
             f"runCode({java_string(what)}, {self.at(p)}, {who}, "

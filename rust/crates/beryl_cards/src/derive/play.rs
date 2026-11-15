@@ -53,11 +53,43 @@ pub(super) struct Run {
 /// creature spell, which some counters want.
 const LEADS: [&str; 2] = [props::SORCERY.card, props::VANILLA.card];
 
+/// The sorcery lead with its target chosen, the opponent's untapped creature: for a
+/// card that can respond only to an instant or sorcery spell, as Fork copies one, which the
+/// leads above never let respond, since the sorcery's target is still to choose when player 0
+/// would.
+const TARGETED_LEAD: &[Action] = &[
+    Action::cast(P0, props::SORCERY.card),
+    Action::choose(P0, DecisionKind::Target, props::FLIER.card),
+];
+
 /// The ability player 0 activates for a card that targets an ability on the stack to respond
 /// to: the equip ability of the Equipment the witness for such cards puts on the battlefield
 /// beside one creature of player 0's, its one target, which the runner chooses unasked
 /// ([`super::witness`]).
 const ABILITY_LEAD: Action = Action::activate(P0, props::EQUIPMENT.card, 1);
+
+/// The spells and abilities player 0 puts on the stack for the card to respond to, each named
+/// for a label, after none at all: [`LEADS`] but the card itself, and for a card that targets
+/// abilities, an equip ability. None for a card as mana.
+fn leads(
+    def: &'static CardDef,
+    place: Place,
+    targets_abilities: bool,
+) -> Vec<Option<(&'static str, Vec<Action>)>> {
+    let mut leads = vec![None];
+    if !matches!(place, Place::Mana(..)) {
+        leads.extend(
+            LEADS
+                .iter()
+                .filter(|&&lead| lead != def.name)
+                .map(|&l| Some((l, vec![Action::cast(P0, l)]))),
+        );
+        if targets_abilities {
+            leads.push(Some(("an equip ability", vec![ABILITY_LEAD])));
+        }
+    }
+    leads
+}
 
 /// Every opening of a scenario of `def` starting in `place`, labelled: each action naming the
 /// card its owner can take at the first priority in their main phase, each they can take in
@@ -95,21 +127,25 @@ pub(super) fn openings(
         targets(|kind| matches!(kind, TargetKind::Spell | TargetKind::SpellOrPermanent));
     let targets_abilities = targets(|kind| kind.abilities().is_some());
     let mut out: Vec<(String, Vec<Stimulus>)> = Vec::new();
-    let mut leads: Vec<Option<(&'static str, Action)>> = vec![None];
-    if !matches!(place, Place::Mana(..)) {
-        leads.extend(
-            LEADS
-                .iter()
-                .filter(|&&lead| lead != def.name)
-                .map(|&l| Some((l, Action::cast(P0, l)))),
-        );
-        if targets_abilities {
-            leads.push(Some(("an equip ability", ABILITY_LEAD)));
+    let mut leads = leads(def, place, targets_abilities);
+    let mut i = 0;
+    let mut targeted = false;
+    while i < leads.len() {
+        let lead = leads[i].clone();
+        i += 1;
+        let responded = out
+            .iter()
+            .any(|(label, _)| label.contains(" in response to "));
+        if i == leads.len() && targets_spells && !responded && !targeted && i > 1 {
+            targeted = true;
+            leads.push(Some((props::SORCERY.card, TARGETED_LEAD.to_vec())));
         }
-    }
-    for lead in leads {
-        let cast = lead.map(|(_, action)| action);
-        let mut to: Vec<Stimulus> = cast.into_iter().map(Stimulus::Act).collect();
+        let cast = lead.as_ref().map(|(_, actions)| actions.as_slice());
+        let mut to: Vec<Stimulus> = cast
+            .unwrap_or_default()
+            .iter()
+            .map(|&a| Stimulus::Act(a))
+            .collect();
         to.push(Stimulus::Hold);
         let ran = Walk::new(start, prelude).and_then(|w| {
             walk(
@@ -148,12 +184,12 @@ pub(super) fn openings(
                         || targets_abilities
                         || !out.iter().any(|(l, _)| *l == label) =>
                 {
-                    let lead = lead.map(|(name, _)| name).unwrap_or_default();
-                    let stimuli = [&[Stimulus::Act(cast), Stimulus::Respond(action)], then];
-                    out.push((
-                        format!("{label} in response to {lead}"),
-                        with(&stimuli.concat()),
-                    ));
+                    let lead = lead.as_ref().map(|&(name, _)| name).unwrap_or_default();
+                    let mut stimuli: Vec<Stimulus> =
+                        cast.iter().map(|&a| Stimulus::Act(a)).collect();
+                    stimuli.push(Stimulus::Respond(action));
+                    stimuli.extend_from_slice(then);
+                    out.push((format!("{label} in response to {lead}"), with(&stimuli)));
                 }
                 Some(_) => {}
             }
@@ -346,6 +382,12 @@ pub(super) fn walk(
                 walk.next += 1;
             }
             action
+        } else if let Some(Stimulus::Act(answer @ Action::Answer { kind, .. })) = pending
+            && kind == d.kind
+        {
+            // A lead's own answer, as its sorcery's target.
+            walk.next += 1;
+            answer
         } else {
             let mut picks = unambiguous(&walk.live, &d, true);
             if picks.is_empty() && d.kind == DecisionKind::TriggerOrder {

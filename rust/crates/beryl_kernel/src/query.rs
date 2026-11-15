@@ -312,8 +312,10 @@ impl<L: Layout> State<L> {
         let o = self.object(slot);
         if o.zone == Zone::Battlefield {
             self.derived(slot).colors
-        } else if !self.reaches_elsewhere() {
+        } else if !self.reaches_elsewhere() && !o.flags.has(Flag::Copy) {
             self.definition(slot).face(t).colors
+        } else if !self.reaches_elsewhere() {
+            self.copiable_colors(t, slot)
         } else {
             self.elsewhere(t, slot).colors
         }

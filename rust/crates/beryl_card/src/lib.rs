@@ -77,11 +77,11 @@ pub mod prelude {
     pub use crate::{
         Ability, Amount, BasicLandTypes, CardDef, CastTerms, CastingKind, CastingOption, Castings,
         ChosenKind, Colors, Comparison, Condition, CopyChange, CopyException, Cost, CostAction,
-        CostPart, CounterKind, Duration, Effect, Face, FaceIx, Filter, Found, Governed, Keywords,
-        LayerSpec, LibraryOrder, LibraryPosition, ManaColor, ManaCost, ManaRestriction, ManaSet,
-        Modification, Named, Objects, Place, Players, Prevention, Prompt, Protection, Purpose,
-        Recipients, Replacement, RuleChange, SpellCost, Subtype, Subtypes, Supertypes, Taken,
-        TargetKind, TargetSpec, TextWord, Trigger, TriggerEvent, TurnStep, Types, When, Zone, card,
-        mana,
+        CostPart, CounterKind, Duration, Effect, ExceptIx, Face, FaceIx, Filter, Found, Governed,
+        Keywords, LayerSpec, LibraryOrder, LibraryPosition, ManaColor, ManaCost, ManaRestriction,
+        ManaSet, Modification, Named, Objects, Place, Players, Prevention, Prompt, Protection,
+        Purpose, Recipients, Replacement, RuleChange, SpellCost, Subtype, Subtypes, Supertypes,
+        Taken, TargetKind, TargetSpec, TextWord, Trigger, TriggerEvent, TurnStep, Types, When,
+        Zone, card, mana,
     };
 }

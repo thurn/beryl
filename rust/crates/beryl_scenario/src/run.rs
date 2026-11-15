@@ -3,6 +3,7 @@
 use beryl_engine::card::{FaceIx, Types};
 use beryl_engine::event::{Event, Tag};
 use beryl_engine::state::ObjectRef;
+use beryl_engine::state::Pending;
 use beryl_engine::{
     Breakpoint, CardTable, Choice, Decision, DecisionKind, GameTable, Opt, Outcome, Profile,
     Replay, Scratch, Seat, Slot, State, Step, Stops, Zone, ZoneKey, apply, next,
@@ -420,6 +421,17 @@ impl Runner {
             Step::Decide(d) => (Some(d.decider), Some(d.kind), Some(d.prompt.purpose)),
             Step::Over(_) => (None, None, None),
         };
+        // A target asked while a spell or ability resolves is a copy's new target, whose
+        // first option is the target it has.
+        let kept = match step {
+            Step::Decide(d)
+                if d.kind == DecisionKind::Target
+                    && matches!(self.s.pending(), Pending::Resolving(_)) =>
+            {
+                self.pick_for(d, Choice(0))
+            }
+            _ => None,
+        };
         let flashback = self
             .s
             .cast_permissions()
@@ -454,6 +466,7 @@ impl Runner {
             kind,
             purpose,
             stack,
+            kept,
             flips,
             taps,
         }

@@ -365,6 +365,19 @@ impl Ctx {
         {
             return Some(format!("Dredge {n}"));
         }
+        // Storm's whole ability (CR 702.40a).
+        if let Behavior::Data(Effect::CopySpell {
+            spells: Objects::This,
+            count: Amount::SpellsCastBefore,
+            except: None,
+            new_targets: true,
+        }) = ability.body()
+            && ability
+                .trigger()
+                .is_some_and(|trigger| trigger.is_this(TriggerEvent::Casts))
+        {
+            return Some("Storm".to_owned());
+        }
         if ability.kind() != AbilityKind::Activated {
             return None;
         }

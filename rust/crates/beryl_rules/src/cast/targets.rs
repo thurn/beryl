@@ -10,7 +10,8 @@ use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
 use crate::protection;
 use crate::state::{
-    AbilityTarget, CastKind, CastStep, Casting, StackEntry, StackItem, State, Target, Zone,
+    AbilityTarget, CastKind, CastStep, Casting, StackEntry, StackItem, State, Target, TargetPlace,
+    Zone, placed,
 };
 use crate::table::GameTable;
 
@@ -337,6 +338,49 @@ fn ability_still_legal<L: Layout>(
     let you = entry.controller();
     let set = candidates(s, t, spec, you, itself, entry.x, source_of(entry));
     place < 64 && set.abilities & (1 << place) != 0
+}
+
+/// The new targets a copy of a spell may have in place of its target at `place`, for its
+/// controller to choose among as the copy is made, before it is on the stack
+/// ([CR 707.10c]): "If the player chooses to change some or all of the targets, the new targets
+/// must be legal. Once the player has decided what the copy's targets will be, the copy is put
+/// onto the stack with those targets." The candidates of that target's spec now, less the
+/// targets `entry`, the copy's entry, has for the same spec: the same target can't be chosen
+/// twice for one instance of the word "target" ([CR 115.3]). The target at `place` itself is
+/// among them only if it is still legal; the caller offers to keep it either way.
+///
+/// [CR 707.10c]: https://yawgatog.com/resources/magic-rules/#R70710c
+/// [CR 115.3]: https://yawgatog.com/resources/magic-rules/#R1153
+pub(crate) fn new_targets<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    entry: &StackEntry<L>,
+    ability: &Ability,
+    place: TargetPlace,
+) -> TargetSet<L> {
+    let spec_ix = entry.targets.as_slice()[place.index()].spec();
+    let spec = &ability.targets()[spec_ix.index()];
+    // Not yet on the stack, the copy is no candidate, and every entry there is below it.
+    let itself = Itself {
+        spell: None,
+        on_stack: false,
+    };
+    let mut set = candidates(s, t, spec, entry.controller(), itself, entry.x, None);
+    for (other, target) in placed(entry.targets.as_slice()) {
+        if other == place || target.spec() != spec_ix {
+            continue;
+        }
+        if let Some(r) = target.as_object() {
+            set.objects.remove(r.slot);
+        }
+        if let Some(player) = target.as_player() {
+            set.players.remove(player);
+        }
+        if let Some(AbilityTarget::At(at)) = target.as_ability() {
+            set.abilities &= !(1 << at);
+        }
+    }
+    set
 }
 
 /// Chooses the targets of the triggered ability just put on the stack, if it has any.

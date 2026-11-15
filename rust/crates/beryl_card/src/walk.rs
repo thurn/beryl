@@ -338,7 +338,11 @@ impl Amount {
     pub fn walk(&self, visit: Visit) {
         visit(Node::Amount(self));
         match self {
-            Amount::Fixed(_) | Amount::X | Amount::ThatMany | Amount::Carried => {}
+            Amount::Fixed(_)
+            | Amount::X
+            | Amount::ThatMany
+            | Amount::Carried
+            | Amount::SpellsCastBefore => {}
             Amount::Count(objects) | Amount::CardTypesAmong(objects) => objects.walk(visit),
             Amount::Times(_, amount) | Amount::Plus(_, amount) => amount.walk(visit),
             Amount::Life(players)

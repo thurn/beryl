@@ -4,10 +4,12 @@ without asking."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import cast
 
 from .card_facts import Json, Unsupported
+from .xmage_java import java_string
 
 # Questions with one answer, which Beryl answers silently, that XMage asks anyway: by kind,
 # targets (with none to choose too) and X, whose limit XMage leaves to the payment; by what the
@@ -39,6 +41,34 @@ class Position:
     creatures: list[int]
     # The seat controlling the active player this turn (CR 724.1), if another seat does.
     controller: int | None = None
+    # At a copy of a spell's new target, the target it has now, as a pick.
+    kept: Json | None = None
+
+    def check_simultaneous_emblem_triggers(self) -> None:
+        """An emblem's triggers on one event, such as Teferi, Hero of Dominaria's for each card
+        of a multiple draw, go on the stack together: XMage asks their order, which Beryl, with
+        the triggers equivalent (architecture section 7.2), never asks, and an emblem names no
+        card to answer with."""
+        names = [cast(str, item["name"]) for item in self.stack if not item["spell"]]
+        for name in set(names):
+            if name.endswith(" Emblem") and names.count(name) > 1:
+                raise Unsupported(f"ordering {name}'s simultaneous triggers")
+
+    def new_target(
+        self, who: str, pick: Json, player: Callable[[object], str]
+    ) -> list[str]:
+        """The commands for `who`'s answer `pick` to a copy's new target (`kept` is the target
+        it has): XMage asks whether to change each target, then for the new one
+        (`StackObjectImpl.chooseNewTarget`). `player` names a seat as XMage's test does.
+        """
+        changed = pick != self.kept
+        lines = [f"setChoice({who}, {'true' if changed else 'false'});"]
+        if changed and "card" in pick:
+            name = java_string(self.object_name(cast(str, pick["card"])))
+            lines.append(f"addTarget({who}, {name});")
+        elif changed:
+            lines.append(f"addTarget({who}, {player(pick['player'])});")
+        return lines
 
     def object_name(self, card: str) -> str:
         """How XMage's test commands name the object `card` picks: a face-down permanent, which
@@ -75,4 +105,5 @@ class Position:
             flashback=cast(list[str], t.get("flashback", [])),
             face_down=cast(list[str], t.get("face_down", [])),
             creatures=cast(list[int], t.get("creatures", [1, 1])),
+            kept=cast("Json | None", t.get("kept")),
         )

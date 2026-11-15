@@ -457,7 +457,9 @@ impl<L: Layout> Scene<'_, L> {
             Amount::ThatMany => i32::from(self.registers.outcome.number),
             // CR 608.2h: settled once, as the effect that made the delayed ability was
             // applied.
-            Amount::Carried => i32::from(self.subject.info.amount),
+            // What a delayed trigger carries, or what a "when you cast" ability kept as it
+            // triggered (`trigger::fires`), which the card table allows in no other ability.
+            Amount::Carried | Amount::SpellsCastBefore => i32::from(self.subject.info.amount),
             // Of those the instruction acted on, the ones each of the players controlled
             // as it set out to (CR 608.2h).
             Amount::ThoseOf(players) => {

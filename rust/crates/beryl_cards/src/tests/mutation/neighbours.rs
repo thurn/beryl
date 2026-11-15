@@ -726,6 +726,29 @@ fn local(effect: &'static Effect) -> Neighbours<Effect> {
                 );
             }
         }
+        Effect::CopySpell {
+            spells,
+            count,
+            except,
+            new_targets,
+        } => {
+            let copy = |count, except, new_targets| Effect::CopySpell {
+                spells,
+                count,
+                except,
+                new_targets,
+            };
+            for (name, count) in amounts(count) {
+                add(name, copy(count, except, new_targets));
+            }
+            add(
+                format!("new_targets {}", !new_targets),
+                copy(count, except, !new_targets),
+            );
+            if except.is_some() {
+                add("except None".to_owned(), copy(count, None, new_targets));
+            }
+        }
         Effect::AddCounters {
             objects: which,
             kind,
