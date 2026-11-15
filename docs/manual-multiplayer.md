@@ -390,8 +390,10 @@ to your graveyard) where Cockatrice needs a third step in between: I tell you
 which card, and you move it.
 
 The host returns a stale refusal for a reference from an older view, from
-another seat, or with a different expected zone. The host resolves current
-references to its object ids before checking the action’s permissions.
+another seat, or for a zone the object is absent from. In a batch, the host
+resolves each member’s references against the state left by the previous
+members. A reference can follow the same object to a public zone. If an action
+replaces the object’s id, the old reference is stale.
 
 ### The log, undo and rewind
 
@@ -907,7 +909,8 @@ Arrows show attacks, blocks and targets.
 
 - **Dragging with the right button from a card draws an arrow** to the card or
   player it is released on. With a selection, each selected card gets an arrow.
-- **An arrow drawn from a card in hand plays the card first.**
+- **An arrow drawn from a card in hand plays the card first.** The move and
+  arrow are one log entry. If the arrow is refused, the card stays in hand.
 - **The arrow's kind is worked out once, when it is drawn.** From a creature to
   the player who does not control it, or to that player's planeswalker, between
   the beginning of combat and combat damage phases: an attack. From a creature

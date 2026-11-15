@@ -2,7 +2,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::apply::{AppliedChanges, Presentation, commit, next_entry, perform, perform_history};
+use crate::apply::{
+    AppliedChanges, Presentation, apply_mapped, commit, next_entry, perform, perform_history,
+};
 use crate::change::Edit;
 use crate::state::ObjectId;
 use crate::{Action, Chance, Change, Entry, Refusal, Seat, Table, apply, permissions, undo};
@@ -211,12 +213,46 @@ impl Log {
         chance: &mut Chance,
         check: impl FnOnce(&Table, &Entry) -> Result<(), Refusal>,
     ) -> Result<&Entry, Refusal> {
+        self.apply_transaction(table, chance, check, |log, table, chance| {
+            log.execute(table, by, action, chance)
+        })
+    }
+
+    /// Resolves each member of a batch just before applying it to the staged table.
+    /// Only resolved host actions are recorded, and the batch commits as one entry.
+    #[allow(clippy::too_many_arguments)]
+    pub fn apply_mapped_checked<Id>(
+        &mut self,
+        table: &mut Table,
+        by: Seat,
+        action: Action<Id>,
+        chance: &mut Chance,
+        mut resolve: impl FnMut(&Table, Action<Id>) -> Result<Action, Refusal>,
+        check: impl FnOnce(&Table, &Entry) -> Result<(), Refusal>,
+    ) -> Result<&Entry, Refusal> {
+        self.apply_transaction(table, chance, check, |log, table, chance| {
+            if matches!(action, Action::Batch { .. }) {
+                apply_mapped(table, by, action, chance, resolve)
+            } else {
+                let action = resolve(table, action)?;
+                log.execute(table, by, &action, chance)
+            }
+        })
+    }
+
+    fn apply_transaction(
+        &mut self,
+        table: &mut Table,
+        chance: &mut Chance,
+        check: impl FnOnce(&Table, &Entry) -> Result<(), Refusal>,
+        execute: impl FnOnce(&Self, &mut Table, &mut Chance) -> Result<Entry, Refusal>,
+    ) -> Result<&Entry, Refusal> {
         if table.entry_number != self.tip() {
             return Err(Refusal::INVALID);
         }
         let before = table.clone();
         let mut planned_chance = chance.clone();
-        let entry = self.execute(table, by, action, &mut planned_chance)?;
+        let entry = execute(self, table, &mut planned_chance)?;
         if let Err(refusal) = check(table, &entry) {
             *table = before;
             return Err(refusal);
@@ -239,7 +275,7 @@ impl Log {
                 let n = next_entry(table)?;
                 let (applied, seen) = undo::inverse(self, table, target);
                 let (applied, touches) = perform_history(table, action, applied);
-                let mut result = commit(table, n, by, action, applied, touches);
+                let mut result = commit(table, n, by, action.clone(), applied, touches);
                 result.undoes = Some(target.n);
                 result.seen = seen;
                 result.undone_action = Some(target.action.clone());
@@ -260,7 +296,7 @@ impl Log {
                     Some(Presentation::Reset),
                 );
                 let (applied, touches) = perform_history(table, action, applied);
-                Ok(commit(table, n, by, action, applied, touches))
+                Ok(commit(table, n, by, action.clone(), applied, touches))
             }
             _ => apply(table, by, action, chance),
         }

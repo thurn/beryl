@@ -1,7 +1,7 @@
 use beryl_table::apply::Entry;
 use beryl_table::permissions;
-use beryl_table::state::ObjectId;
-use beryl_table::{Chance, Log, Refusal, Seat, Table};
+use beryl_table::state::{ObjectId, Zone};
+use beryl_table::{Action, Chance, Log, Refusal, Seat, Table};
 
 use super::{TableAction, TableObjectAction, TableObjectRef};
 use crate::script::Subject;
@@ -50,6 +50,7 @@ impl TableActionRefs {
             reference: TableObjectRef {
                 view: self.view.clone(),
                 handle,
+                after_move: None,
             },
             zone,
         });
@@ -87,24 +88,65 @@ impl TableActionRefs {
         if by != self.seat {
             return Err(Refusal::Stale);
         }
-        let action = action.try_map_objects(&mut |reference, zone| {
-            if self.revision != table.revision() || reference.view != self.view {
-                return Err(Refusal::Stale);
+        log.apply_mapped_checked(
+            table,
+            by,
+            action,
+            chance,
+            |staged, action| self.resolve_action(staged, action),
+            check,
+        )
+    }
+
+    fn resolve_action(&self, staged: &Table, mut action: TableAction) -> Result<Action, Refusal> {
+        if let Action::Arrow { selection, .. } = &mut action
+            && selection
+                .objects
+                .iter()
+                .any(|reference| reference.after_move == Some(true))
+        {
+            // The selection names the original hand. Use the staged destination
+            // so the client need not predict where the host played the card.
+            let mut destination = None;
+            for reference in &mut selection.objects {
+                let (id, published) = self.issued(staged, reference)?;
+                let current = permissions::reference_zone(staged, self.seat, id)
+                    .filter(|zone| matches!(zone, Zone::Battlefield | Zone::Stack))
+                    .ok_or(Refusal::Stale)?;
+                if reference.after_move != Some(true)
+                    || !matches!(published, Zone::Hand(_))
+                    || selection.zone != published
+                    || destination.is_some_and(|zone| zone != current)
+                {
+                    return Err(Refusal::Stale);
+                }
+                destination = Some(current);
+                reference.after_move = None;
             }
-            let index = reference.handle as usize;
-            let entry = self.actions.get(index).ok_or(Refusal::Stale)?;
-            if zone != entry.zone {
-                return Err(Refusal::Stale);
-            }
-            let id = self.ids[index];
-            if table
-                .position(id)
-                .is_none_or(|(current, _)| current != zone)
+            selection.zone = destination.expect("selection contains a moved reference");
+        }
+        action.try_map_objects(&mut |reference, zone| {
+            let (id, published) = self.issued(staged, &reference)?;
+            if reference.after_move == Some(true)
+                || (zone != published && !zone.is_public())
+                || permissions::reference_zone(staged, self.seat, id) != Some(zone)
             {
                 return Err(Refusal::Stale);
             }
             Ok(id)
-        })?;
-        log.apply_checked(table, by, &action, chance, check)
+        })
+    }
+
+    fn issued(
+        &self,
+        table: &Table,
+        reference: &TableObjectRef,
+    ) -> Result<(ObjectId, Zone), Refusal> {
+        if self.revision != table.revision() || reference.view != self.view {
+            return Err(Refusal::Stale);
+        }
+        let index = reference.handle as usize;
+        let entry = self.actions.get(index).ok_or(Refusal::Stale)?;
+        Ok((self.ids[index], entry.zone))
     }
 }

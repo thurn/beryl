@@ -901,7 +901,7 @@ deckTokens?: Array<CardTokenLink>, prompt?: TablePrompt, arrows?: Array<TableArr
 
 export type TableArrow = { arrow: Arrow, from: Subject, to: Subject, own: boolean, };
 
-export type TableObjectRef = { view: string, handle: number, };
+export type TableObjectRef = { view: string, handle: number, afterMove?: boolean, };
 
 export type TableObjectAction = { subject: Subject, reference: TableObjectRef, zone: TableZone, };
 

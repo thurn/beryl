@@ -19,9 +19,13 @@ fn object(slot: u16) -> Subject {
 }
 
 fn put(table: &mut Table, id: u32, zone: Zone) -> ObjectId {
+    put_named(table, id, zone, "Island")
+}
+
+fn put_named(table: &mut Table, id: u32, zone: Zone, name: &str) -> ObjectId {
     let id = ObjectId(id);
     Change::Create {
-        object: Object::new(id, Card::Named("Island".into()), OWNER, zone),
+        object: Object::new(id, Card::Named(name.into()), OWNER, zone),
         index: table.zone(zone).unwrap().len(),
     }
     .perform(table);
@@ -304,4 +308,172 @@ fn two_identical_stack_markers_get_distinct_action_references() {
         )
         .unwrap();
     assert_eq!(table.stack, [first]);
+}
+
+#[test]
+fn a_batch_aims_a_land_and_a_spell_from_their_played_zones() {
+    let mut table = Table::new(2);
+    let land = put(&mut table, 1, HAND);
+    let spell = put_named(&mut table, 2, HAND, "Counterspell");
+    let mut log = Log::new(&table);
+    let mut chance = Chance::fresh(42);
+    let view = publish(&table, OWNER, &[(object(1), land), (object(2), spell)]);
+    let [land_ref, spell_ref] = view.actions() else {
+        panic!("expected both cards in hand");
+    };
+    let play = Action::Move {
+        selection: Selection {
+            objects: vec![land_ref.reference.clone(), spell_ref.reference.clone()],
+            zone: HAND,
+        },
+        to: Destination::Computed(ComputedDestination::Play),
+        position: Position::Top,
+        face: None,
+        tapped: None,
+    };
+    // The client can follow the land without knowing which zone the host picks.
+    let mut follow_land = serde_json::to_value(&land_ref.reference).unwrap();
+    follow_land["afterMove"] = serde_json::json!(true);
+    let follow_land = serde_json::from_value(follow_land).unwrap();
+    let land_arrow = Action::Arrow {
+        selection: Selection {
+            objects: vec![follow_land],
+            zone: HAND,
+        },
+        to: Target::Player(GUEST),
+    };
+    // An explicitly specified zone also works for a moved source or target.
+    let spell_arrow = Action::Arrow {
+        selection: Selection {
+            objects: vec![spell_ref.reference.clone()],
+            zone: Zone::Stack,
+        },
+        to: Target::Object(SeenObject {
+            id: land_ref.reference.clone(),
+            zone: FIELD,
+        }),
+    };
+    let action = Action::Batch {
+        actions: vec![
+            play,
+            Action::Batch {
+                actions: vec![land_arrow, spell_arrow],
+            },
+        ],
+    };
+    let entry = view
+        .apply(&mut table, &mut log, OWNER, action, &mut chance)
+        .unwrap();
+    assert_eq!(entry.n, 1);
+    assert_eq!(table.zone(FIELD).unwrap(), [land]);
+    assert_eq!(table.zone(Zone::Stack).unwrap(), [spell]);
+    assert!(table.zone(HAND).unwrap().is_empty());
+    assert_eq!(table.arrows.len(), 2);
+    assert_eq!(table.arrows[0].from, land);
+    assert_eq!(table.arrows[0].to, ArrowTarget::Player(GUEST));
+    assert_eq!(table.arrows[1].from, spell);
+    assert_eq!(table.arrows[1].to, ArrowTarget::Object(land));
+    assert_eq!(log.entries().len(), 1);
+    assert_eq!(beryl_table::log::rebuild(&log, 1).unwrap(), table);
+}
+
+#[test]
+fn a_bad_arrow_target_rolls_back_the_entire_batch() {
+    let mut table = Table::new(2);
+    let land = put(&mut table, 1, HAND);
+    let target = put(&mut table, 2, FIELD);
+    let hidden = put(&mut table, 3, Zone::Hand(GUEST));
+    let mut log = Log::new(&table);
+    let mut chance = Chance::fresh(42);
+    let before = table.clone();
+    let objects = [(object(1), land), (object(2), target), (object(3), hidden)];
+    let previous = publish(&table, OWNER, &objects);
+    let view = publish(&table, OWNER, &objects);
+    let [land_ref, target_ref] = view.actions() else {
+        panic!("expected the hidden card to have no reference");
+    };
+    let mut unissued = serde_json::to_value(&target_ref.reference).unwrap();
+    unissued["handle"] = serde_json::json!(2);
+    let object_target = |id, zone| Target::Object(SeenObject { id, zone });
+    for (target, refusal) in [
+        (
+            object_target(target_ref.reference.clone(), Zone::Stack),
+            Refusal::Stale,
+        ),
+        (
+            object_target(previous.actions()[1].reference.clone(), FIELD),
+            Refusal::Stale,
+        ),
+        (
+            object_target(serde_json::from_value(unissued).unwrap(), Zone::Hand(GUEST)),
+            Refusal::Stale,
+        ),
+        (Target::Player(Seat(2)), Refusal::INVALID),
+    ] {
+        let action = Action::Batch {
+            actions: vec![
+                Action::Roll { count: 1, sides: 6 },
+                move_to(land_ref, Destination::Computed(ComputedDestination::Play)),
+                Action::Arrow {
+                    selection: Selection {
+                        objects: vec![land_ref.reference.clone()],
+                        zone: FIELD,
+                    },
+                    to: target,
+                },
+            ],
+        };
+        assert_eq!(
+            view.apply(&mut table, &mut log, OWNER, action, &mut chance),
+            Err(refusal)
+        );
+        assert_eq!(table, before);
+        assert!(log.entries().is_empty());
+        assert_eq!(chance, Chance::fresh(42));
+    }
+}
+
+#[test]
+fn a_batch_cannot_follow_a_card_through_a_hidden_id_change() {
+    let mut table = Table::new(1);
+    let land = put(&mut table, 1, HAND);
+    let mut log = Log::new(&table);
+    let mut chance = Chance::fresh(42);
+    let view = publish(&table, OWNER, &[(object(1), land)]);
+    let land = &view.actions()[0];
+    let mut follow_land = serde_json::to_value(&land.reference).unwrap();
+    follow_land["afterMove"] = serde_json::json!(true);
+    let follow_land = serde_json::from_value(follow_land).unwrap();
+    let play = move_to(land, Destination::Computed(ComputedDestination::Play));
+    let aim = Action::Arrow {
+        selection: Selection {
+            objects: vec![follow_land],
+            zone: HAND,
+        },
+        to: Target::Player(OWNER),
+    };
+    let back_to_hand = Action::Move {
+        selection: Selection {
+            objects: vec![land.reference.clone()],
+            zone: FIELD,
+        },
+        to: Destination::Zone(HAND),
+        position: Position::Top,
+        face: None,
+        tapped: None,
+    };
+    let before = table.clone();
+    for action in [
+        aim.clone(),
+        Action::Batch {
+            actions: vec![play, back_to_hand, aim],
+        },
+    ] {
+        assert_eq!(
+            view.apply(&mut table, &mut log, OWNER, action, &mut chance),
+            Err(Refusal::Stale)
+        );
+        assert_eq!(table, before);
+        assert!(log.entries().is_empty());
+    }
 }

@@ -16,6 +16,10 @@ pub use actions::TableActionRefs;
 pub struct TableObjectRef {
     view: String,
     handle: u32,
+    // An arrow source can follow this hand card to where an earlier batch member played it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    after_move: Option<bool>,
 }
 
 /// The action schema shared with the host log, with viewer references in every object field.

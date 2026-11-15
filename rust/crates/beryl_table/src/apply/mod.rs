@@ -179,10 +179,28 @@ pub fn apply(
     action: &Action,
     chance: &mut Chance,
 ) -> Result<Entry, Refusal> {
+    apply_mapped(table, by, action.clone(), chance, |_, action| Ok(action))
+}
+
+/// Resolve each leaf against the staged state before applying it.
+pub(crate) fn apply_mapped<Id>(
+    table: &mut Table,
+    by: Seat,
+    action: Action<Id>,
+    chance: &mut Chance,
+    mut resolve: impl FnMut(&Table, Action<Id>) -> Result<Action, Refusal>,
+) -> Result<Entry, Refusal> {
     let n = next_entry(table)?;
     let mut planned_chance = chance.clone();
     let mut touches = Touches::default();
-    let mut applied = apply_action(table, by, action, &mut planned_chance, &mut touches)?;
+    let (action, mut applied) = apply_action(
+        table,
+        by,
+        action,
+        &mut planned_chance,
+        &mut touches,
+        &mut resolve,
+    )?;
     if matches!(
         &applied.members[..],
         [Member {
@@ -205,16 +223,16 @@ pub(crate) fn commit(
     table: &mut Table,
     n: u32,
     by: Seat,
-    action: &Action,
+    action: Action,
     applied: AppliedChanges,
     touches: Touches,
 ) -> Entry {
     table.entry_number = n;
-    let summary = crate::log::Summary::new(table, by, action, &applied.changes);
+    let summary = crate::log::Summary::new(table, by, &action, &applied.changes);
     Entry {
         n,
         by,
-        action: action.clone(),
+        action,
         changes: applied.changes,
         undoes: None,
         touches,
@@ -225,35 +243,41 @@ pub(crate) fn commit(
     }
 }
 
-fn apply_action(
+fn apply_action<Id>(
     table: &mut Table,
     by: Seat,
-    action: &Action,
+    action: Action<Id>,
     chance: &mut Chance,
     touches: &mut Touches,
-) -> Result<AppliedChanges, Refusal> {
+    resolve: &mut impl FnMut(&Table, Action<Id>) -> Result<Action, Refusal>,
+) -> Result<(Action, AppliedChanges), Refusal> {
     if let Action::Batch { actions } = action {
         permissions::check_actor(table, by)?;
         let mut staged = table.clone();
         let mut applied = AppliedChanges::default();
+        let mut resolved = Vec::with_capacity(actions.len());
         for member in actions {
-            applied.append(apply_action(&mut staged, by, member, chance, touches)?);
+            let (action, changes) =
+                apply_action(&mut staged, by, member, chance, touches, resolve)?;
+            resolved.push(action);
+            applied.append(changes);
         }
         *table = staged;
-        return Ok(applied);
+        return Ok((Action::Batch { actions: resolved }, applied));
     }
-    permissions::check(table, by, action)?;
-    let mut applied = plan_action(table, by, action, chance)?;
-    library::settle_handling(table, by, action, &mut applied);
+    let action = resolve(table, action)?;
+    permissions::check(table, by, &action)?;
+    let mut applied = plan_action(table, by, &action, chance)?;
+    library::settle_handling(table, by, &action, &mut applied);
     let len = applied.changes.len();
-    if table.turn_plays.is_some() && counts_as_turn_play(action, table.turn) {
+    if table.turn_plays.is_some() && counts_as_turn_play(&action, table.turn) {
         applied
             .changes
             .push(Change::SetTable(TableEdit::TurnPlay { add: true }));
     }
-    perform_with_top_knowledge(table, action, &mut applied.changes, touches);
+    perform_with_top_knowledge(table, &action, &mut applied.changes, touches);
     applied.extend_last_member(applied.changes.len() - len);
-    Ok(applied)
+    Ok((action, applied))
 }
 
 /// Opening-hand steps and assist switches can be used before the first play.

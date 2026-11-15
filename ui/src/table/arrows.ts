@@ -6,7 +6,6 @@ import type {
   TableSeenObject,
   TableTarget as ActionTarget,
 } from "../generated/protocol";
-import { tableCurrent } from "../ipc";
 import type { Name, Point } from "../stage/layout";
 import { dark, sought } from "../stage/light";
 import { shapeOf, type Reach } from "../stage/lines";
@@ -63,21 +62,6 @@ function sources(client: TableClient, from: CardTarget): number[] {
     (name): name is number =>
       typeof name === "number" && !!client.card(name)?.action,
   );
-}
-
-function drawActions(
-  view: PlayerView,
-  from: readonly number[],
-  to: Destination,
-): TableAction[] {
-  return from.flatMap((slot) => {
-    const entry = view.table?.objectActions.find(
-      ({ subject }) => subject.kind === "object" && subject.slot === slot,
-    );
-    return entry && !inHand(entry)
-      ? [{ arrow: { objects: [entry.reference], in: entry.zone, to } }]
-      : [];
-  });
 }
 
 /** The table owns the aim shared by a right-drag and a menu command. */
@@ -208,42 +192,30 @@ export class TableArrows {
       client.card(from.name, true)?.action !== from.action
     )
       return;
-    let to = destination(target, view);
+    const to = destination(target, view);
     if (!to) return;
-    const cards = selected.filter(
-      (name): name is number =>
-        typeof name === "number" && !("name" in target && name === target.name),
-    );
-    const moves: TableAction[] = cards.flatMap((name) => {
-      const action = client.card(name)?.action;
-      return action && inHand(action)
-        ? [
-            {
-              move: {
-                to: "play",
-                objects: [action.reference],
-                in: action.zone,
-              },
-            },
-          ]
-        : [];
-    });
-    let ready = view;
-    if (moves.length) {
-      // The host validates a batch against the original view. Wait for the next
-      // view so the arrow can use the played cards' public zones and fresh references.
-      const previous = view.table?.log.at(-1)?.n;
-      const reply = await client.send(actionList(moves), from.name);
-      if (!("ok" in reply) || previous === undefined) return;
-      const next = (await tableCurrent())?.view;
-      if (!client.surface || next?.table?.log.at(-1)?.n !== previous + 1)
-        return;
-      ready = next;
-      to = destination(target, ready);
-      if (!to) return;
+    const moves: TableAction[] = [];
+    const arrows: TableAction[] = [];
+    for (const name of selected) {
+      if (
+        typeof name !== "number" ||
+        ("name" in target && name === target.name)
+      )
+        continue;
+      const entry = client.card(name, true)?.action;
+      if (!entry) continue;
+      const play = inHand(entry);
+      if (play)
+        moves.push({
+          move: { to: "play", objects: [entry.reference], in: entry.zone },
+        });
+      const reference = play
+        ? { ...entry.reference, afterMove: true }
+        : entry.reference;
+      arrows.push({ arrow: { objects: [reference], in: entry.zone, to } });
     }
-    const arrows = drawActions(ready, cards, to);
-    if (arrows.length) await client.send(actionList(arrows), from.name);
+    if (arrows.length)
+      await client.send(actionList([...moves, ...arrows]), from.name);
   }
 
   readonly #cancel = () => {

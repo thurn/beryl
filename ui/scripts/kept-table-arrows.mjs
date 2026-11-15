@@ -4,7 +4,6 @@ import assert from "node:assert/strict";
 import { center, check } from "./kept-harness.mjs";
 import {
     clickTableResult,
-    showTableView,
     startTable,
     tableActionRef,
     tableRoute,
@@ -66,51 +65,65 @@ await check(
     live,
 );
 
-await check(
-    "manual table arrow from hand plays the card first",
-    async (page) => {
-        await startTable(page, "24 Island");
-        const from = lastHand(await tableView());
-        const sent = [];
-        page.on("request", (request) => {
-            if (request.url().endsWith("/invoke/table_act"))
-                sent.push(request.postDataJSON().request.action);
-        });
-        const arrowReply = page.waitForResponse(
-            (response) =>
-                response.url().endsWith("/invoke/table_act") &&
-                !!response.request().postDataJSON().request.action.arrow,
-        );
-        const box = await card(page, from).boundingBox();
-        await aim(
-            page,
-            { x: box.x + box.width * 0.6, y: box.y + box.height * 0.15 },
-            center(await life(page).boundingBox()),
-        );
-        await page.mouse.up({ button: "right" });
-        assert.deepEqual(await (await arrowReply).json(), { ok: { ok: true } });
-        assert.equal(sent.length, 2);
-        assert.equal(sent[0].move.to, "play");
-        assert.ok("hand" in sent[0].move.in);
-        assert.equal(sent[1].arrow.in, "battlefield");
-        assert.notEqual(
-            sent[0].move.objects[0].view,
-            sent[1].arrow.objects[0].view,
-        );
-        const view = await tableView();
-        await showTableView(page, view);
-        assert.ok(field(view).includes(from));
-        assert.deepEqual(view.table.arrows, [
-            {
-                arrow: "friendly-target",
-                from: object(from),
-                to: ownLife,
-                own: true,
-            },
-        ]);
-    },
-    live,
-);
+for (const [name, playedZone] of [
+    ["Island", "battlefield"],
+    ["Counterspell", "stack"],
+]) {
+    await check(
+        "manual table arrow from hand plays the card first (" +
+            playedZone +
+            ")",
+        async (page) => {
+            await startTable(page, "24 " + name);
+            const before = await tableView();
+            const from = lastHand(before);
+            const selection = tableActionRef(before, object(from));
+            const sent = [];
+            page.on("request", (request) => {
+                if (request.url().endsWith("/invoke/table_act"))
+                    sent.push(request.postDataJSON().request.action);
+            });
+            const box = await card(page, from).boundingBox();
+            const view = await draw(
+                page,
+                { x: box.x + box.width * 0.6, y: box.y + box.height * 0.15 },
+                center(await life(page).boundingBox()),
+            );
+            assert.deepEqual(sent, [
+                {
+                    batch: {
+                        actions: [
+                            { move: { ...selection, to: "play" } },
+                            {
+                                arrow: {
+                                    in: selection.in,
+                                    objects: [
+                                        {
+                                            ...selection.objects[0],
+                                            afterMove: true,
+                                        },
+                                    ],
+                                    to: { player: 0 },
+                                },
+                            },
+                        ],
+                    },
+                },
+            ]);
+            assert.equal(view.table.log.length, before.table.log.length + 1);
+            assert.equal(tableActionRef(view, object(from)).in, playedZone);
+            assert.deepEqual(view.table.arrows, [
+                {
+                    arrow: "friendly-target",
+                    from: object(from),
+                    to: ownLife,
+                    own: true,
+                },
+            ]);
+        },
+        live,
+    );
+}
 
 await check(
     "manual table arrow selection batches every card and shortcut clears",
