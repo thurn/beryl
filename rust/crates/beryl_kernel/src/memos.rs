@@ -555,8 +555,8 @@ impl<L: Layout> State<L> {
     }
 
     /// The cards of the merged permanent in `slot` other than the one in its own slot, in the
-    /// order they merged ([`Memo::PartOf`]): none for any other permanent. With no merged permanent in the
-    /// game, one AND.
+    /// order they merged ([`Memo::PartOf`]): none for any other permanent. With no merged
+    /// permanent in the game, one AND.
     #[inline]
     pub fn pile(&self, slot: L::Slot) -> impl Iterator<Item = L::Slot> + '_ {
         self.memos
