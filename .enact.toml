@@ -23,6 +23,15 @@ slow_tree = "ci-runner"
 
 [worktree]
 root = ".worktrees"   # inside the checkout; gitignored
+# Every worktree, ad hoc or for a bead, reuses one of ten fixed directories, slot-01 to slot-10,
+# keeping its rust/target. rustc ignores incremental caches built at another path, so a new
+# directory per change rebuilt every crate on the changed chain from scratch: after a one-function
+# beryl_kernel change, 421-544 CPU-seconds of test build against 18 in a tree that built the
+# previous state. In the fast check that cost was the Rust lane: on 2026-11-15, rust:tests was
+# killed at the 180 s limit in 48 of 52 runs and rust:clippy in 87 of 157. Ten covers the usual
+# number of live worktrees; when all are busy a tree gets a directory of its own name.
+# `caches.tidy_target` keeps each slot's target within its budget.
+slots = 10
 # Before Enact deletes a worktree, move its ui/node_modules into the cache, and its rust/target
 # too if it is one of slow CI's worktrees, the only ones that save it. The next worktree's
 # first command clones them from there (tools/src/beryl_tools/warm.py).

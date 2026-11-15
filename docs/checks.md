@@ -432,8 +432,13 @@ own busy figure for comparison. `cpu.py` explains how processes are attributed.
   `just specs --shots <card>`) rather than a full sweep. Bare
   `just specs <card>` serves the spec pages until interrupted; it is not a
   check.
-- A new worktree starts with no `rust/target` or `ui/node_modules`. The first
-  `just` command that needs one copies it from the cache in seconds
-  (copy-on-write, `tools/src/beryl_tools/warm.py`), and removing the worktree
-  saves them back. Plain `npm` or `cargo` commands don't do this, so run
-  `just warm` (or `just ui-typecheck`, `just ui-unit`) first.
+- `enact worktree create` hands out one of ten reused directories,
+  `.worktrees/slot-01` to `slot-10` (`[worktree] slots` in `.enact.toml`). A
+  slot keeps its `rust/target` and `ui/node_modules` between changes, because
+  rustc ignores incremental caches built at another path, and a new path rebuilt
+  every changed crate from scratch. When every slot is busy, the worktree gets a
+  new directory. A new directory starts with no `rust/target` or
+  `ui/node_modules`. The first `just` command that needs one copies it from the
+  cache in seconds (copy-on-write, `tools/src/beryl_tools/warm.py`), and
+  removing the worktree saves them back. Plain `npm` or `cargo` commands don't
+  do this, so run `just warm` (or `just ui-typecheck`, `just ui-unit`) first.
