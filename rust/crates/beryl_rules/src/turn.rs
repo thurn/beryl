@@ -93,7 +93,7 @@ pub(crate) fn step_actions<L: Layout>(
                 drawing::draw(&mut Game::new(s, t, sink), active, 1)?;
             }
         }
-        TurnStep::DeclareAttackers => combat::begin_attackers(s),
+        TurnStep::DeclareAttackers => combat::begin_attackers(s, t),
         TurnStep::DeclareBlockers => combat::begin_blockers(s, t),
         TurnStep::FirstStrikeDamage | TurnStep::CombatDamage => {
             combat::begin_damage(s, t, sink)?;

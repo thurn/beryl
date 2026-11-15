@@ -144,7 +144,7 @@ pub(super) fn pass_to<L: Layout>(
         t,
         obs,
         stops,
-        next_stop(obs, stops.stops(), stops.step_stops()),
+        next_stop(t, obs, stops.stops(), stops.step_stops()),
     )
 }
 
@@ -157,7 +157,7 @@ pub(crate) fn pass_on<L: Layout>(
 ) -> Option<NextStop> {
     match pass_to(t, obs, stops) {
         NextStop::Resolve | NextStop::CombatDamage => {
-            let later = next_step_stop(obs, stops.step_stops(), obs.turn().step());
+            let later = next_step_stop(t, obs, stops.step_stops(), obs.turn().step());
             Some(skip_idle_blocks(t, obs, stops, later))
         }
         NextStop::Step(_) | NextStop::NextTurn => None,
@@ -180,7 +180,7 @@ fn skip_idle_blocks<L: Layout>(
                 && obs.turn().active() != obs.viewer()
                 && !can_declare_blockers(obs, t) =>
         {
-            next_step_stop(obs, stops.step_stops(), TurnStep::DeclareBlockers)
+            next_step_stop(t, obs, stops.step_stops(), TurnStep::DeclareBlockers)
         }
         next => next,
     }

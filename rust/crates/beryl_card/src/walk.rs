@@ -202,6 +202,15 @@ impl Ability {
                 | Governed::Counter(objects) => {
                     objects.walk(visit);
                 }
+                Governed::Attack {
+                    attackers,
+                    unless_defender_controls,
+                } => {
+                    attackers.walk(visit);
+                    if let Some(filter) = unless_defender_controls {
+                        filter.walk(visit);
+                    }
+                }
                 Governed::ActivateAbilities { .. } => {}
             }
         }

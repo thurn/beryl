@@ -64,6 +64,13 @@
       "Life and Limb: all Forests [-and all-] {+or+} Saprolings are [-1/1 green Saproling creatures and Forest lands-] {+a creature land+} in addition to [-their-] {+its+} other types {+, are a Saproling in addition to its other types , are a Forest in addition to its other land types , are green , and have base power and toughness 1/1+} ."
     ]
   },
+  "Lord of Atlantis": {
+    "reason": "wording",
+    "note": "\"Other Merfolk get +1/+1 and have islandwalk\" and \"each other Merfolk gets +1/+1 and has islandwalk\" name the same permanents: every Merfolk on the battlefield but the Lord. The renderer says a set of permanents in the singular with \"each\".",
+    "diff": [
+      "Lord of Atlantis: {+each+} other Merfolk [-get-] {+gets+} +1/+1 and [-have-] {+has+} islandwalk ."
+    ]
+  },
   "Malcolm, Alluring Scoundrel": {
     "reason": "wording",
     "note": "Oracle says \"it\" for Malcolm where the renderer names the card.",

@@ -37,6 +37,23 @@ const UNREACHED: &[(&str, &str)] = &[
          the card's hand-written scenarios play a land with it in a graveyard",
     ),
     (
+        "Dandân: ability 0 (Static)",
+        "it stops the card attacking a player with no Island, and a generated scenario casts the \
+         card and never attacks; the card's hand-written scenarios attack players with and \
+         without one",
+    ),
+    (
+        "Dandân: ability 1 (Triggered)",
+        "it triggers when its controller controls no Island, and a generated scenario casts the \
+         card with Islands and keeps them; the card's hand-written scenarios have Mind Bend make \
+         the Island a Swamp",
+    ),
+    (
+        "Lord of Atlantis: ability 0 (Static)",
+        "it affects only other Merfolk, and a generated scenario casts the card with none on the \
+         battlefield; the card's hand-written scenarios have Merfolk on both sides",
+    ),
+    (
         "Life from the Loam: ability 1 (Replacement)",
         "dredge works from a graveyard, and a generated scenario casts the card from a hand and \
          draws nothing after; the card's hand-written scenarios dredge in the draw step and \

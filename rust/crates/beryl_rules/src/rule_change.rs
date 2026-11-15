@@ -16,7 +16,7 @@ use beryl_kernel::chosen::ChosenValue;
 
 use crate::bitboard::Bitboard;
 use crate::card::{Ability, AbilityIx, AbilityKind, Face, ObjectAbility, Words};
-use crate::filter::{self, Filter};
+use crate::filter::{self, Evaluate, Filter};
 use crate::ids::Seat;
 use crate::interpret;
 use crate::layout::Layout;
@@ -88,6 +88,7 @@ fn spells_of(rule: &RuleChange) -> Filter {
         Governed::CastSpells(filter) => filter,
         Governed::ActivateLoyaltyAbilities(_)
         | Governed::Block(_)
+        | Governed::Attack { .. }
         | Governed::ActivateAbilities { .. }
         | Governed::Counter(_)
         | Governed::SpellCosts { .. } => unreachable!("a rule change about casting"),
@@ -232,6 +233,63 @@ pub(crate) fn cant_block<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) 
     own_rule_holds(s, t, slot, RuleKind::CantBlock)
 }
 
+/// Whether the creature in `slot` can't attack, because it can attack no defending player and
+/// no planeswalker one controls, as "This creature can't attack unless defending player
+/// controls an Island." says of a defending player with no Island ([CR 508.1c]): "The
+/// active player checks each creature they control to see whether it's affected by any
+/// restrictions (effects that say a creature can't attack, or that it can't attack unless
+/// some condition is met)." Made by a static ability of its own whose condition holds. Asked
+/// only in a game whose cards can say it ([`attacks_restricted`]).
+///
+/// [CR 508.1c]: https://yawgatog.com/resources/magic-rules/#R5081c
+#[cold]
+#[inline(never)]
+pub(crate) fn cant_attack<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> bool {
+    let of_kind = t.rules_of(RuleKind::CantAttack);
+    !(s.defending_players()).any(|defending| !attack_forbidden(s, t, slot, defending, of_kind))
+}
+
+/// Whether some card of the game restricts attacking ([`cant_attack`]): one test, so that a
+/// declaration of attackers in a game with none asks nothing of each creature.
+#[inline]
+pub(crate) fn attacks_restricted(t: &GameTable) -> bool {
+    !t.rules_of(RuleKind::CantAttack).is_empty()
+}
+
+/// Whether the creature in `slot` can't attack `defending` ([`cant_attack`]). The permanents
+/// the defending player must control are read for the creature's controller, through the
+/// words of the creature's text ([CR 612.1]): "This can apply to any words or symbols printed
+/// on that object, but generally affects only that object’s rules text". So a creature whose
+/// "Island" reads as "Swamp" can attack only a player who controls a Swamp.
+///
+/// [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
+fn attack_forbidden<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    defending: Seat,
+    of_kind: Rules,
+) -> bool {
+    let own = s.definition(slot).rules(t).common(of_kind);
+    own.iter().any(|id| {
+        let Governed::Attack {
+            unless_defender_controls,
+            ..
+        } = t.rule(id).what
+        else {
+            unreachable!("a rule change of the kind that forbids attacking");
+        };
+        let allowed = unless_defender_controls.is_some_and(|filter| {
+            let you = s.controller(slot);
+            let words = s.words_of(slot);
+            s.permanents().any(|(permanent, d)| {
+                d.controller == defending && filter.matches(s, t, permanent, you, &words)
+            })
+        });
+        !allowed && own_condition_holds(s, t, slot, id)
+    })
+}
+
 /// Whether the spell `spell` can't be countered ([CR 701.6a]): "To counter a spell or ability
 /// means to cancel it, removing it from the stack." A prohibition beats what would counter
 /// it ([CR 101.2]): "When a rule or effect allows or directs something to happen, and another
@@ -303,20 +361,24 @@ fn own_rule_holds<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot, kind: R
         "an effect that changes a rule asked of a permanent"
     );
     let own = s.definition(slot).rules(t).common(of_kind);
-    own.iter().any(|id| {
-        // Most conditions are read of the permanent, by the rule change's number; any
-        // other is read in a scene, for the ability that has it.
-        let holds = match t.rule_condition(id) {
-            None => true,
-            Some(condition) => interpret::without_a_scene(s, slot, condition)
-                .unwrap_or_else(|| in_a_scene(s, t, slot, id)),
-        };
-        #[cfg(feature = "coverage")]
-        if holds && let Some((_, ability)) = maker_of(s, t, slot, id) {
-            crate::coverage::hit(ability);
-        }
-        holds
-    })
+    own.iter().any(|id| own_condition_holds(s, t, slot, id))
+}
+
+/// Whether the condition of the static ability of the permanent in `slot` that makes the
+/// rule change `id` for its own permanent holds, or it has none.
+fn own_condition_holds<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot, id: RuleId) -> bool {
+    // Most conditions are read of the permanent, by the rule change's number; any other is
+    // read in a scene, for the ability that has it.
+    let holds = match t.rule_condition(id) {
+        None => true,
+        Some(condition) => interpret::without_a_scene(s, slot, condition)
+            .unwrap_or_else(|| in_a_scene(s, t, slot, id)),
+    };
+    #[cfg(feature = "coverage")]
+    if holds && let Some((_, ability)) = maker_of(s, t, slot, id) {
+        crate::coverage::hit(ability);
+    }
+    holds
 }
 
 /// `cost`, the total cost of the spell `face` would be before the rule changes in force

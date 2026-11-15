@@ -6,6 +6,19 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- A landwalk keyword that a static ability grants ignored text changes of the
+  permanent with the ability. Lord of Atlantis whose "Island" Mind Bend changed
+  to "Swamp" still gave other Merfolk islandwalk instead of swampwalk.
+  `LayerChange::resolve` read the color words and subtypes of a modification
+  through the source's `Words`, but passed `Modification::AddKeywords` through
+  unchanged: landwalk keywords are plain bits in `Keywords`, not a word type, so
+  the compiler did not ask for a reading. The layers read a permanent's own
+  landwalk through its words, which is why the gap went unseen. Found and fixed
+  in the change that added Lord of Atlantis: `resolve` reads granted keywords
+  through `Words::landwalk`. Prevention: hold a landwalk's land type as a
+  private word type, as filters hold subtypes, so that reading it without the
+  source's words does not compile.
+
 - Tarmogoyf in a graveyard, hand or library read as 0/1, its printed values,
   where CR 604.3 says its characteristic-defining ability works in every zone;
   Adeline, Resplendent Cathar off the battlefield had power 0. `State::power`

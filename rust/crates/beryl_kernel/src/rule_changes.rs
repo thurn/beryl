@@ -21,9 +21,9 @@ use crate::event::Replaces;
 pub enum Unchecked {
     /// It governs what no check reads: the loyalty abilities of permanents other than the
     /// one with the ability, or their timing as the rules have it already; casting that no
-    /// one can do; blocking with creatures other than the one with the ability, or when
-    /// rather than whether one blocks; what a spell costs together with when it is cast; or
-    /// an effect starts one that is asked of a permanent.
+    /// one can do; blocking or attacking with creatures other than the one with the ability,
+    /// or when rather than whether one blocks or attacks; what a spell costs together with
+    /// when it is cast; or an effect starts one that is asked of a permanent.
     Rule,
     /// It governs casting the spells a filter accepts, and the filter asks for more than a
     /// spell's own characteristics.
@@ -137,6 +137,14 @@ pub enum RuleKind {
     ///
     /// [CR 509.1a]: https://yawgatog.com/resources/magic-rules/#R5091a
     CantBlock,
+    /// The creature with the ability can't be declared as an attacker, or only against a
+    /// defending player who controls a permanent of a kind ([CR 508.1c]): "The active player
+    /// checks each creature they control to see whether it's affected by any restrictions
+    /// (effects that say a creature can't attack, or that it can't attack unless some
+    /// condition is met)."
+    ///
+    /// [CR 508.1c]: https://yawgatog.com/resources/magic-rules/#R5081c
+    CantAttack,
     /// Some players can't activate the activated abilities other than mana abilities of the
     /// sources with the card name the permanent that makes the change chose as it entered
     /// ([CR 602.5]): "A player can't begin to activate an ability that's prohibited from
@@ -160,7 +168,7 @@ pub enum RuleKind {
 }
 
 impl RuleKind {
-    const COUNT: usize = 7;
+    const COUNT: usize = 8;
 
     /// The kind of change `rule` is, or the part of it no code reads.
     pub fn of(rule: &RuleChange) -> Result<RuleKind, Unchecked> {
@@ -211,6 +219,21 @@ impl RuleKind {
                     Err(Unchecked::Players)
                 }
             }
+            // Its controller declares the attack (CR 508.1a), so the change is asked of the
+            // creature, and is for "you" or for nobody.
+            (
+                Governed::Attack {
+                    attackers: Objects::This,
+                    ..
+                },
+                When::Never,
+            ) => {
+                if matches!(rule.players, Players::You) {
+                    Ok(RuleKind::CantAttack)
+                } else {
+                    Err(Unchecked::Players)
+                }
+            }
             // Mana abilities are activated while a cost is paid, which reads no rule change.
             (
                 Governed::ActivateAbilities {
@@ -237,13 +260,15 @@ impl RuleKind {
                     Err(Unchecked::Players)
                 }
             }
-            // Other permanents' loyalty abilities or blocks, a restriction to the timing the
-            // rules have already, a change to when a creature blocks, mana abilities or the
-            // timing of named sources' abilities, countering spells other than the one it is
-            // on, and a change to what a spell costs said with a change to when it is cast.
+            // Other permanents' loyalty abilities, attacks or blocks, a restriction to the
+            // timing the rules have already, a change to when a creature attacks or blocks, mana
+            // abilities or the timing of named sources' abilities, countering spells other than
+            // the one it is on, and a change to what a spell costs said with a change to when it
+            // is cast.
             (
                 Governed::ActivateLoyaltyAbilities(_)
                 | Governed::Block(_)
+                | Governed::Attack { .. }
                 | Governed::ActivateAbilities { .. }
                 | Governed::Counter(_)
                 | Governed::SpellCosts { .. },
@@ -587,6 +612,40 @@ mod tests {
             when: When::Never,
         };
         assert_eq!(RuleKind::of(&cast_none), Err(Unchecked::Rule));
+    }
+
+    /// "This creature can't attack unless defending player controls an Island" is checked of
+    /// the creature with the ability; attacking with other creatures, or a change to when one
+    /// attacks, is refused.
+    #[test]
+    fn only_a_creatures_own_attack_restriction_is_checked() {
+        let attack = |players, attackers, when| {
+            RuleKind::of(&RuleChange {
+                players,
+                what: Governed::Attack {
+                    attackers,
+                    unless_defender_controls: Some(Filter::Any),
+                },
+                when,
+            })
+        };
+        assert_eq!(
+            attack(Players::You, Objects::This, When::Never),
+            Ok(RuleKind::CantAttack)
+        );
+        assert!(!RuleKind::CantAttack.of_players());
+        assert_eq!(
+            attack(Players::EachOpponent, Objects::This, When::Never),
+            Err(Unchecked::Players)
+        );
+        assert_eq!(
+            attack(Players::You, Objects::Carried, When::Never),
+            Err(Unchecked::Rule)
+        );
+        assert_eq!(
+            attack(Players::You, Objects::This, When::OnlyAsSorcery),
+            Err(Unchecked::Rule)
+        );
     }
 
     /// "Activated abilities of sources with the chosen name can't be activated unless they're

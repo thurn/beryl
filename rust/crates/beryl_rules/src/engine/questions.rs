@@ -89,7 +89,7 @@ pub(crate) fn decision<L: Layout>(
         Pending::EnterChoosing { slot, kind, .. } => {
             chosen::decision(t, s.object(slot).owner(), kind, Bitboard::single(slot))
         }
-        Pending::DeclareAttackers { attacker } => combat::attack_decision(s, attacker),
+        Pending::DeclareAttackers { attacker } => combat::attack_decision(s, t, attacker),
         Pending::DeclareBlockers { blocker } => combat::block_decision(s, t, blocker),
         Pending::CombatDamage { done, lethal } => combat::division_decision(s, done, lethal),
         Pending::Casting(c) => cast::decision(s, t, sink, &c),

@@ -102,7 +102,11 @@ impl LayerChange {
             Modification::AddSubtypeWord(word) => LayerChange::AddSubtype(word.read(words)),
             Modification::SetSubtypeWord(word) => LayerChange::SetSubtype(word.read(words)),
             Modification::SetLandTypeWords(types) => LayerChange::SetLandTypes(types.read(words)),
-            Modification::AddKeywords(keywords) => LayerChange::AddKeywords(keywords),
+            // "Other Merfolk have islandwalk" whose "Island" reads as "Swamp" grants
+            // swampwalk (CR 612.1): the granting text is the source's, read through its words.
+            Modification::AddKeywords(keywords) => {
+                LayerChange::AddKeywords(words.landwalk(keywords))
+            }
             Modification::Grant(grant) => LayerChange::Grant(grant),
             Modification::SetColorWords(colors) => LayerChange::SetColors(colors.read(words)),
             Modification::AddColorWords(colors) => LayerChange::AddColors(colors.read(words)),

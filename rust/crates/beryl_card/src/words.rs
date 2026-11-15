@@ -146,11 +146,20 @@ impl Words {
     /// land type". The other keywords are kept.
     ///
     /// [CR 702.14a]: https://yawgatog.com/resources/magic-rules/#R70214a
+    #[inline]
     #[must_use]
     pub fn landwalk(&self, keywords: Keywords) -> Keywords {
         if self.changed == 0 || !keywords.intersects(Keywords::ANY_LANDWALK) {
             return keywords;
         }
+        self.landwalk_changed(keywords)
+    }
+
+    /// [`Words::landwalk`] when some subtype word reads otherwise and `keywords` has a
+    /// landwalk.
+    #[cold]
+    #[inline(never)]
+    fn landwalk_changed(&self, keywords: Keywords) -> Keywords {
         let mut read = keywords.minus(Keywords::ANY_LANDWALK);
         for (walk, land) in Keywords::LANDWALK {
             if keywords.contains(walk) {

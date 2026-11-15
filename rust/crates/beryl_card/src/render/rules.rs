@@ -5,7 +5,8 @@ use super::Ctx;
 use super::filters::Kind;
 use super::words::number;
 use crate::continuous::{Governed, Named, RuleChange, SpellCost, When};
-use crate::effect::Players;
+use crate::effect::{Objects, Players};
+use crate::filter::Filter;
 use crate::mana::ManaRestriction;
 
 impl Ctx {
@@ -36,6 +37,12 @@ impl Ctx {
                     _ => format!("{creatures} can block only at a changed time"),
                 };
             }
+            // "This creature can't attack unless defending player controls an Island": of the
+            // creatures, not of who declares attacks.
+            Governed::Attack {
+                attackers,
+                unless_defender_controls,
+            } => return self.attack_restriction(attackers, unless_defender_controls, rule.when),
             // Of the abilities, not of who would activate them.
             Governed::ActivateAbilities {
                 sources: Named::Chosen,
@@ -102,6 +109,27 @@ impl Ctx {
             }
             (When::AsInstant, _) => format!("{who} may {what} as though they had flash"),
             (When::AsUsual, _) => format!("{who} {what} as usual"),
+        }
+    }
+
+    /// "This creature can't attack unless defending player controls an Island"
+    /// ([CR 508.1c](https://yawgatog.com/resources/magic-rules/#R5081c)).
+    fn attack_restriction(
+        &mut self,
+        attackers: Objects,
+        unless_defender_controls: Option<Filter>,
+        when: When,
+    ) -> String {
+        let creatures = self.objects(attackers);
+        let unless = unless_defender_controls.map_or(String::new(), |filter| {
+            let permanent = self
+                .noun(filter, Kind::Permanent)
+                .indefinite(Kind::Permanent);
+            format!(" unless defending player controls {permanent}")
+        });
+        match when {
+            When::Never => format!("{creatures} can't attack{unless}"),
+            _ => format!("{creatures} can attack only at a changed time"),
         }
     }
 

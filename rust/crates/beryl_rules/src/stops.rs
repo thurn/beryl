@@ -62,6 +62,7 @@ pub enum NextStop {
 /// ([`is_smart_stop`]), counting the combat in which the viewer, as the active player, can
 /// declare attackers; otherwise the next step.
 pub fn next_stop<L: Layout>(
+    t: &GameTable,
     obs: Observation<'_, L>,
     stops: Stops,
     step_stops: StepStops,
@@ -84,21 +85,23 @@ pub fn next_stop<L: Layout>(
     if stops != Stops::Smart {
         return NextStop::Step(later.min().unwrap_or(TurnStep::Untap));
     }
-    next_step_stop(obs, step_stops, step)
+    next_step_stop(t, obs, step_stops, step)
 }
 
 /// The next step of the turn after `after` that is one of the viewer's `steps` under the smart
 /// stops with the stack empty, counting the combat in which the viewer, as the active player,
 /// can declare attackers.
 pub fn next_step_stop<L: Layout>(
+    t: &GameTable,
     obs: Observation<'_, L>,
     steps: StepStops,
     after: TurnStep,
 ) -> NextStop {
     let s = obs.shown();
     let active = s.turn().active() == obs.viewer();
-    let declares =
-        active && s.turn().step() < TurnStep::BeginningOfCombat && combat::can_declare_attackers(s);
+    let declares = active
+        && s.turn().step() < TurnStep::BeginningOfCombat
+        && combat::can_declare_attackers(s, t);
     let attacking = declares || any_attacking(s);
     for l in TurnStep::ALL.into_iter().filter(|&l| l > after) {
         if (l == TurnStep::BeginningOfCombat && declares) || steps.stops_in(l, active, || attacking)

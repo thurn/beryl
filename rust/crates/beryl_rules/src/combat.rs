@@ -69,27 +69,37 @@ fn blockers_of<L: Layout>(s: &State<L>, attacker: L::Slot) -> Bitboard<L::Slot> 
 /// [CR 702.10b](https://yawgatog.com/resources/magic-rules/#R70210b): "If a creature has haste,
 /// it can attack even if it hasn't been controlled by its controller continuously since their
 /// most recent turn began."
-fn may_attack<L: Layout>(s: &State<L>, slot: L::Slot) -> bool {
+///
+/// Nor may a creature that a restriction keeps from attacking every player it could
+/// ([`rule_change::cant_attack`]), read only when some card of the game says one
+/// (`restricted`, [`rule_change::attacks_restricted`]). In a two-player game every
+/// planeswalker it could attack is the one defending player's, so a restriction read for that
+/// player is the whole check.
+fn may_attack<L: Layout>(s: &State<L>, t: &GameTable, restricted: bool, slot: L::Slot) -> bool {
     let o = s.object(slot);
     s.controller(slot) == s.turn().active()
         && is_creature(s, slot)
         && !o.is_tapped()
         && (!o.is_summoning_sick() || has(s, slot, Keywords::HASTE))
         && !o.is_attacking()
+        && !(restricted && rule_change::cant_attack(s, t, slot))
 }
 
 /// Whether the active player has a creature that can attack now, so that declaring attackers
 /// is a decision.
-pub(crate) fn can_declare_attackers<L: Layout>(s: &State<L>) -> bool {
-    s.battlefield().iter().any(|&slot| may_attack(s, slot))
+pub(crate) fn can_declare_attackers<L: Layout>(s: &State<L>, t: &GameTable) -> bool {
+    let restricted = rule_change::attacks_restricted(t);
+    s.battlefield()
+        .iter()
+        .any(|&slot| may_attack(s, t, restricted, slot))
 }
 
 /// The declare attackers step's turn-based action begins ([CR 508.1]): "First, the active player
 /// declares attackers. This turn-based action doesn't use the stack."
 ///
 /// [CR 508.1]: https://yawgatog.com/resources/magic-rules/#R5081
-pub(crate) fn begin_attackers<L: Layout>(s: &mut State<L>) {
-    if can_declare_attackers(s) {
+pub(crate) fn begin_attackers<L: Layout>(s: &mut State<L>, t: &GameTable) {
+    if can_declare_attackers(s, t) {
         s.ask(Pending::DeclareAttackers { attacker: None });
     }
 }
@@ -103,16 +113,18 @@ pub(crate) fn begin_attackers<L: Layout>(s: &mut State<L>) {
 /// silently (§7.2).
 pub(crate) fn attack_decision<L: Layout>(
     s: &State<L>,
+    t: &GameTable,
     attacker: Option<L::Slot>,
 ) -> Result<Decision<L>, Full> {
     let mut list: L::Queue<Opt<L>, 64> = Default::default();
     let (player, kind, part) = if attacker.is_none() {
         list.push(Opt::Done)?;
+        let restricted = rule_change::attacks_restricted(t);
         let able: Bitboard<L::Slot> = s
             .battlefield()
             .iter()
             .copied()
-            .filter(|&slot| may_attack(s, slot))
+            .filter(|&slot| may_attack(s, t, restricted, slot))
             .collect();
         // Candidates are listed in the candidate order, which a `Choice` counts in.
         for slot in s.in_candidate_order(collapse(s, able)) {

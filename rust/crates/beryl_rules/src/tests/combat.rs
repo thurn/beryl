@@ -993,8 +993,9 @@ fn random_combat_games_keep_the_invariants() {
 fn passing_goes_to_the_next_smart_stop() {
     use crate::Observation;
     use crate::profile::{NextStop, StepStops, Stops, next_stop};
-    let next =
-        |g: &Game, p: Seat, stops| next_stop(Observation::new(&g.s, p), stops, StepStops::SMART);
+    let next = |g: &Game, p: Seat, stops| {
+        next_stop(&g.t, Observation::new(&g.s, p), stops, StepStops::SMART)
+    };
     let mut g = Game::new();
     let (a, d) = (g.attacker, g.defender());
     // Nothing can attack: main 1 passes to main 2, and the defender's next stop is the
