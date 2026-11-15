@@ -48,7 +48,7 @@ pub(crate) fn begin_cast<L: Layout>(
     // A cast for escape is under no permission's terms (CR 118.9a): only one alternative
     // cost is paid, so a flashback permission the card also has does nothing to it.
     let permission = casting::permission(s, player, slot).filter(|_| !costs.escapes());
-    if cfg!(feature = "coverage") && costs.escapes() {
+    if cfg!(debug_assertions) && costs.escapes() {
         hit_escape(s, t, slot);
     }
     event::move_one(s, t, sink, slot, Zone::Stack, Reason::Cast)?;

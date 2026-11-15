@@ -135,12 +135,20 @@ def record_fixtures(into: Path = RECORDED, only: list[str] | None = None) -> int
     """Plays the fixtures' seeded games (those named in `only`, or all) and records them into
     `into`, fresh each run."""
     shutil.rmtree(into, ignore_errors=True)
+    built = subprocess.run(
+        paths.CLI_BUILD,
+        cwd=paths.RUST,
+        env=paths.run_env(),
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
+    if built.returncode != 0:
+        return built.returncode
     return subprocess.run(
-        ["cargo", "run", "--quiet", "--package", "beryl_cli", "--"]
+        [str(system.exe(paths.RUN_TARGET / "debug" / "beryl_cli"))]
         + ["record-fixture", str(FIXTURES), str(into)]
         + (only or []),
         cwd=paths.RUST,
-        env=paths.run_env(),
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         check=False,
@@ -466,9 +474,9 @@ def ui_live(args: argparse.Namespace) -> int:
         / time.strftime("%Y%m%d-%H%M%S")
     )
     out.mkdir(parents=True)
-    profile = ["--release"] if args.release else []
+    release = ["cargo", "build", "--quiet", "--package", "beryl_cli", "--release"]
     built = subprocess.run(
-        ["cargo", "build", "--quiet", "--package", "beryl_cli", *profile],
+        release if args.release else paths.CLI_BUILD,
         cwd=paths.RUST,
         env=paths.run_env(),
         stdin=subprocess.DEVNULL,

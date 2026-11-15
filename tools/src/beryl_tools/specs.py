@@ -70,11 +70,11 @@ def out_dir(kind: str) -> Path:
 
 
 def build(release: bool) -> Path | None:
-    """Builds beryl_cli, optimized if `release`; returns its binary, or None if the build
-    failed."""
-    profile = ["--release"] if release else []
+    """Builds beryl_cli, optimized if `release` and otherwise as the tests step does
+    (`paths.CLI_BUILD`); returns its binary, or None if the build failed."""
+    optimized = ["cargo", "build", "--quiet", "--release", "--package", "beryl_cli"]
     built = subprocess.run(
-        ["cargo", "build", "--quiet", *profile, "--package", "beryl_cli"],
+        optimized if release else paths.CLI_BUILD,
         cwd=paths.RUST,
         env=paths.run_env(),
         stdin=subprocess.DEVNULL,

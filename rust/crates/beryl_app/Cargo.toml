@@ -23,6 +23,11 @@ iroh = ["dep:beryl_link_iroh"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+# Replaces nothing: the app never calls it. It turns on the `default` feature of
+# `crossbeam-utils` (which Tauri uses) that the benchmarks' `criterion` turns on, so that
+# `cargo test` and the checks' build of the workspace's libraries (`CLI_BUILD` in
+# tools/src/beryl_tools/paths.py) compile Tauri and the app once, not once each.
+crossbeam-utils = "0.8.23"
 tauri = { version = "2", features = [] }
 beryl_session = { path = "../beryl_session" }
 # Runs the manual table and projects it onto the shared game-update event.

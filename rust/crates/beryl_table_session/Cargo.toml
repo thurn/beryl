@@ -26,5 +26,3 @@ serde_json = "1.0.154"
 tempfile = "3"
 
 [dev-dependencies]
-# Reuses the table's deterministic action generator to exercise both viewer projections.
-beryl_table = { path = "../beryl_table", features = ["testing"] }

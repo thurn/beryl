@@ -17,11 +17,8 @@ mod markers;
 mod projection;
 #[path = "history/reveals.rs"]
 mod reveals;
-#[cfg(not(feature = "testing"))]
 #[path = "../src/testing.rs"]
 mod testing;
-#[cfg(feature = "testing")]
-use beryl_table::testing;
 use testing::{ASSIST_AND_LOG, CORE, Generator, Kind};
 
 const HOST: Seat = Seat(0);

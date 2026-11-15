@@ -11,11 +11,8 @@ use beryl_table::{Action, Chance, Change, Seat, Table, apply};
 
 #[path = "redaction/animation.rs"]
 mod animation;
-#[cfg(not(feature = "testing"))]
 #[path = "../src/testing.rs"]
 mod testing;
-#[cfg(feature = "testing")]
-use beryl_table::testing;
 use testing::{ASSIST_AND_LOG, CORE, Generator, Kind};
 
 const HOST: Seat = Seat(0);

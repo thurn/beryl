@@ -1231,11 +1231,11 @@ scenario, its scenarios pass on Beryl and, where exportable, on XMage and Forge
 or appear on the divergence allowlist, and fuzz play including the card raises
 no invariant. dirac's lockstep bar is the model.
 
-`beryl_engine`'s `coverage` feature, which only tests enable, records each
-ability that resolves, mana ability that makes mana, static ability whose effect
-applies or rule bites, replacement that modifies an event, and casting option a
-spell is cast with. A `beryl_cards` test fails on any no scenario exercises, and
-`just fuzz` reports those random play never reaches.
+`beryl_engine::coverage`, kept in every build with debug assertions, records
+each ability that resolves, mana ability that makes mana, static ability whose
+effect applies or rule bites, replacement that modifies an event, and casting
+option a spell is cast with. A `beryl_cards` test fails on any no scenario
+exercises, and `just fuzz` reports those random play never reaches.
 
 ### 17.4 Other checks
 

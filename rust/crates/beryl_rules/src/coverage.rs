@@ -9,24 +9,45 @@
 //! Each instruction of effect data carried out is recorded too, for the bar a library entry
 //! meets: "Library effects carry hand-written scenarios".
 //!
-//! The record is the `coverage` feature's, which only tests enable; without it [`hit`] is
-//! empty and costs nothing. A thread records only between [`start`] and [`take`], so other
-//! tests built with the feature, such as the allocation counter's, record nothing.
+//! Builds with debug assertions keep the record: the tests, the scripts and fixtures the checks
+//! run, and `just fuzz` and `just exhaust`, which turn debug assertions on in an optimized build.
+//! Elsewhere, as in the app, the search binaries and the benchmarks, [`hit`] is empty and costs
+//! nothing, and [`take`] returns nothing. A thread records only between [`start`] and [`take`],
+//! so other code in a debug build, such as the allocation counter's tests, records nothing.
+//!
+//! This was a Cargo feature that `beryl_cards`' and `beryl_search`' dev-dependencies turned on.
+//! A feature changes the hash Cargo stores a crate's build under, so every build that did not
+//! include those dev-dependencies, such as `cargo build -p beryl_cli` for the fast check's
+//! script and browser checks, compiled the rules, the engine, every card crate and the CLI a
+//! second time: 68 crates and 45 s after a fresh worktree's test build. Keying the record on
+//! `debug_assertions` makes it the same in every debug build.
 
 /// Notes that the ability, casting option or instruction at `what`, a `'static` part of a
 /// card definition, did what it says. Identity is the address: card definitions are statics.
 #[inline]
 pub(crate) fn hit<T>(what: &'static T) {
-    #[cfg(feature = "coverage")]
+    #[cfg(debug_assertions)]
     record::hit(std::ptr::from_ref(what).addr());
-    #[cfg(not(feature = "coverage"))]
+    #[cfg(not(debug_assertions))]
     let _ = what;
 }
 
-#[cfg(feature = "coverage")]
+#[cfg(debug_assertions)]
 pub use record::{start, take};
 
-#[cfg(feature = "coverage")]
+/// Starts recording on this thread; does nothing in a build without debug assertions.
+#[cfg(not(debug_assertions))]
+pub fn start() {}
+
+/// What was recorded on this thread since [`start`]: nothing in a build without debug
+/// assertions.
+#[cfg(not(debug_assertions))]
+#[must_use]
+pub fn take() -> std::collections::BTreeSet<usize> {
+    std::collections::BTreeSet::new()
+}
+
+#[cfg(debug_assertions)]
 mod record {
     use std::cell::RefCell;
     use std::collections::BTreeSet;

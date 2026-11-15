@@ -44,7 +44,12 @@ The lanes:
 - `script`: `beryl_cli script-check`, when a crate it depends on changed. In a
   debug build it runs every card's spec moments from both seats and every UI
   fixture's recording, checking each animation script against its assertions.
-  Each one is logged as a check named `script:<card>/<moment>/<seat>`.
+  Each one is logged as a check named `script:<card>/<moment>/<seat>`. It and
+  the browser lanes build `beryl_cli` with `paths.CLI_BUILD`, which names the
+  same packages and profile as the rust lane's `cargo test`, so the two share
+  one build in the checkout's target. `tools/tests/test_cli_build.py` fails if a
+  dev-dependency turns on a feature that no normal dependency does, which would
+  split them again.
 - `ui`: prettier, tsc and `npm test`.
 - `names`, which holds several source checks:
   - `card-names`: no card names in generic code, apart from the entries in

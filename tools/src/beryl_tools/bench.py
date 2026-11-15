@@ -187,10 +187,10 @@ def probe() -> Machine:
 
 
 # The package benchmarks build as, unless the flags name one. Built from the workspace with no
-# package named, Cargo turns on every feature any member's dev-dependencies ask for, such as
-# `beryl_engine`'s `coverage` (the card tests' record of which abilities ran), which no build
-# of the app or the search has. On 2026-11-13 that recording was 0.42% of the rollout
-# benchmark's instructions.
+# package named, Cargo turns on every feature any member's dev-dependencies ask for, which no
+# build of the app or the search has. On 2026-11-13 one such feature, the card tests' record of
+# which abilities ran (now `beryl_engine::coverage`, kept only with debug assertions), was 0.42%
+# of the rollout benchmark's instructions.
 BENCH_PACKAGE = "beryl_bench"
 
 

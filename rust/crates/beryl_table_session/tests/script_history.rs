@@ -1,11 +1,17 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+// The table's deterministic action generator, compiled into this test as the table's own tests
+// compile it. A Cargo feature that only this dev-dependency turned on made `cargo test` and the
+// checks' `beryl_cli` build compile the table and everything above it twice.
+#[allow(dead_code, reason = "each test uses part of the generator")]
+#[path = "../../beryl_table/src/testing.rs"]
+mod testing;
 use beryl_session::protocol::{Why, ZoneName};
 use beryl_session::script::{Act, Mark, Notice, Script, Span, Verb};
 use beryl_table::action::{Destination, Position};
 use beryl_table::state::{Assist, Face, Line, LineVisibility, ObjectId, Proposal, Zone};
-use beryl_table::testing::{ASSIST_AND_LOG, CORE, Generator, Kind};
 use beryl_table::{Action, Refusal, Table};
+use testing::{ASSIST_AND_LOG, CORE, Generator, Kind};
 
 mod script_common;
 use script_common::{FIELD, GUEST, Game, HOST, add, select};

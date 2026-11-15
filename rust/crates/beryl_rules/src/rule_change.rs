@@ -422,7 +422,7 @@ fn own_condition_holds<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot, id
         Some(condition) => interpret::without_a_scene(s, slot, condition)
             .unwrap_or_else(|| in_a_scene(s, t, slot, id)),
     };
-    #[cfg(feature = "coverage")]
+    #[cfg(debug_assertions)]
     if holds && let Some((_, ability)) = maker_of(s, t, slot, id) {
         crate::coverage::hit(ability);
     }
@@ -498,7 +498,7 @@ fn changed_cost<L: Layout>(
             if ability.condition().is_none()
                 || interpret::static_condition_holds(s, t, slot, index, ability)
             {
-                #[cfg(feature = "coverage")]
+                #[cfg(debug_assertions)]
                 crate::coverage::hit(ability);
                 match change {
                     SpellCost::More(n) => more = more.saturating_add(n),

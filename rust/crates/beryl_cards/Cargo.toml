@@ -75,8 +75,6 @@ beryl_card_build = { path = "../beryl_card_build" }
 [dev-dependencies]
 # Tests read every card's scenarios: the crate's own, with the feature on.
 beryl_cards = { path = ".", features = ["scenarios"] }
-# The scenarios' ability coverage (architecture §17.3).
-beryl_engine = { path = "../beryl_engine", features = ["coverage"] }
 serde_json = "1"
 
 [features]

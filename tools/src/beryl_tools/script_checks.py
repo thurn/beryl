@@ -48,9 +48,10 @@ def script_check_step(*only: str) -> int:
 
 
 def build() -> bool:
-    """Builds the checker in debug, where the script checks are assertions; whether it built."""
+    """Builds the checker with debug assertions, where the script checks are assertions, sharing
+    the tests step's build (`paths.CLI_BUILD`); whether it built."""
     built = subprocess.run(
-        ["cargo", "build", "--locked", "--quiet", "--package", CHECKER],
+        paths.CLI_BUILD,
         cwd=paths.RUST,
         env=paths.run_env(),
         stdin=subprocess.DEVNULL,

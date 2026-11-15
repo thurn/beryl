@@ -13,6 +13,3 @@ workspace = true
 beryl_kernel = { path = "../beryl_kernel" }
 beryl_rules = { path = "../beryl_rules" }
 
-[features]
-# Records which abilities a game exercised (`beryl_rules`' `coverage`), for the card tests.
-coverage = ["beryl_rules/coverage"]

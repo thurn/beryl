@@ -1,4 +1,10 @@
 use beryl_session::card_records::{CardRecordsRequest, card_records};
+// The table's deterministic action generator, compiled into this test as the table's own tests
+// compile it. A Cargo feature that only this dev-dependency turned on made `cargo test` and the
+// checks' `beryl_cli` build compile the table and everything above it twice.
+#[allow(dead_code, reason = "each test uses part of the generator")]
+#[path = "../../beryl_table/src/testing.rs"]
+mod testing;
 use beryl_session::protocol::{
     Counter, FaceName, PowerToughness, RowName, Side, StackItem, Status, Step, TablePhase,
     ZoneName, ZoneRef,
@@ -9,9 +15,9 @@ use beryl_table::state::{
     Arrow as TableArrow, ArrowKind, ArrowTarget, Assist, Card, Face, Object, ObjectId, Phase, Row,
     Zone,
 };
-use beryl_table::testing::{CORE, Generator};
 use beryl_table::{Action, Chance, Change, Log, Refusal, Seat, Table};
 use beryl_table_session::publication::{PublishedTable, SeatPublication};
+use testing::{CORE, Generator};
 
 const HOST: Seat = Seat(0);
 const GUEST: Seat = Seat(1);

@@ -79,12 +79,44 @@ TAURI_TARGET: Path = RUST / "target" / "tauri"
 
 
 # The target directory of the binaries `by` runs while other work builds: on Windows, one of
-# their own. Windows replaces no running binary, and `cargo test --workspace` (dev-dependencies'
-# features unified in) and `cargo build -p beryl_cli` build different binaries at one path, so
-# the rust lane would fail to relink the binary a UI lane runs, and the other way round.
+# their own. Windows replaces no running binary, so the rust lane would fail to relink the
+# binary a UI lane is running, and the other way round.
 RUN_TARGET: Path = (
     RUST / "target" / "run" if sys.platform == "win32" else RUST / "target"
 )
+
+
+# The package the rust lane leaves to the nightly (`rust_tests.NIGHTLY_PACKAGE`).
+NIGHTLY_PACKAGE = "beryl_link_iroh"
+
+# What the rust lane builds (`rust_tests.BUILD_SCOPE`, which says why).
+BUILD_SCOPE: list[str] = ["--workspace", "--exclude", NIGHTLY_PACKAGE]
+
+# The command that builds the `beryl_cli` binary the checks run: the script checks, the fixture
+# recordings of the browser lanes and the spec pages. It must build the same units as the tests
+# step, which shares the target directory with it. `cargo test` builds every library in the
+# `test` profile, and Cargo's hash for a unit also depends on which packages the command names,
+# so `cargo build -p beryl_cli` compiled the rules, the engine, every card crate and the CLI a
+# second time, in the `dev` profile, while the other lanes waited on Cargo's lock on the target
+# directory. In the fast check on 2026-11-14 and 15, 69 of 176 rust:clippy runs were killed at
+# the 180 s limit while waiting on that lock. Built over [`BUILD_SCOPE`] in the `test` profile,
+# whichever of the two runs second compiles nothing the first did: after edits to beryl_kernel
+# and beryl_table and the tests step's build, this command only linked the CLI, in 2 s. The
+# binary lands in target/debug. tools/tests/test_cli_build.py keeps the features the same.
+CLI_BUILD: list[str] = [
+    "cargo",
+    "build",
+    "--locked",
+    "--quiet",
+    "--profile",
+    "test",
+    *BUILD_SCOPE,
+    # With the libraries named too, Cargo hashes them as `cargo test` does; with `--bin` alone,
+    # beryl_kernel, beryl_table, beryl_rules and beryl_engine still compiled a second time.
+    "--lib",
+    "--bin",
+    "beryl_cli",
+]
 
 
 def run_env() -> dict[str, str]:

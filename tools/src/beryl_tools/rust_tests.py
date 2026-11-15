@@ -127,7 +127,7 @@ def affected_packages(
 
 # The nightly builds iroh and runs its offline transport checks. A cold build of
 # the dependency can exceed the fast lane's entire budget by itself.
-NIGHTLY_PACKAGE = "beryl_link_iroh"
+NIGHTLY_PACKAGE: str = paths.NIGHTLY_PACKAGE
 
 
 # What the rust lane builds, whichever packages a change can break. Cargo resolves features
@@ -139,7 +139,7 @@ NIGHTLY_PACKAGE = "beryl_link_iroh"
 # took 65 s of the fast check after a one-line change to `beryl_session`, against 7 s for the
 # same change checked over the whole workspace. Cargo rebuilds only what changed either way,
 # so the packages a change can break choose only which tests run.
-BUILD_SCOPE: list[str] = ["--workspace", "--exclude", NIGHTLY_PACKAGE]
+BUILD_SCOPE: list[str] = paths.BUILD_SCOPE
 
 
 def rust_lane(
