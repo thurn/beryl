@@ -48,9 +48,10 @@ final class TableController: UIViewController {
             }
         }
         let link = CADisplayLink(target: self, selector: #selector(tick))
-        let fastest = Float(UIScreen.main.maximumFramesPerSecond)
-        link.preferredFrameRateRange = CAFrameRateRange(
-            minimum: 60, maximum: fastest, preferred: fastest)
+        // The library counts frames against a fixed 60 Hz until its rate rule drives this
+        // link (beryl_host's `Phone`). A range from 60 up to the display's highest would let a
+        // ProMotion display show frames at uneven rates that the frame log never calls late.
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 60, preferred: 60)
         link.add(to: .main, forMode: .common)
         self.link = link
         let center = NotificationCenter.default

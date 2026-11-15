@@ -94,8 +94,9 @@ impl Phone {
                     }
                 };
                 feed.opened(&Opened {
-                    // The hosts ask for the display's highest rate; the spike's hosts do not
-                    // read it back, so the floor's 60 Hz is assumed.
+                    // The iOS host asks its display link for 60 Hz. The Android host's
+                    // Choreographer ticks at the display's own rate, which the spike does not
+                    // read back, so the floor's 60 Hz is assumed.
                     display_hz: 60.0,
                     adapter: renderer.adapter().to_owned(),
                 });
