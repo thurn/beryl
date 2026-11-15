@@ -258,6 +258,8 @@ impl Core {
 
     pub fn wake(&self, now: u64) -> Wake {
         if self.stress.is_some()
+            || self.pointer_moved
+            || self.resized
             || now < self.motion_until
             || (!self.pending.is_empty() && now >= self.busy_until)
         {

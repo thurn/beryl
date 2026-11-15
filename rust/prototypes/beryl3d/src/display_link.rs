@@ -17,9 +17,11 @@ use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use winit::event_loop::EventLoopProxy;
 use winit::window::Window;
 
+use crate::window::UserEvent;
+
 /// What the display link's target holds: where to send each tick.
 struct Ivars {
-    proxy: EventLoopProxy<()>,
+    proxy: EventLoopProxy<UserEvent>,
 }
 
 define_class!(
@@ -33,13 +35,13 @@ define_class!(
     impl Ticker {
         #[unsafe(method(tick:))]
         fn tick(&self, _link: &CADisplayLink) {
-            let _ = self.ivars().proxy.send_event(());
+            let _ = self.ivars().proxy.send_event(UserEvent::Tick);
         }
     }
 );
 
 impl Ticker {
-    fn new(proxy: EventLoopProxy<()>, mtm: MainThreadMarker) -> Retained<Ticker> {
+    fn new(proxy: EventLoopProxy<UserEvent>, mtm: MainThreadMarker) -> Retained<Ticker> {
         let this = Self::alloc(mtm).set_ivars(Ivars { proxy });
         // SAFETY: NSObject's init on a freshly allocated object.
         unsafe { msg_send![super(this), init] }
@@ -55,7 +57,7 @@ pub struct DisplayLink {
 impl DisplayLink {
     /// A display link for `window`'s view, asking for `hz` frames a second. None where the
     /// window has no AppKit view or this is not the main thread.
-    pub fn new(window: &Window, proxy: EventLoopProxy<()>, hz: f32) -> Option<DisplayLink> {
+    pub fn new(window: &Window, proxy: EventLoopProxy<UserEvent>, hz: f32) -> Option<DisplayLink> {
         let mtm = MainThreadMarker::new()?;
         let RawWindowHandle::AppKit(handle) = window.window_handle().ok()?.as_raw() else {
             return None;

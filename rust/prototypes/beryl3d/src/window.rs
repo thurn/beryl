@@ -68,11 +68,33 @@ struct State {
 
 struct App {
     setup: Setup,
-    proxy: EventLoopProxy<()>,
+    proxy: EventLoopProxy<UserEvent>,
     state: Option<State>,
 }
 
+/// What other threads and the display link send the event loop.
+#[derive(Debug)]
+pub enum UserEvent {
+    /// The display link fired: draw a frame now.
+    Tick,
+    /// The session sent an update.
+    Update,
+}
+
 impl State {
+    /// Asks for a frame after an input. With a display link, frames are drawn only on its
+    /// ticks: drawing on every mouse move or session update as well submitted frames faster
+    /// than the display shows them, used up macOS's few drawables and made the next frame
+    /// wait several display intervals for one. The input has reached the core, whose wake now
+    /// says a frame is wanted, and the link runs from `about_to_wait`.
+    fn request_frame(&self) {
+        #[cfg(target_os = "macos")]
+        if self.display_link.is_some() {
+            return;
+        }
+        self.window.request_redraw();
+    }
+
     fn clock(&self) -> Duration {
         let end = self.paused_at.unwrap_or_else(Instant::now);
         end.duration_since(self.started)
@@ -262,7 +284,7 @@ impl State {
     }
 }
 
-impl ApplicationHandler<()> for App {
+impl ApplicationHandler<UserEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.state.is_some() {
             return;
@@ -310,7 +332,7 @@ impl ApplicationHandler<()> for App {
         let renderer = Renderer::new(device, queue, config.format, &self.setup.faces, false);
         let proxy = self.proxy.clone();
         let (sessions, id, updates) = crate::game::start(move || {
-            let _ = proxy.send_event(());
+            let _ = proxy.send_event(UserEvent::Update);
         });
         let live = Live {
             sessions,
@@ -374,9 +396,20 @@ impl ApplicationHandler<()> for App {
         });
     }
 
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, (): ()) {
-        if let Some(state) = &self.state {
-            state.window.request_redraw();
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
+        let Some(state) = &mut self.state else {
+            return;
+        };
+        match event {
+            UserEvent::Tick => state.window.request_redraw(),
+            UserEvent::Update => {
+                // The update goes into the core now, so that the core's wake sees it and the
+                // display link starts; the frame itself waits for the next tick.
+                if let Some(Shown { core, .. }) = &mut state.boards[0] {
+                    drain(core, Some(&state.live));
+                }
+                state.request_frame();
+            }
         }
     }
 
@@ -406,11 +439,11 @@ impl ApplicationHandler<()> for App {
                     1.0 - position.y as f32 / state.config.height as f32 * 2.0,
                 );
                 state.core().handle(Input::Pointer(Some(ndc)));
-                state.window.request_redraw();
+                state.request_frame();
             }
             WindowEvent::CursorLeft { .. } => {
                 state.core().handle(Input::Pointer(None));
-                state.window.request_redraw();
+                state.request_frame();
             }
             WindowEvent::KeyboardInput { event, .. }
                 if event.state == ElementState::Pressed && !event.repeat =>
@@ -501,7 +534,7 @@ impl ApplicationHandler<()> for App {
 }
 
 pub fn run(setup: Setup) {
-    let event_loop = EventLoop::<()>::with_user_event()
+    let event_loop = EventLoop::<UserEvent>::with_user_event()
         .build()
         .expect("an event loop");
     let proxy = event_loop.create_proxy();
