@@ -577,6 +577,7 @@ pub(super) fn decision<L: Layout>(
         // mana can pay the rest: Arena's chooser of graveyard cards, "Submit 2".
         Measure::ForGeneric(_) if action == CostAction::Exile => Decision {
             player: c.player,
+            decider: c.player,
             kind: DecisionKind::ChooseUpTo,
             candidates: Candidates::Options(substitute_options(s, t, c)?),
             prompt: Prompt::new(purpose).most(left),
