@@ -6,6 +6,7 @@ import type {
 } from "../generated/protocol";
 import type { TableClient } from "./client";
 import type { TableCommands } from "./TableMenu";
+import { canUseZone } from "./zoneAccess";
 
 type Look = Extract<TableAction, { look: unknown }>;
 export type PileView =
@@ -89,11 +90,16 @@ export class TableViewers {
   async close(pile: OpenPile, shuffle = false) {
     if (!this.#open.includes(pile)) return;
     if (pile.zone === "library") {
-      if (this.#pending) return;
+      const view = this.client.view;
+      if (
+        this.#pending ||
+        (shuffle && (!view || !canUseZone(view, pile.side, "library")))
+      )
+        return;
       this.#pending = true;
       try {
         const close: TableAction = { close_look: {} };
-        const local = this.client.view?.table?.seat ?? 0;
+        const local = view?.table?.seat ?? 0;
         const seat = pile.side === "you" ? local : 1 - local;
         const result = await this.client.send(
           shuffle

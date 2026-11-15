@@ -14,6 +14,7 @@ import { advancePhase, untapPermanents } from "./turn";
 import {
   actionReference,
   checked,
+  pileSlots,
   seatOf,
   type MenuCommand,
   type MenuContext,
@@ -29,14 +30,6 @@ const statChanges: Record<string, readonly [number, number]> = {
   "stats.power_up_toughness_down": [1, -1],
   "stats.power_down_toughness_up": [-1, 1],
 };
-
-export function pileSlots({ target, view }: MenuContext) {
-  if (target.kind === "library" || target.kind === "graveyard")
-    return view.players[target.side][target.kind];
-  if (target.kind === "hand" || target.kind === "exile")
-    return view.table?.orders[target.side][target.kind] ?? [];
-  return [];
-}
 
 export function commandActions(
   entry: MenuCommand,

@@ -17,6 +17,7 @@ import { counterNames, type TokenChoice } from "./cardState.ts";
 import { uses } from "./fill.ts";
 import { manaColor } from "./players.ts";
 import type { Row } from "./Menu.tsx";
+import { canMoveInto, canUseZone, isHiddenZone } from "./zoneAccess.ts";
 
 export type PrintedCard = { card: CardEntry; face: number };
 
@@ -31,7 +32,7 @@ export interface MenuContext {
   element?: HTMLElement;
   pointed?: Element | null;
   logEntry?: LogLine;
-  viewer?: { revealed: boolean; wholeLibrary: boolean };
+  viewer?: { revealed: boolean; wholeLibrary: boolean; canShuffle: boolean };
   key?: (id: string) => string | undefined;
 }
 
@@ -58,15 +59,53 @@ export function kindOf(target: TableTarget): AppliesTo {
   return target.kind;
 }
 
-function canUseZone(view: PlayerView, side: Side, zone: string) {
-  return (
-    side === "you" ||
-    (zone === "hand"
-      ? !!view.table?.lentHand
-      : !!view.table?.acting.some(
-          (access) => access.side === side && access.zone === zone,
-        ))
-  );
+export function pileSlots({
+  target,
+  view,
+}: Pick<MenuContext, "target" | "view">) {
+  if (target.kind === "library" || target.kind === "graveyard")
+    return view.players[target.side][target.kind];
+  if (target.kind === "hand" || target.kind === "exile")
+    return view.table?.orders[target.side][target.kind] ?? [];
+  return [];
+}
+
+/** A pile move into an ungranted hidden zone is limited to cards owned by
+ * the destination seat. Library commands take a prefix from the chosen end.
+ */
+export function pileMoveLimit(
+  command: Command,
+  target: TableTarget,
+  view: PlayerView,
+) {
+  if (!("side" in target)) return;
+  const move = command.action?.move;
+  if (!move || typeof move !== "object" || !("to" in move)) return;
+  const to = move.to;
+  if (!to || typeof to !== "object") return;
+  const [destinationTemplate] = Object.entries(to);
+  if (!destinationTemplate) return;
+  const [zone, seat] = destinationTemplate;
+  if (
+    !isHiddenZone(zone) ||
+    seat !== "$seat" ||
+    canUseZone(view, target.side, zone)
+  )
+    return;
+
+  const slots = pileSlots({ target, view });
+  const ordered =
+    target.kind === "library" && !command.id.includes("bottom")
+      ? [...slots].reverse()
+      : slots;
+  const objects = new Map(view.objects.map((object) => [object.slot, object]));
+  const destination = { side: target.side, zone };
+  const firstBlocked = ordered.findIndex((slot) => {
+    const object = objects.get(slot);
+    return !object || !canMoveInto(view, destination, object);
+  });
+  if (firstBlocked === -1) return ordered.length;
+  return target.kind === "library" ? firstBlocked : 0;
 }
 
 export function allowed(
@@ -95,23 +134,26 @@ export function allowed(
   } else if ("side" in target) {
     const { side, kind } = target;
     if (seatOf(view, side) >= table.seats) return false;
-    if (kind === "hand" && side !== "you") return false;
-    if (kind === "library") {
-      if (!canUseZone(view, side, kind)) return false;
-      if (
-        "always_reveal_top" in (command.action ?? {}) ||
-        "always_look_at_top" in (command.action ?? {})
-      )
-        return side === "you";
-      if (
-        "draw" in (command.action ?? {}) ||
-        "mulligan" in (command.action ?? {})
-      )
-        return canUseZone(view, side, "hand");
-      if (command.id === "library.undo_draw") return side === "you";
-      if (uses(command.action, "objects") && !view.players[side].library.length)
-        return false;
-    }
+    if (isHiddenZone(kind) && !canUseZone(view, side, kind)) return false;
+    const action = command.action ?? {};
+    if ("draw" in action || "mulligan" in action)
+      return (
+        canUseZone(view, side, "hand") && canUseZone(view, side, "library")
+      );
+    if (
+      "always_reveal_top" in action ||
+      "always_look_at_top" in action ||
+      "lend" in action ||
+      command.id === "library.undo_draw"
+    )
+      return side === "you";
+    if (
+      kind === "library" &&
+      uses(command.action, "objects") &&
+      !view.players[side].library.length
+    )
+      return false;
+    if (pileMoveLimit(command, target, view) === 0) return false;
   }
   // A reveal has a recipient only on a two-seat table.
   return table.seats === 2 || !uses(command.action, "other_seat");
@@ -220,6 +262,7 @@ export function availableCommands(
   }).flatMap((command): MenuCommand[] => {
     if (
       !allowed(command, target, view) ||
+      (command.client === "close_and_shuffle" && !context.viewer?.canShuffle) ||
       cards.some(
         (card) =>
           !allowed(command, card, view) ||

@@ -111,7 +111,16 @@ impl Reference {
 }
 
 fn can_use_zone(table: &Table, by: Seat, zone: Zone) -> bool {
-    zone.hidden_owner().is_none_or(|owner| owner == by) || table.lent_zones.contains(&(zone, by))
+    zone.hidden_owner().is_none_or(|owner| owner == by)
+        || zone_grants(table, by).any(|lent| lent == zone)
+}
+
+/// Hidden zones an owner has lent to this seat. Ownership and individual
+/// reveals are checked separately.
+pub fn zone_grants(table: &Table, by: Seat) -> impl Iterator<Item = Zone> + '_ {
+    table.lent_zones.iter().filter_map(move |&(zone, to)| {
+        (to == by && zone.hidden_owner().is_some_and(|owner| owner != by)).then_some(zone)
+    })
 }
 
 /// The expected zone to offer with a projected object the seat can act on.

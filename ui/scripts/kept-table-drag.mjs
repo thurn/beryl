@@ -384,6 +384,123 @@ await check(
     live,
 );
 
+// Layout audits cannot check whether a permission permits a menu command or a drop.
+await check(
+    "manual table grants enable hand commands and preserve owner returns",
+    async (page) => {
+        let granted = false;
+        await page.route("**/invoke/table_current", async (route) => {
+            const response = await route.fetch();
+            const payload = await response.json();
+            const { view } = payload.ok;
+            const { table, players } = view;
+            table.seat = 1;
+            table.seats = 2;
+            table.acting = granted ? [{ side: "opponent", zone: "hand" }] : [];
+
+            const hand = table.orders.you.hand.pop();
+            const library = players.you.library.pop();
+            const [opposingCard] = view.battlefield;
+            table.orders.opponent.hand.push(hand);
+            players.opponent.library.push(library);
+            for (const object of view.objects) {
+                if ([hand, library, opposingCard].includes(object.slot)) {
+                    object.owner = "opponent";
+                    object.controller = "opponent";
+                    if (object.slot !== opposingCard) object.name = null;
+                }
+            }
+            table.objectActions = table.objectActions.filter(
+                ({ subject }) =>
+                    subject.slot !== library &&
+                    (granted || subject.slot !== hand),
+            );
+            const handAction = table.objectActions.find(
+                ({ subject }) => subject.slot === hand,
+            );
+            if (handAction) handAction.zone = { hand: 0 };
+            await route.fulfill({ response, json: payload });
+        });
+        await startTable(page, "24 Island", [
+            move("battlefield"),
+            move("battlefield"),
+        ]);
+
+        const handMenu = async () => {
+            const emptyHandSpace = await stagePoint(page, 300, 24);
+            await page.mouse.click(emptyHandSpace.x, emptyHandSpace.y, {
+                button: "right",
+            });
+            await page.getByRole("menu").waitFor();
+        };
+        const reveal = page.getByRole("menuitem", {
+            name: "Reveal hand",
+            exact: true,
+        });
+        await handMenu();
+        assert.equal(await reveal.count(), 0);
+        await page.keyboard.press("Escape");
+
+        const before = await tableView();
+        const [opposingCard, guestCard] = before.battlefield;
+        const library = page.locator(
+            "button[data-pile=library][data-side=opponent]",
+        );
+        const target = page.locator(
+            "[data-table-drop=library][data-side=opponent]",
+        );
+        const destination = await point(library, 0.5, 0.25);
+        const actions = [];
+        await page.route("**/invoke/table_act", (route) => {
+            actions.push(route.request().postDataJSON().request.action);
+            return route.fulfill({
+                headers: { "Access-Control-Allow-Origin": "*" },
+                json: { ok: { refused: "permission" } },
+            });
+        });
+        const held = () =>
+            page.evaluate(() => window.berylStage.pointer.held?.name);
+        await begin(page, await point(card(page, guestCard)), destination);
+        assert.equal(await held(), guestCard);
+        assert.equal(await page.locator("[data-table-drop]").count(), 0);
+        await page.mouse.up();
+        await page.evaluate(() => window.berylStage.clock.advance(1000));
+        await committed(page);
+
+        await begin(page, await point(card(page, opposingCard)), destination);
+        assert.equal(await held(), opposingCard);
+        assert.equal(await target.count(), 1);
+        assert.deepEqual(await finish(page), { refused: "permission" });
+        assert.deepEqual(actions, [
+            {
+                move: {
+                    ...ref(before, opposingCard),
+                    to: { library: 0 },
+                    position: "top",
+                },
+            },
+        ]);
+
+        granted = true;
+        await page.evaluate(() => {
+            window.location.hash = "#/";
+        });
+        await page.locator(".start-panel").waitFor();
+        await page.evaluate(() => {
+            window.location.hash = "#/table";
+        });
+        await page.locator("[data-manual-table]").waitFor();
+        await handMenu();
+        assert.deepEqual(await clickTable(page, reveal), {
+            refused: "permission",
+        });
+        assert.deepEqual(actions.at(-1), {
+            reveal: { in: { hand: 0 }, to: [0] },
+        });
+    },
+    live,
+);
+
 await check(
     "manual table drag Escape releases the card without dropping it",
     async (page) => {

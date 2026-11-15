@@ -14,6 +14,7 @@ import { PileSheet } from "../stage/PhoneChrome";
 import { REVEALED } from "../stage/Revealed.tsx";
 import type { TableClient } from "./client";
 import { pickViewerCard } from "./controls";
+import { canUseZone } from "./zoneAccess";
 import { type OpenPile, type PileView, portionSlots } from "./viewers";
 
 const noViewer = () => undefined;
@@ -157,16 +158,19 @@ export function TablePileViewer({
     pile.zone === "library" ||
     pile.zone === "graveyard" ||
     pile.zone === "exile";
-  const full = pile.zone === "library" && pile.portion === "all";
+  const canShuffle =
+    pile.zone === "library" &&
+    pile.portion === "all" &&
+    canUseZone(view, pile.side, "library");
   const close = (shuffle = false) => {
     void viewers.close(pile, shuffle).catch(viewers.reportError);
   };
   const onClose = () => {
-    if (full && !confirmShuffle) setConfirmShuffle(true);
+    if (canShuffle && !confirmShuffle) setConfirmShuffle(true);
     else close();
   };
   let footer;
-  if (confirmShuffle) {
+  if (confirmShuffle && canShuffle) {
     footer = (
       <div className="table-viewer-actions">
         <Button onClick={() => close(true)}>Shuffle</Button>

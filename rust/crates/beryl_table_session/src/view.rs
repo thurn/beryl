@@ -19,7 +19,7 @@ use beryl_table::action::Portion;
 use beryl_table::assist;
 use beryl_table::log::UndoControl;
 use beryl_table::state::{ArrowKind, ArrowTarget, Assist, ObjectId, Phase, Zone};
-use beryl_table::{Entry, Log, Refusal, Seat, Table, redact};
+use beryl_table::{Entry, Log, Refusal, Seat, Table, permissions, redact};
 
 pub(super) fn project(
     table: &Table,
@@ -82,10 +82,7 @@ pub(super) fn project(
             opponent: theirs,
         },
         arrows: arrows(&projected, slots, viewer),
-        acting: acting(&projected, viewer),
-        lent_hand: projected
-            .lent_zones
-            .contains(&(Zone::Hand(Seat(1 - seat.0)), seat)),
+        acting: acting(table, viewer),
         object_actions: refs.actions().to_vec(),
         card_commands,
         top_revealed: projected.always_reveal_top.contains(&seat),
@@ -189,10 +186,8 @@ pub(super) fn zone(zone: Zone) -> (ZoneName, Option<Seat>) {
 
 fn acting(table: &Table, viewer: Viewer) -> Vec<ZoneRef> {
     let mut zones = Vec::new();
-    for &(lent, to) in &table.lent_zones {
-        if to == viewer.0
-            && let (zone, Some(seat)) = zone(lent)
-        {
+    for lent in permissions::zone_grants(table, viewer.0) {
+        if let (zone, Some(seat)) = zone(lent) {
             let item = ZoneRef {
                 side: viewer.side(seat),
                 zone,

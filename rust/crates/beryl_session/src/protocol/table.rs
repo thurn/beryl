@@ -242,10 +242,6 @@ pub struct TableView {
     pub orders: ManualOrders,
     /// Hidden zones lent to this viewer. Reveals authorize individual object actions.
     pub acting: Vec<ZoneRef>,
-    /// The opposing hand was lent to the viewer as a zone.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    #[ts(optional, as = "Option<_>")]
-    pub lent_hand: bool,
     /// References for actionable objects and stack markers shown in this view.
     pub object_actions: Vec<TableObjectAction>,
     /// Card command facts keyed by stage slot.

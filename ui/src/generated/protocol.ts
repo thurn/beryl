@@ -871,10 +871,6 @@ seat?: number, orders: ManualOrders,
  */
 acting: Array<ZoneRef>, 
 /**
- * The opposing hand was lent to the viewer as a zone.
- */
-lentHand?: boolean, 
-/**
  * References for actionable objects and stack markers shown in this view.
  */
 objectActions: Array<TableObjectAction>, 

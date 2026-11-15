@@ -169,7 +169,6 @@ fn manual_view_with_ordered_zones() -> PlayerView {
         },
         arrows: vec![],
         acting: vec![],
-        lent_hand: false,
         object_actions: vec![],
         card_commands: BTreeMap::new(),
         top_revealed: false,

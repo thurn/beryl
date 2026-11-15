@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { commands } from "../src/table/commands.ts";
 import { fill } from "../src/table/fill.ts";
-import { allowed, menuRows } from "../src/table/menuRows.ts";
+import { allowed, menuRows, pileMoveLimit } from "../src/table/menuRows.ts";
 
 const view = {
     turn: { active: "you" },
@@ -14,6 +14,7 @@ const view = {
     },
     players: { you: { library: [7] }, opponent: { library: [8] } },
     stack: [],
+    objects: [],
 };
 const card = (kind, zone, owner = "you", name = "Example") => ({
     kind,
@@ -121,10 +122,14 @@ test("menu rows show Transform for a two-faced card", () => {
 });
 
 test("menu permissions distinguish public cards, inaccessible cards and lent piles", () => {
-    const tap = commands.find(({ id }) => id === "permanent.tap");
-    const peek = commands.find(({ id }) => id === "permanent.peek");
-    const search = commands.find(({ id }) => id === "library.search");
-    const draw = commands.find(({ id }) => id === "library.draw");
+    const find = (id) => commands.find((command) => command.id === id);
+    const tap = find("permanent.tap");
+    const peek = find("permanent.peek");
+    const search = find("library.search");
+    const draw = find("library.draw");
+    const lend = find("library.lend");
+    const mulligan = find("hand.mulligan");
+    const sort = find("hand.sort_name");
     const mine = card("permanent", "battlefield");
     mine.object.facing = "down";
     const theirs = card("their_permanent", "battlefield", "opponent");
@@ -135,34 +140,79 @@ test("menu permissions distinguish public cards, inaccessible cards and lent pil
     assert.equal(allowed(peek, theirs, view), false);
     assert.equal(allowed(tap, { ...theirs, action: undefined }, view), false);
     const library = { kind: "library", side: "opponent" };
-    assert.equal(allowed(search, library, view), false);
-    const lent = {
+    const hand = { kind: "hand", side: "opponent" };
+    const grant = (...zones) => ({
         ...view,
         table: {
             ...view.table,
-            acting: [{ side: "opponent", zone: "library" }],
+            acting: zones.map((zone) => ({ side: "opponent", zone })),
         },
+    });
+    const libraryOnly = grant("library");
+    const handOnly = grant("hand");
+    const both = grant("library", "hand");
+    assert.equal(allowed(search, library, view), false);
+    assert.equal(allowed(search, library, libraryOnly), true);
+    assert.equal(allowed(lend, library, both), false);
+    assert.equal(allowed(draw, library, libraryOnly), false);
+    assert.equal(allowed(draw, library, handOnly), false);
+    assert.equal(allowed(draw, library, both), true);
+    assert.equal(allowed(sort, hand, view), false);
+    assert.equal(allowed(sort, hand, handOnly), true);
+    assert.equal(allowed(mulligan, hand, handOnly), false);
+    assert.equal(allowed(mulligan, hand, both), true);
+    assert.deepEqual(rows(hand).header, { title: "Hand", whose: "2 cards" });
+    assert.deepEqual(rows(hand).groups, []);
+    assert.ok(labels(rows(hand, handOnly)).includes("Reveal hand"));
+    const revealed = card("hand_card", "hand", "opponent");
+    assert.equal(allowed(find("hand_card.play"), revealed, view), true);
+});
+
+test("hidden destinations allow owner returns without a whole-zone grant", () => {
+    const target = { kind: "hand", side: "opponent" };
+    const command = commands.find(
+        ({ id }) => id === "hand.move_to_library_top",
+    );
+    const handGrant = { zone: "hand", side: "opponent" };
+    const state = {
+        ...view,
+        objects: [
+            { slot: 2, owner: "opponent", zone: "hand" },
+            { slot: 3, owner: "opponent", zone: "hand" },
+        ],
+        table: { ...view.table, acting: [handGrant] },
     };
-    assert.equal(allowed(search, library, lent), true);
-    assert.equal(allowed(draw, library, lent), false);
-    const revealedHand = {
-        ...lent,
-        table: {
-            ...lent.table,
-            acting: [...lent.table.acting, { side: "opponent", zone: "hand" }],
-        },
-    };
-    assert.equal(allowed(draw, library, revealedHand), false);
+    assert.equal(allowed(command, target, state), true);
+    state.objects[1].owner = "you";
+    assert.equal(allowed(command, target, state), false);
     assert.equal(
-        allowed(draw, library, {
-            ...lent,
-            table: { ...lent.table, lentHand: true },
+        allowed(command, target, {
+            ...state,
+            table: {
+                ...state.table,
+                acting: [handGrant, { zone: "library", side: "opponent" }],
+            },
         }),
         true,
     );
-    const hand = rows({ kind: "hand", side: "opponent" });
-    assert.deepEqual(hand.header, { title: "Hand", whose: "2 cards" });
-    assert.deepEqual(hand.groups, []);
+
+    const drawBottom = commands.find(
+        ({ id }) => id === "library.draw_bottom_cards",
+    );
+    const libraryState = {
+        ...state,
+        objects: state.objects.map((card) => ({ ...card, zone: "library" })),
+        players: { ...state.players, opponent: { library: [2, 3] } },
+        table: {
+            ...state.table,
+            acting: [{ zone: "library", side: "opponent" }],
+        },
+    };
+    const library = { kind: "library", side: "opponent" };
+    assert.equal(allowed(drawBottom, library, libraryState), true);
+    assert.equal(pileMoveLimit(drawBottom, library, libraryState), 1);
+    libraryState.players.opponent.library.reverse();
+    assert.equal(allowed(drawBottom, library, libraryState), false);
 });
 
 test("fill substitutes nested arrays and values, preserves text, and rejects missing references", () => {

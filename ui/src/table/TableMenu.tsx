@@ -18,7 +18,8 @@ import { selectAt } from "./select";
 import { playerCounterValue } from "./players";
 import { describe } from "./shortcuts";
 import { TablePalette } from "./TablePalette";
-import { commandActions, pileSlots } from "./commandActions";
+import { commandActions } from "./commandActions";
+import { canUseZone } from "./zoneAccess";
 import {
   baseStats,
   counterNames,
@@ -38,6 +39,8 @@ import {
   availableCommands,
   kindOf,
   menuRows,
+  pileMoveLimit,
+  pileSlots,
   type MenuCommand,
   type MenuContext,
 } from "./menuRows";
@@ -173,6 +176,8 @@ export class TableCommands {
       viewer: viewer && {
         revealed: viewer.zone === "revealed",
         wholeLibrary: viewer.zone === "library" && viewer.portion === "all",
+        canShuffle:
+          viewer.zone === "library" && canUseZone(view, viewer.side, "library"),
       },
       pointed: this.client.surface?.pointed(),
       key: (id) => describe(this.bindings.get(id), this.bindings.platform),
@@ -537,7 +542,10 @@ export class TableCommands {
         ? counterValue(object, name)
         : (life ?? playerValue);
       const count =
-        target.kind === "library" ? pileSlots(context).length : undefined;
+        target.kind === "library"
+          ? (pileMoveLimit(command, target, context.view) ??
+            pileSlots(context).length)
+          : undefined;
       const verb =
         command.id === "library.draw_cards"
           ? "Draw"
@@ -549,7 +557,9 @@ export class TableCommands {
         start:
           current ??
           (command.id === "hand.mulligan"
-            ? (context.view.table?.orders.you.hand.length ?? 7)
+            ? (context.view.table?.orders[
+                target.kind === "hand" ? target.side : "you"
+              ].hand.length ?? 7)
             : 1),
         current,
         min:

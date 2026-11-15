@@ -1,6 +1,7 @@
 use beryl_session::card_records::{CardRecordsRequest, card_records};
 use beryl_session::protocol::{
     Counter, FaceName, PowerToughness, RowName, Side, StackItem, Status, Step, TablePhase,
+    ZoneName, ZoneRef,
 };
 use beryl_session::script::{Arrow, Subject};
 use beryl_table::action::{Destination, Portion, Position, Selection};
@@ -128,7 +129,6 @@ fn both_seats_get_ordered_piles_and_relative_table_state() {
         assert_eq!(manual.seats, 2);
         assert_eq!(manual.seat.unwrap_or_default(), seat.0);
         assert_eq!(manual.top_revealed, seat == GUEST);
-        assert_eq!(manual.lent_hand, seat == GUEST);
         assert_eq!(manual.manual_stats, [slot(creature)]);
         assert_eq!(host.life, 12);
         assert_eq!(
@@ -179,7 +179,23 @@ fn both_seats_get_ordered_piles_and_relative_table_state() {
             if seat == HOST { "You" } else { "Seat 1" }
         );
         assert_eq!(manual.log[0].text, "Put an ability on the stack.");
-        assert_eq!(manual.acting.len(), if seat == GUEST { 2 } else { 0 });
+        if seat == GUEST {
+            assert_eq!(
+                manual.acting,
+                [
+                    ZoneRef {
+                        side: Side::Opponent,
+                        zone: ZoneName::Hand
+                    },
+                    ZoneRef {
+                        side: Side::Opponent,
+                        zone: ZoneName::Library
+                    },
+                ],
+            );
+        } else {
+            assert!(manual.acting.is_empty());
+        }
         let action = |id| {
             manual
                 .object_actions
@@ -293,6 +309,76 @@ fn manual_commands_follow_the_visible_face_and_keep_exact_base_stats() {
                 toughness: 3
             })
         );
+    }
+}
+
+#[test]
+fn both_seats_project_zone_grants_separately_from_revealed_cards() {
+    let mut table = Table::new(2);
+    let hidden = [HOST, GUEST].map(|seat| {
+        let id = 1 + u32::from(seat.0) * 4;
+        [
+            add(&mut table, id, "Island", Zone::Hand(seat), &[seat]),
+            add(&mut table, id + 1, "Island", Zone::Library(seat), &[]),
+            add(&mut table, id + 2, "Plains", Zone::Library(seat), &[]),
+            add(&mut table, id + 3, "Opt", Zone::Sideboard(seat), &[seat]),
+        ]
+    });
+    let log = Log::new(&table);
+    let mut table = PublishedTable::new(table, log, Chance::fresh(17)).unwrap();
+    for (owner, other) in [(HOST, GUEST), (GUEST, HOST)] {
+        table
+            .apply_host(
+                owner,
+                &Action::Lend {
+                    zone: Zone::Hand(owner),
+                    to: other,
+                },
+            )
+            .unwrap();
+        table
+            .apply_host(
+                owner,
+                &Action::Reveal {
+                    zone: Zone::Library(owner),
+                    objects: Some(vec![hidden[usize::from(owner.0)][1]]),
+                    random: None,
+                    to: vec![other],
+                },
+            )
+            .unwrap();
+    }
+
+    for (seat, other) in [(HOST, GUEST), (GUEST, HOST)] {
+        let publication = table.publication(seat).unwrap();
+        let view = publication.view().table.as_ref().unwrap();
+        assert_eq!(
+            view.acting,
+            [ZoneRef {
+                side: Side::Opponent,
+                zone: ZoneName::Hand
+            }]
+        );
+        let action_zone = |id| {
+            let subject = Subject::Object {
+                slot: publication.slot(id).unwrap(),
+            };
+            view.object_actions
+                .iter()
+                .find(|action| action.subject == subject)
+                .map(|action| action.zone)
+        };
+        let [hand, reveal, private, sideboard] = hidden[usize::from(seat.0)];
+        assert_eq!(action_zone(hand), Some(Zone::Hand(seat)));
+        assert_eq!(action_zone(reveal), Some(Zone::Library(seat)));
+        assert_eq!(action_zone(private), Some(Zone::Library(seat)));
+        assert_eq!(action_zone(sideboard), Some(Zone::Sideboard(seat)));
+
+        let [lent, reveal, private, sideboard] = hidden[usize::from(other.0)];
+        assert_eq!(action_zone(lent), Some(Zone::Hand(other)));
+        assert_eq!(action_zone(reveal), Some(Zone::Library(other)));
+        assert_eq!(action_zone(private), None);
+        assert_eq!(action_zone(sideboard), None);
     }
 }
 

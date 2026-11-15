@@ -974,7 +974,8 @@ Three rules hold for every menu.
   "Draw arrow…" open no dialog. Each closes the menu and starts an arrow from
   the card, and the click that ends the arrow picks the target.
 - **A menu with fewer permissions is the same menu with fewer rows,** not a
-  different one. The other player's hand offers nothing but its count.
+  different one. The other player's hand offers its count. If the owner lends
+  it, the menu also offers actions the viewer can take on that hand.
 
 ### Prompts for numbers and text
 

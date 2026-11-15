@@ -12,6 +12,7 @@ import type {
 } from "../generated/protocol";
 import { sameZone, type TableClient } from "./client";
 import type { Destination } from "./dropZones";
+import { canMoveInto, isHiddenZone } from "./zoneAccess";
 
 export interface DragCard {
   object: ObjectView;
@@ -31,11 +32,12 @@ export function available(
   if (to.side === "opponent" && client.view?.table?.seats !== 2) {
     return to.kind === "stack";
   }
-  if (to.kind !== "hand" || to.side === "you") return true;
+  if (!isHiddenZone(to.kind)) return true;
+  const view = client.view;
+  const destination = { zone: to.kind, side: to.side };
   return (
-    client.view?.table?.acting.some(
-      ({ zone, side }) => zone === "hand" && side === to.side,
-    ) || cards.every(({ object }) => object.owner === to.side)
+    !!view &&
+    cards.every(({ object }) => canMoveInto(view, destination, object))
   );
 }
 
