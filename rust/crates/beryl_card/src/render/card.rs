@@ -177,12 +177,15 @@ fn merged(ctx: &mut Ctx, before: &Ability, ability: &Ability) -> Option<String> 
 }
 
 /// A casting option's keyword line, if it is printed `first` (kicker, offspring,
-/// impending) or last (overload, evoke): "Kicker {X}. X can't be 0.", "Impending
-/// 4—{2}{W}{W}", "Evoke—Exile a blue card from your hand."
+/// impending, an alternative cost no keyword names) or last (overload, evoke): "Kicker {X}.
+/// X can't be 0.", "Impending 4—{2}{W}{W}", "Evoke—Exile a blue card from your hand.", "You
+/// may pay 1 life and exile a blue card from your hand rather than pay this spell's mana
+/// cost."
 /// ([CR 702.33a](https://yawgatog.com/resources/magic-rules/#R70233a),
 /// [CR 702.176a](https://yawgatog.com/resources/magic-rules/#R702176a),
 /// [CR 702.96a](https://yawgatog.com/resources/magic-rules/#R70296a),
-/// [CR 702.74a](https://yawgatog.com/resources/magic-rules/#R70274a)).
+/// [CR 702.74a](https://yawgatog.com/resources/magic-rules/#R70274a),
+/// [CR 118.9](https://yawgatog.com/resources/magic-rules/#R1189)).
 fn casting_line(ctx: &mut Ctx, option: CastingOption, first: bool) -> Option<String> {
     let line = match option {
         CastingOption::Kicker { cost, min_x } => {
@@ -211,6 +214,17 @@ fn casting_line(ctx: &mut Ctx, option: CastingOption, first: bool) -> Option<Str
                 format!("Evoke\u{2014}{}.", capitalized(&list(&actions, "and")))
             };
             (false, line)
+        }
+        CastingOption::Alternative { cost, parts } => {
+            let mut actions = ctx.cost_actions(Cost::of_parts(parts));
+            if !cost.is_zero() {
+                actions.insert(0, format!("pay {}", mana_text(cost)));
+            }
+            let actions = list(&actions, "and");
+            (
+                true,
+                format!("You may {actions} rather than pay this spell's mana cost."),
+            )
         }
     };
     (line.0 == first).then_some(line.1)

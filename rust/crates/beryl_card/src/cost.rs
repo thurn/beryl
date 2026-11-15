@@ -422,6 +422,16 @@ pub enum CastingOption {
         cost: ManaCost,
         parts: &'static [CostPart],
     },
+    /// An alternative cost no keyword names
+    /// ([CR 118.9](https://yawgatog.com/resources/magic-rules/#R1189)): "Some spells have
+    /// alternative costs. An alternative cost is a cost listed in a spell's text, or applied
+    /// to it from another effect, that its controller may pay rather than paying the spell's
+    /// mana cost." The cost is `cost` and `parts`, as Force of Will's "You may pay 1 life and
+    /// exile a blue card from your hand rather than pay this spell's mana cost."
+    Alternative {
+        cost: ManaCost,
+        parts: &'static [CostPart],
+    },
 }
 
 /// Which keyword a [`CastingOption`] is, as an effect asks whether its cost was paid
@@ -433,6 +443,7 @@ pub enum CastingKind {
     Impending,
     Overload,
     Evoke,
+    Alternative,
 }
 
 /// A set of [`CastingKind`]s: the keywords whose costs were paid for one spell, as the
@@ -486,6 +497,7 @@ impl CastingOption {
             CastingOption::Impending { .. } => CastingKind::Impending,
             CastingOption::Overload { .. } => CastingKind::Overload,
             CastingOption::Evoke { .. } => CastingKind::Evoke,
+            CastingOption::Alternative { .. } => CastingKind::Alternative,
         }
     }
 
@@ -498,24 +510,26 @@ impl CastingOption {
             CastingOption::Impending { .. }
                 | CastingOption::Overload { .. }
                 | CastingOption::Evoke { .. }
+                | CastingOption::Alternative { .. }
         )
     }
 
-    /// Its mana cost: all of it, or the mana part of an evoke cost.
+    /// Its mana cost: all of it, or the mana part of an evoke or alternative cost.
     pub fn cost(self) -> ManaCost {
         match self {
             CastingOption::Kicker { cost, .. }
             | CastingOption::Offspring(cost)
             | CastingOption::Impending { cost, .. }
             | CastingOption::Overload { cost, .. }
-            | CastingOption::Evoke { cost, .. } => cost,
+            | CastingOption::Evoke { cost, .. }
+            | CastingOption::Alternative { cost, .. } => cost,
         }
     }
 
     /// The parts of its cost that are not mana.
     pub fn parts(self) -> &'static [CostPart] {
         match self {
-            CastingOption::Evoke { parts, .. } => parts,
+            CastingOption::Evoke { parts, .. } | CastingOption::Alternative { parts, .. } => parts,
             CastingOption::Kicker { .. }
             | CastingOption::Offspring(_)
             | CastingOption::Impending { .. }

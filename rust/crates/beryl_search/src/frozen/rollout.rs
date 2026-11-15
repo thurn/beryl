@@ -378,6 +378,8 @@ impl Policy<'_> {
                 CastingOption::Impending { .. } | CastingOption::Overload { .. } => -10,
                 // A card from hand and the permanent itself, for its enters ability alone.
                 CastingOption::Evoke { .. } => -30,
+                // What it costs besides mana, as a card from hand.
+                CastingOption::Alternative { .. } => -20,
             };
         }
         // Overloaded, a spell hits each permanent its first target's filter accepts

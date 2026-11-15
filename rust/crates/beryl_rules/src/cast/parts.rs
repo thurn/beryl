@@ -8,13 +8,13 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Castings, Chosen, CostAction, CostPart, Face, ManaCost, Measure, Prompt, Purpose,
+    Castings, Chosen, CostAction, CostPart, Face, Keywords, ManaCost, Measure, Prompt, Purpose,
 };
 use crate::counters;
 use crate::decision::{Candidates, Decision, DecisionKind, Opt};
 use crate::engine::{collapse, collapse_in_order};
 use crate::event::{self, Entry, Reason, Sink};
-use crate::filter::Evaluate;
+use crate::filter::{Evaluate, Filter};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -31,13 +31,62 @@ use super::costs::total_cost;
 use super::steps::{finish, pay_mana, top};
 use super::timing::entry_ability_of;
 
+/// What delve has its spell's caster do rather than pay generic mana
+/// ([CR 702.66a]): "For each generic mana in this spell's total cost, you may exile a card
+/// from your graveyard rather than pay that mana." A part of no cost printed on a card, which
+/// the casting steps name by [`DELVE_PART`].
+///
+/// [CR 702.66a]: https://yawgatog.com/resources/magic-rules/#R70266a
+static DELVE: CostPart = CostPart::Chosen(
+    CostAction::Exile,
+    Chosen {
+        zone: Zone::Graveyard,
+        filter: Filter::Any,
+        other: false,
+        measure: Measure::ForGeneric(u8::MAX),
+    },
+);
+
+/// The index the casting steps give [`DELVE`] among a spell's parts, past any it prints.
+const DELVE_PART: u8 = u8::MAX;
+
+/// Whether `face`, a spell's, has delve. Delve functions only while its spell is on the
+/// stack ([CR 702.66a]), where an effect that grants or removes abilities reaches no spell
+/// this engine plays, so the face's keywords answer.
+///
+/// [CR 702.66a]: https://yawgatog.com/resources/magic-rules/#R70266a
+pub(super) fn delves(face: &Face) -> bool {
+    face.keywords.contains(Keywords::DELVE)
+}
+
+/// Whether `player` can pay `cost` for casting the card in `slot`, a spell with delve,
+/// exiling cards from their graveyard for its generic mana (CR 702.66a).
+pub(super) fn delve_pays<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    funds: &Funds<L>,
+    player: Seat,
+    slot: L::Slot,
+    cost: ManaCost,
+) -> bool {
+    let CostPart::Chosen(action, chosen) = DELVE else {
+        unreachable!("delve exiles chosen cards");
+    };
+    let cards = candidates(s, t, player, slot, action, &chosen);
+    let nothing = mana::Paying::NOTHING;
+    payable_with_substitutes(s, t, funds, cost, u8::MAX, cards, Bitboard::EMPTY, nothing)
+}
+
 /// The part at `index` of the cost of the spell or ability `entry`, counting its parts that
-/// are not mana from 0 in the order printed.
+/// are not mana from 0 in the order printed; at [`DELVE_PART`], delve's.
 fn part_at<L: Layout>(
     t: &GameTable,
     entry: &StackEntry<L>,
     index: u8,
 ) -> Option<&'static CostPart> {
+    if index == DELVE_PART {
+        return Some(&DELVE);
+    }
     let index = usize::from(index);
     let StackItem::Spell {
         card, face, costs, ..
@@ -220,6 +269,7 @@ pub(super) fn spell_payable<L: Layout>(
     }
     face.cost_parts(costs).all(|part| match part {
         CostPart::Chosen(action, chosen) => payable(s, t, player, slot, *action, chosen),
+        CostPart::Life(n) => s.can_pay_life(player, *n),
         _ => unreachable!("the card table refuses a spell's cost the engine cannot pay"),
     })
 }
@@ -320,7 +370,7 @@ pub(super) fn pay<L: Layout>(
             CostPart::Life(n) => {
                 // CR 119.4: "If a player pays life, the payment is subtracted from their life
                 // total; in other words, the player loses that much life". The player who
-                // pays is the one activating the ability.
+                // pays is the one casting the spell or activating the ability.
                 let player = top(s).controller();
                 life::lose(&mut Game::new(s, t, sink), player, n)?;
             }
@@ -336,16 +386,27 @@ pub(super) fn pay<L: Layout>(
     }
 }
 
-/// Turns to an ability's mana: first the part of its cost that may be paid rather than
-/// generic mana, if it has one and there is a choice to make, then the mana itself.
-fn pay_substitutes<L: Layout>(
+/// Turns to the mana of an ability or a spell: first the part of its cost that may be paid
+/// rather than generic mana, if it has one and there is a choice to make, then the mana
+/// itself. A spell's is delve's, whose cards pay for generic mana of the total cost once it
+/// is locked in ([CR 601.2h]): "The player pays the total cost."
+///
+/// [CR 601.2h]: https://yawgatog.com/resources/magic-rules/#R6012h
+pub(super) fn pay_substitutes<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
     mut c: Casting<L>,
 ) -> Result<(), Full> {
     let entry = top(s);
-    if let Some((part, _, _, most)) = substitute(entry_ability_of(t, entry).cost().parts()) {
+    let found = match entry.item {
+        StackItem::Spell { card, face, .. } => {
+            delves(t.def(card).face(face)).then_some((DELVE_PART, u8::MAX))
+        }
+        _ => substitute(entry_ability_of(t, entry).cost().parts())
+            .map(|(part, _, _, most)| (part, most)),
+    };
+    if let Some((part, most)) = found {
         let left = most.min(total_cost(s, t, entry, &c).generic);
         c.step = CastStep::Objects(PayingObjects::start(part, left));
         if left > 0 && !substitute_options(s, t, &c)?.is_empty() {
@@ -370,25 +431,55 @@ fn substitute_options<L: Layout>(
     let entry = top(s);
     let cost = total_cost(s, t, entry, c);
     let mut objects: L::Queue<Opt<L>, 64> = Default::default();
-    let left = step(c).left;
+    let paying_objects = step(c);
+    let left = paying_objects.left;
+    let (action, chosen) = part_being_paid(t, entry, c);
     if left > 0 {
-        let (action, chosen) = part_being_paid(t, entry, c);
-        let able = candidates(s, t, c.player, itself(entry), action, chosen);
+        let able =
+            candidates(s, t, c.player, itself(entry), action, chosen) & !paying_objects.chosen;
         let mut fewer = cost;
         fewer.generic -= 1;
         let funds = Funds::of(s, t, c.player)?;
+        // Cards from a graveyard are chosen from the bottom up (see `choices`): each set is
+        // one sequence of answers, and a card leaves only those above it to choose after.
+        let graveyard = s.graveyard(c.player);
+        let from = usize::from(paying_objects.graveyard_from);
+        let (offered, above) = if chosen.zone == Zone::Graveyard {
+            let order = graveyard.get(from..).unwrap_or_default();
+            let offered = collapse_in_order(s, order.iter().copied().filter(|&g| able.contains(g)));
+            (offered, Some(order))
+        } else {
+            (collapse(s, able), None)
+        };
         // Candidates are listed in the candidate order, which a `Choice` counts in.
-        for slot in s.in_candidate_order(collapse(s, able)) {
+        for slot in s.in_candidate_order(offered) {
             let rest = Bitboard::single(slot);
+            let later = match above {
+                Some(order) => {
+                    let i = order
+                        .iter()
+                        .position(|&g| g == slot)
+                        .expect("in the graveyard");
+                    order[i + 1..]
+                        .iter()
+                        .copied()
+                        .filter(|&g| able.contains(g))
+                        .collect()
+                }
+                None => able,
+            };
             let paying = mana::Paying::entry(t, entry);
-            if payable_with_substitutes(s, t, &funds, fewer, left - 1, able, rest, paying) {
+            if payable_with_substitutes(s, t, &funds, fewer, left - 1, later, rest, paying) {
                 objects.push(Opt::Object(slot))?;
             }
         }
     }
     // With only generic symbols, activating a mana source keeps at least as much payment
-    // available as it did untapped. Activate before tapping any permanent to pay.
-    let manual_mana = s.profile().taps_mana == Some(c.player)
+    // available as it did untapped. Activate before tapping any permanent to pay. Delve's
+    // cards are chosen before any mana is made, as Arena opens its chooser before any land
+    // taps (UI Conventions, "Additional costs").
+    let manual_mana = action == CostAction::Tap
+        && s.profile().taps_mana == Some(c.player)
         && c.substituted == 0
         && cost.symbols.iter().all(|&n| n == 0);
     if objects.is_empty() && !manual_mana {
@@ -460,11 +551,12 @@ fn choices<L: Layout>(
 }
 
 /// What a player is asked as they choose the objects of a part: the prompts that exist are
-/// crew's, a waterbend cost's and a card to exile.
+/// crew's, a waterbend cost's, delve's and a card to exile.
 fn purpose(action: CostAction, chosen: &Chosen) -> Purpose {
     match (action, chosen.measure) {
         (CostAction::Tap, Measure::TotalPower(_)) => Purpose::Crew,
         (CostAction::Tap, Measure::ForGeneric(_)) => Purpose::Waterbend,
+        (CostAction::Exile, Measure::ForGeneric(_)) => Purpose::Delve,
         (CostAction::Exile, Measure::Count(_)) => Purpose::ExileCost,
         _ => unreachable!("the card table refuses a cost the engine cannot pay"),
     }
@@ -481,6 +573,15 @@ pub(super) fn decision<L: Layout>(
     let purpose = purpose(action, chosen);
     let left = step(c).left;
     Ok(match chosen.measure {
+        // Delve's cards, picked one at a time up to the generic mana left, with an end once
+        // mana can pay the rest: Arena's chooser of graveyard cards, "Submit 2".
+        Measure::ForGeneric(_) if action == CostAction::Exile => Decision {
+            player: c.player,
+            kind: DecisionKind::ChooseUpTo,
+            candidates: Candidates::Options(substitute_options(s, t, c)?),
+            prompt: Prompt::new(purpose).most(left),
+            about: Bitboard::EMPTY,
+        },
         // Each object pays one generic mana, or the rest is paid with mana.
         Measure::ForGeneric(_) => Decision {
             player: c.player,
@@ -547,6 +648,24 @@ fn pay_with_all<L: Layout>(
     }
 }
 
+/// Ends paying generic mana with objects: the cards chosen to exile go at once, and the rest
+/// of the cost is paid with mana.
+fn end_substitutes<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    mut c: Casting<L>,
+) -> Result<(), Full> {
+    let mut paying = step(&c);
+    if !paying.chosen.is_empty() {
+        let (action, _) = part_being_paid(t, top(s), &c);
+        pay_with_all(s, t, sink, action, paying.chosen)?;
+        paying.chosen = Bitboard::EMPTY;
+        c.step = CastStep::Objects(paying);
+    }
+    pay_mana(s, t, sink, c)
+}
+
 /// Applies an answer to [`CastStep::Objects`]: the object chosen pays, and the part is asked
 /// again until it is paid.
 pub(super) fn perform<L: Layout>(
@@ -562,19 +681,32 @@ pub(super) fn perform<L: Layout>(
     match chosen.measure {
         Measure::ForGeneric(_) => {
             // CR 701.67a: "you may tap an untapped artifact or creature you control rather
-            // than pay that mana."
+            // than pay that mana." CR 702.66a: "you may exile a card from your graveyard
+            // rather than pay that mana." The cards stay in the graveyard until the last is
+            // chosen, then go to exile at once ([`end_substitutes`]).
             match option {
                 Some(Opt::Mana { slot, color }) => mana::activate(s, t, sink, slot, color)?,
                 Some(Opt::Object(slot)) => {
-                    pay_with(s, t, sink, action, slot)?;
+                    if action == CostAction::Exile {
+                        let graveyard = s.graveyard(c.player);
+                        if let Some(i) = graveyard.iter().position(|&g| g == slot) {
+                            paying.graveyard_from = i as u8 + 1;
+                        }
+                        paying.chosen.insert(slot);
+                    } else {
+                        pay_with(s, t, sink, action, slot)?;
+                    }
                     c.substituted += 1;
                     paying.left -= 1;
                 }
-                _ => return pay_mana(s, t, sink, c),
+                _ => {
+                    c.step = CastStep::Objects(paying);
+                    return end_substitutes(s, t, sink, c);
+                }
             }
             c.step = CastStep::Objects(paying);
             if substitute_options(s, t, &c)?.is_empty() {
-                return pay_mana(s, t, sink, c);
+                return end_substitutes(s, t, sink, c);
             }
             s.ask(Pending::Casting(c));
             return Ok(());

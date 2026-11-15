@@ -286,6 +286,9 @@ def step(action: JsonObject, cards: Cards, purpose: object = None) -> JsonObject
             raise Unsupported("a chosen payment plan")
         if action["kind"] == "Priority" and pick["pick"] == "Card":
             raise Unsupported("a mana ability activated at priority")
+        if purpose == "delve":
+            # Forge's AI chooses the cards delve exiles itself, as it pays any cost.
+            raise Unsupported("a choice of the cards delve exiles")
         if purpose == "exile-cost":
             # Forge's AI pays a spell's costs itself (AiCostDecision), asking its controller
             # nothing.

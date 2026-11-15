@@ -125,6 +125,11 @@ bitset! {
         /// [CR 702.10c](https://yawgatog.com/resources/magic-rules/#R70210c) says the same of
         /// its activated abilities whose cost includes the tap symbol or the untap symbol.
         HASTE = 2,
+        /// [CR 702.66a](https://yawgatog.com/resources/magic-rules/#R70266a): "Delve is a
+        /// static ability that functions while the spell with delve is on the stack. 'Delve'
+        /// means 'For each generic mana in this spell's total cost, you may exile a card from
+        /// your graveyard rather than pay that mana.'"
+        DELVE = 3,
         /// [CR 702.19b](https://yawgatog.com/resources/magic-rules/#R70219b): "The
         /// controller of an attacking creature with trample first assigns damage to the
         /// creature(s) blocking it. Once all those blocking creatures are assigned lethal

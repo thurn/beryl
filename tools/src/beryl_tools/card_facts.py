@@ -82,7 +82,8 @@ class Cards:
         return [
             a
             for f in self.faces.get(name, [])
-            for a in cast(list[Json], f["abilities"])
+            # A face with keywords alone, as Gurmag Angler's delve, lists no abilities.
+            for a in cast(list[Json], f.get("abilities", []))
         ]
 
     def instructions(self, name: str) -> list[Json]:
@@ -146,6 +147,11 @@ class Cards:
             for face in self.faces.get(card, [])
             for p in self.oracle.get(cast(str, face["name"]), "").split("\n")
         ]
+
+    def delves(self, card: str) -> bool:
+        """Whether `card` has delve (CR 702.66a), whose keyword the faces' facts leave out:
+        a paragraph of its Oracle text that starts with the keyword."""
+        return any(p.startswith("Delve") for p in self.paragraphs(card))
 
     def mana_text(self, source: str) -> str | None:
         """The text of a mana source's one mana ability, `{T}: Add` and what it makes, where
@@ -252,6 +258,10 @@ class Cards:
                 answers.append(("", None))
             elif not option["alternative"]:
                 answers.append(("Yes", "No"))
+            elif keyword == "Alternative":
+                # An alternative cost no keyword names, as Force of Will's: XMage names it by
+                # its costs, "Cast with alternative cost: Pay 1 life and ...".
+                answers.append(("Cast with alternative cost", None))
             elif cast(Json, option["cost"]).get("parts"):
                 answers.append((f"Cast with {keyword}", None))
             else:

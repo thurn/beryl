@@ -744,6 +744,7 @@ pub enum CastingName {
     Impending,
     Overload,
     Evoke,
+    Alternative,
 }
 
 impl From<CastingOption> for CastingName {
@@ -754,6 +755,7 @@ impl From<CastingOption> for CastingName {
             CastingOption::Impending { .. } => CastingName::Impending,
             CastingOption::Overload { .. } => CastingName::Overload,
             CastingOption::Evoke { .. } => CastingName::Evoke,
+            CastingOption::Alternative { .. } => CastingName::Alternative,
         }
     }
 }

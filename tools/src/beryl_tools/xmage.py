@@ -370,8 +370,9 @@ class Exporter:
     def cast(self, action: Json, p: Position) -> None:
         who = self.player(action["player"])
         card = cast(str, action["card"])
-        if action["face"]:
-            raise Unsupported(f"casting {card}'s back face")
+        if action["face"] or self.cards.delves(card):
+            # Delve is a special action in XMage, which the exporter does not write.
+            raise Unsupported(f"casting {card}'s back face, or {card} with delve")
         costs = cast(int, action["costs"])
         if card in p.flashback:
             self.flashback(action, p)

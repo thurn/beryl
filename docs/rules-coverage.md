@@ -679,8 +679,17 @@ Built by by-bajq.3.10:
   (`Governed::SpellCosts`, `RuleKind::SpellCost`). It is asked of the permanents
   that make it, not kept in the players' rule sets, because Trinisphere's "as
   long as this artifact is untapped" is a condition the layers don't read. In a
-  game whose cards make none, the check is one test of the table's set. Delve
-  pays generic mana while the cost is paid, so it can pay a floor.
+  game whose cards make none, the check is one test of the table's set.
+- **Alternative costs and delve.** An alternative cost no keyword names is
+  `CastingOption::Alternative`, mana and parts such as life and a card exiled
+  from hand (built: Force of Will). Delve (`Keywords::DELVE`, CR 702.66a) pays
+  generic mana of the locked-in total, after any floor, so it can pay what a
+  floor adds and never colored mana (built: Gurmag Angler). It shares the
+  casting steps' "objects rather than generic mana" payment with waterbend: the
+  player picks graveyard cards from the bottom up, so each set of cards is one
+  sequence of answers, and a pick is offered only while it is a real choice. The
+  oracles report delve as unsupported: XMage pays it as a special action the
+  exporter does not write, and Forge's AI chooses the cards itself.
 - **Prohibitions.** `Governed::ActivateAbilities` is activating the abilities of
   the sources a `Named` names, with or without mana abilities, under
   `When::Never` (built for Pithing Needle). A filter has no permanent to read a

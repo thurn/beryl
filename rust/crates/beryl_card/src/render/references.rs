@@ -539,6 +539,7 @@ impl Ctx {
             CastingKind::Impending => "impending",
             CastingKind::Overload => "overload",
             CastingKind::Evoke => "evoke",
+            CastingKind::Alternative => "alternative",
         };
         let whose = if it == "it" {
             "its".to_owned()

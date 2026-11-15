@@ -106,7 +106,8 @@ fn before_rule_changes(face: &Face, costs: Castings, x: u8, increase: u8, free: 
     cost.plus(ManaCost::generic(increase)).with_x(x)
 }
 
-/// The total mana cost of the spell or ability being cast, once X is announced.
+/// The mana still to pay for the spell or ability being cast, once X is announced: its total
+/// cost, less the generic mana objects paid for rather than mana ([`Casting::substituted`]).
 pub(super) fn total_cost<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -117,7 +118,10 @@ pub(super) fn total_cost<L: Layout>(
     match (entry.item, entry.ability()) {
         (StackItem::Spell { object, costs, .. }, _) => {
             let increase = s.cost_increase(object);
-            spell_cost(s, t, c.player, face, costs, entry.x, increase, c.free())
+            let mut cost = spell_cost(s, t, c.player, face, costs, entry.x, increase, c.free());
+            // Cards delve exiled pay for generic mana of the locked-in total (CR 702.66a).
+            cost.generic -= c.substituted;
+            cost
         }
         (_, Some(ability)) => {
             let mut cost = face.ability(ability).cost().mana.with_x(entry.x);

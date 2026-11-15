@@ -13,7 +13,7 @@
 //! The mutation check (`tests/mutation.rs`) finds a field no witness covers: a mutant of the
 //! card with that field changed survives every scenario.
 
-use beryl_card::{Filter, Node};
+use beryl_card::{CostAction, CostPart, Filter, Node};
 use beryl_engine::Zone;
 use beryl_engine::card::{
     Ability, AbilityKind, Behavior, CardDef, Castings, Effect, FaceIx, Objects, Players, Types,
@@ -121,6 +121,30 @@ const OWN_CREATURE: Witness = Witness {
     prelude: &[],
 };
 
+/// A casting option whose cost exiles a card from hand, as Force of Will's or an evoke cost:
+/// another blue card in hand, Timetwister. The starting hand's blue card is the creature
+/// spell player 0 casts for a counterspell to respond to, so without this a counterspell
+/// with such a cost would have no card left to exile.
+const CARD_TO_EXILE: Witness = Witness {
+    words: "with another blue card in hand",
+    mine: &[],
+    theirs: &[],
+    hand: &[props::UNTARGETED_SPELL],
+    prelude: &[],
+};
+
+/// Whether a casting option of `def` exiles a card from its caster's hand.
+fn exiles_from_hand(def: &CardDef) -> bool {
+    (def.faces.iter().flat_map(|face| face.casting)).any(|option| {
+        option.parts().iter().any(|part| {
+            matches!(
+                part,
+                CostPart::Chosen(CostAction::Exile, chosen) if chosen.zone == Zone::Hand
+            )
+        })
+    })
+}
+
 fn affects_own_creatures(ability: &Ability) -> bool {
     let Some(Objects::All {
         zone: Zone::Battlefield,
@@ -178,6 +202,9 @@ pub(super) fn witnesses(def: &'static CardDef) -> Vec<&'static Witness> {
         |a: &Ability| (a.targets().iter()).any(|t| t.kind.abilities().is_some());
     if abilities.clone().any(targets_abilities) {
         found.borrow_mut().push(&ABILITY_TO_TARGET);
+    }
+    if exiles_from_hand(def) {
+        found.borrow_mut().push(&CARD_TO_EXILE);
     }
     for ability in abilities.filter(|a| resolves(a)) {
         let Behavior::Data(effect) = ability.body() else {

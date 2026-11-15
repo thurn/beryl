@@ -642,11 +642,17 @@ public final class BerylForgeHarness {
                 if (!sa.isSpell()) {
                     continue;
                 }
-                boolean alternative = sa.getAlternativeCost() != null;
+                // An alternative cost no keyword names, as Force of Will's, is a spell Forge
+                // builds from a static ability: one that is not the card's basic spell and has
+                // no keyword's alternative cost.
+                boolean unnamed = sa.getAlternativeCost() == null && !sa.isBasicSpell();
+                boolean alternative = sa.getAlternativeCost() != null || unnamed;
                 if (!alternative && plain == null) {
                     plain = sa;
                 }
-                if (alternative && cost != null && sa.getAlternativeCost().name().equalsIgnoreCase(cost)) {
+                if (alternative && cost != null && (unnamed
+                        ? cost.equalsIgnoreCase("Alternative")
+                        : sa.getAlternativeCost().name().equalsIgnoreCase(cost))) {
                     chosen = sa;
                 }
             }

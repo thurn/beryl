@@ -17,7 +17,7 @@ use crate::state::{
     AbilityRef, CastKind, CastStep, Casting, Count, Pending, StackEntry, StackItem, State, Target,
     Tracker, Zone,
 };
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
 
 use super::costs::{spent_by_entry, total_cost, x_range_start};
 use super::parts;
@@ -174,8 +174,8 @@ pub(super) fn advance<L: Layout>(
 }
 
 /// Turns to paying the total cost, once everything is announced: an ability's parts that are
-/// not mana and then its mana, or a spell's mana and then its parts ([`parts::pay`] says why
-/// in that order).
+/// not mana and then its mana, or a spell's mana, with any cards delve exiles for it, and
+/// then its parts ([`parts::pay`] says why in that order).
 ///
 /// [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
 /// total cost."
@@ -187,6 +187,10 @@ fn begin_payment<L: Layout>(
 ) -> Result<(), Full> {
     if c.kind == CastKind::Activation {
         return parts::pay(s, t, sink, c, 0);
+    }
+    // A game whose cards have no delve pays a spell's mana alone.
+    if t.can(Capability::Delve) {
+        return parts::pay_substitutes(s, t, sink, c);
     }
     pay_mana(s, t, sink, c)
 }

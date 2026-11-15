@@ -50,7 +50,7 @@ pub fn pays_for_ability(part: &CostPart) -> bool {
 }
 
 /// Whether the engine pays this part of a spell's cost: exiling a number of cards from its
-/// caster's hand or graveyard.
+/// caster's hand or graveyard, or a payment of life.
 pub fn pays_for_spell(part: &CostPart) -> bool {
     matches!(
         *part,
@@ -61,7 +61,7 @@ pub fn pays_for_spell(part: &CostPart) -> bool {
                 measure: Measure::Count(_),
                 ..
             }
-        )
+        ) | CostPart::Life(_)
     )
 }
 
@@ -297,14 +297,11 @@ mod tests {
     fn a_spell_and_an_ability_each_pay_their_own_parts() {
         let exile = CostPart::exile(1, Zone::Hand, Filter::Any);
         assert!(pays_for_spell(&exile) && !pays_for_ability(&exile));
-        for part in [
-            CostPart::TAP,
-            CostPart::crew(2),
-            CostPart::Loyalty(1),
-            CostPart::Life(1),
-        ] {
+        for part in [CostPart::TAP, CostPart::crew(2), CostPart::Loyalty(1)] {
             assert!(pays_for_ability(&part) && !pays_for_spell(&part));
         }
+        // Life is paid in either place.
+        assert!(pays_for_ability(&CostPart::Life(1)) && pays_for_spell(&CostPart::Life(1)));
         // Only its source is exiled or revealed by no code, and only cards are exiled.
         assert!(!pays_for_ability(&CostPart::This(CostAction::Exile)));
         assert!(!pays_for_spell(&CostPart::exile(

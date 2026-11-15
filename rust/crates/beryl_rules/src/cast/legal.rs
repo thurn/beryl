@@ -129,6 +129,27 @@ fn restricted_pays<L: Layout>(
     paying.reads_restrictions(t) && funds.pays_restricted(s, t, cost, Bitboard::EMPTY, paying)
 }
 
+/// Whether `cost` for casting the card in `slot` as its face `face` is paid some way other
+/// than with unrestricted mana: with restricted mana the spell accepts, or with cards delve
+/// exiles (CR 702.66a). Never in a game whose cards make no restricted mana and have no
+/// delve, which the caller tests first.
+#[cold]
+#[inline(never)]
+fn pays_otherwise<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    funds: &Funds<L>,
+    cost: ManaCost,
+    player: Seat,
+    slot: L::Slot,
+    face: FaceIx,
+) -> bool {
+    (funds.may_restrict() && restricted_pays(s, t, funds, cost, slot, face))
+        || (t.can(Capability::Delve)
+            && parts::delves(s.copiable(slot).turned(face).face(t))
+            && parts::delve_pays(s, t, funds, player, slot, cost))
+}
+
 /// Why `player` may not cast the card in `slot` with this face and these casting options:
 /// the first check it fails, or none if they may. A timing refusal names no permanent here
 /// ([`refusal`] does).
@@ -165,7 +186,8 @@ fn refused<L: Layout, const TARGETS: bool>(
     let cost = spell_cost(s, t, player, face, costs, x, increase, free);
     if !now.funds(s, t).is_some_and(|f| {
         f.pays(s, t, cost, Bitboard::EMPTY)
-            || (f.may_restrict() && restricted_pays(s, t, f, cost, slot, face_index))
+            || (t.can_either(Capability::RemembersMana, Capability::Delve)
+                && pays_otherwise(s, t, f, cost, player, slot, face_index))
     }) {
         return Some(Refusal::Mana);
     }

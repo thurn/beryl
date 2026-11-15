@@ -442,6 +442,9 @@ pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
             auto: AUTO_PAY,
             ..NONE
         },
+        // "Delve" over "Each card you exile from your graveyard pays for {1}", with "Submit 0"
+        // (`5UHzpVvUkfI 47:31.0`): the title alone, as the prompt bar shows one line.
+        Purpose::Delve => picks("Delve"),
         // "Choose attackers." with "No Attacks" and "All Attack" (`0VsYGs88NXA 27:29.0`,
         // `3sEoP_s4DQE 23:41.5`), then "1 Attacker" (`0VsYGs88NXA 27:29.5`) or "2 Attackers"
         // (`0VsYGs88NXA 37:14.0`, `IEXcjBn3BXk 38:13.0`). Arena aims an attacker with an

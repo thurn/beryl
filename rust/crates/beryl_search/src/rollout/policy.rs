@@ -263,6 +263,8 @@ impl<L: Layout> Policy<'_, L> {
                     evoked = true;
                     -30
                 }
+                // What it costs besides mana, as Force of Will's card from hand and life.
+                CastingOption::Alternative { .. } => -20,
             };
         }
         // Overloaded, a spell hits each permanent its first target's filter accepts

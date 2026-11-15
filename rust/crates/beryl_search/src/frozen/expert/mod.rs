@@ -1363,7 +1363,8 @@ impl Expert<'_> {
                 // An alternative cost, instead of the mana cost.
                 CastingOption::Impending { cost: c, .. }
                 | CastingOption::Overload { cost: c, .. }
-                | CastingOption::Evoke { cost: c, .. } => cost = i32::from(c.mana_value()),
+                | CastingOption::Evoke { cost: c, .. }
+                | CastingOption::Alternative { cost: c, .. } => cost = i32::from(c.mana_value()),
             }
         }
         self.mana(self.me()) - cost

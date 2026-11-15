@@ -445,12 +445,15 @@ fn paid_costs<L: Layout>(t: &GameTable, e: &StackEntry<L>, flashback: bool) -> V
     }
     e.costs()
         .paid(t.def(e.card()).face(e.face()))
-        .map(|option| match option {
-            CastingOption::Kicker { .. } => PaidCost::Kicker,
-            CastingOption::Offspring(_) => PaidCost::Offspring,
-            CastingOption::Impending { .. } => PaidCost::Impending,
-            CastingOption::Overload { .. } => PaidCost::Overload,
-            CastingOption::Evoke { .. } => PaidCost::Evoke,
+        .filter_map(|option| match option {
+            CastingOption::Kicker { .. } => Some(PaidCost::Kicker),
+            CastingOption::Offspring(_) => Some(PaidCost::Offspring),
+            CastingOption::Impending { .. } => Some(PaidCost::Impending),
+            CastingOption::Overload { .. } => Some(PaidCost::Overload),
+            CastingOption::Evoke { .. } => Some(PaidCost::Evoke),
+            // No keyword names it, so Arena tags nothing: Force of Will cast for its
+            // alternative cost is a plain Force of Will on the stack.
+            CastingOption::Alternative { .. } => None,
         })
         .collect()
 }

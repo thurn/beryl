@@ -70,12 +70,19 @@ pub enum Capability {
     /// works in every zone, so a read of the power of an object off the battlefield looks for
     /// one ([`crate::defined`]).
     DefinesPt,
+    /// A card has delve ([`beryl_card::Keywords::DELVE`]), so paying a spell's mana looks
+    /// for cards in its caster's graveyard to pay generic mana with, and whether a spell is
+    /// castable counts them.
+    Delve,
 }
 
 impl Capability {
     /// The capabilities a face gives a game that can contain it.
     pub(super) fn of(face: &Face) -> u16 {
         let mut found = 0;
+        if face.keywords.contains(beryl_card::Keywords::DELVE) {
+            found |= Capability::Delve.bit();
+        }
         if Inputs::of(face) != Inputs::NONE {
             found |= Capability::LayerInputs.bit();
         }

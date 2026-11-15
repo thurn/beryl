@@ -308,6 +308,10 @@ purposes! {
     /// "For each generic mana in that cost, you may tap an untapped artifact or creature you
     /// control rather than pay that mana."
     Waterbend = "waterbend" => Pay,
+    /// Delve's cards ([CR 702.66a](https://yawgatog.com/resources/magic-rules/#R70266a)):
+    /// "For each generic mana in this spell's total cost, you may exile a card from your
+    /// graveyard rather than pay that mana."
+    Delve = "delve" => Pick,
     /// The attackers and what each attacks
     /// ([CR 508.1a](https://yawgatog.com/resources/magic-rules/#R5081a)): "The active player
     /// chooses which creatures that they control, if any, will attack."

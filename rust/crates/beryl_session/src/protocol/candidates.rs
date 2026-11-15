@@ -378,6 +378,17 @@ fn casting_options<L: Layout>(
                 words.extend(parts.iter().filter_map(exile_text));
                 format!(" with evoke, {}", words.join(", "))
             }
+            CastingOption::Alternative { cost, parts } => {
+                let mut words = Vec::new();
+                if cost != ManaCost::NONE {
+                    words.push(mana_text(cost));
+                }
+                words.extend(parts.iter().filter_map(|part| match part {
+                    CostPart::Life(n) => Some(format!("{n} life")),
+                    part => exile_text(part),
+                }));
+                format!(" for {}", words.join(", "))
+            }
         })
         .collect()
 }
