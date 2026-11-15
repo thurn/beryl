@@ -146,7 +146,11 @@ impl<L: Layout> Memo<L> {
     #[inline]
     fn names(self) -> Option<L::Slot> {
         match self {
-            Memo::Paid(_) | Memo::X(_) | Memo::Chosen(_) | Memo::Really(_) | Memo::PhasedOutUnder(_) => None,
+            Memo::Paid(_)
+            | Memo::X(_)
+            | Memo::Chosen(_)
+            | Memo::Really(_)
+            | Memo::PhasedOutUnder(_) => None,
             Memo::ExiledWith(by) | Memo::ExiledUntil(by) | Memo::PutOntoBattlefieldWith(by) => {
                 Some(by)
             }
@@ -161,8 +165,7 @@ impl<L: Layout> Memo<L> {
             Memo::X(x) => x > 0,
             Memo::Paid(paid) => !paid.is_empty(),
             Memo::Chosen(value) => value.holds(),
-            Memo::Really(_) => true,
-            Memo::PhasedOutUnder(_) => true,
+            Memo::Really(_) | Memo::PhasedOutUnder(_) => true,
             // What exiled it left a card or a token in its slot.
             Memo::ExiledWith(by) | Memo::PutOntoBattlefieldWith(by) => zone(by) != Zone::Nowhere,
             // An object exiled "until" its exiler leaves returns as it leaves (CR 610.3).

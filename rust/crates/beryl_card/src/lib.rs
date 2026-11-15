@@ -81,9 +81,9 @@ pub mod prelude {
         ChosenKind, Colors, Comparison, Condition, CopyChange, CopyException, Cost, CostAction,
         CostPart, CounterKind, Duration, Effect, ExceptIx, Face, FaceIx, Filter, Found, Governed,
         GrantIx, Keywords, LayerSpec, LibraryOrder, LibraryPosition, ManaColor, ManaCost,
-        ManaRestriction, ManaSet, Modification, Named, Objects, Place, PlayerRules, Players, Prevention, Prompt,
-        Protection, Purpose, PutOnto, Recipients, Replacement, RuleChange, SpellCost, Subtype,
-        Subtypes, Supertypes, Taken, TargetKind, TargetSpec, TextWord, Trigger, TriggerEvent,
-        TurnStep, Types, When, Zone, card, mana,
+        ManaRestriction, ManaSet, Modification, Named, Objects, Place, PlayerRules, Players,
+        Prevention, Prompt, Protection, Purpose, PutOnto, Recipients, Replacement, RuleChange,
+        SpellCost, Subtype, Subtypes, Supertypes, Taken, TargetKind, TargetSpec, TextWord, Trigger,
+        TriggerEvent, TurnStep, Types, When, Zone, card, mana,
     };
 }
