@@ -231,7 +231,10 @@ impl<L: Layout> Copiable<L> {
 
     /// The rule changes the static abilities of the face that is up make, by their numbers
     /// in the game. For a card no face of which makes one, a load and a test.
-    #[inline]
+    // Always inline: the compiler leaves it out of line in `beryl_rules`' check of a
+    // permanent's own rule changes, which the rollout benchmark makes 70,000 times.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub fn rules(self, t: &GameTable) -> Rules {
         if t.may_have_rules(self.card).is_empty() {
             return Rules::NONE;

@@ -187,8 +187,10 @@ fn complete<L: Layout, const MEMORY: bool>(
     plan: &Plan<L>,
 ) -> Option<[u8; KINDS]> {
     let classes = sources.classes();
-    let mut must: u32 =
-        plan.spend.iter().map(|&n| u32::from(n)).sum::<u32>() + plan.remembered.count_ones();
+    let mut must: u32 = plan.spend.iter().map(|&n| u32::from(n)).sum::<u32>();
+    if MEMORY {
+        must += plan.remembered.count_ones();
+    }
     let mut several_taps = 0;
     let mut several_make = 0;
     for (i, c) in classes.iter().enumerate() {
@@ -300,6 +302,43 @@ pub(super) fn lowest_kind(kinds: u8) -> usize {
     kinds.trailing_zeros() as usize
 }
 
+/// Offers the plan `p` to [`plans`]' list `out`, with `scores` beside it: a plan of the same
+/// outcome as one listed replaces it only by keeping more later costs payable, which `score`
+/// counts. Plans of one outcome leave the same mana floating and sacrifice as many sources;
+/// with `MEMORY` (a payment that can spend mana that remembers), they also spend the same
+/// such mana and give the spell the same rider ([`Sources::outcome`]). Returns whether `out`
+/// is full.
+fn offer<L: Layout, const MEMORY: bool>(
+    sources: &Sources<L>,
+    out: &mut L::Queue<Plan<L>, 64>,
+    scores: &mut L::Queue<Option<(u32, usize, u32)>, 64>,
+    score: &mut impl FnMut(&Plan<L>) -> (u32, usize, u32),
+    p: &Plan<L>,
+) -> bool {
+    let found = if MEMORY {
+        let outcome = sources.outcome(p);
+        (out.iter()).position(|q| q.left == p.left && sources.outcome(q) == outcome)
+    } else {
+        let sacrificed = sources.sacrificed(p);
+        (out.iter()).position(|q| q.left == p.left && sources.sacrificed(q) == sacrificed)
+    };
+    match found {
+        // The first plan of a remainder taps the least flexible sources; a later one
+        // replaces it only by keeping more costs payable.
+        Some(i) => {
+            let q = &out.as_slice()[i];
+            let first = *scores.as_mut_slice()[i].get_or_insert_with(|| score(q));
+            let this = score(p);
+            if this > first {
+                out.as_mut_slice()[i] = p.clone();
+                scores.as_mut_slice()[i] = Some(this);
+            }
+            false
+        }
+        None => out.push(p.clone()).is_err() || scores.push(None).is_err(),
+    }
+}
+
 /// The plans a payment of `cost` for what `paying` is for offers, at most one per distinct
 /// floating remainder, number of sources sacrificed and restricted mana spent
 /// ([`Sources::outcome`]), in order of the fewest sacrificed, then the least mana left
@@ -349,54 +388,43 @@ pub(crate) fn plans<L: Layout>(
     };
     let mut scores: L::Queue<Option<(u32, usize, u32)>, 64> = Default::default();
     let mut full = false;
-    let memory = sources.has_memory();
-    each_plan(cost, pool, &sources, &mut |p| {
-        let sacrificed = sources.sacrificed(p);
-        let found = if memory {
-            let outcome = sources.outcome(p);
-            (out.iter()).position(|q| q.left == p.left && sources.outcome(q) == outcome)
-        } else {
-            (out.iter()).position(|q| q.left == p.left && sources.sacrificed(q) == sacrificed)
-        };
-        match found {
-            // The first plan of a remainder taps the least flexible sources; a later one
-            // replaces it only by keeping more costs payable.
-            Some(i) => {
-                let q = &out.as_slice()[i];
-                let first = *scores.as_mut_slice()[i].get_or_insert_with(|| score(q));
-                let this = score(p);
-                if this > first {
-                    out.as_mut_slice()[i] = p.clone();
-                    scores.as_mut_slice()[i] = Some(this);
-                }
-            }
-            None => {
-                full |= out.push(p.clone()).is_err() || scores.push(None).is_err();
-            }
-        }
-        !full
-    });
+    // Two searches, so that a payment that can spend no mana that remembers compares plans
+    // without testing for it at each one.
+    if sources.has_memory() {
+        each_plan(cost, pool, &sources, &mut |p| {
+            full |= offer::<L, true>(&sources, &mut out, &mut scores, &mut score, p);
+            !full
+        });
+    } else {
+        each_plan(cost, pool, &sources, &mut |p| {
+            full |= offer::<L, false>(&sources, &mut out, &mut scores, &mut score, p);
+            !full
+        });
+    }
     if full {
         return Err(Full);
     }
     // A plan is dominated only by one sacrificing fewer, so with one number sacrificed among
-    // them all no score is needed.
+    // them all no score is needed and every plan is kept.
     let fewest = out.iter().map(|p| sources.sacrificed(p)).min();
     if out.iter().any(|p| Some(sources.sacrificed(p)) != fewest) {
         for (p, sc) in out.iter().zip(scores.as_mut_slice()) {
             sc.get_or_insert_with(|| score(p));
         }
-    }
-    let mut kept: L::Queue<Plan<L>, 64> = Default::default();
-    for (p, &sc) in out.iter().zip(scores.iter()) {
-        let sacrificed = sources.sacrificed(p);
-        let dominated = out.iter().zip(scores.iter()).any(|(q, &other)| {
-            sources.sacrificed(q) < sacrificed && other.expect("scored") >= sc.expect("scored")
-        });
-        if !dominated {
-            kept.push(p.clone())?;
+        let mut dominated: L::Queue<bool, 64> = Default::default();
+        for (p, &sc) in out.iter().zip(scores.iter()) {
+            let sacrificed = sources.sacrificed(p);
+            dominated.push(out.iter().zip(scores.iter()).any(|(q, &other)| {
+                sources.sacrificed(q) < sacrificed && other.expect("scored") >= sc.expect("scored")
+            }))?;
         }
+        let mut i = 0;
+        out.retain(|_| {
+            i += 1;
+            !dominated.as_slice()[i - 1]
+        });
     }
+    let mut kept = out;
     // Only a pool can leave mana floating that a source would make again: a source's own
     // leftover mana is `wasteful`'s.
     if kept.len() > 1 && pool.iter().any(|&n| n > 0) {
