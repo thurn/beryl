@@ -1,6 +1,8 @@
 import json
 import time
 
+import pytest
+
 from beryl_tools import cpu
 from beryl_tools.cpu import Process, Sampler
 
@@ -160,8 +162,8 @@ def test_a_zombie_child_is_not_counted_twice_when_reaped() -> None:
     child.cpu = 8000.0
     used, _ = sampler.step({10: app, 11: child}, {})
     assert sum(used.values()) == 8000.0
-    # The child exits and waits to be reaped. `proc_pid_rusage` cannot read the zombie, so
-    # its CPU is `ps`'s, which is zero for a zombie: that adds nothing.
+    # The child exits and waits to be reaped. A root-owned zombie's CPU comes from `ps`,
+    # which shows zero for a zombie: that adds nothing.
     zombie = proc(11, 10, 0.0, "<defunct>")
     used, _ = sampler.step({10: app, 11: zombie}, {})
     assert used == {}
@@ -187,3 +189,38 @@ def test_a_pid_with_a_new_start_time_is_a_new_process() -> None:
     new.start = "Sun Nov 15 07:10:02 2026"
     used, _ = sampler.step({5: shell, 11: new}, {})
     assert used == {("other", "compile", "-"): 1.0, ("other", "tool", "-"): 2.0}
+
+
+def test_a_child_reaped_while_the_table_is_read_is_not_counted_twice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`ps` lists a child, which exits and is reaped before its parent's reaped-children CPU is
+    read. The parent's total then holds the child's whole lifetime, so the child must be gone
+    from the table, or the CPU already counted for it would be counted a second time."""
+    start = "Sun Nov 15 06:54:46 2026"
+    listing = {
+        "pid=,ppid=,lstart=,cputime=,comm=": (
+            f"5 1 {start} 0:00.00 /bin/zsh\n10 5 {start} 0:01.00 /usr/bin/cargo"
+        ),
+        "pid=,args=": "5 zsh\n10 cargo test",
+    }
+    monkeypatch.setattr(cpu, "_run", lambda command: listing[command[2]])
+    rusage: dict[int, tuple[float, float]] = {5: (0.0, 0.0), 10: (1.0, 0.0)}
+
+    def read_rusage(pid: int) -> tuple[float, float] | None:
+        if pid not in rusage:
+            raise ProcessLookupError(pid)
+        return rusage[pid]
+
+    monkeypatch.setattr(cpu, "read_rusage", read_rusage)
+    sampler = Sampler()
+    sampler.step(cpu.read_processes(), {})  # Baseline.
+    rusage[10] = (2000.0, 0.0)
+    used, _ = sampler.step(cpu.read_processes(), {})
+    assert sum(used.values()) == 1999.0
+    # cargo runs 1 s more and exits, and the shell reaps it between the `ps` listing (which
+    # still shows cargo) and the shell's read: only that last second is new.
+    del rusage[10]
+    rusage[5] = (0.0, 2001.0)
+    used, _ = sampler.step(cpu.read_processes(), {})
+    assert sum(used.values()) == 1.0

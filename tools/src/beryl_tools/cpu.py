@@ -24,10 +24,12 @@ and every process too short-lived to be sampled at all, is still counted, charge
 child's context or else the parent's. Root-owned processes cannot be read that way, so their
 own CPU comes from `ps` and a child that outlives its parent (re-parented to `launchd`) loses
 its last few seconds. A pid is the same process for as long as its start time (`ps`'s `lstart`)
-is; a figure that falls for the same process comes from a less precise reading (a zombie that
-`proc_pid_rusage` cannot read shows `ps`'s cputime of zero) and adds nothing. Each row also records `top`'s own busy figure for the minute
-(`top_cores`); the sampled sum should be close to it. `peak_cores` is the highest rate seen
-between two consecutive samples, for bursts shorter than a minute.
+is; a figure that falls for the same process comes from a less precise reading (a root-owned
+zombie shows `ps`'s cputime of zero) and adds nothing. A process `ps` lists but that is reaped
+before `proc_pid_rusage` reads it is left out of that sample, as if it had already exited. Each
+row also records `top`'s own busy figure for the minute (`top_cores`); the sampled sum should be
+close to it. `peak_cores` is the highest rate seen between two consecutive samples, for bursts
+shorter than a minute.
 
 `by cpu install` keeps the sampler running as a launchd agent, and `by cpu uninstall` removes it.
 """
@@ -36,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import errno
 import json
 import os
 import plistlib
@@ -269,10 +272,17 @@ def read_processes() -> dict[int, Process]:
         if len(parts) == 2 and int(parts[0]) in table:
             table[int(parts[0])].args = parts[1]
     # Parents before children: a child read alive and then reaped before its parent is read
-    # would be counted twice, once itself and once in its parent's reaped total.
+    # would be counted twice, once itself and once in its parent's reaped total. A child that
+    # `ps` listed but that was reaped before it is read is dropped from the table for the same
+    # reason: its parent may already have been read with the child's whole lifetime in its
+    # reaped total, and [`Sampler`] must record what the child owes before that total grows.
     for pid in Sampler._parents_first(table):
         proc = table[pid]
-        found = read_rusage(proc.pid)
+        try:
+            found = read_rusage(proc.pid)
+        except ProcessLookupError:
+            del table[pid]
+            continue
         if found is not None:
             proc.cpu, proc.children = found
     return table
@@ -293,20 +303,24 @@ _USER, _SYSTEM, _CHILD_USER, _CHILD_SYSTEM = 2, 3, 12, 13
 
 def read_rusage(pid: int) -> tuple[float, float] | None:
     """(own CPU seconds, reaped children's CPU seconds) of `pid` from macOS's
-    `proc_pid_rusage`, or None off macOS or for a process this user cannot read (root's). Its
-    times are mach ticks, which `mach_timebase_info` converts to nanoseconds."""
+    `proc_pid_rusage`, or None off macOS or for a process this user cannot read (root's).
+    Raises `ProcessLookupError` for a process that has been reaped (an unreaped zombie still
+    reads). Its times are mach ticks, which `mach_timebase_info` converts to nanoseconds.
+    """
     global _LIBSYSTEM, _TICK_SECONDS
     if sys.platform != "darwin":
         return None
     library = _LIBSYSTEM
     if library is None:
-        library = ctypes.CDLL("/usr/lib/libSystem.B.dylib")
+        library = ctypes.CDLL("/usr/lib/libSystem.B.dylib", use_errno=True)
         base = _Timebase()
         library.mach_timebase_info(ctypes.byref(base))
         _TICK_SECONDS = base.numer / base.denom / 1e9
         _LIBSYSTEM = library
     info = (ctypes.c_uint64 * 40)()
     if library.proc_pid_rusage(pid, _RUSAGE_INFO_V2, info) != 0:
+        if ctypes.get_errno() == errno.ESRCH:
+            raise ProcessLookupError(pid)
         return None
     own = (info[_USER] + info[_SYSTEM]) * _TICK_SECONDS
     children = (info[_CHILD_USER] + info[_CHILD_SYSTEM]) * _TICK_SECONDS
