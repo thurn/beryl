@@ -1,5 +1,5 @@
 //! The two macOS calls the desktop host makes that winit does not: a display link that paces
-//! frames at the display's highest rate, and the frame thread's scheduling class. These are the
+//! frames at the display's highest rate, and a thread's scheduling class. These are the
 //! only items in the crate that use `unsafe`, each on the one platform call that needs it.
 
 use std::ptr::NonNull;
@@ -111,14 +111,10 @@ impl Drop for DisplayLink {
     }
 }
 
-/// Puts the calling thread in the user-interactive scheduling class, the highest, so that the
-/// operating system runs it ahead of the AI's search threads when it wakes. A thread otherwise
-/// keeps the class of the thread that made it.
+/// Puts the calling thread in the scheduling class `class` (`crate::threads`).
 #[expect(unsafe_code, reason = "pthread_set_qos_class_self_np")]
-pub fn interactive_thread() {
+pub fn set_thread_class(class: libc::qos_class_t) {
     // SAFETY: `pthread_set_qos_class_self_np` changes only the calling thread's class and takes
     // no pointers. It fails only for an invalid class or priority, which these are not.
-    let _ = unsafe {
-        libc::pthread_set_qos_class_self_np(libc::qos_class_t::QOS_CLASS_USER_INTERACTIVE, 0)
-    };
+    let _ = unsafe { libc::pthread_set_qos_class_self_np(class, 0) };
 }

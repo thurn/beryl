@@ -132,11 +132,15 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 name = "beryl_3d"
 version = "0.1.0"
 dependencies = [
+ "beryl_3d",
  "beryl_assets",
  "beryl_host",
  "beryl_inspect",
  "beryl_render",
  "beryl_scene",
+ "beryl_session",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

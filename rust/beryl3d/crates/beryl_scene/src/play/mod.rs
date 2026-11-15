@@ -447,6 +447,15 @@ impl Show {
         }
     }
 
+    /// The verbs of the script under way, one bit per verb in the order of `Verb::ALL`, or 0
+    /// when none plays.
+    #[must_use]
+    pub fn playing_verbs(&self) -> u32 {
+        self.playing
+            .as_ref()
+            .map_or(0, |playing| playing.compiled.verbs)
+    }
+
     /// The next verb that a script played as an instant change because it is not built yet,
     /// each verb returned once, for the host to log.
     pub fn next_unbuilt(&mut self) -> Option<Verb> {

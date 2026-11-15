@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::{Duration, Instant};
 
-use beryl_render::{Renderer, Surface};
+use beryl_render::{Presented, Renderer, Surface};
 use beryl_scene::Client;
 use beryl_scene::command::Request;
 use beryl_scene::frame::Frame;
@@ -17,12 +17,13 @@ use beryl_scene::input::{Input, Lifecycle};
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalPosition, LogicalSize};
 use winit::event::{ElementState, KeyEvent, WindowEvent};
-use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy};
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Fullscreen, Window, WindowId};
 
 use crate::events::Translator;
-use crate::frames::{Draw, FrameLoop, Sleep, Ticks};
+use crate::frames::{Draw, Feed, FrameLoop, Opened, Shown, Sleep, Ticks};
+use crate::inbox::Inbox;
 
 /// What the window is (decision C15: the faster choice is the default).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,6 +45,10 @@ pub struct Options {
     pub title: String,
     /// The window's size in logical points when it is not fullscreen.
     pub size: (f64, f64),
+    /// Where the client's clock stops, in nanoseconds since it started.
+    pub pause_at: Option<u64>,
+    /// How long the host runs before it ends by itself, if it does.
+    pub end_after: Option<Duration>,
 }
 
 /// What other threads and the display link send the event loop.
@@ -54,21 +59,6 @@ pub enum UserEvent {
     Tick,
     /// Inputs are waiting in the inbox.
     Inbox,
-}
-
-/// Hands inputs to the host from other threads: session updates, finished assets and replies.
-/// Each one wakes the event loop, so a still table responds at once.
-#[derive(Clone)]
-pub struct Inbox {
-    sender: Sender<Input>,
-    proxy: EventLoopProxy<UserEvent>,
-}
-
-impl Inbox {
-    /// Sends `input` to the client. False once the host has ended.
-    pub fn send(&self, input: Input) -> bool {
-        self.sender.send(input).is_ok() && self.proxy.send_event(UserEvent::Inbox).is_ok()
-    }
 }
 
 /// The desktop host before it runs.
@@ -105,21 +95,27 @@ impl Desktop {
 
     /// A handle other threads use to send inputs.
     pub fn inbox(&self) -> Inbox {
-        Inbox {
-            sender: self.sender.clone(),
-            proxy: self.event_loop.create_proxy(),
-        }
+        let proxy = self.event_loop.create_proxy();
+        Inbox::new(self.sender.clone(), move || {
+            proxy.send_event(UserEvent::Inbox).is_ok()
+        })
     }
 
-    /// Runs `client` in the window until it is closed. `setup` prepares the renderer (its card
-    /// faces, say) before the first frame.
-    pub fn run(self, client: Client, setup: impl FnOnce(&mut Renderer)) -> Result<(), String> {
+    /// Runs `client` in the window until it is closed or `Options::end_after` has passed, with
+    /// `feed` added to its frame loop. `setup` prepares the renderer (its card faces, say)
+    /// before the first frame.
+    pub fn run(
+        self,
+        client: Client,
+        feed: Box<dyn Feed>,
+        setup: impl FnOnce(&mut Renderer),
+    ) -> Result<(), String> {
         let mut app = App {
             options: self.options,
             #[cfg(target_os = "macos")]
             proxy: self.event_loop.create_proxy(),
             inbox: self.receiver,
-            client: Some(client),
+            client: Some((client, feed)),
             setup: Some(setup),
             running: None,
             started: Instant::now(),
@@ -146,10 +142,10 @@ struct App<S> {
     options: Options,
     /// Where the display link sends its ticks.
     #[cfg(target_os = "macos")]
-    proxy: EventLoopProxy<UserEvent>,
+    proxy: winit::event_loop::EventLoopProxy<UserEvent>,
     inbox: Receiver<Input>,
-    /// The client until the window opens, when it moves into `running`.
-    client: Option<Client>,
+    /// The client and the app's feed until the window opens, when they move into `running`.
+    client: Option<(Client, Box<dyn Feed>)>,
     setup: Option<S>,
     running: Option<Running>,
     /// The client's time 0.
@@ -173,10 +169,23 @@ struct Screen {
 }
 
 impl Draw for Screen {
-    fn draw(&mut self, frame: &Frame) {
+    fn draw(&mut self, frame: &Frame) -> Option<Shown> {
         let window = &self.window;
-        self.renderer
-            .present(frame, &mut self.surface, || window.pre_present_notify());
+        let started = Instant::now();
+        match self
+            .renderer
+            .present(frame, &mut self.surface, || window.pre_present_notify())
+        {
+            Presented::Shown { waited, .. } => {
+                let waited = waited.as_nanos() as u64;
+                let total = started.elapsed().as_nanos() as u64;
+                Some(Shown {
+                    waited,
+                    encoded: total.saturating_sub(waited),
+                })
+            }
+            Presented::Skipped => None,
+        }
     }
 }
 
@@ -232,16 +241,21 @@ impl<S: FnOnce(&mut Renderer)> App<S> {
         if let Some(setup) = self.setup.take() {
             setup(&mut renderer);
         }
-        let mut client = self.client.take().ok_or("the window opened twice")?;
+        let (client, mut feed) = self.client.take().ok_or("the window opened twice")?;
         let translator = Translator::new(size, window.scale_factor());
-        client.handle(translator.surface());
-        // Windows has no class to ask for that safe code can reach; its frame thread keeps
-        // the main thread's normal priority.
-        #[cfg(target_os = "macos")]
-        crate::macos::interactive_thread();
-        let pacer = self.pacer(&window);
+        crate::threads::interactive_thread();
+        let display_hz = self.display_hz(&window);
+        feed.opened(&Opened {
+            display_hz,
+            adapter: renderer.adapter().to_owned(),
+        });
+        let pacer = self.pacer(&window, display_hz);
+        let mut frames = FrameLoop::new(client, pacer)
+            .with_feed(feed)
+            .paused_at(self.options.pause_at);
+        frames.handle(translator.surface());
         Ok(Running {
-            frames: FrameLoop::new(client, pacer),
+            frames,
             screen: Screen {
                 renderer,
                 surface,
@@ -253,14 +267,34 @@ impl<S: FnOnce(&mut Renderer)> App<S> {
     }
 
     #[cfg_attr(not(target_os = "macos"), expect(clippy::unused_self))]
-    fn pacer(&self, window: &Arc<Window>) -> Pacer {
+    fn pacer(&self, window: &Arc<Window>, display_hz: f32) -> Pacer {
         #[cfg(target_os = "macos")]
-        if let Some(link) =
-            crate::macos::DisplayLink::new(window, self.proxy.clone(), highest_rate(window))
-        {
+        if let Some(link) = crate::macos::DisplayLink::new(window, self.proxy.clone(), display_hz) {
             return Pacer::Link(link);
         }
+        #[cfg(not(target_os = "macos"))]
+        let _ = display_hz;
         Pacer::Redraw(Arc::clone(window))
+    }
+
+    /// The display's highest refresh rate in frames a second, or 60 where it is unknown.
+    #[expect(clippy::unused_self)]
+    fn display_hz(&self, window: &Window) -> f32 {
+        let millihertz = window.current_monitor().and_then(|monitor| {
+            monitor
+                .video_modes()
+                .map(|mode| mode.refresh_rate_millihertz())
+                .max()
+                .or_else(|| monitor.refresh_rate_millihertz())
+        });
+        millihertz.unwrap_or(60_000) as f32 / 1000.0
+    }
+
+    /// Whether the run has lasted `Options::end_after`.
+    fn over(&self) -> bool {
+        self.options
+            .end_after
+            .is_some_and(|end| self.started.elapsed() >= end)
     }
 
     fn tick(&mut self) {
@@ -268,7 +302,7 @@ impl<S: FnOnce(&mut Renderer)> App<S> {
         let Some(running) = &mut self.running else {
             return;
         };
-        if running.frames.tick(now, &mut running.screen) {
+        if running.frames.tick(now, &mut running.screen).is_some() {
             while let Some(request) = running.frames.client().next_request() {
                 carry_out(&running.window, request);
             }
@@ -391,29 +425,26 @@ impl<S: FnOnce(&mut Renderer)> ApplicationHandler<UserEvent> for App<S> {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if self.over() {
+            event_loop.exit();
+            return;
+        }
         let now = self.now();
+        let end = self.options.end_after.map(|end| self.started + end);
         let Some(running) = &mut self.running else {
             return;
         };
-        let flow = match running.frames.schedule(now) {
-            Sleep::UntilEvent => ControlFlow::Wait,
-            Sleep::Until(at) => ControlFlow::WaitUntil(self.started + Duration::from_nanos(at)),
+        let wait = match running.frames.schedule(now) {
+            Sleep::UntilEvent => None,
+            Sleep::Until(at) => Some(self.started + Duration::from_nanos(at)),
+        };
+        let flow = match (wait, end) {
+            (Some(wait), Some(end)) => ControlFlow::WaitUntil(wait.min(end)),
+            (Some(at), None) | (None, Some(at)) => ControlFlow::WaitUntil(at),
+            (None, None) => ControlFlow::Wait,
         };
         event_loop.set_control_flow(flow);
     }
-}
-
-/// The display's highest refresh rate in frames a second, or 60 where it is unknown.
-#[cfg(target_os = "macos")]
-fn highest_rate(window: &Window) -> f32 {
-    let millihertz = window.current_monitor().and_then(|monitor| {
-        monitor
-            .video_modes()
-            .map(|mode| mode.refresh_rate_millihertz())
-            .max()
-            .or_else(|| monitor.refresh_rate_millihertz())
-    });
-    millihertz.unwrap_or(60_000) as f32 / 1000.0
 }
 
 /// Carries out one of the client's requests. A desktop has no haptics, and its text fields are

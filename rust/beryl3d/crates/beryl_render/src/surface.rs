@@ -1,6 +1,8 @@
 //! A window's surface: the drawables a host presents frames in (docs/beryl-3d.md, "Hosts").
 //! The host passes its window; no wgpu type crosses into the host's code.
 
+use std::time::{Duration, Instant};
+
 use beryl_scene::frame::Frame;
 
 use crate::renderer::{Drawn, Renderer};
@@ -18,8 +20,8 @@ pub struct Surface {
 /// What became of one call to `Renderer::present`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Presented {
-    /// The frame was drawn and handed to the display.
-    Shown(Drawn),
+    /// The frame was drawn and handed to the display, after waiting `waited` for a drawable.
+    Shown { drawn: Drawn, waited: Duration },
     /// No drawable was available (the window is hidden, or the surface was out of date and has
     /// been configured again), so nothing was drawn. The next frame tries again.
     Skipped,
@@ -60,7 +62,8 @@ impl Renderer {
         config.present_mode = wgpu::PresentMode::Fifo;
         config.desired_maximum_frame_latency = FRAMES_IN_FLIGHT;
         surface.configure(&device, &config);
-        let renderer = Self::new(device, queue, config.format);
+        let mut renderer = Self::new(device, queue, config.format);
+        renderer.adapter = adapter.get_info().name;
         Ok((renderer, Surface { surface, config }))
     }
 
@@ -72,6 +75,7 @@ impl Renderer {
         surface: &mut Surface,
         before: impl FnOnce(),
     ) -> Presented {
+        let asked = Instant::now();
         let drawable = match surface.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(drawable)
             | wgpu::CurrentSurfaceTexture::Suboptimal(drawable) => drawable,
@@ -81,13 +85,14 @@ impl Renderer {
             }
             _ => return Presented::Skipped,
         };
+        let waited = asked.elapsed();
         let view = drawable
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
         let drawn = self.render_view(frame, &view, surface.config.width, surface.config.height);
         before();
         self.queue.present(drawable);
-        Presented::Shown(drawn)
+        Presented::Shown { drawn, waited }
     }
 
     /// Changes the surface's size to `width` by `height` physical pixels.

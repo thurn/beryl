@@ -1,7 +1,8 @@
 //! The frame loop with a test's own ticks: frames are drawn only on ticks, at most one per
-//! tick however many inputs arrive, and no tick is asked for while the client wants none.
+//! tick however many inputs arrive, no tick is asked for while the client wants none, and a
+//! paused clock draws one frame at the pause and no other until an input arrives.
 
-use beryl_host::{Draw, FrameLoop, Sleep, Ticks};
+use beryl_host::{Draw, FrameLoop, Shown, Sleep, Ticks};
 use beryl_scene::frame::Frame;
 use beryl_scene::input::{Button, Input, Modifiers, Pointer, PointerKind, PointerPhase};
 use beryl_scene::{Client, Config};
@@ -28,8 +29,9 @@ struct Counter {
 }
 
 impl Draw for Counter {
-    fn draw(&mut self, _frame: &Frame) {
+    fn draw(&mut self, _frame: &Frame) -> Option<Shown> {
         self.frames += 1;
+        Some(Shown::default())
     }
 }
 
@@ -78,8 +80,8 @@ fn a_tick_with_nothing_new_draws_nothing() {
     let mut frames = FrameLoop::new(client(), TestTicks::default());
     let mut counter = Counter::default();
     frames.handle(moved(1.0));
-    assert!(frames.tick(INTERVAL, &mut counter));
-    assert!(!frames.tick(2 * INTERVAL, &mut counter));
+    assert!(frames.tick(INTERVAL, &mut counter).is_some());
+    assert!(frames.tick(2 * INTERVAL, &mut counter).is_none());
     assert_eq!(counter.frames, 1);
 }
 
@@ -99,4 +101,45 @@ fn no_tick_is_asked_for_while_the_client_wants_no_frame() {
     frames.schedule(6 * INTERVAL);
     assert!(!frames.ticks().running);
     assert_eq!(frames.ticks().asked, 1);
+}
+
+#[test]
+fn a_paused_clock_draws_one_frame_at_the_pause_and_then_only_for_an_input() {
+    let pause = 3 * INTERVAL;
+    let mut frames = FrameLoop::new(client(), TestTicks::default()).paused_at(Some(pause));
+    let mut counter = Counter::default();
+    // A still table before the pause still wakes at the pause, to show it.
+    assert_eq!(frames.schedule(INTERVAL), Sleep::Until(pause));
+    let at_pause = frames
+        .tick(pause + 1000, &mut counter)
+        .expect("a frame at the pause");
+    assert_eq!(at_pause.clock, pause);
+    for tick in 4..20 {
+        assert!(frames.tick(tick * INTERVAL, &mut counter).is_none());
+        assert_eq!(frames.schedule(tick * INTERVAL), Sleep::UntilEvent);
+    }
+    frames.handle(moved(1.0));
+    let after_input = frames
+        .tick(30 * INTERVAL, &mut counter)
+        .expect("a frame for the input");
+    assert_eq!(after_input.clock, pause, "the clock moved past the pause");
+    assert!(frames.tick(31 * INTERVAL, &mut counter).is_none());
+    assert_eq!(counter.frames, 2);
+}
+
+#[test]
+fn the_gap_since_the_last_frame_is_measured_only_while_the_ticks_run() {
+    let mut frames = FrameLoop::new(client(), TestTicks::default());
+    let mut counter = Counter::default();
+    frames.handle(moved(1.0));
+    let first = frames.tick(INTERVAL, &mut counter).expect("a frame");
+    assert_eq!(first.since_last, None);
+    frames.handle(moved(2.0));
+    let second = frames.tick(2 * INTERVAL, &mut counter).expect("a frame");
+    assert_eq!(second.since_last, Some(INTERVAL));
+    // The table rests, the ticks stop, and the next frame starts a new run of ticks.
+    assert!(frames.tick(3 * INTERVAL, &mut counter).is_none());
+    frames.handle(moved(3.0));
+    let later = frames.tick(10 * INTERVAL, &mut counter).expect("a frame");
+    assert_eq!(later.since_last, None);
 }

@@ -56,6 +56,8 @@ pub struct Renderer {
     depth: Option<(wgpu::TextureView, u32, u32)>,
     /// Present when the renderer counts the fragments each frame shades.
     counter: Option<FragmentCounter>,
+    /// The GPU adapter's name, for logs.
+    pub(crate) adapter: String,
 }
 
 impl Renderer {
@@ -113,6 +115,7 @@ impl Renderer {
             bind_groups,
             depth: None,
             counter: None,
+            adapter: "unknown".to_owned(),
         }
     }
 
@@ -157,10 +160,15 @@ impl Renderer {
         }))
         .map_err(|error| format!("no GPU device: {error}"))?;
         // Stored as sRGB values and blended as they are, as a browser blends colors.
-        Ok((
-            Self::new(device, queue, wgpu::TextureFormat::Rgba8Unorm),
-            name,
-        ))
+        let mut renderer = Self::new(device, queue, wgpu::TextureFormat::Rgba8Unorm);
+        renderer.adapter.clone_from(&name);
+        Ok((renderer, name))
+    }
+
+    /// The name of the GPU adapter it draws with, as the driver gives it.
+    #[must_use]
+    pub fn adapter(&self) -> &str {
+        &self.adapter
     }
 
     /// The name of the GPU adapter that counts fragments, or `None` for a renderer not made by

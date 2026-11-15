@@ -9,9 +9,28 @@ publish = false
 [lints]
 workspace = true
 
+[[bin]]
+name = "beryl3d"
+path = "src/main.rs"
+
+[features]
+# What only a debug build has: `--fixture`, which replays a recording from the recordings pack
+# instead of playing a game, and `--pause-at`. A release build leaves it off, and with it the
+# pack.
+tools = ["dep:beryl_inspect"]
+
 [dependencies]
 beryl_assets = { path = "../beryl_assets" }
 beryl_host = { path = "../beryl_host" }
-beryl_inspect = { path = "../beryl_inspect" }
+beryl_inspect = { path = "../beryl_inspect", optional = true }
 beryl_render = { path = "../beryl_render" }
 beryl_scene = { path = "../beryl_scene" }
+# The game the app plays: `Sessions` on the session thread.
+beryl_session = { path = "../../../crates/beryl_session" }
+# The frame log's lines, in place of a hand-written JSON writer and reader.
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+
+[dev-dependencies]
+# The crate itself with `tools`, so that its tests and the binary they run can replay fixtures.
+beryl_3d = { path = ".", features = ["tools"] }

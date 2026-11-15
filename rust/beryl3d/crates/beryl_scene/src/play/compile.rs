@@ -32,6 +32,9 @@ pub(crate) struct Compiled {
     /// The verbs among its steps that are drawn as instant changes, one bit per verb in the order
     /// of `Verb::ALL`.
     pub unbuilt: u32,
+    /// Every verb among its steps, built or not, one bit per verb in the order of `Verb::ALL`,
+    /// for the host's log of late frames.
+    pub verbs: u32,
     /// Every step, as it was laid out, for the interface checks.
     pub steps: Vec<StepRecord>,
     /// Every segment of `tracks`, in the order it was added, with the step that made it.
@@ -79,12 +82,18 @@ pub(crate) fn compile(
         finals: Table::objects_for(after, &table.placement(after)),
         end: 0,
         unbuilt: 0,
+        verbs: 0,
         steps: Vec::new(),
         segments: Vec::new(),
     };
     let Some(script) = after.script.as_ref() else {
         return compiled;
     };
+    compiled.verbs = script
+        .beats
+        .iter()
+        .flatten()
+        .fold(0, |verbs, step| verbs | bit(step.act.verb()));
     if timings.len() != script.beats.iter().map(Vec::len).sum::<usize>() {
         return compiled;
     }

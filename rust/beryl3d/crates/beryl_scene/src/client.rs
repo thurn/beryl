@@ -251,6 +251,17 @@ impl Client {
         self.show.next_unbuilt()
     }
 
+    /// The verbs of the script playing as of the last `frame`, for the host's log of late
+    /// frames.
+    pub fn playing_verbs(&self) -> impl Iterator<Item = Verb> + '_ {
+        let verbs = self.show.playing_verbs();
+        Verb::ALL
+            .iter()
+            .enumerate()
+            .filter(move |(index, _)| verbs & (1 << index) != 0)
+            .map(|(_, verb)| *verb)
+    }
+
     /// The next thing the client asks of the platform, if any.
     pub fn next_request(&mut self) -> Option<Request> {
         self.requests.pop_front()

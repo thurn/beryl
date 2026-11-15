@@ -1848,7 +1848,8 @@ just b3d smoke
   gives no `--window`. `background` is a window that never takes focus and opens
   behind the others. `foreground` is an ordinary window. `fullscreen` is what a
   person gets when they give no `--window` (decision C15). A run that an agent
-  starts with a window must give `--for`, so that it always ends.
+  starts must give `--for`, so that it always ends: a windowless run has no
+  window to close.
 - **Every run writes a frame log of its own** and prints the log's path with a
   summary: frames drawn, late frames, frames held to 60 Hz on a faster display,
   and how long frames waited for a drawable. `just b3d frames [path]` prints a

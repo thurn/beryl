@@ -18,7 +18,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from .. import system, warm
-from . import gate, lane, paths, sweep, vm
+from . import app, gate, lane, paths, sweep, vm
 
 # Exit code for a command line `just b3d` cannot run, as argparse uses.
 USAGE = 2
@@ -270,6 +270,45 @@ COMMANDS: tuple[Command, ...] = (
         ),
         gate.run_gate,
         gate.gate_arguments,
+    ),
+    Command(
+        "app",
+        "runs the app; an agent gets no window unless it names one, and then gives --for",
+        (
+            (
+                "just b3d app --fixture verbs-zones --for 10s",
+                "replay a recording with no window for 10 s",
+            ),
+            (
+                "just b3d app --fixture verbs-zones --pause-at 1500ms --window background --for 5s",
+                "a window behind the others, its clock stopped at 1.5 s",
+            ),
+        ),
+        app.run_app,
+        app.app_arguments,
+    ),
+    Command(
+        "smoke",
+        "starts the app with no window on verbs-zones and waits for its first frame",
+        (
+            ("just b3d smoke", "build the app and see its first frame"),
+            ("just b3d smoke --no-build", "the app as last built"),
+        ),
+        app.run_smoke,
+        app.smoke_arguments,
+    ),
+    Command(
+        "frames",
+        "a frame log's summary and its 10 worst frames; the newest of this checkout if no path",
+        (
+            ("just b3d frames", "the newest log of a run from this checkout"),
+            (
+                "just b3d frames ~/Library/Caches/beryl/b3d/frames/1794743250854-11214.jsonl",
+                "one log",
+            ),
+        ),
+        app.run_frames,
+        app.frames_arguments,
     ),
     Command(
         "vm",

@@ -102,6 +102,8 @@ OWN: tuple[SweepStep, ...] = (
     # The GPU's work: shader cost, and the fragments shaded counted in the beryl3d-bench
     # machine. Only this Mac's machine has been shown to count fragments repeatably.
     SweepStep("gpu", (*BY, "b3d", "gate", "--gpu"), (MAC,)),
+    # The app starts with no window and shows its first frame.
+    SweepStep("smoke", (*BY, "b3d", "smoke")),
 )
 
 
