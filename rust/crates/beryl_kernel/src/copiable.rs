@@ -1,7 +1,7 @@
 //! Copiable values: a definition, the face of it that is up, and the copy exceptions that
 //! made them ([`crate::additions`]). [`crate::query`] asks them of an object.
 
-use beryl_card::{Colors, CopyChange, Face, FaceIx, GrantIx};
+use beryl_card::{Colors, CopyChange, Face, FaceIx, GrantIx, Words};
 
 use crate::additions::{Addition, AdditionList};
 use crate::event::{Listens, Replaces};
@@ -43,6 +43,42 @@ pub struct Copiable<L: Layout = Small> {
     /// [`FaceIx::DOWN`] for a face-down permanent's.
     face: FaceIx,
     additions: L::Additions,
+    /// The colors an exception's color words read as through the text changes of the spell or
+    /// ability that made the copy, where those changed them ([`Copiable::with_addition_read`]).
+    read: ReadColors,
+}
+
+/// The colors one of a copy's exceptions sets ([`CopyChange::Colors`]), read through the text
+/// changes of the spell or ability that made the copy as it made it ([CR 612.1]), as Fork whose
+/// "red" reads "blue" makes a blue copy. The read is made once, as the copy is made
+/// ([CR 608.2h]): "If an effect requires information from the game (such as the number of
+/// creatures on the battlefield), the answer is determined only once, when the effect is
+/// applied." Kept only where the text changes changed the colors: every other exception's
+/// color words read as printed. Only the last exception that sets colors counts (CR 707.9b),
+/// so one place is enough.
+///
+/// [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
+/// [CR 608.2h]: https://yawgatog.com/resources/magic-rules/#R6082h
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+struct ReadColors {
+    /// One past the place among the additions of the exception they were read for; 0 for
+    /// none.
+    after: u8,
+    colors: Colors,
+}
+
+impl ReadColors {
+    /// No colors read through text changes.
+    const NONE: ReadColors = ReadColors {
+        after: 0,
+        colors: Colors::NONE,
+    };
+
+    /// The colors read for the exception at `place` among the additions, if any were.
+    #[inline]
+    fn at(self, place: usize) -> Option<Colors> {
+        (usize::from(self.after) == place + 1).then_some(self.colors)
+    }
 }
 
 /// Which definition an object's values are read from, to tell objects of one from those of
@@ -68,6 +104,7 @@ impl<L: Layout> crate::relayout::Relayout for Copiable<L> {
             card: crate::relayout::card(self.card),
             face: self.face,
             additions: relayout_additions::<L, M>(self.additions),
+            read: self.read,
         }
     }
 }
@@ -94,6 +131,7 @@ impl<L: Layout> Copiable<L> {
             card,
             face: FaceIx::FRONT,
             additions: L::Additions::NONE,
+            read: ReadColors::NONE,
         }
     }
 
@@ -105,6 +143,7 @@ impl<L: Layout> Copiable<L> {
             card: o.card,
             face: o.face,
             additions: L::Additions::NONE,
+            read: ReadColors::NONE,
         }
     }
 
@@ -112,13 +151,59 @@ impl<L: Layout> Copiable<L> {
     /// makes them ([CR 707.9b]): "Some copy effects modify a characteristic as part of the
     /// copying process. The final set of values for that characteristic becomes part of the
     /// copiable values of the copy." [`Full`] past what the layout holds
-    /// ([`Layout::Additions`]).
+    /// ([`Layout::Additions`]). The exception's words read as printed: a copy made by a spell
+    /// or ability whose text may be changed is made with [`Copiable::with_addition_read`].
     ///
     /// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
     #[inline]
     pub fn with_addition(mut self, addition: Addition<L::Card>) -> Result<Copiable<L>, Full> {
         self.additions.push(addition)?;
         Ok(self)
+    }
+
+    /// [`Copiable::with_addition`] for a copy made by a spell or ability whose text has the
+    /// changes `words`: the color words of the exception read through them ([`ReadColors`]),
+    /// as they are when the copy is made. One test while the text is as printed.
+    ///
+    /// # Errors
+    ///
+    /// [`Full`] past what the layout holds ([`Layout::Additions`]).
+    #[inline]
+    pub fn with_addition_read(
+        self,
+        addition: Addition<L::Card>,
+        t: &GameTable,
+        words: &Words,
+    ) -> Result<Copiable<L>, Full> {
+        let place = self.additions.len();
+        let mut values = self.with_addition(addition)?;
+        if !words.is_none() {
+            values.read_colors(addition, place, t, words);
+        }
+        Ok(values)
+    }
+
+    /// Notes the colors the exception `addition`, at `place` among the additions, sets as read
+    /// through `words`, where they differ from its words as printed.
+    #[cold]
+    #[inline(never)]
+    fn read_colors(
+        &mut self,
+        addition: Addition<L::Card>,
+        place: usize,
+        t: &GameTable,
+        words: &Words,
+    ) {
+        for change in addition.changes(t) {
+            if let CopyChange::Colors(set) = *change {
+                let colors = set.read(words);
+                if colors != set.read(&Words::NONE) {
+                    // A layout holds far fewer than 255 additions.
+                    let after = u8::try_from(place + 1).unwrap_or(u8::MAX);
+                    self.read = ReadColors { after, colors };
+                }
+            }
+        }
     }
 
     /// The exceptions these values carry, in the order the copy effects made them.
@@ -140,6 +225,7 @@ impl<L: Layout> Copiable<L> {
     pub(crate) fn with_additions_of(self, copied: Copiable<L>) -> Copiable<L> {
         Copiable {
             additions: copied.additions,
+            read: copied.read,
             ..self
         }
     }
@@ -341,20 +427,25 @@ impl<L: Layout> Copiable<L> {
         }
     }
 
-    /// [`Copiable::colors`] of values with exceptions.
+    /// [`Copiable::colors`] of values with exceptions. An exception's color words read as
+    /// printed, or as the copier's text changes read them when it made the copy
+    /// ([`ReadColors`]).
     #[cold]
     #[inline(never)]
     fn colors_of_additions(self, t: &GameTable) -> Colors {
-        let changes = self
-            .additions
-            .iter()
-            .flat_map(|addition| addition.changes(t));
-        changes.fold(self.face(t).colors, |colors, change| match *change {
-            CopyChange::Colors(set) => set,
-            CopyChange::PowerToughness(..) | CopyChange::AddSubtype(_) | CopyChange::Has(_) => {
-                colors
-            }
-        })
+        let changes = (self.additions.iter().enumerate())
+            .flat_map(|(place, addition)| addition.changes(t).iter().map(move |c| (place, c)));
+        changes.fold(
+            self.face(t).colors,
+            |colors, (place, change)| match *change {
+                CopyChange::Colors(set) => {
+                    (self.read.at(place)).unwrap_or_else(|| set.read(&Words::NONE))
+                }
+                CopyChange::PowerToughness(..) | CopyChange::AddSubtype(_) | CopyChange::Has(_) => {
+                    colors
+                }
+            },
+        )
     }
 
     /// Toughness, 0 where the face has none (CR 208.1): "the second is its toughness".

@@ -606,3 +606,16 @@ fixed in the same session. Newest first.
   needs a record from the event that makes it, not from the view after it; the
   script checks catch the gap only when a spec moment plays it, so a new kind of
   object gets a spec moment in the change that adds it.
+
+- **Fork's copy stayed red when a text change made Fork's "red" read "blue".**
+  Crystal Spray on Fork, changing "red" to "blue", should make Fork's copy blue,
+  since "except that the copy is red" is a color word of Fork's text (CR 612.1,
+  CR 707.9b). Beryl made it red: `CopyChange::Colors` held a plain `Colors`, and
+  a copy's exceptions are read lazily from the card, so nothing read them
+  through the copier's text changes. Fixed: `CopyChange::Colors` holds
+  `ColorWords`, which can only be read through an object's `Words`, and the
+  copiers make copies with `Copiable::with_addition_read`, which records the
+  colors as the copier's words read them when they differ from the printed ones.
+  Prevention: every value in the card vocabulary that a card's text names as a
+  color word or subtype is a word type from `beryl_card::words`, so a reader
+  that skips the text changes does not compile.

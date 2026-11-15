@@ -310,7 +310,10 @@ pub(crate) fn become_copy_instruction<L: Layout>(
     let source = entry.card();
     let mut values = run.state().copiable(original.slot);
     if let Some(ix) = except {
-        values = values.with_addition(Addition::new(source, entry.face(), ix))?;
+        // Its color words read through the text changes of the spell or ability (CR 612.1).
+        let words = run.state().entry_words(entry);
+        let addition = Addition::new(source, entry.face(), ix);
+        values = values.with_addition_read(addition, run.game().table, &words)?;
     }
     let mut copies = run.permanents(objects);
     let mut became = Bitboard::EMPTY;

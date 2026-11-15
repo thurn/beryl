@@ -60,7 +60,7 @@ impl Ctx {
             .and_then(|ix| self.face?.excepts.get(ix.index()))
             .and_then(|exception| {
                 exception.0.iter().rev().find_map(|change| match *change {
-                    CopyChange::Colors(colors) => Some(colors),
+                    CopyChange::Colors(colors) => Some(colors.read(&self.words)),
                     CopyChange::PowerToughness(..)
                     | CopyChange::AddSubtype(_)
                     | CopyChange::Has(_) => None,
@@ -97,7 +97,7 @@ impl Ctx {
                 other_types(subtype)
             ),
             CopyChange::Colors(colors) => {
-                let words = super::words::colors(colors);
+                let words = super::words::colors(colors.read(&self.words));
                 format!("it's {}", super::words::list(&words, "and"))
             }
             CopyChange::Has(ix) if self.is_this_ability(ix) => "it has this ability".to_owned(),

@@ -199,8 +199,11 @@ pub(crate) fn create_copies_instruction<L: Layout>(
     // the copy takes it after those of what it copies (CR 707.9b).
     let entry = &run.resolution().entry;
     let addition = except.map(|ix| Addition::new(entry.card(), entry.face(), ix));
+    // Its color words read through the text changes of the spell or ability (CR 612.1).
+    let words = run.state().entry_words(entry);
+    let table = run.game().table;
     let excepted = |what: Copiable<L>| match addition {
-        Some(addition) => what.with_addition(addition),
+        Some(addition) => what.with_addition_read(addition, table, &words),
         None => Ok(what),
     };
     let count = run.scene().amount(count);

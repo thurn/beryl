@@ -16,7 +16,7 @@
 //! [CR 608.3f]: https://yawgatog.com/resources/magic-rules/#R6083f
 //! [CR 704.5e]: https://yawgatog.com/resources/magic-rules/#R7045e
 
-use beryl_card::{Amount, ExceptIx, Objects};
+use beryl_card::{Amount, ExceptIx, Objects, Words};
 
 use crate::additions::Addition;
 use crate::bitboard::Bitboard;
@@ -62,8 +62,10 @@ pub(crate) fn instruction<L: Layout>(
     let entry = &run.resolution().entry;
     let controller = entry.controller();
     // CR 707.9b: the exception is one the ability's own face lists, and the copy takes it
-    // after those of what it copies.
+    // after those of what it copies. Its color words read through the text changes of the
+    // spell or ability making the copy (CR 612.1), as they are now.
     let addition = except.map(|ix| Addition::new(entry.card(), entry.face(), ix));
+    let words = run.state().entry_words(entry);
     let departed = match spells {
         Objects::This => (entry.source())
             .filter(|&source| !run.state().is_current(source))
@@ -75,6 +77,7 @@ pub(crate) fn instruction<L: Layout>(
         count,
         controller,
         addition,
+        words,
         new_targets,
     };
     let mut made = Bitboard::EMPTY;
@@ -101,6 +104,9 @@ struct Copies<L: Layout> {
     count: u8,
     controller: Seat,
     addition: Option<Addition<L::Card>>,
+    /// The text changes of the spell or ability making the copies, which the exception's
+    /// words read through.
+    words: Words,
     new_targets: bool,
 }
 
@@ -115,7 +121,7 @@ impl<L: Layout> Copies<L> {
         made: &mut Bitboard<L::Slot>,
     ) -> Result<(), Stop> {
         if let Some(addition) = self.addition {
-            what = what.with_addition(addition)?;
+            what = what.with_addition_read(addition, run.game().table, &self.words)?;
         }
         for _ in 0..self.count {
             let (game, resolution) = run.resolving();

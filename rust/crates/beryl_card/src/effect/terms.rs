@@ -6,6 +6,7 @@ use crate::effect::Effect;
 use crate::effect::{Objects, Players};
 use crate::filter::Filter;
 use crate::index::GrantIx;
+use crate::words::ColorWords;
 
 /// Where in a library a card is put.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -98,7 +99,8 @@ impl CopyException {
     pub const ONE_ONE: CopyException = CopyException(&[CopyChange::PowerToughness(1, 1)]);
 
     /// "Except that the copy is red", as Fork copies a spell.
-    pub const RED: CopyException = CopyException(&[CopyChange::Colors(Colors::RED)]);
+    pub const RED: CopyException =
+        CopyException(&[CopyChange::Colors(ColorWords::new(Colors::RED))]);
 }
 
 /// One change a [`CopyException`] makes to the values a copy takes.
@@ -107,8 +109,12 @@ pub enum CopyChange {
     /// "Except it's [power]/[toughness]" (CR 707.9b).
     PowerToughness(i8, i8),
     /// "Except that the copy is [colors]", as Fork's copy is red (CR 707.9b): the copy's
-    /// colors are these, whatever its mana cost says.
-    Colors(Colors),
+    /// colors are these, whatever its mana cost says. They are color words of the copier's
+    /// text, which a text-changing effect on the spell or ability that makes the copy
+    /// changes ([CR 612.1]): Fork whose "red" reads "blue" makes a blue copy.
+    ///
+    /// [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
+    Colors(ColorWords),
     /// "Except it's a [subtype] in addition to its other types" (CR 707.9b).
     AddSubtype(Subtype),
     /// "Except it has [the ability at this index of the face's grants]"
