@@ -57,6 +57,7 @@ from .xmage_java import (
     Faces,
     assertion_code,
     java_string,
+    outcome_lines,
     trample_amount,
 )
 
@@ -111,6 +112,8 @@ class Exporter:
         self.unless_pays: dict[str, str] = {}
         # The turns in which a trampler was blocked (`xmage_java.trample_amount`).
         self.trampled: set[int] = set()
+        # What the test checks after the game has run, for an outcome assertion.
+        self.ending: list[str] = []
 
     def player(self, seat: object) -> str:
         return "playerA" if seat == self.active else "playerB"
@@ -158,17 +161,6 @@ class Exporter:
         self.waiting.discard(who)
         if starts and not p.stack:
             self.waiting.add("playerB" if who == "playerA" else "playerA")
-
-    def topmost_spell(self, p: Position) -> str | None:
-        for item in reversed(p.stack):
-            if cast(bool, item["spell"]):
-                return cast(str, item["name"])
-        return None
-
-    def spell_on_top(self, p: Position) -> str | None:
-        if p.stack and cast(bool, p.stack[-1]["spell"]):
-            return cast(str, p.stack[-1]["name"])
-        return None
 
     def run(self) -> None:
         self.arrange()
@@ -387,7 +379,7 @@ class Exporter:
         self.pay(who, p, None)
         # XMage's stack clause asks for a spell anywhere on the stack, so a cast in response to
         # an ability above a spell (a storm trigger above its spell) waits for that spell too.
-        spell = self.topmost_spell(p)
+        spell = p.topmost_spell()
         targets = "TestPlayer.NO_TARGET"
         if self.cards.targets_in_cast(card):
             targets = java_string("^".join(self.take_targets(action["player"])))
@@ -520,7 +512,7 @@ class Exporter:
             raise Unsupported(f"{card}'s ability {how} {index}")
         self.prepare(who, p, starts=True)
         self.pay(who, p, card)
-        spell = self.spell_on_top(p)
+        spell = p.spell_on_top()
         if spell is None:
             self.emit(f"activateAbility({self.at(p)}, {who}, {java_string(text)});")
         else:
@@ -740,7 +732,8 @@ class Exporter:
             self.export.skipped.append("Decision: Beryl's decision surface")
             return
         if what == "Outcome":
-            raise Unsupported("an outcome assertion")
+            self.ending = outcome_lines(assertion)
+            return
         if p.decider is None:
             raise Unsupported(f"a {what} assertion after the game is over")
         if p.kind != "Priority":
@@ -769,3 +762,4 @@ class Exporter:
         else:
             self.emit(f"setStopAt({turn + 1}, PhaseStep.UNTAP);")
         self.emit("execute();")
+        self.lines.extend(self.ending)

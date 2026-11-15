@@ -6,6 +6,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -70,6 +72,9 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
      * question comes, and dropped at its player's first priority after the step where Beryl
      * answered it if not.
      */
+    /** XMage's question whether a loop of the game is a draw. */
+    private static final String INFINITE_LOOP = "Draw game because of infinite looping?";
+
     private static final class BerylTestPlayer extends TestPlayer {
         private String castCost;
 
@@ -157,8 +162,21 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
                     || (game.getTurnNum() == turn && game.getTurnStepType().getIndex() > step);
         }
 
+        /**
+         * A choice from the queue, but with the queue empty, the only candidate of a choice
+         * that needs one: Beryl answers a question with one answer without asking, and records
+         * it in the scenario only where it asks. An Aura that a loop returns again and again
+         * chooses what it enchants each time (CR 303.4f), more times than any queue holds.
+         */
         @Override
         public boolean choose(Outcome outcome, Target target, Ability source, Game game, Map<String, Serializable> options) {
+            if (getChoices().isEmpty() && target.getMinNumberOfTargets() > 0) {
+                Set<UUID> possible = target.possibleTargets(getId(), source, game);
+                if (possible.size() == 1) {
+                    target.add(possible.iterator().next(), game);
+                    return true;
+                }
+            }
             return withOptional(
                     name -> selectable(name, outcome, target, source, game, null),
                     () -> super.choose(outcome, target, source, game, options));
@@ -224,9 +242,17 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
             return super.chooseReplacementEffect(effectsMap, objectsMap, game);
         }
 
+        /**
+         * A yes or no from the queue, but for XMage's question whether a loop it found is a
+         * draw (`GameImpl.checkInfiniteLoop`), always yes: in the rules a loop of mandatory
+         * actions is a draw with no player asked (CR 104.4b), and Beryl asks nothing.
+         */
         @Override
         public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText,
                 String falseText, Ability source, Game game) {
+            if (INFINITE_LOOP.equals(message)) {
+                return true;
+            }
             return withOptional(
                     answer -> answer.equals("Yes") || answer.equals("No"),
                     () -> super.chooseUse(outcome, message, secondMessage, trueText, falseText, source, game));

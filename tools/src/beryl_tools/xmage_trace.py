@@ -46,6 +46,19 @@ class Position:
     # The mana permanents and spells made, in order: `source`, `color` and `restricted`.
     mana: list[Json] = field(default_factory=list)
 
+    def topmost_spell(self) -> str | None:
+        """The name of the highest spell on the stack, if there is one."""
+        for item in reversed(self.stack):
+            if cast(bool, item["spell"]):
+                return cast(str, item["name"])
+        return None
+
+    def spell_on_top(self) -> str | None:
+        """The name of the top of the stack, if it is a spell."""
+        if self.stack and cast(bool, self.stack[-1]["spell"]):
+            return cast(str, self.stack[-1]["name"])
+        return None
+
     def check_simultaneous_emblem_triggers(self) -> None:
         """An emblem's triggers on one event, such as Teferi, Hero of Dominaria's for each card
         of a multiple draw, go on the stack together: XMage asks their order, which Beryl, with

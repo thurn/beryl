@@ -204,6 +204,18 @@ def method_name(index: int, scenario: str) -> str:
     return f"s{index:02d}_{body}"
 
 
+def outcome_lines(a: Json) -> list[str]:
+    """A Beryl outcome assertion as the statements that check it once the game has run. XMage
+    ends a loop of mandatory actions as a draw when every player agrees, which
+    `BerylScenarioTest` always does (CR 104.4b). A win is not exported yet."""
+    ending = cast(Json, a["outcome"])
+    if ending["ending"] != "Draw":
+        raise Unsupported(f"a {ending['ending']} outcome assertion")
+    return [
+        'org.junit.Assert.assertTrue("a draw", playerA.hasDrew() && playerB.hasDrew());'
+    ]
+
+
 def assertion_code(a: Json, who: str) -> str:
     """A Beryl assertion as the XMage assertion of the same fact, about the player `who`."""
     what = cast(str, a["assert"])
