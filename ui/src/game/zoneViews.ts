@@ -152,13 +152,19 @@ export function libraries(view: PlayerView): ZonePile[] {
 export const knowsAny = (pile: ZonePile) =>
   pile.cards.some((o) => o.name !== null);
 
-/** The permanent among `onField` holding the card `o` in exile, drawn behind it: the one that
- * exiled it until it leaves (CR 610.3), or else the one whose abilities find it "exiled with"
- * it (CR 607.2a). */
+/** The permanent among `onField` holding the card `o`, drawn behind it: for a card in exile,
+ * the one that exiled it until it leaves (CR 610.3), or else the one whose abilities find it
+ * "exiled with" it (CR 607.2a); for a card in the merged zone, the merged permanent it is part
+ * of (CR 731.2b). */
 export function held(
   o: ObjectView,
   onField: ReadonlySet<number>,
 ): number | undefined {
+  if (o.zone === "merged") {
+    return o.partOf !== undefined && onField.has(o.partOf)
+      ? o.partOf
+      : undefined;
+  }
   if (o.zone !== "exile") return undefined;
   for (const host of [o.exiledBy, o.exiledWith]) {
     if (host !== null && onField.has(host)) return host;
@@ -166,11 +172,14 @@ export function held(
   return undefined;
 }
 
-/** The cards in exile linked to the permanent in `slot`: those it exiled until it leaves
- * (CR 610.3) and those its abilities find "exiled with" it (CR 607.2a). */
+/** The cards held by the permanent in `slot` (`held`): those it exiled until it leaves
+ * (CR 610.3), those its abilities find "exiled with" it (CR 607.2a), and the other cards of
+ * a merged permanent (CR 731.2b). */
 export function exiledWith(view: PlayerView, slot: number): ObjectView[] {
   return view.objects.filter(
-    (o) => o.zone === "exile" && (o.exiledBy === slot || o.exiledWith === slot),
+    (o) =>
+      (o.zone === "exile" && (o.exiledBy === slot || o.exiledWith === slot)) ||
+      (o.zone === "merged" && o.partOf === slot),
   );
 }
 

@@ -61,6 +61,8 @@ export interface CardMarks {
   sick: boolean;
   /** It is a token, not a card (CR 111.1). */
   token?: boolean;
+  /** A copy effect gives it another card's values (CR 707.2). */
+  copy?: boolean;
   /** Its controller is not its owner. */
   stolen?: boolean;
 }
@@ -465,10 +467,11 @@ export function Card({
             <MarkBadge icon="lock" label="Doesn’t untap" />
           </span>
         )}
-        {marks && (otherCounters.length > 0 || marks.token) && (
+        {marks && (otherCounters.length > 0 || marks.token || marks.copy) && (
           <span className="card-counters">
             {/* Marks that say what the frame and art also hint, apart from any art. */}
             {marks.token && <span className="token-label">Token</span>}
+            {marks.copy && <span className="token-label">Copy</span>}
             {otherCounters.map((c) => (
               <MarkBadge
                 key={c.kind}

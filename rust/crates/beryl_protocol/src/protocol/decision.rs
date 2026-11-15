@@ -53,6 +53,15 @@ pub struct DecisionView {
     /// At a priority, each card in the viewer's hand they may neither cast nor play as a land,
     /// and why: what the UI says of one a click finds nothing to do with.
     pub refused: Vec<Refused>,
+    /// The player the decision belongs to, when that is not the viewer: the viewer controls
+    /// them this turn and makes their decisions ([CR 724.5]): "While controlling another
+    /// player, a player makes all choices and decisions the controlled player is allowed to
+    /// make or is told to make by the rules or by any objects."
+    ///
+    /// [CR 724.5]: https://yawgatog.com/resources/magic-rules/#R7245
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub acting_for: Option<Side>,
 }
 
 /// A card in the viewer's hand they may neither cast nor play as a land now.

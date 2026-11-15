@@ -552,6 +552,22 @@ recordings do not show them.
   "Over or Under?" with OVER and UNDER. The recordings show only the opponent
   mutating, never the choice. A card under a merged permanent is in the merged
   zone and is not drawn on the table.
+- **A permanent's chosen value.** A value chosen as a permanent entered (a
+  color, a creature type, a card name) shows on the permanent on one line, as a
+  manual card's note does. Its inspection panel says "Chosen:" and the value.
+- **Phased-out permanents.** A phased-out permanent stays where it lay, faded.
+  It is never offered as a candidate, and its inspection panel says "Phased
+  out".
+- **Cards under a merged permanent.** The other cards of a merged permanent
+  (mutate) peek out from under it, as cards a permanent holds in exile do.
+  Clicking one opens them all to read.
+- **Copies.** A permanent that is a copy shows the copied card's face with a
+  "Copy" label where a token shows "Token" (the phone, which shows neither
+  label, shows the copied card's scan). Its inspection panel names the card it
+  really is.
+- **Controlling another player.** While the viewer controls the opponent's turn,
+  each decision they make for the opponent says "For opponent" before what it
+  asks; a priority says only that.
 
 ## Verbs
 

@@ -85,6 +85,7 @@ fn deciding() -> Input {
             undo: 0,
             undo_depth: 0,
             refused: Vec::new(),
+            acting_for: None,
         },
     };
     Input::Update(Box::new(GameUpdate {

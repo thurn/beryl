@@ -198,6 +198,15 @@ pub struct TurnView {
     /// Who won the coin flip that chose who chooses, in a game begun by one: the session's to
     /// say ([`crate::Game`]), as the position no longer holds it.
     pub flip_winner: Option<Side>,
+    /// The side controlling the active player this turn, when another player does
+    /// ([CR 724.1]): that side makes the active player's decisions, so a view whose
+    /// `controlled_by` is [`Side::You`] and whose `active` is [`Side::Opponent`] acts for the
+    /// opponent.
+    ///
+    /// [CR 724.1]: https://yawgatog.com/resources/magic-rules/#R7241
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub controlled_by: Option<Side>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -288,6 +297,27 @@ pub struct ObjectView {
     /// find it among the cards "exiled with" it
     /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)).
     pub exiled_with: Option<ObjectId>,
+    /// Phased out ([CR 702.26b]): on the battlefield by its zone, and treated as though it
+    /// does not exist.
+    ///
+    /// [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(optional, as = "Option<_>")]
+    pub phased_out: bool,
+    /// In the merged zone: the merged permanent this card is part of, drawn under it
+    /// ([CR 731.2]).
+    ///
+    /// [CR 731.2]: https://yawgatog.com/resources/magic-rules/#R7312
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub part_of: Option<ObjectId>,
+    /// On the battlefield, for a card a copy effect gives another card's values: the name of
+    /// the card it really is ([CR 707.2]), while `name` is the copied card's.
+    ///
+    /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub really: Option<String>,
     /// On the battlefield: the value it chose as it entered, by name ("Red", "Goblin",
     /// "Counterspell", "Another card")
     /// ([CR 614.12a](https://yawgatog.com/resources/magic-rules/#R61412a)).

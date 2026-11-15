@@ -11,7 +11,7 @@ use beryl_engine::{
 use super::ObjectId;
 use super::{
     Candidate, CandidateView, DecisionId, DecisionView, Kind, PassTo, RefusalView, Refused,
-    StackItem, StopsSetting, candidate, catalog_label, name, stack_item,
+    StackItem, StopsSetting, candidate, catalog_label, name, side, stack_item,
 };
 use crate::prompt::{halt_prompt, prompt_view};
 
@@ -71,11 +71,13 @@ pub(super) fn decision_view<L: Layout>(
         cancellable: false,
         undo: 0,
         undo_depth: 0,
-        refused: if d.kind == DecisionKind::Priority {
+        // The viewer's own hand says nothing of a priority they hold for another player.
+        refused: if d.kind == DecisionKind::Priority && d.player == obs.viewer() {
             refused(t, obs)
         } else {
             Vec::new()
         },
+        acting_for: (d.player != obs.viewer()).then(|| side(obs, d.player)),
     }
 }
 
@@ -130,6 +132,7 @@ pub(super) fn halt_view<L: Layout>(
         undo: 0,
         undo_depth: 0,
         refused: refused(t, obs),
+        acting_for: None,
     }
 }
 

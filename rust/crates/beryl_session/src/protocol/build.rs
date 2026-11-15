@@ -1,12 +1,13 @@
 //! Building a [`PlayerView`] from one player's [`Observation`].
 
 use beryl_engine::card::{
-    Ability, AbilityKind, CastingOption, FaceAbility, FaceIx, Measure, Part, Purpose, Shape, Types,
+    Ability, AbilityKind, CastingOption, FaceAbility, FaceIx, Keywords, Measure, Part, Purpose,
+    Shape, Types,
 };
 use beryl_engine::event::{Event, LossCause};
 use beryl_engine::layout::Queue;
 use beryl_engine::state::{
-    AbilityTarget, AttackTarget, CombatRole, ObjectRef, Pending, StackEntry,
+    AbilityTarget, AttackTarget, CombatRole, Memo, ObjectRef, Pending, StackEntry,
 };
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{
@@ -83,6 +84,33 @@ pub fn player_view<L: Layout>(
         opponent: player_state(viewer.opponent()),
     };
     objects.extend(obs.battlefield().iter().map(|&s| object_view(t, obs, s)));
+    // The other cards of each merged permanent, which the UI draws under it ([CR 731.2b]: "As
+    // an object merges with a permanent, that object leaves its previous zone and becomes part
+    // of an object on the battlefield").
+    //
+    // [CR 731.2b]: https://yawgatog.com/resources/magic-rules/#R7312b
+    // A merged permanent with a mutating card over it keeps its own card in its slot, under a
+    // copy effect: the card in the merged zone that it shows is the one over it, so the view
+    // names the card under it by the permanent's own.
+    for &host in obs.battlefield() {
+        let mut own = really(t, obs, host);
+        let top = name(t, obs, host);
+        for s in obs.shown().pile(host) {
+            let mut view = object_view(t, obs, s);
+            if own.is_some() && view.name.as_deref() == top {
+                view.name = own.take().map(str::to_owned);
+            }
+            objects.push(view);
+        }
+    }
+    // Phased-out permanents are on the battlefield by their zone, but in no battlefield list:
+    // the view still sends them, marked, after the rest ([CR 702.26b]): "a phased-out
+    // permanent is treated as though it does not exist".
+    //
+    // [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
+    let phased_out = obs.in_candidate_order(obs.phased_out());
+    let phased_out: Vec<L::Slot> = phased_out.collect();
+    objects.extend(phased_out.iter().map(|&s| object_view(t, obs, s)));
     let mut stack: Vec<_> = obs.stack().iter().map(|e| stack_item(t, obs, e)).collect();
     objects.extend(
         obs.stack()
@@ -152,9 +180,10 @@ pub fn player_view<L: Layout>(
             priority: Some(side(obs, turn.priority())),
             starting: obs.starting_player().map(|p| side(obs, p)),
             flip_winner: None,
+            controlled_by: turn.controller().map(|p| side(obs, p)),
         },
         players,
-        battlefield: slots(obs.battlefield().iter().copied()),
+        battlefield: slots(obs.battlefield().iter().chain(&phased_out).copied()),
         objects,
         stack,
         stops,
@@ -323,7 +352,9 @@ pub(super) fn face_name<L: Layout>(
 fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot) -> ObjectView {
     let o = obs.object(slot);
     let on_battlefield = o.zone() == Zone::Battlefield;
-    let derived = on_battlefield.then(|| obs.derived(slot));
+    let derived = on_battlefield
+        .then(|| characteristics(t, obs, slot))
+        .flatten();
     let types = derived.map_or(Types::NONE, |d| d.types);
     let creature = types.contains(Types::CREATURE);
     let counters = obs
@@ -375,6 +406,15 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         attached_to: some(o.attached_to()),
         exiled_by: some(obs.memos(slot).exiled_until()),
         exiled_with: some(obs.memos(slot).exiled_with()),
+        phased_out: o.is_phased_out(),
+        part_of: obs.memos(slot).iter().find_map(|memo| match memo {
+            Memo::PartOf(host) => Some(ObjectId(host.num())),
+            _ => None,
+        }),
+        // A merged permanent's cards are drawn under it instead ([`player_view`]).
+        really: really(t, obs, slot)
+            .filter(|_| obs.shown().pile(slot).next().is_none())
+            .map(str::to_owned),
         chosen: obs.memos(slot).chosen().map(|value| value.name(t)),
         text,
         type_line,
@@ -403,6 +443,60 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         doesnt_untap: false,
         hidden_pick: obs.hidden_picks().contains(slot),
     }
+}
+
+/// The name of the card the permanent in `slot` really is, when a copy effect shows another
+/// ([CR 707.2]).
+///
+/// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
+fn really<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    slot: L::Slot,
+) -> Option<&'static str> {
+    if !obs.knows(slot) || obs.object(slot).zone() != Zone::Battlefield {
+        return None;
+    }
+    let card = t.def(obs.shown().really(slot)?).face_name(FaceIx::FRONT);
+    (Some(card) != name(t, obs, slot)).then_some(card)
+}
+
+/// A permanent's types, power, toughness and keywords as the view shows them.
+#[derive(Clone, Copy)]
+struct Shown {
+    types: Types,
+    power: i8,
+    toughness: i8,
+    keywords: Keywords,
+}
+
+/// The characteristics of the permanent in `slot`: after continuous effects, or for a
+/// phased-out permanent, which has no layer results, those printed on its face up, as it is
+/// treated as though it does not exist ([CR 702.26b]): "a phased-out permanent is treated as
+/// though it does not exist". None for a phased-out permanent the viewer does not know.
+///
+/// [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
+fn characteristics<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    slot: L::Slot,
+) -> Option<Shown> {
+    if !obs.object(slot).is_phased_out() {
+        let d = obs.derived(slot);
+        return Some(Shown {
+            types: d.types,
+            power: d.power,
+            toughness: d.toughness,
+            keywords: d.keywords,
+        });
+    }
+    let face = t.def(obs.card(slot)?).face(obs.object(slot).face());
+    Some(Shown {
+        types: face.types,
+        power: face.power.unwrap_or(0),
+        toughness: face.toughness.unwrap_or(0),
+        keywords: face.keywords,
+    })
 }
 
 /// Whether ability `index` of `list` is triggered, and how many paragraphs of the face's text

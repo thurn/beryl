@@ -488,6 +488,11 @@ export function Inspect({
       {refusal && <InspectRefusal {...refusal} />}
       {entry && <p className="inspect-artist">Illustrated by {entry.artist}</p>}
       {object.note && <p className="inspect-note">{object.note}</p>}
+      {object.chosen && <p className="inspect-note">Chosen: {object.chosen}</p>}
+      {object.really && (
+        <p className="inspect-note">Copy. Card: {object.really}</p>
+      )}
+      {object.phasedOut && <p className="inspect-note">Phased out</p>}
       {changed && (
         <p className="inspect-types" aria-label="Types now">
           <s>{printed.map(titled).join(" ")}</s>{" "}

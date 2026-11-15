@@ -34,6 +34,7 @@ import type { PhoneLayout } from "../mobile/layout";
 import { floating } from "../components/Player";
 import type {
   ButtonId,
+  DecisionView,
   PlayerView,
   PromptButton,
   PromptView,
@@ -191,10 +192,14 @@ function usePresses(
  * or for a division how much is still to give out, as the session wrote each. A mana
  * payment's title already names the whole cost ("Pay {1}{W}."), so showing it twice before
  * a pick says nothing more. Crew and Waterbend keep their payment amount beside the prompt. */
+/** What the open prompt asks, after the player the viewer answers it for when they control
+ * another player (CR 724.5): a priority asks nothing else, so it says only that. */
 function Asks({
   prompt: { title, body: state, purpose },
+  decision,
 }: {
   prompt: PromptView;
+  decision?: DecisionView;
 }) {
   const left =
     state.shape === "pay"
@@ -206,6 +211,11 @@ function Asks({
         : undefined;
   return (
     <>
+      {decision?.actingFor && (
+        <span className="prompt-for">
+          {title ? "For opponent: " : "For opponent"}
+        </span>
+      )}
       <RulesText text={title} />
       {left !== undefined && (
         <span className="prompt-left">
@@ -401,7 +411,11 @@ export function PromptDock({
           ? "stage-prompt stage-prompt-long"
           : "stage-prompt"
       }
-      title={prompt.title ? <Asks prompt={prompt} /> : undefined}
+      title={
+        prompt.title || decision?.actingFor ? (
+          <Asks prompt={prompt} decision={decision} />
+        ) : undefined
+      }
     >
       {(others.length > 0 || takesBack) && (
         <DockButtons>
@@ -523,12 +537,12 @@ export function PhonePromptOver({
       data-middle={!held || undefined}
       style={style}
     >
-      <Asks prompt={prompt} />
+      <Asks prompt={prompt} decision={decision} />
     </div>
   );
   return (
     <>
-      {prompt.title &&
+      {(prompt.title || decision?.actingFor) &&
         !steps &&
         asks(
           long ? "phone-pill phone-pill-long" : "phone-pill",

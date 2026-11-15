@@ -137,7 +137,6 @@ pub mod scenarios {
         // [CR 502.1]: https://yawgatog.com/resources/magic-rules/#R5021
         // [CR 702.26d]: https://yawgatog.com/resources/magic-rules/#R70226d
         Scenario::new("a stolen artifact phases in at its thief's untap step")
-            .interaction(&[SKYDIVER])
             .battlefield(
                 P0,
                 &[
@@ -284,6 +283,30 @@ pub mod scenarios {
                 THEM.targets(Prop::Flier),
                 Resolve,
                 THEM.has(Zone::Graveyard, Prop::Flier, 1),
+            ]),
+        // Phased out, P1's permanents stay out for the rest of P1's turn: P1, with a land still
+        // to play, and P0, with Lightning Bolt to cast in P1's end step, both see P1's lands
+        // and 2/1 phased out.
+        Scenario::new("permanents stay phased out for the rest of the turn")
+            .interaction(&[BOLT])
+            .at(2, P1, TurnStep::PrecombatMain)
+            .battlefield(
+                P1,
+                &[Card::Plains, Card::Plains, Card::Plains, Prop::Vanilla],
+            )
+            .hand(P1, &[PROTECTION, Card::Plains])
+            .battlefield(P0, &[Card::Mountain, Prop::Flier])
+            .hand(P0, &[BOLT])
+            .library(P0, &[Card::Plains; 3])
+            .library(P1, &[Card::Plains; 3])
+            .actions(&[
+                THEM.casts(PROTECTION),
+                Resolve,
+                THEM.has(Zone::Battlefield, Prop::Vanilla, 0),
+                THEM.has(Zone::Battlefield, Card::Plains, 0),
+                advance_to(2, TurnStep::End),
+                THEM.has(Zone::Battlefield, Prop::Vanilla, 0),
+                THEM.has(Zone::Exile, PROTECTION, 1),
             ]),
         // The ruling: "Creatures can still attack you while you have protection from everything,
         // although combat damage that they would deal to you will be prevented." P1's 3/1

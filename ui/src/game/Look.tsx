@@ -53,7 +53,7 @@ export function Look({
     <Card
       card={down ? faceDownFace(object) : card}
       back={down}
-      note={object.note}
+      note={object.note ?? object.chosen}
       combat={
         combat === "attacking"
           ? "attacker"
@@ -71,6 +71,7 @@ export function Look({
           elsewhere && "card-elsewhere",
           state.linked && "card-linked",
           under && "card-under",
+          object.phasedOut && "card-phased",
         ]
           .filter(Boolean)
           .join(" ") || undefined

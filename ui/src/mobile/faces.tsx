@@ -58,6 +58,9 @@ export function CardScan({
       back={down}
       width={width}
       tapped={field && object.tapped}
+      // Live state the scan cannot show: a value chosen as it entered, and phasing.
+      note={field ? object.chosen : undefined}
+      className={field && object.phasedOut ? "card-phased" : undefined}
       marks={
         field ? { counters: marksOf(object).counters, sick: false } : undefined
       }

@@ -39,3 +39,25 @@ fn the_controller_sees_the_controlled_players_hand_and_remembers_it() {
     assert_eq!(hand(3).0, vec![oust, island]);
     assert!(hand(2).1.is_empty());
 }
+
+/// Both seats' views of P1's turn 2 say that P0 controls it ([CR 724.1]), and no other turn's
+/// do.
+///
+/// [CR 724.1]: https://yawgatog.com/resources/magic-rules/#R7241
+#[test]
+fn both_seats_see_who_controls_the_turn() {
+    let views = common::views(
+        names::MINDSLAVER,
+        "the control ends with the turn",
+        |_, _, _| {},
+    );
+    for [mine, theirs] in &views {
+        let controlled = mine.turn.number == 2;
+        assert_eq!(mine.turn.controlled_by, controlled.then_some(Side::You));
+        assert_eq!(
+            theirs.turn.controlled_by,
+            controlled.then_some(Side::Opponent)
+        );
+    }
+    assert!(views.iter().any(|[mine, _]| mine.turn.number == 2));
+}

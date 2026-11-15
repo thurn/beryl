@@ -258,7 +258,16 @@ starting: Side | null,
  * Who won the coin flip that chose who chooses, in a game begun by one: the session's to
  * say ([`crate::Game`]), as the position no longer holds it.
  */
-flipWinner: Side | null, };
+flipWinner: Side | null, 
+/**
+ * The side controlling the active player this turn, when another player does
+ * ([CR 724.1]): that side makes the active player's decisions, so a view whose
+ * `controlled_by` is [`Side::You`] and whose `active` is [`Side::Opponent`] acts for the
+ * opponent.
+ *
+ * [CR 724.1]: https://yawgatog.com/resources/magic-rules/#R7241
+ */
+controlledBy?: Side, };
 
 export type Players = { you: PlayerState, opponent: PlayerState, };
 
@@ -334,6 +343,27 @@ exiledBy: ObjectId | null,
  * ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)).
  */
 exiledWith: ObjectId | null, 
+/**
+ * Phased out ([CR 702.26b]): on the battlefield by its zone, and treated as though it
+ * does not exist.
+ *
+ * [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
+ */
+phasedOut?: boolean, 
+/**
+ * In the merged zone: the merged permanent this card is part of, drawn under it
+ * ([CR 731.2]).
+ *
+ * [CR 731.2]: https://yawgatog.com/resources/magic-rules/#R7312
+ */
+partOf?: ObjectId, 
+/**
+ * On the battlefield, for a card a copy effect gives another card's values: the name of
+ * the card it really is ([CR 707.2]), while `name` is the copied card's.
+ *
+ * [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
+ */
+really?: string, 
 /**
  * On the battlefield: the value it chose as it entered, by name ("Red", "Goblin",
  * "Counterspell", "Another card")
@@ -484,7 +514,16 @@ undoDepth: number,
  * At a priority, each card in the viewer's hand they may neither cast nor play as a land,
  * and why: what the UI says of one a click finds nothing to do with.
  */
-refused: Array<Refused>, };
+refused: Array<Refused>, 
+/**
+ * The player the decision belongs to, when that is not the viewer: the viewer controls
+ * them this turn and makes their decisions ([CR 724.5]): "While controlling another
+ * player, a player makes all choices and decisions the controlled player is allowed to
+ * make or is told to make by the rules or by any objects."
+ *
+ * [CR 724.5]: https://yawgatog.com/resources/magic-rules/#R7245
+ */
+actingFor?: Side, };
 
 export type PassTo = { "kind": "resolve" } | { "kind": "combatDamage" } | { "kind": "step", step: Step, } | { "kind": "nextTurn" };
 

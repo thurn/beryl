@@ -253,6 +253,9 @@ export function sideGroups(
     o.facing === "up" &&
     o.face !== "down" &&
     !o.note &&
+    !o.chosen &&
+    !o.really &&
+    !o.phasedOut &&
     !o.doesntUntap &&
     !o.namedCounters?.length &&
     o.counters.length === 0 &&

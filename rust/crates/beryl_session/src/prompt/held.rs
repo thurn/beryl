@@ -237,10 +237,17 @@ impl<L: Layout> Table<'_, L> {
     /// The first of `offered` that the card `o` stands for: one it is interchangeable with,
     /// which the decision offers in its place (architecture §7.2: the engine offers one
     /// candidate for interchangeable objects). Only a card the viewer knows by name stands for
-    /// another: whether two cards they cannot tell apart are alike is not theirs to learn.
+    /// another: whether two cards they cannot tell apart are alike is not theirs to learn. A
+    /// phased-out permanent stands for none, as it is treated as though it does not exist
+    /// ([CR 702.26b]), and has no layer results to compare.
+    ///
+    /// [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
     fn stands_for(&self, o: &ObjectView, offered: &[ObjectId]) -> Option<ObjectId> {
         let slot = |ObjectId(num): ObjectId| L::Slot::from_num(num);
         o.name.as_ref()?;
+        if o.phased_out {
+            return None;
+        }
         offered.iter().copied().find(|&c| {
             // Interchangeable objects are of one card, so of one name: most are told apart
             // without asking the engine.

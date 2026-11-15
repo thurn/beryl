@@ -135,6 +135,7 @@ export function marksOf(o: ObjectView): CardMarks {
     doesntUntap: o.doesntUntap,
     sick: o.summoningSick,
     token: o.token,
+    copy: o.really !== undefined,
     stolen: o.owner !== o.controller,
   };
 }
