@@ -8,7 +8,7 @@ use beryl_session::ipc::decks::{
 use beryl_table_session::decks::{self, Decks};
 use tauri::AppHandle;
 
-fn library(app: &AppHandle) -> Result<Decks, SessionError> {
+pub(crate) fn library(app: &AppHandle) -> Result<Decks, SessionError> {
     let path = crate::profile::data_dir(app).map_err(io_error)?;
     Ok(Decks::new(path.join("decks")))
 }

@@ -99,7 +99,9 @@ its own build and checks; see `rust/beryl3d/AGENTS.md`.
   (headless for agents; drive it with `adb shell input` or the WebView's
   DevTools over `adb forward`).
 - A human runs `just dev` for the app with hot reload, or `just bundle` for a
-  release `Beryl.app`.
+  release `Beryl.app`. A human runs `just table-pair` to build the debug app
+  once and open the `host` and `guest` profiles at a shared localhost table,
+  with WU Control dealt to both seats. Agents cannot run it.
 
 ## Benchmarks
 

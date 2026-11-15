@@ -41,6 +41,11 @@ default:
 dev *args:
     {{ by }} dev "$@"
 
+# Build once and open a host and guest at the same local table (humans)
+[group('app')]
+table-pair *args:
+    {{ by }} table-pair "$@"
+
 # Build the debug app and launch it headless until its UI loads (--seconds N, --no-build)
 [group('app')]
 smoke *args:

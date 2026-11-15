@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from . import checks, paths, system, warm
@@ -49,6 +50,61 @@ def dev(args: argparse.Namespace) -> int:
         )
         return 2
     return tauri("dev", "--features", "iroh")
+
+
+def table_pair(_: argparse.Namespace) -> int:
+    if paths.is_agent():
+        print("table-pair: agents never open a window", file=sys.stderr)
+        return 2
+
+    cache = paths.cache_root().resolve()
+    mailbox = cache / "table-pair"
+    mailbox.mkdir(exist_ok=True)
+    try:
+        with system.file_lock(mailbox / "lock", timeout=0):
+            return launch_pair(cache, mailbox)
+    except system.LockHeld:
+        print("table-pair: another pair is already running", file=sys.stderr)
+        return 2
+
+
+def launch_pair(cache: Path, mailbox: Path) -> int:
+    if tauri("build", "--debug", "--no-bundle", "--features", "iroh") != 0:
+        return checks.CANNOT_RUN
+
+    signals = [mailbox / name for name in ("invite", "invite.tmp", "guest-ready")]
+    for signal in signals:
+        signal.unlink(missing_ok=True)
+
+    env = {**os.environ, "BERYL_CACHE": str(cache)}
+    env.pop("BERYL_SMOKE", None)
+    apps: list[subprocess.Popen[bytes]] = []
+    try:
+        for role in ("host", "guest"):
+            apps.append(
+                subprocess.Popen(
+                    [str(BINARY)],
+                    env={**env, "BERYL_PROFILE": role, "BERYL_TABLE_PAIR": role},
+                    stdin=subprocess.DEVNULL,
+                )
+            )
+        while True:
+            statuses = [app.poll() for app in apps]
+            for status in statuses:
+                if status:
+                    return status
+            if all(status == 0 for status in statuses):
+                break
+            time.sleep(0.1)
+    finally:
+        for app in apps:
+            if app.poll() is None:
+                system.terminate(app)
+        for app in apps:
+            app.wait()
+        for signal in signals:
+            signal.unlink(missing_ok=True)
+    return 0
 
 
 def smoke(args: argparse.Namespace) -> int:
@@ -116,6 +172,9 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser("dev", help="the app with hot reload, in a window (humans)")
     p.add_argument("--window", action="store_true", help="open it even for an agent")
     p.set_defaults(func=dev)
+    sub.add_parser(
+        "table-pair", help="open a host and guest at the same local table (humans)"
+    ).set_defaults(func=table_pair)
     p = sub.add_parser(
         "smoke", help="build and launch the app headless until the UI loads"
     )

@@ -234,6 +234,7 @@ dependencies = [
  "beryl_art",
  "beryl_search",
  "beryl_session",
+ "beryl_table",
  "beryl_table_session",
  "block2",
  "crossbeam-utils",

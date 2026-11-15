@@ -7,6 +7,8 @@ mod bug_reports;
 mod decks;
 mod games;
 mod links;
+#[cfg(all(debug_assertions, desktop))]
+mod pair;
 mod profile;
 mod snapshot;
 mod table_keys;
@@ -85,6 +87,8 @@ async fn app_info(app: tauri::AppHandle) -> AppInfo {
 #[allow(clippy::needless_pass_by_value)] // Tauri passes command arguments by value.
 fn ui_ready(app: tauri::AppHandle) {
     if smoke_seconds().is_none() {
+        #[cfg(all(debug_assertions, desktop))]
+        pair::start(&app);
         return;
     }
     println!("beryl: ui ready");
