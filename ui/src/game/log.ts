@@ -397,6 +397,7 @@ export function logLines(view: PlayerView, names: Names): LogLine[] {
       }
       case "stack":
       case "nowhere":
+      case "merged":
         return;
     }
   };

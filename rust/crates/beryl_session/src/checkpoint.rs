@@ -145,14 +145,17 @@ fn is_default<T: Default + PartialEq>(value: &T) -> bool {
 }
 
 /// A copy exception: the one at `except` among the copy exceptions of the face `face` of the
-/// card named `card`.
+/// card named `card`, or, with no `except`, every ability of that face, as a card under a
+/// merged permanent gives it (CR 731.2a). A checkpoint keeps the permanent's values and not
+/// the cards under it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Exception {
     pub card: String,
     #[serde(default, skip_serializing_if = "is_default")]
     pub face: Face,
-    pub except: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub except: Option<u8>,
 }
 
 impl Exception {
@@ -163,7 +166,7 @@ impl Exception {
             .map(|a| Exception {
                 card: t.def(a.card()).name.to_owned(),
                 face: Face::of(a.face()),
-                except: a.except().get(),
+                except: a.except().map(ExceptIx::get),
             })
             .collect()
     }
@@ -173,13 +176,13 @@ impl Exception {
         let card = game_index(t, &self.card)?;
         let face = self.face.ix();
         let lists = t.def(card).faces.get(usize::from(face.get()));
-        if lists.is_none_or(|f| usize::from(self.except) >= f.excepts.len()) {
-            return Err(format!(
-                "{} lists no copy exception {}",
-                self.card, self.except
-            ));
+        let Some(except) = self.except else {
+            return Ok(Addition::every_ability(card, face));
+        };
+        if lists.is_none_or(|f| usize::from(except) >= f.excepts.len()) {
+            return Err(format!("{} lists no copy exception {except}", self.card));
         }
-        Ok(Addition::new(card, face, ExceptIx::new(self.except)))
+        Ok(Addition::new(card, face, ExceptIx::new(except)))
     }
 }
 

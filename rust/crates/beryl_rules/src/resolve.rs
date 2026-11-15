@@ -12,7 +12,7 @@
 //! state itself.
 
 use crate::bitboard::Bitboard;
-use crate::card::{Ability, AbilityKind, CastingOption};
+use crate::card::{Ability, AbilityKind, CastingOption, Face};
 use crate::cast::{self, entry_ability};
 use crate::chance;
 use crate::decision::{Answers, Choice, Decision, Outcome, StallReason};
@@ -391,11 +391,18 @@ fn body<L: Layout>(
         legal_targets(s, t, entry, ability)
     });
     let spell = entry.spell();
-    if ability.is_some() && !entry.targets.is_empty() && legal.is_empty() {
+    let mutating = spell.is_some() && mutating(face, entry);
+    if mutating && legal.is_empty() {
+        // CR 702.140b: "As a mutating creature spell begins resolving, if its target is
+        // illegal, it ceases to be a mutating creature spell and continues resolving as a
+        // creature spell and will be put onto the battlefield under the control of the spell's
+        // controller."
+        enter_battlefield(s, t, sink, entry)?;
+    } else if ability.is_some() && !entry.targets.is_empty() && legal.is_empty() {
         if spell.is_some() {
             cast::leave_stack(s, t, sink, entry, Zone::Graveyard, Reason::Resolve)?;
         }
-    } else if spell.is_some() && !face.is_instant_or_sorcery() {
+    } else if spell.is_some() && !face.is_instant_or_sorcery() && !mutating {
         // An Aura's spell ability, which says what it targets, does its work by entering.
         if let Some(ability) = ability {
             crate::coverage::hit(ability);
@@ -453,6 +460,16 @@ fn body<L: Layout>(
     Ok(None)
 }
 
+/// Whether `entry`, a spell of the face `face`, is a mutating creature spell: one cast for
+/// its mutate cost ([CR 702.140a]): "If you do, it becomes a mutating creature spell". Its
+/// spell ability merges it with its target as it resolves ([`beryl_card::Effect::Mutate`]).
+///
+/// [CR 702.140a]: https://yawgatog.com/resources/magic-rules/#R702140a
+fn mutating<L: Layout>(face: &Face, entry: &StackEntry<L>) -> bool {
+    !face.casting.is_empty()
+        && (entry.costs().paid(face)).any(|o| matches!(o, CastingOption::Mutate { .. }))
+}
+
 /// A permanent spell resolves, entering with what it was cast with: kicked, its offspring
 /// cost or impending cost paid, and X.
 ///
@@ -476,12 +493,18 @@ fn enter_battlefield<L: Layout>(
         controller: Some(entry.controller()),
         face: entry.face(),
         x: entry.x,
-        attach: entry
-            .targets
-            .as_slice()
-            .first()
-            .and_then(|target| target.as_object())
-            .map(|r| r.slot),
+        // An Aura spell's target; a mutating creature spell entering as a creature attaches
+        // to nothing.
+        attach: if mutating(face, entry) {
+            None
+        } else {
+            entry
+                .targets
+                .as_slice()
+                .first()
+                .and_then(|target| target.as_object())
+                .map(|r| r.slot)
+        },
         ..Entry::default()
     };
     for option in entry.costs().paid(face) {

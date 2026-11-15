@@ -248,6 +248,12 @@ impl Ctx {
             Effect::Scry { player, count } => {
                 vec![self.clause(player, ("scry", "scries"), |c| c.amount(count))]
             }
+            // The reminder text of mutate, which no card prints as a line of its own.
+            Effect::Mutate(objects) => vec![format!(
+                "put this spell over or under {}. They mutate into the creature on top plus all \
+                 abilities from under it",
+                self.objects(objects)
+            )],
             Effect::Explore(objects) => {
                 let plural = self.is_plural(objects);
                 let who = self.objects(objects);

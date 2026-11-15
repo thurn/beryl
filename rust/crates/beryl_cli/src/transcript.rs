@@ -388,6 +388,7 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
                     CastingOption::Evoke { .. } => " for evoke",
                     CastingOption::Alternative { .. } => " for its alternative cost",
                     CastingOption::Escape { .. } => " with escape",
+                    CastingOption::Mutate { .. } => " for mutate",
                 });
             }
             text

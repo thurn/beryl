@@ -253,10 +253,12 @@ impl<L: Layout> Policy<'_, L> {
         let mut evoked = false;
         for option in costs.paid(f) {
             v += match option {
-                // Escape: a card back from the graveyard, for three others there.
+                // Escape: a card back from the graveyard, for three others there. Mutate: a
+                // cheaper creature whose mutate ability triggers, on one already there.
                 CastingOption::Kicker { .. }
                 | CastingOption::Offspring(_)
-                | CastingOption::Escape { .. } => 10,
+                | CastingOption::Escape { .. }
+                | CastingOption::Mutate { .. } => 10,
                 CastingOption::Impending { .. } | CastingOption::Overload { .. } => -10,
                 // Evoke trades the permanent for its enters ability
                 // ([CR 702.74a](https://yawgatog.com/resources/magic-rules/#R70274a)):

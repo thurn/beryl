@@ -338,6 +338,15 @@ pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
             no: "BOTTOM",
             ..NONE
         },
+        // Not seen in Arena: no recording shows a player mutating their own creature. Built as
+        // the top-or-bottom choice is, under the mutating card's name.
+        Purpose::Mutate => Wording {
+            title: "{source}",
+            unnamed: "Over or Under?",
+            yes: "OVER",
+            no: "UNDER",
+            ..NONE
+        },
         // "Explore", over "Drag the card to put it on top of your library or into your
         // graveyard.", its piles "Library" and "Graveyard" (`RwKoGGUmw2k 23:00.5`,
         // `gIhJjyoJ0_M 27:44.0`).
@@ -655,7 +664,7 @@ impl Holes<'_> {
                         Some(Zone::Library) => " from your library",
                         Some(Zone::Exile) => " from your exile",
                         Some(Zone::Stack) => " from your stack",
-                        Some(Zone::Battlefield | Zone::Nowhere) | None => "",
+                        Some(Zone::Battlefield | Zone::Nowhere | Zone::Merged) | None => "",
                     };
                     out.push_str(zone);
                 }

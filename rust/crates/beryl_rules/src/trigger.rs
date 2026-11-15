@@ -123,7 +123,7 @@ pub(crate) fn match_event<L: Layout>(
         // those that work away from a face of the battlefield's definitions.
         if t.listens_away().intersects(mask) {
             elsewhere::match_away(s, t, k, e)?;
-            if t.can(Capability::GivesTriggers) {
+            if t.can(Capability::GivesTriggers) || t.can(Capability::Merges) {
                 elsewhere::match_given(s, t, k, e)?;
             }
         }
@@ -261,6 +261,7 @@ fn fires<L: Layout>(
             Some(info(None, player, 0))
         }
         (TriggerEvent::BecomesTarget, &Event::Targeted { object, controller })
+        | (TriggerEvent::Mutates, &Event::Mutated { object, controller })
             if whose(controller) && about(object) =>
         {
             Some(info(Some(object), controller, 0))
@@ -355,8 +356,11 @@ pub(crate) fn match_look_back<L: Layout>(
     if t.listens_away().intersects(mask) {
         elsewhere::look_back_away(s, t, leaving.clone())?;
     }
+    // In a game with mutate, a card under a merged permanent may listen where no permanent's
+    // face does.
+    let merges = t.can(Capability::Merges);
     if !t.listens_any().intersects(mask)
-        || !s.listening().unwrap_or(t.listens_any()).intersects(mask)
+        || (!merges && !s.listening().unwrap_or(t.listens_any()).intersects(mask))
     {
         return Ok(());
     }
@@ -416,6 +420,9 @@ pub(crate) fn match_look_back<L: Layout>(
                     )?;
                 }
             }
+        }
+        if merges {
+            elsewhere::look_back_merged(s, t, left, to)?;
         }
         if s.triggers().len() > waiting {
             s.record_last_known(left)?;

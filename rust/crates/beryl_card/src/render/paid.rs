@@ -20,6 +20,7 @@ impl Ctx {
             CastingKind::Overload => "overload",
             CastingKind::Evoke => "evoke",
             CastingKind::Alternative => "alternative",
+            CastingKind::Mutate => "mutate",
             CastingKind::Escape => {
                 return if paid {
                     format!("{it} escaped")

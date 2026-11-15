@@ -257,6 +257,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::ReturnTransformed(_)
         | Effect::PutIntoLibrary { .. }
         | Effect::Explore(_)
+        | Effect::Mutate(_)
         | Effect::DealDamage { .. }
         | Effect::PreventDamage { .. }
         | Effect::AddCounters { .. }

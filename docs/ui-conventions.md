@@ -541,6 +541,11 @@ recordings do not show them.
   and otherwise leaves a game in place. The phone keeps dark system chrome in
   either system appearance. The bottom actions clear the gesture bar, and the
   seed and game buttons rise above the numeric keyboard.
+- **Mutating over or under.** As a mutating creature spell resolves, its
+  controller is asked as a top-or-bottom choice is, under the spell's name:
+  "Over or Under?" with OVER and UNDER. The recordings show only the opponent
+  mutating, never the choice. A card under a merged permanent is in the merged
+  zone and is not drawn on the table.
 
 ## Verbs
 

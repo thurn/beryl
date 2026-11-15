@@ -99,6 +99,16 @@ pub enum Memo<L: Layout = Small> {
     ///
     /// [CR 702.26a]: https://yawgatog.com/resources/magic-rules/#R70226a
     PhasedOutUnder(Seat),
+    /// The card is one of the cards of the merged permanent in this slot, other than the
+    /// card in the permanent's own slot ([CR 731.2]): "That permanent becomes a merged
+    /// permanent represented by the card or copy that represented that object in addition to
+    /// any other components that were representing it." It waits in [`Zone::Merged`], in no
+    /// battlefield list, and goes where the permanent goes as it leaves the battlefield
+    /// ([`State::pile`]). Which card is on top is the permanent's copiable values' to say
+    /// ([`crate::query::Copiable::merged_with`]).
+    ///
+    /// [CR 731.2]: https://yawgatog.com/resources/magic-rules/#R7312
+    PartOf(L::Slot),
 }
 
 impl<L: Layout> Memo<L> {
@@ -114,6 +124,7 @@ impl<L: Layout> Memo<L> {
             Memo::Really(_) => Kinds::REALLY,
             Memo::PutOntoBattlefieldWith(_) => Kinds::PUT_WITH,
             Memo::PhasedOutUnder(_) => Kinds::PHASED_OUT_UNDER,
+            Memo::PartOf(_) => Kinds::PART_OF,
         }
     }
 
@@ -129,6 +140,7 @@ impl<L: Layout> Memo<L> {
             | Memo::PutOntoBattlefieldWith(_)
             | Memo::PhasedOutUnder(_) => Zone::Battlefield,
             Memo::ExiledWith(_) | Memo::ExiledUntil(_) => Zone::Exile,
+            Memo::PartOf(_) => Zone::Merged,
         }
     }
 
@@ -151,9 +163,10 @@ impl<L: Layout> Memo<L> {
             | Memo::Chosen(_)
             | Memo::Really(_)
             | Memo::PhasedOutUnder(_) => None,
-            Memo::ExiledWith(by) | Memo::ExiledUntil(by) | Memo::PutOntoBattlefieldWith(by) => {
-                Some(by)
-            }
+            Memo::ExiledWith(by)
+            | Memo::ExiledUntil(by)
+            | Memo::PutOntoBattlefieldWith(by)
+            | Memo::PartOf(by) => Some(by),
         }
     }
 
@@ -170,6 +183,8 @@ impl<L: Layout> Memo<L> {
             Memo::ExiledWith(by) | Memo::PutOntoBattlefieldWith(by) => zone(by) != Zone::Nowhere,
             // An object exiled "until" its exiler leaves returns as it leaves (CR 610.3).
             Memo::ExiledUntil(by) => zone(by) == Zone::Battlefield,
+            // A card is part of a permanent only while it is on the battlefield.
+            Memo::PartOf(of) => zone(of) == Zone::Battlefield,
         }
     }
 
@@ -184,6 +199,7 @@ impl<L: Layout> Memo<L> {
             Memo::Really(card) => Memo::Really(crate::relayout::card(card)),
             Memo::PutOntoBattlefieldWith(by) => Memo::PutOntoBattlefieldWith(slot(by)),
             Memo::PhasedOutUnder(player) => Memo::PhasedOutUnder(player),
+            Memo::PartOf(of) => Memo::PartOf(slot(of)),
         }
     }
 
@@ -209,8 +225,9 @@ impl Kinds {
     const REALLY: u16 = 1 << 12;
     const PUT_WITH: u16 = 1 << 13;
     const PHASED_OUT_UNDER: u16 = 1 << 14;
+    const PART_OF: u16 = 1 << 15;
     /// The kinds whose memo names a slot ([`Memo::names`]).
-    const NAMING: u16 = Kinds::EXILED_WITH | Kinds::EXILED_UNTIL | Kinds::PUT_WITH;
+    const NAMING: u16 = Kinds::EXILED_WITH | Kinds::EXILED_UNTIL | Kinds::PUT_WITH | Kinds::PART_OF;
     /// The kinds whose memo ends as a new object arrives in the slot it names
     /// ([`State::forget_links_to`]).
     const LINKS: u16 = Kinds::EXILED_WITH | Kinds::PUT_WITH;
@@ -535,6 +552,18 @@ impl<L: Layout> State<L> {
                 Memo::Really(card) if e.slot == slot => Some(card),
                 _ => None,
             })
+    }
+
+    /// The cards of the merged permanent in `slot` other than the one in its own slot, in the
+    /// order they merged ([`Memo::PartOf`]): none for any other permanent. With no merged permanent in the
+    /// game, one AND.
+    #[inline]
+    pub fn pile(&self, slot: L::Slot) -> impl Iterator<Item = L::Slot> + '_ {
+        self.memos
+            .of(Kinds::PART_OF)
+            .iter()
+            .filter(move |e| e.memo == Memo::PartOf(slot))
+            .map(|e| e.slot)
     }
 
     /// The cards exiled with the object in `source` by an ability linked to another of its

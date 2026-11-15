@@ -1,7 +1,7 @@
 //! Trigger matching off the main path of [`super::match_event`], out of line: the abilities
 //! of objects outside the battlefield that work where they are, as events happen and as
-//! permanents leave, and the triggered abilities that copy exceptions give the permanents that
-//! are copies.
+//! permanents leave, the triggered abilities that copy exceptions give the permanents that
+//! are copies, and those of the cards under a merged permanent.
 
 use super::{ability, about, away, enqueue, fires, times};
 use crate::card::FaceAbility;
@@ -19,11 +19,18 @@ use beryl_kernel::listener;
 /// an ability, so the table's listeners do not hold it. Out of line: only a game with a card
 /// whose exception gives one looks ([`Capability::GivesTriggers`]).
 ///
+/// It matches the triggered abilities of the faces of the cards under a merged permanent too
+/// ([`Copiable::merged_faces`]), from the table's listeners of those faces ([CR 702.140e]): "A
+/// mutated permanent has all abilities of each card and token that represents it." Only a game
+/// with mutate has them ([`Capability::Merges`]).
+///
 /// What a permanent lost is kept by the index of its face's own abilities
 /// ([`State::has_ability`]), which has no place for these, so an effect that removes abilities
-/// does not remove them yet: no card of the pool removes abilities from a copy.
+/// does not remove them yet: no card of the pool removes abilities from a copy or a merged
+/// permanent.
 ///
 /// [CR 707.9a]: https://yawgatog.com/resources/magic-rules/#R7079a
+/// [CR 702.140e]: https://yawgatog.com/resources/magic-rules/#R702140e
 #[cold]
 #[inline(never)]
 pub(super) fn match_given<L: Layout>(
@@ -53,6 +60,78 @@ pub(super) fn match_given<L: Layout>(
                 let given = TriggeredAbility::of(FaceAbility::Grant(grant));
                 for _ in 0..times(e) {
                     enqueue(s, t, Some(source), card, face, given, controller, info)?;
+                }
+            }
+        }
+        for (card, face) in values.merged_faces(t) {
+            for l in t.listeners(card, face, k) {
+                if let Some(info) = fires(s, t, l.trigger, Some(slot), controller, e) {
+                    let ability = TriggeredAbility::own(l.ability);
+                    for _ in 0..times(e) {
+                        enqueue(s, t, Some(source), card, face, ability, controller, info)?;
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// [`super::match_look_back`] for the triggered abilities of the cards under a merged
+/// permanent ([`Copiable::merged_faces`]), as the permanent `left` leaves for `to`: a card
+/// under it that says "when this creature dies" sees the permanent die, once, however many
+/// cards it is made of ([CR 731.3]): "If a merged permanent leaves the battlefield, one
+/// permanent leaves the battlefield". As the permanent is now, just before it leaves (CR 603.10a).
+/// Out of line: only a game with mutate looks ([`Capability::Merges`]).
+///
+/// [CR 731.3]: https://yawgatog.com/resources/magic-rules/#R7313
+#[cold]
+#[inline(never)]
+pub(super) fn look_back_merged<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    left: L::Slot,
+    to: Zone,
+) -> Result<(), Full> {
+    let object = s.object_ref(left);
+    for i in 0..s.battlefield().len() {
+        let slot = s.battlefield()[i];
+        if !s.object(slot).flags().has(Flag::Copy) {
+            continue;
+        }
+        let values = s.copiable(slot);
+        let source = s.object_ref(slot);
+        let controller = s.controller(slot);
+        let words = s.words_of(slot);
+        // CR 700.4: dying is going to a graveyard.
+        let kinds = [
+            (EventKind::Dies, to == Zone::Graveyard),
+            (EventKind::Leaves, true),
+        ];
+        for (card, face) in values.merged_faces(t) {
+            for (kind, happened) in kinds {
+                if !happened {
+                    continue;
+                }
+                for l in t.listeners(card, face, kind) {
+                    if !about(
+                        s,
+                        t,
+                        l.trigger.subject,
+                        Some(slot),
+                        controller,
+                        &words,
+                        object,
+                    ) {
+                        continue;
+                    }
+                    let info = TriggerInfo {
+                        object: Some(object),
+                        player: s.controller(left),
+                        amount: 0,
+                    };
+                    let ability = TriggeredAbility::own(l.ability);
+                    enqueue(s, t, Some(source), card, face, ability, controller, info)?;
                 }
             }
         }

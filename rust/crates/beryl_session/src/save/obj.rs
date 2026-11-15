@@ -192,6 +192,8 @@ pub enum ZoneName {
     Exile,
     Stack,
     Nowhere,
+    /// Part of a merged permanent (CR 731.2).
+    Merged,
 }
 
 impl From<Zone> for ZoneName {
@@ -204,6 +206,7 @@ impl From<Zone> for ZoneName {
             Zone::Exile => ZoneName::Exile,
             Zone::Stack => ZoneName::Stack,
             Zone::Nowhere => ZoneName::Nowhere,
+            Zone::Merged => ZoneName::Merged,
         }
     }
 }

@@ -327,6 +327,7 @@ fn of_a_spells_characteristics(filter: Filter) -> bool {
         | Filter::SubtypeWord(_)
         | Filter::ColorWords(_) => true,
         Filter::Whose(_)
+        | Filter::Owned(_)
         | Filter::Tapped
         | Filter::Token
         | Filter::ManaValueAtMost(_)

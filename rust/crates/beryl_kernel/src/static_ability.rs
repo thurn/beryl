@@ -400,6 +400,7 @@ pub fn read_by_the_layers(filter: Filter) -> bool {
         | Filter::SubtypeWord(_)
         | Filter::ColorWords(_)
         | Filter::Whose(_)
+        | Filter::Owned(_)
         | Filter::Tapped
         | Filter::Token
         | Filter::ManaValueAtMost(_)

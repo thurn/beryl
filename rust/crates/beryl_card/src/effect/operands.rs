@@ -151,6 +151,7 @@ impl Effect {
             | Effect::GainFlashback(objects)
             | Effect::PutIntoLibrary { objects, .. }
             | Effect::Explore(objects)
+            | Effect::Mutate(objects)
             | Effect::Modify { objects, .. }
             | Effect::ChangeText { objects, .. } => Operands::of_objects(objects),
             // The player who will control the permanents.

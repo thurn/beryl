@@ -124,6 +124,7 @@ impl Evaluate for Filter {
             // CR 108.4a: a card that is no permanent or spell has no controller, and "its
             // owner" is used instead, which is what the query answers.
             Filter::Whose(players) => is_for(players, s.controller(slot), you),
+            Filter::Owned(players) => is_for(players, o.owner, you),
             Filter::Tapped => o.flags.has(Flag::Tapped),
             Filter::Token => o.is_token(),
             Filter::ManaValueAtMost(n) => s.mana_value(t, slot) <= n,
@@ -187,6 +188,7 @@ pub(crate) fn passes_so_far<L: Layout>(
         // The rest read no characteristic an effect here changes.
         Filter::Any
         | Filter::Whose(_)
+        | Filter::Owned(_)
         | Filter::Tapped
         | Filter::Token
         | Filter::ManaValueAtMost(_)

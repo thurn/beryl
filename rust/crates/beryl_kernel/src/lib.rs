@@ -52,6 +52,7 @@
 //! | change a permanent's status, damage or counters | [`State::set_tapped`], [`State::set_summoning_sick`], [`State::reset_permanents_for_turn`], [`State::turn_face_up`], [`State::mark_damage`], [`State::clear_damage`], [`State::add_counters`], [`State::remove_counters`], [`State::order_timestamps`] | a face with its timestamp and who knows it; permanents reordered keep the timestamps they had among them; `derived_dirty` where the kernel can tell the layers read the field |
 //! | phase permanents out and in (CR 702.26) | [`State::phase_out`], [`State::phase_in`] ([`phasing`]) | the zone, incarnation and stores untouched; the battlefield queue, the owner's battlefield bitboard and the set of phased-out permanents; what is attached phases with its permanent, and what phased out alone phases in unattached once its permanent left; combat references to it end; who it phases in for, where that is not its base controller ([`memos::Memo::PhasedOutUnder`]); `derived_dirty` |
 //! | put a spell on the stack, make a token, have a permanent enter | [`State::become_spell`], [`State::make_token`], [`State::arrive`] with a [`mutate::Arrival`], [`State::remember`] | what a permanent enters with (tapped, attacking, its face, controller, counters and what it is attached to) is set as one change, before anything reads it |
+//! | merge a mutating creature spell with a permanent (CR 702.140c, CR 731) | [`State::merge`] | the permanent stays the object it was; the card waits in [`beryl_card::Zone::Merged`] with a [`memos::Memo::PartOf`] naming it; the permanent's copiable values, kept by a copy effect, are its top card's face with every ability of each other card ([`additions::Addition::every_ability`]); its cards go with it as [`State::move_object`] takes it off the battlefield (CR 731.3) |
 //! | declare and end combat | [`State::declare_attacker`], [`State::choose_attacked`], [`State::forget_attacked`], [`State::declare_blocker`], [`State::block`], [`State::mark_struck_first`], [`State::remove_from_combat`], [`State::end_combat`] | the combat flags and the combat reference change together; nothing stays related to a permanent removed from combat |
 //! | show or hide a card | [`State::reveal`], [`State::look`], [`State::forget`], and for a paused resolution [`State::keep_seen`] | each player's knowledge; the identity is settled first |
 //! | store the layers' results | [`State::rederive`], which lends the cache to the one function that fills it ([`derive::Rederive`]) | the derived table by battlefield index, the listening and replacing masks, the rules the static abilities change for each player, the layer inputs the static abilities read ([`static_ability::Inputs`]), whether an effect removed abilities (for [`State::has_ability`]) or changed land types (for [`State::makes_card_mana`] and [`State::intrinsic_mana`]), what each face-down permanent's controller sees, `derived_dirty` cleared |
@@ -167,6 +168,7 @@
 //! | `ObjectFlags` `KICKED`, `OFFSPRING`, `IMPENDING`, `EVOKED` | Memos: the costs paid as the object was cast ([`memos::Memo::Paid`]), one entry holding the set of them, with a kind in the store's index for each kind of casting option of the vocabulary's list | by-w8gv.7.6, built |
 //! | `EXILED_UNTIL`, `EXILED_WITH`, `Object::linked`, `State::link`, `State::forget_links_to` | Memos: a memo of the exiled card naming the slot of what exiled it ([`memos::Memo::ExiledWith`], [`memos::Memo::ExiledUntil`]; "Duration and expiry" says how the first outlives that object), read by [`State::exiled_with`] and [`State::exiled_until`] | by-w8gv.7.7, built |
 //! | a field naming the creature an Aura put onto the battlefield | Memos: a memo of the creature naming the slot of the Aura ([`memos::Memo::PutOntoBattlefieldWith`]), which outlives the Aura as [`memos::Memo::ExiledWith`] does, read by [`State::put_onto_battlefield_with`] | by-bajq.8.2, built |
+//! | the cards of a merged permanent (CR 731.2) | Memos: a memo of each card other than the one in the permanent's slot naming the permanent ([`memos::Memo::PartOf`]), the card in [`beryl_card::Zone::Merged`], read by [`State::pile`] | built |
 //! | `LOYALTY_ACTIVATED`, `ENTERED_THIS_TURN` | Trackers, keyed by permanent: a kind of [`trackers::Tracker`] each, noted with [`State::track`] and read with [`State::tracked`] | by-w8gv.7.8, built |
 //! | [`state::Counters`]' long-tail pair (`other_kind`, `other`) | the counters table ([`counters::CounterTable`]), a row for each kind on each object, beside the three kinds the rules themselves read, which stay fields of the object. The kinds are the vocabulary's list (`beryl_card::counter_kinds`), and [`State::add_counters`], [`State::remove_counters`] and [`State::counters_of`] take any of them | by-w8gv.7.9, built |
 //! | `Flag::OneOne` | Effects: a copy effect on the token ([`effects::Payload::Copy`]) holding its copiable values with their exceptions ([`additions::Addition`], CR 707.9b), behind [`state::Flag::Copy`] so that [`State::copiable`] of any other object is one bit test. The zone move carries a token's copy effect to its next incarnation ([`effects::copy`]). A card under a copy effect, such as one that entered as a copy ([`State::enter_as_copy`]) or became one ([`State::become_copy`]), remembers the card it really is ([`memos::Memo::Really`]), which [`State::card_really_is`] and [`State::definition_name`] read and the zone move makes it again | by-bajq.6.1 to 6.3, built |
@@ -596,7 +598,8 @@
 //! | The rules ask | Query |
 //! | --- | --- |
 //! | the card that represents an object: nothing for a token (CR 111.1, 111.6) | [`State::card_behind`] |
-//! | what it is before any other effect, and what a copy of it would be (CR 707.2) | [`State::copiable`], a [`Copiable`] |
+//! | what it is before any other effect, and what a copy of it would be (CR 707.2); for a merged permanent, its top card's face and every ability of its other cards (CR 731.2a, [`Copiable::merged_faces`]) | [`State::copiable`], a [`Copiable`] |
+//! | the other cards of a merged permanent (CR 731.2) | [`State::pile`] |
 //! | the definition and face it has the values of, for what the card table keeps per definition and no copy exception changes | [`State::definition`], a [`definition::Definition`]; its power and toughness before the other layers, [`State::copiable_pt`] |
 //! | its mana value: a spell's with its X (CR 202.3e), a transformed permanent's front face's and a copied back face's 0 (CR 712.6d) | [`State::mana_value`] |
 //! | who controls it: a permanent's layer result, a spell's caster, elsewhere the owner (CR 108.4a) | [`State::controller`] |
@@ -759,6 +762,7 @@ pub mod layout;
 pub mod listener;
 pub mod mana_memory;
 pub mod memos;
+mod merge;
 pub mod mutate;
 mod new;
 mod object;

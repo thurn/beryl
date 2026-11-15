@@ -375,6 +375,11 @@ class Exporter:
             if costs != 1 << overload:
                 raise Unsupported(f"casting option {costs:#b} of {card}")
             name, costs = f"{card} with overload", 0
+        mutate = self.cards.mutate_bit(card)
+        if mutate is not None and costs >> mutate & 1:
+            if costs != 1 << mutate:
+                raise Unsupported(f"casting option {costs:#b} of {card}")
+            name, costs = f"{card} using Mutate", 0
         self.prepare(who, p, starts=True)
         self.pay(who, p, None)
         # XMage's stack clause asks for a spell anywhere on the stack, so a cast in response to
@@ -658,6 +663,10 @@ class Exporter:
             self.emit(f"setChoice({who}, {java_string(COLORS[cast(int, pick['n'])])});")
         elif action.get("purpose", p.purpose) == "creature-type" and what == "Named":
             self.emit(f"setChoice({who}, {java_string(creature_type(pick['name']))});")
+        elif action.get("purpose", p.purpose) == "mutate" and what in ("Yes", "No"):
+            # XMage asks "UNDER or OVER" (`PermanentImpl.mutate`), yes for under; Beryl's yes
+            # is over.
+            self.emit(f"setChoice({who}, {'true' if what == 'No' else 'false'});")
         elif action.get("purpose", p.purpose) == "replace":
             # Dredge's yes or no (`chooseUse`); mandatory effects' order by source name.
             yes = "false" if card is None else "true"

@@ -135,12 +135,20 @@ impl<L: Layout> State<L> {
     /// ([`Flag::Copy`]): `printed`, the results its definition's face gives, with the power,
     /// toughness, colors and subtypes of its copiable values, which hold its exceptions
     /// ([`State::copiable_pt`], [`State::copiable_colors`], [`State::copy_subtypes`], [`State::copy_supertypes`]), and the
-    /// activated abilities they give ([`State::copy_grants`]). A permanent with no copy effect
+    /// activated abilities they give ([`State::copy_grants`]), with the keywords of the faces
+    /// of a merged permanent's other cards ([`Copiable::merged_faces`]). A permanent with no
+    /// copy effect
     /// keeps `printed`, so the layers test the flag once and come here only for a copy.
     #[cold]
     #[inline(never)]
     pub fn copy_layer_one(&self, t: &GameTable, slot: L::Slot, printed: Derived<L>) -> Derived<L> {
         let (power, toughness) = self.excepted_pt(t, slot);
+        // CR 702.140e: "A mutated permanent has all abilities of each card and token that
+        // represents it", its keywords among them.
+        let keywords = (self.copiable(slot).merged_faces(t))
+            .fold(printed.keywords, |k, (card, face)| {
+                k.union(t.def(card).face(face).keywords)
+            });
         Derived {
             power,
             toughness,
@@ -148,6 +156,7 @@ impl<L: Layout> State<L> {
             subtypes: self.copy_subtypes(t, slot),
             supertypes: self.copy_supertypes(t, slot),
             granted: self.copy_grants(t, slot),
+            keywords,
             ..printed
         }
     }

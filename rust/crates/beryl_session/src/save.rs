@@ -605,6 +605,7 @@ pub enum CastingName {
     ///
     /// [`Castings::ESCAPE`]: beryl_engine::card::Castings::ESCAPE
     Escape,
+    Mutate,
 }
 
 impl From<CastingOption> for CastingName {
@@ -617,6 +618,7 @@ impl From<CastingOption> for CastingName {
             CastingOption::Evoke { .. } => CastingName::Evoke,
             CastingOption::Alternative { .. } => CastingName::Alternative,
             CastingOption::Escape { .. } => CastingName::Escape,
+            CastingOption::Mutate { .. } => CastingName::Mutate,
         }
     }
 }

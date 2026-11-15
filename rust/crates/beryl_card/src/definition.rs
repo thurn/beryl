@@ -140,23 +140,26 @@ impl Face {
     }
 
     /// The spell ability of an instant or sorcery, or the targeting ability of an Aura
-    /// spell: what the spell targets and does as it resolves.
+    /// spell: what the spell targets and does as it resolves. An ability that only a spell
+    /// cast with one of its options has ([`CastingOption::ability`]) is not it.
     pub fn spell_ability(&self) -> Option<&'static Ability> {
-        self.abilities
-            .iter()
-            .find(|a| a.kind() == AbilityKind::Spell)
+        let optional = |index: usize| {
+            self.casting
+                .iter()
+                .any(|o| o.ability().is_some_and(|a| a.index() == index))
+        };
+        (self.abilities.iter().enumerate())
+            .find(|&(index, a)| a.kind() == AbilityKind::Spell && !optional(index))
+            .map(|(_, a)| a)
     }
 
     /// The spell ability of this face cast with the options `costs`: its overloaded one when
-    /// its overload cost is paid ([`CastingOption::Overload`]), else
-    /// [`Face::spell_ability`].
+    /// its overload cost is paid ([`CastingOption::Overload`]), its mutating one when its
+    /// mutate cost is ([`CastingOption::Mutate`]), else [`Face::spell_ability`].
     pub fn spell_ability_with(&self, costs: Castings) -> Option<&'static Ability> {
         costs
             .paid(self)
-            .find_map(|o| match o {
-                CastingOption::Overload { ability, .. } => Some(&self.abilities[ability.index()]),
-                _ => None,
-            })
+            .find_map(|o| o.ability().map(|ability| &self.abilities[ability.index()]))
             .or_else(|| self.spell_ability())
     }
 

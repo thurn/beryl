@@ -459,6 +459,14 @@ pub enum CastingOption {
         cost: ManaCost,
         parts: &'static [CostPart],
     },
+    /// Mutate ([CR 702.140a]): "'Mutate [cost]' means 'You may pay [cost] rather than pay this
+    /// spell's mana cost. If you do, it becomes a mutating creature spell and targets a
+    /// non-Human creature with the same owner as this spell.'" The mutating creature spell's target and what it does as it resolves are the
+    /// face's spell ability at index `ability` ([`crate::Effect::Mutate`]), which the face
+    /// lists after its own and which only a spell cast for its mutate cost has.
+    ///
+    /// [CR 702.140a]: https://yawgatog.com/resources/magic-rules/#R702140a
+    Mutate { cost: ManaCost, ability: AbilityIx },
 }
 
 /// The part of a granted escape cost that is not mana ([`CastingOption::Escape`]): "exile
@@ -490,6 +498,7 @@ pub enum CastingKind {
     ///
     /// [CR 702.138b]: https://yawgatog.com/resources/magic-rules/#R702138b
     Escape,
+    Mutate,
 }
 
 /// A set of [`CastingKind`]s: the keywords whose costs were paid for one spell, as the
@@ -535,6 +544,26 @@ impl CastingOption {
         }
     }
 
+    /// "Mutate [cost]", whose mutating creature spell's ability is the face's ability at
+    /// `ability`, counting from 0: [`CastingOption::Mutate`], as a card file writes it.
+    pub const fn mutate(cost: ManaCost, ability: u8) -> CastingOption {
+        CastingOption::Mutate {
+            cost,
+            ability: AbilityIx::new(ability),
+        }
+    }
+
+    /// The face's ability that only a spell cast with this option paid has: an overloaded
+    /// spell's changed text, or a mutating creature spell's target and merge.
+    pub const fn ability(self) -> Option<AbilityIx> {
+        match self {
+            CastingOption::Overload { ability, .. } | CastingOption::Mutate { ability, .. } => {
+                Some(ability)
+            }
+            _ => None,
+        }
+    }
+
     /// Which keyword it is.
     pub const fn kind(self) -> CastingKind {
         match self {
@@ -545,6 +574,7 @@ impl CastingOption {
             CastingOption::Evoke { .. } => CastingKind::Evoke,
             CastingOption::Alternative { .. } => CastingKind::Alternative,
             CastingOption::Escape { .. } => CastingKind::Escape,
+            CastingOption::Mutate { .. } => CastingKind::Mutate,
         }
     }
 
@@ -559,6 +589,7 @@ impl CastingOption {
                 | CastingOption::Evoke { .. }
                 | CastingOption::Alternative { .. }
                 | CastingOption::Escape { .. }
+                | CastingOption::Mutate { .. }
         )
     }
 
@@ -571,7 +602,8 @@ impl CastingOption {
             | CastingOption::Overload { cost, .. }
             | CastingOption::Evoke { cost, .. }
             | CastingOption::Alternative { cost, .. }
-            | CastingOption::Escape { cost, .. } => cost,
+            | CastingOption::Escape { cost, .. }
+            | CastingOption::Mutate { cost, .. } => cost,
         }
     }
 
@@ -584,7 +616,8 @@ impl CastingOption {
             CastingOption::Kicker { .. }
             | CastingOption::Offspring(_)
             | CastingOption::Impending { .. }
-            | CastingOption::Overload { .. } => &[],
+            | CastingOption::Overload { .. }
+            | CastingOption::Mutate { .. } => &[],
         }
     }
 }

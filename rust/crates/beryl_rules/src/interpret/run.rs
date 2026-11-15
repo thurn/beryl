@@ -247,6 +247,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::Mill { player, count } => mill::instruction(self, player, count)?,
             Effect::Scry { player, count } => scry::instruction(self, player, count)?,
             Effect::Explore(objects) => explore::instruction(self, objects)?,
+            Effect::Mutate(objects) => crate::keywords::mutate::instruction(self, objects)?,
             Effect::ManifestDread(players) => manifest_dread::instruction(self, players)?,
             Effect::FlipCoin(players) => coins::instruction(self, players)?,
             Effect::DealDamage { to, amount } => damage::instruction(self, to, amount)?,

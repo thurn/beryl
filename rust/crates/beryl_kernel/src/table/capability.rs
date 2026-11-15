@@ -88,6 +88,11 @@ pub enum Capability {
     /// ability waits or is on the stack keeps what a copy of it takes
     /// ([`crate::last_known::DepartedSpell`]).
     CopiesItself,
+    /// A card has mutate ([`beryl_card::CastingOption::Mutate`]), so a permanent may be made
+    /// of several cards, and has the abilities of the faces of the cards under its top one
+    /// ([`crate::query::Copiable::merged_faces`]), whose triggered abilities trigger matching
+    /// looks for apart (`beryl_rules`' `trigger`).
+    Merges,
     /// A card has a mana ability activated only as an instant ([`crate::table::is_instant_mana`]),
     /// so a priority decision looks for one to offer on its own.
     InstantMana,
@@ -114,6 +119,9 @@ impl Capability {
         });
         if gives_triggers {
             found |= Capability::GivesTriggers.bit();
+        }
+        if (face.casting.iter()).any(|o| matches!(o, beryl_card::CastingOption::Mutate { .. })) {
+            found |= Capability::Merges.bit();
         }
         if face.subtypes.read(&Words::NONE).contains(Subtype::Aura) {
             found |= Capability::ChoosesAsEnters.bit();

@@ -1048,6 +1048,7 @@ fn local(effect: &'static Effect) -> Neighbours<Effect> {
         Effect::ExileLinked(_)
         | Effect::ReturnTransformed(_)
         | Effect::Explore(_)
+        | Effect::Mutate(_)
         | Effect::FlipCoin(_)
         | Effect::AddMana { .. }
         | Effect::ChangeRule { .. }

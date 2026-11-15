@@ -629,7 +629,7 @@ export type Kind = "priority" | "playOrDraw" | "keepOrMulligan" | "triggerOrder"
 
 export type Step = "untap" | "upkeep" | "draw" | "precombatMain" | "beginningOfCombat" | "declareAttackers" | "declareBlockers" | "firstStrikeDamage" | "combatDamage" | "endOfCombat" | "postcombatMain" | "end" | "cleanup";
 
-export type ZoneName = "library" | "hand" | "battlefield" | "graveyard" | "exile" | "stack" | "nowhere" | "sideboard";
+export type ZoneName = "library" | "hand" | "battlefield" | "graveyard" | "exile" | "stack" | "nowhere" | "sideboard" | "merged";
 
 export type Why = "play" | "draw" | "discard" | "destroy" | "sacrifice" | "stateBased" | "exile" | "created" | "return" | "effect" | "cast" | "counter" | "resolve";
 
@@ -1056,7 +1056,7 @@ buttons: Array<PromptButton>,
  */
 body: ShapeBody, };
 
-export type Purpose = "priority" | "target" | "choose" | "discard" | "cleanup" | "put-on-bottom" | "legend-rule" | "look" | "search" | "untap" | "manifest-dread" | "exile-cost" | "combat-damage" | "trigger-order" | "scry" | "arrange" | "put-back" | "may" | "may-search" | "move" | "fateseal" | "top-or-bottom" | "explore" | "unless-pays" | "pay-life" | "x" | "play-or-draw" | "mulligan" | "cast-offer" | "act" | "color" | "creature-type" | "card-name" | "replace-word" | "new-word" | "divide-damage" | "distribute-counters" | "mana" | "crew" | "waterbend" | "delve" | "attack" | "block" | "enter-order" | "replace";
+export type Purpose = "priority" | "target" | "choose" | "discard" | "cleanup" | "put-on-bottom" | "legend-rule" | "look" | "search" | "untap" | "manifest-dread" | "exile-cost" | "combat-damage" | "trigger-order" | "scry" | "arrange" | "put-back" | "may" | "may-search" | "move" | "fateseal" | "top-or-bottom" | "mutate" | "explore" | "unless-pays" | "pay-life" | "x" | "play-or-draw" | "mulligan" | "cast-offer" | "act" | "color" | "creature-type" | "card-name" | "replace-word" | "new-word" | "divide-damage" | "distribute-counters" | "mana" | "crew" | "waterbend" | "delve" | "attack" | "block" | "enter-order" | "replace";
 
 export type ObjectId = number;
 

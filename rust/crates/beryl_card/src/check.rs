@@ -743,7 +743,7 @@ impl Scope<'_> {
 
     const fn filter(self, filter: &Filter) -> Checked {
         match filter {
-            Filter::Whose(players) => self.players(players),
+            Filter::Whose(players) | Filter::Owned(players) => self.players(players),
             Filter::Not(filter) => self.filter(filter),
             Filter::All(filters) | Filter::AnyOf(filters) => self.filters(filters),
             Filter::Any

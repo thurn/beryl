@@ -554,6 +554,8 @@ fn game_event<L: Layout>(t: &GameTable, obs: Observation<'_, L>, e: &Event<L>) -
         Event::Win { player } => GameEvent::Win {
             player: side(player),
         },
-        Event::Targeted { .. } => unreachable!("only trigger matching reads a targeting event"),
+        Event::Targeted { .. } | Event::Mutated { .. } => {
+            unreachable!("only trigger matching reads a targeting or mutating event")
+        }
     }
 }

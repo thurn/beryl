@@ -8,7 +8,14 @@
 //! ([`beryl_card::Face::excepts`]) and its place in that list, never by its values, so a
 //! [`Small`](crate::Small) game keeps one in two bytes and the values stay the vocabulary's.
 //!
+//! A merged permanent's values are made the same way ([CR 702.140e]): "A mutated permanent has
+//! all abilities of each card and token that represents it. Its other characteristics are
+//! derived from the topmost card or token." Its values are its top card's
+//! face, and an addition for each card under it says the permanent has every ability of that
+//! card's face ([`Addition::every_ability`]).
+//!
 //! [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
+//! [CR 702.140e]: https://yawgatog.com/resources/magic-rules/#R702140e
 
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -32,28 +39,60 @@ pub struct Addition<C: CardId> {
 impl<C: CardId> Addition<C> {
     /// The bit of [`Addition::entry`] that says the exception is the back face's.
     const BACK: u8 = 1 << 7;
+    /// The index [`Addition::entry`] holds for an addition that is no exception but every
+    /// ability of the face ([`Addition::every_ability`]).
+    const EVERY: u8 = Addition::<C>::BACK - 1;
 
     /// The exception at `except` of the face `face` of the card at `card`.
     ///
     /// # Panics
     ///
-    /// If `face` is neither the front nor the back face, or `except` is past the 128 the byte
+    /// If `face` is neither the front nor the back face, or `except` is past the 127 the byte
     /// numbers: a face lists a handful.
     #[must_use]
     pub fn new(card: C, face: FaceIx, except: ExceptIx) -> Addition<C> {
         assert!(
-            except.get() < Addition::<C>::BACK,
-            "an exception index past 127"
+            except.get() < Addition::<C>::EVERY,
+            "an exception index past 126"
         );
-        let back = match face {
-            FaceIx::FRONT => 0,
-            FaceIx::BACK => Addition::<C>::BACK,
-            _ => panic!("a copy exception of a face neither front nor back"),
-        };
         Addition {
             card,
-            entry: back | except.get(),
+            entry: Addition::<C>::back(face) | except.get(),
         }
+    }
+
+    /// Every ability of the face `face` of the card at `card`: what a card under a merged
+    /// permanent adds to its values ([CR 702.140e]): "A mutated permanent has all abilities of
+    /// each card and token that represents it." It changes nothing else, so
+    /// [`Addition::changes`] has none.
+    ///
+    /// # Panics
+    ///
+    /// If `face` is neither the front nor the back face.
+    ///
+    /// [CR 702.140e]: https://yawgatog.com/resources/magic-rules/#R702140e
+    #[must_use]
+    pub fn every_ability(card: C, face: FaceIx) -> Addition<C> {
+        Addition {
+            card,
+            entry: Addition::<C>::back(face) | Addition::<C>::EVERY,
+        }
+    }
+
+    /// The bit of [`Addition::entry`] for `face`.
+    fn back(face: FaceIx) -> u8 {
+        match face {
+            FaceIx::FRONT => 0,
+            FaceIx::BACK => Addition::<C>::BACK,
+            _ => panic!("an addition of a face neither front nor back"),
+        }
+    }
+
+    /// Whether it is every ability of its face ([`Addition::every_ability`]) rather than a
+    /// copy exception.
+    #[inline]
+    pub fn is_every_ability(self) -> bool {
+        self.entry & !Addition::<C>::BACK == Addition::<C>::EVERY
     }
 
     /// The card at whose face the exception is listed.
@@ -72,16 +111,21 @@ impl<C: CardId> Addition<C> {
         }
     }
 
-    /// Its index in that face's [`beryl_card::Face::excepts`].
+    /// Its index in that face's [`beryl_card::Face::excepts`]: none for every ability of the
+    /// face ([`Addition::every_ability`]).
     #[inline]
-    pub fn except(self) -> ExceptIx {
-        ExceptIx::new(self.entry & !Addition::<C>::BACK)
+    pub fn except(self) -> Option<ExceptIx> {
+        (!self.is_every_ability()).then(|| ExceptIx::new(self.entry & !Addition::<C>::BACK))
     }
 
-    /// The changes it makes, in the order they apply.
+    /// The changes it makes as an exception, in the order they apply: none for every ability
+    /// of a face, which changes no value but the abilities.
     #[inline]
     pub fn changes(self, t: &GameTable) -> &'static [CopyChange] {
-        t.def(self.card).face(self.face()).excepts[self.except().index()].0
+        match self.except() {
+            Some(except) => t.def(self.card).face(self.face()).excepts[except.index()].0,
+            None => &[],
+        }
     }
 
     /// The addition with its card numbered by another layout.

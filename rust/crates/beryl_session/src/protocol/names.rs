@@ -70,6 +70,9 @@ pub enum ZoneName {
     Stack,
     Nowhere,
     Sideboard,
+    /// Part of a merged permanent, under or over the card in the permanent's own slot
+    /// ([CR 731.2](https://yawgatog.com/resources/magic-rules/#R7312)).
+    Merged,
 }
 
 impl From<Zone> for ZoneName {
@@ -82,6 +85,7 @@ impl From<Zone> for ZoneName {
             Zone::Exile => Self::Exile,
             Zone::Stack => Self::Stack,
             Zone::Nowhere => Self::Nowhere,
+            Zone::Merged => Self::Merged,
         }
     }
 }
@@ -98,6 +102,7 @@ impl TryFrom<ZoneName> for Zone {
             ZoneName::Exile => Self::Exile,
             ZoneName::Stack => Self::Stack,
             ZoneName::Nowhere => Self::Nowhere,
+            ZoneName::Merged => Self::Merged,
             ZoneName::Sideboard => return Err("the engine has no sideboard zone"),
         })
     }

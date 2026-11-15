@@ -244,6 +244,15 @@ purposes! {
     Fateseal = "fateseal" => YesNo,
     /// Whether a card goes on the top (yes) or the bottom of its owner's library.
     TopOrBottom = "top-or-bottom" => YesNo,
+    /// Whether a mutating creature spell goes over (yes) or under the creature it targets
+    /// ([CR 702.140c]): "As a mutating creature spell resolves, if its target is legal, it
+    /// doesn't enter the battlefield. Rather, it merges with the target creature and becomes
+    /// one object represented by more than one card or token (see rule 731, "Merging with
+    /// Permanents"). The spell's controller chooses whether the spell is put on top of the
+    /// creature or on the bottom."
+    ///
+    /// [CR 702.140c]: https://yawgatog.com/resources/magic-rules/#R702140c
+    Mutate = "mutate" => YesNo,
     /// Whether the card an explore revealed goes to the graveyard
     /// ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)): the controller
     /// "may put the revealed card into their graveyard."

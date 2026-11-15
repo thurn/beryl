@@ -63,7 +63,9 @@ pub fn render_face_read(def: &CardDef, face: FaceIx, words: &Words) -> String {
         .casting
         .iter()
         .filter_map(|option| match option {
-            CastingOption::Overload { ability, .. } => Some(ability.index()),
+            CastingOption::Overload { ability, .. } | CastingOption::Mutate { ability, .. } => {
+                Some(ability.index())
+            }
             _ => None,
         })
         .collect();
@@ -203,6 +205,8 @@ fn casting_line(ctx: &mut Ctx, option: CastingOption, first: bool) -> Option<Str
             format!("Impending {counters}\u{2014}{}", mana_text(cost)),
         ),
         CastingOption::Overload { cost, .. } => (false, format!("Overload {}", mana_text(cost))),
+        // CR 702.140a: "Mutate [cost]", the first line of a mutating creature card.
+        CastingOption::Mutate { cost, .. } => (true, format!("Mutate {}", mana_text(cost))),
         CastingOption::Evoke { cost, parts } => {
             let line = if parts.is_empty() {
                 format!("Evoke {}", mana_text(cost))

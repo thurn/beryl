@@ -29,6 +29,8 @@ pub enum EventKind {
     State,
     /// An object becoming the target of a spell or ability ([`crate::event::Event::Targeted`]).
     Targeted,
+    /// A mutating creature spell merging with a creature ([`crate::event::Event::Mutated`]).
+    Mutated,
 }
 
 /// The [`EventKind`]s that a card's triggered abilities listen to, as one 64-bit mask, at

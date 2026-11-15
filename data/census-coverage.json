@@ -32,6 +32,7 @@
   "keyword:Kicker": "CastingOption::Kicker",
   "keyword:Landwalk": "Keywords::LANDWALK",
   "keyword:Lifelink": "Keywords::LIFELINK",
+  "keyword:Mutate": "CastingOption::Mutate",
   "keyword:Reach": "Keywords::REACH",
   "keyword:Trample": "Keywords::TRAMPLE",
   "keyword:Vigilance": "Keywords::VIGILANCE",

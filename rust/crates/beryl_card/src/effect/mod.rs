@@ -436,6 +436,18 @@ pub enum Effect {
         of: Objects,
         except: Option<ExceptIx>,
     },
+    /// A mutating creature spell merges with [objects], its target ([CR 702.140c]): "As a
+    /// mutating creature spell resolves, if its target is legal, it doesn't enter the
+    /// battlefield. Rather, it merges with the target creature and becomes one object
+    /// represented by more than one card or token (see rule 731, "Merging with Permanents").
+    /// The spell's controller chooses whether the spell is put on top of the creature or on
+    /// the bottom." The spell ability of [`crate::CastingOption::Mutate`], which only that
+    /// cast has; a mutating creature spell whose target is illegal enters as a creature
+    /// instead ([CR 702.140b]).
+    ///
+    /// [CR 702.140c]: https://yawgatog.com/resources/magic-rules/#R702140c
+    /// [CR 702.140b]: https://yawgatog.com/resources/magic-rules/#R702140b
+    Mutate(Objects),
     /// "Put [count] [kind] counters on [objects]"
     /// ([CR 122.1](https://yawgatog.com/resources/magic-rules/#R1221)): "A counter is a
     /// marker placed on an object or player that modifies its characteristics and/or
@@ -688,6 +700,7 @@ impl Effect {
             | Effect::Unless { effect, .. }
             | Effect::ForEachPlayer { effect, .. } => effect.takes(target, how),
             Effect::Attach { .. }
+            | Effect::Mutate(_)
             | Effect::CopySpell { .. }
             | Effect::ExchangeControl(..)
             | Effect::Regenerate(_)

@@ -31,7 +31,7 @@ impl Kind {
     /// ([CR 609.2](https://yawgatog.com/resources/magic-rules/#R6092)).
     pub(super) fn of_zone(zone: Zone) -> Kind {
         match zone {
-            Zone::Battlefield | Zone::Nowhere => Kind::Permanent,
+            Zone::Battlefield | Zone::Nowhere | Zone::Merged => Kind::Permanent,
             Zone::Stack => Kind::Spell,
             Zone::Library | Zone::Hand | Zone::Graveyard | Zone::Exile => Kind::Card(Some(zone)),
         }
@@ -94,6 +94,15 @@ impl Ctx {
                     }
                 }
             },
+            Filter::Owned(players) => {
+                let owner = self.zone_owner(*players);
+                let verb = if owner == "your" {
+                    "you own"
+                } else {
+                    "they own"
+                };
+                noun.suffixes.push(verb.to_owned());
+            }
             Filter::Tapped => noun.adjectives.push("tapped".to_owned()),
             Filter::Token => noun.adjectives.push("token".to_owned()),
             Filter::ManaValueAtMost(n) => {
@@ -155,6 +164,15 @@ impl Ctx {
             Filter::Whose(players) => {
                 let who = self.controls(*players, false);
                 noun.suffixes.push(who);
+            }
+            Filter::Owned(players) => {
+                let owner = self.zone_owner(*players);
+                let verb = if owner == "your" {
+                    "you don't own"
+                } else {
+                    "they don't own"
+                };
+                noun.suffixes.push(verb.to_owned());
             }
             Filter::Any
             | Filter::ManaValueAtMost(_)
@@ -264,7 +282,8 @@ pub(super) fn zone_name(zone: Zone) -> &'static str {
     match zone {
         Zone::Library => "library",
         Zone::Hand => "hand",
-        Zone::Battlefield => "battlefield",
+        // A card of a merged permanent is on the battlefield as part of it.
+        Zone::Battlefield | Zone::Merged => "battlefield",
         Zone::Graveyard => "graveyard",
         Zone::Exile => "exile",
         Zone::Stack => "stack",

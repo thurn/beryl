@@ -138,12 +138,16 @@ impl Ctx {
             | TriggerEvent::Leaves
             | TriggerEvent::Attacks
             | TriggerEvent::BecomesTarget
+            | TriggerEvent::Mutates
             | TriggerEvent::DealsCombatDamageToPlayer => {
                 let (word, subject) = match trigger.subject {
                     Subject::This => (
-                        if matches!(trigger.event, TriggerEvent::Attacks)
-                            || matches!(trigger.event, TriggerEvent::DealsCombatDamageToPlayer)
-                        {
+                        if matches!(
+                            trigger.event,
+                            TriggerEvent::Attacks
+                                | TriggerEvent::DealsCombatDamageToPlayer
+                                | TriggerEvent::Mutates
+                        ) {
                             "whenever"
                         } else {
                             "when"
@@ -218,6 +222,7 @@ impl Ctx {
             TriggerEvent::Leaves => "leaves the battlefield".to_owned(),
             TriggerEvent::Attacks => "attacks".to_owned(),
             TriggerEvent::BecomesTarget => "becomes the target of a spell or ability".to_owned(),
+            TriggerEvent::Mutates => "mutates".to_owned(),
             TriggerEvent::DealsCombatDamageToPlayer => {
                 let whom = match trigger.whose {
                     Players::EachPlayer => "a player".to_owned(),

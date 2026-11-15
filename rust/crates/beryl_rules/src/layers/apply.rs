@@ -475,6 +475,9 @@ fn passes<L: Layout>(
         Filter::SubtypeWord(word) => d.subtypes.contains(t.subtypes(), word.read(&by.words)),
         Filter::ColorWords(colors) => d.colors.intersects(colors.read(&by.words)),
         Filter::Whose(players) => filter::is_for(players, d.controller, by.you),
+        Filter::Owned(players) => {
+            filter::is_for(players, s.object(s.battlefield()[i]).owner(), by.you)
+        }
         Filter::Tapped => s.object(s.battlefield()[i]).is_tapped(),
         Filter::Token => s.object(s.battlefield()[i]).is_token(),
         Filter::ManaValueAtMost(n) => s.mana_value(t, s.battlefield()[i]) <= n,
@@ -494,6 +497,7 @@ fn passes<L: Layout>(
 pub(super) fn filter_reads(filter: Filter) -> Characteristics {
     match filter {
         Filter::Any
+        | Filter::Owned(_)
         | Filter::Tapped
         | Filter::Token
         | Filter::ManaValueAtMost(_)

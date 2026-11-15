@@ -19,6 +19,8 @@ impl Effect {
             | Effect::Discard { .. }
             | Effect::Scry { .. }
             | Effect::Explore(_)
+            // Over or under is chosen as it resolves.
+            | Effect::Mutate(_)
             | Effect::UntapUpTo { .. }
             | Effect::ManifestDread(_)
             | Effect::CreateAttackingTokens { .. }

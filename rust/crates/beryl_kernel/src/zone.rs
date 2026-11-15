@@ -21,6 +21,10 @@ use beryl_card::FaceIx;
 /// counters it keeps in no field and the continuous effects on it.
 pub type Signature<'a, L> = (Object<L>, Option<(Derived<L>, Tracked)>, Stored<'a, L>);
 
+/// The other cards of a merged permanent as it leaves the battlefield
+/// ([`State::move_object`]). A pile of more is [`Full`].
+type Pile<L> = <L as Layout>::Queue<<L as Layout>::Slot, 8>;
+
 /// Where in a library an object goes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Place {
@@ -70,10 +74,10 @@ impl<L: Layout> State<L> {
         // A token copy stays one ([`State::carried_copy`]); a card under a copy effect is the
         // card it really is again, with the effect ended with the rest of what the stores hold
         // ([`crate::Memo::Really`]).
-        let carried = if o.flags.has(Flag::Copy) {
-            self.leaving_copy(slot)
+        let (carried, pile) = if o.flags.has(Flag::Copy) {
+            (self.leaving_copy(slot), self.leaving_pile(slot, from)?)
         } else {
-            None
+            (None, None)
         };
         // CR 400.7a: a permanent spell's text changes go on with the permanent it becomes
         // (`crate::effects::text`).
@@ -122,7 +126,7 @@ impl<L: Layout> State<L> {
                 self.flags.derived_dirty = true;
             }
             Zone::Stack => self.zones.stack.insert(slot),
-            Zone::Hand | Zone::Exile | Zone::Nowhere => {}
+            Zone::Hand | Zone::Exile | Zone::Nowhere | Zone::Merged => {}
         }
         if (to as usize) < Zone::OWNED {
             self.zones.members[owner][to as usize].insert(slot);
@@ -153,6 +157,54 @@ impl<L: Layout> State<L> {
         }
         if from == Zone::Hand && to == Zone::Library {
             forget_hand(self, Seat::BOTH[owner], slot);
+        }
+        if let Some(pile) = pile {
+            self.move_pile(sink, &pile, to, place)?;
+        }
+        Ok(())
+    }
+
+    /// The other cards of the merged permanent in `slot` as it leaves `from`: none unless it
+    /// is a merged permanent leaving the battlefield. Read before the move ends what the
+    /// stores hold about it.
+    #[cold]
+    #[inline(never)]
+    fn leaving_pile(&self, slot: L::Slot, from: Zone) -> Result<Option<Pile<L>>, Full> {
+        let mut pile = Pile::<L>::default();
+        if from == Zone::Battlefield {
+            for card in self.pile(slot) {
+                pile.push(card)?;
+            }
+        }
+        Ok((!pile.is_empty()).then_some(pile))
+    }
+
+    /// Moves the other cards of a merged permanent that left the battlefield to the zone it
+    /// went to ([CR 731.3]): "If a merged permanent leaves the battlefield, one permanent leaves
+    /// the battlefield and each of the individual components are put into the appropriate
+    /// zone." Each becomes an object of its own there. Its owner may choose the order of those
+    /// that go to a graveyard or library ([CR 731.3a]); they go in the order they merged, above
+    /// the permanent's own card. A token that ceases to exist leaves its
+    /// cards in its owner's graveyard.
+    ///
+    /// [CR 731.3]: https://yawgatog.com/resources/magic-rules/#R7313
+    /// [CR 731.3a]: https://yawgatog.com/resources/magic-rules/#R7313a
+    #[cold]
+    #[inline(never)]
+    fn move_pile(
+        &mut self,
+        sink: &mut Sink<L>,
+        pile: &Pile<L>,
+        to: Zone,
+        place: Place,
+    ) -> Result<(), Full> {
+        let to = if to == Zone::Nowhere {
+            Zone::Graveyard
+        } else {
+            to
+        };
+        for &card in pile.as_slice() {
+            self.move_object(sink, card, to, place)?;
         }
         Ok(())
     }
@@ -383,7 +435,7 @@ fn leave<L: Layout>(s: &mut State<L>, slot: L::Slot) {
             }
         }
         Zone::Stack => s.zones.stack.remove(slot),
-        Zone::Hand | Zone::Exile | Zone::Nowhere => {}
+        Zone::Hand | Zone::Exile | Zone::Nowhere | Zone::Merged => {}
     }
     if (o.zone as usize) < Zone::OWNED {
         s.zones.members[owner][o.zone as usize].remove(slot);

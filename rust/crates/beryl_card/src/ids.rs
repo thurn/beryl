@@ -58,6 +58,15 @@ impl fmt::Display for Seat {
 }
 
 /// Where an object is. Objects in [`Zone::Nowhere`] are unused slots.
+///
+/// [`Zone::Merged`] is no zone of the rules: it is where the game keeps a card that is part of
+/// a merged permanent other than the one in the permanent's own slot ([CR 731.2]): "That
+/// permanent becomes a merged permanent represented by the card or copy that represented that
+/// object in addition to any other components that were representing it." Such a card is on
+/// the battlefield as part of that permanent and is in no battlefield list. It comes after
+/// [`Zone::Nowhere`], so no [`ZoneSet`] holds it and no ability works there.
+///
+/// [CR 731.2]: https://yawgatog.com/resources/magic-rules/#R7312
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Zone {
@@ -69,6 +78,7 @@ pub enum Zone {
     Stack,
     #[default]
     Nowhere,
+    Merged,
 }
 
 impl Zone {
@@ -77,11 +87,11 @@ impl Zone {
 
     /// [CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002): "Graveyard, battlefield,
     /// stack, exile, ante, and command are public zones. ... Library and hand are hidden
-    /// zones".
+    /// zones". A card that is part of a merged permanent is on the battlefield.
     pub fn is_public(self) -> bool {
         matches!(
             self,
-            Zone::Battlefield | Zone::Graveyard | Zone::Exile | Zone::Stack
+            Zone::Battlefield | Zone::Graveyard | Zone::Exile | Zone::Stack | Zone::Merged
         )
     }
 }

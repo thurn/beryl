@@ -374,10 +374,12 @@ impl Policy<'_> {
         let mut v = i32::from(info.value);
         for option in costs.paid(f) {
             v += match option {
-                // Escape: a card back from the graveyard, for three others there.
+                // Escape: a card back from the graveyard, for three others there. Mutate: a
+                // cheaper creature whose mutate ability triggers, on one already there.
                 CastingOption::Kicker { .. }
                 | CastingOption::Offspring(_)
-                | CastingOption::Escape { .. } => 10,
+                | CastingOption::Escape { .. }
+                | CastingOption::Mutate { .. } => 10,
                 CastingOption::Impending { .. } | CastingOption::Overload { .. } => -10,
                 // A card from hand and the permanent itself, for its enters ability alone.
                 CastingOption::Evoke { .. } => -30,

@@ -170,6 +170,7 @@ fn accepts_composed(filter: Filter, face: &Face) -> bool {
         Filter::All(filters) => filters.iter().all(|&filter| accepts_composed(filter, face)),
         Filter::AnyOf(filters) => filters.iter().any(|&filter| accepts_composed(filter, face)),
         Filter::Whose(_)
+        | Filter::Owned(_)
         | Filter::Tapped
         | Filter::Token
         | Filter::ManaValueAtMost(_)

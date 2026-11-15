@@ -293,7 +293,7 @@ impl Filter {
             | Filter::PowerAtMost(_)
             | Filter::ManaValueAtMostX
             | Filter::InZone(_) => {}
-            Filter::Whose(players) => players.walk(visit),
+            Filter::Whose(players) | Filter::Owned(players) => players.walk(visit),
             Filter::Not(filter) => filter.walk(visit),
             Filter::All(filters) | Filter::AnyOf(filters) => {
                 for filter in *filters {

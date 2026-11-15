@@ -163,6 +163,14 @@ impl<L: Layout> State<L> {
                 // A phased-out permanent is on the battlefield by its zone and in the set of
                 // phased-out permanents instead of its owner's zone set (`crate::phasing`).
                 Zone::Battlefield if o.flags.has(Flag::PhasedOut) => phased_out.insert(slot),
+                // A card of a merged permanent is part of the permanent it names.
+                Zone::Merged => check(
+                    self.memos(slot)
+                        .iter()
+                        .any(|m| matches!(m, crate::memos::Memo::PartOf(_))),
+                    "a card in the merged zone is part of no permanent",
+                    Some(At::Slot(slot.index())),
+                )?,
                 zone => members[o.owner.index()][zone as usize].insert(slot),
             }
         }

@@ -32,6 +32,8 @@ const ARRIVING: Record<ZoneName, Sound | null> = {
   stack: null,
   // A token ceasing to exist, once its move to a graveyard has sounded.
   nowhere: null,
+  // A card merging with a permanent sounds by its spell's resolution.
+  merged: null,
 };
 
 /** How much quieter the opponent's doings are than the player's own, in decibels. */

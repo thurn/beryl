@@ -302,6 +302,10 @@ impl<L: Layout> Relayout for Event<L> {
                 object: object.relayout(),
                 controller,
             },
+            &Event::Mutated { object, controller } => Event::Mutated {
+                object: object.relayout(),
+                controller,
+            },
         }
     }
 }

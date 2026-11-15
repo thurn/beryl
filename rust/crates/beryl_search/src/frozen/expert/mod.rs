@@ -1365,7 +1365,8 @@ impl Expert<'_> {
                 | CastingOption::Overload { cost: c, .. }
                 | CastingOption::Evoke { cost: c, .. }
                 | CastingOption::Alternative { cost: c, .. }
-                | CastingOption::Escape { cost: c, .. } => cost = i32::from(c.mana_value()),
+                | CastingOption::Escape { cost: c, .. }
+                | CastingOption::Mutate { cost: c, .. } => cost = i32::from(c.mana_value()),
             }
         }
         self.mana(self.me()) - cost

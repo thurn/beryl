@@ -853,15 +853,29 @@ Built by by-bajq.3.10:
   game is still a pure function of its choices; the state's `Hash` leaves them
   out, so no pinned hash changed. Worldgorger Dragon with Animate Dead is the
   scenario.
-- **Merged permanents** (CR 731). The permanent stays the object it was, in its
-  slot, with its counters, attachments and timestamp. The card that merges moves
-  to a zone state of its own that names the permanent it is part of and its
-  place in the pile. The permanent's copiable values are the top card's face
-  plus an addition for every ability of each card under it (R7). The layers and
-  a copy of it then need nothing new; the listeners and the replacement lookups
-  read the additions' abilities through the query of the abilities an object has
-  (by-bajq.4.2), since the card table's listeners are per definition. When the
-  permanent leaves, the move expands to every card of it at once.
+- **Merged permanents** (CR 731, built). The permanent stays the object it was,
+  in its slot, with its counters, attachments and timestamp (`State::merge`).
+  The card that merges moves to `Zone::Merged`, which comes after
+  `Zone::Nowhere` so no `ZoneSet` holds it, with `Memo::PartOf` naming the
+  permanent (`State::pile` lists them). The permanent's copiable values are kept
+  by a copy effect: the top card's face plus `Addition::every_ability` for each
+  other card (R7). Over, the permanent's definition becomes the merging card's
+  and `Memo::Really` remembers its own; under, a copy's exceptions stay. Layer 1
+  adds the other cards' keywords (`State::copy_layer_one`), and their triggered
+  abilities are matched from the table's listeners of their faces, on events and
+  as the permanent leaves (`trigger::elsewhere`), in a game with mutate
+  (`Capability::Merges`, which adds every battlefield kind to `listens_away`). A
+  copy of the permanent copies its values, every-ability additions included.
+  When the permanent leaves, `State::move_object` moves its other cards to the
+  same zone, in the order they merged rather than an order their owner chooses.
+  Mutate is `CastingOption::Mutate`, whose spell ability only the mutating spell
+  has (`Face::spell_ability_with`); `Effect::Mutate` asks over or under
+  (`Purpose::Mutate`) and raises `Event::Mutated`, and a mutating spell whose
+  target is illegal enters as a creature (CR 702.140b). Not yet built: the
+  activated, mana, static and replacement abilities of the cards under a merged
+  permanent (`State::abilities` and the layers read only the top face's), and an
+  effect removing those abilities. A checkpoint keeps the permanent's values and
+  not the cards under it.
 - **Phased-out permanents** (CR 702.26; built by by-bajq.8.4). A phased-out
   permanent is in no battlefield list and no battlefield bitboard, and in a
   bitboard of its own that the untap step reads. Its zone, incarnation and

@@ -232,6 +232,19 @@ fn gather(
     Ok((defs, indices))
 }
 
+/// The event kinds trigger matching looks for away from the faces of the battlefield's
+/// definitions: `away`, and in a game with mutate (`capabilities` has
+/// [`Capability::Merges`]) every kind a permanent's ability listens to, `here`. A card of any
+/// face may be under a merged permanent, where the table's listeners of the permanent's
+/// definition do not find its triggered abilities, so trigger matching looks for them apart.
+fn merged_listen_away(capabilities: u32, away: Listens, here: Listens) -> Listens {
+    if capabilities & Capability::Merges.bit() == 0 {
+        away
+    } else {
+        away | here
+    }
+}
+
 /// The game index of each distinct name among `defs` that a card has ([`GameTable::names`]):
 /// not a token's or an emblem's, which some card of `defs` lists among what it creates, and
 /// not [`FACE_DOWN_COPY`]'s, which is no card's.
@@ -359,6 +372,7 @@ impl GameTable {
             .iter()
             .flat_map(|d| d.faces)
             .fold(Capability::of(&FACE_DOWN), |c, f| c | Capability::of(f));
+        let listens_away = merged_listen_away(capabilities, listens_away, listens_any);
         Ok(Self {
             cards,
             defs,

@@ -326,6 +326,16 @@ pub enum Event<L: Layout = Small> {
     Win {
         player: Seat,
     },
+    /// A mutating creature spell `controller` controlled merged with the permanent `object`
+    /// as it resolved ([CR 702.140d]): "An ability that triggers whenever a creature mutates
+    /// triggers when a spell merges with a creature as a result of a resolving mutating
+    /// creature spell." The merged permanent is the object it was (CR 731.2c).
+    ///
+    /// [CR 702.140d]: https://yawgatog.com/resources/magic-rules/#R702140d
+    Mutated {
+        object: ObjectRef<L>,
+        controller: Seat,
+    },
 }
 
 impl Copy for Event<Small> {}
@@ -350,6 +360,7 @@ impl<L: Layout> Event<L> {
             Event::Cast { .. } => EventKind::Cast,
             Event::Draw { .. } => EventKind::Draw,
             Event::Targeted { .. } => EventKind::Targeted,
+            Event::Mutated { .. } => EventKind::Mutated,
             _ => return None,
         })
     }

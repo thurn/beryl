@@ -98,6 +98,7 @@ pub fn listens_to(trigger: &Trigger, zones: ZoneSet) -> Result<Option<EventKind>
         TriggerEvent::Draws => (EventKind::Draw, About::Nothing, true),
         TriggerEvent::State(_) => (EventKind::State, About::Nothing, false),
         TriggerEvent::BecomesTarget => (EventKind::Targeted, About::Either, true),
+        TriggerEvent::Mutates => (EventKind::Mutated, About::This, true),
     };
     if !AWAY.union(ZoneSet::BATTLEFIELD).includes(zones) {
         return Err(Unmatched::Zone);

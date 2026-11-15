@@ -36,6 +36,12 @@ pub enum Filter {
     /// teammates are the other players on their team, and the player's opponents are all
     /// players not on their team."
     Whose(&'static Players),
+    /// Owned by one of these players, wherever it is, read as [`Filter::Whose`] is: "creature
+    /// you own" ([CR 108.3]): "The owner of a card in the game is the player who started the
+    /// game with it in their deck."
+    ///
+    /// [CR 108.3]: https://yawgatog.com/resources/magic-rules/#R1083
+    Owned(&'static Players),
     Tapped,
     /// Is a token ([CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111)): "Some
     /// effects put tokens onto the battlefield." Not a token is "nontoken".
@@ -88,7 +94,7 @@ impl Filter {
             | Filter::PowerAtMost(_)
             | Filter::InZone(_) => false,
             Filter::ManaValueAtMostX => true,
-            Filter::Whose(players) => players.needs_a_resolution(),
+            Filter::Whose(players) | Filter::Owned(players) => players.needs_a_resolution(),
             Filter::Not(filter) => filter.needs_a_resolution(),
             Filter::All(filters) | Filter::AnyOf(filters) => {
                 let mut i = 0;

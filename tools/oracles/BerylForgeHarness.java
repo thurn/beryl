@@ -1605,6 +1605,19 @@ public final class BerylForgeHarness {
 
         @Override
         public <T extends GameEntity> T chooseSingleEntityForEffect(FCollectionView<T> options, DelayedReveal delayedReveal, SpellAbility sa, String title, boolean isOptional, Player targetedPlayer, Map<String, Object> params) {
+            // Forge asks a mutating spell's controller which card goes on top (`MutateEffect`);
+            // Beryl asks over (yes) or under (CR 702.140c).
+            if (sa != null && sa.getApi() == ApiType.Mutate) {
+                JsonObject pick = run.take(player, YES_NO, "mutate over " + options);
+                if (pick != null) {
+                    boolean over = pick.get("pick").getAsString().equals("Yes");
+                    for (T option : options) {
+                        if ((option instanceof Card c && c.getId() == sa.getHostCard().getId()) == over) {
+                            return option;
+                        }
+                    }
+                }
+            }
             // The permanent a copy effect copies is Beryl's one pick of it, whatever the count.
             boolean copying = sa != null && sa.getApi() == ApiType.Clone;
             if (options.size() == 1 && !isOptional && !copying) {

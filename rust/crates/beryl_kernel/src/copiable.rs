@@ -408,6 +408,51 @@ impl<L: Layout> Copiable<L> {
             })
     }
 
+    /// The faces whose every ability these values have besides those of the face that is up:
+    /// those of the cards under a merged permanent, from the top of the pile down
+    /// ([`Addition::every_ability`]). None for values with no addition, after one test.
+    #[inline]
+    pub fn merged_faces(self, t: &GameTable) -> impl Iterator<Item = (L::Card, FaceIx)> {
+        let _ = t;
+        let additions = self.additions;
+        let count = additions.len();
+        (0..count)
+            .filter_map(move |i| additions.as_ref()[i])
+            .filter(|addition| addition.is_every_ability())
+            .map(|addition| (addition.card(), addition.face()))
+    }
+
+    /// The values a merged permanent has once the card `card`, cast with its face `face` up,
+    /// merges with a permanent whose values these are ([CR 731.2a]): "A merged permanent has
+    /// only the characteristics of its topmost component, unless otherwise specified by the
+    /// effect that caused them to merge. This is a copiable effect whose timestamp is the time
+    /// the objects merged." Mutate specifies its abilities ([CR 702.140e]): "A mutated
+    /// permanent has all abilities of each card and token that represents it." Under (`top` false), these values stay as they are, a copy
+    /// effect's exceptions among them, and the card's face is added below the others. Over,
+    /// that card's face is the values, with every ability of the face these values had up and
+    /// of each face under it added. A face-down permanent's face has no abilities
+    /// ([CR 708.2a]), so it adds none. [`Full`] past what the layout holds.
+    ///
+    /// Over a copy, the copy effect's own exceptions are not kept: the values add every ability
+    /// of the face it copied, and not an ability its exception gave it.
+    ///
+    /// [CR 731.2a]: https://yawgatog.com/resources/magic-rules/#R7312a
+    /// [CR 702.140e]: https://yawgatog.com/resources/magic-rules/#R702140e
+    /// [CR 708.2a]: https://yawgatog.com/resources/magic-rules/#R7082a
+    pub fn merged_with(self, card: L::Card, face: FaceIx, top: bool) -> Result<Copiable<L>, Full> {
+        if !top {
+            return self.with_addition(Addition::every_ability(card, face));
+        }
+        let mut values = Copiable::of_card(card).turned(face);
+        if self.face != FaceIx::DOWN {
+            values = values.with_addition(Addition::every_ability(self.card, self.face))?;
+        }
+        for addition in self.additions().filter(|a| a.is_every_ability()) {
+            values = values.with_addition(addition)?;
+        }
+        Ok(values)
+    }
+
     /// What the scans over every permanent read of that face, found once per game.
     #[inline]
     pub fn facts(self, t: &GameTable) -> FaceFacts {

@@ -389,6 +389,7 @@ fn casting_options<L: Layout>(
             // CR 702.138a: escape is a cast from the graveyard, its cost the card's mana cost
             // and the cards it exiles.
             CastingOption::Escape { .. } => " with escape".to_owned(),
+            CastingOption::Mutate { cost, .. } => format!(" with mutate {}", mana_text(cost)),
         })
         .collect()
 }

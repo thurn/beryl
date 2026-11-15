@@ -324,15 +324,23 @@ class Cards:
                 return cast(int, option["bit"])
         return None
 
+    def mutate_bit(self, card: str) -> int | None:
+        """The `costs` bit of mutate, which XMage casts as a spell ability of its own, "Cast
+        <name> using Mutate"."""
+        for option in self.casting(card):
+            if option["keyword"] == "Mutate":
+                return cast(int, option["bit"])
+        return None
+
     def cast_answers(self, card: str) -> list[tuple[str, str | None]]:
         """For each casting option XMage asks about when the spell is cast, by `costs` bit,
         XMage's answer for paying it and for not paying it. Alternative costs share one menu,
         which XMage may omit if none is available. Additional costs such as kicker and
-        offspring are yes or no. Overload has a separate cast command."""
+        offspring are yes or no. Overload and mutate have separate cast commands."""
         answers: list[tuple[str, str | None]] = []
         for option in self.casting(card):
             keyword = cast(str, option["keyword"])
-            if keyword == "Overload":
+            if keyword in ("Overload", "Mutate"):
                 answers.append(("", None))
             elif not option["alternative"]:
                 answers.append(("Yes", "No"))

@@ -103,6 +103,13 @@ pub enum TriggerEvent {
     /// [CR 603.2e]: https://yawgatog.com/resources/magic-rules/#R6032e
     /// [CR 115.1a]: https://yawgatog.com/resources/magic-rules/#R1151a
     BecomesTarget,
+    /// "Whenever [subject] mutates" ([CR 702.140d]): "An ability that triggers whenever a
+    /// creature mutates triggers when a spell merges with a creature as a result of a
+    /// resolving mutating creature spell." Every such ability of the merged permanent sees
+    /// it, from its top card or from a card under it. The player is the spell's controller.
+    ///
+    /// [CR 702.140d]: https://yawgatog.com/resources/magic-rules/#R702140d
+    Mutates,
     /// "When [condition]": a state trigger ([CR 603.8]): "Some triggered abilities trigger when
     /// a game state (such as a player controlling no permanents of a particular card type) is
     /// true, rather than triggering when an event occurs. These abilities trigger as soon as the
@@ -164,6 +171,8 @@ impl Trigger {
     pub const ATTACKS: Trigger = Trigger::of(TriggerEvent::Attacks, Subject::This);
     /// "When this becomes the target of a spell or ability."
     pub const BECOMES_TARGET: Trigger = Trigger::of(TriggerEvent::BecomesTarget, Subject::This);
+    /// "Whenever this creature mutates."
+    pub const MUTATES: Trigger = Trigger::of(TriggerEvent::Mutates, Subject::This);
     /// "Whenever this deals combat damage to a player."
     pub const DEALS_COMBAT_DAMAGE_TO_A_PLAYER: Trigger =
         Trigger::of(TriggerEvent::DealsCombatDamageToPlayer, Subject::This);
