@@ -39,11 +39,12 @@ store" and "Isolation" before changing anything here.
   the Enact commands a session ran) and the desktop app's session records.
   `windows.py` derives bead windows from those commands and sets the `bead` of
   each request and tool call.
-- `codex.py`: Codex logs (`~/.codex/sessions` and `archived_sessions`, `.jsonl` only; the
-  `.zst` ones are not read), as rows in the same tables with provider `codex`. A
-  request is a `token_count` line, keyed by its running total; its model and turn
-  end come from `codex_marks`. Shell commands are read from the string literals
-  in the `exec` script's `cmd:`, so a command built from variables is missed.
+- `codex.py`: Codex logs (`~/.codex/sessions` and `archived_sessions`, `.jsonl`
+  only; the `.zst` ones are not read), as rows in the same tables with provider
+  `codex`. A request is a `token_count` line, keyed by its running total; its
+  model and turn end come from `codex_marks`. Shell commands are read from the
+  string literals in the `exec` script's `cmd:`, so a command built from
+  variables is missed.
 - `kinds.py`: command kinds from `data/efficiency-command-kinds.json`.
   `timing.py` splits each window's seconds into the categories of "Time
   accounting" and stores them in `window_time`. Kinds and splits are derived
