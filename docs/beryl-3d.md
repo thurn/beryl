@@ -1105,9 +1105,9 @@ What the session does and what a client still does:
 - **A client makes a few steps itself.** While a prompt is open, the client
   draws its marks, its arrows and the cards it holds up as steps of its own,
   made from the prompt's state (`ui/src/stage/prompt.ts`). Their timing is a
-  short fixed table, because it does not depend on the game: `beryl_session`'s
-  `own_timings` function returns it. Beryl 3D calls that function, and the web
-  interface asks for the table once at startup.
+  short fixed table, because it does not depend on the game: `beryl_protocol`'s
+  `own_timings` function returns it (`script/timing/own.rs`). Beryl 3D calls
+  that function, and the web interface asks for the table once at startup.
 - **Segments are made from the laid-out beat.** Each step becomes segments, at
   absolute times, on the scene objects it concerns.
 - **Reduced motion** is a client's choice: it plays every step with no duration,
@@ -1698,8 +1698,7 @@ repeated) and `--json`. Left out, they are `you`, `desktop`, 1600 by 900 (393 by
 759 with `--layout phone`), 1, `baseline` and the recording's start, with no
 action. A test's name, `b3d:<recording>/<seat>/<width>x<height>`, also names a
 recording and sets its seat and window. `diff` runs its actions after `--from`,
-so `--from` and `--to` at the same moment show what an action changes. `check`
-leaves out `blank-card` until cards have faces, and its closing line says so.
+so `--from` and `--to` at the same moment show what an action changes.
 
 `just b3d` is two programs behind one command. The commands that print text are
 `beryl_inspect`'s program, `b3d`, which contains no GPU code. `png` and `film`
