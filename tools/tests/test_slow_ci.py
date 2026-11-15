@@ -145,6 +145,22 @@ def test_a_pass_records_its_lanes_and_keeps_the_others(tmp_path: Path) -> None:
     assert passes.stale("ui", "u1") == "no pass on record"
 
 
+def test_a_lane_windows_skips_keeps_a_last_pass_older_than_master(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Master moved past both passes (a Windows pass); HEAD descends from both.
+    monkeypatch.setattr(slow_ci.system, "WINDOWS", False)
+    monkeypatch.setattr(slow_ci, "ancestor", lambda commit, of="HEAD": of == "HEAD")
+    Passes(tmp_path / "passes.json").record(
+        ["counts", "rust"], "old", {"counts": "c", "rust": "r"}
+    )
+    passes = Passes.load(tmp_path / "passes.json")
+    assert passes.base("counts", "master") == "old"
+    assert passes.base("rust", "master") == "master"
+    monkeypatch.setattr(slow_ci.system, "WINDOWS", True)
+    assert passes.base("counts", "master") == "master"
+
+
 def test_a_full_sweep_is_due_an_hour_after_the_last_began(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

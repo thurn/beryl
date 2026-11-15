@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import bisect, checks, runlog, verdicts
+from beryl_tools import bisect, checks, runlog, slow_ci, verdicts
 
 # A browser lane's step over a repository whose `version` file counts its commits: "plays a
 # land" and "casts a spell" fail from version 3, "draws a card" from version 5, and "untaps"
@@ -159,6 +159,38 @@ def test_a_culprit_at_the_first_commit_is_checked_against_master(
         f"bisect: ui-test:draws a card  culprit {tip} feat: version 5  (1 commit since"
         " master)" in lines
     )
+
+
+def test_a_lane_only_this_machine_runs_is_bisected_from_its_last_pass_here(
+    repo: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Windows passed version 4 and moved master there; this machine last passed ui-test,
+    # which Windows skips, at version 2. The culprit, version 3, lies before master.
+    monkeypatch.setattr(bisect.system, "WINDOWS", False)
+    passes = tmp_path / "lane-passes.json"
+    monkeypatch.setattr("beryl_tools.slow_ci.passes_path", lambda: passes)
+    second = git(repo, "rev-parse", "HEAD~3")
+    slow_ci.Passes(passes).record(["ui-test"], second, {"ui-test": "f"})
+    git(repo, "update-ref", "refs/remotes/origin/master", "HEAD~1")
+    lines = run(repo, capsys)
+    third = git(repo, "rev-parse", "HEAD~2")[:10]
+    since = "(3 commits since ui-test last passed here)"
+    culprit = f"culprit {third} feat: version 3  {since}"
+    assert f"bisect: ui-test:plays a land  {culprit}" in lines
+    assert f"bisect: ui-test:casts a spell  {culprit}" in lines
+
+
+def test_a_lane_both_machines_run_is_bisected_from_master(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    passes = tmp_path / "lane-passes.json"
+    monkeypatch.setattr("beryl_tools.slow_ci.passes_path", lambda: passes)
+    slow_ci.Passes(passes).record(["rust"], "0" * 40, {"rust": "f"})
+    rust = checks.Outcome("rust", False, 0.0, "", [])
+    assert bisect.start([rust], tmp_path) == (bisect.BASE, "master")
 
 
 def test_out_of_time_reports_the_range_left(

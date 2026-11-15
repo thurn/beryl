@@ -169,7 +169,10 @@ machine tests `staging` whenever it's free and fixes failures as they appear.
 
 Windows leaves `app`, `ui-smoke`, `oracle` and `counts` to the Mac, and its fast
 check skips the browser checks and `motion` (see `WINDOWS_SKIPS` in
-`checks.py`).
+`checks.py`). Because a Windows pass moves `master` without running those lanes,
+the Mac counts their changes from where each last passed on the Mac, even when
+that is older than `master`, and a bisection of one of them searches from that
+pass rather than from `master`.
 
 The nightly also runs `just ui-counts --gate` on staging, which plays the board
 fixtures named in `data/ui-counts.json` on Playwright's paused clock, one frame

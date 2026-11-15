@@ -4,10 +4,12 @@ each lane last passed can affect, and every lane once an hour.
 Each lane has a base: the commit at which it last passed on this machine, recorded in
 `$BERYL_CACHE/ci/lane-passes.json` ([`Passes`]), when the commit checked out descends from it
 and it is newer than where the checkout left `origin/master`; else that merge base. A lane that
-fails keeps its old base, so it runs on every later run until it passes. A lane passes at a
-commit only when every check it holds passes there, and a change that cannot reach it cannot
-change that. So master, which moves only when slow CI passes, never moves past a lane that
-would fail, as long as these rules say truly which changes reach which lane.
+the other OS skips (checks.WINDOWS_SKIPS) keeps its last pass as its base even when it is older
+than master, because a Windows pass moves master without running it. A lane that fails keeps
+its old base, so it runs on every later run until it passes. A lane passes at a commit only
+when every check it holds passes there, and a change that cannot reach it cannot change that.
+So the lanes this machine alone runs see every commit since they last passed here, as long as
+these rules say truly which changes reach which lane.
 
 A lane runs when a path changed since its base reaches it ([`lane_reason`]): the Rust lane for
 a change under rust/ or to a data file a crate reads, the browser smoke lane for one under rust/
@@ -277,6 +279,13 @@ def ancestor(commit: str, of: str = "HEAD") -> bool:
     return run_git("merge-base", "--is-ancestor", commit, of) is not None
 
 
+def only_here(lane: str) -> bool:
+    """Whether `lane` is one that slow CI on the other OS skips (checks.WINDOWS_SKIPS), so that
+    only this machine can vouch for it. Either machine's pass moves master, so master is no
+    proof that such a lane passed."""
+    return lane in checks.WINDOWS_SKIPS and not system.WINDOWS
+
+
 @dataclass
 class Passes:
     """Each lane's last pass on this machine, `{"commit", "fingerprint"}`, and when the last
@@ -310,9 +319,13 @@ class Passes:
 
     def base(self, lane: str, master: str) -> str:
         """Where `lane`'s changes count from: its last pass when HEAD descends from it and it
-        is newer than `master` (master_base), else `master`."""
+        is newer than `master` (master_base), else `master`. A lane only this machine runs
+        ([`only_here`]) keeps an older last pass too: a pass on the other OS moved master
+        without running it, so the commits between are unchecked on that lane."""
         last = self.lanes.get(lane, {}).get("commit", "")
-        return last if last and ancestor(last) and ancestor(master, last) else master
+        if not last or not ancestor(last):
+            return master
+        return last if only_here(lane) or ancestor(master, last) else master
 
     def stale(self, lane: str, now: str) -> str:
         """Why `lane`'s last pass cannot vouch for its tools, `now` its fingerprint; nothing

@@ -3,7 +3,9 @@
 When a step of `by ci` still fails after its rerun and no pending entry excuses it
 (checks.py, `run_lane`), `after` reruns what it named as failed, narrowed as the rerun was, in a
 detached worktree under the cache at the commits since master (`git rev-list --first-parent
-origin/master..HEAD`), and binary-searches for the first commit at which each fails. A probe runs
+origin/master..HEAD`), and binary-searches for the first commit at which each fails. A failed
+lane that only this machine runs searches from its last pass here instead, when that pass is
+older than master (`start`): a pass on Windows moves master without running it. A probe runs
 every check whose search has reached the same commits, so checks with one culprit share one
 search. It probes the tip first: a check that passes there is a flake and blames no commit.
 
@@ -495,10 +497,34 @@ def after(outcomes: list[Outcome], started: float, repo: Path = paths.REPO) -> N
 
 
 def bisect(outcomes: list[Outcome], started: float, repo: Path) -> None:
-    since = out(repo, "rev-list", "--first-parent", "--reverse", f"{BASE}..HEAD")
+    base, origin = start(outcomes, repo)
+    since = out(repo, "rev-list", "--first-parent", "--reverse", f"{base}..HEAD")
     left = min(SEARCH, time_left(started, repo))
-    for line in bisect_since(outcomes, since.split(), left, repo):
+    for line in bisect_since(outcomes, since.split(), left, repo, origin):
         print(line)
+
+
+def start(outcomes: list[Outcome], repo: Path) -> tuple[str, str]:
+    """Where the search starts, and how the answer names it: `origin/master`, or the oldest
+    last pass on this machine of a failed lane that only this machine runs
+    (slow_ci.only_here), when that pass is older than master. A Windows pass moves master
+    without running such a lane, so the commit that broke it can lie before master."""
+    from . import slow_ci  # It imports checks, which imports this module.
+
+    passes = slow_ci.Passes.load(slow_ci.passes_path())
+    base, origin, behind = BASE, "master", 0
+    for lane in sorted({o.lane for o in outcomes if slow_ci.only_here(o.lane)}):
+        last = passes.lanes.get(lane, {}).get("commit", "")
+        older = git(repo, "merge-base", "--is-ancestor", last, BASE).returncode == 0
+        if not last or not older or out(repo, "rev-parse", BASE) == last:
+            continue
+        # Commits from that pass to HEAD; the oldest pass has the most.
+        count = int(
+            out(repo, "rev-list", "--first-parent", "--count", f"{last}..HEAD") or 0
+        )
+        if count > behind:
+            base, origin, behind = last, f"{lane} last passed here", count
+    return base, origin
 
 
 def bisect_since(
