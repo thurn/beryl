@@ -75,6 +75,8 @@ pub struct Sessions {
     replays: Option<PathBuf>,
     pub(crate) ledger: Option<Arc<Ledger>>,
     emit: Arc<Emit>,
+    /// Where each game's views as the seat across the table sees them go, if anywhere.
+    across: Option<Arc<Emit>>,
     ids: SessionIds,
     current: Mutex<Current>,
     /// The latest view emitted, of whichever game emitted last.
@@ -106,6 +108,7 @@ impl Sessions {
             replays,
             ledger: None,
             emit: Arc::new(emit),
+            across: None,
             ids: SessionIds::default(),
             current: Mutex::default(),
             latest: Arc::default(),
@@ -122,6 +125,16 @@ impl Sessions {
     #[must_use]
     pub fn with_budget(mut self, budget: Budget) -> Self {
         self.budget = budget;
+        self
+    }
+
+    /// Also sends `across` each game's view of every update as the seat across the table from
+    /// the human sees it, just before the human's view of the same update: how a UI fixture is
+    /// recorded from the other seat. Not for a review game, which draws that seat's views
+    /// itself.
+    #[must_use]
+    pub fn with_across(mut self, across: impl Fn(GameUpdate) + Send + Sync + 'static) -> Self {
+        self.across = Some(Arc::new(across));
         self
     }
 
@@ -289,6 +302,10 @@ impl Sessions {
         let session = self.ids.allocate();
         about["session"] = json!(session.0);
         let started = game(session).and_then(|(mut game, first)| {
+            if let Some(across) = &self.across {
+                let across = Arc::clone(across);
+                game.watch_across(Box::new(move |view| across(GameUpdate { session, view })));
+            }
             if let Some(name) = stand_in {
                 game.set_stand_in_with_budget(name, self.budget)?;
             }

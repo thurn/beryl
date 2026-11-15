@@ -190,9 +190,7 @@ fn opened(view: &PlayerView) -> Option<(DecisionId, PromptView)> {
 }
 
 /// The session's next view from `updates`, or the panic or the end that came in its place.
-pub(super) fn next_view(
-    updates: &Receiver<Result<GameUpdate, String>>,
-) -> Result<GameUpdate, String> {
+pub(super) fn next_view<T>(updates: &Receiver<Result<T, String>>) -> Result<T, String> {
     updates
         .recv()
         .map_err(|_| "the session ended without a view".to_owned())?
@@ -276,7 +274,7 @@ mod tests {
             "clicks": ["Counterspell", "Island", "press decline"],
         }))
         .unwrap();
-        let messages = super::super::record_game(&def).unwrap();
+        let messages = super::super::record_game(&def, false).unwrap();
         let replies: Vec<(ClickRequest, ClickReply)> = (messages.iter())
             .filter_map(|message| match message {
                 FixtureMessage::Response {
@@ -326,7 +324,7 @@ mod tests {
             "clicks": ["drop 0 0 Island", "press confirm"],
         }))
         .unwrap();
-        let messages = super::super::record_game(&def).unwrap();
+        let messages = super::super::record_game(&def, false).unwrap();
         let replies: Vec<(ClickRequest, ClickReply)> = (messages.iter())
             .filter_map(|message| match message {
                 FixtureMessage::Response {
@@ -369,7 +367,7 @@ mod tests {
             "clicks": ["press decline"],
         }))
         .unwrap();
-        let refused = super::super::record_game(&def).unwrap_err();
+        let refused = super::super::record_game(&def, false).unwrap_err();
         assert!(refused.contains("scripts must end"), "{refused}");
     }
 }

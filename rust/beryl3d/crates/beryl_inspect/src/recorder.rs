@@ -20,15 +20,15 @@ pub struct Cli {
 
 /// One recording still to make.
 enum Job<'a> {
-    Fixture(&'a fixture::Definition),
+    Fixture(&'a fixture::Definition, Seat),
     Moment(&'a str, &'static Moment, View),
 }
 
 impl Recorder for Cli {
-    /// Every fixture in `ui/fixtures.json`, from the seat its stop is seen from, and every card
-    /// spec moment from both seats, on as many threads as the machine has cores. A fixture is
-    /// recorded from one seat because its definition names its human's seat, and `beryl_cli`
-    /// has no way to seat the human across the table from it.
+    /// Every fixture in `ui/fixtures.json` and every card spec moment, from both seats, on as
+    /// many threads as the machine has cores. A fixture that has one viewer (a manual table,
+    /// or a board with a prop, which stands only in its human's view) is recorded from that
+    /// seat alone ([`fixture::Definition::seats`]).
     fn record(&self) -> Vec<Recorded> {
         let source = self.root.join("ui/fixtures.json");
         let mut done = Vec::new();
@@ -47,7 +47,17 @@ impl Recorder for Cli {
         let cards: Vec<&specs::Spec> = specs::cards().iter().collect();
         // Plays every candidate moment of every card, which decides which are kept.
         specs::generate(&cards);
-        let mut jobs: Vec<Job> = definitions.iter().map(Job::Fixture).collect();
+        let mut jobs = Vec::new();
+        for def in &definitions {
+            match def.seats() {
+                Ok(seats) => jobs.extend(seats.into_iter().map(|seat| Job::Fixture(def, seat))),
+                Err(why) => done.push(Recorded {
+                    name: def.name().to_owned(),
+                    seat: Seat::P0,
+                    messages: Err(format!("fixture {}: {why}", def.name())),
+                }),
+            }
+        }
         for spec in &cards {
             for moment in spec.moments() {
                 jobs.extend(View::ALL.map(|view| Job::Moment(&spec.slug, moment, view)));
@@ -79,10 +89,10 @@ impl Recorder for Cli {
 
 fn record(job: &Job, source: &std::path::Path) -> Recorded {
     match job {
-        Job::Fixture(def) => Recorded {
+        Job::Fixture(def, seat) => Recorded {
             name: def.name().to_owned(),
-            seat: def.seat().unwrap_or(Seat::P0),
-            messages: fixture::record(def, source)
+            seat: *seat,
+            messages: fixture::record_from(def, source, *seat)
                 .map(with_card_records)
                 .map_err(|why| format!("fixture {}: {why}", def.name())),
         },

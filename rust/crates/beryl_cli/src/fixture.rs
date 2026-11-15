@@ -13,9 +13,9 @@ mod until;
 mod view_predicates;
 
 use std::path::Path;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvError, RecvTimeoutError, channel};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use beryl_cards::CARDS;
 use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
@@ -90,6 +90,17 @@ impl Definition {
             return Ok(Seat::P0);
         }
         Ok(Until::parse(self.stop()?)?.seat())
+    }
+
+    /// The seats its recording can be seen from: its human's, and for a game with no prop the
+    /// seat across the table too ([`record_from`]). A manual table has one viewer, and a prop
+    /// stands only in its human's view.
+    pub fn seats(&self) -> Result<Vec<Seat>, String> {
+        let seat = self.seat()?;
+        if self.table.is_some() || self.prop.is_some() {
+            return Ok(vec![seat]);
+        }
+        Ok(vec![seat, seat.opponent()])
     }
 
     fn stop(&self) -> Result<&str, String> {
@@ -181,12 +192,35 @@ pub fn record(def: &Definition, source: &Path) -> Result<Vec<FixtureMessage>, St
         }
         return table::record(table, source);
     }
-    record_game(def)
+    record_game(def, false)
 }
 
+/// The messages of `def`'s recording as `seat`, one of [`Definition::seats`], sees it. From the
+/// seat across the table from its human, it is the same game, with the same stand-in answers,
+/// the same clicks and the same stop, read from the human's views: only the views recorded are
+/// the other seat's. That seat never decides, so nothing answers them.
+pub fn record_from(
+    def: &Definition,
+    source: &Path,
+    seat: Seat,
+) -> Result<Vec<FixtureMessage>, String> {
+    if seat == def.seat()? {
+        return record(def, source);
+    }
+    if !def.seats()?.contains(&seat) {
+        return Err(format!("it is not seen from seat {}", seat.index()));
+    }
+    record_game(def, true)
+}
+
+/// A view sent to the human, and with it the same update as the seat across the table sees it
+/// when that is recorded.
+type Seen = (GameUpdate, Option<GameUpdate>);
+
 /// A session whose thread panicked (in a debug build, a script that breaks its checks)
-/// says where.
-fn record_game(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
+/// says where. With `across`, the views recorded are the seat's across the table from the
+/// human, and none of the human's answers is.
+fn record_game(def: &Definition, across: bool) -> Result<Vec<FixtureMessage>, String> {
     let until = def.stop()?;
     let stop = Arc::new(Stop::parse(def)?);
     let clicks = (def.clicks.iter())
@@ -197,31 +231,14 @@ fn record_game(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
     }
     let prop = standing(def)?;
     let human = stop.until.seat();
-    let (sent, updates) = channel();
-    let told = sent.clone();
-    let guard = crate::panics::Guard::new(move |panic| drop(told.send(Err(panic))));
-    let progress = Shared::default();
-    // Snapshot script progress with each view, before the session can answer its next decision.
-    // The session also uses this snapshot to know when to hand the seat over.
-    let (sent_progress, view_progress) = channel();
-    let at_stop = Arc::new(AtomicBool::new(false));
-    let (scripts, at, said) = (
-        Arc::clone(&progress),
-        Arc::clone(&stop),
-        Arc::clone(&at_stop),
-    );
-    let sessions = Sessions::new(None, move |update| {
-        crate::panics::watch(|| {
-            let told = sent.clone();
-            move |panic| drop(told.send(Err(panic)))
-        });
-        let scripts = boards::lock(&scripts);
-        let stopped = scripts.done() && at.reached(&update.view);
-        said.store(stopped, Ordering::SeqCst);
-        let _ = sent_progress.send((stopped, scripts.next.into_iter().flatten().next()));
-        // The recording stops listening once it has what it came for.
-        let _ = sent.send(Ok(update));
-    });
+    let Listening {
+        sessions,
+        updates,
+        view_progress,
+        progress,
+        at_stop,
+        guard,
+    } = listen(&stop, across);
     let before = crate::panics::mark();
     let (session, unused) = start(def, &sessions, human, &progress, &at_stop, guard)?;
     // A seeded game owns no guard, so nothing tells of a panic before its first view.
@@ -244,7 +261,7 @@ fn record_game(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
         if let Some(failure) = boards::lock(&progress).failure.take() {
             return Err(failure);
         }
-        let update = update
+        let (update, other) = update
             .map_err(|_| "the session ended without a view".to_owned())?
             .map_err(|panic| format!("the session {panic}"))?;
         let (handed, waiting) = view_progress.recv().expect("script progress for this view");
@@ -256,7 +273,11 @@ fn record_game(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
         );
         // The seat across the table from a prop is shown it in its first view.
         let watches = clicks.is_empty() && messages.len() == OPENING;
-        let shown = prop::watched(prop.filter(|_| watches), human, &update)?;
+        let shown = match other {
+            Some(other) => other,
+            None if across => return Err("the session sent no view across the table".to_owned()),
+            None => prop::watched(prop.filter(|_| watches), human, &update)?,
+        };
         messages.push(FixtureMessage::game_update(&shown));
         if !clicks.is_empty() && deciding {
             // The seat is the recording's from its stop, which the scripts must be done by:
@@ -267,7 +288,15 @@ fn record_game(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
                 ));
             }
             if reached {
-                answer(&clicks, prop, &sessions, &update, &updates, &mut messages)?;
+                answer(
+                    &clicks,
+                    prop,
+                    &sessions,
+                    &update,
+                    &updates,
+                    &mut messages,
+                    across,
+                )?;
                 return Ok(messages);
             }
         }
@@ -281,7 +310,7 @@ fn record_game(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
             if let Some(action) = waiting {
                 return Err(format!("the board's {action:?} was never taken"));
             }
-            if !deciding && !ended {
+            if !deciding && !ended && !across {
                 // It ends as the human watches (`first handling`): a replay releases views
                 // only on an answer, so one plays it on to the end.
                 messages.push(FixtureMessage::response(ipc::CHOOSE, &()));
@@ -295,10 +324,74 @@ fn record_game(def: &Definition) -> Result<Vec<FixtureMessage>, String> {
                 None => format!("the game ended before {until:?}"),
             });
         }
-        if deciding {
+        if deciding && !across {
             // The stand-in answered; the UI's `choose` would have returned nothing.
             messages.push(FixtureMessage::response(ipc::CHOOSE, &()));
         }
+    }
+}
+
+/// The sessions a recording plays its game in, and what it hears from them.
+struct Listening {
+    sessions: Sessions,
+    /// Each view sent to the human, or the panic that came in its place.
+    updates: Receiver<Result<Seen, String>>,
+    /// With each view, whether it is the stop, and the board's action still to be taken.
+    view_progress: Receiver<(bool, Option<beryl_scenario::Action>)>,
+    /// How far the board's scripts have got.
+    progress: Shared,
+    /// Whether the view last sent was the stop.
+    at_stop: Arc<AtomicBool>,
+    /// The guard that tells of a panic on the session's thread, for that thread to own.
+    guard: crate::panics::Guard,
+}
+
+/// Sessions that send each view to a recording that stops at `stop`, with the view across the
+/// table beside it when `across`.
+fn listen(stop: &Arc<Stop>, across: bool) -> Listening {
+    let (sent, updates) = channel::<Result<Seen, String>>();
+    let told = sent.clone();
+    let guard = crate::panics::Guard::new(move |panic| drop(told.send(Err(panic))));
+    let progress = Shared::default();
+    // Snapshot script progress with each view, before the session can answer its next decision.
+    // The session also uses this snapshot to know when to hand the seat over.
+    let (sent_progress, view_progress) = channel();
+    let at_stop = Arc::new(AtomicBool::new(false));
+    let (scripts, at, said) = (
+        Arc::clone(&progress),
+        Arc::clone(stop),
+        Arc::clone(&at_stop),
+    );
+    // The session sends the other seat's view of an update just before the human's.
+    let other = Arc::new(Mutex::new(None));
+    let drawn = Arc::clone(&other);
+    let sessions = Sessions::new(None, move |update| {
+        crate::panics::watch(|| {
+            let told = sent.clone();
+            move |panic| drop(told.send(Err(panic)))
+        });
+        let scripts = boards::lock(&scripts);
+        let stopped = scripts.done() && at.reached(&update.view);
+        said.store(stopped, Ordering::SeqCst);
+        let _ = sent_progress.send((stopped, scripts.next.into_iter().flatten().next()));
+        // The recording stops listening once it has what it came for.
+        let other = other.lock().unwrap_or_else(PoisonError::into_inner).take();
+        let _ = sent.send(Ok((update, other)));
+    });
+    let sessions = if across {
+        sessions.with_across(move |update| {
+            *drawn.lock().unwrap_or_else(PoisonError::into_inner) = Some(update);
+        })
+    } else {
+        sessions
+    };
+    Listening {
+        sessions,
+        updates,
+        view_progress,
+        progress,
+        at_stop,
+        guard,
     }
 }
 
@@ -318,19 +411,30 @@ fn standing(def: &Definition) -> Result<Option<Standing>, String> {
 
 /// Makes `clicks` from `stop`, the view a recording stopped at and the last of `messages`, and
 /// adds what they led to: on the session's own prompts, or on `prop`, stood on its board in
-/// place of what `stop` asks, whose answer leads to `stop` itself.
+/// place of what `stop` asks, whose answer leads to `stop` itself. With `across`, it adds only
+/// the views across the table that the clicks led to.
 fn answer(
     clicks: &[Written],
     prop: Option<Standing>,
     sessions: &Sessions,
     stop: &GameUpdate,
-    updates: &Receiver<Result<GameUpdate, String>>,
+    updates: &Receiver<Result<Seen, String>>,
     messages: &mut Vec<FixtureMessage>,
+    across: bool,
 ) -> Result<(), String> {
     let Some(prop) = prop else {
-        let mut next = || clicks::next_view(updates);
+        let mut others = Vec::new();
+        let mut next = || {
+            let (update, other) = clicks::next_view(updates)?;
+            others.extend(other);
+            Ok(update)
+        };
         let mut click = |request| sessions.click(request).map_err(|e| e.to_string());
-        return clicks::play(clicks, &mut click, stop, &mut next, messages);
+        let mut heard = Vec::new();
+        let said = if across { &mut heard } else { &mut *messages };
+        clicks::play(clicks, &mut click, stop, &mut next, said)?;
+        messages.extend(others.iter().map(FixtureMessage::game_update));
+        return Ok(());
     };
     // A prop stands where the board's seat is first asked anything.
     if messages.len() != OPENING + 1 {
@@ -354,9 +458,9 @@ fn answer(
 /// unwinds, and a seeded game's first view comes at once, so the panic is taken for this game's
 /// (in a run that fails all the same).
 fn first_view(
-    updates: &Receiver<Result<GameUpdate, String>>,
+    updates: &Receiver<Result<Seen, String>>,
     before: u64,
-) -> Result<Result<GameUpdate, String>, RecvError> {
+) -> Result<Result<Seen, String>, RecvError> {
     let mut seen = None;
     loop {
         match updates.recv_timeout(std::time::Duration::from_secs(1)) {
@@ -605,7 +709,7 @@ mod tests {
             clicks: vec![],
             prop: None,
         };
-        let messages = record_game(&def).unwrap();
+        let messages = record_game(&def, false).unwrap();
         let Some(FixtureMessage::Event { payload, .. }) = messages.last() else {
             panic!("a recording ends on a view");
         };
@@ -614,5 +718,54 @@ mod tests {
             panic!("a recording stops at a decision");
         };
         assert_eq!(decision.kind, Kind::Target);
+    }
+
+    /// The views of `messages`, a recording.
+    fn views(messages: &[FixtureMessage]) -> Vec<PlayerView> {
+        (messages.iter())
+            .filter_map(|message| match message {
+                FixtureMessage::Event { payload, .. } => Some(
+                    serde_json::from_value::<GameUpdate>(payload.clone())
+                        .unwrap()
+                        .view,
+                ),
+                FixtureMessage::Response { .. } => None,
+            })
+            .collect()
+    }
+
+    /// Seen from across the table, a recording is the same game to the same stop, a view of
+    /// each update the human was shown, from the other side and with nothing to decide: for a
+    /// seeded game, and for a board whose clicks play on past its stop.
+    #[test]
+    fn a_recording_from_across_the_table_shows_the_same_updates() {
+        let seeded = serde_json::json!({
+            "name": "t",
+            "seed": 4,
+            "decks": ["wu-control", "wu-control"],
+            "agents": ["random", "random"],
+            "until": "first target decision for seat 1",
+        });
+        let clicked = serde_json::json!({
+            "name": "t",
+            "board": "shape-pick",
+            "until": "first priority decision for seat 0",
+            "clicks": ["Counterspell", "Island", "press decline"],
+        });
+        for json in [seeded, clicked] {
+            let def: Definition = serde_json::from_value(json).unwrap();
+            let seats = def.seats().unwrap();
+            assert_eq!(seats.len(), 2);
+            let path = Path::new("unused");
+            let human = views(&record_from(&def, path, seats[0]).unwrap());
+            let across = views(&record_from(&def, path, seats[1]).unwrap());
+            assert_eq!(human.len(), across.len(), "{}", def.name);
+            for (mine, theirs) in human.iter().zip(&across) {
+                assert_eq!(mine.turn.number, theirs.turn.number);
+                assert_eq!(mine.turn.step, theirs.turn.step);
+                assert_ne!(mine.turn.active, theirs.turn.active);
+                assert!(!matches!(theirs.status, Status::Deciding { .. }));
+            }
+        }
     }
 }

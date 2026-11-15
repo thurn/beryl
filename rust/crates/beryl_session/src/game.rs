@@ -228,6 +228,8 @@ pub struct Game {
     /// When the stand-in hands the human's decisions back to them, if ever.
     hand_over: Option<HandOver>,
     review: Option<crate::ReviewViews>,
+    /// Where the other seat's view of each update goes, if anywhere ([`Game::watch_across`]).
+    across: Option<crate::AcrossViews>,
     at: At,
     /// The turn and step the latest view began, or the game's first.
     seen: (u16, TurnStep),
@@ -375,6 +377,22 @@ impl Game {
         }
     }
 
+    /// Draws the other seat's view of every update the human is sent, with its script, and
+    /// sends it to `emit` just before the human's: what a recording of the game as the seat
+    /// across the table sees it reads. The game plays as it would without it.
+    pub(crate) fn watch_across(&mut self, emit: crate::AcrossViews) {
+        self.across = Some(emit);
+    }
+
+    pub(crate) fn publish_across(&mut self) {
+        if self.across.is_some() {
+            let view = self.opponent_view();
+            if let Some(emit) = &self.across {
+                emit(view);
+            }
+        }
+    }
+
     /// The other seat's view of the latest update, with its script: what a review game
     /// publishes beside the human's, and what the fuzz checks (`fuzz.rs`).
     pub(crate) fn opponent_view(&mut self) -> PlayerView {
@@ -409,6 +427,7 @@ impl Game {
             stand_in_next: AgentDecision(0),
             hand_over: None,
             review: None,
+            across: None,
             at: At::Playing,
             seq: 0,
             replay,

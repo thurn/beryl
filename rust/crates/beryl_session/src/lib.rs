@@ -102,6 +102,10 @@ pub type HandOver = Box<dyn Fn() -> bool + Send>;
 /// Both seats' views of a prepared review game, in the prepared human's seat order.
 pub type ReviewViews = Box<dyn Fn(SessionId, [PlayerView; 2]) + Send>;
 
+/// The view of each update as the seat across the table from the human sees it, sent just
+/// before the human's view of the same update ([`Sessions::with_across`]).
+pub type AcrossViews = Box<dyn Fn(PlayerView) + Send>;
+
 /// An agent a human can play against.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]

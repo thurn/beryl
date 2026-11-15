@@ -1982,9 +1982,13 @@ than the test that reads it.
   smaller), or why it could not be recorded. The builder holds
   `recordings-<hash>.lock`, writes under a temporary name and renames; the
   newest three files are kept.
-- **Card spec moments are recorded from both seats; a fixture from its own.** A
-  fixture's definition names the seat its stop is seen from, and `beryl_cli`
-  cannot yet seat the human across the table from it.
+- **Card spec moments and fixtures are recorded from both seats.** A fixture's
+  definition names the seat its stop is seen from. From the other seat it is the
+  same game, with the same stand-in answers and clicks and the same stop, with
+  the session drawing that seat's view of each update as well
+  (`Sessions::with_across`). That seat never decides in it. A manual table
+  fixture has one viewer, and a prop stands only in its human's view, so those
+  are recorded from their own seat alone.
 
 Measured on 2026-11-15, each the median of five runs at load 40 to 50 on the
 development Mac, in an unoptimized build: building the file from nothing takes
@@ -2382,6 +2386,9 @@ checked by the rest of the project's checks:
   download queue and cache), and later the crate for profiles, bug report
   storage and resuming a game.
 - **The fixture recorder made a library**, in `beryl_cli`.
+- **Recording a fixture from the seat across the table**: `fixture::record_from`
+  in `beryl_cli`, and `Sessions::with_across` in `beryl_session`, which sends
+  the other seat's view of each update beside the human's.
 - **One import of Beryl 3D's tools package**, the `just b3d` recipe, and the
   rule that sorts paths into lanes.
 - **Design tokens**: the data file that generates the web interface's CSS

@@ -239,6 +239,7 @@ fn run(
             return !shared.conceded.load(Ordering::Relaxed);
         }
         game.publish_review(&view);
+        game.publish_across();
         emit(view);
         false
     };
