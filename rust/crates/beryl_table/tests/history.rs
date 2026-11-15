@@ -573,9 +573,9 @@ fn a_save_rejects_new_formats_and_recovers_a_partial_append() {
 }
 
 #[test]
-fn a_recovered_save_can_be_appended_to_and_opened_again() {
+fn every_partial_final_line_can_be_reopened_and_appended_to() {
     use std::fs::OpenOptions;
-    use std::io::Write;
+    use std::io::{Seek, Write};
 
     let path =
         std::env::temp_dir().join(format!("beryl-table-recovery-{}.jsonl", std::process::id()));
@@ -587,18 +587,62 @@ fn a_recovered_save_can_be_appended_to_and_opened_again() {
         .unwrap();
     let mut game = Game::new(fixtures());
     game.act(HOST, &tap(1, true));
-    file.write_all(&game.file).unwrap();
-    file.write_all(b"{\"n\":2,\"action\":\"\xc3").unwrap();
-    let (mut table, mut log, mut chance) = save::open_for_append(&mut file).unwrap();
-    assert_eq!(table, game.table);
-    let entry = log.apply(&mut table, HOST, &UNDO, &mut chance).unwrap();
-    save::append(&mut file, entry).unwrap();
-    let reopened = save::open_for_append(&mut file).unwrap();
+    let complete_prefix = game.file.len();
+    let before = (
+        game.table.clone(),
+        game.log.entries().to_vec(),
+        game.chance.clone(),
+    );
+    game.act(
+        HOST,
+        &Action::Batch {
+            actions: vec![
+                Action::Note {
+                    selection: Selection {
+                        objects: vec![ObjectId(1)],
+                        zone: BATTLEFIELD,
+                    },
+                    note: Some("En garde ⚔".into()),
+                },
+                Action::Roll { count: 1, sides: 6 },
+            ],
+        },
+    );
+
+    for end in complete_prefix..=game.file.len() {
+        file.rewind().unwrap();
+        file.write_all(&game.file[..end]).unwrap();
+        file.set_len(end as u64).unwrap();
+        let (mut table, mut log, mut chance) = save::open_for_append(&mut file).unwrap();
+        let expected = if end == game.file.len() {
+            (&game.table, game.log.entries(), &game.chance)
+        } else {
+            (&before.0, before.1.as_slice(), &before.2)
+        };
+        assert_eq!(
+            (&table, log.entries(), &chance),
+            expected,
+            "at byte {} of the final line",
+            end - complete_prefix
+        );
+
+        let entry = log
+            .apply(
+                &mut table,
+                HOST,
+                &Action::Roll { count: 1, sides: 6 },
+                &mut chance,
+            )
+            .unwrap();
+        save::append(&mut file, entry).unwrap();
+        let (reopened, history, resumed_chance) = save::open_for_append(&mut file).unwrap();
+        assert_eq!(
+            (reopened, history.entries(), resumed_chance),
+            (table, log.entries(), chance)
+        );
+    }
     drop(file);
     std::fs::remove_file(path).unwrap();
-    assert_eq!(reopened.0, table);
-    assert_eq!(reopened.1.entries(), log.entries());
-    assert_eq!(reopened.2, chance);
 }
 
 fn assert_restored(before: &Table, after: &Table) {

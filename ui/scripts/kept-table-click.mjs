@@ -33,14 +33,13 @@ const moveHand = (to) => (view) => ({
 });
 
 await check(
-    "manual table click starts a solo table and draws",
+    "manual table click draws from a solo library",
     async (page) => {
-        await page.getByRole("button", { name: "Solo table" }).click();
-        await page.locator("[data-manual-table]").waitFor();
+        await startTable(page, LANDS);
         const before = await tableView();
         assert.equal(before.table.seats, 1);
         assert.equal(hand(before).length, 7);
-        assert.equal(before.players.you.library.length, 33);
+        assert.equal(before.players.you.library.length, 17);
         const library = pile(page, "library");
         await library.hover();
         await page.mouse.down();

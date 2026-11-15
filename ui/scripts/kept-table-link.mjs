@@ -36,7 +36,9 @@ const goTo = (page, hash) =>
 await check(
     "manual table link freezes both seats and resumes the saved game",
     async (page) => {
-        const { host, guest } = await pair(page, "memory");
+        // The server retains saves from other checks that also use this profile.
+        const hostName = "Reconnect host";
+        const { host, guest } = await pair(page, "memory", { hostName });
         try {
             for (const seat of ["host", "guest"]) {
                 await lobbyCommand(seat, {
@@ -45,13 +47,16 @@ await check(
                     side: [],
                 });
             }
-            await lobbyCommand("guest", { kind: "ready", ready: true });
-            await lobbyCommand("host", { kind: "start" });
+            // Deal a live game before simulating a host restart.
+            assert.deepEqual(await action("host", { start: { first: 0 } }), {
+                ok: true,
+            });
             assert.deepEqual(
                 await action("guest", { life: { seat: 1, set: 17 } }),
                 { ok: true },
             );
             const before = await tableView("guest");
+            assert.equal(before.turn.number, 1);
             await showTableView(guest, before);
             await showTableView(host, await tableView("host"));
             const points = await Promise.all([
@@ -62,7 +67,7 @@ await check(
             await tableCommand("test_cut_table_link", {}, "host");
             await Promise.all([
                 notice(host, "Guest is reconnecting").waitFor(),
-                notice(guest, "Host is reconnecting").waitFor(),
+                notice(guest, `${hostName} is reconnecting`).waitFor(),
             ]);
             assert.deepEqual(await crowdedControls(host), []);
             const sent = [];
@@ -104,10 +109,10 @@ await check(
             const saved = host
                 .getByRole("list", { name: "Saved tables" })
                 .getByRole("listitem")
-                .filter({ hasText: "Host · Guest" });
+                .filter({ hasText: `${hostName} · Guest` });
             await saved.getByRole("button", { name: "Resume table" }).click();
             await host.locator("[data-manual-table]").waitFor();
-            await notice(guest, "Host is reconnecting").waitFor({
+            await notice(guest, `${hostName} is reconnecting`).waitFor({
                 state: "hidden",
             });
             const guestView = await tableView("guest");
@@ -136,7 +141,7 @@ await check(
             assert.equal((await tableView("host")).players.opponent.life, 19);
 
             await leave("host");
-            await notice(guest, "Host left the table").waitFor();
+            await notice(guest, `${hostName} left the table`).waitFor();
             await guest
                 .getByRole("button", { name: "Lobby", exact: true })
                 .click();

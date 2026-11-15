@@ -6,11 +6,11 @@ use std::sync::mpsc::{Receiver, SyncSender, channel, sync_channel};
 use beryl_link::memory::{self, MemoryLink};
 use beryl_link::wire::{Hello, Message, RefusalReason, TableStatus, decode, encode};
 use beryl_link::{Link, LinkError};
-use beryl_session::ipc::LobbyUpdate;
-use beryl_session::protocol::{LinkState, TableAction, TableView};
-use beryl_session::script::{Table as Stage, failure};
+use beryl_session::ipc::{LobbyUpdate, TableAnswerRequest};
+use beryl_session::protocol::{Answer, LinkState, TableAction, TablePrompt, TableView};
+use beryl_session::script::{Act, Span, Table as Stage, failure};
 use beryl_session::{GameUpdate, SessionIds, WIRE_HASH};
-use beryl_table::action::{Adjustment, Destination, Position, Selection};
+use beryl_table::action::{Adjustment, Destination, Flow, Position, Selection};
 use beryl_table::save;
 use beryl_table::state::Zone;
 use beryl_table::{Action, Refusal, Seat};
@@ -123,6 +123,13 @@ fn manual(update: &GameUpdate) -> &TableView {
     update.view.table.as_ref().unwrap()
 }
 
+fn assert_guest_keeps_host_cards_private(update: &GameUpdate) {
+    assert!(manual(update).prompt.is_none());
+    let json = serde_json::to_string(update).unwrap();
+    assert!(json.contains("Plains"));
+    assert!(!json.contains("Island"));
+}
+
 fn load(seat: Seat, card: &str) -> TableAction {
     Action::LoadDeck {
         seat,
@@ -131,7 +138,7 @@ fn load(seat: Seat, card: &str) -> TableAction {
     }
 }
 
-fn life(seat: Seat, delta: i32) -> TableAction {
+fn life<Id>(seat: Seat, delta: i32) -> Action<Id> {
     Action::Life {
         seat,
         adjustment: Adjustment::Add(delta),
@@ -355,6 +362,7 @@ fn a_drop_freezes_actions_and_resume_replays_the_save_for_the_same_guest() {
     );
     let (mut guest, resumed) = join(&links, TableStatus::Resumed);
     emitted.recv().unwrap();
+    assert_guest_keeps_host_cards_private(&resumed);
     assert!(Stage::of(&resumed.view).shows(&Stage::of(&guest_before.view)));
     host.act(life(HOST, -1)).unwrap();
     assert_eq!(guest_update(&mut guest).view.players.opponent.life, 26);
@@ -404,6 +412,82 @@ fn overlapping_local_and_guest_actions_publish_the_same_order() {
 }
 
 #[test]
+fn a_rejoining_guest_cannot_see_or_answer_the_hosts_private_prompt() {
+    let directory = tempfile::tempdir().unwrap();
+    let (host, emitted) = tables(directory.path());
+    let (links, incoming) = sync_channel(1);
+    host.host(incoming, HostSettings::new("Derek", INVITE, SECRET))
+        .unwrap();
+    emitted.recv().unwrap();
+    host.act(load(HOST, "Island")).unwrap();
+    emitted.recv().unwrap();
+    let (mut guest, _) = join(&links, TableStatus::New);
+    emitted.recv().unwrap();
+    accepted_guest_action(&mut guest, 1, &load(GUEST, "Plains"));
+    emitted.recv().unwrap();
+    host.act(start(HOST)).unwrap();
+    emitted.recv().unwrap();
+    guest_update(&mut guest);
+
+    host.open_library_prompt(HOST, "Scry".into(), Flow::Scry, 2, |_| Ok(life(HOST, -1)))
+        .unwrap();
+    let opened = emitted.recv().unwrap();
+    assert!(matches!(
+        manual(&opened).prompt,
+        Some(TablePrompt::Sort { .. })
+    ));
+    assert_guest_keeps_host_cards_private(&guest_update(&mut guest));
+    guest.sever();
+    assert_eq!(
+        manual(&emitted.recv().unwrap()).link,
+        LinkState::Reconnecting
+    );
+    assert_eq!(host.answer(Answer::Done), Err(Refusal::Stale));
+    assert_eq!(
+        host.open_library_prompt(GUEST, "Scry".into(), Flow::Scry, 2, |_| Ok(life(GUEST, -1))),
+        Err(Refusal::Stale)
+    );
+    assert!(emitted.try_recv().is_err());
+
+    let (mut guest, resumed) = join(&links, TableStatus::Resumed);
+    assert_guest_keeps_host_cards_private(&resumed);
+    let script = resumed.view.script.as_ref().unwrap();
+    assert!(script.reset.is_some());
+    assert!(script.beats.iter().flatten().all(|step| matches!(
+        step.act,
+        Act::Lift {
+            span: Span::Begin,
+            ..
+        }
+    )));
+    emitted.recv().unwrap();
+    send(
+        &mut guest,
+        &Message::Act {
+            n: 1,
+            action: serde_json::to_value(TableAnswerRequest {
+                answer: Answer::Done,
+            })
+            .unwrap(),
+        },
+    );
+    assert_eq!(
+        receive(&mut guest).unwrap(),
+        Message::Refused {
+            n: 1,
+            reason: RefusalReason::Stale
+        }
+    );
+    assert!(emitted.try_recv().is_err());
+    assert_eq!(
+        manual(&host.current().unwrap()).prompt,
+        manual(&opened).prompt
+    );
+    host.answer(Answer::Done).unwrap();
+    assert_eq!(guest_update(&mut guest).view.players.opponent.life, 19);
+}
+
+#[test]
 fn lobby_sends_only_the_viewers_deck_and_unknown_names() {
     let directory = tempfile::tempdir().unwrap();
     let (send, events) = channel();
@@ -422,6 +506,9 @@ fn lobby_sends_only_the_viewers_deck_and_unknown_names() {
         else {
             unreachable!()
         };
+        let json = payload.to_string();
+        assert!(!json.contains("Host secret"));
+        assert!(!json.contains(INVITE));
         serde_json::from_value::<LobbyUpdate>(payload)
             .unwrap()
             .view
@@ -442,9 +529,6 @@ fn lobby_sends_only_the_viewers_deck_and_unknown_names() {
     assert!(hidden.invite.is_none());
     assert_eq!(hidden.seats[0].main_count, 10);
     assert_eq!(hidden.seats[0].side_count, 2);
-    let json = serde_json::to_string(&hidden).unwrap();
-    assert!(!json.contains("Host secret"));
-
     guest_act(
         &mut guest,
         1,

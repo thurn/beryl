@@ -91,7 +91,11 @@ async function openTable(page) {
 }
 
 /** Give a live host page a guest in the same paused-clock browser context. */
-export async function pair(host, link = "local", { fromStart = false } = {}) {
+export async function pair(
+    host,
+    link = "local",
+    { fromStart = false, hostName = "Host" } = {},
+) {
     const guest = await host.context().newPage();
     try {
         const route = await tableRoute(guest, false, "guest");
@@ -103,7 +107,7 @@ export async function pair(host, link = "local", { fromStart = false } = {}) {
         const { invite } = await tableCommand(
             "table_host",
             {
-                request: { link, settings: { name: "Host" } },
+                request: { link, settings: { name: hostName } },
             },
             "host",
         );

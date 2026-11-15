@@ -105,9 +105,7 @@ impl HostSession {
         on_done: impl Fn(&PromptState) -> Result<Action, Refusal> + Send + Sync + 'static,
     ) -> Result<(), Refusal> {
         let mut host = self.0.lock();
-        if host.stopped {
-            return Err(Refusal::Stale);
-        }
+        host.check_available(LOCAL)?;
         let state = build(host.table.table())?;
         let all = state.observer_lift().is_some();
         let HostedTable { table, save, .. } = &mut *host;
@@ -168,14 +166,19 @@ struct HostedTable {
 }
 
 impl HostedTable {
-    // Both IPC and the authenticated link call this with the same table
-    // queue lock held until both views have been sent or queued.
-    fn apply(&mut self, seat: Seat, request: Request) -> Result<(), Refusal> {
+    fn check_available(&self, seat: Seat) -> Result<(), Refusal> {
         if self.stopped
             || (self.sender.is_none() && (seat != LOCAL || self.link != LinkState::Alone))
         {
             return Err(Refusal::Stale);
         }
+        Ok(())
+    }
+
+    // Both IPC and the authenticated link call this with the same table
+    // queue lock held until both views have been sent or queued.
+    fn apply(&mut self, seat: Seat, request: Request) -> Result<(), Refusal> {
+        self.check_available(seat)?;
         let was_playing = self.table.table().game_match.in_game;
         let all = match request {
             Request::Action(action) => {
