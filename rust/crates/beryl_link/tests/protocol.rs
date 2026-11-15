@@ -332,6 +332,10 @@ fn a_severed_link_redials_and_resumes_with_a_whole_view() {
         disconnect.close().unwrap();
         assert_eq!(events.recv().unwrap(), Event::Reconnecting);
         verify_connected(&events, &Event::Resumed { seat: 1 }, 1);
+        assert_eq!(guest.act_on(1, json!("increment")), Err(LinkError::Closed));
+        let n = guest.act_on(2, json!("increment")).unwrap();
+        assert_eq!(events.recv().unwrap(), Event::Update(json!({"count": 2})));
+        assert_eq!(events.recv().unwrap(), Event::Done { n });
         let sender = table.lock().sender.clone().unwrap();
         sender.leave().unwrap();
         assert_eq!(events.recv().unwrap(), Event::Left);

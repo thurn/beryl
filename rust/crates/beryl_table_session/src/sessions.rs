@@ -5,38 +5,60 @@ use std::io;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, mpsc::Receiver};
 
-use beryl_link::Link;
+use beryl_link::guest::Guest;
 use beryl_link::host::Sender;
-use beryl_session::protocol::TableAction;
+use beryl_link::{Link, LinkError};
+use beryl_session::protocol::{LinkState, TableAction};
 use beryl_session::{GameUpdate, SessionId, SessionIds};
 use beryl_table::deck::Deck;
 use beryl_table::save::SaveError;
 use beryl_table::{Action, Chance, Log, Refusal, Seat, Table};
+use serde_json::Value;
 
-use crate::host::{Emit, HostSession};
+use crate::guest::GuestSession;
+use crate::host::HostSession;
 use crate::publication::PublishedTable;
 use crate::saves::{self, HostSettings, Save, SavedTable};
 
 const SOLO: Seat = Seat(0);
 
+pub(super) type Emit = Arc<dyn Fn(GameUpdate) + Send + Sync>;
+pub(super) type EmitEvent = Arc<dyn Fn(TableEvent) + Send + Sync>;
+
+/// Events outside the game feed for a linked table.
+#[derive(Debug, PartialEq)]
+pub enum TableEvent {
+    Link(LinkState),
+    Error(String),
+    Lobby(Value),
+}
+
 pub struct TableSessions {
     ids: SessionIds,
-    // Serialize actions and their publication, so two callers can't emit views out of order.
+    // Serialize replacements with solo actions and stop the old table before publishing the next.
     current: Mutex<Option<Current>>,
     emit: Emit,
+    emit_event: EmitEvent,
     directory: Option<PathBuf>,
 }
 
 enum Current {
     Solo(Box<Solo>),
     Hosted(HostSession),
+    Joined(GuestSession),
+}
+
+enum Departure {
+    Host(Sender),
+    Guest(Guest),
 }
 
 impl Current {
-    fn stop(&self) -> Option<Sender> {
+    fn stop(&self) -> Option<Departure> {
         match self {
             Self::Solo(_) => None,
-            Self::Hosted(host) => host.stop(),
+            Self::Hosted(host) => host.stop().map(Departure::Host),
+            Self::Joined(guest) => guest.stop().map(Departure::Guest),
         }
     }
 }
@@ -68,6 +90,7 @@ impl TableSessions {
             ids,
             current: Mutex::default(),
             emit: Arc::new(emit),
+            emit_event: Arc::new(|_| {}),
             directory: None,
         }
     }
@@ -82,6 +105,14 @@ impl TableSessions {
             directory: Some(data_dir.into().join("tables")),
             ..Self::new(ids, emit)
         }
+    }
+
+    /// Set the emitter for link and lobby notifications. Like the game
+    /// emitter, it must not call back into the session.
+    #[must_use]
+    pub fn with_events(mut self, emit: impl Fn(TableEvent) + Send + Sync + 'static) -> Self {
+        self.emit_event = Arc::new(emit);
+        self
     }
 
     /// Start a table with one seat, replacing any table after its new view is ready.
@@ -135,6 +166,33 @@ impl TableSessions {
         self.open_host(self.lock(), links, save, table, log, Chance::fresh(seed))
     }
 
+    /// Start a guest session. Its first view arrives after the handshake.
+    /// The connector is reused to redial after an interrupted connection.
+    pub fn join<L: Link + 'static>(
+        &self,
+        connect: impl FnMut() -> Result<L, LinkError> + Send + 'static,
+        name: impl Into<String>,
+        secret: impl Into<String>,
+    ) -> SessionId {
+        let mut current = self.lock();
+        let session = self.ids.allocate();
+        let (guest, events) = GuestSession::new(
+            session,
+            connect,
+            name.into(),
+            secret.into(),
+            Arc::clone(&self.emit),
+            Arc::clone(&self.emit_event),
+        );
+        let previous = replace(&mut current, Current::Joined(guest));
+        if let Some(Current::Joined(guest)) = current.as_ref() {
+            guest.listen(events);
+        }
+        drop(current);
+        leave_link(previous);
+        session
+    }
+
     /// Replay a save and listen for the original guest on the supplied links.
     pub fn resume(
         &self,
@@ -186,8 +244,14 @@ impl TableSessions {
         }
         let table = PublishedTable::new(table, log, chance).map_err(invalid)?;
         let session = self.ids.allocate();
-        let host =
-            HostSession::new(session, table, save, Arc::clone(&self.emit)).map_err(invalid)?;
+        let host = HostSession::new(
+            session,
+            table,
+            save,
+            Arc::clone(&self.emit),
+            Arc::clone(&self.emit_event),
+        )
+        .map_err(invalid)?;
         let update = host.current();
         let previous = replace(&mut current, Current::Hosted(host));
         (self.emit)(update);
@@ -212,13 +276,19 @@ impl TableSessions {
                 drop(current);
                 apply(action)
             }
+            Current::Joined(guest) => {
+                let apply = guest.local_action();
+                drop(current);
+                apply(action)
+            }
         }
     }
 
     pub fn current(&self) -> Option<GameUpdate> {
-        self.lock().as_ref().map(|current| match current {
-            Current::Solo(solo) => solo.update(),
-            Current::Hosted(host) => host.current(),
+        self.lock().as_ref().and_then(|current| match current {
+            Current::Solo(solo) => Some(solo.update()),
+            Current::Hosted(host) => Some(host.current()),
+            Current::Joined(guest) => guest.current(),
         })
     }
 
@@ -235,12 +305,16 @@ impl TableSessions {
     }
 }
 
-fn replace(current: &mut Option<Current>, next: Current) -> Option<Sender> {
+fn replace(current: &mut Option<Current>, next: Current) -> Option<Departure> {
     current.replace(next).and_then(|old| old.stop())
 }
 
-fn leave_link(sender: Option<Sender>) {
-    if let Some(sender) = sender {
-        let _ = sender.leave();
+fn leave_link(departure: Option<Departure>) {
+    match departure {
+        Some(Departure::Host(sender)) => {
+            let _ = sender.leave();
+        }
+        Some(Departure::Guest(guest)) => drop(guest),
+        None => {}
     }
 }

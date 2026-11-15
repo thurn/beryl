@@ -36,6 +36,7 @@ struct State {
     ready: bool,
     stopped: bool,
     next_action: u64,
+    connection_number: u64,
 }
 
 pub struct Guest {
@@ -48,9 +49,23 @@ impl Guest {
     /// Number and send an action while connected. A reconnect never replays an
     /// unacknowledged action, since it may already have taken effect.
     pub fn act(&self, action: Value) -> Result<u64, LinkError> {
+        self.send_action(action, None)
+    }
+
+    /// Send only on the indicated connection, numbered from 1 in the order
+    /// the caller receives Joined or Resumed. Use this when the caller must
+    /// first process that connection's snapshot before sending any actions.
+    pub fn act_on(&self, connection: u64, action: Value) -> Result<u64, LinkError> {
+        self.send_action(action, Some(connection))
+    }
+
+    fn send_action(&self, action: Value, connection: Option<u64>) -> Result<u64, LinkError> {
         let mut state = self.state.lock().map_err(|_| LinkError::Closed)?;
         let n = state.next_action;
-        if !state.ready || state.stopped {
+        if !state.ready
+            || state.stopped
+            || connection.is_some_and(|number| number != state.connection_number)
+        {
             return Err(LinkError::Closed);
         }
         state
@@ -118,6 +133,7 @@ pub fn join<L: Link + 'static>(
         ready: false,
         stopped: false,
         next_action: 1,
+        connection_number: 0,
     }));
     let (event_sender, events) = mpsc::sync_channel(EVENT_CAPACITY);
     let (wake, cancellation) = mpsc::channel();
@@ -230,10 +246,11 @@ impl Session<'_> {
         match connection.handshake()? {
             Message::Welcome { seat, table, host } => {
                 connection.set_name(host);
-                let state = self.state.lock().map_err(|_| LinkError::Closed)?;
+                let mut state = self.state.lock().map_err(|_| LinkError::Closed)?;
                 if state.stopped {
                     return Ok(End::Left);
                 }
+                state.connection_number += 1;
                 *joined = true;
                 *reconnecting = false;
                 if !self.emit(match table {

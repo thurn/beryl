@@ -18,12 +18,11 @@ use serde_json::Value;
 use crate::publication::PublishedTable;
 use crate::refusal::to_wire;
 use crate::saves::Save;
+use crate::sessions::{Emit, EmitEvent, TableEvent};
 
 const LOCAL: Seat = Seat(0);
 const GUEST: Seat = Seat(1);
 const ACCEPT_POLL: Duration = Duration::from_millis(100);
-
-pub(super) type Emit = Arc<dyn Fn(GameUpdate) + Send + Sync>;
 
 pub(super) struct HostSession(Arc<TableQueue<HostedTable>>);
 
@@ -33,6 +32,7 @@ impl HostSession {
         mut table: PublishedTable,
         save: Save,
         emit: Emit,
+        emit_event: EmitEvent,
     ) -> Result<Self, Refusal> {
         table.set_names(seat_names(&save));
         table.reset_seat(LOCAL)?;
@@ -46,6 +46,7 @@ impl HostSession {
             table,
             save,
             emit,
+            emit_event,
             link,
             sender: None,
             stopped: false,
@@ -121,6 +122,7 @@ struct HostedTable {
     table: PublishedTable,
     save: Save,
     emit: Emit,
+    emit_event: EmitEvent,
     link: LinkState,
     sender: Option<Sender>,
     stopped: bool,
@@ -234,6 +236,12 @@ impl Hosted for HostedTable {
         let link = connected(&sender.peer());
         self.sender = Some(sender);
         self.link_changed(link);
+    }
+
+    fn version_mismatch(&mut self, reason: &str) {
+        if !self.stopped {
+            (self.emit_event)(TableEvent::Error(reason.into()));
+        }
     }
 
     fn left(&mut self, _: u8) {

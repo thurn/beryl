@@ -13,10 +13,13 @@ pub fn to_wire(refusal: Refusal) -> RefusalReason {
 }
 
 pub fn reply_from_wire(reason: RefusalReason) -> TableActReply {
-    let refusal = match reason {
+    TableActReply::from(Err(from_wire(reason)))
+}
+
+pub(crate) fn from_wire(reason: RefusalReason) -> Refusal {
+    match reason {
         RefusalReason::Permission => Refusal::Permission,
         RefusalReason::Stale => Refusal::Stale,
         RefusalReason::Invalid { blocking } => Refusal::Invalid { blocking },
-    };
-    TableActReply::from(Err(refusal))
+    }
 }

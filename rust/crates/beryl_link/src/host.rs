@@ -29,6 +29,9 @@ pub trait Hosted {
     /// already queued when this runs.
     fn connected(&mut self, _seat: u8, _sender: Sender) {}
 
+    /// Report a wire mismatch to the local player after authenticating the invite.
+    fn version_mismatch(&mut self, _reason: &str) {}
+
     fn left(&mut self, seat: u8);
     fn dropped(&mut self, seat: u8);
 }
@@ -106,6 +109,7 @@ pub fn serve(
     }
     if hello.wire != host.wire {
         let reason = VERSION_MISMATCH.to_owned();
+        hosted.lock().version_mismatch(&reason);
         let _ = connection.outbox.finish(&Message::Mismatch {
             reason: reason.clone(),
         });
