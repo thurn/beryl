@@ -197,7 +197,6 @@ pub fn object(slot: ObjectId, zone: ZoneName, side: Side, name: Option<&str>) ->
         hidden_pick: false,
         custom_colors: None,
         token_printing: None,
-        hidden_pick: false,
     }
 }
 
