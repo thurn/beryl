@@ -23,7 +23,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import timing, windows
+from . import timing, tokens, windows
 from .ingest import FileSource, LineSource, Row
 
 PROVIDER = "claude"
@@ -310,6 +310,12 @@ class Transcripts(LineSource):
             "cache_read_tokens": number(usage, "cache_read_input_tokens"),
             "output_tokens": number(usage, "output_tokens"),
         }
+        written = usage.get("cache_creation")
+        hour = (
+            number(written, "ephemeral_1h_input_tokens")
+            if isinstance(written, dict)
+            else 0
+        )
         model = message.get("model")
         rows: list[Row] = [
             (
@@ -325,6 +331,7 @@ class Transcripts(LineSource):
                         else None
                     ),
                     **tokens,
+                    "cache_write_1h_tokens": hour,
                     "context_tokens": tokens["input_tokens"]
                     + tokens["cache_write_tokens"]
                     + tokens["cache_read_tokens"],
@@ -364,7 +371,8 @@ class Transcripts(LineSource):
         found = [transcript_of(p) for p in changed]
         written = windows.derive(db, self.host, PROVIDER, found)
         tops = sorted({parent or transcript for transcript, parent in found})
-        return written + timing.refresh(db, self.host, PROVIDER, tops)
+        written += timing.refresh(db, self.host, PROVIDER, tops)
+        return written + tokens.refresh(db, self.host, PROVIDER, tops)
 
 
 def iso_from_milliseconds(value: object) -> str | None:

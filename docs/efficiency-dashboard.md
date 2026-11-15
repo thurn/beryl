@@ -460,15 +460,29 @@ it records.
 
 ```json
 {
-  "as_of": "2026-11-15",
-  "source": "the address of the provider's price page",
-  "models": {
-    "example-model": {
-      "input": 3.0, "cache_write": 6.0, "cache_read": 0.3, "output": 15.0
+  "tables": [
+    {
+      "as_of": "2026-11-15",
+      "source": "the address of the provider's price page",
+      "models": {
+        "example-model": {
+          "input": 3.0, "cache_write": 3.75, "cache_write_1h": 6.0,
+          "cache_read": 0.3, "output": 15.0
+        }
+      }
     }
-  }
+  ]
 }
 ```
+
+- Claude Code writes to the 1-hour cache, which costs more than the 5-minute
+  one. The transcript's `usage.cache_creation` says how many cache write tokens
+  went to each, and each part is priced at its own rate. Both are still the one
+  class "cache write".
+- A model may also have `above`, its prices for a prompt over a number of
+  tokens, as Haiku 5.5 has.
+- The earliest table also prices requests older than it, since the store holds
+  requests from before the file was written.
 
 - A request by a model that is not in the table has an unknown price. Its tokens
   are still counted, its dollars are null, and `coverage` lists the model. A sum

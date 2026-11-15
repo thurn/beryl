@@ -30,6 +30,7 @@ TABLES = {
     "prompts",
     "settings",
     "window_time",
+    "window_dollars",
     "transcripts",
     "enact_events",
     "tool_results",

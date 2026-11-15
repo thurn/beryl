@@ -64,12 +64,15 @@ class Transcript:
         usage: tuple[int, int, int, int] = (1, 10, 100, 5),
         tools: tuple[tuple[str, str, Mapping[str, object]], ...] = (),
         stop: str | None = None,
+        model: str = "claude-test",
+        hour: int = 0,
     ) -> Transcript:
         """A request at `time` with `usage` as (input, cache write, cache read, output), a
         text block and a `tool_use` block for each of `tools`, given as (id, name, input).
-        It stops for its tools, or with `stop`, else ends the turn.
+        It stops for its tools, or with `stop`, else ends the turn. `hour` of its cache
+        writes went to the 1-hour cache.
         """
-        counts = dict(
+        counts: dict[str, object] = dict(
             zip(
                 [
                     "input_tokens",
@@ -80,6 +83,10 @@ class Transcript:
                 usage,
             )
         )
+        counts["cache_creation"] = {
+            "ephemeral_1h_input_tokens": hour,
+            "ephemeral_5m_input_tokens": usage[1] - hour,
+        }
         blocks: list[dict[str, object]] = [{"type": "text", "text": "thinking aloud"}]
         for call, name, given in tools:
             use: dict[str, object] = {"type": "tool_use", "id": call, "name": name}
@@ -93,7 +100,7 @@ class Transcript:
                         "timestamp": time,
                         "message": {
                             "id": message,
-                            "model": "claude-test",
+                            "model": model,
                             "usage": counts,
                             "content": [block],
                             "stop_reason": stop

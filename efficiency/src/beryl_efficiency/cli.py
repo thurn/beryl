@@ -243,6 +243,16 @@ def coverage(db: sqlite3.Connection, pending: dict[str, int] | None = None) -> R
     lines.append(
         f"ingests   {count} since {since or '-'}: wall {wall:.2f} s  cpu {cpu:.2f} s"
     )
+    unpriced = {
+        str(r[0]): int(r[1])
+        for r in db.execute("""SELECT coalesce(model, '-'), count(*) FROM requests
+            WHERE dollars IS NULL AND (context_tokens > 0 OR output_tokens > 0)
+            GROUP BY model ORDER BY count(*) DESC""")
+    }
+    lines.append(
+        "no price  requests by models with no price: "
+        + (", ".join(f"{k} {v}" for k, v in unpriced.items()) or "none")
+    )
     other = unmatched(db)
     share = other["other_share"]
     lines.append(
@@ -281,6 +291,7 @@ def coverage(db: sqlite3.Connection, pending: dict[str, int] | None = None) -> R
             **missing,
             "unread": pending,
             "unmatched": other,
+            "unpriced": unpriced,
         },
         lines,
         ["efficiency sql 'select * from sources'"],

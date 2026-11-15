@@ -262,6 +262,34 @@ MIGRATIONS: tuple[str, ...] = (
     -- times that earlier ingests did not keep.
     DELETE FROM sources WHERE source = 'claude';
     """,
+    """
+    -- The part of `cache_write_tokens` written to the 1-hour cache, which costs more than
+    -- the 5-minute one, and each request's dollars by class (null when its model has no
+    -- price).
+    ALTER TABLE requests ADD COLUMN cache_write_1h_tokens INTEGER;
+    ALTER TABLE requests ADD COLUMN input_dollars REAL;
+    ALTER TABLE requests ADD COLUMN cache_write_dollars REAL;
+    ALTER TABLE requests ADD COLUMN cache_read_dollars REAL;
+    ALTER TABLE requests ADD COLUMN output_dollars REAL;
+    -- Each window's tokens and dollars split three ways, each summing to the window's
+    -- dollars: `split` is `class` (input, cache_write, cache_read, output), `source` (fixed
+    -- prefix, `new: <who>`, `carried: <who>`, output) or `purpose` (wake-up, working). A
+    -- row of split `unpriced` names a model with no price whose requests the dollars leave
+    -- out, so the window's dollars are a lower bound. `start` is the window's start.
+    CREATE TABLE window_dollars (
+        host TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        transcript TEXT NOT NULL,
+        start TEXT NOT NULL,
+        split TEXT NOT NULL,
+        name TEXT NOT NULL,
+        tokens REAL NOT NULL,
+        dollars REAL NOT NULL,
+        PRIMARY KEY (host, provider, transcript, start, split, name)
+    );
+    -- Transcripts are read again from the start for the 1-hour cache writes.
+    DELETE FROM sources WHERE source = 'claude';
+    """,
 )
 
 

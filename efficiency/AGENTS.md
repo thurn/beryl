@@ -43,6 +43,10 @@ store" and "Isolation" before changing anything here.
   `timing.py` splits each window's seconds into the categories of "Time
   accounting" and stores them in `window_time`. Kinds and splits are derived
   again for every transcript when the kinds table changes.
+- `tokens.py`: dollars from `data/efficiency-prices.json`, the parts of each
+  request's context, tool calls' added tokens and carrying cost, and each
+  window's dollars by class, source and purpose in `window_dollars`. All of it
+  is derived again when the price table changes.
 - `cli.py`: the queries `just efficiency` runs; `render.py`: results and their
   text tables.
 

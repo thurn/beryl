@@ -84,6 +84,35 @@ def time_lines(split: list[dict[str, object]]) -> list[str]:
     return lines
 
 
+def dollar_split(db: sqlite3.Connection, bead: str) -> dict[str, dict[str, float]]:
+    """The bead's windows' dollars by split (`class`, `source`, `purpose`) and name, and the
+    models with no price under `unpriced` with their tokens."""
+    found: dict[str, dict[str, float]] = {}
+    for split, name, tokens, dollars in db.execute(
+        """SELECT d.split, d.name, sum(d.tokens), sum(d.dollars) FROM window_dollars AS d
+        JOIN windows AS w ON w.host = d.host AND w.provider = d.provider
+            AND w.transcript = d.transcript AND w.start = d.start
+        WHERE w.bead = ? GROUP BY d.split, d.name""",
+        (bead,),
+    ):
+        value = float(tokens) if split == "unpriced" else float(dollars)
+        found.setdefault(str(split), {})[str(name)] = round(value, 4)
+    return found
+
+
+def dollar_lines(split: dict[str, dict[str, float]]) -> list[str]:
+    """The total, marked as a lower bound when a model had no price, then each split."""
+    total = sum(split.get("class", {}).values())
+    unpriced = split.get("unpriced", {})
+    mark = " or more (no price for " + ", ".join(unpriced) + ")" if unpriced else ""
+    lines = [f"dollars   {total:.2f}{mark}"]
+    for name in ("class", "source", "purpose"):
+        parts = sorted(split.get(name, {}).items(), key=lambda kv: -kv[1])
+        shown = " | ".join(f"{k} {v:.2f}" for k, v in parts if v >= 0.005)
+        lines.append(f"  by {name:<8}{shown or '-'}")
+    return lines
+
+
 def report(db: sqlite3.Connection, bead: str) -> Result:
     title_row = db.execute("SELECT title FROM beads WHERE id = ?", (bead,)).fetchone()
     title = str(title_row[0]) if title_row and title_row[0] else None
@@ -115,6 +144,7 @@ def report(db: sqlite3.Connection, bead: str) -> Result:
         )
     ]
     split = time_split(db, bead)
+    money = dollar_split(db, bead)
     ran, have = hosts_of(db, bead)
     no_data = not sessions and ran is not None and ran not in have
     wall = round(sum(float(str(s["minutes"])) for s in sessions), 1)
@@ -133,6 +163,7 @@ def report(db: sqlite3.Connection, bead: str) -> Result:
             "tokens   "
             + "  ".join(f"{k.removesuffix('_tokens')} {v}" for k, v in tokens.items()),
             *time_lines(split),
+            *dollar_lines(money),
             "",
             *table(
                 ["session", "title", "kind", "start", "minutes"],
@@ -153,6 +184,7 @@ def report(db: sqlite3.Connection, bead: str) -> Result:
             "tokens": None if no_data else tokens,
             "wall_minutes": None if no_data else wall,
             "time": None if no_data else split,
+            "dollars": None if no_data else money,
             "sessions": sessions,
         },
         lines,
