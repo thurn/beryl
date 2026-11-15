@@ -80,6 +80,9 @@ targets:
       - sdk: MetalKit.framework
       - sdk: QuartzCore.framework
       - sdk: Security.framework
+      # The iroh static library uses these to read network and DNS configuration.
+      - sdk: SystemConfiguration.framework
+      - sdk: libresolv.tbd
       - sdk: UIKit.framework
       - sdk: WebKit.framework
     preBuildScripts:
