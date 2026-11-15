@@ -18,6 +18,7 @@ import type {
   Under,
 } from "../stage/pointer";
 import { shakeRefusal } from "../stage/Refusal";
+import type { TableArrows } from "./arrows";
 import type { TableDrag } from "./drag";
 
 type ObjectKind =
@@ -67,6 +68,12 @@ type Aim = (
   over: TableTarget | undefined,
   done: boolean,
 ) => void;
+interface AimRegistration {
+  drag: Aim;
+  cancel: () => void;
+  pick: (target: TableTarget) => boolean;
+  picking: () => boolean;
+}
 type Sweep = (from: Point, to: Point, done: boolean) => void;
 type DragRegistration = Pick<PointerClient, "dragSource" | "over" | "lift"> & {
   canHold?(): boolean;
@@ -92,12 +99,13 @@ export class TableClient {
   #cardClick?: (target: CardTarget, keys: PointerKeys) => boolean;
   view?: PlayerView;
   drag?: TableDrag;
+  arrows?: TableArrows;
   #surface?: DomSurface;
   readonly #clicks = new Map<TableTarget["kind"], Click>();
   readonly #secondaries = new Set<Secondary>();
   #drop?: DropHandler;
   #drag?: DragRegistration;
-  #aim?: Aim;
+  #aim?: AimRegistration;
   #sweep?: Sweep;
   #cancelSweep?: () => void;
   readonly #keys = new Set<(event: KeyboardEvent) => void>();
@@ -135,6 +143,7 @@ export class TableClient {
     // References expire with the view. A held press cannot acquire new ones on release.
     this.pointer.cancel();
     this.#drag?.viewChanged?.();
+    this.#aim?.cancel();
   }
 
   get surface() {
@@ -191,6 +200,7 @@ export class TableClient {
   }
 
   readonly setSurface = (surface: DomSurface | undefined) => {
+    if (!surface) this.#aim?.cancel();
     this.#surface = surface;
   };
 
@@ -221,7 +231,7 @@ export class TableClient {
     this.pointer.rejectDrop(name);
   }
 
-  onAim(handler: Aim) {
+  onAim(handler: AimRegistration) {
     this.#aim = handler;
   }
 
@@ -283,6 +293,7 @@ export class TableClient {
     keys: PointerKeys,
     element?: HTMLElement,
   ): boolean {
+    if (this.#aim?.pick(target)) return true;
     if ("name" in target && this.#cardClick?.(target, keys)) return true;
     const handler = this.#clicks.get(target.kind);
     handler?.(target, keys, element);
@@ -303,6 +314,7 @@ export class TableClient {
     dragSource: (element, keys, at) =>
       this.#drag?.dragSource?.(element, keys, at),
     holdable: (name) =>
+      !this.#aim?.picking() &&
       !!this.#drop &&
       (this.#drag?.canHold?.() ?? true) &&
       !!this.card(name, true)?.action &&
@@ -321,8 +333,9 @@ export class TableClient {
     },
     aim: (name, at, over, done) => {
       const from = this.card(name);
-      if (from) this.#aim?.(from, at, this.#under(over), done);
+      if (from) this.#aim?.drag(from, at, this.#under(over), done);
     },
+    cancelAim: () => this.#aim?.cancel(),
     sweep: (from, to, done) => this.#sweep?.(from, to, done),
     cancelSweep: () => this.#cancelSweep?.(),
   };

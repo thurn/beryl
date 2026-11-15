@@ -69,7 +69,10 @@ fn moved(act: &Act, subject: Subject) -> bool {
 
 pub(super) fn wanted(handling: Option<CardHandling>, arrows: &[TableArrow]) -> Vec<Open> {
     let mut open = Vec::new();
-    for &TableArrow { arrow, from, to } in arrows {
+    for &TableArrow {
+        arrow, from, to, ..
+    } in arrows
+    {
         let point = Open::Point { arrow, from, to };
         if !open.contains(&point) {
             open.push(point);

@@ -10,6 +10,9 @@ import {
   exposeBoardStage,
   pageStage,
 } from "../stage/playback";
+import type { Name } from "../stage/layout";
+import type { Under } from "../stage/pointer";
+import { TableArrows } from "../table/arrows";
 import { registerClicks } from "../table/click";
 import { TableClient } from "../table/client";
 import { TableDrag } from "../table/drag";
@@ -28,6 +31,9 @@ export function TableScreen() {
     client.drag = new TableDrag(client, board.stage, (failure) =>
       setError(String(failure)),
     );
+    client.arrows = new TableArrows(client, board.stage, (failure) =>
+      setError(String(failure)),
+    );
     registerSelection(client);
     registerClicks(client, (failure) => setError(String(failure)));
     return { board, client };
@@ -37,8 +43,17 @@ export function TableScreen() {
 
   useLayoutEffect(() => {
     exposeBoardStage(board);
-    return () => exposeBoardStage(pageStage());
-  }, [board]);
+    // A driven browser can open the target picker through the same API as a menu.
+    const driven = window as Window & {
+      berylPickTableTarget?: (from: Name) => Promise<Under | undefined>;
+    };
+    if (navigator.webdriver)
+      driven.berylPickTableTarget = (from) => client.arrows!.pickTarget(from);
+    return () => {
+      delete driven.berylPickTableTarget;
+      exposeBoardStage(pageStage());
+    };
+  }, [board, client]);
 
   useEffect(() => {
     let mounted = true;

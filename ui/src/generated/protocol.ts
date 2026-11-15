@@ -740,7 +740,7 @@ acting: Array<ZoneRef>,
  */
 objectActions: Array<TableObjectAction>, prompt?: TablePrompt, arrows?: Array<TableArrow>, };
 
-export type TableArrow = { arrow: Arrow, from: Subject, to: Subject, };
+export type TableArrow = { arrow: Arrow, from: Subject, to: Subject, own: boolean, };
 
 export type TableObjectRef = { view: string, handle: number, };
 

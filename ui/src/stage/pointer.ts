@@ -80,6 +80,7 @@ export interface PointerClient {
   secondary?(target: Target, at: Point): void;
   /** A right drag from a node, with `done` on release. */
   aim?(from: Name, at: Point, over: Under | undefined, done: boolean): void;
+  cancelAim?(): void;
   /** A primary drag from empty table, with `done` on release. */
   sweep?(from: Point, to: Point, done: boolean): void;
   cancelSweep?(): void;
@@ -473,6 +474,7 @@ export class Pointer {
    * card goes back to where it rests, and nothing is clicked or dropped. */
   cancel() {
     const press = this.#endPress();
+    if (press?.kind === "secondary" && press.moved) this.#client?.cancelAim?.();
     if (
       press?.kind === "primary" &&
       press.moved &&

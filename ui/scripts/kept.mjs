@@ -24,5 +24,6 @@ await import("./kept-opening.mjs");
 await import("./kept-table-click.mjs");
 await import("./kept-table-select.mjs");
 await import("./kept-table-drag.mjs");
+await import("./kept-table-arrows.mjs");
 const { stopTableServer } = await import("./table.mjs");
 await finish(stopTableServer);

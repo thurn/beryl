@@ -236,9 +236,13 @@ export function StageBoard({
           logOpen={logOpen}
           onLog={toggleLog}
           client={client}
-          orb={(side) => (
-            <PlayerTarget prompts={prompts} asked={asked} side={side} />
-          )}
+          orb={(side) =>
+            client ? (
+              <span className="life-hit" aria-hidden="true" />
+            ) : (
+              <PlayerTarget prompts={prompts} asked={asked} side={side} />
+            )
+          }
         />
         <div className="card-layer" ref={layer}>
           {client && surface && (

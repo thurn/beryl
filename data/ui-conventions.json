@@ -846,6 +846,11 @@
     },
     {
       "kind": "no-equivalent",
+      "name": "Manual table: drawing and removing arrows",
+      "rule": "Right-drag from a card to a card or life total to draw an arrow. A selected source draws an arrow from each selected card. A hand card plays first. A command that asks for a target starts the same aim and a click chooses the target. Escape cancels the aim. Right-click a drawn arrow to remove it, or use Cmd+R to remove all the arrows you drew."
+    },
+    {
+      "kind": "no-equivalent",
       "name": "Selection rectangle",
       "rule": "On a manual table, dragging from empty felt selects the cards the rectangle touches. Selected cards wear the gold selection mark. A summary beside the selected permanents gives their count, total power and total toughness."
     },

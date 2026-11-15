@@ -152,6 +152,10 @@
   fill: rgb(var(--tone));
   stroke-width: 3.5;
 }
+.stage-line[data-line^="table-aim "] {
+  --tone: 230 239 244;
+  stroke-width: 2;
+}
 .stage-line-friendly-target {
   --tone: 165 238 178;
 }

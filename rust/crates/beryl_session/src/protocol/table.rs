@@ -205,6 +205,8 @@ pub struct TableArrow {
     pub arrow: Arrow,
     pub from: Subject,
     pub to: Subject,
+    // Whether the viewer drew this arrow and can remove it.
+    pub own: bool,
 }
 
 /// What the viewer can see or use on a manual table in addition to the shared game view.

@@ -64,6 +64,7 @@ export class DomSurface implements Surface {
   /** Where the browser's pointer was last, in the window. */
   #pointer: { x: number; y: number } | undefined;
   #repoint: (() => void) | undefined;
+  #followPointer?: (at?: Point) => void;
   readonly #raised: RaisedCopy;
   /** The pointer the page's events are told to (`point`), which says which card is held. */
   #holder: Pointer | undefined;
@@ -113,6 +114,17 @@ export class DomSurface implements Surface {
     const at = this.#pointer;
     return at ? this.#layer.ownerDocument.elementFromPoint(at.x, at.y) : null;
   }
+
+  /** Follow a mouse on the board in stage coordinates. */
+  followPointer(move: (at?: Point) => void) {
+    this.#followPointer = move;
+    return () => {
+      this.#followPointer = undefined;
+    };
+  }
+
+  /** The path of a drawn line, in stage coordinates. */
+  linePath = (key: string) => this.#lines.get(key);
 
   /** An element of the node `name`'s own, posed as the node is but drawn over every card of
    * the hand, for what a hand card draws outside its frame: its cost above its top right
@@ -413,7 +425,9 @@ export class DomSurface implements Surface {
           external: !!external,
         };
       }),
+      on(board, "pointerleave", () => this.#followPointer?.()),
       on(board, "pointermove", (e) => {
+        if (e.pointerType === "mouse") this.#followPointer?.(at(e));
         if (active?.id !== e.pointerId) return;
         pointer.move(at(e), () => {
           const held = pointer.held;

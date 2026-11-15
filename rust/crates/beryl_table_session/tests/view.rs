@@ -167,6 +167,7 @@ fn both_seats_get_ordered_piles_and_relative_table_state() {
         );
         assert_eq!(manual.arrows[0].to, Subject::Player { player: guest_side });
         assert_eq!(manual.arrows[0].arrow, Arrow::Attack);
+        assert_eq!(manual.arrows[0].own, seat == HOST);
         assert_eq!(manual.assists.combat, seat == HOST);
         assert_eq!(
             manual.log[0].by,

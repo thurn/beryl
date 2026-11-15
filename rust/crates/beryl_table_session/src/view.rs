@@ -285,7 +285,12 @@ pub(super) fn arrows(table: &Table, slots: &Slots, viewer: Viewer) -> Vec<TableA
                 ArrowKind::FriendlyTarget => Arrow::FriendlyTarget,
                 ArrowKind::HostileTarget => Arrow::HostileTarget,
             };
-            Some(TableArrow { from, to, arrow })
+            Some(TableArrow {
+                from,
+                to,
+                arrow,
+                own: entry.by == viewer.0,
+            })
         })
         .collect()
 }

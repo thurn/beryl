@@ -253,6 +253,12 @@ restore the old behavior.
   exile viewer. Shift-click plays face down. Click a mana symbol or a player
   counter to add one, or right-click to remove one. The press shows immediately.
   A refused action shakes what was clicked.
+- **Manual table: drawing and removing arrows.** Right-drag from a card to a
+  card or life total to draw an arrow. A selected source draws an arrow from
+  each selected card. A hand card plays first. A command that asks for a target
+  starts the same aim and a click chooses the target. Escape cancels the aim.
+  Right-click a drawn arrow to remove it, or use Cmd+R to remove all the arrows
+  you drew.
 - **Selection rectangle.** On a manual table, dragging from empty felt selects
   the cards the rectangle touches. Selected cards wear the gold selection mark.
   A summary beside the selected permanents gives their count, total power and
