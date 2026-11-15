@@ -104,9 +104,11 @@ def run_smoke(args: argparse.Namespace) -> int:
         stdout=subprocess.PIPE,
         text=True,
     )
-    assert process.stdout is not None
+    output = process.stdout
+    if output is None:
+        raise RuntimeError("the app's output is not a pipe")
     shown = None
-    for line in process.stdout:
+    for line in output:
         if line.startswith(FIRST_SHOWN):
             shown = line.strip()
             break
