@@ -114,6 +114,39 @@ def b3d_command(
     return Command(name, summary, examples, run_b3d(name), passthrough=True)
 
 
+def run_render(command: str) -> Callable[[argparse.Namespace], int]:
+    """Builds the `b3d-render` program of `beryl_3d` and runs its `command` with the arguments."""
+
+    def run(args: argparse.Namespace) -> int:
+        built = cargo(
+            [
+                "build",
+                "-q",
+                "-p",
+                "beryl_3d",
+                "--features",
+                "tools",
+                "--bin",
+                "b3d-render",
+            ]
+        )
+        if built != 0:
+            return built
+        program = paths.WORKSPACE / "target" / "debug" / "b3d-render"
+        return subprocess.run(
+            [str(program), command, *args.arguments], env=os.environ, check=False
+        ).returncode
+
+    return run
+
+
+def render_command(
+    name: str, summary: str, examples: tuple[tuple[str, str], tuple[str, str]]
+) -> Command:
+    """A picture command of the `b3d-render` program, which reads its own options and `--help`."""
+    return Command(name, summary, examples, run_render(name), passthrough=True)
+
+
 def run_clippy(_args: argparse.Namespace) -> int:
     return cargo(["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"])
 
@@ -172,6 +205,34 @@ COMMANDS: tuple[Command, ...] = (
             (
                 "just b3d check verbs-zones --seat opponent --size 1440x900",
                 "the second seat in a smaller window",
+            ),
+        ),
+    ),
+    render_command(
+        "png",
+        "draws one moment of a recording offscreen to a PNG file, and with --tree its tree",
+        (
+            (
+                "just b3d png verbs-zones --at 1500ms --tree",
+                "the frame 1.5 s in, and its tree",
+            ),
+            (
+                "just b3d png verbs-zones --at 1500ms --crop 'card \"Island\" #8'",
+                "only the box around one element",
+            ),
+        ),
+    ),
+    render_command(
+        "film",
+        "draws up to 24 frames of a recording as a grid in one PNG, a line of text per frame",
+        (
+            (
+                "just b3d film verbs-zones --from 0ms --to 3s --frames 12",
+                "twelve frames over the first three seconds",
+            ),
+            (
+                "just b3d film verbs-zones --from 800ms --to 1500ms --every 100ms --crop 'card #8'",
+                "one card, followed every 100 ms",
             ),
         ),
     ),

@@ -6,4 +6,6 @@ pub mod app;
 pub mod fixture;
 pub mod frame_log;
 pub mod options;
+#[cfg(feature = "tools")]
+pub mod pictures;
 pub mod session;

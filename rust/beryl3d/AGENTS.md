@@ -43,9 +43,16 @@ through the client with no window or GPU (the `b3d` skill has the details):
   left, moved or changed state.
 - `just b3d check <name>` runs every interface check on every tick, and exits
   with 1 on a fault.
+- `just b3d png <name> --at <moment> [--tree] [--crop <locator>]` draws that
+  moment offscreen with the real renderer, and
+  `just b3d film <name> --from <moment> --to <moment> --frames 12` draws up to
+  24 frames as a grid in one picture, with a line of text for each. Both print
+  the file's path, under `$BERYL_CACHE/b3d/out/`.
 
-They are the `b3d` program in `beryl_inspect` (`src/cli`), built in debug. A
-wrong name, moment or locator exits with 2 and lists what would work.
+The text commands are the `b3d` program in `beryl_inspect` (`src/cli`), and the
+pictures are `b3d-render` in `beryl_3d` (`src/pictures`, with `Headless` in
+`beryl_host`), built in debug. A wrong name, moment or locator exits with 2 and
+lists what would work.
 
 ## Paths
 

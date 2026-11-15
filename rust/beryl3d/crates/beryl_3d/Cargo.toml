@@ -13,11 +13,18 @@ workspace = true
 name = "beryl3d"
 path = "src/main.rs"
 
+# The picture program of `just b3d png` and `just b3d film`: a debug tool, so it needs the
+# recordings and the driver that `tools` brings.
+[[bin]]
+name = "b3d-render"
+path = "src/bin/b3d_render.rs"
+required-features = ["tools"]
+
 [features]
 # What only a debug build has: `--fixture`, which replays a recording from the recordings pack
 # instead of playing a game, and `--pause-at`. A release build leaves it off, and with it the
 # pack.
-tools = ["dep:beryl_inspect"]
+tools = ["dep:beryl_inspect", "beryl_host/headless"]
 
 [dependencies]
 beryl_assets = { path = "../beryl_assets" }

@@ -9,6 +9,11 @@ publish = false
 [lints]
 workspace = true
 
+[features]
+# `Headless`, which plays a recording through the test driver and draws its frames offscreen.
+# The app leaves it off, so that the driver is not in its build.
+headless = ["beryl_scene/driver"]
+
 [dependencies]
 beryl_render = { path = "../beryl_render" }
 beryl_scene = { path = "../beryl_scene" }

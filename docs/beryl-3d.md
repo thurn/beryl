@@ -1690,6 +1690,26 @@ the recorder that builds the recordings pack. Moving the protocol types into a
 crate of their own and running the recorder as a separate program would leave
 `b3d` the client and the protocol alone.
 
+`just b3d png verbs-zones --at 1500ms` has a target of 6 seconds after the same
+one-line edit. It was measured on 2026-11-15 with `b3d-render` (`beryl_3d`, 134
+MB) five times at the load shown, and is not met:
+
+| Run | Time (s) | Load (1 min) |
+| --: | -------: | -----------: |
+|   1 |     21.2 |           36 |
+|   2 |     32.0 |           37 |
+|   3 |     46.6 |           34 |
+|   4 |     34.2 |           25 |
+|   5 |     21.6 |           22 |
+
+The median is 32 s. The build after the edit takes about 13 s (`beryl_scene`,
+then `beryl_inspect`, `beryl_render`, `beryl_host` and `beryl_3d`, which all
+depend on it), and the rest is macOS checking the newly linked executable before
+its first run, which took 28 s at load 20 to 50 and 1.4 s on the next run. The
+program is larger than `b3d` because it links wgpu. The remedies are the ones
+for `tree` above: a smaller program, which needs the protocol types in a crate
+of their own, and a smaller picture program that does not link the recorder.
+
 ### Times, moments, locators and actions
 
 These four are written one way everywhere.

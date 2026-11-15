@@ -1,6 +1,6 @@
 ---
 name: b3d
-description: See and check what Beryl 3D, the native 3D client in rust/beryl3d, shows at any moment of a recording, as text, with no window and no GPU — `just b3d list`, `info`, `tree`, `diff` and `check`. Lists recordings and their moments, prints the elements on screen as a tree whose lines are locators, drives the client with actions (hover, press, drag), diffs two moments and runs every interface check on every tick. Use when changing or debugging Beryl 3D's scene, layout, animation or prompts, or checking a Beryl 3D change from the player's side.
+description: See and check what Beryl 3D, the native 3D client in rust/beryl3d, shows at any moment of a recording, as text, with no window and no GPU — `just b3d list`, `info`, `tree`, `diff` and `check`, and pictures of a moment or a span with `png` and `film`. Lists recordings and their moments, prints the elements on screen as a tree whose lines are locators, drives the client with actions (hover, press, drag), diffs two moments and runs every interface check on every tick. Use when changing or debugging Beryl 3D's scene, layout, animation or prompts, or checking a Beryl 3D change from the player's side.
 ---
 
 # Seeing and checking Beryl 3D
@@ -23,6 +23,8 @@ just b3d info verbs-zones                    # every moment of one recording
 just b3d tree verbs-zones --at 1500ms        # the elements on screen at a moment
 just b3d diff verbs-zones --from 800ms --to 1500ms   # what appeared, left, moved or changed
 just b3d check verbs-zones                   # every interface check on every tick
+just b3d png verbs-zones --at 1500ms --tree  # a picture of that moment, and its tree
+just b3d film verbs-zones --from 0ms --to 3s --frames 12   # twelve frames in one picture
 ```
 
 - **`list [prefix]`** prints each recording's name, its seat (`--seat you` or
@@ -41,6 +43,20 @@ just b3d check verbs-zones                   # every interface check on every ti
 - **`check <recording>`** runs every check on every tick for one seat and window
   and prints each fault with a `show:` command, then one closing line. It exits
   with 1 when it finds a fault.
+
+- **`png <recording>`** draws the frame at `--at` with the real renderer, with no
+  window, and prints the file's path (under `$BERYL_CACHE/b3d/out/`, named with the
+  process id so two runs never share a file). `--tree` also prints the tree of the
+  same frame; `--crop <locator>` keeps only the box around one element. View the
+  file with the Read tool.
+- **`film <recording> --from <moment> --to <moment>`** draws at most 24 frames as
+  a grid no wider than 2,000 pixels in one PNG, each labelled with its time, and
+  prints one line per frame: its time and what was moving. `--frames <n>` or
+  `--every <duration>` chooses the frames; `--crop` follows one element. Use it
+  to see an animation's path, and `diff` or `tree` to find out why.
+
+Pictures are drawn in the Baseline tier with placeholder card faces, and text in
+the table is not drawn yet.
 
 Every command that takes a recording also takes `--seat you|opponent`,
 `--layout desktop|phone`, `--size <width>x<height>` (1600x900 by default),

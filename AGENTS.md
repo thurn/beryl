@@ -209,8 +209,8 @@ Use the cheapest test that covers your change. Agents never open a window;
 3. The app: `just smoke` builds the debug app, launches it without a window and
    waits until the UI reports that it has loaded.
 4. Beryl 3D, the native client in `rust/beryl3d`: `just b3d tree`, `diff` and
-   `check` show and check what it draws as text ("Seeing and checking" in
-   `rust/beryl3d/AGENTS.md`).
+   `check` show and check what it draws as text, and `png` and `film` draw it
+   ("Seeing and checking" in `rust/beryl3d/AGENTS.md`).
 5. The phone apps: `just ios-smoke` and `just android-smoke` load the UI in a
    headless simulator or emulator and require a PNG window snapshot
    (`rust/AGENTS.md`). `just mobile-bugs` pulls their saved bug reports into the

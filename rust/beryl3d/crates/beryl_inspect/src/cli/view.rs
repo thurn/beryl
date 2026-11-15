@@ -7,7 +7,7 @@ use beryl_scene::agent::fault::rect_text;
 use beryl_scene::agent::hit::bounds;
 use beryl_scene::agent::tree::{line as tree_line, place_word};
 use beryl_scene::agent::{TreeOptions, tree as tree_text};
-use beryl_scene::driver::{Duration, Moment, Name, Offset};
+use beryl_scene::driver::{Duration, Moment, Name, Offset, Page};
 use beryl_scene::frame::{Frame, Role};
 use serde_json::{Value, json};
 
@@ -17,6 +17,19 @@ use super::{Printed, act, milliseconds, open, seek_and_act, time_of};
 
 /// How many changes `diff` prints before it cuts the rest, unless `--full`.
 const MOST_CHANGES: usize = 60;
+
+/// The line `tree` prints under the command: where in the recording the page is and how many
+/// elements are on screen, as `view 6 of 36, t=1500ms, animating, 48 elements`.
+pub fn position_line(page: &mut Page) -> String {
+    let (view, views, animating) = page.position();
+    let now = page.now();
+    let elements = page.frame().resolved.len();
+    let state = if animating { "animating" } else { "at rest" };
+    format!(
+        "view {view} of {views}, t={}ms, {state}, {elements} elements",
+        milliseconds(now)
+    )
+}
 
 pub(super) fn tree(options: &Options) -> Result<Printed, Usage> {
     let role = match options.value("--role") {
@@ -42,11 +55,7 @@ pub(super) fn tree(options: &Options) -> Result<Printed, Usage> {
     let elements = frame.resolved.len();
     let body =
         tree_text(frame, &tree_options).map_err(|error| Usage(format!("--within: {error}")))?;
-    let state = if animating { "animating" } else { "at rest" };
-    let header = format!(
-        "view {view} of {views}, t={}ms, {state}, {elements} elements",
-        milliseconds(now)
-    );
+    let header = position_line(&mut page);
     if options.json {
         let lines: Vec<Value> = body.lines().map(line_value).collect();
         let value = json!({

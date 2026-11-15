@@ -17,6 +17,7 @@ use std::fmt::Write;
 use beryl_scene::driver::{Moment, Page};
 
 pub use options::{Options, Spec, Tier, Usage};
+pub use view::position_line;
 
 use crate::pages;
 
@@ -272,7 +273,7 @@ fn help(command: &Command) -> String {
 }
 
 /// The recording `options` names, in the window and seat they give, at its start.
-pub(crate) fn open(options: &Options) -> Result<Page, Usage> {
+pub fn open(options: &Options) -> Result<Page, Usage> {
     options::known(options.name(), options.seat)?;
     pages::page(options.name(), options.seat, options.layout, options.size).map_err(Usage)
 }
@@ -283,7 +284,7 @@ pub(crate) fn open(options: &Options) -> Result<Page, Usage> {
 ///
 /// When the recording has no such moment, or the moment lies past the recording's end; the
 /// message names the moments it has.
-pub(crate) fn time_of(page: &mut Page, options: &Options, moment: &Moment) -> Result<u64, Usage> {
+pub fn time_of(page: &mut Page, options: &Options, moment: &Moment) -> Result<u64, Usage> {
     let info = format!("`just b3d info {}` lists its moments", options.name());
     let time = page
         .time_of(moment)
@@ -307,11 +308,7 @@ pub(crate) fn time_of(page: &mut Page, options: &Options, moment: &Moment) -> Re
 ///
 /// When the moment is wrong (see [`time_of`]), or an action's locator names no single
 /// uncovered element.
-pub(crate) fn seek_and_act(
-    page: &mut Page,
-    options: &Options,
-    moment: &Moment,
-) -> Result<(), Usage> {
+pub fn seek_and_act(page: &mut Page, options: &Options, moment: &Moment) -> Result<(), Usage> {
     let time = time_of(page, options, moment)?;
     page.seek(&Moment::At(beryl_scene::driver::Duration(time)))
         .map_err(|error| Usage(error.to_string()))?;
@@ -319,7 +316,7 @@ pub(crate) fn seek_and_act(
 }
 
 /// Does each of `options`' actions in order.
-pub(crate) fn act(page: &mut Page, options: &Options) -> Result<(), Usage> {
+pub fn act(page: &mut Page, options: &Options) -> Result<(), Usage> {
     for action in &options.actions {
         page.try_act(action)
             .map_err(|error| Usage(format!("--do: {error}")))?;
@@ -328,6 +325,6 @@ pub(crate) fn act(page: &mut Page, options: &Options) -> Result<(), Usage> {
 }
 
 /// Nanoseconds as whole milliseconds, rounded to the nearest.
-pub(crate) fn milliseconds(nanoseconds: u64) -> u64 {
+pub fn milliseconds(nanoseconds: u64) -> u64 {
     (nanoseconds + 500_000) / 1_000_000
 }

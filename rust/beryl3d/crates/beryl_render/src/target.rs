@@ -92,13 +92,17 @@ impl Renderer {
 
     /// Writes `target`'s pixels to a PNG file at `path`.
     pub fn write_png(&self, target: &Target, path: &Path) -> Result<(), String> {
-        image::save_buffer(
-            path,
-            &self.read(target),
-            target.width,
-            target.height,
-            image::ColorType::Rgba8,
-        )
-        .map_err(|error| format!("{}: {error}", path.display()))
+        write_rgba_png(path, &self.read(target), target.width, target.height)
     }
+}
+
+/// Writes `pixels`, `width` by `height` of RGBA bytes row by row from the top, to a PNG file at
+/// `path`. It serves pictures built from several frames, which no target holds.
+///
+/// # Errors
+///
+/// When the file cannot be written; the message names it.
+pub fn write_rgba_png(path: &Path, pixels: &[u8], width: u32, height: u32) -> Result<(), String> {
+    image::save_buffer(path, pixels, width, height, image::ColorType::Rgba8)
+        .map_err(|error| format!("{}: {error}", path.display()))
 }
