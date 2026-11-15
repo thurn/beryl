@@ -549,6 +549,15 @@ impl<L: Layout> State<L> {
         }
     }
 
+    /// Whether an effect that gives protection applied in the last run of the layers
+    /// ([`crate::event::Replaces::PROTECTION`]), so that a permanent may have protection: the
+    /// gate of every test of protection. One AND, with no test of whether the layer results
+    /// are current, since protection is read from those results.
+    #[inline]
+    pub fn may_protect(&self) -> bool {
+        self.replacing.protects()
+    }
+
     /// The colors the permanent in `slot` has protection from ([CR 702.16a]), none for an
     /// object that is no permanent, and none without a look at the permanent while no effect
     /// gives protection ([`crate::event::Replaces::PROTECTION`]).
@@ -556,7 +565,7 @@ impl<L: Layout> State<L> {
     /// [CR 702.16a]: https://yawgatog.com/resources/magic-rules/#R70216a
     #[inline]
     pub fn protection(&self, slot: L::Slot) -> Colors {
-        if !self.replacing.protects() || self.object(slot).zone != Zone::Battlefield {
+        if !self.may_protect() || self.object(slot).zone != Zone::Battlefield {
             return Colors::NONE;
         }
         self.derived(slot).protection

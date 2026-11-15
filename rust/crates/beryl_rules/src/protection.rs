@@ -34,7 +34,7 @@ use crate::table::GameTable;
 /// Whether any permanent may have protection now: the gate of every test here.
 #[inline]
 pub(crate) fn live<L: Layout>(s: &State<L>) -> bool {
-    s.replacing().is_some_and(crate::event::Replaces::protects)
+    s.may_protect()
 }
 
 /// Whether the permanent in `permanent` has protection from `source`: from one of the colors
