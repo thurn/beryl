@@ -14,6 +14,20 @@ fixed in the same session. Newest first.
   validate object lifetime against zone membership that includes phased-out
   permanents. Use the gameplay zone set when a rule needs to ignore them.
 
+- **Reading the hidden picks of a long resolution in the `Large` layout panicked
+  with a shift overflow.** `Resolving::hidden_picks` tested bit `i` of the
+  32-bit `hidden` mask for every entry `i` of the answer record, and
+  `State::record_answer` set bit `record.len()` for a hidden pick. A `Small`
+  record holds at most 32 answers, but a `Large` record grows, so a resolution
+  past 32 answers (the promotion test's) overflowed the shift as soon as a
+  session view read its hidden picks, with or without any hidden pick in it.
+  Fixed in the change that first read them from every view: the read looks at
+  the first 32 entries only, and a hidden pick past them is refused as a full
+  record is (commit 83aaebfc added the mask). Prevention: a bit mask indexed by
+  a list position must be sized by the list's capacity in every layout, or
+  stored in the list itself (a flag beside each entry), so that a `Large` list
+  cannot outgrow it.
+
 - **A save with a copy replayed a different attack once its cards were in other
   slots.** A Phantasmal Image copying Grizzly Bears and a real Grizzly Bears,
   both able to attack, were named alike in a save: an answer names an object by

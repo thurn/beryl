@@ -199,6 +199,9 @@ impl<L: Layout> Resolving<L> {
             .as_slice()
             .iter()
             .enumerate()
+            // `hidden` has a bit for each of the first 32 entries only; a record in the
+            // `Large` layout may grow past them, with no hidden pick there (`record_answer`).
+            .take(u32::BITS as usize)
             .filter(|&(i, _)| self.hidden & (1 << i) != 0)
             .filter_map(|(_, &answer)| hidden_pick_of::<L>(answer))
     }
@@ -405,8 +408,11 @@ impl<L: Layout> State<L> {
             unreachable!("a paused resolution or step");
         };
         if r.asks_hidden {
-            // The record holds at most 32 answers, one bit each.
-            r.hidden |= 1 << r.record.len();
+            // `hidden` marks the first 32 entries, one bit each, as many as a `Small`
+            // record holds. A `Large` record may hold more, but a hidden pick past them
+            // cannot be marked, so it is refused as a full record is.
+            let position = u32::try_from(r.record.len()).map_err(|_| Full)?;
+            r.hidden |= 1u32.checked_shl(position).ok_or(Full)?;
         }
         r.record.push(answer)
     }
