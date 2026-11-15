@@ -224,6 +224,20 @@ the client they describe, and later sections refer to them by number.
   and Beryl 3D's own work fixes it (see
   [Checks and isolation](#checks-and-isolation)).
 
+- **C18. The highest frame rate the display and device can hold, but smooth
+  motion comes first.** The project's owner decided this on 2026-11-15. Every
+  host asks for the display's highest refresh rate, and a frame counts as late
+  against the rate the host chose. Smooth animation is mandatory, so an even
+  lower rate beats an uneven higher one. When frames miss the chosen rate, the
+  renderer first drops the Enhanced tier to Baseline (C8). If frames still miss
+  it, the host steps down to the next rate that divides the display's (120 to 60
+  Hz) and stays there until a sustained run of frames shows room to step back
+  up. The thresholds are data, not literals in code. Being shown at 60 Hz on a
+  120 Hz display without asking for it is a fault, not a step down. The
+  measurements found fullscreen on macOS often held to 60 Hz (see
+  [Measurements](#measurements)). If the reason cannot be fixed, the desktop app
+  starts windowed instead, as C15 already allows.
+
 ## What does not change
 
 Beryl 3D is a second player of scripts the session already writes. Nothing in
