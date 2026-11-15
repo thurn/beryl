@@ -213,9 +213,9 @@ def send_pack() -> bool:
         "--workdir",
         "/",
         vm.NAME,
-        "mkdir",
-        "-p",
-        f"$HOME/{directory}",
+        "bash",
+        "-c",
+        f'mkdir -p "$HOME/{directory}"',
     ]
     copy = ["limactl", "copy", lines[-1], f"{vm.NAME}:{directory}/"]
     return all(subprocess.run(cmd, check=False).returncode == 0 for cmd in (make, copy))
