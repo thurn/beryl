@@ -1,8 +1,8 @@
 //! `Client::frame` allocates nothing once a prompt bar has been laid out, nor while a life total
 //! falls and the amount it fell by sinks away, nor while 255 marks are drawn, nor with 255
-//! attackers wearing their wedges, and neither does moving a float of the flat
-//! layer and writing it (docs/beryl-3d.md, "The frame": no allocation). This binary counts
-//! every heap allocation, so it holds one test.
+//! attackers wearing their wedges, nor on a table of 255 permanents that each wear badges, and
+//! neither does moving a float of the flat layer and writing it (docs/beryl-3d.md, "The frame":
+//! no allocation). This binary counts every heap allocation, so it holds one test.
 
 mod common;
 
@@ -13,11 +13,12 @@ use beryl_protocol::GameUpdate;
 use beryl_protocol::prompt::Purpose;
 use beryl_protocol::prompt::{ButtonId, PartName, PromptButton, PromptView, ShapeBody, Words};
 use beryl_protocol::protocol::{
-    CardType, Combat, DecisionId, DecisionView, Kind, ObjectId, SessionId, Side, Status, ZoneName,
+    CardType, Combat, Counter, CounterView, DecisionId, DecisionView, Kind, ObjectId,
+    PowerToughness, SessionId, Side, Status, ZoneName,
 };
 use beryl_protocol::script::{Act, Mark, Subject, Tally};
 use beryl_scene::element::{floats, text};
-use beryl_scene::frame::{Frame, FrameBuilder, Material};
+use beryl_scene::frame::{Frame, FrameBuilder, Material, Role};
 use beryl_scene::input::{AssetReady, GlyphCell, Input, Insets, Size};
 use beryl_scene::layout::{FloatLook, Layer};
 use beryl_scene::light::{MarkSpan, Span};
@@ -194,6 +195,8 @@ fn a_frame_with_a_prompt_bar_allocates_nothing() {
 
     a_frame_of_255_attackers_allocates_nothing();
 
+    a_badged_table_allocates_nothing();
+
     // A float moved and faded by a new look, then written into a frame.
     let mut layer = Layer::new();
     layer.float(floats::LIFE[0], Some(text("20")));
@@ -267,4 +270,71 @@ fn a_frame_of_255_attackers_allocates_nothing() {
         "each attacker drawn wears a wedge"
     );
     assert_eq!(after - before, 0, "allocations in a frame of 255 attackers");
+}
+
+/// A frame of a table of 255 creatures, each with its power and toughness and two kinds of
+/// counters, allocates nothing.
+fn a_badged_table_allocates_nothing() {
+    let mut client = Client::new(Config::LARGEST);
+    client.handle(Input::Surface {
+        size: Size {
+            width: 1440.0,
+            height: 900.0,
+        },
+        scale: 2.0,
+        safe_area: Insets::default(),
+    });
+    let mut builder = ViewBuilder::new();
+    for index in 0..255_i32 {
+        let side = if index % 2 == 0 {
+            Side::You
+        } else {
+            Side::Opponent
+        };
+        let creature = builder.card(ZoneName::Battlefield, side, &format!("Creature {index}"));
+        creature.types = vec![CardType::Creature];
+        creature.pt = Some(PowerToughness {
+            power: index % 10,
+            toughness: 3,
+        });
+        creature.damage = index % 2;
+        creature.counters = ["time", "ice"]
+            .into_iter()
+            .map(|name| CounterView {
+                kind: Counter::named(name).expect("a kind of counter"),
+                count: 2,
+            })
+            .collect();
+    }
+    client.handle(Input::Update(Box::new(builder.update())));
+    let glyphs: Vec<GlyphCell> = client
+        .wanted_glyphs()
+        .map(|key| GlyphCell {
+            key,
+            rect: [0, 0, 20, 24],
+            bearing: [0, -20],
+        })
+        .collect();
+    client.handle(Input::Assets(AssetReady::Glyphs { page: 1, glyphs }));
+    client.frame(0);
+    let before = ALLOCATIONS.load(Ordering::Relaxed);
+    let frame = client.frame(1_000_000);
+    let after = ALLOCATIONS.load(Ordering::Relaxed);
+    // Each creature in view wears a plaque and two counter badges; the rows scroll the rest.
+    let cards = frame
+        .resolved
+        .iter()
+        .filter(|element| element.role == Role::Card)
+        .count();
+    let panels = frame.draws[..frame.layer as usize]
+        .iter()
+        .filter(|draw| draw.material == Material::Panel as u8)
+        .count();
+    assert!(cards > 10, "the frame draws the rows' cards: {cards}");
+    assert_eq!(panels, 3 * cards, "three badges on each card drawn");
+    assert_eq!(
+        after - before,
+        0,
+        "allocations during a badged table's frame"
+    );
 }

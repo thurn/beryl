@@ -25,6 +25,9 @@ pub struct Rest {
     pub place: Place,
     /// False for a card scrolled out of its row's view, which is not drawn.
     pub visible: bool,
+    /// How many identical permanents the top card of a pile of them stands for, which it wears
+    /// as a count; 1 for every other card.
+    pub copies: u16,
 }
 
 /// The rows of one side, in the order of `Placement::scroll`'s entries.
@@ -617,6 +620,7 @@ fn pile(placement: &mut Placement, objects: &[&ObjectView], zone: ZoneName, side
                 pose,
                 place,
                 visible: true,
+                copies: 1,
             },
         );
     }
@@ -661,6 +665,7 @@ fn hand(
                 pose,
                 place,
                 visible: true,
+                copies: 1,
             },
         );
     }
@@ -722,6 +727,7 @@ fn battlefield_row(
                        object,
                        pose,
                        visible,
+                       copies,
                    }| {
         placement.set(
             object.slot,
@@ -729,6 +735,7 @@ fn battlefield_row(
                 pose,
                 place,
                 visible,
+                copies,
             },
         );
     };

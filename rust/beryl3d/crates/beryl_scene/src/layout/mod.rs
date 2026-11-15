@@ -163,6 +163,12 @@ impl Layer {
         &mut self.glyphs
     }
 
+    /// The fonts and shaped texts, with the glyph table, for text the table draws outside the
+    /// flat layer.
+    pub fn text_and_glyphs(&mut self) -> (&mut Text, &mut Glyphs) {
+        (&mut self.text, &mut self.glyphs)
+    }
+
     /// The innermost element at `point` that a press means something on, with its press and
     /// whether it is enabled. Floats are drawn over the screen, so they are searched first, the
     /// last drawn first. The screen is searched only while it is `open`, that is drawn.

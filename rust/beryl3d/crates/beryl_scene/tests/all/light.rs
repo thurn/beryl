@@ -49,6 +49,7 @@ fn every_verb_has_a_play_function_and_says_whether_it_is_built() {
             Verb::Vanish,
             Verb::Emerge,
             Verb::Flip,
+            Verb::Tap,
             Verb::Strike,
             Verb::Streak,
             Verb::Count,

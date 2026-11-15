@@ -158,6 +158,10 @@ impl Client {
                     self.show.counts(),
                     self.show.coming_counts(),
                 );
+                if !self.show.badges_mut().shaped() {
+                    let (text, glyphs) = self.layer.text_and_glyphs();
+                    (self.show.badges_mut()).shape(text, glyphs, self.window.scale);
+                }
                 self.show_screen();
             }
             Input::Reply(Reply::Click(Ok(reply))) => {
@@ -188,6 +192,7 @@ impl Client {
             }
             Input::Assets(AssetReady::Glyphs { page, glyphs }) => {
                 self.layer.glyphs_mut().add(page, &glyphs);
+                self.show.badges_mut().add(page, &glyphs);
             }
             Input::Surface {
                 size,
@@ -201,6 +206,10 @@ impl Client {
                 };
                 self.show.resize(self.window);
                 self.layer.resize(self.window);
+                if self.show.badges_mut().shaped() {
+                    let glyphs = self.layer.glyphs_mut();
+                    (self.show.badges_mut()).rescale(scale, glyphs);
+                }
             }
             input => self.inputs.push(input),
         }

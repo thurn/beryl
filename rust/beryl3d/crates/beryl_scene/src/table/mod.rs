@@ -6,6 +6,7 @@
 //! printed size, 63 by 88, centred on the origin in the plane z = 0 with its face toward +z,
 //! so a pose's scale of 1 is a card's real size.
 
+pub mod badges;
 mod camera;
 pub(crate) mod lifted;
 mod own;

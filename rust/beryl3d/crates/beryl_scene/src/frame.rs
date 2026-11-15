@@ -242,8 +242,9 @@ pub const CLIPS: usize = 16;
 
 /// The most objects the engine's largest board holds, and so the most cards a frame draws.
 pub const OBJECTS: usize = 1024;
-/// The most records one card writes: the card, its soft edge, its contact shadow and a mark.
-pub const RECORDS_PER_OBJECT: usize = 4;
+/// The most records one card writes: the card, its soft edge, its contact shadow and a mark, and
+/// its badges: a plaque and its digits, and two counter badges (`table::badges`).
+pub const RECORDS_PER_OBJECT: usize = 12;
 /// The most records the flat layer writes: the glyphs and panels of a prompt, a card browser and
 /// the text around the table.
 pub const LAYER_RECORDS: usize = 4096;

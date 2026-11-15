@@ -6,7 +6,7 @@ use crate::common::{
 };
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{Side, StackItem, Why, ZoneName};
-use beryl_protocol::script::{Act, Fact, Step, Subject, Verb};
+use beryl_protocol::script::{Act, Fact, Step, Subject};
 use beryl_scene::frame::Wake;
 use beryl_scene::play::Show;
 use beryl_scene::pose::Curve;
@@ -96,8 +96,11 @@ fn a_script_of_three_beats_plays_to_its_end() {
     );
     at_rest(&show, &after, 870 * MS);
     assert_eq!(show.wake(870 * MS), Wake::Never);
-    assert_eq!(show.next_unbuilt(), Some(Verb::Tap), "the tap was instant");
-    assert_eq!(show.next_unbuilt(), None, "each verb is logged once");
+    assert_eq!(
+        show.next_unbuilt(),
+        None,
+        "every verb of the script is built"
+    );
 }
 
 #[test]

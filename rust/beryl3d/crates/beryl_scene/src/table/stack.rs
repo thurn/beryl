@@ -94,6 +94,7 @@ pub(super) fn place_stack(
                 row: None,
             },
             visible: true,
+            copies: 1,
         };
         match *item {
             OnStack::Spell(slot) => placement.set(slot, rest),

@@ -120,6 +120,9 @@
       "more": 0.18,
       "units": 4,
       "ribbon": 1.5
+    },
+    "tap": {
+      "near": 0.5
     }
   },
   "light": {
@@ -289,5 +292,40 @@
     "step": 0.02,
     "reach": 0.08,
     "depth": 290
+  },
+  "badges": {
+    "em": 0.1,
+    "raise": 0.2,
+    "numeral_points": 17,
+    "plaque": {
+      "right": 0.68,
+      "bottom": 0.3,
+      "height": 1.9,
+      "min_width": 4.2,
+      "padding": 0.35,
+      "radius": 0.5,
+      "border": 0.12,
+      "numerals": 1.7
+    },
+    "counter": {
+      "left": 0.62,
+      "right": 5.1,
+      "bottom": 0.3,
+      "height": 1.8,
+      "gap": 0.2,
+      "padding": 0.29,
+      "radius": 0.9,
+      "border": 0.1,
+      "numerals": 1.1
+    },
+    "count": {
+      "right": 0.62,
+      "top": 1.45,
+      "height": 1.44,
+      "padding": 0.3,
+      "radius": 0.3,
+      "border": 0.06,
+      "numerals": 1.15
+    }
   }
 }

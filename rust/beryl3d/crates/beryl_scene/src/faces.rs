@@ -24,6 +24,9 @@ pub struct ListedFace {
     pub names: Vec<String>,
     /// The face's colors as the card store gives them (`W`, `U`, `B`, `R`, `G`).
     pub colors: Vec<String>,
+    /// The power and toughness printed on the face, when both are numbers: a battlefield
+    /// plaque inks a value raised or lowered against them.
+    pub printed: Option<[i32; 2]>,
 }
 
 /// Every face of a match, in [`FaceId`] order: the card back, then each card's faces, then
@@ -41,7 +44,7 @@ impl FaceList {
     #[must_use]
     pub fn from_records(records: &CardRecords) -> Self {
         let mut list = Self::default();
-        list.add(&records.card_back, Vec::new(), &[]);
+        list.add(&records.card_back, Vec::new(), &[], None);
         for (asked, entry) in records.cards.iter().chain(&records.tokens) {
             list.add_entry(asked, entry);
         }
@@ -85,13 +88,26 @@ impl FaceList {
             if i == 0 {
                 names.extend([entry.name.clone(), asked.to_owned()]);
             }
-            self.add(&face.images.large, names, &face.colors);
+            let printed = face
+                .power
+                .as_deref()
+                .zip(face.toughness.as_deref())
+                .and_then(|(power, toughness)| {
+                    Some([power.parse().ok()?, toughness.parse().ok()?])
+                });
+            self.add(&face.images.large, names, &face.colors, printed);
         }
     }
 
     /// Adds the face showing `image`, or adds `names` to the face already listed with it. A
     /// name already listed keeps its first face.
-    fn add(&mut self, image: &str, names: Vec<String>, colors: &[String]) {
+    fn add(
+        &mut self,
+        image: &str,
+        names: Vec<String>,
+        colors: &[String],
+        printed: Option<[i32; 2]>,
+    ) {
         let next = FaceId(u16::try_from(self.faces.len()).expect("a match has under 2^16 faces"));
         let id = *self.by_image.entry(image.to_owned()).or_insert(next);
         if id == next {
@@ -99,6 +115,7 @@ impl FaceList {
                 image: image.to_owned(),
                 names: Vec::new(),
                 colors: colors.to_vec(),
+                printed,
             });
         }
         let listed = &mut self.faces[usize::from(id.0)];
@@ -148,6 +165,12 @@ impl Faces {
         if let Some(slot) = layers.get_mut(usize::from(face.0)) {
             *slot = Some(layer);
         }
+    }
+
+    /// The face that shows the card or face named `name`. Allocates nothing.
+    #[must_use]
+    pub fn face(&self, name: &str) -> Option<&ListedFace> {
+        self.list.get(self.list.find(name)?)
     }
 
     /// The board-size layer of the face that shows the card or face named `name`, once it has

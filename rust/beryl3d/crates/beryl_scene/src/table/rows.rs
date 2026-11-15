@@ -16,6 +16,8 @@ pub(super) struct Laid<'a> {
     pub object: &'a ObjectView,
     pub pose: Pose,
     pub visible: bool,
+    /// The group's size on its top card, and 1 on the copies beneath it.
+    pub copies: u16,
 }
 
 /// How a row is laid out: the least strip in millimetres, the layout's spacing, and the row's
@@ -154,6 +156,11 @@ fn place_group<'a>(
             object,
             pose,
             visible,
+            copies: if depth == 0 {
+                u16::try_from(group.len()).unwrap_or(u16::MAX)
+            } else {
+                1
+            },
         });
     }
 }

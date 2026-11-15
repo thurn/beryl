@@ -25,7 +25,10 @@ mod counts;
 pub(crate) use compile::nanoseconds;
 mod index;
 pub mod record;
+mod scene;
 pub(crate) mod step;
+
+pub use scene::{Reach, Scene};
 
 use std::collections::VecDeque;
 
@@ -45,40 +48,12 @@ use crate::light::{self, Lit, StreakRun};
 use crate::motion::Track;
 use crate::pointer::Pointer;
 use crate::pose::Pose;
+use crate::table::badges::Badges;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Dress, Motion, Table, Window, ability_track};
 use crate::verbs::Interval;
 
 /// How many spans, streaks and effects the show holds before holding more allocates.
 const LIGHTS: usize = 256;
-
-/// Where something is and how large, for the light drawn to or on it.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Reach {
-    pub pose: Pose,
-    /// Half its width and height, in millimetres. A player's anchor is a point.
-    pub half: Vec2,
-}
-
-/// The show as a frame draws it, for the writers of light and effects to ask where things are.
-#[derive(Clone, Copy)]
-pub struct Scene<'a> {
-    show: &'a Show,
-    now: u64,
-}
-
-impl Scene<'_> {
-    /// Where `subject` is at the frame's time (`Show::reach`).
-    #[must_use]
-    pub fn reach(&self, subject: Subject) -> Option<Reach> {
-        self.show.reach(subject, self.now)
-    }
-
-    /// The table, for its camera and layout.
-    #[must_use]
-    pub fn table(&self) -> &Table {
-        &self.show.table
-    }
-}
 
 /// An update and the timings of its script's steps, compiled to play after the scripts before
 /// it.
@@ -199,6 +174,8 @@ pub struct Show {
     pointer: Pointer,
     /// The life totals and pools the table shows.
     counts: Counts,
+    /// The numbers the badges on permanents are made of.
+    badges: Badges,
 }
 
 impl Show {
@@ -224,6 +201,7 @@ impl Show {
             effects: Vec::with_capacity(LIGHTS),
             pointer: Pointer::default(),
             counts: Counts::default(),
+            badges: Badges::default(),
         }
     }
 
@@ -388,6 +366,10 @@ impl Show {
 
     pub fn faces_mut(&mut self) -> &mut Faces {
         &mut self.faces
+    }
+
+    pub fn badges_mut(&mut self) -> &mut Badges {
+        &mut self.badges
     }
 
     /// The latest view: the last to arrive, which the table shows once every script before it
@@ -615,13 +597,14 @@ impl Show {
         });
         let dress = Dress {
             effects: &self.effects,
+            badges: &self.badges,
             lit: &self.lit,
             pointer: &self.pointer,
             now,
         };
         self.table
             .write(shown, motion, &self.faces, &dress, builder);
-        let scene = Scene { show: self, now };
+        let scene = Scene::new(self, now);
         light::arrows::write(&self.lit, now, &scene, builder);
         light::marks::write(&self.lit, now, &scene, builder);
         light::streaks::write(&self.lit, now, &scene, builder);

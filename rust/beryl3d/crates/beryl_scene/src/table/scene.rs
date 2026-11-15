@@ -5,8 +5,11 @@ use std::cell::Cell;
 
 use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerView, Side, StackItem, ZoneName};
 use beryl_protocol::script::Subject;
+use std::f32::consts::FRAC_PI_4;
+
 use glam::{Affine3A, Quat, Vec2, Vec3};
 
+use super::badges::{self, Badges};
 use super::own::{self, Fights};
 use super::place::{
     Group, Placement, Rest, Scroll, Zones, place_group, place_reusing, place_zones,
@@ -38,6 +41,8 @@ pub(crate) struct SceneObject {
     place: Place,
     visible: bool,
     tapped: bool,
+    /// How many identical permanents it stands for (`Rest::copies`).
+    copies: u16,
     /// Its index in the view's `objects`, for its name; for an ability, in the view's `stack`.
     view_index: u32,
 }
@@ -121,6 +126,8 @@ pub struct Look {
 #[derive(Clone, Copy, Debug)]
 pub struct Dress<'a> {
     pub effects: &'a [EffectRun],
+    /// The numbers the badges on permanents are made of.
+    pub badges: &'a Badges,
     pub lit: &'a Lit,
     pub pointer: &'a Pointer,
     pub now: u64,
@@ -289,6 +296,7 @@ impl Table {
                         pose: object.pose,
                         place: object.place,
                         visible: object.visible,
+                        copies: 1,
                     };
                     (*id, rest)
                 })
@@ -302,6 +310,7 @@ impl Table {
                         pose: object.pose,
                         place: object.place,
                         visible: object.visible,
+                        copies: object.copies,
                     })
                 })
                 .collect(),
@@ -375,6 +384,7 @@ impl Table {
                     place: rest.place,
                     visible: rest.visible,
                     tapped: false,
+                    copies: 1,
                     view_index: u32::try_from(index).expect("a stack holds fewer than 2^32 items"),
                 },
             ));
@@ -403,6 +413,7 @@ impl Table {
                 place: rest.place,
                 visible: rest.visible,
                 tapped: object.tapped,
+                copies: rest.copies,
                 view_index: u32::try_from(index).expect("a view holds fewer than 2^32 objects"),
             });
         }
@@ -497,9 +508,14 @@ impl Table {
             Some(object) => (object, motion.view),
             None => (resting?, view),
         };
+        // A permanent that taps or untaps on its track reads as tapped once it has turned
+        // more than half of its quarter turn, from the middle of its step.
+        let tapped = [resting, last].iter().flatten().any(|object| object.tapped)
+            && pose.rotation.angle_between(Quat::IDENTITY) > FRAC_PI_4;
         let object = SceneObject {
             pose,
             visible: seen && pose.opacity > 0.0,
+            tapped,
             ..object
         };
         Some((object, view, track.moving(motion.t)))
@@ -519,6 +535,11 @@ impl Table {
         let shown = &view.objects[object.view_index as usize];
         let name = shown.name.as_deref().unwrap_or("");
         let face = face_of(faces, shown);
+        let listed = shown
+            .token_printing
+            .as_deref()
+            .and_then(|printing| faces.face(printing))
+            .or_else(|| faces.face(name));
         let mut state = 0;
         if object.tapped {
             state |= StateBits::TAPPED;
@@ -560,6 +581,20 @@ impl Table {
             back,
             builder,
         );
+        // Marks on a card lying on the table are drawn with the table's marks, and on one in
+        // flight with the raised marks.
+        let on = badges::On {
+            pose: look.pose,
+            band: if under_way {
+                Band::RaisedMarks
+            } else {
+                Band::TableMarks
+            },
+            opacity: look.pose.opacity,
+        };
+        dress
+            .badges
+            .write((shown, listed, object.copies), &on, builder);
     }
 
     /// Writes the resolved element and the draw record of a card named `name` with this `id`

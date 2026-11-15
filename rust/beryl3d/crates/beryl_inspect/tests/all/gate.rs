@@ -2,6 +2,7 @@
 
 use beryl_inspect::gate::{Phase, REST_FRAMES, play, rank};
 use beryl_inspect::stress::NAMES;
+use beryl_scene::frame::{Frame, Role};
 
 #[test]
 fn rank_picks_the_frames_with_the_most_work() {
@@ -87,10 +88,17 @@ fn a_flight_draws_only_the_cards_the_rows_show() {
     for name in NAMES {
         let mut at_rest = 0;
         let mut most_in_flight = 0;
+        // The cards drawn, not the records: each permanent also writes the records of its
+        // badges.
+        let cards = |frame: &Frame| {
+            (frame.resolved.iter())
+                .filter(|element| element.role == Role::Card)
+                .count()
+        };
         assert!(play(name, |moment, frame| match moment.phase {
-            Phase::Rest => at_rest = at_rest.max(frame.work.records),
+            Phase::Rest => at_rest = at_rest.max(cards(frame)),
             Phase::Flight if moment.frame >= REST_FRAMES => {
-                most_in_flight = most_in_flight.max(frame.work.records);
+                most_in_flight = most_in_flight.max(cards(frame));
             }
             Phase::Flight => {}
         }));
@@ -98,7 +106,7 @@ fn a_flight_draws_only_the_cards_the_rows_show() {
         // flight may add.
         assert!(
             most_in_flight <= at_rest + 40,
-            "{name}: {most_in_flight} records in flight, {at_rest} at rest"
+            "{name}: {most_in_flight} cards drawn in flight, {at_rest} at rest"
         );
     }
 }

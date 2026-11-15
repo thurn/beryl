@@ -90,3 +90,29 @@ pub mod color {
     /// (`ui/src/design/components/card-marks-and-piles.css`).
     pub const OUTLINE: [u8; 4] = STOLEN;
 }
+
+/// The colors of the badges on a permanent (`table::badges`), from the web interface's CSS
+/// rules for the same marks in `ui/src/design/components`. Each is RGBA, not premultiplied.
+pub mod badge {
+    /// The plaque's fill, by the card's frame: the `--bar` of `.frame-w`, `.frame-u`,
+    /// `.frame-b`, `.frame-r` and `.frame-g` in `card-palettes.css`, then `.frame-m` for a
+    /// card of two or more colors and `.frame-c` for a colorless one.
+    pub const PLAQUE_WHITE: [u8; 4] = [0xe2, 0xdf, 0xda, 0xff];
+    pub const PLAQUE_BLUE: [u8; 4] = [0xb9, 0xd3, 0xea, 0xff];
+    pub const PLAQUE_BLACK: [u8; 4] = [0xb4, 0xad, 0xa8, 0xff];
+    pub const PLAQUE_RED: [u8; 4] = [0xe0, 0xb4, 0xa0, 0xff];
+    pub const PLAQUE_GREEN: [u8; 4] = [0xb6, 0xbc, 0xb0, 0xff];
+    pub const PLAQUE_GOLD: [u8; 4] = [0xda, 0xb8, 0x72, 0xff];
+    pub const PLAQUE_COLORLESS: [u8; 4] = [0xd0, 0xc7, 0xbc, 0xff];
+    /// The plaque's border, `.card-pt`'s `border` in `card-frame.css`.
+    pub const PLAQUE_BORDER: [u8; 4] = [0x14, 0x11, 0x0f, 0xff];
+    /// A number on the plaque that reads as printed, `.card-pt b`'s `--pt-ink`.
+    pub const PLAQUE_INK: [u8; 4] = [0x19, 0x21, 0x3a, 0xff];
+    /// A counter badge's fill, the middle of `.mark-badge`'s gradient in `card-frame.css`.
+    pub const COUNTER: [u8; 4] = [0x2b, 0x28, 0x24, 0xff];
+    /// The pile count's fill, the middle of `.card-count`'s gradient in
+    /// `card-marks-and-piles.css`, and its border and ink.
+    pub const COUNT: [u8; 4] = [0xec, 0xda, 0xb9, 0xff];
+    pub const COUNT_BORDER: [u8; 4] = [0xb8, 0x92, 0x4e, 0xff];
+    pub const COUNT_INK: [u8; 4] = [0x1d, 0x1b, 0x19, 0xff];
+}
