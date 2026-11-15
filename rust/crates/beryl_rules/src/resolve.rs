@@ -39,7 +39,29 @@ use crate::{interpret, replace};
 /// then answers each question as the run stops at it, and the body runs again with the
 /// answer recorded: the record holds a replacement's choice and the body's own questions in
 /// the order they came, so each run asks them alike.
+///
+/// A resolution that finishes with no choice made since the state was last the same is a
+/// loop of mandatory actions, and the game is a draw
+/// ([CR 104.4b](https://yawgatog.com/resources/magic-rules/#R1044b)): "If a game ...
+/// somehow enters a "loop" of mandatory actions, repeating a sequence of events with no way
+/// to stop, the game is a draw." [`State::note_resolution`] finds it.
 pub(crate) fn resolve<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    x: &mut Scratch<L>,
+    a: &mut dyn Answers<L>,
+) -> Result<(), Full> {
+    resolve_top(s, t, x, a)?;
+    if !matches!(s.pending(), Pending::Resolving(_)) && s.outcome().is_none() && s.note_resolution()
+    {
+        s.end_game(Outcome::Draw);
+    }
+    Ok(())
+}
+
+/// [`resolve`] up to the loop check.
+#[inline]
+fn resolve_top<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     x: &mut Scratch<L>,
@@ -143,6 +165,9 @@ pub(crate) fn answer_inline<L: Layout>(
         return None;
     }
     s.count_decision();
+    if question.len() > 1 {
+        s.note_choice();
+    }
     // A body builds its questions for the player each belongs to; the player controlling
     // them answers (CR 724.5, `engine::controlled`).
     let c = if s.turn().controller().is_some() {

@@ -12,7 +12,7 @@ use beryl_card::{AbilityIx, Colors, FaceIx, GrantIx, Keywords, Supertypes, Types
 
 use crate::counters::Counters;
 use crate::fixed::Full;
-use crate::ids::{CardId, CardIx, Seat, Slot};
+use crate::ids::{CardId, CardIx, Seat, Slot, SlotId};
 use crate::layout::{Layout, Small};
 
 /// The [`Object::battlefield_index`] of a slot not on the battlefield.
@@ -582,7 +582,7 @@ impl<L: Layout> std::hash::Hash for Object<L> {
             battlefield_index: _,
         } = self;
         card.hash(h);
-        incarnation.hash(h);
+        crate::repeats::incarnation(*incarnation).hash(h);
         zone.hash(h);
         owner.hash(h);
         base_controller.hash(h);
@@ -593,7 +593,7 @@ impl<L: Layout> std::hash::Hash for Object<L> {
         damage.hash(h);
         counters.hash(h);
         attached_to.hash(h);
-        timestamp.hash(h);
+        crate::repeats::timestamp(*timestamp, crate::repeats::timestamp_live(*zone)).hash(h);
         face.hash(h);
         combat_slot.hash(h);
     }
@@ -601,10 +601,19 @@ impl<L: Layout> std::hash::Hash for Object<L> {
 
 /// A reference to one incarnation of the object in a slot (architecture §5). A reference
 /// whose incarnation no longer matches names an object that has left its zone.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ObjectRef<L: Layout = Small> {
     pub slot: L::Slot,
     pub incarnation: u16,
+}
+
+/// The slot and the incarnation, as a derived `Hash` would; a canonical hash reads the
+/// incarnation as how long ago it was current ([`crate::repeats`]).
+impl<L: Layout> std::hash::Hash for ObjectRef<L> {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.slot.hash(h);
+        crate::repeats::reference(self.slot.index(), self.incarnation).hash(h);
+    }
 }
 
 /// The result of applying continuous effects to a permanent (architecture §9), by

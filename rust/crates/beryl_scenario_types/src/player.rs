@@ -33,6 +33,13 @@ pub const fn wins(player: Player) -> Action {
     })
 }
 
+/// The open decision is the end of the game, which is a draw.
+pub const fn ends_in_draw() -> Action {
+    Action::assert(Assertion::Outcome {
+        outcome: Ending::Draw,
+    })
+}
+
 /// How many spells and abilities are on the stack.
 pub const fn stack(count: u8) -> Action {
     Action::assert(Assertion::Stack { count })

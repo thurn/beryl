@@ -207,5 +207,13 @@
     "diff": [
       "Fiend Hunter: when ~ leaves the battlefield , return the {+cards+} exiled [-card-] {+with ~+} to the battlefield under [-its owner's-] {+their owners'+} control ."
     ]
+  },
+  "Worldgorger Dragon": {
+    "reason": "wording",
+    "note": "Oracle says \"exile all other permanents you control\"; the renderer says \"each other permanent\", the same set. Oracle's \"the exiled cards\" are the cards the enters ability exiled, linked to this Dragon, which the renderer calls \"the cards exiled with\" it.",
+    "diff": [
+      "Worldgorger Dragon: when ~ enters , exile [-all-] {+each+} other [-permanents-] {+permanent+} you control .",
+      "Worldgorger Dragon: when ~ leaves the battlefield , return the {+cards+} exiled [-cards-] {+with ~+} to the battlefield under their owners' control ."
+    ]
   }
 }

@@ -567,6 +567,9 @@ fn perform_priority<L: Layout>(
         | Opt::Activate { .. }
         | Opt::TurnFaceUp(_)
         | Opt::Mana { .. } => {
+            // An action other than passing: no loop through it is one of mandatory actions
+            // (CR 104.4b).
+            s.note_choice();
             act(s, &mut x.events, player, Some(option));
             let done = take_action(s, t, x, player, option);
             x.events.leave();
@@ -620,6 +623,12 @@ fn perform<L: Layout>(
 ) -> Result<(), Full> {
     let object = || d.candidates.object(c).expect("an object choice");
     let option = || d.candidates.option(c).expect("an option choice");
+    // A choice among several means no loop through this moment is one of mandatory actions
+    // (CR 104.4b; [`crate::resolve::resolve`]). A priority action other than passing is
+    // noted where it is taken ([`perform_priority`]).
+    if d.kind != DecisionKind::Priority && d.len() > 1 {
+        s.note_choice();
+    }
     if let Some(done) = perform_machine(s, t, x, a, d, c) {
         return done;
     }

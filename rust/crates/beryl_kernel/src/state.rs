@@ -37,6 +37,7 @@ use crate::ids::{Seat, Slot, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::object::OFF_BATTLEFIELD;
 use crate::profile::{Limits, Profile};
+use crate::repeats::Repeats;
 use crate::rng::Rng;
 pub use crate::rule_changes::{RuleId, RuleKind, Rules};
 use crate::static_ability::Inputs;
@@ -79,7 +80,7 @@ pub enum ZoneKey {
 
 /// Zone membership and the zones whose order the rules read (architecture §4.3). Only the
 /// zone chokepoints write it ([`crate::zone`]).
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Zones<L: Layout = Small> {
     /// Membership by owner, indexed by `Zone as usize` for the owned zones.
     pub(crate) members: L::PerPlayer<[Bitboard<L::Slot>; Zone::OWNED]>,
@@ -93,6 +94,25 @@ pub struct Zones<L: Layout = Small> {
 }
 
 impl Copy for Zones<Small> {}
+
+/// The fields in order, as a derived `Hash` would; a canonical hash reads the next timestamp
+/// as the count of live ones ([`crate::repeats`]).
+impl<L: Layout> std::hash::Hash for Zones<L> {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        let Zones {
+            members,
+            stack,
+            library,
+            graveyard,
+            next_timestamp,
+        } = self;
+        members.hash(h);
+        stack.hash(h);
+        library.hash(h);
+        graveyard.hash(h);
+        crate::repeats::next_timestamp(*next_timestamp).hash(h);
+    }
+}
 
 /// Counters toward the budgets of the profile (architecture §12.3).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -166,6 +186,9 @@ pub struct State<L: Layout = Small> {
     /// Slots on the battlefield, in the order they entered.
     pub(crate) battlefield: L::Queue<L::Slot, BATTLEFIELD>,
     pub(crate) rng: Rng,
+    /// The resolutions in a row with no choice, and the hash a loop of mandatory actions is
+    /// compared with ([`crate::repeats`]).
+    pub(crate) repeats: Repeats,
     /// `knowledge[p]` holds the slots whose identity player `p` knows (architecture §13).
     pub(crate) knowledge: L::PerPlayer<Bitboard<L::Slot>>,
     /// The slots a store has an entry about as an object, so that an object with nothing
@@ -229,6 +252,14 @@ pub const CAPTURED_WORDS: usize = 4;
 /// (`beryl_bench` pins the hash of its corpus).
 impl<L: Layout> std::hash::Hash for State<L> {
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.hash_game(h, true);
+    }
+}
+
+impl<L: Layout> State<L> {
+    /// [`State`]'s `Hash`, with the budgets or without them ([`State::canonical_hash`]).
+    pub(crate) fn hash_game<H: std::hash::Hasher>(&self, h: &mut H, with_budgets: bool) {
+        use std::hash::Hash;
         let State {
             turn,
             players,
@@ -261,6 +292,8 @@ impl<L: Layout> std::hash::Hash for State<L> {
             counters,
             // Found from the faces on the battlefield and the memos, which the hash covers.
             elsewhere: _,
+            // Bookkeeping about the past that only the loop check reads ([`crate::repeats`]).
+            repeats: _,
         } = self;
         objects.hash(h);
         battlefield.hash(h);
@@ -292,7 +325,9 @@ impl<L: Layout> std::hash::Hash for State<L> {
         knowledge.hash(h);
         rng.hash(h);
         profile.hash(h);
-        budgets.hash(h);
+        if with_budgets {
+            budgets.hash(h);
+        }
         flags.hash(h);
         outcome.hash(h);
     }

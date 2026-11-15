@@ -241,7 +241,9 @@
 //! ([`decision::Decision::decider`]): the question a paused resolution keeps is 8 bytes
 //! longer, the decision having no spare byte; [`state::Turn::controller`] fits the turn's
 //! padding. It is 20,128 since spells that left the stack are kept for abilities of their own
-//! that copy them ([`last_known::DepartedSpell`]): two rows of 56 bytes, 112.
+//! that copy them ([`last_known::DepartedSpell`]): two rows of 56 bytes, 112. It is 20,144
+//! since the state counts resolutions in a row with no choice and keeps the hash a loop of
+//! mandatory actions is compared with ([`repeats`]): a `u16` and a `u64`, 16 with padding.
 //! The limit is 20,480. Each bead may change the size at its
 //! own push by at most its allotment, whatever landed before it, and reports the size as it
 //! reports the count:
@@ -264,7 +266,7 @@
 //! | by-bajq.5.3 | +136 (landed: +88) | a byte in each of the 64 stack entries naming its captured text changes, and the table of four captured sets |
 //! | by-bajq.6.1 | +72 (landed: +32) | two copy exceptions in each `Copiable`, which each of the 16 last-known rows holds |
 //! | by-bajq.7.4 | +48 (landed: +32) | up to four entries of mana that remembers in each player's pool |
-//! | by-bajq.8.3 | +16 | the count of mandatory resolutions in a row and the hash it compares, padded |
+//! | by-bajq.8.3 | +16 (landed: +16) | the count of mandatory resolutions in a row and the hash it compares, padded |
 //! | by-bajq.8.4 | +32 | a set of the phased-out permanents' slots |
 //!
 //! The allotments of groups 4 to 8 sum to 352, so with all of them landed the size is at
@@ -774,6 +776,7 @@ mod players;
 pub mod profile;
 pub mod query;
 pub mod relayout;
+pub mod repeats;
 pub mod replacement;
 pub mod rng;
 pub mod rule_changes;

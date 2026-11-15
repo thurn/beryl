@@ -21,7 +21,7 @@
 use beryl_card::TextChange;
 
 use crate::fixed::Full;
-use crate::ids::{CardId, Seat};
+use crate::ids::{CardId, Seat, SlotId};
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::object::ObjectRef;
 use crate::observation::Observation;
@@ -184,7 +184,7 @@ pub enum Permanents<L: Layout = Small> {
 /// and a zone change is an object's. A set is affected by a layer change alone: only a change to
 /// characteristics or control locks in what it affects (CR 611.2c), and nothing else that
 /// the cards do is one effect on several objects.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Affects<L: Layout = Small> {
     /// One object, as it was when the effect began
     /// ([CR 611.2c](https://yawgatog.com/resources/magic-rules/#R6112c)): "the set of objects
@@ -355,7 +355,7 @@ impl Kinds {
 /// A continuous effect from a resolved spell or ability
 /// ([CR 611.2](https://yawgatog.com/resources/magic-rules/#R6112)). A record: the store
 /// gives entries back whole.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ContinuousEffect<L: Layout = Small> {
     /// The game index of the card the spell or ability that created it came from, as it was
     /// then. The source may since have left its zone, and once hidden its slot may hold another
@@ -374,6 +374,41 @@ pub struct ContinuousEffect<L: Layout = Small> {
 /// (the crate's contract, "Stores") counts on it, and it is why an entry keeps the two
 /// halves of a [`Continuous`] apart ([`Affects`]).
 const _: () = assert!(size_of::<ContinuousEffect<Small>>() == 24);
+
+/// The variant and its fields, as a derived `Hash` would; a canonical hash reads an object's
+/// incarnation as how long ago it was current ([`crate::repeats`]).
+impl<L: Layout> std::hash::Hash for Affects<L> {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        std::mem::discriminant(self).hash(h);
+        match *self {
+            Affects::Object { slot, incarnation } => {
+                slot.hash(h);
+                crate::repeats::reference(slot.index(), incarnation).hash(h);
+            }
+            Affects::Player(seat) => seat.hash(h),
+            Affects::Set(set) => set.hash(h),
+        }
+    }
+}
+
+/// The fields in order, as a derived `Hash` would; a canonical hash reads the timestamp as
+/// its rank ([`crate::repeats`]).
+impl<L: Layout> std::hash::Hash for ContinuousEffect<L> {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        let ContinuousEffect {
+            source,
+            timestamp,
+            duration,
+            affected,
+            payload,
+        } = self;
+        source.hash(h);
+        crate::repeats::timestamp(*timestamp, true).hash(h);
+        duration.hash(h);
+        affected.hash(h);
+        payload.hash(h);
+    }
+}
 
 impl<L: Layout> Default for ContinuousEffect<L> {
     fn default() -> Self {

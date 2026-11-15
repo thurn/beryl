@@ -12,7 +12,7 @@ use beryl_card::{AbilityIx, Castings, FaceAbility, FaceIx, GrantIx, SpecIx};
 use crate::bitboard::Bitboard;
 use crate::event::Sink;
 use crate::fixed::Full;
-use crate::ids::Seat;
+use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small};
 use crate::object::ObjectRef;
 use crate::state::State;
@@ -34,7 +34,7 @@ pub const TARGETS: usize = 8;
 /// entries have no identity of their own: a field in each entry would be copied in every
 /// rollout. Only an entry above an ability can name it, so the names change only when an
 /// entry below the top leaves, and [`State::take_off_stack`] repairs them then.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Target<L: Layout = Small> {
     spec: SpecIx,
     /// The targeted object's slot; none for a player or an ability.
@@ -46,6 +46,19 @@ pub struct Target<L: Layout = Small> {
 }
 
 const _: () = assert!(size_of::<Target<Small>>() == 4);
+
+/// The fields in order, as a derived `Hash` would; a canonical hash reads an object's
+/// incarnation as how long ago it was current ([`crate::repeats`]).
+impl<L: Layout> std::hash::Hash for Target<L> {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.spec.hash(h);
+        self.slot.hash(h);
+        match self.slot {
+            Some(slot) => crate::repeats::reference(slot.index(), self.rest).hash(h),
+            None => self.rest.hash(h),
+        }
+    }
+}
 
 /// What an ability target names: its entry's place on the stack, counted from the bottom, or
 /// nothing, once that entry has left the stack.

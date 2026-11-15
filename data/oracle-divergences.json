@@ -103,5 +103,12 @@
     "scenario": "it copies a basic land and can copy again",
     "cr": "CR 707.9a (https://yawgatog.com/resources/magic-rules/#R7079a): \"Some copy effects cause the copy to gain an ability as part of the copying process. This ability becomes part of the copiable values for the copy, along with any other abilities that were copied.\"",
     "reason": "XMage adds the copy's 'except it has this ability' with a one-shot addAbility after copyPermanent, outside its layer system, so the copy no longer has the ability once continuous effects are reapplied and it can't copy again. The ability is part of the copy's copiable values (CR 707.9a)."
+  },
+  {
+    "oracle": "forge",
+    "card": "Worldgorger Dragon",
+    "scenario": "Animate Dead on Worldgorger Dragon alone is a draw",
+    "cr": "CR 104.4b (https://yawgatog.com/resources/magic-rules/#R1044b): \"If a game that's not using the limited range of influence option (including a two-player game) somehow enters a 'loop' of mandatory actions, repeating a sequence of events with no way to stop, the game is a draw. Loops that contain an optional action don't result in a draw.\"",
+    "reason": "Forge has no rule that ends a loop of mandatory actions as a draw: it keeps returning the Dragon and Animate Dead until its step limit, where XMage (after its loop check) and Beryl end the game in a draw."
   }
 ]

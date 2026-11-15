@@ -19,13 +19,13 @@ use beryl_card::{
 
 mod player;
 
-pub use player::{ME, Player, Resolve, THEM, advance_to, stack, wins};
+pub use player::{ME, Player, Resolve, THEM, advance_to, ends_in_draw, stack, wins};
 
 /// Everything a card file's scenarios module uses: `use beryl_scenario_types::prelude::*;`.
 pub mod prelude {
     pub use crate::{
         Action, Assertion, ME, P0, P1, Permanent, Pick, Player, Resolve, Scenario, THEM,
-        advance_to, stack, wins,
+        advance_to, ends_in_draw, stack, wins,
     };
     pub use beryl_card::{CounterKind, DecisionKind, ManaColor, TurnStep, Zone};
 }

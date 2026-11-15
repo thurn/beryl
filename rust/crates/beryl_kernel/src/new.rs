@@ -146,6 +146,7 @@ impl<L: Layout> State<L> {
             pending: Pending::None,
             knowledge: Table::filled(Bitboard::EMPTY),
             rng: Rng::new(0),
+            repeats: Default::default(),
             profile,
             budgets: Budgets::default(),
             flags: Flags::default(),

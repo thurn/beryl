@@ -834,12 +834,18 @@ Built by by-bajq.3.10:
   leave (`delayed_triggers::fire_on_leaving`). An Aura entering other than as a
   resolving Aura spell chooses what it enchants (CR 303.4f,
   `replace::enchants`), or stays where it is (CR 303.4g).
-- **Mandatory loops** (CR 104.4b). The engine counts resolutions in a row with
-  no choice but passes. Past eight, it compares a canonical hash of the state,
-  which ignores incarnations and reads timestamps as ranks, with a stored one
-  that it replaces at each power of two. A match ends the game in a draw. The
-  counter and the hash are ten bytes of the state, so a game is still a pure
-  function of its choices.
+- **Mandatory loops** (CR 104.4b, built). The engine counts resolutions in a row
+  in which no player chose among several answers, other than by passing priority
+  (`State::note_resolution`, `State::note_choice`). Past eight, it compares a
+  canonical hash of the state as each resolution ends with a stored one that it
+  replaces at each power of two. The canonical hash is the state's `Hash`
+  without the budgets, reading each object's incarnation as nothing, each
+  reference to one as how many zone changes ago it was current, and each
+  timestamp as its rank (`beryl_kernel::repeats`). A match ends the game in a
+  draw. The counter and the hash are 16 bytes of the state with padding, so a
+  game is still a pure function of its choices; the state's `Hash` leaves them
+  out, so no pinned hash changed. Worldgorger Dragon with Animate Dead is the
+  scenario.
 - **Merged permanents** (CR 731). The permanent stays the object it was, in its
   slot, with its counters, attachments and timestamp. The card that merges moves
   to a zone state of its own that names the permanent it is part of and its

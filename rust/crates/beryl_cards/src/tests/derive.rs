@@ -125,6 +125,12 @@ const UNREACHED: &[(&str, &str)] = &[
          it",
     ),
     (
+        "Worldgorger Dragon: ability 1 (Triggered)",
+        "it returns the cards exiled with the Dragon, and a generated scenario casts the card and \
+         never has it leave the battlefield; the card's hand-written scenarios destroy it and \
+         sacrifice it to Animate Dead's leaves ability",
+    ),
+    (
         "Leonin Scimitar: ability 1 (Activated)",
         "equip targets a creature its controller controls, and a generated position gives the \
          Equipment's controller none; the card's hand-written scenario equips one",
