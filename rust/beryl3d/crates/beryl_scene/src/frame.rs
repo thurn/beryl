@@ -170,9 +170,10 @@ pub struct Load {
 /// The work the client core did, counted so that the gates can hold it.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Work {
-    /// Elements visited.
+    /// Elements visited: each object slot of the table and each node of the flat layer that
+    /// the frame looks at, whether or not it draws it.
     pub elements: u32,
-    /// Animation segments evaluated.
+    /// Animation segments evaluated: one for each object whose pose comes from a track.
     pub segments: u32,
     /// Layout nodes computed, in `handle`.
     pub layout_nodes: u32,
@@ -346,8 +347,19 @@ impl<'a> FrameBuilder<'a> {
         };
         self.frame.names.push_str(name);
         self.frame.resolved.push(element);
-        self.frame.work.elements += 1;
         index(self.frame.resolved.len() - 1)
+    }
+
+    /// Counts an element visited: an object slot of the table or a node of the flat layer.
+    /// Every walk over elements calls it once for each, so that a second walk shows in
+    /// `Work::elements`.
+    pub fn visit(&mut self) {
+        self.frame.work.elements += 1;
+    }
+
+    /// Counts an animation segment evaluated for an object's pose.
+    pub fn segment(&mut self) {
+        self.frame.work.segments += 1;
     }
 
     /// Sets the camera's view and projection, `Frame::view_projection`, which `finish` also uses

@@ -24,7 +24,8 @@ pub struct Stress {
     /// permanents with a script.
     pub views: Vec<PlayerView>,
     /// For each view after the first, one timing per step of its script, in script order:
-    /// `timings[i]` belongs to `views[i + 1]`.
+    /// `timings[i]` belongs to `views[i + 1]`, whose script carries the same timings as a
+    /// session's does.
     pub timings: Vec<Vec<StepTiming>>,
 }
 
@@ -72,11 +73,11 @@ fn board(count: u16) -> Stress {
             cause: None,
         })
         .collect();
-    let timings = beat.iter().map(|_| flight_timing()).collect();
+    let timings: Vec<StepTiming> = beat.iter().map(|_| flight_timing()).collect();
     second.script = Some(Script {
         reset: None,
         beats: vec![beat],
-        timing: Vec::new(),
+        timing: timings.clone(),
     });
 
     Stress {

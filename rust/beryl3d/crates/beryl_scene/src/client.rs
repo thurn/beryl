@@ -85,8 +85,14 @@ impl Client {
                     }
                     _ => None,
                 };
-                // The session sends no step timings yet, so every script is shown at once.
-                self.show.push(update, Vec::new());
+                // The session sends one timing for each step of the script beside it.
+                let timings = update
+                    .view
+                    .script
+                    .as_ref()
+                    .map(|script| script.timing.clone())
+                    .unwrap_or_default();
+                self.show.push(update, timings);
                 self.show_prompt();
             }
             Input::Reply(Reply::Click(Ok(reply))) => {

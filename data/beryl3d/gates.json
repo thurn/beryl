@@ -1,1 +1,47 @@
-{"audit": {"target_points": 24, "phone_target_points": 44, "line_end_points": 0.1, "line_reshape_points": 4}, "frames": {}, "tiers": {}, "materials": {}, "tests": {}}
+{
+  "audit": {
+    "target_points": 24,
+    "phone_target_points": 44,
+    "line_end_points": 0.1,
+    "line_reshape_points": 4
+  },
+  "frames": {
+    "stress-255": {
+      "worst_frame_elements": 256,
+      "total_elements": 32512,
+      "worst_frame_segments": 255,
+      "total_segments": 24480,
+      "worst_frame_records": 256,
+      "total_records": 27955,
+      "worst_frame_layout_nodes": 1,
+      "total_layout_nodes": 1,
+      "worst_frame_text_runs": 0,
+      "total_text_runs": 0,
+      "worst_frame_draw_calls": 1,
+      "worst_frame_upload_bytes": 20480,
+      "worst_frame_blended_area": 0.0,
+      "handle_allocations": 46846,
+      "frame_allocations": 0
+    },
+    "stress-1024": {
+      "worst_frame_elements": 1025,
+      "total_elements": 130175,
+      "worst_frame_segments": 1024,
+      "total_segments": 98304,
+      "worst_frame_records": 1025,
+      "total_records": 101779,
+      "worst_frame_layout_nodes": 1,
+      "total_layout_nodes": 1,
+      "worst_frame_text_runs": 0,
+      "total_text_runs": 0,
+      "worst_frame_draw_calls": 1,
+      "worst_frame_upload_bytes": 82000,
+      "worst_frame_blended_area": 0.0,
+      "handle_allocations": 178729,
+      "frame_allocations": 0
+    }
+  },
+  "tiers": {},
+  "materials": {},
+  "tests": {}
+}

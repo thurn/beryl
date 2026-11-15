@@ -18,7 +18,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from .. import system, warm
-from . import lane, paths, sweep, vm
+from . import gate, lane, paths, sweep, vm
 
 # Exit code for a command line `just b3d` cannot run, as argparse uses.
 USAGE = 2
@@ -180,6 +180,19 @@ COMMANDS: tuple[Command, ...] = (
         ),
         run_fmt,
         lambda p: p.add_argument("--check", action="store_true"),
+    ),
+    Command(
+        "gate",
+        "plays the gated boards natively and fails on a work count or allocation over its limit",
+        (
+            ("just b3d gate", "hold every gated board to data/beryl3d/gates.json"),
+            (
+                "just b3d gate --board stress-255 --update",
+                "lower one board's limits to what it measured",
+            ),
+        ),
+        gate.run_gate,
+        gate.gate_arguments,
     ),
     Command(
         "vm",

@@ -20,6 +20,7 @@ def steps() -> list[Step]:
         Step("fmt", [*cargo, "fmt", "--check"], paths.REPO),
         Step("clippy", [*cargo, "clippy"], paths.REPO),
         Step("cargo-test", [*cargo, "cargo-test"], paths.REPO),
+        Step("gate", [*cargo, "gate"], paths.REPO),
         Step("scene-purity", [*PURITY, "scene-purity"], paths.REPO),
         Step("lints-match", [*PURITY, "lints-match"], paths.REPO),
         Step("data-names", [*PURITY, "data-names"], paths.REPO),

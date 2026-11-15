@@ -28,6 +28,7 @@ impl Layer {
         builder: &mut FrameBuilder,
         camera: &Camera,
     ) {
+        builder.visit();
         let element = &node.element;
         let index = builder.resolved(
             &element.name,

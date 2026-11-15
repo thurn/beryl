@@ -44,15 +44,25 @@ project, and selects the main lanes.
   (`fly`'s `arc`, in millimetres), and each count under `catch_up` a `usize` in
   `data::space::catch_up`: more than `double` updates waiting make the script
   clock run twice as fast, more than `quadruple` four times.
+
 - `data/beryl3d/gates.json`: the audit, frame, tier, material and test gates.
   Each number under `audit` becomes an `f32` constant in `beryl_scene`'s
   `data::audit`, named for its key in upper case:
+
   - `target_points` and `phone_target_points`: the side of the square an
     interactive card at rest must leave uncovered (the "reachable" check), on
     the desktop and phone layouts.
   - `line_end_points` and `line_reshape_points`: how far an arrow's end may move
     and still be at rest, and how far a control point must move to count as a
     change of shape (the "lines hold" check).
+
+  Under `frames.<board>` are the limits `just b3d gate` holds each gated board's
+  work counters, load and allocations to (docs/beryl-3d.md, "Finding the worst
+  frame"). `just b3d gate --update` lowers them to what was measured. A limit
+  rises only when the work itself changed (a new verb, a new element on every
+  screen) or a compiler or dependency upgrade moved the count with no change to
+  Beryl's code, and the commit that raises it gives the old and new numbers. It
+  needs nobody's approval.
 
 A break caused by a change to the main workspace (a renamed `beryl_session`
 item, say) is fixed in the Beryl 3D change that meets it, not by holding the

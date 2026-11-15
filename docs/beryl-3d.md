@@ -2171,6 +2171,35 @@ thousands of measurements, so the gate finds its candidates first.
   that runs before each push. That catches most regressions without the virtual
   machine.
 
+The native gate is `just b3d gate`, a step of the `beryl3d` lane
+(`tools/src/beryl_tools/beryl3d/gate.py`). The `gate` binary of `beryl_inspect`
+plays each gated board as a host would at 60 frames a second
+(`beryl_inspect::gate::Playback`): the first view and 30 frames at rest, then
+the next view and frames until its script has played out. It prints every
+frame's work counters, its load and the allocations made inside `Client::frame`,
+which a counting global allocator sees, and the allocations made in
+`Client::handle` over the board. The gate holds them to these limits under
+`frames.<board>` in `data/beryl3d/gates.json`:
+
+- `worst_frame_<counter>` and `total_<counter>` for each work counter
+  (`elements`, `segments`, `records`, `layout_nodes`, `text_runs`);
+- `worst_frame_draw_calls`, `worst_frame_upload_bytes` and
+  `worst_frame_blended_area` for the Baseline tier's load;
+- `handle_allocations` over the board, and `frame_allocations`, which is 0.
+
+The counters are exact, so they have no tolerance: one over its limit fails, and
+the report names the board, the frame and the count. `just b3d gate --update`
+lowers each limit to what was measured and never raises one. The allocation gate
+is also a test of `beryl_inspect` (`tests/frame_allocation.rs`), which prints
+the backtrace of the first allocation inside a frame.
+`beryl_inspect::gate::rank` gives the 8 frames that the counters rank highest,
+for the instruction-count gate.
+
+An element is visited once for each object slot of the table and each node of
+the flat layer that a frame looks at, whether or not it draws it, so a second
+walk over the elements shows in the count. A segment is evaluated once for each
+object whose pose comes from a track.
+
 ### What counts do not show
 
 Counted work predicts a frame's cost. It does not measure a real device.

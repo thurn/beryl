@@ -138,12 +138,14 @@ impl Table {
             .map_or(0, |motion| motion.tracks.len())
             .max(self.objects.len());
         for slot in 0..slots {
+            builder.visit();
             let resting = self.objects.get(slot).copied().flatten();
-            let moving = motion.and_then(|motion| {
-                let track = motion
-                    .tracks
-                    .get(slot)
-                    .filter(|t| !t.segments().is_empty())?;
+            let track = motion.and_then(|motion| {
+                let track = motion.tracks.get(slot)?;
+                (!track.segments().is_empty()).then_some((motion, track))
+            });
+            let moving = track.and_then(|(motion, track)| {
+                builder.segment();
                 let pose = track.pose_at(motion.t);
                 match motion.finals.get(slot).copied().flatten() {
                     Some(object) => Some((object, motion.view, pose)),
