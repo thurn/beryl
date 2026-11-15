@@ -53,9 +53,11 @@ pub enum Capability {
     /// A card has dredge ([`beryl_card::Replacement::dredge`]), a replacement of draws that
     /// works from a graveyard, so a draw looks there for one.
     Dredge,
-    /// A card chooses a value as it enters ([`beryl_card::Replacement::choose_as_enters`]), a
-    /// choice that may come up wherever a permanent enters, so every resolution runs where it
-    /// can pause for it (`beryl_rules`' `resolve`).
+    /// A card chooses a value as it enters ([`beryl_card::Replacement::choose_as_enters`]) or
+    /// may enter as a copy of a permanent it chooses
+    /// ([`beryl_card::Replacement::enter_as_copy`]), a choice that may come up wherever a
+    /// permanent enters, so every resolution runs where it can pause for it (`beryl_rules`'
+    /// `resolve`).
     ChoosesAsEnters,
     /// A card's static ability affects objects in every zone
     /// ([`beryl_card::Objects::Everywhere`]), so the recompute lists such effects for the
@@ -74,6 +76,11 @@ pub enum Capability {
     /// for cards in its caster's graveyard to pay generic mana with, and whether a spell is
     /// castable counts them.
     Delve,
+    /// A card's copy exception gives a triggered ability ([`beryl_card::CopyChange::Has`]),
+    /// which a permanent whose copiable values carry the exception has on no face of its
+    /// definition, so trigger matching looks at the exceptions of copies (`beryl_rules`'
+    /// `trigger`).
+    GivesTriggers,
 }
 
 impl Capability {
@@ -88,6 +95,12 @@ impl Capability {
         }
         if !face.grants.is_empty() {
             found |= Capability::Grants.bit();
+        }
+        let gives_triggers = (0..face.grants.len()).any(|i| {
+            face.grants[i].trigger().is_some() && crate::listener::given_by_exception(face, i)
+        });
+        if gives_triggers {
+            found |= Capability::GivesTriggers.bit();
         }
         // An ability a permanent is granted reads what one of its own does.
         if face.grants.iter().any(|a| a.layer().is_some()) {
@@ -106,7 +119,7 @@ impl Capability {
                 _ => {}
             }
             if let Some(&Replacement {
-                rewrite: Rewrite::Choose(_),
+                rewrite: Rewrite::Choose(_) | Rewrite::EnterAsCopy { .. },
                 ..
             }) = a.replacement()
             {

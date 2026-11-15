@@ -422,6 +422,24 @@ impl FaceAbility {
     }
 }
 
+impl FaceAbility {
+    /// A byte that tells the abilities of one face apart, for a record that names an ability
+    /// by a number: an own ability's index, or 128 more than a grant's.
+    pub const fn number(self) -> u8 {
+        match self {
+            FaceAbility::Own(i) => i.get(),
+            FaceAbility::Grant(i) => 128 | i.get(),
+        }
+    }
+}
+
+/// The face's first own ability: the value a fixed list's unused places hold.
+impl Default for FaceAbility {
+    fn default() -> FaceAbility {
+        FaceAbility::own(0)
+    }
+}
+
 /// An ability of an object, as a decision to activate it names it: one of its face up's
 /// own, by its index in [`Face::abilities`], or the `k`th ability other objects grant it,
 /// counting those in the order they were granted. That count is the state's, an index into

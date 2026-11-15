@@ -5,7 +5,7 @@ use crate::characteristics::{BasicLandTypes, Colors, Keywords, Subtype, Types};
 use crate::effect::{Amount, Condition, Objects, Players};
 use crate::filter::Filter;
 use crate::ids::Zone;
-use crate::index::{AbilityIx, GrantIx};
+use crate::index::{AbilityIx, ExceptIx, GrantIx};
 use crate::prompt::Purpose;
 use crate::words::{ColorWords, LandTypeWords, SubtypeWord};
 
@@ -64,6 +64,26 @@ impl Replacement {
     /// the value for as long as it stays.
     pub const fn choose_as_enters(kind: ChosenKind) -> Replacement {
         Replacement::this_enters(Rewrite::Choose(kind))
+    }
+
+    /// "You may have this enter as a copy of any [permanent the filter accepts] on the
+    /// battlefield", "except [the exception at `except` of the face's list]"
+    /// ([CR 707.9]): "Copy effects may include modifications or exceptions to the copying
+    /// process." It becomes a copy as it enters ([CR 707.5]): "It doesn't enter the
+    /// battlefield, and then become a copy of that permanent." Such an effect is applied
+    /// before the other replacements of entering ([CR 616.1c]): "If any of the replacement
+    /// and/or prevention effects would cause an object to become a copy of another object as
+    /// it enters the battlefield, one of them must be chosen." The permanent is chosen, not
+    /// targeted ([CR 115.10a]): "Unless that object or player is identified by the word
+    /// 'target' in the text of that spell or ability, or the rule for that keyword ability,
+    /// it's not a target." Its controller may choose none.
+    ///
+    /// [CR 707.9]: https://yawgatog.com/resources/magic-rules/#R7079
+    /// [CR 707.5]: https://yawgatog.com/resources/magic-rules/#R7075
+    /// [CR 616.1c]: https://yawgatog.com/resources/magic-rules/#R6161c
+    /// [CR 115.10a]: https://yawgatog.com/resources/magic-rules/#R11510a
+    pub const fn enter_as_copy(of: &'static Filter, except: Option<ExceptIx>) -> Replacement {
+        Replacement::this_enters(Rewrite::EnterAsCopy { of, except })
     }
 
     /// "If [players] would draw a card, [the ability's body] instead."
@@ -223,6 +243,13 @@ pub enum Rewrite {
     /// The damage is multiplied by N: "it deals double that damage to that permanent or
     /// player instead" is 2. The damage still comes from its source.
     Multiply(u8),
+    /// "You may have this enter as a copy of [a permanent the filter accepts] on the
+    /// battlefield", with the exception at `except` of the face's list
+    /// ([`crate::Face::excepts`]) if it has one ([`Replacement::enter_as_copy`]).
+    EnterAsCopy {
+        of: &'static Filter,
+        except: Option<ExceptIx>,
+    },
 }
 
 /// The kind of value a permanent chooses as it enters ([`Rewrite::Choose`]): one entry of a

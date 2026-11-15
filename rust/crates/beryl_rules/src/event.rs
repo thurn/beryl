@@ -83,6 +83,22 @@ pub(crate) fn arrive<L: Layout>(
     Ok(())
 }
 
+/// Starts the copy effect of the permanent that just arrived in `slot`, if it chose to enter as
+/// a copy ([`Sink::copies`]), before the layers or any trigger look at it ([CR 707.5]): "It
+/// doesn't enter the battlefield, and then become a copy of that permanent. ... Also, any
+/// enters-the-battlefield triggered abilities of the copy will have a chance to trigger."
+///
+/// [CR 707.5]: https://yawgatog.com/resources/magic-rules/#R7075
+#[cold]
+#[inline(never)]
+fn start_copy<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, slot: L::Slot) -> Result<(), Full> {
+    let Some(i) = sink.copies.iter().position(|&(copier, _)| copier == slot) else {
+        return Ok(());
+    };
+    let (_, values) = sink.copies.remove(i);
+    s.enter_as_copy(slot, values)
+}
+
 /// Has each permanent that chose a value as it entered remember it ([`Memo::Chosen`]), once
 /// the batch has moved and before the layers or any trigger look at it, and empties the list
 /// for the next batch.
@@ -244,6 +260,9 @@ pub(crate) fn move_batch_to<L: Layout>(
         s.move_object(sink, slot, dest, place)?;
         if dest == Zone::Battlefield {
             arrive(s, t, slot, entry)?;
+            if !sink.copies.is_empty() {
+                start_copy(s, sink, slot)?;
+            }
             arrived.push_bounded(slot);
         }
         sink.push_joined(changed(s.object_ref(slot), from, dest), || {

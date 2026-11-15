@@ -9,7 +9,7 @@ use crate::event::{self, Sink};
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
-use crate::state::{AbilityRef, PendingTrigger, State, Zone};
+use crate::state::{AbilityRef, PendingTrigger, State, TriggeredAbility, Zone};
 use crate::table::{GameTable, is_sacrificed, is_simple};
 
 use super::pool::{helps, pay_unit};
@@ -419,7 +419,7 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
         of: AbilityRef {
             source: Some(source),
             controller,
-            ability: index,
+            ability: TriggeredAbility::own(index),
             card,
             face,
         },

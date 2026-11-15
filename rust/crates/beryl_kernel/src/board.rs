@@ -68,7 +68,7 @@ impl<L: Layout> State<L> {
             return Some(format!("a delayed trigger of {}", t.def(d.of.card).name));
         }
         if let Some(d) = self.triggers.as_slice().iter().find(|d| {
-            let ability = &t.def(d.of.card).face(d.of.face).abilities[d.of.ability.index()];
+            let ability = t.def(d.of.card).face(d.of.face).ability(d.of.ability.get());
             ability.trigger().is_some_and(|trigger| trigger.delayed)
         }) {
             return Some(format!("a delayed trigger of {}", t.def(d.of.card).name));

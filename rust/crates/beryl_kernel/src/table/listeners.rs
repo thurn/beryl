@@ -2,12 +2,12 @@
 //! listen to, those that work on the battlefield apart from those that work elsewhere
 //! ([`crate::listener::AWAY`]).
 
-use beryl_card::{FaceIx, ZoneSet};
+use beryl_card::{AbilityKind, CardDef, Face, FaceIx, ZoneSet};
 
-use super::GameTable;
+use super::{GameTable, TableError};
 use crate::event::{EventKind, Listens};
 use crate::ids::CardId;
-use crate::listener::Listener;
+use crate::listener::{self, Listener};
 
 /// Each card's listeners of one list of a [`GameTable`], one card after another, where each card's
 /// start, and for each card the kinds of event they listen to and the zones they work in but the
@@ -121,4 +121,31 @@ impl GameTable {
     pub fn listens_anywhere(&self) -> Listens {
         self.listens_anywhere
     }
+}
+
+/// Whether the engine finds each ability of `def`, and each it grants, wherever it says it
+/// works ([`listener::found_where_it_works`]), and reads each it grants
+/// ([`listener::read_when_granted`]).
+pub(super) fn found_where_they_work(def: &CardDef) -> Result<(), TableError> {
+    let card = def.name;
+    let mut faces = def.faces.iter();
+    let mut abilities = faces
+        .clone()
+        .flat_map(|f| f.abilities.iter().chain(f.grants));
+    if !abilities.all(listener::found_where_it_works) {
+        return Err(TableError::Zone { card });
+    }
+    // A triggered ability a copy exception gives is matched from the copy's copiable values
+    // (`listener::given`), not from what a continuous effect grants.
+    let read = |f: &Face| {
+        (0..f.grants.len()).all(|i| {
+            let ability = &f.grants[i];
+            listener::read_when_granted(ability)
+                || (ability.kind() == AbilityKind::Triggered && listener::given_by_exception(f, i))
+        })
+    };
+    if !faces.all(read) {
+        return Err(TableError::Granted { card });
+    }
+    Ok(())
 }

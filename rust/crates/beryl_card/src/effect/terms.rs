@@ -1,11 +1,12 @@
 //! The parameters an entry has of its own: where, in what order and on what terms.
 
-use crate::characteristics::Colors;
+use crate::characteristics::{Colors, Subtype};
 #[cfg(doc)]
 use crate::continuous::Duration;
 #[cfg(doc)]
 use crate::effect::Effect;
 use crate::filter::Filter;
+use crate::index::GrantIx;
 
 /// Where in a library a card is put.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -109,6 +110,15 @@ pub enum CopyChange {
     /// "Except that the copy is [colors]", as Fork's copy is red (CR 707.9b): the copy's
     /// colors are these, whatever its mana cost says.
     Colors(Colors),
+    /// "Except it's a [subtype] in addition to its other types" (CR 707.9b).
+    AddSubtype(Subtype),
+    /// "Except it has [the ability at this index of the face's grants]"
+    /// ([CR 707.9a](https://yawgatog.com/resources/magic-rules/#R7079a)): "Some copy effects
+    /// cause the copy to gain an ability as part of the copying process. This ability becomes
+    /// part of the copiable values for the copy, along with any other abilities that were
+    /// copied." The face that lists the exception lists the ability in
+    /// [`crate::Face::grants`].
+    Has(GrantIx),
 }
 
 /// Which of the cards a player looks at they take into their hand ([`Effect::Dig`]).

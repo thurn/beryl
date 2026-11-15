@@ -22,6 +22,7 @@ use crate::observation::Observation;
 use crate::replace::DrawReplacement;
 use crate::replacement::{self, Instead};
 use crate::resolution::Resolution;
+use crate::state::TriggeredAbility;
 use crate::state::{AbilityRef, Count, PendingTrigger, TriggerInfo, TurnStep, Zone, ZoneKey};
 use crate::table::Capability;
 use crate::{ending, replace};
@@ -168,7 +169,7 @@ fn instructions<L: Layout>(
             source: Some(source),
             card,
             face,
-            ability: replacement.index,
+            ability: TriggeredAbility::own(replacement.index),
             controller: replacement.controller,
         },
         info: TriggerInfo::default(),

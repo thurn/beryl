@@ -20,7 +20,7 @@ pub(crate) fn entry_ability<L: Layout>(
     match entry.item {
         StackItem::Spell { costs, .. } => face.spell_ability_with(costs),
         StackItem::Activated { of } => Some(face.ability(of.ability)),
-        StackItem::Triggered { of, .. } => Some(face.ability(FaceAbility::Own(of.ability))),
+        StackItem::Triggered { of, .. } => Some(of.ability.of_face(face)),
     }
 }
 

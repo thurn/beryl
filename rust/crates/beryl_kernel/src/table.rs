@@ -16,7 +16,7 @@ use crate::replacement::{self, Unreplaced};
 use crate::rule_changes::{self, RuleChanges, RuleId, RuleKind, Rules, Unchecked};
 use crate::static_ability::{self, Inputs, Unapplied};
 use crate::subtypes::{GameSubtypes, SubtypeNumbers};
-use listeners::Indexed;
+use listeners::{Indexed, found_where_they_work};
 
 mod capability;
 mod cards;
@@ -137,7 +137,9 @@ pub struct GameTable {
     /// Every zone any card of the game has a triggered ability that works in, but the
     /// battlefield.
     zones_away: ZoneSet,
-    /// Every kind of event the abilities of `away_listeners` listen to.
+    /// Every kind of event the abilities of `away_listeners` listen to, and those the triggered
+    /// abilities copy exceptions give listen to ([`Capability::GivesTriggers`]): both are
+    /// matched apart from the faces of the battlefield's definitions.
     listens_away: Listens,
     /// `listens_any` and `listens_away` together: whether to match an event at all, in one AND.
     listens_anywhere: Listens,
@@ -170,24 +172,6 @@ pub struct GameTable {
     names: Vec<usize>,
     /// Per game index, the printed subtypes of its first two faces by those numbers.
     face_subtypes: Vec<[GameSubtypes; 2]>,
-}
-
-/// Whether the engine finds each ability of `def`, and each it grants, wherever it says it
-/// works ([`listener::found_where_it_works`]), and reads each it grants
-/// ([`listener::read_when_granted`]).
-fn found_where_they_work(def: &CardDef) -> Result<(), TableError> {
-    let card = def.name;
-    let mut faces = def.faces.iter();
-    let mut abilities = faces
-        .clone()
-        .flat_map(|f| f.abilities.iter().chain(f.grants));
-    if !abilities.all(listener::found_where_it_works) {
-        return Err(TableError::Zone { card });
-    }
-    if !faces.all(|f| f.grants.iter().all(listener::read_when_granted)) {
-        return Err(TableError::Granted { card });
-    }
-    Ok(())
 }
 
 /// A card's replacement mask ([`Replaces`]), with the rule changes its abilities name numbered
@@ -320,8 +304,13 @@ impl GameTable {
         let mut away = Indexed::default();
         let mut replaces = Vec::with_capacity(defs.len());
         let mut rule_changes = RuleChanges::default();
+        let mut given = Listens::NONE;
         for def in &defs {
             let of = listener::of(def).map_err(|unmatched| TableError::Trigger {
+                card: def.name,
+                unmatched,
+            })?;
+            given |= listener::given(def).map_err(|unmatched| TableError::Trigger {
                 card: def.name,
                 unmatched,
             })?;
@@ -342,7 +331,7 @@ impl GameTable {
         }
         let (here, away) = (here.finish(), away.finish());
         let zones_away = away.zones.iter().fold(ZoneSet::NONE, |a, &b| a.union(b));
-        let listens_away = away.kinds.iter().fold(Listens::NONE, |a, &b| a | b);
+        let listens_away = away.kinds.iter().fold(given, |a, &b| a | b);
         let listens_any = here.kinds.iter().fold(Listens::NONE, |a, &b| a | b);
         let listens_anywhere = listens_any | listens_away;
         let replaces_any = replaces.iter().fold(Replaces::NONE, |a, &b| a | b);

@@ -1,0 +1,210 @@
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Phantasmal Image {1}{U}
+//! Creature — Illusion, 0/0
+//!
+//! You may have this creature enter as a copy of any creature on the battlefield, except it's an
+//! Illusion in addition to its other types and it has "When this creature becomes the target of a
+//! spell or ability, sacrifice it."
+// End of the generated card header.
+
+use crate::prelude::*;
+
+/// "You may have this creature enter as a copy of any creature on the battlefield" is a
+/// replacement effect that has it become a copy as it enters ([CR 707.5]): "It doesn't enter
+/// the battlefield, and then become a copy of that permanent. ... Also, any
+/// enters-the-battlefield triggered abilities of the copy will have a chance to trigger." The
+/// creature is chosen, not targeted, so hexproof does not stop it. Declining, it enters as a
+/// 0/0 and dies.
+///
+/// The exception is a creature type and an ability, both part of the copy's copiable values
+/// ([CR 707.9a]): "This ability becomes part of the copiable values for the copy, along with
+/// any other abilities that were copied." So a copy of the Image is an Illusion with the
+/// ability too. The ability is listed as one the face gives, which only the copy has: the
+/// Image that enters as itself has no such ability.
+///
+/// "When this creature becomes the target of a spell or ability" triggers as the spell is cast
+/// or the ability is put on the stack with it among its targets ([CR 603.2e]): "Some trigger
+/// events use the word 'becomes' ... These trigger only at the time the named event happens".
+/// "Sacrifice it" is the creature the trigger was about, the copy itself.
+///
+/// [CR 707.5]: https://yawgatog.com/resources/magic-rules/#R7075
+/// [CR 707.9a]: https://yawgatog.com/resources/magic-rules/#R7079a
+/// [CR 603.2e]: https://yawgatog.com/resources/magic-rules/#R6032e
+pub static CARD: CardDef = Printed::PhantasmalImage
+    .abilities(&[Ability::replacing(&Replacement::enter_as_copy(
+        &Filter::Types(Types::CREATURE),
+        Some(ExceptIx::new(0)),
+    ))])
+    .grants(
+        &[Ability::triggered(&Trigger::BECOMES_TARGET).effect(&sacrifice(Objects::TriggeredOn))],
+    )
+    .excepts(&[CopyException(&[
+        CopyChange::AddSubtype(Subtype::Illusion),
+        CopyChange::Has(GrantIx::new(0)),
+    ])])
+    .card();
+
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
+    use crate::prelude::*;
+
+    const IMAGE: &str = Card::PhantasmalImage;
+    const BEZA: &str = Card::BezaTheBoundingSpring;
+    const MOTHER: &str = Card::MotherOfRunes;
+    const HOLY: &str = Card::HolyStrength;
+    const HOLE: &str = Card::PortableHole;
+    const GARGANTUAN: &str = Card::QuicksilverGargantuan;
+
+    /// P1 controls Beza, the Bounding Spring; P0, at 10 life against P1's 20, holds
+    /// Phantasmal Image and the Islands to cast it. Beza's enters ability gains its controller
+    /// 4 life when an opponent has more; its other parts find nothing that P1 has more of.
+    const fn beza(name: &'static str, images: &'static [&'static str]) -> Scenario {
+        Scenario::new(name)
+            .interaction(&[BEZA])
+            .life(P0, 10)
+            .battlefield(P0, &[Card::Island; 4])
+            .hand(P0, images)
+            .battlefield(P1, &[BEZA, Card::Plains, Card::Plains, Card::Plains])
+    }
+
+    /// Seven Islands for Quicksilver Gargantuan and a Plains for Portable Hole.
+    const P1_LANDS: &[&str] = &[
+        Card::Island,
+        Card::Island,
+        Card::Island,
+        Card::Island,
+        Card::Island,
+        Card::Island,
+        Card::Island,
+        Card::Plains,
+    ];
+
+    pub const SCENARIOS: &[Scenario] = &[
+        // Ruling: "Any enters-the-battlefield abilities of the copied creature will trigger
+        // when Phantasmal Image enters the battlefield." The Image enters as Beza, a 4/5, and
+        // Beza's enters ability gains P0 4 life.
+        beza("the copy's enters ability triggers", &[IMAGE]).actions(&[
+            ME.casts(IMAGE),
+            Resolve,
+            ME.picks_up_to(BEZA),
+            Resolve,
+            ME.controls(BEZA, 1),
+            ME.pt(BEZA, 4, 5),
+            ME.life(14),
+            THEM.controls(BEZA, 1),
+        ]),
+        // Declining to copy, the Image enters as itself, a 0/0, and dies
+        // ([CR 704.5f](https://yawgatog.com/resources/magic-rules/#R7045f)): "If a creature
+        // has toughness 0 or less, it's put into its owner's graveyard."
+        beza("an Image that copies nothing dies", &[IMAGE]).actions(&[
+            ME.casts(IMAGE),
+            Resolve,
+            ME.done_picking(),
+            ME.has(Zone::Graveyard, IMAGE, 1),
+            ME.life(10),
+        ]),
+        // Two Images of Beza are two legendary permanents with the same name under one
+        // player ([CR 704.5j](https://yawgatog.com/resources/magic-rules/#R7045j)): "that
+        // player chooses one of them, and the rest are put into their owners' graveyards." P1's
+        // Beza stays. Each Image's copy of Beza gained P0 4 life as it entered.
+        beza(
+            "two Images of a legendary creature meet the legend rule",
+            &[IMAGE, IMAGE],
+        )
+        .actions(&[
+            ME.casts(IMAGE),
+            Resolve,
+            ME.picks_up_to(BEZA),
+            Resolve,
+            ME.casts(IMAGE),
+            Resolve,
+            ME.picks_up_to(BEZA),
+            ME.picks(BEZA),
+            Resolve,
+            ME.controls(BEZA, 1),
+            ME.has(Zone::Graveyard, IMAGE, 1),
+            ME.life(18),
+            THEM.controls(BEZA, 1),
+        ]),
+        // P1's Mother of Runes gives itself protection from white in response to the Image.
+        // The Image chooses it all the same: what it copies is chosen, not targeted
+        // ([CR 115.10a](https://yawgatog.com/resources/magic-rules/#R11510a)). Holy Strength
+        // can target only P0's copy, which is sacrificed as it becomes the Aura spell's target,
+        // and the Aura, its one target gone, does nothing
+        // ([CR 608.3b](https://yawgatog.com/resources/magic-rules/#R6083b)).
+        Scenario::new("an Aura spell targeting the copy has it sacrificed")
+            .interaction(&[MOTHER, HOLY])
+            .battlefield(
+                P0,
+                &[Card::Island, Card::Island, Card::Plains, Card::Plains],
+            )
+            .hand(P0, &[IMAGE, HOLY])
+            .battlefield(P1, &[MOTHER])
+            .actions(&[
+                ME.casts(IMAGE),
+                THEM.activates(MOTHER, 0),
+                // Mother's ability resolves first, choosing white as it does.
+                THEM.chooses_color(Colors::WHITE),
+                Resolve,
+                ME.picks_up_to(MOTHER),
+                ME.controls(MOTHER, 1),
+                // P1's Mother has protection from white, so the copy is the one target.
+                ME.casts(HOLY),
+                Resolve,
+                ME.controls(MOTHER, 0),
+                ME.has(Zone::Graveyard, IMAGE, 1),
+                Resolve,
+                ME.has(Zone::Graveyard, HOLY, 1),
+            ]),
+        // Ruling: "If the chosen creature is copying something else ..., then Phantasmal
+        // Image enters the battlefield as whatever the chosen creature copied." P1's
+        // Quicksilver Gargantuan copies P0's Mother of Runes, a 7/7 copy, and P1's Portable
+        // Hole exiles the original. P0's Image copies the Gargantuan: Mother of Runes with the
+        // Gargantuan's exception, 7/7, and the Image's own, which P0's Holy Strength then
+        // shows. P0's own Portable Hole first exiles the Gargantuan, the only other Mother.
+        Scenario::new("an Image of a Gargantuan that copied Mother of Runes is a 7/7 Mother")
+            .interaction(&[GARGANTUAN, MOTHER, HOLY])
+            .at(2, P1, TurnStep::PrecombatMain)
+            .battlefield(
+                P0,
+                &[
+                    MOTHER,
+                    Card::Island,
+                    Card::Island,
+                    Card::Plains,
+                    Card::Plains,
+                ],
+            )
+            .hand(P0, &[IMAGE, HOLE, HOLY])
+            .battlefield(P1, P1_LANDS)
+            .hand(P1, &[GARGANTUAN, HOLE])
+            .library(P0, &[Card::Island, Card::Island])
+            .library(P1, &[Card::Island, Card::Island])
+            .actions(&[
+                THEM.casts(GARGANTUAN),
+                Resolve,
+                THEM.picks_up_to(MOTHER),
+                THEM.pt(MOTHER, 7, 7),
+                // P0's Mother is the one permanent P1's Portable Hole can target.
+                THEM.casts(HOLE),
+                Resolve,
+                Resolve,
+                ME.controls(MOTHER, 0),
+                advance_to(3, TurnStep::PrecombatMain),
+                ME.casts(IMAGE),
+                Resolve,
+                ME.picks_up_to(MOTHER),
+                ME.pt(MOTHER, 7, 7),
+                ME.casts(HOLE),
+                Resolve,
+                ME.targets(MOTHER),
+                Resolve,
+                THEM.controls(MOTHER, 0),
+                ME.controls(MOTHER, 1),
+                // The copy is the one creature left for Holy Strength to target.
+                ME.casts(HOLY),
+                Resolve,
+                ME.has(Zone::Graveyard, IMAGE, 1),
+            ]),
+    ];
+}

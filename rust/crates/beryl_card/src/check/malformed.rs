@@ -33,9 +33,9 @@ pub enum Malformed {
     NoModification,
     /// A resolving continuous effect of more parts than [`MODIFY_PARTS`].
     Parts,
-    /// An [`Effect::CreateCopies`] or [`Effect::CopySpell`] naming a copy exception its face
-    /// does not list
-    /// ([`Face::excepts`]).
+    /// An [`Effect::CreateCopies`], an [`Effect::CopySpell`] or an enter-as-a-copy
+    /// replacement naming a copy exception its face does not list ([`Face::excepts`]), or an
+    /// exception giving an ability the face does not list in [`Face::grants`].
     Copy,
     /// [`Effect::AddMana`] outside a mana ability, whose activator chooses the kind
     /// ([CR 605.1a](https://yawgatog.com/resources/magic-rules/#R6051a)): any other ability
@@ -116,7 +116,9 @@ impl Malformed {
             Malformed::Parts => {
                 "a resolving continuous effect has more parts than the engine begins at once"
             }
-            Malformed::Copy => "a copy's exception is a power and toughness other than 1/1",
+            Malformed::Copy => {
+                "a copy names an exception, or an exception an ability, its face lacks"
+            }
             Malformed::AddMana => "an effect adds mana outside a mana ability",
             Malformed::Countered => "a countered spell is put somewhere other than exile",
             Malformed::Cost => "an effect names a cost the engine cannot take as it resolves",

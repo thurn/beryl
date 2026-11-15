@@ -76,6 +76,15 @@ pub enum Memo<L: Layout = Small> {
     /// are not copied." A copy of the permanent makes its own choice as it enters, and a
     /// permanent that becomes a copy keeps this one.
     Chosen(ChosenValue<L>),
+    /// The card the permanent really is, at this game index, while a copy effect gives it the
+    /// values of another ([`crate::effects::copy`]): its definition field names the one it
+    /// copies, so that every reader of its values reads them as it would of any object, and
+    /// this is what it is again once it leaves the battlefield ([CR 707.2]): "When copying an
+    /// object, the copy acquires the copiable values of the original object's characteristics".
+    /// A token has none: a token copy is what it copied wherever it is (CR 111.3).
+    ///
+    /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
+    Really(L::Card),
 }
 
 impl<L: Layout> Memo<L> {
@@ -88,6 +97,7 @@ impl<L: Layout> Memo<L> {
             Memo::ExiledWith(_) => Kinds::EXILED_WITH,
             Memo::ExiledUntil(_) => Kinds::EXILED_UNTIL,
             Memo::Chosen(_) => Kinds::CHOSEN,
+            Memo::Really(_) => Kinds::REALLY,
         }
     }
 
@@ -96,7 +106,7 @@ impl<L: Layout> Memo<L> {
     #[inline]
     fn zone(self) -> Zone {
         match self {
-            Memo::Paid(_) | Memo::X(_) | Memo::Chosen(_) => Zone::Battlefield,
+            Memo::Paid(_) | Memo::X(_) | Memo::Chosen(_) | Memo::Really(_) => Zone::Battlefield,
             Memo::ExiledWith(_) | Memo::ExiledUntil(_) => Zone::Exile,
         }
     }
@@ -115,7 +125,7 @@ impl<L: Layout> Memo<L> {
     #[inline]
     fn names(self) -> Option<L::Slot> {
         match self {
-            Memo::Paid(_) | Memo::X(_) | Memo::Chosen(_) => None,
+            Memo::Paid(_) | Memo::X(_) | Memo::Chosen(_) | Memo::Really(_) => None,
             Memo::ExiledWith(by) | Memo::ExiledUntil(by) => Some(by),
         }
     }
@@ -128,6 +138,7 @@ impl<L: Layout> Memo<L> {
             Memo::X(x) => x > 0,
             Memo::Paid(paid) => !paid.is_empty(),
             Memo::Chosen(value) => value.holds(),
+            Memo::Really(_) => true,
             // What exiled it left a card or a token in its slot.
             Memo::ExiledWith(by) => zone(by) != Zone::Nowhere,
             // An object exiled "until" its exiler leaves returns as it leaves (CR 610.3).
@@ -143,6 +154,7 @@ impl<L: Layout> Memo<L> {
             Memo::ExiledWith(by) => Memo::ExiledWith(slot(by)),
             Memo::ExiledUntil(by) => Memo::ExiledUntil(slot(by)),
             Memo::Chosen(value) => Memo::Chosen(value.relayout()),
+            Memo::Really(card) => Memo::Really(crate::relayout::card(card)),
         }
     }
 
@@ -165,6 +177,7 @@ impl Kinds {
     const EXILED_WITH: u16 = 1 << 9;
     const EXILED_UNTIL: u16 = 1 << 10;
     const CHOSEN: u16 = 1 << 11;
+    const REALLY: u16 = 1 << 12;
     /// The kinds whose memo names a slot ([`Memo::names`]).
     const NAMING: u16 = Kinds::EXILED_WITH | Kinds::EXILED_UNTIL;
 
@@ -473,6 +486,19 @@ impl<L: Layout> State<L> {
             .iter()
             .find_map(|e| match e.memo {
                 Memo::Chosen(value) if e.slot == slot => Some(value),
+                _ => None,
+            })
+    }
+
+    /// The card the permanent in `slot` really is while a copy effect gives it the values of
+    /// another ([`Memo::Really`]), if one does. With no such permanent in the game, one AND.
+    #[inline]
+    pub fn really(&self, slot: L::Slot) -> Option<L::Card> {
+        self.memos
+            .of(Kinds::REALLY)
+            .iter()
+            .find_map(|e| match e.memo {
+                Memo::Really(card) if e.slot == slot => Some(card),
                 _ => None,
             })
     }

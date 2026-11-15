@@ -11,6 +11,7 @@ use crate::bitboard::Bitboard;
 use crate::cause::{Cause, Scopes, StackIx, Tag};
 use crate::chance::Chance;
 use crate::chosen::ChosenValue;
+use crate::copiable::Copiable;
 use crate::ids::Seat;
 use crate::layout::{Layout, Small};
 use crate::object::ObjectRef;
@@ -304,6 +305,18 @@ pub enum Event<L: Layout = Small> {
         player: Seat,
         cause: LossCause<L>,
     },
+    /// An object became a target of a spell or ability `controller` controls, as the spell was
+    /// cast or the ability put on the stack ([CR 603.2e]): "Some trigger events use the word
+    /// 'becomes' ... These trigger only at the time the named event happens". Once for each
+    /// object, however many of the spell's or ability's targets it is. Only trigger matching
+    /// reads it: the rules raise it in a game whose cards listen to it and keep it from the
+    /// sink, whose [`Event::Cast`] and [`Event::Ability`] name the targets.
+    ///
+    /// [CR 603.2e]: https://yawgatog.com/resources/magic-rules/#R6032e
+    Targeted {
+        object: ObjectRef<L>,
+        controller: Seat,
+    },
     Win {
         player: Seat,
     },
@@ -330,6 +343,7 @@ impl<L: Layout> Event<L> {
             Event::TokensCreated { .. } => EventKind::Tokens,
             Event::Cast { .. } => EventKind::Cast,
             Event::Draw { .. } => EventKind::Draw,
+            Event::Targeted { .. } => EventKind::Targeted,
             _ => return None,
         })
     }
@@ -377,6 +391,13 @@ pub struct Sink<L: Layout = Small> {
     /// to carry. A fixed list, so that no move allocates (architecture §18): a fifth value in
     /// one batch is [`crate::fixed::Full`].
     pub chosen: L::Queue<(L::Slot, ChosenValue<L>), 4>,
+    /// The copiable values the permanents of the batch of moves under way enter as copies of
+    /// ([CR 707.5]): "An object that enters the battlefield 'as a copy' or 'that's a copy' of
+    /// another object becomes a copy as it enters the battlefield." Kept as `chosen` is, from
+    /// the choice until the permanent's copy effect starts as it arrives.
+    ///
+    /// [CR 707.5]: https://yawgatog.com/resources/magic-rules/#R7075
+    pub copies: L::Queue<(L::Slot, Copiable<L>), 4>,
     /// The replacement effects of permanents that have applied to the draw being made, or to
     /// a draw that replaced it, each as its permanent and the index of its ability: a draw
     /// made by their instructions is a modified event, which they do not apply to again
@@ -492,6 +513,7 @@ impl<L: Layout> Sink<L> {
             // Between the engine's calls no run is under way, and no draw is being made.
             asking: Asking::default(),
             chosen: Default::default(),
+            copies: Default::default(),
             applied: Default::default(),
         }
     }

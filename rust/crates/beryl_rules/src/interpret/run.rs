@@ -14,7 +14,7 @@ use crate::actions::{
     regenerate, sacrifice, scry, search, shuffle, tap, transform,
 };
 use crate::bitboard::Bitboard;
-use crate::card::{AbilityIx, FaceAbility, Flow, Stop};
+use crate::card::{Flow, Stop};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -22,6 +22,7 @@ use crate::interpret::scene::{Outcome, Registers, Scene};
 use crate::keywords::flashback;
 use crate::layout::{Layout, Queue, Table};
 use crate::resolution::Resolution;
+use crate::state::TriggeredAbility;
 use crate::state::{AbilityRef, ObjectRef, PendingTrigger, StackItem, State, Zone, placed};
 use crate::zones;
 use crate::{casting, choices, coins, continuous, costs, counters, damage, drawing, ending};
@@ -46,10 +47,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 source: entry.object(),
                 card: entry.card(),
                 face: entry.face(),
-                ability: match entry.ability() {
-                    Some(FaceAbility::Own(index)) => index,
-                    _ => AbilityIx::default(),
-                },
+                ability: TriggeredAbility::of(entry.ability().unwrap_or_default()),
                 controller: entry.controller(),
             },
             info: entry.info().copied().unwrap_or_default(),

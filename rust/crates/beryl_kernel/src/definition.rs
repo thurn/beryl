@@ -164,6 +164,15 @@ impl<L: Layout> State<L> {
         self.copiable(slot).colors(t)
     }
 
+    /// The subtypes layer 1 gives the object in `slot`, a copy ([`Flag::Copy`]), with those
+    /// its exceptions add, such as "it's an Illusion in addition to its other types"
+    /// ([`Copiable::excepted_subtypes`]). Any other object's are its definition's.
+    #[cold]
+    #[inline(never)]
+    pub fn copy_subtypes(&self, t: &GameTable, slot: L::Slot) -> GameSubtypes {
+        self.copiable(slot).excepted_subtypes(t)
+    }
+
     /// [`State::copiable_pt`] of an object with a copy effect on it.
     #[cold]
     #[inline(never)]

@@ -9,10 +9,10 @@
 //! card's own file.
 
 use crate::ability::{Ability, AbilityKind, Behavior};
-use crate::continuous::{Duration, LayerSpec, MODIFY_PARTS, Modification};
+use crate::continuous::{Duration, LayerSpec, MODIFY_PARTS, Modification, Replacement, Rewrite};
 use crate::cost::{Chosen, Cost, CostAction, CostPart, Measure};
 use crate::definition::{CardDef, Face};
-use crate::effect::{Amount, Condition, Effect, Objects, Operands, Players};
+use crate::effect::{Amount, Condition, CopyChange, Effect, Objects, Operands, Players};
 use crate::filter::Filter;
 use crate::ids::Zone;
 use crate::index::SpecIx;
@@ -68,8 +68,11 @@ impl CardDef {
         while i < self.faces.len() {
             let face = &self.faces[i];
             if let Err(malformed) = both(
-                check_abilities(face, face.abilities),
-                check_abilities(face, face.grants),
+                both(
+                    check_abilities(face, face.abilities),
+                    check_abilities(face, face.grants),
+                ),
+                check_excepts(face),
             ) {
                 return Err(malformed);
             }
@@ -77,6 +80,26 @@ impl CardDef {
         }
         Ok(())
     }
+}
+
+/// Whether each copy exception of `face` that gives an ability names one the face lists in
+/// [`Face::grants`] ([`CopyChange::Has`]).
+const fn check_excepts(face: &Face) -> Checked {
+    let mut i = 0;
+    while i < face.excepts.len() {
+        let changes = face.excepts[i].0;
+        let mut j = 0;
+        while j < changes.len() {
+            if let CopyChange::Has(ix) = changes[j]
+                && ix.index() >= face.grants.len()
+            {
+                return Err(Malformed::Copy);
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+    Ok(())
 }
 
 const fn check_abilities(face: &Face, abilities: &[Ability]) -> Checked {
@@ -287,7 +310,20 @@ impl Scope<'_> {
             }
             Behavior::Custom(_) => Ok(()),
         };
-        both(both(condition, self.ability_targets()), both(layer, body))
+        let copy = match self.ability.replacement() {
+            Some(Replacement {
+                rewrite:
+                    Rewrite::EnterAsCopy {
+                        except: Some(ix), ..
+                    },
+                ..
+            }) if ix.index() >= self.face.excepts.len() => Err(Malformed::Copy),
+            _ => Ok(()),
+        };
+        both(
+            both(both(condition, self.ability_targets()), both(layer, body)),
+            copy,
+        )
     }
 
     /// Whether each target of an ability on the stack has no filter: what a filter says is

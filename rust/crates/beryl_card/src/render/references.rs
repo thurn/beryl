@@ -10,7 +10,7 @@ use crate::filter::Filter;
 use crate::ids::Zone;
 use crate::index::SpecIx;
 use crate::target::TargetKind;
-use crate::trigger::TriggerEvent;
+use crate::trigger::{Subject, TriggerEvent};
 
 impl Ctx {
     /// A player as the subject or object of a clause: "you", "each opponent", "target
@@ -301,10 +301,12 @@ impl Ctx {
             return "it".to_owned();
         };
         match trigger.event {
+            // "When this creature becomes the target of a spell or ability, sacrifice it."
+            TriggerEvent::BecomesTarget if matches!(trigger.subject, Subject::This) => "it",
             TriggerEvent::Discards | TriggerEvent::Draws => "that card",
             TriggerEvent::Casts => "that spell",
             TriggerEvent::CreatesTokens => "those tokens",
-            TriggerEvent::Leaves => "that permanent",
+            TriggerEvent::Leaves | TriggerEvent::BecomesTarget => "that permanent",
             TriggerEvent::Enters
             | TriggerEvent::Dies
             | TriggerEvent::Attacks

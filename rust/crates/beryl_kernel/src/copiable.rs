@@ -1,7 +1,7 @@
 //! Copiable values: a definition, the face of it that is up, and the copy exceptions that
 //! made them ([`crate::additions`]). [`crate::query`] asks them of an object.
 
-use beryl_card::{Colors, CopyChange, Face, FaceIx};
+use beryl_card::{Colors, CopyChange, Face, FaceIx, GrantIx};
 
 use crate::additions::{Addition, AdditionList};
 use crate::event::{Listens, Replaces};
@@ -174,10 +174,53 @@ impl<L: Layout> Copiable<L> {
         t.def(self.card).face(self.face)
     }
 
-    /// The printed subtypes of the face that is up, by the game's numbers.
+    /// The printed subtypes of the face that is up, by the game's numbers. Those a copy's
+    /// exceptions add are [`Copiable::excepted_subtypes`].
     #[inline]
     pub fn subtypes(self, t: &GameTable) -> GameSubtypes {
         t.face_subtypes(self.card, self.face)
+    }
+
+    /// The subtypes of the face that is up with those the exceptions add (CR 707.9b): what
+    /// layer 1 gives a copy ([`crate::State::copy_subtypes`]).
+    #[cold]
+    #[inline(never)]
+    pub fn excepted_subtypes(self, t: &GameTable) -> GameSubtypes {
+        let printed = self.subtypes(t);
+        (self.additions.iter())
+            .flat_map(|addition| addition.changes(t))
+            .fold(printed, |subtypes, change| match *change {
+                CopyChange::AddSubtype(subtype) => subtypes.with(t.subtypes(), subtype),
+                CopyChange::PowerToughness(..) | CopyChange::Colors(_) | CopyChange::Has(_) => {
+                    subtypes
+                }
+            })
+    }
+
+    /// The abilities the exceptions of these values give, each with the card and face that
+    /// list it in their grants ([CR 707.9a]): "This ability becomes part of the copiable values
+    /// for the copy, along with any other abilities that were copied."
+    ///
+    /// [CR 707.9a]: https://yawgatog.com/resources/magic-rules/#R7079a
+    pub fn given_abilities(
+        self,
+        t: &GameTable,
+    ) -> impl Iterator<Item = (L::Card, FaceIx, GrantIx)> + '_ {
+        let additions = self.additions;
+        let count = additions.len();
+        (0..count)
+            .filter_map(move |i| additions.as_ref()[i])
+            .flat_map(move |addition| {
+                addition
+                    .changes(t)
+                    .iter()
+                    .filter_map(move |change| match *change {
+                        CopyChange::Has(grant) => Some((addition.card(), addition.face(), grant)),
+                        CopyChange::PowerToughness(..)
+                        | CopyChange::Colors(_)
+                        | CopyChange::AddSubtype(_) => None,
+                    })
+            })
     }
 
     /// What the scans over every permanent read of that face, found once per game.
@@ -296,7 +339,9 @@ impl<L: Layout> Copiable<L> {
             .flat_map(|addition| addition.changes(t));
         changes.fold(self.face(t).colors, |colors, change| match *change {
             CopyChange::Colors(set) => set,
-            CopyChange::PowerToughness(..) => colors,
+            CopyChange::PowerToughness(..) | CopyChange::AddSubtype(_) | CopyChange::Has(_) => {
+                colors
+            }
         })
     }
 
@@ -330,7 +375,7 @@ impl<L: Layout> Copiable<L> {
             .flat_map(|addition| addition.changes(t))
             .fold(None, |pt, change| match *change {
                 CopyChange::PowerToughness(power, toughness) => Some((power, toughness)),
-                CopyChange::Colors(_) => pt,
+                CopyChange::Colors(_) | CopyChange::AddSubtype(_) | CopyChange::Has(_) => pt,
             })
     }
 

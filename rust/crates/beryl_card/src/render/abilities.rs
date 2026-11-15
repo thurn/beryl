@@ -134,6 +134,7 @@ impl Ctx {
             | TriggerEvent::Dies
             | TriggerEvent::Leaves
             | TriggerEvent::Attacks
+            | TriggerEvent::BecomesTarget
             | TriggerEvent::DealsCombatDamageToPlayer => {
                 let (word, subject) = match trigger.subject {
                     Subject::This => (
@@ -207,6 +208,7 @@ impl Ctx {
             TriggerEvent::Dies => "dies".to_owned(),
             TriggerEvent::Leaves => "leaves the battlefield".to_owned(),
             TriggerEvent::Attacks => "attacks".to_owned(),
+            TriggerEvent::BecomesTarget => "becomes the target of a spell or ability".to_owned(),
             TriggerEvent::DealsCombatDamageToPlayer => {
                 let whom = match trigger.whose {
                     Players::EachPlayer => "a player".to_owned(),
@@ -616,6 +618,7 @@ impl Ctx {
                     ChosenKind::Word => "a color word or a basic land type",
                 }
             )],
+            (_, Rewrite::EnterAsCopy { of, except }) => vec![self.enter_as_copy(*of, except)],
             (Replaced::PutInto(&objects, zone), Rewrite::ToZone(instead)) => {
                 let what = if objects == Filter::Any {
                     "a card or token".to_owned()

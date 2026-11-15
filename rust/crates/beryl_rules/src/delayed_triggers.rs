@@ -9,6 +9,7 @@ use crate::game::Game;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::resolution::Resolution;
+use crate::state::TriggeredAbility;
 use crate::state::{AbilityRef, ObjectRef, PendingTrigger, TriggerInfo};
 use crate::trigger;
 
@@ -29,7 +30,7 @@ pub fn create<L: Layout>(
             source: entry.object(),
             card: entry.card(),
             face: entry.face(),
-            ability,
+            ability: TriggeredAbility::own(ability),
             controller: entry.controller(),
         },
         info: TriggerInfo {

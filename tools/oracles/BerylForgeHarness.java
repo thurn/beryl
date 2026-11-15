@@ -40,6 +40,7 @@ import forge.game.player.PlayerActionConfirmMode;
 import forge.game.player.PlayerController.BinaryChoiceType;
 import forge.game.player.PlayerController;
 import forge.game.player.RegisteredPlayer;
+import forge.game.ability.ApiType;
 import forge.game.replacement.ReplacementEffect;
 import forge.game.spellability.OptionalCostValue;
 import forge.game.spellability.SpellAbility;
@@ -1333,6 +1334,11 @@ public final class BerylForgeHarness {
 
         @Override
         public boolean confirmAction(SpellAbility sa, PlayerActionConfirmMode mode, String message, List<String> options, Card cardToShow, Map<String, Object> params) {
+            // "Do you want to copy it?" after the permanent is chosen: Beryl's pick of the
+            // permanent (`copies`) already said yes.
+            if (sa != null && sa.getApi() == ApiType.Clone) {
+                return true;
+            }
             return yes(YES_NO, "confirm " + message, super.confirmAction(sa, mode, message, options, cardToShow, params));
         }
 
@@ -1374,6 +1380,19 @@ public final class BerylForgeHarness {
                     }
                 }
             }
+            if (replacing == null) {
+                for (ReplacementEffect re : possibleReplacers) {
+                    Boolean copies = copies(re);
+                    if (copies == null) {
+                        continue;
+                    }
+                    replacing = copies ? re.getHostCard().getName() : "";
+                    if (copies) {
+                        return re;
+                    }
+                    break;
+                }
+            }
             if (replacing == null && possibleReplacers.stream().anyMatch(re -> re.hasParam("Optional"))) {
                 JsonObject pick = run.take(player, Set.of("ChooseUpTo"), "replacement among " + possibleReplacers);
                 if (pick != null) {
@@ -1400,8 +1419,37 @@ public final class BerylForgeHarness {
             return super.chooseSingleReplacementEffect(possibleReplacers);
         }
 
+        /**
+         * For an optional replacement that has its permanent enter as a copy ("You may have this
+         * creature enter as a copy of ..."), whether Beryl's script copies, or null for any other
+         * effect or where the script does not say. Beryl asks one pick of the permanent to copy,
+         * or none, where Forge asks whether to apply the effect and then which permanent: a pick
+         * of a card applies the effect and is left for that choice; declining is taken here.
+         */
+        private Boolean copies(ReplacementEffect re) {
+            SpellAbility copy = re.getOverridingAbility();
+            if (!re.hasParam("Optional") || copy == null || copy.getApi() != ApiType.Clone) {
+                return null;
+            }
+            JsonObject step = run.peekPastAsserts();
+            if (!run.isAnswer(step, player, Set.of("ChooseUpTo"))) {
+                return null;
+            }
+            if (step.getAsJsonObject("pick").has("card")) {
+                return true;
+            }
+            run.take(player, Set.of("ChooseUpTo"), "copy " + re);
+            return false;
+        }
+
         @Override
         public boolean confirmReplacementEffect(ReplacementEffect re, SpellAbility effectSA, GameEntity affected, String question) {
+            if (replacing == null) {
+                Boolean copies = copies(re);
+                if (copies != null) {
+                    return copies;
+                }
+            }
             if (replacing != null) {
                 boolean apply = !replacing.isEmpty() && Run.named(re.getHostCard(), replacing);
                 if (apply || --declining <= 0) {
@@ -1430,10 +1478,12 @@ public final class BerylForgeHarness {
 
         @Override
         public <T extends GameEntity> T chooseSingleEntityForEffect(FCollectionView<T> options, DelayedReveal delayedReveal, SpellAbility sa, String title, boolean isOptional, Player targetedPlayer, Map<String, Object> params) {
-            if (options.size() == 1 && !isOptional) {
+            // The permanent a copy effect copies is Beryl's one pick of it, whatever the count.
+            boolean copying = sa != null && sa.getApi() == ApiType.Clone;
+            if (options.size() == 1 && !isOptional && !copying) {
                 return options.get(0);
             }
-            List<T> picked = pickMany(List.copyOf(options), isOptional ? 0 : 1, 1, "choose " + title);
+            List<T> picked = pickMany(List.copyOf(options), isOptional || copying ? 0 : 1, 1, "choose " + title);
             if (picked == null) {
                 return super.chooseSingleEntityForEffect(options, delayedReveal, sa, title, isOptional, targetedPlayer, params);
             }

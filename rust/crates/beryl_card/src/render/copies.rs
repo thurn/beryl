@@ -1,8 +1,11 @@
 //! The rules text of copying: a token copy of an object, and a copy of a spell.
 
 use super::Ctx;
+use super::abilities::other_types;
+use super::filters::Kind;
 use super::words::with_article;
 use crate::effect::{Amount, CopyChange, Objects, Players};
+use crate::filter::Filter;
 use crate::index::ExceptIx;
 
 impl Ctx {
@@ -23,7 +26,7 @@ impl Ctx {
             // values for that characteristic becomes part of the copiable values".
             let pt = changes.iter().rev().find_map(|change| match *change {
                 CopyChange::PowerToughness(p, t) => Some((p, t)),
-                CopyChange::Colors(_) => None,
+                CopyChange::Colors(_) | CopyChange::AddSubtype(_) | CopyChange::Has(_) => None,
             });
             match (pt, count) {
                 (Some((p, t)), _) => {
@@ -58,7 +61,9 @@ impl Ctx {
             .and_then(|exception| {
                 exception.0.iter().rev().find_map(|change| match *change {
                     CopyChange::Colors(colors) => Some(colors),
-                    CopyChange::PowerToughness(..) => None,
+                    CopyChange::PowerToughness(..)
+                    | CopyChange::AddSubtype(_)
+                    | CopyChange::Has(_) => None,
                 })
             });
         let the_copy = if count == Amount::Fixed(1) {
@@ -79,5 +84,41 @@ impl Ctx {
             clauses.push(format!("you may choose new targets for {the_copy}"));
         }
         clauses
+    }
+
+    /// One change a copy exception makes, as "except" says it: "it's 7/7", "it's an Illusion
+    /// in addition to its other types", "it has \"...\"" (CR 707.9).
+    pub(super) fn copy_change(&mut self, change: CopyChange) -> String {
+        match change {
+            CopyChange::PowerToughness(p, t) => format!("it's {p}/{t}"),
+            CopyChange::AddSubtype(subtype) => format!(
+                "it's {} in addition to its other {}",
+                with_article(subtype.name()),
+                other_types(subtype)
+            ),
+            CopyChange::Colors(colors) => {
+                let words = super::words::colors(colors);
+                format!("it's {}", super::words::list(&words, "and"))
+            }
+            CopyChange::Has(ix) => format!("it has {}", self.granted(ix)),
+        }
+    }
+
+    /// "You may have this creature enter as a copy of any creature on the battlefield,
+    /// except ..." (CR 707.9).
+    pub(super) fn enter_as_copy(&mut self, of: Filter, except: Option<ExceptIx>) -> String {
+        let this = self.this.clone();
+        let noun = self.noun(of, Kind::Permanent).singular(Kind::Permanent);
+        let clause =
+            format!("you may have {this} enter as a copy of any {noun} on the battlefield");
+        let changes = except
+            .and_then(|ix| self.face?.excepts.get(ix.index()))
+            .map_or(&[][..], |exception| exception.0);
+        let excepted: Vec<String> = changes.iter().map(|&c| self.copy_change(c)).collect();
+        if excepted.is_empty() {
+            clause
+        } else {
+            format!("{clause}, except {}", excepted.join(" and "))
+        }
     }
 }

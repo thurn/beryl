@@ -20,6 +20,7 @@ use crate::ids::Seat;
 use crate::layers;
 use crate::layout::Layout;
 use crate::resolution::Resolution;
+use crate::state::TriggeredAbility;
 use crate::state::{AbilityRef, PendingTrigger, State, Tracker, TriggerInfo, ZoneKey};
 use crate::table::GameTable;
 
@@ -175,7 +176,7 @@ pub(crate) fn static_condition_holds<L: Layout>(
             source: Some(s.object_ref(slot)),
             card,
             face,
-            ability: index,
+            ability: TriggeredAbility::own(index),
             controller: s.controller(slot),
         },
         info: TriggerInfo::default(),
@@ -203,7 +204,7 @@ pub(crate) fn names_nothing<L: Layout>(
             source: Some(s.object_ref(slot)),
             card,
             face,
-            ability: AbilityIx::default(),
+            ability: TriggeredAbility::default(),
             controller: s.controller(slot),
         },
         info: TriggerInfo::default(),

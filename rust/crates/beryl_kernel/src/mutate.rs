@@ -290,6 +290,24 @@ impl<L: Layout> State<L> {
         self.start_effect(source, copy, Duration::Indefinite)
     }
 
+    /// Starts the copy effect of the permanent that just entered in `slot` as a copy, with the
+    /// copiable values `values` ([CR 707.5]): "An object that enters the battlefield 'as a copy'
+    /// or 'that's a copy' of another object becomes a copy as it enters the battlefield." Part
+    /// of its zone change, before anything reads it: no event of its own. The effect lasts
+    /// while the permanent stays, and ends with what the stores hold about it as it leaves; a
+    /// card is then the card it really is again ([`crate::Memo::Really`]). Its source is the
+    /// card it really is, whose ability made it a copy. [`Full`] if the stores had no room.
+    ///
+    /// [CR 707.5]: https://yawgatog.com/resources/magic-rules/#R7075
+    #[cold]
+    #[inline(never)]
+    pub fn enter_as_copy(&mut self, slot: L::Slot, values: Copiable<L>) -> Result<(), Full> {
+        debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
+        let source = self.card_behind(slot).unwrap_or(self.object(slot).card);
+        let copy = Continuous::Copy(self.object_ref(slot), values);
+        self.start_effect(source, copy, Duration::Indefinite)
+    }
+
     /// Gives the permanent that just entered in `slot` the status it enters with. Part of
     /// its zone change: no event of its own, and the move has already marked the layer
     /// results stale. [`Full`] if it enters with counters of a kind the table has no room

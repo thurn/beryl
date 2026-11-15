@@ -9,11 +9,11 @@
 //! [`crate::filter::is_for`].
 
 use beryl_card::{
-    Ability, AbilityIx, AbilityKind, CardDef, FaceIx, Filter, Players, Subject, Trigger,
-    TriggerEvent, Zone, ZoneSet,
+    Ability, AbilityIx, AbilityKind, CardDef, CopyChange, Face, FaceIx, Filter, Players, Subject,
+    Trigger, TriggerEvent, Zone, ZoneSet,
 };
 
-use crate::event::EventKind;
+use crate::event::{EventKind, Listens};
 use crate::filter::reads;
 
 /// One triggered ability of a card of the game, under the kind of event it listens to.
@@ -95,6 +95,7 @@ pub fn listens_to(trigger: &Trigger, zones: ZoneSet) -> Result<Option<EventKind>
         TriggerEvent::Discards => (EventKind::Discard, About::Filtered, true),
         TriggerEvent::Draws => (EventKind::Draw, About::Nothing, true),
         TriggerEvent::State(_) => (EventKind::State, About::Nothing, false),
+        TriggerEvent::BecomesTarget => (EventKind::Targeted, About::Either, true),
     };
     if !AWAY.union(ZoneSet::BATTLEFIELD).includes(zones) {
         return Err(Unmatched::Zone);
@@ -142,6 +143,37 @@ pub(crate) fn of(def: &CardDef) -> Result<Vec<Listener>, Unmatched> {
         }
     }
     Ok(listeners)
+}
+
+/// The grants of `face` that a copy exception of it gives ([`CopyChange::Has`]): read as part of
+/// a copy's copiable values ([CR 707.9a]), not through what a continuous effect grants.
+///
+/// [CR 707.9a]: https://yawgatog.com/resources/magic-rules/#R7079a
+pub(crate) fn given_by_exception(face: &Face, grant: usize) -> bool {
+    (face.excepts.iter())
+        .flat_map(|exception| exception.0)
+        .any(|change| matches!(*change, CopyChange::Has(ix) if ix.index() == grant))
+}
+
+/// The kinds of event the triggered abilities that the copy exceptions of `def` give listen
+/// to ([`given_by_exception`]), matched for each permanent whose copiable values carry the
+/// exception (`beryl_rules`' `trigger`), and the first of them the engine cannot match.
+pub(crate) fn given(def: &CardDef) -> Result<Listens, Unmatched> {
+    let mut kinds = Listens::NONE;
+    for face in def.faces {
+        for (i, ability) in face.grants.iter().enumerate() {
+            let Some(trigger) = ability.trigger() else {
+                continue;
+            };
+            if !given_by_exception(face, i) {
+                continue;
+            }
+            if let Some(kind) = listens_to(trigger, ability.zones())? {
+                kinds = kinds | Listens::event(kind);
+            }
+        }
+    }
+    Ok(kinds)
 }
 
 /// Whether the engine finds `ability` wherever it says it works ([CR 113.6b]): "An ability

@@ -37,6 +37,8 @@ use crate::profile::Stops;
 use crate::state::{AbilityMask, CounterKind, MoveReplacement, ObjectRef, State, Zone, ZoneKey};
 use crate::table::{Capability, GameTable};
 use crate::{actions, chosen, interpret, zones};
+use beryl_kernel::additions::Addition;
+use beryl_kernel::query::Copiable;
 
 mod damage;
 mod destruction;
@@ -327,6 +329,8 @@ fn entering_destinations<L: Layout>(
 }
 
 /// Applies the permanent's own replacement effects that modify how it enters (CR 614.12):
+/// first one that has it enter as a copy, then the others, found against the copy
+/// ([`copy_to_enter`]). Then
 /// they "check the characteristics of the permanent as it would exist on the battlefield".
 /// One it would not have there does not apply ([`layers::lost_entering`]): under an effect
 /// that makes nonbasic lands Mountains, a land that would enter tapped unless its controller
@@ -348,10 +352,20 @@ fn entering<L: Layout>(
     mut entry: Entry<L>,
 ) -> Result<Entry<L>, Full> {
     let o = s.object(slot);
-    let face = s.copiable(slot).turned(entry.face).face(t);
     let controller = entry.controller.unwrap_or(o.owner());
+    let mut face = s.copiable(slot).turned(entry.face).face(t);
     // Found at the first replacement of entering: most permanents have none.
     let mut lost = None;
+    if t.can(Capability::ChoosesAsEnters)
+        && let Some(copy) = copy_to_enter(s, t, sink, slot, controller, entry)?
+    {
+        sink.copies.push((slot, copy))?;
+        entry.face = copy.record(t).1;
+        face = copy.face(t);
+        // What the copy would lose is not found yet: no card of the pool removes abilities
+        // from a permanent as it enters.
+        lost = Some(L::AbilityMask::default());
+    }
     let mut pays_life = false;
     for (n, ability) in face.abilities.iter().enumerate() {
         let Some(replacement) = ability.replacement() else {
@@ -393,6 +407,9 @@ fn entering<L: Layout>(
                 let value = choose_value(s, t, sink, slot, controller, kind)?;
                 sink.chosen.push((slot, value))?;
             }
+            // Applied first ([`copy_to_enter`]); a copied one finds the event already
+            // modified by a copy effect, which it is one of (CR 614.5).
+            Rewrite::EnterAsCopy { .. } => continue,
             // The card table holds no other rewrite of entering.
             Rewrite::None
             | Rewrite::ToZone(_)
@@ -408,6 +425,77 @@ fn entering<L: Layout>(
         entry.counters = Some((CounterKind::Loyalty, loyalty));
     }
     Ok(entry)
+}
+
+/// The copiable values the object in `slot` enters as a copy of, if it has a replacement that
+/// may have it enter as one and its controller `player` chooses a permanent
+/// ([`Rewrite::EnterAsCopy`]): those of the chosen permanent, with their own exceptions, and
+/// the exception of the ability after them ([CR 707.9b]): "The final set of values for that
+/// characteristic becomes part of the copiable values of the copy." So a copy of a copy takes
+/// what the copied permanent copied ([CR 707.3]): "Objects that copy the object will use the
+/// new copiable values."
+///
+/// The choice comes before the other replacements of entering ([CR 616.1c]): "If any of the
+/// replacement and/or prevention effects would cause an object to become a copy of another
+/// object as it enters the battlefield, one of them must be chosen." It is a choice made before
+/// the permanent enters ([CR 614.12a]), among the permanents on the battlefield the filter
+/// accepts, read for `player`: none of a batch entering with it, which are not there yet. The
+/// permanent is not targeted, so hexproof and protection do not stop it. Declining is choosing
+/// none, and the object enters as itself.
+///
+/// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
+/// [CR 707.3]: https://yawgatog.com/resources/magic-rules/#R7073
+/// [CR 616.1c]: https://yawgatog.com/resources/magic-rules/#R6161c
+/// [CR 614.12a]: https://yawgatog.com/resources/magic-rules/#R61412a
+#[cold]
+#[inline(never)]
+fn copy_to_enter<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
+    player: Seat,
+    entry: Entry<L>,
+) -> Result<Option<Copiable<L>>, Full> {
+    let values = s.copiable(slot).turned(entry.face);
+    let face = values.face(t);
+    let Some((n, ability, of, except)) =
+        (0u8..)
+            .zip(face.abilities)
+            .find_map(|(n, a)| match a.replacement()?.rewrite {
+                Rewrite::EnterAsCopy { of, except } => Some((n, a, of, except)),
+                _ => None,
+            })
+    else {
+        return Ok(None);
+    };
+    if layers::lost_entering(s, t, slot, entry, face)?.contains(AbilityIx::new(n)) {
+        return Ok(None);
+    }
+    let words = crate::card::Words::NONE;
+    let mut options = <L::Queue<Opt<L>, 64>>::default();
+    options.push(Opt::Done)?;
+    for p in s.in_candidate_order(s.battlefield().iter().copied().collect()) {
+        if p != slot && of.matches(s, t, p, player, &words) {
+            options.push(Opt::Object(p))?;
+        }
+    }
+    let d = Decision::options(
+        player,
+        DecisionKind::ChooseUpTo,
+        options,
+        Prompt::new(Purpose::Choose).most(1),
+    );
+    let Some(Opt::Object(copied)) = d.candidates.option(answer(s, sink, &d)?) else {
+        return Ok(None);
+    };
+    crate::coverage::hit(ability);
+    let mut copy = s.copiable(copied).recorded(t);
+    if let Some(except) = except {
+        let (card, face) = values.record(t);
+        copy = copy.with_addition(Addition::new(card, face, except))?;
+    }
+    Ok(Some(copy))
 }
 
 /// The life an "unless you pay N life" replacement of the entering object asks for, if it has

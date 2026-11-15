@@ -28,7 +28,9 @@ impl<L: Layout> State<L> {
     /// permanent face up shows, a place in a decklist.
     ///
     /// It is the rules' answer, with nothing masked: a face-down permanent's is its hidden
-    /// card. A player's view asks [`crate::Observation::card`].
+    /// card. A card under a copy effect answers what it copied, whose faces it has while it
+    /// stays; [`State::card_really_is`] names the card itself. A player's view asks
+    /// [`crate::Observation::card`].
     ///
     /// [CR 111.1]: https://yawgatog.com/resources/magic-rules/#R1111
     /// [CR 111.7]: https://yawgatog.com/resources/magic-rules/#R1117
@@ -37,6 +39,21 @@ impl<L: Layout> State<L> {
     pub fn card_behind(&self, slot: L::Slot) -> Option<L::Card> {
         let o = self.object(slot);
         (!o.is_token()).then_some(o.card)
+    }
+
+    /// The game index of the card or token in `slot` itself: its definition's, or for a card
+    /// under a copy effect the card it really is ([`crate::Memo::Really`]), which it is again
+    /// once it leaves the battlefield. For what names an object apart from its values: a
+    /// deck's cards, and what a tool or a save calls it.
+    #[inline]
+    pub fn card_really_is(&self, slot: L::Slot) -> L::Card {
+        let o = self.object(slot);
+        // One test for an object that is no copy.
+        if o.flags.has(Flag::Copy) && !o.is_token() {
+            self.really_is(slot)
+        } else {
+            o.card
+        }
     }
 
     /// The definition of the card that represents the object in `slot`, with every face it may be
@@ -52,10 +69,11 @@ impl<L: Layout> State<L> {
     /// what orders a batch of objects so that no seed decides it (the contract's
     /// `in_game_order`), and what a tool, a save or a test calls an object. It is not the
     /// object's name by the rules, which is [`Copiable::name`], and it is the rules' own
-    /// view: a face-down permanent's is its hidden card's.
+    /// view: a face-down permanent's is its hidden card's, and a card under a copy effect's
+    /// the card's it really is ([`State::card_really_is`]).
     #[inline]
     pub fn definition_name(&self, t: &GameTable, slot: L::Slot) -> &'static str {
-        t.def(self.object(slot).card).name
+        t.def(self.card_really_is(slot)).name
     }
 
     /// The copiable values of the object in `slot` (CR 707.2): what it is before any other

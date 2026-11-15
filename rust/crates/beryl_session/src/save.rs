@@ -5,7 +5,7 @@
 //! candidate that does the same ([`Chosen::find`]); the index it had is kept as a hint, which
 //! only breaks ties between candidates that do the same and shows drift.
 
-use beryl_engine::card::{AbilityKind, CastingOption, ChosenKind, ManaColor, Types};
+use beryl_engine::card::{AbilityKind, CastingOption, ChosenKind, FaceAbility, ManaColor, Types};
 use beryl_engine::chosen::ChosenValue;
 use beryl_engine::state::StackItem;
 use beryl_engine::{Choice, Decision, GameTable, Layout, Opt, State, TurnStep, Zone};
@@ -503,9 +503,13 @@ impl Act {
             Opt::Mulligan => Act::Mulligan,
             Opt::Trigger(i) => Act::Trigger {
                 source: o.object_named(s).map(obj),
+                // An own ability by its place among the face's triggered ones; one a copy
+                // exception gives by 128 more than its place among the face's grants.
                 ability: s.triggers().get(Into::<usize>::into(i)).map(|tr| {
-                    let triggered = t.def(tr.of.card).face(tr.of.face).abilities
-                        [..tr.of.ability.index()]
+                    let FaceAbility::Own(own) = tr.of.ability.get() else {
+                        return tr.of.ability.get().number();
+                    };
+                    let triggered = t.def(tr.of.card).face(tr.of.face).abilities[..own.index()]
                         .iter()
                         .filter(|a| matches!(a.kind(), AbilityKind::Triggered))
                         .count();

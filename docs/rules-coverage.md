@@ -660,6 +660,27 @@ Built by by-bajq.3.10:
 - **Entering as a copy** is a replacement of the class CR 616.1c names. The
   choice is not a target. The other replacements of entering are then found
   against the copy.
+- **As built** (by-bajq.6.2, 2026-11-15). `Rewrite::EnterAsCopy` (a filter and
+  an optional exception) is applied first in `replace::entering`: the entering
+  object's controller chooses a permanent or declines, the copied values (with
+  their additions, and the copier's exception after them) wait in
+  `Sink::copies`, and the face they give is the one the other replacements of
+  entering are read from, so a copy of Painter's Servant chooses a color. The
+  copy effect starts as the permanent arrives (`State::enter_as_copy`), before
+  the layers or any trigger look at it. A card under a copy effect remembers the
+  card it is (`Memo::Really`); the zone move makes it that card again.
+  `CopyChange` gained `AddSubtype` (read by layer 1 through
+  `State::copiable_subtypes`) and `Has`, an ability the face lists in its
+  grants. A triggered ability given this way is matched by a pass over the
+  copies (`trigger::match_given`, behind `Capability::GivesTriggers`), and
+  triggers on the stack are now named by `FaceAbility` so that one can be a
+  grant. "Becomes the target of a spell or ability" is
+  `TriggerEvent::BecomesTarget`, matched on `Event::Targeted`, which the rules
+  raise after a spell is cast, an ability activated or a trigger put on the
+  stack, and keep from the sink. Gaps: no effect changes targets yet, so a
+  changed target raises nothing; an ability-removing effect does not remove an
+  ability a copy exception gives; and what an entering copy would lose to such
+  effects is not found.
 - **Becoming a copy** is an instruction with a duration and the copier's
   exception.
 - **Copies of spells** (CR 707.10). A copy takes a slot of the token pool on the

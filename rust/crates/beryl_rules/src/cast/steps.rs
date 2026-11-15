@@ -6,7 +6,7 @@ use crate::card::{CastingIx, ObjectAbility, Part, Prompt, Purpose, TargetSpec};
 use crate::casting;
 use crate::decision::{Candidates, Decision, DecisionKind, Opt};
 use crate::engine::collapse;
-use crate::event::{self, Event, Reason, Sink};
+use crate::event::{self, Event, EventKind, Reason, Sink};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::keywords::flashback;
@@ -18,6 +18,7 @@ use crate::state::{
     Tracker, Zone,
 };
 use crate::table::{Capability, GameTable};
+use crate::trigger;
 
 use super::costs::{spent_by_entry, total_cost, x_range_start};
 use super::parts;
@@ -148,7 +149,11 @@ pub(super) fn advance<L: Layout>(
                         let event = ability_event(entry);
                         s.settle_question();
                         sink.push(event);
-                        return Ok(());
+                        return if t.listens_anywhere().hears(EventKind::Targeted) {
+                            targeted(s, t)
+                        } else {
+                            Ok(())
+                        };
                     }
                     return begin_payment(s, t, sink, c);
                 };
@@ -308,6 +313,33 @@ pub(super) fn finish<L: Layout>(
         )?;
     } else {
         sink.push(ability_event(entry));
+    }
+    if t.listens_anywhere().hears(EventKind::Targeted) {
+        targeted(s, t)?;
+    }
+    Ok(())
+}
+
+/// Matches the triggers of the objects the spell or ability on top of the stack targets, now
+/// that its targets are chosen and it is cast, activated or put on the stack ([CR 603.2e]):
+/// "Some trigger events use the word 'becomes' ... These trigger only at the time the named
+/// event happens". Each object once, however many of the targets it is. Asked only in a game
+/// whose cards listen to such an event, so others pay one AND.
+///
+/// [CR 603.2e]: https://yawgatog.com/resources/magic-rules/#R6032e
+#[cold]
+#[inline(never)]
+fn targeted<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
+    let entry = top(s);
+    let controller = entry.controller();
+    let objects: Bitboard<L::Slot> = (entry.targets.iter())
+        .filter_map(|target| target.as_object())
+        .filter(|&object| s.is_current(object))
+        .map(|object| object.slot)
+        .collect();
+    for slot in s.in_candidate_order(objects) {
+        let object = s.object_ref(slot);
+        trigger::match_event(s, t, &Event::Targeted { object, controller })?;
     }
     Ok(())
 }

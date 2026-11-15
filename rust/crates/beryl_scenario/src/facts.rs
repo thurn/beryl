@@ -81,6 +81,11 @@ pub struct AbilityFacts {
     /// mana ability a payment taps from a land's text.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub changes_land_types: bool,
+    /// A replacement effect that may have its permanent enter as a copy of a permanent its
+    /// controller chooses (`Rewrite::EnterAsCopy`): Beryl asks one pick of the permanent, or
+    /// none, where an oracle may ask whether to copy first.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub enters_as_copy: bool,
 }
 
 /// A cost: its mana in Scryfall's notation, then its other parts in the order printed.
@@ -323,6 +328,9 @@ fn ability_facts(index: String, ability: &Ability) -> AbilityFacts {
                 _ => false,
             })
         }),
+        enters_as_copy: ability
+            .replacement()
+            .is_some_and(|r| matches!(r.rewrite, beryl_card::Rewrite::EnterAsCopy { .. })),
     }
 }
 

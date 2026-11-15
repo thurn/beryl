@@ -28,7 +28,7 @@ use crate::fixed::Full;
 use crate::ids::CardId;
 use crate::layout::{Layout, PerSeat, Queue, index};
 use crate::state::{
-    AbilityMask, Derived, GrantRef, LayerChange, LockedIn, Permanents, Rules, State, Zone,
+    AbilityMask, Derived, Flag, GrantRef, LayerChange, LockedIn, Permanents, Rules, State, Zone,
     read_layer,
 };
 use crate::static_ability::{self, Inputs};
@@ -337,8 +337,8 @@ fn apply_layers<L: Layout>(
     let mut listed = Ok(());
     for i in 0..s.battlefield().len() {
         let slot = s.battlefield()[i];
-        // Layer 1: the copiable values (CR 613.2a). A token copy's are those of what it
-        // copies, with the exceptions it was made with (CR 707.9b).
+        // Layer 1: the copiable values (CR 613.2a). A copy's are those of what it copies,
+        // with the exceptions it was made with (CR 707.9b).
         let what = s.definition(slot);
         let f = what.face(t);
         let (power, toughness, colors) = s.copiable_base(t, slot, f);
@@ -355,6 +355,9 @@ fn apply_layers<L: Layout>(
             granted: [None; 4],
             lost: Default::default(),
         };
+        if s.object(slot).flags().has(Flag::Copy) {
+            s.results()[i].subtypes = s.copy_subtypes(t, slot);
+        }
         for (n, ability) in f.abilities.iter().enumerate() {
             let Some(spec) = ability.layer() else {
                 continue;

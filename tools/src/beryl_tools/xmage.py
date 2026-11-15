@@ -31,7 +31,6 @@ trace is what places each Beryl action as XMage commands:
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import cast
 
 from .card_facts import CONTROLLED_TURN, Cards, Json, Unsupported, payment_taps
@@ -56,8 +55,6 @@ from .xmage_java import (
     Faces,
     assertion_code,
     java_string,
-    method_name,
-    setup_cards,
     trample_amount,
 )
 
@@ -571,6 +568,18 @@ class Exporter:
             if self.last_answer != (source, kind):
                 self.emit(f'setOptionalChoice({who}, {self.at(p)}, "No");')
         self.last_answer = (source, kind)
+        if (
+            kind == "ChooseUpTo"
+            and source is not None
+            and self.cards.enters_as_copy(source)
+        ):
+            # XMage asks whether to copy, then which permanent.
+            if card is None:
+                self.emit(f"setChoice({who}, false);")
+            else:
+                self.emit(f"setChoice({who}, true);")
+                self.emit(f"setChoice({who}, {java_string(p.object_name(card))});")
+            return
         resolving = source or ""
         may_choose = self.cards.may_choose(resolving)
         if self.cards.takes(resolving) and kind == "ChooseObject" and card is not None:
@@ -767,34 +776,3 @@ class Exporter:
         else:
             self.emit(f"setStopAt({turn + 1}, PhaseStep.UNTAP);")
         self.emit("execute();")
-
-
-def export_one(entry: Json, index: int, faces: Faces, cards: set[str]) -> Export:
-    export = Export(
-        card=cast(str, entry["card"]),
-        scenario=cast(str, entry["name"]),
-        method=method_name(index, cast(str, entry["name"])),
-    )
-    if "failure" in entry:
-        export.unsupported = f"Beryl fails it: {entry['failure']}"
-        return export
-    missing = sorted(set(setup_cards(entry)) - cards)
-    if missing:
-        export.unsupported = f"XMage lacks {', '.join(missing)}"
-        return export
-    try:
-        Exporter(entry, faces, export).run()
-    except Unsupported as e:
-        export.unsupported = str(e)
-        export.body.clear()
-    return export
-
-
-def export_all(dump: Sequence[Json], faces: Faces, cards: set[str]) -> list[Export]:
-    counters: dict[str, int] = {}
-    exports = []
-    for entry in dump:
-        card = cast(str, entry["card"])
-        counters[card] = counters.get(card, 0) + 1
-        exports.append(export_one(entry, counters[card], faces, cards))
-    return exports

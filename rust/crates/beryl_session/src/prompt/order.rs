@@ -128,7 +128,10 @@ fn resolves<L: Layout>(s: &State<L>, t: &GameTable, opt: Opt<L>) -> (u8, L::Inde
         unreachable!("a trigger-order decision offers only triggers");
     };
     let tr = &s.triggers()[Into::<usize>::into(i)];
-    let ability = &t.def(tr.of.card).face(tr.of.face).abilities[tr.of.ability.index()];
+    let ability = t
+        .def(tr.of.card)
+        .face(tr.of.face)
+        .ability(tr.of.ability.get());
     let group = if ability.asks() {
         2
     } else {

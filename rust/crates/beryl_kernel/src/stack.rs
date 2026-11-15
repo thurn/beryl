@@ -7,7 +7,7 @@
 //! mutators keep. The entry goes on once the object is there and comes off before the object
 //! leaves; the invariants hold a state to it ([`crate::invariants`]).
 
-use beryl_card::{AbilityIx, Castings, FaceAbility, FaceIx, SpecIx};
+use beryl_card::{AbilityIx, Castings, FaceAbility, FaceIx, GrantIx, SpecIx};
 
 use crate::bitboard::Bitboard;
 use crate::event::Sink;
@@ -239,8 +239,8 @@ impl TargetPlaces {
 /// An ability of a card, as it exists on the stack or waiting to go on it.
 ///
 /// `A` says which abilities it can be: a [`FaceAbility`] for an activated ability, which may
-/// be one another object grants, or an [`AbilityIx`] among the face's own for a triggered
-/// ability.
+/// be one another object grants, or a [`TriggeredAbility`] for a triggered ability, one of the
+/// face's own or one a copy exception gives ([`beryl_card::CopyChange::Has`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct AbilityRef<L: Layout = Small, A = FaceAbility> {
     /// The object with the ability; an emblem's ability has none.
@@ -260,6 +260,47 @@ pub struct AbilityRef<L: Layout = Small, A = FaceAbility> {
     pub controller: Seat,
 }
 
+/// A triggered ability's [`FaceAbility`] in one byte, as the stack and the waiting triggers
+/// keep it: an own ability's index, or 128 more than a grant's ([`FaceAbility::number`]). A
+/// face has at most 64 abilities and a handful of grants. Two bytes in each of them cost a
+/// [`Small`] state 312 bytes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct TriggeredAbility(u8);
+
+impl TriggeredAbility {
+    /// `ability` in one byte.
+    #[inline]
+    pub const fn of(ability: FaceAbility) -> TriggeredAbility {
+        TriggeredAbility(ability.number())
+    }
+
+    /// The face's own ability at `index`.
+    #[inline]
+    pub const fn own(index: AbilityIx) -> TriggeredAbility {
+        TriggeredAbility::of(FaceAbility::Own(index))
+    }
+
+    /// The ability it names on `face`: an own one by its index, a grant out of line.
+    #[inline]
+    pub fn of_face(self, face: &'static beryl_card::Face) -> &'static beryl_card::Ability {
+        if self.0 & 128 == 0 {
+            &face.abilities[usize::from(self.0)]
+        } else {
+            face.ability(self.get())
+        }
+    }
+
+    /// The ability it names.
+    #[inline]
+    pub const fn get(self) -> FaceAbility {
+        if self.0 & 128 == 0 {
+            FaceAbility::Own(AbilityIx::new(self.0))
+        } else {
+            FaceAbility::Grant(GrantIx::new(self.0 & 127))
+        }
+    }
+}
+
 /// What a [`StackEntry`] is: a spell, an activated ability or a triggered ability.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StackItem<L: Layout = Small> {
@@ -276,7 +317,7 @@ pub enum StackItem<L: Layout = Small> {
     Activated { of: AbilityRef<L> },
     /// A triggered ability, and what it triggered on (CR 603.3).
     Triggered {
-        of: AbilityRef<L, AbilityIx>,
+        of: AbilityRef<L, TriggeredAbility>,
         info: TriggerInfo<L>,
     },
 }
@@ -418,7 +459,7 @@ impl<L: Layout> StackEntry<L> {
         match self.item {
             StackItem::Spell { .. } => None,
             StackItem::Activated { of } => Some(of.ability),
-            StackItem::Triggered { of, .. } => Some(FaceAbility::Own(of.ability)),
+            StackItem::Triggered { of, .. } => Some(of.ability.get()),
         }
     }
 
@@ -468,9 +509,9 @@ pub struct TriggerInfo<L: Layout = Small> {
 /// An ability that has triggered and waits to be put on the stack.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct PendingTrigger<L: Layout = Small> {
-    /// The ability, among the face's own; its controller is the player who controlled the
-    /// source when it triggered.
-    pub of: AbilityRef<L, AbilityIx>,
+    /// The ability, among the face's own or, for one a copy exception gives, its grants. Its
+    /// controller is the player who controlled the source when it triggered.
+    pub of: AbilityRef<L, TriggeredAbility>,
     pub info: TriggerInfo<L>,
 }
 

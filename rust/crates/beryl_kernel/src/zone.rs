@@ -67,10 +67,13 @@ impl<L: Layout> State<L> {
             }
         }
         let from = o.zone;
-        let carried = if o.flags.has(Flag::Copy) {
-            self.carried_copy(slot)
+        // A token copy stays one ([`State::carried_copy`]); a card under a copy effect is the
+        // card it really is again once the effect ends with the rest of what the stores hold
+        // ([`crate::Memo::Really`]).
+        let (carried, really) = if o.flags.has(Flag::Copy) {
+            self.leaving_copy(slot)
         } else {
-            None
+            (None, None)
         };
         // CR 400.7a: a permanent spell's text changes go on with the permanent it becomes
         // (`crate::effects::text`).
@@ -86,6 +89,10 @@ impl<L: Layout> State<L> {
         o.zone = to;
         o.base_controller = o.owner;
         o.flags = o.flags.kept_across_zones();
+        if let Some(card) = really {
+            o.card = card;
+            o.flags.set(Flag::Copy, false);
+        }
         o.damage = 0;
         // [CR 122.2](https://yawgatog.com/resources/magic-rules/#R1222): "Counters on an
         // object are not retained if that object moves from one zone to another." Those of

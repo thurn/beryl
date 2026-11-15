@@ -16,8 +16,9 @@
 use beryl_engine::additions::Addition;
 use beryl_engine::card::{CastingKind, CastingKinds, ExceptIx, FaceIx, Types};
 use beryl_engine::layout::Queue;
+use beryl_engine::query::Copiable;
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::state::{CounterKind, Memo};
+use beryl_engine::state::{CounterKind, Flag, Memo};
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{CardIx, GameTable, Layout, Seat, Small, State, Zone, ZoneKey};
 use serde::de::Error as _;
@@ -111,6 +112,12 @@ pub struct Permanent {
     /// were made.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub excepts: Vec<Exception>,
+    /// The card or token whose values a card that entered as a copy has
+    /// ([CR 707.5](https://yawgatog.com/resources/magic-rules/#R7075)), with `excepts` the
+    /// exceptions of its copy and `face` the face of what it copied; none for a card that is no
+    /// copy. `card` stays the card it really is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copy_of: Option<String>,
     #[serde(default, skip_serializing_if = "is_default")]
     pub tapped: bool,
     /// Not under its controller's control continuously since their most recent turn began
@@ -335,6 +342,16 @@ impl Checkpoint {
             s.board().set_controller(slot, seat(b.controller)?);
             if !b.token && b.face != Face::Front {
                 s.board().set_face(slot, b.face.ix());
+            }
+            if let Some(copied) = b.copy_of.as_deref().filter(|_| !b.token) {
+                let copied = Copiable::<Small>::of_card(game_index(t, copied)?);
+                let values = additions
+                    .iter()
+                    .try_fold(copied.turned(b.face.ix()), |values, &a| {
+                        values.with_addition(a)
+                    })
+                    .map_err(full)?;
+                s.enter_as_copy(slot, values).map_err(full)?;
             }
             s.board().set_tapped(slot, b.tapped);
             s.board().set_sick(slot, b.sick);
@@ -569,6 +586,8 @@ fn permanent<L: Layout>(
         face,
         token: o.is_token(),
         excepts: Exception::of(t, s, slot),
+        copy_of: (!o.is_token() && o.flags().has(Flag::Copy))
+            .then(|| t.def(s.definition(slot).record(t).0).name.to_owned()),
         tapped: o.is_tapped(),
         sick: o.is_summoning_sick(),
         counters: Counter::on(s, slot),

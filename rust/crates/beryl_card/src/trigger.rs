@@ -92,6 +92,17 @@ pub enum TriggerEvent {
     /// ([CR 614.6](https://yawgatog.com/resources/magic-rules/#R6146)), so it triggers nothing.
     /// No subject.
     Draws,
+    /// "Whenever [subject] becomes the target of a spell or ability" ([CR 603.2e]): "Some
+    /// trigger events use the word 'becomes' ... These trigger only at the time the named
+    /// event happens". It happens as a spell or ability is put on the stack with the object
+    /// among its targets: a spell's targets are chosen as it is cast ([CR 115.1a]), an
+    /// activated ability's as it is activated, and a triggered ability's as it is put on the
+    /// stack. Once for each spell or ability, however many of its targets the object is. The
+    /// player is the spell's or ability's controller.
+    ///
+    /// [CR 603.2e]: https://yawgatog.com/resources/magic-rules/#R6032e
+    /// [CR 115.1a]: https://yawgatog.com/resources/magic-rules/#R1151a
+    BecomesTarget,
     /// "When [condition]": a state trigger ([CR 603.8]): "Some triggered abilities trigger when
     /// a game state (such as a player controlling no permanents of a particular card type) is
     /// true, rather than triggering when an event occurs. These abilities trigger as soon as the
@@ -151,6 +162,8 @@ impl Trigger {
     pub const LEAVES: Trigger = Trigger::of(TriggerEvent::Leaves, Subject::This);
     /// "Whenever this attacks."
     pub const ATTACKS: Trigger = Trigger::of(TriggerEvent::Attacks, Subject::This);
+    /// "When this becomes the target of a spell or ability."
+    pub const BECOMES_TARGET: Trigger = Trigger::of(TriggerEvent::BecomesTarget, Subject::This);
     /// "Whenever this deals combat damage to a player."
     pub const DEALS_COMBAT_DAMAGE_TO_A_PLAYER: Trigger =
         Trigger::of(TriggerEvent::DealsCombatDamageToPlayer, Subject::This);

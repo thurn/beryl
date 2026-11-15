@@ -44,7 +44,15 @@ from pathlib import Path
 from typing import cast
 
 from . import card_store, cards, checks, forge, oracle_selection, paths, runlog, system
-from . import card_diverge, card_facts, deadline, oracle_memory, xmage, xmage_java
+from . import (
+    card_diverge,
+    card_facts,
+    deadline,
+    oracle_memory,
+    xmage,
+    xmage_export,
+    xmage_java,
+)
 from .oracle_selection import skip_all
 
 FORMULAS = ("maven", "openjdk@21")
@@ -606,7 +614,9 @@ def check_xmage(entries: list[dict[str, object]], log: Path) -> dict[str, object
     (pass, fail, allowlisted, unsupported) and their counts, as `forge.summarize` reports.
     """
     faces = xmage_java.Faces.load(card_store.STORE, card_facts.named_cards(entries))
-    exports = xmage.export_all(entries, faces, xmage_java.xmage_cards(checkout(XMAGE)))
+    exports = xmage_export.export_all(
+        entries, faces, xmage_java.xmage_cards(checkout(XMAGE))
+    )
     classes = xmage_java.write(exports, xmage_tests())
     for old in reports().glob(f"TEST-{xmage_java.PACKAGE}.*.xml"):
         old.unlink()

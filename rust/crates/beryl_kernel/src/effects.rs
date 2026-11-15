@@ -602,7 +602,7 @@ impl<L: Layout> State<L> {
                 Continuous::Copy(object, values) => {
                     debug_assert!(self.is_current(object));
                     self.keyed.insert(object.slot);
-                    self.take_copied_values(object, values);
+                    self.take_copied_values(object, values)?;
                 }
             }
         }

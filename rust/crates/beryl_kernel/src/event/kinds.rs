@@ -27,6 +27,8 @@ pub enum EventKind {
     ///
     /// [CR 603.8]: https://yawgatog.com/resources/magic-rules/#R6038
     State,
+    /// An object becoming the target of a spell or ability ([`crate::event::Event::Targeted`]).
+    Targeted,
 }
 
 /// The [`EventKind`]s that a card's triggered abilities listen to, as one 64-bit mask, at

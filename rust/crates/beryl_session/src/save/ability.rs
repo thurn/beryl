@@ -56,14 +56,15 @@ impl AbilityRef {
             u8::try_from(before).expect("a face's abilities number under 256")
         };
         match entry.item {
-            StackItem::Triggered { of, .. } => AbilityRef {
-                granted: false,
-                n: place(
-                    of.card,
-                    of.face,
-                    of.ability.index(),
-                    &[AbilityKind::Triggered],
-                ),
+            StackItem::Triggered { of, .. } => match of.ability.get() {
+                FaceAbility::Own(i) => AbilityRef {
+                    granted: false,
+                    n: place(of.card, of.face, i.index(), &[AbilityKind::Triggered]),
+                },
+                FaceAbility::Grant(i) => AbilityRef {
+                    granted: true,
+                    n: u8::try_from(i.index()).expect("a face's grants number under 256"),
+                },
             },
             StackItem::Activated { of } => match of.ability {
                 FaceAbility::Own(i) => AbilityRef {

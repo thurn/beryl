@@ -82,6 +82,12 @@ impl CardDef {
         };
         for face in self.faces {
             visit(face.subtypes.read(printed).union(face.keywords.landwalk()));
+            // A copy exception's "is an Illusion in addition to its other types" (CR 707.9b).
+            for change in face.excepts.iter().flat_map(|exception| exception.0) {
+                if let crate::CopyChange::AddSubtype(subtype) = *change {
+                    visit(Subtypes::of(&[subtype]));
+                }
+            }
             for ability in face.abilities.iter().chain(face.grants) {
                 if let Some(spec) = ability.layer() {
                     for given in spec.modifications.iter().filter_map(given) {

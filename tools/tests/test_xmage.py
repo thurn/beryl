@@ -7,7 +7,15 @@ from typing import cast
 
 import pytest
 
-from beryl_tools import card_store, checks, oracles, xmage, card_facts, xmage_java
+from beryl_tools import (
+    card_store,
+    checks,
+    oracles,
+    xmage,
+    card_facts,
+    xmage_export,
+    xmage_java,
+)
 
 FIXTURE: Path = Path(__file__).parent / "fixtures" / "scenarios-xmage.json"
 XMAGE_CARDS = {
@@ -28,7 +36,7 @@ XMAGE_CARDS = {
 def exports(known: set[str] = XMAGE_CARDS) -> dict[str, xmage_java.Export]:
     dump = json.loads(FIXTURE.read_text())
     faces = xmage_java.Faces.load(card_store.STORE)
-    return {e.scenario: e for e in xmage.export_all(dump, faces, known)}
+    return {e.scenario: e for e in xmage_export.export_all(dump, faces, known)}
 
 
 def body(name: str) -> list[str]:
@@ -94,7 +102,7 @@ def test_payments_are_left_to_xmage_where_land_types_change() -> None:
         {"index": "Own 1", "kind": "Static", "changes_land_types": True}
     )
     faces = xmage_java.Faces.load(card_store.STORE)
-    export = xmage.export_one(entry, 1, faces, XMAGE_CARDS)
+    export = xmage_export.export_one(entry, 1, faces, XMAGE_CARDS)
     assert export.unsupported is None, export.unsupported
     assert not any(line.startswith("tapSource(") for line in export.body)
 
@@ -102,7 +110,7 @@ def test_payments_are_left_to_xmage_where_land_types_change() -> None:
     # have spent the sources that the second needs.
     entry["actions"][5:] = entry["actions"][1:3]
     entry["trace"][5:] = entry["trace"][1:3]
-    repeated = xmage.export_one(entry, 1, faces, XMAGE_CARDS)
+    repeated = xmage_export.export_one(entry, 1, faces, XMAGE_CARDS)
     assert repeated.unsupported == "a payment after one XMage chose the sources of"
 
 
@@ -124,7 +132,7 @@ def test_tapped_assertions_are_skipped_after_xmage_chose_a_payments_sources() ->
         "count": 1,
     }
     faces = xmage_java.Faces.load(card_store.STORE)
-    export = xmage.export_one(entry, 1, faces, XMAGE_CARDS)
+    export = xmage_export.export_one(entry, 1, faces, XMAGE_CARDS)
     assert export.unsupported is None, export.unsupported
     assert not any("assertTapped" in line for line in export.body)
     assert "Tapped: after XMage chose a payment's sources" in export.skipped
@@ -175,7 +183,7 @@ def test_a_payment_xmage_chose_onto_a_stack_makes_later_taps_by_name_unsupported
     )
     named = card_facts.named_cards(dump)
     faces = xmage_java.Faces.load(card_store.STORE, named)
-    [export] = xmage.export_all(dump, faces, set(named))
+    [export] = xmage_export.export_all(dump, faces, set(named))
     assert export.unsupported == (
         "a payment tapping a source by name after one XMage chose the sources of"
     )

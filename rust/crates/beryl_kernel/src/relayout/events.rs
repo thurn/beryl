@@ -295,6 +295,10 @@ impl<L: Layout> Relayout for Event<L> {
                 cause: cause.relayout(),
             },
             &Event::Win { player } => Event::Win { player },
+            &Event::Targeted { object, controller } => Event::Targeted {
+                object: object.relayout(),
+                controller,
+            },
         }
     }
 }

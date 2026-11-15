@@ -315,6 +315,12 @@ class Cards:
                 return (True, "addTarget")
         return None
 
+    def enters_as_copy(self, card: str) -> bool:
+        """Whether `card` may enter as a copy of a permanent its controller chooses, which
+        Beryl asks as one pick of the permanent or none, and XMage as a yes or no ("use the
+        copy effect?") and then the permanent."""
+        return any(a.get("enters_as_copy") for a in self.abilities(card))
+
     def may_search(self, card: str) -> bool:
         """Whether resolving `card` may search a library: a yes or no and then the search,
         which XMage asks as a target from the library even with no card to find, where Beryl,

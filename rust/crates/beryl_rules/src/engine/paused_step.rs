@@ -117,8 +117,10 @@ fn run<L: Layout>(
     match done {
         Err(Full) if stopped.is_some() => {
             sink.restore_scopes(scopes);
-            // Values chosen for permanents of a batch that stopped before they moved.
+            // Values and copies chosen for permanents of a batch that stopped before they
+            // moved.
             sink.chosen.clear();
+            sink.copies.clear();
             Ok(stopped)
         }
         done => done.map(|()| None),

@@ -221,7 +221,8 @@ impl<'a, L: Layout> Observation<'a, L> {
             for i in 0..t.deck_len(player) {
                 let slot = L::Slot::deck(player, i);
                 if self.root.knows(self.viewer, slot) || shown(slot) {
-                    let card = s.object(slot).card;
+                    // The card it really is, even under a copy effect.
+                    let card = s.card_really_is(slot);
                     let at = remainder
                         .position(card)
                         .expect("a known card not in its deck");
