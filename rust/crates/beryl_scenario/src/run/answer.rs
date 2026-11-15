@@ -102,6 +102,15 @@ pub(super) fn pick_in<L: Layout>(
         Pick::DefendingPlayer => Opt::Defender(None),
         // A plan past what the layout's index names is no option.
         Pick::Plan { i } => Opt::Plan(L::Index::try_from(usize::from(i)).ok()?),
+        Pick::Named { name } => {
+            let kind = ChosenKind::of_purpose(d.prompt.purpose)?;
+            return option_index(d, |o| match o {
+                Opt::Number(n) => {
+                    ChosenValue::<L>::of_number(kind, n).is_some_and(|v| v.name(t) == *name)
+                }
+                _ => false,
+            });
+        }
     };
     option_index(d, |o| o == wanted)
 }

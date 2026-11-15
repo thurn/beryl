@@ -113,7 +113,7 @@ fn game() -> (GameTable, State, Seat) {
 }
 
 /// Moves a copy of `name` from `player`'s library to their hand.
-fn to_hand(t: &GameTable, s: &mut State, player: Seat, name: &str) -> Slot {
+pub(super) fn to_hand(t: &GameTable, s: &mut State, player: Seat, name: &str) -> Slot {
     let slot = (s.in_candidate_order(s.zone(ZoneKey::Of(player, Zone::Library))))
         .find(|&slot| s.definition_name(t, slot) == name)
         .unwrap();
@@ -122,7 +122,12 @@ fn to_hand(t: &GameTable, s: &mut State, player: Seat, name: &str) -> Slot {
     slot
 }
 
-fn decide(t: &GameTable, s: &mut State, x: &mut Scratch, a: &mut dyn Answers) -> Decision {
+pub(super) fn decide(
+    t: &GameTable,
+    s: &mut State,
+    x: &mut Scratch,
+    a: &mut dyn Answers,
+) -> Decision {
     match next(s, t, x, a) {
         Step::Decide(d) => d,
         Step::Over(o) => panic!("the game ended: {o:?}"),

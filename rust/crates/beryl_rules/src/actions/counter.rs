@@ -9,6 +9,7 @@ use crate::fixed::Full;
 use crate::game::Game;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
+use crate::rule_change;
 use crate::state::{ObjectRef, StackEntry, State, Zone};
 
 /// Counters a spell ([CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a)):
@@ -16,12 +17,16 @@ use crate::state::{ObjectRef, StackEntry, State, Zone};
 /// doesn't resolve and none of its effects occur. A countered spell is put into its
 /// owner's graveyard." Or into `to`, where the effect that counters it says so, and a
 /// replacement on the spell may still exile it instead. Returns whether it was countered: a
-/// spell no longer on the stack is not.
+/// spell no longer on the stack is not, nor is one that can't be countered
+/// ([`rule_change::cant_be_countered`]), which stays where it is.
 pub fn counter<L: Layout>(
     game: &mut Game<'_, L>,
     spell: ObjectRef<L>,
     to: Zone,
 ) -> Result<bool, Full> {
+    if rule_change::cant_be_countered(game.state, game.table, spell) {
+        return Ok(false);
+    }
     let Some(entry) = game.state.take_off_stack(game.sink, spell) else {
         return Ok(false);
     };

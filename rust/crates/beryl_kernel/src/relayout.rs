@@ -7,6 +7,7 @@ use crate::bitboard::Bitboard;
 use crate::decision::{Candidates, Decision, Opt, Refusal, Step};
 use crate::ids::{CardId, SlotId};
 use crate::layout::{Item, Layout, Queue, Table, index};
+use crate::mana_memory::RememberedMana;
 mod events;
 
 use crate::state::{
@@ -288,6 +289,12 @@ impl<L: Layout> Relayout for Player<L> {
         Player {
             life: self.life,
             mana: self.mana,
+            remembered: queue(self.remembered.as_slice(), |m| RememberedMana {
+                color: m.color,
+                restriction: m.restriction,
+                chosen_type: m.chosen_type,
+                source: card(m.source),
+            }),
             lands_played: self.lands_played,
             drew_from_empty: self.drew_from_empty,
             mulligans: self.mulligans,

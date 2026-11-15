@@ -25,6 +25,7 @@ mod many_layers;
 mod mulligan;
 mod payment;
 mod regeneration;
+mod remembered_mana;
 mod replace;
 mod replay;
 mod rules;

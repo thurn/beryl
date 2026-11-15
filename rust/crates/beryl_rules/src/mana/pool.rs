@@ -6,8 +6,9 @@ use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::state::State;
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
 
+use super::remembered::{self, Paying};
 use super::sources::{available, controlled, source};
 use super::{
     CLASSES,
@@ -27,6 +28,8 @@ pub(crate) struct Funds<L: Layout = Small> {
     units: Units,
     /// The same, grouped, for the checks that exclude none.
     all: Groups,
+    /// Whether a card of the game makes restricted mana ([`Funds::pays_restricted`]).
+    restricted: bool,
 }
 
 impl<L: Layout> Funds<L> {
@@ -56,11 +59,12 @@ impl<L: Layout> Funds<L> {
             slots,
             units,
             all: units.groups(),
+            restricted: t.can(Capability::RemembersMana),
         })
     }
 
-    /// Whether the player can pay `cost` with none of `exclude`, as [`payable`]. `s` is the
-    /// state the funds were found in.
+    /// Whether the player can pay `cost` with none of `exclude` for no spell, as [`payable`]
+    /// does with [`Paying::NOTHING`]. `s` is the state the funds were found in.
     pub(crate) fn pays(
         &self,
         s: &State<L>,
@@ -83,21 +87,89 @@ impl<L: Layout> Funds<L> {
         u.pays(cost)
     }
 
+    /// Whether the player can pay `cost` with none of `exclude` for what `paying` is for:
+    /// [`Funds::pays`], or, where that fails for a spell in a game whose cards make restricted
+    /// mana, [`Funds::pays_restricted`]. Restricted mana only adds to what pays.
+    #[inline]
+    pub(crate) fn pays_for(
+        &self,
+        s: &State<L>,
+        t: &GameTable,
+        cost: ManaCost,
+        exclude: Bitboard<L::Slot>,
+        paying: Paying<L>,
+    ) -> bool {
+        self.pays(s, t, cost, exclude)
+            || (paying.reads_restrictions(t) && self.pays_restricted(s, t, cost, exclude, paying))
+    }
+
+    /// [`Funds::pays`] for a spell, in a game whose cards make restricted mana: a source of
+    /// restricted mana the spell's restriction accepts is one unit of the kinds of either of
+    /// its mana abilities, and the mana that remembers in the pool that it accepts adds its
+    /// units.
+    #[cold]
+    #[inline(never)]
+    pub(crate) fn pays_restricted(
+        &self,
+        s: &State<L>,
+        t: &GameTable,
+        cost: ManaCost,
+        exclude: Bitboard<L::Slot>,
+        paying: Paying<L>,
+    ) -> bool {
+        let mut u = self.units;
+        for slot in s.in_candidate_order(exclude & self.slots) {
+            let (kinds, amount, _, _) =
+                source(s, t, self.player, slot, s.derived(slot)).expect("a source");
+            u.take(kinds, u16::from(amount));
+        }
+        // More sources of restricted mana than a [`Small`] payment holds: say it may be paid,
+        // so that the payment's own scan finds the layout `Full` and the game goes on in
+        // `Large`.
+        let Ok(restricted) = remembered::restricted_sources(s, t, self.player) else {
+            return true;
+        };
+        for r in restricted.iter() {
+            if exclude.contains(r.slot) || !paying.accepts(t, r.restriction, r.chosen_type) {
+                continue;
+            }
+            match source(s, t, self.player, r.slot, s.derived(r.slot)) {
+                Some((kinds, 1, _, _)) => {
+                    u.take(kinds, 1);
+                    u.add(kinds | r.kinds, 1);
+                }
+                _ => u.add(r.kinds, 1),
+            }
+        }
+        for &(_, kind) in remembered::accepted_entries(s, t, self.player, paying).iter() {
+            u.add(1 << kind, 1);
+        }
+        u.pays(cost)
+    }
+
+    /// Whether a card of the game makes restricted mana, so that [`Funds::pays_restricted`]
+    /// may pay what [`Funds::pays`] does not.
+    #[inline]
+    pub(crate) fn may_restrict(&self) -> bool {
+        self.restricted
+    }
+
     /// The untapped sources but those in `exclude`.
     pub(crate) fn sources(&self, exclude: Bitboard<L::Slot>) -> Bitboard<L::Slot> {
         self.slots & !exclude
     }
 }
 
-/// The payability prefilter: whether `player` can pay `cost` at all.
+/// The payability prefilter: whether `player` can pay `cost` for what `paying` is for at all.
 pub(crate) fn payable<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
     cost: ManaCost,
     exclude: Bitboard<L::Slot>,
+    paying: Paying<L>,
 ) -> Result<bool, Full> {
-    Ok(available(s, t, player, exclude)?.pays(cost))
+    Ok(available(s, t, player, exclude, paying)?.pays(cost))
 }
 
 /// Pays one unit toward `remaining`: a colored or colorless symbol of its kind if one is

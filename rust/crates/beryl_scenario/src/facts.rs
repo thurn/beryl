@@ -44,6 +44,8 @@ pub struct FaceFacts {
 }
 
 /// One ability.
+// A JSON record the oracle tools read: each flag is a field of its own there.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Serialize)]
 pub struct AbilityFacts {
     /// As a scenario names it: `Own i` over the face's abilities, or `Grant i` over those it
@@ -60,6 +62,9 @@ pub struct AbilityFacts {
     /// A mana ability's "Activate only if you control ...".
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub conditional: bool,
+    /// A mana ability's "Spend this mana only ...": its mana remembers a restriction (CR 106.6).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub restricted: bool,
     /// A triggered ability's event.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trigger: Option<String>,
@@ -303,6 +308,7 @@ fn ability_facts(index: String, ability: &Ability) -> AbilityFacts {
         cost: cost_facts(ability.cost()),
         produces: (ability.kind() == AbilityKind::Mana).then(|| mana_facts(ability.produces())),
         conditional: ability.only_if_you_control().is_some(),
+        restricted: ability.spend().is_some(),
         trigger: ability.trigger().map(|trigger| variant(&trigger.event)),
         targets: ability.targets().iter().map(target_facts).collect(),
         instructions,

@@ -209,6 +209,22 @@ class Cards:
                 return True
         return False
 
+    def color_asked(self, source: str) -> bool:
+        """Whether tapping `source` for mana makes a choice the oracles ask and Beryl's trace
+        does not record: the color of mana it sacrifices itself for, or whether its
+        restricted mana pays."""
+        return self.sacrificed_for_mana_of_any_color(source) or self.restricted_mana(
+            source
+        )
+
+    def restricted_mana(self, source: str) -> bool:
+        """Whether a mana ability of `source` makes mana that remembers a restriction, "Spend
+        this mana only ...", as Cavern of Souls' colored mana: the oracles ask its color and
+        whether it pays, which Beryl's trace does not record."""
+        return any(
+            a["kind"] == "Mana" and a.get("restricted") for a in self.abilities(source)
+        )
+
     def casting(self, card: str) -> list[Json]:
         """The casting options of a card's front face, in the order of Beryl's `costs` bits."""
         faces = self.faces.get(card, [])

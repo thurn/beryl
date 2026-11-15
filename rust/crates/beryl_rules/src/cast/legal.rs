@@ -5,8 +5,8 @@ use std::cell::{Cell, OnceCell};
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, Castings, CostAction, Face, FaceIx, Keywords, ObjectAbility, Timing,
-    Types,
+    Ability, AbilityKind, Castings, CostAction, Face, FaceIx, Keywords, ManaCost, ObjectAbility,
+    Timing, Types,
 };
 use crate::casting;
 use crate::decision::{Opt, Refusal};
@@ -14,7 +14,7 @@ use crate::engine::collapse;
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small};
-use crate::mana::Funds;
+use crate::mana::{self, Funds};
 use crate::rule_change;
 use crate::state::{RuleKind, State, Tracker, Zone, ZoneKey};
 use crate::table::{Capability, GameTable};
@@ -112,6 +112,23 @@ fn in_time<L: Layout, const TARGETS: bool>(
     }
 }
 
+/// Whether restricted mana the spell accepts pays `cost` for casting the card in `slot` as its
+/// face `face`, where unrestricted mana does not: never in a game whose cards make no
+/// restricted mana ([`mana::Paying`]).
+#[cold]
+#[inline(never)]
+fn restricted_pays<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    funds: &Funds<L>,
+    cost: ManaCost,
+    slot: L::Slot,
+    face: FaceIx,
+) -> bool {
+    let paying = mana::Paying::casting(s, t, slot, face);
+    paying.reads_restrictions(t) && funds.pays_restricted(s, t, cost, Bitboard::EMPTY, paying)
+}
+
 /// Why `player` may not cast the card in `slot` with this face and these casting options:
 /// the first check it fails, or none if they may. A timing refusal names no permanent here
 /// ([`refusal`] does).
@@ -146,10 +163,10 @@ fn refused<L: Layout, const TARGETS: bool>(
     // cost without having the necessary resources to pay it fully."
     let x = x_range_start(face, costs, free).unwrap_or(0);
     let cost = spell_cost(face, costs, x, increase, free);
-    if !now
-        .funds(s, t)
-        .is_some_and(|f| f.pays(s, t, cost, Bitboard::EMPTY))
-    {
+    if !now.funds(s, t).is_some_and(|f| {
+        f.pays(s, t, cost, Bitboard::EMPTY)
+            || (f.may_restrict() && restricted_pays(s, t, f, cost, slot, face_index))
+    }) {
         return Some(Refusal::Mana);
     }
     // CR 601.2h: the player pays the total cost, so the objects its parts take must be there.
@@ -383,7 +400,8 @@ fn activatable<L: Layout, const TARGETS: bool>(
     let paid = now.funds(s, t).is_some_and(|funds| match substitute {
         Some((_, action, chosen, most)) => {
             let objects = parts::candidates(s, t, player, slot, action, chosen);
-            parts::payable_with_substitutes(s, t, funds, cost, most, objects, spent)
+            let nothing = mana::Paying::NOTHING;
+            parts::payable_with_substitutes(s, t, funds, cost, most, objects, spent, nothing)
         }
         None => funds.pays(s, t, cost, spent),
     });

@@ -187,7 +187,9 @@ impl Ability {
             rule.players.walk(visit);
             match &rule.what {
                 Governed::CastSpells(filter) => filter.walk(visit),
-                Governed::ActivateLoyaltyAbilities(objects) | Governed::Block(objects) => {
+                Governed::ActivateLoyaltyAbilities(objects)
+                | Governed::Block(objects)
+                | Governed::Counter(objects) => {
                     objects.walk(visit);
                 }
                 Governed::ActivateAbilities { .. } => {}
@@ -195,6 +197,12 @@ impl Ability {
         }
         if let Some(filter) = &self.only_if_you_control() {
             filter.walk(visit);
+        }
+        if let Some(restriction) = self.spend() {
+            restriction.cast.walk(visit);
+            if let Some(rider) = restriction.rider {
+                rider.players.walk(visit);
+            }
         }
         if let Behavior::Data(effect) = self.body() {
             effect.walk(visit);

@@ -54,7 +54,7 @@
 //! | declare and end combat | [`State::declare_attacker`], [`State::choose_attacked`], [`State::forget_attacked`], [`State::declare_blocker`], [`State::block`], [`State::mark_struck_first`], [`State::remove_from_combat`], [`State::end_combat`] | the combat flags and the combat reference change together; nothing stays related to a permanent removed from combat |
 //! | show or hide a card | [`State::reveal`], [`State::look`], [`State::forget`], and for a paused resolution [`State::keep_seen`] | each player's knowledge; the identity is settled first |
 //! | store the layers' results | [`State::rederive`], which lends the cache to the one function that fills it ([`derive::Rederive`]) | the derived table by battlefield index, the listening and replacing masks, the rules the static abilities change for each player, the layer inputs the static abilities read ([`static_ability::Inputs`]), whether an effect removed abilities (for [`State::has_ability`]) or changed land types (for [`State::makes_card_mana`] and [`State::intrinsic_mana`]), what each face-down permanent's controller sees, `derived_dirty` cleared |
-//! | change a player | [`State::gain_life`], [`State::lose_life`], [`State::damage_player`], [`State::add_mana`], [`State::spend_mana`], [`State::empty_mana_pools`], [`State::count_land_played`], [`State::declare_mulligan`], [`State::keep_hand`], [`State::count_bottomed`], [`State::count_mulligan`], [`State::add_emblem`] | a pool spends only mana it holds; a hand is kept with what it owes the bottom of the library; a mulligan taken is one to declare again |
+//! | change a player | [`State::gain_life`], [`State::lose_life`], [`State::damage_player`], [`State::add_mana`], [`State::spend_mana`], [`State::add_remembered_mana`], [`State::spend_remembered_mana`], [`State::empty_mana_pools`], [`State::count_land_played`], [`State::declare_mulligan`], [`State::keep_hand`], [`State::count_bottomed`], [`State::count_mulligan`], [`State::add_emblem`] | a pool spends only mana it holds, and holds at most four entries of mana that remembers in [`Small`] (a fifth is `Full`); a hand is kept with what it owes the bottom of the library; a mulligan taken is one to declare again |
 //! | move the turn, count toward a budget, end the game | [`State::set_starting_player`], [`State::begin_turn`], [`State::begin_step`], [`State::give_priority`], [`State::pass_priority`], [`State::reset_passes`], [`State::declare_attack`], [`State::set_cleanup_check`], [`State::count_decision`], [`State::count_state_based_check`], [`State::reset_state_based_checks`], [`State::end_game`] | passes reset with priority; the lands played and the decisions offered begin again with the turn; that attackers were declared ends with the combat ([`State::end_combat`]) |
 //! | use the stack | [`State::put_on_stack`], [`State::take_top_of_stack`], [`State::take_off_stack`], which returns the entry, [`State::announce_x`], [`State::announce_target`] | a spell's entry goes on once its card is in the stack zone and comes off before the card leaves, so the zone move keeps the stack's set of objects and these keep its order |
 //! | queue triggers | [`State::queue_trigger`], [`State::take_trigger`], [`State::delay_trigger`], [`State::fire_delayed`] | a delayed trigger that fires waits with the others, once |
@@ -229,7 +229,9 @@
 //! fewer, the 510 of the 255 slots less 6 of padding. It is 19,856 since the list of
 //! effects that reach other zones ([`elsewhere`]): four entries of 3 bytes and the list's
 //! length, 16 with padding. It is 19,888 since a [`query::Copiable`] holds two copy
-//! exceptions: each of the 16 last-known rows is 60 bytes, 2 more.
+//! exceptions: each of the 16 last-known rows is 60 bytes, 2 more. It is 19,920 since each
+//! player's pool holds up to four entries of mana that remembers ([`mana_memory`]), four bytes
+//! each with the queue's length.
 //! The limit is 20,480. Each bead may change the size at its
 //! own push by at most its allotment, whatever landed before it, and reports the size as it
 //! reports the count:
@@ -251,7 +253,7 @@
 //! | by-bajq.5.1 | +48 (landed: +16) | up to four effects that reach other zones, beside the layer results |
 //! | by-bajq.5.3 | +136 | a byte in each of the 64 stack entries naming its captured text changes, and the table of four captured sets |
 //! | by-bajq.6.1 | +72 (landed: +32) | two copy exceptions in each `Copiable`, which each of the 16 last-known rows holds |
-//! | by-bajq.7.4 | +48 | up to four entries of mana that remembers in each player's pool |
+//! | by-bajq.7.4 | +48 (landed: +32) | up to four entries of mana that remembers in each player's pool |
 //! | by-bajq.8.3 | +16 | the count of mandatory resolutions in a row and the hash it compares, padded |
 //! | by-bajq.8.4 | +32 | a set of the phased-out permanents' slots |
 //!
@@ -734,6 +736,7 @@ mod knowledge;
 pub mod last_known;
 pub mod layout;
 pub mod listener;
+pub mod mana_memory;
 pub mod memos;
 pub mod mutate;
 mod new;

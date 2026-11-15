@@ -29,6 +29,15 @@ COLORS = ("White", "Blue", "Black", "Red", "Green")
 # game has: a real card that no scenario uses.
 ANOTHER_CARD = "Black Lotus"
 
+
+def creature_type(name: object) -> str:
+    """The creature type XMage names (`ChoiceCreatureType`) for Beryl's `name` of one: the same,
+    but for Beryl's "Another creature type", a type no card of the game has, which is a Kithkin:
+    no card a scenario uses is one."""
+    text = cast(str, name)
+    return "Kithkin" if text == "Another creature type" else text
+
+
 # Beryl's TurnStep names to XMage's PhaseStep, in turn order.
 STEPS: dict[str, str] = {
     "Untap": "UNTAP",

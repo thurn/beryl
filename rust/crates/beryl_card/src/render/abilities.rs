@@ -70,6 +70,10 @@ impl Ctx {
                     text.push_str(&noun);
                     text.push('.');
                 }
+                if let Some(restriction) = ability.spend() {
+                    text.push(' ');
+                    text.push_str(&self.spend_only(restriction));
+                }
                 return text;
             }
             AbilityKind::Triggered => self.triggered(ability),

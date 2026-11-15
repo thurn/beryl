@@ -57,7 +57,7 @@ pub(crate) fn face_up_options<L: Layout>(
     // Candidates are listed in the candidate order, which a `Choice` counts in.
     for slot in s.in_candidate_order(collapse(s, face_down)) {
         if let Some(cost) = face_up_cost(s, t, slot)
-            && mana::payable(s, t, player, cost, Bitboard::EMPTY)?
+            && mana::payable(s, t, player, cost, Bitboard::EMPTY, mana::Paying::NOTHING)?
         {
             out.push(Opt::TurnFaceUp(slot))?;
         }
@@ -81,7 +81,16 @@ pub(crate) fn begin_turning_face_up<L: Layout>(
     let cost = face_up_cost(s, t, slot).expect("a permanent offered to turn face up");
     if s.profile().payment != Payment::Manual {
         let greedy = s.profile().payment == Payment::Greedy;
-        let plans = mana::plans(s, t, sink, player, cost, Bitboard::EMPTY, greedy)?;
+        let plans = mana::plans(
+            s,
+            t,
+            sink,
+            player,
+            cost,
+            Bitboard::EMPTY,
+            greedy,
+            mana::Paying::NOTHING,
+        )?;
         debug_assert!(!plans.is_empty(), "a cost offered is payable");
         if plans.len() == 1 {
             mana::pay(
@@ -92,6 +101,7 @@ pub(crate) fn begin_turning_face_up<L: Layout>(
                 cost,
                 Bitboard::EMPTY,
                 &plans.as_slice()[0],
+                mana::Paying::NOTHING,
             )?;
             s.turn_face_up(slot);
             return Ok(());
@@ -118,10 +128,26 @@ pub(crate) fn decision<L: Layout>(
         (
             DecisionKind::ManaPayment,
             Part::Pick,
-            mana::manual_options(s, t, player, remaining, Bitboard::EMPTY)?,
+            mana::manual_options(
+                s,
+                t,
+                player,
+                remaining,
+                Bitboard::EMPTY,
+                mana::Paying::NOTHING,
+            )?,
         )
     } else {
-        let plans = mana::plans(s, t, sink, player, remaining, Bitboard::EMPTY, false)?;
+        let plans = mana::plans(
+            s,
+            t,
+            sink,
+            player,
+            remaining,
+            Bitboard::EMPTY,
+            false,
+            mana::Paying::NOTHING,
+        )?;
         let mut list: L::Queue<Opt<L>, 64> = Default::default();
         for i in 0..plans.len() {
             list.push(Opt::Plan(index::<L>(i)))?;
@@ -149,12 +175,30 @@ pub(crate) fn perform<L: Layout>(
     let player = s.controller(slot);
     let remaining = match option {
         Opt::Plan(i) => {
-            let plans = mana::plans(s, t, sink, player, remaining, Bitboard::EMPTY, false)?;
+            let plans = mana::plans(
+                s,
+                t,
+                sink,
+                player,
+                remaining,
+                Bitboard::EMPTY,
+                false,
+                mana::Paying::NOTHING,
+            )?;
             let plan = &plans.as_slice()[Into::<usize>::into(i)];
-            mana::pay(s, t, sink, player, remaining, Bitboard::EMPTY, plan)?;
+            mana::pay(
+                s,
+                t,
+                sink,
+                player,
+                remaining,
+                Bitboard::EMPTY,
+                plan,
+                mana::Paying::NOTHING,
+            )?;
             ManaCost::NONE
         }
-        option => mana::manual_pay(s, t, sink, player, remaining, option)?,
+        option => mana::manual_pay(s, t, sink, player, remaining, option, mana::Paying::NOTHING)?,
     };
     if remaining.is_zero() {
         s.settle_question();

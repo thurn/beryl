@@ -192,6 +192,15 @@ impl GameSubtypes {
         numbers.has(subtype).of(self)
     }
 
+    /// Whether the set has the creature type the game numbered `n`, or every creature type.
+    /// [`crate::chosen::ANOTHER`], a creature type no card of the game names, is in a set
+    /// only with every creature type.
+    #[inline]
+    pub fn has_creature_type(self, n: u8) -> bool {
+        self.has_bit(EVERY_CREATURE_TYPE)
+            || (usize::from(n) < EVERY_CREATURE_TYPE && self.has_bit(usize::from(n)))
+    }
+
     /// The set with `subtype` added.
     ///
     /// # Panics

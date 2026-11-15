@@ -9,7 +9,7 @@
 
 use beryl_card::{Ability, AbilityKind, CardDef, Chosen, CostAction, CostPart, Measure, Zone};
 
-use crate::table::{is_sacrificed, is_simple};
+use crate::table::{is_sacrificed, is_tap_for_mana};
 
 /// Why the engine cannot play a card for one of its costs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -67,9 +67,9 @@ pub fn pays_for_spell(part: &CostPart) -> bool {
 
 /// Whether the engine pays the cost of this ability. A mana ability is paid by the mana
 /// solver, which taps its source or taps and sacrifices it, and pays nothing else
-/// ([`is_simple`], [`is_sacrificed`]).
+/// ([`is_tap_for_mana`], restricted or not, and [`is_sacrificed`]).
 fn ability(a: &Ability) -> Result<(), Unpayable> {
-    if a.kind() == AbilityKind::Mana && !is_simple(a) && !is_sacrificed(a) {
+    if a.kind() == AbilityKind::Mana && !is_tap_for_mana(a) && !is_sacrificed(a) {
         return Err(Unpayable::ManaAbility);
     }
     if let Some(part) = a.cost().parts().iter().find(|part| !pays_for_ability(part)) {

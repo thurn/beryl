@@ -8,6 +8,7 @@ use crate::event::{Event, Recipient};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, Table};
+use crate::mana_memory::{REMEMBERED_MANA, RememberedMana};
 use crate::object::ObjectRef;
 use crate::state::State;
 use crate::static_ability::Inputs;
@@ -57,11 +58,14 @@ impl std::ops::IndexMut<ManaColor> for ManaPool {
 ///
 /// Written only by [`State`]'s mutators: nothing outside the crate reaches one to write. The
 /// fields are `pub(crate)`: other crates read them through the getters.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Player<L: Layout = Small> {
     pub(crate) life: i16,
     /// Unspent mana.
     pub(crate) mana: ManaPool,
+    /// Unspent mana that remembers what it may be spent on ([`crate::mana_memory`]), oldest
+    /// first: none in a game whose cards make none.
+    pub(crate) remembered: L::Queue<RememberedMana<L>, REMEMBERED_MANA>,
     pub(crate) lands_played: u8,
     /// Attempted to draw from an empty library since state-based actions were last checked
     /// (CR 704.5b).
@@ -79,6 +83,36 @@ pub struct Player<L: Layout = Small> {
 
 impl Copy for Player<Small> {}
 
+/// The fields in declaration order, as a derived `Hash` feeds them, with the mana that
+/// remembers fed only when there is some: a game whose cards make none hashes as it did
+/// before pools could hold it, so the state hashes its tests pin stay.
+impl<L: Layout> std::hash::Hash for Player<L> {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        let Player {
+            life,
+            mana,
+            remembered,
+            lands_played,
+            drew_from_empty,
+            mulligans,
+            mulligan,
+            to_bottom,
+            emblems,
+        } = self;
+        life.hash(h);
+        mana.hash(h);
+        lands_played.hash(h);
+        drew_from_empty.hash(h);
+        mulligans.hash(h);
+        mulligan.hash(h);
+        to_bottom.hash(h);
+        emblems.hash(h);
+        if !remembered.is_empty() {
+            remembered.as_slice().hash(h);
+        }
+    }
+}
+
 impl<L: Layout> Player<L> {
     /// The life total ([CR 119.1](https://yawgatog.com/resources/magic-rules/#R1191)): "Each
     /// player begins the game with a starting life total of 20."
@@ -91,6 +125,12 @@ impl<L: Layout> Player<L> {
     #[inline]
     pub fn mana(&self) -> ManaPool {
         self.mana
+    }
+
+    /// The unspent mana that remembers what it may be spent on, oldest first (CR 106.6).
+    #[inline]
+    pub fn remembered_mana(&self) -> &[RememberedMana<L>] {
+        self.remembered.as_slice()
     }
 
     /// The lands the player has played this turn
@@ -250,6 +290,7 @@ impl<L: Layout> State<L> {
     pub fn empty_mana_pools(&mut self) {
         for p in self.players.as_mut_slice() {
             p.mana = ManaPool::default();
+            p.remembered.clear();
         }
     }
 

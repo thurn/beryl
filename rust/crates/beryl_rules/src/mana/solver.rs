@@ -10,6 +10,7 @@ use crate::state::State;
 use crate::table::GameTable;
 
 use super::lookahead::{Later, later_costs, looking_ahead, still_payable};
+use super::remembered::Paying;
 use super::sources::Sources;
 use super::{CLASSES, KINDS, Taps, units::Units};
 
@@ -20,6 +21,9 @@ pub(crate) struct Plan<L: Layout = Small> {
     pub(super) spend: [u8; KINDS],
     pub(super) taps: Taps<L>,
     pub(crate) left: [u8; KINDS],
+    /// The mana that remembers it spends, a bit per entry of [`Sources::remembered`]: none
+    /// in a game whose cards make no restricted mana.
+    pub(super) remembered: u8,
 }
 
 impl<L: Layout> Default for Plan<L> {
@@ -28,6 +32,7 @@ impl<L: Layout> Default for Plan<L> {
             spend: [0; KINDS],
             taps: Table::filled(0),
             left: [0; KINDS],
+            remembered: 0,
         }
     }
 }
@@ -43,13 +48,20 @@ pub(super) fn each_plan<L: Layout>(
 ) {
     let total = cost.total(0);
     let mut plan = Plan::default();
-    walk(cost, total, pool, sources, 0, 0, &mut plan, f);
+    if sources.has_memory() {
+        walk::<L, true>(cost, total, pool, sources, 0, 0, &mut plan, f);
+    } else {
+        walk::<L, false>(cost, total, pool, sources, 0, 0, &mut plan, f);
+    }
 }
 
-/// The plan search: positions `0..KINDS` choose floating mana to spend, the rest how many
-/// sources of each class to tap. `must` counts the units that must be spent so far.
+/// The plan search: positions `0..KINDS` choose floating mana to spend, the next whether to
+/// spend each mana that remembers the payment accepts, and the rest how many sources of each
+/// class to tap. `must` counts the units that must be spent so far. `MEMORY`: whether the
+/// sources have a restricted class or the pool mana that remembers ([`Sources::has_memory`]),
+/// so that a search of any other payment reads none of it.
 #[allow(clippy::too_many_arguments)]
-fn walk<L: Layout>(
+fn walk<L: Layout, const MEMORY: bool>(
     cost: ManaCost,
     total: u32,
     pool: [u8; KINDS],
@@ -60,9 +72,14 @@ fn walk<L: Layout>(
     f: &mut dyn FnMut(&Plan<L>) -> bool,
 ) -> bool {
     let classes = sources.classes();
-    if position == KINDS + classes.len() {
-        return match complete(cost, total, pool, sources, plan) {
-            Some(left) if !wasteful(cost, total, pool, sources, plan) => {
+    let remembered = if MEMORY {
+        sources.remembered().len()
+    } else {
+        0
+    };
+    if position == KINDS + remembered + classes.len() {
+        return match complete::<L, MEMORY>(cost, total, pool, sources, plan) {
+            Some(left) if !wasteful::<L, MEMORY>(cost, total, pool, sources, plan) => {
                 plan.left = left;
                 f(plan)
             }
@@ -75,7 +92,7 @@ fn walk<L: Layout>(
                 continue;
             }
             plan.spend[position] = n;
-            if !walk(
+            if !walk::<L, MEMORY>(
                 cost,
                 total,
                 pool,
@@ -91,16 +108,39 @@ fn walk<L: Layout>(
         plan.spend[position] = 0;
         return true;
     }
-    let i = position - KINDS;
+    if MEMORY && position < KINDS + remembered {
+        let bit = 1 << (position - KINDS);
+        for spent in [true, false] {
+            if spent && must + 1 > total {
+                continue;
+            }
+            plan.remembered = if spent {
+                plan.remembered | bit
+            } else {
+                plan.remembered & !bit
+            };
+            let must = must + u32::from(spent);
+            if !walk::<L, MEMORY>(cost, total, pool, sources, position + 1, must, plan, f) {
+                return false;
+            }
+        }
+        return true;
+    }
+    let i = position - KINDS - remembered;
     let class = classes[i];
-    for n in (0..=class.count()).rev() {
+    // A permanent tapped for its other class's mana is tapped for this one's too.
+    let room = match class.restricted.then(|| class.twin()).flatten() {
+        Some(twin) if MEMORY => class.count() - plan.taps[usize::from(twin)],
+        _ => class.count(),
+    };
+    for n in (0..=room).rev() {
         // Every tapped source spends at least one of its mana.
         if must + u32::from(n) > total {
             continue;
         }
         plan.taps[i] = n;
         let must = must + if class.amount == 1 { u32::from(n) } else { 0 };
-        if !walk(cost, total, pool, sources, position + 1, must, plan, f) {
+        if !walk::<L, MEMORY>(cost, total, pool, sources, position + 1, must, plan, f) {
             return false;
         }
     }
@@ -139,7 +179,7 @@ pub(super) fn spent_by_class<L: Layout>(
 
 /// Checks a plan's tap counts and floating spend: the mana it leaves floating when they pay
 /// `cost` exactly.
-fn complete<L: Layout>(
+fn complete<L: Layout, const MEMORY: bool>(
     cost: ManaCost,
     total: u32,
     pool: [u8; KINDS],
@@ -147,7 +187,8 @@ fn complete<L: Layout>(
     plan: &Plan<L>,
 ) -> Option<[u8; KINDS]> {
     let classes = sources.classes();
-    let mut must: u32 = plan.spend.iter().map(|&n| u32::from(n)).sum();
+    let mut must: u32 =
+        plan.spend.iter().map(|&n| u32::from(n)).sum::<u32>() + plan.remembered.count_ones();
     let mut several_taps = 0;
     let mut several_make = 0;
     for (i, c) in classes.iter().enumerate() {
@@ -167,6 +208,13 @@ fn complete<L: Layout>(
     let mut units = Units::NONE;
     for (k, &n) in plan.spend.iter().enumerate() {
         units.add(1 << k, u16::from(n));
+    }
+    if MEMORY {
+        for (i, &(_, kind, _)) in sources.remembered().iter().enumerate() {
+            if plan.remembered & (1 << i) != 0 {
+                units.add(1 << kind, 1);
+            }
+        }
     }
     for (c, &n) in classes.iter().zip(spent.iter()) {
         units.add(c.kinds, n as u16);
@@ -192,7 +240,11 @@ fn complete<L: Layout>(
 /// extra source only turns into floating mana, which tapping it later would make as well, so
 /// the plan is dominated (§10) and never offered or taken. No implemented card has a {C} symbol in a
 /// cost, so colorless mana left floating is never worth more than the source's own mana.
-fn wasteful<L: Layout>(
+// Inline in each copy of [`walk`], as it was in the one walk before there were two: called
+// apart, it costs the rollout benchmark 1M instructions more.
+#[allow(clippy::inline_always)]
+#[inline(always)]
+fn wasteful<L: Layout, const MEMORY: bool>(
     cost: ManaCost,
     total: u32,
     pool: [u8; KINDS],
@@ -202,7 +254,7 @@ fn wasteful<L: Layout>(
     (0..sources.classes().len()).any(|i| {
         plan.taps[i] > 0 && {
             plan.taps[i] -= 1;
-            let fewer = complete(cost, total, pool, sources, plan).is_some();
+            let fewer = complete::<L, MEMORY>(cost, total, pool, sources, plan).is_some();
             plan.taps[i] += 1;
             fewer
         }
@@ -225,6 +277,8 @@ fn floats_for_nothing<L: Layout>(sources: &Sources<L>, p: &Plan<L>, q: &Plan<L>)
         || q.taps.iter().zip(p.taps.iter()).any(|(a, b)| a > b)
         || q.left.iter().zip(&p.left).any(|(a, b)| a > b)
         || sources.sacrificed(q) > sources.sacrificed(p)
+        || (sources.has_memory()
+            && (p.remembered != q.remembered || sources.rides(p) != sources.rides(q)))
     {
         return false;
     }
@@ -246,8 +300,9 @@ pub(super) fn lowest_kind(kinds: u8) -> usize {
     kinds.trailing_zeros() as usize
 }
 
-/// The plans a payment of `cost` offers, at most one per distinct floating remainder and
-/// number of sources sacrificed, in order of the fewest sacrificed, then the least mana left
+/// The plans a payment of `cost` for what `paying` is for offers, at most one per distinct
+/// floating remainder, number of sources sacrificed and restricted mana spent
+/// ([`Sources::outcome`]), in order of the fewest sacrificed, then the least mana left
 /// floating. Sacrificing a source is a plan's own outcome (§10), but almost always a waste:
 /// a plan that sacrifices more is offered only when it keeps strictly more later costs payable
 /// than every plan sacrificing fewer. Under [`crate::profile::Payment::Greedy`] it is the
@@ -255,6 +310,7 @@ pub(super) fn lowest_kind(kinds: u8) -> usize {
 ///
 /// The human's payment ([`crate::Profile::taps_mana`]) offers the same plans, each tapping
 /// the sources [`looking_ahead`] picks.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn plans<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -263,9 +319,10 @@ pub(crate) fn plans<L: Layout>(
     cost: ManaCost,
     exclude: Bitboard<L::Slot>,
     greedy: bool,
+    paying: Paying<L>,
 ) -> Result<L::Queue<Plan<L>, 64>, Full> {
     sink.work.solver_runs += 1;
-    let sources = Sources::of(s, t, player, exclude)?;
+    let sources = Sources::of(s, t, player, exclude, paying)?;
     let pool = s.player(player).mana().amounts();
     let mut out: L::Queue<Plan<L>, 64> = Default::default();
     if greedy {
@@ -292,12 +349,16 @@ pub(crate) fn plans<L: Layout>(
     };
     let mut scores: L::Queue<Option<(u32, usize, u32)>, 64> = Default::default();
     let mut full = false;
+    let memory = sources.has_memory();
     each_plan(cost, pool, &sources, &mut |p| {
         let sacrificed = sources.sacrificed(p);
-        match out
-            .iter()
-            .position(|q| q.left == p.left && sources.sacrificed(q) == sacrificed)
-        {
+        let found = if memory {
+            let outcome = sources.outcome(p);
+            (out.iter()).position(|q| q.left == p.left && sources.outcome(q) == outcome)
+        } else {
+            (out.iter()).position(|q| q.left == p.left && sources.sacrificed(q) == sacrificed)
+        };
+        match found {
             // The first plan of a remainder taps the least flexible sources; a later one
             // replaces it only by keeping more costs payable.
             Some(i) => {
@@ -342,10 +403,24 @@ pub(crate) fn plans<L: Layout>(
         let all = kept.clone();
         kept.retain(|p| !all.iter().any(|q| floats_for_nothing(&sources, p, q)));
     }
-    kept.as_mut_slice().sort_by_key(|p| {
-        let floating: u32 = p.left.iter().map(|&n| u32::from(n)).sum();
-        (sources.sacrificed(p), floating, p.left)
-    });
+    let floating = |p: &Plan<L>| p.left.iter().map(|&n| u32::from(n)).sum::<u32>();
+    if sources.has_memory() {
+        // A rider first among plans alike but for it: the spell gets it at no cost but the
+        // restricted mana.
+        kept.as_mut_slice().sort_by_key(|p| {
+            let rides = !sources.rides(p);
+            (
+                sources.sacrificed(p),
+                floating(p),
+                p.left,
+                rides,
+                p.remembered,
+            )
+        });
+    } else {
+        kept.as_mut_slice()
+            .sort_by_key(|p| (sources.sacrificed(p), floating(p), p.left));
+    }
     if s.profile().taps_mana == Some(player) {
         looking_ahead(s, t, player, cost, &sources, kept.as_mut_slice())?;
     }

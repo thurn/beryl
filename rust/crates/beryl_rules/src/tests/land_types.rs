@@ -176,7 +176,15 @@ const G: u8 = 1 << ManaColor::Green as u8;
 
 /// Whether the first player's untapped lands pay `cost` now.
 fn pays(t: &GameTable, s: &State, cost: ManaCost) -> bool {
-    crate::mana::payable(s, t, Seat::P0, cost, Bitboard::EMPTY).unwrap()
+    crate::mana::payable(
+        s,
+        t,
+        Seat::P0,
+        cost,
+        Bitboard::EMPTY,
+        crate::mana::Paying::NOTHING,
+    )
+    .unwrap()
 }
 
 /// A land of a basic land type has that type's mana ability though its text does not write

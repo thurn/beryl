@@ -3,7 +3,9 @@
 //! played (a shrunk fuzz failure, an exhaustive search's failure) can be pasted into a card's
 //! scenarios.
 
+use beryl_card::ChosenKind;
 use beryl_engine::card::{Castings, FaceIx, ObjectAbility};
+use beryl_engine::chosen::ChosenValue;
 use beryl_engine::{Choice, Decision, DecisionKind, GameTable, Layout, Opt, Seat, State};
 
 use std::fmt::Write;
@@ -72,13 +74,30 @@ pub(crate) fn pick<L: Layout>(
         Opt::Yes => Pick::Yes,
         Opt::No => Pick::No,
         Opt::Done => Pick::Done,
-        Opt::Number(n) => Pick::Number { n },
+        Opt::Number(n) => {
+            value_name(t, d, n).map_or(Pick::Number { n }, |name| Pick::Named { name })
+        }
         Opt::Plan(i) => Pick::Plan {
             i: u16::try_from(Into::<usize>::into(i)).ok()?,
         },
         Opt::Player(player) => Pick::Player { player },
         Opt::Defender(None) => Pick::DefendingPlayer,
         _ => return None,
+    })
+}
+
+/// The name of the creature type a decision of `d` numbers `n`, as [`Pick::Named`] picks it:
+/// the oracles name the type, not Beryl's number for it. A color stays a number, which they
+/// read in the rules' order, and a card name a card ([`Pick::Card`]).
+fn value_name<L: Layout>(t: &GameTable, d: &Decision<L>, n: u8) -> Option<&'static str> {
+    let kind = ChosenKind::of_purpose(d.prompt.purpose)?;
+    Some(match ChosenValue::<L>::of_number(kind, n)? {
+        ChosenValue::Color(_) | ChosenValue::Name(_) => return None,
+        ChosenValue::CreatureType(Some(n)) => t
+            .subtypes()
+            .subtype(n)
+            .map_or("Another creature type", |subtype| subtype.name()),
+        ChosenValue::CreatureType(None) => "Another creature type",
     })
 }
 

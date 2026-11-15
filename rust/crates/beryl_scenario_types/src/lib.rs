@@ -328,6 +328,11 @@ pub enum Pick {
     Plan {
         i: u16,
     },
+    /// The value named `name` among those a player chooses as a permanent enters or an effect
+    /// begins: a creature type, a card name or a color, as the engine names it.
+    Named {
+        name: &'static str,
+    },
 }
 
 /// A fact about the current position.

@@ -58,6 +58,7 @@ import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.function.Predicate;
@@ -1225,6 +1226,27 @@ public final class BerylForgeHarness {
                 throw new StepFailed("color " + chosen + " among " + options);
             }
             return chosen;
+        }
+
+        /**
+         * Beryl's answer to a choice of a creature type (its purpose "creature-type"), the type
+         * by name. Beryl's "Another creature type", one no card of the game has, is a Kithkin
+         * here: no card a scenario uses is one.
+         */
+        @Override
+        public String chooseSomeType(String kindOfType, SpellAbility sa, Collection<String> validTypes, boolean isOptional) {
+            JsonObject pick = run.takeFollowingFor(player, "creature-type");
+            if (pick == null || !pick.has("name")) {
+                return super.chooseSomeType(kindOfType, sa, validTypes, isOptional);
+            }
+            String type = pick.get("name").getAsString();
+            if (type.equals("Another creature type")) {
+                type = "Kithkin";
+            }
+            if (!validTypes.contains(type)) {
+                throw new StepFailed("creature type " + type + " among " + validTypes.size() + " offered");
+            }
+            return type;
         }
 
         @Override

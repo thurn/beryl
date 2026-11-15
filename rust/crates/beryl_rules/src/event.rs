@@ -89,7 +89,8 @@ pub(crate) fn arrive<L: Layout>(
 #[cold]
 #[inline(never)]
 fn remember_chosen<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>) -> Result<(), Full> {
-    for (slot, value) in sink.chosen.drain(..) {
+    let chosen = std::mem::take(&mut sink.chosen);
+    for &(slot, value) in chosen.iter() {
         s.remember(slot, Memo::Chosen(value))?;
     }
     Ok(())

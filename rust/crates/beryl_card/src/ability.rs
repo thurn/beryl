@@ -17,7 +17,10 @@ use crate::mana::{ManaCost, ManaSet};
 use crate::target::{Takes, TargetKind, TargetSpec};
 use crate::trigger::Trigger;
 
+mod of_kind;
 mod zones;
+
+use of_kind::OfKind;
 
 /// What kind of ability this is ([CR 113.3](https://yawgatog.com/resources/magic-rules/#R1133)):
 /// "There are four general categories of abilities": spell, activated, triggered and static.
@@ -202,7 +205,7 @@ const fn add_mana(mana: ManaSet) -> &'static Effect {
 /// The engine scans a face's abilities for every decision it builds, so the size is kept a
 /// power of two, which makes stepping through them a shift: at 120 bytes the rollout
 /// benchmark counted 0.11% more instructions than at 128. The alignment is what rounds it
-/// up: the fields fill 106 bytes.
+/// up to 128 bytes.
 #[derive(Clone, Copy, Debug)]
 #[repr(align(32))]
 pub struct Ability {
@@ -216,9 +219,6 @@ pub struct Ability {
     /// as the effect is given: the engine asks of every activated ability at every priority.
     needy: bool,
     body: Behavior,
-    /// Triggered abilities: what they trigger on. Held by reference, as the body and the
-    /// condition are: a [`Trigger`] names a filter and players.
-    trigger: Option<&'static Trigger>,
     /// A static or replacement ability: its "as long as" or "while", read as often as the
     /// ability is. Triggered abilities: an intervening "if" clause, checked when the ability
     /// triggers and again as it resolves
@@ -226,22 +226,18 @@ pub struct Ability {
     /// only if it is; otherwise it does nothing. If the ability triggers, it checks the
     /// stated condition again as it resolves."
     condition: Option<&'static Condition>,
-    /// Replacement abilities: what they replace and how, held by reference as the trigger is.
-    replacement: Option<&'static Replacement>,
-    /// Static abilities: the continuous effect they generate on the battlefield. Held by
-    /// reference, as the trigger is: a [`LayerSpec`] names objects and a condition.
-    layer: Option<&'static LayerSpec>,
+    /// What only one kind of ability has: a triggered ability's trigger, a static ability's
+    /// continuous effect, a replacement ability's replacement, or a mana ability's terms.
+    /// Each is held by reference: a [`Trigger`] names a filter and players, and a
+    /// [`LayerSpec`] names objects and a condition. One field for them all keeps the
+    /// ability's size a power of two.
+    of_kind: OfKind,
     /// The rule the ability changes
     /// ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311)): a static ability
     /// all the time, as long as its [`condition`](Ability::condition) holds, and any other
     /// by its effect, for as long as that says. A game numbers the rule changes its cards
     /// name here, so one a body starts is named here too.
     rule: Option<&'static RuleChange>,
-    /// Mana abilities: "Activate only if you control a [permanent this filter accepts]"
-    /// ([CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)): "A player can't begin
-    /// to activate an ability that's prohibited from being activated." Held by reference, as
-    /// the trigger is: the ability's size is a power of two with its cost's parts in it.
-    only_if_you_control: Option<&'static Filter>,
     /// Whether its card's rules text says it in the paragraph of the ability before it, as
     /// "Whenever this creature enters or attacks" says the two triggered abilities a face
     /// lists for it, so that a view finds its words. The rules make a paragraph one ability
@@ -267,12 +263,9 @@ impl Ability {
             produces: ManaSet::NONE,
             needy: false,
             body: Behavior::Data(&Effect::NOTHING),
-            trigger: None,
             condition: None,
-            replacement: None,
-            layer: None,
+            of_kind: OfKind::None,
             rule: None,
-            only_if_you_control: None,
             shares_paragraph: false,
             zones: zones::usual_zones(kind),
         }
@@ -331,7 +324,7 @@ impl Ability {
     /// have a trigger condition and an effect."
     pub const fn triggered(trigger: &'static Trigger) -> Ability {
         Ability {
-            trigger: Some(trigger),
+            of_kind: OfKind::Trigger(trigger),
             ..Ability::of(AbilityKind::Triggered)
         }
     }
@@ -348,7 +341,7 @@ impl Ability {
             "a static ability has no targets, no X and no instruction before it"
         );
         Ability {
-            layer: Some(layer),
+            of_kind: OfKind::Layer(layer),
             ..Ability::of(AbilityKind::Static)
         }
     }
@@ -365,7 +358,7 @@ impl Ability {
     /// A static ability creating a replacement effect.
     pub const fn replacing(replacement: &'static Replacement) -> Ability {
         Ability {
-            replacement: Some(replacement),
+            of_kind: OfKind::Replacement(replacement),
             ..Ability::of(AbilityKind::Replacement)
         }
     }
@@ -564,20 +557,6 @@ impl Ability {
         }
     }
 
-    /// "Activate only if you control a [permanent `filter` accepts]" (CR 602.5), of a mana
-    /// ability.
-    #[must_use]
-    pub const fn if_you_control(self, filter: &'static Filter) -> Ability {
-        assert!(
-            matches!(self.kind, AbilityKind::Mana),
-            "only a mana ability is restricted by what you control"
-        );
-        Ability {
-            only_if_you_control: Some(filter),
-            ..self
-        }
-    }
-
     /// "Activate only as a sorcery"
     /// ([CR 602.5d](https://yawgatog.com/resources/magic-rules/#R6025d)): "Activated
     /// abilities that read 'Activate only as a sorcery' mean the player must follow the
@@ -629,41 +608,16 @@ impl Ability {
         self.body
     }
 
-    /// A triggered ability: what it triggers on.
-    #[inline]
-    pub const fn trigger(&self) -> Option<&'static Trigger> {
-        self.trigger
-    }
-
     /// Its intervening "if" or "as long as" ([`Ability::only_if`]).
     #[inline]
     pub const fn condition(&self) -> Option<&'static Condition> {
         self.condition
     }
 
-    /// A replacement ability: what it replaces and how; `None` for any other kind.
-    #[inline]
-    pub const fn replacement(&self) -> Option<&'static Replacement> {
-        self.replacement
-    }
-
-    /// A static ability: the continuous effect it generates.
-    #[inline]
-    pub const fn layer(&self) -> Option<&'static LayerSpec> {
-        self.layer
-    }
-
     /// The rule it changes ([`Ability::rule_change`], [`Ability::starting`]).
     #[inline]
     pub const fn rule(&self) -> Option<&'static RuleChange> {
         self.rule
-    }
-
-    /// A mana ability: what its controller must control to activate it
-    /// ([`Ability::if_you_control`]).
-    #[inline]
-    pub const fn only_if_you_control(&self) -> Option<&'static Filter> {
-        self.only_if_you_control
     }
 
     /// Whether its card's rules text says it in the paragraph of the ability before it

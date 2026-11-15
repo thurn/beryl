@@ -3,13 +3,14 @@
 
 use beryl_card::{
     Ability, AbilityIx, AbilityKind, CardDef, Condition, CostAction, CostPart, FACE_DOWN,
-    FACE_DOWN_COPY, Face, FaceIx, RuleChange, Words, Zone, ZoneSet,
+    FACE_DOWN_COPY, Face, FaceIx, ManaRestriction, RuleChange, Words, Zone, ZoneSet,
 };
 
 use crate::event::{Listens, Replaces};
 use crate::ids::{CardId, CardIx, LargeCardIx, Seat};
 use crate::layout::{Layout, PerLayout, PerSeat};
 use crate::listener::{self, Listener, Unmatched};
+use crate::mana_memory;
 use crate::payable::{self, Unpayable};
 use crate::replacement::{self, Unreplaced};
 use crate::rule_changes::{self, RuleChanges, RuleId, RuleKind, Rules, Unchecked};
@@ -159,6 +160,8 @@ pub struct GameTable {
     capabilities: u16,
     /// The rule changes the cards of the game name, numbered.
     rule_changes: RuleChanges,
+    /// The mana restrictions the cards of the game name, numbered ([`crate::mana_memory`]).
+    pub(crate) restrictions: Vec<&'static ManaRestriction>,
     /// The subtypes the cards of the game name, numbered.
     subtypes: SubtypeNumbers,
     /// The game index of each name a player may choose that the game has a card of: the
@@ -361,6 +364,7 @@ impl GameTable {
             SubtypeNumbers::new(&defs).map_err(|count| TableError::Subtypes { count })?;
         let face_subtypes = subtypes.of_cards(&defs);
         let names = card_names(&defs);
+        let restrictions = mana_memory::number(&defs);
         let capabilities = defs
             .iter()
             .flat_map(|d| d.faces)
@@ -388,6 +392,7 @@ impl GameTable {
             needy,
             capabilities,
             rule_changes,
+            restrictions,
             subtypes,
             face_subtypes,
             names,
@@ -752,9 +757,17 @@ pub fn has_other_ability(face: &Face) -> bool {
     })
 }
 
-/// Whether an ability is one the solver taps for: a mana ability whose whole cost is {T}.
+/// Whether an ability is one the solver taps for: a mana ability whose whole cost is {T}, and
+/// whose mana may be spent on anything.
 #[inline]
 pub fn is_simple(a: &Ability) -> bool {
+    is_tap_for_mana(a) && a.spend().is_none()
+}
+
+/// Whether an ability is a mana ability whose whole cost is {T}: [`is_simple`], or one whose
+/// mana is restricted, which the solver taps only for a payment the restriction accepts.
+#[inline]
+pub fn is_tap_for_mana(a: &Ability) -> bool {
     a.kind() == AbilityKind::Mana
         && a.cost().mana.is_zero()
         && matches!(a.cost().parts(), [CostPart::This(CostAction::Tap)])

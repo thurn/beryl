@@ -211,6 +211,9 @@ enum PickDef {
     Plan {
         i: u16,
     },
+    Named {
+        name: &'static str,
+    },
 }
 
 /// Colors as the names of each, white first ([`Colors::NAMES`]).

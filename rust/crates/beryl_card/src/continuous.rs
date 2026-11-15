@@ -56,6 +56,13 @@ pub enum Governed {
         sources: Named,
         mana_abilities: bool,
     },
+    /// Countering these spells ([CR 701.6a]): "To counter a spell or ability means to cancel
+    /// it, removing it from the stack." With [`When::Never`], "that spell can't be
+    /// countered": the players are those whose spells or abilities would counter it, each
+    /// player. A spell or ability may still target the spell, and does nothing to it.
+    ///
+    /// [CR 701.6a]: https://yawgatog.com/resources/magic-rules/#R7016a
+    Counter(Objects),
 }
 
 /// The sources a [`Governed::ActivateAbilities`] names, by their names.
@@ -122,6 +129,12 @@ impl RuleChange {
             }
             (Governed::ActivateAbilities { .. }, When::OnlyAsSorcery | When::AsInstant) => {
                 "with abilities of named sources to activate at a changed time".to_owned()
+            }
+            (Governed::Counter(_), When::Never) => {
+                "with a spell that can't be countered".to_owned()
+            }
+            (Governed::Counter(_), When::OnlyAsSorcery | When::AsInstant) => {
+                "with a spell countered at a changed time".to_owned()
             }
         }
     }

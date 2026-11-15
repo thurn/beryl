@@ -38,6 +38,7 @@ from .card_facts import Cards, Json, Unsupported, payment_taps
 from .xmage_trace import Position
 from .xmage_java import (
     ANOTHER_CARD,
+    creature_type,
     CHOICE_KINDS,
     COLORS,
     YES_NO_KINDS,
@@ -444,10 +445,8 @@ class Exporter:
         taps = payment_taps(self.actions, [t.taps for t in self.trace], self.index)
         if taps is None:
             return
-        if any(self.cards.sacrificed_for_mana_of_any_color(name) for name in taps):
-            raise Unsupported(
-                "a payment sacrificing a source for mana of a color XMage asks"
-            )
+        if any(self.cards.color_asked(name) for name in taps):
+            raise Unsupported("a payment with mana whose color XMage asks")
         if p.stack:
             if who in self.payment_left_to_xmage and taps:
                 raise Unsupported(
@@ -665,6 +664,8 @@ class Exporter:
         elif action.get("purpose", p.purpose) == "color" and what == "Number":
             # XMage names the color (`ChoiceColor`); Beryl numbers it as CR 105.1 does.
             self.emit(f"setChoice({who}, {java_string(COLORS[cast(int, pick['n'])])});")
+        elif action.get("purpose", p.purpose) == "creature-type" and what == "Named":
+            self.emit(f"setChoice({who}, {java_string(creature_type(pick['name']))});")
         elif action.get("purpose", p.purpose) == "replace":
             # Dredge's yes or no (`chooseUse`); mandatory effects' order by source name.
             yes = "false" if card is None else "true"

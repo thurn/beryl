@@ -13,6 +13,7 @@ use crate::state::{AbilityRef, PendingTrigger, State, Zone};
 use crate::table::{GameTable, is_sacrificed, is_simple};
 
 use super::pool::{helps, pay_unit};
+use super::remembered::{self, Paying};
 use super::solver::{Plan, lowest_kind, spent_by_class};
 use super::sources::{Class, Sources, allowed, controlled, source};
 use super::{KINDS, Taps};
@@ -27,6 +28,7 @@ use super::{KINDS, Taps};
 /// [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
 /// total cost. ... Partial payments are not allowed." So the events of the payment, each
 /// source's tap and the mana it makes, are kept as one group: the cost is paid or it is not.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn pay<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -35,14 +37,30 @@ pub(crate) fn pay<L: Layout>(
     cost: ManaCost,
     exclude: Bitboard<L::Slot>,
     plan: &Plan<L>,
+    paying: Paying<L>,
 ) -> Result<(), Full> {
     sink.together();
-    let paid = pay_whole(s, t, sink, player, cost, exclude, plan);
+    let paid = pay_whole(s, t, sink, player, cost, exclude, plan, paying);
     sink.apart();
     paid
 }
 
+/// Where a unit of a payment comes from.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+enum From {
+    /// Floating mana.
+    #[default]
+    Pool,
+    /// The mana that remembers at this place in the pool.
+    Remembered(u8),
+    /// A source's unrestricted mana ability.
+    Tap,
+    /// A source's restricted mana ability.
+    Restricted,
+}
+
 /// [`pay`], inside the group it opens.
+#[allow(clippy::too_many_arguments)]
 fn pay_whole<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -51,8 +69,12 @@ fn pay_whole<L: Layout>(
     cost: ManaCost,
     exclude: Bitboard<L::Slot>,
     plan: &Plan<L>,
+    paying: Paying<L>,
 ) -> Result<(), Full> {
-    let sources = Sources::of(s, t, player, exclude)?;
+    let sources = Sources::of(s, t, player, exclude, paying)?;
+    if sources.has_memory() {
+        return pay_with_memory(s, t, sink, player, cost, plan, paying, &sources);
+    }
     let total = cost.total(0);
     let must: u32 = plan.spend.iter().map(|&n| u32::from(n)).sum::<u32>()
         + sources
@@ -93,13 +115,115 @@ fn pay_whole<L: Layout>(
         }
     }
     let mut kinds = Default::default();
-    assign::<L>(cost, units.as_slice(), &mut kinds)?;
+    assign::<L, false>(cost, units.as_slice(), &mut kinds)?;
     for (&(unit_kinds, source, n), &kind) in units.iter().zip(kinds.iter()) {
         let kind = kind.unwrap_or_else(|| lowest_kind(unit_kinds));
         if let Some(slot) = source {
             activate(s, t, sink, slot, ManaColor::ALL[kind])?;
         }
         s.spend_mana(player, ManaColor::ALL[kind], n);
+    }
+    debug_assert_eq!(s.player(player).mana().amounts(), plan.left);
+    Ok(())
+}
+
+/// [`pay_whole`] where the plan may spend mana that remembers or tap a source for restricted
+/// mana ([`Sources::has_memory`]): each unit says where it comes from, so that restricted mana
+/// is spent as such and gives the spell its rider.
+#[cold]
+#[inline(never)]
+#[allow(clippy::too_many_arguments)]
+fn pay_with_memory<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    player: Seat,
+    cost: ManaCost,
+    plan: &Plan<L>,
+    paying: Paying<L>,
+    sources: &Sources<L>,
+) -> Result<(), Full> {
+    let total = cost.total(0);
+    let must: u32 = plan.spend.iter().map(|&n| u32::from(n)).sum::<u32>()
+        + plan.remembered.count_ones()
+        + sources
+            .classes()
+            .iter()
+            .zip(plan.taps.iter())
+            .filter(|(c, _)| c.amount == 1)
+            .map(|(_, &n)| u32::from(n))
+            .sum::<u32>();
+    let spent = spent_by_class(sources, plan, total - must);
+    // The units spent: (kinds, source slot or none for floating mana, how many), and where
+    // each comes from.
+    let mut units: L::Queue<(u8, Option<L::Slot>, u8), 64> = Default::default();
+    let mut from: L::Queue<From, 64> = Default::default();
+    for (k, &n) in plan.spend.iter().enumerate() {
+        for _ in 0..n {
+            units.push((1 << k, None, 1))?;
+            from.push(From::Pool)?;
+        }
+    }
+    for (i, &(at, kind, _)) in sources.remembered().iter().enumerate() {
+        if plan.remembered & (1 << i) != 0 {
+            units.push((1 << kind, None, 1))?;
+            from.push(From::Remembered(at))?;
+        }
+    }
+    let human = s.profile().taps_mana == Some(player);
+    for (i, c) in sources.classes().iter().enumerate() {
+        let tapped: L::Queue<L::Slot, 64> = if human {
+            human_taps(s, c, plan.taps[i])?
+        } else {
+            by_card(s, c, plan.taps[i])?
+        };
+        let how = if c.restricted {
+            From::Restricted
+        } else {
+            From::Tap
+        };
+        if c.amount == 1 {
+            for &slot in tapped.iter() {
+                units.push((c.kinds, Some(slot), 1))?;
+                from.push(how)?;
+            }
+        } else {
+            // Spread the spent units as `spent_by_class` counted them.
+            let mut rest = spent[i];
+            for (j, &slot) in tapped.iter().enumerate() {
+                let later = (tapped.len() - j - 1) as u32;
+                let here = (rest - later).min(u32::from(c.amount));
+                units.push((c.kinds, Some(slot), u8::try_from(here).unwrap_or(c.amount)))?;
+                from.push(how)?;
+                rest -= here;
+            }
+        }
+    }
+    let mut kinds = Default::default();
+    assign::<L, true>(cost, units.as_slice(), &mut kinds)?;
+    // The mana that remembers first, from the last in the pool, so that the places of the
+    // rest hold; a restricted source's mana is the last in the pool as it is spent.
+    for &how in from.iter().rev() {
+        if let From::Remembered(at) = how {
+            remembered::spend(s, t, player, usize::from(at), paying)?;
+        }
+    }
+    for ((&(unit_kinds, source, n), &kind), &how) in units.iter().zip(kinds.iter()).zip(from.iter())
+    {
+        let color = ManaColor::ALL[kind.unwrap_or_else(|| lowest_kind(unit_kinds))];
+        match (how, source) {
+            (From::Remembered(_), _) => {}
+            (From::Restricted, Some(slot)) => {
+                activate_as::<L, true>(s, t, sink, slot, color)?;
+                let last = s.player(player).remembered_mana().len() - 1;
+                remembered::spend(s, t, player, last, paying)?;
+            }
+            (_, Some(slot)) => {
+                activate_as::<L, false>(s, t, sink, slot, color)?;
+                s.spend_mana(player, color, n);
+            }
+            (_, None) => s.spend_mana(player, color, n),
+        }
     }
     debug_assert_eq!(s.player(player).mana().amounts(), plan.left);
     Ok(())
@@ -172,7 +296,9 @@ fn augment<S: SlotId>(
 /// Assigns the colored and colorless symbols of `cost` to units, each unit `(kinds, _, n)`
 /// paying `n` symbols of one kind. `kinds` gets the kind each unit is spent as, or `None` where
 /// it pays only generic mana. Kuhn's augmenting paths over the few symbols a cost has.
-fn assign<L: Layout>(
+/// `MEMORY` names [`pay_with_memory`]'s copy apart from [`pay_whole`]'s, so that each is
+/// inlined into its one caller.
+fn assign<L: Layout, const MEMORY: bool>(
     cost: ManaCost,
     units: &[(u8, Option<L::Slot>, u8)],
     kinds: &mut L::Queue<Option<usize>, 64>,
@@ -224,6 +350,9 @@ fn assign<L: Layout>(
 /// [CR 605.3b](https://yawgatog.com/resources/magic-rules/#R6053b): "An activated mana
 /// ability doesn't go on the stack, so it can't be targeted, countered, or otherwise
 /// responded to. Rather, it resolves immediately after it is activated."
+///
+/// It taps for an unrestricted mana ability that makes the mana if it has one, and for its
+/// restricted mana ability otherwise ([`remembered`]), whose mana remembers its restriction.
 pub(crate) fn activate<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -231,12 +360,25 @@ pub(crate) fn activate<L: Layout>(
     slot: L::Slot,
     color: ManaColor,
 ) -> Result<(), Full> {
+    activate_as::<L, false>(s, t, sink, slot, color)
+}
+
+/// [`activate`], for the source's restricted mana ability if `RESTRICTED`.
+fn activate_as<L: Layout, const RESTRICTED: bool>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    slot: L::Slot,
+    color: ManaColor,
+) -> Result<(), Full> {
+    let restricted = RESTRICTED;
     let (card, face) = s.definition(slot).record(t);
     // The card table refuses a card that grants a mana ability (`TableError::Granted`), so
     // the one found is the permanent's own.
     let printed = s.abilities(t, slot).find_map(|(ability, a)| match ability {
         ObjectAbility::Own(i)
-            if (is_simple(a) || is_sacrificed(a))
+            if !restricted
+                && (is_simple(a) || is_sacrificed(a))
                 && a.produces().includes(color)
                 && allowed(s, t, a, s.controller(slot), &s.words_of(slot)) =>
         {
@@ -244,6 +386,15 @@ pub(crate) fn activate<L: Layout>(
         }
         _ => None,
     });
+    if printed.is_none()
+        && (restricted || s.intrinsic_mana(t, slot) & (1 << color.index()) == 0)
+        && let Some((_, ability)) = remembered::makes(s, t, slot, color)
+    {
+        let source = s.object_ref(slot);
+        // Its only cost is {T} (CR 602.2b, CR 601.2h).
+        event::set_tapped(s, t, sink, source, true)?;
+        return remembered::add(s, t, sink, source, ability, color);
+    }
     // [CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056): a land of a basic land
     // type "has the intrinsic ability “{T}: Add [mana symbol],” even if the text box doesn't
     // actually contain that text". It is no ability of the face, so its activation names
@@ -279,25 +430,41 @@ pub(crate) fn activate<L: Layout>(
 
 /// Manual payment (the `manual_mana` flag): the floating mana and the sources, one per
 /// class, whose next unit pays toward `remaining` and leaves the rest payable.
+///
+/// Floating mana of a kind is one option, whether it is unrestricted or mana that remembers
+/// the payment accepts: [`manual_pay`] spends the unrestricted first.
 pub(crate) fn manual_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
     remaining: ManaCost,
     exclude: Bitboard<L::Slot>,
+    paying: Paying<L>,
 ) -> Result<L::Queue<Opt<L>, 64>, Full> {
-    let sources = Sources::of(s, t, player, exclude)?;
+    let sources = Sources::of(s, t, player, exclude, paying)?;
     let pool = s.player(player).mana().amounts();
     let mut out: L::Queue<Opt<L>, 64> = Default::default();
     for kind in 0..KINDS {
-        if pool[kind] == 0 || !helps(remaining, kind) {
+        if !helps(remaining, kind) {
             continue;
         }
         let mut rest = remaining;
         pay_unit(&mut rest, kind);
         let mut after = pool;
-        after[kind] -= 1;
-        if sources.units(after, &Table::filled(0)).pays(rest) {
+        let mut spent = 0;
+        if pool[kind] > 0 {
+            after[kind] -= 1;
+        } else if let Some(i) =
+            (sources.remembered().iter()).position(|&(_, k, _)| usize::from(k) == kind)
+        {
+            spent = 1 << i;
+        } else {
+            continue;
+        }
+        if sources
+            .units_left(after, &Table::filled(0), spent)
+            .pays(rest)
+        {
             out.push(Opt::Pool(ManaColor::ALL[kind]))?;
         }
     }
@@ -315,12 +482,17 @@ pub(crate) fn manual_options<L: Layout>(
             pay_unit(&mut rest, kind);
             let mut after = pool;
             after[kind] += c.amount - 1;
-            if sources.units(after, &taps).pays(rest) {
-                out.push(Opt::Mana {
-                    slot,
-                    color: ManaColor::ALL[kind],
-                })?;
+            // A source with a restricted class names it by its kind: [`activate`] taps for
+            // the unrestricted ability if it makes the kind.
+            if (c.restricted && classes_make(&sources, c, kind))
+                || !sources.units(after, &taps).pays(rest)
+            {
+                continue;
             }
+            out.push(Opt::Mana {
+                slot,
+                color: ManaColor::ALL[kind],
+            })?;
         }
     }
     Ok(out)
@@ -336,7 +508,9 @@ pub(crate) fn manual_pay<L: Layout>(
     player: Seat,
     mut remaining: ManaCost,
     option: Opt<L>,
+    paying: Paying<L>,
 ) -> Result<ManaCost, Full> {
+    let made = s.player(player).remembered_mana().len();
     let color = match option {
         Opt::Pool(color) => color,
         Opt::Mana { slot, color } => {
@@ -348,9 +522,28 @@ pub(crate) fn manual_pay<L: Layout>(
         }
         _ => unreachable!("a manual payment option"),
     };
-    s.spend_mana(player, color, 1);
+    let pool = s.player(player).remembered_mana().len();
+    if pool > made {
+        // A restricted ability made it: the mana that remembers, last in the pool.
+        remembered::spend(s, t, player, pool - 1, paying)?;
+    } else if s.player(player).mana()[color] > 0 {
+        s.spend_mana(player, color, 1);
+    } else {
+        let accepted = remembered::accepted_entries(s, t, player, paying);
+        let &(at, _) = (accepted.iter())
+            .find(|&&(_, kind)| usize::from(kind) == color.index())
+            .expect("mana of the kind an option names");
+        remembered::spend(s, t, player, usize::from(at), paying)?;
+    }
     pay_unit(&mut remaining, color.index());
     Ok(remaining)
+}
+
+/// Whether the class with the same member as the restricted class `c` makes `kind`: then that
+/// class's option names the permanent tapped for it.
+fn classes_make<L: Layout>(sources: &Sources<L>, c: &Class<L>, kind: usize) -> bool {
+    c.twin()
+        .is_some_and(|twin| sources.classes()[usize::from(twin)].kinds & (1 << kind) != 0)
 }
 
 /// The standalone mana activations offered at priority, under manual payment or to the player
@@ -398,8 +591,14 @@ fn add_activations<L: Layout>(
     sources: Bitboard<L::Slot>,
 ) {
     // Candidates are listed in the candidate order, which a `Choice` counts in.
+    let restricted = remembered::restricted_sources(s, t, player).unwrap_or_default();
     for slot in s.in_candidate_order(sources) {
-        let Some((kinds, ..)) = source(s, t, player, slot, s.derived(slot)) else {
+        // Its restricted mana too: the mana remembers what it may be spent on.
+        let more = (restricted.iter().find(|r| r.slot == slot)).map_or(0, |r| r.kinds);
+        let Some(kinds) = source(s, t, player, slot, s.derived(slot))
+            .map(|(kinds, ..)| kinds | more)
+            .or((more != 0).then_some(more))
+        else {
             continue;
         };
         for kind in (0..KINDS).filter(|&k| kinds & (1 << k) != 0) {

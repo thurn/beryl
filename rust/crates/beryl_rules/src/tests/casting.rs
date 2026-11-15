@@ -397,7 +397,17 @@ fn a_modal_double_faced_card_is_cast_by_its_spell_face_or_played_by_its_land_fac
     assert_eq!(g.s.object(stupor).face(), FaceIx::BACK);
     // Its land face is a source of blue: with the two Islands, {U}{U}{U}.
     let uuu = crate::card::ManaCost::new(0, [0, 3, 0, 0, 0, 0]);
-    assert!(crate::mana::payable(&g.s, &g.t, g.me, uuu, crate::Bitboard::EMPTY).unwrap());
+    assert!(
+        crate::mana::payable(
+            &g.s,
+            &g.t,
+            g.me,
+            uuu,
+            crate::Bitboard::EMPTY,
+            crate::mana::Paying::NOTHING
+        )
+        .unwrap()
+    );
     assert_eq!(g.s.object(bear).zone(), Zone::Battlefield);
 }
 

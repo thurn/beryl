@@ -331,6 +331,8 @@ def taps(
     )
     if found is None:
         return []
+    if any(cards.restricted_mana(name) for name in found):
+        raise Unsupported("a payment tapping a source of restricted mana")
     if action["action"] == "Activate" and action["card"] in found:
         found.remove(cast(str, action["card"]))
     land_types_change = cards.change_land_types()

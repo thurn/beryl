@@ -670,11 +670,20 @@ Built by by-bajq.3.10:
   does so by granting an ability to cards in a graveyard is read through group
   4's list. `cast::legal::cast_sources` scans the zone only while such a rule is
   in force.
-- **Mana with memory.** A pool gains up to four entries of mana that remembers a
-  restriction and a rider, both numbered by the game as rule changes are. The
-  solver treats each as a class of its own. Spent on a spell, the rider becomes
-  a rule change on that spell. A capability keeps the entries out of every other
-  game.
+- **Mana with memory** (built by by-bajq.7.4). A mana ability may restrict its
+  mana (`ManaRestriction`: the spells it casts, "of the chosen type", a rider).
+  The game numbers restrictions as it numbers rule changes, and the rider is a
+  rule change it numbers too ("that spell can't be countered" is
+  `Governed::Counter`, `RuleKind::CantBeCountered`). A pool gains up to four
+  entries of mana that remembers: a kind, a restriction, the chosen type
+  captured as the mana is made, and the source's card. A payment says what it is
+  for (`mana::Paying`), and only a spell's payment reads restrictions. A source
+  of restricted mana the spell accepts is a class of its own, linked to the
+  class of its unrestricted mana, and a plan that spends restricted mana with a
+  rider differs in outcome from one that doesn't, so both are offered (D7).
+  Spent on a spell, the rider becomes `Continuous::Rule` on that spell, which
+  `actions::counter` asks. `Capability::RemembersMana` keeps all of it out of
+  every other game.
 - **A player.** "Your life total can't change" and protection for a player are
   rule changes on that player. The life mutators, the cost check and the
   targeting check each ask the one question.

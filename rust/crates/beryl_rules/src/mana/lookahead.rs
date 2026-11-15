@@ -94,7 +94,7 @@ pub(super) fn still_payable<L: Layout>(
             // The permanent taps for the ability, so it cannot also make mana for it.
             let mut without = plan.taps.clone();
             for (i, c) in sources.classes().iter().enumerate() {
-                if c.members.contains(slot) {
+                if c.members.contains(slot) && !c.is_twin() {
                     without[i] += 1;
                 }
             }
@@ -474,10 +474,9 @@ pub(super) fn looking_ahead<L: Layout>(
         best.push(outlook(sources, k, &ahead, &creatures))?;
     }
     each_plan(cost, s.player(player).mana().amounts(), sources, &mut |p| {
-        let sacrificed = sources.sacrificed(p);
-        if let Some(i) = kept
-            .iter()
-            .position(|k| k.left == p.left && sources.sacrificed(k) == sacrificed)
+        let outcome = sources.outcome(p);
+        if let Some(i) =
+            (kept.iter()).position(|k| k.left == p.left && sources.outcome(k) == outcome)
         {
             let o = outlook(sources, p, &ahead, &creatures);
             if o > best.as_slice()[i] {

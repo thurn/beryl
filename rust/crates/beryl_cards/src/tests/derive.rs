@@ -16,6 +16,12 @@ const CUSTOM: &[&str] = &[];
 /// a generated scenario exercises fails too, so the list stays current.
 const UNREACHED: &[(&str, &str)] = &[
     (
+        "Cavern of Souls: ability 2 (Mana)",
+        "its mana pays only for a creature spell of the type the land chose as it entered, and a \
+         generated position puts the land onto the battlefield having chosen none; the card's \
+         hand-written scenarios play it, choose Human and cast a Human with that mana",
+    ),
+    (
         "Bloodghast: ability 0 (Static)",
         "it stops the card blocking, and a generated scenario casts the card and never has an \
          opponent attack; the card's hand-written scenarios have one attack into it",

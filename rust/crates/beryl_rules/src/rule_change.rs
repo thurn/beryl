@@ -88,7 +88,8 @@ fn spells_of(rule: &RuleChange) -> Filter {
         Governed::CastSpells(filter) => filter,
         Governed::ActivateLoyaltyAbilities(_)
         | Governed::Block(_)
-        | Governed::ActivateAbilities { .. } => unreachable!("a rule change about casting"),
+        | Governed::ActivateAbilities { .. }
+        | Governed::Counter(_) => unreachable!("a rule change about casting"),
     }
 }
 
@@ -96,7 +97,7 @@ fn spells_of(rule: &RuleChange) -> Filter {
 /// is read of a spell a player has yet to cast. The card table has only filters read this
 /// way (`beryl_kernel`'s `rule_changes::RuleKind::of`).
 #[inline]
-fn accepts(filter: Filter, face: &Face) -> bool {
+pub(crate) fn accepts(filter: Filter, face: &Face) -> bool {
     match filter {
         Filter::Any => true,
         Filter::Types(types) => face.types.intersects(types),
@@ -230,6 +231,55 @@ pub(crate) fn cant_block<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) 
     own_rule_holds(s, t, slot, RuleKind::CantBlock)
 }
 
+/// Whether the spell `spell` can't be countered ([CR 701.6a]): "To counter a spell or ability
+/// means to cancel it, removing it from the stack." A prohibition beats what would counter
+/// it ([CR 101.2]): "When a rule or effect allows or directs something to happen, and another
+/// effect states that it can't happen, the "can't" effect takes precedence." Its own static
+/// ability may say so, or the mana spent on it ([CR 106.6]): "Some spells or abilities that
+/// produce mana ... have an additional effect that affects the spell or ability that mana is
+/// spent on". One test while no card of the game says it.
+///
+/// [CR 701.6a]: https://yawgatog.com/resources/magic-rules/#R7016a
+/// [CR 101.2]: https://yawgatog.com/resources/magic-rules/#R1012
+/// [CR 106.6]: https://yawgatog.com/resources/magic-rules/#R1066
+#[inline]
+pub(crate) fn cant_be_countered<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    spell: crate::state::ObjectRef<L>,
+) -> bool {
+    let of_kind = t.rules_of(RuleKind::CantBeCountered);
+    if of_kind.is_empty() {
+        return false;
+    }
+    countered_never(s, t, spell, of_kind)
+}
+
+/// [`cant_be_countered`] in a game whose cards can say it: whether the spell is on the stack
+/// and an effect on it, or a static ability of its own whose condition holds, says it.
+#[cold]
+#[inline(never)]
+fn countered_never<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    spell: crate::state::ObjectRef<L>,
+    of_kind: Rules,
+) -> bool {
+    let on_stack = (s.stack().iter()).any(|entry| entry.spell() == Some(spell));
+    if !on_stack {
+        return false;
+    }
+    if !s.effect_rules_on(spell).common(of_kind).is_empty() {
+        return true;
+    }
+    let own = s.definition(spell.slot).rules(t).common(of_kind);
+    own.iter().any(|id| match t.rule_condition(id) {
+        None => true,
+        Some(condition) => interpret::without_a_scene(s, spell.slot, condition)
+            .unwrap_or_else(|| in_a_scene(s, t, spell.slot, id)),
+    })
+}
+
 /// Whether a static ability of the permanent in `slot` whose condition holds makes a rule
 /// change of `kind`, one asked of the permanent with the ability ([CR 604.1]): "Static
 /// abilities do something all the time rather than being activated or triggered." With no
@@ -239,7 +289,9 @@ pub(crate) fn cant_block<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) 
 /// change that is asked of a permanent.
 ///
 /// [CR 604.1]: https://yawgatog.com/resources/magic-rules/#R6041
-#[inline]
+// Out of line, as the compiler had it before a second rule kind was asked of an object: inlined
+// into the decision builder and the blocker check it costs the rollout benchmark more.
+#[inline(never)]
 fn own_rule_holds<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot, kind: RuleKind) -> bool {
     let of_kind = t.rules_of(kind);
     if of_kind.is_empty() {

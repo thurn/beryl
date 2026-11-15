@@ -134,6 +134,12 @@ impl Player {
         self.answers(DecisionKind::ChooseObject, Pick::Number { n: u8::MAX })
     }
 
+    /// Chooses the value named `name`, as "choose a creature type" asks: "Human", or
+    /// "another creature type" for one no card of the game names.
+    pub const fn chooses_named(self, name: &'static str) -> Action {
+        self.answers(DecisionKind::ChooseObject, Pick::Named { name })
+    }
+
     /// Chooses the value of X.
     pub const fn x(self, n: u8) -> Action {
         self.answers(DecisionKind::X, Pick::Number { n })

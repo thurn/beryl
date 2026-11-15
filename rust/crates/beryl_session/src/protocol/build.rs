@@ -182,7 +182,13 @@ pub(super) fn pending_attackers<L: Layout>(
 
 fn player_state<L: Layout>(t: &GameTable, obs: Observation<'_, L>, p: Seat) -> PlayerState {
     let player = obs.player(p);
-    let [white, blue, black, red, green, colorless] = player.mana().amounts().map(u32::from);
+    // Mana that remembers what it may be spent on counts as mana of its kind (CR 106.6: "This
+    // doesn't affect the mana's type").
+    let mut amounts = player.mana().amounts().map(u32::from);
+    for mana in player.remembered_mana() {
+        amounts[mana.color.index()] += 1;
+    }
+    let [white, blue, black, red, green, colorless] = amounts;
     PlayerState {
         life: player.life().into(),
         mana: ManaPool {

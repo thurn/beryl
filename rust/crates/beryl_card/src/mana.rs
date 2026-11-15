@@ -1,5 +1,8 @@
 //! Mana: costs, the kinds of mana, and what a mana ability produces.
 
+use crate::continuous::RuleChange;
+use crate::filter::Filter;
+
 /// A mana cost: generic mana plus colored and colorless symbols, and any {X}.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct ManaCost {
@@ -149,6 +152,27 @@ impl ManaSet {
     pub fn includes(self, color: ManaColor) -> bool {
         self.colors & (1 << color as u8) != 0
     }
+}
+
+/// What the mana a mana ability makes may be spent on, and what it does to the spell it pays
+/// for ([CR 106.6]): "Some spells or abilities that produce mana restrict how that mana can be
+/// spent, have an additional effect that affects the spell or ability that mana is spent on,
+/// ... This doesn't affect the mana's type." "Spend this mana only to cast a creature spell
+/// of the chosen type, and that spell can't be countered" is the creature spells, of the
+/// chosen type, with "can't be countered" as the rider.
+///
+/// [CR 106.6]: https://yawgatog.com/resources/magic-rules/#R1066
+#[derive(Clone, Copy, Debug)]
+pub struct ManaRestriction {
+    /// The spells it may be spent to cast, read of each spell's own characteristics.
+    pub cast: Filter,
+    /// Whether the spell must also have the creature type the mana's source chose as it
+    /// entered ([`crate::Replacement::choose_as_enters`]). The type is remembered with the
+    /// mana as it is made: the source may be gone by the time the mana is spent.
+    pub of_chosen_type: bool,
+    /// What it does to the spell it is spent on: a rule change on that spell, for as long as
+    /// the spell is on the stack.
+    pub rider: Option<&'static RuleChange>,
 }
 
 /// A mana cost in Scryfall's notation, parsed at compile time: `mana("{1}{U}")`. For costs

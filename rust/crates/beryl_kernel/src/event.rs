@@ -374,8 +374,9 @@ pub struct Sink<L: Layout = Small> {
     /// The values the permanents of the batch of moves under way chose as they enter
     /// ([`crate::Memo::Chosen`]), from their choice, made before any of them moves, until
     /// they have entered. Here rather than beside each move, which every zone move would pay
-    /// to carry; empty, and never allocated, in a game with no card that chooses.
-    pub chosen: Vec<(L::Slot, ChosenValue<L>)>,
+    /// to carry. A fixed list, so that no move allocates (architecture §18): a fifth value in
+    /// one batch is [`crate::fixed::Full`].
+    pub chosen: L::Queue<(L::Slot, ChosenValue<L>), 4>,
     /// The replacement effects of permanents that have applied to the draw being made, or to
     /// a draw that replaced it, each as its permanent and the index of its ability: a draw
     /// made by their instructions is a modified event, which they do not apply to again
@@ -490,7 +491,7 @@ impl<L: Layout> Sink<L> {
             revealed: crate::relayout::bits(self.revealed),
             // Between the engine's calls no run is under way, and no draw is being made.
             asking: Asking::default(),
-            chosen: Vec::new(),
+            chosen: Default::default(),
             applied: Default::default(),
         }
     }

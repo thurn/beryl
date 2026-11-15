@@ -1,9 +1,11 @@
-//! The template of a change to a rule of the game ([`RuleChange`]).
+//! The templates of a change to a rule of the game ([`RuleChange`]) and of a restriction on
+//! the mana a mana ability makes ([`ManaRestriction`]).
 
 use super::Ctx;
 use super::filters::Kind;
 use crate::continuous::{Governed, Named, RuleChange, When};
 use crate::effect::Players;
+use crate::mana::ManaRestriction;
 
 impl Ctx {
     /// A change to a rule of the game, such as "each opponent can cast spells only any time
@@ -47,6 +49,14 @@ impl Ctx {
                     _ => format!("{sources} can be activated only at a changed time"),
                 };
             }
+            // "This spell can't be countered": of the spells, not of who would counter them.
+            Governed::Counter(objects) => {
+                let spells = self.objects(objects);
+                return match rule.when {
+                    When::Never => format!("{spells} can't be countered"),
+                    _ => format!("{spells} can be countered only at a changed time"),
+                };
+            }
         };
         match (rule.when, rule.what) {
             (When::Never, _) => format!("{who} can't {what}"),
@@ -58,5 +68,30 @@ impl Ctx {
             }
             (When::AsInstant, _) => format!("{who} may {what} as though they had flash"),
         }
+    }
+
+    /// "Spend this mana only to cast a creature spell of the chosen type, and that spell
+    /// can't be countered." ([CR 106.6]).
+    ///
+    /// [CR 106.6]: https://yawgatog.com/resources/magic-rules/#R1066
+    pub(super) fn spend_only(&mut self, restriction: &ManaRestriction) -> String {
+        let spell = self
+            .noun(restriction.cast, Kind::Spell)
+            .indefinite(Kind::Spell);
+        let chosen = if restriction.of_chosen_type {
+            " of the chosen type"
+        } else {
+            ""
+        };
+        let rider = match restriction.rider {
+            Some(&RuleChange {
+                what: Governed::Counter(_),
+                when: When::Never,
+                ..
+            }) => ", and that spell can't be countered",
+            Some(_) => ", and that spell is changed",
+            None => "",
+        };
+        format!("Spend this mana only to cast {spell}{chosen}{rider}.")
     }
 }

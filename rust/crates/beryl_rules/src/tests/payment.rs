@@ -324,6 +324,7 @@ fn pay_and_check(
         cost,
         Bitboard::EMPTY,
         plan,
+        crate::mana::Paying::NOTHING,
     )
     .unwrap();
     // CR 601.2h: the cost is paid in full, and only from the mana the tapped and sacrificed
@@ -391,7 +392,15 @@ fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
         );
         let expected = brute_force_pays(cost, pool, &names);
         let context = format!("{cost:?} from {pool:?} and {names:?}");
-        let payable = mana::payable(&g.s, &g.t, g.me, cost, Bitboard::EMPTY).unwrap();
+        let payable = crate::mana::payable(
+            &g.s,
+            &g.t,
+            g.me,
+            cost,
+            Bitboard::EMPTY,
+            crate::mana::Paying::NOTHING,
+        )
+        .unwrap();
         assert_eq!(payable, expected, "{context}");
         for greedy in [false, true] {
             let plans = mana::plans(
@@ -402,6 +411,7 @@ fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
                 cost,
                 Bitboard::EMPTY,
                 greedy,
+                crate::mana::Paying::NOTHING,
             )
             .unwrap();
             assert_eq!(!plans.is_empty(), payable, "{context}");

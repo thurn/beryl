@@ -59,6 +59,10 @@ pub enum Capability {
     /// ([`beryl_card::Objects::Everywhere`]), so the recompute lists such effects for the
     /// reads of characteristics off the battlefield ([`crate::elsewhere`]).
     ReachesElsewhere,
+    /// A card has a mana ability whose mana is restricted ([`beryl_card::Ability::spend`]),
+    /// so pools may hold mana that remembers ([`crate::mana_memory`]) and the mana solver
+    /// looks for it.
+    RemembersMana,
 }
 
 impl Capability {
@@ -98,6 +102,9 @@ impl Capability {
                 && matches!(spec.affected, beryl_card::Objects::Everywhere(_))
             {
                 found |= Capability::ReachesElsewhere.bit();
+            }
+            if a.spend().is_some() {
+                found |= Capability::RemembersMana.bit();
             }
             if a.cost().is_loyalty() {
                 found |= Capability::LoyaltyActivated.bit();

@@ -228,6 +228,7 @@ pub(super) fn spell_payable<L: Layout>(
 /// `objects` each rather than with mana (CR 701.67a), and with none of `exclude`. An object
 /// that makes no mana now pays as much as it ever can, so those pay first; a mana source
 /// pays at least as much tapped for mana, so it never needs to.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn payable_with_substitutes<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -236,6 +237,7 @@ pub(super) fn payable_with_substitutes<L: Layout>(
     most: u8,
     objects: Bitboard<L::Slot>,
     mut exclude: Bitboard<L::Slot>,
+    paying: mana::Paying<L>,
 ) -> bool {
     let free = objects & !exclude & !funds.sources(exclude);
     // Any of them do: each pays one generic mana, and none is a source the funds count.
@@ -246,7 +248,7 @@ pub(super) fn payable_with_substitutes<L: Layout>(
         cost.generic -= 1;
         exclude.insert(slot);
     }
-    funds.pays(s, t, cost, exclude)
+    funds.pays_for(s, t, cost, exclude, paying)
 }
 
 /// Does `action` to the source of the ability `entry`, as the part of its cost that says so.
@@ -378,7 +380,8 @@ fn substitute_options<L: Layout>(
         // Candidates are listed in the candidate order, which a `Choice` counts in.
         for slot in s.in_candidate_order(collapse(s, able)) {
             let rest = Bitboard::single(slot);
-            if payable_with_substitutes(s, t, &funds, fewer, left - 1, able, rest) {
+            let paying = mana::Paying::entry(t, entry);
+            if payable_with_substitutes(s, t, &funds, fewer, left - 1, able, rest, paying) {
                 objects.push(Opt::Object(slot))?;
             }
         }
@@ -391,7 +394,14 @@ fn substitute_options<L: Layout>(
     if objects.is_empty() && !manual_mana {
         return Ok(out);
     }
-    if mana::payable(s, t, c.player, cost, Bitboard::EMPTY)? {
+    if mana::payable(
+        s,
+        t,
+        c.player,
+        cost,
+        Bitboard::EMPTY,
+        mana::Paying::entry(t, entry),
+    )? {
         out.push(Opt::Done)?;
     }
     for &o in objects.iter() {

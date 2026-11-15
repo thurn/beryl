@@ -137,7 +137,7 @@ fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Resul
         let cost = ManaCost { x: 0, ..cost };
         let expected = reference_pays(units.as_slice(), cost);
         let none = Bitboard::EMPTY;
-        let Ok(prefilter) = mana::payable(s, t, player, cost, none) else {
+        let Ok(prefilter) = mana::payable(s, t, player, cost, none, mana::Paying::NOTHING) else {
             continue;
         };
         check(
@@ -151,7 +151,16 @@ fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Resul
             at,
         )?;
         for greedy in [false, true] {
-            let plans = mana::plans(s, t, &mut Sink::default(), player, cost, none, greedy);
+            let plans = mana::plans(
+                s,
+                t,
+                &mut Sink::default(),
+                player,
+                cost,
+                none,
+                greedy,
+                mana::Paying::NOTHING,
+            );
             if let Ok(plans) = plans {
                 check(
                     plans.is_empty() != expected,
@@ -171,8 +180,8 @@ const UNITS: usize = 64;
 /// Units of mana, each as the set of kinds it may be.
 type Units = Fixed<u8, UNITS>;
 
-/// The units of mana `player` could make now, each as the set of kinds it may be: their
-/// floating mana, and one tap of each untapped permanent they control with a mana ability
+/// The units of mana `player` could make now for a cost of no spell, each as the set of kinds
+/// it may be: their unrestricted floating mana, and one tap of each untapped permanent they control with a mana ability
 /// whose only costs are {T} and perhaps sacrificing it, read from its face up. `None` where a
 /// permanent's mana abilities make different amounts, which units cannot say, or where there
 /// are more than [`UNITS`].
@@ -218,8 +227,11 @@ fn reference_units<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Opti
                         CostPart::This(CostAction::Tap | CostAction::Sacrifice)
                     )
                 });
+            // The costs checked are for no spell, which restricted mana pays none of
+            // (CR 106.6).
             if a.kind() != AbilityKind::Mana
                 || !tap_only
+                || a.spend().is_some()
                 || !controls(s, t, player, a, &s.words_of(slot))
             {
                 continue;

@@ -466,3 +466,17 @@ fixed in the same session. Newest first.
   `Inputs` bit and a mutator that checks it, and a test of such a read changes
   the field through the mutator the rules use, never an arranger that marks the
   results stale itself.
+
+- **Choosing a creature type as a permanent entered allocated on the heap.** The
+  allocation test (`beryl_search/tests/allocations.rs`), which plays random
+  games from fuzz decks, counted four allocations once Cavern of Souls joined
+  the card pool: it was the first card to choose a creature type as it enters.
+  Two places added for chosen values allocated: `ChosenValue::candidates` boxed
+  the iterator of each kind (`Box<dyn Iterator>`), and `Sink::chosen`, the
+  values a batch of entering permanents chose, was a `Vec`. No test reached
+  either with a card that chooses a creature type, so the allocation-free hot
+  path (§18) silently broke. Fixed: the candidates chain one iterator of each
+  kind, all but one empty, and `Sink::chosen` is a fixed queue of four, `Full`
+  past it. Prevention: a new kind of choice gets a card in the fuzz pool in the
+  change that adds it, so the allocation test plays it; and lists on the event
+  sink are fixed-capacity queues, as the kernel's other lists are.

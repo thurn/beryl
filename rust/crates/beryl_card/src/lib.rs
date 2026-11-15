@@ -61,7 +61,7 @@ pub use effect::{
 pub use filter::Filter;
 pub use ids::{Seat, TurnStep, Zone, ZoneSet};
 pub use index::{AbilityIx, CastingIx, ExceptIx, GrantIx, ModeIx, SpecIx};
-pub use mana::{INTRINSIC_MANA, ManaColor, ManaCost, ManaSet, mana};
+pub use mana::{INTRINSIC_MANA, ManaColor, ManaCost, ManaRestriction, ManaSet, mana};
 pub use prompt::{Part, Place, Prompt, Purpose, Shape};
 pub use target::{Takes, TargetKind, TargetSpec};
 pub use trigger::{Subject, Trigger, TriggerEvent};
@@ -76,9 +76,9 @@ pub mod prelude {
         Ability, Amount, BasicLandTypes, CardDef, CastTerms, CastingKind, CastingOption, Castings,
         ChosenKind, Colors, Comparison, Condition, CopyChange, CopyException, Cost, CostAction,
         CostPart, CounterKind, Duration, Effect, Face, FaceIx, Filter, Found, Governed, Keywords,
-        LayerSpec, LibraryOrder, LibraryPosition, ManaColor, ManaCost, ManaSet, Modification,
-        Named, Objects, Place, Players, Prevention, Prompt, Protection, Purpose, Recipients,
-        Replacement, RuleChange, Subtype, Subtypes, Supertypes, Taken, TargetKind, TargetSpec,
-        Trigger, TriggerEvent, TurnStep, Types, When, Zone, card, mana,
+        LayerSpec, LibraryOrder, LibraryPosition, ManaColor, ManaCost, ManaRestriction, ManaSet,
+        Modification, Named, Objects, Place, Players, Prevention, Prompt, Protection, Purpose,
+        Recipients, Replacement, RuleChange, Subtype, Subtypes, Supertypes, Taken, TargetKind,
+        TargetSpec, Trigger, TriggerEvent, TurnStep, Types, When, Zone, card, mana,
     };
 }

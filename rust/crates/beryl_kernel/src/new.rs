@@ -27,6 +27,7 @@ fn new_player<L: Layout>() -> Player<L> {
     Player {
         life: 20,
         mana: ManaPool::default(),
+        remembered: Default::default(),
         lands_played: 0,
         drew_from_empty: false,
         mulligans: 0,

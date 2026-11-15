@@ -60,17 +60,26 @@ impl<L: Layout> ChosenValue<L> {
     /// order a prompt lists them: the five colors; the creature types the game numbers, then
     /// [`ANOTHER`]; the names of the game's cards in game order, then [`ANOTHER`].
     pub fn candidates(t: &GameTable, kind: ChosenKind) -> impl Iterator<Item = u8> + '_ {
-        let numbers: Box<dyn Iterator<Item = u8> + '_> = match kind {
-            ChosenKind::Color => Box::new(0..5),
-            ChosenKind::CreatureType => Box::new(t.subtypes().creature_types().map(|(n, _)| n)),
-            // A layout whose card index is wider than a byte numbers a name past ANOTHER; no
-            // pair of decklists gives a game that many cards.
-            ChosenKind::CardName => Box::new(
-                (t.names().iter()).filter_map(|&i| u8::try_from(i).ok().filter(|&n| n < ANOTHER)),
-            ),
-        };
+        // One iterator of each kind, all but one empty, so that no prompt allocates: a decision
+        // is built on the hot path (architecture §18).
+        let colors = (kind == ChosenKind::Color)
+            .then_some(0..5)
+            .into_iter()
+            .flatten();
+        let types = (kind == ChosenKind::CreatureType)
+            .then(|| t.subtypes().creature_types().map(|(n, _)| n))
+            .into_iter()
+            .flatten();
+        // A layout whose card index is wider than a byte numbers a name past ANOTHER; no
+        // pair of decklists gives a game that many cards.
+        let names = (kind == ChosenKind::CardName)
+            .then(|| {
+                (t.names().iter()).filter_map(|&i| u8::try_from(i).ok().filter(|&n| n < ANOTHER))
+            })
+            .into_iter()
+            .flatten();
         let another = (kind != ChosenKind::Color).then_some(ANOTHER);
-        numbers.chain(another)
+        colors.chain(types).chain(names).chain(another)
     }
 
     /// The value of `kind` that candidate number `n` stands for, if any

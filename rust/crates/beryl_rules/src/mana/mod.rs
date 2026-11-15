@@ -18,6 +18,7 @@ mod add;
 mod lookahead;
 mod pay;
 mod pool;
+mod remembered;
 mod solver;
 mod sources;
 mod units;
@@ -34,6 +35,7 @@ pub(crate) use pay::{
     activate, manual_options, manual_pay, pay, standalone_options, waterbend_mana_options,
 };
 pub(crate) use pool::{Funds, payable};
+pub(crate) use remembered::Paying;
 #[cfg(test)]
 pub(crate) use solver::Plan;
 pub(crate) use solver::plans;

@@ -143,10 +143,16 @@ pub enum RuleKind {
     ///
     /// [CR 602.5]: https://yawgatog.com/resources/magic-rules/#R6025
     CantActivateNamed,
+    /// The spell can't be countered ([CR 701.6a]): "To counter a spell or ability means to
+    /// cancel it, removing it from the stack." Asked of the spell: its own static ability
+    /// says it, or the mana spent on it did ([`beryl_card::ManaRestriction::rider`]).
+    ///
+    /// [CR 701.6a]: https://yawgatog.com/resources/magic-rules/#R7016a
+    CantBeCountered,
 }
 
 impl RuleKind {
-    const COUNT: usize = 5;
+    const COUNT: usize = 6;
 
     /// The kind of change `rule` is, or the part of it no code reads.
     pub fn of(rule: &RuleChange) -> Result<RuleKind, Unchecked> {
@@ -202,13 +208,24 @@ impl RuleKind {
                     Err(Unchecked::Players)
                 }
             }
+            // Whoever would counter it, the change is asked of the spell, and is for every
+            // player or for nobody.
+            (Governed::Counter(Objects::This), When::Never) => {
+                if matches!(rule.players, Players::EachPlayer) {
+                    Ok(RuleKind::CantBeCountered)
+                } else {
+                    Err(Unchecked::Players)
+                }
+            }
             // Other permanents' loyalty abilities or blocks, a restriction to the timing the
-            // rules have already, a change to when a creature blocks, and mana abilities or
-            // the timing of named sources' abilities.
+            // rules have already, a change to when a creature blocks, mana abilities or the
+            // timing of named sources' abilities, and countering spells other than the one it
+            // is on.
             (
                 Governed::ActivateLoyaltyAbilities(_)
                 | Governed::Block(_)
-                | Governed::ActivateAbilities { .. },
+                | Governed::ActivateAbilities { .. }
+                | Governed::Counter(_),
                 _,
             ) => Err(Unchecked::Rule),
         }
@@ -381,9 +398,26 @@ pub(crate) fn number(def: &CardDef, rules: &mut RuleChanges) -> Result<Replaces,
     for face in def.faces {
         for ability in face.abilities.iter().chain(face.grants) {
             mask |= named_by(ability, rules)?;
+            if let Some(rider) = ability.spend().and_then(|restriction| restriction.rider) {
+                number_rider(rider, rules)?;
+            }
         }
     }
     Ok(mask)
+}
+
+/// Numbers the rider of a mana ability's restriction, a rule change the mana starts on the
+/// spell it is spent on ([CR 106.6]): "Some spells or abilities that produce mana ... have an
+/// additional effect that affects the spell or ability that mana is spent on". So it is one
+/// asked of an object.
+///
+/// [CR 106.6]: https://yawgatog.com/resources/magic-rules/#R1066
+fn number_rider(rider: &'static RuleChange, rules: &mut RuleChanges) -> Result<(), Unchecked> {
+    if RuleKind::of(rider)?.of_players() {
+        return Err(Unchecked::Rule);
+    }
+    rules.number(rider)?;
+    Ok(())
 }
 
 /// Numbers the rule change `ability` names, if it names one, and gives

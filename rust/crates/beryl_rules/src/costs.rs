@@ -44,8 +44,14 @@ pub fn may_pay<L: Layout>(
     prompt: Prompt,
 ) -> Result<bool, Stop> {
     let none = Bitboard::EMPTY;
-    if !mana::payable(game.state, game.table, player, cost, none)?
-        || !choices::yes_no(game, resolution, player, prompt.cost(cost), none)?
+    if !mana::payable(
+        game.state,
+        game.table,
+        player,
+        cost,
+        none,
+        mana::Paying::NOTHING,
+    )? || !choices::yes_no(game, resolution, player, prompt.cost(cost), none)?
     {
         return Ok(false);
     }
@@ -76,12 +82,20 @@ pub fn pay<L: Layout>(
     if game.state.profile().payment == Payment::Manual {
         let mut remaining = cost;
         while !remaining.is_zero() {
-            let options = mana::manual_options(game.state, game.table, player, remaining, none)?;
+            let options = mana::manual_options(
+                game.state,
+                game.table,
+                player,
+                remaining,
+                none,
+                mana::Paying::NOTHING,
+            )?;
             let (options, step) = (options.as_slice(), mana.cost(remaining));
             let option = choices::pay(game, resolution, player, options, step)?;
             let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
             sink.enter_action(player);
-            let left = mana::manual_pay(s, t, sink, player, remaining, option);
+            let left =
+                mana::manual_pay(s, t, sink, player, remaining, option, mana::Paying::NOTHING);
             sink.leave();
             remaining = left?;
         }
@@ -89,7 +103,16 @@ pub fn pay<L: Layout>(
     }
     let greedy = game.state.profile().payment == Payment::Greedy;
     let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
-    let plans = mana::plans(s, t, sink, player, cost, none, greedy)?;
+    let plans = mana::plans(
+        s,
+        t,
+        sink,
+        player,
+        cost,
+        none,
+        greedy,
+        mana::Paying::NOTHING,
+    )?;
     let mut opts: L::Queue<Opt<L>, 64> = Default::default();
     for i in 0..plans.len() {
         opts.push(Opt::Plan(index::<L>(i)))?;
@@ -101,7 +124,7 @@ pub fn pay<L: Layout>(
     let plan = &plans.as_slice()[Into::<usize>::into(i)];
     let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
     sink.enter_action(player);
-    let paid = mana::pay(s, t, sink, player, cost, none, plan);
+    let paid = mana::pay(s, t, sink, player, cost, none, plan, mana::Paying::NOTHING);
     sink.leave();
     Ok(paid?)
 }

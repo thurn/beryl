@@ -391,7 +391,7 @@ fn entering<L: Layout>(
             }
             Rewrite::Choose(kind) => {
                 let value = choose_value(s, t, sink, slot, controller, kind)?;
-                sink.chosen.push((slot, value));
+                sink.chosen.push((slot, value))?;
             }
             // The card table holds no other rewrite of entering.
             Rewrite::None
