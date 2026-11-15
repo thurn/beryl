@@ -1,0 +1,152 @@
+//! Screens: what the flat layer shows on each of the web interface's routes, and the sheets
+//! that open over them (docs/beryl-3d.md, "The flat layer"). `screen` is one match that calls
+//! one function per file, so each screen is built in its own file.
+
+mod bug_report;
+mod gallery;
+mod game;
+mod game_over;
+mod opening;
+mod settings;
+mod start;
+mod table;
+mod testing;
+
+use beryl_protocol::PlayerView;
+use beryl_protocol::prompt::PromptView;
+use beryl_protocol::protocol::{OutcomeView, Side, Status};
+
+use crate::element::Element;
+use crate::frame::ElementId;
+use crate::settings::Settings;
+use crate::table::Window;
+
+/// A screen of the client: the web interface's routes (`Main` in `ui/src/App.tsx`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Screen {
+    /// The start screen, where a game is started.
+    Start,
+    /// A game, from its opening hand to its end.
+    Game,
+    /// The manual table, where both players move cards by hand.
+    Table,
+    /// The card gallery.
+    Gallery,
+    /// The testing screen.
+    Testing,
+}
+
+impl Screen {
+    pub const ALL: [Self; 5] = [
+        Self::Start,
+        Self::Game,
+        Self::Table,
+        Self::Gallery,
+        Self::Testing,
+    ];
+
+    /// The screen's name, as `data/beryl3d/screens.json` writes it.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Start => "start",
+            Self::Game => "game",
+            Self::Table => "table",
+            Self::Gallery => "gallery",
+            Self::Testing => "testing",
+        }
+    }
+}
+
+/// A sheet: what opens over a screen and closes again without leaving it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Sheet {
+    Settings,
+    BugReport,
+}
+
+impl Sheet {
+    pub const ALL: [Self; 2] = [Self::Settings, Self::BugReport];
+
+    /// The sheet's name, as `data/beryl3d/screens.json` writes it.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Settings => "settings",
+            Self::BugReport => "bug-report",
+        }
+    }
+}
+
+/// Everything a screen function reads.
+#[derive(Clone, Copy, Debug)]
+pub struct ScreenIn<'a> {
+    pub window: Window,
+    /// The latest view of the game, if one has started.
+    pub view: Option<&'a PlayerView>,
+    /// The open prompt, if any.
+    pub prompt: Option<&'a PromptView>,
+    pub settings: &'a Settings,
+    /// The element the pointer is over, if any.
+    pub hovered: Option<ElementId>,
+    /// The sheet open over the screen, if any.
+    pub sheet: Option<Sheet>,
+    /// The names of the agents a person may play, in the order the host listed them.
+    pub agents: &'a [String],
+}
+
+/// What the flat layer shows on `screen`.
+#[must_use]
+pub fn screen(screen: Screen, input: &ScreenIn) -> Element {
+    match screen {
+        Screen::Start => start::start(input),
+        Screen::Game => game::game(input),
+        Screen::Table => table::table(input),
+        Screen::Gallery => gallery::gallery(input),
+        Screen::Testing => testing::testing(input),
+    }
+}
+
+/// What a sheet shows over the screen.
+#[must_use]
+pub fn sheet(sheet: Sheet, input: &ScreenIn) -> Element {
+    match sheet {
+        Sheet::Settings => settings::settings(input),
+        Sheet::BugReport => bug_report::bug_report(input),
+    }
+}
+
+/// The music that plays.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Music {
+    /// The menu's music, everywhere but in a game and in the gallery.
+    Menu,
+    /// The game's music, while a game goes on.
+    Game,
+    /// The sting for a game the viewer won.
+    Win,
+    /// The sting for a game the viewer did not win.
+    Loss,
+}
+
+/// The music that plays on `screen` with `view` the latest view of the game, as the web
+/// interface's `useMusic` call in `ui/src/App.tsx` chooses it: none in the gallery, the menu's
+/// music off the game screen, the game's while it goes on, then a win or a loss once it is
+/// over. A game with no view yet is going on.
+#[must_use]
+pub fn music(screen: Screen, view: Option<&PlayerView>) -> Option<Music> {
+    Some(match screen {
+        Screen::Gallery => return None,
+        Screen::Start | Screen::Table | Screen::Testing => Music::Menu,
+        Screen::Game => match view.map(|view| &view.status) {
+            Some(Status::Over {
+                outcome:
+                    OutcomeView::Win {
+                        winner: Side::You, ..
+                    },
+            }) => Music::Win,
+            Some(Status::Over { .. }) => Music::Loss,
+            _ => Music::Game,
+        },
+    })
+}

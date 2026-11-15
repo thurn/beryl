@@ -9,6 +9,8 @@ use beryl_protocol::{DecisionId, SessionError, SessionId, StartRequest, StopsSet
 
 use crate::frame::ElementId;
 use crate::input::Rect;
+use crate::screens::Music;
+use crate::settings::Settings;
 
 /// One variant for each function of `beryl_session::Sessions` that a player's action calls,
 /// carrying that function's own arguments. The host sends it to the session thread and passes
@@ -50,6 +52,17 @@ pub enum Request {
     },
     Haptic(Haptic),
     OpenUrl(String),
+    /// Save the player's settings, to be handed back as `Input::Settings` at the next start.
+    SaveSettings(Settings),
+    /// Play this music from now on, or none. Sent each time the music the screen calls for
+    /// changes (`screens::music`).
+    Music(Option<Music>),
+    /// Play music and sound effects at these levels, from 0 to 100, or none at all if `muted`.
+    Audio {
+        music: u8,
+        effects: u8,
+        muted: bool,
+    },
 }
 
 /// How strong a haptic tap is.

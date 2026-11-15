@@ -7,6 +7,8 @@
 //! as the font's missing-character glyph.
 
 pub mod fonts;
+pub mod glyphs;
+mod write;
 
 use std::collections::BTreeMap;
 
@@ -18,6 +20,8 @@ use parley::{
 
 use crate::input::Rect;
 use fonts::Font;
+pub use glyphs::{Glyphs, key as glyph_key};
+pub use write::{BlockLook, write_block};
 
 /// How a run of text looks: its font, weight, size in logical points and line height as a
 /// multiple of its size.

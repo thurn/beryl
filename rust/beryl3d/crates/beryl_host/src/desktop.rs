@@ -539,7 +539,12 @@ fn carry_out(window: &Window, request: Request) {
         Request::EndTextEntry => window.set_ime_allowed(false),
         Request::Share { path } => reveal(&path),
         Request::OpenUrl(url) => open_url(url),
-        Request::Haptic(_) => {}
+        // A desktop has no haptics. Saving settings and playing sound are not built in the
+        // desktop host yet: the shell and sound tracks of the flat layer's milestone build them.
+        Request::Haptic(_)
+        | Request::SaveSettings(_)
+        | Request::Music(_)
+        | Request::Audio { .. } => {}
     }
 }
 

@@ -12,7 +12,9 @@ pub mod effects;
 pub mod element;
 pub mod faces;
 pub mod frame;
+pub mod hud;
 pub mod input;
+pub mod inspect;
 pub mod layout;
 pub mod light;
 pub mod motion;
@@ -20,11 +22,15 @@ pub mod notice;
 pub mod play;
 pub mod pointer;
 pub mod pose;
+pub mod prompts;
+pub mod screens;
+pub mod settings;
 pub mod table;
 #[cfg(feature = "driver")]
 pub mod testing;
 pub mod text;
 pub mod tokens;
 pub mod verbs;
+pub mod widgets;
 
 pub use client::{Client, Config};

@@ -10,8 +10,8 @@ use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
 use std::thread::{self, JoinHandle};
 
 use beryl_scene::input::{AssetReady, GlyphCell, GlyphKey};
-use beryl_scene::layout::glyph_key;
 use beryl_scene::text::fonts::ALL;
+use beryl_scene::text::glyph_key;
 use beryl_scene::tokens::type_style;
 use swash::FontRef;
 use swash::scale::{Render, ScaleContext, Source};

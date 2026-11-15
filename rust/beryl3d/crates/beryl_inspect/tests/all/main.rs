@@ -12,5 +12,6 @@ mod gate;
 mod pack;
 mod recorded;
 mod runner;
+mod screens;
 mod specs;
 mod stress;

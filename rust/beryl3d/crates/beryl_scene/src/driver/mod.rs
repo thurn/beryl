@@ -27,7 +27,7 @@ use glam::Vec2;
 pub use action::{Action, key_code};
 pub use check::{Checked, Mode, StepMoment, TimelineStep};
 pub use moment::{Duration, Moment, Name, Offset, ParseError};
-pub use recording::{Answer, Recording, Responses, plays_on};
+pub use recording::{Answer, OPEN, Recording, Responses, plays_on};
 
 use crate::agent::{self, Context, Fault, Layout, TreeOptions, locate, uncovered};
 use crate::faces::FaceList;
@@ -159,7 +159,7 @@ impl Page {
             layout,
             size,
             tick: TICK,
-            client: client(),
+            client: Client::new(Config::LARGEST),
             now: 0,
             released: 0,
             batch: 0,
@@ -588,12 +588,15 @@ impl Page {
         for ready in self.glyphs.clone() {
             self.give(Input::Assets(ready));
         }
+        for press in self.recording.opens() {
+            self.client.press(&press);
+        }
         self.release();
         self.render();
     }
 
     fn restart(&mut self) {
-        self.client = client();
+        self.client = Client::new(Config::LARGEST);
         self.responses = Responses::shared(Arc::clone(&self.recording));
         self.now = 0;
         self.released = 0;
@@ -703,7 +706,7 @@ impl Page {
             layout: self.layout,
             size: self.size,
             tick: self.tick,
-            client: client(),
+            client: Client::new(Config::LARGEST),
             now: 0,
             released: 0,
             batch: 0,
@@ -790,9 +793,4 @@ fn offset_from(time: u64, offset: Offset) -> u64 {
     } else {
         time + offset.length.0
     }
-}
-
-/// A client sized for the largest board the engine holds.
-fn client() -> Client {
-    Client::new(Config::LARGEST)
 }

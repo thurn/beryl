@@ -1,15 +1,16 @@
 //! Writing the flat layer into a frame (docs/beryl-3d.md, "The frame"): a resolved element for
 //! each kept element, a panel record for the top of the screen, the top of each float and each
-//! button, a glyph record for each glyph a page holds, and the boxes of the text's lines. It
-//! reads only what `Client::handle` laid out, and allocates nothing.
+//! button, a glyph record for each glyph a page holds (`text::write_block`), and the boxes of
+//! the text's lines. It reads only what `Client::handle` laid out, and allocates nothing.
 
 use glam::Vec2;
 
-use super::{FloatLook, Layer, Node, glyphs, has_panel};
+use super::{FloatLook, Layer, Node, has_panel};
 use crate::element::TextAlign;
-use crate::frame::{Band, Draw, FrameBuilder, NameRef, Place, Resolved, Sprite, StateBits};
+use crate::frame::{Band, Draw, FrameBuilder, NameRef, Place, Resolved, StateBits};
 use crate::input::Rect;
 use crate::table::Camera;
+use crate::text::{self, BlockLook};
 use crate::tokens::{color, size};
 
 impl Layer {
@@ -137,30 +138,14 @@ impl Layer {
             None if element.enabled => color::TYPE,
             None => color::TEXT_FAINT,
         });
-        let scale = self.window.scale;
-        for glyph in &block.glyphs {
-            let Some(placed) = self.glyphs.get(glyphs::key(style, scale, glyph.glyph)) else {
-                continue;
-            };
-            let [_, _, width, height] = placed.rect;
-            let rect = Rect {
-                x: origin.x + glyph.x + f32::from(placed.bearing[0]) / scale,
-                y: origin.y + glyph.y + f32::from(placed.bearing[1]) / scale,
-                width: f32::from(width) / scale,
-                height: f32::from(height) / scale,
-            };
-            builder.draw(
-                Band::Layer,
-                Draw::glyph(
-                    camera.layer_transform(rect),
-                    tint,
-                    Sprite {
-                        page: placed.page,
-                        rect: placed.rect,
-                    },
-                ),
-            );
-        }
+        let look = BlockLook {
+            style,
+            tint,
+            scale: self.window.scale,
+            glyphs: &self.glyphs,
+            camera,
+        };
+        text::write_block(builder, block, origin, &look);
     }
 }
 

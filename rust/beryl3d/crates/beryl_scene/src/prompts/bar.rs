@@ -4,8 +4,9 @@
 
 use beryl_protocol::prompt::PromptView;
 
-use super::{Element, Press, button, row, text};
+use crate::element::{Element, Press, row, text};
 use crate::tokens::{space, type_style};
+use crate::widgets::button;
 
 /// The prompt bar for `prompt`: its title, then its buttons in the order the session sent them.
 /// A prompt with no title, such as a priority stop's, shows only its buttons, as the web

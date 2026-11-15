@@ -11,4 +11,5 @@ pub mod pack;
 pub mod pages;
 pub mod recordings;
 pub mod runner;
+pub mod screens;
 pub mod stress;

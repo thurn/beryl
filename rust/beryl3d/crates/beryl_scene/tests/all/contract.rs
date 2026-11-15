@@ -171,3 +171,150 @@ fn play() -> Vec<Frame> {
 fn the_same_inputs_and_times_give_the_same_frames() {
     assert_eq!(play(), play());
 }
+
+mod milestone_three {
+    use beryl_protocol::prompt::{ButtonId, Click, ClickRequest, PromptView, ShapeBody};
+    use beryl_protocol::protocol::{LossReason, OutcomeView, Side, Status};
+    use beryl_protocol::script::Arrow;
+    use beryl_scene::command::{Request, SessionCommand};
+    use beryl_scene::element::Press;
+    use beryl_scene::prompts;
+    use beryl_scene::screens::{self, Music, Screen, ScreenIn, Sheet};
+    use beryl_scene::settings::{Setting, Settings};
+    use beryl_scene::table::Window;
+    use beryl_scene::testing::ViewBuilder;
+
+    use super::super::flat_layer::{client, deciding, decision, prompt};
+
+    fn input<'a>(prompt: Option<&'a PromptView>, settings: &'a Settings) -> ScreenIn<'a> {
+        ScreenIn {
+            window: Window::default(),
+            view: None,
+            prompt,
+            settings,
+            hovered: None,
+            sheet: None,
+            agents: &[],
+        }
+    }
+
+    #[test]
+    fn every_screen_and_sheet_gives_a_named_element() {
+        let settings = Settings::default();
+        let input = input(None, &settings);
+        for screen in Screen::ALL {
+            assert!(
+                !screens::screen(screen, &input).name.is_empty(),
+                "{screen:?}"
+            );
+        }
+        for sheet in Sheet::ALL {
+            assert!(!screens::sheet(sheet, &input).name.is_empty(), "{sheet:?}");
+        }
+    }
+
+    /// One prompt body of each shape.
+    fn bodies() -> Vec<ShapeBody> {
+        vec![
+            ShapeBody::Pick {
+                tray: Vec::new(),
+                least: 1,
+                most: 1,
+                picked: Vec::new(),
+                warned: Vec::new(),
+            },
+            ShapeBody::Order { items: Vec::new() },
+            ShapeBody::Split { piles: Vec::new() },
+            ShapeBody::YesNo {
+                about: Vec::new(),
+                places: None,
+            },
+            ShapeBody::Number {
+                values: vec![0, 1],
+                value: 0,
+                detail: None,
+            },
+            ShapeBody::Mode { about: Vec::new() },
+            ShapeBody::Catalog {
+                entries: vec!["Plains".to_owned()],
+                chosen: None,
+            },
+            ShapeBody::Divide {
+                total: 3,
+                left: 3,
+                shares: Vec::new(),
+            },
+            ShapeBody::Pay {
+                cost: "{1}".to_owned(),
+                left: "{1}".to_owned(),
+            },
+            ShapeBody::Declare {
+                arrow: Arrow::Attack,
+                pairs: Vec::new(),
+                lined: false,
+                aiming: Vec::new(),
+            },
+            ShapeBody::Candidates,
+        ]
+    }
+
+    #[test]
+    fn every_prompt_shape_shows_the_prompt_bar() {
+        let settings = Settings::default();
+        for body in bodies() {
+            let mut shaped = prompt("Choose");
+            shaped.body = body;
+            let element = prompts::screen(&shaped, &input(Some(&shaped), &settings));
+            assert_eq!(
+                element,
+                Some(prompts::prompt_bar(&shaped)),
+                "{:?}",
+                shaped.body
+            );
+        }
+    }
+
+    #[test]
+    fn a_button_press_clicks_the_open_prompt() {
+        let mut client = client();
+        client.handle(deciding(prompt("Pay {1}{U}")));
+        client.press(&Press::Button(ButtonId::Auto));
+        assert_eq!(
+            client.next_command(),
+            Some(SessionCommand::Click(ClickRequest {
+                decision: decision(),
+                revision: 3,
+                click: Click::Button {
+                    button: ButtonId::Auto
+                },
+            }))
+        );
+    }
+
+    #[test]
+    fn a_setting_press_asks_for_the_settings_to_be_saved() {
+        let mut client = client();
+        while client.next_request().is_some() {}
+        client.press(&Press::Setting(Setting::Music(40)));
+        let Some(Request::SaveSettings(saved)) = client.next_request() else {
+            panic!("the first request saves the settings");
+        };
+        assert_eq!(saved.music, 40);
+    }
+
+    #[test]
+    fn a_finished_game_the_viewer_won_plays_the_win() {
+        let mut view = ViewBuilder::sample().build();
+        view.status = Status::Over {
+            outcome: OutcomeView::Win {
+                winner: Side::You,
+                reason: LossReason::Life,
+                by: None,
+            },
+        };
+        assert_eq!(screens::music(Screen::Game, Some(&view)), Some(Music::Win));
+        view.status = Status::Thinking;
+        assert_eq!(screens::music(Screen::Game, Some(&view)), Some(Music::Game));
+        assert_eq!(screens::music(Screen::Gallery, Some(&view)), None);
+    }
+}

@@ -1,0 +1,13 @@
+{
+  "screens": [
+    { "name": "start", "screen": "start", "recording": "screen/start", "built": false },
+    { "name": "opening", "screen": "game", "recording": "opening-keep", "built": false },
+    { "name": "game", "screen": "game", "recording": "pay-default", "built": true },
+    { "name": "game over", "screen": "game", "recording": "game-over", "built": false },
+    { "name": "settings", "screen": "settings", "recording": "screen/settings", "built": false },
+    { "name": "bug report", "screen": "bug-report", "recording": "screen/bug-report", "built": false },
+    { "name": "gallery", "screen": "gallery", "recording": "screen/gallery", "built": false },
+    { "name": "testing", "screen": "testing", "recording": "screen/testing", "built": false },
+    { "name": "manual table", "screen": "table", "recording": "screen/table", "built": false }
+  ]
+}

@@ -19,7 +19,7 @@ use beryl_scene::driver::{Page, Recording};
 use beryl_scene::input::Size;
 
 use crate::pack::{self, Entry, Recorder};
-use crate::{pages, stress};
+use crate::{pages, screens, stress};
 
 /// One recording, as `just b3d list` shows it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -88,6 +88,7 @@ pub fn names() -> Result<Vec<(String, Seat)>, String> {
         .iter()
         .map(|entry| (entry.name.to_owned(), entry.seat()))
         .chain(stress::NAMES.map(|name| (name.to_owned(), Seat::P0)))
+        .chain(screens::NAMES.map(|name| (name.to_owned(), Seat::P0)))
         .collect();
     names.sort_by(|a, b| (&a.0, a.1.get()).cmp(&(&b.0, b.1.get())));
     Ok(names)
@@ -112,9 +113,9 @@ pub fn weight(name: &str, seat: Seat) -> usize {
         .map_or(0, <[u8]>::len)
 }
 
-/// Every recording whose name starts with `prefix`, stress boards included, sorted by name and
-/// seat, each with its length and number of views. Finding a length plays the recording
-/// through the client, on as many threads as the machine has cores.
+/// Every recording whose name starts with `prefix`, stress boards and screen recordings
+/// included, sorted by name and seat, each with its length and number of views. Finding a
+/// length plays the recording through the client, on as many threads as the machine has cores.
 ///
 /// # Errors
 ///
@@ -141,18 +142,20 @@ pub fn list(prefix: &str) -> Result<Vec<Listed>, String> {
         })
         .collect();
     listed.extend(
-        stress::NAMES
-            .into_iter()
+        (stress::NAMES.into_iter())
+            .chain(screens::NAMES)
             .filter(|name| name.starts_with(prefix))
-            .map(listed_stress),
+            .map(listed_made),
     );
     listed.sort_by(|a, b| (&a.name, a.seat.get()).cmp(&(&b.name, b.seat.get())));
     Ok(listed)
 }
 
-/// The stress board `name`, which is seen from the first seat only.
-fn listed_stress(name: &str) -> Listed {
-    let views = stress::stress(name).map_or(0, |board| board.views.len());
+/// The stress board or screen recording `name`, which is seen from the first seat only.
+fn listed_made(name: &str) -> Listed {
+    let views = (stress::stress(name).map(|board| board.views.len()))
+        .or_else(|| screens::messages(name).map(|_| 1))
+        .unwrap_or(0);
     let length_ms = pages::page(name, Side::You, Layout::Desktop, LENGTH_WINDOW)
         .ok()
         .and_then(|mut page| page.moments().last().map(|(_, at)| at.0 / 1_000_000));

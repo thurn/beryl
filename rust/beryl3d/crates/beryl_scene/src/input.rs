@@ -7,6 +7,7 @@ use beryl_protocol::card_records::CardRecords;
 use glam::Vec2;
 
 use crate::command::Reply;
+use crate::settings::Settings;
 
 /// One thing that has happened, passed to `Client::handle`.
 #[derive(Clone, Debug, PartialEq)]
@@ -37,6 +38,11 @@ pub enum Input {
     Tier(Tier),
     /// The session's answer to a `SessionCommand`.
     Reply(Reply),
+    /// The player's saved settings, which the host hands over at startup.
+    Settings(Settings),
+    /// The names of the agents a person may play, in the order they are offered
+    /// (`beryl_session::agents`).
+    Agents(Vec<String>),
 }
 
 /// A rectangle with its top left corner at (`x`, `y`). It is in logical points unless the field

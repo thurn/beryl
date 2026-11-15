@@ -34,7 +34,7 @@ const HEIGHT: f32 = 900.0;
 /// A millisecond, in the nanoseconds `Client::frame` takes.
 const MS: u64 = 1_000_000;
 
-fn client() -> Client {
+pub(super) fn client() -> Client {
     let mut client = Client::new(Config {
         elements: 256,
         draws: 1024,
@@ -51,7 +51,7 @@ fn client() -> Client {
     client
 }
 
-fn decision() -> DecisionId {
+pub(super) fn decision() -> DecisionId {
     DecisionId {
         session: SessionId(1),
         seq: 7,
@@ -69,7 +69,7 @@ fn prompt_button(id: ButtonId, label: &str, primary: bool) -> PromptButton {
 }
 
 /// A mana payment, as the session words one.
-fn prompt(title: &str) -> PromptView {
+pub(super) fn prompt(title: &str) -> PromptView {
     PromptView {
         revision: 3,
         purpose: Purpose::Mana,
@@ -93,7 +93,7 @@ fn prompt(title: &str) -> PromptView {
 }
 
 /// The sample table, with the viewer deciding `prompt`.
-fn deciding(prompt: PromptView) -> Input {
+pub(super) fn deciding(prompt: PromptView) -> Input {
     let mut view = ViewBuilder::sample().build();
     view.status = Status::Deciding {
         decision: DecisionView {

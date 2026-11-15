@@ -7,7 +7,6 @@
 //! point of the window (`float`).
 
 mod float;
-mod glyphs;
 mod write;
 
 use taffy::{
@@ -16,7 +15,6 @@ use taffy::{
 };
 
 pub use float::FloatLook;
-pub use glyphs::{Glyphs, key as glyph_key};
 
 use float::Float;
 
@@ -24,7 +22,7 @@ use crate::element::{Align, Direction, Element, Justify, Press, Style};
 use crate::frame::{ElementId, Role};
 use crate::input::{Rect, Size};
 use crate::table::Window;
-use crate::text::{Block, Text, TypeStyle};
+use crate::text::{Block, Glyphs, Text, TypeStyle};
 
 /// Where the desktop layout anchors a screen: its bottom right corner this far in from the
 /// safe area's, where the web interface's action dock stands (`.dock` in
@@ -174,7 +172,7 @@ impl Layer {
                 .find_map(|child| find(child, point))
                 .or_else(|| {
                     let element = &node.element;
-                    element.press.map(|press| (node.id, press, element.enabled))
+                    (element.press.clone()).map(|press| (node.id, press, element.enabled))
                 })
         }
         (self.floats.iter().rev())

@@ -1,7 +1,7 @@
 //! Recordings by name, played through the test driver (docs/beryl-3d.md, "The test driver"):
 //! `Page::fixture` and `Page::spec`, and `check_recording`, which runs every interface check
 //! on every tick of a recording. A name is a fixture's, a card spec moment's as
-//! `<card>/<moment>`, or a stress board's ([`crate::stress`]).
+//! `<card>/<moment>`, a stress board's ([`crate::stress`]) or a screen's ([`crate::screens`]).
 
 use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::ipc::CARD_RECORDS;
@@ -12,8 +12,8 @@ use beryl_scene::agent::Layout;
 use beryl_scene::driver::{Page, Recording, TICK};
 use beryl_scene::input::Size;
 
-use crate::recordings;
 use crate::stress::stress;
+use crate::{recordings, screens};
 
 /// The desktop windows every recording is checked in: the smallest common laptop screen, two
 /// common desktop screens and an ultrawide one.
@@ -106,6 +106,14 @@ pub fn recording(name: &str, seat: Side) -> Result<Recording, String> {
             0,
             FixtureMessage::response(CARD_RECORDS, &CardRecords::none()),
         );
+        return Ok(Recording(messages));
+    }
+    if let Some(messages) = screens::messages(name) {
+        if seat != Seat::P0 {
+            return Err(format!(
+                "the screen recording {name:?} is seen from P0 only, not {seat:?}"
+            ));
+        }
         return Ok(Recording(messages));
     }
     recordings::find(name, seat).map(|messages| Recording(messages.to_vec()))

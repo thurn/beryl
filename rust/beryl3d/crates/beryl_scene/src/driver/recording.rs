@@ -22,6 +22,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::command::{Reply, SessionCommand};
+use crate::element::Press;
+use crate::screens::{Screen, Sheet};
 
 /// One recording's messages for one seat: the session's views, as `game-update` events, and
 /// its responses to commands. Other events are ignored.
@@ -68,6 +70,38 @@ impl Recording {
         CardRecords::deserialize(value)
             .map(Some)
             .map_err(|error| format!("the recorded `card_records` answer is not one: {error}"))
+    }
+}
+
+/// The event that a recording made with no engine, such as a screen's, holds to put the client
+/// on a screen or open a sheet over it before its first view. Its payload is the name of the
+/// screen or the sheet (`Screen::name`, `Sheet::name`).
+pub const OPEN: &str = "beryl3d-open";
+
+impl Recording {
+    /// The presses that its `OPEN` events stand for, in order.
+    ///
+    /// # Panics
+    ///
+    /// When an `OPEN` event names no screen or sheet.
+    #[must_use]
+    pub fn opens(&self) -> Vec<Press> {
+        let name_of = |payload: &Value| payload.as_str().unwrap_or_default().to_owned();
+        (self.0.iter())
+            .filter_map(|message| match message {
+                FixtureMessage::Event { event, payload } if event == OPEN => Some(name_of(payload)),
+                _ => None,
+            })
+            .map(|name| {
+                let screen = Screen::ALL.into_iter().find(|screen| screen.name() == name);
+                let sheet = Sheet::ALL.into_iter().find(|sheet| sheet.name() == name);
+                match (screen, sheet) {
+                    (Some(screen), _) => Press::Open(screen),
+                    (None, Some(sheet)) => Press::Sheet(Some(sheet)),
+                    (None, None) => panic!("{OPEN} names no screen or sheet: {name:?}"),
+                }
+            })
+            .collect()
     }
 }
 

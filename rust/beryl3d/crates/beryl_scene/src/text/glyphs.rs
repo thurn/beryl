@@ -6,8 +6,8 @@
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
+use super::{Block, TypeStyle};
 use crate::input::{GlyphCell, GlyphKey};
-use crate::text::{Block, TypeStyle};
 
 /// Where a rasterized glyph is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
