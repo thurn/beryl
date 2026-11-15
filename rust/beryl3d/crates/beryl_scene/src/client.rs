@@ -211,6 +211,7 @@ impl Client {
         self.wake = self.show.wake(now);
         let (layout_nodes, text_runs) = self.layer.take_work();
         builder.layout_work(layout_nodes, text_runs);
+        builder.placement_work(self.show.table().take_placed());
         self.open = self.show.settled();
         (self.layer).write(&mut builder, self.show.table().camera(), self.open);
         builder.finish();

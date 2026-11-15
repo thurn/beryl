@@ -59,6 +59,12 @@ impl Placement {
         }
     }
 
+    /// How many objects of `rests` have a resting place. The abilities on the stack are left
+    /// out, as `Work::placed` leaves them out.
+    pub(crate) fn count(&self) -> usize {
+        self.rests.iter().flatten().count()
+    }
+
     pub(crate) fn set(&mut self, slot: ObjectId, rest: Rest) {
         let index = usize::from(slot.0);
         if self.rests.len() <= index {
@@ -104,18 +110,19 @@ pub(crate) fn place_zones(
 /// Every object's resting place in `zones`, as `place_zones` gives it, taking a group's resting
 /// places from `known`, the placement of `known_zones` under the same rules, wherever that group
 /// holds equal objects in the same order in both. Comparing the objects costs less than laying
-/// them out again.
+/// them out again. Returns it with how many objects it laid out rather than copied.
 pub(crate) fn place_reusing(
     zones: &Zones,
     (known_zones, known): (&Zones, &Placement),
     layout: &Layout,
     camera: &Camera,
     scroll: &Scroll,
-) -> Placement {
+) -> (Placement, usize) {
     let mut placement = Placement {
         rests: Vec::with_capacity(known.rests.len()),
         abilities: Vec::new(),
     };
+    let mut laid = 0;
     let groups = Group::ALL.into_iter().zip(all_members(zones));
     for ((group, objects), was) in groups.zip(all_members(known_zones)) {
         let same = objects.len() == was.len()
@@ -131,6 +138,7 @@ pub(crate) fn place_reusing(
                 placement.abilities.clone_from(&known.abilities);
             }
         } else {
+            laid += objects.len();
             lay(
                 group,
                 &objects,
@@ -140,7 +148,7 @@ pub(crate) fn place_reusing(
             );
         }
     }
-    placement
+    (placement, laid)
 }
 
 /// Places the objects of `group` in `zones` into `placement`, and leaves the slots it placed in

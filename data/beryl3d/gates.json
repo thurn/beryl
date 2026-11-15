@@ -29,7 +29,9 @@
       "frame_allocations": 0,
       "worst_frame_instructions": 3055119,
       "total_instructions": 37895318,
-      "tolerance_percent": 1.0
+      "tolerance_percent": 1.0,
+      "worst_frame_placed": 2550,
+      "total_placed": 2805
     },
     "stress-1024": {
       "worst_frame_elements": 1025,
@@ -49,7 +51,9 @@
       "frame_allocations": 0,
       "worst_frame_instructions": 11210755,
       "total_instructions": 79392870,
-      "tolerance_percent": 1.0
+      "tolerance_percent": 1.0,
+      "worst_frame_placed": 10240,
+      "total_placed": 11264
     },
     "verbs-zones": {
       "worst_frame_elements": 516,
@@ -69,7 +73,9 @@
       "frame_allocations": 0,
       "worst_frame_instructions": 2085813,
       "total_instructions": 100894992,
-      "tolerance_percent": 1.0
+      "tolerance_percent": 1.0,
+      "worst_frame_placed": 761,
+      "total_placed": 1814
     },
     "pay-default": {
       "worst_frame_elements": 269,
@@ -89,7 +95,9 @@
       "frame_allocations": 0,
       "worst_frame_instructions": 347285,
       "total_instructions": 4620323,
-      "tolerance_percent": 1.0
+      "tolerance_percent": 1.0,
+      "worst_frame_placed": 23,
+      "total_placed": 34
     }
   },
   "tiers": {

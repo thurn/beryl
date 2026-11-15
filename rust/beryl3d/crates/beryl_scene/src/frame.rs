@@ -192,6 +192,11 @@ pub struct Work {
     pub text_runs: u32,
     /// Draw records written.
     pub records: u32,
+    /// Objects placed: each object of `Placement::rests` whose resting place the table worked
+    /// out, whether in `handle`, compiling a script step by step, or in the frame. A group whose
+    /// resting places are copied from a placement already made counts nothing, and neither do
+    /// the abilities on the stack, which are few.
+    pub placed: u32,
 }
 
 /// When the client next needs a frame, as of the last call to `Client::frame`.
@@ -410,6 +415,11 @@ impl<'a> FrameBuilder<'a> {
     pub fn layout_work(&mut self, layout_nodes: u32, text_runs: u32) {
         self.frame.work.layout_nodes += layout_nodes;
         self.frame.work.text_runs += text_runs;
+    }
+
+    /// Records the objects the table placed since the last frame.
+    pub fn placement_work(&mut self, placed: u32) {
+        self.frame.work.placed += placed;
     }
 
     /// Adds a clip rectangle in physical pixels and returns its entry, for `Draw::with_clip`.

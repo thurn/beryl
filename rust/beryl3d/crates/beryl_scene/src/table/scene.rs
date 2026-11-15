@@ -1,6 +1,8 @@
 //! The table's scene objects: one per game object, keyed by the object's slot in the view and
 //! kept across updates, so that a card moving between zones is one object throughout.
 
+use std::cell::Cell;
+
 use beryl_protocol::protocol::{ObjectId, PlayerView, Side, StackItem};
 use beryl_protocol::script::Subject;
 use glam::{Affine3A, Quat, Vec2, Vec3};
@@ -128,6 +130,26 @@ pub struct Table {
     camera: Camera,
     scroll: Scroll,
     objects: Objects,
+    placed: Placed,
+}
+
+/// How many objects a table has placed since its count was last taken, for `Work::placed`.
+/// Placing reads the table without changing it, so the count is kept in a cell. It is
+/// bookkeeping, not what the table shows, so two tables are equal whatever their counts.
+#[derive(Clone, Debug, Default)]
+struct Placed(Cell<u32>);
+
+impl Placed {
+    fn add(&self, objects: usize) {
+        let objects = u32::try_from(objects).unwrap_or(u32::MAX);
+        self.0.set(self.0.get().saturating_add(objects));
+    }
+}
+
+impl PartialEq for Placed {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
 }
 
 impl Default for Table {
@@ -144,6 +166,7 @@ impl Table {
             camera: Camera::fit(layout.camera, window),
             scroll: Scroll::default(),
             objects: Objects::default(),
+            placed: Placed::default(),
         }
     }
 
@@ -200,7 +223,14 @@ impl Table {
     /// bottom first, for this window.
     #[must_use]
     pub fn placement(&self, view: &PlayerView, abilities: &[u32]) -> Placement {
-        place(view, abilities, &self.layout, &self.camera, &self.scroll)
+        let placement = place(view, abilities, &self.layout, &self.camera, &self.scroll);
+        self.placed.add(placement.count());
+        placement
+    }
+
+    /// How many objects the table has placed since the last call, and starts counting again.
+    pub(crate) fn take_placed(&self) -> u32 {
+        self.placed.0.take()
     }
 
     /// Every object's resting place in the view the table shows, which it holds already: the
@@ -237,7 +267,9 @@ impl Table {
 
     /// Every object's resting place in `zones`, for this window.
     pub(crate) fn placement_of(&self, zones: &Zones) -> Placement {
-        place_zones(zones, &self.layout, &self.camera, &self.scroll)
+        let placement = place_zones(zones, &self.layout, &self.camera, &self.scroll);
+        self.placed.add(placement.count());
+        placement
     }
 
     /// Every object's resting place in `zones`, for this window, taking each group's from
@@ -248,7 +280,10 @@ impl Table {
         zones: &Zones,
         known: (&Zones, &Placement),
     ) -> Placement {
-        place_reusing(zones, known, &self.layout, &self.camera, &self.scroll)
+        let (placement, laid) =
+            place_reusing(zones, known, &self.layout, &self.camera, &self.scroll);
+        self.placed.add(laid);
+        placement
     }
 
     /// Places the objects of `group` in `zones` into `placement` for this window, and leaves the
@@ -262,6 +297,7 @@ impl Table {
     ) {
         let rules = (&self.layout, &self.camera, &self.scroll, Some(ids));
         place_group(zones, group, rules, placement, placed);
+        self.placed.add(placed.len());
     }
 
     /// Puts every object of `view` at its resting place, and forgets the objects it no longer

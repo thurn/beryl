@@ -458,6 +458,7 @@ pub struct Work {
     pub layout_nodes: u32,    // layout nodes computed, in `handle`
     pub text_runs: u32,       // runs of text shaped, in `handle`
     pub records: u32,         // draw records written
+    pub placed: u32,          // objects placed, mostly compiling scripts in `handle`
 }
 ```
 
@@ -2610,8 +2611,8 @@ Callgrind counts a whole run. Counting every frame separately would mean
 thousands of measurements, so the gate finds its candidates first.
 
 1. The client core keeps cheap **work counters** as it runs: elements visited,
-   segments evaluated, layout nodes computed, records written. They are
-   deterministic.
+   segments evaluated, layout nodes computed, records written, objects placed.
+   They are deterministic.
 2. A native pass plays the fixture and ranks its frames by those counters.
 3. One run of `b3d-frame-counts` under Callgrind plays the fixture again, with
    every frame sent through a wrapper function, `frame_counted`, which makes its

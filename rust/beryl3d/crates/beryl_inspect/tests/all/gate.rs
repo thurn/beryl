@@ -15,6 +15,33 @@ fn rank_picks_the_frames_with_the_most_work() {
 }
 
 #[test]
+fn rank_sees_the_frame_that_places_the_most_objects() {
+    // A view whose script moves cards between zones is compiled step by step, and each step
+    // places the rows it changed again. Only `Work::placed` counts that work, and it costs more
+    // instructions than any other frame of `verbs-zones`, so the frame doing the most of it
+    // must rank. A frame at rest places nothing.
+    let mut most = (0, 0);
+    let mut at_rest = 0;
+    assert!(play("verbs-zones", |moment, frame| {
+        if frame.work.placed > most.0 {
+            most = (frame.work.placed, moment.frame);
+        }
+        if moment.phase == Phase::Rest {
+            at_rest += frame.work.placed;
+        }
+    }));
+    assert!(most.0 > 0, "no frame of verbs-zones placed an object");
+    let ranked = rank("verbs-zones").expect("verbs-zones is a gated board");
+    assert!(
+        ranked.contains(&most.1),
+        "frame {} places {} objects, but rank picks {ranked:?}",
+        most.1,
+        most.0
+    );
+    assert_eq!(at_rest, 0, "frames at rest placed objects");
+}
+
+#[test]
 fn a_stress_board_rests_then_flies_until_its_script_ends() {
     for name in NAMES {
         let mut phases = Vec::new();
