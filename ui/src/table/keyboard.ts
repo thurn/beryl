@@ -71,7 +71,10 @@ export function listenTableKeys(commands: TableCommands) {
       return;
     if (
       event.code === "Escape" &&
-      (client.overlayOpen || client.selection.size || client.sweepSnapshot())
+      (client.overlayOpen ||
+        client.arrows?.dragging ||
+        client.selection.size ||
+        client.sweepSnapshot())
     )
       return;
     if (id || claims(event, bindings.platform)) event.preventDefault();

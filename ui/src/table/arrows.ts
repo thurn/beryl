@@ -162,6 +162,10 @@ export class TableArrows {
     });
   }
 
+  get dragging() {
+    return this.#dragging;
+  }
+
   /** Start a menu's aim. The click is consumed before normal table actions run. */
   pickTarget(
     from: Name,
