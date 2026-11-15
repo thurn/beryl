@@ -194,6 +194,9 @@ pub struct State<L: Layout = Small> {
     /// The slots a store has an entry about as an object, so that an object with nothing
     /// stored about it ends at the cost of one bit test ([`crate::store`]).
     pub(crate) keyed: Bitboard<L::Slot>,
+    /// The phased-out permanents ([`crate::phasing`]): on the battlefield by their zone, and in
+    /// no battlefield list or zone set, so nothing that walks the battlefield finds them.
+    pub(crate) phased_out: Bitboard<L::Slot>,
     /// The Trackers store ([`crate::trackers`]): [`State::track`] writes it, the turn's
     /// beginning empties it and the zone move ends what it holds about a permanent. Here
     /// and not with the other stores for the decision loop's reads of it.
@@ -276,6 +279,8 @@ impl<L: Layout> State<L> {
             rng,
             knowledge,
             keyed: _,
+            // Each phased-out permanent's flags say it, and the objects are hashed.
+            phased_out: _,
             zones,
             pending,
             objects,

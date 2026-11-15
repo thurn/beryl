@@ -16,7 +16,7 @@ use crate::state::{
     ChosenSource, Continuous, Duration, ObjectRef, Shield, State, Subject, ZoneKey,
 };
 use crate::table::GameTable;
-use crate::{choices, continuous, life, replace};
+use crate::{choices, continuous, life, replace, rule_change};
 
 /// Deals `amount` damage from `source` to a player or a permanent, combat damage with
 /// `combat` ([CR 120.3](https://yawgatog.com/resources/magic-rules/#R1203)). A permanent that
@@ -72,7 +72,15 @@ pub fn deal<L: Layout>(
     // damage.
     let lifelink = lifelink(game, source);
     let e = match to {
-        Recipient::Player(p) => game.state.damage_player(source, p, amount, combat),
+        // A player whose life total can't change is still dealt the damage, and loses no life
+        // ([CR 119.8](https://yawgatog.com/resources/magic-rules/#R1198)): "If an effect says
+        // that a player can't lose life, that player can't make an exchange such that the
+        // player's life total would become lower".
+        Recipient::Player(p) => {
+            let loses_life = rule_change::life_can_change(game.state, game.table, p);
+            game.state
+                .damage_player(source, p, amount, combat, loses_life)
+        }
         Recipient::Permanent(r) => {
             if !game.on_battlefield(r) {
                 return Ok(0);

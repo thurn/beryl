@@ -192,6 +192,15 @@ pub enum Effect {
     /// resolving spell or ability regenerates a permanent, it creates a replacement effect that
     /// protects the permanent the next time it would be destroyed this turn."
     Regenerate(Objects),
+    /// "[Permanents] phase out" ([CR 702.26b]): "If a permanent phases out, its status changes to
+    /// “phased out.” Except for rules and effects that specifically mention phased-out
+    /// permanents, a phased-out permanent is treated as though it does not exist." What is
+    /// attached to them phases out with them (CR 702.26g), and they phase in during the untap
+    /// step of the player who controlled them ([CR 502.1]).
+    ///
+    /// [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
+    /// [CR 502.1]: https://yawgatog.com/resources/magic-rules/#R5021
+    PhaseOut(Objects),
     /// "Exile [objects]"
     /// ([CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a)): "To exile an
     /// object, move it to the exile zone from wherever it is."
@@ -675,6 +684,7 @@ impl Effect {
             | Effect::CopySpell { .. }
             | Effect::ExchangeControl(..)
             | Effect::Regenerate(_)
+            | Effect::PhaseOut(_)
             | Effect::PreventDamage { .. }
             | Effect::Draw { .. }
             | Effect::Discard { .. }

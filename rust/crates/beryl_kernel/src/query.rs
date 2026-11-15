@@ -297,7 +297,7 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn controller(&self, slot: L::Slot) -> Seat {
         let o = self.object(slot);
-        if o.zone == Zone::Battlefield {
+        if o.on_battlefield() {
             self.derived(slot).controller
         } else {
             o.base_controller
@@ -312,7 +312,7 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn power(&self, t: &GameTable, slot: L::Slot) -> i8 {
         let o = self.object(slot);
-        if o.zone == Zone::Battlefield {
+        if o.on_battlefield() {
             self.derived(slot).power
         } else {
             self.pt_elsewhere(t, slot).0
@@ -328,7 +328,7 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn colors(&self, t: &GameTable, slot: L::Slot) -> Colors {
         let o = self.object(slot);
-        if o.zone == Zone::Battlefield {
+        if o.on_battlefield() {
             self.derived(slot).colors
         } else if !self.reaches_elsewhere() && !o.flags.has(Flag::Copy) {
             self.definition(slot).face(t).colors
@@ -347,7 +347,7 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn types(&self, t: &GameTable, slot: L::Slot) -> Types {
         let o = self.object(slot);
-        if o.zone == Zone::Battlefield {
+        if o.on_battlefield() {
             self.derived(slot).types
         } else if !self.reaches_elsewhere() {
             self.definition(slot).face(t).types
@@ -363,7 +363,7 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn supertypes(&self, t: &GameTable, slot: L::Slot) -> Supertypes {
         let o = self.object(slot);
-        if o.zone == Zone::Battlefield {
+        if o.on_battlefield() {
             self.derived(slot).supertypes
         } else if !self.reaches_elsewhere() {
             self.definition(slot).face(t).supertypes
@@ -379,7 +379,7 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn has_subtype(&self, t: &GameTable, slot: L::Slot, subtype: Subtype) -> bool {
         let o = self.object(slot);
-        if o.zone == Zone::Battlefield {
+        if o.on_battlefield() {
             self.derived(slot).subtypes.contains(t.subtypes(), subtype)
         } else if !self.reaches_elsewhere() {
             let printed = self.definition(slot).face(t).subtypes;
@@ -397,7 +397,7 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn keywords(&self, t: &GameTable, slot: L::Slot) -> Keywords {
         let o = self.object(slot);
-        if o.zone == Zone::Battlefield {
+        if o.on_battlefield() {
             self.derived(slot).keywords
         } else {
             self.definition(slot).face(t).keywords
@@ -420,7 +420,7 @@ impl<L: Layout> State<L> {
     /// [CR 702.16a]: https://yawgatog.com/resources/magic-rules/#R70216a
     #[inline]
     pub fn protection(&self, slot: L::Slot) -> Colors {
-        if !self.may_protect() || self.object(slot).zone != Zone::Battlefield {
+        if !self.may_protect() || !self.object(slot).on_battlefield() {
             return Colors::NONE;
         }
         self.derived(slot).protection
@@ -430,7 +430,7 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn toughness(&self, t: &GameTable, slot: L::Slot) -> i8 {
         let o = self.object(slot);
-        if o.zone == Zone::Battlefield {
+        if o.on_battlefield() {
             self.derived(slot).toughness
         } else {
             self.pt_elsewhere(t, slot).1

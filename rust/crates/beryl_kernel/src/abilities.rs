@@ -10,7 +10,7 @@
 //!
 //! [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
 
-use beryl_card::{Ability, AbilityIx, ObjectAbility, Zone};
+use beryl_card::{Ability, AbilityIx, ObjectAbility};
 
 use crate::layout::Layout;
 use crate::object::GrantRef;
@@ -75,7 +75,7 @@ impl<L: Layout> State<L> {
 
     /// The abilities granted to the object in `slot`: none off the battlefield.
     fn granted_to(&self, slot: L::Slot) -> [Option<GrantRef<L>>; GRANTS] {
-        if self.object(slot).zone() == Zone::Battlefield {
+        if self.object(slot).on_battlefield() {
             self.derived(slot).granted
         } else {
             [None; GRANTS]

@@ -805,9 +805,16 @@ Built by by-bajq.3.10:
   Spent on a spell, the rider becomes `Continuous::Rule` on that spell, which
   `actions::counter` asks. `Capability::RemembersMana` keeps all of it out of
   every other game.
-- **A player.** "Your life total can't change" and protection for a player are
-  rule changes on that player. The life mutators, the cost check and the
-  targeting check each ask the one question.
+- **A player** (built by by-bajq.8.4). "Your life total can't change" and
+  protection from everything for a player are one rule change on that player,
+  `Governed::Player(PlayerRules)`, of one rule kind (`RuleKind::Player`): an
+  ability starts at most one rule change, and Teferi's Protection makes both.
+  The gain and loss of life (`life::gain`, `life::lose`), damage to a player,
+  the payment of life (`life::can_pay`), the targeting check and the damage
+  prevention each ask `rule_change::life_can_change` or
+  `rule_change::protected_from_everything`, one AND while no card in the game
+  makes such a change. Damage to a player whose life can't change is dealt and
+  changes no life total. An Aura attached to a player is not built.
 
 ### 7. Stack and object identity
 
@@ -855,10 +862,16 @@ Built by by-bajq.3.10:
   read the additions' abilities through the query of the abilities an object has
   (by-bajq.4.2), since the card table's listeners are per definition. When the
   permanent leaves, the move expands to every card of it at once.
-- **Phased-out permanents** (CR 702.26). A phased-out permanent is in no
-  battlefield list and no battlefield bitboard, and in a bitboard of its own
-  that the untap step reads. Its zone, incarnation and stored state are
-  untouched, so nothing triggers, and what is attached to it phases with it.
+- **Phased-out permanents** (CR 702.26; built by by-bajq.8.4). A phased-out
+  permanent is in no battlefield list and no battlefield bitboard, and in a
+  bitboard of its own that the untap step reads. Its zone, incarnation and
+  stored state are untouched, so nothing triggers, and what is attached to it
+  phases with it. `Object::on_battlefield`, a test of the battlefield index,
+  says "on the battlefield and phased in" for the readers of one object, as
+  cheaply as a test of the zone. Each permanent that phases out directly under a
+  player other than its base controller remembers that player
+  (`Memo::PhasedOutUnder`), whose untap step phases it in. The keyword phasing
+  is not built: no card has it.
 
 ### 8. The decision protocol
 

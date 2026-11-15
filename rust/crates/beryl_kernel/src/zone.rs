@@ -347,6 +347,8 @@ fn leave<L: Layout>(s: &mut State<L>, slot: L::Slot) {
         }
         Zone::Battlefield => {
             s.leave_battlefield(slot);
+            // A phased-out permanent is in no battlefield list (`crate::phasing`).
+            s.phased_out.remove(slot);
             s.flags.derived_dirty = true;
             // What was tracked of it this turn ends with it (CR 400.7): the object it
             // returns as is new.
@@ -365,6 +367,18 @@ fn leave<L: Layout>(s: &mut State<L>, slot: L::Slot) {
                 }
                 if other.attached_to == Some(slot) {
                     other.attached_to = None;
+                }
+            }
+            // What phased out directly while attached to it phases in unattached
+            // ([CR 702.26i](https://yawgatog.com/resources/magic-rules/#R70226i)): "if that
+            // object is still in the same zone ... If not, that Aura, Equipment, or
+            // Fortification phases in unattached."
+            if !s.phased_out.is_empty() {
+                for other in s.phased_out.iter() {
+                    let other = s.object_mut(other);
+                    if other.attached_to == Some(slot) {
+                        other.attached_to = None;
+                    }
                 }
             }
         }

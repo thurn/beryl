@@ -50,6 +50,7 @@
 //! | --- | --- | --- |
 //! | move an object between zones (CR 400.7), draw, order or shuffle a library, end a token | [`State::move_object`], [`State::draw`], [`State::reorder_library`], [`State::shuffle_library`], [`State::rebind_at_random`], [`State::cease_to_exist`] | the new incarnation and its reset fields; both zones' membership bitboards; the ordered library, graveyard and stack; the battlefield queue and every permanent's index into it; `derived_dirty`, for a graveyard while a permanent reads the graveyards; the attachments, combat references and exile links that named it; what the stores held about it, which ends ("Stores"); its identity, settled before anyone sees it ([`chance`]); both players' knowledge |
 //! | change a permanent's status, damage or counters | [`State::set_tapped`], [`State::set_summoning_sick`], [`State::reset_permanents_for_turn`], [`State::turn_face_up`], [`State::mark_damage`], [`State::clear_damage`], [`State::add_counters`], [`State::remove_counters`], [`State::order_timestamps`] | a face with its timestamp and who knows it; permanents reordered keep the timestamps they had among them; `derived_dirty` where the kernel can tell the layers read the field |
+//! | phase permanents out and in (CR 702.26) | [`State::phase_out`], [`State::phase_in`] ([`phasing`]) | the zone, incarnation and stores untouched; the battlefield queue, the owner's battlefield bitboard and the set of phased-out permanents; what is attached phases with its permanent, and what phased out alone phases in unattached once its permanent left; combat references to it end; who it phases in for, where that is not its base controller ([`memos::Memo::PhasedOutUnder`]); `derived_dirty` |
 //! | put a spell on the stack, make a token, have a permanent enter | [`State::become_spell`], [`State::make_token`], [`State::arrive`] with a [`mutate::Arrival`], [`State::remember`] | what a permanent enters with (tapped, attacking, its face, controller, counters and what it is attached to) is set as one change, before anything reads it |
 //! | declare and end combat | [`State::declare_attacker`], [`State::choose_attacked`], [`State::forget_attacked`], [`State::declare_blocker`], [`State::block`], [`State::mark_struck_first`], [`State::remove_from_combat`], [`State::end_combat`] | the combat flags and the combat reference change together; nothing stays related to a permanent removed from combat |
 //! | show or hide a card | [`State::reveal`], [`State::look`], [`State::forget`], and for a paused resolution [`State::keep_seen`] | each player's knowledge; the identity is settled first |
@@ -242,7 +243,8 @@
 //! rows of 56 bytes, 112. It is 20,144 since the state counts resolutions in a row with no choice
 //! and keeps the hash a loop of mandatory actions is compared with ([`repeats`]): a `u16` and a
 //! `u64`, 16 with padding. It is 20,184 since a [`query::Copiable`] holds three copy exceptions,
-//! 40 bytes more in all. The limit is 20,480. Each bead may change the size at its own push by at
+//! 40 bytes more in all. It is 20,216 since the set of phased-out permanents
+//! ([`phasing`]), 32 bytes. The limit is 20,480. Each bead may change the size at its own push by at
 //! most its allotment, whatever landed before it, and reports the size as it reports the count:
 //!
 //! | Bead | Allotment | Why |
@@ -264,7 +266,7 @@
 //! | by-bajq.6.1 | +72 (landed: +32, and +40 by by-bajq.6.10) | copy exceptions in each `Copiable`, which each of the 16 last-known rows holds: two, then three |
 //! | by-bajq.7.4 | +48 (landed: +32) | up to four entries of mana that remembers in each player's pool |
 //! | by-bajq.8.3 | +16 (landed: +16) | the count of mandatory resolutions in a row and the hash it compares, padded |
-//! | by-bajq.8.4 | +32 | a set of the phased-out permanents' slots |
+//! | by-bajq.8.4 | +32 (landed: +32) | a set of the phased-out permanents' slots |
 //!
 //! The allotments of groups 4 to 8 sum to 352, so with all of them landed the size is at
 //! most 20,192 and any order holds the limit. Past them the room left is 288 bytes. The
@@ -767,6 +769,7 @@ pub mod observation;
 mod order;
 pub mod payable;
 mod pending;
+pub mod phasing;
 mod player;
 mod player_set;
 mod players;

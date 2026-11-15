@@ -9,6 +9,7 @@ use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
 use crate::protection;
+use crate::rule_change;
 use crate::state::{
     AbilityTarget, CastKind, CastStep, Casting, StackEntry, StackItem, State, Target, TargetPlace,
     Zone, placed,
@@ -200,7 +201,11 @@ fn domain<L: Layout>(
 ) -> TargetSet<L> {
     let players = match spec.kind {
         TargetKind::Player | TargetKind::PermanentOrPlayer => {
-            s.players().filter(|p| player_matches(spec, p, you))
+            // CR 702.16j: a player with protection from everything "can't be targeted by
+            // spells or abilities".
+            s.players().filter(|p| {
+                player_matches(spec, p, you) && !rule_change::protected_from_everything(s, t, p)
+            })
         }
         _ => PlayerSet::NOBODY,
     };

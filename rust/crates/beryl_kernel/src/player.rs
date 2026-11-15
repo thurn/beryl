@@ -230,7 +230,9 @@ impl<L: Layout> State<L> {
     /// Deals damage to a player
     /// ([CR 120.3a](https://yawgatog.com/resources/magic-rules/#R1203a)): "Damage dealt to a
     /// player by a source without infect causes that player to lose that much life."
-    /// [`State::mark_damage`] is the same for a permanent.
+    /// [`State::mark_damage`] is the same for a permanent. With `loses_life` false the damage is
+    /// dealt and the life total stays, as for a player whose life total can't change: the damage
+    /// still has its other results, such as lifelink's gain.
     #[inline]
     #[must_use]
     pub fn damage_player(
@@ -239,9 +241,12 @@ impl<L: Layout> State<L> {
         player: Seat,
         amount: u8,
         combat: bool,
+        loses_life: bool,
     ) -> Event<L> {
-        self.player_mut(player).life -= i16::from(amount);
-        self.life_changed();
+        if loses_life {
+            self.player_mut(player).life -= i16::from(amount);
+            self.life_changed();
+        }
         Event::Damage {
             source,
             to: Recipient::Player(player),

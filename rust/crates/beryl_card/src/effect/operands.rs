@@ -138,6 +138,7 @@ impl Effect {
             }
             | Effect::Destroy { objects, .. }
             | Effect::Regenerate(objects)
+            | Effect::PhaseOut(objects)
             | Effect::Exile(objects)
             | Effect::ExileUntilThisLeaves(objects)
             | Effect::ExileLinked(objects)

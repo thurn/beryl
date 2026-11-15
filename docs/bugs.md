@@ -650,3 +650,16 @@ fixed in the same session. Newest first.
   any list that grows each time a repeatable action resolves needs a test that
   repeats the action past the list's capacity; the fuzzer reaches such lines
   only by chance.
+
+- **A static ability that changes a rule for players did nothing until its kind
+  was listed twice.** Platinum Emperion's "Your life total can't change" let
+  Lightning Bolt lower its controller's life, while the same change made by
+  Teferi's Protection's resolved effect worked. The layers collect a static
+  ability's rule change for players only when the card table's set of such
+  changes holds it, and `RuleChanges::of_players` built that set from a
+  hand-written list of three kinds, separate from `RuleKind::of_players`, which
+  already named the new `RuleKind::Player`. Found by the card's scenarios and
+  fixed in the change that added the kind: `RuleChanges::number` now adds each
+  change whose kind `RuleKind::of_players` names to the set, so the two can't
+  disagree. Prevention: derive a set from the one predicate that defines it,
+  never from a second list of variants.

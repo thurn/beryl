@@ -165,10 +165,17 @@ pub enum RuleKind {
     ///
     /// [CR 601.2f]: https://yawgatog.com/resources/magic-rules/#R6012f
     SpellCost,
+    /// A change to some players themselves ([`beryl_card::PlayerRules`]): their life totals
+    /// can't change ([CR 119.8]), or they have protection from everything ([CR 702.16j]). Each
+    /// rule asked about reads which changes it makes.
+    ///
+    /// [CR 119.8]: https://yawgatog.com/resources/magic-rules/#R1198
+    /// [CR 702.16j]: https://yawgatog.com/resources/magic-rules/#R70216j
+    Player,
 }
 
 impl RuleKind {
-    const COUNT: usize = 8;
+    const COUNT: usize = 9;
 
     /// The kind of change `rule` is, or the part of it no code reads.
     pub fn of(rule: &RuleChange) -> Result<RuleKind, Unchecked> {
@@ -260,7 +267,18 @@ impl RuleKind {
                     Err(Unchecked::Players)
                 }
             }
-            // Other permanents' loyalty abilities, attacks or blocks, a restriction to the
+            (Governed::Player(_), When::AsUsual) => {
+                if matches!(
+                    rule.players,
+                    Players::You | Players::EachOpponent | Players::EachPlayer
+                ) {
+                    Ok(RuleKind::Player)
+                } else {
+                    Err(Unchecked::Players)
+                }
+            }
+            // A change to players said with a time, other permanents' loyalty abilities, attacks
+            // or blocks, a restriction to the
             // timing the rules have already, a change to when a creature attacks or blocks, mana
             // abilities or the timing of named sources' abilities, countering spells other than
             // the one it is on, and a change to what a spell costs said with a change to when it
@@ -271,7 +289,8 @@ impl RuleKind {
                 | Governed::Attack { .. }
                 | Governed::ActivateAbilities { .. }
                 | Governed::Counter(_)
-                | Governed::SpellCosts { .. },
+                | Governed::SpellCosts { .. }
+                | Governed::Player(_),
                 _,
             ) => Err(Unchecked::Rule),
         }
@@ -283,7 +302,10 @@ impl RuleKind {
     pub const fn of_players(self) -> bool {
         matches!(
             self,
-            RuleKind::CastOnlyAsSorcery | RuleKind::CastAsInstant | RuleKind::CantActivateNamed
+            RuleKind::CastOnlyAsSorcery
+                | RuleKind::CastAsInstant
+                | RuleKind::CantActivateNamed
+                | RuleKind::Player
         )
     }
 
@@ -325,6 +347,8 @@ pub(crate) struct RuleChanges {
     of_kind: [Rules; RuleKind::COUNT],
     /// Those that govern casting every spell, whatever it is.
     of_every_spell: Rules,
+    /// Those of a kind that applies to players ([`RuleKind::of_players`]).
+    of_players: Rules,
     /// For each, the condition of the static ability that makes it for its own permanent,
     /// if it has one ([`RuleChanges::keep_condition`]).
     conditions: Vec<Option<&'static Condition>>,
@@ -348,6 +372,9 @@ impl RuleChanges {
         self.of_kind[kind as usize] = self.of_kind[kind as usize].with(id);
         if matches!(rule.what, Governed::CastSpells(Filter::Any)) {
             self.of_every_spell = self.of_every_spell.with(id);
+        }
+        if kind.of_players() {
+            self.of_players = self.of_players.with(id);
         }
         Ok(id)
     }
@@ -431,9 +458,7 @@ impl RuleChanges {
     /// The rule changes that apply to players ([`RuleKind::of_players`]).
     #[inline]
     pub(crate) fn of_players(&self) -> Rules {
-        self.of_kind(RuleKind::CastOnlyAsSorcery)
-            .union(self.of_kind(RuleKind::CastAsInstant))
-            .union(self.of_kind(RuleKind::CantActivateNamed))
+        self.of_players
     }
 }
 

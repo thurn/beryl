@@ -246,13 +246,18 @@ pub(super) fn ability_payable<L: Layout>(
     })
 }
 
-/// Whether `player` can pay every payment of life among `parts`, as [`State::can_pay_life`]
+/// Whether `player` can pay every payment of life among `parts`, as [`life::can_pay`]
 /// answers for each ([CR 119.4](https://yawgatog.com/resources/magic-rules/#R1194)): "If a
 /// cost or effect allows a player to pay an amount of life greater than 0, the player may do
 /// so only if their life total is greater than or equal to the amount of the payment."
-pub(super) fn life_payable<L: Layout>(s: &State<L>, player: Seat, parts: &[CostPart]) -> bool {
+pub(super) fn life_payable<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    parts: &[CostPart],
+) -> bool {
     parts.iter().all(|part| match part {
-        CostPart::Life(n) => s.can_pay_life(player, *n),
+        CostPart::Life(n) => life::can_pay(s, t, player, *n),
         _ => true,
     })
 }

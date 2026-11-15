@@ -83,6 +83,10 @@ pub enum Governed {
     ///
     /// [CR 601.2f]: https://yawgatog.com/resources/magic-rules/#R6012f
     SpellCosts { spells: Filter, change: SpellCost },
+    /// The players themselves: what [`PlayerRules`] names, as "your life total can't change and
+    /// you gain protection from everything" says. Made with [`When::AsUsual`]: the change is to
+    /// the players, not to when they do something.
+    Player(PlayerRules),
 }
 
 /// How a [`Governed::SpellCosts`] changes a spell's total cost ([CR 601.2f]).
@@ -107,6 +111,41 @@ pub enum SpellCost {
     ///
     /// [CR 601.2f]: https://yawgatog.com/resources/magic-rules/#R6012f
     AtLeast(u8),
+}
+
+/// What a [`Governed::Player`] changes about the players it applies to, one bit for each.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct PlayerRules(u8);
+
+impl PlayerRules {
+    /// "Your life total can't change": the players can't gain life ([CR 119.7]) and can't lose
+    /// life ([CR 119.8]): "If an effect says that a player can't lose life, that player can't
+    /// make an exchange such that the player's life total would become lower ... In addition, a
+    /// cost that involves having that player pay life can't be paid." Damage is still dealt to
+    /// them.
+    ///
+    /// [CR 119.7]: https://yawgatog.com/resources/magic-rules/#R1197
+    /// [CR 119.8]: https://yawgatog.com/resources/magic-rules/#R1198
+    pub const LIFE_CANT_CHANGE: PlayerRules = PlayerRules(1 << 0);
+    /// "You gain protection from everything" ([CR 702.16j]): "A permanent or player with
+    /// protection from everything has protection from each object regardless of that object's
+    /// characteristic values. Such a permanent or player can't be targeted by spells or
+    /// abilities and can't be enchanted by Auras. ... All damage that would be dealt to such a
+    /// permanent or player is prevented."
+    ///
+    /// [CR 702.16j]: https://yawgatog.com/resources/magic-rules/#R70216j
+    pub const PROTECTION_FROM_EVERYTHING: PlayerRules = PlayerRules(1 << 1);
+
+    /// Both sets' changes.
+    #[must_use]
+    pub const fn union(self, other: PlayerRules) -> PlayerRules {
+        PlayerRules(self.0 | other.0)
+    }
+
+    /// Whether it makes every change `other` makes.
+    pub const fn contains(self, other: PlayerRules) -> bool {
+        self.0 & other.0 == other.0
+    }
 }
 
 /// The sources a [`Governed::ActivateAbilities`] names, by their names.
@@ -212,6 +251,19 @@ impl RuleChange {
                     SpellCost::Less(n) => format!("paying {n} less for {spells}"),
                     SpellCost::AtLeast(n) => format!("paying at least {n} for {spells}"),
                 }
+            }
+            (Governed::Player(changes), _) => {
+                let life = changes.contains(PlayerRules::LIFE_CANT_CHANGE);
+                let protection = changes.contains(PlayerRules::PROTECTION_FROM_EVERYTHING);
+                match (life, protection) {
+                    (true, true) => {
+                        "with a life total that can't change and protection from everything"
+                    }
+                    (true, false) => "with a life total that can't change",
+                    (false, true) => "with protection from everything",
+                    (false, false) => "with no change to themselves",
+                }
+                .to_owned()
             }
             (_, When::AsUsual) => "with a rule changed in no way".to_owned(),
         }

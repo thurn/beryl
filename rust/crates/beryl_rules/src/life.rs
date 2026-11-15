@@ -8,21 +8,50 @@ use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
+use crate::rule_change;
+use crate::state::State;
+use crate::table::GameTable;
 
 /// A player gains life ([CR 119.3](https://yawgatog.com/resources/magic-rules/#R1193)): "If an
 /// effect causes a player to gain life or lose life, that player's life total is adjusted
-/// accordingly."
+/// accordingly." Nothing happens to a player whose life total can't change
+/// ([`rule_change::life_can_change`]): there is no life gain event for a replacement effect or
+/// a trigger to see ([CR 119.7]): "a replacement effect that would replace a life gain event
+/// affecting that player won't do anything."
+///
+/// [CR 119.7]: https://yawgatog.com/resources/magic-rules/#R1197
 #[inline]
 pub fn gain<L: Layout>(game: &mut Game<'_, L>, player: Seat, amount: u8) -> Result<(), Full> {
+    if !rule_change::life_can_change(game.state, game.table, player) {
+        return Ok(());
+    }
     let e = game.state.gain_life(player, amount);
     game.settle(e)
 }
 
-/// A player loses life (CR 119.3).
+/// A player loses life (CR 119.3), or nothing happens if their life total can't change
+/// ([CR 119.8]): "If an effect says that a player can't lose life, that player can't make an
+/// exchange such that the player's life total would become lower".
+///
+/// [CR 119.8]: https://yawgatog.com/resources/magic-rules/#R1198
 #[inline]
 pub fn lose<L: Layout>(game: &mut Game<'_, L>, player: Seat, amount: u8) -> Result<(), Full> {
+    if !rule_change::life_can_change(game.state, game.table, player) {
+        return Ok(());
+    }
     let e = game.state.lose_life(player, amount);
     game.settle(e)
+}
+
+/// Whether `player` can pay `amount` life: they have that much ([`State::can_pay_life`],
+/// [CR 119.4]), and their life total can change ([CR 119.8]): "a cost that involves having that
+/// player pay life can't be paid." Every rule that asks whether life can be paid asks here.
+///
+/// [CR 119.4]: https://yawgatog.com/resources/magic-rules/#R1194
+/// [CR 119.8]: https://yawgatog.com/resources/magic-rules/#R1198
+#[inline]
+pub(crate) fn can_pay<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, amount: u8) -> bool {
+    s.can_pay_life(player, amount) && (amount == 0 || rule_change::life_can_change(s, t, player))
 }
 
 /// [`Effect::GainLife`](beryl_card::Effect::GainLife): "[Player] gains [amount] life." The

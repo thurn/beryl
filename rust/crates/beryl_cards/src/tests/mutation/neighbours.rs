@@ -483,6 +483,7 @@ fn local(effect: &'static Effect) -> Neighbours<Effect> {
         }
         Effect::Counter(o) => objects_of(o, Effect::Counter, &mut add),
         Effect::Regenerate(o) => objects_of(o, Effect::Regenerate, &mut add),
+        Effect::PhaseOut(o) => objects_of(o, Effect::PhaseOut, &mut add),
         Effect::Exile(o) => objects_of(o, Effect::Exile, &mut add),
         Effect::ExileUntilThisLeaves(o) => objects_of(o, Effect::ExileUntilThisLeaves, &mut add),
         Effect::Sacrifice(o) => objects_of(o, Effect::Sacrifice, &mut add),

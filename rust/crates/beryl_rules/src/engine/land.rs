@@ -38,7 +38,7 @@ pub(super) fn play_land<L: Layout>(
         ..Entry::default()
     };
     match crate::replace::life_to_enter(s, t, slot, entry)? {
-        Some(life) if s.player(player).life() >= i16::from(life) => {
+        Some(life) if crate::life::can_pay(s, t, player, life) => {
             s.ask(Pending::EnterPayingLife { slot, life });
             Ok(())
         }

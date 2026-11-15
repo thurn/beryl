@@ -63,6 +63,7 @@ impl Effect {
             | Effect::CounterInto { .. }
             | Effect::Destroy { .. }
             | Effect::Regenerate(_)
+            | Effect::PhaseOut(_)
             | Effect::Exile(_)
             | Effect::ExileUntilThisLeaves(_)
             | Effect::ExileLinked(_)

@@ -187,7 +187,7 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn layers_read_counters(&self, t: &GameTable, slot: L::Slot, kind: CounterKind) -> bool {
         matches!(kind, CounterKind::PlusOne | CounterKind::MinusOne)
-            || self.object(slot).zone() != Zone::Battlefield
+            || !self.object(slot).on_battlefield()
             || (self.layer_inputs.contains(Inputs::COUNTERS)
                 && self.definition(slot).face(t).abilities.iter().any(|a| {
                     a.layer()

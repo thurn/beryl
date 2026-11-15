@@ -21,7 +21,7 @@ use crate::bitboard::Bitboard;
 use crate::chosen::ChosenValue;
 use crate::fit::{Misfit, room};
 use crate::fixed::Full;
-use crate::ids::SlotId;
+use crate::ids::{Seat, SlotId};
 use crate::invariants::{At, Violation, check};
 use crate::layout::{Layout, Queue, Small};
 use crate::observation::Observation;
@@ -91,6 +91,14 @@ pub enum Memo<L: Layout = Small> {
     /// [`Memo::ExiledWith`] does, for an ability of the Aura still on the stack after the
     /// Aura left, until a new object arrives in that slot ([`State::forget_links_to`]).
     PutOntoBattlefieldWith(L::Slot),
+    /// The phased-out permanent phased out under this player's control, who is not the player
+    /// who put it onto the battlefield: it phases in during that player's untap step
+    /// ([CR 702.26a]): "all phased-out permanents that had phased out under that player's
+    /// control “phase in.”" A permanent without it phased out under its base controller's
+    /// control ([`crate::phasing`]).
+    ///
+    /// [CR 702.26a]: https://yawgatog.com/resources/magic-rules/#R70226a
+    PhasedOutUnder(Seat),
 }
 
 impl<L: Layout> Memo<L> {
@@ -105,6 +113,7 @@ impl<L: Layout> Memo<L> {
             Memo::Chosen(_) => Kinds::CHOSEN,
             Memo::Really(_) => Kinds::REALLY,
             Memo::PutOntoBattlefieldWith(_) => Kinds::PUT_WITH,
+            Memo::PhasedOutUnder(_) => Kinds::PHASED_OUT_UNDER,
         }
     }
 
@@ -117,7 +126,8 @@ impl<L: Layout> Memo<L> {
             | Memo::X(_)
             | Memo::Chosen(_)
             | Memo::Really(_)
-            | Memo::PutOntoBattlefieldWith(_) => Zone::Battlefield,
+            | Memo::PutOntoBattlefieldWith(_)
+            | Memo::PhasedOutUnder(_) => Zone::Battlefield,
             Memo::ExiledWith(_) | Memo::ExiledUntil(_) => Zone::Exile,
         }
     }
@@ -136,7 +146,7 @@ impl<L: Layout> Memo<L> {
     #[inline]
     fn names(self) -> Option<L::Slot> {
         match self {
-            Memo::Paid(_) | Memo::X(_) | Memo::Chosen(_) | Memo::Really(_) => None,
+            Memo::Paid(_) | Memo::X(_) | Memo::Chosen(_) | Memo::Really(_) | Memo::PhasedOutUnder(_) => None,
             Memo::ExiledWith(by) | Memo::ExiledUntil(by) | Memo::PutOntoBattlefieldWith(by) => {
                 Some(by)
             }
@@ -152,6 +162,7 @@ impl<L: Layout> Memo<L> {
             Memo::Paid(paid) => !paid.is_empty(),
             Memo::Chosen(value) => value.holds(),
             Memo::Really(_) => true,
+            Memo::PhasedOutUnder(_) => true,
             // What exiled it left a card or a token in its slot.
             Memo::ExiledWith(by) | Memo::PutOntoBattlefieldWith(by) => zone(by) != Zone::Nowhere,
             // An object exiled "until" its exiler leaves returns as it leaves (CR 610.3).
@@ -169,6 +180,7 @@ impl<L: Layout> Memo<L> {
             Memo::Chosen(value) => Memo::Chosen(value.relayout()),
             Memo::Really(card) => Memo::Really(crate::relayout::card(card)),
             Memo::PutOntoBattlefieldWith(by) => Memo::PutOntoBattlefieldWith(slot(by)),
+            Memo::PhasedOutUnder(player) => Memo::PhasedOutUnder(player),
         }
     }
 
@@ -193,6 +205,7 @@ impl Kinds {
     const CHOSEN: u16 = 1 << 11;
     const REALLY: u16 = 1 << 12;
     const PUT_WITH: u16 = 1 << 13;
+    const PHASED_OUT_UNDER: u16 = 1 << 14;
     /// The kinds whose memo names a slot ([`Memo::names`]).
     const NAMING: u16 = Kinds::EXILED_WITH | Kinds::EXILED_UNTIL | Kinds::PUT_WITH;
     /// The kinds whose memo ends as a new object arrives in the slot it names
@@ -590,6 +603,30 @@ impl<L: Layout> State<L> {
             e.memo != Memo::ExiledWith(slot) && e.memo != Memo::PutOntoBattlefieldWith(slot)
         });
         self.settle_ended(done);
+    }
+
+    /// The player under whose control the phased-out permanent in `slot` phased out, if it is not
+    /// its base controller ([`Memo::PhasedOutUnder`]). With no permanent in the game that
+    /// remembers one, one AND.
+    #[inline]
+    pub(crate) fn phased_out_under(&self, slot: L::Slot) -> Option<Seat> {
+        self.memos
+            .of(Kinds::PHASED_OUT_UNDER)
+            .iter()
+            .find_map(|e| match e.memo {
+                Memo::PhasedOutUnder(player) if e.slot == slot => Some(player),
+                _ => None,
+            })
+    }
+
+    /// Ends the [`Memo::PhasedOutUnder`] of the permanents in `slots` as they phase in.
+    pub(crate) fn forget_phased_out_under(&mut self, slots: Bitboard<L::Slot>) {
+        if self.memos.kinds.0 & Kinds::PHASED_OUT_UNDER != 0 {
+            let done = self
+                .memos
+                .end(|e| !(matches!(e.memo, Memo::PhasedOutUnder(_)) && slots.contains(e.slot)));
+            self.settle_ended(done);
+        }
     }
 
     /// Everything the object in `slot` remembers: for [`State::signature`], tools, tests

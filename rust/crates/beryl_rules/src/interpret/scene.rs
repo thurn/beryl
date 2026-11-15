@@ -561,7 +561,7 @@ impl<L: Layout> Scene<'_, L> {
             Condition::OnBattlefield(names) => {
                 let objects = self.objects(names);
                 !objects.is_empty()
-                    && objects.all(|slot| self.s.object(slot).zone() == Zone::Battlefield)
+                    && objects.all(|slot| self.s.object(slot).on_battlefield())
             }
             Condition::Is(names, filter) => {
                 // What a target was is not kept once the effect has moved it (`Known` holds

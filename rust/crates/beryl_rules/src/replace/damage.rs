@@ -13,6 +13,7 @@ use crate::game::Game;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
 use crate::protection;
+use crate::rule_change;
 use crate::state::{ChosenSource, ObjectRef, ShieldAt, State, Subject, Zone, ZoneKey};
 use crate::table::GameTable;
 
@@ -64,10 +65,20 @@ pub(crate) fn damage<L: Layout>(
     let live = s
         .replacing()
         .is_some_and(|r| r.protects() || r.replaces(ReplacementKind::Damage));
-    if !live && !s.has_prevention_shields() {
+    if !live && !s.has_prevention_shields() && !player_protected(s, game.table(), &proposal) {
         return Ok(proposal);
     }
     replaced(game, proposal)
+}
+
+/// Whether the damage would be dealt to a player with protection from everything, which
+/// prevents it ([CR 702.16j]): "All damage that would be dealt to such a permanent or player is
+/// prevented." One AND while no card in the game gives a player protection.
+///
+/// [CR 702.16j]: https://yawgatog.com/resources/magic-rules/#R70216j
+#[inline]
+fn player_protected<L: Layout>(s: &State<L>, t: &GameTable, p: &Damage<L>) -> bool {
+    matches!(p.to, Recipient::Player(player) if rule_change::protected_from_everything(s, t, player))
 }
 
 /// A replacement or prevention effect of damage, by where it comes from: what [CR 614.5]
@@ -171,10 +182,14 @@ fn candidates<L: Layout>(
         }
     };
     if p.preventable {
-        if let Recipient::Permanent(r) = p.to
-            && protection::live(s)
-            && protection::protected_from_cold(s, t, r.slot, p.source.slot)
-        {
+        let permanent_protected = |r: ObjectRef<L>| {
+            protection::live(s) && protection::protected_from_cold(s, t, r.slot, p.source.slot)
+        };
+        let protected = match p.to {
+            Recipient::Permanent(r) => permanent_protected(r),
+            Recipient::Player(_) => player_protected(s, t, p),
+        };
+        if protected {
             add(Candidate {
                 key: Key::Protection,
                 change: Change::PreventAll,

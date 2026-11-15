@@ -4,7 +4,7 @@
 use super::Ctx;
 use super::filters::Kind;
 use super::words::number;
-use crate::continuous::{Governed, Named, RuleChange, SpellCost, When};
+use crate::continuous::{Governed, Named, PlayerRules, RuleChange, SpellCost, When};
 use crate::effect::{Objects, Players};
 use crate::filter::Filter;
 use crate::mana::ManaRestriction;
@@ -65,6 +65,7 @@ impl Ctx {
                     _ => format!("{spells} can be countered only at a changed time"),
                 };
             }
+            Governed::Player(changes) => return self.player_rules(rule.players, changes),
             // Of the spells, not of who casts them: "Noncreature spells cost {1} more to
             // cast."
             Governed::SpellCosts { spells, change } => {
@@ -110,6 +111,41 @@ impl Ctx {
             (When::AsInstant, _) => format!("{who} may {what} as though they had flash"),
             (When::AsUsual, _) => format!("{who} {what} as usual"),
         }
+    }
+
+    /// A change to players themselves: "your life total can't change and you gain protection
+    /// from everything" ([CR 119.8], [CR 702.16j]).
+    ///
+    /// [CR 119.8]: https://yawgatog.com/resources/magic-rules/#R1198
+    /// [CR 702.16j]: https://yawgatog.com/resources/magic-rules/#R70216j
+    fn player_rules(&mut self, players: Players, changes: PlayerRules) -> String {
+        let mut clauses = Vec::new();
+        if changes.contains(PlayerRules::LIFE_CANT_CHANGE) {
+            let whose = self.possessive(players);
+            clauses.push(format!("{whose} life total can't change"));
+        }
+        if changes.contains(PlayerRules::PROTECTION_FROM_EVERYTHING) {
+            let who = self.player(players);
+            let gain = if players == Players::You {
+                "gain"
+            } else {
+                "gains"
+            };
+            clauses.push(format!("{who} {gain} protection from everything"));
+        }
+        clauses.join(" and ")
+    }
+
+    /// "All permanents you control phase out" ([CR 702.26b]): the permanents are the subject.
+    ///
+    /// [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
+    pub(super) fn phase_out(&mut self, objects: Objects) -> String {
+        let phase = if self.is_plural(objects) {
+            "phase"
+        } else {
+            "phases"
+        };
+        format!("{} {phase} out", self.objects(objects))
     }
 
     /// "This creature can't attack unless defending player controls an Island"

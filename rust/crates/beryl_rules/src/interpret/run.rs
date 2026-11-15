@@ -196,6 +196,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 regeneration,
             } => destroy::instruction(self, objects, regeneration)?,
             Effect::Regenerate(objects) => regenerate::instruction(self, objects)?,
+            Effect::PhaseOut(objects) => crate::phasing::instruction(self, objects)?,
             Effect::PreventDamage {
                 to,
                 prevention,
@@ -399,7 +400,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// card or token on the battlefield."
     pub(crate) fn permanents(&self, objects: Objects) -> Bitboard<L::Slot> {
         let s = &*self.game.state;
-        (self.scene().objects(objects)).filter(|slot| s.object(slot).zone() == Zone::Battlefield)
+        (self.scene().objects(objects)).filter(|slot| s.object(slot).on_battlefield())
     }
 
     /// The objects `objects` names that are not in `zone` already.

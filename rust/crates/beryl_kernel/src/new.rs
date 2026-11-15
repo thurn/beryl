@@ -139,6 +139,7 @@ impl<L: Layout> State<L> {
             departed_spells: Default::default(),
             effects: Effects::empty(),
             keyed: Bitboard::EMPTY,
+            phased_out: Bitboard::EMPTY,
             memos: Memos::empty(),
             counters: CounterTable::empty(),
             elsewhere: Default::default(),

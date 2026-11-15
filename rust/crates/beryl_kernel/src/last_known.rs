@@ -26,7 +26,7 @@ use crate::invariants::{Violation, check};
 use crate::layout::{Layout, Queue, Small};
 use crate::object::{Derived, ObjectRef};
 use crate::query::Copiable;
-use crate::state::{PendingTrigger, StackEntry, State, Zone};
+use crate::state::{PendingTrigger, StackEntry, State};
 use crate::table::{Capability, GameTable};
 
 /// The rows a [`Small`] game holds: a sweeper that kills more creatures with abilities that
@@ -107,7 +107,7 @@ impl<L: Layout> State<L> {
     /// many abilities look back at it. The layer results must be current.
     pub fn record_last_known(&mut self, slot: L::Slot) -> Result<(), Full> {
         debug_assert!(
-            self.object(slot).zone == Zone::Battlefield && !self.flags.derived_dirty,
+            self.object(slot).on_battlefield() && !self.flags.derived_dirty,
             "last-known information of a permanent with current layer results"
         );
         let object = self.object_ref(slot);

@@ -11,7 +11,7 @@
 //! its filter accepts, or its condition. Which permanent makes a change is found only to
 //! tell a player why.
 
-use beryl_card::{Governed, ManaCost, RuleChange, SpellCost};
+use beryl_card::{Governed, ManaCost, PlayerRules, RuleChange, SpellCost};
 use beryl_kernel::chosen::ChosenValue;
 
 use crate::bitboard::Bitboard;
@@ -50,6 +50,51 @@ pub(crate) fn cast_as_instant<L: Layout>(
     face: &Face,
 ) -> bool {
     governs_cast(s, t, RuleKind::CastAsInstant, player, face)
+}
+
+/// Whether `player`'s life total can change: no rule change in force says it can't, as "Until
+/// your next turn, your life total can't change" does ([CR 119.7], [CR 119.8]). One AND while
+/// no card in the game makes a change to players. Every gain and loss of life and every
+/// payment of life asks here.
+///
+/// [CR 119.7]: https://yawgatog.com/resources/magic-rules/#R1197
+/// [CR 119.8]: https://yawgatog.com/resources/magic-rules/#R1198
+#[inline]
+pub(crate) fn life_can_change<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> bool {
+    !player_rule(s, t, player, PlayerRules::LIFE_CANT_CHANGE)
+}
+
+/// Whether `player` has protection from everything ([CR 702.16j]): "Such a permanent or player
+/// can't be targeted by spells or abilities and can't be enchanted by Auras. ... All damage
+/// that would be dealt to such a permanent or player is prevented." One AND while no card in
+/// the game makes a change to players.
+///
+/// [CR 702.16j]: https://yawgatog.com/resources/magic-rules/#R70216j
+#[inline]
+pub(crate) fn protected_from_everything<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+) -> bool {
+    player_rule(s, t, player, PlayerRules::PROTECTION_FROM_EVERYTHING)
+}
+
+/// Whether a rule change in force for `player` makes the change `which` to them. The card
+/// table's set of changes to players is read first, so a game whose cards make none reads
+/// nothing of the state.
+#[inline]
+fn player_rule<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, which: PlayerRules) -> bool {
+    let of_kind = t.rules_of(RuleKind::Player);
+    !of_kind.is_empty() && makes(t, s.rules_for(player).common(of_kind), which)
+}
+
+/// Whether one of `rules`, which change players, makes the change `which`. Out of line: only a
+/// game with such a change in force comes here.
+#[inline(never)]
+fn makes(t: &GameTable, rules: Rules, which: PlayerRules) -> bool {
+    rules
+        .iter()
+        .any(|id| matches!(t.rule(id).what, Governed::Player(changes) if changes.contains(which)))
 }
 
 /// Whether a rule change of `kind` in force for `player` governs their casting the spell
@@ -91,7 +136,8 @@ fn spells_of(rule: &RuleChange) -> Filter {
         | Governed::Attack { .. }
         | Governed::ActivateAbilities { .. }
         | Governed::Counter(_)
-        | Governed::SpellCosts { .. } => unreachable!("a rule change about casting"),
+        | Governed::SpellCosts { .. }
+        | Governed::Player(_) => unreachable!("a rule change about casting"),
     }
 }
 

@@ -8,7 +8,7 @@ use crate::bitboard::Bitboard;
 use crate::elsewhere::SoFar;
 use crate::ids::Seat;
 use crate::layout::Layout;
-use crate::state::{Flag, State, Zone};
+use crate::state::{Flag, State};
 use crate::table::GameTable;
 
 /// What a [`Filter`] accepts in a game. Evaluating one is a pass over a candidate set; the
@@ -87,7 +87,7 @@ impl Evaluate for Filter {
     ) -> bool {
         let o = s.object(slot);
         let face = || s.definition(slot).face(t);
-        let derived = || (o.zone == Zone::Battlefield).then(|| s.derived(slot));
+        let derived = || o.on_battlefield().then(|| s.derived(slot));
         // A permanent's characteristics are the layers' results. Anything else's are its
         // face's while no effect reaches other zones, and the kernel's reads of them
         // otherwise ([`crate::elsewhere`]), out of line.

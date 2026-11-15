@@ -9,6 +9,7 @@ use crate::game::Game;
 use crate::ids::Seat;
 use crate::layers;
 use crate::layout::Layout;
+use crate::phasing;
 use crate::state::{Duration, Pending, State, TurnStep, Zone, ZoneKey};
 use crate::table::GameTable;
 
@@ -109,6 +110,7 @@ pub(crate) fn step_actions<L: Layout>(
 /// determines which permanents they control will untap. Then they untap them all
 /// simultaneously." Their events are kept as one group.
 fn untap<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sink<L>) -> Result<(), Full> {
+    phasing::untap_step(s, t, sink)?;
     sink.together();
     let untapped = untap_all(s, t, sink);
     sink.apart();

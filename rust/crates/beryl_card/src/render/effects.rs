@@ -117,6 +117,7 @@ impl Ctx {
             Effect::Regenerate(objects) => {
                 vec![self.acts(("regenerate", "regenerates"), objects, "")]
             }
+            Effect::PhaseOut(objects) => vec![self.phase_out(objects)],
             Effect::Attach { objects, to } => {
                 let host = self.objects(to);
                 vec![self.acts(("attach", "attaches"), objects, &format!(" to {host}"))]

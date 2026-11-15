@@ -12,7 +12,7 @@ use crate::words::{ColorWords, LandTypeWords, SubtypeWord};
 
 mod rule_change;
 
-pub use rule_change::{Governed, Named, RuleChange, SpellCost, When};
+pub use rule_change::{Governed, Named, PlayerRules, RuleChange, SpellCost, When};
 
 /// A replacement effect of a static ability
 /// ([CR 614.1](https://yawgatog.com/resources/magic-rules/#R6141)): "Some continuous effects

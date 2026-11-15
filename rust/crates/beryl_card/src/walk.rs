@@ -217,7 +217,7 @@ impl Ability {
                         filter.walk(visit);
                     }
                 }
-                Governed::ActivateAbilities { .. } => {}
+                Governed::ActivateAbilities { .. } | Governed::Player(_) => {}
             }
         }
         if let Some(filter) = &self.only_if_you_control() {

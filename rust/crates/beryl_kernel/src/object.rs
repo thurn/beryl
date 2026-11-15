@@ -31,6 +31,13 @@ pub enum Flag {
     ///
     /// [CR 302.6]: https://yawgatog.com/resources/magic-rules/#R3026
     SummoningSick = 1 << 1,
+    /// Phased out ([CR 702.26b]): "If a permanent phases out, its status changes to “phased
+    /// out.” Except for rules and effects that specifically mention phased-out permanents, a
+    /// phased-out permanent is treated as though it does not exist." Its slot is in the state's
+    /// set of phased-out permanents ([`crate::phasing`]) and in no battlefield list.
+    ///
+    /// [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
+    PhasedOut = 1 << 2,
     /// A token ([CR 111.1]): "a marker used to represent any permanent that isn't
     /// represented by a card."
     ///
@@ -381,6 +388,19 @@ impl<L: Layout> Object<L> {
         self.zone
     }
 
+    /// On the battlefield and phased in: a permanent the game treats as existing, with layer
+    /// results ([CR 702.26b]): "a phased-out permanent is treated as though it does not exist."
+    /// A phased-out permanent's [`Object::zone`] is still the battlefield ([CR 702.26d]): "The
+    /// phasing event doesn't actually cause a permanent to change zones". As cheap as a test of
+    /// the zone: one read of the battlefield index.
+    ///
+    /// [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
+    /// [CR 702.26d]: https://yawgatog.com/resources/magic-rules/#R70226d
+    #[inline]
+    pub fn on_battlefield(&self) -> bool {
+        self.battlefield_index != OFF_BATTLEFIELD
+    }
+
     /// [CR 108.3](https://yawgatog.com/resources/magic-rules/#R1083): "The owner of a card in the
     /// game is the player who started the game with it in their deck."
     #[inline]
@@ -409,6 +429,13 @@ impl<L: Layout> Object<L> {
     #[inline]
     pub fn is_summoning_sick(&self) -> bool {
         self.flags.has(Flag::SummoningSick)
+    }
+
+    /// Phased out ([`Flag::PhasedOut`]): on the battlefield by its zone, and treated as though
+    /// it does not exist.
+    #[inline]
+    pub fn is_phased_out(&self) -> bool {
+        self.flags.has(Flag::PhasedOut)
     }
 
     /// [CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111): "a marker used to represent

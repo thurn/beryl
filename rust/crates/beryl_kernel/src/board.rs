@@ -81,6 +81,10 @@ impl<L: Layout> State<L> {
             let name = t.def(row.copiable.record(t).0).name;
             return Some(format!("the last-known information of {name}"));
         }
+        if let Some(slot) = self.phased_out.iter().next() {
+            let name = t.def(self.object(slot).card).name;
+            return Some(format!("{name} phased out"));
+        }
         self.stores_lingering(t)
     }
 }

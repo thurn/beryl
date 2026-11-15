@@ -298,6 +298,11 @@ pub const fn destroy_without_regeneration(objects: Objects) -> Effect {
     }
 }
 
+/// [`Effect::PhaseOut`]: "[permanents] phase out".
+pub const fn phase_out(objects: Objects) -> Effect {
+    Effect::PhaseOut(objects)
+}
+
 /// [`Effect::Regenerate`]: "regenerate [permanents]".
 pub const fn regenerate(objects: Objects) -> Effect {
     Effect::Regenerate(objects)

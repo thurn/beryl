@@ -95,6 +95,13 @@ impl<L: Layout> State<L> {
                 "attached to an object off the battlefield and out of the graveyards",
                 at,
             )?;
+            // What is attached to a permanent phases out with it (CR 702.26g).
+            check(
+                o.flags.has(Flag::PhasedOut)
+                    || !o.attached_to.is_some_and(|l| self.phased_out.contains(l)),
+                "a phased-in permanent attached to a phased-out one",
+                at,
+            )?;
             if !matches!(o.zone, Zone::Battlefield | Zone::Stack) {
                 // What may stay off the battlefield: being a token. What exiled a card is
                 // a memo of it, held to the exile zone by the Memos store's own check.
@@ -147,14 +154,23 @@ impl<L: Layout> State<L> {
     fn check_zones(&self) -> Result<(), Violation> {
         let mut members: L::PerPlayer<_> = Table::filled([Bitboard::EMPTY; Zone::OWNED]);
         let mut stack = Bitboard::EMPTY;
+        let mut phased_out = Bitboard::EMPTY;
         for slot in L::Slot::all() {
             let o = self.object(slot);
             match o.zone {
                 Zone::Stack => stack.insert(slot),
                 Zone::Nowhere => {}
+                // A phased-out permanent is on the battlefield by its zone and in the set of
+                // phased-out permanents instead of its owner's zone set (`crate::phasing`).
+                Zone::Battlefield if o.flags.has(Flag::PhasedOut) => phased_out.insert(slot),
                 zone => members[o.owner.index()][zone as usize].insert(slot),
             }
         }
+        check(
+            phased_out == self.phased_out,
+            "the phased-out set disagrees with the objects' flags",
+            None,
+        )?;
         check(
             members == self.zones.members,
             "zone bitboards disagree",
