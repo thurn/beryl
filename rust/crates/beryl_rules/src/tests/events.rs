@@ -1397,10 +1397,14 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
     decide_with(&t, &mut s, &mut x);
     assert_eq!(s.object(aura).zone(), Zone::Graveyard);
 
-    // On a token, the token ceases to exist and the Aura goes, in one check.
+    // On a token, the token ceases to exist and the Aura goes, in one check. The Aura is
+    // placed directly: put onto the battlefield by an effect with nothing to enchant, it
+    // would stay where it is (CR 303.4g).
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
-    let aura = put(&t, &mut s, &mut x, p, "Test Reconfiguration");
+    let aura = find(&s, &t, p, "Test Reconfiguration");
+    s.board().place(aura, Zone::Battlefield).unwrap();
+    crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let mut token = Bitboard::EMPTY;
     with_game(&t, &mut s, &mut x, aura, |game, resolution| {
         token = create_tokens(game, resolution, &MAP, 1, TokenEntry::default());

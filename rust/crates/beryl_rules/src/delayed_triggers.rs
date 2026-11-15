@@ -3,14 +3,16 @@
 
 use beryl_card::{Amount, Objects};
 
-use crate::card::AbilityIx;
+use crate::card::{AbilityIx, TriggerEvent};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::resolution::Resolution;
-use crate::state::TriggeredAbility;
-use crate::state::{AbilityRef, ObjectRef, PendingTrigger, TriggerInfo};
+use crate::state::{
+    AbilityRef, ObjectRef, PendingTrigger, State, TriggerInfo, TriggeredAbility, Zone,
+};
+use crate::table::GameTable;
 use crate::trigger;
 
 /// What is resolving creates a delayed triggered ability: the ability at `ability` on its
@@ -69,4 +71,29 @@ pub(crate) fn instruction<L: Layout>(
     let (game, resolution) = run.resolving();
     create(game, resolution, ability, amount, object)?;
     Ok(Outcome::NOTHING)
+}
+
+/// Fires the delayed triggers that wait for their own source to leave the battlefield, of the
+/// permanents of one event about to leave it: each once ([CR 603.7b]): "A delayed triggered
+/// ability will trigger only once—the next time its trigger event occurs". It keeps the object
+/// it carries.
+///
+/// [CR 603.7b]: https://yawgatog.com/resources/magic-rules/#R6037b
+#[cold]
+#[inline(never)]
+pub(crate) fn fire_on_leaving<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    leaving: impl Iterator<Item = (L::Slot, Zone)>,
+) -> Result<(), Full> {
+    for (left, _) in leaving {
+        let object = s.object_ref(left);
+        s.fire_delayed(|d| {
+            d.of.source == Some(object)
+                && trigger::ability(t, d.of.card, d.of.face, d.of.ability.get())
+                    .trigger()
+                    .is_some_and(|trigger| trigger.is_this(TriggerEvent::Leaves))
+        })?;
+    }
+    Ok(())
 }

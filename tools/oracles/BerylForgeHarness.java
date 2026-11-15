@@ -686,16 +686,28 @@ public final class BerylForgeHarness {
             String selector = step.get("ability").getAsString();
             Card card = find(player, name, ZoneType.Battlefield, ZoneType.Hand, ZoneType.Graveyard);
             List<String> seen = new ArrayList<>();
+            List<SpellAbility> offered = new ArrayList<>();
             for (SpellAbility sa : card.getAllPossibleAbilities(player, true)) {
                 if (sa.isSpell() || sa.isLandAbility() || sa.isManaAbility()) {
                     continue;
                 }
                 seen.add(sa.toString());
+                offered.add(sa);
                 if (sa.toString().contains(selector)) {
                     sa.setActivatingPlayer(player);
                     prepare(player, sa);
                     return sa;
                 }
+            }
+            // Forge builds a description from its own script, whose wording may be older than
+            // the Oracle text the selector comes from ("Exile all cards from target player's
+            // graveyard" for "Exile target player's graveyard"). A card with one activated
+            // ability has only that one to activate.
+            if (offered.size() == 1) {
+                SpellAbility sa = offered.get(0);
+                sa.setActivatingPlayer(player);
+                prepare(player, sa);
+                return sa;
             }
             throw new StepFailed("Forge offers no ability of " + name + " matching " + selector + "; it offers " + seen);
         }

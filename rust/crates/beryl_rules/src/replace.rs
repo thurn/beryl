@@ -46,8 +46,10 @@ pub(crate) use damage::{Damage, damage};
 pub(crate) use destruction::destruction;
 
 mod draws;
+mod enchant;
 
 pub(crate) use draws::{DrawReplacement, draw};
+pub(crate) use enchant::{Enchants, enchants};
 
 /// A move proposed for one object of a batch, before the state changes: the proposal the
 /// replacement effects of a move rewrite ([`moving`]). Where in a library it goes and why it

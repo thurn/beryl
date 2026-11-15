@@ -8,8 +8,9 @@
 //! [`card`](crate::card) runs it, so in a card's `static` one is a compile error in the
 //! card's own file.
 
+use crate::PutOnto;
 use crate::ability::{Ability, AbilityKind, Behavior};
-use crate::continuous::{Duration, LayerSpec, MODIFY_PARTS, Modification, Replacement, Rewrite};
+use crate::continuous::{Duration, LayerSpec, Modification, Replacement, Rewrite};
 use crate::cost::{Chosen, Cost, CostAction, CostPart, Measure};
 use crate::definition::{CardDef, Face};
 use crate::effect::{Amount, Condition, CopyChange, Effect, Objects, Operands, Players};
@@ -21,6 +22,7 @@ use crate::target::TargetKind;
 use crate::trigger::{Subject, Trigger, TriggerEvent};
 
 mod malformed;
+mod modifications;
 pub use malformed::Malformed;
 
 type Checked = Result<(), Malformed>;
@@ -222,6 +224,7 @@ const fn moved_by(effect: &Effect) -> Option<&Objects> {
         | Effect::ReturnToHand(objects)
         | Effect::PutIntoGraveyard(objects)
         | Effect::ReturnToBattlefield(objects)
+        | Effect::PutOntoBattlefield(PutOnto { objects, .. })
         | Effect::ReturnTransformed(objects)
         | Effect::PutIntoLibrary { objects, .. }
         | Effect::ShuffleInto { cards: objects, .. } => Some(objects),
@@ -467,7 +470,11 @@ impl Scope<'_> {
             Effect::AddMana { .. } if !matches!(self.ability.kind(), AbilityKind::Mana) => {
                 Err(Malformed::AddMana)
             }
-            Effect::Modify { modifications, .. } => self.resolved_modifications(modifications),
+            Effect::Modify {
+                objects,
+                modifications,
+                ..
+            } => self.resolved_modifications(objects, modifications),
             // One object, picked: the one run of picks the interpreter asks.
             Effect::Choose { prompt, .. }
                 if !(matches!(prompt.purpose.shape(), Shape::Pick) && prompt.most == 1) =>
@@ -478,6 +485,10 @@ impl Scope<'_> {
                 duration: Duration::UntilYourNextTurn,
                 ..
             } => Err(Malformed::Permitted),
+            Effect::PutOntoBattlefield(PutOnto {
+                under: Some(Players::EachPlayer | Players::EachOpponent | Players::EachOther(_)),
+                ..
+            }) => Err(Malformed::Under),
             Effect::Fateseal { count, .. } => match count {
                 Amount::Fixed(1) => Ok(()),
                 _ => Err(Malformed::Fateseal),
@@ -562,40 +573,6 @@ impl Scope<'_> {
         }
     }
 
-    /// The parts of a resolving effect: at least one, each checked.
-    const fn resolved_modifications(self, modifications: &[Modification]) -> Checked {
-        let mut checked = match modifications.len() {
-            0 => Err(Malformed::NoModification),
-            n if n > MODIFY_PARTS => Err(Malformed::Parts),
-            _ => Ok(()),
-        };
-        let mut i = 0;
-        while i < modifications.len() {
-            let part = match modifications[i] {
-                Modification::AddChosenColor => Err(Malformed::ChosenColor),
-                _ => self.modification(&modifications[i]),
-            };
-            checked = both(checked, part);
-            i += 1;
-        }
-        checked
-    }
-
-    const fn modification(self, modification: &Modification) -> Checked {
-        match modification {
-            Modification::Grant(grant) if grant.index() >= self.face.grants.len() => {
-                Err(Malformed::Grant)
-            }
-            Modification::SetPower(amount) => self.amount(amount),
-            Modification::SetPt(power, toughness) | Modification::SetBasePt(power, toughness) => {
-                both(self.amount(power), self.amount(toughness))
-            }
-            // A resolving effect names no ability of its own permanent's face.
-            Modification::LoseAbility(_) => Err(Malformed::Lost),
-            _ => Ok(()),
-        }
-    }
-
     /// The kind of thing the ability's `target`th target is, if it has one.
     const fn target(self, target: SpecIx) -> Option<TargetKind> {
         let targets = self.ability.targets();
@@ -632,7 +609,8 @@ impl Scope<'_> {
             | Objects::AttachedTo
             | Objects::Those
             | Objects::Paid(_)
-            | Objects::ExiledWithThis => Ok(()),
+            | Objects::ExiledWithThis
+            | Objects::PutOntoBattlefieldWithThis => Ok(()),
             Objects::TriggeredOn | Objects::TriggeredOnIn(_) => match self.ability.trigger() {
                 Some(_) => Ok(()),
                 None => Err(Malformed::TriggeredOn),
@@ -738,7 +716,9 @@ impl Scope<'_> {
                 self.unmoved(objects),
                 both(self.objects(objects), self.filter(filter)),
             ),
-            Condition::EnteredThisTurn(objects) | Condition::Token(objects) => {
+            Condition::EnteredThisTurn(objects)
+            | Condition::Token(objects)
+            | Condition::OnBattlefield(objects) => {
                 both(self.unmoved(objects), self.objects(objects))
             }
             Condition::Not(condition) => self.condition(condition),

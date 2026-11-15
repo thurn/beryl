@@ -1,7 +1,7 @@
 //! Zones ([CR 400](https://yawgatog.com/resources/magic-rules/#R400)): moving an object from
 //! one to another, and looking at the cards of a hidden one.
 
-use beryl_card::{Objects, Players, Types};
+use beryl_card::{Objects, Players, PutOnto, Types};
 
 use crate::bitboard::Bitboard;
 use crate::card::FaceIx;
@@ -13,7 +13,7 @@ use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::stack;
-use crate::state::{CounterKind, ObjectRef, Zone};
+use crate::state::{CounterKind, Memo, ObjectRef, Zone};
 use crate::zone::Place;
 
 /// Moves an object to a zone, to the top of an ordered one. One that has changed zones since
@@ -126,6 +126,58 @@ pub(crate) fn return_instruction<L: Layout>(
     let entry = Entry::default();
     event::move_batch(game.state, game.table, game.sink, cards, to, reason, entry)?;
     Ok(run.now_in(cards, Zone::Battlefield))
+}
+
+/// [`Effect::PutOntoBattlefield`](beryl_card::Effect::PutOntoBattlefield): "Return [objects]
+/// to the battlefield under your control", from whatever zone each is in, all at once and as
+/// new objects (CR 400.7), under the control of the one player [`PutOnto::under`] names or
+/// else of each one's owner
+/// ([CR 110.2a](https://yawgatog.com/resources/magic-rules/#R1102a)): "If an effect
+/// instructs a player to put an object onto the battlefield, that object enters the
+/// battlefield under that player's control unless the effect states otherwise." An instant
+/// or sorcery card stays where it is (CR 400.4a). The outcome is the permanents they are.
+///
+/// A linked instruction has each permanent remember the ability's source
+/// ([`Memo::PutOntoBattlefieldWith`]), while that source is still the object whose ability
+/// this is: Animate Dead's "enchant creature put onto the battlefield with this Aura" and
+/// "that creature" read it.
+pub(crate) fn put_onto_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    onto: &PutOnto,
+) -> Result<Outcome<L>, Full> {
+    // A permanent has one controller: players that are not one player put nothing there,
+    // which the card table refuses to say (`Malformed::Under`).
+    let controller = match onto.under {
+        Some(players) => match run.scene().players(players).sole() {
+            Some(player) => Some(player),
+            None => return Ok(Outcome::NOTHING),
+        },
+        None => None,
+    };
+    let objects = run.elsewhere_than(onto.objects, Zone::Battlefield);
+    let source = run.resolution().source();
+    let game = run.game();
+    let objects = objects.filter(|slot| {
+        let (def, face) = game.state.definition(slot).record(game.table);
+        let types = game.table.def(def).face(face).types;
+        !types.intersects(Types::INSTANT.union(Types::SORCERY))
+    });
+    let entry = Entry {
+        controller,
+        tapped: onto.tapped,
+        ..Entry::default()
+    };
+    let (to, reason) = (Zone::Battlefield, Reason::Effect);
+    event::move_batch(
+        game.state, game.table, game.sink, objects, to, reason, entry,
+    )?;
+    let outcome = run.now_in(objects, Zone::Battlefield);
+    if onto.linked && run.state().is_current(source) {
+        for slot in run.state().in_candidate_order(outcome.objects) {
+            (run.game().state).remember(slot, Memo::PutOntoBattlefieldWith(source.slot))?;
+        }
+    }
+    Ok(outcome)
 }
 
 /// Puts cards onto the battlefield tapped, each under its owner's control, simultaneously:

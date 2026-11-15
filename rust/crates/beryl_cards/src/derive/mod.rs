@@ -141,6 +141,7 @@ fn positions(
         }
         for &witness in witnesses {
             let names_card = witness.hand.contains(&def.name)
+                || witness.theirs_graveyard.contains(&def.name)
                 || witness
                     .mine
                     .iter()

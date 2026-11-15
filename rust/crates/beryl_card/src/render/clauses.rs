@@ -110,6 +110,12 @@ impl Ctx {
     /// library".
     pub(super) fn moved(&mut self, objects: Objects) -> String {
         match objects {
+            // "Exile target player's graveyard": a graveyard is named whole.
+            Objects::InZoneOf {
+                zone: crate::Zone::Graveyard,
+                players,
+                filter: crate::Filter::Any,
+            } => format!("{} graveyard", self.possessive(*players)),
             Objects::InZoneOf {
                 zone,
                 players,
@@ -245,6 +251,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::ReturnToHand(_)
         | Effect::PutIntoGraveyard(_)
         | Effect::ReturnToBattlefield(_)
+        | Effect::PutOntoBattlefield(_)
         | Effect::ReturnTransformed(_)
         | Effect::PutIntoLibrary { .. }
         | Effect::Explore(_)

@@ -777,10 +777,22 @@ Built by by-bajq.3.10:
   ability's source and index. Built as a decision option for the ability's
   place; the table names a stack ability by a number the script gives it, so a
   target choice that offers one is answered by the candidates' buttons.
-- **An Aura on a card in a graveyard.** `attached_to` may name an object in
-  another zone. The state-based check reads the enchant ability in force, which
-  is a layer 6 result: Animate Dead loses one and gains another, and what "put
-  onto the battlefield with this" means is a memo.
+- **An Aura on a card in a graveyard** (built). `attached_to` may name an object
+  in a graveyard, and the card leaving the graveyard unattaches the Aura
+  (`event::move_batch_to`, in a game with an Aura). An enchant ability is what
+  an Aura's spell ability targets; `attach::may_enchant` asks every one the Aura
+  has now through `State::abilities` (CR 702.5c), so a layer 6 `LoseAbility`
+  removes one and a granted spell ability adds one. The state-based action (CR
+  704.5m) and the attach instruction both ask it. "Put onto the battlefield with
+  this Aura" is `Memo::PutOntoBattlefieldWith` on the creature, written by a
+  linked `Effect::PutOntoBattlefield` (the general zone change to the
+  battlefield: under whose control, tapped or not) and read by
+  `TargetSpec::put_with_this` and `Objects::PutOntoBattlefieldWithThis`. Animate
+  Dead's "When this Aura leaves the battlefield" sits in its enters ability's
+  paragraph, so it is a delayed triggered ability that waits for its source to
+  leave (`delayed_triggers::fire_on_leaving`). An Aura entering other than as a
+  resolving Aura spell chooses what it enchants (CR 303.4f,
+  `replace::enchants`), or stays where it is (CR 303.4g).
 - **Mandatory loops** (CR 104.4b). The engine counts resolutions in a row with
   no choice but passes. Past eight, it compares a canonical hash of the state,
   which ignores incarnations and reads timestamps as ranks, with a stored one

@@ -7,7 +7,7 @@
 //! made required and the reverse, a "may" or an "unless" removed, an `If` condition negated,
 //! one element dropped from a `Sequence` and a filter widened to `Filter::Any`.
 
-use beryl_card::{Duration, Filter, Prevention, Regeneration};
+use beryl_card::{Duration, Filter, Prevention, PutOnto, Regeneration};
 use beryl_engine::Zone;
 use beryl_engine::card::{
     Ability, AbilityKind, Amount, Behavior, CardDef, Condition, Effect, Face, Objects, Players,
@@ -489,6 +489,55 @@ fn local(effect: &'static Effect) -> Neighbours<Effect> {
         Effect::ReturnToHand(o) => objects_of(o, Effect::ReturnToHand, &mut add),
         Effect::PutIntoGraveyard(o) => objects_of(o, Effect::PutIntoGraveyard, &mut add),
         Effect::ReturnToBattlefield(o) => objects_of(o, Effect::ReturnToBattlefield, &mut add),
+        Effect::PutOntoBattlefield(onto) => {
+            let mut put = |name: String, changed: PutOnto| {
+                add(name, Effect::PutOntoBattlefield(leak(changed)));
+            };
+            for (name, objects) in objects(onto.objects) {
+                put(name, PutOnto { objects, ..*onto });
+            }
+            match onto.under {
+                Some(player) => {
+                    put(
+                        "under owners".to_owned(),
+                        PutOnto {
+                            under: None,
+                            ..*onto
+                        },
+                    );
+                    for (name, player) in players(player) {
+                        put(
+                            name,
+                            PutOnto {
+                                under: Some(player),
+                                ..*onto
+                            },
+                        );
+                    }
+                }
+                None => put(
+                    "under Players::You".to_owned(),
+                    PutOnto {
+                        under: Some(Players::You),
+                        ..*onto
+                    },
+                ),
+            }
+            put(
+                format!("tapped {}", !onto.tapped),
+                PutOnto {
+                    tapped: !onto.tapped,
+                    ..*onto
+                },
+            );
+            put(
+                format!("linked {}", !onto.linked),
+                PutOnto {
+                    linked: !onto.linked,
+                    ..*onto
+                },
+            );
+        }
         Effect::GainFlashback(o) => objects_of(o, Effect::GainFlashback, &mut add),
         Effect::PutIntoLibrary {
             objects: which,

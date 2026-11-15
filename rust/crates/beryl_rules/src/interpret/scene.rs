@@ -171,6 +171,7 @@ impl<L: Layout> Scene<'_, L> {
             | Objects::TriggeredOnIn(_)
             | Objects::Carried
             | Objects::ExiledWithThis
+            | Objects::PutOntoBattlefieldWithThis
             | Objects::All { .. }
             | Objects::InZoneOf { .. }
             | Objects::CardsIn { .. }
@@ -253,6 +254,12 @@ impl<L: Layout> Scene<'_, L> {
             // that object exiled, so its slot is asked whether or not it is current.
             Objects::ExiledWithThis => (self.subject.of.source)
                 .map_or(Bitboard::EMPTY, |source| s.exiled_with(source.slot)),
+            // "That creature": the permanents an ability of the source put onto the
+            // battlefield and that are still there, whether or not the source is.
+            Objects::PutOntoBattlefieldWithThis => (self.subject.of.source)
+                .map_or(Bitboard::EMPTY, |source| {
+                    s.put_onto_battlefield_with(source.slot)
+                }),
             Objects::Paid(_) => {
                 unreachable!("the card table refuses an effect that names what a cost took")
             }
@@ -549,6 +556,13 @@ impl<L: Layout> Scene<'_, L> {
                 comparison.holds(self.value(left).max(0), self.value(right).max(0))
             }
             Condition::Token(names) => self.is_a_token(names),
+            // "If it's on the battlefield": of the ability's source, still the object it was
+            // (CR 400.7).
+            Condition::OnBattlefield(names) => {
+                let objects = self.objects(names);
+                !objects.is_empty()
+                    && objects.all(|slot| self.s.object(slot).zone() == Zone::Battlefield)
+            }
             Condition::Is(names, filter) => {
                 // What a target was is not kept once the effect has moved it (`Known` holds
                 // no characteristics), so "if it was a [filter]" cannot be asked of one: a

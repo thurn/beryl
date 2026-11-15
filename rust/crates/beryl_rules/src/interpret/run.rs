@@ -213,6 +213,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 zones::put_into_graveyard_instruction(self, objects)?
             }
             Effect::ReturnToBattlefield(cards) => zones::return_instruction(self, cards)?,
+            Effect::PutOntoBattlefield(onto) => zones::put_onto_instruction(self, onto)?,
             Effect::ReturnTransformed(cards) => transform::return_instruction(self, cards)?,
             Effect::PutIntoLibrary { objects, position } => {
                 library::put_instruction(self, objects, position)?
@@ -486,6 +487,7 @@ fn at_once(effect: &Effect) -> bool {
             | Effect::ReturnToHand(_)
             | Effect::PutIntoGraveyard(_)
             | Effect::ReturnToBattlefield(_)
+            | Effect::PutOntoBattlefield(_)
             | Effect::PutIntoLibrary { .. }
             | Effect::ShuffleInto { .. }
             | Effect::Discard { .. }

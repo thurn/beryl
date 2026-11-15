@@ -70,6 +70,7 @@ impl Effect {
             | Effect::ReturnToHand(_)
             | Effect::PutIntoGraveyard(_)
             | Effect::ReturnToBattlefield(_)
+            | Effect::PutOntoBattlefield(_)
             | Effect::ReturnTransformed(_)
             | Effect::PutIntoLibrary { .. }
             | Effect::GainFlashback(_)

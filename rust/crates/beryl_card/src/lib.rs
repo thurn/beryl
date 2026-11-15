@@ -56,7 +56,8 @@ pub use definition::{
 };
 pub use effect::{
     Amount, CastTerms, Comparison, Condition, CopyChange, CopyException, Effect, Found,
-    LibraryOrder, LibraryPosition, Objects, Players, Prevention, Recipients, Regeneration, Taken,
+    LibraryOrder, LibraryPosition, Objects, Players, Prevention, PutOnto, Recipients, Regeneration,
+    Taken,
 };
 pub use filter::Filter;
 pub use ids::{Seat, TurnStep, Zone, ZoneSet};
@@ -80,8 +81,8 @@ pub mod prelude {
         CostPart, CounterKind, Duration, Effect, ExceptIx, Face, FaceIx, Filter, Found, Governed,
         GrantIx, Keywords, LayerSpec, LibraryOrder, LibraryPosition, ManaColor, ManaCost,
         ManaRestriction, ManaSet, Modification, Named, Objects, Place, Players, Prevention, Prompt,
-        Protection, Purpose, Recipients, Replacement, RuleChange, SpellCost, Subtype, Subtypes,
-        Supertypes, Taken, TargetKind, TargetSpec, TextWord, Trigger, TriggerEvent, TurnStep,
-        Types, When, Zone, card, mana,
+        Protection, Purpose, PutOnto, Recipients, Replacement, RuleChange, SpellCost, Subtype,
+        Subtypes, Supertypes, Taken, TargetKind, TargetSpec, TextWord, Trigger, TriggerEvent,
+        TurnStep, Types, When, Zone, card, mana,
     };
 }

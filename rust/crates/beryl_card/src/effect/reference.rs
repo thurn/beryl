@@ -53,6 +53,11 @@ pub enum Objects {
     /// instruction to exile them in the first ability." Known whether or not this is still
     /// where it was.
     ExiledWithThis,
+    /// "That creature" of an Aura that put a creature onto the battlefield: the permanents an
+    /// ability of this object put there and said so ([`crate::effect::PutOnto::linked`]), as
+    /// Animate Dead's delayed ability sacrifices. Known whether or not this is still where it
+    /// was, as long as no new object has arrived in its place.
+    PutOntoBattlefieldWithThis,
     /// The object a delayed triggered ability carries from the effect that created it
     /// ([`crate::Effect::Delay`]): "that card" in "return that card to the battlefield at the
     /// beginning of the next end step". It is the object as it was when the delayed ability
@@ -215,7 +220,10 @@ impl Objects {
     /// ([`crate::LayerSpec::needs_a_resolution`]).
     pub const fn needs_a_resolution(&self) -> bool {
         match self {
-            Objects::This | Objects::AttachedTo | Objects::ExiledWithThis => false,
+            Objects::This
+            | Objects::AttachedTo
+            | Objects::ExiledWithThis
+            | Objects::PutOntoBattlefieldWithThis => false,
             Objects::Target(_)
             | Objects::Those
             | Objects::Paid(_)

@@ -199,7 +199,11 @@ pub(super) fn start(def: &'static CardDef, place: Place, witness: Option<&Witnes
     let mut battlefield: Vec<Permanent> = lands.into_iter().map(Permanent::new).collect();
     let mut hand = without(HAND, card);
     let mut opponent_added: &[Permanent] = &[];
+    let mut opponent_graveyard = without(&[props::SORCERY.card], card);
     if let Some(witness) = witness {
+        for &added in witness.theirs_graveyard.iter().rev() {
+            opponent_graveyard.insert(0, added);
+        }
         battlefield.extend_from_slice(witness.mine);
         hand.extend_from_slice(witness.hand);
         opponent_added = witness.theirs;
@@ -244,7 +248,7 @@ pub(super) fn start(def: &'static CardDef, place: Place, witness: Option<&Witnes
             hand: leak(without(OPPONENT_HAND, card)),
             battlefield: &[],
             permanents: leak(opponent),
-            graveyard: leak(without(&[props::SORCERY.card], card)),
+            graveyard: leak(opponent_graveyard),
             exile: &[],
             library,
         },

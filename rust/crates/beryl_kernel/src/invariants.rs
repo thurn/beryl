@@ -83,12 +83,16 @@ impl<L: Layout> State<L> {
                     at,
                 )?;
             }
-            let on_battlefield = |link: Option<L::Slot>| {
-                link.is_some_and(|l| self.object(l).zone == Zone::Battlefield)
+            // An Aura may enchant a card in a graveyard (CR 303.4, Animate Dead's
+            // "enchant creature card in a graveyard").
+            let attachable = |link: Option<L::Slot>| {
+                link.is_some_and(|l| {
+                    matches!(self.object(l).zone, Zone::Battlefield | Zone::Graveyard)
+                })
             };
             check(
-                o.attached_to.is_none() || on_battlefield(o.attached_to),
-                "attached to an object off the battlefield",
+                o.attached_to.is_none() || attachable(o.attached_to),
+                "attached to an object off the battlefield and out of the graveyards",
                 at,
             )?;
             if !matches!(o.zone, Zone::Battlefield | Zone::Stack) {

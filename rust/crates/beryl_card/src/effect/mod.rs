@@ -40,7 +40,8 @@ pub use condition::{Comparison, Condition};
 pub use operands::Operands;
 pub use reference::{Objects, Players, Recipients};
 pub use terms::{
-    CastTerms, CopyChange, CopyException, Found, LibraryOrder, LibraryPosition, Prevention, Taken,
+    CastTerms, CopyChange, CopyException, Found, LibraryOrder, LibraryPosition, Prevention,
+    PutOnto, Taken,
 };
 
 use crate::continuous::{Duration, Modification, RuleChange};
@@ -229,6 +230,11 @@ pub enum Effect {
     /// battlefield under that player's control unless the effect states otherwise." Each
     /// enters untapped as a new object (CR 400.7).
     ReturnToBattlefield(Objects),
+    /// [`PutOnto`]: "return [objects] to the battlefield under your control", tapped or not,
+    /// remembered by the ability's source or not. An instant or sorcery card stays where it
+    /// is ([CR 400.4a](https://yawgatog.com/resources/magic-rules/#R4004a)): "If an instant
+    /// or sorcery card would enter the battlefield, it remains in its previous zone."
+    PutOntoBattlefield(&'static PutOnto),
     /// "Return [cards] to the battlefield transformed under their owners' control"
     /// ([CR 712.11a](https://yawgatog.com/resources/magic-rules/#R71211a)): "If a spell or
     /// ability puts a double-faced card onto the battlefield 'transformed' or 'converted,' it
@@ -676,6 +682,7 @@ impl Effect {
             | Effect::ManifestDread(_)
             | Effect::CreateAttackingTokens { .. }
             | Effect::ReturnToBattlefield(_)
+            | Effect::PutOntoBattlefield(_)
             | Effect::ReturnTransformed(_)
             | Effect::GainFlashback(_)
             | Effect::PermitCast { .. }

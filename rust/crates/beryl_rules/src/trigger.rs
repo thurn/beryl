@@ -345,6 +345,9 @@ pub(crate) fn match_look_back<L: Layout>(
     t: &GameTable,
     leaving: impl Iterator<Item = (L::Slot, Zone)> + Clone,
 ) -> Result<(), Full> {
+    if !s.delayed().is_empty() {
+        crate::delayed_triggers::fire_on_leaving(s, t, leaving.clone())?;
+    }
     let mask = Listens::event(EventKind::Dies) | Listens::event(EventKind::Leaves);
     if !t.listens_anywhere().intersects(mask) {
         return Ok(());

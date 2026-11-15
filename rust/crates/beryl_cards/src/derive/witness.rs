@@ -16,7 +16,8 @@
 use beryl_card::{CostAction, CostPart, Filter, Node};
 use beryl_engine::Zone;
 use beryl_engine::card::{
-    Ability, AbilityKind, Behavior, CardDef, Castings, Effect, FaceIx, Objects, Players, Types,
+    Ability, AbilityKind, Behavior, CardDef, Castings, Effect, FaceIx, Objects, Players,
+    TargetKind, Types,
 };
 use beryl_scenario::{Action, P0, Permanent};
 use beryl_scenario_types::{ME, Resolve};
@@ -33,6 +34,8 @@ pub(super) struct Witness {
     pub(super) theirs: &'static [Permanent],
     /// Player 0's added cards in hand, which the prelude casts.
     pub(super) hand: &'static [&'static str],
+    /// Player 1's added cards in their graveyard, on top.
+    pub(super) theirs_graveyard: &'static [&'static str],
     /// What player 0 does before the opening, every question answered.
     pub(super) prelude: &'static [Action],
 }
@@ -52,6 +55,7 @@ const REGENERATION_SHIELD: Witness = Witness {
     ],
     theirs: &[],
     hand: &[props::REGENERATION.card],
+    theirs_graveyard: &[],
     prelude: &[
         ME.casts(props::REGENERATION.card),
         ME.targets(names::DRYAD_ARBOR),
@@ -70,6 +74,7 @@ const ABILITY_TO_TARGET: Witness = Witness {
     ],
     theirs: &[],
     hand: &[],
+    theirs_graveyard: &[],
     prelude: &[],
 };
 
@@ -85,6 +90,7 @@ const STOLEN: Witness = Witness {
     ],
     theirs: &[Permanent::new(names::ORNITHOPTER)],
     hand: &[props::THIEF.card],
+    theirs_graveyard: &[],
     prelude: &[
         Action::Cast {
             player: P0,
@@ -108,8 +114,33 @@ const OWN_ARTIFACT: Witness = Witness {
     mine: &[Permanent::new(props::ARTIFACT.card)],
     theirs: &[],
     hand: &[],
+    theirs_graveyard: &[],
     prelude: &[],
 };
+
+/// A creature card in player 1's graveyard, for a spell that targets one, as Animate Dead's
+/// "enchant creature card in a graveyard": the starting graveyards hold an instant and a
+/// sorcery alone, so such a spell could never be cast.
+const CREATURE_CARD_IN_GRAVEYARD: Witness = Witness {
+    words: "with a creature card in a graveyard",
+    mine: &[],
+    theirs: &[],
+    hand: &[],
+    theirs_graveyard: &[props::VANILLA.card],
+    prelude: &[],
+};
+
+fn targets_a_creature_card(ability: &Ability) -> bool {
+    ability.targets().iter().any(|spec| {
+        let mut creature = false;
+        spec.filter.walk(&mut |node| {
+            if let Node::Filter(Filter::Types(types)) = node {
+                creature |= types.intersects(Types::CREATURE);
+            }
+        });
+        spec.kind == TargetKind::GraveyardCard && creature
+    })
+}
 
 /// The starting positions put creatures on the opponent's battlefield. A static
 /// effect on creatures its source's controller controls needs one on that side too.
@@ -118,6 +149,7 @@ const OWN_CREATURE: Witness = Witness {
     mine: &[Permanent::new(props::THIEF.card)],
     theirs: &[],
     hand: &[],
+    theirs_graveyard: &[],
     prelude: &[],
 };
 
@@ -130,6 +162,7 @@ const CARD_TO_EXILE: Witness = Witness {
     mine: &[],
     theirs: &[],
     hand: &[props::UNTARGETED_SPELL.card],
+    theirs_graveyard: &[],
     prelude: &[],
 };
 
@@ -205,6 +238,9 @@ pub(super) fn witnesses(def: &'static CardDef) -> Vec<&'static Witness> {
     }
     if exiles_from_hand(def) {
         found.borrow_mut().push(&CARD_TO_EXILE);
+    }
+    if abilities.clone().any(targets_a_creature_card) {
+        found.borrow_mut().push(&CREATURE_CARD_IN_GRAVEYARD);
     }
     for ability in abilities.filter(|a| resolves(a)) {
         let Behavior::Data(effect) = ability.body() else {

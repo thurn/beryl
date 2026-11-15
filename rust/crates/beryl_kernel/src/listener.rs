@@ -47,7 +47,8 @@ pub enum Unmatched {
     /// Its event is not matched for those players: any but "you", "each opponent" and "each
     /// player", or any but "each player" for an event no player does.
     Whose,
-    /// It is delayed and waits for an event other than the beginning of a step or phase.
+    /// It is delayed and waits for an event other than the beginning of a step or phase, or
+    /// its own source leaving the battlefield.
     Delayed,
     /// It works in a zone the engine matches no ability in ([`AWAY`]): a library or a hand.
     Zone,
@@ -70,9 +71,10 @@ enum About {
 }
 
 /// The kind of event a trigger listens to, or why the engine cannot match it. A delayed trigger
-/// listens to none (`None`): it waits in the state, not in the table, for the beginning of a step
-/// ([CR 603.7]): "An effect may create a delayed triggered ability that can do something at a later
-/// time."
+/// listens to none (`None`): it waits in the state, not in the table, for the beginning of a step,
+/// or for its source to leave the battlefield, as Animate Dead's "When this Aura leaves the
+/// battlefield" ([CR 603.7]): "An effect may create a delayed triggered ability that can do
+/// something at a later time."
 ///
 /// [CR 603.7]: https://yawgatog.com/resources/magic-rules/#R6037
 ///
@@ -117,6 +119,7 @@ pub fn listens_to(trigger: &Trigger, zones: ZoneSet) -> Result<Option<EventKind>
     match (trigger.delayed, kind) {
         (false, kind) => Ok(Some(kind)),
         (true, EventKind::Step) => Ok(None),
+        (true, EventKind::Leaves) if matches!(trigger.subject, Subject::This) => Ok(None),
         (true, _) => Err(Unmatched::Delayed),
     }
 }
@@ -212,10 +215,13 @@ pub fn read_when_granted(ability: &Ability) -> bool {
                 && ability.rule().is_none()
                 && ability.replacement().is_none()
         }
-        AbilityKind::Spell
-        | AbilityKind::Mana
-        | AbilityKind::Triggered
-        | AbilityKind::Replacement => false,
+        // An Aura's enchant ability is what its spell ability targets. CR 702.5a: "The
+        // enchant ability restricts what an Aura spell can target and what an Aura can
+        // enchant." The rules read the enchant abilities an Aura has through the query of its
+        // abilities (`State::abilities`), as Animate Dead gains "enchant creature put onto the
+        // battlefield with this Aura".
+        AbilityKind::Spell => !ability.targets().is_empty(),
+        AbilityKind::Mana | AbilityKind::Triggered | AbilityKind::Replacement => false,
     }
 }
 

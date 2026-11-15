@@ -135,6 +135,7 @@ fn condition_reads_tapped(condition: &Condition) -> bool {
         | Condition::Did
         | Condition::WonFlip
         | Condition::EnteredThisTurn(_)
+        | Condition::OnBattlefield(_)
         | Condition::DrewInDrawStep(_)
         | Condition::Token(_) => false,
     }
@@ -154,6 +155,7 @@ fn condition_reads_life(condition: &Condition) -> bool {
         | Condition::WonFlip
         | Condition::Is(..)
         | Condition::EnteredThisTurn(_)
+        | Condition::OnBattlefield(_)
         | Condition::DrewInDrawStep(_)
         | Condition::Token(_) => false,
     }
@@ -272,6 +274,7 @@ fn found_by_the_layers(affected: Objects) -> bool {
         | Objects::TriggeredOnIn(_)
         | Objects::Carried
         | Objects::ExiledWithThis
+        | Objects::PutOntoBattlefieldWithThis
         | Objects::InZoneOf { .. }
         | Objects::CardsIn { .. }
         | Objects::All { .. }
@@ -469,6 +472,7 @@ fn reads(condition: &Condition) -> bool {
         | Condition::WonFlip
         | Condition::Is(..)
         | Condition::EnteredThisTurn(_)
+        | Condition::OnBattlefield(_)
         | Condition::DrewInDrawStep(_)
         | Condition::Token(_) => false,
     }
@@ -492,6 +496,7 @@ pub fn reads_results(condition: &Condition) -> bool {
         | Condition::Did
         | Condition::WonFlip
         | Condition::EnteredThisTurn(_)
+        | Condition::OnBattlefield(_)
         | Condition::DrewInDrawStep(_)
         | Condition::Token(_) => false,
     }
@@ -602,6 +607,7 @@ pub fn holds<L: Layout>(
         | Condition::WonFlip
         | Condition::Is(..)
         | Condition::EnteredThisTurn(_)
+        | Condition::OnBattlefield(_)
         | Condition::DrewInDrawStep(_)
         | Condition::Token(_) => {
             unreachable!("the card table refuses a static ability with this condition")
@@ -631,6 +637,7 @@ fn counts(condition: &Condition, of: &dyn Fn(CounterKind) -> bool) -> bool {
         | Condition::WonFlip
         | Condition::Is(..)
         | Condition::EnteredThisTurn(_)
+        | Condition::OnBattlefield(_)
         | Condition::DrewInDrawStep(_)
         | Condition::Token(_) => false,
     }

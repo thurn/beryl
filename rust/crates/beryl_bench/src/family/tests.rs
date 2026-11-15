@@ -63,7 +63,7 @@ fn family_corpora_never_change() {
             (
                 "attachments",
                 vec![2, 5, 8, 10, 13, 22, 2, 5, 8, 5, 8, 11],
-                6_263_972_986_648_383_259
+                12_916_577_998_348_938_393
             ),
             (
                 "layers",
@@ -109,10 +109,10 @@ fn families_pair_their_steps() {
                 "attachments",
                 Pairing {
                     paired: 3_619,
-                    skipped: 16,
+                    skipped: 30,
                     capacity_stalls: 0,
-                    layer_recomputes: 825,
-                    transactions: 0
+                    layer_recomputes: 821,
+                    transactions: 3_136
                 }
             ),
             (

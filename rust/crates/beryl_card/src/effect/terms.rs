@@ -2,9 +2,8 @@
 
 use crate::characteristics::{Colors, Subtype};
 #[cfg(doc)]
-use crate::continuous::Duration;
-#[cfg(doc)]
 use crate::effect::Effect;
+use crate::effect::{Objects, Players};
 use crate::filter::Filter;
 use crate::index::GrantIx;
 
@@ -156,6 +155,25 @@ pub enum Found {
     /// "Put it onto the battlefield tapped", under the control of the player searching
     /// ([CR 110.2a](https://yawgatog.com/resources/magic-rules/#R1102a)).
     OntoBattlefieldTapped,
+}
+
+/// "Put [objects] onto the battlefield", or "return" them there from a graveyard or exile:
+/// the general zone change to the battlefield ([`crate::Effect::PutOntoBattlefield`]).
+/// Each object goes from whatever zone it is in, all at once, as a new object (CR 400.7).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct PutOnto {
+    pub objects: Objects,
+    /// Under whose control: one player, such as [`Players::You`] for "under your control",
+    /// or `None` for "under its owner's control"
+    /// ([CR 110.2a](https://yawgatog.com/resources/magic-rules/#R1102a)): "If an effect
+    /// instructs a player to put an object onto the battlefield, that object enters the
+    /// battlefield under that player's control unless the effect states otherwise."
+    pub under: Option<Players>,
+    /// "Tapped".
+    pub tapped: bool,
+    /// Each permanent remembers that an ability of this object put it onto the battlefield,
+    /// for [`crate::TargetSpec::put_with_this`] and [`Objects::PutOntoBattlefieldWithThis`].
+    pub linked: bool,
 }
 
 /// How much of the next damage a prevention shield prevents

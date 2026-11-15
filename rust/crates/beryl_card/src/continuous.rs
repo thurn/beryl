@@ -510,6 +510,12 @@ impl Modification {
         Modification::Grant(GrantIx::new(index))
     }
 
+    /// "Loses [ability]", the ability at `index` of the affected permanent's own face,
+    /// counting from 0: [`Modification::LoseAbility`], as a card file writes it.
+    pub const fn lose(index: u8) -> Modification {
+        Modification::LoseAbility(AbilityIx::new(index))
+    }
+
     /// [`Modification::AddSubtypeWord`], as a card file writes it.
     #[allow(non_snake_case)]
     pub const fn AddSubtype(subtype: Subtype) -> Modification {

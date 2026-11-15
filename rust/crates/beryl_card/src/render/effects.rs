@@ -5,16 +5,16 @@
 use super::Ctx;
 use super::clauses::{prefix, subject_of};
 use super::filters::Kind;
-use super::words::{mana_set, number, ordinal, symbol, with_article};
+use super::words::{mana_set, number, symbol, with_article};
+use super::zones::owners;
 use crate::ability::Behavior;
 use crate::characteristics::Types;
 use crate::continuous::Duration;
 use crate::definition::CardDef;
-use crate::effect::{
-    Amount, Effect, Found, LibraryOrder, LibraryPosition, Objects, Players, Regeneration, Taken,
-};
+use crate::effect::{Amount, Effect, Found, LibraryOrder, Objects, Players, Regeneration, Taken};
 use crate::filter::Filter;
 use crate::ids::Zone;
+use crate::trigger::TriggerEvent;
 
 impl Ctx {
     /// The clauses an effect says, each a sentence once capitalized and closed: "draw three
@@ -132,6 +132,12 @@ impl Ctx {
                 let until = format!(" until {} leaves the battlefield", self.this);
                 vec![self.acts(("exile", "exiles"), objects, &until)]
             }
+            // "That permanent's controller sacrifices it": a delayed ability's permanent may be
+            // another player's, who sacrifices it. CR 701.21a: "To sacrifice a permanent, its
+            // controller moves it from the battlefield directly to its owner's graveyard."
+            Effect::Sacrifice(Objects::Carried) => {
+                vec!["that permanent's controller sacrifices it".to_owned()]
+            }
             Effect::Sacrifice(objects) => {
                 vec![self.acts(("sacrifice", "sacrifices"), objects, "")]
             }
@@ -162,6 +168,7 @@ impl Ctx {
                 let rest = format!(" to the battlefield under {control}");
                 vec![self.acts(("return", "returns"), objects, &rest)]
             }
+            Effect::PutOntoBattlefield(onto) => vec![self.put_onto(onto)],
             Effect::ReturnTransformed(objects) => {
                 let control = owners(self.is_plural(objects), "control");
                 let rest = format!(" to the battlefield transformed under {control}");
@@ -482,47 +489,6 @@ impl Ctx {
         clauses
     }
 
-    /// "Put [objects] into their owners' libraries [position]" (CR 400.3).
-    fn put_into_library(&mut self, objects: Objects, position: LibraryPosition) -> Vec<String> {
-        let plural = self.is_plural(objects);
-        let library = owners(plural, "library");
-        match position {
-            LibraryPosition::Top => {
-                vec![self.acts(("put", "puts"), objects, &format!(" on top of {library}"))]
-            }
-            LibraryPosition::Bottom => vec![self.acts(
-                ("put", "puts"),
-                objects,
-                &format!(" on the bottom of {library}"),
-            )],
-            LibraryPosition::FromTop(n) => vec![self.acts(
-                ("put", "puts"),
-                objects,
-                &format!(" into {library} {} from the top", ordinal(n)),
-            )],
-            LibraryPosition::TopOrBottom => {
-                // "Choose up to one target creature spell. Its owner puts it on their choice
-                // of the top or bottom of their library": the target is said first.
-                let mut clauses = Vec::new();
-                let what = self.objects(objects);
-                let (whose, it) = if matches!(what.as_str(), "it" | "them") {
-                    (if plural { "their owners" } else { "its owner" }, what)
-                } else if matches!(objects, Objects::Target(_)) {
-                    clauses.push(format!("choose {what}"));
-                    ("its owner", "it".to_owned())
-                } else {
-                    (if plural { "their owners" } else { "its owner" }, what)
-                };
-                let puts = if plural { "put" } else { "puts" };
-                clauses.push(format!(
-                    "{whose} {puts} {it} on their choice of the top or bottom of their library"
-                ));
-                self.plural = plural;
-                clauses
-            }
-        }
-    }
-
     /// "Look at the top four cards of your library. Put two of them into your hand and the
     /// rest on the bottom of your library in any order."
     fn dig(
@@ -662,7 +628,9 @@ impl Ctx {
         );
         self.begin(ability.targets(), ability.trigger());
         let clauses = match (ability.trigger(), ability.body()) {
-            (Some(trigger), Behavior::Data(effect)) if names_carried(effect) => {
+            (Some(trigger), Behavior::Data(effect))
+                if names_carried(effect) && matches!(trigger.event, TriggerEvent::Step(_)) =>
+            {
                 let mut clauses = self.body(ability.body());
                 let lead = self.trigger_text(trigger);
                 if let Some(last) = clauses.last_mut() {
@@ -684,7 +652,7 @@ impl Ctx {
 }
 
 /// Whether a delayed ability's one instruction acts on the object it carries, which Oracle
-/// text says before the trigger: "Return that card to the battlefield under its owner's
+/// text says before a step's trigger: "Return that card to the battlefield under its owner's
 /// control at the beginning of the next end step."
 fn names_carried(effect: &Effect) -> bool {
     effect.operands().objects == Some(&Objects::Carried)
@@ -717,20 +685,6 @@ impl Ctx {
                     filter => yours(filter),
                 }
         })
-    }
-}
-
-/// "Its owner's hand", or "their owners' hands" for several (CR 400.3).
-fn owners(plural: bool, zone: &str) -> String {
-    if plural {
-        let zones = if zone == "control" {
-            "control".to_owned()
-        } else {
-            super::words::plural(zone)
-        };
-        format!("their owners' {zones}")
-    } else {
-        format!("its owner's {zone}")
     }
 }
 

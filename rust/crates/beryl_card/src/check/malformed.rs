@@ -29,6 +29,9 @@ pub enum Malformed {
     /// said by anything but a static ability of the permanent about itself: the index names
     /// an ability of the face it is printed on.
     Lost,
+    /// A [`crate::PutOnto`] under the control of players that may be several ("each player",
+    /// "each opponent"): a permanent has one controller.
+    Under,
     /// A continuous effect that does nothing: no modification.
     NoModification,
     /// A resolving continuous effect of more parts than [`MODIFY_PARTS`].
@@ -111,6 +114,9 @@ impl Malformed {
             Malformed::Grant => "a modification grants an ability its face does not list",
             Malformed::Lost => {
                 "a modification removes an ability that is not one of its own permanent's"
+            }
+            Malformed::Under => {
+                "a permanent is put onto the battlefield under players that may be several"
             }
             Malformed::NoModification => "a continuous effect modifies nothing",
             Malformed::Parts => {

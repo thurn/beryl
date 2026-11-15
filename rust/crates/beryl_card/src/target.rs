@@ -102,6 +102,9 @@ pub struct TargetSpec {
     pub optional: bool,
     /// "Other target": not the object whose ability this is.
     pub other: bool,
+    /// Only a permanent an ability of the object with this spec put onto the battlefield,
+    /// as Animate Dead's "enchant creature put onto the battlefield with this Aura" says.
+    pub put_with_this: bool,
 }
 
 impl TargetSpec {
@@ -113,6 +116,7 @@ impl TargetSpec {
             count: 1,
             optional: false,
             other: false,
+            put_with_this: false,
         }
     }
 
@@ -185,6 +189,17 @@ impl TargetSpec {
     pub const fn optional(self) -> TargetSpec {
         TargetSpec {
             optional: true,
+            ..self
+        }
+    }
+
+    /// The same spec for "[permanent] put onto the battlefield with this": only one an
+    /// ability of the object with the spec put there
+    /// ([`crate::effect::PutOnto::linked`]).
+    #[must_use]
+    pub const fn put_with_this(self) -> TargetSpec {
+        TargetSpec {
+            put_with_this: true,
             ..self
         }
     }

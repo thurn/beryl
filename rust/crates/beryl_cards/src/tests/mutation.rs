@@ -31,6 +31,21 @@ use neighbours::mutants;
 /// why. An entry a scenario kills fails too, so the list stays current.
 const EQUIVALENT: &[(&str, &str, &str, &str)] = &[
     (
+        "Animate Dead",
+        "ability 1, step 3",
+        "Amount::Fixed(1)",
+        "the delayed trigger it makes (ability 3) sacrifices the object the delay carries and \
+         reads no `Amount::Carried`, so the number the delay carries is never read",
+    ),
+    (
+        "Animate Dead",
+        "granted ability 0, target 0",
+        "optional",
+        "the granted spell ability is an enchant ability of a permanent, never cast, so its spec \
+         chooses no target; what it may enchant reads the spec's kind, filter and \
+         `put_with_this` only",
+    ),
+    (
         "Flickerwisp",
         "ability 0, step 1",
         "Amount::Fixed(1)",

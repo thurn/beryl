@@ -16,7 +16,7 @@ pub use crate::tokens::TokenEntry;
 use beryl_kernel::mutate::Arrival;
 
 use crate::bitboard::Bitboard;
-use crate::card::{CastingKinds, FaceIx};
+use crate::card::{CastingKinds, FaceIx, Subtype};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layers;
@@ -202,6 +202,9 @@ pub(crate) fn move_batch_to<L: Layout>(
     // filling it with `replace::Move`s cost the rollout benchmark 1% more instructions.
     let mut moves: L::Queue<(L::Slot, Zone, Zone, Entry<L>), 128> = Default::default();
     let mut returning = Bitboard::EMPTY;
+    // Whether the game has an Aura, which may choose what it enchants as it enters and may be
+    // attached to a card in a graveyard: a game with none asks neither below.
+    let auras = t.subtypes().has(Subtype::Aura).possible();
     for &slot in s.in_game_order(t, objects)?.as_slice() {
         let o = *s.object(slot);
         // CR 111.8: "A token that has left the battlefield can't move to another zone or
@@ -221,7 +224,21 @@ pub(crate) fn move_batch_to<L: Layout>(
             entry,
             cast: reason == Reason::Resolve,
         };
-        let m = replace::moving(s, t, sink, proposal)?;
+        let mut m = replace::moving(s, t, sink, proposal)?;
+        // An Aura entering other than as a resolving Aura spell chooses what it enchants
+        // (CR 303.4f), and with nothing to choose stays where it is, or goes to its owner's
+        // graveyard from the stack (CR 303.4g).
+        if auras && m.to == Zone::Battlefield && m.entry.attach.is_none() {
+            match replace::enchants(s, t, sink, slot, m.entry)? {
+                replace::Enchants::NotAnAura => {}
+                replace::Enchants::Object(host) => m.entry.attach = Some(host),
+                replace::Enchants::Nothing if from == Zone::Stack => m.to = Zone::Graveyard,
+                replace::Enchants::Nothing => {
+                    s.end_exiled_until(slot);
+                    continue;
+                }
+            }
+        }
         moves.push((m.slot, m.from, m.to, m.entry))?;
         if o.zone() == Zone::Battlefield {
             returning |= s.exiled_until(slot);
@@ -256,6 +273,9 @@ pub(crate) fn move_batch_to<L: Layout>(
         let &(slot, from, dest, entry) = each;
         if dest == Zone::Battlefield && entry.pay_life {
             replace::pay_life_to_enter(s, t, sink, slot, entry)?;
+        }
+        if auras && from == Zone::Graveyard {
+            unattach_from(s, slot);
         }
         s.move_object(sink, slot, dest, place)?;
         if dest == Zone::Battlefield {
@@ -297,6 +317,22 @@ pub(crate) fn move_batch_to<L: Layout>(
         returned?;
     }
     Ok(())
+}
+
+/// Unattaches each Aura attached to the card in `slot`, which is leaving a graveyard, as
+/// Animate Dead is attached while its enters ability waits. The object the card becomes is
+/// new ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), so the Aura is
+/// attached to nothing, and goes to the graveyard as a state-based action (CR 704.5m) unless
+/// an instruction attaches it again.
+#[cold]
+#[inline(never)]
+fn unattach_from<L: Layout>(s: &mut State<L>, slot: L::Slot) {
+    for i in 0..s.battlefield().len() {
+        let aura = s.battlefield()[i];
+        if s.object(aura).attached_to() == Some(slot) {
+            s.unattach(aura);
+        }
+    }
 }
 
 /// Taps or untaps a permanent.

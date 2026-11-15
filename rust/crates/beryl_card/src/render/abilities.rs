@@ -3,7 +3,6 @@
 //! and the whole ability as one paragraph. A rule change's template is in `rules.rs`.
 
 use super::Ctx;
-use super::effects::says_nothing;
 use super::filters::{Kind, zone_name};
 use super::words::{
     capitalized, colors, counted, keywords, list, mana_text, number, protection, pt_change,
@@ -42,12 +41,8 @@ impl Ctx {
         }
         let clauses = match ability.kind() {
             AbilityKind::Spell => {
-                if says_nothing(ability.body())
-                    && let Some(&spec) = ability.targets().first()
-                {
-                    // An Aura's spell targets what it will enchant
-                    // ([CR 303.4a](https://yawgatog.com/resources/magic-rules/#R3034a)).
-                    return format!("Enchant {}", self.target_noun(spec));
+                if let Some(enchant) = self.enchant(ability) {
+                    return enchant;
                 }
                 self.body(ability.body())
             }
@@ -567,7 +562,10 @@ impl Ctx {
         match self.face.and_then(|face| face.abilities.get(ix.index())) {
             Some(ability) => match Ctx::keyword_line(ability) {
                 Some(keyword) => super::words::uncapitalized(&keyword),
-                None => "that ability".to_owned(),
+                None => match self.enchant(ability) {
+                    Some(enchant) => format!("\"{}\"", super::words::uncapitalized(&enchant)),
+                    None => "that ability".to_owned(),
+                },
             },
             None => "[an ability]".to_owned(),
         }

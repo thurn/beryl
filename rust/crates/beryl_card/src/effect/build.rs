@@ -24,7 +24,7 @@ use crate::counter::CounterKind;
 use crate::definition::CardDef;
 use crate::effect::{
     Amount, CastTerms, Comparison, Condition, Effect, Found, LibraryOrder, LibraryPosition,
-    Objects, Players, Prevention, Recipients, Regeneration, Taken,
+    Objects, Players, Prevention, PutOnto, Recipients, Regeneration, Taken,
 };
 use crate::filter::Filter;
 use crate::ids::Zone;
@@ -342,6 +342,23 @@ pub const fn put_into_graveyard(objects: Objects) -> Effect {
 /// control".
 pub const fn return_to_battlefield(cards: Objects) -> Effect {
     Effect::ReturnToBattlefield(cards)
+}
+
+/// [`Effect::PutOntoBattlefield`]: "return [objects] to the battlefield under [player]'s
+/// control", untapped and not linked: [`PutOnto`] says the rest.
+pub const fn put_onto_battlefield(onto: &'static PutOnto) -> Effect {
+    Effect::PutOntoBattlefield(onto)
+}
+
+/// "Return [objects] to the battlefield under [player]'s control": a [`PutOnto`] for
+/// [`put_onto_battlefield`], untapped and not linked.
+pub const fn onto_battlefield_under(objects: Objects, player: Players) -> PutOnto {
+    PutOnto {
+        objects,
+        under: Some(player),
+        tapped: false,
+        linked: false,
+    }
 }
 
 /// [`Effect::ReturnTransformed`]: "return [cards] to the battlefield transformed under their

@@ -5,6 +5,7 @@
 //! of every entry. [`Effect::operands`] is the one place that says which expressions an
 //! entry holds, so a new entry is listed once and each such walk reads it.
 
+use crate::PutOnto;
 use crate::cost::{Chosen, Cost, CostPart};
 use crate::effect::{Amount, Effect, Objects, Players, Recipients, Taken};
 use crate::filter::Filter;
@@ -150,6 +151,11 @@ impl Effect {
             | Effect::Explore(objects)
             | Effect::Modify { objects, .. }
             | Effect::ChangeText { objects, .. } => Operands::of_objects(objects),
+            // The player who will control the permanents.
+            Effect::PutOntoBattlefield(PutOnto { objects, under, .. }) => Operands {
+                others: under.as_ref(),
+                ..Operands::of_objects(objects)
+            },
             Effect::Attach { objects, to } | Effect::ExchangeControl(objects, to) => Operands {
                 to: Some(to),
                 ..Operands::of_objects(objects)

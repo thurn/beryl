@@ -6,6 +6,22 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- An Aura stayed on the battlefield attached to an object its enchant ability no
+  longer allowed, and an Aura that became a creature stayed attached. The
+  state-based action for Auras (CR 704.5m) asked only whether the enchanted
+  permanent had protection from the Aura, because the only Aura then in the pool
+  enchanted "creature or Vehicle" and made its creature a Vehicle. An Aura put
+  onto the battlefield other than as a resolving Aura spell entered attached to
+  nothing and died, where CR 303.4f lets its controller choose what it enchants.
+  Found and fixed while adding Animate Dead, whose enchant ability changes on
+  the battlefield: `attach::may_enchant` asks every enchant ability the Aura has
+  now (CR 702.5c) and CR 303.4d, the state-based action and the attach
+  instruction both ask it, and `replace::enchants` makes the CR 303.4f choice.
+  Prevention: a rule with a general condition ("an illegal object") is written
+  in general and not narrowed to the cards of the day; a doc comment that says
+  "the one implemented card does X, so" marks code to revisit when a second card
+  arrives.
+
 - **Storm copied nothing once its spell was countered.** With Brain Freeze or
   Tendrils of Agony on the stack, countering the spell in response to its storm
   trigger left the trigger with nothing to copy, though the rules copy it from

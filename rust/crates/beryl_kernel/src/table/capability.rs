@@ -2,7 +2,7 @@
 
 use beryl_card::{
     Amount, Behavior, Condition, Draws, Effect, Face, Modification, Node, Objects, Replaced,
-    Replacement, Rewrite,
+    Replacement, Rewrite, Subtype, Words,
 };
 
 use crate::static_ability::Inputs;
@@ -54,11 +54,12 @@ pub enum Capability {
     /// A card has dredge ([`beryl_card::Replacement::dredge`]), a replacement of draws that
     /// works from a graveyard, so a draw looks there for one.
     Dredge,
-    /// A card chooses a value as it enters ([`beryl_card::Replacement::choose_as_enters`]) or
+    /// A card chooses a value as it enters ([`beryl_card::Replacement::choose_as_enters`]),
     /// may enter as a copy of a permanent it chooses
-    /// ([`beryl_card::Replacement::enter_as_copy`]), a choice that may come up wherever a
-    /// permanent enters, so every resolution runs where it can pause for it (`beryl_rules`'
-    /// `resolve`).
+    /// ([`beryl_card::Replacement::enter_as_copy`]), or is an Aura, which chooses what it
+    /// enchants as it enters other than as a resolving Aura spell (CR 303.4f): a choice that
+    /// may come up wherever a permanent enters, so every resolution runs where it can pause for
+    /// it (`beryl_rules`' `resolve`).
     ChoosesAsEnters,
     /// A card's static ability affects objects in every zone
     /// ([`beryl_card::Objects::Everywhere`]), so the recompute lists such effects for the
@@ -107,6 +108,9 @@ impl Capability {
         });
         if gives_triggers {
             found |= Capability::GivesTriggers.bit();
+        }
+        if face.subtypes.read(&Words::NONE).contains(Subtype::Aura) {
+            found |= Capability::ChoosesAsEnters.bit();
         }
         // An ability a permanent is granted reads what one of its own does.
         if face.grants.iter().any(|a| a.layer().is_some()) {

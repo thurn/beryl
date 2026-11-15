@@ -208,6 +208,7 @@ pub(super) fn static_members<L: Layout>(
         | Objects::TriggeredOnIn(_)
         | Objects::Carried
         | Objects::ExiledWithThis
+        | Objects::PutOntoBattlefieldWithThis
         | Objects::InZoneOf { .. }
         | Objects::CardsIn { .. }
         | Objects::Paid(_) => {

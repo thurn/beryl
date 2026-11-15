@@ -311,7 +311,8 @@ impl Objects {
             | Objects::TriggeredOn
             | Objects::TriggeredOnIn(_)
             | Objects::Carried
-            | Objects::ExiledWithThis => {}
+            | Objects::ExiledWithThis
+            | Objects::PutOntoBattlefieldWithThis => {}
             Objects::All { filter, .. } | Objects::Everywhere(filter) => filter.walk(visit),
             Objects::InZoneOf {
                 players, filter, ..
@@ -382,7 +383,9 @@ impl Condition {
                 objects.walk(visit);
                 filter.walk(visit);
             }
-            Condition::EnteredThisTurn(objects) | Condition::Token(objects) => {
+            Condition::EnteredThisTurn(objects)
+            | Condition::Token(objects)
+            | Condition::OnBattlefield(objects) => {
                 objects.walk(visit);
             }
             Condition::Not(condition) => condition.walk(visit),

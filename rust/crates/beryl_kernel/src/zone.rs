@@ -138,7 +138,7 @@ impl<L: Layout> State<L> {
             self.carry_text(slot, &text)?;
         }
         if matches!(to, Zone::Battlefield | Zone::Nowhere) {
-            self.forget_exiled_with(slot);
+            self.forget_links_to(slot);
         }
         // CR 400.2: cards in public zones are seen by every player.
         if to.is_public() {
@@ -278,7 +278,7 @@ impl<L: Layout> State<L> {
             incarnation,
             ..Object::EMPTY
         };
-        self.forget_exiled_with(slot);
+        self.forget_links_to(slot);
         for k in self.knowledge.as_mut_slice() {
             k.remove(slot);
         }

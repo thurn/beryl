@@ -22,6 +22,7 @@
 //! - [`card`]: a face's paragraphs, in Oracle's order.
 
 mod abilities;
+mod auras;
 mod card;
 mod clauses;
 mod copies;
@@ -32,6 +33,7 @@ mod prevention;
 mod references;
 mod rules;
 mod words;
+mod zones;
 
 #[cfg(test)]
 mod tests;
@@ -104,6 +106,9 @@ enum Attached {
     /// creatures ([CR 303.4b](https://yawgatog.com/resources/magic-rules/#R3034b)).
     Aura {
         creature: bool,
+        /// It enchants a card in a graveyard: "enchanted creature card", where an instruction
+        /// moves that card.
+        card: bool,
     },
     /// An Equipment: "equipped creature"
     /// ([CR 301.5a](https://yawgatog.com/resources/magic-rules/#R3015a)).
@@ -117,11 +122,13 @@ impl Ctx {
         let this = self_reference(face, name);
         let subtypes = face.subtypes.read(&Words::NONE);
         let attached = if subtypes.contains(Subtype::Aura) {
-            let creature = face
+            let enchant = face
                 .spell_ability()
-                .and_then(|spell| spell.targets().first())
-                .is_some_and(|spec| spec.filter == crate::Filter::Types(Types::CREATURE));
-            Attached::Aura { creature }
+                .and_then(|spell| spell.targets().first());
+            let creature =
+                enchant.is_some_and(|spec| spec.filter == crate::Filter::Types(Types::CREATURE));
+            let card = enchant.is_some_and(|spec| spec.kind == crate::TargetKind::GraveyardCard);
+            Attached::Aura { creature, card }
         } else if subtypes.contains(Subtype::Equipment) {
             Attached::Equipment
         } else {

@@ -1,4 +1,11 @@
 {
+  "Animate Dead": {
+    "reason": "wording",
+    "note": "The renderer names the Aura where Oracle says \"it\" for the same object, ends the quoted granted ability without its period and puts it before the next sentence, splits \"return ... and attach this Aura to it\" into two sentences, and calls the creature the delayed ability carries \"that permanent\", which a sacrifice always is. Same instructions in the same order.",
+    "diff": [
+      "Animate Dead: when ~ enters , if it's on the battlefield , [-it-] {+~+} loses \" enchant creature card in a graveyard \" and gains \" enchant creature put onto the battlefield with ~ [-.-] \" return enchanted creature card to the battlefield under your control [-and-] {+.+} attach ~ to it . when ~ leaves the battlefield , that [-creature's-] {+permanent's+} controller sacrifices it ."
+    ]
+  },
   "Beza, the Bounding Spring": {
     "reason": "wording",
     "note": "Oracle puts each instruction before its condition (\"create a Treasure token if an opponent controls more lands than you\"); the renderer puts the condition first. Same four intervening-if clauses.",

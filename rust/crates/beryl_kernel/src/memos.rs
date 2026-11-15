@@ -60,7 +60,7 @@ pub enum Memo<L: Layout = Small> {
     /// It names the slot and not one incarnation of it: the card stays exiled with that
     /// object after the object has left its zone, for an ability of it still on the stack,
     /// until a new object arrives in the slot on the battlefield or the slot of a token is
-    /// freed ([`State::forget_exiled_with`]).
+    /// freed ([`State::forget_links_to`]).
     ExiledWith(L::Slot),
     /// The card in exile was exiled until the permanent in this slot leaves the
     /// battlefield, which returns it
@@ -85,6 +85,12 @@ pub enum Memo<L: Layout = Small> {
     ///
     /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
     Really(L::Card),
+    /// The permanent was put onto the battlefield by an ability of the Aura in this slot,
+    /// which says so of it: Animate Dead's "enchant creature put onto the battlefield with
+    /// this Aura", and its "that creature" once the Aura has left. It names the slot as
+    /// [`Memo::ExiledWith`] does, for an ability of the Aura still on the stack after the
+    /// Aura left, until a new object arrives in that slot ([`State::forget_links_to`]).
+    PutOntoBattlefieldWith(L::Slot),
 }
 
 impl<L: Layout> Memo<L> {
@@ -98,6 +104,7 @@ impl<L: Layout> Memo<L> {
             Memo::ExiledUntil(_) => Kinds::EXILED_UNTIL,
             Memo::Chosen(_) => Kinds::CHOSEN,
             Memo::Really(_) => Kinds::REALLY,
+            Memo::PutOntoBattlefieldWith(_) => Kinds::PUT_WITH,
         }
     }
 
@@ -106,7 +113,11 @@ impl<L: Layout> Memo<L> {
     #[inline]
     fn zone(self) -> Zone {
         match self {
-            Memo::Paid(_) | Memo::X(_) | Memo::Chosen(_) | Memo::Really(_) => Zone::Battlefield,
+            Memo::Paid(_)
+            | Memo::X(_)
+            | Memo::Chosen(_)
+            | Memo::Really(_)
+            | Memo::PutOntoBattlefieldWith(_) => Zone::Battlefield,
             Memo::ExiledWith(_) | Memo::ExiledUntil(_) => Zone::Exile,
         }
     }
@@ -126,7 +137,9 @@ impl<L: Layout> Memo<L> {
     fn names(self) -> Option<L::Slot> {
         match self {
             Memo::Paid(_) | Memo::X(_) | Memo::Chosen(_) | Memo::Really(_) => None,
-            Memo::ExiledWith(by) | Memo::ExiledUntil(by) => Some(by),
+            Memo::ExiledWith(by) | Memo::ExiledUntil(by) | Memo::PutOntoBattlefieldWith(by) => {
+                Some(by)
+            }
         }
     }
 
@@ -140,7 +153,7 @@ impl<L: Layout> Memo<L> {
             Memo::Chosen(value) => value.holds(),
             Memo::Really(_) => true,
             // What exiled it left a card or a token in its slot.
-            Memo::ExiledWith(by) => zone(by) != Zone::Nowhere,
+            Memo::ExiledWith(by) | Memo::PutOntoBattlefieldWith(by) => zone(by) != Zone::Nowhere,
             // An object exiled "until" its exiler leaves returns as it leaves (CR 610.3).
             Memo::ExiledUntil(by) => zone(by) == Zone::Battlefield,
         }
@@ -155,6 +168,7 @@ impl<L: Layout> Memo<L> {
             Memo::ExiledUntil(by) => Memo::ExiledUntil(slot(by)),
             Memo::Chosen(value) => Memo::Chosen(value.relayout()),
             Memo::Really(card) => Memo::Really(crate::relayout::card(card)),
+            Memo::PutOntoBattlefieldWith(by) => Memo::PutOntoBattlefieldWith(slot(by)),
         }
     }
 
@@ -178,8 +192,12 @@ impl Kinds {
     const EXILED_UNTIL: u16 = 1 << 10;
     const CHOSEN: u16 = 1 << 11;
     const REALLY: u16 = 1 << 12;
+    const PUT_WITH: u16 = 1 << 13;
     /// The kinds whose memo names a slot ([`Memo::names`]).
-    const NAMING: u16 = Kinds::EXILED_WITH | Kinds::EXILED_UNTIL;
+    const NAMING: u16 = Kinds::EXILED_WITH | Kinds::EXILED_UNTIL | Kinds::PUT_WITH;
+    /// The kinds whose memo ends as a new object arrives in the slot it names
+    /// ([`State::forget_links_to`]).
+    const LINKS: u16 = Kinds::EXILED_WITH | Kinds::PUT_WITH;
 
     /// The bits of the kinds of cost in `paid`.
     #[inline]
@@ -524,9 +542,33 @@ impl<L: Layout> State<L> {
             .remembering(Kinds::EXILED_UNTIL, Memo::ExiledUntil(source))
     }
 
-    /// Unlinks the cards exiled with an earlier object in `slot`, as a new object arrives
-    /// there or a token's slot is freed: the zone move calls it. The cards stay "exiled
-    /// with" the object that exiled them
+    /// The permanents put onto the battlefield by an ability of the Aura in `source`
+    /// ([`Memo::PutOntoBattlefieldWith`]), whether or not the Aura is still there. With no
+    /// permanent in the game that remembers one, one AND.
+    #[inline]
+    pub fn put_onto_battlefield_with(&self, source: L::Slot) -> Bitboard<L::Slot> {
+        self.memos
+            .remembering(Kinds::PUT_WITH, Memo::PutOntoBattlefieldWith(source))
+    }
+
+    /// Ends the card in `slot`'s memo of what it was exiled until, if it has one: the card
+    /// stays in exile as that permanent leaves, as an Aura with nothing it could enchant does
+    /// ([CR 303.4g](https://yawgatog.com/resources/magic-rules/#R3034g)): "If an Aura is
+    /// entering the battlefield and there is no legal object or player for it to enchant, the
+    /// Aura remains in its current zone". It is exiled until nothing any more.
+    #[cold]
+    #[inline(never)]
+    pub fn end_exiled_until(&mut self, slot: L::Slot) {
+        let done = self
+            .memos
+            .end(|e| !(e.slot == slot && matches!(e.memo, Memo::ExiledUntil(_))));
+        self.settle_ended(done);
+    }
+
+    /// Unlinks the cards exiled with an earlier object in `slot`, and the permanents put
+    /// onto the battlefield with it, as a new object arrives there or a token's slot is
+    /// freed: the zone move calls it. The cards stay "exiled with" the object that exiled
+    /// them
     /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second
     /// ability refers only to cards in the exile zone that were put there as a result of an
     /// instruction to exile them in the first ability." An ability of that object still on
@@ -534,17 +576,19 @@ impl<L: Layout> State<L> {
     /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)) and does not. With
     /// no card in the game exiled this way, one AND.
     #[inline]
-    pub(crate) fn forget_exiled_with(&mut self, slot: L::Slot) {
-        if self.memos.kinds.0 & Kinds::EXILED_WITH != 0 {
-            self.forget_exiled_with_slot(slot);
+    pub(crate) fn forget_links_to(&mut self, slot: L::Slot) {
+        if self.memos.kinds.0 & Kinds::LINKS != 0 {
+            self.forget_links_to_slot(slot);
         }
     }
 
-    /// The rare path of [`State::forget_exiled_with`], out of line.
+    /// The rare path of [`State::forget_links_to`], out of line.
     #[cold]
     #[inline(never)]
-    fn forget_exiled_with_slot(&mut self, slot: L::Slot) {
-        let done = self.memos.end(|e| e.memo != Memo::ExiledWith(slot));
+    fn forget_links_to_slot(&mut self, slot: L::Slot) {
+        let done = self.memos.end(|e| {
+            e.memo != Memo::ExiledWith(slot) && e.memo != Memo::PutOntoBattlefieldWith(slot)
+        });
         self.settle_ended(done);
     }
 

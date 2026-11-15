@@ -16,6 +16,12 @@ const CUSTOM: &[&str] = &[];
 /// a generated scenario exercises fails too, so the list stays current.
 const UNREACHED: &[(&str, &str)] = &[
     (
+        "Animate Dead: ability 3 (Triggered)",
+        "it is the delayed ability the enters ability creates, which triggers as Animate Dead \
+         leaves the battlefield, and a generated scenario never makes it leave; the card's \
+         hand-written scenarios destroy it and flicker it",
+    ),
+    (
         "Cavern of Souls: ability 2 (Mana)",
         "its mana pays only for a creature spell of the type the land chose as it entered, and a \
          generated position puts the land onto the battlefield having chosen none; the card's \

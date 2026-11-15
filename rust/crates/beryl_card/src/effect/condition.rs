@@ -31,6 +31,11 @@ pub enum Condition {
     /// "If it entered this turn", "as long as this entered this turn": there is such an
     /// object, and every one is a permanent that entered the battlefield this turn.
     EnteredThisTurn(Objects),
+    /// "If it's on the battlefield": there is such an object, on the battlefield. Of the
+    /// ability's source, it is still the object that it was when the ability triggered: one
+    /// that left and came back is a new object
+    /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
+    OnBattlefield(Objects),
     /// "If it's a token", and with [`Condition::Not`], "if it isn't a token": there is such an
     /// object, and every one is a token ([CR 111.1]): "Some effects put tokens onto the
     /// battlefield." Of the permanent whose leaving the battlefield triggered the ability, as it
@@ -76,9 +81,9 @@ impl Condition {
             Condition::Is(objects, filter) => {
                 objects.needs_a_resolution() || filter.needs_a_resolution()
             }
-            Condition::EnteredThisTurn(objects) | Condition::Token(objects) => {
-                objects.needs_a_resolution()
-            }
+            Condition::EnteredThisTurn(objects)
+            | Condition::Token(objects)
+            | Condition::OnBattlefield(objects) => objects.needs_a_resolution(),
             Condition::Not(condition) => condition.needs_a_resolution(),
             Condition::All(conditions) | Condition::Any(conditions) => {
                 let mut i = 0;
@@ -103,7 +108,8 @@ impl Condition {
             Condition::Compare(left, _, right) => left.names_paid() || right.names_paid(),
             Condition::Is(objects, _)
             | Condition::EnteredThisTurn(objects)
-            | Condition::Token(objects) => objects.names_paid(),
+            | Condition::Token(objects)
+            | Condition::OnBattlefield(objects) => objects.names_paid(),
             Condition::Not(condition) => condition.names_paid(),
             Condition::All(conditions) | Condition::Any(conditions) => {
                 let mut i = 0;

@@ -94,6 +94,7 @@ impl Ctx {
                 format!("{} from {}", self.triggered_on(), owners_zone(zone))
             }
             Objects::ExiledWithThis => format!("the cards exiled with {}", self.this),
+            Objects::PutOntoBattlefieldWithThis => "that creature".to_owned(),
             Objects::Carried => "that card".to_owned(),
             Objects::All { zone, filter } => {
                 let kind = Kind::of_zone(zone);
@@ -150,6 +151,7 @@ impl Ctx {
     pub(super) fn one_of(&mut self, objects: Objects) -> String {
         match objects {
             Objects::ExiledWithThis => format!("a card exiled with {}", self.this),
+            Objects::PutOntoBattlefieldWithThis => "that creature".to_owned(),
             Objects::All { zone, filter } => {
                 let kind = Kind::of_zone(zone);
                 self.noun(filter, kind).indefinite(kind)
@@ -251,7 +253,8 @@ impl Ctx {
             | Objects::Everywhere(_)
             | Objects::ExiledWithThis => true,
             // "Each other creature is": one at a time.
-            Objects::This
+            Objects::PutOntoBattlefieldWithThis
+            | Objects::This
             | Objects::AttachedTo
             | Objects::TriggeredOn
             | Objects::TriggeredOnIn(_)
@@ -284,11 +287,13 @@ impl Ctx {
     /// player an Aura is attached to is called enchanted."
     fn attached_to(&self) -> String {
         match self.attached {
-            Attached::Aura { creature: true } | Attached::Equipment => match self.attached {
+            Attached::Aura { creature: true, .. } | Attached::Equipment => match self.attached {
                 Attached::Equipment => "equipped creature",
                 _ => "enchanted creature",
             },
-            Attached::Aura { creature: false } => "enchanted permanent",
+            Attached::Aura {
+                creature: false, ..
+            } => "enchanted permanent",
             Attached::Neither => "the permanent it's attached to",
         }
         .to_owned()
@@ -477,6 +482,13 @@ impl Ctx {
             Condition::EnteredThisTurn(objects) => {
                 format!("{} entered this turn", self.objects(objects))
             }
+            Condition::OnBattlefield(objects) => {
+                let what = self.condition_subject(objects);
+                format!(
+                    "{} on the battlefield",
+                    be(&what, self.is_plural(objects), true)
+                )
+            }
             Condition::Token(objects) => {
                 let what = self.objects(objects);
                 format!("{} a token", be(&what, false, true))
@@ -498,6 +510,16 @@ impl Ctx {
         }
     }
 
+    /// What a condition about whether objects are somewhere is about: "it" for the object the
+    /// ability is on, as the trigger has named it already ("When this Aura enters, if it's on
+    /// the battlefield").
+    fn condition_subject(&mut self, objects: Objects) -> String {
+        match objects {
+            Objects::This => "it".to_owned(),
+            objects => self.objects(objects),
+        }
+    }
+
     /// "If it isn't a token", "if you lose the flip", "if you don't".
     fn negated(&mut self, condition: Condition) -> String {
         match condition {
@@ -512,6 +534,13 @@ impl Ctx {
             }
             Condition::EnteredThisTurn(objects) => {
                 format!("{} didn't enter this turn", self.objects(objects))
+            }
+            Condition::OnBattlefield(objects) => {
+                let what = self.condition_subject(objects);
+                format!(
+                    "{} on the battlefield",
+                    be(&what, self.is_plural(objects), false)
+                )
             }
             Condition::Token(objects) => {
                 let what = self.objects(objects);
