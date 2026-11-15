@@ -9,6 +9,11 @@ publish = false
 [lints]
 workspace = true
 
+# The phones build this crate's library as a static library for iOS and a shared library for
+# Android (`cargo rustc --lib --crate-type staticlib` or `cdylib`, in `just b3d ios-smoke` and
+# `android-smoke`), so that a desktop build links neither. Their hosts call the C functions in
+# src/ffi, declared in include/beryl3d.h.
+
 [[bin]]
 name = "beryl3d"
 path = "src/main.rs"
@@ -31,12 +36,22 @@ beryl_assets = { path = "../beryl_assets" }
 beryl_host = { path = "../beryl_host" }
 beryl_inspect = { path = "../beryl_inspect", optional = true }
 beryl_render = { path = "../beryl_render" }
-beryl_scene = { path = "../beryl_scene" }
+# The `driver` feature reads a replayed recording's views and responses.
+beryl_scene = { path = "../beryl_scene", features = ["driver"] }
 # The game the app plays: `Sessions` on the session thread.
 beryl_session = { path = "../../../crates/beryl_session" }
+# Receives wgpu's warnings on a phone, which shows no standard error, and writes them to a file
+# (src/ffi). The release wgpu already depends on.
+log = { version = "0.4.35", features = ["std"] }
 # The frame log's lines, in place of a hand-written JSON writer and reader.
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+
+# The Kotlin host's strings and Surface, in place of hand-written JNI and NDK declarations. The
+# releases wgpu already links on Android.
+[target.'cfg(target_os = "android")'.dependencies]
+jni-sys = "0.3.1"
+ndk-sys = "0.6.0"
 
 [dev-dependencies]
 # The crate itself with `tools`, so that its tests and the binary they run can replay fixtures.

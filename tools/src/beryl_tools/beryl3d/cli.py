@@ -18,7 +18,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from .. import system, warm
-from . import app, gate, lane, paths, sweep, vm
+from . import app, gate, lane, paths, phone, sweep, vm
 
 # Exit code for a command line `just b3d` cannot run, as argparse uses.
 USAGE = 2
@@ -370,6 +370,48 @@ COMMANDS: tuple[Command, ...] = (
         ),
         app.run_frames,
         app.frames_arguments,
+    ),
+    Command(
+        "ios-smoke",
+        "replays a recording in the app's iOS host in the headless Simulator, and saves the screen",
+        (
+            ("just b3d ios-smoke", "build, install and replay verbs-zones"),
+            (
+                "just b3d ios-smoke --fixture stress-255",
+                "replay the 255-card stress board",
+            ),
+        ),
+        phone.checked(phone.run_ios_smoke),
+        phone.ios_smoke_arguments,
+    ),
+    Command(
+        "android-smoke",
+        "replays a recording in the app's Android host in a headless emulator, on Vulkan or GLES",
+        (
+            (
+                "just b3d android-smoke",
+                "build, install and replay verbs-zones on Vulkan",
+            ),
+            (
+                "just b3d android-smoke --gles",
+                "the same with Vulkan hidden: OpenGL ES 3.0",
+            ),
+        ),
+        phone.checked(phone.run_android_smoke),
+        phone.android_smoke_arguments,
+    ),
+    Command(
+        "ios-device",
+        "installs the app's iOS host on the paired iPhone and replays two recordings, when asked",
+        (
+            (
+                "just b3d ios-device --user-asked",
+                "the user asked for it: install and replay",
+            ),
+            ("just b3d ios-device", "a person's run, which needs no flag"),
+        ),
+        phone.checked(phone.run_ios_device),
+        phone.ios_device_arguments,
     ),
     Command(
         "vm",

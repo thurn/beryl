@@ -22,7 +22,10 @@ beryl_render = { path = "../beryl_render" }
 beryl_scene = { path = "../beryl_scene" }
 # Pointer positions as the client's vectors.
 glam = "0.34.3"
-# The desktop window and its events, in place of hand-written platform windowing.
+
+# The desktop window and its events, in place of hand-written platform windowing. The phones
+# have native Swift and Kotlin hosts instead (decision C7), which call `phone::Phone`.
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
 winit = "0.30.13"
 
 # The display link that asks macOS for the display's highest refresh rate (src/macos.rs): winit

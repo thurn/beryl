@@ -58,6 +58,9 @@ pub struct Options {
     pub load: Option<(usize, Class)>,
     /// How long each finished frame is held back before it is shown (`--slow-gpu`).
     pub slow_gpu: Option<Duration>,
+    /// With `fixture`, write that recording to this file as JSON and exit, for a phone's app to
+    /// replay.
+    pub write_fixture: Option<String>,
 }
 
 /// Whether this build has the options only a debug build has (`--fixture`, `--pause-at`,
@@ -80,6 +83,7 @@ impl Options {
             drive: None,
             load: None,
             slow_gpu: None,
+            write_fixture: None,
         };
         let mut rest = arguments.iter();
         while let Some(option) = rest.next() {
@@ -94,6 +98,7 @@ impl Options {
                 "--drive" if tools => options.drive = Some(value()?),
                 "--load" if tools => options.load = Some(crate::load::parse(&value()?)?),
                 "--slow-gpu" if tools => options.slow_gpu = Some(duration(&value()?)?),
+                "--write-fixture" if tools => options.write_fixture = Some(value()?),
                 "--for" => options.run_for = Some(duration(&value()?)?),
                 "--window" => {
                     let word = value()?;
@@ -130,6 +135,9 @@ pub fn usage(tools: bool) -> String {
         );
         lines.push(
             "  --slow-gpu <duration>                            hold each frame back this long",
+        );
+        lines.push(
+            "  --write-fixture <path>                           write --fixture's recording, exit",
         );
     }
     lines.join("\n")

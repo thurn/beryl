@@ -3,16 +3,25 @@
 //! frame, each later view 400 milliseconds after the table comes to rest in the view before
 //! it, and a command is answered from the recording's responses. Nothing here calls the
 //! session, so the frame thread can do it all: it is a lookup in memory.
+//!
+//! A debug build on the desktop reads the recording from the recordings pack. A phone has no
+//! pack and no engine to build one, so `just b3d ios-smoke` and `android-smoke` write the
+//! recording to a file on the Mac (`beryl3d --fixture <name> --write-fixture <path>`) and copy
+//! it into the app's data folder, where [`Fixture::read`] finds it.
 
-use beryl_inspect::pages;
+use std::path::Path;
+
 use beryl_scene::Client;
-use beryl_scene::agent::Layout;
 use beryl_scene::command::{Reply, SessionCommand};
-use beryl_scene::driver::{Moment, REPLY_DELAY, Recording, Responses, plays_on};
+use beryl_scene::driver::{REPLY_DELAY, Recording, Responses, plays_on};
 use beryl_scene::frame::Wake;
-use beryl_scene::input::Size;
 use beryl_session::GameUpdate;
-use beryl_session::protocol::Side;
+use beryl_session::ipc::FixtureMessage;
+#[cfg(feature = "tools")]
+use {
+    beryl_inspect::pages, beryl_scene::agent::Layout, beryl_scene::driver::Moment,
+    beryl_scene::input::Size, beryl_session::protocol::Side,
+};
 
 /// A recording being replayed.
 pub struct Fixture {
@@ -25,19 +34,43 @@ pub struct Fixture {
 }
 
 impl Fixture {
-    /// The recording `name` as the first seat sees it.
+    /// The recording `name` from the recordings pack, as the first seat sees it.
     ///
     /// # Errors
     ///
     /// When there is no such recording, or it cannot be read.
+    #[cfg(feature = "tools")]
     pub fn new(name: &str) -> Result<Self, String> {
-        let recording: Recording = pages::recording(name, Side::You)?;
+        Self::replaying(&pages::recording(name, Side::You)?)
+    }
+
+    /// The recording `name` from the file `<name>.json` in `dir`, as `write` left it.
+    ///
+    /// # Errors
+    ///
+    /// When the file is missing or is not a recording.
+    pub fn read(dir: &Path, name: &str) -> Result<Self, String> {
+        let path = dir.join(format!("{name}.json"));
+        let text = std::fs::read_to_string(&path)
+            .map_err(|error| format!("{}: {error}", path.display()))?;
+        let messages: Vec<FixtureMessage> = serde_json::from_str(&text)
+            .map_err(|error| format!("{}: not a recording: {error}", path.display()))?;
+        Self::replaying(&Recording(messages))
+    }
+
+    fn replaying(recording: &Recording) -> Result<Self, String> {
         Ok(Self {
             views: recording.views()?,
-            responses: Responses::new(&recording),
+            responses: Responses::new(recording),
             released: 0,
             due: None,
         })
+    }
+
+    /// Whether every view has been given and the table rests in the last: the recording's last
+    /// script has ended.
+    pub fn ended(&self, client: &Client) -> bool {
+        self.released == self.views.len() && client.wake() == Wake::Never
     }
 
     /// The views to give the client at `clock`: the first at the start, and the next once its
@@ -95,12 +128,26 @@ impl Fixture {
     }
 }
 
+/// Writes the recording `name` from the recordings pack to `path` as JSON, for
+/// [`Fixture::read`] on a phone.
+///
+/// # Errors
+///
+/// When there is no such recording, or the file cannot be written.
+#[cfg(feature = "tools")]
+pub fn write(name: &str, path: &Path) -> Result<(), String> {
+    let recording = pages::recording(name, Side::You)?;
+    let text = serde_json::to_string(&recording.0).map_err(|error| error.to_string())?;
+    std::fs::write(path, text).map_err(|error| format!("{}: {error}", path.display()))
+}
+
 /// The time of `moment` in the recording `name` (or, with none, a duration's), in nanoseconds.
 ///
 /// # Errors
 ///
 /// When the moment is malformed, names a moment the recording lacks, or is a named moment with
 /// no recording.
+#[cfg(feature = "tools")]
 pub fn moment(text: &str, name: Option<&str>, size: Size) -> Result<u64, String> {
     let moment: Moment = text
         .parse()

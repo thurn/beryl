@@ -139,6 +139,9 @@ dependencies = [
  "beryl_render",
  "beryl_scene",
  "beryl_session",
+ "jni-sys 0.3.1",
+ "log",
+ "ndk-sys",
  "serde",
  "serde_json",
 ]

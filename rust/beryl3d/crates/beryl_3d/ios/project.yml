@@ -1,0 +1,37 @@
+# The iOS host of Beryl 3D's phone spike (docs/beryl-3d.md, "Hosts"). `just b3d ios-smoke` and
+# `just b3d ios-device` generate the Xcode project from this file with xcodegen into
+# $BERYL_CACHE/b3d/ios, build the Rust library, and pass the folder holding it as
+# BERYL3D_LIB_DIR and beryl_3d's crate folder as BERYL3D_CRATE_DIR, since the project is not
+# beside its sources. Info.plist
+# says the app runs full screen in landscape and lets devicectl copy its frame logs off a phone
+# (UIFileSharingEnabled).
+name: Beryl3D
+options:
+  bundleIdPrefix: ca.thurn
+  deploymentTarget:
+    iOS: "15.0"
+targets:
+  Beryl3D:
+    type: application
+    platform: iOS
+    sources:
+      - path: Beryl3D
+        excludes: [Info.plist]
+    settings:
+      base:
+        # Different from the Tauri app's ca.thurn.beryl, so both can be installed.
+        PRODUCT_BUNDLE_IDENTIFIER: ca.thurn.beryl3d
+        DEVELOPMENT_TEAM: D77745XTVL
+        CODE_SIGN_STYLE: Automatic
+        SWIFT_VERSION: "5.0"
+        SWIFT_OBJC_BRIDGING_HEADER: $(BERYL3D_CRATE_DIR)/ios/Beryl3D/Bridging.h
+        HEADER_SEARCH_PATHS: $(BERYL3D_CRATE_DIR)/include
+        LIBRARY_SEARCH_PATHS: $(BERYL3D_LIB_DIR)
+        OTHER_LDFLAGS: [-lberyl_3d, -lc++]
+        TARGETED_DEVICE_FAMILY: "1"
+        # The Rust library is built for arm64 alone, on the Simulator as on a phone.
+        ARCHS: arm64
+        ONLY_ACTIVE_ARCH: false
+        ENABLE_BITCODE: false
+        INFOPLIST_FILE: $(BERYL3D_CRATE_DIR)/ios/Beryl3D/Info.plist
+        GENERATE_INFOPLIST_FILE: false

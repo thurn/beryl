@@ -7,13 +7,16 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use beryl_host::{Desktop, Feed, Inbox, Opened, Ticked, WindowMode, Windowless, WindowlessOptions};
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+use beryl_host::{Desktop, WindowMode};
+use beryl_host::{Feed, Inbox, Opened, Ticked, Windowless, WindowlessOptions};
 use beryl_scene::frame::Wake;
 use beryl_scene::input::{Input, Size};
 use beryl_scene::{Client, Config};
 use beryl_session::protocol::Status;
 use beryl_session::script::Verb;
 
+use crate::fixture::Fixture;
 use crate::frame_log::{FrameLog, Run, Summary};
 use crate::options::{Options, Window};
 use crate::session::{self, Commands, Live};
@@ -28,6 +31,8 @@ const SIZE: Size = Size {
 const WINDOWLESS_HZ: f32 = 60.0;
 /// The line the app prints when its first frame is shown, which `just b3d smoke` waits for.
 pub const FIRST_SHOWN: &str = "beryl3d: first frame shown";
+/// The line the app prints when a replayed recording's last script has ended.
+pub const FIXTURE_ENDED: &str = "beryl3d: fixture ended";
 
 /// What a finished run left.
 pub struct Finished {
@@ -41,8 +46,7 @@ enum Source {
     /// The session thread, which takes the client's commands.
     Live(Commands),
     /// A recording, replayed on the frame thread.
-    #[cfg(feature = "tools")]
-    Fixture(crate::fixture::Fixture),
+    Fixture(Fixture),
 }
 
 /// What the app adds to the host's frame loop.
@@ -50,6 +54,12 @@ struct AppFeed {
     source: Option<Source>,
     /// The frame log, made when the host opens and read back after the run.
     log: Rc<RefCell<Option<Logged>>>,
+    /// The folder the frame log is written in.
+    log_dir: PathBuf,
+    /// When the frame log is finished.
+    finish: Finish,
+    /// Whether a replayed recording has ended.
+    ended: bool,
     /// The run as known before the host opened; the host fills in the display and adapter.
     run: Run,
     /// Whether the latest view says the AI is searching.
@@ -57,15 +67,38 @@ struct AppFeed {
     shown_first: bool,
 }
 
+/// When the frame log is finished and its summary written.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Finish {
+    /// When the run ends: on the desktop.
+    AtExit,
+    /// When a replayed recording ends: on a phone, whose app never exits by itself.
+    AtFixtureEnd,
+}
+
 /// The frame log, or why there is none.
 type Logged = Result<FrameLog, String>;
 
-#[cfg(feature = "tools")]
 impl AppFeed {
     /// Gives the client an input from the feed itself, noting what the view says first.
     fn give(&mut self, client: &mut Client, input: Input) {
         self.input(&input);
         client.handle(input);
+    }
+
+    /// Finishes the frame log and prints its summary: done once, when a phone's replay ends.
+    fn finish_log(&mut self) {
+        let Some(Ok(log)) = self.log.borrow_mut().take() else {
+            return;
+        };
+        let path = log.path().to_owned();
+        match log.finish() {
+            Ok(summary) => {
+                println!("{}", summary.print(&self.run));
+                println!("frame log: {}", path.display());
+            }
+            Err(error) => eprintln!("beryl3d: the frame log could not be written: {error}"),
+        }
     }
 }
 
@@ -73,7 +106,7 @@ impl Feed for AppFeed {
     fn opened(&mut self, opened: &Opened) {
         self.run.display_hz = opened.display_hz;
         self.run.adapter.clone_from(&opened.adapter);
-        let log = FrameLog::create(&frames_dir(), &self.run)
+        let log = FrameLog::create(&self.log_dir, &self.run)
             .map_err(|error| format!("the frame log could not be written: {error}"));
         *self.log.borrow_mut() = Some(log);
     }
@@ -84,9 +117,7 @@ impl Feed for AppFeed {
         }
     }
 
-    #[cfg_attr(not(feature = "tools"), expect(unused_variables))]
     fn before(&mut self, client: &mut Client, clock: u64) {
-        #[cfg(feature = "tools")]
         if let Some(Source::Fixture(fixture)) = &mut self.source {
             for update in fixture.due(clock) {
                 self.give(client, Input::Update(Box::new(update)));
@@ -98,7 +129,6 @@ impl Feed for AppFeed {
         while let Some(command) = client.next_command() {
             match &mut self.source {
                 Some(Source::Live(commands)) => commands.send(command),
-                #[cfg(feature = "tools")]
                 Some(Source::Fixture(fixture)) => match fixture.answer(&command) {
                     Ok((reply, views)) => {
                         client.handle(Input::Reply(reply));
@@ -111,9 +141,15 @@ impl Feed for AppFeed {
                 None => {}
             }
         }
-        #[cfg(feature = "tools")]
         if let Some(Source::Fixture(fixture)) = &mut self.source {
             fixture.settled(client);
+            if !self.ended && fixture.ended(client) {
+                self.ended = true;
+                println!("{FIXTURE_ENDED} at {:.1} ms", ticked.clock as f64 / 1e6);
+                if self.finish == Finish::AtFixtureEnd {
+                    self.finish_log();
+                }
+            }
         }
         let mut log = self.log.borrow_mut();
         let Some(Ok(log)) = log.as_mut() else {
@@ -141,11 +177,38 @@ impl Feed for AppFeed {
 
     fn wake(&self) -> Wake {
         match &self.source {
-            #[cfg(feature = "tools")]
             Some(Source::Fixture(fixture)) => fixture.wake(),
             _ => Wake::Never,
         }
     }
+}
+
+/// The feed of a phone's app (`beryl_3d`'s C functions): it replays `fixture`, the recording
+/// `name`, writes its frame log in `log_dir`, and finishes the log when the replay ends.
+pub(crate) fn phone_feed(name: &str, fixture: Fixture, log_dir: PathBuf) -> Box<dyn Feed> {
+    Box::new(AppFeed {
+        source: Some(Source::Fixture(fixture)),
+        log: Rc::new(RefCell::new(None)),
+        log_dir,
+        finish: Finish::AtFixtureEnd,
+        ended: false,
+        run: Run {
+            checkout: checkout(),
+            pid: std::process::id(),
+            started_ms: now_ms(),
+            window: "phone".to_owned(),
+            display_hz: 0.0,
+            adapter: String::new(),
+            load: None,
+            fixture: Some(name.to_owned()),
+            pause_at_ms: None,
+            drive: None,
+            load_threads: None,
+            slow_gpu_ms: None,
+        },
+        searching: false,
+        shown_first: false,
+    })
 }
 
 /// Runs the app as `options` say, until its window closes or `--for` has passed.
@@ -159,9 +222,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
     let run = Run {
         checkout: checkout(),
         pid: std::process::id(),
-        started_ms: SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_or(0, |since| since.as_millis() as u64),
+        started_ms: now_ms(),
         window: options.window.word().to_owned(),
         display_hz: 0.0,
         adapter: String::new(),
@@ -185,6 +246,9 @@ pub fn run(options: &Options) -> Result<Finished, String> {
     let mut feed = AppFeed {
         source: None,
         log: Rc::clone(&log),
+        log_dir: frames_dir(),
+        finish: Finish::AtExit,
+        ended: false,
         run: run.clone(),
         searching: false,
         shown_first: false,
@@ -205,6 +269,10 @@ pub fn run(options: &Options) -> Result<Finished, String> {
             feed.source = Some(source(options, host.inbox())?);
             host.run(client, Box::new(feed), |_| {})
         }
+        // A phone's app is its Swift or Kotlin host, which calls `crate::ffi`.
+        #[cfg(any(target_os = "ios", target_os = "android"))]
+        _ => Err("a phone has no desktop window: its host calls beryl_3d's C functions".to_owned()),
+        #[cfg(not(any(target_os = "ios", target_os = "android")))]
         window => {
             let mode = match window {
                 Window::Background => WindowMode::Background,
@@ -243,10 +311,12 @@ pub fn run(options: &Options) -> Result<Finished, String> {
 }
 
 /// The session thread, or with `--fixture` the recording.
+// Only the recording can fail to start, and only a build with `tools` has one.
+#[cfg_attr(not(feature = "tools"), expect(clippy::unnecessary_wraps))]
 fn source(options: &Options, inbox: Inbox) -> Result<Source, String> {
     #[cfg(feature = "tools")]
     if let Some(name) = &options.fixture {
-        return crate::fixture::Fixture::new(name).map(Source::Fixture);
+        return Fixture::new(name).map(Source::Fixture);
     }
     #[cfg(not(feature = "tools"))]
     let _ = options;
@@ -300,6 +370,13 @@ fn pause_at(options: &Options) -> Result<Option<u64>, String> {
     return crate::fixture::moment(text, options.fixture.as_deref(), SIZE).map(Some);
     #[cfg(not(feature = "tools"))]
     Err(format!("--pause-at {text}: this build cannot pause"))
+}
+
+/// The time, in milliseconds since the Unix epoch.
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |since| since.as_millis() as u64)
 }
 
 /// The checkout the app was built from: four directories above this crate's.

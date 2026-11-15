@@ -19,6 +19,20 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    #[cfg(feature = "tools")]
+    if let Some(path) = &options.write_fixture {
+        let Some(name) = &options.fixture else {
+            eprintln!("beryl3d: --write-fixture needs --fixture");
+            return ExitCode::from(2);
+        };
+        return match beryl_3d::fixture::write(name, std::path::Path::new(path)) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("beryl3d: {error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     match app::run(&options) {
         Ok(finished) => {
             println!("{}", finished.summary.print(&finished.run));

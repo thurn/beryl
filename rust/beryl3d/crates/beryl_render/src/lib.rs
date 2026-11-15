@@ -12,6 +12,6 @@ mod textures;
 
 pub use mesh::CARD_RADIUS;
 pub use renderer::{Drawn, Limits, Renderer};
-pub use surface::{Presented, Surface};
+pub use surface::{Native, Presented, Surface};
 pub use target::{Target, write_rgba_png};
 pub use textures::{BACK_LAYER, GLOW_SPRITE};

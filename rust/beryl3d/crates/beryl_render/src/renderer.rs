@@ -56,8 +56,11 @@ pub struct Renderer {
     depth: Option<(wgpu::TextureView, u32, u32)>,
     /// Present when the renderer counts the fragments each frame shades.
     counter: Option<FragmentCounter>,
-    /// The GPU adapter's name, for logs.
+    /// The GPU adapter's name and backend, for logs.
     pub(crate) adapter: String,
+    /// The instance and adapter of a renderer that draws to a surface, for the surfaces a phone
+    /// host supplies after losing one.
+    pub(crate) gpu: Option<(wgpu::Instance, wgpu::Adapter)>,
 }
 
 impl Renderer {
@@ -116,6 +119,7 @@ impl Renderer {
             depth: None,
             counter: None,
             adapter: "unknown".to_owned(),
+            gpu: None,
         }
     }
 

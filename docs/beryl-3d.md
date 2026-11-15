@@ -852,6 +852,41 @@ bool beryl3d_next_request(Beryl3d *, BerylRequest *out);
 - **Requests are polled.** After each frame the host calls
   `beryl3d_next_request` until it returns false.
 
+What exists so far is a spike that replays one recording on a phone, built to
+find problems with the graphics paths and the build before milestone 4 builds
+the real hosts on it:
+
+- **Five functions.** `beryl_3d` exports `beryl3d_new`, `beryl3d_surface`,
+  `beryl3d_surface_lost`, `beryl3d_lifecycle` and `beryl3d_frame` (`src/ffi`,
+  declared by hand in `include/beryl3d.h`). `BerylConfig` names a recording and
+  the app's writable folder. The app reads `<recording>.json` from that folder
+  and writes its frame log and its error log (`beryl3d.log`) there.
+  `BerylLifecycle` and the wake's kind are `uint32_t` values with named
+  constants, so that no value from C can be an invalid Rust enum. Android's
+  Kotlin host calls JNI functions that turn its strings into UTF-8 and its
+  `Surface` into an `ANativeWindow`, then call the same code.
+- **The hosts** are `ios/` (Swift, an xcodegen spec, iOS 15) and `android/`
+  (Kotlin, built with the Tauri app's Gradle wrapper, API 24) beside the crate.
+  Their bundle and application ids are `ca.thurn.beryl3d`, so both apps can be
+  installed beside the Tauri app. They hold no logic beyond passing the surface,
+  the lifecycle and the display's time. The display link and the frame callback
+  call `beryl3d_frame` on every tick, whatever it returns.
+- **The library** is built with `cargo rustc --crate-type staticlib` for iOS and
+  `cdylib` for Android, so that desktop builds link neither. On Android it needs
+  only the system's libraries and loads at API 24.
+- **A phone has no recordings pack.** `just b3d ios-smoke` and `android-smoke`
+  write the recording on the Mac with
+  `beryl3d --fixture <name> --write-fixture <path>` and copy it into the app's
+  folder. `just b3d ios-device` does the same on the paired iPhone.
+- **The phone's device is made with OpenGL ES 3.0's limits**
+  (`downlevel_webgl2_defaults`), the floor's, on every backend.
+- **No debug names on GPU objects.** The Android emulator's Vulkan driver
+  crashed with SIGSEGV in `vkSetDebugUtilsObjectNameEXT` while wgpu named the
+  device's first objects, which a debug build does for every object. The phone
+  instance leaves wgpu's `DEBUG` flag off and keeps validation.
+- **wgpu's Android surface needs a display handle**, even though Android's
+  carries nothing: without one, `create_surface_unsafe` refuses the window.
+
 Three behaviors are specified because they differ most between platforms.
 
 - **Text entry.** On phones the host shows a native text field over the element

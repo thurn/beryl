@@ -19,10 +19,12 @@ check enforces.
 - `beryl_render`: draws a scene with wgpu. The only crate that names `wgpu`.
 - `beryl_assets`: decodes and packs card pictures for the renderer.
 - `beryl_host`: the window and event loop (winit) that drive a scene and render
-  it.
+  it, and `Phone`, the Rust half of the iOS and Android hosts.
 - `beryl_inspect`: reads a scene and reports it as text; it has no GPU
   dependency.
-- `beryl_3d`: the client that ties the other five crates together.
+- `beryl_3d`: the client that ties the other five crates together. On phones it
+  is a library whose C functions (`src/ffi`, `include/beryl3d.h`) a small Swift
+  app (`ios/`) or Kotlin app (`android/`) calls.
 
 ## Commands
 
@@ -53,6 +55,17 @@ The text commands are the `b3d` program in `beryl_inspect` (`src/cli`), and the
 pictures are `b3d-render` in `beryl_3d` (`src/pictures`, with `Headless` in
 `beryl_host`), built in debug. A wrong name, moment or locator exits with 2 and
 lists what would work.
+
+## Phones
+
+`just b3d ios-smoke` and `just b3d android-smoke` (`--gles` for OpenGL ES 3.0)
+build the library and its host, replay a recording in the headless iOS Simulator
+or Android emulator, and save the frame log and a PNG of the screen in
+`$BERYL_CACHE/b3d/phone`. The app writes its errors and panics to `beryl3d.log`
+and wgpu's warnings to `wgpu.log` in its data folder, and the smoke prints them
+when it fails. `just b3d ios-device --user-asked` installs on the paired iPhone,
+only when the user asked for it in chat. None of these are in the lane or the
+sweep yet.
 
 ## Paths
 
