@@ -152,6 +152,9 @@ await check(
             await button(lobby(host), "Sideboard").click();
             await button(lobby(host), "Move Plains to main deck").click();
             await lobby(guest).getByText("21 main · 1 sideboard").waitFor();
+            await button(lobby(host), "Move Island to sideboard").click();
+            await lobby(guest).getByText("20 main · 2 sideboard").waitFor();
+            await button(lobby(host), "Done").click();
 
             await ready.click();
             await start.click();

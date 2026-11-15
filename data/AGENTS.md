@@ -66,6 +66,13 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   uses the requested part. `Primary` is the unlabeled group before "Move to".
   The Rust test in `beryl_table/tests/commands.rs` checks the shape of each
   action.
+- `table-appendix-map.json`: maps each carried-over row in the Cockatrice
+  appendix to a command id in `table-commands.json` or `gesture:` followed by
+  the title of a registered manual-table browser check. Rows with several
+  controls can list several targets. In the zone table, the key joins the zone
+  and Cockatrice label with `/`. Protocol rows use `Protocol / ` before the
+  label. Leave excluded rows out of the map. `ui/scripts/appendix.test.mjs`
+  checks these references.
 - `design-tokens.json`: the design tokens both clients draw with.
   `just design-tokens` writes the web interface's `ui/src/design/tokens.css`
   from it, and Beryl 3D's `beryl_scene` build script writes the constants of its

@@ -176,13 +176,19 @@ export function tableActionRef(view, subject) {
 
 /** Plays the expected log position on the paused clock. A proposal switch can
  * change the view at the same log position, so callers may also wait for its revision. */
-export async function showTableView(page, expected, proposal) {
+export async function showTableView(
+    page,
+    expected,
+    proposal,
+    { play = false } = {},
+) {
     await page.evaluate(
-        ({ logLength, proposal }) =>
+        ({ logLength, proposal, play }) =>
             new Promise((resolve) => {
                 const stage = window.berylStage;
                 const show = () => {
-                    stage.skip();
+                    if (play) stage.settle();
+                    else stage.skip();
                     const table = stage.shown.view?.table;
                     if (
                         table?.log.length === logLength &&
@@ -200,7 +206,7 @@ export async function showTableView(page, expected, proposal) {
                 const stop = stage.subscribe(() => queueMicrotask(show));
                 show();
             }),
-        { logLength: expected.table.log.length, proposal },
+        { logLength: expected.table.log.length, proposal, play },
     );
 }
 

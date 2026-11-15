@@ -43,5 +43,6 @@ await import("./kept-table-lobby.mjs");
 await import("./kept-table-lobby-pair.mjs");
 await import("./kept-table-start.mjs");
 await import("./kept-table-link.mjs");
+await import("./kept-table-qa.mjs");
 const { stopTableServer } = await import("./table.mjs");
 await finish(stopTableServer);

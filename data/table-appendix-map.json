@@ -1,0 +1,389 @@
+{
+  "Tap / Untap": "permanent.tap",
+  "Skip untapping": "permanent.skip_untap",
+  "Turn Over": ["permanent.turn_over", "card.transform"],
+  "Peek at card face": "permanent.peek",
+  "Clone": "card.clone",
+  "Move to (submenu)": [
+    "move.battlefield",
+    "move.graveyard",
+    "move.exile",
+    "move.hand",
+    "move.library_top",
+    "move.library_bottom"
+  ],
+  "Attach to card…": "card.attach",
+  "Unattach": "permanent.unattach",
+  "Draw arrow…": "card.arrow",
+  "Power / toughness (submenu)": ["stats.set", "stats.reset"],
+  "Set annotation…": "permanent.note",
+  "Reduce life by power": "permanent.reduce_life_by_power",
+  "Select All": "selection.all",
+  "Select Row": "selection.row",
+  "Card counters (submenu)": [
+    "counter.first_add",
+    "counter.first_remove",
+    "counter.add_named"
+  ],
+  "View related cards": "card.related",
+  "Token: (name)": "token.from_card",
+  "Hand / Play": "hand_card.play",
+  "Hand / Play Face Down": "hand_card.play_face_down",
+  "Hand / Reveal to… (all, or a player)": "hand_card.reveal",
+  "Hand / Clone, Move to, Attach, Draw arrow": [
+    "card.clone",
+    "move.battlefield",
+    "card.attach",
+    "card.arrow"
+  ],
+  "Stack / Play": "stack_entry.resolve",
+  "Stack / Play Face Down": "hand_card.play_face_down",
+  "Stack / Clone, Move to, Attach, Draw arrow": [
+    "card.clone",
+    "move.battlefield",
+    "card.attach",
+    "card.arrow"
+  ],
+  "Graveyard, exile / Play": "pile_card.play",
+  "Graveyard, exile / Play Face Down": "hand_card.play_face_down",
+  "Graveyard, exile / Select Column": "selection.column",
+  "Library or sideboard view / Play, Play Face Down, Reveal to…": [
+    "pile_card.play",
+    "hand_card.play_face_down",
+    "hand_card.reveal"
+  ],
+  "Revealed cards window / Hide": "viewer.hide_revealed",
+  "Top of library in random order": "move.library_top",
+  "X cards from the top of library…": "move.library_nth",
+  "Bottom of library in random order": "move.library_bottom",
+  "Table": "move.battlefield",
+  "Hand": "move.hand",
+  "Graveyard": "move.graveyard",
+  "Exile": "move.exile",
+  "Drag a card, with the selection following": "gesture:manual table drag two cards into library order",
+  "Shift held while dragging: face down": "gesture:manual table QA shifts a dragged card face down",
+  "Drag from a pile: the top card": "gesture:manual table drag library top and Option bottom to hand",
+  "Ctrl-drag from a pile: the bottom card": "gesture:manual table drag library top and Option bottom to hand",
+  "Drop on another player's table: give control": "gesture:manual table drag sends give from the guest seat and cannot pick up a private pile",
+  "Drop on a table cell, at grid coordinates": "gesture:manual table drag reorders a row and pins a land",
+  "Drop onto a zone view window": "gesture:manual table drag to the open zone viewer",
+  "Increase power": "stats.power_up",
+  "Decrease power": "stats.power_down",
+  "Increase toughness": "stats.toughness_up",
+  "Decrease toughness": "stats.toughness_down",
+  "Increase power and toughness": "stats.both_up",
+  "Decrease power and toughness": "stats.both_down",
+  "Increase power and decrease toughness": "stats.power_up_toughness_down",
+  "Decrease power and increase toughness": "stats.power_down_toughness_up",
+  "Set power and toughness…": "stats.set",
+  "Reset power and toughness": "stats.reset",
+  "Add / remove / set counter A (red)": [
+    "counter.first_add",
+    "counter.first_remove",
+    "counter.first_set"
+  ],
+  "Add / remove / set counter B (yellow)": [
+    "counter.second_add",
+    "counter.second_remove",
+    "counter.second_set"
+  ],
+  "Add / remove / set counter C (green)": [
+    "counter.third_add",
+    "counter.third_remove",
+    "counter.third_set"
+  ],
+  "Add / remove / set counters D, E, F": "counter.add_named",
+  "Increment all card counters": "counter.increment_all",
+  "Create token…": "token.create",
+  "Create another token": "token.repeat",
+  "Create predefined token (from the deck)": [
+    "token.deck_1",
+    "token.deck_2",
+    "token.deck_3",
+    "token.deck_4",
+    "token.deck_5",
+    "token.deck_6",
+    "token.deck_7",
+    "token.deck_8",
+    "token.deck_9",
+    "token.deck_10"
+  ],
+  "Token: (name), on a card": "token.from_card",
+  "Token: Attach to (name)": "token.attached",
+  "All tokens": "token.all",
+  "Token: Transform into (name)": "card.transform",
+  "Sort hand by name / type / mana value": [
+    "hand.sort_name",
+    "hand.sort_type",
+    "hand.sort_mana_value"
+  ],
+  "Reveal hand to…": "hand.reveal",
+  "Reveal random card to…": "hand.reveal_random",
+  "Reveal a chosen number of random cards to…": "hand.reveal_random_cards",
+  "Take mulligan (choose hand size)": "hand.mulligan",
+  "Take mulligan (same hand size)": "hand.mulligan_same_size",
+  "Take mulligan (hand size − 1)": "hand.mulligan_one_fewer",
+  "Move hand to top / bottom of library": [
+    "hand.move_to_library_top",
+    "hand.move_to_library_bottom"
+  ],
+  "Move hand to graveyard / exile": [
+    "hand.move_to_graveyard",
+    "hand.move_to_exile"
+  ],
+  "Draw card": "library.draw",
+  "Draw cards…": "library.draw_cards",
+  "Undo last draw": "library.undo_draw",
+  "Shuffle": "library.shuffle",
+  "View library": "library.search",
+  "View top cards of library…": "library.look_top",
+  "View bottom cards of library…": "library.look_bottom",
+  "Reveal library to…": "library.reveal",
+  "Lend library to…": "library.lend",
+  "Reveal top cards to…": ["library.reveal_top", "library.reveal_top_cards"],
+  "Always reveal top card": "library.keep_top_revealed",
+  "Always look at top card": "library.keep_top_known",
+  "Play top card": "library.play_top",
+  "Play top card face down": "library.play_top_face_down",
+  "Move top card to stack": "library.move_top_to_stack",
+  "Put top card on bottom": "library.put_top_on_bottom",
+  "Move top card to graveyard": "library.move_top_card_to_graveyard",
+  "Move top cards to graveyard…": "library.move_top_cards_to_graveyard",
+  "Move top cards to graveyard face down…": "library.move_top_cards_to_graveyard_face_down",
+  "Move top card to exile": "library.move_top_card_to_exile",
+  "Move top cards to exile…": "library.move_top_cards_to_exile",
+  "Move top cards to exile face down…": "library.move_top_cards_to_exile_face_down",
+  "Put top cards on stack until…": "library.stack_until",
+  "Shuffle top cards…": "library.shuffle_top",
+  "Draw bottom card": "library.draw_bottom",
+  "Draw bottom cards…": "library.draw_bottom_cards",
+  "Play bottom card": "library.play_bottom",
+  "Play bottom card face down": "library.play_bottom_face_down",
+  "Put bottom card on top": "library.put_bottom_on_top",
+  "Move bottom card to graveyard": "library.move_bottom_card_to_graveyard",
+  "Move bottom cards to graveyard…": "library.move_bottom_cards_to_graveyard",
+  "Move bottom cards to graveyard face down…": "library.move_bottom_cards_to_graveyard_face_down",
+  "Move bottom card to exile": "library.move_bottom_card_to_exile",
+  "Move bottom cards to exile…": "library.move_bottom_cards_to_exile",
+  "Move bottom cards to exile face down…": "library.move_bottom_cards_to_exile_face_down",
+  "Shuffle bottom cards…": "library.shuffle_bottom",
+  "Search field": "viewer.search",
+  "Group by, sort by": [
+    "viewer.group_type",
+    "viewer.sort_name",
+    "viewer.sort_mana_value"
+  ],
+  "\"Shuffle when closing\" checkbox": [
+    "viewer.close_and_shuffle",
+    "viewer.close_without_shuffle"
+  ],
+  "Close most recent view": "viewer.close",
+  "View graveyard": "graveyard.view",
+  "Graveyard: reveal random card to…": "graveyard.reveal_random",
+  "Move graveyard to top / bottom of library": [
+    "graveyard.move_to_library_top",
+    "graveyard.move_to_library_bottom"
+  ],
+  "Move graveyard to hand / exile": [
+    "graveyard.move_to_hand",
+    "graveyard.move_to_exile"
+  ],
+  "View exile": "exile.view",
+  "Move exile to top / bottom of library, hand, graveyard": [
+    "exile.move_to_library_top",
+    "exile.move_to_library_bottom",
+    "exile.move_to_hand",
+    "exile.move_to_graveyard"
+  ],
+  "View sideboard": "sideboard.view",
+  "Move a card to or from the sideboard": "gesture:manual pile viewer drags to and from the sideboard",
+  "Add life": ["life.gain_one", "life.gain_five"],
+  "Remove life": ["life.lose_one", "life.lose_five"],
+  "Set life…": "life.set",
+  "Add / remove / set \"other\" counter": [
+    "player.storm_add",
+    "player.storm_remove",
+    "player.storm_set"
+  ],
+  "Add / remove / set a color counter": [
+    "player.mana_add",
+    "player.mana_remove",
+    "player.mana_set"
+  ],
+  "Left click +1, right click −1 on a counter": "gesture:manual table click and right click adjust mana and a named counter",
+  "+10 to −10 steps": [
+    "life.gain_one",
+    "life.gain_five",
+    "life.lose_one",
+    "life.lose_five",
+    "life.set"
+  ],
+  "(none)": "player.add_counter",
+  "Untap all permanents": "table.untap_all",
+  "Roll die…": "table.roll",
+  "Flip coin": "table.flip_coin",
+  "Tally: subtypes, total power, total toughness": "selection.tally",
+  "Untap step": "phase.untap",
+  "Upkeep step": "phase.upkeep",
+  "Draw step": "phase.draw",
+  "First main phase": "phase.first_main",
+  "Beginning of combat step": "phase.beginning_of_combat",
+  "Declare attackers step": "phase.declare_attackers",
+  "Declare blockers step": "phase.declare_blockers",
+  "Combat damage step": "phase.combat_damage",
+  "End of combat step": "phase.end_of_combat",
+  "Second main phase": "phase.second_main",
+  "End of turn step": "phase.end",
+  "Next phase": "phase.next",
+  "Next phase with action": "phase.next_with_action",
+  "Next turn": "phase.next_turn",
+  "Click the active Untap button": "phase.untap_active",
+  "Click the active Draw button": "phase.draw_active",
+  "Set turn order…": "lobby.first",
+  "Right-drag from a card to a card or a player": [
+    "gesture:manual table arrow to a card outside combat",
+    "gesture:manual table arrow attack and block use the host's projected styles"
+  ],
+  "Draw arrow… (menu)": "card.arrow",
+  "Arrow color by modifier: red, yellow (Ctrl), blue (Alt), green (Shift)": [
+    "gesture:manual table arrow to a card outside combat",
+    "gesture:manual table arrow attack and block use the host's projected styles"
+  ],
+  "Selected cards each get an arrow": "gesture:manual table arrow selection batches every card and shortcut clears",
+  "An arrow from a card in hand plays the card first": "gesture:manual table arrow menu plays a hand card and aims in one entry",
+  "Right-click an arrow to delete it": "gesture:manual table arrow right-click removes the drawn curve",
+  "Remove all local arrows": "table.clear_arrows",
+  "Arrows deleted when the turn passes": "phase.next_turn",
+  "Arrows deleted when a card they touch changes zone": "move.graveyard",
+  "Arrows kept through a block of phases, deleted after": [
+    "phase.next_turn",
+    "table.delete_arrow"
+  ],
+  "Click a card: select it": "gesture:manual table selection toggles cards and taps mixed permanents together",
+  "Double-click a card: tap, play or resolve": [
+    "permanent.tap",
+    "hand_card.play",
+    "stack_entry.resolve"
+  ],
+  "Double-click the library: draw": "library.draw",
+  "Double-click a graveyard or exile: open its view": [
+    "graveyard.view",
+    "exile.view"
+  ],
+  "Ctrl-click: toggle a card in the selection": "gesture:manual table selection toggles cards and taps mixed permanents together",
+  "Drag on empty space: selection rectangle": "gesture:manual table selection drags a rectangle over four lands",
+  "Hover a card: card info panel": "gesture:manual table QA previews a public card",
+  "Middle button held: large card popup": "gesture:manual table QA previews a public card",
+  "Hover action panel (Info, Main, Move, Counters, Tokens)": "gesture:manual table menu states pass screen and stage audits",
+  "\"Selected cards\" menu in the menu bar": "gesture:manual table menu puts a mixed selection on top in selection order",
+  "Host game": "lobby.host",
+  "Game settings: players, starting life": "lobby.game_settings",
+  "Load deck…": "lobby.change_deck",
+  "Load deck from clipboard…": "lobby.paste_deck",
+  "Unload deck": "lobby.unload_deck",
+  "Sideboard lock; drag cards between main and side": "lobby.sideboard",
+  "Ready to start": "lobby.ready",
+  "Force start": "lobby.start",
+  "(first seat plays first)": ["lobby.first", "lobby.start"],
+  "(no opening hand is dealt)": ["lobby.start", "lobby.keep", "lobby.mulligan"],
+  "Concede / Unconcede": "table.concede",
+  "(rematch: everyone readies again)": "table.next_game",
+  "Game information": "table.lobby",
+  "Copy game link; Invite to game…": "lobby.copy_invite",
+  "Leave game": "table.leave",
+  "Reconnect to a game in progress": "gesture:manual table link freezes both seats and resumes the saved game",
+  "A card leaving the table loses its counters, tapped state, power and toughness, and \"doesn't untap\" flag": "move.graveyard",
+  "A card's annotation is cleared on leaving the table, except to the stack": [
+    "move.graveyard",
+    "library.move_top_to_stack"
+  ],
+  "A token leaving the table for anywhere but the stack is destroyed": "move.graveyard",
+  "A card moved face down or to another controller gets a new id": [
+    "library.shuffle",
+    "move.hand"
+  ],
+  "A card given to another player is annotated \"Owner: name\"": "gesture:manual table drag sends give from the guest seat and cannot pick up a private pile",
+  "A shuffle forgets which top cards the owner had looked at": "library.shuffle",
+  "A shuffle ends a lent library's write access": "library.shuffle",
+  "\"Untap all\" skips cards set not to untap": "table.untap_all",
+  "Undo draw works only while the drawn card is still in hand": [
+    "library.undo_draw",
+    "table.undo"
+  ],
+  "Playing from hand sends non-lands to the stack first (setting, on by default)": "hand_card.play",
+  "Playing from the stack sends an instant or sorcery to the graveyard, anything else to the table": "stack_entry.resolve",
+  "A card whose database entry says it enters tapped is played tapped": "hand_card.play",
+  "A played card's table row comes from its type": "hand_card.play",
+  "Same-named cards pile up in threes on the table": "gesture:manual table selection drags a rectangle over four lands",
+  "An attached card cannot be moved separately on the table": "card.attach",
+  "Dice, shuffles and random reveals use the server's random numbers": [
+    "table.roll",
+    "library.shuffle",
+    "hand.reveal_random"
+  ],
+  "Nothing is dealt, untapped or drawn automatically": "assist.turn_upkeep",
+  "Replays: recorded games, with a timeline": "table.rewind",
+  "Sounds for phases and die rolls": "gesture:manual table QA plays phase and die sounds",
+  "Card info dock": "gesture:manual table QA previews a public card",
+  "Player list with ping": "table.lobby",
+  "Protocol / MoveCard": [
+    "move.battlefield",
+    "gesture:manual table drag reorders a row and pins a land",
+    "gesture:manual table drag sends give from the guest seat and cannot pick up a private pile"
+  ],
+  "Protocol / FlipCard": "permanent.turn_over",
+  "Protocol / AttachCard": ["card.attach", "permanent.unattach"],
+  "Protocol / CreateToken": ["token.create", "token.attached", "card.clone"],
+  "Protocol / CreateArrow, DeleteArrow": [
+    "card.arrow",
+    "table.delete_arrow",
+    "table.clear_arrows"
+  ],
+  "Protocol / SetCardAttr (tapped, doesn't untap, power and toughness, annotation)": [
+    "permanent.tap",
+    "permanent.skip_untap",
+    "stats.set",
+    "permanent.note"
+  ],
+  "Protocol / SetCardCounter, IncCardCounter": [
+    "counter.first_set",
+    "counter.first_add"
+  ],
+  "Protocol / IncCounter, SetCounter, CreateCounter, DelCounter": [
+    "life.set",
+    "player.counter_add",
+    "player.counter_remove",
+    "player.counter_set"
+  ],
+  "Protocol / DrawCards, UndoDraw": ["library.draw", "library.undo_draw"],
+  "Protocol / Shuffle": "library.shuffle",
+  "Protocol / Mulligan": "hand.mulligan",
+  "Protocol / DumpZone": "library.search",
+  "Protocol / RevealCards, RevealRandomCards": [
+    "hand_card.reveal",
+    "hand.reveal_random",
+    "permanent.peek",
+    "library.lend"
+  ],
+  "Protocol / ChangeZoneProperties": [
+    "library.keep_top_revealed",
+    "library.keep_top_known"
+  ],
+  "Protocol / RollDie": "table.roll",
+  "Protocol / NextTurn, SetActivePhase": ["phase.next_turn", "phase.next"],
+  "Protocol / DeckSelect, SetSideboardPlan": [
+    "lobby.change_deck",
+    "lobby.sideboard"
+  ],
+  "Protocol / ReadyStart": ["lobby.ready", "lobby.start"],
+  "Protocol / Concede": "table.concede",
+  "Protocol / LeaveGame": "table.leave",
+  "Protocol / (none)": [
+    "card.ability",
+    "card.remove",
+    "card.damage",
+    "hand.sort_name",
+    "table.next_game",
+    "table.rewind"
+  ]
+}

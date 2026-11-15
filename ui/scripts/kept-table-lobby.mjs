@@ -3,6 +3,7 @@ import { crowdedControls, phoneFaults } from "./capture.mjs";
 import { check } from "./kept-harness.mjs";
 import {
     clickAnswer,
+    clickTable,
     clickTableResult,
     showTableView,
     tableRoute,
@@ -89,6 +90,44 @@ await check(
             drawn.objects.filter((card) => card.zone === "hand").length,
             4,
         );
+        let current = drawn;
+        const mod = mac ? "Meta" : "Control";
+        for (let turn = 0; turn < 3; turn++) {
+            const before = current.turn.number;
+            [current] = await Promise.all([
+                clickTableResult(page),
+                page.keyboard.press(`${mod}+Enter`),
+            ]);
+            assert.equal(current.turn.number, before + 1);
+            current = await clickTable(
+                page,
+                page.locator('button[data-pile="library"][data-side="you"]'),
+            );
+        }
+        if (
+            !current.objects.some(
+                ({ zone, name }) =>
+                    zone === "hand" && name === "Misspelled Islan",
+            )
+        ) {
+            const count = current.players.you.library.length;
+            await page.keyboard.press(`${mod}+e`);
+            await page
+                .getByRole("textbox", { name: "Cards to draw" })
+                .fill(String(count));
+            [current] = await Promise.all([
+                clickTableResult(page),
+                page.keyboard.press("Enter"),
+            ]);
+        }
+        const unknown = current.objects.find(
+            ({ zone, name }) => zone === "hand" && name === "Misspelled Islan",
+        );
+        assert.ok(unknown);
+        await page
+            .locator(`.card-layer > [data-slot="${unknown.slot}"]`)
+            .getByText(unknown.name, { exact: true })
+            .waitFor();
         await page.keyboard.press("F2");
         await page.getByRole("button", { name: "Confirm Concede" }).click();
         await lobby.getByText("12 main · 1 sideboard").waitFor();

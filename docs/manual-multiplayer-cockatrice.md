@@ -545,10 +545,10 @@ design.
 | DeckSelect, SetSideboardPlan                                                   | `load_deck`, `sideboard`                                                                      |
 | ReadyStart                                                                     | `ready`, `start`                                                                              |
 | Concede                                                                        | `concede`                                                                                     |
-| Unconcede                                                                      | None. Conceding asks first.                                                                   |
+| Unconcede                                                                      | Not carried over. Conceding asks first.                                                       |
 | LeaveGame                                                                      | Closing the connection.                                                                       |
-| GameSay                                                                        | None. There is no chat.                                                                       |
-| KickFromGame, Judge, ReverseTurn, SetPlayerOrder, SetPlaymat, SetSideboardLock | None. See the tables above.                                                                   |
+| GameSay                                                                        | Not carried over. There is no chat.                                                           |
+| KickFromGame, Judge, ReverseTurn, SetPlayerOrder, SetPlaymat, SetSideboardLock | Not carried over. See the tables above.                                                       |
 | (none)                                                                         | `marker`, `remove`, `damage`, `sort_hand`, `next_game`, `rewind`, `batch`: Beryl's additions. |
 
 ## Manual QA
