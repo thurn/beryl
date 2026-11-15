@@ -6,6 +6,24 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Painter's Servant entering with another permanent at once panicked.** When
+  Worldgorger Dragon left and returned Painter's Servant together with another
+  permanent that has a static ability, the engine panicked with "the layers read
+  the amounts of a part that has some". Before asking a player to order the
+  timestamps of permanents that entered together (CR 613.7m),
+  `layers::together::parts` lists each static ability's parts. It resolved them
+  with `LayerChange::resolve`, which cannot read "the chosen color", and took
+  every part it left unresolved for a power or toughness amount to be read as
+  the layer applies. The layers themselves resolve parts with
+  `layers::elsewhere::resolve`, which reads the chosen color from the permanent.
+  `parts` now uses `elsewhere::resolve` too, and a Worldgorger Dragon scenario
+  returns Painter's Servant and Glorious Anthem together. Found by `just fuzz`.
+  Prevention: one function should turn a static ability's part into a layer
+  change for every caller; `LayerChange::resolve` returning `None` means two
+  different things (an amount to read later, a value to read from the
+  permanent), and an enum for the unresolved case would make each caller handle
+  both.
+
 - **A merged permanent lost the replacement abilities and object rule changes of
   the cards under it.** Gemrazer cast for its mutate cost over Hullbreacher made
   no Treasure when an opponent drew an extra card, and over Bloodghast the

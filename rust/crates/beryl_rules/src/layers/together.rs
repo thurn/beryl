@@ -12,7 +12,7 @@
 //!
 //! [CR 613.7m]: https://yawgatog.com/resources/magic-rules/#R6137m
 
-use super::apply;
+use super::{apply, elsewhere};
 use crate::card::{AbilityIx, Layer};
 use crate::layout::Layout;
 use crate::state::{Characteristics, LayerChange, State, read_layer};
@@ -85,7 +85,9 @@ fn parts<'a, L: Layout>(
                 .iter()
                 .enumerate()
                 .map(move |(part, &modification)| {
-                    let change = LayerChange::resolve(modification, you, &words).unwrap_or(
+                    // As the layers list it, "the chosen color" read from the permanent, so
+                    // that only a part with an amount is left to read as it applies.
+                    let change = elsewhere::resolve(s, slot, modification, you, &words).unwrap_or(
                         LayerChange::Read {
                             layer: read_layer(modification),
                             face: face_ix,

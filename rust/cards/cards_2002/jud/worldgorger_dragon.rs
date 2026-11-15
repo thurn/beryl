@@ -146,5 +146,47 @@ pub mod scenarios {
                 ME.tapped(Card::Mountain, 0),
                 ME.has(Zone::Exile, Card::Mountain, 0),
             ]),
+        // The leaves ability returns Painter's Servant and Glorious Anthem together, and P0
+        // chooses a color for the Servant again: it is a new object (CR 400.7). Whether the
+        // order of their timestamps matters is asked of the "chosen color" as the layers read
+        // it, the color chosen as the Servant enters.
+        Scenario::new("permanents with static abilities come back together")
+            .interaction(&[Card::GetLost, Card::PaintersServant, Card::GloriousAnthem])
+            .hand(P0, &[DRAGON])
+            .battlefield(
+                P0,
+                &[
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::PaintersServant,
+                    Card::GloriousAnthem,
+                ],
+            )
+            .hand(P1, &[Card::GetLost, Card::GetLost])
+            .battlefield(
+                P1,
+                &[Card::Plains, Card::Plains, Card::Plains, Card::Plains],
+            )
+            .library(P0, &[Card::Plains])
+            .library(P1, &[Card::Plains])
+            .actions(&[
+                ME.casts(DRAGON),
+                Resolve,
+                Resolve,
+                ME.controls(Card::PaintersServant, 0),
+                ME.has(Zone::Exile, Card::GloriousAnthem, 1),
+                ME.passes(),
+                THEM.casts(Card::GetLost),
+                Resolve,
+                Resolve,
+                ME.chooses_color(Colors::RED),
+                ME.controls(Card::GloriousAnthem, 1),
+                ME.pt(Card::PaintersServant, 2, 4),
+                ME.colored(Zone::Battlefield, Card::Mountain, Colors::RED),
+            ]),
     ];
 }
