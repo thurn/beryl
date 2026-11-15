@@ -467,13 +467,37 @@ pub const fn at_your_upkeep(effect: &'static Effect) -> Ability { .. }
 - Tokens several cards create and the scenario props stay in
   `beryl_card_shared`.
 
-**E5. A brief that drafts.** `just card brief` splits the card's Oracle text
-into sentences, normalises each as the measurement above did, and matches it
-against the phrase wordings and against the renderings of whole abilities of
-implemented cards. It prints a draft: for each sentence, the expression that
-renders to it, or `// no phrase renders this sentence:` with the nearest three.
-`just card new` writes the draft into the file. The existing sections (rulings,
-nearest cards, the XMage class) stay, after the draft.
+**E5. A brief that drafts.** `just card brief` prints a draft of the definition,
+and `just card new` writes it into the file. The draft comes first from
+[phase.rs](https://github.com/phase-rs/phase)'s published typed parse of every
+card (`card-data.json`, MIT/Apache-2.0), translated node by node into vocabulary
+entries and phrases by a table in `tools/src/beryl_tools/phase_draft.py`. For a
+sentence that table cannot translate, the brief matches the normalised sentence
+against the phrase wordings and the renderings of whole abilities of implemented
+cards, or prints `// no phrase renders this sentence:` with the nearest three.
+
+- **Nothing of Phase is built.** Python reads the JSON from `$BERYL_CACHE` at
+  authoring time, pinned by a hash in `data/phase-data.json`. There is no Phase
+  crate, no Cargo dependency and no card data in the repository, and a drafted
+  card file is the same size as a hand-written one, so build and check times do
+  not change. P1 still holds: Beryl parses no Oracle text.
+- **The renderer checks the draft.** Phase drops or misreads some clauses on
+  cards it reports as parsed, so a draft is only a draft until it renders back
+  to the Oracle text. `card new` prints the render diff, which names the missing
+  or extra words.
+- **A field the table does not read stops the draft**, naming the field, instead
+  of dropping a clause silently.
+- **When the draft is complete, the brief is short:** the Oracle text, the
+  draft, each sentence's render status and the rulings. The vocabulary,
+  nearest-card and XMage sections print only for sentences the draft does not
+  cover.
+
+A prototype on 2026-11-15 mapped about 45 of the 637 node kinds that Phase's
+commons and uncommons use. It drafted 60 random commons and uncommons
+completely. 52 of them compiled, and 33 rendered exactly to their Oracle text.
+The other 19 named their difference in the render diff: 6 were the table's
+wording and 13 were clauses Phase had dropped. A `drafted` card is then a fix-up
+for a `tier:haiku` writer (E7).
 
 **E6. The set planner.** `just set list <code>` prints the cards first printed
 in a set. `just set plan <code>` sorts them:
@@ -481,7 +505,7 @@ in a set. `just set plan <code>` sorts them:
 | Tier         | Meaning                                                                              | Who writes it                          |
 | ------------ | ------------------------------------------------------------------------------------ | -------------------------------------- |
 | `store`      | Complete from the card store (keyword-only creatures)                                | Nobody                                 |
-| `drafted`    | Every sentence drafted by the brief                                                  | A `tier:light` writer checks the draft |
+| `drafted`    | Every sentence drafted by the brief                                                  | A `tier:haiku` writer checks the draft |
 | `composed`   | Some sentence has no phrase, but every keyword and layout it needs exists            | A `tier:sonnet` writer                 |
 | `vocabulary` | A sentence needs a vocabulary entry; grouped by the missing clause, most cards first | One `tier:opus` bead a group           |
 | `mechanism`  | A keyword, layout or rule the engine lacks                                           | A design bead                          |
